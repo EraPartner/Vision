@@ -96,6 +96,7 @@ function MatchBadge({
             );
         case "new":
             return <Badge variant="success">{label}</Badge>;
+        case "unresolved":
         default:
             return <Badge variant="destructive">{label}</Badge>;
     }

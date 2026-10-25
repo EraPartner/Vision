@@ -37,6 +37,7 @@ export function datePresetRange(
             return { start: ymd(new Date(y, m - 1, 1)), end: ymd(new Date(y, m, 0)) };
         case "thisYear":
             return { start: ymd(new Date(y, 0, 1)), end: ymd(new Date(y, 11, 31)) };
+        case "any":
         default:
             return undefined;
     }

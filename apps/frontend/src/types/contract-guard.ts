@@ -107,6 +107,45 @@ type Expect<T extends true> = T;
  */
 type KeysSubsetOf<A, B> = keyof A extends keyof B ? true : false;
 
+/**
+ * True iff `T`, with `null`/`undefined` stripped, is a finite union of string
+ * literals (an OpenAPI `enum`), not plain `string`.
+ */
+type IsStringEnum<T> = [NonNullable<T>] extends [string]
+    ? string extends NonNullable<T>
+        ? false
+        : true
+    : false;
+
+type EnumOf<T> =
+    NonNullable<T> extends readonly (infer Item)[] ? NonNullable<Item> : NonNullable<T>;
+
+/**
+ * Keys where the contract (`B`) declares a string enum, or an array of one, and
+ * the consumed type (`A`) accepts a value outside it — typically a plain
+ * `string`. Narrower is fine: a consumed type may use a subset of the enum.
+ */
+type WidenedEnumKeys<A, B> = {
+    [K in keyof A & keyof B]-?: IsStringEnum<EnumOf<B[K]>> extends true
+        ? [EnumOf<A[K]>] extends [EnumOf<B[K]>]
+            ? never
+            : K
+        : never;
+}[keyof A & keyof B];
+
+/**
+ * `true` iff `A`'s keys ⊆ `B`'s keys and every string enum in `B` stays a
+ * literal union in `A` (ADR-251). Otherwise it evaluates to the offending key
+ * names, so `Expect<…>` fails with e.g. `Type '"status"' does not satisfy the
+ * constraint 'true'`.
+ */
+type Matches<A, B> =
+    KeysSubsetOf<A, B> extends false
+        ? Exclude<keyof A, keyof B>
+        : [WidenedEnumKeys<A, B>] extends [never]
+          ? true
+          : WidenedEnumKeys<A, B>;
+
 type IsOptionalKey<T, K extends keyof T> =
     Record<never, never> extends Pick<T, K> ? true : false;
 
@@ -117,60 +156,61 @@ type IsNumeric<T> = [NonNullable<T>] extends [number]
         : false
     : false;
 
-// ── Key coverage: every field the consumed type reads must exist in the contract.
+// ── Key and enum coverage: every field the consumed type reads must exist in
+//    the contract, and every contract enum must stay a literal union.
 export type _KeysTransaction = Expect<
-    KeysSubsetOf<Transaction, Schemas["Transaction"]>
+    Matches<Transaction, Schemas["Transaction"]>
 >;
 export type _KeysTransactionCreate = Expect<
-    KeysSubsetOf<TransactionCreate, Schemas["TransactionCreate"]>
+    Matches<TransactionCreate, Schemas["TransactionCreate"]>
 >;
 export type _OptionalTransactionCreateAllowDuplicate = Expect<
     IsOptionalKey<Schemas["TransactionCreate"], "allow_duplicate">
 >;
-export type _KeysCategory = Expect<KeysSubsetOf<Category, Schemas["Category"]>>;
-export type _KeysAccount = Expect<KeysSubsetOf<Account, Schemas["Account"]>>;
+export type _KeysCategory = Expect<Matches<Category, Schemas["Category"]>>;
+export type _KeysAccount = Expect<Matches<Account, Schemas["Account"]>>;
 export type _KeysRecipient = Expect<
-    KeysSubsetOf<Recipient, Schemas["Recipient"]>
+    Matches<Recipient, Schemas["Recipient"]>
 >;
-export type _KeysTag = Expect<KeysSubsetOf<Tag, Schemas["Tag"]>>;
+export type _KeysTag = Expect<Matches<Tag, Schemas["Tag"]>>;
 export type _KeysPlannedTransaction = Expect<
-    KeysSubsetOf<PlannedTransaction, Schemas["PlannedTransaction"]>
+    Matches<PlannedTransaction, Schemas["PlannedTransaction"]>
 >;
 export type _KeysInvestment = Expect<
-    KeysSubsetOf<Investment, Schemas["Investment"]>
+    Matches<Investment, Schemas["Investment"]>
 >;
 export type _KeysPortfolioTransaction = Expect<
-    KeysSubsetOf<PortfolioTransaction, Schemas["PortfolioTransaction"]>
+    Matches<PortfolioTransaction, Schemas["PortfolioTransaction"]>
 >;
 
 // ── Second wave: the schemas the spec had let rot unnoticed because nothing
 //    here referenced them (splits, watchlist, attachments, AI chat). Each of
 //    these described a payload the backend has never sent; guarding them is
 //    what keeps the spec honest now that it has been corrected.
-export type _KeysSplitItem = Expect<KeysSubsetOf<SplitItem, Schemas["Split"]>>;
+export type _KeysSplitItem = Expect<Matches<SplitItem, Schemas["Split"]>>;
 export type _KeysSplitPayment = Expect<
-    KeysSubsetOf<SplitPayment, Schemas["SplitPayment"]>
+    Matches<SplitPayment, Schemas["SplitPayment"]>
 >;
 export type _KeysOwedSummaryItem = Expect<
-    KeysSubsetOf<OwedSummaryItem, Schemas["SplitOwed"]>
+    Matches<OwedSummaryItem, Schemas["SplitOwed"]>
 >;
 export type _KeysWatchlistItem = Expect<
-    KeysSubsetOf<WatchlistItem, Schemas["WatchlistItem"]>
+    Matches<WatchlistItem, Schemas["WatchlistItem"]>
 >;
 export type _KeysAttachment = Expect<
-    KeysSubsetOf<Attachment, Schemas["Attachment"]>
+    Matches<Attachment, Schemas["Attachment"]>
 >;
 export type _KeysConversationSummary = Expect<
-    KeysSubsetOf<ConversationSummary, Schemas["AiConversation"]>
+    Matches<ConversationSummary, Schemas["AiConversation"]>
 >;
 export type _KeysChatMessage = Expect<
-    KeysSubsetOf<ChatMessage, Schemas["AiMessage"]>
+    Matches<ChatMessage, Schemas["AiMessage"]>
 >;
 export type _KeysTokenUsage = Expect<
-    KeysSubsetOf<TokenUsage, Schemas["AiTokenUsage"]>
+    Matches<TokenUsage, Schemas["AiTokenUsage"]>
 >;
 export type _KeysOllamaModel = Expect<
-    KeysSubsetOf<OllamaModel, Schemas["OllamaModel"]>
+    Matches<OllamaModel, Schemas["OllamaModel"]>
 >;
 
 // ── Third wave: the payloads left as bare `Envelope`s after the 2026-07-27
@@ -178,173 +218,173 @@ export type _KeysOllamaModel = Expect<
 //    conversation detail, Ollama status). Now that the spec names them, these
 //    keep them honest.
 export type _KeysOwedDetailItem = Expect<
-    KeysSubsetOf<OwedDetailItem, Schemas["SplitOwedDetail"]>
+    Matches<OwedDetailItem, Schemas["SplitOwedDetail"]>
 >;
 export type _KeysConversationDetail = Expect<
-    KeysSubsetOf<ConversationDetail, Schemas["AiConversationDetail"]>
+    Matches<ConversationDetail, Schemas["AiConversationDetail"]>
 >;
 export type _KeysOllamaStatus = Expect<
-    KeysSubsetOf<OllamaStatus, Schemas["OllamaStatus"]>
+    Matches<OllamaStatus, Schemas["OllamaStatus"]>
 >;
 
 // ── Research endpoints: guard the actual operation response, not merely a
 //    detached component. This closes the gap where every endpoint referenced
 //    the untyped base Envelope while the UI maintained a second DTO universe.
 export type _KeysResearchSearch = Expect<
-    KeysSubsetOf<
+    Matches<
         ResearchSearchResponse,
         ResponseData<operations["researchSearch"]>
     >
 >;
 export type _KeysResearchChart = Expect<
-    KeysSubsetOf<
+    Matches<
         ResearchChartResponse,
         ResponseData<operations["researchChart"]>
     >
 >;
 export type _KeysResearchFundamentals = Expect<
-    KeysSubsetOf<
+    Matches<
         ResearchFundamentals,
         Schemas["ResearchFundamentals"]
     >
 >;
 export type _KeysResearchAnalyst = Expect<
-    KeysSubsetOf<ResearchAnalyst, ResponseData<operations["researchAnalyst"]>>
+    Matches<ResearchAnalyst, ResponseData<operations["researchAnalyst"]>>
 >;
 export type _KeysResearchNews = Expect<
-    KeysSubsetOf<ResearchNewsResponse, ResponseData<operations["researchNews"]>>
+    Matches<ResearchNewsResponse, ResponseData<operations["researchNews"]>>
 >;
 export type _KeysResearchMacroSearch = Expect<
-    KeysSubsetOf<
+    Matches<
         MacroSearchResponse,
         ResponseData<operations["researchMacroSearch"]>
     >
 >;
 export type _KeysResearchMacroSeries = Expect<
-    KeysSubsetOf<
+    Matches<
         MacroSeriesResponse,
         ResponseData<operations["researchMacroSeries"]>
     >
 >;
 export type _KeysResearchScorecard = Expect<
-    KeysSubsetOf<
+    Matches<
         ResearchScorecardResponse,
         ResponseData<operations["researchScorecard"]>
     >
 >;
 export type _KeysResearchPortfolioForecast = Expect<
-    KeysSubsetOf<
+    Matches<
         PortfolioForecast,
         ResponseData<operations["researchPortfolioForecast"]>
     >
 >;
 export type _KeysResearchMappings = Expect<
-    KeysSubsetOf<
+    Matches<
         MappingsResponse,
         ResponseData<operations["researchListMappings"]>
     >
 >;
 export type _KeysResearchSavedMappings = Expect<
-    KeysSubsetOf<
+    Matches<
         MappingsResponse,
         ResponseData<operations["researchSaveMappings"]>
     >
 >;
 export type _KeysResearchMapping = Expect<
-    KeysSubsetOf<
+    Matches<
         InstrumentProviderMapping,
         Schemas["InstrumentProviderMapping"]
     >
 >;
 export type _KeysResearchMappingResolve = Expect<
-    KeysSubsetOf<
+    Matches<
         MappingResolveResponse,
         ResponseData<operations["researchResolveMappings"]>
     >
 >;
 export type _KeysResearchMappingAudit = Expect<
-    KeysSubsetOf<
+    Matches<
         MappingAuditResponse,
         ResponseData<operations["researchAuditMappings"]>
     >
 >;
 export type _KeysResearchProviderKeys = Expect<
-    KeysSubsetOf<
+    Matches<
         ProviderKeysResponse,
         ResponseData<operations["researchListProviderKeys"]>
     >
 >;
 export type _KeysResearchSetProviderKey = Expect<
-    KeysSubsetOf<
+    Matches<
         ProviderKeysResponse,
         ResponseData<operations["researchSetProviderKey"]>
     >
 >;
 export type _KeysResearchAnalystConsensus = Expect<
-    KeysSubsetOf<ResearchAnalystConsensus, Schemas["ResearchAnalystConsensus"]>
+    Matches<ResearchAnalystConsensus, Schemas["ResearchAnalystConsensus"]>
 >;
 export type _KeysResearchAnalystAction = Expect<
-    KeysSubsetOf<ResearchAnalystAction, Schemas["ResearchAnalystAction"]>
+    Matches<ResearchAnalystAction, Schemas["ResearchAnalystAction"]>
 >;
 export type _KeysResearchNewsArticle = Expect<
-    KeysSubsetOf<ResearchNewsArticle, Schemas["ResearchNewsArticle"]>
+    Matches<ResearchNewsArticle, Schemas["ResearchNewsArticle"]>
 >;
 export type _KeysResearchMappingProposal = Expect<
-    KeysSubsetOf<MappingProposal, Schemas["ResearchMappingProposal"]>
+    Matches<MappingProposal, Schemas["ResearchMappingProposal"]>
 >;
 export type _KeysResearchMappingCandidate = Expect<
-    KeysSubsetOf<MappingProposalCandidate, Schemas["ResearchSearchItem"]>
+    Matches<MappingProposalCandidate, Schemas["ResearchSearchItem"]>
 >;
 export type _KeysResearchAuditQuote = Expect<
-    KeysSubsetOf<
+    Matches<
         MappingAuditQuote,
         Schemas["ResearchMappingAuditData"]["quotes"][number]
     >
 >;
 export type _KeysResearchProviderKeyStatus = Expect<
-    KeysSubsetOf<ProviderKeyStatus, Schemas["ResearchProviderKeyStatus"]>
+    Matches<ProviderKeyStatus, Schemas["ResearchProviderKeyStatus"]>
 >;
 export type _KeysResearchScorecardBody = Expect<
-    KeysSubsetOf<ResearchScorecard, Schemas["ResearchScorecard"]>
+    Matches<ResearchScorecard, Schemas["ResearchScorecard"]>
 >;
 export type _KeysResearchScorecardFlag = Expect<
-    KeysSubsetOf<ScorecardFlag, Schemas["ResearchScorecardFlag"]>
+    Matches<ScorecardFlag, Schemas["ResearchScorecardFlag"]>
 >;
 export type _KeysResearchForecastPoint = Expect<
-    KeysSubsetOf<ForecastPoint, Schemas["ResearchForecastPoint"]>
+    Matches<ForecastPoint, Schemas["ResearchForecastPoint"]>
 >;
 export type _KeysResearchForecastHolding = Expect<
-    KeysSubsetOf<
+    Matches<
         ForecastForwardHolding,
         Schemas["ResearchForecastForwardHolding"]
     >
 >;
 export type _KeysResearchMeta = Expect<
-    KeysSubsetOf<ResearchMeta, Schemas["ResearchMeta"]>
+    Matches<ResearchMeta, Schemas["ResearchMeta"]>
 >;
 export type _KeysResearchSearchItem = Expect<
-    KeysSubsetOf<ResearchSearchItem, Schemas["ResearchSearchItem"]>
+    Matches<ResearchSearchItem, Schemas["ResearchSearchItem"]>
 >;
 export type _KeysResearchChartPoint = Expect<
-    KeysSubsetOf<ResearchChartPoint, Schemas["ResearchChartPoint"]>
+    Matches<ResearchChartPoint, Schemas["ResearchChartPoint"]>
 >;
 export type _KeysResearchMacroSeriesItem = Expect<
-    KeysSubsetOf<MacroSeriesItem, Schemas["ResearchMacroSeriesItem"]>
+    Matches<MacroSeriesItem, Schemas["ResearchMacroSeriesItem"]>
 >;
 export type _KeysResearchForecastProjected = Expect<
-    KeysSubsetOf<
+    Matches<
         NonNullable<PortfolioForecast["projected"]>,
         Schemas["ResearchForecastProjected"]
     >
 >;
 export type _KeysResearchScorecardCounts = Expect<
-    KeysSubsetOf<
+    Matches<
         ResearchScorecard["counts"],
         Schemas["ResearchScorecard"]["counts"]
     >
 >;
 export type _KeysUpdateCheckStatus = Expect<
-    KeysSubsetOf<
+    Matches<
         UpdateCheckStatus,
         ResponseData<operations["adminUpdateCheck"]>
     >
@@ -416,3 +456,16 @@ export type _NumOwedDetailTransactionAmount = Expect<
 export type _NumOwedDetailRemaining = Expect<
     IsNumeric<Schemas["SplitOwedDetail"]["remaining"]>
 >;
+
+// ── Enum coverage for the domain clients in src/lib/api (ADR-251). Each block
+//    pins a hand-written request or response type to its contract schema so a
+//    contract enum cannot decay to `string` in the code that consumes it.
+
+// ── Enums: dashboard, info, aggregations, portfolio, watchlist, market.
+
+// ── Enums: transaction and portfolio imports, admin, database editor.
+
+// ── Enums: research, monitors, dossiers, analysis, AI.
+
+// ── Enums: Belgian tax, reports, accounts, transactions, recipients, splits,
+//    saved charts, settings.
