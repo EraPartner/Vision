@@ -52,7 +52,8 @@ WindowServer (compositing cost lands there). CPU % is CPU time per wall second o
 3. Enter the sudo password once when asked (for `powermetrics`). Leave the Vision window in front
    until the run ends; an unfocused window pauses the aurora and the run reports a warning.
 
-Results land in `perf-results/<timestamp>/` (git-ignored): `results.json`, `summary.md`,
+Results land in `perf-results/<timestamp>/` of the main checkout (git-ignored), also when the
+script runs from a linked worktree: `results.json`, `summary.md`,
 `powermetrics.jsonl`, `traces/*.json.gz` (open in Perfetto or Chrome DevTools) and app logs.
 `bun scripts/mac-baseline.ts --help` lists the options (`--app`, `--tiers`, `--idle`,
 `--sustained`, `--cooldown`, `--pages`, `--full-effects`, `--repeat`, `--no-powermetrics`,

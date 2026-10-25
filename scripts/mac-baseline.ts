@@ -127,7 +127,7 @@ const USAGE = `Usage: bun scripts/mac-baseline.ts [options]
   --cooldown <s>        Wait with the app closed before each measured launch (default 60)
   --scroll-px <px>      Ledger scroll distance each way (default 15000)
   --pages <list>        Page-switch sequence (default ${DEFAULT_PAGES.join(",")})
-  --out <dir>           Results root (default perf-results/ in the checkout)
+  --out <dir>           Results root (default perf-results/ in the main checkout)
   --no-powermetrics     Skip sudo powermetrics (no GPU or power numbers)
   --no-trace            Skip the Chromium trace pass
   --launch-probe <s>    Before the settle, record running page animations (every
@@ -281,7 +281,7 @@ function parseOptions(argv: string[]): Options | null {
       ? values.pages.split(",").map((page) => page.trim())
       : DEFAULT_PAGES,
     outRoot: path.resolve(
-      values.out ?? path.join(import.meta.dirname, "..", "perf-results"),
+      values.out ?? path.join(mainWorktreeRoot(), "perf-results"),
     ),
     powermetrics: values["no-powermetrics"] !== true,
     trace: values["no-trace"] !== true,
@@ -1592,6 +1592,19 @@ function loadElectronReference(
     }
   }
   return null;
+}
+
+/**
+ * The main checkout, so runs started from a linked worktree land next to the others.
+ * Falls back to this checkout outside git.
+ */
+function mainWorktreeRoot(): string {
+  const repo = path.join(import.meta.dirname, "..");
+  const listing = run("git", ["-C", repo, "worktree", "list", "--porcelain"]);
+  const first = listing
+    ?.split("\n")
+    .find((line) => line.startsWith("worktree "));
+  return first ? path.resolve(first.slice("worktree ".length)) : repo;
 }
 
 /** perf-results/ of the repository's other git worktrees. */
