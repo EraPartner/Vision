@@ -4626,3 +4626,14 @@ splash.starting
 splash.startingServices
 splash.waitingApp
 table.noData
+
+# Added 2026-10-25 (ADR-249 catch-up): keys the Swift app uses
+app.errorPageMessage
+app.errorPageOpenLogs
+app.errorPageRetry
+app.errorPageTitle
+app.preMigrationBackupFailed
+app.running
+app.stopped
+backup.done
+backup.failed
