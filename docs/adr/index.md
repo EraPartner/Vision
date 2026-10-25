@@ -282,6 +282,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-25: Exhaustive API enums in TypeScript (accepted)
+
+[[docs/adr/251-exhaustive-api-enums-in-typescript|ADR-251]] keeps every `openapi.yaml` string enum
+a literal union in the frontend: `contract-guard.ts` fails the typecheck when a consumed type
+widens one to `string`, and frontend switches over a union list every member even with a
+`default` arm. Runtime tolerance for unknown values is unchanged.
+
 ### 2026-10-25: Swift design-system parity foundation (accepted)
 
 [[docs/adr/250-swift-design-system-parity|ADR-250]] makes the token generator the single source of
