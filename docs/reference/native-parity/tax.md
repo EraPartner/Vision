@@ -2,8 +2,8 @@
 title: "Native parity inventory: Belgian tax"
 type: reference
 status: active
-date: 2026-10-15
-updated: 2026-10-15
+date: 2026-10-25
+updated: 2026-10-25
 tags: [reference, swift-rewrite, native-parity, tax, belgian-tax, household]
 description: "Code-derived inventory of the /tax route (TaxOverviewPage): year switcher, year actions, as-filed snapshots, exports, widget customisation, the six-step tax profile sheet with every household, income, home, deduction and region input, and the deduction review cards."
 aliases: [native parity tax]
@@ -33,6 +33,7 @@ Page title `tax.page.title` "Taxes"; subtitle `tax.page.subtitle` "Estimated Bel
 - Full-page error instead of everything below when the statistics query fails: `tax.page.loadError` "Couldn't load tax statistics: {msg}"; the header then has no actions (`apps/frontend/src/pages/TaxOverviewPage.tsx:214-229`).
 - Filing masthead (always shown): eyebrow `tax.masthead.eyebrow` "Belgian income tax for income year", the viewed year large, a status badge `tax.masthead.status.{live,estimate,snapshot,frozen,filed}` ("Live estimate", "Estimated", "Saved profile", "Frozen", "Filed") with icon, region `tax.masthead.meta.region` (label via `tax.profile.region.{region}.label`), marginal rate `tax.masthead.meta.marginalRate` (0 decimals), hero effective burden `tax.masthead.meta.effectiveBurden` (1 decimal). On a historical year, a notice `tax.historical.banner.{mode}Title` + `{mode}Desc`, with `tax.historical.banner.filedReferencePrefix` "ref" and the filing reference in filed mode (`apps/frontend/src/features/tax/TaxFilingMasthead.tsx:105-231`). Mode priority filed > frozen > snapshot > estimate (`apps/frontend/src/features/tax/historicalBannerMode.ts:200-211`).
 - Multi-year trend strip (`trendStrip`): card `tax.trendStrip.title` "Multi-year trend", up to 8 newest years; each tile shows year, filed/frozen icon, total income tax (whole euros), effective rate + `tax.trendStrip.effective`, and a bar normalised to the max PIT (min 4%). Hidden when there is one year or fewer (`apps/frontend/src/features/tax/MultiYearTrendStrip.tsx:280-363`).
+- When `GET /api/belgian-tax/portfolio-dashboard` reports `unconvertedCurrencies`, the native view shows the `tax.fxUnavailable` note after the disclaimer.
 - Disclaimer alert (always shown): title `tax.belgianRulesDesc`, text `tax.disclaimerTitle`: `tax.disclaimerText`, then a bullet list of household notes: `tax.household.storedUnreadable` first when the stored household could not be read, then one line per distinct issue code as `tax.household.issue.severity.{info,warning,needs_source}`: `tax.household.issue.{code}` (live year only) (`apps/frontend/src/pages/TaxOverviewPage.tsx:111-135`, `:244-248`; `apps/frontend/src/features/tax/TaxDisclaimerBanner.tsx:12-33`).
 - Below the disclaimer, a warning line `tax.fxUnavailable` "Incomplete: no exchange rate is stored for {currencies}; those amounts are left out of the affected figures." lists the dashboard's `unconvertedCurrencies` when it is not empty (`apps/frontend/src/pages/TaxOverviewPage.tsx:262`).
 - Load states below the disclaimer: `tax.household.loadFailed` page error when the engine failed to load; a section loader while the profile loads; `TaxNoProfileCard` when there is no profile and no income data (`apps/frontend/src/pages/TaxOverviewPage.tsx:250-256`).

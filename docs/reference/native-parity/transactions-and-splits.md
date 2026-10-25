@@ -2,8 +2,8 @@
 title: "Native parity inventory: Transactions, splits and Who owes you"
 type: reference
 status: active
-date: 2026-10-17
-updated: 2026-10-17
+date: 2026-10-25
+updated: 2026-10-25
 tags:
   [
     reference,
@@ -444,7 +444,7 @@ Component: `apps/frontend/src/pages/OwesPage.tsx`. Feature doc: [[docs/features/
 - Page header: `owesPage.title` "Who owes you", subtitle `owesPage.subtitle` "Track shared expenses and payments" — `apps/frontend/src/pages/OwesPage.tsx:80`.
 - Loading skeleton (summary block + 3 rows) — `apps/frontend/src/pages/OwesPage.tsx:39`.
 - Error banner `common.loadFailedRetry` "Could not load this information. Try again." with retry — `apps/frontend/src/pages/OwesPage.tsx:86`.
-- Total card (only when the total > 0): `owesPage.totalOutstanding` "Total outstanding", `owesPage.fromPerson` / `owesPage.fromPeople` "from {n} people", large total in the app default currency — `apps/frontend/src/pages/OwesPage.tsx:92`.
+- Total card (only when the total > 0): `owesPage.totalOutstanding` "Total outstanding", `owesPage.fromPerson` / `owesPage.fromPeople` "from {n} people", large total in the app default currency (server total; `owesPage.fxUnavailable` notes recipients left out for want of a rate) — `apps/frontend/src/pages/OwesPage.tsx:92`.
 - Empty state: `owesPage.noDebts` "No outstanding debts" / `owesPage.splitToTrack` "Split a transaction to start tracking who owes you" — `apps/frontend/src/pages/OwesPage.tsx:121`.
 - Person list: name; `owesPage.split` / `owesPage.splits` "{n} splits" · `owesPage.paid` "Paid: {amount}" · `owesPage.totalLabel` "Total: {amount}"; repayment progress bar (aria `owesPage.repaymentProgress` "Repayment progress for {recipient}", hidden below sm); remaining amount; chevron — `apps/frontend/src/pages/OwesPage.tsx:128`.
 - Data: `GET /api/splits/owed` — `apps/frontend/src/lib/api/splits.ts:93`.

@@ -3,7 +3,7 @@ title: "Native parity inventory: Portfolio overview and holdings"
 type: reference
 status: active
 date: 2026-10-25
-updated: 2026-10-17
+updated: 2026-10-25
 tags:
   [
     reference,
@@ -52,8 +52,11 @@ The React descriptions below remain the source baseline for checking parity.
 UI paths in this table are under `apps/native/Sources/VisionNativeUI/`; Core portfolio paths are under
 `apps/native/Sources/VisionNativeCore/Screens/Portfolio/`. Monetary responses decode directly to
 `Decimal`. Active units, basis, income, gains and broker partitions come from the canonical backend
-summary. The additive `active=false` summary request supplies `archivedPresentation`, preserving
-the shared TypeScript ordinary-history policy for archived details. Swift does not replay archived
+summary. Hero, allocation and per-holding totals (including broker-filter `accountTotals`, real-estate
+`monthlyRent`, `feesAndTaxes` and `propertyReturn`) are read from the server and never recomputed or
+converted in Swift (ADR-216, ADR-217); a missing rent rate shows the error as in React. Archived rows are
+the `summaries` of the `active=false` read with `isActive == false`; the vestigial
+`archivedPresentation` is ignored, as React does. Swift does not replay archived
 lots or mix reporting currency with raw investment quote currency. The server also supplies the
 earliest active ordinary transaction date for the annualized-return hint.
 
