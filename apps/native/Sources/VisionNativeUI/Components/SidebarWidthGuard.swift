@@ -17,8 +17,11 @@ struct SidebarWidthGuard: NSViewRepresentable {
 
     /// The last corrections the probe attempted, newest last, for test diagnostics.
     @MainActor static var trace: [String] = []
+    @MainActor private static let traceStart = ContinuousClock.now
     @MainActor private static func note(_ line: String) {
-        trace.append(line)
+        let elapsed = traceStart.duration(to: .now).components
+        let ms = elapsed.seconds * 1000 + elapsed.attoseconds / 1_000_000_000_000_000
+        trace.append("+\(ms)ms \(line)")
         if trace.count > 20 { trace.removeFirst(trace.count - 20) }
     }
 
@@ -94,7 +97,12 @@ struct SidebarWidthGuard: NSViewRepresentable {
         @objc private func sidebarFrameDidChange(_ note: Notification) { scheduleCorrection() }
 
         private func scheduleCorrection() {
-            guard window != nil, !pending, corrections < 8 else { return }
+            guard window != nil, !pending, corrections < 8 else {
+                if corrections >= 8 || window == nil {
+                    SidebarWidthGuard.note("skip window=\(window != nil) corrections=\(corrections)")
+                }
+                return
+            }
             pending = true
             // Moving the divider inside a layout pass would re-enter it.
             Task { @MainActor [weak self] in
@@ -147,7 +155,10 @@ struct SidebarWidthGuard: NSViewRepresentable {
                 sidebar: before, splitView: splitWidth, minimum: minimum, ideal: ideal,
                 firstLayout: firstLayout)
             widened = true
-            if width != nil, !firstLayout, !hasSettled(at: before) { return }
+            if width != nil, !firstLayout, !hasSettled(at: before) {
+                SidebarWidthGuard.note("settling sidebar=\(before)")
+                return
+            }
             narrowWidth = nil
             if let width {
                 corrections += 1
