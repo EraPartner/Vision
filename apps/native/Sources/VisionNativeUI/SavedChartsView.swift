@@ -85,7 +85,7 @@ struct SavedChartsView: View {
 /// A saved chart awaiting delete confirmation; `SavedChart` has no `Identifiable` conformance.
 private struct PendingChartDeletion: Identifiable {
     let chart: OpenAPI.SavedChart
-    var id: Int { chart.id }
+    var id: SavedChartID { chart.id }
 }
 
 struct CustomChartPlot: View {

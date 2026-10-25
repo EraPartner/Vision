@@ -17,11 +17,7 @@ public struct AnalysisResultView: View {
     }
     private var strings: any Localizing { shell.strings }
     private static func tabKey(_ tab: String) -> String {
-        switch tab {
-        case "chart": return "analysis.chart"
-        case "pivot": return "analysis.pivot"
-        default: return "analysis.tableView"
-        }
+        ["chart": "analysis.chart", "pivot": "analysis.pivot"][tab] ?? "analysis.tableView"
     }
     public var body: some View {
         VStack(alignment: .leading, spacing: 20) {

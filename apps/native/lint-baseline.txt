@@ -127,7 +127,7 @@ string-literal-compare	apps/native/Sources/VisionNativeCore/Screens/Insights/Ins
 string-literal-compare	apps/native/Sources/VisionNativeCore/Screens/Insights/StatisticsData.swift	6
 string-literal-compare	apps/native/Sources/VisionNativeCore/Screens/Insights/StatisticsModel.swift	2
 string-literal-compare	apps/native/Sources/VisionNativeCore/Screens/Owes/OwesModel.swift	5
-string-literal-compare	apps/native/Sources/VisionNativeCore/Screens/Planned/PlannedEditing.swift	2
+string-literal-compare	apps/native/Sources/VisionNativeCore/Screens/Planned/PlannedEditing.swift	1
 string-literal-compare	apps/native/Sources/VisionNativeCore/Screens/Planned/PlannedPayment.swift	2
 string-literal-compare	apps/native/Sources/VisionNativeCore/Screens/Portfolio/NetWorthData.swift	6
 string-literal-compare	apps/native/Sources/VisionNativeCore/Screens/Portfolio/PortfolioData.swift	11

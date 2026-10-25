@@ -298,8 +298,8 @@ public enum PlannedPatternDirection: Codable, Hashable, Sendable, RawRepresentab
 
     public init(rawValue: String) {
         switch rawValue {
-        case "income": self = .income
-        case "expense": self = .expense
+        case "income": self = .income  // lint:allow string-literal-compare wire value decoding
+        case "expense": self = .expense  // lint:allow string-literal-compare wire value decoding
         default: self = .unknown(rawValue)
         }
     }
@@ -330,8 +330,8 @@ public enum PlannedChangeDirection: Codable, Hashable, Sendable, RawRepresentabl
 
     public init(rawValue: String) {
         switch rawValue {
-        case "increased": self = .increased
-        case "decreased": self = .decreased
+        case "increased": self = .increased  // lint:allow string-literal-compare wire value decoding
+        case "decreased": self = .decreased  // lint:allow string-literal-compare wire value decoding
         default: self = .unknown(rawValue)
         }
     }

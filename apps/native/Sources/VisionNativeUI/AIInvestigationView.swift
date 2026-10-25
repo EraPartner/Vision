@@ -65,6 +65,8 @@ struct AIInvestigationView: View {
         case .localOnly: return "aiResearch.localOnly"
         case .publicProviders: return "aiResearch.publicProviders"
         case .publicWeb: return "aiResearch.publicWeb"
+        // Never offered: the control lists the three known modes.
+        case .unknown(let raw): return raw
         }
     }
     private var settings: some View {
