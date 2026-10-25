@@ -751,7 +751,8 @@ public struct PortfolioBrokerPerformance: Codable, Equatable, Sendable {
 
 public struct PortfolioQuote: Codable, Equatable, Sendable, Identifiable {
     public let symbol: String
-    public let currency: CurrencyCode
+    /// Provider text, not always ISO 4217 (for example `GBp`); format with `ResearchMoney`.
+    public let currency: String
     public let name: String?
     public let price: Decimal?
     public let change: Decimal?

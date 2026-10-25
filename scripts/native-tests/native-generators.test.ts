@@ -17,6 +17,7 @@ import {
   PATH_ID_ENTITY,
   SCHEMA_ID_ENTITY,
   STEM_ENTITY,
+  PROVIDER_CURRENCY_SCHEMAS,
   UNTYPED_IDS,
   enumCases,
   generateAPI,
@@ -532,6 +533,11 @@ test("the real spec generates with every id mapped and every table entry used", 
     .flatMap(([struct, fields]) => fields.map((field) => `${struct}.${field}`))
     .sort();
   assert.deepEqual(generated.stats.nullableFieldsHit, expectedNullable);
+  assert.deepEqual(
+    generated.stats.providerCurrencySchemasHit,
+    [...PROVIDER_CURRENCY_SCHEMAS].sort(),
+    "every PROVIDER_CURRENCY_SCHEMAS entry has a currency field, and none is stale",
+  );
 
   // No integer or string id-named field stays Int/String unless it is in UNTYPED_IDS.
   const allowedNames = new Set(
@@ -567,10 +573,15 @@ test("the real spec generates with every id mapped and every table entry used", 
   const enumCount = (generated.models.match(/^ *public enum \w+: Codable, Hashable/gm) ?? [])
     .length + (generated.operations.match(/^ *public enum \w+: Codable, Hashable/gm) ?? []).length;
   assert.equal(enumCount, generated.stats.enumsNamed + generated.stats.enumsInline);
-  assert.doesNotMatch(
-    generated.models,
-    /public let currency\w*: (?:String|\[String\])/i,
-    "no currency field stays String",
+  // Split at each struct header so a field is attributed to its own (possibly nested) struct.
+  const stringCurrencyStructs = generated.models
+    .split(/(?=public struct \w+)/)
+    .filter((chunk) => /public let currency\w*: (?:String|\[String\])/i.test(chunk))
+    .map((chunk) => /public struct (\w+)/.exec(chunk)?.[1] ?? "?");
+  assert.deepEqual(
+    stringCurrencyStructs.filter((name) => !PROVIDER_CURRENCY_SCHEMAS.has(name)),
+    [],
+    "no currency field stays String outside PROVIDER_CURRENCY_SCHEMAS",
   );
 });
 

@@ -94,7 +94,10 @@ struct PortfolioTickerView: View {
                     PortfolioInlineDisclosure(label: investment.symbol ?? quote.symbol, explanation: investment.name)
                         .font(.callout.monospaced().weight(.medium))
                     if let price = quote.price {
-                        Text(MoneyText.text(price, currency: quote.currency, settings: shell.settings, signed: false))
+                        Text(
+                            ResearchMoney.text(
+                                price, currency: quote.currency, locale: shell.settings.numberFormat.locale,
+                                fractionDigits: shell.settings.showDecimalPlaces))
                             .font(.callout).monospacedDigit().foregroundStyle(theme.secondaryLabel)
                     }
                     if let change = quote.changePercent {

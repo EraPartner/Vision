@@ -7727,13 +7727,13 @@ extension OpenAPI {
         public let providerSymbol: String?
         public let resolvedName: String?
         public let exchange: String?
-        public let currency: CurrencyCode?
+        public let currency: String?
         public let status: String
         public let verifiedAt: String?
         public let createdAt: String?
         public let updatedAt: String?
 
-        public init(id: InstrumentProviderMappingID, instrumentKey: String, keyType: KeyType, provider: String, providerSymbol: String? = nil, resolvedName: String? = nil, exchange: String? = nil, currency: CurrencyCode? = nil, status: String, verifiedAt: String? = nil, createdAt: String? = nil, updatedAt: String? = nil) {
+        public init(id: InstrumentProviderMappingID, instrumentKey: String, keyType: KeyType, provider: String, providerSymbol: String? = nil, resolvedName: String? = nil, exchange: String? = nil, currency: String? = nil, status: String, verifiedAt: String? = nil, createdAt: String? = nil, updatedAt: String? = nil) {
             self.id = id
             self.instrumentKey = instrumentKey
             self.keyType = keyType
@@ -8186,7 +8186,7 @@ extension OpenAPI {
 
     public struct MarketQuoteItem: Codable, Equatable, Sendable {
         public let symbol: String
-        public let currency: CurrencyCode
+        public let currency: String
         public let name: String?
         public let exchange: String?
         public let type: String?
@@ -8204,7 +8204,7 @@ extension OpenAPI {
         public let analystConsensus: OpenAPI.ResearchAnalystConsensus?
         public let recentAnalystActions: [JSONValue]?
 
-        public init(symbol: String, currency: CurrencyCode, name: String? = nil, exchange: String? = nil, type: String? = nil, price: Decimal? = nil, change: Decimal? = nil, changePercent: Decimal? = nil, open: Decimal? = nil, dayHigh: Decimal? = nil, dayLow: Decimal? = nil, prevClose: Decimal? = nil, volume: Decimal? = nil, avgVolume: Decimal? = nil, high52w: Decimal? = nil, low52w: Decimal? = nil, analystConsensus: OpenAPI.ResearchAnalystConsensus? = nil, recentAnalystActions: [JSONValue]? = nil) {
+        public init(symbol: String, currency: String, name: String? = nil, exchange: String? = nil, type: String? = nil, price: Decimal? = nil, change: Decimal? = nil, changePercent: Decimal? = nil, open: Decimal? = nil, dayHigh: Decimal? = nil, dayLow: Decimal? = nil, prevClose: Decimal? = nil, volume: Decimal? = nil, avgVolume: Decimal? = nil, high52w: Decimal? = nil, low52w: Decimal? = nil, analystConsensus: OpenAPI.ResearchAnalystConsensus? = nil, recentAnalystActions: [JSONValue]? = nil) {
             self.symbol = symbol
             self.currency = currency
             self.name = name
@@ -8263,10 +8263,10 @@ extension OpenAPI {
         public let symbol: String
         public let name: String
         public let exchange: String
-        public let currency: CurrencyCode?
+        public let currency: String?
         public let type: String
 
-        public init(symbol: String, name: String, exchange: String, currency: CurrencyCode? = nil, type: String) {
+        public init(symbol: String, name: String, exchange: String, currency: String? = nil, type: String) {
             self.symbol = symbol
             self.name = name
             self.exchange = exchange
@@ -11677,10 +11677,10 @@ extension OpenAPI {
 
     public struct ResearchChartData: Codable, Equatable, Sendable {
         public let symbol: String?
-        public let currency: CurrencyCode?
+        public let currency: String?
         public let points: [OpenAPI.ResearchChartPoint]
 
-        public init(symbol: String? = nil, currency: CurrencyCode? = nil, points: [OpenAPI.ResearchChartPoint]) {
+        public init(symbol: String? = nil, currency: String? = nil, points: [OpenAPI.ResearchChartPoint]) {
             self.symbol = symbol
             self.currency = currency
             self.points = points
@@ -12693,7 +12693,7 @@ extension OpenAPI {
     public struct ResearchFundamentals: Codable, Equatable, Sendable {
         public let symbol: String?
         public let name: String?
-        public let currency: CurrencyCode?
+        public let currency: String?
         public let marketCap: Decimal?
         public let pe: Decimal?
         public let forwardPE: Decimal?
@@ -12718,7 +12718,7 @@ extension OpenAPI {
         public let freeCashFlow: Decimal?
         public let fcfYield: Decimal?
 
-        public init(symbol: String? = nil, name: String? = nil, currency: CurrencyCode? = nil, marketCap: Decimal? = nil, pe: Decimal? = nil, forwardPE: Decimal? = nil, dividendYield: Decimal? = nil, eps: Decimal? = nil, beta: Decimal? = nil, priceToBook: Decimal? = nil, profitMargin: Decimal? = nil, revenue: Decimal? = nil, returnOnEquity: Decimal? = nil, sector: String? = nil, pegRatio: Decimal? = nil, payoutRatio: Decimal? = nil, grossMargin: Decimal? = nil, operatingMargin: Decimal? = nil, revenueGrowth: Decimal? = nil, earningsGrowth: Decimal? = nil, debtToEquity: Decimal? = nil, currentRatio: Decimal? = nil, quickRatio: Decimal? = nil, interestCoverage: Decimal? = nil, freeCashFlow: Decimal? = nil, fcfYield: Decimal? = nil) {
+        public init(symbol: String? = nil, name: String? = nil, currency: String? = nil, marketCap: Decimal? = nil, pe: Decimal? = nil, forwardPE: Decimal? = nil, dividendYield: Decimal? = nil, eps: Decimal? = nil, beta: Decimal? = nil, priceToBook: Decimal? = nil, profitMargin: Decimal? = nil, revenue: Decimal? = nil, returnOnEquity: Decimal? = nil, sector: String? = nil, pegRatio: Decimal? = nil, payoutRatio: Decimal? = nil, grossMargin: Decimal? = nil, operatingMargin: Decimal? = nil, revenueGrowth: Decimal? = nil, earningsGrowth: Decimal? = nil, debtToEquity: Decimal? = nil, currentRatio: Decimal? = nil, quickRatio: Decimal? = nil, interestCoverage: Decimal? = nil, freeCashFlow: Decimal? = nil, fcfYield: Decimal? = nil) {
             self.symbol = symbol
             self.name = name
             self.currency = currency
@@ -12989,12 +12989,12 @@ extension OpenAPI {
 
         public struct QuotesItem: Codable, Equatable, Sendable {
             public let provider: String
-            public let currency: CurrencyCode?
+            public let currency: String?
             public let price: Decimal?
             public let skipped: String?
             public let error: String?
 
-            public init(provider: String, currency: CurrencyCode? = nil, price: Decimal? = nil, skipped: String? = nil, error: String? = nil) {
+            public init(provider: String, currency: String? = nil, price: Decimal? = nil, skipped: String? = nil, error: String? = nil) {
                 self.provider = provider
                 self.currency = currency
                 self.price = price
@@ -13036,14 +13036,14 @@ extension OpenAPI {
         public let providerSymbol: String?
         public let resolvedName: String?
         public let exchange: String?
-        public let currency: CurrencyCode?
+        public let currency: String?
         public let candidates: [OpenAPI.ResearchSearchItem]?
         public let fromStore: Bool?
         public let fromHolding: Bool?
         public let reason: String?
         public let error: String?
 
-        public init(provider: String, status: String, providerSymbol: String? = nil, resolvedName: String? = nil, exchange: String? = nil, currency: CurrencyCode? = nil, candidates: [OpenAPI.ResearchSearchItem]? = nil, fromStore: Bool? = nil, fromHolding: Bool? = nil, reason: String? = nil, error: String? = nil) {
+        public init(provider: String, status: String, providerSymbol: String? = nil, resolvedName: String? = nil, exchange: String? = nil, currency: String? = nil, candidates: [OpenAPI.ResearchSearchItem]? = nil, fromStore: Bool? = nil, fromHolding: Bool? = nil, reason: String? = nil, error: String? = nil) {
             self.provider = provider
             self.status = status
             self.providerSymbol = providerSymbol

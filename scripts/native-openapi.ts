@@ -235,6 +235,21 @@ export interface GeneratorTables {
   nullablePatchFields: Record<string, string[]>;
 }
 
+/**
+ * Schemas whose currency fields carry market-data provider text rather than a
+ * stored ISO 4217 code. Providers return values such as "GBp" (pence), and the
+ * backend passes them through unchanged, so these stay `String`.
+ */
+export const PROVIDER_CURRENCY_SCHEMAS: ReadonlySet<string> = new Set([
+  "InstrumentProviderMapping",
+  "MarketQuoteItem",
+  "MarketSearchResult",
+  "QuotesItem",
+  "ResearchChartData",
+  "ResearchFundamentals",
+  "ResearchMappingProposal",
+]);
+
 export const DEFAULT_TABLES: GeneratorTables = {
   schemaIdEntity: SCHEMA_ID_ENTITY,
   stemEntity: STEM_ENTITY,
@@ -252,6 +267,8 @@ export interface GenerationStats {
   enumsNamed: number;
   enumsInline: number;
   currencyFields: number;
+  /** PROVIDER_CURRENCY_SCHEMAS entries that matched a currency field. */
+  providerCurrencySchemasHit: string[];
   nullableFields: number;
   /** Keys of UNTYPED_IDS that matched a field. */
   untypedIdsHit: string[];
@@ -488,6 +505,7 @@ class Generator {
     enumsNamed: 0,
     enumsInline: 0,
     currencyFields: 0,
+    providerCurrencySchemasHit: new Set<string>(),
     nullableFields: 0,
   };
 
@@ -833,7 +851,13 @@ class Generator {
       usedNames.add(name);
       const swiftName = swiftIdentifier(name);
       let base = this.identifierType(wire, schema, scope);
-      if (base === undefined && isCurrencyField(wire, schema)) {
+      const providerCurrency = scope.some((part) => PROVIDER_CURRENCY_SCHEMAS.has(part));
+      if (providerCurrency && isCurrencyField(wire, schema)) {
+        for (const part of scope) {
+          if (PROVIDER_CURRENCY_SCHEMAS.has(part)) this.stats.providerCurrencySchemasHit.add(part);
+        }
+      }
+      if (base === undefined && !providerCurrency && isCurrencyField(wire, schema)) {
         base = schema.type === "array" ? "[CurrencyCode]" : "CurrencyCode";
         this.stats.currencyFields++;
       }
@@ -1369,6 +1393,7 @@ export function generateAPI(
       enumsNamed: generator.stats.enumsNamed,
       enumsInline: generator.stats.enumsInline,
       currencyFields: generator.stats.currencyFields,
+      providerCurrencySchemasHit: [...generator.stats.providerCurrencySchemasHit].sort(),
       nullableFields: generator.stats.nullableFields,
       untypedIdsHit: [...generator.untypedHits].sort(),
       nullableFieldsHit: [...generator.nullableHits].sort(),
