@@ -1,4 +1,5 @@
 import SwiftUI
+import VisionNativeCore
 
 /// Tailwind's window-width breakpoints (`sm` 640, `md` 768, `lg` 1024, `xl` 1280). The web
 /// compares them with the viewport; native pages compare them with their page width (the

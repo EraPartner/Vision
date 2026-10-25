@@ -235,11 +235,11 @@ public struct VisionGlassDialog<Content: View>: View {
 /// drawn past the window edge, so only the leading corners show rounded.
 public struct VisionSideSheet<Content: View>: View {
     /// `w-3/4` (sheet.tsx side right).
-    static var widthFraction: CGFloat { 0.75 }
+    nonisolated static var widthFraction: CGFloat { 0.75 }
     /// `sm:max-w-sm` (sheet.tsx side right), 24rem.
-    static var defaultMaxWidth: CGFloat { 384 }
+    nonisolated static var defaultMaxWidth: CGFloat { 384 }
     /// `gap-4` (sheet.tsx variants base).
-    static var gap: CGFloat { 16 }
+    nonisolated static var gap: CGFloat { 16 }
 
     private let available: CGSize
     private let metrics: VisionDialogMetrics
