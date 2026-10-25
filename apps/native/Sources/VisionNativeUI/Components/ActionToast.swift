@@ -3,22 +3,19 @@ import SwiftUI
 import VisionNativeCore
 
 /// The surface of a toast. The web toast is `glass-thick` (components/ui/sonner.tsx
-/// `group toast glass-thick`, index.css `.glass-thick`); under Full effects it is a
-/// `VisionGlassSurface(.thick)`, otherwise the system regular material it has been. The
-/// Reduced tier and Reduce Transparency keep the flat `--card` fill.
+/// `group toast glass-thick`, index.css `.glass-thick`), drawn as `VisionGlassSurface(.thick)`.
+/// The Reduced tier and Reduce Transparency keep the flat `--card` fill.
 struct ToastSurface: View {
     @Environment(\.visionTheme) private var theme
     @Environment(\.visionVisualEffects) private var effects
-    @Environment(\.visionFullEffects) private var fullEffects
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         if effects == "reduced" || reduceTransparency {
             RoundedRectangle(cornerRadius: DesignTokens.Radius.card).fill(theme.card)
-        } else if fullEffects {
-            VisionGlassSurface(material: .thick, cornerRadius: DesignTokens.Radius.card)
         } else {
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.card).fill(.regularMaterial)
+            // sonner.tsx draws every toast as `glass-thick`, with or without Full effects.
+            VisionGlassSurface(material: .thick, cornerRadius: DesignTokens.Radius.card)
         }
     }
 }
