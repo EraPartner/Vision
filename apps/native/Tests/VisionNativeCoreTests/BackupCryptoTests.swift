@@ -1,4 +1,3 @@
-import CommonCrypto
 import CryptoKit
 import Foundation
 import Testing
@@ -157,35 +156,36 @@ func readBytes(_ path: String) throws -> [UInt8] {
         #expect(BackupFiles.size(directory + "/out.enc") != nil)
     }
 
-    @Test func decryptsNodeV1BundleAndLegacySqlFiles() throws {
+    @Test func theRetiredV1FormatIsRefusedByNameForBundlesAndLegacySqlFiles() throws {
         let directory = try makeBackupScratchDirectory()
         defer { try? FileManager.default.removeItem(atPath: directory) }
         let bundle = directory + "/legacy.visionbak.enc"
         let sql = directory + "/legacy.sql.enc"
         try writeBytes(bundle, Array("VISIONBAK1".utf8) + bytes(hex: Self.nodeV1Body))
         try writeBytes(sql, Array("VISIONENC1".utf8) + bytes(hex: Self.nodeV1Body))
+        // Still recognised as encrypted, so the picker routes them to the refusal.
         #expect(BackupBundle.isEncrypted(bundle))
         #expect(LegacySQLBackup.isEncrypted(sql))
         #expect(!LegacySQLBackup.isEncrypted(bundle))
 
-        try EncryptedFile.decrypt(
-            encryptedPath: bundle, destinationPath: directory + "/bundle.out", passphrase: "legacy-pass",
-            format: BackupBundle.format)
-        try EncryptedFile.decrypt(
-            encryptedPath: sql, destinationPath: directory + "/sql.out", passphrase: "legacy-pass",
-            format: LegacySQLBackup.format)
-        let expected = Array("-- legacy v1\nSELECT 1;\n".utf8)
-        let bundlePlain = try readBytes(directory + "/bundle.out")
-        let sqlPlain = try readBytes(directory + "/sql.out")
-        #expect(bundlePlain == expected)
-        #expect(sqlPlain == expected)
+        #expect(throws: BackupFailure(EncryptedFile.retiredV1Message)) {
+            try EncryptedFile.decrypt(
+                encryptedPath: bundle, destinationPath: directory + "/bundle.out", passphrase: "legacy-pass",
+                format: BackupBundle.format)
+        }
+        #expect(throws: BackupFailure(EncryptedFile.retiredV1Message)) {
+            try EncryptedFile.decrypt(
+                encryptedPath: sql, destinationPath: directory + "/sql.out", passphrase: "legacy-pass",
+                format: LegacySQLBackup.format)
+        }
+        #expect(!BackupFiles.exists(directory + "/bundle.out"))
+        #expect(!BackupFiles.exists(directory + "/sql.out"))
     }
 
     @Test func aWrongPassphraseReportsTheFormatsInvalidErrorAndLeavesNoOutput() throws {
         let directory = try makeBackupScratchDirectory()
         defer { try? FileManager.default.removeItem(atPath: directory) }
         try writeBytes(directory + "/v2.enc", bytes(hex: Self.nodeV2))
-        try writeBytes(directory + "/v1.enc", Array("VISIONENC1".utf8) + bytes(hex: Self.nodeV1Body))
 
         #expect(throws: BackupFailure(BackupBundle.format.invalidError)) {
             try EncryptedFile.decrypt(
@@ -193,23 +193,6 @@ func readBytes(_ path: String) throws -> [UInt8] {
                 format: BackupBundle.format)
         }
         #expect(!BackupFiles.exists(directory + "/v2.out"))
-        #expect(throws: BackupFailure(BackupPassphrase.invalid)) {
-            try EncryptedFile.decrypt(
-                encryptedPath: directory + "/v1.enc", destinationPath: directory + "/v1.out", passphrase: "wrong",
-                format: LegacySQLBackup.format)
-        }
-        #expect(!BackupFiles.exists(directory + "/v1.out"))
-    }
-
-    @Test func pkcs7PaddingIsCheckedLikeOpenSSL() {
-        let valid = [UInt8](repeating: 0x41, count: 13) + [3, 3, 3]
-        #expect(EncryptedFile.pkcs7Unpad(valid) == [UInt8](repeating: 0x41, count: 13))
-        let full = [UInt8](repeating: 16, count: 16)
-        #expect(EncryptedFile.pkcs7Unpad(full) == [])
-        #expect(EncryptedFile.pkcs7Unpad([UInt8](repeating: 0x41, count: 15) + [25]) == nil)
-        #expect(EncryptedFile.pkcs7Unpad([UInt8](repeating: 0x41, count: 15) + [0]) == nil)
-        #expect(EncryptedFile.pkcs7Unpad([UInt8](repeating: 0x41, count: 13) + [2, 3, 3]) == nil)
-        #expect(EncryptedFile.pkcs7Unpad([3, 3, 3]) == nil)
     }
 
     @Test func aMissingPassphraseOrUnknownMagicIsReported() throws {

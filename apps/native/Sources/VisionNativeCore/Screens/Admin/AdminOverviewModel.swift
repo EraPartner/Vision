@@ -1,44 +1,6 @@
 import Foundation
 import Observation
 
-/// The page's admin token (`sessionStorage["vision.adminToken"]`, apps/frontend/src/lib/adminToken.ts).
-/// The native card reads and writes the page's own storage, so the web admin pages and the
-/// native API client see the same token, and nothing else stores it.
-public struct AdminTokenAccess: Sendable {
-    /// `getAdminToken()` before trimming; `nil` when unset or the page cannot answer.
-    public let read: @Sendable () async -> String?
-    /// `setAdminToken(value)`: stores the trimmed value; a blank value removes it. `false` when
-    /// the page is not ready or did not answer, so the storage is unchanged.
-    public let write: @Sendable (String) async -> Bool
-
-    public init(read: @escaping @Sendable () async -> String?, write: @escaping @Sendable (String) async -> Bool) {
-        self.read = read
-        self.write = write
-    }
-}
-
-/// The page scripts behind `AdminTokenAccess`, run with `callAsyncJavaScript`.
-public enum AdminTokenScript {
-    /// `vision.adminToken`.
-    public static let storageKey = "vision.adminToken"
-    /// The stored token, or an empty string.
-    public static let read = """
-        try { return String(window.sessionStorage.getItem("vision.adminToken") || ""); } catch { return ""; }
-        """
-    /// `setAdminToken(token)`, with `token` passed as an argument (never spliced into the
-    /// script). Returns "ok", or an empty string when `sessionStorage` is unavailable.
-    public static let write = """
-        try {
-            const value = String(token ?? "").trim();
-            if (value) window.sessionStorage.setItem("vision.adminToken", value);
-            else window.sessionStorage.removeItem("vision.adminToken");
-            return "ok";
-        } catch { return ""; }
-        """
-    /// The argument name `write` reads.
-    public static let argument = "token"
-}
-
 /// A summary tile of the overview (`OverviewCard`).
 public struct AdminOverviewTile: Equatable, Sendable, Identifiable {
     /// The ring: none for `ok`, `ring-warning/40` for `warn`, `ring-destructive/40` for `error`.
@@ -120,8 +82,7 @@ public enum AdminOverviewPresentation {
     }
 }
 
-/// The state of `/admin` (`AdminOverviewPage`): the three `useAdminOverviewQueries`
-/// queries, the admin token card and the audit history card.
+/// The state of `/admin` (`AdminOverviewPage`): the three `useAdminOverviewQueries` queries.
 @MainActor
 @Observable
 public final class AdminOverviewModel {
@@ -131,25 +92,11 @@ public final class AdminOverviewModel {
     public let providers: ScreenQuery<[OpenAPI.ProviderHealth]>
     /// `adminKeys.requestMetrics`, 15 s.
     public let metrics: ScreenQuery<[OpenAPI.RouteMetric]>
-    public let audit: AuditHistoryModel
-    /// The token input's draft.
-    public var tokenDraft = ""
-    /// `hasAdminToken()`: the "token is set" line and the Clear button.
-    public private(set) var hasToken = false
-    public private(set) var notice: ScreenNotice?
 
-    @ObservationIgnored private let token: AdminTokenAccess
-    @ObservationIgnored private var notices = NoticeCounter()
-
-    public init(
-        service: any AdminService, token: AdminTokenAccess, audit: AuditHistoryModel,
-        now: @escaping @Sendable () -> Date = { Date() }
-    ) {
+    public init(service: any AdminService, now: @escaping @Sendable () -> Date = { Date() }) {
         dbStats = ScreenQuery(staleAfter: 60, now: now) { try await service.databaseStats() }
         providers = ScreenQuery(staleAfter: 30, now: now) { try await service.providerHealth() }
         metrics = ScreenQuery(staleAfter: 15, now: now) { try await service.requestMetrics() }
-        self.token = token
-        self.audit = audit
     }
 
     /// The skeleton tiles show while the database stats load.
@@ -161,72 +108,16 @@ public final class AdminOverviewModel {
             metrics: metrics.data, metricsLoading: metrics.isLoading, settings: settings, strings: strings)
     }
 
-    /// The page went away: the typed token and the audit transfer password do not outlive it.
-    public func disappear() {
-        tokenDraft = ""
-        audit.disappear()
-    }
-
-    /// The page mounted: the queries (unless fresh), the token state and the audit history.
+    /// The page mounted: the queries, unless fresh.
     public func appear() async {
         let dbStats = dbStats
         let providers = providers
         let metrics = metrics
-        let audit = audit
         await withTaskGroup(of: Void.self) { group in
-            group.addTask { await self.refreshTokenState() }
             group.addTask { await dbStats.appear() }
             group.addTask { await providers.appear() }
             group.addTask { await metrics.appear() }
-            group.addTask { await audit.load() }
         }
-    }
-
-    // MARK: Admin token
-
-    /// Save is disabled for a blank draft; Enter does nothing then.
-    public var canSaveToken: Bool { !tokenDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    public var canClearToken: Bool { hasToken }
-
-    public func refreshTokenState() async {
-        hasToken = Self.isSet(await token.read())
-    }
-
-    /// `save()`: store the trimmed token, clear the input, toast `admin.token.saved`, or
-    /// `apiError.unknown` when the page could not store it.
-    public func saveToken() async {
-        guard canSaveToken else { return }
-        let value = tokenDraft
-        tokenDraft = ""
-        let stored = await token.write(value)
-        hasToken = Self.isSet(await token.read())
-        notice = notices.make(stored ? .success : .error, stored ? "admin.token.saved" : "apiError.unknown")
-    }
-
-    /// `clear()`: remove the token, toast `admin.token.cleared`, or `apiError.unknown` when the
-    /// page could not remove it.
-    public func clearToken() async {
-        guard canClearToken else { return }
-        if await token.write("") {
-            hasToken = false
-            notice = notices.make(.success, "admin.token.cleared")
-        } else {
-            hasToken = Self.isSet(await token.read())
-            notice = notices.make(.error, "apiError.unknown")
-        }
-    }
-
-    /// The toast was shown.
-    public func attachNotices(_ center: NativeNoticeCenter) {
-        notices.attach(center) { [weak self] in self?.clearNotice($0) }
-    }
-
-    public func clearNotice(_ id: Int) {
-        if notice?.id == id { notice = nil }
-    }
-
-    private static func isSet(_ value: String?) -> Bool {
-        !(value ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 
@@ -254,11 +145,10 @@ public struct AdminScreens: Sendable {
     /// (`adminKeys.dbStats`).
     @MainActor
     public static func make(
-        service: any AdminService, database: any DatabaseAdminService, token: AdminTokenAccess,
-        audit: any AuditHistoryService, now: @escaping @Sendable () -> Date = { Date() }
+        service: any AdminService, database: any DatabaseAdminService,
+        now: @escaping @Sendable () -> Date = { Date() }
     ) -> AdminScreens {
-        let overview = AdminOverviewModel(
-            service: service, token: token, audit: AuditHistoryModel(service: audit), now: now)
+        let overview = AdminOverviewModel(service: service, now: now)
         let providers = ProviderHealthModel(
             service: service, now: now, onProvidersChanged: { [weak overview] in overview?.providers.invalidate() })
         let databaseScreens = DatabaseScreens(

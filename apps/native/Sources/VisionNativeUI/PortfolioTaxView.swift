@@ -179,6 +179,15 @@ public struct PortfolioTaxView: View {
     @ViewBuilder private func content(_ data: PortfolioTaxDashboard, overview: OpenAPI.BelgianTaxOverview) -> some View
     {
         if overview.isHistorical { historicalBanner(overview) }
+        if !data.isEmpty {
+            TaxCard(title: strings.t("tax.portfolioDisclaimerTitle")) {
+                Text(strings.t("tax.portfolioDisclaimerText")).font(.callout).foregroundStyle(theme.secondaryLabel)
+            }
+        }
+        if !data.unconvertedCurrencies.isEmpty {
+            Text(strings.t("tax.fxUnavailable", ["currencies": data.unconvertedCurrencies.joined(separator: ", ")]))
+                .font(.footnote).foregroundStyle(theme.warning)
+        }
         if data.isEmpty {
             TaxCard {
                 VisionEmptyState(
@@ -188,9 +197,6 @@ public struct PortfolioTaxView: View {
                 }
             }
         } else {
-            TaxCard(title: strings.t("tax.portfolioDisclaimerTitle")) {
-                Text(strings.t("tax.portfolioDisclaimerText")).font(.callout).foregroundStyle(theme.secondaryLabel)
-            }
             sectionHeading("tax.costsSection", description: "tax.costsHelp")
             if model.widgets.isVisible("summaryCards") { PortfolioTaxSummaryView(data: data, shell: shell) }
             if model.widgets.isVisible("taxByAssetClass"), !data.taxByAssetClass.isEmpty {

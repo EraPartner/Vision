@@ -7,7 +7,9 @@ public enum RuntimeConstants {
     public static let postgresMajor = 18
     public static let postgresMinor = 6
     public static let postgresVersion = "\(postgresMajor).\(postgresMinor)"
-    public static let chromiumVersion = "150.0.7871.24"
+    /// `RUNTIME_VERIFICATION_MARKER`: records the last full payload verification, below the
+    /// runtime's `nativeRoot`.
+    public static let runtimeVerificationMarker = "runtime-verification.json"
     public static let loopbackHost = "127.0.0.1"
     /// `DEFAULT_POSTGRES_PORT`: the port a URL without a port means.
     public static let defaultPostgresPort = 54329
@@ -25,6 +27,11 @@ public enum RuntimeConstants {
     ]
     public static let versionCheckedPostgresTools = ["postgres", "psql", "pg_dump", "pg_restore"]
     public static let analysisRole = "vision_analysis_executor"
+    /// `RETIRED_NATIVE_ENV_KEYS`: secrets of removed features. An older `runtime.env` may
+    /// still hold them; they are stripped on the next layout check and never reach the backend.
+    public static let retiredEnvironmentKeys: Set<String> = [
+        "OPENAI_API_KEY", "OPENAI_API_ENABLED", "AI_REFERENCE_MAPPING_KEY",
+    ]
     public static let childEnvironmentAllowlist = [
         "PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "TEMP", "TMP", "TERM", "LANG", "LC_ALL", "LC_CTYPE", "TZ",
         "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",

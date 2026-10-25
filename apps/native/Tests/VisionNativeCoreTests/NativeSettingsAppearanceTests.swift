@@ -31,6 +31,18 @@ struct NativeSettingsAppearanceTests {
             ]))
         #expect(malformed == defaults)
     }
+    @Test func fullEffectsDefaultsOffAndKeepsOnlyABooleanLikeTheSourceStore() {
+        // ADR-244: `AppSettings.fullEffects`, off by default, validated on its own.
+        #expect(!NativeAppSettings.defaults.fullEffects)
+        #expect(NativeSettingsDefaults.app["fullEffects"] == .bool(false))
+        #expect(NativeAppSettings.migrate(.object(["fullEffects": .bool(true)])).fullEffects)
+        #expect(!NativeAppSettings.migrate(.object(["fullEffects": .string("true")])).fullEffects)
+        #expect(!NativeAppSettings.migrate(.object(["fullEffects": .int(1)])).fullEffects)
+        // A stored blob without the key (older installs) migrates to off and keeps the other fields.
+        let migrated = NativeSettingsDefaults.migrateApp(.object(["visualEffects": .string("enhanced")]))
+        #expect(migrated["fullEffects"] == .bool(false) && migrated["visualEffects"] == .string("enhanced"))
+        #expect(NativeSettingsDefaults.appValue("fullEffects", raw: .object(["fullEffects": .string("on")])) == .bool(false))
+    }
     @Test func explicitAndSystemModesRetainVariantAccentAndGainLossSkin() {
         var settings = NativeAppSettings.defaults
         settings.colorblindGainLoss = true
@@ -91,6 +103,17 @@ struct NativeSettingsAppearanceTests {
             theme: nil, settings: settings, systemIsDark: true, physicalPixelCount: 8_294_400,
             sessionTierOverride: "reduced")
         #expect(uncapped.effectiveVisualEffects == "enhanced")
+    }
+    @Test func builtInDisplayIsNeverLargeAndUnknownFallsBackToPixels() {
+        // A "More Space" MacBook Air mode: 7.06 MP backing store on a built-in panel (ADR-244).
+        #expect(!NativeSettingsAppearanceResolver.isLargeDisplay(physicalPixelCount: 7_056_000, isBuiltIn: true))
+        #expect(NativeSettingsAppearanceResolver.isLargeDisplay(physicalPixelCount: 7_056_000, isBuiltIn: false))
+        #expect(NativeSettingsAppearanceResolver.isLargeDisplay(physicalPixelCount: 7_056_000, isBuiltIn: nil))
+        var settings = NativeAppSettings.defaults
+        settings.visualEffects = "enhanced"
+        let builtIn = NativeSettingsAppearanceResolver.resolve(
+            theme: nil, settings: settings, systemIsDark: true, physicalPixelCount: 8_294_400, isBuiltInDisplay: true)
+        #expect(!builtIn.isLargeDisplay && builtIn.effectiveVisualEffects == "enhanced")
     }
 }
 

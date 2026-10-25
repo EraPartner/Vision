@@ -89,10 +89,6 @@ public final class PortfolioModel {
     public private(set) var historyComplete = false
     public private(set) var historyVersion = 0
     public private(set) var historyError: String?
-    /// RealEstatePage's complete property history (usePortfolio `completeAssetClass`), for rent.
-    public private(set) var rentHistory: [Int: [PortfolioTransaction]] = [:]
-    public private(set) var rentLoading = false
-    public private(set) var rentError: String?
     public var error: String? { errors["investments"] ?? errors["summary"] }
     public var isLoading: Bool { summary == nil && error == nil }
     /// The footer line that replaces the broker subtotals, which also disables the broker
@@ -106,7 +102,13 @@ public final class PortfolioModel {
     public var active: [PortfolioHolding] { summary?.summaries.filter(\.isActive) ?? [] }
     public var priceFreshness: PortfolioPriceFreshness { .aggregate(active) }
     public var stalePriceCount: Int { active.filter { PortfolioPriceFreshness.isStale($0, now: now()) }.count }
-    public var archived: [PortfolioHolding] { archiveSummary?.archivedPresentation?.filter { !$0.isActive } ?? [] }
+    /// Archived holdings come from the all-holdings summary (`active=false`), the same engine as
+    /// the active ones: dated FX and the configured cost-basis method (`useAllHoldingsSummaryQuery`).
+    public var archived: [PortfolioHolding] { archiveSummary?.summaries.filter { !$0.isActive } ?? [] }
+    /// `findHoldingTotals`: the server totals of an asset page's classes.
+    public func holdingTotals(assetClasses: [String]) -> PortfolioHoldingTotals {
+        summary?.holdingTotals(assetClasses: assetClasses) ?? .empty
+    }
     public var selectedInvestment: PortfolioHolding? { (active + archived).first { $0.id == selectedInvestmentId } }
     public var firstInvestmentDate: String? { summary?.firstInvestmentDate }
     public func investment(id: Int) -> PortfolioInvestment? {
@@ -158,12 +160,12 @@ public final class PortfolioModel {
         }
     }
     public var brokerOptions: [PortfolioBrokerOption] {
-        let ids = Set(active.flatMap { $0.byAccount.compactMap(\.accountId) })
+        let ids = Set((summary?.accountTotals ?? []).compactMap(\.accountId))
         var result = ids.map { id in
             PortfolioBrokerOption(
                 id: String(id), name: accounts.first { $0.id == id }.map { $0.displayName ?? $0.name } ?? "#\(id)")
         }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        if active.contains(where: { $0.byAccount.contains { $0.accountId == nil } }) {
+        if (summary?.accountTotals ?? []).contains(where: { $0.accountId == nil }) {
             result.append(PortfolioBrokerOption(id: "unassigned", name: ""))
         }
         return result
@@ -174,20 +176,32 @@ public final class PortfolioModel {
                 currentValue: holding.currentValue, totalInvested: holding.totalInvested, gainLoss: holding.gainLoss,
                 oversold: holding.oversold, providedReturnPercent: holding.gainLossPercent)
         }
+        // The server's per-account total of this holding (ADR-216); the page only picks the row.
         let account = brokerFilter == "unassigned" ? nil : Int(brokerFilter)
-        let rows = holding.byAccount.filter { $0.accountId == account }
+        guard let row = holding.accountTotals.first(where: { $0.accountId == account }) else {
+            return .init(currentValue: 0, totalInvested: 0, gainLoss: 0, oversold: false)
+        }
         return .init(
-            currentValue: rows.reduce(0) { $0 + $1.currentValue },
-            totalInvested: rows.reduce(0) { $0 + $1.totalInvested },
-            gainLoss: rows.reduce(0) { $0 + $1.gainLoss }, oversold: rows.contains(where: \.oversold))
+            currentValue: row.currentValue, totalInvested: row.totalInvested, gainLoss: row.gainLoss,
+            oversold: row.oversold)
     }
     public var filteredHoldings: [PortfolioHolding] { holdings(assetClass: nil) }
+    /// The holdings and P/L subtotals of the footer: the summary totals, or the selected broker
+    /// account's server total, never a sum of the visible rows.
     public var brokerSubtotal: PortfolioBrokerSubtotal {
-        let rows = filteredHoldings.map { metrics(for: $0) }
+        guard brokerFilter != "all" else {
+            let totals = summary?.totals
+            return .init(
+                currentValue: totals?.totalPortfolioValue ?? 0, totalInvested: totals?.totalInvested ?? 0,
+                gainLoss: totals?.totalGainLoss ?? 0, oversold: false)
+        }
+        let account = brokerFilter == "unassigned" ? nil : Int(brokerFilter)
+        guard Int(brokerFilter) != nil || brokerFilter == "unassigned",
+            let row = summary?.accountTotals.first(where: { $0.accountId == account })
+        else { return .init(currentValue: 0, totalInvested: 0, gainLoss: 0, oversold: false) }
         return .init(
-            currentValue: rows.reduce(0) { $0 + $1.currentValue },
-            totalInvested: rows.reduce(0) { $0 + $1.totalInvested },
-            gainLoss: rows.reduce(0) { $0 + $1.gainLoss }, oversold: rows.contains(where: \.oversold))
+            currentValue: row.currentValue, totalInvested: row.totalInvested, gainLoss: row.gainLoss,
+            oversold: row.oversold)
     }
     public func holdings(assetClass: String?) -> [PortfolioHolding] {
         var rows = active.filter { holding in
@@ -198,7 +212,7 @@ public final class PortfolioModel {
             else { return false }
             if brokerFilter == "all" { return true }
             guard brokerFilter == "unassigned" || Int(brokerFilter) != nil else { return false }
-            return holding.byAccount.contains {
+            return holding.accountTotals.contains {
                 $0.accountId == (brokerFilter == "unassigned" ? nil : Int(brokerFilter))
             }
         }
@@ -339,8 +353,8 @@ public final class PortfolioModel {
         }
         assign(answers.1, key: "archive") { value in
             try validate(value.currency, expected: currency)
-            guard let rows = value.archivedPresentation, rows.allSatisfy({ !$0.isActive && $0.currency == currency })
-            else { throw invalid("Missing archived presentation contract") }
+            guard value.summaries.allSatisfy({ $0.currency == currency })
+            else { throw invalid("Wrong archived summary currency") }
             archiveSummary = value
         }
         assign(answers.2, key: "investments") { investments = $0 }
@@ -531,36 +545,6 @@ public final class PortfolioModel {
             historyLoading = false
         }
         return complete
-    }
-    /// Loads every property's complete history with four workers, as `usePortfolioTransactionsQuery`
-    /// does for the complete asset class; a failure surfaces instead of a partial rent.
-    public func loadRentHistory(ids: [Int], force: Bool = false) async {
-        let wanted = Set(ids)
-        guard force || rentError != nil || wanted != Set(rentHistory.keys) else { return }
-        rentLoading = true
-        rentError = nil
-        let service = service
-        do {
-            var loaded: [Int: [PortfolioTransaction]] = [:]
-            try await withThrowingTaskGroup(of: (Int, [PortfolioTransaction]).self) { group in
-                var pending = ids.makeIterator()
-                for _ in 0..<min(4, ids.count) {
-                    if let id = pending.next() {
-                        group.addTask { (id, try await Self.completeHistory(service: service, investmentId: id)) }
-                    }
-                }
-                while let result = try await group.next() {
-                    loaded[result.0] = result.1
-                    if let next = pending.next() {
-                        group.addTask { (next, try await Self.completeHistory(service: service, investmentId: next)) }
-                    }
-                }
-            }
-            rentHistory = loaded
-        } catch {
-            if !(error is CancellationError) { rentError = error.localizedDescription }
-        }
-        rentLoading = false
     }
     public nonisolated static func completeHistory(service: any PortfolioService, investmentId: Int) async throws
         -> [PortfolioTransaction]

@@ -1,10 +1,9 @@
-import CommonCrypto
 import Foundation
 import Testing
 @testable import VisionNativeCore
 
-// Vision backup bundles: the Electron Vision 1.0.2 fixture, the v1 (CBC) bundle format
-// and bundles written by Vision Native.
+// Vision backup bundles: the Electron Vision 1.0.2 fixture, the retired v1 (CBC) format
+// that is refused by name, and bundles written by Vision Native.
 
 enum BackupFixture {
     static let passphrase = "vision-v1.0.2-fixture"
@@ -73,19 +72,21 @@ enum BackupFixture {
                 "attachments/tx-001/receipt.txt",
             ])
 
-        let wrapped = try BackupFiles.makeTemporaryDirectory(prefix: "v1_", in: directory)
-        let iv = (0..<16).map { UInt8($0) }
-        let key = try #require(try EncryptedFile.deriveKeyV1(BackupFixture.passphrase, salt: "vision-backup-v1"))
-        let cryptor = try AESCryptor(operation: kCCEncrypt, key: key, iv: iv, options: kCCOptionPKCS7Padding)
-        let plain = try readBytes(directory + "/fixture.zip")
-        let ciphertext = try cryptor.update(plain) + cryptor.finish()
-        try writeBytes(wrapped + "/v1.visionbak.enc", BackupBundle.encryptedMagicV1 + iv + ciphertext)
+    }
 
-        let opened = try BackupBundle.open(
-            wrapped + "/v1.visionbak.enc", passphrase: BackupFixture.passphrase, temporaryParent: directory)
-        defer { opened.cleanup() }
-        #expect(opened.metadata["appVersion"]?.stringValue == "1.0.2")
-        #expect(opened.frontendState != nil)
+    @Test func aRetiredV1BundleIsRefusedByName() throws {
+        let directory = try makeBackupScratchDirectory()
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        // magic | iv(16) | one CBC block: the header alone decides, the ciphertext is never read.
+        let body = [UInt8](repeating: 0x5A, count: 32)
+        try writeBytes(directory + "/v1.visionbak.enc", BackupBundle.encryptedMagicV1 + body)
+        #expect(BackupBundle.isEncrypted(directory + "/v1.visionbak.enc"))
+        #expect(throws: BackupFailure(EncryptedFile.retiredV1Message)) {
+            _ = try BackupBundle.open(
+                directory + "/v1.visionbak.enc", passphrase: BackupFixture.passphrase, temporaryParent: directory)
+        }
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: directory)
+        #expect(leftovers == ["v1.visionbak.enc"])
     }
 
     @Test func aWrongOrMissingPassphraseHasElectronsMessages() throws {

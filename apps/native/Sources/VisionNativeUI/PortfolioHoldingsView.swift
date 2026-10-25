@@ -46,22 +46,10 @@ public struct PortfolioHoldingsView: View {
     private var holdings: [PortfolioHolding] { model.active.filter { classes.contains($0.assetClass) } }
     private var isUnitBased: Bool { !["real_estate", "savings", "bond"].contains(assetClass) }
     private var isRealEstate: Bool { assetClass == "real_estate" }
-    /// RealEstatePage: each property's latest rent, converted from its booking currency.
-    private var rentById: [Int: Decimal?] {
-        let converter = PlannedCurrencyConverter(
-            rates: shell.exchangeRates.data, target: shell.settings.defaultCurrency)
-        return Dictionary(
-            uniqueKeysWithValues: holdings.map { holding in
-                (
-                    holding.id,
-                    PortfolioMonthlyRent.inTarget(
-                        model.rentHistory[holding.id] ?? [], originalCurrency: holding.originalCurrency,
-                        convert: { converter.convert($0, from: $1) })
-                )
-            })
-    }
-    private var missingRentRate: Bool { isRealEstate && rentById.values.contains { $0 == nil } }
-    private var rentKey: String { holdings.map { String($0.id) }.joined(separator: ",") }
+    /// `findHoldingTotals`: the page figures are the server's totals of these classes (ADR-216).
+    private var totals: PortfolioHoldingTotals { model.holdingTotals(assetClasses: classes) }
+    /// RealEstatePage: a property's rent without a stored rate makes the monthly rent unavailable.
+    private var missingRentRate: Bool { isRealEstate && totals.monthlyRentRateMissing }
     private var emptyKey: String {
         switch prefix {
         case "crypto": "noCrypto"
@@ -91,22 +79,12 @@ public struct PortfolioHoldingsView: View {
                         .menuIndicator(.hidden).accessibilityLabel(strings.t("portfolio.menu"))
                     }
                 }
-                if model.isLoading || (isRealEstate && (model.rentLoading || (missingRentRate && shell.exchangeRates.isLoading))) {
+                if model.isLoading {
                     ProgressView().frame(maxWidth: .infinity).padding(60)
-                } else if let error = model.error ?? (isRealEstate ? model.rentError : nil) ?? (missingRentRate
-                    ? strings.t("realestate.missingRentRate") : nil)
-                {
+                } else if let error = model.error ?? (missingRentRate ? strings.t("realestate.missingRentRate") : nil) {
                     Text(strings.t(prefix + ".pageErrorTitle")).font(.title2)
                     Text(error).foregroundStyle(theme.destructive)
-                    Button(strings.t("common.retry")) {
-                        Task {
-                            await reload(force: true)
-                            if isRealEstate {
-                                await model.loadRentHistory(ids: holdings.map(\.id), force: true)
-                                if missingRentRate { await shell.exchangeRates.retry() }
-                            }
-                        }
-                    }
+                    Button(strings.t("common.retry")) { Task { await reload(force: true) } }
                 } else if holdings.isEmpty {
                     AdminCard {
                         VisionEmptyState(
@@ -129,11 +107,6 @@ public struct PortfolioHoldingsView: View {
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: shell.settings.defaultCurrency + String(shell.settingsRevision)) { await reload() }
-        .task(id: isRealEstate ? rentKey : "") {
-            guard isRealEstate, !holdings.isEmpty else { return }
-            await shell.exchangeRates.appear()
-            await model.loadRentHistory(ids: holdings.map(\.id))
-        }
         .onChange(of: assetClass) { _, _ in
             query.clearAll()
             optionalColumns = []
@@ -142,13 +115,12 @@ public struct PortfolioHoldingsView: View {
     private func reload(force: Bool = false) async {
         await model.load(currency: shell.settings.defaultCurrency, force: force)
     }
-    private func total(_ pick: (PortfolioHolding) -> Decimal) -> Decimal { holdings.reduce(0) { $0 + pick($1) } }
     private func money(_ amount: Decimal, currency: String? = nil, signed: Bool = false) -> String {
         MoneyText.text(
             amount, currency: currency ?? shell.settings.defaultCurrency, settings: shell.settings, signed: signed)
     }
     private var summary: some View {
-        let value = total { $0.currentValue }
+        let value = totals.totalPortfolioValue
         return AdminCard(padding: 24) {
             // The web summary: the value on the left, the figures in a grid on the right.
             HStack(alignment: .top, spacing: 32) {
@@ -172,16 +144,21 @@ public struct PortfolioHoldingsView: View {
                     alignment: .leading, spacing: 14
                 ) {
                     if isUnitBased {
-                        figure("portfolio.realizedPnl", total { $0.realizedGain }, signed: true)
-                        figure("portfolio.unrealizedPnl", total { $0.unrealizedGain }, signed: true)
-                        if assetClass != "crypto" { figure("portfolio.dividends", total { $0.totalDividends }) }
-                        figure("portfolio.feesAndTaxes", -total { $0.totalFees + $0.totalTaxes })
-                        figure("portfolio.netReturn", total { $0.gainLoss }, signed: true)
+                        figure("portfolio.realizedPnl", totals.totalRealizedGain, signed: true)
+                        figure("portfolio.unrealizedPnl", totals.totalUnrealizedGain, signed: true)
+                        if assetClass != "crypto" { figure("portfolio.dividends", totals.totalDividends) }
+                        figure("portfolio.feesAndTaxes", -totals.totalFeesAndTaxes)
+                        // Custody fees and standalone deductions sit in the server's net return; the
+                        // pages add only the income they show (crypto shows no dividends).
+                        figure(
+                            "portfolio.netReturn",
+                            assetClass == "crypto" ? totals.netReturnExcludingIncome : totals.netReturnWithDividends,
+                            signed: true)
                     } else if assetClass == "real_estate" {
-                        figure("portfolio.appreciation", total { $0.totalAppreciation }, signed: true)
-                        figure("portfolio.rentalIncome", total { $0.totalIncome }, signed: true)
+                        figure("portfolio.appreciation", totals.totalAppreciation, signed: true)
+                        figure("portfolio.rentalIncome", totals.totalIncome, signed: true)
                         Group {
-                            let rent = rentById.values.reduce(Decimal(0)) { $0 + ($1 ?? 0) }
+                            let rent = totals.estimatedMonthlyRent
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(strings.t("portfolio.yield")).font(.caption).foregroundStyle(theme.tertiaryLabel)
                                 Text(
@@ -193,9 +170,9 @@ public struct PortfolioHoldingsView: View {
                                     .foregroundStyle(theme.secondaryLabel)
                             }
                         }
-                        let returned = total { $0.totalAppreciation + $0.totalIncome - $0.totalFees - $0.totalTaxes }
+                        let returned = totals.totalPropertyReturn
                         figure("portfolio.totalReturn", returned, signed: true)
-                        let cost = total { $0.totalBuyCost }
+                        let cost = totals.totalInvested
                         let roi = cost > 0 ? returned / cost * 100 : 0
                         VStack(alignment: .leading, spacing: 5) {
                             Text(strings.t("portfolio.totalROI")).font(.caption).foregroundStyle(theme.tertiaryLabel)
@@ -204,7 +181,7 @@ public struct PortfolioHoldingsView: View {
                                 label: VisionFormat.percent(roi, digits: 1, locale: shell.settings.numberFormat.locale))
                         }
                     } else {
-                        let weightedRate = value > 0 ? total { $0.currentValue * $0.interestRate } / value : 0
+                        let weightedRate = totals.valueWeightedInterestRate
                         VStack(alignment: .leading, spacing: 5) {
                             Text(strings.t("portfolio.avgInterestRate")).font(.caption).foregroundStyle(
                                 theme.tertiaryLabel)
@@ -213,10 +190,10 @@ public struct PortfolioHoldingsView: View {
                                     weightedRate, digits: 2, locale: shell.settings.numberFormat.locale)
                             ).font(Font.visionTitle3).monospacedDigit()
                         }
-                        figure("portfolio.interestEarned", total { $0.totalIncome })
-                        figure("portfolio.projectedAnnual", total { $0.projectedAnnualInterest })
-                        if total({ $0.accruedInterest }) > 0 {
-                            figure("portfolio.accrued", total { $0.accruedInterest })
+                        figure("portfolio.interestEarned", totals.totalIncome)
+                        figure("portfolio.projectedAnnual", totals.totalProjectedAnnualInterest)
+                        if totals.totalAccruedInterest > 0 {
+                            figure("portfolio.accrued", totals.totalAccruedInterest)
                         }
                     }
                 }
@@ -375,14 +352,13 @@ public struct PortfolioHoldingsView: View {
                             Text(money(h.unrealizedGain, signed: true)).foregroundStyle(
                                 h.unrealizedGain >= 0 ? theme.gain : theme.loss
                             ).monospacedDigit()
-                            if let percent = (assetClass == "crypto" ? h.gainLossPercent : h.unrealizedGainPercent) {
-                                DeltaPill(
-                                    percent,
-                                    label: VisionFormat.percent(
-                                        percent, digits: 2, locale: shell.settings.numberFormat.locale))
-                            } else {
-                                Text("—").font(.caption).monospacedDigit()
-                            }
+                            // `unrealizedPercentOf`: crypto keeps its total-return pill; the others show
+                            // the server's unrealized percent (0 when absent).
+                            let percent = assetClass == "crypto" ? h.gainLossPercent : (h.unrealizedGainPercent ?? 0)
+                            DeltaPill(
+                                percent,
+                                label: VisionFormat.percent(
+                                    percent, digits: 2, locale: shell.settings.numberFormat.locale))
                         })
                 }))
         if optionalColumns.contains("realized") {
@@ -451,9 +427,7 @@ public struct PortfolioHoldingsView: View {
     private var assetCards: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 390), alignment: .top)], alignment: .leading, spacing: 20) {
             ForEach(holdings) { holding in
-                PortfolioAssetCard(
-                    holding: holding, model: model, editing: editing, shell: shell,
-                    monthlyRent: isRealEstate ? (rentById[holding.id] ?? nil) : nil)
+                PortfolioAssetCard(holding: holding, model: model, editing: editing, shell: shell)
             }
         }
     }

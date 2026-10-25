@@ -107,8 +107,8 @@ struct PortfolioImportCommitTailTests {
         values[PortfolioImportSessionModel.sessionKey] = try JSONEncoder().encode(
             TaxValue.array([
                 .object([
-                    "id": .string("retained"), "name": .string("synthetic.csv"), "kind": .string("existing"),
-                    "status": .string("staged"), "accountId": .number(42), "batchId": .number(7),
+                    "id": .string("retained"), "name": .string("synthetic.csv"), "status": .string("staged"),
+                    "accountId": .number(42), "batchId": .number(7),
                 ])
             ]))
     }
@@ -137,15 +137,14 @@ private actor CommitTailTransport: APITransport {
         case "/api/portfolio/import/reconciliation/preview":
             value = .object([
                 "batchIds": .array([.number(7)]), "adoptPolicy": .null, "batchPolicies": .array([]),
-                "planFingerprint": .string("synthetic-reviewed"), "ready": .bool(true), "actions": .array([]),
+                "rowChoices": .array([]), "ready": .bool(true), "actions": .array([]),
                 "blockers": .array([]), "summary": .object([:]),
             ])
         case "/api/portfolio/import/reconciliation/commit":
             commitRequests += 1
             if lostAcknowledgement { throw APIError.network("Synthetic lost commit acknowledgement") }
             let counts: TaxValue = .object([
-                "imported": .number(1), "duplicates": .number(0), "adopted": .number(0),
-                "repaired": .number(0), "errors": .number(0),
+                "imported": .number(1), "duplicates": .number(0), "adopted": .number(0), "errors": .number(0),
             ])
             var batch = counts
             batch["batch_id"] = .number(7)

@@ -3,12 +3,12 @@ import Testing
 
 @testable import VisionNativeCore
 
-@MainActor @Suite("Optional native cold actions and menus")
+@MainActor @Suite("Native cold actions and menus")
 struct NativeShellIntentIntegrationTests {
     private func makeModel(
         session: NativeShellIntentCoordinator? = nil, initial: String = "/planned",
         loaded: Bool = false, documentReady: Bool = false,
-        nativeSettings: NativeSettingsModel? = nil, recorder: ShellRecorder
+        nativeSettings: NativeSettingsModel? = nil
     ) -> NativeShellModel {
         let model = NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]),
@@ -19,11 +19,10 @@ struct NativeShellIntentIntegrationTests {
             imports: ImportFixture.idleModel(),
             transactions: TransactionsFixture.idleModel(), accounts: AccountsFixture.idleModel(),
             categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
-            nativeSettings: nativeSettings, nativeFallback: true,
+            nativeSettings: nativeSettings,
             nativeNavigation: NativeNavigationHistory(initial: NativeNavigationLocation(initial)!),
-            nativeIntents: session, loadSettings: { .defaults },
-            onNavigate: { recorder.actions.append($0) })
-        model.isRendererReady = documentReady
+            nativeIntents: session, loadSettings: { .defaults })
+        model.setNativeDocumentState(documentReady ? .ready : .loading)
         if loaded { model.apply(settings: .defaults) }
         return model
     }
@@ -32,25 +31,22 @@ struct NativeShellIntentIntegrationTests {
         ImportFile(name: name, data: Data("date,amount\n2026-01-01,1".utf8))
     }
 
-    @Test func coldCSVWaitsForHydrationOnboardingAndAReadyDestination() async {
+    @Test func coldCSVWaitsForHydrationAndAReadyDestination() async {
         let session = NativeShellIntentCoordinator()
-        let recorder = ShellRecorder()
-        let model = makeModel(session: session, recorder: recorder)
+        let model = makeModel(session: session)
         let csv = file()
-        model.isPresentingOnboarding = true
         #expect(model.openImportFile(csv))
         #expect(model.route.path == "/planned" && model.imports.file == nil)
         model.apply(settings: .defaults)
-        model.isRendererReady = true
         model.nativeIntentReadinessDidChange()
         #expect(model.route.path == "/planned" && model.imports.file == nil)
-        model.isPresentingOnboarding = false
+        model.setNativeDocumentState(.ready)
         model.nativeIntentReadinessDidChange()
         #expect(model.route.path == "/import" && model.imports.file == nil)
         model.nativeIntentConsumerDidBecomeReady(for: .transactions)
         #expect(model.imports.file == nil && !model.transactions.isAddPresented)
         model.nativeIntentConsumerDidBecomeReady(for: .importExport)
-        #expect(model.imports.file == csv && recorder.actions.isEmpty)
+        #expect(model.imports.file == csv)
         model.nativeIntentReadinessDidChange()
         #expect(model.imports.file == csv)
         await model.settingsSettled()
@@ -58,15 +54,14 @@ struct NativeShellIntentIntegrationTests {
 
     @Test func coldTransactionSurvivesRebuildAndOldGraphCannotConsumeOrOverwriteHistory() async {
         let session = NativeShellIntentCoordinator()
-        let recorder = ShellRecorder()
         let first = makeModel(
             session: session, initial: "/transactions?q=a+b&flag&raw=%2f", loaded: true,
-            documentReady: true, recorder: recorder)
+            documentReady: true)
         first.navigate(to: "/planned?year=2024")
         first.isReloadingGraph = true
         #expect(first.newTransaction())
-        let second = makeModel(session: session, recorder: recorder)
-        #expect(second.nativeNavigationLocation?.raw == "/planned?year=2024" && second.canGoBack)
+        let second = makeModel(session: session)
+        #expect(second.nativeNavigationLocation.raw == "/planned?year=2024" && second.canGoBack)
         #expect(!first.newTransaction() && !first.openImportFile(file("stale.csv")))
         first.isReloadingGraph = false
         first.nativeIntentReadinessDidChange()
@@ -74,17 +69,17 @@ struct NativeShellIntentIntegrationTests {
         first.goBack()
         #expect(!first.transactions.isAddPresented && second.route.path == "/planned")
         second.apply(settings: .defaults)
-        second.isRendererReady = true
+        second.setNativeDocumentState(.ready)
         second.nativeIntentReadinessDidChange()
         #expect(second.route.path == "/transactions" && !second.transactions.isAddPresented)
         second.nativeIntentConsumerDidBecomeReady(for: .transactions)
-        #expect(second.transactions.isAddPresented && recorder.actions.isEmpty)
-        let third = makeModel(session: session, loaded: true, documentReady: true, recorder: recorder)
+        #expect(second.transactions.isAddPresented)
+        let third = makeModel(session: session, loaded: true, documentReady: true)
         third.nativeIntentConsumerDidBecomeReady(for: .transactions)
         #expect(!third.transactions.isAddPresented && third.route.path == "/transactions")
         third.goBack()
         third.goBack()
-        #expect(third.nativeNavigationLocation?.raw == "/transactions?q=a+b&flag&raw=%2f")
+        #expect(third.nativeNavigationLocation.raw == "/transactions?q=a+b&flag&raw=%2f")
         await first.settingsSettled()
         await second.settingsSettled()
         await third.settingsSettled()
@@ -93,12 +88,11 @@ struct NativeShellIntentIntegrationTests {
     @Test func registeredCSVExpiryIsNotRestartedByGraphReplacement() async {
         var clock = Date(timeIntervalSince1970: 1_000)
         let session = NativeShellIntentCoordinator(now: { clock })
-        let recorder = ShellRecorder()
-        let first = makeModel(session: session, loaded: true, documentReady: true, recorder: recorder)
+        let first = makeModel(session: session, loaded: true, documentReady: true)
         #expect(first.openImportFile(file()))
         #expect(first.route.path == "/import" && first.imports.file == nil)
         clock.addTimeInterval(31)
-        let second = makeModel(session: session, loaded: true, documentReady: true, recorder: recorder)
+        let second = makeModel(session: session, loaded: true, documentReady: true)
         second.nativeIntentConsumerDidBecomeReady(for: .importExport)
         #expect(second.imports.file == nil && second.route.path == "/import")
         await first.settingsSettled()
@@ -107,25 +101,22 @@ struct NativeShellIntentIntegrationTests {
 
     @Test func blockedColdTransactionKeepsItsDestinationAcrossReconstruction() async {
         let session = NativeShellIntentCoordinator()
-        let recorder = ShellRecorder()
-        let first = makeModel(session: session, loaded: true, documentReady: true, recorder: recorder)
+        let first = makeModel(session: session, loaded: true, documentReady: true)
         first.setLeaveGuard(.init(id: "/planned", hasUnsavedChanges: { true }, discard: {}))
         #expect(first.newTransaction())
         #expect(first.route.path == "/planned" && first.leaveConfirmation?.path == "/transactions")
-        let second = makeModel(session: session, loaded: true, documentReady: true, recorder: recorder)
+        let second = makeModel(session: session, loaded: true, documentReady: true)
         #expect(second.leaveConfirmation == nil && second.route.path == "/planned")
         second.nativeIntentReadinessDidChange()
         second.nativeIntentConsumerDidBecomeReady(for: .transactions)
         #expect(second.route.path == "/transactions" && second.transactions.isAddPresented)
-        #expect(recorder.actions.isEmpty)
         await first.settingsSettled()
         await second.settingsSettled()
     }
 
     @Test func stayCancelsThePendingSheetAndRepeatedReadyCommandsReuseItsForm() async throws {
         let session = NativeShellIntentCoordinator()
-        let recorder = ShellRecorder()
-        let model = makeModel(session: session, loaded: true, documentReady: true, recorder: recorder)
+        let model = makeModel(session: session, loaded: true, documentReady: true)
         model.setLeaveGuard(.init(id: "/planned", hasUnsavedChanges: { true }, discard: {}))
         #expect(model.newTransaction())
         model.stayOnPage()
@@ -141,13 +132,12 @@ struct NativeShellIntentIntegrationTests {
         await model.settingsSettled()
     }
 
-    @Test func settingsAndThemeMenusUseHydratedNativeOwnersWithoutRendererMessages() async {
+    @Test func settingsAndThemeMenusUseHydratedNativeOwners() async {
         let service = NativeIntentSettingsService()
         let settings = NativeSettingsModel(service: service, debounce: .zero)
-        let recorder = ShellRecorder()
         let model = makeModel(
             session: NativeShellIntentCoordinator(), loaded: true, documentReady: true,
-            nativeSettings: settings, recorder: recorder)
+            nativeSettings: settings)
         #expect(model.acceptNativeMenuAction(.openSettings))
         #expect(model.acceptNativeMenuAction(.setTheme("dark")))
         #expect(model.acceptNativeMenuAction(.setTheme("neon")))
@@ -161,27 +151,13 @@ struct NativeShellIntentIntegrationTests {
         #expect(model.acceptNativeMenuAction(.closeSettings))
         #expect(model.settingsSection == nil && !model.canGoBack)
         #expect(!model.acceptNativeMenuAction(MenuAction("unknown")))
-        #expect(recorder.actions.isEmpty)
         await settings.flush()
         #expect(await service.writes.count == 1)
         await model.settingsSettled()
     }
 
-    @Test func omissionPreservesExistingColdActionAndMenuFallbackBehavior() async {
-        let recorder = ShellRecorder()
-        let model = makeModel(recorder: recorder)
-        #expect(!model.newTransaction())
-        #expect(!model.openImportFile(file()))
-        #expect(!model.acceptNativeMenuAction(.openSettings))
-        model.apply(settings: .defaults)
-        model.nativeIntentReadinessDidChange()
-        model.nativeIntentConsumerDidBecomeReady(for: .importExport)
-        #expect(model.route.path == "/planned" && recorder.actions.isEmpty)
-        await model.settingsSettled()
-    }
-
     @Test func scrollOffsetsBelongToAVisitAndAreRestoredOnlyOnBackOrForward() async {
-        let model = makeModel(initial: "/transactions", loaded: true, documentReady: true, recorder: ShellRecorder())
+        let model = makeModel(initial: "/transactions", loaded: true, documentReady: true)
         model.recordScrollOffset(640)
         #expect(model.restorableScrollOffset() == nil)
         model.navigate(to: "/planned")

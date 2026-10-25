@@ -36,11 +36,14 @@ public struct RebalanceResult: Codable, Equatable, Sendable {
     public let availableCash: Decimal
     public let cashAccounts: [CashAccount]
     public let deployment: [String: Decimal]
+    /// Currencies of cash left out for want of a stored exchange rate (ADR-216, #308); absent or
+    /// empty when everything converted.
+    public let unconvertedCurrencies: [String]?
     public var sleeves: [String] { Set(actualValues.keys).union(targetWeights.keys).sorted() }
     public var totalDeployed: Decimal { deployment.values.reduce(0, +) }
     public init(
         currency: String, targetWeights: [String: Decimal], actualValues: [String: Decimal], availableCash: Decimal,
-        cashAccounts: [CashAccount], deployment: [String: Decimal]
+        cashAccounts: [CashAccount], deployment: [String: Decimal], unconvertedCurrencies: [String]? = nil
     ) {
         self.currency = currency
         self.targetWeights = targetWeights
@@ -48,6 +51,7 @@ public struct RebalanceResult: Codable, Equatable, Sendable {
         self.availableCash = availableCash
         self.cashAccounts = cashAccounts
         self.deployment = deployment
+        self.unconvertedCurrencies = unconvertedCurrencies
     }
     public struct CashAccount: Codable, Equatable, Sendable {
         public let id: Int

@@ -92,17 +92,13 @@ private actor NetWorthRaceService: NetWorthService {
             snapshots = rows
         }
         return .init(
+            unconvertedCurrencies: [],
             current: .init(liquid: 6, liabilities: 0, investments: 0, netWorth: 6, currency: currency),
             monthlyChange: 0, monthlyChangePercent: 0, snapshots: snapshots,
             snapshotsTotal: limit == nil ? nil : 6, snapshotsLimit: limit, snapshotsOffset: offset)
     }
-    func netWorthAccounts() async throws -> [OpenAPI.Account] { [] }
-    func netWorthPartitions(currency: String) async throws -> NetWorthPartitions {
-        try JSONDecoder().decode(
-            NetWorthPartitions.self, from: Data("{\"currency\":\"\(currency)\",\"byAccount\":[]}".utf8))
-    }
-    func netWorthRates() async throws -> OpenAPI.ExchangeRates {
-        .init(totalRates: 0, rates: [], fallbackRates: [:], source: "synthetic", isStale: false)
+    func netWorthByAccount(currency: String) async throws -> OpenAPI.NetWorthByAccountResponse {
+        .init(currency: currency, rows: [], total: 0, unconvertedAccountIds: [])
     }
     func netWorthPrices() async throws -> [NetWorthInvestmentPrice] { [] }
     func refreshNetWorthPrices() async throws -> PortfolioPriceRefresh {

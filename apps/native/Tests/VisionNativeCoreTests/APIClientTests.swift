@@ -42,41 +42,31 @@ actor SleepRecorder {
         """#
 
     func client(
-        _ transport: FakeTransport, token: String? = nil, sleeper: SleepRecorder = SleepRecorder(),
+        _ transport: FakeTransport, sleeper: SleepRecorder = SleepRecorder(),
         base: URL? = APIClientTests.base
     ) -> APIClient {
         APIClient(
-            baseURL: { base }, adminToken: { token }, transport: transport,
+            baseURL: { base }, transport: transport,
             sleep: { await sleeper.record($0) }, jitter: { 0.5 }, requestId: { "req-1" })
     }
 
     @Test func sendsTheHeadersOfApiRequestAndUnwrapsTheEnvelope() async throws {
         let transport = FakeTransport([.response(200, Self.ratesBody)])
-        let rates = try await client(transport, token: " secret ").send(
+        let rates = try await client(transport).send(
             OpenAPIOperations.GetExchangeRates(dbOnly: true))
         #expect(rates.totalRates == 2)
         #expect(rates.rates.first?.currency == "USD")
         #expect(rates.rates.first?.rateToEur == Decimal(string: "0.92"))
-        #expect(rates.fallbackRates["USD"] == Decimal(string: "0.9"))
+        #expect(rates.source == "database")
         #expect(rates.lastFetchedAt == "2026-10-09T15:05:00.000Z")
         let request = try #require(await transport.requests.first)
         #expect(request.method == .get)
         #expect(request.url.absoluteString == "http://127.0.0.1:54331/api/info/exchange-rates?db_only=true")
         #expect(request.headers["Content-Type"] == "application/json")
         #expect(request.headers["X-Request-Id"] == "req-1")
-        #expect(request.headers["Authorization"] == "Bearer secret")
+        #expect(request.headers["Authorization"] == nil)
         #expect(request.timeout == 30)
         #expect(request.body == nil)
-    }
-
-    @Test func omitsTheAuthorizationHeaderWithoutAToken() async throws {
-        let transport = FakeTransport([.response(200, #"{"ok":true,"data":{"message":"ok"}}"#)])
-        let info = try await client(transport, token: "  ").send(OpenAPIOperations.RefreshExchangeRates())
-        #expect(info.message == "ok")
-        let request = try #require(await transport.requests.first)
-        #expect(request.headers["Authorization"] == nil)
-        #expect(request.method == .post)
-        #expect(request.url.path == "/api/info/exchange-rates/refresh")
     }
 
     @Test func metadataSurvivesAnIdempotentRetryWithoutChangingTheDataContract() async throws {
@@ -297,19 +287,10 @@ actor SleepRecorder {
     }
 
     @Test func modelDefaultsRetainTheDistinctWebMigrationRules() {
-        let raw = NativeAppSettings.migrate(
-            .object([
-                "aiDefaultModel": .string(""), "openAiDefaultModel": .string(String(repeating: "😀", count: 100)),
-            ]))
+        let raw = NativeAppSettings.migrate(.object(["aiDefaultModel": .string("")]))
         #expect(raw.aiDefaultModel == "")
-        #expect(raw.openAiDefaultModel == String(repeating: "😀", count: 100))
-        let invalid = NativeAppSettings.migrate(
-            .object([
-                "aiDefaultModel": .int(123), "openAiDefaultModel": .string(String(repeating: "😀", count: 101)),
-            ]))
+        let invalid = NativeAppSettings.migrate(.object(["aiDefaultModel": .int(123)]))
         #expect(invalid.aiDefaultModel == nil)
-        #expect(invalid.openAiDefaultModel == nil)
-        #expect(NativeAppSettings.migrate(.object(["openAiDefaultModel": .string("")])).openAiDefaultModel == nil)
         #expect(NativeAppSettings.defaults.aiDefaultModel == nil)
     }
 }

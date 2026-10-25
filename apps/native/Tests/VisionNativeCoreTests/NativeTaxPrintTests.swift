@@ -99,7 +99,7 @@ private actor NativeTaxPrintTransport: APITransport {
         let client = APIClient(baseURL: { URL(string: "http://127.0.0.1:54331") }, transport: transport, maxRetries: 0)
         let tax = TaxScreens(client: client)
         let shell = NativeShellModelTests().makeModel(recorder: ShellRecorder(), tax: tax)
-        shell.routeDidChange(NativeRoute("/tax?year=2025")!)
+        shell.show(NativeRoute("/tax?year=2025")!)
         await tax.load(year: 2025, currency: "EUR")
         try #require(tax.overview.error == nil)
         try #require(tax.dashboard.error == nil, "\(tax.dashboard.error ?? "")")
@@ -119,7 +119,7 @@ private actor NativeTaxPrintTransport: APITransport {
     @Test func missingOrDifferentRouteDataCannotBePrintedAsCurrent() {
         let shell = NativeShellModelTests().makeModel(recorder: ShellRecorder())
         #expect(throws: APIError.self) { try NativeTaxPrintSnapshot.capture(shell: shell) }
-        shell.routeDidChange(NativeRoute("/tax?year=2020")!)
+        shell.show(NativeRoute("/tax?year=2020")!)
         #expect(throws: APIError.self) { try NativeTaxPrintSnapshot.capture(shell: shell) }
     }
 }

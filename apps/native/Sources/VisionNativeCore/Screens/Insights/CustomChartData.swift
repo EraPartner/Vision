@@ -95,8 +95,12 @@ public struct CustomRecipientPivot: Decodable, Equatable, Sendable {
         public let name: String
         public let total: Decimal
     }
+    /// The conversion contract of a period pivot (recipient and tag pivots alike).
     public struct Conversion: Decodable, Equatable, Sendable {
         public let usedHistoricalFallback: Bool
+        public let affectedCurrencies: [String]?
+        /// Transactions left out because no stored rate converts them (ADR-216).
+        public let unconvertedCount: Int?
         public let unconvertedCurrencies: [String]?
     }
     public let recipientPivot: [String: [Item]]
@@ -110,6 +114,7 @@ public struct CustomTagPivot: Decodable, Equatable, Sendable {
         public let total: Decimal
     }
     public let tagPivot: [String: [Item]]
+    public let conversion: CustomRecipientPivot.Conversion?
 }
 
 public struct CustomChartEntity: Equatable, Sendable, Identifiable {
@@ -128,6 +133,11 @@ public struct CustomChartDataset: Equatable, Sendable {
     public let periods: [String]
     public let entities: [CustomChartEntity]
     public let usesHistoricalFallback: Bool
+    /// Currencies whose totals used today's rate because the historical one was unavailable.
+    public let fallbackCurrencies: [String]
+    /// Transactions of the recipient and tag pivots left out for want of a stored rate; the
+    /// category series come from the Statistics snapshot (ADR-216).
+    public let unconvertedCount: Int
     public init(
         configuration: CustomChartDraft, statistics: StatisticsSnapshot,
         recipients: CustomRecipientPivot?, tags: CustomTagPivot?, otherLabel: String
@@ -178,7 +188,10 @@ public struct CustomChartDataset: Equatable, Sendable {
             entities = Array(entities.prefix(8)) + [CustomChartEntity(id: "other", name: otherLabel, values: values)]
         }
         self.entities = entities
-        usesHistoricalFallback = recipients?.conversion?.usedHistoricalFallback ?? false
+        let conversions = [recipients?.conversion, tags?.conversion].compactMap { $0 }
+        usesHistoricalFallback = conversions.contains { $0.usedHistoricalFallback }
+        fallbackCurrencies = Array(Set(conversions.flatMap { $0.affectedCurrencies ?? [] })).sorted()
+        unconvertedCount = conversions.reduce(0) { $0 + ($1.unconvertedCount ?? 0) }
     }
     public var series: [InsightChartSeries] {
         entities.map { entity in

@@ -35,43 +35,35 @@ public enum ChildEnvironment {
         safe(inherited: inherited, overrides: [("LANG", "C"), ("LC_ALL", "C"), ("LC_CTYPE", "C")])
     }
 
-    /// `buildNativeBackendEnv` for the packaged backend. Vision Native passes no audit
-    /// bridge token (phase 1e) and never runs the synthetic smoke mode.
+    /// `withoutRetiredEnv`: the runtime environment minus the secrets of removed features.
+    public static func withoutRetired(_ environment: [String: String]) -> [String: String] {
+        environment.filter { !RuntimeConstants.retiredEnvironmentKeys.contains($0.key) }
+    }
+
+    /// `buildNativeBackendEnv` for the packaged backend. Vision Native never runs the
+    /// synthetic smoke mode (`VISION_SYNTHETIC_SMOKE_OFFLINE` is always removed). The
+    /// backend finds its Apple Foundation Models helper (`vision-apple-ai`) itself, from
+    /// `VISION_RUNTIME_ROOT`, and migrates from `VISION_RUNTIME_ROOT/db/migrations`.
     public static func backend(
         inherited: [String: String],
         runtimeEnvironment: [String: String],
         port: Int,
         layout: RuntimeLayout,
-        runtimeRoot: String,
-        alembic: String?,
-        chrome: String?,
-        auditBridgeToken: String? = nil
+        runtimeRoot: String
     ) -> [String: String] {
-        let openAIEnabled =
-            runtimeEnvironment["OPENAI_API_ENABLED"] == "true"
-            && !(runtimeEnvironment["OPENAI_API_KEY"] ?? "").isEmpty
         // `{ ...runtimeEnv, KEY: value }`: a later `undefined` (nil) replaces an earlier
         // value and is then skipped, so it removes that key from the overrides.
-        var merged: [String: String?] = runtimeEnvironment.mapValues { Optional($0) }
+        var merged: [String: String?] = withoutRetired(runtimeEnvironment).mapValues { Optional($0) }
         let fixed: [(String, String?)] = [
-            ("OPENAI_API_ENABLED", openAIEnabled ? "true" : "false"),
-            ("OPENAI_API_KEY", openAIEnabled ? runtimeEnvironment["OPENAI_API_KEY"] : nil),
             ("SERVER_HOST", RuntimeConstants.loopbackHost),
             ("PORT", String(port)),
             ("NODE_ENV", "production"),
             ("ENVIRONMENT", "production"),
             ("ATTACHMENTS_DIR", layout.attachments),
-            ("VISION_CACHE_DIR", layout.cache),
             ("VISION_RUNTIME_ROOT", runtimeRoot),
             ("VISION_NATIVE_ENV_FILE", layout.env),
             ("VISION_DIST_DIR", PathUtilities.join(runtimeRoot, "dist")),
-            ("VISION_SKIP_CONFIG_ENV_LOCAL", "true"),
-            ("ALEMBIC_BIN", alembic),
-            ("ALEMBIC_CONFIG", PathUtilities.join(runtimeRoot, "config", "alembic.ini")),
-            ("PUPPETEER_EXECUTABLE_PATH", chrome),
             ("OLLAMA_URL", "http://127.0.0.1:11434"),
-            ("ADMIN_ALLOW_TOKENLESS_NONLOOPBACK", "false"),
-            ("VISION_AUDIT_BRIDGE_TOKEN", auditBridgeToken),
             ("VISION_SYNTHETIC_SMOKE_OFFLINE", nil),
         ]
         for (key, value) in fixed {

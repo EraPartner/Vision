@@ -5,7 +5,7 @@ import Testing
 
 @MainActor
 @Suite struct PortfolioImportShellHandoffTests {
-    @Test func restoredWebMetadataSurvivesGuardedDraftDiscardWithoutFileBytes() async throws {
+    @Test func restoredMetadataSurvivesGuardedDraftDiscardWithoutFileBytes() async throws {
         let store = PortfolioImportMemorySessionStore()
         store.values[PortfolioImportSessionModel.sessionKey] = try JSONEncoder().encode(
             TaxValue.array([
@@ -24,11 +24,10 @@ import Testing
         await imports.advanced.selectFile(
             PortfolioImportFile(filename: "pending.csv", data: bytes, contentType: "text/csv"))
         #expect(imports.advanced.file?.data == bytes && imports.isDirty)
-        let recorder = ShellRecorder()
         let shell = NativeShellModelTests().makeModel(
-            settings: NativeAppSettings(adminMode: false), recorder: recorder,
+            settings: NativeAppSettings(adminMode: false), recorder: ShellRecorder(),
             portfolio: PortfolioScreens(client: service), portfolioImports: imports)
-        shell.routeDidChange(try #require(NativeRoute("/portfolio/import")))
+        shell.show(try #require(NativeRoute("/portfolio/import")))
         await shell.settingsSettled()
         #expect(shell.detail == .native(.portfolioImport))
         shell.setLeaveGuard(
@@ -36,17 +35,16 @@ import Testing
                 id: "/portfolio/import", hasUnsavedChanges: { imports.isDirty }, discard: { imports.discardDrafts() }))
         shell.navigate(to: "/portfolio/import/invalid/review")
         #expect(shell.leaveConfirmation?.path == "/portfolio/import/invalid/review")
-        #expect(recorder.actions.isEmpty)
+        #expect(shell.route.path == "/portfolio/import")
         shell.leavePage()
         await imports.session.flushCheckpoint()
-        #expect(recorder.actions.last == .navigate("/portfolio/import/invalid/review"))
+        #expect(shell.route.path == "/portfolio/import/invalid/review")
         #expect(imports.advanced.file == nil && !imports.isDirty)
         #expect(imports.session.ids == [7] && imports.session.statements.first?.file == nil)
         let checkpoint = try #require(store.values[PortfolioImportSessionModel.sessionKey])
         let retained = try JSONDecoder().decode([PortfolioImportStatement].self, from: checkpoint)
         #expect(retained.first?.batchId == 7 && retained.first?.file == nil)
         #expect(!String(decoding: checkpoint, as: UTF8.self).contains("memory-only-file-content-marker"))
-        shell.routeDidChange(try #require(NativeRoute("/portfolio/import/invalid/review")))
         #expect(shell.detail == .native(.portfolioImportReview(batchId: "invalid")))
         await imports.review.load(rawBatchId: "invalid")
         #expect(imports.review.error != nil)

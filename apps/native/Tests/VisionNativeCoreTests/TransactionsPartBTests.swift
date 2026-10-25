@@ -118,24 +118,37 @@ actor FakeSplitsService: SplitsService {
         return bulkResult
     }
 
-    func owedSummary() async throws -> [OpenAPI.SplitOwed] {
+    /// The server's `OwedTotals` for the open splits (`unconverted` counts the rows left out).
+    private func totals(_ open: [OpenAPI.SplitOwedDetail], currency: String) -> OpenAPI.OwedTotals {
+        OpenAPI.OwedTotals(
+            currency: currency, remaining: open.reduce(Decimal(0)) { $0 + $1.remaining },
+            unconvertedCount: unconvertedCount, unconvertedCurrencies: unconvertedCount > 0 ? ["CHF"] : [])
+    }
+
+    private var unconvertedCount = 0
+    func setUnconvertedCount(_ count: Int) { unconvertedCount = count }
+
+    func owedSummary(currency: String) async throws -> OwedSummaryPage {
         summaryLoads += 1
         try check()
         let open = owedSplits.filter { !$0.isSettled }
-        guard !open.isEmpty else { return [] }
+        let totals = totals(open, currency: currency)
+        guard !open.isEmpty else { return OwedSummaryPage(items: [], summary: totals) }
         let total = open.reduce(Decimal(0)) { $0 + $1.amount }
         let paid = open.reduce(Decimal(0)) { $0 + $1.amountPaid }
-        return [
-            OpenAPI.SplitOwed(
-                recipientId: 4, recipientName: "Anna", totalOwed: total, totalPaid: paid, remaining: total - paid,
-                splitCount: open.count)
-        ]
+        return OwedSummaryPage(
+            items: [
+                OpenAPI.SplitOwed(
+                    recipientId: 4, recipientName: "Anna", totalOwed: total, totalPaid: paid, remaining: total - paid,
+                    splitCount: open.count, unconvertedCount: 0, unconvertedCurrencies: [])
+            ], summary: totals)
     }
 
-    func owed(recipientId: Int) async throws -> [OpenAPI.SplitOwedDetail] {
+    func owed(recipientId: Int, currency: String) async throws -> OwedDetailPage {
         detailLoads.append(recipientId)
         try check()
-        return owedSplits.filter { !$0.isSettled }
+        let open = owedSplits.filter { !$0.isSettled }
+        return OwedDetailPage(items: open, summary: totals(open, currency: currency))
     }
 
     func exportOwedCsv(recipientId: Int) async throws -> Data {
@@ -205,6 +218,9 @@ enum SplitFixture {
             "txPage.bulk.confirmDeleteTitle.one": "Delete {count} transaction?",
             "txPage.bulk.confirmDeleteTitle.other": "Delete {count} transactions?",
             "txPage.bulk.transferSelectionChanged": "The selected records changed.",
+            "owesPage.fxUnavailable.one": "{count} split left out: exchange rate unavailable",
+            "owesPage.fxUnavailable.other": "{count} splits left out: exchange rates unavailable",
+            "owesPage.settleAll.confirmDescription": "Settle {count} for {amount}.",
         ])
 
     static func decimal(_ text: String) -> Decimal { Decimal(string: text)! }
@@ -327,9 +343,8 @@ enum SplitFixture {
     }
 
     @Test func anExpenseIsCreatedSignedAndTheNewRowIsSelected() async throws {
-        let recorder = ShellRecorder()
         let service = FakeTransactionsService(rows: TxFixture.rows(2))
-        let (model, shell) = try await TxFixture.opened(service, recorder: recorder, pickers: Self.pickers())
+        let (model, shell) = try await TxFixture.opened(service, pickers: Self.pickers())
         defer { withExtendedLifetime(shell) {} }
         await model.pickers.load()
         model.requestAdd()
@@ -352,9 +367,8 @@ enum SplitFixture {
         #expect(!model.isAddPresented)
         #expect(model.addForm == nil)
         #expect(!model.hasUnsavedChanges)
-        #expect(recorder.actions.last == .replaceRoute("/transactions?id=1001"))
-        // The page reports the route: the first page reloads and the new row opens.
-        shell.routeDidChange(try #require(NativeRoute("/transactions?id=1001")))
+        #expect(shell.nativeNavigationLocation.raw == "/transactions?id=1001")
+        // The route selects the new row: the first page reloads and the row opens.
         await model.sync()
         #expect(model.selectedId == 1001)
         #expect(model.rows?.first?.id == 1001)
@@ -462,8 +476,7 @@ enum SplitFixture {
     }
 
     @Test func theSheetKeepsItsFormAndGuardsNavigation() async throws {
-        let recorder = ShellRecorder()
-        let (model, shell) = try await TxFixture.opened(FakeTransactionsService(), recorder: recorder)
+        let (model, shell) = try await TxFixture.opened(FakeTransactionsService())
         defer { withExtendedLifetime(shell) {} }
         shell.setLeaveGuard(model.leaveGuard)
         model.requestAdd()
@@ -480,507 +493,16 @@ enum SplitFixture {
         shell.leavePage()
         #expect(model.addForm == nil)
         #expect(!model.isAddPresented)
-        #expect(recorder.actions.last == .navigate("/planned"))
-    }
-
-    @Test func stayingOnThePageDropsAPendingNewTransaction() async throws {
-        let model = TransactionsFixture.idleModel()
-        let shell = TxFixture.shell(model, recorder: ShellRecorder())
-        shell.routeDidChange(try #require(NativeRoute("/planned")))
-        await shell.settingsSettled()
-        #expect(shell.newTransaction())
-        shell.stayOnPage()
-        shell.routeDidChange(try #require(NativeRoute("/transactions")))
-        await model.sync()
-        #expect(!model.isAddPresented)
-    }
-
-    @Test func aPendingNewTransactionIsDroppedWhenTheShellLandsElsewhere() async throws {
-        let model = TransactionsFixture.idleModel()
-        let shell = TxFixture.shell(model, recorder: ShellRecorder())
-        shell.routeDidChange(try #require(NativeRoute("/planned")))
-        await shell.settingsSettled()
-        #expect(shell.newTransaction())
-        // The page redirected somewhere else instead of `/transactions`.
-        shell.routeDidChange(try #require(NativeRoute("/accounts")))
-        #expect(!model.addOnArrival)
-        shell.routeDidChange(try #require(NativeRoute("/transactions")))
-        await model.sync()
-        #expect(!model.isAddPresented)
+        #expect(shell.route.path == "/planned")
     }
 }
 
-// MARK: - Split transaction
-
-@MainActor
-@Suite struct SplitTransactionTests {
-    @Test func evenAllocationIsCentExactAndRoundingIsHalfEven() {
-        #expect(MoneyMath.allocateEvenly(10, parts: 3) == [SplitFixture.decimal("3.34"), SplitFixture.decimal("3.33"), SplitFixture.decimal("3.33")])
-        #expect(MoneyMath.allocateEvenly(SplitFixture.decimal("0.01"), parts: 2) == [SplitFixture.decimal("0.01"), 0])
-        #expect(MoneyMath.allocateEvenly(5, parts: 0).isEmpty)
-        // The total's cents round half to even too: 0.025 is 2 cents, 0.035 is 4.
-        #expect(MoneyMath.allocateEvenly(SplitFixture.decimal("0.025"), parts: 1) == [SplitFixture.decimal("0.02")])
-        #expect(MoneyMath.allocateEvenly(SplitFixture.decimal("0.035"), parts: 1) == [SplitFixture.decimal("0.04")])
-        #expect(MoneyMath.round(SplitFixture.decimal("2.345")) == SplitFixture.decimal("2.34"))
-        #expect(MoneyMath.round(SplitFixture.decimal("2.355")) == SplitFixture.decimal("2.36"))
-    }
-
-    @Test func theSharesFollowTheSplitType() async throws {
-        let splits = FakeSplitsService()
-        let service = FakeTransactionsService(rows: [TxFixture.wire(id: 1, amount: -10)])
-        let (model, shell) = try await TxFixture.opened(service, splits: splits)
-        defer { withExtendedLifetime(shell) {} }
-        let row = try #require(model.rows?.first)
-        model.requestSplit(row)
-        let form = try #require(model.splitForm)
-        await form.load()
-        #expect(!form.isLoadingExisting)
-        #expect(!form.canSubmit(format: .eu))
-        form.setRecipient(1, to: 4)
-        form.addEntry()
-        let second = try #require(form.entries.last)
-        form.setRecipient(second.id, to: 5)
-        // Equal: everyone, you included.
-        #expect(form.totalPeople == 3)
-        #expect(form.equalShare == SplitFixture.decimal("3.33"))
-        #expect(form.shares(format: .eu)?.map { share in share.amount } == [SplitFixture.decimal("3.33"), SplitFixture.decimal("3.33")])
-        // Others pay all: cent-exact.
-        form.setSplitType(.full)
-        #expect(form.fullShare(for: 1) == 5)
-        #expect(form.newSplitTotal(format: .eu) == 10)
-        // Custom: typed amounts; zero blocks, over the total blocks.
-        form.setSplitType(.custom)
-        form.setAmount(1, to: "6")
-        form.setAmount(second.id, to: "0")
-        #expect(form.hasNonPositiveShare(format: .eu))
-        form.setAmount(second.id, to: "4,5")
-        #expect(form.exceedsTotal(format: .eu))
-        #expect(!form.canSubmit(format: .eu))
-        form.setAmount(second.id, to: "4")
-        form.setNote(second.id, to: "Taxi")
-        #expect(form.canSubmit(format: .eu))
-        // Remove entry only with two or more cards.
-        form.addEntry()
-        let third = try #require(form.entries.last)
-        form.removeEntry(third.id)
-        #expect(form.entries.count == 2)
-        await model.submitSplit()
-        let batch = try #require(await splits.batches.last)
-        #expect(batch == [SplitShare(recipientId: 4, amount: 6, note: nil), SplitShare(recipientId: 5, amount: 4, note: "Taxi")])
-        #expect(model.notice?.key == "splits.created")
-        #expect(model.splitForm == nil)
-    }
-
-    @Test func existingSplitsCountAgainstTheTotal() async throws {
-        let splits = FakeSplitsService()
-        await splits.setExisting([SplitFixture.split(1, transactionId: 1, amount: 8, name: "Anna")], transactionId: 1)
-        let service = FakeTransactionsService(rows: [TxFixture.wire(id: 1, amount: -10)])
-        let (model, shell) = try await TxFixture.opened(service, splits: splits)
-        defer { withExtendedLifetime(shell) {} }
-        model.requestSplit(try #require(model.rows?.first))
-        let form = try #require(model.splitForm)
-        await form.load()
-        #expect(form.existingTotal == 8)
-        #expect(form.existingRecipientNames == "Anna")
-        #expect(form.remainingCapacity == 2)
-        form.setRecipient(1, to: 4)
-        #expect(form.exceedsTotal(format: .eu))
-        form.setSplitType(.custom)
-        form.setAmount(1, to: "2")
-        #expect(form.canSubmit(format: .eu))
-        await splits.fail(true)
-        await model.submitSplit()
-        #expect(model.notice?.key == "splits.createFailed")
-        #expect(model.splitForm != nil)
-        model.dismissSplit()
-        #expect(model.splitRequest == nil)
-    }
-
-    @Test func anUndockedInspectorKeepsSplitDeleteAndAddPresentable() async throws {
-        let service = FakeTransactionsService(rows: TxFixture.rows(3))
-        let (model, shell) = try await TxFixture.opened(service)
-        defer { withExtendedLifetime(shell) {} }
-        let narrow = TransactionsModel.dockedInspectorWidth - 1
-        #expect(!model.inspectorIsSheet(pageWidth: narrow))
-        model.select(2)
-        let row = try #require(model.selectedRow)
-        #expect(model.inspectorIsSheet(pageWidth: narrow))
-        #expect(!model.inspectorIsSheet(pageWidth: TransactionsModel.dockedInspectorWidth))
-        // The inspector's Split: the dialog's state is set and the inspector sheet, which
-        // presents it, stays open.
-        model.requestSplit(row)
-        #expect(model.splitForm?.row.id == 2)
-        #expect(model.inspectorIsSheet(pageWidth: narrow))
-        model.dismissSplit()
-        #expect(model.inspectorIsSheet(pageWidth: narrow))
-        // The inspector's Delete asks while the inspector stays open.
-        model.requestDelete(row)
-        #expect(model.pendingDelete?.id == 2)
-        #expect(model.inspectorIsSheet(pageWidth: narrow))
-        model.cancelDelete()
-        // ⌘N over the inspector sheet.
-        model.requestAdd()
-        #expect(model.isAddPresented)
-        #expect(model.inspectorIsSheet(pageWidth: narrow))
-        model.dismissAdd()
-        // Confirming the delete closes the inspector with its row.
-        model.requestDelete(row)
-        await model.confirmDelete()
-        #expect(await service.deleted == [2])
-        #expect(!model.inspectorIsSheet(pageWidth: narrow))
-        #expect(model.row(2) == nil)
-    }
-
-    @Test func aNewSplitRefreshesWhoOwesYou() async throws {
-        let splits = FakeSplitsService(owed: [SplitFixture.owed(1, amount: 20)])
-        let service = FakeTransactionsService(rows: [TxFixture.wire(id: 1, amount: -10), TxFixture.wire(id: 2, amount: -6)])
-        let (model, shell) = try await TxFixture.opened(service, splits: splits)
-        defer { withExtendedLifetime(shell) {} }
-        let owes = model.owes
-        await owes.loadSummary()
-        await owes.open(try #require(owes.summary?.first))
-        #expect(await splits.summaryLoads == 1)
-        #expect(await splits.detailLoads == [4])
-        // Within 30 s both answers are reused.
-        await owes.loadSummary()
-        await owes.loadSplits()
-        #expect(await splits.summaryLoads == 1)
-        #expect(await splits.detailLoads == [4])
-        // The Split dialog's create invalidates `splitKeys.all`.
-        model.requestSplit(try #require(model.row(1)))
-        let form = try #require(model.splitForm)
-        await form.load()
-        form.setRecipient(1, to: 4)
-        await model.submitSplit()
-        #expect(model.notice?.key == "splits.created")
-        await owes.loadSummary()
-        await owes.loadSplits()
-        #expect(await splits.summaryLoads == 2)
-        #expect(await splits.detailLoads == [4, 4])
-        // So does Bulk split.
-        model.toggleSelection(1)
-        model.toggleSelection(2)
-        model.openBulkDialog(.split)
-        model.setBulkSplitRecipient(4)
-        await model.applyBulkSplit()
-        #expect(await splits.bulkCalls.count == 1)
-        await owes.loadSummary()
-        await owes.loadSplits()
-        #expect(await splits.summaryLoads == 3)
-        #expect(await splits.detailLoads == [4, 4, 4])
-        // A failed create leaves the cached answers alone.
-        await splits.fail(true)
-        model.requestSplit(try #require(model.row(2)))
-        let failing = try #require(model.splitForm)
-        await failing.load()
-        failing.setRecipient(1, to: 4)
-        await model.submitSplit()
-        #expect(model.notice?.key == "splits.createFailed")
-        await splits.fail(false)
-        await owes.loadSummary()
-        #expect(await splits.summaryLoads == 3)
-    }
-}
-
-// MARK: - Bulk actions
-
-@MainActor
-@Suite struct TransactionBulkTests {
-    @Test func theSelectorEncodesIdsOrTheFilter() throws {
-        let ids = try #require(
-            try TransactionBulkUpdateRequest(selector: .ids([3, 1]), fields: BulkUpdateFields(isActive: false)).encodedBody())
-        #expect(String(decoding: ids, as: UTF8.self) == #"{"fields":{"is_active":false},"ids":[3,1]}"#)
-        var filters = TransactionFilters()
-        filters.uncategorised = true
-        filters.recipientId = 4
-        let selection = BulkFilterSelection(filters: filters, search: "rent", active: true)
-        let body = try #require(
-            try TransactionBulkUpdateRequest(
-                selector: .filter(selection, expectedCount: 12), fields: BulkUpdateFields(categoryId: .some(nil))
-            ).encodedBody())
-        #expect(
-            String(decoding: body, as: UTF8.self)
-                == #"{"expected_count":12,"fields":{"category_id":null},"filter":{"active":true,"recipient_id":4,"search":"rent","uncategorised":true}}"#
-        )
-        let export = try #require(
-            try TransactionBulkExportRequest(selector: .ids([2]), format: .json).encodedBody())
-        #expect(String(decoding: export, as: UTF8.self) == #"{"format":"json","ids":[2]}"#)
-        #expect(
-            TransactionBulkExportRequest.fileName(.json, now: Date(timeIntervalSince1970: 1_791_800_000))
-                == "transactions_export_2026-10-12T10-13-20.ndjson")
-    }
-
-    @Test func selectAllMatchingPromotesToTheFilter() async throws {
-        let bulk = FakeTransactionBulkService()
-        let service = FakeTransactionsService(rows: TxFixture.rows(60))
-        let (model, shell) = try await TxFixture.opened(
-            service, route: "/transactions?uncategorised=true", bulk: bulk)
-        defer { withExtendedLifetime(shell) {} }
-        #expect(!model.showsBulkBar)
-        let loaded = try #require(model.rows)
-        #expect(model.total == 20)
-        #expect(loaded.count == 20)
-        model.toggleSelection(loaded[0].id)
-        #expect(model.showsBulkBar)
-        #expect(model.bulkCount == 1)
-        #expect(!model.canSelectAllMatching)
-        // Every loaded row checked, but nothing more matches.
-        model.toggleSelectAll()
-        #expect(!model.canSelectAllMatching)
-        await model.requestBulkSetActive(true)
-        let first = try #require(await bulk.updateSelectors.last)
-        #expect(first.count == 20)
-        #expect(await bulk.updateFields.last == BulkUpdateFields(isActive: true))
-        #expect(model.notice?.key == "txPage.bulk.updated.other")
-        #expect(!model.showsBulkBar)
-    }
-
-    @Test func filterModeSendsTheFilterAndDisablesTagAndSplit() async throws {
-        let bulk = FakeTransactionBulkService()
-        let (model, shell) = try await TxFixture.opened(
-            FakeTransactionsService(rows: TxFixture.rows(120)), bulk: bulk)
-        defer { withExtendedLifetime(shell) {} }
-        #expect(model.total == 120)
-        model.toggleSelectAll()
-        #expect(model.canSelectAllMatching)
-        model.selectAllMatching()
-        #expect(model.bulkCount == 120)
-        #expect(model.bulkIdsOnly)
-        model.openBulkDialog(.tag)
-        #expect(model.bulkDialog == nil)
-        model.openBulkDialog(.split)
-        #expect(model.bulkDialog == nil)
-        #expect(model.transferPair == nil)
-        model.requestBulkDelete()
-        #expect(model.bulkConfirmation == .delete(count: 120))
-        let text = try #require(model.bulkConfirmationText())
-        #expect(text.title == "txPage.bulk.confirmDeleteTitle")
-        await model.confirmBulk()
-        guard case .filter(let selection, let expected)? = await bulk.deletes.last else {
-            Issue.record("expected a filter selector")
-            return
-        }
-        #expect(expected == 120)
-        #expect(selection.active)
-        #expect(model.notice?.key == "txPage.bulk.deleted.other")
-        #expect(model.notice?.variables["n"] == "120")
-        #expect(!model.showsBulkBar)
-    }
-
-    @Test func deactivateAsksAndCategoryAndPayeeDialogsApply() async throws {
-        let bulk = FakeTransactionBulkService()
-        let (model, shell) = try await TxFixture.opened(FakeTransactionsService(rows: TxFixture.rows(4)), bulk: bulk)
-        defer { withExtendedLifetime(shell) {} }
-        model.toggleSelection(1)
-        model.toggleSelection(2)
-        await model.requestBulkSetActive(false)
-        #expect(model.bulkConfirmation == .deactivate(count: 2))
-        model.cancelBulkConfirmation()
-        #expect(await bulk.updateFields.isEmpty)
-        await model.requestBulkSetActive(false)
-        await model.confirmBulk()
-        #expect(await bulk.updateFields.last == BulkUpdateFields(isActive: false))
-        model.toggleSelection(3)
-        model.openBulkDialog(.recategorize)
-        model.setBulkCategory(nil)
-        await model.applyBulkCategory()
-        #expect(await bulk.updateFields.last == BulkUpdateFields(categoryId: .some(nil)))
-        #expect(model.bulkDialog == nil)
-        model.toggleSelection(3)
-        model.openBulkDialog(.recipient)
-        await model.applyBulkRecipient()
-        #expect(await bulk.updateFields.count == 2)
-        model.setBulkRecipient(2)
-        await model.applyBulkRecipient()
-        #expect(await bulk.updateFields.last == BulkUpdateFields(recipientId: 2))
-        #expect(await bulk.updateSelectors.last == .ids([3]))
-        // A failure toasts and keeps the selection.
-        model.toggleSelection(4)
-        await bulk.fail(true)
-        await model.requestBulkSetActive(true)
-        #expect(model.notice?.key == "txPage.bulk.failed")
-        #expect(model.showsBulkBar)
-    }
-
-    @Test func tagsStayUntilCancelAndApplyToTheIds() async throws {
-        let bulk = FakeTransactionBulkService()
-        let (model, shell) = try await TxFixture.opened(FakeTransactionsService(rows: TxFixture.rows(4)), bulk: bulk)
-        defer { withExtendedLifetime(shell) {} }
-        shell.setLeaveGuard(model.leaveGuard)
-        model.toggleSelection(2)
-        model.toggleSelection(1)
-        model.openBulkDialog(.tag)
-        model.setBulkTagsToAdd(PickerDataModel.toggling("trip", in: []))
-        model.setBulkTagsToRemove(["old"])
-        #expect(model.hasUnsavedChanges)
-        model.closeBulkDialog()
-        #expect(model.bulkDrafts.tagsToAdd == ["trip"])
-        model.openBulkDialog(.tag)
-        await model.applyBulkTags()
-        #expect(await bulk.tagCalls == ["1,2|trip|old"])
-        #expect(model.notice?.key == "tags.bulkApplied")
-        #expect(model.bulkDrafts.tagsEmpty)
-        #expect(model.bulkDialog == nil)
-        model.toggleSelection(3)
-        model.openBulkDialog(.tag)
-        model.setBulkTagsToAdd(["x"])
-        model.cancelBulkTags()
-        #expect(model.bulkDrafts.tagsEmpty)
-        #expect(PickerDataModel.toggling("x", in: ["x", "y"]) == ["y"])
-    }
-
-    @Test func exportSavesUnderTheStampedNameWithTheCount() async throws {
-        let bulk = FakeTransactionBulkService()
-        let (model, shell) = try await TxFixture.opened(FakeTransactionsService(rows: TxFixture.rows(4)), bulk: bulk)
-        defer { withExtendedLifetime(shell) {} }
-        var saved: [String] = []
-        model.save = { _, name in
-            saved.append(name)
-            return true
-        }
-        model.toggleSelection(1)
-        model.toggleSelection(2)
-        model.openBulkDialog(.export)
-        model.setBulkExportFormat(.json)
-        await model.applyBulkExport()
-        #expect(await bulk.exportFormats == [.json])
-        #expect(saved.first?.hasPrefix("transactions_export_2026-10-12T") == true)
-        #expect(saved.first?.hasSuffix(".ndjson") == true)
-        #expect(model.notice?.key == "txPage.bulk.exportedCount.other")
-        #expect(model.notice?.variables["count"] == "3")
-        #expect(model.bulkDialog == nil)
-        // Without the header the ids count.
-        await bulk.setExportedCount(nil)
-        await model.applyBulkExport()
-        #expect(model.notice?.variables["count"] == "2")
-        #expect(model.bulkDrafts.exportFormat == .json)
-        #expect(model.showsBulkBar)
-    }
-
-    @Test func bulkSplitNamesWhatWasSkipped() async throws {
-        let splits = FakeSplitsService()
-        let (model, shell) = try await TxFixture.opened(FakeTransactionsService(rows: TxFixture.rows(4)), splits: splits)
-        defer { withExtendedLifetime(shell) {} }
-        shell.strings = SplitFixture.strings
-        model.toggleSelection(1)
-        model.toggleSelection(2)
-        model.openBulkDialog(.split)
-        await model.applyBulkSplit()
-        #expect(await splits.bulkCalls.isEmpty)
-        model.setBulkSplitRecipient(4)
-        model.setBulkSplitMode(.full)
-        await splits.setBulkResult(
-            OpenAPI.BulkSplitResult(
-                requested: 2, split: 1, skippedAlreadySplit: 1, skippedZeroAmount: 0, skippedMissing: 0, items: []))
-        await model.applyBulkSplit()
-        #expect(await splits.bulkCalls == ["1,2|4|full"])
-        #expect(model.notice?.key == "splits.bulkCreated.one")
-        #expect(model.notice?.detail == "1 was already split.")
-        #expect(model.bulkDialog == nil)
-        #expect(model.bulkDrafts.splitMode == .equal)
-        model.toggleSelection(3)
-        model.openBulkDialog(.split)
-        model.setBulkSplitRecipient(4)
-        await splits.setBulkResult(
-            OpenAPI.BulkSplitResult(
-                requested: 1, split: 0, skippedAlreadySplit: 0, skippedZeroAmount: 1, skippedMissing: 1, items: []))
-        await model.applyBulkSplit()
-        #expect(model.notice?.key == "splits.bulkNothingSplit")
-        #expect(model.notice?.kind == .info)
-        #expect(model.notice?.detail == "2 could not be split.")
-    }
-
-    @Test func markAsInternalTransferNeedsAnEligiblePair() async throws {
-        let bulk = FakeTransactionBulkService()
-        let rows = [
-            TxFixture.wire(id: 1, accountId: 7, bank: "BE00 1234", amount: -50),
-            TxFixture.wire(id: 2, accountId: 9, bank: "BE99 0000", amount: 50),
-            TxFixture.wire(id: 3, accountId: 7, amount: 20),
-            TxFixture.wire(id: 4, accountId: 9, amount: 20, currency: "eur"),
-        ]
-        let (model, shell) = try await TxFixture.opened(FakeTransactionsService(rows: rows), bulk: bulk)
-        defer { withExtendedLifetime(shell) {} }
-        shell.strings = SplitFixture.strings
-        model.toggleSelection(3)
-        model.toggleSelection(4)
-        // Same sign and a lower-case currency do not qualify.
-        #expect(model.transferPair == nil)
-        model.clearBulkSelection()
-        model.toggleSelection(1)
-        model.toggleSelection(2)
-        let pair = try #require(model.transferPair)
-        #expect(Set([pair.0.id, pair.1.id]) == [1, 2])
-        let (outflow, inflow) = pair.0.id == 1 ? (pair.0, pair.1) : (pair.1, pair.0)
-        let variables = TransactionsModel.transferVariables(outflow, inflow)
-        #expect(variables["firstAccount"] == "BE00 1234")
-        #expect(variables["secondAmount"] == "50")
-        #expect(variables["firstCurrency"] == "EUR")
-        model.requestMarkTransfer()
-        // The selection changed while the alert asked.
-        model.toggleSelection(2)
-        await model.confirmBulk()
-        #expect(model.notice?.key == "txPage.bulk.failed")
-        #expect(model.notice?.detail == "The selected records changed.")
-        #expect(await bulk.transfers.isEmpty)
-        model.toggleSelection(2)
-        model.requestMarkTransfer()
-        await model.confirmBulk()
-        let linked = await bulk.transfers
-        #expect(linked.map { legs in Set(legs) } == [[1, 2]])
-        #expect(model.notice?.key == "txPage.bulk.markTransferSuccess")
-        #expect(!model.showsBulkBar)
-    }
-
-    @Test func theTransferRecheckComparesOnlyTheLegFields() {
-        let leg = TransactionRow(TxFixture.wire(id: 1, accountId: 7, amount: -50))
-        // A category, payee or memo edit while the alert asks keeps the link.
-        var edited = leg
-        edited.categoryId = 5
-        edited.categoryName = "Food"
-        edited.recipientId = 9
-        edited.memo = "Savings"
-        #expect(TransactionsModel.sameTransferLeg(edited, leg))
-        // The fields the confirmation showed, or that make it a transfer, cancel it.
-        var moved = leg
-        moved.amount = -40
-        #expect(!TransactionsModel.sameTransferLeg(moved, leg))
-        var redated = leg
-        redated.date = "2026-10-02"
-        #expect(!TransactionsModel.sameTransferLeg(redated, leg))
-        var excluded = leg
-        excluded.isActive = false
-        #expect(!TransactionsModel.sameTransferLeg(excluded, leg))
-        var linked = leg
-        linked.transferPeerId = 2
-        #expect(!TransactionsModel.sameTransferLeg(linked, leg))
-        var otherAccount = leg
-        otherAccount.accountId = 8
-        #expect(!TransactionsModel.sameTransferLeg(otherAccount, leg))
-        var otherCurrency = leg
-        otherCurrency.currency = "USD"
-        #expect(!TransactionsModel.sameTransferLeg(otherCurrency, leg))
-    }
-
-    @Test func deletedToastsFollowTheResult() {
-        let changed = TransactionsModel.bulkDeletedToast(BulkDeleteResult(deleted: 3, requested: 4, matched: 5), language: .en)
-        #expect(changed.key == "txPage.bulk.deletedSelectionChanged.other")
-        #expect(changed.variables["matched"] == "5")
-        let partial = TransactionsModel.bulkDeletedToast(BulkDeleteResult(deleted: 1, requested: 2, matched: 2), language: .nl)
-        #expect(partial.key == "txPage.bulk.deletedOf.other")
-        #expect(partial.variables["skipped"] == "1")
-        let one = TransactionsModel.bulkDeletedToast(BulkDeleteResult(deleted: 1, requested: 1, matched: 1), language: .en)
-        #expect(one.key == "txPage.bulk.deleted.one")
-        #expect(one.variables["count"] == "1")
-    }
-}
-
-// MARK: - Who owes you
 
 @MainActor
 @Suite struct OwesTests {
     static func shell(_ splits: FakeSplitsService) -> (OwesModel, NativeShellModel) {
         let model = TxFixture.model(FakeTransactionsService(), splits: splits)
-        let shell = TxFixture.shell(model, recorder: ShellRecorder())
+        let shell = TxFixture.shell(model)
         shell.strings = SplitFixture.strings
         return (model.owes, shell)
     }
@@ -1002,6 +524,24 @@ enum SplitFixture {
         #expect(OwesModel.progress(paid: 5, of: 0) == 0)
         await model.loadSummary(force: true)
         #expect(await splits.summaryLoads == 2)
+    }
+
+    @Test func splitsLeftOutForWantOfARateShowInTheTotalAndTheSettleAllAlert() async throws {
+        let splits = FakeSplitsService(owed: [SplitFixture.owed(1, amount: 20, paid: 5)])
+        await splits.setUnconvertedCount(2)
+        let (model, shell) = Self.shell(splits)
+        defer { withExtendedLifetime(shell) {} }
+        await model.appear()
+        #expect(model.unconvertedCount == 2)
+        #expect(model.showsTotalCard)
+        await model.open(try #require(model.summary?.first))
+        #expect(model.personOutstanding == 15)
+        model.requestSettleAll()
+        let alert = try #require(model.confirmationText())
+        #expect(alert.message.hasSuffix("2 splits left out: exchange rates unavailable"))
+        #expect(model.payment == nil)
+        model.openPayment(try #require(model.splits?.first))
+        #expect(model.payment?.currency == "EUR")
     }
 
     @Test func aFailedSummaryRetries() async throws {
@@ -1068,7 +608,7 @@ enum SplitFixture {
         await model.appear()
         await model.open(try #require(model.summary?.first))
         model.requestSettleAll()
-        #expect(model.confirmation == .settleAll(count: 2, amount: 30))
+        #expect(model.confirmation == .settleAll(count: 2, amount: 30, unconvertedCount: 0))
         await model.confirm()
         #expect(await splits.settledAll == [4])
         #expect(model.notice?.key == "splits.allSettled")

@@ -12,9 +12,16 @@ public struct NativeSettingsAppearance: Equatable, Sendable {
 /// Foundation-only counterparts of ThemeHydration.resolveTheme and lib/visualEffects.resolveEffectiveTier.
 /// Doubles here represent geometry and clock components, never financial values.
 public enum NativeSettingsAppearanceResolver {
+    /// `isLargeDisplay` of lib/visualEffects (ADR-075, ADR-244): a built-in panel is never large,
+    /// since the cap exists for external 4K/5K outputs. `isBuiltIn` is nil when unknown (React:
+    /// outside the desktop app), where the pixel heuristic applies.
+    public static func isLargeDisplay(physicalPixelCount: Double, isBuiltIn: Bool?) -> Bool {
+        if isBuiltIn == true { return false }
+        return physicalPixelCount > 6_000_000
+    }
     public static func resolve(
         theme: TaxValue?, settings: NativeAppSettings, date: Date = Date(), calendar: Calendar = .current,
-        systemIsDark: Bool, physicalPixelCount: Double, sessionTierOverride: String? = nil,
+        systemIsDark: Bool, physicalPixelCount: Double, isBuiltInDisplay: Bool? = nil, sessionTierOverride: String? = nil,
         previousAppearance: ThemeAppearance = .dark
     ) -> NativeSettingsAppearance {
         let mode = theme?["mode"]?.stringValue ?? "dark"
@@ -29,7 +36,7 @@ public enum NativeSettingsAppearanceResolver {
         default: appearance = scheduledAppearance(schedule, date: date, calendar: calendar)
         }
         let variant = theme?["variant"]?.stringValue.flatMap(ThemeVariant.init(rawValue:)) ?? .default
-        let large = physicalPixelCount > 6_000_000
+        let large = isLargeDisplay(physicalPixelCount: physicalPixelCount, isBuiltIn: isBuiltInDisplay)
         let tier = settings.autoAdaptDisplay && large ? sessionTierOverride ?? "reduced" : settings.visualEffects
         return .init(
             theme: .init(

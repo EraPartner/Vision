@@ -17,11 +17,40 @@ enum AppRuntime {
         Bundle.main.object(forInfoDictionaryKey: NativeVariant.infoPlistKey))
     /// Starts and stops Vision Native's own PostgreSQL 18 cluster and backend.
     static let supervisor = RuntimeSupervisor.live(
-        allowPayloadOverride: AppRuntime.isDebugBuild, variant: AppRuntime.variant)
+        allowPayloadOverride: AppRuntime.isDebugBuild, variant: AppRuntime.variant,
+        beforeMigrations: AppRuntime.preMigrationHook)
+    /// ADR-242: the Demo database is synthetic and reseeded at the packaged schema, so only the
+    /// standard variant takes a backup before the backend migrates (`main.ts`).
+    private static var preMigrationHook: PreMigrationBackupRelay.Action? {
+        guard AppRuntime.variant == .standard else { return nil }
+        return { pending, runtime in try await AppRuntime.preMigrationBackup.run(pending, runtime) }
+    }
+    /// Reaches the backup service, which `ShellController` creates after the supervisor exists.
+    static let preMigrationBackup = PreMigrationBackupRelay()
     static let logger = Logger(subsystem: "com.vaultvoyager.vision-native", category: "runtime")
     static let shellLogger = Logger(subsystem: "com.vaultvoyager.vision-native", category: "shell")
     /// The `will-quit` hard timeout in `packaging/electron/main.ts`.
     static let shutdownTimeout: Duration = .seconds(45)
+}
+
+/// The path from the supervisor's `beforeMigrations` hook to the backup service. Until the shell
+/// installs the backup, the hook throws, so no migration runs without the backup it was meant to take.
+final class PreMigrationBackupRelay: @unchecked Sendable {
+    typealias Action = @Sendable (PendingMigrations, NativeRuntime) async throws -> Void
+    private let lock = NSLock()
+    private var action: Action?
+
+    func install(_ action: @escaping Action) {
+        lock.withLock { self.action = action }
+    }
+
+    func run(_ pending: PendingMigrations, _ runtime: NativeRuntime) async throws {
+        let action = lock.withLock { self.action }
+        guard let action else {
+            throw NativeRuntimeError("PRE_MIGRATION_BACKUP_UNAVAILABLE", "The backup service is not ready.")
+        }
+        try await action(pending, runtime)
+    }
 }
 
 /// An AppKit entry point rather than a SwiftUI `App`, so the menu bar, dock menu and window

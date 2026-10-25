@@ -3,7 +3,7 @@ import Testing
 
 @testable import VisionNativeCore
 
-@MainActor @Suite("Analysis SQL history factory bridge integration")
+@MainActor @Suite("Analysis SQL history factory integration")
 struct AnalysisSQLHistoryIntegrationTests {
     @Test func actualClosureFactoryKeepsMetadataAcrossNativeRouteVisits() async throws {
         var persisted = try APIBody.encode(["SELECT synthetic_history"])
@@ -16,7 +16,7 @@ struct AnalysisSQLHistoryIntegrationTests {
         let shell = NativeShellModelTests().makeModel(
             settings: NativeAppSettings(adminMode: false), recorder: ShellRecorder(), analysis: screens)
         let route = try #require(NativeRoute("/analysis?savedAnalysis=invalid"))
-        shell.routeDidChange(route)
+        shell.show(route)
         await shell.settingsSettled()
         #expect(shell.detail == .native(.analysis))
         await screens.didAppear(route: route)

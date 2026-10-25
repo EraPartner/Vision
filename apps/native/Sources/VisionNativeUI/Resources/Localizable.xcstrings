@@ -16417,6 +16417,132 @@
         }
       }
     },
+    "app.errorPageMessage": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision couldn't reach its backend. Try again, or check the logs to see what happened."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision kon de backend niet bereiken. Probeer het opnieuw of bekijk de logboeken om te zien wat er gebeurde."
+          }
+        }
+      }
+    },
+    "app.errorPageOpenLogs": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open logs"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logboeken openen"
+          }
+        }
+      }
+    },
+    "app.errorPageRetry": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opnieuw proberen"
+          }
+        }
+      }
+    },
+    "app.errorPageTitle": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision couldn't start"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision kon niet starten"
+          }
+        }
+      }
+    },
+    "app.preMigrationBackupFailed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision could not back up your data before updating the database, so it did not update or start. Free up disk space or check the logs, then open Vision again. Details: {error}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision kon geen back-up van je gegevens maken voordat de database werd bijgewerkt, dus de update en het starten zijn niet doorgegaan. Maak schijfruimte vrij of bekijk de logboeken en open Vision daarna opnieuw. Details: {error}"
+          }
+        }
+      }
+    },
+    "app.running": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision is running."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision wordt uitgevoerd."
+          }
+        }
+      }
+    },
+    "app.stopped": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision has been stopped."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision is gestopt."
+          }
+        }
+      }
+    },
     "aria.cancel": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -16597,6 +16723,24 @@
         }
       }
     },
+    "aria.downloadAttachment": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download attachment {name}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bijlage {name} downloaden"
+          }
+        }
+      }
+    },
     "aria.edit": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -16773,6 +16917,42 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zijbalk in-/uitklappen"
+          }
+        }
+      }
+    },
+    "backup.done": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup saved."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back-up opgeslagen."
+          }
+        }
+      }
+    },
+    "backup.failed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup failed. Check the backup folder."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back-up mislukt. Controleer de back-upmap."
           }
         }
       }
@@ -19095,6 +19275,42 @@
           "stringUnit": {
             "state": "translated",
             "value": "Kon deze pagina niet laden"
+          }
+        }
+      }
+    },
+    "common.fxUnavailableTransactions.one": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} transaction left out: exchange rate unavailable"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} transactie niet meegerekend: wisselkoers niet beschikbaar"
+          }
+        }
+      }
+    },
+    "common.fxUnavailableTransactions.other": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} transactions left out: exchange rates unavailable"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} transacties niet meegerekend: wisselkoersen niet beschikbaar"
           }
         }
       }
@@ -29485,6 +29701,42 @@
         }
       }
     },
+    "importReview.alreadyImported.badge": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already imported"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al geïmporteerd"
+          }
+        }
+      }
+    },
+    "importReview.alreadyImported.summary": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} rows are already in your ledger. They are skipped as duplicates."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} rijen staan al in je grootboek. Ze worden als duplicaat overgeslagen."
+          }
+        }
+      }
+    },
     "importReview.approve": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -38319,6 +38571,42 @@
           "stringUnit": {
             "state": "translated",
             "value": "van {n} persoon"
+          }
+        }
+      }
+    },
+    "owesPage.fxUnavailable.one": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} split left out: exchange rate unavailable"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} splitsing niet meegerekend: wisselkoers niet beschikbaar"
+          }
+        }
+      }
+    },
+    "owesPage.fxUnavailable.other": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} splits left out: exchange rates unavailable"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} splitsingen niet meegerekend: wisselkoersen niet beschikbaar"
           }
         }
       }
@@ -59275,6 +59563,42 @@
         }
       }
     },
+    "settings.aiChat.modelFit": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uses about {weights} GB plus up to {context} GB for conversation context, of {total} GB memory."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gebruikt ongeveer {weights} GB plus maximaal {context} GB voor gesprekscontext, van {total} GB geheugen."
+          }
+        }
+      }
+    },
+    "settings.aiChat.modelFitTip": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tip: setting OLLAMA_FLASH_ATTENTION=1 and OLLAMA_KV_CACHE_TYPE=q8_0 for Ollama roughly halves context memory."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tip: met OLLAMA_FLASH_ATTENTION=1 en OLLAMA_KV_CACHE_TYPE=q8_0 voor Ollama halveert het geheugen voor context ongeveer."
+          }
+        }
+      }
+    },
     "settings.aiChat.noModels": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -60333,6 +60657,42 @@
           "stringUnit": {
             "state": "translated",
             "value": "Donker vanaf"
+          }
+        }
+      }
+    },
+    "settings.appearance.fullEffects": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full effects"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volledige effecten"
+          }
+        }
+      }
+    },
+    "settings.appearance.fullEffectsHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brings back effects that were turned down to save power: smooth aurora drift, frosted dialog backdrops, glass chart tooltips and cards, animated card shadows and longer chart entrances. Uses more GPU and battery."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brengt effecten terug die zijn afgezwakt om energie te besparen: vloeiend bewegende aurora, matglazen achtergrond achter dialogen, glazen grafiektooltips en kaarten, geanimeerde kaartschaduwen en langere grafiekanimaties. Gebruikt meer GPU en batterij."
           }
         }
       }
@@ -68739,6 +69099,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Uit dividendtransacties in je portefeuille"
+          }
+        }
+      }
+    },
+    "tax.fxUnavailable": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incomplete: no exchange rate is stored for {currencies}; those amounts are left out of the affected figures."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Onvolledig: er is geen wisselkoers opgeslagen voor {currencies}; die bedragen zijn niet meegerekend in de betrokken cijfers."
           }
         }
       }
@@ -78013,6 +78391,24 @@
         }
       }
     },
+    "tax.yearActions.computeFailed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't calculate the figures for {year}. Try again."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kon de cijfers voor {year} niet berekenen. Probeer het opnieuw."
+          }
+        }
+      }
+    },
     "tax.yearActions.exportCsv": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -80061,6 +80457,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Transactiedetails"
+          }
+        }
+      }
+    },
+    "txPage.downloadAttachmentError": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not download attachment"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kon bijlage niet downloaden"
           }
         }
       }

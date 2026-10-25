@@ -38,18 +38,17 @@ struct NativeSettingsAIView: View {
                         get: { model.selectedLocalModel }, set: { settings.setAppValue("aiDefaultModel", .string($0)) }),
                     options: localOptions
                 ).disabled(!model.canSelectLocalModel)
+                // AIChatSettingsSection `fitLine`: memory advisor line under the model select.
+                if let fit = model.fitVariables {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(strings.t("settings.aiChat.modelFit", fit))
+                        Text(strings.t("settings.aiChat.modelFitTip"))
+                    }
+                    .font(.footnote).foregroundStyle(theme.secondaryLabel)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16).padding(.bottom, 12)
+                }
             }
-            NativeSettingsGroup(title: strings.t("settings.aiOpenAi.section")) {
-                NativeSettingsSelectRow(
-                    title: strings.t("settings.aiOpenAi.defaultModel"),
-                    description: strings.t("settings.aiOpenAi.defaultModelHint"),
-                    value: Binding(
-                        get: { model.selectedOpenAiModel },
-                        set: { settings.setAppValue("openAiDefaultModel", .string($0)) }),
-                    options: openAiOptions
-                ).disabled(!model.canSelectOpenAiModel)
-            }
-            agentCloak
             preferences
             NativeSettingsGroup(
                 title: strings.t("settings.research.section"), description: strings.t("settings.research.hint")
@@ -68,53 +67,6 @@ struct NativeSettingsAIView: View {
         let rows = model.ollamaModels ?? []
         if rows.isEmpty { return [.init(value: model.selectedLocalModel, label: strings.t(model.modelPlaceholderKey))] }
         return rows.map { .init(value: $0.name, label: $0.name) }
-    }
-    private var openAiOptions: [NativeSettingsOption] {
-        if model.openAiModels.isEmpty {
-            return [.init(value: model.selectedOpenAiModel, label: strings.t(model.openAiPlaceholderKey))]
-        }
-        return model.openAiModels.map { .init(value: $0.id, label: "\($0.label) (\($0.id))") }
-    }
-    private var agentCloak: some View {
-        NativeSettingsGroup(
-            title: strings.t("settings.agentCloak.section"), description: strings.t("settings.agentCloak.description")
-        ) {
-            NativeSettingsRow(title: strings.t("settings.agentCloak.status"), stacked: true) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(strings.t(model.desktopLabelKey))
-                    if let status = model.desktopStatus {
-                        if !status.openAiEnabled { Text(strings.t("settings.agentCloak.openAiHint")) }
-                        if !status.available { Text(strings.t("settings.agentCloak.connectionHint")) }
-                        if status.enabled && !status.mappingKeyConfigured {
-                            Text(strings.t("settings.agentCloak.keyMissingHint")).foregroundStyle(theme.destructive)
-                        }
-                    }
-                    if let error = model.desktopMutationError ?? model.desktopReadError {
-                        Text(error).foregroundStyle(theme.destructive).accessibilityLabel(error)
-                    }
-                }.font(.callout)
-            }
-            Divider()
-            NativeSettingsRow(
-                title: strings.t("settings.agentCloak.protection"),
-                description: strings.t("settings.agentCloak.protectionHint"), stacked: true
-            ) {
-                HStack {
-                    Button(strings.t("settings.agentCloak.checkAgain")) { Task { await model.checkAgentCloak() } }
-                        .buttonStyle(.visionOutline).disabled(!model.canCheckDesktop)
-                    // Web: outline to disable, the default (primary) variant to enable.
-                    if model.desktopStatus?.enabled == true {
-                        Button(strings.t("settings.agentCloak.disable")) {
-                            Task { await model.toggleAgentCloak() }
-                        }.buttonStyle(.visionOutline).disabled(!model.canToggleDesktop)
-                    } else {
-                        Button(strings.t("settings.agentCloak.enable")) {
-                            Task { await model.toggleAgentCloak() }
-                        }.buttonStyle(.visionPrimary).disabled(!model.canToggleDesktop)
-                    }
-                }
-            }
-        }
     }
     private var preferences: some View {
         NativeSettingsGroup(

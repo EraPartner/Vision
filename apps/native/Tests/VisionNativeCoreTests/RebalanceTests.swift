@@ -80,6 +80,16 @@ struct RebalanceDataTests {
         #expect(data.sleeves == ["bonds", "other", "stocks"])
         #expect(data.cashAccounts.first?.balanceCurrency == "EUR")
         #expect(data.cashAccounts.first?.accountCurrency == "USD")
+        // A cash partition without a stored rate is not deployable cash and is named (ADR-216).
+        #expect(data.unconvertedCurrencies == ["CHF"])
+    }
+    @Test func cashWithoutAStoredRateIsFlaggedNotConverted() throws {
+        let plain = try JSONDecoder().decode(RebalanceResult.self, from: Data(rebalanceWireFixture.utf8))
+        #expect(plain.unconvertedCurrencies == ["CHF"])
+        var raw = try JSONDecoder().decode(TaxValue.self, from: Data(rebalanceWireFixture.utf8))
+        raw["unconvertedCurrencies"] = .array([.string("SEK")])
+        let flagged = try JSONDecoder().decode(RebalanceResult.self, from: APIBody.encode(raw))
+        #expect(flagged.unconvertedCurrencies == ["SEK"])
     }
     @Test func persistedNumericStringsAndUnknownMetadataSurviveAnUnrelatedSave() throws {
         let raw = Data(
@@ -274,7 +284,7 @@ struct RebalanceModelTests {
 }
 
 private let rebalanceWireFixture =
-    #"{"currency":"EUR","targetWeights":{"stocks":0.6,"bonds":0.4},"actualValues":{"stocks":123456789.123456789,"other":20},"availableCash":1000,"cashAccounts":[{"id":1,"name":"Synthetic USD account","accountCurrency":"USD","balance":123.45,"balanceCurrency":"EUR"}],"deployment":{"stocks":111.123456789012345}}"#
+    #"{"currency":"EUR","targetWeights":{"stocks":0.6,"bonds":0.4},"actualValues":{"stocks":123456789.123456789,"other":20},"availableCash":1000,"cashAccounts":[{"id":1,"name":"Synthetic USD account","accountCurrency":"USD","balance":123.45,"balanceCurrency":"EUR","unconvertedCurrencies":[]}],"unconvertedCurrencies":["CHF"],"deployment":{"stocks":111.123456789012345}}"#
 private let rebalanceCashWireFixture =
     #"{"currency":"EUR","today":"2026-10-13","horizonEnd":"2027-01-11","horizonDays":90,"currentCash":1000,"reserveFloor":77.001,"minimumProjectedBalance":700,"minimumDate":"2026-11-01","candidateCashCap":600.123456789012345,"occurrenceCount":5,"assumptions":{"plannedOnly":true,"excludesStatisticalForecast":true,"excludesFutureIncome":true,"excludesUnplannedExpenses":true,"currencyConversionAtRecentRates":true}}"#
 

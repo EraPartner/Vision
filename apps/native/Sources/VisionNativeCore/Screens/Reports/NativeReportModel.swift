@@ -152,14 +152,14 @@ import Observation
             }
             body["theme"] = try await callbacks.theme()
             guard generation == visit else { return }
-            let response = try await service.generate(NativeReportRequest(type: reportType, body: .object(body)))
+            // The endpoint answers a print-ready document (ADR-234); the service prints it to PDF and
+            // the file keeps the document's own name (`report.filename`).
+            let file = try await service.generate(NativeReportRequest(type: reportType, body: .object(body)))
             guard generation == visit else { return }
-            // Match the existing helper: name uses the app-local day after the PDF arrives.
-            let name = "vision-\(reportType.rawValue)-\(today).pdf"
             let completed: Bool
             switch output {
-            case .download: completed = try await callbacks.save(response.body, name)
-            case .print: completed = try await callbacks.print?(response.body, name) ?? false
+            case .download: completed = try await callbacks.save(file.pdf, file.filename)
+            case .print: completed = try await callbacks.print?(file.pdf, file.filename) ?? false
             }
             guard generation == visit, completed else { return }
             if case .download = output { publish("statsPage.report.downloadSuccess") }

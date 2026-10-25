@@ -81,6 +81,7 @@ struct CustomChartPlot: View {
     let kind: CustomChartKind
     let settings: NativeAppSettings
     let strings: any Localizing
+    @Environment(\.visionTheme) private var theme
     private let externalSelection: Binding<String?>?
     private let externalRange: Binding<String?>?
     @State private var localSelection: String?
@@ -114,7 +115,17 @@ struct CustomChartPlot: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if dataset.usesHistoricalFallback {
-                Text(strings.t("customChart.historicalFxFallback")).font(.caption).foregroundStyle(.orange)
+                Text(
+                    strings.t(
+                        "customChart.historicalFxFallback",
+                        ["currencies": dataset.fallbackCurrencies.isEmpty ? "—" : dataset.fallbackCurrencies.joined(separator: ", ")]
+                    )
+                ).font(.caption).foregroundStyle(theme.warning)
+            }
+            // No stored rate at all: left out, never added 1:1 (ADR-216).
+            if dataset.unconvertedCount > 0 {
+                Text(strings.tc("common.fxUnavailableTransactions", dataset.unconvertedCount))
+                    .font(.footnote).foregroundStyle(theme.warning)
             }
             if dataset.entities.isEmpty {
                 Text(strings.t("customChart.noSeries"))

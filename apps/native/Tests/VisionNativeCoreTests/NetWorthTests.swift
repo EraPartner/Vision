@@ -64,33 +64,49 @@ struct NetWorthTests {
         #expect(model.selection == nil && model.rangeStart == nil)
         #expect(await service.calls.count == before)
     }
-    @Test func accountCompositionKeepsHoldingsOnlyWalletsAndUnassignedAmounts() throws {
-        let accounts = [
-            account(1, "Cash", "EUR", "bank", 10), account(2, "Wallet", "EUR", "wallet", 999),
-            account(3, "Foreign", "USD", "bank", 8),
-        ]
-        let partitions = try JSONDecoder().decode(
-            NetWorthPartitions.self,
-            from: Data(
-                #"{"currency":"EUR","byAccount":[{"account_id":2,"currentValue":20},{"account_id":null,"currentValue":5},{"account_id":2,"currentValue":0.125}]}"#
-                    .utf8))
-        let rows = try NetWorthAccountRow.build(
-            accounts: accounts, partitions: partitions, rates: rates(), currency: "EUR")
-        #expect(rows.first { $0.accountId == 2 }?.cash == 0)
-        #expect(rows.first { $0.accountId == 2 }?.holdings == Decimal(string: "20.13"))
-        #expect(rows.first { $0.accountId == 3 }?.cash == 4)
-        #expect(rows.last?.accountId == nil)
-        #expect(rows.last?.total == 5)
-        let missingRates = OpenAPI.ExchangeRates(
-            totalRates: 0, rates: [], fallbackRates: [:], source: "synthetic", isStale: false)
-        #expect(throws: APIError.self) {
-            try NetWorthAccountRow.build(
-                accounts: accounts, partitions: partitions, rates: missingRates, currency: "EUR")
-        }
+    @Test func breakdownRowsAreTheServerFiguresLabelledAndOrdered() throws {
+        let response = OpenAPI.NetWorthByAccountResponse(
+            currency: "EUR",
+            rows: [
+                .init(
+                    accountId: 2, name: "Wallet", type: "wallet", cashCurrency: "EUR", cash: 0, holdings: 20,
+                    total: 20, unconverted: false),
+                .init(
+                    accountId: 1, name: "Cash", type: "bank", cashCurrency: "USD", cash: 4, holdings: 0, total: 4,
+                    unconverted: false),
+                .init(
+                    accountId: 3, name: nil, type: nil, cashCurrency: nil, cash: nil, holdings: 1, total: nil,
+                    unconverted: false),
+                .init(accountId: nil, holdings: 5, total: 5, unconverted: false),
+            ], total: 29, unconvertedAccountIds: [])
+        let breakdown = try #require(NetWorthAccountRow.rows(from: response))
+        #expect(breakdown.total == 29)
+        #expect(breakdown.rows.last?.accountId == nil)
+        #expect(breakdown.rows.last?.total == 5)
+        #expect(breakdown.rows.first { $0.accountId == 2 }?.cash == 0)
+        #expect(breakdown.rows.first { $0.accountId == 2 }?.holdings == 20)
+        #expect(breakdown.rows.first { $0.accountId == 1 }?.cash == 4)
+        #expect(breakdown.rows.first { $0.accountId == 3 }?.label == "#3")
+        let unconverted = OpenAPI.NetWorthByAccountResponse(
+            currency: "EUR",
+            rows: [
+                .init(
+                    accountId: 1, name: "Cash", type: "bank", cashCurrency: "CHF", cash: nil, holdings: 0,
+                    total: nil, unconverted: true)
+            ], total: nil, unconvertedAccountIds: [1])
+        #expect(NetWorthAccountRow.rows(from: unconverted) == nil)
+    }
+    @Test func theDisplayedBreakdownTotalIsTheServerSum() async throws {
+        let service = NetWorthFake()
+        let model = NetWorthModel(service: service)
+        await model.load(currency: "EUR", pageSize: 2, route: try #require(NativeRoute("/portfolio/net-worth")))
+        #expect(model.accountRows?.count == 1)
+        #expect(model.accountsTotal == 10)
+        #expect(await service.byAccountCurrencies == ["EUR"])
     }
     @Test func unavailableBreakdownDoesNotSuppressTheHeadline() async throws {
         let service = NetWorthFake()
-        await service.failRates()
+        await service.failBreakdown()
         let model = NetWorthModel(service: service)
         await model.load(currency: "EUR", pageSize: 2, route: try #require(NativeRoute("/portfolio/net-worth")))
         #expect(model.data?.current.netWorth == 100)
@@ -186,7 +202,7 @@ struct NativeNetWorthPrintTests {
     @Test func loadedErrorsAndIncompleteHistoryRemainTheCurrentViewWithoutFetchingMore() async throws {
         let service = NetWorthFake()
         await service.setEmptyPage()
-        await service.failRates()
+        await service.failBreakdown()
         let model = NetWorthModel(service: service)
         await model.load(currency: "EUR", pageSize: 2, route: NativeRoute("/portfolio/net-worth")!)
         let captured = try NativeNetWorthPrintSnapshot.capture(
@@ -202,18 +218,6 @@ struct NativeNetWorthPrintTests {
 private func snapshot(_ date: String, _ value: Decimal) -> OpenAPI.NetWorthSnapshot {
     .init(date: date, liquid: 0, liabilities: 0, investments: value, netWorth: value)
 }
-private func account(_ id: Int, _ name: String, _ currency: String, _ type: String, _ balance: Decimal)
-    -> OpenAPI.Account
-{
-    .init(
-        id: id, name: name, currency: currency, type: type, liquidityClass: "cash", spendable: true, inNetWorth: true,
-        taxWrapper: "none", owner: "me", multiCurrencyCash: false, hasCashSleeve: true, computedBalance: balance,
-        isActive: true, createdAt: "2025-01-01", updatedAt: "2025-01-01")
-}
-private func rates() -> OpenAPI.ExchangeRates {
-    .init(
-        totalRates: 0, rates: [], fallbackRates: ["USD": Decimal(string: "0.5")!], source: "synthetic", isStale: false)
-}
 private actor NetWorthFake: NetWorthService {
     struct Call: Sendable {
         let currency: String
@@ -223,12 +227,13 @@ private actor NetWorthFake: NetWorthService {
     private(set) var calls: [Call] = []
     private(set) var refreshes = 0
     private var emptyPage = false
-    private var failingRates = false
+    private var failingBreakdown = false
+    private(set) var byAccountCurrencies: [String] = []
     private var pauseEuro = false
     private var releaseWaiter: CheckedContinuation<Void, Never>?
     private var pauseWaiter: CheckedContinuation<Void, Never>?
     func setEmptyPage() { emptyPage = true }
-    func failRates() { failingRates = true }
+    func failBreakdown() { failingBreakdown = true }
     func pauseEuroHistory() { pauseEuro = true }
     func waitForPause() async { if releaseWaiter == nil { await withCheckedContinuation { pauseWaiter = $0 } } }
     func release() {
@@ -259,19 +264,22 @@ private actor NetWorthFake: NetWorthService {
             rows = [snapshot("2025-06-03", 3), snapshot("2025-06-02", 2)]
         }
         return .init(
+            unconvertedCurrencies: [],
             current: .init(
                 liquid: 0, liabilities: 0, investments: currency == "EUR" ? 100 : 200,
                 netWorth: currency == "EUR" ? 100 : 200, currency: currency), monthlyChange: 0, monthlyChangePercent: 0,
             snapshots: rows, snapshotsTotal: limit == nil ? nil : 4, snapshotsLimit: limit, snapshotsOffset: offset)
     }
-    func netWorthAccounts() async throws -> [OpenAPI.Account] { [account(1, "Cash", "EUR", "bank", 10)] }
-    func netWorthPartitions(currency: String) async throws -> NetWorthPartitions {
-        try JSONDecoder().decode(
-            NetWorthPartitions.self, from: Data("{\"currency\":\"\(currency)\",\"byAccount\":[]}".utf8))
-    }
-    func netWorthRates() async throws -> OpenAPI.ExchangeRates {
-        if failingRates { throw APIError.network("synthetic rate failure") }
-        return rates()
+    func netWorthByAccount(currency: String) async throws -> OpenAPI.NetWorthByAccountResponse {
+        byAccountCurrencies.append(currency)
+        if failingBreakdown { throw APIError.network("synthetic breakdown failure") }
+        return .init(
+            currency: currency,
+            rows: [
+                .init(
+                    accountId: 1, name: "Cash", type: "bank", cashCurrency: "EUR", cash: 10, holdings: 0, total: 10,
+                    unconverted: false)
+            ], total: 10, unconvertedAccountIds: [])
     }
     func netWorthPrices() async throws -> [NetWorthInvestmentPrice] {
         try JSONDecoder().decode(

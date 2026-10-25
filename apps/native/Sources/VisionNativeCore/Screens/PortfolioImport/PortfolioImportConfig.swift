@@ -166,19 +166,6 @@ public struct PortfolioImportConfig: Codable, Equatable, Sendable {
     public static func preset(_ source: String) -> Self? {
         var value = Self()
         switch source {
-        case "native_receipts":
-            value.dateColumn = "Date"
-            value.typeColumn = "Type"
-            value.symbolColumn = "Symbol"
-            value.unitsColumn = "Units"
-            value.amountColumn = "Amount"
-            value.currencyColumn = "Currency"
-            value.sourceIdColumn = "Source_ID"
-            value.sourceAccountColumn = "Source_Account"
-            value.noteColumn = "Note"
-            value.numberFormat = "decimal_dot"
-            value.defaultAssetClass = "metals"
-            value.defaultType = "gift"
         case "ibkr":
             value.format = "ibkr_transaction_history"
             value.dateColumn = "Date"

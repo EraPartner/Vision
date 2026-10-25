@@ -1,63 +1,19 @@
 import Foundation
 
-/// Dormant phase-4 storage boundary. The host still owns admission, restore drains,
-/// generation fences and the transition away from the retained browser store.
+/// The native shell's private per-device state: what the web app kept in the browser's
+/// `localStorage` (and a little `sessionStorage`), now a JSON file in the runtime directory
+/// (`raw-state.json`). There is no web document to capture anything from: a missing file is
+/// an empty store, and the file is written on the first change. A file that cannot be read is
+/// never replaced by an empty one.
+///
+/// The host owns admission, restore drains and generation fences around this store.
 public actor NativeRawStateStore {
     public enum StoreError: Error, Equatable, Sendable {
-        case invalidSource, invalidPersistenceURL, incompleteCapture, sourceMismatch, unsupportedVersion
-        case migrationRequired, alreadyMigrated
-    }
-
-    /// Identifies the exact browser origin and website-data store that was read.
-    /// A changed loopback port is a different origin and cannot reuse a capture.
-    public struct Source: Codable, Equatable, Sendable {
-        public let webOrigin: String
-        public let storeIdentifier: String
-
-        public init(webOrigin: URL, storeIdentifier: String) throws {
-            guard var parts = URLComponents(url: webOrigin, resolvingAgainstBaseURL: false),
-                let scheme = parts.scheme?.lowercased(), ["http", "https"].contains(scheme),
-                let host = parts.host?.lowercased(), !host.isEmpty,
-                parts.user == nil, parts.password == nil, parts.query == nil, parts.fragment == nil,
-                parts.path.isEmpty || parts.path == "/", !storeIdentifier.isEmpty
-            else { throw StoreError.invalidSource }
-            parts.scheme = scheme
-            parts.host = host
-            parts.port = parts.port ?? (scheme == "https" ? 443 : 80)
-            parts.path = ""
-            guard let origin = parts.string else { throw StoreError.invalidSource }
-            self.webOrigin = origin
-            self.storeIdentifier = storeIdentifier
-        }
-    }
-
-    public enum CaptureStatus: Equatable, Sendable { case complete, partial, unavailable }
-
-    /// `complete` attests that the host read all local entries successfully from
-    /// this source and captured its supported session keys after draining accepted
-    /// writers. A backup's known-key subset is not a complete migration capture.
-    /// No browser keys are deleted here.
-    public struct MigrationCapture: Sendable {
-        public let source: Source
-        public let identifier: UUID
-        public let status: CaptureStatus
-        public let localValues: [String: String]
-        public let sessionValues: [SessionKey: String]
-
-        public init(
-            source: Source, identifier: UUID, status: CaptureStatus,
-            localValues: [String: String], sessionValues: [SessionKey: String]
-        ) {
-            self.source = source
-            self.identifier = identifier
-            self.status = status
-            self.localValues = localValues
-            self.sessionValues = sessionValues
-        }
+        case invalidPersistenceURL, unsupportedVersion
     }
 
     /// Application callers get an explicit capability rather than arbitrary keys.
-    /// Unknown historical keys survive capture, persistence and restore overlays.
+    /// Unknown historical keys survive persistence and restore overlays.
     public enum LocalKey: String, CaseIterable, Sendable {
         case theme = "vision_theme"
         case themeVariant = "vision_theme_variant"
@@ -79,11 +35,21 @@ public actor NativeRawStateStore {
     }
 
     public enum SessionKey: String, CaseIterable, Sendable {
-        case adminToken = "vision.adminToken"
         case portfolioSession = "vision.portfolio-import.latest-session.v1"
         case portfolioReview = "vision.portfolio-import.latest-review-settings.v1"
         case dashboardArrival = "vision.dashboardArrivalSeen"
     }
+
+    /// The keys a backup carries: the frontend's `LOCAL_STORAGE_KEYS` registry in its exact order
+    /// (lib/localStorage-keys.ts), which backups made by the web app and by Electron use.
+    /// Credentials and session values are not part of it.
+    public static let backupKeys = [
+        "vision_theme", "vision_theme_variant", "vision.backup.passphrase.reminder.dismissed",
+        "dismissed_upcoming_planned_payments", "vision.home.dismissedAccountInactivity",
+        "dismissed_recurring_patterns", "vision.palette.recents", "vision.lastRoute", "vision.language",
+        "vision.startupSection", "vision.onboarding.draft.v1", "vision.research.chartBuilder.layouts.v2",
+        "vision.analysis.sqlHistory", "vision.sidebar.collapsed", "vision.sidebar.hiddenSections",
+    ]
 
     /// Both closures execute synchronously inside this actor: the durable commit
     /// finishes before memory advances. Injected save implementations must offer
@@ -101,7 +67,7 @@ public actor NativeRawStateStore {
         }
 
         /// The caller must provide an existing parent directory. There is no
-        /// inferred Application Support path or fallback to another browser origin.
+        /// inferred Application Support path.
         public static let atomicFile = Persistence(
             load: { url in
                 do { return try Data(contentsOf: url) } catch {
@@ -118,109 +84,72 @@ public actor NativeRawStateStore {
         public let keys: [String: String]
     }
 
+    /// Version 1 files written while the app still captured browser storage carry extra
+    /// fields (`source`, `migrationCaptureID`, `startedEmpty`); decoding ignores them, and the
+    /// next write drops them.
     private struct Document: Codable {
         let version: Int
-        let source: Source
-        let migrationCaptureID: UUID
-        /// A complete capture that found no browser storage: the synthetic Demo started empty
-        /// (owner decision 2026-10-17), recorded rather than implied.
-        var startedEmpty: Bool?
         var localValues: [String: String]
     }
 
-    private let source: Source
     private let persistenceURL: URL
     private let persistence: Persistence
-    private var document: Document?
+    private var document: Document
     private var sessionValues: [SessionKey: String] = [:]
 
-    /// An absent file leaves the store uninitialized. Corruption, version or source
-    /// mismatch throws; none of those cases silently becomes an empty database.
+    /// An absent file is an empty store. Corruption or an unknown version throws and leaves
+    /// the file untouched: none of those cases silently becomes an empty database.
     /// The host must retain a single writer instance for each persistence URL.
-    public init(persistenceURL: URL, source: Source, persistence: Persistence = .atomicFile) throws {
+    public init(persistenceURL: URL, persistence: Persistence = .atomicFile) throws {
         guard persistenceURL.isFileURL else { throw StoreError.invalidPersistenceURL }
-        self.source = source
         self.persistenceURL = persistenceURL
         self.persistence = persistence
         if let data = try persistence.load(persistenceURL) {
             let loaded = try JSONDecoder().decode(Document.self, from: data)
             guard loaded.version == 1 else { throw StoreError.unsupportedVersion }
-            guard loaded.source == source else { throw StoreError.sourceMismatch }
             document = loaded
+        } else {
+            document = Document(version: 1, localValues: [:])
         }
     }
 
-    public var isMigrated: Bool { document != nil }
-
-    /// Whether the migration captured no browser storage at all.
-    public var startedEmpty: Bool { document?.startedEmpty == true }
-
-    /// The source an existing store file was captured from, or `nil` when there is no file.
-    /// Once migrated the store is the source of truth: the host opens it under this recorded
-    /// source even if the backend port changed since (owner decision 2026-10-17); only an
-    /// unmigrated capture stays bound to the current origin.
-    public static func recordedSource(at persistenceURL: URL, persistence: Persistence = .atomicFile) throws -> Source? {
-        guard persistenceURL.isFileURL else { throw StoreError.invalidPersistenceURL }
-        guard let data = try persistence.load(persistenceURL) else { return nil }
-        let loaded = try JSONDecoder().decode(Document.self, from: data)
-        guard loaded.version == 1 else { throw StoreError.unsupportedVersion }
-        return loaded.source
-    }
-
-    public func migrate(_ capture: MigrationCapture) throws {
-        guard document == nil else { throw StoreError.alreadyMigrated }
-        guard capture.source == source else { throw StoreError.sourceMismatch }
-        guard capture.status == .complete else { throw StoreError.incompleteCapture }
-        try commit(
-            Document(
-                version: 1, source: source, migrationCaptureID: capture.identifier,
-                startedEmpty: capture.localValues.isEmpty && capture.sessionValues.isEmpty ? true : nil,
-                localValues: capture.localValues))
-        sessionValues = capture.sessionValues
-    }
+    /// How many local keys the store holds.
+    public var localKeyCount: Int { document.localValues.count }
 
     /// Nil means absent; empty strings and the literal string "null" remain values.
-    public func value(for key: LocalKey) throws -> String? {
-        try requireDocument().localValues[key.rawValue]
+    public func value(for key: LocalKey) -> String? {
+        document.localValues[key.rawValue]
     }
 
     public func setValue(_ value: String?, for key: LocalKey) throws {
-        var next = try requireDocument()
+        var next = document
         next.localValues[key.rawValue] = value
         try commit(next)
     }
 
     /// Session lifetime belongs to this store instance, not a shell graph. A graph
-    /// rebuild can reuse it; a new browser-equivalent session starts a new instance.
-    public func sessionValue(for key: SessionKey) throws -> String? {
-        _ = try requireDocument()
-        return sessionValues[key]
+    /// rebuild can reuse it; a new app session starts a new instance.
+    public func sessionValue(for key: SessionKey) -> String? {
+        sessionValues[key]
     }
 
-    public func setSessionValue(_ value: String?, for key: SessionKey) throws {
-        _ = try requireDocument()
+    public func setSessionValue(_ value: String?, for key: SessionKey) {
         sessionValues[key] = value
     }
 
     /// Matches BackupSection's full registry, including its boot caches/recents.
-    /// Transient session values never participate in capture or persistence.
-    public func backupSnapshot() throws -> BackupSnapshot {
-        let values = try requireDocument().localValues
-        return BackupSnapshot(keys: values.filter { NativeSettingsStorageBridge.knownKeys.contains($0.key) })
+    /// Transient session values never participate in persistence.
+    public func backupSnapshot() -> BackupSnapshot {
+        BackupSnapshot(keys: document.localValues.filter { Self.backupKeys.contains($0.key) })
     }
 
-    /// Values must already have passed the retained source's `String(value)`
-    /// conversion. JSON encoding arbitrary values is not equivalent. Omitted
-    /// keys remain untouched, and historical keys are retained exactly.
+    /// Values must already have passed the source's `String(value)` conversion. JSON
+    /// encoding arbitrary values is not equivalent. Omitted keys remain untouched, and
+    /// historical keys are retained exactly.
     public func applyRestoredLocalValues(_ values: [String: String]) throws {
-        var next = try requireDocument()
+        var next = document
         next.localValues.merge(values) { _, restored in restored }
         try commit(next)
-    }
-
-    private func requireDocument() throws -> Document {
-        guard let document else { throw StoreError.migrationRequired }
-        return document
     }
 
     private func commit(_ next: Document) throws {

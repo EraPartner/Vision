@@ -145,6 +145,9 @@ public struct StatisticsFlow: Decodable, Equatable, Sendable {
     public let nodes: [Node]
     public let links: [Link]
     public let year: Int
+    /// Transactions left out of the flow for want of a stored rate (ADR-216).
+    public let unconverted_count: Int?
+    public var unconvertedCount: Int { unconverted_count ?? 0 }
 }
 
 public struct StatisticsYear: Equatable, Sendable, Identifiable {

@@ -109,7 +109,8 @@ private actor PortfolioCoordinatorTransport: APITransport {
         let stored: TaxValue = .object(["2026:7": .object(["taxes": .number(amount), "fees": .number(0)])])
         let raw: JSONValue = .object(["2026:7": .object(["taxes": .int(read), "fees": .int(0)])])
         return .init(
-            year: 2025, currency: "EUR", isEmpty: false, hasProfile: false, hasInKindIncomeUnclassified: false,
+            unconvertedCurrencies: [], year: 2025, currency: "EUR", isEmpty: false, hasProfile: false,
+            hasInKindIncomeUnclassified: false,
             totals: .init(
                 totalTaxes: amount, totalFees: 0, totalTaxesAndFees: amount, totalRecordedTaxes: amount,
                 totalRecordedFees: 0, totalManualTaxes: 0, totalManualFees: 0, totalManualCosts: 0,

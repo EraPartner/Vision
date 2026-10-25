@@ -53,7 +53,7 @@ struct ResearchMarketLookupTests {
     }
     @Test func currencyChangeRetiresLateProviderBridge() async throws {
         let transport = LookupTransport()
-        await transport.pause("/api/research/presentation")
+        await transport.pause("research-presentation")
         let model = ResearchMarketLookupModel(service: lookupClient(transport))
         let route = NativeRoute("/research/market?symbol=SYNTH&investmentId=2")!
         let first = Task { await model.load(route: route) }
@@ -131,7 +131,7 @@ struct ResearchMarketLookupTests {
         action.trade.units = "2"
         action.trade.accountId = ""
         #expect(action.effectiveBrokerId == nil)
-        await transport.pause("/api/research/presentation")
+        await transport.pause("research-presentation")
         let first = Task { await action.recordTransaction() }
         await transport.waitForPause()
         #expect(action.isSubmitting)
@@ -201,7 +201,7 @@ struct ResearchMarketLookupTests {
         action.trade.units = "2"
         action.trade.amount = "20"
         action.investment.name = "Keep both drafts"
-        await transport.pause("/api/research/presentation")
+        await transport.pause("research-presentation")
         let stale = Task { await action.recordTransaction() }
         await transport.waitForPause()
         action.configure(
@@ -257,8 +257,10 @@ struct ResearchMarketLookupTests {
     }
 }
 
-private func lookupClient(_ transport: LookupTransport) -> APIClient {
-    .init(baseURL: { URL(string: "http://synthetic.invalid") }, transport: transport, maxRetries: 0)
+private func lookupClient(_ transport: LookupTransport) -> PresentationStubService {
+    PresentationStubService(
+        base: .init(baseURL: { URL(string: "http://synthetic.invalid") }, transport: transport, maxRetries: 0),
+        presentation: { try await transport.presentation($0) })
 }
 private func lookupQuote(_ symbol: String, price: Decimal) throws -> ResearchQuote {
     try .init(
@@ -297,6 +299,36 @@ private actor LookupTransport: APITransport {
         gate?.resume()
         gate = nil
     }
+    private func pauseIfRequested(_ path: String) async {
+        if pausePath == path {
+            pausePath = nil
+            began = true
+            waiter?.resume()
+            waiter = nil
+            await withCheckedContinuation { gate = $0 }
+        }
+    }
+    /// The research presentation runs in the app: the transport only scripts, records and pauses it.
+    func presentation(_ input: TaxValue) async throws -> TaxValue {
+        presentations.append(input)
+        await pauseIfRequested("research-presentation")
+        if input["kind"] == .string("providerQuote") {
+            return .object([
+                "kind": .string("providerQuote"),
+                "result": .object([
+                    "symbol": .string("SYNTH"), "currency": input["investment"]?["currency"] ?? .string("EUR"),
+                    "price": .number(123), "change": .number(0),
+                ]),
+            ])
+        }
+        return .object([
+            "kind": .string("marketAdd"),
+            "result": .object([
+                "providedCount": .number(3), "isConsistent": .bool(true), "effectiveAmount": .number(20),
+                "effectiveUnits": .number(2), "effectivePrice": .number(10),
+            ]),
+        ])
+    }
     func send(_ request: APIRequest) async throws -> APIResponse {
         requests.append(request)
         let path = request.url.path
@@ -313,17 +345,10 @@ private actor LookupTransport: APITransport {
                 input = try JSONDecoder().decode(TaxValue.self, from: body)
             }
         }
-        if path == "/api/research/presentation" { presentations.append(input) }
         if path == "/api/investments", request.method == .post { investmentWrites.append(input) }
         if path.contains("/transactions"), request.method == .post { tradeWrites.append(input) }
         if path == "/api/research/mappings", request.method == .post { mappingWrites.append(input) }
-        if pausePath == path {
-            pausePath = nil
-            began = true
-            waiter?.resume()
-            waiter = nil
-            await withCheckedContinuation { gate = $0 }
-        }
+        await pauseIfRequested(path)
         if path == "/api/investments", request.method == .post, createFails {
             throw APIError.network("Lost acknowledgement")
         }
@@ -361,24 +386,6 @@ private actor LookupTransport: APITransport {
                     ])
                 ]),
             ])
-        case "/api/research/presentation":
-            if input["kind"] == .string("providerQuote") {
-                payload = .object([
-                    "kind": .string("providerQuote"),
-                    "result": .object([
-                        "symbol": .string("SYNTH"), "currency": input["investment"]?["currency"] ?? .string("EUR"),
-                        "price": .number(123), "change": .number(0),
-                    ]),
-                ])
-            } else {
-                payload = .object([
-                    "kind": .string("marketAdd"),
-                    "result": .object([
-                        "providedCount": .number(3), "isConsistent": .bool(true), "effectiveAmount": .number(20),
-                        "effectiveUnits": .number(2), "effectivePrice": .number(10),
-                    ]),
-                ])
-            }
         case "/api/research/mappings/resolve":
             payload = .object([
                 "instrument_key": input["instrument_key"]!, "key_type": .string("internal"),

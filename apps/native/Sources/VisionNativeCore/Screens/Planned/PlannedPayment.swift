@@ -30,21 +30,6 @@ public enum PlannedFrequency: String, CaseIterable, Sendable {
 
     /// `FREQUENCY_LABEL_KEYS` of PlannedPaymentsTable.
     public var labelKey: String { "plannedPage.freq.\(rawValue)" }
-
-    /// The multiplier of `monthlyMultiplier` in plannedCurrencyTotals.ts.
-    func monthlyMultiplier(customIntervalDays: Int?) -> Decimal {
-        switch self {
-        case .daily: return 30
-        case .weekly: return Decimal(string: "4.33") ?? 4
-        case .biweekly: return Decimal(string: "2.17") ?? 2
-        case .monthly: return 1
-        case .quarterly: return Decimal(1) / Decimal(3)
-        case .yearly: return Decimal(1) / Decimal(12)
-        case .custom:
-            guard let days = customIntervalDays, days != 0 else { return 1 }
-            return Decimal(30) / Decimal(days)
-        }
-    }
 }
 
 /// `PlannedPayment` of apps/frontend/src/lib/plannedPaymentMapper.ts (`mapFromAPI`): the row
@@ -352,74 +337,6 @@ public struct PlannedDay: Equatable, Sendable {
     }
 }
 
-// MARK: Currency
-
-/// `useCurrencyConverter(target).convertToTargetIfAvailable`: the stored ECB rates over the
-/// fallback rates, with EUR at 1.
-public struct PlannedCurrencyConverter: Equatable, Sendable {
-    public let ratesToEur: [String: Decimal]
-    public let target: String
-
-    public init(rates: OpenAPI.ExchangeRates?, target: String) {
-        var table = rates?.fallbackRates ?? [:]
-        table["EUR"] = 1
-        for rate in rates?.rates ?? [] { table[rate.currency] = rate.rateToEur }
-        ratesToEur = table
-        self.target = target
-    }
-
-    /// `nil` when either currency has no rate (or a zero one).
-    public func convert(_ amount: Decimal, from currency: String?) -> Decimal? {
-        let from = (currency ?? "EUR").uppercased()
-        let to = target.uppercased()
-        if from == to { return amount }
-        guard let rateFrom = ratesToEur[from], !rateFrom.isZero, let rateTo = ratesToEur[to], !rateTo.isZero else {
-            return nil
-        }
-        return amount * rateFrom / rateTo
-    }
-}
-
-/// `ConvertedTotal`: the sum in the target currency and the rows left out for want of a rate.
-public struct PlannedConvertedTotal: Equatable, Sendable {
-    public let total: Decimal
-    public let unavailableCount: Int
-
-    public init(total: Decimal, unavailableCount: Int) {
-        self.total = total
-        self.unavailableCount = unavailableCount
-    }
-}
-
-/// plannedCurrencyTotals.ts.
-public enum PlannedTotals {
-    /// `sumConvertedAmounts`.
-    public static func sum(
-        _ payments: [PlannedPayment], converter: PlannedCurrencyConverter,
-        multiplier: (PlannedPayment) -> Decimal = { _ in 1 }
-    ) -> PlannedConvertedTotal {
-        var total = Decimal(0)
-        var unavailable = 0
-        for payment in payments {
-            guard let converted = converter.convert(payment.amount, from: payment.currency) else {
-                unavailable += 1
-                continue
-            }
-            total += converted * multiplier(payment)
-        }
-        return PlannedConvertedTotal(total: total, unavailableCount: unavailable)
-    }
-
-    /// `sumConvertedMonthlyAmounts`: the signed monthly impact of the active recurring rows.
-    public static func monthly(_ payments: [PlannedPayment], converter: PlannedCurrencyConverter)
-        -> PlannedConvertedTotal
-    {
-        sum(payments.filter { $0.isActive && $0.isRecurring }, converter: converter) { payment in
-            (payment.frequency ?? .monthly).monthlyMultiplier(customIntervalDays: payment.customIntervalDays)
-        }
-    }
-}
-
 // MARK: Next 7 days
 
 /// `DayBucket` of nextSevenDays.ts: one tile of the strip.
@@ -439,21 +356,20 @@ public struct PlannedDayBucket: Equatable, Sendable, Identifiable {
     public var overflow: Int { items.count - shown.count }
 }
 
-/// `NextSevenDaysStrip`'s figures.
+/// `NextSevenDaysStrip`'s day tiles; the window total and Estimated monthly come from
+/// `GET /api/planned-transactions/totals` (`PlannedPaymentsModel.totals`).
 public struct PlannedStrip: Equatable, Sendable {
     /// `WINDOW_DAYS`: today and the seven days after it.
     public static let windowDays = 8
 
     public let buckets: [PlannedDayBucket]
     public let dueCount: Int
-    /// The window's signed total in the default currency.
-    public let windowTotal: PlannedConvertedTotal
     /// The `plannedPage.next7.range` ends.
     public let from: PlannedDay
     public let to: PlannedDay
 
     /// `bucketNextSevenDays`: active rows with a readable due date between today and today+7.
-    public init(payments: [PlannedPayment], today: Date, calendar: Calendar, converter: PlannedCurrencyConverter) {
+    public init(payments: [PlannedPayment], today: Date, calendar: Calendar) {
         let start = calendar.startOfDay(for: today)
         var grouped = Array(repeating: [PlannedPayment](), count: Self.windowDays)
         for payment in payments where payment.isActive {
@@ -476,7 +392,6 @@ public struct PlannedStrip: Equatable, Sendable {
         }
         self.buckets = buckets
         dueCount = buckets.reduce(0) { $0 + $1.items.count }
-        windowTotal = PlannedTotals.sum(buckets.flatMap { $0.items }, converter: converter)
         from = PlannedDates.day(buckets.first?.date ?? start, calendar: calendar)
         to = PlannedDates.day(buckets.last?.date ?? start, calendar: calendar)
     }

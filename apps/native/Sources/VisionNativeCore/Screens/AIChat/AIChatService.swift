@@ -4,6 +4,12 @@ public protocol AIChatService: Sendable {
     func chatInvalidateSharedReads(_ keys: [String]) async
     func chatStatus() async throws -> AIChatOllamaStatus
     func chatModels() async throws -> [AIChatOllamaModel]
+    /// `GET /api/ai/model/fit`: memory facts for one model (`apiClient.getModelFit`).
+    func chatModelFit(model: String) async throws -> OpenAPI.AiModelFit
+    /// `POST /api/ai/model/warm`: best-effort, always 204 (`apiClient.warmModel`).
+    func chatWarm(model: String) async throws
+    /// `POST /api/ai/model/release`: best-effort, always 204 (`apiClient.releaseModel`).
+    func chatRelease(model: String) async throws
     func chatConversations(offset: Int) async throws -> AIChatConversationPage
     func chatConversation(id: String) async throws -> AIChatConversationDetail
     func chatCreate(model: String?) async throws -> AIChatConversationDetail
@@ -14,6 +20,11 @@ public protocol AIChatService: Sendable {
 }
 extension AIChatService {
     public func chatInvalidateSharedReads(_ keys: [String]) async {}
+    public func chatModelFit(model: String) async throws -> OpenAPI.AiModelFit {
+        throw APIError.backendUnavailable
+    }
+    public func chatWarm(model: String) async throws {}
+    public func chatRelease(model: String) async throws {}
 }
 private struct AIChatModelsResponse: Codable, Sendable {
     let items: [AIChatOllamaModel]
@@ -34,6 +45,15 @@ extension APIClient: AIChatService {
             )
         }
         return response.items
+    }
+    public func chatModelFit(model: String) async throws -> OpenAPI.AiModelFit {
+        try await send(OpenAPIOperations.GetAiModelFit(model: model))
+    }
+    public func chatWarm(model: String) async throws {
+        let _: APIEmpty = try await send(OpenAPIOperations.WarmAiModel(body: .init(model: model)))
+    }
+    public func chatRelease(model: String) async throws {
+        let _: APIEmpty = try await send(OpenAPIOperations.ReleaseAiModel(body: .init(model: model)))
     }
     public func chatConversations(offset: Int) async throws -> AIChatConversationPage {
         try await send(

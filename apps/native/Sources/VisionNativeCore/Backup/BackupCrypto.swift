@@ -265,12 +265,10 @@ public enum LegacySQLBackup {
     public static let magicV1 = Array("VISIONENC1".utf8)
     public static let magicV2 = Array("VISIONENC2".utf8)
 
-    /// `decryptBackupFileToTemp`'s options. The v1 salt is `<APP_NAME lowercased>-backup-v1`
-    /// of Electron Vision ("Vision").
+    /// `decryptBackupFileToTemp`'s options.
     public static let format = EncryptedFile.Format(
-        v1Magic: magicV1,
+        retiredV1Magic: magicV1,
         v2Magic: magicV2,
-        v1Salt: "vision-backup-v1",
         requiredError: BackupPassphrase.required,
         invalidError: BackupPassphrase.invalid,
         invalidHeaderMessage: "Invalid encrypted backup header.",

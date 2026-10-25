@@ -76,7 +76,7 @@ exchangeRates.storedRatesDesc
 exchangeRates.subtitle
 exchangeRates.title
 
-# Admin > Overview (admin token card and tiles)
+# Admin > Overview (tiles)
 admin.overview.allHealthy
 admin.overview.dataSources
 admin.overview.dbSize
@@ -87,8 +87,6 @@ admin.overview.failing
 admin.overview.requests
 admin.overview.tables
 admin.overview.title
-
-# Admin > Overview, Audit history card
 
 # Admin > Data sources
 admin.providers.checkNow
@@ -632,6 +630,10 @@ importReview.accounts.line
 importReview.accounts.newBadge
 importReview.accounts.title
 importReview.accounts.unspecified
+txPage.downloadAttachmentError
+aria.downloadAttachment
+importReview.alreadyImported.badge
+importReview.alreadyImported.summary
 importReview.approve
 importReview.back
 importReview.category
@@ -1762,6 +1764,7 @@ tax.flow.op.netOut
 tax.flow.opGroup.alsoOwed
 tax.flow.opGroup.deductions
 tax.flow.title
+tax.fxUnavailable
 tax.fromDividendTransactions
 tax.gainsContext
 tax.historical.banner.createCta
@@ -2278,6 +2281,7 @@ tax.widget.yearlyOverview
 tax.widget.yearlyTaxFeeTrend
 tax.witheldAtSource
 tax.yearActions.exportCsv
+tax.yearActions.computeFailed
 tax.yearActions.freeze
 tax.yearActions.markFiled
 tax.yearActions.menuLabel
@@ -4162,6 +4166,8 @@ onboarding.persist.failed
 settings.aiChat.defaultModel
 settings.aiChat.defaultModelHint
 settings.aiChat.loadingModels
+settings.aiChat.modelFit
+settings.aiChat.modelFitTip
 settings.aiChat.noModels
 settings.aiChat.section
 settings.aiChat.selectModel
@@ -4220,6 +4226,8 @@ settings.app.version
 settings.app.versionAvailable
 settings.appearance.autoAdaptDisplay
 settings.appearance.autoAdaptDisplayHint
+settings.appearance.fullEffects
+settings.appearance.fullEffectsHint
 settings.appearance.darkFrom
 settings.appearance.gainLossColors
 settings.appearance.gainLossColors.classic
@@ -4628,3 +4636,18 @@ splash.starting
 splash.startingServices
 splash.waitingApp
 table.noData
+
+# Added 2026-10-25 (ADR-249 catch-up): keys the Swift app uses
+app.errorPageMessage
+app.errorPageOpenLogs
+app.errorPageRetry
+app.errorPageTitle
+app.preMigrationBackupFailed
+app.running
+app.stopped
+backup.done
+backup.failed
+common.fxUnavailableTransactions.one
+common.fxUnavailableTransactions.other
+owesPage.fxUnavailable.one
+owesPage.fxUnavailable.other

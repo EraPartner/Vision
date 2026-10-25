@@ -13,12 +13,11 @@ enum RatesFixture {
                     currency: currency, rateToEur: Decimal(string: rate)!, rateDate: "2026-10-09",
                     fetchedAt: "2026-10-09T15:05:00.000Z")
             },
-            fallbackRates: ["EUR": 1, "USD": Decimal(string: "0.92")!, "GBP": Decimal(string: "1.17")!],
             source: "database", isStale: false, lastFetchedAt: "2026-10-09T15:05:00.000Z")
     }
 
     static let empty = OpenAPI.ExchangeRates(
-        totalRates: 0, rates: [], fallbackRates: ["EUR": 1], source: "fallback", isStale: true, lastFetchedAt: nil)
+        totalRates: 0, rates: [], source: "fallback", isStale: true, lastFetchedAt: nil)
 }
 
 /// A clock the test moves by hand.
@@ -115,15 +114,14 @@ final class TestClock: @unchecked Sendable {
     @Test func summaryCardsAndLiveTableUseTheAppFormats() throws {
         let settings = NativeAppSettings(dateFormat: .dayMonthYearDot, numberFormat: .eu, showDecimalPlaces: 2)
         let view = ExchangeRatesPresentation(
-            data: RatesFixture.rates(), tab: .live, settings: settings, strings: strings, timeZone: utc)
-        #expect(view.cards.map(\.value) == ["1.234", "2", "09.10.2026"])
-        #expect(view.cards[2].subtext == "Fetched 09.10.2026 15:05")
+            data: RatesFixture.rates(), settings: settings, strings: strings, timeZone: utc)
+        #expect(view.cards.map(\.value) == ["1.234", "09.10.2026"])
+        #expect(view.cards[1].subtext == "Fetched 09.10.2026 15:05")
         guard case .table(let table) = view.content else {
             Issue.record("expected a table")
             return
         }
         #expect(table.description == "2 currencies · ECB rate date 09.10.2026")
-        #expect(table.note == nil)
         let usd = try #require(table.rows.first)
         #expect(usd.currency == "USD")
         #expect(usd.rate == "1,084200")
@@ -133,26 +131,12 @@ final class TestClock: @unchecked Sendable {
         #expect(view.columns.count == 4)
     }
 
-    @Test func theFallbackTabSortsAndDropsEUR() {
-        let settings = NativeAppSettings(numberFormat: .us, showDecimalPlaces: 0)
+    @Test func withoutRatesThePageShowsTheEmptyState() {
         let view = ExchangeRatesPresentation(
-            data: RatesFixture.rates(), tab: .fallback, settings: settings, strings: strings, timeZone: utc)
-        guard case .table(let table) = view.content else {
-            Issue.record("expected a table")
-            return
-        }
-        #expect(table.rows.map(\.currency) == ["GBP", "USD"])
-        #expect(table.rows.first?.rate == "1.170000")
-        #expect(table.rows.first?.hundredInEuro == "€117")
-        #expect(table.note == "exchangeRates.fallbackNote")
-    }
-
-    @Test func theLiveTabWithoutRatesIsTheEmptyState() {
-        let view = ExchangeRatesPresentation(
-            data: RatesFixture.empty, tab: .live, settings: .defaults, strings: strings, timeZone: utc)
+            data: RatesFixture.empty, settings: .defaults, strings: strings, timeZone: utc)
         #expect(view.content == .empty(title: "exchangeRates.latestEcbRates", message: "exchangeRates.noRates"))
-        #expect(view.cards.map(\.value) == ["0", "0", "—"])
-        #expect(view.cards[2].subtext == "No data fetched yet")
+        #expect(view.cards.map(\.value) == ["0", "—"])
+        #expect(view.cards[1].subtext == "No data fetched yet")
     }
 }
 

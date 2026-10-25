@@ -714,6 +714,21 @@ enum ReviewFixture {
         #expect(ImportMatchKind(source: "pattern").legendKey == "importReview.legend.pattern")
     }
 
+    @Test func thePreviewCountsAndFlagsRowsAlreadyInTheLedger() throws {
+        let json = #"""
+            {"batch_id":7,"already_imported":1,"groups":[{"recipient_id":3,"recipient_name":"Shop","row_count":2,"rows":[
+            {"id":"1","row_index":0,"amount":"-5","tx_date":"2026-10-01","already_imported":true},
+            {"id":"2","row_index":1,"amount":"-6","tx_date":"2026-10-02"}]}],
+            "totals":{"exact":2,"fuzzy":0,"pattern":0,"new":0,"unresolved":0}}
+            """#
+        let preview = try JSONDecoder().decode(ImportPreview.self, from: Data(json.utf8))
+        #expect(preview.alreadyImportedCount == 1)
+        #expect(preview.totalRows == 2)
+        // Approve counts only the rows commit will add (`totalRows - alreadyImported`).
+        #expect(preview.approvableRows == 1)
+        #expect(preview.rows.map(\.isAlreadyImported) == [true, false])
+    }
+
     @Test func downloadsReturnTheRawBodyOrTheEnvelopeError() async throws {
         let transport = FakeTransport([
             .response(200, "Date,Amount\n2026-10-01,-4.50\n"),
@@ -743,14 +758,12 @@ enum ReviewFixture {
         #expect(NativeScreen.screen(forPath: "/import/42/review") == .importReview(batchId: 42))
         #expect(NativeScreen.screen(forPath: "/import/abc/review") == nil)
         #expect(NativeScreen.screen(forPath: "/import/42") == nil)
-        let recorder = ShellRecorder()
-        let shell = ImportShellTests().makeShell(ReviewFixture.model(), recorder: recorder)
-        shell.routeDidChange(try #require(NativeRoute("/import/42/review")))
+        let shell = ImportShellTests().makeShell(ReviewFixture.model())
+        shell.show(try #require(NativeRoute("/import/42/review")))
         await shell.settingsSettled()
         #expect(shell.detail == .native(.importReview(batchId: 42)))
         shell.replace(with: "/import")
-        #expect(recorder.actions == [.replaceRoute("/import")])
-        #expect(shell.pendingRoute?.path == "/import")
+        #expect(shell.route.path == "/import" && shell.nativeNavigation.count == 1)
     }
 
     @Test func theToastCenterStacksThreeAndKeepsActions() {

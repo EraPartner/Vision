@@ -47,11 +47,10 @@ enum PlumbingFixture {
     static let base = URL(string: "http://127.0.0.1:54331")!
 
     static func client(
-        stream: FakeStreamTransport = FakeStreamTransport(), transport: FakeTransport = FakeTransport([]),
-        token: String? = "secret"
+        stream: FakeStreamTransport = FakeStreamTransport(), transport: FakeTransport = FakeTransport([])
     ) -> APIClient {
         APIClient(
-            baseURL: { base }, adminToken: { token }, transport: transport, sleep: { _ in }, jitter: { 0 },
+            baseURL: { base }, transport: transport, sleep: { _ in }, jitter: { 0 },
             requestId: { "req-1" }, streamTransport: stream)
     }
 
@@ -183,7 +182,7 @@ enum PlumbingFixture {
         #expect(request.body == body)
         #expect(request.headers["Content-Type"] == "application/json")
         #expect(request.headers["Accept"] == "text/event-stream")
-        #expect(request.headers["Authorization"] == "Bearer secret")
+        #expect(request.headers["Authorization"] == nil)
         #expect(request.headers["X-Request-Id"] == "req-1")
         #expect(stream.requests.count == 1)
     }
@@ -236,7 +235,7 @@ enum PlumbingFixture {
         #expect(request.url.absoluteString == "http://127.0.0.1:54331/api/import/csv/stream")
         #expect(request.headers["Content-Type"] == "multipart/form-data; boundary=B")
         #expect(request.headers["Accept"] == "text/event-stream")
-        #expect(request.headers["Authorization"] == "Bearer secret")
+        #expect(request.headers["Authorization"] == nil)
         #expect(request.headers["X-Request-Id"] == "req-1")
         #expect(request.body == form.encoded())
         #expect(request.timeout == APIClient.streamTimeout)

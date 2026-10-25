@@ -146,6 +146,10 @@ public struct NetWorthView: View {
                 )
                 .font(.footnote).foregroundStyle(theme.tertiaryLabel)
             }
+            if !data.unconvertedCurrencies.isEmpty {
+                // Balances in a currency without a stored rate are left out (ADR-216).
+                Text(strings.t("accounts.totalIncomplete")).font(.footnote).foregroundStyle(theme.warning)
+            }
             Text(strings.t("networth.sinceStart")).font(.caption.weight(.medium)).foregroundStyle(theme.tertiaryLabel)
                 .padding(.top, 8)
             if let change = model.allTimeChange {
@@ -242,7 +246,7 @@ public struct NetWorthView: View {
         AdminCard(padding: VisionPageLayout.padding) {
             Text(strings.t("networth.byAccount.title")).font(Font.visionTitle3)
             Text(strings.t("networth.byAccount.description")).foregroundStyle(theme.secondaryLabel)
-            if let rows = model.accountRows {
+            if let rows = model.accountRows, let total = model.accountsTotal {
                 if rows.isEmpty { Text(strings.t("networth.byAccount.none")) }
                 // The web's inset list: one bordered surface, hairlines between compact rows.
                 VStack(spacing: 0) {
@@ -257,7 +261,6 @@ public struct NetWorthView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
                         .strokeBorder(theme.border.opacity(0.6), lineWidth: 1))
-                let total = rows.reduce(Decimal.zero) { $0 + $1.total }
                 let difference = NetWorthAccountRow.cents(total - data.current.netWorth)
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {

@@ -375,7 +375,7 @@ private actor BannerService: ShellNotificationsService {
                 fxWaiter = nil
             }
         }
-        return .init(totalRates: 0, rates: [], fallbackRates: [:], source: source, isStale: false)
+        return .init(totalRates: 0, rates: [], source: source, isStale: false)
     }
     func notificationRefreshExchangeRates() async throws {
         refreshes += 1

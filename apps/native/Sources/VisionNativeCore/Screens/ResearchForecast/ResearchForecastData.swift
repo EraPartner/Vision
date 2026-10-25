@@ -90,6 +90,9 @@ public struct ResearchForecastData: Codable, Equatable, Sendable {
     public var probBelowInvested: Decimal? { raw["probBelowInvested"]?.decimalValue }
     public var targetValue: Decimal? { raw["targetValue"]?.decimalValue }
     public var probTarget: Decimal? { raw["probTarget"]?.decimalValue }
+    /// `targetValue != null && targetValue !== 0`: a zero target counts as none, so the card
+    /// shows the probability of ending below the invested amount instead.
+    public var hasTarget: Bool { (targetValue ?? 0) != 0 }
     public init(raw: TaxValue) throws {
         try ResearchDecode.requireObject(raw)
         self.raw = raw
@@ -138,21 +141,4 @@ public struct ResearchForecastData: Codable, Equatable, Sendable {
     }
     public init(from decoder: any Decoder) throws { try self.init(raw: TaxValue(from: decoder)) }
     public func encode(to encoder: any Encoder) throws { try raw.encode(to: encoder) }
-}
-
-public struct ResearchLifeScenarioSetting: Decodable, Equatable, Sendable {
-    public let key: String
-    public let value: TaxValue
-    public let expected: TaxValue
-    public init(from decoder: any Decoder) throws {
-        let raw = try TaxValue(from: decoder)
-        key = try ResearchDecode.string(raw["key"])
-        guard key == "life_scenarios", let value = raw["value"], let expected = raw["expected"],
-            expected["exists"]?.boolValue != nil
-        else {
-            throw ResearchDecode.failure("Invalid life_scenarios setting baseline")
-        }
-        self.value = value
-        self.expected = expected
-    }
 }

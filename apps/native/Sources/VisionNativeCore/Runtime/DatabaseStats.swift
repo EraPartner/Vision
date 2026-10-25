@@ -8,6 +8,16 @@ public enum DatabaseStatistics {
         "transactions", "user_settings",
     ]
     public static let runtimeManagedUserSettings = ["fx_full_history_repair_done", "transfers_backfilled"]
+    /// `RUNTIME_MANAGED_USER_SETTING_PREFIXES`: key prefixes the backend writes on its own after
+    /// it reports ready (warmup records each daily job's last run as `daily_job_<name>`), so a
+    /// post-start comparison must not count those rows as user settings.
+    public static let runtimeManagedUserSettingPrefixes = ["daily_job_"]
+
+    /// `AND key NOT LIKE '<prefix>%'` per prefix. LIKE treats "_" as a wildcard, so it is
+    /// escaped to match literally.
+    private static let prefixClause = runtimeManagedUserSettingPrefixes
+        .map { "AND key NOT LIKE '\($0.replacingOccurrences(of: "_", with: "\\_"))%'" }
+        .joined(separator: " ")
 
     /// `DATABASE_STATS_SQL`, character for character.
     public static let sql: String = [
@@ -34,13 +44,14 @@ public enum DatabaseStatistics {
         """,
         """
         SELECT 'schema' AS key,
-                  COALESCE((SELECT string_agg(version_num, ',' ORDER BY version_num) FROM alembic_version), '') AS value
+                  COALESCE((SELECT max(name) FROM public.kysely_migration), '') AS value
            UNION ALL
            SELECT 'postgres_version_num', current_setting('server_version_num')
            UNION ALL
            SELECT 'stable:user_settings', count(*)::text
            FROM public.user_settings
            WHERE key NOT IN (\(runtimeManagedUserSettings.map { "'\($0)'" }.joined(separator: ", ")))
+             \(prefixClause)
            UNION ALL
            SELECT 'table:' || table_name, row_count::text
            FROM pg_temp.vision_migration_table_counts

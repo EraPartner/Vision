@@ -206,26 +206,9 @@ extension APIClient: ResearchService {
                 OpenAPIOperations.CreateInvestmentTransaction.self, parameters: ["id": String(investmentId)],
                 body: input))
     }
+    /// Runs in the app from the Swift port of the shared TypeScript (`ResearchPresentation`); there is
+    /// no `/api/research/presentation` endpoint.
     public func researchPresentation(_ input: TaxValue) async throws -> TaxValue {
-        try await send(ResearchPresentationRequest(input: input))
+        try ResearchPresentation.compute(input)
     }
-}
-public struct ResearchPresentationRequest: APIOperation {
-    public typealias Response = TaxValue
-    public static let operationId = "computeResearchPresentation"
-    public static let method = HTTPMethod.post
-    public static let pathTemplate = "/api/research/presentation"
-    public let multipart: MultipartFormData
-    public init(input: TaxValue) throws {
-        let data = try APIBody.encode(input)
-        guard data.count <= 64 * 1024 * 1024 else {
-            throw APIError.invalidRequest("Research presentation exceeds the file limit")
-        }
-        var form = MultipartFormData()
-        form.append(file: "file", filename: "research.json", contentType: "application/json", data: data)
-        multipart = form
-    }
-    public var path: String { Self.pathTemplate }
-    public var contentType: String { multipart.contentType }
-    public func encodedBody() throws -> Data? { multipart.encoded() }
 }

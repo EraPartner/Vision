@@ -466,7 +466,7 @@ struct ResearchChartBuilderTests {
         await transport.release()
         await entering.value
         #expect(model.snapshots.values.first?.data.raw["marker"] == .string("3mo"))
-        await transport.pause(path: "/api/research/presentation")
+        await transport.pause(path: "research-presentation")
         state = model.state
         state.rebase = true
         model.state = state
@@ -518,7 +518,9 @@ private func chartLargeUnicodeState() -> ResearchChartBuilderState {
     _ transport: ChartTestTransport, store: ChartTestStore, clock: ChartTestClock = ChartTestClock()
 ) -> ResearchChartBuilderModel {
     .init(
-        service: APIClient(baseURL: { URL(string: "http://synthetic.invalid") }, transport: transport, maxRetries: 0),
+        service: PresentationStubService(
+            base: APIClient(baseURL: { URL(string: "http://synthetic.invalid") }, transport: transport, maxRetries: 0),
+            presentation: { try await transport.presentation($0) }),
         store: store, cache: ResearchReadCache(now: { clock.date }), now: { clock.date }, debounceMilliseconds: 1)
 }
 private final class ChartTestClock: @unchecked Sendable {
@@ -600,15 +602,35 @@ private actor ChartTestTransport: APITransport {
         gate?.resume()
         gate = nil
     }
-    func send(_ request: APIRequest) async throws -> APIResponse {
-        requests.append(request)
-        if pausedPath == request.url.path {
+    private func pauseIfRequested(_ path: String) async {
+        if pausedPath == path {
             pausedPath = nil
             began = true
             waiter?.resume()
             waiter = nil
             await withCheckedContinuation { gate = $0 }
         }
+    }
+    /// The research presentation runs in the app: the transport only scripts, records and pauses it.
+    func presentation(_ input: TaxValue) async throws -> TaxValue {
+        presentationInputs.append(input)
+        await pauseIfRequested("research-presentation")
+        var row: [String: TaxValue] = ["time": .number(1_767_225_600_000)]
+        for series in input["series"]?.arrayValue ?? [] {
+            if let id = series["id"]?.stringValue { row[id] = .number(77) }
+        }
+        return .object([
+            "kind": .string("chart"),
+            "result": .object([
+                "rows": .array([.object(row)]),
+                "oscillatorRows": .array([.object(["time": .number(1_767_225_600_000), "rsi": .number(42)])]),
+                "tag": .string(input["rebase"] == .bool(true) ? "rebased" : "original"),
+            ]),
+        ])
+    }
+    func send(_ request: APIRequest) async throws -> APIResponse {
+        requests.append(request)
+        await pauseIfRequested(request.url.path)
         let query = URLComponents(url: request.url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let data: TaxValue
         var provider = "synthetic-provider"
@@ -631,24 +653,6 @@ private actor ChartTestTransport: APITransport {
                 "provider": .string(provider), "seriesId": .string("TEST.ID"), "title": .string("Synthetic"),
                 "units": .string("Index"),
                 "points": .array([.object(["time": .number(1_767_225_600_000), "close": .null])]),
-            ])
-        case "/api/research/presentation":
-            let body = String(decoding: request.body ?? Data(), as: UTF8.self)
-            let json = try #require(
-                body.components(separatedBy: "\r\n\r\n").dropFirst().first?.components(separatedBy: "\r\n--").first)
-            let input = try JSONDecoder().decode(TaxValue.self, from: Data(json.utf8))
-            presentationInputs.append(input)
-            var row: [String: TaxValue] = ["time": .number(1_767_225_600_000)]
-            for series in input["series"]?.arrayValue ?? [] {
-                if let id = series["id"]?.stringValue { row[id] = .number(77) }
-            }
-            data = .object([
-                "kind": .string("chart"),
-                "result": .object([
-                    "rows": .array([.object(row)]),
-                    "oscillatorRows": .array([.object(["time": .number(1_767_225_600_000), "rsi": .number(42)])]),
-                    "tag": .string(input["rebase"] == .bool(true) ? "rebased" : "original"),
-                ]),
             ])
         default: throw APIError.invalidRequest("Unexpected Chart Builder fixture path " + request.url.path)
         }

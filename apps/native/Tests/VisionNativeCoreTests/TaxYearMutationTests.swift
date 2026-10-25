@@ -243,6 +243,19 @@ struct TaxActionsMutationTests {
         #expect(!actions.isSaving)
     }
 
+    @Test func aFailedServerComputationIsReportedForTheYearAndWritesNothing() async throws {
+        let service = try MutationActionService(failCompute: true)
+        let overview = TaxOverviewModel(service: service)
+        await overview.load(year: 2024)
+        let actions = TaxActionsModel(overview: overview, computations: service, settings: service)
+        #expect(!(await actions.perform(.freeze)))
+        #expect(await service.writes.isEmpty)
+        #expect(actions.computeFailure?.year == 2024)
+        #expect(actions.computeFailure?.detail.contains("Synthetic compute failure") == true)
+        actions.clearComputeFailure()
+        #expect(actions.computeFailure == nil)
+    }
+
     @Test func unreadableSourceStopsAnActionBeforePersistence() async throws {
         let service = try MutationActionService(invalid: true)
         let overview = TaxOverviewModel(service: service)
@@ -334,16 +347,19 @@ private actor MutationActionService: TaxComputationService, TaxSettingsService {
     var fixture: MutationFixture
     let invalid: Bool
     let failAfterWrite: Bool
+    let failCompute: Bool
     var writes: [TaxSettingsPatch] = []
     var computeCount = 0
     var overviewCount = 0
-    init(frozen: Bool = false, invalid: Bool = false, failAfterWrite: Bool = false) throws {
+    init(frozen: Bool = false, invalid: Bool = false, failAfterWrite: Bool = false, failCompute: Bool = false) throws {
         fixture = try MutationFixture(frozen: frozen)
         self.invalid = invalid
         self.failAfterWrite = failAfterWrite
+        self.failCompute = failCompute
     }
     func computeTax(household: OpenAPI.BelgianTaxHouseholdInput) async throws -> OpenAPI.BelgianTaxComputation {
         computeCount += 1
+        if failCompute { throw APIError.network("Synthetic compute failure") }
         return fixture.computation
     }
     func taxOverview(year: Int?) async throws -> OpenAPI.BelgianTaxOverview {

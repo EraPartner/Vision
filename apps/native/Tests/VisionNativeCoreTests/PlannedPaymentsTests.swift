@@ -56,6 +56,16 @@ actor FakePlannedService: PlannedPaymentsService {
         failingLookups = failing
     }
 
+    private(set) var totalsCurrencies: [String] = []
+    private var totalsAnswer: OpenAPI.PlannedTotals?
+
+    func setTotals(_ totals: OpenAPI.PlannedTotals?) { totalsAnswer = totals }
+
+    func plannedTotals(currency: String) async throws -> OpenAPI.PlannedTotals? {
+        totalsCurrencies.append(currency)
+        return totalsAnswer
+    }
+
     func plannedPayments(includePaused: Bool) async throws -> [OpenAPI.PlannedTransaction] {
         loads.append(includePaused)
         if let loadGate { await loadGate.wait() }
@@ -158,9 +168,10 @@ enum PlannedFixture {
             rates: [
                 OpenAPI.ExchangeRate(
                     currency: "USD", rateToEur: Decimal(string: "1.0842")!, rateDate: "2026-10-09",
-                    fetchedAt: "2026-10-09T15:05:00.000Z")
+                    fetchedAt: "2026-10-09T15:05:00.000Z"),
+                OpenAPI.ExchangeRate(
+                    currency: "JPY", rateToEur: 0, rateDate: "2026-10-09", fetchedAt: "2026-10-09T15:05:00.000Z"),
             ],
-            fallbackRates: ["EUR": 1, "USD": Decimal(string: "0.92")!, "GBP": Decimal(string: "1.17")!, "JPY": 0],
             source: "database", isStale: false, lastFetchedAt: nil)
     }
 
@@ -176,6 +187,18 @@ enum PlannedFixture {
             service: service, editing: editing, pickers: pickers,
             rates: ExchangeRatesModel(service: FakeExchangeRatesService(rates: rates)), dismissals: dismissals,
             calendar: calendar, now: { time.now }, retryDelay: .zero)
+    }
+
+    static func totals(net: Decimal, windowMissing: Int, monthly: Decimal, monthlyMissing: Int)
+        -> OpenAPI.PlannedTotals
+    {
+        OpenAPI.PlannedTotals(
+            currency: "EUR", today: "2026-10-12", monthEnd: "2026-10-31",
+            restOfMonth: .init(incoming: 0, outgoing: net, unconvertedCount: windowMissing),
+            monthlyEquivalent: .init(total: monthly, unconvertedCount: monthlyMissing), nextDays: [],
+            nextDaysTotal: .init(
+                from: "2026-10-12", to: "2026-10-19", incoming: 0, outgoing: net, net: net,
+                unconvertedCount: windowMissing))
     }
 
     @MainActor
@@ -319,26 +342,7 @@ enum PlannedFixture {
 }
 
 @Suite struct PlannedFiguresTests {
-    let converter = PlannedCurrencyConverter(rates: PlannedFixture.rates(), target: "EUR")
-
-    @Test func conversionUsesLiveRatesOverFallbacksAndSkipsMissingOrZeroRates() {
-        #expect(converter.ratesToEur["USD"] == Decimal(string: "1.0842"))
-        #expect(converter.convert(-100, from: "usd") == Decimal(-100) * Decimal(string: "1.0842")!)
-        #expect(converter.convert(10, from: "GBP") == Decimal(10) * Decimal(string: "1.17")!)
-        #expect(converter.convert(10, from: nil) == 10)
-        #expect(converter.convert(10, from: "XYZ") == nil)
-        #expect(converter.convert(10, from: "JPY") == nil)
-        let toUSD = PlannedCurrencyConverter(rates: PlannedFixture.rates(), target: "USD")
-        #expect(toUSD.convert(10, from: "EUR") == Decimal(10) / Decimal(string: "1.0842")!)
-        #expect(toUSD.convert(10, from: "usd") == 10)
-        let noRates = PlannedCurrencyConverter(rates: nil, target: "EUR")
-        #expect(noRates.convert(10, from: "USD") == nil)
-        #expect(noRates.convert(10, from: "XYZ") == nil)
-        let sameUnknown = PlannedCurrencyConverter(rates: nil, target: "XYZ")
-        #expect(sameUnknown.convert(10, from: "xyz") == 10)
-    }
-
-    @Test func theStripBucketsEightDaysOfActivePaymentsWithTheirTotal() {
+    @Test func theStripBucketsEightDaysOfActivePayments() {
         let rows = [
             PlannedFixture.row(id: 1, name: "Small", date: "2026-10-12", amount: -10),
             PlannedFixture.row(id: 2, name: "Rent", date: "2026-10-12", amount: -200),
@@ -352,7 +356,7 @@ enum PlannedFixture {
         ]
         let strip = PlannedStrip(
             payments: rows.map { row in PlannedFixture.payment(row) }, today: PlannedFixture.today,
-            calendar: PlannedFixture.calendar, converter: converter)
+            calendar: PlannedFixture.calendar)
         #expect(strip.buckets.count == PlannedStrip.windowDays)
         #expect(strip.buckets[0].isToday)
         #expect(!strip.buckets[1].isToday)
@@ -363,8 +367,6 @@ enum PlannedFixture {
         #expect(strip.buckets[7].items.map { payment in payment.name } == ["Cloud"])
         #expect(strip.buckets[7].day == 19)
         #expect(strip.dueCount == 5)
-        let expected = Decimal(-260) + Decimal(-100) * Decimal(string: "1.0842")!
-        #expect(strip.windowTotal == PlannedConvertedTotal(total: expected, unavailableCount: 1))
         #expect(strip.from == PlannedDay(year: 2026, month: 10, day: 12))
         #expect(strip.to == PlannedDay(year: 2026, month: 10, day: 19))
         let strings = DictionaryStrings(language: .en, table: ["plannedPage.next7.range": "{from} – {to}"])
@@ -373,32 +375,10 @@ enum PlannedFixture {
 
     @Test func anEmptyWindowHasEightEmptyTiles() {
         let strip = PlannedStrip(
-            payments: [], today: PlannedFixture.today, calendar: PlannedFixture.calendar, converter: converter)
+            payments: [], today: PlannedFixture.today, calendar: PlannedFixture.calendar)
         #expect(strip.buckets.count == 8)
         #expect(strip.dueCount == 0)
-        #expect(strip.windowTotal == PlannedConvertedTotal(total: 0, unavailableCount: 0))
         #expect(strip.buckets.allSatisfy { bucket in bucket.items.isEmpty && bucket.overflow == 0 })
-    }
-
-    @Test func estimatedMonthlyWeighsActiveRecurringRowsByFrequency() {
-        let rows = [
-            PlannedFixture.row(id: 1, amount: -10, recurring: true, pattern: "weekly"),
-            PlannedFixture.row(id: 2, amount: -100, recurring: true, pattern: nil),
-            PlannedFixture.row(id: 3, amount: -1200, recurring: true, pattern: "yearly"),
-            PlannedFixture.row(id: 4, amount: -20, recurring: true, pattern: "every 15 days"),
-            PlannedFixture.row(id: 5, amount: -300, recurring: true, pattern: "quarterly"),
-            PlannedFixture.row(id: 6, amount: 1, recurring: true, pattern: "daily"),
-            PlannedFixture.row(id: 7, amount: -10, recurring: true, pattern: "biweekly"),
-            PlannedFixture.row(id: 8, amount: -500, recurring: true, pattern: "monthly", isActive: false),
-            PlannedFixture.row(id: 9, amount: -700),
-            PlannedFixture.row(id: 10, amount: -5, currency: "XYZ", recurring: true, pattern: "monthly"),
-        ]
-        let total = PlannedTotals.monthly(rows.map { row in PlannedFixture.payment(row) }, converter: converter)
-        // -43.3 - 100 - 100 - 40 - 100 + 30 - 21.7
-        #expect(PlannedFixture.close(total.total, Decimal(string: "-375")!))
-        #expect(total.unavailableCount == 1)
-        #expect(PlannedFrequency.custom.monthlyMultiplier(customIntervalDays: 0) == 1)
-        #expect(PlannedFrequency.custom.monthlyMultiplier(customIntervalDays: nil) == 1)
     }
 }
 
@@ -593,29 +573,44 @@ enum PlannedFixture {
         #expect(model.payments.first?.currency == "EUR")
         await model.appear(showAll: false, defaultCurrency: "USD")
         #expect(model.payments.first?.currency == "USD")
-        #expect(model.converter.target == "USD")
         #expect(await service.loads.count == 1)
     }
 
-    @Test func theFiguresUseTheSharedRatesAndToday() async {
+    @Test func theTotalsComeFromTheServerInTheDefaultCurrency() async {
         let service = FakePlannedService(rows: [
-            PlannedFixture.row(
-                id: 1, date: "2026-10-12", amount: -100, currency: "USD", recurring: true, pattern: "monthly"),
+            PlannedFixture.row(id: 1, date: "2026-10-12", amount: -100, currency: "USD", recurring: true, pattern: "monthly"),
             PlannedFixture.row(id: 2, date: "2026-10-13", amount: -5, currency: "XYZ"),
         ])
+        await service.setTotals(PlannedFixture.totals(net: -92, windowMissing: 1, monthly: -92, monthlyMissing: 0))
         let model = PlannedPaymentsModel(
             service: service, editing: FakePlannedEditingService(), pickers: FakePickerService(),
-            rates: ExchangeRatesModel(service: FakeExchangeRatesService(rates: [.success(PlannedFixture.rates())])),
             dismissals: .memory(), calendar: PlannedFixture.calendar, now: { PlannedFixture.today })
+        #expect(model.isTotalsLoading)
         await model.appear(showAll: false, defaultCurrency: "EUR")
-        #expect(!model.isRatesLoading)
-        let usd = Decimal(-100) * Decimal(string: "1.0842")!
+        #expect(!model.isTotalsLoading)
+        #expect(await service.totalsCurrencies == ["EUR"])
         #expect(model.strip.dueCount == 2)
-        #expect(model.strip.windowTotal == PlannedConvertedTotal(total: usd, unavailableCount: 1))
-        #expect(model.estimatedMonthly == PlannedConvertedTotal(total: usd, unavailableCount: 0))
+        #expect(model.windowTotal?.net == -92)
+        #expect(model.windowTotal?.unconvertedCount == 1)
+        #expect(model.estimatedMonthly?.total == -92)
+        #expect(model.estimatedMonthly?.unconvertedCount == 0)
         let first = model.payments[0]
         #expect(model.dueState(first) == .today)
         #expect(model.dueState(model.payments[1]) == .tomorrow)
+    }
+
+    @Test func aMutationAndACurrencyChangeRefetchTheTotals() async {
+        let service = FakePlannedService(rows: [PlannedFixture.row(id: 1, recurring: true, pattern: "monthly")])
+        await service.setTotals(PlannedFixture.totals(net: 0, windowMissing: 0, monthly: -10, monthlyMissing: 0))
+        let model = PlannedFixture.model(service)
+        await model.appear(showAll: false, defaultCurrency: "EUR")
+        await model.appear(showAll: false, defaultCurrency: "EUR")
+        #expect(await service.totalsCurrencies == ["EUR"])
+        await model.appear(showAll: false, defaultCurrency: "USD")
+        #expect(await service.totalsCurrencies == ["EUR", "USD"])
+        await model.toggleActive(model.payments[0])
+        await model.totalsRefresh?.value
+        #expect(await service.totalsCurrencies == ["EUR", "USD", "USD"])
     }
 
     @Test func searchSortAndFiltersNarrowTheTableAndPickTheEmptyState() async {
@@ -936,7 +931,7 @@ enum PlannedFixture {
         #expect(PlannedPaymentsRoute.showAllValue(false) == nil)
     }
 
-    func makeShell(settings: NativeAppSettings, recorder: ShellRecorder) -> NativeShellModel {
+    func makeShell(settings: NativeAppSettings) -> NativeShellModel {
         NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]), theme: ThemeSelection(appearance: .light),
             notices: NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false),
@@ -944,36 +939,34 @@ enum PlannedFixture {
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
             transactions: TransactionsFixture.idleModel(), accounts: AccountsFixture.idleModel(),
             categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
-            loadSettings: { settings },
-            onNavigate: { recorder.actions.append($0) })
+            loadSettings: { settings })
     }
 
     @Test func plannedIsNativeWithoutAdminModeOnceSettingsLoad() async throws {
-        let recorder = ShellRecorder()
-        let shell = makeShell(settings: NativeAppSettings(adminMode: false), recorder: recorder)
-        shell.routeDidChange(try #require(NativeRoute("/planned?show_all=true")))
-        #expect(shell.detail == .web)
+        let shell = makeShell(settings: NativeAppSettings(adminMode: false))
+        shell.show(try #require(NativeRoute("/planned?show_all=true")))
+        #expect(shell.detail == .loading)
         await shell.settingsSettled()
         #expect(shell.detail == .native(.plannedPayments))
-        shell.routeDidChange(try #require(NativeRoute("/admin/exchange-rates")))
+        // Without admin mode an admin route goes home instead.
+        shell.show(try #require(NativeRoute("/admin/exchange-rates")))
         await shell.settingsSettled()
-        #expect(shell.detail == .web)
-        shell.routeDidChange(try #require(NativeRoute("/planned")))
+        #expect(shell.route == .home)
+        shell.show(try #require(NativeRoute("/planned")))
         #expect(shell.detail == .native(.plannedPayments))
     }
 
     @Test func theViewMenuReplacesTheRoute() async throws {
-        let recorder = ShellRecorder()
-        let shell = makeShell(settings: NativeAppSettings(adminMode: true), recorder: recorder)
-        shell.routeDidChange(try #require(NativeRoute("/planned")))
+        let shell = makeShell(settings: NativeAppSettings(adminMode: true))
+        shell.show(try #require(NativeRoute("/planned")))
         await shell.settingsSettled()
         shell.replaceQuery(PlannedPaymentsRoute.showAllParameter, with: PlannedPaymentsRoute.showAllValue(true))
         #expect(shell.route.string == "/planned?show_all=true")
         #expect(PlannedPaymentsRoute.showAll(in: shell.route))
-        #expect(recorder.actions.last == .replaceRoute("/planned?show_all=true"))
+        #expect(shell.nativeNavigationLocation.raw == "/planned?show_all=true")
         shell.replaceQuery(PlannedPaymentsRoute.showAllParameter, with: PlannedPaymentsRoute.showAllValue(false))
         #expect(shell.route.string == "/planned")
-        #expect(recorder.actions.last == .replaceRoute("/planned"))
+        #expect(shell.nativeNavigationLocation.raw == "/planned")
         #expect(shell.detail == .native(.plannedPayments))
     }
 }

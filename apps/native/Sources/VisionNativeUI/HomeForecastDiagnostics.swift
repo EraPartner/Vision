@@ -33,22 +33,27 @@ struct HomeForecastDiagnostics: View {
                                 "currency": model.forecast?.currency ?? settings.defaultCurrency,
                             ])
                     ).font(.footnote).foregroundStyle(theme.secondaryLabel)
-                    Text(strings.t("cashflow.diagnostics.suggestedWeights")).font(.headline)
-                    Text(strings.t("cashflow.diagnostics.weightsNote")).font(.footnote).foregroundStyle(
-                        theme.secondaryLabel)
-                    let weights = diagnostics.suggestedWeights
-                    let maxWeight = weights.values.max() ?? 1
-                    ForEach(diagnostics.backtest.sorted { $0.mae < $1.mae }) { method in
-                        if let weight = weights[method.id] {
-                            HStack {
-                                Text(method.label)
-                                Spacer()
-                                Text(
-                                    VisionFormat.decimal(
-                                        100 * weight, fractionDigits: 1, locale: settings.numberFormat.locale) + "%")
+                    // The weights the ensemble applied, computed on the server.
+                    let weights = diagnostics.ensemble_weights ?? [:]
+                    if !weights.isEmpty {
+                        let maxWeight = weights.values.max() ?? 1
+                        Text(strings.t("cashflow.diagnostics.suggestedWeights")).font(.headline)
+                        Text(strings.t("cashflow.diagnostics.weightsNote")).font(.footnote).foregroundStyle(
+                            theme.secondaryLabel)
+                        ForEach(diagnostics.backtest.sorted { $0.mae < $1.mae }) { method in
+                            if let weight = weights[method.id] {
+                                HStack {
+                                    Text(method.label)
+                                    Spacer()
+                                    Text(
+                                        VisionFormat.decimal(
+                                            100 * weight, fractionDigits: 0, locale: settings.numberFormat.locale)
+                                            + "%")
+                                }
+                                ProgressView(
+                                    value: maxWeight > 0 ? NSDecimalNumber(decimal: weight / maxWeight).doubleValue : 0
+                                ).tint(theme.primary)
                             }
-                            ProgressView(value: NSDecimalNumber(decimal: weight / maxWeight).doubleValue).tint(
-                                theme.primary)
                         }
                     }
                 } else {

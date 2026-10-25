@@ -38,7 +38,14 @@ public struct TaxOverviewView: View {
                 } else if let overview {
                     content(overview)
                 }
-                if let error = screens.actions.error ?? screens.exportError ?? screens.profileOpenError
+                if let failure = screens.actions.computeFailure {
+                    // YearActionsMenu's toast: the title, then the server's reason.
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(strings.t("tax.yearActions.computeFailed", ["year": String(failure.year)]))
+                        Text(failure.detail).font(.footnote)
+                    }
+                    .foregroundStyle(theme.destructive)
+                } else if let error = screens.actions.error ?? screens.exportError ?? screens.profileOpenError
                     ?? screens.profile.error
                 {
                     Text(error).foregroundStyle(theme.destructive)
@@ -140,6 +147,13 @@ public struct TaxOverviewView: View {
             TaxTrendStripView(model: screens.dashboard, overview: overview, shell: shell)
         }
         disclaimer(overview)
+        // `tax.fxUnavailable`: amounts without a stored rate are left out, not converted 1:1 (#308).
+        if let currencies = data?.unconvertedCurrencies, !currencies.isEmpty {
+            Text(strings.t("tax.fxUnavailable", ["currencies": currencies.joined(separator: ", ")]))
+                .font(.footnote)
+                .foregroundStyle(theme.warning)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         if let data {
             if data.isEmpty {
                 TaxCard {

@@ -1,94 +1,36 @@
 import Foundation
 import Observation
 
+/// Local-only investigations (ADR-229): the route is fixed to the configured Ollama endpoint, so there is
+/// no cloud model, disclosure preview, grant or record state.
 @MainActor @Observable public final class AIInvestigationModel {
-    public var question = "" { didSet { if question != oldValue { clearPreview() } } }
-    public var depthOverride: String? { didSet { if depthOverride != oldValue { clearPreview() } } }
-    public var route = "local" { didSet { if route != oldValue { clearPreview() } } }
-    public var openAiModelOverride: String? {
-        didSet { if openAiModelOverride != oldValue { clearPreview() } }
-    }
-    public var disclosureMode = "cloud-plan-public" {
-        didSet { if disclosureMode != oldValue { clearPreview() } }
-    }
-    public var selectedSummary = "" { didSet { if selectedSummary != oldValue { clearPreview() } } }
-    public var selectedEvidence = "" { didSet { if selectedEvidence != oldValue { clearPreview() } } }
-    public var researchMode = "local-only" {
-        didSet { if researchMode != oldValue { clearPreview() } }
-    }
-    public var publicWebQuery = "" { didSet { if publicWebQuery != oldValue { clearPreview() } } }
-    public var publicQuestion = "" { didSet { if publicQuestion != oldValue { clearPreview() } } }
-    public var publicSymbols = "" { didSet { if publicSymbols != oldValue { clearPreview() } } }
-    public var dateFrom = "" { didSet { if dateFrom != oldValue { clearPreview() } } }
-    public var dateTo = "" { didSet { if dateTo != oldValue { clearPreview() } } }
+    public var question = ""
+    public var depthOverride: String?
+    public var researchMode = "local-only"
+    public var publicWebQuery = ""
+    public var publicSymbols = ""
+    public var dateFrom = ""
+    public var dateTo = ""
     public var clarification = ""
-    public private(set) var status: AIResearchStatus?
     public private(set) var job: AIInvestigation?
-    public private(set) var preview: AIDisclosurePreview?
-    public private(set) var grantId: String?
-    public private(set) var recordCount: Int?
-    public private(set) var disclosureRecords: [TaxValue] = []
-    public private(set) var disclosureGrants: [TaxValue] = []
     public private(set) var documents: [AIResearchDocument] = []
     public private(set) var busy = false
     public private(set) var error: String?
-    public var isOnline = true {
-        didSet { if isOnline && !oldValue { refreshStatusSoon(initialMount: !pausedStatusRead) } }
-    }
-    public var isForeground = true {
-        didSet { if isForeground && !oldValue && pausedStatusRead { refreshStatusSoon() } }
-    }
-    public var didReceiveResearch: (@MainActor (NativeSettingsAIReceipt<AIResearchStatus>) -> Void)?
-    public var sharedResearchReceipt: NativeSettingsAIReceipt<AIResearchStatus>? {
-        guard let status, let statusReadAt else { return nil }
-        return .init(value: status, fetchedAt: statusReadAt)
-    }
-    public func seedSharedResearch(_ value: AIResearchStatus, fetchedAt: Date) {
-        guard statusReadAt.map({ fetchedAt > $0 }) ?? true else { return }
-        let oldModel = openAiModel
-        statusRevision = UUID()
-        statusTask?.cancel()
-        statusTask = nil
-        status = value
-        statusReadAt = fetchedAt
-        pausedStatusRead = false
-        if oldModel != openAiModel { clearPreview() }
-    }
-    public func invalidateSharedResearch() {
-        statusRevision = UUID()
-        statusTask?.cancel()
-        statusTask = nil
-        statusReadAt = nil
-        // Query invalidation refetches an active observer even if the Settings writer has unmounted.
-        refreshStatusSoon(initialMount: true)
-    }
     public var pickDocument: (@MainActor () async throws -> AIResearchDocumentFile?)?
     @ObservationIgnored private let service: any AIInvestigationService
-    @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private let pollDelay: Duration
     @ObservationIgnored private var settings = NativeAppSettings.defaults
-    @ObservationIgnored private var userDefaultModel: String?
     @ObservationIgnored private var active = false
     @ObservationIgnored private var visit = UUID()
-    @ObservationIgnored private var previewRevision = UUID()
     @ObservationIgnored private var jobRevision = UUID()
-    @ObservationIgnored private var historyRevision = UUID()
     @ObservationIgnored private var documentRevision = UUID()
     @ObservationIgnored private var busyCount = 0
     @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
-    @ObservationIgnored private var statusRevision = UUID()
-    @ObservationIgnored private var statusTask: Task<Void, Never>?
-    @ObservationIgnored private var statusReadAt: Date?
-    @ObservationIgnored private var pausedStatusRead = false
 
-    public init(
-        service: any AIInvestigationService, pollDelay: Duration = .milliseconds(1200),
-        now: @escaping @Sendable () -> Date = { Date() }
-    ) {
+    public init(service: any AIInvestigationService, pollDelay: Duration = .milliseconds(1200)) {
         self.service = service
         self.pollDelay = pollDelay
-        self.now = now
     }
     public var depth: String {
         depthOverride
@@ -105,28 +47,10 @@ import Observation
             ? value : nil
     }
     public var language: String { settings.language == "nl" ? "nl" : "en" }
-    public var openAiModels: [OpenAIResearchModel] { status?.openAiModels ?? [] }
-    public var openAiEnabled: Bool { status?.openAiEnabled ?? false }
-    public var openAiModel: String {
-        let allowed = Set(openAiModels.map(\.id))
-        return [openAiModelOverride, userDefaultModel, status?.openAiModel].compactMap { $0 }.first {
-            !$0.isEmpty && allowed.contains($0)
-        } ?? openAiModels.first?.id ?? ""
-    }
-    public var selectedOpenAiModel: OpenAIResearchModel? {
-        openAiModels.first { $0.id == openAiModel }
-    }
     public var runDisabled: Bool {
         busy || trim(question).isEmpty
             || (researchMode == "public-web" && trim(publicWebQuery).isEmpty)
             || (researchMode == "public-providers" && trim(publicSymbols).isEmpty)
-            || (route == "openai-api" && (!openAiEnabled || openAiModel.isEmpty))
-            || (route == "openai-api" && disclosureMode == "cloud-plan-public"
-                && trim(publicQuestion).isEmpty)
-            || (route == "openai-api" && disclosureMode == "selected-summary"
-                && trim(selectedSummary).isEmpty)
-            || (route == "openai-api" && disclosureMode == "cloud-synthesis-selected"
-                && trim(selectedEvidence).isEmpty)
     }
     public var canClarify: Bool { !trim(clarification).isEmpty }
     public var canCancel: Bool {
@@ -135,26 +59,19 @@ import Observation
     public var canResume: Bool { job.map { ["partial", "failed"].contains($0.state) } ?? false }
     public var settingsSummary: [String] {
         [
-            route == "local" ? "aiResearch.localModel" : "aiResearch.openAi",
+            "aiResearch.localModel",
             depth == "quick" ? "aiResearch.quick" : "aiResearch.detailed",
             researchMode == "local-only"
                 ? "aiResearch.localOnly"
                 : researchMode == "public-web" ? "aiResearch.publicWeb" : "aiResearch.publicProviders",
         ]
     }
-    public func configure(settings: NativeAppSettings, openAiDefaultModel: String? = nil) {
-        let oldContext = input()
+    public func configure(settings: NativeAppSettings) {
         self.settings = settings
-        userDefaultModel = openAiDefaultModel ?? settings.openAiDefaultModel
-        if oldContext != input() { clearPreview() }
     }
-    public func load(force: Bool = false) async {
+    public func load() async {
         if active {
-            if let loadTask {
-                await loadTask.value
-                return
-            }
-            if force { await refreshStatusIfStale() }
+            if let loadTask { await loadTask.value }
             return
         }
         active = true
@@ -163,9 +80,7 @@ import Observation
         let documentsScope = documentRevision
         let task = Task { [weak self] in
             guard let self, active, visit == scope, !Task.isCancelled else { return }
-            async let documentRead = readDocuments(visit: scope)
-            await refreshStatusIfStale(initialMount: true)
-            let newDocuments = await documentRead
+            let newDocuments = await readDocuments(visit: scope)
             guard active, visit == scope else { return }
             if let newDocuments, documentRevision == documentsScope { documents = newDocuments }
         }
@@ -173,115 +88,47 @@ import Observation
         await task.value
         if active, visit == scope { loadTask = nil }
     }
-    /// Only status uses the source TanStack focus/reconnect policy. The job poll is a manual interval.
-    public func refreshStatusIfStale(initialMount: Bool = false) async {
-        guard active else { return }
-        if let statusTask {
-            await statusTask.value
-            return
-        }
-        guard statusReadAt.map({ now().timeIntervalSince($0) >= 60 }) ?? true else { return }
-        guard isOnline else {
-            pausedStatusRead = true
-            return
-        }
-        guard initialMount || isForeground else { return }
-        pausedStatusRead = false
-        let scope = visit
-        let revision = UUID()
-        statusRevision = revision
-        let task = Task { [weak self] in
-            guard let self, active, visit == scope, statusRevision == revision, !Task.isCancelled else { return }
-            do {
-                let response = try await service.investigationStatus()
-                guard active, visit == scope, statusRevision == revision, !Task.isCancelled else { return }
-                let oldModel = openAiModel
-                status = response
-                statusReadAt = now()
-                if let receipt = sharedResearchReceipt { didReceiveResearch?(receipt) }
-                if oldModel != openAiModel { clearPreview() }
-            } catch {
-                // useAiResearchStatus has retry: 0 and no source error banner.
-            }
-        }
-        statusTask = task
-        await task.value
-        if active, visit == scope, statusRevision == revision { statusTask = nil }
-    }
     private func readDocuments(visit scope: UUID) async -> [AIResearchDocument]? {
         guard active, visit == scope, !Task.isCancelled else { return nil }
         return try? await service.investigationDocuments()
-    }
-    private func refreshStatusSoon(initialMount: Bool = false) {
-        guard active else { return }
-        let scope = visit
-        Task { [weak self] in
-            guard let self, active, visit == scope, !Task.isCancelled else { return }
-            await refreshStatusIfStale(initialMount: initialMount)
-        }
     }
     public func didDisappear() {
         active = false
         visit = UUID()
         jobRevision = UUID()
-        historyRevision = UUID()
         documentRevision = UUID()
         pollTask?.cancel()
         pollTask = nil
         loadTask?.cancel()
         loadTask = nil
-        statusRevision = UUID()
-        statusTask?.cancel()
-        statusTask = nil
-        pausedStatusRead = false
         question = ""
         depthOverride = nil
-        route = "local"
-        openAiModelOverride = nil
-        disclosureMode = "cloud-plan-public"
-        selectedSummary = ""
-        selectedEvidence = ""
         researchMode = "local-only"
         publicWebQuery = ""
-        publicQuestion = ""
         publicSymbols = ""
         dateFrom = ""
         dateTo = ""
         clarification = ""
         job = nil
-        preview = nil
-        grantId = nil
-        recordCount = nil
-        disclosureRecords = []
-        disclosureGrants = []
         documents = []
         busyCount = 0
         busy = false
         error = nil
-        clearPreview()
     }
-    /// Identical source scope and disclosure fields. Evidence is an inspected string, not reinterpreted JSON.
+    /// Identical source scope fields; the route is always the local Ollama endpoint.
     public func input() -> TaxValue {
         .object([
-            "question": .string(trim(question)), "route": .string(route),
+            "question": .string(trim(question)), "route": .string("local"),
             "researchMode": .string(researchMode),
-            "publicQuestion": optional(
-                route == "openai-api" && disclosureMode == "cloud-plan-public" ? trim(publicQuestion) : nil),
             "publicWebQuery": optional(researchMode == "public-web" ? trim(publicWebQuery) : nil),
             "publicSymbols": .array(
                 researchMode == "public-providers"
                     ? publicSymbols.split(separator: ",", omittingEmptySubsequences: false).map {
                         trim(String($0)).uppercased()
                     }.filter { !$0.isEmpty }.prefix(3).map { .string($0) } : []),
-            "publicMacroQueries": .array([]), "clarification": .null,
-            "model": optional(route == "openai-api" && !openAiModel.isEmpty ? openAiModel : nil),
-            "depth": .string(depth), "language": .string(language), "scope": scope(), "grantId": .null,
-            "selectedSummary": optional(
-                route == "openai-api" && disclosureMode == "selected-summary" ? trim(selectedSummary) : nil),
-            "selectedEvidence": optional(
-                route == "openai-api" && disclosureMode == "cloud-synthesis-selected"
-                    ? trim(selectedEvidence) : nil),
-            "referenceScopeId": .null, "savedAnalysisId": .null,
+            "publicMacroQueries": .array([]), "clarification": .null, "model": .null,
+            "depth": .string(depth), "language": .string(language), "scope": scope(),
+            "savedAnalysisId": .null,
         ])
     }
     public func scope() -> TaxValue {
@@ -297,49 +144,12 @@ import Observation
     public func run() async {
         guard active, !runDisabled else { return }
         let scope = visit
-        let previewScope = previewRevision
         let request = input()
-        let capturedPreview = preview
-        let capturedMode = disclosureMode
-        let capturedDepth = depth
         beginBusy()
         error = nil
         defer { endBusy(visit: scope) }
         do {
-            var outgoing = request
-            if route == "openai-api" {
-                guard let capturedPreview else {
-                    let response = try await service.investigationPreview(request)
-                    if active, visit == scope, previewRevision == previewScope { preview = response }
-                    return
-                }
-                let formatter = ISO8601DateFormatter()
-                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                let grant = try await service.investigationGrant(
-                    .object([
-                        "route": .string("openai-api"), "mode": .string(capturedMode),
-                        "purpose": .string(
-                            capturedMode == "cloud-synthesis-selected"
-                                ? "Synthesize an answer from this inspected selected evidence"
-                                : "Plan this inspected investigation question"),
-                        "previewHash": .string(capturedPreview.payloadSha256),
-                        "allowedFields": .array(capturedPreview.fieldManifest.map { .string($0) }),
-                        "maxRequests": .number(3),
-                        "maxInputCharacters": .number(Decimal(max(100, capturedPreview.payloadBytes * 2))),
-                        "maxOutputTokens": .number(capturedDepth == "detailed" ? 7200 : 2700),
-                        "maxCostMicros": .number(2_000_000),
-                        "maxDisclosureUnits": .number(Decimal(capturedPreview.disclosureUnits.count)),
-                        "expiresAt": .string(formatter.string(from: now().addingTimeInterval(15 * 60))),
-                        "retainExactPayload": .bool(false),
-                    ]))
-                if active, visit == scope { grantId = grant }
-                guard var frozen = capturedPreview.outboundRequest.objectValue else {
-                    throw ResearchDecode.failure("Invalid frozen disclosure request")
-                }
-                frozen["grantId"] = .string(grant)
-                outgoing = .object(frozen)
-            }
-            let result = try await service.investigationCreate(outgoing)
+            let result = try await service.investigationCreate(request)
             guard active, visit == scope else { return }
             setJob(result)
         } catch { if active, visit == scope { self.error = error.localizedDescription } }
@@ -425,75 +235,6 @@ import Observation
             }
         }
     }
-    public func loadHistory() async {
-        guard active else { return }
-        let scope = visit
-        let revision = UUID()
-        historyRevision = revision
-        do {
-            async let records = service.investigationRecords()
-            async let grants = service.investigationGrants()
-            let (r, g) = try await (records, grants)
-            guard active, visit == scope, historyRevision == revision else { return }
-            recordCount = try ResearchDecode.count(r["total"])
-            disclosureRecords = try AIInvestigationDecode.array(r["items"])
-            disclosureGrants = try AIInvestigationDecode.array(g["items"])
-        } catch {
-            if active, visit == scope, historyRevision == revision {
-                self.error = error.localizedDescription
-            }
-        }
-    }
-    public func deleteHistory() async {
-        guard active else { return }
-        let scope = visit
-        historyRevision = UUID()
-        do {
-            try await service.investigationDeleteHistory()
-            guard active, visit == scope else { return }
-            historyRevision = UUID()
-            recordCount = 0
-            disclosureRecords = []
-            disclosureGrants = []
-            grantId = nil
-        } catch {
-            if active, visit == scope {
-                historyRevision = UUID()
-                self.error = error.localizedDescription
-            }
-        }
-    }
-    public func revokeActiveGrant() async {
-        guard let grantId else { return }
-        await revoke(grantId, updateHistory: false, clearActive: true)
-    }
-    public func revokeGrant(_ id: String) async {
-        await revoke(id, updateHistory: true, clearActive: false)
-    }
-    private func revoke(_ id: String, updateHistory: Bool, clearActive: Bool) async {
-        guard active else { return }
-        let scope = visit
-        historyRevision = UUID()
-        do {
-            try await service.investigationRevoke(id: id)
-            guard active, visit == scope else { return }
-            historyRevision = UUID()
-            if clearActive, grantId == id { grantId = nil }
-            if updateHistory {
-                let formatter = ISO8601DateFormatter()
-                disclosureGrants = disclosureGrants.map { item in
-                    guard item["id"] == .string(id), var fields = item.objectValue else { return item }
-                    fields["revoked_at"] = .string(formatter.string(from: now()))
-                    return .object(fields)
-                }
-            }
-        } catch {
-            if active, visit == scope {
-                historyRevision = UUID()
-                self.error = error.localizedDescription
-            }
-        }
-    }
     private func setJob(_ value: AIInvestigation) {
         jobRevision = UUID()
         job = value
@@ -528,10 +269,6 @@ import Observation
         } catch {
             // Source polling failures are silent; independent interval ticks continue.
         }
-    }
-    private func clearPreview() {
-        preview = nil
-        previewRevision = UUID()
     }
     private func beginBusy() {
         busyCount += 1

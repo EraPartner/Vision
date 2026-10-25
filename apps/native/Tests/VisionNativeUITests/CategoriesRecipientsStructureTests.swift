@@ -136,7 +136,7 @@ actor StaticRecipientsService: RecipientsService {
     {
         let shell = makeShell(language: language, appearance: appearance)
         let model = shell.categories
-        shell.routeDidChange(try #require(NativeRoute("/categories?show_all=true")))
+        shell.show(try #require(NativeRoute("/categories?show_all=true")))
         await shell.settingsSettled()
         #expect(shell.detail == .native(.categories))
         // Each host stays alive until the end, so no `.onDisappear` resets the model early.
@@ -161,7 +161,7 @@ actor StaticRecipientsService: RecipientsService {
         model.cancelDelete()
         // No categories, and the error card with Retry.
         let empty = makeShell(language: language, appearance: appearance, categories: StaticCategoriesService(nodes: []))
-        empty.routeDidChange(try #require(NativeRoute("/categories")))
+        empty.show(try #require(NativeRoute("/categories")))
         await empty.settingsSettled()
         await empty.categories.appear()
         #expect(empty.categories.rows.isEmpty)
@@ -170,7 +170,7 @@ actor StaticRecipientsService: RecipientsService {
         #expect(emptyHost.fittingSize.height > 0)
         let failing = makeShell(
             language: language, appearance: appearance, categories: StaticCategoriesService(failing: true))
-        failing.routeDidChange(try #require(NativeRoute("/categories")))
+        failing.show(try #require(NativeRoute("/categories")))
         await failing.settingsSettled()
         await failing.categories.appear()
         #expect(failing.categories.error != nil)
@@ -183,7 +183,7 @@ actor StaticRecipientsService: RecipientsService {
     func theCategoryDialogsLayOut(_ language: NativeLanguage, _ appearance: ThemeAppearance) async throws {
         let shell = makeShell(language: language, appearance: appearance)
         let model = shell.categories
-        shell.routeDidChange(try #require(NativeRoute("/categories")))
+        shell.show(try #require(NativeRoute("/categories")))
         await shell.settingsSettled()
         await model.appear()
         var hosts: [NSView] = []
@@ -218,7 +218,7 @@ actor StaticRecipientsService: RecipientsService {
     {
         let shell = makeShell(language: language, appearance: appearance)
         let model = shell.recipients
-        shell.routeDidChange(try #require(NativeRoute("/recipients?show_all=true")))
+        shell.show(try #require(NativeRoute("/recipients?show_all=true")))
         await shell.settingsSettled()
         #expect(shell.detail == .native(.recipients))
         var hosts: [NSView] = []
@@ -246,7 +246,7 @@ actor StaticRecipientsService: RecipientsService {
         model.cancelDelete()
         // No payees, and the error card with Retry.
         let empty = makeShell(language: language, appearance: appearance, recipients: StaticRecipientsService(rows: []))
-        empty.routeDidChange(try #require(NativeRoute("/recipients")))
+        empty.show(try #require(NativeRoute("/recipients")))
         await empty.settingsSettled()
         await empty.recipients.appear()
         #expect(empty.recipients.rows?.isEmpty == true)
@@ -255,7 +255,7 @@ actor StaticRecipientsService: RecipientsService {
         #expect(emptyHost.fittingSize.height > 0)
         let failing = makeShell(
             language: language, appearance: appearance, recipients: StaticRecipientsService(failing: true))
-        failing.routeDidChange(try #require(NativeRoute("/recipients")))
+        failing.show(try #require(NativeRoute("/recipients")))
         await failing.settingsSettled()
         await failing.recipients.appear()
         #expect(failing.recipients.error != nil)
@@ -268,7 +268,7 @@ actor StaticRecipientsService: RecipientsService {
     func theRecipientDialogsLayOut(_ language: NativeLanguage, _ appearance: ThemeAppearance) async throws {
         let shell = makeShell(language: language, appearance: appearance)
         let model = shell.recipients
-        shell.routeDidChange(try #require(NativeRoute("/recipients")))
+        shell.show(try #require(NativeRoute("/recipients")))
         await shell.settingsSettled()
         await model.appear()
         var hosts: [NSView] = []
@@ -317,13 +317,13 @@ actor StaticRecipientsService: RecipientsService {
 
     @Test func theShellShowsCategoriesAndRecipients() async throws {
         let shell = makeShell(language: .nl, appearance: .dark)
-        let host = layOut(ShellRootView(model: shell) { hidden in Color.clear.accessibilityHidden(hidden) })
+        let host = layOut(ShellRootView(model: shell))
         defer { withExtendedLifetime(host) {} }
-        shell.routeDidChange(try #require(NativeRoute("/categories")))
+        shell.show(try #require(NativeRoute("/categories")))
         await shell.settingsSettled()
         #expect(shell.detail == .native(.categories))
         host.layoutSubtreeIfNeeded()
-        shell.routeDidChange(try #require(NativeRoute("/recipients")))
+        shell.show(try #require(NativeRoute("/recipients")))
         #expect(shell.detail == .native(.recipients))
         host.layoutSubtreeIfNeeded()
         #expect(!host.subviews.isEmpty)

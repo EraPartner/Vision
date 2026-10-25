@@ -5,7 +5,6 @@ import Testing
 /// The runtime a quiescent capture drives, like the mock in quiescent-snapshot.test.ts.
 private actor FakeSnapshotRuntime: SnapshotRuntime {
     private(set) var running = true
-    private(set) var auditPaused = false
     private(set) var events: [String] = []
     private let startFailure: NativeRuntimeError?
 
@@ -13,13 +12,7 @@ private actor FakeSnapshotRuntime: SnapshotRuntime {
         self.startFailure = startFailure
     }
 
-    func pauseAuditClosure() async {
-        auditPaused = true
-        events.append("pause")
-    }
-
     func stop(keepPostgres: Bool) async throws {
-        #expect(auditPaused)
         #expect(keepPostgres)
         running = false
         events.append("stop")
@@ -30,11 +23,6 @@ private actor FakeSnapshotRuntime: SnapshotRuntime {
         if let startFailure { throw startFailure }
         running = true
     }
-
-    func resumeAuditClosure() async {
-        auditPaused = false
-        events.append("resume")
-    }
 }
 
 @Suite struct QuiescentSnapshotTests {
@@ -43,9 +31,7 @@ private actor FakeSnapshotRuntime: SnapshotRuntime {
         let runtime = FakeSnapshotRuntime()
         let capture = { @Sendable () async throws -> String in
             let running = await runtime.running
-            let paused = await runtime.auditPaused
             #expect(!running)
-            #expect(paused)
             if fails { throw NativeRuntimeError("DUMP_FAILED", "dump failed") }
             return "snapshot"
         }
@@ -59,22 +45,18 @@ private actor FakeSnapshotRuntime: SnapshotRuntime {
             #expect(value == "snapshot")
         }
         let running = await runtime.running
-        let paused = await runtime.auditPaused
         let events = await runtime.events
         #expect(running)
-        #expect(!paused)
-        #expect(events == ["pause", "stop", "start", "resume"])
+        #expect(events == ["stop", "start"])
     }
 
-    @Test func aRestartFailureIsSurfacedAndTheAuditPauseReleased() async throws {
+    @Test func aRestartFailureIsSurfaced() async throws {
         let runtime = FakeSnapshotRuntime(startFailure: NativeRuntimeError("RESTART_FAILED", "restart failed"))
         let error = await #expect(throws: NativeRuntimeError.self) {
             try await QuiescentSnapshot.capture(runtime) { @Sendable () async throws -> String in "snapshot" }
         }
         #expect(error?.code == "RESTART_FAILED")
-        let paused = await runtime.auditPaused
         let events = await runtime.events
-        #expect(!paused)
-        #expect(events == ["pause", "stop", "start", "resume"])
+        #expect(events == ["stop", "start"])
     }
 }

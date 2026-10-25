@@ -55,10 +55,21 @@ public protocol HomeService: Sendable {
     func homeAccounts() async throws -> [OpenAPI.Account]
     func homePlanned(start: String, end: String, limit: Int) async throws -> [OpenAPI
         .PlannedTransaction]
+    /// `usePlannedTotals(currency)`: rest-of-month incoming and outgoing, converted on the
+    /// server (ADR-216). `nil` when a service has no totals.
+    func homePlannedTotals(currency: String) async throws -> OpenAPI.PlannedTotals?
+    /// `useAccountTotals(currency)`: per-account converted balances (the Accounts list order).
+    /// `nil` when a service has no totals.
+    func homeAccountTotals(currency: String) async throws -> OpenAPI.AccountTotals?
     func homeMatchCount() async throws -> Int
     func homeExclusions(scope: String) async throws -> InsightExclusions
     func homeWidgetSetting() async throws -> OpenAPI.Setting
     func saveHomeWidgets(_ value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting
+}
+
+extension HomeService {
+    public func homePlannedTotals(currency: String) async throws -> OpenAPI.PlannedTotals? { nil }
+    public func homeAccountTotals(currency: String) async throws -> OpenAPI.AccountTotals? { nil }
 }
 
 public struct HomeTransactionPage: Equatable, Sendable {
@@ -142,6 +153,12 @@ extension APIClient: HomeService {
                     URLQueryItem(name: "end_date", value: end),
                 ])
         ).items
+    }
+    public func homePlannedTotals(currency: String) async throws -> OpenAPI.PlannedTotals? {
+        try await send(OpenAPIOperations.GetPlannedTotals(currency: currency))
+    }
+    public func homeAccountTotals(currency: String) async throws -> OpenAPI.AccountTotals? {
+        try await send(OpenAPIOperations.GetAccountTotals(currency: currency))
     }
     public func homeMatchCount() async throws -> Int { try await matchSuggestions().count }
     public func homeExclusions(scope: String) async throws -> InsightExclusions {

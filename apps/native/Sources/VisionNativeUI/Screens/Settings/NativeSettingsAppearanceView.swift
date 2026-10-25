@@ -98,6 +98,19 @@ struct NativeSettingsAppearanceView: View {
                     )
                     .labelsHidden().toggleStyle(.switch)
                 }
+                Divider()
+                NativeSettingsRow(
+                    title: strings.t("settings.appearance.fullEffects"),
+                    description: strings.t("settings.appearance.fullEffectsHint")
+                ) {
+                    Toggle(
+                        strings.t("settings.appearance.fullEffects"),
+                        isOn: Binding(
+                            get: { model.fullEffects },
+                            set: { model.setFullEffects($0) })
+                    )
+                    .labelsHidden().toggleStyle(.switch)
+                }
             }
             NativeSettingsGroup(title: strings.t("settings.group.accessibility")) {
                 NativeSettingsRow(

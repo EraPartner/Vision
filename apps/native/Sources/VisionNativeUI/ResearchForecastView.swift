@@ -3,14 +3,12 @@ import VisionNativeCore
 
 public struct ResearchForecastView: View {
     let model: ResearchForecastModel
-    let life: ResearchLifeScenarioModel
     let shell: NativeShellModel
     @State private var assumptionsOpen = false
     @State private var width: CGFloat = 0
     @Environment(\.visionTheme) private var theme
-    public init(model: ResearchForecastModel, life: ResearchLifeScenarioModel, shell: NativeShellModel) {
+    public init(model: ResearchForecastModel, shell: NativeShellModel) {
         self.model = model
-        self.life = life
         self.shell = shell
     }
     private var strings: any Localizing { shell.strings }
@@ -92,7 +90,6 @@ public struct ResearchForecastView: View {
                         }
                     }
                 }
-                ResearchLifeScenarioPanel(model: life, shell: shell)
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .onGeometryChange(for: CGFloat.self) {
@@ -100,7 +97,6 @@ public struct ResearchForecastView: View {
         } action: {
             width = $0
         }
-        .overlay(alignment: .bottom) { ResearchLifeScenarioUndoToast(model: life, shell: shell) }
     }
     private var controls: some View {
         ResearchCard {
@@ -235,12 +231,13 @@ public struct ResearchForecastView: View {
                 loading: model.isFetching && forecast == nil)
             ResearchForecastStat(
                 title: strings.t(
-                    forecast?.targetValue != nil
+                    forecast?.hasTarget == true
                         ? "research.forecast.probTarget" : "research.forecast.probBelowInvested"),
                 value: ResearchForecastDisplay.percent(
-                    forecast?.targetValue != nil ? forecast?.probTarget : forecast?.probBelowInvested, shell: shell),
+                    forecast?.hasTarget == true ? forecast?.probTarget : forecast?.probBelowInvested, shell: shell),
                 subtitle: ResearchForecastDisplay.money(
-                    forecast?.targetValue ?? forecast?.netInvested, currency: currency, shell: shell),
+                    forecast?.hasTarget == true ? forecast?.targetValue : forecast?.netInvested, currency: currency,
+                    shell: shell),
                 symbol: "target", loading: model.isFetching && forecast == nil)
         }
     }

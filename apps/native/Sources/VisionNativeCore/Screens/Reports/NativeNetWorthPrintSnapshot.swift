@@ -93,7 +93,7 @@ public struct NativeNetWorthPrintSnapshot: Sendable {
                 id: $0.id, accountId: $0.accountId, label: $0.label, type: $0.type,
                 cash: $0.cash, holdings: $0.holdings, total: $0.total)
         }
-        let total = accounts?.reduce(Decimal.zero) { $0 + $1.total }
+        let total = model.accountRows == nil ? nil : model.accountsTotal
         let keys =
             ["liquid", "investments"]
             + (display.contains { abs($0.liabilities) > Decimal(string: "0.005")! } ? ["liabilities"] : [])

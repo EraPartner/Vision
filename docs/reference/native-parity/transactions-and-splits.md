@@ -2,8 +2,8 @@
 title: "Native parity inventory: Transactions, splits and Who owes you"
 type: reference
 status: active
-date: 2026-10-17
-updated: 2026-10-17
+date: 2026-10-25
+updated: 2026-10-25
 tags:
   [
     reference,
@@ -281,8 +281,8 @@ Fields: hidden file input, `accept="image/*,application/pdf"`, one file per pick
 | --- | ------ | ----------------------------------------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 1   | Header | `txPage.uploadAttachment` "Upload" button (spinner while uploading)                             | click       | Opens the file picker                                                                                                                                                                                                       | `apps/frontend/src/components/shared/AttachmentPanel.tsx:181`                                                                | native |
 | 2   | Header | File input                                                                                      | file chosen | Uploads the file, then refreshes the list                                                                                                                                                                                   | `apps/frontend/src/components/shared/AttachmentPanel.tsx:198`, `apps/frontend/src/components/shared/AttachmentPanel.tsx:153` | native |
-| 3   | Row    | File name link                                                                                  | click       | Opens the download URL in a new tab                                                                                                                                                                                         | `apps/frontend/src/components/shared/AttachmentPanel.tsx:63`                                                                 | native |
-| 4   | Row    | Image thumbnail link (images only)                                                              | click       | Opens the image in a new tab                                                                                                                                                                                                | `apps/frontend/src/components/shared/AttachmentPanel.tsx:80`                                                                 | native |
+| 3   | Row    | File name button (aria `aria.downloadAttachment` "Download attachment {name}"; a spinner replaces the download icon while the bytes load) | click | Fetches the bytes and saves them (the desktop app denies new windows). On failure: toast `txPage.downloadAttachmentError` "Could not download attachment" with the API error | `apps/frontend/src/components/shared/AttachmentPanel.tsx:66`                                                                 | native |
+| 4   | Row    | Image thumbnail (images only; decorative, not focusable) | click | Same download as row 3 | `apps/frontend/src/components/shared/AttachmentPanel.tsx:114`                                                                 | native |
 | 5   | Row    | Delete button (aria `aria.deleteAttachment` "Delete attachment {name}", visible on hover/focus) | click       | Confirm `txPage.deleteAttachment` "Delete attachment" / `txPage.deleteAttachment.desc` "Delete "{name}"? This cannot be undone." with `common.delete` "Delete"; then deletes; failure toasts `txPage.deleteAttachmentError` | `apps/frontend/src/components/shared/AttachmentPanel.tsx:95`, `apps/frontend/src/components/shared/AttachmentPanel.tsx:161`  | native |
 
 #### Dialog: Quick Look (`TransactionQuickLook`)
@@ -444,7 +444,7 @@ Component: `apps/frontend/src/pages/OwesPage.tsx`. Feature doc: [[docs/features/
 - Page header: `owesPage.title` "Who owes you", subtitle `owesPage.subtitle` "Track shared expenses and payments" — `apps/frontend/src/pages/OwesPage.tsx:80`.
 - Loading skeleton (summary block + 3 rows) — `apps/frontend/src/pages/OwesPage.tsx:39`.
 - Error banner `common.loadFailedRetry` "Could not load this information. Try again." with retry — `apps/frontend/src/pages/OwesPage.tsx:86`.
-- Total card (only when the total > 0): `owesPage.totalOutstanding` "Total outstanding", `owesPage.fromPerson` / `owesPage.fromPeople` "from {n} people", large total in the app default currency — `apps/frontend/src/pages/OwesPage.tsx:92`.
+- Total card (only when the total > 0): `owesPage.totalOutstanding` "Total outstanding", `owesPage.fromPerson` / `owesPage.fromPeople` "from {n} people", large total in the app default currency (server total; `owesPage.fxUnavailable` notes recipients left out for want of a rate) — `apps/frontend/src/pages/OwesPage.tsx:92`.
 - Empty state: `owesPage.noDebts` "No outstanding debts" / `owesPage.splitToTrack` "Split a transaction to start tracking who owes you" — `apps/frontend/src/pages/OwesPage.tsx:121`.
 - Person list: name; `owesPage.split` / `owesPage.splits` "{n} splits" · `owesPage.paid` "Paid: {amount}" · `owesPage.totalLabel` "Total: {amount}"; repayment progress bar (aria `owesPage.repaymentProgress` "Repayment progress for {recipient}", hidden below sm); remaining amount; chevron — `apps/frontend/src/pages/OwesPage.tsx:128`.
 - Data: `GET /api/splits/owed` — `apps/frontend/src/lib/api/splits.ts:93`.

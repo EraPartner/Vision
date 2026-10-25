@@ -274,38 +274,6 @@ actor StaticDatabaseService: DatabaseAdminService {
     }
 }
 
-/// An audit history with one verified, partly anchored page.
-@MainActor
-final class StaticAuditHistory: AuditHistoryService {
-    static func entry(_ sequence: Int, anchored: Bool) -> JSONValue {
-        let hash = String(repeating: String(sequence % 10), count: 64)
-        return .object([
-            "sequence": .int(sequence), "previousHash": .string(hash), "hash": .string(hash), "version": .int(1),
-            "payload": .object(["stream": .string("transactions"), "event": .string("update")]),
-            "createdAt": .string("2026-01-01T00:00:00.000Z"),
-            "anchorStatus": .string(anchored ? "anchored" : "pending_anchor"),
-        ])
-    }
-
-    func read(_ range: AuditViewer.ReadRange) async -> JSONValue {
-        .object([
-            "success": .bool(true),
-            "verification": .object([
-                "status": .string("partially_verified"), "sequence": .int(2),
-                "hash": .string(String(repeating: "2", count: 64)), "anchoredThrough": .int(1),
-            ]),
-            "entries": .array([Self.entry(1, anchored: true), Self.entry(2, anchored: false)]),
-            "hasMore": .bool(false),
-        ])
-    }
-
-    func enroll() async -> JSONValue { .object(["success": .bool(false), "cancelled": .bool(true)]) }
-    func exportSnapshot() async -> JSONValue { .object(["success": .bool(false), "cancelled": .bool(true)]) }
-    func exportTransfer(password: String) async -> JSONValue { .object(["success": .bool(true)]) }
-    func importTransfer(password: String) async -> JSONValue { .object(["success": .bool(true)]) }
-    func rotateKey() async -> JSONValue { .object(["success": .bool(true)]) }
-}
-
 /// A planned-payments service with fixed rows; `failing` fails the list.
 actor StaticPlannedService: PlannedPaymentsService {
     let rows: [OpenAPI.PlannedTransaction]
@@ -652,19 +620,29 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
             skippedMissing: 0, items: [])
     }
 
-    func owedSummary() async throws -> [OpenAPI.SplitOwed] {
+    func owedSummary(currency: String) async throws -> OwedSummaryPage {
         if failing { throw APIError.network("The network connection was lost.") }
-        guard !owedSplits.isEmpty else { return [] }
+        let totals = OpenAPI.OwedTotals(
+            currency: currency, remaining: owedSplits.reduce(Decimal(0)) { sum, split in sum + split.remaining },
+            unconvertedCount: 0, unconvertedCurrencies: [])
+        guard !owedSplits.isEmpty else { return OwedSummaryPage(items: [], summary: totals) }
         let total = owedSplits.reduce(Decimal(0)) { sum, split in sum + split.amount }
         let paid = owedSplits.reduce(Decimal(0)) { sum, split in sum + split.amountPaid }
-        return [
-            OpenAPI.SplitOwed(
-                recipientId: 4, recipientName: "Anna", totalOwed: total, totalPaid: paid, remaining: total - paid,
-                splitCount: owedSplits.count)
-        ]
+        return OwedSummaryPage(
+            items: [
+                OpenAPI.SplitOwed(
+                    recipientId: 4, recipientName: "Anna", totalOwed: total, totalPaid: paid, remaining: total - paid,
+                    splitCount: owedSplits.count, unconvertedCount: 0, unconvertedCurrencies: [])
+            ], summary: totals)
     }
 
-    func owed(recipientId: Int) async throws -> [OpenAPI.SplitOwedDetail] { owedSplits }
+    func owed(recipientId: Int, currency: String) async throws -> OwedDetailPage {
+        OwedDetailPage(
+            items: owedSplits,
+            summary: OpenAPI.OwedTotals(
+                currency: currency, remaining: owedSplits.reduce(Decimal(0)) { sum, split in sum + split.remaining },
+                unconvertedCount: 0, unconvertedCurrencies: []))
+    }
 
     func exportOwedCsv(recipientId: Int) async throws -> Data { Data("date,amount\n".utf8) }
 
@@ -721,11 +699,23 @@ actor StaticAccountsService: AccountsService {
         return active == "true" ? rows.filter(\.isActive) : rows
     }
 
-    func portfolioAccountRows(currency: String) async throws -> [PortfolioAccountRow] {
-        [
-            PortfolioAccountRow(
-                accountId: 2, contributionKind: "position", oversold: false, currentValue: 4200, gainLoss: 310)
-        ]
+    func portfolioAccountRows(currency: String) async throws -> AccountPortfolioSummary {
+        AccountPortfolioSummary(
+            byAccount: [PortfolioAccountRow(accountId: 2, contributionKind: "position", currentValue: 4200)],
+            accountTotals: [PortfolioAccountTotalsRow(accountId: 2, oversold: false, gainLoss: 310)])
+    }
+
+    func accountTotals(currency: String) async throws -> OpenAPI.AccountTotals {
+        func group(_ total: Decimal) -> OpenAPI.AccountGroupTotal {
+            OpenAPI.AccountGroupTotal(
+                total: total, cash: total, holdings: 0, holdingsUnavailable: false, unconvertedCount: 0,
+                unconvertedCurrencies: [])
+        }
+        return OpenAPI.AccountTotals(
+            currency: currency,
+            netCash: .init(total: Decimal(string: "1234.56")!, unconvertedCount: 0, unconvertedCurrencies: []),
+            groups: .init(cash: group(Decimal(string: "1234.56")!), portfolio: group(4200), liabilities: group(0), archived: group(0)),
+            accounts: [])
     }
 
     func ledger(accountId: Int, offset: Int, limit: Int) async throws -> AccountLedgerPage {
@@ -771,7 +761,7 @@ actor StaticAccountsService: AccountsService {
     }
 
     func retagLots(_ request: LotRetagRequest) async throws -> LotRetagReceipt {
-        LotRetagReceipt(receiptId: 1, changedCount: request.transactionIds.count)
+        LotRetagReceipt(movedCount: request.transactionIds.count)
     }
 }
 
@@ -785,8 +775,7 @@ actor StaticAccountsService: AccountsService {
                 currency: "USD", rateToEur: Decimal(string: "1.0842")!, rateDate: "2026-10-09",
                 fetchedAt: "2026-10-09T15:05:00.000Z")
         ],
-        fallbackRates: ["EUR": 1, "USD": Decimal(string: "0.92")!], source: "database", isStale: false,
-        lastFetchedAt: nil)
+        source: "database", isStale: false, lastFetchedAt: nil)
 
     func makeShell(
         language: NativeLanguage, appearance: ThemeAppearance, failing: Bool = false,
@@ -806,8 +795,7 @@ actor StaticAccountsService: AccountsService {
             notices: NativeNoticeCenter(now: { StaticPlannedService.today }, automaticExpiry: false),
             exchangeRates: rates,
             admin: AdminScreens.make(
-                service: StaticAdminService(failing: failing), database: database,
-                token: AdminTokenAccess(read: { "token" }, write: { _ in true }), audit: StaticAuditHistory()),
+                service: StaticAdminService(failing: failing), database: database),
             planned: PlannedPaymentsModel(
                 service: planned, editing: planned, pickers: planned, rates: rates, dismissals: .memory(),
                 now: { StaticPlannedService.today }),
@@ -816,8 +804,7 @@ actor StaticAccountsService: AccountsService {
                 service: transactions, attachments: transactions, pickers: planned, bulk: splits, splits: splits),
             accounts: AccountsModel(service: accounts, rates: rates),
             categories: CategoriesModel(service: categories), recipients: RecipientsModel(service: recipients),
-            loadSettings: { NativeAppSettings(adminMode: adminMode) },
-            onNavigate: { _ in })
+            loadSettings: { NativeAppSettings(adminMode: adminMode) })
     }
 
     func layOut<Content: View>(_ view: Content) -> NSHostingView<Content> {
@@ -849,12 +836,10 @@ actor StaticAccountsService: AccountsService {
         #expect(layOut(AdminOverviewView(model: admin.overview, shell: shell).environment(\.visionTheme, theme)).fittingSize.width > 0)
         #expect(layOut(ProviderHealthView(model: admin.providers, shell: shell).environment(\.visionTheme, theme)).fittingSize.width > 0)
         #expect(layOut(EndpointLivenessView(model: admin.endpoints, shell: shell).environment(\.visionTheme, theme)).fittingSize.width > 0)
-        // Loaded, with an expanded error row, a filter and an audit page.
+        // Loaded, with an expanded error row and a filter.
         await admin.overview.appear()
         await admin.providers.appear()
         await admin.endpoints.appear()
-        #expect(admin.overview.audit.page?.entries.count == 2)
-        #expect(admin.overview.hasToken)
         admin.providers.toggleExpanded("ecb")
         admin.endpoints.filter = "delete"
         #expect(layOut(AdminOverviewView(model: admin.overview, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
@@ -932,7 +917,7 @@ actor StaticAccountsService: AccountsService {
             language: language, appearance: appearance, planned: StaticPlannedService(rows: StaticPlannedService.sample))
         let model = shell.planned
         // The view's own load reads `show_all` from the route, so the route and the test agree.
-        shell.routeDidChange(try #require(NativeRoute("/planned?show_all=true")))
+        shell.show(try #require(NativeRoute("/planned?show_all=true")))
         // Loading.
         #expect(model.isLoading)
         #expect(layOutPlanned(shell).fittingSize.width > 0)
@@ -941,8 +926,9 @@ actor StaticAccountsService: AccountsService {
         #expect(model.payments.count == 4)
         #expect(model.tablePayments.count == 4)
         #expect(model.strip.dueCount == 2)
-        #expect(model.strip.windowTotal.unavailableCount == 0)
-        #expect(model.estimatedMonthly.unavailableCount == 0)
+        // The static service has no server totals: the figures stay skeletons.
+        #expect(model.windowTotal == nil)
+        #expect(model.estimatedMonthly == nil)
         #expect(layOutPlanned(shell).fittingSize.height > 0)
         // Sorted and filtered, then filtered to nothing.
         model.table.toggleSort(PlannedColumn.amount.rawValue)
@@ -991,7 +977,7 @@ actor StaticAccountsService: AccountsService {
             language: language, appearance: appearance, planned: StaticPlannedService(rows: StaticPlannedService.sample))
         let model = shell.planned
         let theme = VisionTheme(selection: shell.theme)
-        shell.routeDidChange(try #require(NativeRoute("/planned")))
+        shell.show(try #require(NativeRoute("/planned")))
         await model.appear(showAll: false, defaultCurrency: "EUR")
         // The recurring panel before its answer: hidden until the dismissals are known, like the web.
         #expect(model.recurring.display == .hidden)
@@ -1071,7 +1057,7 @@ actor StaticAccountsService: AccountsService {
         let shell = makeShell(language: language, appearance: appearance)
         let theme = VisionTheme(selection: shell.theme)
         let model = shell.transactions
-        shell.routeDidChange(try #require(NativeRoute("/transactions")))
+        shell.show(try #require(NativeRoute("/transactions")))
         await shell.settingsSettled()
         // Loading, then loaded with the excluded row hidden.
         #expect(model.isLoading)
@@ -1111,19 +1097,19 @@ actor StaticAccountsService: AccountsService {
         #expect(layOut(TransactionAddSheet(model: model, form: form, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
         model.dismissAdd()
         // A payee filter with its banner.
-        shell.routeDidChange(try #require(NativeRoute("/transactions?recipient_id=1&uncategorised=true")))
+        shell.show(try #require(NativeRoute("/transactions?recipient_id=1&uncategorised=true")))
         await model.sync()
         #expect(model.bannerRecipient == .found("Landlord"))
         #expect(layOutTransactions(shell).fittingSize.height > 0)
         // The empty and error states.
         let empty = makeShell(language: language, appearance: appearance, transactions: StaticTransactionsService(rows: []))
-        empty.routeDidChange(try #require(NativeRoute("/transactions")))
+        empty.show(try #require(NativeRoute("/transactions")))
         await empty.settingsSettled()
         await empty.transactions.sync()
         #expect(empty.transactions.emptyState == .noTransactions)
         #expect(layOutTransactions(empty).fittingSize.height > 0)
         let failing = makeShell(language: language, appearance: appearance, transactions: StaticTransactionsService(failing: true))
-        failing.routeDidChange(try #require(NativeRoute("/transactions")))
+        failing.show(try #require(NativeRoute("/transactions")))
         await failing.settingsSettled()
         await failing.transactions.sync()
         #expect(failing.transactions.error != nil)
@@ -1137,7 +1123,7 @@ actor StaticAccountsService: AccountsService {
         let shell = makeShell(language: language, appearance: appearance)
         let theme = VisionTheme(selection: shell.theme)
         let model = shell.transactions
-        shell.routeDidChange(try #require(NativeRoute("/transactions")))
+        shell.show(try #require(NativeRoute("/transactions")))
         await shell.settingsSettled()
         await model.sync()
         let rows = try #require(model.rows)
@@ -1183,7 +1169,7 @@ actor StaticAccountsService: AccountsService {
         let shell = makeShell(language: language, appearance: appearance)
         let theme = VisionTheme(selection: shell.theme)
         let model = shell.owes
-        shell.routeDidChange(try #require(NativeRoute("/owes")))
+        shell.show(try #require(NativeRoute("/owes")))
         await shell.settingsSettled()
         // Each host stays alive until the end: a released host can fire `.onDisappear`,
         // whose `model.disappear()` would drop the person detail between the awaits and the
@@ -1220,13 +1206,13 @@ actor StaticAccountsService: AccountsService {
         model.disappear()
         // Nobody owes you, and the error card.
         let empty = makeShell(language: language, appearance: appearance, splits: StaticSplitsService(owed: []))
-        empty.routeDidChange(try #require(NativeRoute("/owes")))
+        empty.show(try #require(NativeRoute("/owes")))
         await empty.settingsSettled()
         await empty.owes.appear()
         #expect(empty.owes.summary?.isEmpty == true)
         #expect(layOutOwes(empty).fittingSize.height > 0)
         let failing = makeShell(language: language, appearance: appearance, splits: StaticSplitsService(failing: true))
-        failing.routeDidChange(try #require(NativeRoute("/owes")))
+        failing.show(try #require(NativeRoute("/owes")))
         await failing.settingsSettled()
         await failing.owes.appear()
         #expect(failing.owes.summaryError != nil)
@@ -1235,8 +1221,8 @@ actor StaticAccountsService: AccountsService {
 
     @Test func theShellShowsTheOwesScreen() async throws {
         let shell = makeShell(language: .en, appearance: .light, adminMode: false)
-        let host = layOut(ShellRootView(model: shell) { hidden in Color.clear.accessibilityHidden(hidden) })
-        shell.routeDidChange(try #require(NativeRoute("/owes")))
+        let host = layOut(ShellRootView(model: shell))
+        shell.show(try #require(NativeRoute("/owes")))
         await shell.settingsSettled()
         #expect(shell.detail == .native(.owes))
         host.layoutSubtreeIfNeeded()
@@ -1245,8 +1231,8 @@ actor StaticAccountsService: AccountsService {
 
     @Test func theShellShowsTheTransactionsScreen() async throws {
         let shell = makeShell(language: .nl, appearance: .dark, adminMode: false)
-        let host = layOut(ShellRootView(model: shell) { hidden in Color.clear.accessibilityHidden(hidden) })
-        shell.routeDidChange(try #require(NativeRoute("/transactions")))
+        let host = layOut(ShellRootView(model: shell))
+        shell.show(try #require(NativeRoute("/transactions")))
         await shell.settingsSettled()
         #expect(shell.detail == .native(.transactions))
         host.layoutSubtreeIfNeeded()
@@ -1257,8 +1243,8 @@ actor StaticAccountsService: AccountsService {
         let shell = makeShell(
             language: .en, appearance: .light, planned: StaticPlannedService(rows: StaticPlannedService.sample),
             adminMode: false)
-        let host = layOut(ShellRootView(model: shell) { hidden in Color.clear.accessibilityHidden(hidden) })
-        shell.routeDidChange(try #require(NativeRoute("/planned?show_all=true")))
+        let host = layOut(ShellRootView(model: shell))
+        shell.show(try #require(NativeRoute("/planned?show_all=true")))
         await shell.settingsSettled()
         #expect(shell.detail == .native(.plannedPayments))
         host.layoutSubtreeIfNeeded()
@@ -1267,12 +1253,12 @@ actor StaticAccountsService: AccountsService {
 
     @Test func theShellShowsTheDatabaseScreensForTheirRoutes() async throws {
         let shell = makeShell(language: .nl, appearance: .dark)
-        let host = layOut(ShellRootView(model: shell) { hidden in Color.clear.accessibilityHidden(hidden) })
-        shell.routeDidChange(try #require(NativeRoute("/admin/db")))
+        let host = layOut(ShellRootView(model: shell))
+        shell.show(try #require(NativeRoute("/admin/db")))
         await shell.settingsSettled()
         #expect(shell.detail == .native(.databaseMaintenance))
         host.layoutSubtreeIfNeeded()
-        shell.routeDidChange(try #require(NativeRoute("/admin/db/categories")))
+        shell.show(try #require(NativeRoute("/admin/db/categories")))
         #expect(shell.detail == .native(.tableEditor(table: "categories")))
         #expect(shell.admin.database.editor?.table == "categories")
         host.layoutSubtreeIfNeeded()
@@ -1283,20 +1269,17 @@ actor StaticAccountsService: AccountsService {
         let shell = makeShell(language: .nl, appearance: .dark, failing: true)
         let theme = VisionTheme(selection: shell.theme)
         await shell.admin.providers.appear()
-        #expect(shell.admin.providers.errorState(strings: shell.strings) == .authentication)
+        #expect(shell.admin.providers.errorState(strings: shell.strings) != nil)
         #expect(layOut(ProviderHealthView(model: shell.admin.providers, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
         await shell.admin.overview.appear()
         #expect(layOut(AdminOverviewView(model: shell.admin.overview, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
     }
 
-    @Test func theShellHostsTheWebContentAndTheNativeScreen() async throws {
+    @Test func theShellHostsTheNativeScreen() async throws {
         let shell = makeShell(language: .nl, appearance: .light)
-        let root = ShellRootView(model: shell) { hidden in
-            Color.clear.accessibilityHidden(hidden)
-        }
-        let host = layOut(root)
+        let host = layOut(ShellRootView(model: shell))
         #expect(host.fittingSize.width > 0)
-        shell.routeDidChange(try #require(NativeRoute("/admin/exchange-rates")))
+        shell.show(try #require(NativeRoute("/admin/exchange-rates")))
         await shell.settingsSettled()
         #expect(shell.detail == .native(.exchangeRates))
         host.layoutSubtreeIfNeeded()
@@ -1330,7 +1313,7 @@ actor StaticAccountsService: AccountsService {
     func theImportScreenLaysOutInEveryState(_ language: NativeLanguage, _ appearance: ThemeAppearance) async throws {
         let shell = makeShell(language: language, appearance: appearance)
         let model = shell.imports
-        shell.routeDidChange(try #require(NativeRoute("/import")))
+        shell.show(try #require(NativeRoute("/import")))
         // Idle, before the lists answer.
         #expect(model.isHistoryLoading)
         #expect(layOutImports(shell).fittingSize.width > 0)
@@ -1436,7 +1419,7 @@ actor StaticAccountsService: AccountsService {
     {
         let shell = makeShell(language: language, appearance: appearance)
         let model = shell.imports
-        shell.routeDidChange(try #require(NativeRoute("/import")))
+        shell.show(try #require(NativeRoute("/import")))
         await model.appear(strings: shell.strings)
         // The export card with its filters open and some picked, then exporting.
         await model.export.toggleFilters()
@@ -1484,7 +1467,7 @@ actor StaticAccountsService: AccountsService {
     {
         let shell = makeShell(language: language, appearance: appearance)
         let review = shell.imports.review
-        shell.routeDidChange(try #require(NativeRoute("/import/13/review")))
+        shell.show(try #require(NativeRoute("/import/13/review")))
         // Loading.
         #expect(review.isLoading)
         #expect(layOutReview(shell).fittingSize.width > 0)
@@ -1529,7 +1512,7 @@ actor StaticAccountsService: AccountsService {
     func theAccountsHubLaysOutInEveryState(_ language: NativeLanguage, _ appearance: ThemeAppearance) async throws {
         let shell = makeShell(language: language, appearance: appearance)
         let model = shell.accounts
-        shell.routeDidChange(try #require(NativeRoute("/accounts")))
+        shell.show(try #require(NativeRoute("/accounts")))
         await shell.settingsSettled()
         // Each host stays alive until the end, so no `.onDisappear` resets the model early.
         var hosts: [NSView] = []
@@ -1557,7 +1540,7 @@ actor StaticAccountsService: AccountsService {
         model.cancelDelete()
         // No accounts yet, and the error card with Retry.
         let empty = makeShell(language: language, appearance: appearance, accounts: StaticAccountsService(rows: []))
-        empty.routeDidChange(try #require(NativeRoute("/accounts")))
+        empty.show(try #require(NativeRoute("/accounts")))
         await empty.settingsSettled()
         await empty.accounts.appear(.hub)
         #expect(empty.accounts.accounts?.isEmpty == true)
@@ -1565,7 +1548,7 @@ actor StaticAccountsService: AccountsService {
         hosts.append(emptyHost)
         #expect(emptyHost.fittingSize.height > 0)
         let failing = makeShell(language: language, appearance: appearance, accounts: StaticAccountsService(failing: true))
-        failing.routeDidChange(try #require(NativeRoute("/accounts")))
+        failing.show(try #require(NativeRoute("/accounts")))
         await failing.settingsSettled()
         await failing.accounts.appear(.hub)
         #expect(failing.accounts.accountsError != nil)
@@ -1580,7 +1563,7 @@ actor StaticAccountsService: AccountsService {
     {
         let shell = makeShell(language: language, appearance: appearance)
         let model = shell.accounts
-        shell.routeDidChange(try #require(NativeRoute("/accounts/1?since=2026-10-01")))
+        shell.show(try #require(NativeRoute("/accounts/1?since=2026-10-01")))
         await shell.settingsSettled()
         #expect(shell.detail == .native(.accountDetail(id: 1)))
         var hosts: [NSView] = []
@@ -1599,13 +1582,13 @@ actor StaticAccountsService: AccountsService {
         hosts.append(detailHost)
         #expect(detailHost.fittingSize.height > 0)
         // A brokerage account, and an id that does not exist.
-        shell.routeDidChange(try #require(NativeRoute("/accounts/2")))
+        shell.show(try #require(NativeRoute("/accounts/2")))
         await model.appear(.detail(2))
         #expect(model.detailState(2) == .loaded(StaticAccountsService.sample[1]))
         let brokerHost = layOutAccount(shell, 2)
         hosts.append(brokerHost)
         #expect(brokerHost.fittingSize.height > 0)
-        shell.routeDidChange(try #require(NativeRoute("/accounts/99")))
+        shell.show(try #require(NativeRoute("/accounts/99")))
         await model.appear(.detail(99))
         #expect(model.detailState(99) == .notFound)
         let missingHost = layOutAccount(shell, 99)
@@ -1618,7 +1601,7 @@ actor StaticAccountsService: AccountsService {
         let shell = makeShell(language: language, appearance: appearance)
         let theme = VisionTheme(selection: shell.theme)
         let model = shell.accounts
-        shell.routeDidChange(try #require(NativeRoute("/accounts")))
+        shell.show(try #require(NativeRoute("/accounts")))
         await shell.settingsSettled()
         await model.appear(.hub)
         let checking = try #require(model.account(1))
@@ -1669,12 +1652,12 @@ actor StaticAccountsService: AccountsService {
 
     @Test func theShellShowsTheAccountsScreens() async throws {
         let shell = makeShell(language: .nl, appearance: .dark, adminMode: false)
-        let host = layOut(ShellRootView(model: shell) { hidden in Color.clear.accessibilityHidden(hidden) })
-        shell.routeDidChange(try #require(NativeRoute("/accounts")))
+        let host = layOut(ShellRootView(model: shell))
+        shell.show(try #require(NativeRoute("/accounts")))
         await shell.settingsSettled()
         #expect(shell.detail == .native(.accounts))
         host.layoutSubtreeIfNeeded()
-        shell.routeDidChange(try #require(NativeRoute("/accounts/1")))
+        shell.show(try #require(NativeRoute("/accounts/1")))
         #expect(shell.detail == .native(.accountDetail(id: 1)))
         host.layoutSubtreeIfNeeded()
         #expect(!host.subviews.isEmpty)

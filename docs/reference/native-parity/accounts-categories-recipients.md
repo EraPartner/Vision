@@ -2,8 +2,8 @@
 title: "Native parity inventory: Accounts, categories, payees and tags"
 type: reference
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-25
+updated: 2026-10-25
 tags:
   [
     reference,
@@ -39,7 +39,7 @@ Component: `apps/frontend/src/pages/AccountsPage.tsx`. Feature doc: [[docs/featu
 - Error state using `PageError` with the API error message. Source: `apps/frontend/src/pages/AccountsPage.tsx:464`.
 - Empty state: `accounts.emptyTitle` ("No accounts yet") and `accounts.emptyDescription`. Source: `apps/frontend/src/pages/AccountsPage.tsx:471`.
 - Account groups in a fixed order: `accounts.group.cash` ("Cash & savings": checking, savings, pension), `accounts.group.portfolio` ("Portfolio accounts": brokerage, crypto exchange, wallet), and `accounts.group.liabilities` ("Liabilities"). Empty groups are omitted. Rows are sorted by display label with a locale-aware, numeric collator, with the account id as the tie-breaker. Sources: `apps/frontend/src/features/accounts/groupAccounts.ts:48`, `apps/frontend/src/features/accounts/groupAccounts.ts:67`, `apps/frontend/src/pages/AccountsPage.tsx:482`.
-- Group header subtotal: `accounts.group.subtotal` ("Subtotal") plus the cash balances converted to the display currency and any portfolio holdings value. It shows `accounts.group.subtotalPending` ("calculating…") while the portfolio summary loads, `accounts.group.subtotalUnavailable` ("unavailable") if that summary fails, and `accounts.group.subtotalIncomplete` ("(incomplete)") when a balance is incomplete. Source: `apps/frontend/src/pages/AccountsPage.tsx:385`.
+- Group header subtotal: `accounts.group.subtotal` ("Subtotal") from `GET /api/accounts/totals` (`groups[].total`: cash converted at the stored rates plus the holdings value, both summed on the server). It shows `accounts.group.subtotalPending` ("calculating…") while the totals load, `accounts.group.subtotalUnavailable` ("unavailable") if they fail or the server reports `holdings_unavailable`, and `accounts.group.subtotalIncomplete` ("(incomplete)") when `unconverted_count` is above zero. Source: `apps/frontend/src/pages/AccountsPage.tsx`.
 - Each account row shows:
   - A leading icon for the account type. Source: `apps/frontend/src/pages/AccountsPage.tsx:63`.
   - The display name, falling back to the name.
@@ -53,7 +53,7 @@ Component: `apps/frontend/src/pages/AccountsPage.tsx`. Feature doc: [[docs/featu
   - Cash-type accounts show the computed balance. Source: `apps/frontend/src/pages/AccountsPage.tsx:302`.
   - Portfolio-type accounts show the holdings value with `accounts.portfolio.holdings` ("Holdings value"), plus `accounts.portfolio.pnl` ("Broker P&L") as a signed amount in the gain or loss color. Without a position they show `accounts.portfolio.noAssignedHoldings` ("No assigned holdings"), or `accounts.trackedInPortfolio` ("Tracked in Portfolio") when no metrics are available. Source: `apps/frontend/src/pages/AccountsPage.tsx:263`.
   - Rows end in a disclosure chevron.
-- Net cash card: `accounts.netCash` ("Net cash") with `accounts.netCashHint`, and the warning `accounts.totalIncomplete` when it applies. The total sums the active, in-net-worth, non-portfolio accounts in the display currency. Sources: `apps/frontend/src/pages/AccountsPage.tsx:501`, `apps/frontend/src/features/accounts/groupAccounts.ts:117`.
+- Net cash card: `accounts.netCash` ("Net cash") with `accounts.netCashHint`, and the warning `accounts.totalIncomplete` when it applies. The total is `net_cash` of `GET /api/accounts/totals`, computed on the server over the active, in-net-worth, non-portfolio accounts in the display currency; the card shows a skeleton while it loads and the warning when `net_cash.unconverted_count` is above zero. Source: `apps/frontend/src/pages/AccountsPage.tsx`.
 - Archived group: collapsed by default, with a header showing the count and a subtotal. Source: `apps/frontend/src/pages/AccountsPage.tsx:530`.
 
 **URL state:** none. `AccountsPage` reads no query parameters, so the retired `/accounts?account=<id>` form opens the hub.
@@ -595,7 +595,7 @@ Source: `apps/frontend/src/components/shared/TagFilterCombobox.tsx`. A read-only
 - **Row menus:** every ••• menu uses the shared `RowMenu` (`apps/frontend/src/components/shared/RowMenu.tsx:61`). Its trigger's accessible name is the localized `label`.
 - **Confirmation alerts:** the account, category, payee and pattern deletes use `useConfirmDialog`. When no label is passed it falls back to `common.confirm` for the title and the confirm button, and to `common.cancel` for the cancel button (`apps/frontend/src/hooks/useConfirmDialog.tsx:83`).
 - **Undo toasts:** category and payee status flips use `undoToast` with a time-to-live (`apps/frontend/src/lib/undoToast.ts:28`).
-- **Amounts:** account amounts render with `Money` or `useCurrencyFormatter` in the account's native currency. Hub subtotals and Net cash convert into `appSettings.defaultCurrency` (EUR fallback) through `useCurrencyConverter`. A missing exchange rate marks the total incomplete; the amount is never treated as 1:1.
+- **Amounts:** account amounts render with `Money` or `useCurrencyFormatter` in the account's native currency. Hub subtotals and Net cash are server totals in `appSettings.defaultCurrency` (`GET /api/accounts/totals`, fresh for two minutes). A currency without a stored rate is left out, counted and marks the total incomplete; the amount is never treated as 1:1. The broker Holdings value and Broker P&L come from the portfolio summary's `accountTotals` row for the account.
 - **Hub dependency:** the Accounts hub and the detail page both depend on the portfolio summary (`getPortfolioSummary({currency})`) for broker holdings and P&L, through `getBrokerAccountMetrics`.
 - **Backend endpoints used in this scope:**
   - `GET/POST /api/accounts`

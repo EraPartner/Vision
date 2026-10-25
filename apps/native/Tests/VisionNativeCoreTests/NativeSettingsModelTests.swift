@@ -28,7 +28,7 @@ struct NativeSettingsModelTests {
         let model = settingsModel(transport)
         await model.load()
         #expect(model.isLoaded && !model.isSaving && model.loadError == nil)
-        #expect(model.appValue("aiAnswerDepth") == nil && model.appValue("openAiDefaultModel") == nil)
+        #expect(model.appValue("aiAnswerDepth") == nil)
         #expect(model.appString("defaultCurrency", fallback: "bad") == "EUR")
         #expect(model.dashboardRaw == NativeSettingsDefaults.dashboard && model.themeRaw == nil)
         await model.flush()
@@ -42,7 +42,7 @@ struct NativeSettingsModelTests {
     @Test func editableMigrationRepairsKnownFieldsButKeepsRawCASAndOptionalAbsence() async throws {
         let raw: TaxValue = .object([
             "showDecimalPlaces": .number(-1), "analysisBenchmark": .string(" msft "),
-            "openAiDefaultModel": .null, "future": .bool(true),
+            "openAiDefaultModel": .string("legacy"), "future": .bool(true),
         ])
         let dashboard: TaxValue = .object([
             "excludedCategoryIds": .array([.string("invalid")]), "exclusionScope": .string("bad"), "future": .number(5),
@@ -244,6 +244,18 @@ struct NativeSettingsModelTests {
         #expect(model.sessionTierOverride == nil && model.effectiveVisualEffects == "standard")
         await model.flush()
         #expect(await transport.writes.count == 1)
+    }
+    @Test func fullEffectsIsAnObservablePersistedSettingThatDefaultsOff() async throws {
+        let transport = NativeSettingsFixture()
+        let model = settingsModel(transport)
+        await model.load()
+        #expect(!model.fullEffects)
+        model.setFullEffects(true)
+        #expect(model.fullEffects && model.appValue("fullEffects") == .bool(true))
+        await model.flush()
+        #expect(await transport.value("app_settings")?["fullEffects"] == .bool(true))
+        model.setFullEffects(false)
+        #expect(!model.fullEffects)
     }
     @Test func editsDuringForcedReadAreNotOverwrittenByEarlierSnapshot() async throws {
         let transport = NativeSettingsFixture(values: [

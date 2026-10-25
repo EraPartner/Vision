@@ -2,9 +2,8 @@ import Foundation
 
 public protocol NetWorthService: Sendable {
     func netWorth(currency: String, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse
-    func netWorthAccounts() async throws -> [OpenAPI.Account]
-    func netWorthPartitions(currency: String) async throws -> NetWorthPartitions
-    func netWorthRates() async throws -> OpenAPI.ExchangeRates
+    /// `useNetWorthByAccount(currency)`: the per-account breakdown, converted on the server.
+    func netWorthByAccount(currency: String) async throws -> OpenAPI.NetWorthByAccountResponse
     func netWorthPrices() async throws -> [NetWorthInvestmentPrice]
     func refreshNetWorthPrices() async throws -> PortfolioPriceRefresh
 }
@@ -13,16 +12,8 @@ extension APIClient: NetWorthService {
     public func netWorth(currency: String, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse {
         try await send(OpenAPIOperations.GetNetWorth(currency: currency, limit: limit, offset: offset))
     }
-    public func netWorthAccounts() async throws -> [OpenAPI.Account] {
-        try await send(OpenAPIOperations.GetAccounts(active: "all")).items
-    }
-    public func netWorthPartitions(currency: String) async throws -> NetWorthPartitions {
-        try await send(
-            InsightRequest<OpenAPIOperations.GetPortfolioSummary, NetWorthPartitions>(
-                OpenAPIOperations.GetPortfolioSummary(), query: [URLQueryItem(name: "currency", value: currency)]))
-    }
-    public func netWorthRates() async throws -> OpenAPI.ExchangeRates {
-        try await send(OpenAPIOperations.GetExchangeRates(dbOnly: true))
+    public func netWorthByAccount(currency: String) async throws -> OpenAPI.NetWorthByAccountResponse {
+        try await send(OpenAPIOperations.GetNetWorthByAccount(currency: currency))
     }
     public func netWorthPrices() async throws -> [NetWorthInvestmentPrice] {
         var rows: [NetWorthInvestmentPrice] = []

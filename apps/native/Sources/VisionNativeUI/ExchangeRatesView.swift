@@ -75,14 +75,14 @@ public struct ExchangeRatesView: View {
         case .loaded(let data):
             loadedView(
                 ExchangeRatesPresentation(
-                    data: data, tab: ExchangeRatesTab(route: shell.route), settings: shell.settings, strings: strings))
+                    data: data, settings: shell.settings, strings: strings))
         }
     }
 
     private var loadingView: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 16) {
-                ForEach(0..<3, id: \.self) { _ in
+                ForEach(0..<2, id: \.self) { _ in
                     card {
                         VStack(alignment: .leading, spacing: 10) {
                             placeholder(width: 112, height: 14)
@@ -137,15 +137,6 @@ public struct ExchangeRatesView: View {
                     summaryCard(summary)
                 }
             }
-            Picker(strings.t("exchangeRates.viewLabel"), selection: tabSelection) {
-                ForEach(ExchangeRatesTab.allCases, id: \.self) { tab in
-                    Label(strings.t(tab.titleKey), systemImage: tab.symbol).tag(tab)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .accessibilityLabel(strings.t("exchangeRates.viewLabel"))
             switch presentation.content {
             case .empty(let title, let message):
                 emptyState(title: title, message: message)
@@ -153,13 +144,6 @@ public struct ExchangeRatesView: View {
                 ratesTable(table, columns: presentation.columns)
             }
         }
-    }
-
-    /// `useTabParam`: the tab lives in `?tab`, written with `replace`.
-    private var tabSelection: Binding<ExchangeRatesTab> {
-        Binding(
-            get: { ExchangeRatesTab(route: shell.route) },
-            set: { shell.replaceQuery(ExchangeRatesTab.parameter, with: $0.rawValue) })
     }
 
     private func summaryCard(_ summary: ExchangeRatesPresentation.SummaryCard) -> some View {
@@ -236,13 +220,7 @@ public struct ExchangeRatesView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, table.note == nil ? 8 : 0)
-                if let note = table.note {
-                    Text(note)
-                        .font(.footnote)
-                        .foregroundStyle(theme.secondaryLabel)
-                        .padding(16)
-                }
+                .padding(.bottom, 8)
             }
         }
     }

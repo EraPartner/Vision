@@ -1053,10 +1053,7 @@ struct BrokerTransferSheet: View {
             AccountCallout(tint: theme.success, symbol: "checkmark.circle") {
                 Text(strings.t("portfolio.brokerTransfer.receipt"))
                     .fontWeight(.medium)
-                Text(strings.t("portfolio.brokerTransfer.receiptCount", ["count": String(receipt.changedCount)]))
-                Text(strings.t("portfolio.brokerTransfer.receiptId", ["id": String(receipt.receiptId)]))
-                    .font(.caption)
-                    .foregroundStyle(theme.secondaryLabel)
+                Text(strings.t("portfolio.brokerTransfer.receiptCount", ["count": String(receipt.movedCount)]))
             }
         } else if draft.preview.isLoading {
             HStack(spacing: 8) {

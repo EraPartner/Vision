@@ -4,14 +4,11 @@ import Observation
 @MainActor @Observable public final class NativeSettingsAIModel {
     public private(set) var ollamaStatus: AIChatOllamaStatus?
     public private(set) var ollamaModels: [AIChatOllamaModel]?
-    public private(set) var researchStatus: AIResearchStatus?
     public private(set) var providerStatuses: NativeSettingsAIProviderStatuses?
-    public private(set) var desktopStatus: NativeSettingsAIAgentCloakStatus?
-    public private(set) var desktopReadError: String?
-    public private(set) var desktopMutationError: String?
+    /// `useModelFit` data for `fitModel`; shown only through `fitVariables`.
+    public private(set) var modelFit: OpenAPI.AiModelFit?
     public private(set) var isSavingKey = false
     public private(set) var isClearingKey = false
-    public private(set) var isTogglingDesktop = false
     public private(set) var benchmarkError = false
     public var benchmarkDraft = ""
     public var isOnline = true {
@@ -33,7 +30,6 @@ import Observation
     public var didNotice: (@MainActor (String) -> Void)?
     public var didReceiveStatus: (@MainActor (NativeSettingsAIReceipt<AIChatOllamaStatus>) -> Void)?
     public var didReceiveModels: (@MainActor (NativeSettingsAIReceipt<[AIChatOllamaModel]>) -> Void)?
-    public var didReceiveResearch: (@MainActor (NativeSettingsAIReceipt<AIResearchStatus>) -> Void)?
     public var didInvalidateSharedReads: (@MainActor ([String]) -> Void)?
     public var sharedStatusReceipt: NativeSettingsAIReceipt<AIChatOllamaStatus>? {
         guard let ollamaStatus, let date = dates[.status] else { return nil }
@@ -42,10 +38,6 @@ import Observation
     public var sharedModelsReceipt: NativeSettingsAIReceipt<[AIChatOllamaModel]>? {
         guard let ollamaModels, let date = dates[.models] else { return nil }
         return .init(value: ollamaModels, fetchedAt: date)
-    }
-    public var sharedResearchReceipt: NativeSettingsAIReceipt<AIResearchStatus>? {
-        guard let researchStatus, let date = dates[.research] else { return nil }
-        return .init(value: researchStatus, fetchedAt: date)
     }
     public func seedSharedStatus(_ value: AIChatOllamaStatus, fetchedAt: Date) {
         guard dates[.status].map({ fetchedAt > $0 }) ?? true else { return }
@@ -62,22 +54,12 @@ import Observation
         ollamaModels = value
         dates[.models] = fetchedAt
     }
-    public func seedSharedResearch(_ value: AIResearchStatus, fetchedAt: Date) {
-        guard dates[.research].map({ fetchedAt > $0 }) ?? true else { return }
-        retire(.research)
-        pausedReads.remove(.research)
-        researchStatus = value
-        dates[.research] = fetchedAt
-    }
     public func invalidateSharedAIReads(_ keys: [String]) {
-        for (key, lane) in [
-            ("ollama-status", Lane.status), ("ollama-models", .models), ("openai-research-status", .research),
-        ] where keys.contains(key) {
+        for (key, lane) in [("ollama-status", Lane.status), ("ollama-models", .models)] where keys.contains(key) {
             dates[lane] = nil
             retire(lane)
         }
     }
-    public var didInvalidateResearchStatus: (@MainActor () -> Void)?
     @ObservationIgnored private let service: any NativeSettingsAIService
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private let now: @Sendable () -> Date
@@ -92,9 +74,12 @@ import Observation
     @ObservationIgnored private var tasks: [Lane: Task<Void, Never>] = [:]
     @ObservationIgnored private var onlineWaiters: [CheckedContinuation<Void, Never>] = []
     @ObservationIgnored private var providerRetryPending = false
+    @ObservationIgnored private var fitModel: String?
+    @ObservationIgnored private var fitDate: Date?
+    @ObservationIgnored private var fitRevision = UUID()
+    @ObservationIgnored private var fitTask: Task<Void, Never>?
     @ObservationIgnored private var statusFailed = false
-    @ObservationIgnored private var desktopFailed = false
-    private enum Lane: CaseIterable, Hashable { case status, models, research, providers, desktop }
+    private enum Lane: CaseIterable, Hashable { case status, models, providers }
 
     public init(
         service: any NativeSettingsAIService, now: @escaping @Sendable () -> Date = { Date() },
@@ -106,10 +91,7 @@ import Observation
     }
     public var isLoadingStatus: Bool { ollamaStatus == nil && fetching.contains(.status) }
     public var isLoadingModels: Bool { ollamaModels == nil && fetching.contains(.models) }
-    public var isLoadingResearch: Bool { researchStatus == nil && fetching.contains(.research) }
     public var isLoadingProviders: Bool { providerStatuses == nil && fetching.contains(.providers) }
-    public var isFetchingDesktop: Bool { fetching.contains(.desktop) }
-    public var isPendingDesktop: Bool { desktopStatus == nil && !desktopFailed }
     public var statusPollInterval: TimeInterval? {
         if ollamaStatus?.enabled == false { return nil }
         return statusFailed || ollamaStatus?.ok == false ? 120 : 30
@@ -130,34 +112,60 @@ import Observation
         ollamaStatus?.ok == true && !isLoadingModels && ollamaModels?.isEmpty == false
     }
     public var selectedLocalModel: String { rawApp?["aiDefaultModel"]?.stringValue ?? ollamaStatus?.defaultModel ?? "" }
-    public var openAiModels: [OpenAIResearchModel] { researchStatus?.openAiModels ?? [] }
-    public var selectedOpenAiModel: String {
-        let user = rawApp?["openAiDefaultModel"]?.stringValue
-        let configured = openAiModels.contains { $0.id == user } ? user : researchStatus?.openAiModel
-        return configured ?? openAiModels.first?.id ?? ""
-    }
-    public var canSelectOpenAiModel: Bool {
-        !isLoadingResearch && researchStatus?.openAiEnabled == true && !openAiModels.isEmpty
-    }
-    public var openAiPlaceholderKey: String {
-        isLoadingResearch
-            ? "settings.aiOpenAi.loadingModels"
-            : openAiModels.isEmpty ? "settings.aiOpenAi.noModels" : "settings.aiOpenAi.selectModel"
-    }
     public var selectedAnswerDepth: String { rawApp?["aiAnswerDepth"]?.stringValue ?? "product-default" }
-    public var desktopLabelKey: String {
-        if isPendingDesktop { return "settings.agentCloak.checking" }
-        guard let value = desktopStatus else { return "settings.agentCloak.statusError" }
-        if value.enabled && value.available && value.mappingKeyConfigured { return "settings.agentCloak.active" }
-        if value.enabled { return "settings.agentCloak.enabledUnavailable" }
-        return value.available ? "settings.agentCloak.ready" : "settings.agentCloak.notDetected"
-    }
-    public var canToggleDesktop: Bool { !isTogglingDesktop && desktopStatus.map { $0.enabled || $0.available } == true }
-    public var canCheckDesktop: Bool { !isFetchingDesktop && !isTogglingDesktop }
     public func configure(appRaw: TaxValue?) {
         rawApp = appRaw
         if !active { benchmarkDraft = appRaw?["analysisBenchmark"]?.stringValue ?? "" }
+        refreshFit()
     }
+    /// The model whose memory advisor line applies: Ollama is reachable, a model is selected and it
+    /// is not the Apple Foundation model (`useModelFit` is off for it).
+    var fitTarget: String? {
+        let model = selectedLocalModel
+        return ollamaStatus?.ok == true && !model.isEmpty && model != appleFoundationModel ? model : nil
+    }
+    /// `AIChatSettingsSection` `fitLine`: the variables of `settings.aiChat.modelFit`, or nil when
+    /// Ollama cannot say (any null field), the fit belongs to another model or is not applicable.
+    public var fitVariables: [String: String]? {
+        guard let target = fitTarget, fitModel == target, let fit = modelFit else { return nil }
+        return Self.fitVariables(fit)
+    }
+    public static func fitVariables(_ fit: OpenAPI.AiModelFit) -> [String: String]? {
+        guard let weights = fit.weightBytes, let perToken = fit.kvBytesPerToken, let window = fit.maxNumCtx else {
+            return nil
+        }
+        let gib = Double(1 << 30)
+        return [
+            "weights": String(format: "%.1f", Double(weights) / gib),
+            "context": String(format: "%.1f", Double(perToken * window) / gib),
+            "total": String(Int((Double(fit.totalMemoryBytes) / gib).rounded())),
+        ]
+    }
+    /// `useModelFit`: staleTime 60 s, no retry, keyed by model; a model change drops the shown data.
+    func refreshFit() {
+        guard active, isOnline, let target = fitTarget else { return }
+        if fitModel != target {
+            fitModel = target
+            fitDate = nil
+            modelFit = nil
+            fitRevision = UUID()
+            fitTask?.cancel()
+            fitTask = nil
+        }
+        guard fitTask == nil, fitDate.map({ now().timeIntervalSince($0) >= 60 }) ?? true else { return }
+        let revision = fitRevision
+        let scope = visit
+        fitTask = Task { [weak self] in
+            guard let self else { return }
+            let result = try? await service.settingsAIModelFit(model: target)
+            guard active, visit == scope, fitRevision == revision, !Task.isCancelled else { return }
+            fitTask = nil
+            fitDate = now()
+            if let result { modelFit = result }
+        }
+    }
+    /// Waits for the model-fit read in flight, if any.
+    public func settleFit() async { await fitTask?.value }
     public func load() async {
         if active { return }
         active = true
@@ -171,6 +179,9 @@ import Observation
         visit = UUID()
         for task in tasks.values { task.cancel() }
         tasks = [:]
+        fitTask?.cancel()
+        fitTask = nil
+        fitRevision = UUID()
         fetching = []
         pausedReads = []
         providerRetryPending = false
@@ -180,15 +191,11 @@ import Observation
         benchmarkError = false
         isSavingKey = false
         isClearingKey = false
-        isTogglingDesktop = false
-        desktopMutationError = nil
     }
     private func initialReads() async {
         async let statusAndModels: Void = readStatusAndModels()
-        async let research: Void = read(.research)
         async let providers: Void = read(.providers)
-        async let desktop: Void = read(.desktop)
-        _ = await (statusAndModels, research, providers, desktop)
+        _ = await (statusAndModels, providers)
     }
     private func readStatusAndModels() async {
         if ollamaStatus?.ok == true {
@@ -220,43 +227,6 @@ import Observation
         guard active, isOnline, isForeground, statusPollInterval != nil else { return }
         await read(.status, force: true)
         if ollamaStatus?.ok == true { await read(.models) }
-    }
-    public func checkAgentCloak() async {
-        guard active, canCheckDesktop else { return }
-        desktopMutationError = nil
-        await read(.desktop, force: true)
-    }
-    public func toggleAgentCloak() async {
-        guard active, canToggleDesktop, let desktopStatus else { return }
-        let scope = visit
-        isTogglingDesktop = true
-        desktopMutationError = nil
-        retire(.desktop)
-        retire(.research)
-        await waitForOnline()
-        do {
-            let receipt = try await service.settingsAIConfigureDesktop(enabled: !desktopStatus.enabled)
-            dates[.desktop] = nil
-            dates[.research] = nil
-            retire(.desktop)
-            retire(.research)
-            self.desktopStatus = receipt
-            desktopFailed = false
-            await service.settingsAIInvalidateReads(["agentcloak-desktop", "openai-research-status"])
-            didInvalidateSharedReads?(["agentcloak-desktop", "openai-research-status"])
-            didInvalidateResearchStatus?()
-            if active {
-                async let desktop: Void = read(.desktop, force: true)
-                async let research: Void = read(.research, force: true)
-                _ = await (desktop, research)
-            }
-            if active, visit == scope { isTogglingDesktop = false }
-        } catch {
-            if active, visit == scope {
-                isTogglingDesktop = false
-                desktopMutationError = error.localizedDescription
-            }
-        }
     }
     public func keyInput(_ provider: String) -> String { keyInputs[provider] ?? "" }
     public func setKeyInput(_ provider: String, _ value: String) { keyInputs[provider] = value }
@@ -342,7 +312,7 @@ import Observation
         tasks[lane] = nil
         fetching.remove(lane)
     }
-    private func ttl(_ lane: Lane) -> TimeInterval { lane == .status ? 15 : lane == .desktop ? 30 : 60 }
+    private func ttl(_ lane: Lane) -> TimeInterval { lane == .status ? 15 : 60 }
     private func read(_ lane: Lane, force: Bool = false) async {
         guard active, !Task.isCancelled else { return }
         if let task = tasks[lane] {
@@ -361,10 +331,6 @@ import Observation
         let revision = UUID()
         revisions[lane] = revision
         fetching.insert(lane)
-        if lane == .desktop, desktopStatus == nil {
-            desktopReadError = nil
-            desktopFailed = false
-        }
         let task = Task { [weak self] in
             guard let self, active, visit == scope, revisions[lane] == revision, !Task.isCancelled else { return }
             do {
@@ -386,10 +352,6 @@ import Observation
                     } catch {}
                 } else if active, visit == scope, revisions[lane] == revision {
                     if lane == .status { statusFailed = true }
-                    if lane == .desktop {
-                        desktopFailed = true
-                        desktopReadError = error.localizedDescription
-                    }
                 }
             }
             guard active, visit == scope, revisions[lane] == revision else { return }
@@ -411,27 +373,17 @@ import Observation
             let value = try await service.settingsAIModels()
             guard active, visit == scope, revisions[lane] == revision, !Task.isCancelled else { return }
             ollamaModels = value
-        case .research:
-            let value = try await service.settingsAIResearchStatus()
-            guard active, visit == scope, revisions[lane] == revision, !Task.isCancelled else { return }
-            researchStatus = value
         case .providers:
             let value = try await service.settingsAIProviderKeys()
             guard active, visit == scope, revisions[lane] == revision, !Task.isCancelled else { return }
             providerStatuses = value
-        case .desktop:
-            let value = try await service.settingsAIDesktopStatus()
-            guard active, visit == scope, revisions[lane] == revision, !Task.isCancelled else { return }
-            desktopStatus = value
-            desktopFailed = false
-            desktopReadError = nil
         }
         guard active, visit == scope, revisions[lane] == revision, !Task.isCancelled else { return }
         dates[lane] = now()
+        if lane == .status { refreshFit() }
         switch lane {
         case .status: if let receipt = sharedStatusReceipt { didReceiveStatus?(receipt) }
         case .models: if let receipt = sharedModelsReceipt { didReceiveModels?(receipt) }
-        case .research: if let receipt = sharedResearchReceipt { didReceiveResearch?(receipt) }
         default: break
         }
     }

@@ -14,9 +14,7 @@ import Foundation
     public static func prepare(_ snapshot: NativeStatisticsPrintSnapshot) -> NativeStatisticsPrintPresentation {
         let inert = APIClient(baseURL: { nil })
         let rates = ExchangeRatesModel(service: inert)
-        let admin = AdminScreens.make(
-            service: inert, database: inert, token: .init(read: { nil }, write: { _ in false }),
-            audit: NativeStatisticsPrintAudit())
+        let admin = AdminScreens.make(service: inert, database: inert)
         let shell = NativeShellModel(
             strings: snapshot.strings, theme: snapshot.theme, exchangeRates: rates, admin: admin,
             planned: PlannedPaymentsModel(
@@ -25,7 +23,7 @@ import Foundation
             transactions: TransactionsModel(
                 service: inert, attachments: inert, pickers: inert, bulk: inert, splits: inert),
             accounts: AccountsModel(service: inert, rates: rates), categories: CategoriesModel(service: inert),
-            recipients: RecipientsModel(service: inert), loadSettings: { snapshot.settings }, onNavigate: { _ in })
+            recipients: RecipientsModel(service: inert), loadSettings: { snapshot.settings })
         shell.apply(settings: snapshot.settings)
         let screens = StatisticsScreens(
             model: StatisticsModel(printSnapshot: snapshot), saved: SavedChartsModel(service: inert),
@@ -34,11 +32,3 @@ import Foundation
     }
 }
 
-@MainActor private final class NativeStatisticsPrintAudit: AuditHistoryService {
-    func read(_ range: AuditViewer.ReadRange) async -> JSONValue { .object(["success": .bool(false)]) }
-    func enroll() async -> JSONValue { .object(["success": .bool(false)]) }
-    func exportSnapshot() async -> JSONValue { .object(["success": .bool(false)]) }
-    func exportTransfer(password: String) async -> JSONValue { .object(["success": .bool(false)]) }
-    func importTransfer(password: String) async -> JSONValue { .object(["success": .bool(false)]) }
-    func rotateKey() async -> JSONValue { .object(["success": .bool(false)]) }
-}

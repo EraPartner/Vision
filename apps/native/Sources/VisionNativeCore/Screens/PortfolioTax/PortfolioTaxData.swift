@@ -3,6 +3,10 @@ import Foundation
 /// The server runs the existing portfolio-tax TypeScript estimators. Native code only
 /// displays their results; settings values retain Decimal precision independently of CAS tokens.
 public struct PortfolioTaxDashboard: Codable, Equatable, Sendable {
+    /// Currencies of amounts left out because no stored rate converts them; empty when everything
+    /// converted (ADR-216). The affected figures (`incompleteFigures`) are lower bounds, so the page
+    /// says so instead of presenting them as complete.
+    public let unconvertedCurrencies: [String]
     public let year: Int
     public let currency: String
     public let isEmpty: Bool

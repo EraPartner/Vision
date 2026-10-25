@@ -2,8 +2,8 @@
 title: "Native parity inventory: Portfolio overview and holdings"
 type: reference
 status: active
-date: 2026-10-17
-updated: 2026-10-17
+date: 2026-10-25
+updated: 2026-10-25
 tags:
   [
     reference,
@@ -52,8 +52,11 @@ The React descriptions below remain the source baseline for checking parity.
 UI paths in this table are under `apps/native/Sources/VisionNativeUI/`; Core portfolio paths are under
 `apps/native/Sources/VisionNativeCore/Screens/Portfolio/`. Monetary responses decode directly to
 `Decimal`. Active units, basis, income, gains and broker partitions come from the canonical backend
-summary. The additive `active=false` summary request supplies `archivedPresentation`, preserving
-the shared TypeScript ordinary-history policy for archived details. Swift does not replay archived
+summary. Hero, allocation and per-holding totals (including broker-filter `accountTotals`, real-estate
+`monthlyRent`, `feesAndTaxes` and `propertyReturn`) are read from the server and never recomputed or
+converted in Swift (ADR-216, ADR-217); a missing rent rate shows the error as in React. Archived rows are
+the `summaries` of the `active=false` read with `isActive == false`; the vestigial
+`archivedPresentation` is ignored, as React does. Swift does not replay archived
 lots or mix reporting currency with raw investment quote currency. The server also supplies the
 earliest active ordinary transaction date for the annualized-return hint.
 
@@ -69,7 +72,7 @@ Phase 3p replaces the PDF handoff with `NativeReportSheet` and `NativeReportMode
 `NativeShellOverlayHost` over the existing native screen. The Portfolio overview and asset-route
 menus retain `?export=pdf`; closing removes only that flag with replace, preserving the other query
 parameters and the underlying visit. The shared sheet owns report type, period, sections, currency,
-validation, binary PDF submission and native save-panel handoff. Same-page reopening retains its
+validation, report-document submission (printed to PDF locally, ADR-234) and native save-panel handoff. Same-page reopening retains its
 form draft; leaving the page resets it. Save-panel cancellation leaves the sheet open without a
 success notice. The source `ExportDialog` remains the fallback when the capability is absent.
 Portfolio PDF export remains separate from the source's optimized current-page print contract.
@@ -583,7 +586,7 @@ Component: `apps/frontend/src/pages/portfolio/RebalancePage.tsx`. Feature doc: [
 - Custom target allocation card (`rebalance.editor.title`), shown for a saved plan or Custom (new): the sleeve rows, `rebalance.editor.total` "Total: {pct}" (warning colour unless it rounds to 100), the note `rebalance.editor.normalizeNote` when the total is not 100 and > 0, the cap controls with `rebalance.editor.capHint` "Up to {amount} in spendable accounts. Leave blank to use the 90-day suggested cap.", and the plan name and save controls (`apps/frontend/src/pages/portfolio/RebalancePage.tsx:675`).
 - The no-sell note `rebalance.noSellNote` "This plan only puts available cash into underweight sleeves. It never proposes selling." (`apps/frontend/src/pages/portfolio/RebalancePage.tsx:908`).
 - A compute error alert with the API error message (`apps/frontend/src/pages/portfolio/RebalancePage.tsx:915`).
-- Result cards, after a compute whose inputs still match the current inputs: `rebalance.availableCash` "Available cash" (the uncapped spendable sum, 0 decimals) with `rebalance.availableCashHint`, and `rebalance.totalDeployed` "Total deployed" with `rebalance.totalDeployedHint`. The `rebalance.deploymentPlan` "Deployment plan" table has the columns `rebalance.sleeve` "Allocation", `rebalance.current` "Current value", `rebalance.target` "Target" (1 decimal) and `rebalance.deploy` "Deploy" (a signed badge, or "—"), with rows sorted by sleeve key (`apps/frontend/src/pages/portfolio/RebalancePage.tsx:926`–`:1063`).
+- Result cards, after a compute whose inputs still match the current inputs: `rebalance.availableCash` "Available cash" (the uncapped spendable sum, 0 decimals) with `rebalance.availableCashHint` (and, when cash in a currency without a stored rate was left out, the `accounts.totalIncomplete` warning; ADR-216), and `rebalance.totalDeployed` "Total deployed" with `rebalance.totalDeployedHint`. The `rebalance.deploymentPlan` "Deployment plan" table has the columns `rebalance.sleeve` "Allocation", `rebalance.current` "Current value", `rebalance.target` "Target" (1 decimal) and `rebalance.deploy` "Deploy" (a signed badge, or "—"), with rows sorted by sleeve key (`apps/frontend/src/pages/portfolio/RebalancePage.tsx:926`–`:1063`).
 - Sleeve labels come from `rebalance.sleeve.{stocks|intl_stocks|bonds|gold|commodities|crypto|real_estate|savings}` ("Stocks", "International stocks", "Bonds", "Gold", "Commodities", "Crypto", "Real estate", "Savings"). Unknown keys fall back to the raw key (`apps/frontend/src/pages/portfolio/RebalancePage.tsx:259`).
 
 On load, a background `POST /api/cross-workspace/rebalance` (model `sixty_forty`) fetches available cash and the current sleeve values (`apps/frontend/src/features/portfolio/usePortfolioQueries.ts:153`). Saved plans load from the `rebalance_plans` setting (`apps/frontend/src/hooks/useRebalancePlans.ts:17`).

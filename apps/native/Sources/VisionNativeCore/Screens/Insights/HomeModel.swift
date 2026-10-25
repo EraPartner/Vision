@@ -21,7 +21,11 @@ public final class HomeModel {
     public private(set) var transactions: [OpenAPI.Transaction] = []
     public private(set) var filteredRecent: [OpenAPI.Transaction] = []
     public private(set) var accounts: [OpenAPI.Account] = []
-    public private(set) var planned: [OpenAPI.PlannedTransaction] = []
+    /// `usePlannedTotals(currency)`: the hero's Planned in and Planned out, converted on the
+    /// server; `nil` until the server answers (the hero shows zero, like the web).
+    public private(set) var plannedTotals: OpenAPI.PlannedTotals?
+    /// `useAccountTotals(currency)`: converted balances that order the Accounts list.
+    public private(set) var accountTotals: OpenAPI.AccountTotals?
     public private(set) var upcoming: [OpenAPI.PlannedTransaction] = []
     public private(set) var transactionCount = 0
     public private(set) var needsCategory = 0
@@ -102,6 +106,8 @@ public final class HomeModel {
             transactions = []
             filteredRecent = []
             accounts = []
+            plannedTotals = nil
+            accountTotals = nil
             fetchedAt = nil
         }
         currency = nextCurrency
@@ -159,8 +165,6 @@ public final class HomeModel {
         let currency = currency
         let exclusions = exclusions
         let today = day(now())
-        let monthEnd = day(
-            calendar.date(byAdding: DateComponents(month: 1, day: -1), to: monthStart(now())) ?? now())
         let weekEnd = day(calendar.date(byAdding: .day, value: 7, to: now()) ?? now())
         async let monthly = Self.result {
             try await service.homeMonthly(currency: currency, exclusions: exclusions)
@@ -181,9 +185,8 @@ public final class HomeModel {
             exclusions.isEmpty ? [] : try await Self.recent(service: service, exclusions: exclusions)
         }
         async let accounts = Self.result { try await service.homeAccounts() }
-        async let planned = Self.result {
-            try await service.homePlanned(start: today, end: monthEnd, limit: 200)
-        }
+        async let plannedTotals = Self.result { try await service.homePlannedTotals(currency: currency) }
+        async let accountTotals = Self.result { try await service.homeAccountTotals(currency: currency) }
         async let upcoming: HomeResult<[OpenAPI.PlannedTransaction]>? =
             sharedUpcoming
             ? nil
@@ -198,7 +201,7 @@ public final class HomeModel {
         let unfilteredAnswer = await unfiltered ?? monthlyAnswer
         let answers = await (
             monthlyAnswer, unfilteredAnswer, pace, balances, worth, transactions, recent, accounts,
-            planned, upcoming, count, needsCategory, matches, widgetSetting
+            plannedTotals, upcoming, count, needsCategory, matches, widgetSetting, accountTotals
         )
         guard token == revision, !Task.isCancelled else { return }
         assign(answers.0, key: "monthly", to: &self.monthly)
@@ -214,7 +217,9 @@ public final class HomeModel {
         }
         assignList(answers.6, key: "recentTransactions", to: &filteredRecent)
         assignList(answers.7, key: "accounts", to: &self.accounts)
-        assignList(answers.8, key: "planned", to: &self.planned)
+        // Totals fail silently like the web: the hero shows zero and the list keeps its order.
+        if case .success(let value) = answers.8 { self.plannedTotals = value }
+        if case .success(let value) = answers.14 { self.accountTotals = value }
         if !usesSharedUpcoming, let answer = answers.9 {
             assignList(answer, key: "upcoming", to: &self.upcoming)
         }
@@ -327,8 +332,25 @@ public final class HomeModel {
         }
         return slices
     }
-    public var remainingPlanned: [OpenAPI.PlannedTransaction] {
-        planned.filter { !($0.isExecuted && !$0.isRecurring) }
+    /// The hero's Planned in: `rest_of_month.incoming`, zero while the totals load.
+    public var plannedIncoming: Decimal { plannedTotals?.restOfMonth.incoming ?? 0 }
+    /// The hero's Planned out: `rest_of_month.outgoing` (negative or zero).
+    public var plannedOutgoing: Decimal { plannedTotals?.restOfMonth.outgoing ?? 0 }
+    /// `AccountsList`: the active accounts with the largest server-converted balance first. An
+    /// account whose balance has an unconverted partition, or no balance, follows in list order.
+    public var sortedAccounts: [OpenAPI.Account] {
+        var converted: [Int: Decimal] = [:]
+        for row in accountTotals?.accounts ?? [] where row.unconvertedCurrencies.isEmpty {
+            converted[row.id] = row.convertedBalance
+        }
+        let rows = accounts.filter(\.isActive).map { account -> (OpenAPI.Account, Decimal?) in
+            (account, account.computedBalance == nil ? nil : converted[account.id])
+        }
+        let known = rows.filter { $0.1 != nil }.sorted { lhs, rhs in
+            lhs.1 == rhs.1 ? lhs.0.id < rhs.0.id : (lhs.1 ?? 0) > (rhs.1 ?? 0)
+        }
+        let unknown = rows.filter { $0.1 == nil }.sorted { $0.0.id < $1.0.id }
+        return (known + unknown).map(\.0)
     }
     public var upcomingRows: [OpenAPI.PlannedTransaction] {
         Array(
@@ -462,9 +484,6 @@ public final class HomeModel {
     private func day(_ date: Date) -> String {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
-    }
-    private func monthStart(_ date: Date) -> Date {
-        calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
     }
 }
 

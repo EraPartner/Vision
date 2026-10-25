@@ -38,23 +38,6 @@ public struct NativeSettingsAIProviderStatuses: Codable, Equatable, Sendable {
     public init(from decoder: any Decoder) throws { try self.init(raw: TaxValue(from: decoder)) }
     public func encode(to encoder: any Encoder) throws { try raw.encode(to: encoder) }
 }
-public struct NativeSettingsAIAgentCloakStatus: Codable, Equatable, Sendable {
-    public let raw: TaxValue
-    public let enabled: Bool
-    public let available: Bool
-    public let mappingKeyConfigured: Bool
-    public let openAiEnabled: Bool
-    public init(raw: TaxValue) throws {
-        try ResearchDecode.requireObject(raw)
-        self.raw = raw
-        enabled = try ResearchDecode.bool(raw["enabled"])
-        available = try ResearchDecode.bool(raw["available"])
-        mappingKeyConfigured = try ResearchDecode.bool(raw["mappingKeyConfigured"])
-        openAiEnabled = try ResearchDecode.bool(raw["openAiEnabled"])
-    }
-    public init(from decoder: any Decoder) throws { try self.init(raw: TaxValue(from: decoder)) }
-    public func encode(to encoder: any Encoder) throws { try raw.encode(to: encoder) }
-}
 public enum NativeSettingsAIText {
     /// ECMAScript trim, including BOM but excluding NEL.
     public static func trim(_ value: String) -> String {

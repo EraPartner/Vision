@@ -30,30 +30,6 @@ public struct PortfolioImportReconciliationView: View {
     private func review(_ plan: PortfolioImportReconciliationPlan) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(strings.t("portfolioImport.session.review")).font(.headline)
-            if model.existingOnly {
-                Text(
-                    strings.t(
-                        "portfolioImport.session.\(modeKey("Counts"))",
-                        [
-                            "adopted": String(plan.summary["adopt"] ?? 0), "events": String(plan.summary["cash"] ?? 0),
-                            "recorded": String(recorded(plan)), "pending": String(plan.pending ?? 0),
-                        ]))
-            }
-            if model.reconciliationMode == .correctExistingOnly, plan.actions.contains(where: { $0.dateProof != nil }) {
-                Text(strings.t("portfolioImport.session.groupDateCorrection")).font(.caption).foregroundStyle(
-                    theme.secondaryLabel)
-            }
-            if (plan.pending ?? 0) > 0 {
-                Text(strings.t("portfolioImport.session.deferred")).font(.callout)
-                ForEach((plan.deferredCounts ?? [:]).keys.sorted(), id: \.self) { reason in
-                    if let count = plan.deferredCounts?[reason], count > 0 {
-                        Text(
-                            "\(strings.t("portfolioImport.session.deferredKinds.\(Self.deferredKinds.contains(reason) ? reason : "unsupported")")): \(count)"
-                        )
-                        .font(.caption)
-                    }
-                }
-            }
             LazyVGrid(
                 columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], alignment: .leading
             ) {
@@ -66,15 +42,13 @@ public struct PortfolioImportReconciliationView: View {
                 }
             }
             if !plan.blockers.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text(strings.t("portfolioImport.session.blocked")).font(.callout.weight(.medium))
+                        .foregroundStyle(theme.destructive)
                     ForEach(Array(plan.blockers.enumerated()), id: \.offset) { _, blocker in
-                        Text(
-                            "\(statementName(blocker.batchId))\(blocker.rowOrdinal.map { " · " + strings.t("portfolioImport.session.row", ["n": String($0)]) } ?? ""): \(strings.t("portfolioImport.session.blockers.\(Self.blockerKeys[blocker.reason] ?? "other")"))"
-                        )
-                        .font(.caption)
+                        blockerRow(blocker)
                     }
-                }.foregroundStyle(theme.destructive).accessibilityElement(children: .contain)
+                }.accessibilityElement(children: .contain)
             }
             DisclosureGroup(strings.t("portfolioImport.session.evidence"), isExpanded: $evidenceExpanded) {
                 LazyVStack(alignment: .leading, spacing: 12) {
@@ -86,77 +60,69 @@ public struct PortfolioImportReconciliationView: View {
                     }
                 }.padding(.top, 12)
             }
-            Text(strings.t("portfolioImport.session.\(modeKey("Atomic"))")).font(.caption).foregroundStyle(
-                theme.secondaryLabel)
-            Button(strings.t("portfolioImport.session.\(commitKey)")) { Task { await model.commit() } }
+            Text(strings.t("portfolioImport.session.atomic")).font(.caption).foregroundStyle(theme.secondaryLabel)
+            Button(strings.t("portfolioImport.session.commit")) { Task { await model.commit() } }
                 .buttonStyle(.visionPrimary).disabled(!model.canCommit || model.operation != "idle")
         }.padding(16).background(
             theme.foreground.opacity(0.03), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
         )
         .accessibilityElement(children: .contain).accessibilityLabel(strings.t("portfolioImport.session.review"))
     }
-    private func recorded(_ plan: PortfolioImportReconciliationPlan) -> Int {
-        if model.reconciliationMode != .recordCashOnly { return plan.summary["record_income"] ?? 0 }
-        return plan.actions.filter { $0.action == "cash" }.reduce(0) {
-            $0 + Int(NSDecimalNumber(decimal: $1.cashProof?["componentCount"]?.decimalValue ?? 0).intValue)
+    /// One blocked row. The owner settles a look-alike of an existing transaction with "Keep both", or
+    /// with "Same transaction" when it names a single counterpart; the answer re-runs the review.
+    private func blockerRow(_ blocker: PortfolioImportReconciliationBlocker) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(blockerText(blocker)).font(.caption).foregroundStyle(theme.destructive)
+            if let rowId = blocker.rowId, PortfolioImportSessionModel.choosableBlockers.contains(blocker.reason) {
+                HStack(spacing: 8) {
+                    choiceButton("portfolioImport.session.choice.keepBoth", blocker.batchId, rowId, .keepBoth)
+                    if PortfolioImportSessionModel.sameTransactionBlockers.contains(blocker.reason),
+                        blocker.candidateTransactionIds.count <= 1
+                    {
+                        choiceButton(
+                            "portfolioImport.session.choice.sameTransaction", blocker.batchId, rowId, .sameTransaction)
+                    }
+                }
+            }
         }
     }
-    private func modeKey(_ suffix: String) -> String {
-        switch model.reconciliationMode {
-        case .recordCashOnly: return "cash\(suffix)"
-        case .recordInKindIncomeOnly: return "income\(suffix)"
-        case .correctExistingOnly: return "correction\(suffix)"
-        case .adoptExistingOnly: return "attachment\(suffix)"
-        case .full: return suffix.lowercased()
-        }
+    private func choiceButton(_ key: String, _ batchId: Int, _ rowId: Int, _ choice: PortfolioImportRowChoice.Choice)
+        -> some View
+    {
+        Button(strings.t(key)) { Task { await model.choose(batchId: batchId, rowId: rowId, choice: choice) } }
+            .buttonStyle(.bordered).controlSize(.small).disabled(model.operation != "idle")
     }
-    private var commitKey: String {
-        switch model.reconciliationMode {
-        case .recordCashOnly: return "recordReviewedCash"
-        case .recordInKindIncomeOnly: return "recordReviewedIncome"
-        case .correctExistingOnly: return "correctReviewed"
-        case .adoptExistingOnly: return "attachReviewed"
-        case .full: return "commit"
-        }
+    private func blockerText(_ blocker: PortfolioImportReconciliationBlocker) -> String {
+        let row = blocker.rowOrdinal.map { " · " + strings.t("portfolioImport.session.row", ["n": String($0)]) } ?? ""
+        let reason = strings.t("portfolioImport.session.blockers.\(Self.blockerKeys[blocker.reason] ?? "other")")
+        return "\(statementName(blocker.batchId))\(row): \(reason)"
     }
     private func statementName(_ id: Int) -> String { model.statements.first { $0.batchId == id }?.name ?? String(id) }
     private func outcome(_ result: PortfolioImportReconciliationResult) -> String {
-        let partial = result.complete == false
-        let key: String
-        switch result.reconciliationScope ?? .full {
-        case .recordCashOnly: key = partial ? "cashPartialSuccess" : "cashSuccess"
-        case .recordInKindIncomeOnly: key = partial ? "incomePartialSuccess" : "incomeSuccess"
-        default: key = partial ? "partialSuccess" : "success"
-        }
-        return strings.t(
-            "portfolioImport.session.\(key)",
+        strings.t(
+            "portfolioImport.session.success",
             [
                 "imported": String(result.imported), "adopted": String(result.adopted),
-                "repaired": String(result.repaired),
-                "pending": String(result.pending ?? 0), "recordedIncome": String(result.recordedIncome ?? 0),
-                "recordedCash": String(result.recordedCash ?? 0),
-                "duplicates": String(max(0, result.duplicates - result.adopted - result.repaired)),
+                "duplicates": String(result.duplicates),
             ])
     }
     static let actions = [
-        "record_income", "insert", "adopt", "repair_duplicate", "duplicate", "duplicate_source", "cash",
-        "transfer", "internal_annotation", "adjustment", "settled", "blocked", "policy_required",
+        "insert", "adopt", "duplicate", "duplicate_source", "cash", "transfer", "internal_annotation", "adjustment",
+        "settled", "blocked", "policy_required",
     ]
-    private static let deferredKinds = ["dividend", "gift", "sell", "cash", "asset_transfer", "asset_adjustment"]
     private static let blockerKeys = [
         "incomplete_source": "incomplete", "invalid_source_values": "invalid", "source_identity_conflict": "identity",
-        "missing_original_basis": "basis", "reference_unproven_basis": "basis", "ambiguous_history": "ambiguous",
+        "missing_original_basis": "basis", "ambiguous_history": "ambiguous",
         "existing_assigned_or_imported_history": "assigned", "missing_source_identity": "identity",
-        "missing_adjustment_identity": "identity",
         "source_policy_required": "policy", "unproven_currency_conversion": "currency",
-        "unproven_economics": "economics",
-        "missing_companion_pro_history": "companionPro", "reference_ambiguous_asset": "referenceAsset",
-        "reference_ambiguous_match": "referenceMatch", "reference_account_mapping_conflict": "referenceAccount",
-        "reference_unmatched_event": "referenceEvent", "reference_unmapped_portfolio": "referencePortfolio",
-        "reference_unproven_transfer_fee": "referenceFee", "reference_existing_trade_conflict": "referenceTrade",
+        "unproven_economics": "economics", "missing_companion_pro_history": "companionPro",
         "unresolved_adjustment_kind": "adjustmentKind", "unresolved_adjustment_basis": "adjustmentBasis",
-        "incomplete_adjustment": "adjustmentIncomplete", "unresolved_zero_yield_policy": "zeroYield",
-        "projected_history_conflict": "projectedHistory", "cash_reconciliation_required": "cashScope",
+        "incomplete_adjustment": "adjustmentIncomplete", "missing_adjustment_identity": "identity",
+        "unresolved_zero_yield_policy": "zeroYield", "projected_history_conflict": "projectedHistory",
+        "cross_format_source_conflict": "crossFormat", "cross_format_identity_missing": "crossFormatIdentity",
+        "cross_format_identity_ambiguous": "crossFormatIdentityAmbiguous",
+        "funding_date_mismatch": "fundingDateMismatch", "funding_date_ambiguous": "fundingDateAmbiguous",
+        "ambiguous_funding_history": "ambiguousFunding", "ambiguous_cash_history": "ambiguousCash",
     ]
 }
 
@@ -166,6 +132,10 @@ private struct PortfolioImportEvidenceView: View {
     let shell: NativeShellModel
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
+    private static let fields = [
+        "date", "type", "units", "price_per_unit", "amount", "fees", "taxes", "currency", "fx_rate_to_eur",
+        "dividend_amount_convention", "income_recognition_role",
+    ]
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(
@@ -173,21 +143,6 @@ private struct PortfolioImportEvidenceView: View {
             )
             .font(.callout.weight(.medium))
             if let id = action.existingTransactionId { note("existingId", ["id": String(id)]) }
-            if let proof = action.cashProof, let kind = proof["eventKind"]?.stringValue { note("cashKinds.\(kind)") }
-            if let values = action.cashValues { cashValues(values) }
-            if let fee = action.cashFeeValues {
-                note("cashFeeExpense", ["amount": display(fee["amount"]), "currency": display(fee["currency"])])
-            }
-            if let id = action.existingCashFeeTransactionId { note("cashFeeExistingId", ["id": String(id)]) }
-            if action.action == "repair_duplicate" {
-                note(
-                    "repairHint",
-                    [
-                        "existing": String(action.existingTransactionId ?? 0),
-                        "imported": String(action.importedTransactionId ?? 0),
-                        "batch": String(action.originalBatchId ?? 0),
-                    ])
-            }
             if let policy = action.policy {
                 note("appliedPolicy", ["policy": strings.t("portfolioImport.session.policyName.\(policy)")])
             }
@@ -216,18 +171,6 @@ private struct PortfolioImportEvidenceView: View {
             Text(verbatim: value).monospacedDigit()
         }.font(.caption)
     }
-    private func cashValues(_ values: TaxValue) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            detail("fields.date", display(values["date"]))
-            detail("fields.amount", "\(display(values["amount"])) \(display(values["currency"]))")
-            detail("cashAccount", account(values["accountId"]))
-            detail(
-                "cashTreatment",
-                strings.t(
-                    values["isTransfer"]?.boolValue == true
-                        ? "portfolioImport.session.cashTransfer" : "portfolioImport.session.cashExpense"))
-        }
-    }
     private func transferValues(_ values: TaxValue) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             detail("fields.date", display(values["date"]))
@@ -247,17 +190,9 @@ private struct PortfolioImportEvidenceView: View {
             detail("adjustment.basis", labelled("adjustment.basis", display(values["basisPolicy"])))
         }
     }
+    /// The fields either side holds a value for, as the web table lists them.
     private var fields: [String] {
-        let keys =
-            action.isCash == true
-            ? ["date", "type", "amount", "currency", "memo"]
-            : [
-                "date", "type", "units", "price_per_unit", "amount", "fees", "taxes", "currency", "fx_rate_to_eur",
-                "dividend_amount_convention", "income_recognition_role",
-            ]
-        return keys.filter {
-            nonnull(action.source?[$0]) || nonnull(action.existing?[$0]) || nonnull(action.importedExisting?[$0])
-        }
+        Self.fields.filter { nonnull(action.source?[$0]) || nonnull(action.existing?[$0]) }
     }
     private var comparison: some View {
         ScrollView(.horizontal) {
@@ -266,21 +201,12 @@ private struct PortfolioImportEvidenceView: View {
                     Text(strings.t("portfolioImport.session.field"))
                     Text(strings.t("portfolioImport.session.sourceValues"))
                     if action.existing != nil { Text(strings.t("portfolioImport.session.existingValues")) }
-                    if action.importedExisting != nil { Text(strings.t("portfolioImport.session.importedValues")) }
                 }.fontWeight(.medium)
                 ForEach(fields, id: \.self) { field in
                     GridRow {
-                        Text(
-                            strings.t(
-                                field == "memo"
-                                    ? "txPage.field.description"
-                                    : action.isCash == true && field == "amount"
-                                        ? "txPage.field.amount" : "portfolioImport.session.fields.\(field)"))
+                        Text(strings.t("portfolioImport.session.fields.\(field)"))
                         Text(verbatim: display(action.source?[field], field: field))
                         if action.existing != nil { Text(verbatim: display(action.existing?[field], field: field)) }
-                        if action.importedExisting != nil {
-                            Text(verbatim: display(action.importedExisting?[field], field: field))
-                        }
                     }.padding(.vertical, 3).background(
                         (action.corrections?.contains(field) ?? false) ? theme.foreground.opacity(0.06) : .clear)
                 }

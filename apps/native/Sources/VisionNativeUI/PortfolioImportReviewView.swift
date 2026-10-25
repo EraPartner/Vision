@@ -59,17 +59,12 @@ public struct PortfolioImportReviewView: View {
         }.task(id: shell.route.path) { await load() }
     }
     private func load() async {
-        if shell.nativeNavigation != nil {
-            guard case .native(.portfolioImportReview(let batchId)) = shell.detail else { return }
-            if let id = shell.nativeNavigationLocation?.match?.supportedBatchId {
-                await model.load(batchId: id)
-            } else {
-                await model.load(rawBatchId: batchId)
-            }
-            return
+        guard case .native(.portfolioImportReview(let batchId)) = shell.detail else { return }
+        if let id = shell.nativeNavigationLocation.match?.supportedBatchId {
+            await model.load(batchId: id)
+        } else {
+            await model.load(rawBatchId: batchId)
         }
-        let parts = shell.route.path.split(separator: "/", omittingEmptySubsequences: false)
-        await model.load(rawBatchId: parts.count == 5 ? String(parts[3]) : "")
     }
     private var routingUnavailable: Bool {
         model.requiresAccountRepair && !model.brokerAccounts.contains { $0.id == model.selectedRepairBrokerId }

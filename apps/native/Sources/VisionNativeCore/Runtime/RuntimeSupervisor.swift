@@ -14,34 +14,6 @@ public enum RuntimePhase: Sendable, Equatable {
     case failed(String)
 }
 
-/// What the audit anchor needs from the system (phase 1e). `nil` in
-/// `SupervisorConfiguration` leaves audit protection unavailable and the backend without
-/// a bridge token, as Electron does without `safeStorage` and a witness.
-public struct AuditDependencies: Sendable {
-    public var witness: any AuditWitness
-    public var keyProtector: (any AuditKeyProtector)?
-    /// Builds the bridge client for this launch's token and the backend's current port.
-    public var transport: @Sendable (_ token: String, _ port: @escaping @Sendable () async -> Int) -> any AuditBridgeTransport
-
-    public init(
-        witness: any AuditWitness, keyProtector: (any AuditKeyProtector)?,
-        transport: @escaping @Sendable (_ token: String, _ port: @escaping @Sendable () async -> Int) ->
-            any AuditBridgeTransport
-    ) {
-        self.witness = witness
-        self.keyProtector = keyProtector
-        self.transport = transport
-    }
-
-    /// The Keychain witness and wrapping key of a variant, and the URLSession bridge.
-    public static func live(variant: NativeVariant) -> AuditDependencies {
-        AuditDependencies(
-            witness: KeychainAuditWitness(service: variant.auditWitnessService),
-            keyProtector: NativeAuditKeyProtector(store: KeychainAuditWrappingKeyStore(service: variant.auditKeyService)),
-            transport: { token, port in URLSessionAuditBridge(token: token, port: port) })
-    }
-}
-
 public struct SupervisorConfiguration: Sendable {
     /// The app's environment (`ProcessInfo.processInfo.environment`). Children only get
     /// the allowlisted keys.
@@ -52,8 +24,12 @@ public struct SupervisorConfiguration: Sendable {
     public var postgresPort: Int
     /// Vision Native or Vision Native Demo: the data directory and runtime id.
     public var variant: NativeVariant
-    /// `nil` runs without audit protection (tests).
-    public var audit: AuditDependencies?
+    /// ADR-242: runs after PostgreSQL is ready and before the backend, which migrates at
+    /// boot, is spawned, only when an existing database is behind the packaged migration
+    /// chain (`backupBeforeMigrations` in `main.ts`). A thrown error fails the launch, so no
+    /// migration runs without the backup it was meant to take. `nil` (the default, and for
+    /// the synthetic Demo database) takes no backup.
+    public var beforeMigrations: (@Sendable (PendingMigrations, NativeRuntime) async throws -> Void)?
     /// `HEALTH_POLL_BUILD_ATTEMPTS`: a cold start may initialize PostgreSQL, seed the
     /// Demo and run migrations, so the first navigation waits up to about 3 minutes.
     public var readinessAttempts: Int
@@ -69,14 +45,14 @@ public struct SupervisorConfiguration: Sendable {
         readinessAttempts: Int = 600,
         allowPayloadOverride: Bool = false,
         variant: NativeVariant = .standard,
-        audit: AuditDependencies? = nil
+        beforeMigrations: (@Sendable (PendingMigrations, NativeRuntime) async throws -> Void)? = nil
     ) {
         self.environment = environment
         self.homeDirectory = homeDirectory
         self.resourcesDirectory = resourcesDirectory
         self.postgresPort = postgresPort ?? variant.postgresPort
         self.variant = variant
-        self.audit = audit
+        self.beforeMigrations = beforeMigrations
         self.readinessAttempts = readinessAttempts
         self.allowPayloadOverride = allowPayloadOverride
     }
@@ -98,7 +74,6 @@ public actor RuntimeSupervisor: BackupSettingsStore {
     private let logger: any RuntimeLogging
     public private(set) var phase: RuntimePhase = .idle
     private var runtime: NativeRuntime?
-    private var audit: AuditRuntime?
     private var launchTask: Task<URL, Error>?
     private var shutdownRequested = false
     private var shutdownInProgress = false
@@ -124,13 +99,15 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         homeDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path,
         resourcesDirectory: String? = Bundle.main.resourcePath,
         allowPayloadOverride: Bool,
-        variant: NativeVariant = .standard
+        variant: NativeVariant = .standard,
+        beforeMigrations: (@Sendable (PendingMigrations, NativeRuntime) async throws -> Void)? = nil
     ) -> RuntimeSupervisor {
         let userData = variant.userDataDirectory(homeDirectory: homeDirectory)
         return RuntimeSupervisor(
             configuration: SupervisorConfiguration(
                 environment: environment, homeDirectory: homeDirectory, resourcesDirectory: resourcesDirectory,
-                allowPayloadOverride: allowPayloadOverride, variant: variant, audit: .live(variant: variant)),
+                allowPayloadOverride: allowPayloadOverride, variant: variant,
+                beforeMigrations: beforeMigrations),
             dependencies: .live(),
             instanceLock: FileInstanceLock(),
             logger: FileRuntimeLog(path: PathUtilities.join(userData, "logs", "main.log"), rotate: false)
@@ -224,8 +201,7 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         logger.log("log", "[runtime] payload \(payload.runtimeDirectory) (\(payload.source))")
         let appPort = await resolveAppPort(layout)
         try checkShutdown()
-        // `crypto.randomBytes(32)`: a new private bridge token every launch.
-        let auditToken = configuration.audit.map { _ in dependencies.random.hex(byteCount: 32) }
+        let log = logger
         let runtime = try NativeRuntime(
             layout: layout,
             postgresPort: configuration.postgresPort,
@@ -233,9 +209,8 @@ public actor RuntimeSupervisor: BackupSettingsStore {
             appPort: appPort,
             inheritedEnvironment: configuration.environment,
             dependencies: dependencies,
-            auditBridgeToken: auditToken)
+            recordBootPhase: { phase, milliseconds in log.log("log", "[runtime] \(phase) \(milliseconds) ms") })
         self.runtime = runtime
-        audit = try makeAuditRuntime(runtime: runtime, layout: layout, token: auditToken)
 
         try enterLaunchPhase(.preparingDatabase)
         try await runtime.ensureLayout()
@@ -256,12 +231,16 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         do {
             try enterLaunchPhase(.startingBackend)
             let started: BackendStartResult
+            var beforeMigrations: (@Sendable (PendingMigrations) async throws -> Void)?
+            if let hook = configuration.beforeMigrations {
+                beforeMigrations = { pending in try await hook(pending, runtime) }
+            }
             do {
-                started = try await runtime.start()
+                started = try await runtime.start(beforeMigrations: beforeMigrations)
             } catch let error as NativeRuntimeError where error.code == "PORT_COLLISION" {
                 let repicked = await repickAppPort(layout)
                 await runtime.setAppPort(repicked)
-                started = try await runtime.start()
+                started = try await runtime.start(beforeMigrations: beforeMigrations)
             }
             logger.log("log", "[runtime] backend \(started)")
             if prepared.switchToken != nil {
@@ -298,28 +277,16 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         return url
     }
 
-    /// The audit half of the native runtime for this launch, or `nil` without audit
-    /// dependencies. A missing key protector leaves the anchor unavailable, like Electron
-    /// without `safeStorage`.
-    private func makeAuditRuntime(runtime: NativeRuntime, layout: RuntimeLayout, token: String?) throws -> AuditRuntime? {
-        guard let dependencies = configuration.audit, let token else { return nil }
-        let clock = self.dependencies.clock
-        let anchor = try AuditAnchor(
-            userDataDirectory: layout.userDataDirectory, keyProtector: dependencies.keyProtector,
-            witness: dependencies.witness, now: { clock.now() })
-        return AuditRuntime(
-            anchor: dependencies.keyProtector == nil ? nil : anchor,
-            transport: dependencies.transport(token, { await runtime.currentAppPort }),
-            newClusterCreatedThisLaunch: { await runtime.newClusterCreatedThisLaunch },
-            now: { clock.now() })
-    }
-
     /// `pollReady`: `/health/detailed` until the dashboard data is ready; 20 fast probes
     /// at 100 ms, then every 300 ms.
     private func pollReady(_ baseURL: URL) async throws {
         let url = baseURL.appendingPathComponent("health/detailed", isDirectory: false)
         for attempt in 0..<configuration.readinessAttempts {
             try checkShutdown()
+            // The backend exited during startup: show why instead of polling until the timeout.
+            if let runtime, let failure = await runtime.backendStartupFailure() {
+                throw NativeRuntimeError("BACKEND_EXITED", failure)
+            }
             if let response = try? await dependencies.http.get(url, timeout: 2),
                 HealthReadiness.navigationReadiness(status: response.status, body: response.body) == true
             {
@@ -422,12 +389,6 @@ public actor RuntimeSupervisor: BackupSettingsStore {
     public func backupRuntime() -> NativeRuntime? {
         guard case .running = phase, !shutdownRequested else { return nil }
         return runtime
-    }
-
-    /// The audit runtime of this launch, under the same conditions as `backupRuntime()`.
-    public func auditRuntime() -> AuditRuntime? {
-        guard case .running = phase, !shutdownRequested else { return nil }
-        return audit
     }
 
     /// The variant this supervisor runs.

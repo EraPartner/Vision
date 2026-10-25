@@ -102,7 +102,7 @@ final class MenuController: NSObject, NSMenuItemValidation {
             item.action = #selector(NSText.selectAll(_:))
         case .services:
             break
-        case .renderer, .openExternal, .about, .reload, .toggleDeveloperTools, .resetZoom, .zoomIn, .zoomOut, .print:
+        case .action, .openExternal, .about, .reload, .resetZoom, .zoomIn, .zoomOut, .print:
             item.target = self
             item.action = #selector(performMenuCommand(_:))
             item.representedObject = MenuCommandBox(command)

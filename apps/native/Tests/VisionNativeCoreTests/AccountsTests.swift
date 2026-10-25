@@ -10,7 +10,10 @@ actor FakeAccountsService: AccountsService {
     var list: [OpenAPI.Account]
     var listFailure: APIError?
     var portfolio: [PortfolioAccountRow]
+    var portfolioTotals: [PortfolioAccountTotalsRow] = []
     var portfolioFailure: APIError?
+    var totals: OpenAPI.AccountTotals = AccountsFixture.totals()
+    var totalsFailure: APIError?
     /// The whole ledger, newest first; pages are cut from it.
     var ledgerRows: [AccountLedgerRow]
     var plannedPage: AccountPlannedPage
@@ -52,6 +55,9 @@ actor FakeAccountsService: AccountsService {
     func set(list: [OpenAPI.Account]) { self.list = list }
     func set(listFailure: APIError?) { self.listFailure = listFailure }
     func set(portfolioFailure: APIError?) { self.portfolioFailure = portfolioFailure }
+    func set(portfolioTotals: [PortfolioAccountTotalsRow]) { self.portfolioTotals = portfolioTotals }
+    func set(totals: OpenAPI.AccountTotals) { self.totals = totals }
+    func set(totalsFailure: APIError?) { self.totalsFailure = totalsFailure }
     func set(plannedFailure: APIError?) { self.plannedFailure = plannedFailure }
     func set(createFailure: APIError?) { self.createFailure = createFailure }
     func set(updateFailure: APIError?) { self.updateFailure = updateFailure }
@@ -69,10 +75,16 @@ actor FakeAccountsService: AccountsService {
         return active == "true" ? list.filter { $0.isActive } : list
     }
 
-    func portfolioAccountRows(currency: String) async throws -> [PortfolioAccountRow] {
+    func portfolioAccountRows(currency: String) async throws -> AccountPortfolioSummary {
         log.append("portfolio \(currency)")
         if let portfolioFailure { throw portfolioFailure }
-        return portfolio
+        return AccountPortfolioSummary(byAccount: portfolio, accountTotals: portfolioTotals)
+    }
+
+    func accountTotals(currency: String) async throws -> OpenAPI.AccountTotals {
+        log.append("totals \(currency)")
+        if let totalsFailure { throw totalsFailure }
+        return totals
     }
 
     func ledger(accountId: Int, offset: Int, limit: Int) async throws -> AccountLedgerPage {
@@ -155,7 +167,7 @@ actor FakeAccountsService: AccountsService {
         log.append("retag")
         retags.append(request)
         if let retagFailure { throw retagFailure }
-        return LotRetagReceipt(receiptId: 41, changedCount: request.transactionIds.count)
+        return LotRetagReceipt(movedCount: request.transactionIds.count)
     }
 }
 
@@ -212,11 +224,25 @@ enum AccountsFixture {
         Decimal(string: text) ?? 0
     }
 
-    /// EUR at 1 and USD at half a euro; no rate for CHF.
-    static func rates() -> OpenAPI.ExchangeRates {
-        OpenAPI.ExchangeRates(
-            totalRates: 1, rates: [], fallbackRates: ["EUR": 1, "USD": decimal("0.5")], source: "database",
-            isStale: false, lastFetchedAt: nil)
+    /// The server's `GET /api/accounts/totals` answer; the groups default to zero.
+    static func totals(
+        netCash: Decimal = 0, netCashMissing: [String] = [], cash: OpenAPI.AccountGroupTotal = group(),
+        portfolio: OpenAPI.AccountGroupTotal = group(), liabilities: OpenAPI.AccountGroupTotal = group(),
+        archived: OpenAPI.AccountGroupTotal = group()
+    ) -> OpenAPI.AccountTotals {
+        OpenAPI.AccountTotals(
+            currency: "EUR",
+            netCash: .init(total: netCash, unconvertedCount: netCashMissing.count, unconvertedCurrencies: netCashMissing),
+            groups: .init(cash: cash, portfolio: portfolio, liabilities: liabilities, archived: archived),
+            accounts: [])
+    }
+
+    static func group(
+        total: Decimal = 0, missing: [String] = [], holdingsUnavailable: Bool = false
+    ) -> OpenAPI.AccountGroupTotal {
+        OpenAPI.AccountGroupTotal(
+            total: total, cash: total, holdings: 0, holdingsUnavailable: holdingsUnavailable,
+            unconvertedCount: missing.count, unconvertedCurrencies: missing)
     }
 
     static func row(_ id: Int, date: String, amount: Decimal, running: Decimal?, currency: String = "EUR")
@@ -234,37 +260,35 @@ enum AccountsFixture {
 
     @MainActor
     static func model(
-        _ service: FakeAccountsService, rates: [Result<OpenAPI.ExchangeRates, APIError>] = [.success(rates())],
-        keys: KeyCounter = KeyCounter()
+        _ service: FakeAccountsService, keys: KeyCounter = KeyCounter()
     ) -> AccountsModel {
         AccountsModel(
-            service: service, rates: ExchangeRatesModel(service: FakeExchangeRatesService(rates: rates)),
+            service: service,
             calendar: PlannedFixture.calendar, now: { PlannedFixture.today }, makeKey: { keys.next() })
     }
 
     @MainActor
     static func shell(
-        _ model: AccountsModel, recorder: ShellRecorder, settings: NativeAppSettings = NativeAppSettings()
+        _ model: AccountsModel, settings: NativeAppSettings = NativeAppSettings()
     ) -> NativeShellModel {
         NativeShellModel(
             strings: strings, theme: ThemeSelection(appearance: .light),
             notices: NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false),
-            exchangeRates: model.rates, admin: AdminFixture.screens(), planned: PlannedFixture.idleModel(),
+            exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService(rates: [])), admin: AdminFixture.screens(), planned: PlannedFixture.idleModel(),
             imports: ImportFixture.idleModel(), transactions: TransactionsFixture.idleModel(), accounts: model,
             categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
-            loadSettings: { settings }, onNavigate: { recorder.actions.append($0) }, settingsReloadDelay: .milliseconds(1))
+            loadSettings: { settings })
     }
 
     /// A shell on `route` with its settings read and the screen appeared.
     @MainActor
     static func opened(
-        _ service: FakeAccountsService, route: String = "/accounts", recorder: ShellRecorder = ShellRecorder(),
-        rates: [Result<OpenAPI.ExchangeRates, APIError>] = [.success(rates())], keys: KeyCounter = KeyCounter()
+        _ service: FakeAccountsService, route: String = "/accounts", keys: KeyCounter = KeyCounter()
     ) async throws -> (AccountsModel, NativeShellModel) {
-        let model = model(service, rates: rates, keys: keys)
-        let shell = shell(model, recorder: recorder)
+        let model = model(service, keys: keys)
+        let shell = shell(model)
         let parsed = try #require(NativeRoute(route))
-        shell.routeDidChange(parsed)
+        shell.show(parsed)
         await shell.settingsSettled()
         let id = AccountsRoutes.detailId(forPath: parsed.path)
         await model.appear(id.map { AccountsScreen.detail($0) } ?? .hub)
@@ -329,45 +353,22 @@ enum AccountsFixture {
         #expect(!noPortfolio.contains { $0.id == .portfolio })
     }
 
-    @Test func aMissingRateMarksTheTotalIncompleteAndNeverCountsOneToOne() {
-        let converter = PlannedCurrencyConverter(rates: AccountsFixture.rates(), target: "EUR")
-        let accounts = [
-            AccountsFixture.account(1, "A", balance: 100),
-            AccountsFixture.account(2, "B", currency: "USD", balance: 50),
-            AccountsFixture.account(3, "C", currency: "CHF", balance: 70),
-        ]
-        let total = AccountGrouping.sumConverted(accounts, converter: converter)
-        #expect(total.amount == 125)
-        #expect(total.incomplete)
-        let zeroChf = AccountGrouping.sumConverted(
-            [AccountsFixture.account(3, "C", currency: "CHF", balance: 0)], converter: converter)
-        #expect(!zeroChf.incomplete)
-        let serverIncomplete = AccountGrouping.sumConverted(
-            [AccountsFixture.account(1, "A", balance: 10, incomplete: true)], converter: converter)
-        #expect(serverIncomplete == AccountTotal(amount: 10, incomplete: true))
-    }
-
-    @Test func netCashCountsActiveInNetWorthNonPortfolioAccounts() {
-        let converter = PlannedCurrencyConverter(rates: AccountsFixture.rates(), target: "EUR")
-        let accounts = [
-            AccountsFixture.account(1, "A", balance: 100),
-            AccountsFixture.account(2, "Card", type: "liability", balance: -40),
-            AccountsFixture.account(3, "Broker", type: "brokerage", balance: 1000),
-            AccountsFixture.account(4, "Old", balance: 7, isActive: false),
-            AccountsFixture.account(5, "Hidden", balance: 9, inNetWorth: false),
-        ]
-        #expect(AccountGrouping.netCash(accounts, converter: converter) == AccountTotal(amount: 60, incomplete: false))
-    }
-
-    @Test func brokerMetricsSumPositionsAndGainsPerAccount() {
-        let rows = [
-            PortfolioAccountRow(accountId: 3, contributionKind: "position", oversold: false, currentValue: 500, gainLoss: 20),
-            PortfolioAccountRow(accountId: 3, contributionKind: "income", oversold: true, currentValue: 0, gainLoss: 5),
-            PortfolioAccountRow(accountId: 4, contributionKind: "position", oversold: false, currentValue: 9, gainLoss: 1),
-        ]
-        let metrics = BrokerAccountMetrics.of(rows, accountId: 3)
+    @Test func brokerMetricsReadThePositionRowAndTheServerAccountTotals() {
+        let summary = AccountPortfolioSummary(
+            byAccount: [
+                PortfolioAccountRow(accountId: 3, contributionKind: "position", currentValue: 500),
+                PortfolioAccountRow(accountId: 3, contributionKind: "income", currentValue: 0),
+                PortfolioAccountRow(accountId: 4, contributionKind: "position", currentValue: 9),
+            ],
+            accountTotals: [
+                PortfolioAccountTotalsRow(accountId: 3, oversold: true, gainLoss: 25),
+                PortfolioAccountTotalsRow(accountId: 4, oversold: false, gainLoss: 1),
+            ])
+        let metrics = BrokerAccountMetrics.of(summary, accountId: 3)
         #expect(metrics == BrokerAccountMetrics(holdingsValue: 500, gainLoss: 25, oversold: true, hasPosition: true))
-        #expect(BrokerAccountMetrics.of(rows, accountId: 8)?.hasPosition == false)
+        #expect(
+            BrokerAccountMetrics.of(summary, accountId: 8)
+                == BrokerAccountMetrics(holdingsValue: 0, gainLoss: 0, oversold: false, hasPosition: false))
         #expect(BrokerAccountMetrics.of(nil, accountId: 3) == nil)
     }
 
@@ -401,40 +402,56 @@ enum AccountsFixture {
 
 @MainActor
 @Suite struct AccountsHubTests {
-    @Test func theHubLoadsAndConvertsItsSubtotals() async throws {
+    @Test func theHubShowsTheServerSubtotalsAndNetCash() async throws {
         let service = FakeAccountsService(
             list: [
                 AccountsFixture.account(1, "Checking", balance: 100),
-                AccountsFixture.account(2, "Dollars", currency: "USD", balance: 50),
                 AccountsFixture.account(3, "Broker", type: "brokerage", balance: 10),
             ],
-            portfolio: [
-                PortfolioAccountRow(accountId: 3, contributionKind: "position", oversold: false, currentValue: 400, gainLoss: -5)
-            ])
+            portfolio: [PortfolioAccountRow(accountId: 3, contributionKind: "position", currentValue: 400)])
+        await service.set(portfolioTotals: [PortfolioAccountTotalsRow(accountId: 3, oversold: false, gainLoss: -5)])
+        await service.set(
+            totals: AccountsFixture.totals(
+                netCash: 125, cash: AccountsFixture.group(total: 125), portfolio: AccountsFixture.group(total: 410)))
         let (model, shell) = try await AccountsFixture.opened(service)
         defer { withExtendedLifetime(shell) {} }
         #expect(shell.detail == .native(.accounts))
         #expect(model.visibleGroups.map { $0.id } == [.cash, .portfolio])
         #expect(model.subtotal(model.visibleGroups[0]) == .amount(AccountTotal(amount: 125, incomplete: false)))
-        // Cash sleeve plus holdings.
         #expect(model.subtotal(model.visibleGroups[1]) == .amount(AccountTotal(amount: 410, incomplete: false)))
         #expect(model.netCash == .amount(AccountTotal(amount: 125, incomplete: false)))
         let broker = try #require(model.account(3))
         #expect(model.metrics(broker)?.holdingsValue == 400)
-        #expect(await service.log.contains("portfolio EUR"))
+        #expect(model.metrics(broker)?.gainLoss == -5)
+        let log = await service.log
+        #expect(log.contains("portfolio EUR"))
+        #expect(log.contains("totals EUR"))
     }
 
-    @Test func aMissingRateOrAFailedSummaryShowsInTheSubtotals() async throws {
+    @Test func unconvertedBalancesMarkTheSubtotalsIncompleteAndAnUnavailableHoldingsFigureShowsAsSuch() async throws {
         let service = FakeAccountsService(list: [
             AccountsFixture.account(1, "Francs", currency: "CHF", balance: 100),
             AccountsFixture.account(3, "Broker", type: "brokerage", balance: 10),
         ])
-        await service.set(portfolioFailure: .network("offline"))
+        await service.set(
+            totals: AccountsFixture.totals(
+                netCash: 0, netCashMissing: ["CHF"], cash: AccountsFixture.group(total: 0, missing: ["CHF"]),
+                portfolio: AccountsFixture.group(holdingsUnavailable: true)))
         let (model, shell) = try await AccountsFixture.opened(service)
         defer { withExtendedLifetime(shell) {} }
         #expect(model.subtotal(model.visibleGroups[0]) == .amount(AccountTotal(amount: 0, incomplete: true)))
         #expect(model.subtotal(model.visibleGroups[1]) == .unavailable)
         #expect(model.netCash == .amount(AccountTotal(amount: 0, incomplete: true)))
+    }
+
+    @Test func aFailedTotalsRequestLeavesTheSubtotalsAndNetCashUnavailable() async throws {
+        let service = FakeAccountsService(list: [AccountsFixture.account(1, "Checking", balance: 100)])
+        await service.set(totalsFailure: .network("offline"))
+        let (model, shell) = try await AccountsFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
+        #expect(model.totalsError != nil)
+        #expect(model.subtotal(model.visibleGroups[0]) == .unavailable)
+        #expect(model.netCash == .unavailable)
     }
 
     @Test func anErrorShowsAndRetryRefetches() async throws {
@@ -459,18 +476,17 @@ enum AccountsFixture {
     }
 
     @Test func rowActionsNavigateOnlyWhileShown() async throws {
-        let recorder = ShellRecorder()
         let account = AccountsFixture.account(5, "kbc", displayName: "My Bank")
-        let (model, shell) = try await AccountsFixture.opened(FakeAccountsService(list: [account]), recorder: recorder)
+        let (model, shell) = try await AccountsFixture.opened(FakeAccountsService(list: [account]))
         defer { withExtendedLifetime(shell) {} }
         model.openDetail(account)
-        #expect(recorder.actions.last == .navigate("/accounts/5"))
+        #expect(shell.nativeNavigationLocation.raw == "/accounts/5")
         model.openTransactions(account)
-        #expect(recorder.actions.last == .navigate("/transactions?account_id=5&filter_label=My%20Bank"))
+        #expect(shell.nativeNavigationLocation.raw == "/transactions?account_id=5&filter_label=My%20Bank")
         model.disappear(.hub)
-        let before = recorder.actions.count
+        let before = shell.nativeNavigationLocation.raw
         model.openDetail(account)
-        #expect(recorder.actions.count == before)
+        #expect(shell.nativeNavigationLocation.raw == before)
     }
 
     @Test func reconcileShowsForDriftOrMultiCurrencyCashButNotHoldingsOnly() async throws {
@@ -487,8 +503,8 @@ enum AccountsFixture {
 
     @Test func accountsIsNativeWithoutAdminMode() async throws {
         let model = AccountsFixture.idleModel()
-        let shell = AccountsFixture.shell(model, recorder: ShellRecorder())
-        shell.routeDidChange(try #require(NativeRoute("/accounts/4?since=2026-01-01")))
+        let shell = AccountsFixture.shell(model)
+        shell.show(try #require(NativeRoute("/accounts/4?since=2026-01-01")))
         await shell.settingsSettled()
         #expect(shell.detail == .native(.accountDetail(id: 4)))
     }
@@ -750,9 +766,8 @@ enum AccountsFixture {
 
     @Test func saveReadingBackfillAndShowSince() async throws {
         let account = Self.drifting()
-        let recorder = ShellRecorder()
         let service = FakeAccountsService(list: [account])
-        let (model, shell) = try await AccountsFixture.opened(service, recorder: recorder)
+        let (model, shell) = try await AccountsFixture.opened(service)
         defer { withExtendedLifetime(shell) {} }
         model.openReconcile(account)
         model.reconcile?.setReading("940,10")
@@ -766,7 +781,7 @@ enum AccountsFixture {
         model.openReconcile(account)
         model.showSince()
         #expect(model.reconcile == nil)
-        #expect(recorder.actions.last == .navigate("/accounts/7?since=2026-09-30"))
+        #expect(shell.nativeNavigationLocation.raw == "/accounts/7?since=2026-09-30")
     }
 
     @Test func theOpeningBalancePrefillsFromTheStatementThenTheBase() async throws {
@@ -915,7 +930,7 @@ enum AccountsFixture {
         model.setTransferDestination(.unassigned)
         #expect(model.transfer?.canTransfer == true)
         await model.confirmTransfer()
-        #expect(model.transfer?.receipt == LotRetagReceipt(receiptId: 41, changedCount: 1))
+        #expect(model.transfer?.receipt == LotRetagReceipt(movedCount: 1))
         #expect(model.notice?.key == "portfolio.brokerTransfer.done")
         let request = try #require(await service.retags.first)
         let json = String(decoding: try APIBody.encode(request), as: UTF8.self)
@@ -925,9 +940,8 @@ enum AccountsFixture {
 
     @Test func deleteAsksFirstThenLeavesForTheHub() async throws {
         let account = AccountsFixture.account(6, "Unused", hasTransactions: false)
-        let recorder = ShellRecorder()
         let service = FakeAccountsService(list: [account, AccountsFixture.account(7, "Kept")])
-        let (model, shell) = try await AccountsFixture.opened(service, route: "/accounts/6", recorder: recorder)
+        let (model, shell) = try await AccountsFixture.opened(service, route: "/accounts/6")
         defer { withExtendedLifetime(shell) {} }
         #expect(model.menuItems(account).last == .delete)
         model.requestDelete(account)
@@ -938,7 +952,7 @@ enum AccountsFixture {
         await model.confirmDelete()
         #expect(await service.log.contains("delete 6"))
         #expect(model.notice?.key == "accounts.deleted")
-        #expect(recorder.actions.contains(.navigate("/accounts")))
+        #expect(shell.nativeNavigationLocation.raw == "/accounts")
     }
 
     @Test func aStillReferencedAccountOpensCloseInstead() async throws {
@@ -1031,17 +1045,15 @@ enum AccountsFixture {
 
     @Test func sinceFiltersTheLoadedRowsAndStopsLoadMore() async throws {
         let account = AccountsFixture.account(2, "Daily")
-        let recorder = ShellRecorder()
         let service = FakeAccountsService(list: [account], ledgerRows: Self.ledger(150))
-        let (model, shell) = try await AccountsFixture.opened(
-            service, route: "/accounts/2?since=2026-10-20", recorder: recorder)
+        let (model, shell) = try await AccountsFixture.opened(service, route: "/accounts/2?since=2026-10-20")
         defer { withExtendedLifetime(shell) {} }
         #expect(model.since == "2026-10-20")
         #expect(model.visibleLedger.allSatisfy { $0.date >= "2026-10-20" })
         #expect(!model.visibleLedger.isEmpty)
         #expect(!model.ledgerHasMore)
         model.clearSince()
-        #expect(recorder.actions.last == .replaceRoute("/accounts/2"))
+        #expect(shell.nativeNavigationLocation.raw == "/accounts/2")
         #expect(model.since == nil)
         #expect(model.ledgerHasMore)
     }

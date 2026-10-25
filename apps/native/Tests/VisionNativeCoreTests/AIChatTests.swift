@@ -271,7 +271,7 @@ struct AIChatTests {
         screens.isOnline = false
         await screens.load(route: NativeRoute(path: "/ai-chat"))
         let requests = await transport.recorded
-        #expect(!screens.chat.isOnline && !screens.investigation.isOnline)
+        #expect(!screens.chat.isOnline)
         #expect(requests.map(\.url.path) == ["/api/ai-research/documents"])
         screens.didDisappear()
         await screens.refresh(route: NativeRoute(path: "/ai-chat"))
@@ -626,8 +626,6 @@ private actor ChatWireTransport: APITransport {
             ])
         } else if request.url.path == "/api/ai-research/documents" {
             data = .object(["items": .array([]), "total": .number(0)])
-        } else if request.url.path == "/api/ai-research/status" {
-            data = .object(["openai": .object(["enabled": .bool(false), "models": .array([])])])
         } else if request.url.path == "/api/ai/models" {
             data = .object([
                 "items": .array([.object(["name": .string("model"), "size": .null])]), "total": .number(1),

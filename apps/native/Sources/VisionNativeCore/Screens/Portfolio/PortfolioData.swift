@@ -223,7 +223,18 @@ public struct PortfolioHolding: Decodable, Equatable, Sendable, Identifiable {
     public let nativeCurrentPrice: Decimal?
     public let nativeAvgCostBasis: Decimal?
     public let unrealizedGainPercent: Decimal?
+    /// Latest rent_income amount in its booking currency, without conversion.
     public let estimatedMonthlyRent: Decimal?
+    /// Latest rent converted to the reporting currency at the latest stored rate on the server.
+    /// `0` without rent; `nil` when the rent's currency has no stored rate (ADR-216).
+    public let monthlyRent: Decimal?
+    /// `totalFees + totalTaxes`, from the server's rounded fields.
+    public let feesAndTaxes: Decimal?
+    /// Real estate return: `totalAppreciation + totalIncome - totalFees - totalTaxes`, on the server.
+    public let propertyReturn: Decimal?
+    /// This holding's figures per broker account, every contribution kind summed on the server.
+    /// The broker filter reads these instead of adding `byAccount` rows.
+    public let accountTotals: [OpenAPI.PortfolioSummaryAccountTotals]
     public var isClosed: Bool { totalUnits <= 0 && currentValue == 0 }
     public var hasLiveProvider: Bool { (priceProvider.flatMap { $0.isEmpty ? nil : $0 } ?? "manual") != "manual" }
     public func rawValue(_ key: String) -> TableRawValue {
@@ -290,6 +301,7 @@ public struct PortfolioHolding: Decodable, Equatable, Sendable, Identifiable {
         case byAccount = "byAccount"
         case transactionCount = "transactionCount"
         case summarySource, nativeCurrentPrice, nativeAvgCostBasis, unrealizedGainPercent, estimatedMonthlyRent
+        case monthlyRent, feesAndTaxes, propertyReturn, accountTotals
     }
     public init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -345,6 +357,11 @@ public struct PortfolioHolding: Decodable, Equatable, Sendable, Identifiable {
         nativeAvgCostBasis = try values.decodeIfPresent(Decimal.self, forKey: .nativeAvgCostBasis)
         unrealizedGainPercent = try values.decodeIfPresent(Decimal.self, forKey: .unrealizedGainPercent)
         estimatedMonthlyRent = try values.decodeIfPresent(Decimal.self, forKey: .estimatedMonthlyRent)
+        monthlyRent = try values.portfolioDecimalIfPresent(forKey: .monthlyRent)
+        feesAndTaxes = try values.portfolioDecimalIfPresent(forKey: .feesAndTaxes)
+        propertyReturn = try values.portfolioDecimalIfPresent(forKey: .propertyReturn)
+        accountTotals =
+            try values.decodeIfPresent([OpenAPI.PortfolioSummaryAccountTotals].self, forKey: .accountTotals) ?? []
     }
 }
 
@@ -426,15 +443,6 @@ public struct PortfolioCashFeeAccount: Codable, Equatable, Sendable {
     }
 }
 
-public struct PortfolioArchivedIncome: Codable, Equatable, Sendable, Identifiable {
-    public let id: Int
-    public let totalInKindIncome: Decimal
-    enum CodingKeys: String, CodingKey {
-        case id = "id"
-        case totalInKindIncome = "totalInKindIncome"
-    }
-}
-
 public struct PortfolioSummaryData: Decodable, Equatable, Sendable {
     public let currency: String
     public let computedAt: String
@@ -442,8 +450,13 @@ public struct PortfolioSummaryData: Decodable, Equatable, Sendable {
     public let summaries: [PortfolioHolding]
     public let byAccount: [PortfolioPartition]
     public let brokerageCashFees: PortfolioCashFees?
-    public let archivedInKindIncome: [PortfolioArchivedIncome]?
-    public let archivedPresentation: [PortfolioHolding]?
+    /// Portfolio-wide figures per broker account (`account_id` nil is unassigned), summed on the
+    /// server: the broker filter's options and subtotals.
+    public let accountTotals: [OpenAPI.PortfolioSummaryAccountTotals]
+    /// Totals per asset class present in `summaries`, and per asset page group, summed on the
+    /// server (ADR-216): the asset pages and the allocation read these, never summing holdings.
+    public let byAssetClass: [OpenAPI.PortfolioAssetClassTotals]
+    public let byAssetGroup: [OpenAPI.PortfolioAssetGroupTotals]
     public let firstInvestmentDate: String?
     enum CodingKeys: String, CodingKey {
         case currency = "currency"
@@ -452,8 +465,7 @@ public struct PortfolioSummaryData: Decodable, Equatable, Sendable {
         case summaries = "summaries"
         case byAccount = "byAccount"
         case brokerageCashFees = "brokerageCashFees"
-        case archivedInKindIncome = "archivedInKindIncome"
-        case archivedPresentation = "archivedPresentation"
+        case accountTotals, byAssetClass, byAssetGroup
         case firstInvestmentDate
     }
     public init(from decoder: any Decoder) throws {
@@ -464,9 +476,84 @@ public struct PortfolioSummaryData: Decodable, Equatable, Sendable {
         summaries = try values.decode([PortfolioHolding].self, forKey: .summaries)
         byAccount = try values.decode([PortfolioPartition].self, forKey: .byAccount)
         brokerageCashFees = try values.decodeIfPresent(PortfolioCashFees.self, forKey: .brokerageCashFees)
-        archivedInKindIncome = try values.decodeIfPresent([PortfolioArchivedIncome].self, forKey: .archivedInKindIncome)
-        archivedPresentation = try values.decodeIfPresent([PortfolioHolding].self, forKey: .archivedPresentation)
+        accountTotals =
+            try values.decodeIfPresent([OpenAPI.PortfolioSummaryAccountTotals].self, forKey: .accountTotals) ?? []
+        byAssetClass =
+            try values.decodeIfPresent([OpenAPI.PortfolioAssetClassTotals].self, forKey: .byAssetClass) ?? []
+        byAssetGroup =
+            try values.decodeIfPresent([OpenAPI.PortfolioAssetGroupTotals].self, forKey: .byAssetGroup) ?? []
         firstInvestmentDate = try values.decodeIfPresent(String.self, forKey: .firstInvestmentDate)
+    }
+}
+
+/// The server totals of one asset page (`findHoldingTotals`, hooks/portfolio/assetGroupTotals.ts).
+public struct PortfolioHoldingTotals: Equatable, Sendable {
+    public let totalPortfolioValue: Decimal
+    public let totalInvested: Decimal
+    public let totalRealizedGain: Decimal
+    public let totalUnrealizedGain: Decimal
+    public let totalIncome: Decimal
+    public let totalDividends: Decimal
+    public let totalFeesAndTaxes: Decimal
+    public let netReturnExcludingIncome: Decimal
+    public let netReturnWithDividends: Decimal
+    public let totalAppreciation: Decimal
+    public let totalPropertyReturn: Decimal
+    public let totalAccruedInterest: Decimal
+    public let totalProjectedAnnualInterest: Decimal
+    public let valueWeightedInterestRate: Decimal
+    public let estimatedMonthlyRent: Decimal
+    /// Some property's rent has no stored rate, so the monthly rent is incomplete.
+    public let monthlyRentRateMissing: Bool
+
+    /// Shown while the summary is loading or holds no matching group.
+    public static let empty = PortfolioHoldingTotals(
+        totalPortfolioValue: 0, totalInvested: 0, totalRealizedGain: 0, totalUnrealizedGain: 0, totalIncome: 0,
+        totalDividends: 0, totalFeesAndTaxes: 0, netReturnExcludingIncome: 0, netReturnWithDividends: 0,
+        totalAppreciation: 0, totalPropertyReturn: 0, totalAccruedInterest: 0, totalProjectedAnnualInterest: 0,
+        valueWeightedInterestRate: 0, estimatedMonthlyRent: 0, monthlyRentRateMissing: false)
+}
+
+extension PortfolioHoldingTotals {
+    init(_ group: OpenAPI.PortfolioAssetGroupTotals) {
+        self.init(
+            totalPortfolioValue: group.totalPortfolioValue, totalInvested: group.totalInvested,
+            totalRealizedGain: group.totalRealizedGain, totalUnrealizedGain: group.totalUnrealizedGain,
+            totalIncome: group.totalIncome, totalDividends: group.totalDividends,
+            totalFeesAndTaxes: group.totalFeesAndTaxes, netReturnExcludingIncome: group.netReturnExcludingIncome,
+            netReturnWithDividends: group.netReturnWithDividends, totalAppreciation: group.totalAppreciation,
+            totalPropertyReturn: group.totalPropertyReturn, totalAccruedInterest: group.totalAccruedInterest,
+            totalProjectedAnnualInterest: group.totalProjectedAnnualInterest,
+            valueWeightedInterestRate: group.valueWeightedInterestRate,
+            estimatedMonthlyRent: group.estimatedMonthlyRent, monthlyRentRateMissing: group.monthlyRentRateMissing)
+    }
+
+    init(_ entry: OpenAPI.PortfolioAssetClassTotals) {
+        self.init(
+            totalPortfolioValue: entry.totalPortfolioValue, totalInvested: entry.totalInvested,
+            totalRealizedGain: entry.totalRealizedGain, totalUnrealizedGain: entry.totalUnrealizedGain,
+            totalIncome: entry.totalIncome, totalDividends: entry.totalDividends,
+            totalFeesAndTaxes: entry.totalFeesAndTaxes, netReturnExcludingIncome: entry.netReturnExcludingIncome,
+            netReturnWithDividends: entry.netReturnWithDividends, totalAppreciation: entry.totalAppreciation,
+            totalPropertyReturn: entry.totalPropertyReturn, totalAccruedInterest: entry.totalAccruedInterest,
+            totalProjectedAnnualInterest: entry.totalProjectedAnnualInterest,
+            valueWeightedInterestRate: entry.valueWeightedInterestRate,
+            estimatedMonthlyRent: entry.estimatedMonthlyRent, monthlyRentRateMissing: entry.monthlyRentRateMissing)
+    }
+}
+
+extension PortfolioSummaryData {
+    /// The server totals of exactly these asset classes: the asset group with the same classes, or
+    /// the single class's own entry (`findHoldingTotals`).
+    public func holdingTotals(assetClasses: [String]) -> PortfolioHoldingTotals {
+        let wanted = Set(assetClasses)
+        if let group = byAssetGroup.first(where: { Set($0.assetClasses) == wanted }) {
+            return PortfolioHoldingTotals(group)
+        }
+        if assetClasses.count == 1, let single = byAssetClass.first(where: { $0.assetClass == assetClasses[0] }) {
+            return PortfolioHoldingTotals(single)
+        }
+        return .empty
     }
 }
 

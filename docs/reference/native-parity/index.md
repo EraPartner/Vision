@@ -2,8 +2,8 @@
 title: "Native parity inventory"
 type: reference
 status: active
-date: 2026-10-17
-updated: 2026-10-17
+date: 2026-10-25
+updated: 2026-10-25
 tags: [reference, swift-rewrite, native-parity, index, adr-203]
 description: "Index of the code-derived inventory of every screen, dialog and user action in the web UI. It is the parity checklist for the Swift rewrite (ADR-204): each row is web today and flips to native when a screen PR ports it."
 aliases: [native parity, parity inventory, swift parity checklist]
@@ -26,7 +26,7 @@ aliases: [native parity, parity inventory, swift parity checklist]
 
 | Page                                                                                                   | Routes                                                                                                     | Screens | Dialogs, sheets, popovers, menus | Action rows |
 | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- | ------: | -------------------------------: | ----------: |
-| [[docs/reference/native-parity/shell-and-settings\|App shell, navigation, settings and onboarding]]    | app chrome, Settings dialog, onboarding, 404, Electron menus and bridge                                    |       3 |                               12 |         205 |
+| [[docs/reference/native-parity/shell-and-settings\|App shell, navigation, settings and onboarding]]    | app chrome, Settings dialog, onboarding, 404, Electron menus and bridge                                    |       3 |                               12 |         204 |
 | [[docs/reference/native-parity/home-and-statistics\|Home, Statistics and reports]]                     | `/`, `/statistics`                                                                                         |       2 |                               13 |         148 |
 | [[docs/reference/native-parity/transactions-and-splits\|Transactions, splits and Who owes you]]        | `/transactions`, `/owes`                                                                                   |       2 |                               29 |         218 |
 | [[docs/reference/native-parity/accounts-categories-recipients\|Accounts, categories, payees and tags]] | `/accounts`, `/accounts/:id`, `/categories`, `/recipients`                                                 |       4 |                               25 |         170 |
@@ -37,8 +37,8 @@ aliases: [native parity, parity inventory, swift parity checklist]
 | [[docs/reference/native-parity/analysis\|Analysis workspace and monitors]]                             | `/analysis`, `/analysis/monitors`                                                                          |       2 |                                7 |         224 |
 | [[docs/reference/native-parity/tax\|Belgian tax]]                                                      | `/tax`                                                                                                     |       1 |                                8 |         117 |
 | [[docs/reference/native-parity/research-and-ai-chat\|Research and AI chat]]                            | seven `/research*` routes, `/research/dossiers`, `/ai-chat`                                                |       9 |                               25 |         222 |
-| [[docs/reference/native-parity/admin\|Admin and developer tools]]                                      | `/admin`, `/admin/db`, `/admin/db/:table`, `/admin/providers`, `/admin/endpoints`, `/admin/exchange-rates` |       6 |                               13 |          89 |
-| **Total**                                                                                              | 40 routes in `appRouteManifest`, one legacy redirect, plus the shell                                       |  **44** |                          **179** |   **1,807** |
+| [[docs/reference/native-parity/admin\|Admin and developer tools]]                                      | `/admin`, `/admin/db`, `/admin/db/:table`, `/admin/providers`, `/admin/endpoints`, `/admin/exchange-rates` |       6 |                                8 |          66 |
+| **Total**                                                                                              | 40 routes in `appRouteManifest`, one legacy redirect, plus the shell                                       |  **44** |                          **174** |   **1,783** |
 
 Counts are the pages' own. The 44 screens are the 40 manifest routes, the `/portfolio/performance` redirect, and the shell page's app chrome, 404 page and Electron startup error page. Shared components (`VirtualDataTable`, comboboxes, `DatePicker`, `RowMenu`, `ExportDialog`) are inventoried in full on the first page that uses them and referenced from the others.
 
@@ -48,7 +48,7 @@ Counts are the pages' own. The 44 screens are the 40 manifest routes, the `/port
 branch, current phase, parallel ownership, unfinished work and validation gaps for continuation.
 
 [[docs/reference/native-parity/phase-1-exit|The phase 1 exit checklist]] maps each of the shell
-page's 205 action rows, its keyboard shortcuts and its bridge methods to the Vision Native code at
+page's 204 action rows, its keyboard shortcuts and its bridge methods to the Vision Native code at
 the end of phase 1, and counts the gaps that remain for the hand-over
 ([[docs/adr/205-vision-native-hand-over|ADR-205]], accepted).
 
@@ -56,14 +56,14 @@ the end of phase 1, and counts the gaps that remain for the hand-over
 
 - **The Belgian tax engine now has a backend operation**: `POST /api/belgian-tax/compute` runs the shared TypeScript engine in `packages/shared-utils/src/belgianTax/`. The web app uses compatibility exports and retains its lazy loading. This satisfies ADR-204's computation prerequisite. Phase 3h now implements native Tax widgets/charts, the six-step write-through profile sheet, snapshot/freeze/filing/history actions, deductions and CSV. Overview/dashboard APIs preserve frozen figures and keep fiscal derivation server-owned. Phase 3p mounts the native PDF report sheet and loaded-page Tax/Statistics/Net worth print documents. App compilation has passed on macOS; the full package gate, rendered print and Demo interaction/accessibility parity remain under verification. See [[docs/api/belgian-tax|Belgian Tax API]].
 - **Two routes were missing from [[docs/reference/frontend-routes|Frontend Routes]]**: `/analysis/monitors` and `/research/dossiers`. Both are in `appRouteManifest` and the sidebar; the routes page now lists them.
-- **Electron-only surfaces** (application and dock menus, badge, CSV open-with, vibrancy, accent colour, the `electronBackup`, `electronAudit`, `electronUpdater`, `electronServices`, `electronAPI` and `electronRecovery` bridges) are inventoried on the shell page. The updater rows are the one deliberate cut (ADR-204 §5).
+- **Electron-only surfaces** (application and dock menus, badge, CSV open-with, vibrancy, accent colour, the `electronBackup`, `electronUpdater`, `electronServices`, `electronAPI` and `electronRecovery` bridges) are inventoried on the shell page. The `electronAudit` bridge was removed by [[docs/adr/231-remove-audit-history|ADR-231]], and Vision Native has no preload bridge at all: each bridge method is a direct Swift call. The updater rows are the one deliberate cut (ADR-204 §5).
 
 ## Deliberate cuts
 
-| Rows                                                                                    | Decision                                                                        |
-| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Shell: Updates section of Settings › About, `electronUpdater` bridge, update menu items | Not ported; the install script is the update path (ADR-204 §5, Tor 2026-10-11). |
-| Shell: Help › About on non-macOS (app menu row 16)                                       | Not applicable; Vision Native is macOS-only and its app menu has About (owner 2026-10-17). |
+| Rows                                                                                    | Decision                                                                                   |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Shell: Updates section of Settings › About, `electronUpdater` bridge, update menu items | Not ported; the install script is the update path (ADR-204 §5, Tor 2026-10-11).            |
+| Shell: Help › About on non-macOS (app menu row 16)                                      | Not applicable; Vision Native is macOS-only and its app menu has About (owner 2026-10-17). |
 
 ## Doc and code conflicts
 

@@ -41,7 +41,8 @@ public enum DatabaseSwitchState: Sendable, Equatable {
 /// discovery, `initdb`, role and extension bootstrap, PostgreSQL start and stop, the
 /// backend child, PID ownership, health, the database switch used by Demo seeding and
 /// restore, the plain dump and the attachment switch used by backup and restore (phase
-/// 1d), and the per-launch audit bridge token the backend receives (phase 1e).
+/// 1d). Migrations are TypeScript/Kysely and run in the backend at boot; the runtime reads
+/// the `public.kysely_migration` ledger for the schema head.
 public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     public nonisolated let layout: RuntimeLayout
     public nonisolated let names: RuntimeNames
@@ -51,13 +52,12 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
 
     private let inheritedEnvironment: [String: String]
     private let dependencies: RuntimeDependencies
-    /// `VISION_AUDIT_BRIDGE_TOKEN`: 64 lowercase hex characters, new every launch.
-    private let auditBridgeToken: String?
+    /// `recordBootPhase`: receives named startup timings, such as the payload verification.
+    private let recordBootPhase: (@Sendable (String, Int) -> Void)?
     private var appPort: Int
     private var tools: NativeTools?
     private var postgresChild: SpawnedChild?
     private var backendChild: SpawnedChild?
-    public private(set) var newClusterCreatedThisLaunch = false
     private var shuttingDown = false
     /// The staging database of a Demo restore whose switch plan is not persisted yet.
     private var stagingRestoreDatabase: String?
@@ -75,14 +75,9 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         appPort: Int,
         inheritedEnvironment: [String: String],
         dependencies: RuntimeDependencies,
-        auditBridgeToken: String? = nil
+        recordBootPhase: (@Sendable (String, Int) -> Void)? = nil
     ) throws {
-        if let auditBridgeToken,
-            auditBridgeToken.range(of: "^[0-9a-f]{64}\\z", options: .regularExpression) == nil
-        {
-            throw NativeRuntimeError("INVALID_AUDIT_BRIDGE_TOKEN", "Invalid native audit bridge token")
-        }
-        self.auditBridgeToken = auditBridgeToken
+        self.recordBootPhase = recordBootPhase
         self.layout = layout
         names = try RuntimeNames(runtimeId: layout.runtimeId)
         self.postgresPort = try validateNetworkPort(postgresPort, "native PostgreSQL port")
@@ -153,7 +148,8 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     // MARK: - Layout and discovery
 
     /// `ensureLayout`: private directories, then `runtime.env` (created once, upgraded
-    /// with a cluster administrator when older), validated and pinned to the port.
+    /// with a cluster administrator when older and stripped of the secrets of removed
+    /// features), validated and pinned to the port.
     @discardableResult
     public func prepareLayout() throws -> DatabaseConfig {
         for directory in [layout.nativeRoot, layout.logs, layout.attachments, layout.cache, layout.postgresRoot] {
@@ -162,7 +158,8 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         let text: String
         switch try readRuntimeEnv() {
         case .some(let existing):
-            let upgraded = RuntimeEnvFile.ensureAdmin(existing, names: names, random: dependencies.random)
+            let upgraded = RuntimeEnvFile.stripRetired(
+                RuntimeEnvFile.ensureAdmin(existing, names: names, random: dependencies.random))
             _ = try RuntimeEnvFile.databaseConfig(upgraded)
             if upgraded != existing {
                 try fileSystem.writeText(layout.env, upgraded, mode: 0o600)
@@ -199,15 +196,20 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         }
     }
 
-    /// `discover`: verifies the payload manifest and finds every tool.
+    /// `discover`: verifies the payload manifest (a full hash once per installed payload, a
+    /// size check afterwards, ADR-235) and finds every tool.
     @discardableResult
     public func discoverTools() async throws -> NativeTools {
+        let started = Date()
+        let recorder = recordBootPhase
+        let milliseconds: @Sendable (Date) -> Int = { Int(Date().timeIntervalSince($0) * 1000) }
         let discovered = try await RuntimePayload.discoverTools(
             runtimeRoot: runtimeRoot,
-            environment: inheritedEnvironment,
+            markerPath: PathUtilities.join(layout.nativeRoot, RuntimeConstants.runtimeVerificationMarker),
             fileSystem: fileSystem,
             runner: dependencies.runner,
-            childEnvironment: safeEnvironment())
+            childEnvironment: safeEnvironment(),
+            verification: { mode in recorder?("runtime_manifest_\(mode.rawValue)", milliseconds(started)) })
         tools = discovered
         return discovered
     }
@@ -275,7 +277,6 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
             try ensureManagedPostgresConfig(staging)
             try fileSystem.setMode(staging, 0o700)
             try fileSystem.move(staging, layout.postgresData)
-            newClusterCreatedThisLaunch = true
             try? fileSystem.remove(secretDirectory)
             return ManagedClusterResult(status: .initialized, configChanged: true)
         } catch {
@@ -411,7 +412,8 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     }
 
     /// `ensurePostgresReady`: reuses a running cluster that passes inspection (restarting
-    /// it after a configuration change), otherwise starts it and waits up to 60 probes.
+    /// it after a configuration change), otherwise starts it and probes every 50 ms for up
+    /// to 30 seconds (a clean cluster accepts connections about 0.1 s after the spawn).
     public func ensurePostgresReady(startService: Bool) async throws {
         try await ensureDiscovered()
         let config = try prepareLayout()
@@ -436,11 +438,12 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         }
         if !ready && startService {
             try await startManagedPostgres()
-            for _ in 0..<60 {
+            let deadline = now().addingTimeInterval(30)
+            while now() < deadline {
                 if postgresChild?.hasExited() == true { break }
                 ready = await postgresIsReady(timeout: 3)
                 if ready { break }
-                await dependencies.clock.sleep(milliseconds: 500)
+                await dependencies.clock.sleep(milliseconds: 50)
             }
         }
         guard ready else {
@@ -455,7 +458,7 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
 
     /// `runSecretAdminSql`: SQL containing secrets goes through a 0600 file, never argv,
     /// and a failure never echoes the statement.
-    private func runSecretAdminSQL(_ config: DatabaseConfig, _ sql: String) async throws {
+    private func runSecretAdminSQL(_ config: DatabaseConfig, _ sql: String, timeout: TimeInterval = 10) async throws {
         let directory = try fileSystem.makeTemporaryDirectory(prefix: "vision-pg-admin-")
         do {
             let sqlFile = PathUtilities.join(directory, "command.sql")
@@ -467,7 +470,7 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
                         "-h", host, "-p", String(postgresPort), "-U", config.adminRole, "--dbname", "postgres",
                         "--set", "ON_ERROR_STOP=1", "--no-psqlrc", "--file", sqlFile,
                     ],
-                    timeout: 10)
+                    timeout: timeout)
             } catch {
                 throw NativeRuntimeError("POSTGRES_ROLE_BOOTSTRAP_FAILED", "Native database role bootstrap failed")
             }
@@ -478,24 +481,12 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         }
     }
 
-    private func adminArguments(_ config: DatabaseConfig) -> [String] {
-        [
-            "-h", host, "-p", String(postgresPort), "-U", config.adminRole, "--dbname", "postgres", "--set",
-            "ON_ERROR_STOP=1", "--no-psqlrc",
-        ]
-    }
-
-    private func roleExists(_ role: String, _ config: DatabaseConfig) async throws -> Bool {
-        let result = try await runAsClusterAdmin(
-            config, try tool("psql"),
-            adminArguments(config) + ["--tuples-only", "--no-align", "--command", PostgresSQL.roleExistsQuery(role)],
-            timeout: 10)
-        return result.stdout.trimmingCharacters(in: .whitespacesAndNewlines) == "1"
-    }
-
     /// `bootstrapDatabase`: owner and application roles (created once, passwords and
     /// attributes reset every launch), the read-only analysis executor, the database
-    /// owned by the migration owner, and the required extensions.
+    /// owned by the migration owner, and the required extensions, all in one psql session
+    /// (`PostgresSQL.bootstrapSQL`). Table grants and migrations belong to the backend,
+    /// which migrates at boot from `db/migrations` and applies
+    /// `config/postgres/app-role-grants.sql.tpl`.
     @discardableResult
     public func bootstrapDatabase() async throws -> DatabaseConfig {
         let config = try prepareLayout()
@@ -506,49 +497,7 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
             startupRestoreRecovery = recovery
             try await recovery.value
         }
-        let psql = try tool("psql")
-        let adminArgs = adminArguments(config)
-
-        if !(try await roleExists(config.ownerRole, config)) {
-            try await runSecretAdminSQL(
-                config, try PostgresSQL.createLoginRole(config.ownerRole, password: config.ownerPassword))
-        }
-        try await runSecretAdminSQL(
-            config, try PostgresSQL.alterLoginRole(config.ownerRole, password: config.ownerPassword))
-        if !(try await roleExists(config.appRole, config)) {
-            try await runSecretAdminSQL(
-                config, try PostgresSQL.createLoginRole(config.appRole, password: config.appPassword))
-        }
-        try await runSecretAdminSQL(
-            config, try PostgresSQL.alterLoginRole(config.appRole, password: config.appPassword))
-
-        if !(try await roleExists(RuntimeConstants.analysisRole, config)) {
-            try await runSecretAdminSQL(config, PostgresSQL.createAnalysisRole)
-        }
-        try await runSecretAdminSQL(config, PostgresSQL.configureAnalysisRole(password: config.analysisPassword))
-
-        let databaseExists = try await runAsClusterAdmin(
-            config, psql,
-            adminArgs + [
-                "--tuples-only", "--no-align", "--command", PostgresSQL.databaseExistsQuery(config.database),
-            ],
-            timeout: 10)
-        if databaseExists.stdout.trimmingCharacters(in: .whitespacesAndNewlines) != "1" {
-            _ = try await runAsClusterAdmin(
-                config, try tool("createdb"),
-                [
-                    "-h", host, "-p", String(postgresPort), "-U", config.adminRole, "--template", "template0",
-                    "--owner", config.ownerRole, config.database,
-                ],
-                timeout: 30)
-        }
-        _ = try await runAsClusterAdmin(
-            config, psql,
-            adminArgs + [
-                "--command", try PostgresSQL.alterDatabaseOwner(config.database, owner: config.ownerRole),
-            ],
-            timeout: 10)
-        try await installRequiredExtensions(config.database, config)
+        try await runSecretAdminSQL(config, try PostgresSQL.bootstrapSQL(config), timeout: 60)
         return config
     }
 
@@ -635,16 +584,21 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
 
     /// `start`: bootstraps the database, reuses a healthy backend this runtime started
     /// earlier, refuses to touch a PID owned by another program, then spawns the
-    /// compiled backend on the loopback app port with the allowlisted environment.
+    /// compiled backend on the loopback app port with the allowlisted environment. The
+    /// backend applies the pending Kysely migrations at boot.
     /// Unlike Electron (`BACKEND_STALE_PID`), a recorded backend of ours that does not
-    /// answer `/health` is stopped and replaced, so Retry can recover from it. With an
-    /// audit bridge token a healthy backend is restarted too, like Electron: a backend kept
-    /// alive across launches holds the previous launch's token.
-    public func start() async throws -> BackendStartResult {
+    /// answer `/health` is stopped and replaced, so Retry can recover from it.
+    ///
+    /// `beforeMigrations` runs after PostgreSQL is ready and before the backend is spawned,
+    /// only when an existing database is behind the packaged migration chain. A thrown
+    /// error aborts the start: no backend is spawned, so no migration runs without the
+    /// backup the hook was meant to take (`NativeStartOptions.beforeMigrations`).
+    public func start(beforeMigrations: (@Sendable (PendingMigrations) async throws -> Void)? = nil) async throws
+        -> BackendStartResult
+    {
         try await assertNativeActive()
         let config = try await bootstrapDatabase()
         let tools = try requireTools()
-        _ = try RuntimePayload.requireChrome(tools.chrome)
         if let existing = PIDRecord.recordedPID(try? fileSystem.readIfPresent(layout.pid)),
             dependencies.processes.exists(existing)
         {
@@ -653,9 +607,7 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
                     "BACKEND_PID_OWNERSHIP_MISMATCH",
                     "The recorded backend process id belongs to another process; refusing to signal it.")
             }
-            if auditBridgeToken == nil,
-                (try? await waitUntilReady(attempts: 3, intervalMilliseconds: 500)) != nil
-            {
+            if (try? await waitUntilReady(attempts: 3, intervalMilliseconds: 500)) != nil {
                 return .alreadyRunning(pid: existing, port: appPort)
             }
             try await stopBackend()
@@ -666,16 +618,16 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         guard await dependencies.ports.isPortFree(port) else {
             throw NativeRuntimeError("PORT_COLLISION", "Native backend port \(port) is already in use.")
         }
+        if let beforeMigrations, let pending = try await pendingMigrations() {
+            try await beforeMigrations(pending)
+        }
         let runtimeEnvironment = RuntimeEnvFile.parse(try fileSystem.readText(layout.env))
         let environment = ChildEnvironment.backend(
             inherited: inheritedEnvironment,
             runtimeEnvironment: runtimeEnvironment,
             port: port,
             layout: layout,
-            runtimeRoot: runtimeRoot,
-            alembic: tools.alembic,
-            chrome: tools.chrome,
-            auditBridgeToken: auditBridgeToken)
+            runtimeRoot: runtimeRoot)
         let recordPath = layout.pid
         let spawnedPID = LockedValue<Int32>(0)
         try ensureNotShuttingDown()
@@ -768,6 +720,16 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
             .joined(separator: "\n"))
     }
 
+    /// `backendStartupFailure`: why the backend from the last `start()` exited, or `nil`
+    /// while it runs (or when none was started), so a launch can show the reason instead of
+    /// polling until it times out. Unlike Electron it has no exit code to report.
+    public func backendStartupFailure() -> String? {
+        guard backendChild?.hasExited() == true else { return nil }
+        let data = try? fileSystem.readIfPresent(layout.backendLog)
+        let tail = data.map { String(decoding: $0.suffix(65_536), as: UTF8.self) } ?? ""
+        return BackendLog.lastStartupError(tail) ?? "The Vision backend stopped during startup."
+    }
+
     // MARK: - Database switch (Demo seeding)
 
     private func adminDatabasePsql(_ database: String, _ command: String, timeout: TimeInterval = 30) async throws
@@ -852,33 +814,52 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         _ = try await adminDatabasePsql(target, try PostgresSQL.materializedViewOwnership(appRole: config.appRole))
     }
 
-    /// `validateRestoredDatabase`: public tables exist and the Alembic heads match.
+    /// `readSchemaLedger`: the highest `public.kysely_migration` name of `database`, as the
+    /// migration owner. The first query reports whether the ledger exists so that a missing
+    /// table is not an error; `nil` means no ledger (or an empty one).
+    private func readSchemaLedger(_ database: String, _ config: DatabaseConfig, timeout: TimeInterval) async throws
+        -> String?
+    {
+        let psql = try tool("psql")
+        func query(_ command: String) async throws -> String {
+            let result = try await runAsOwner(
+                config, psql,
+                [
+                    "-h", host, "-p", String(config.port), "-U", config.ownerRole, "-d", database,
+                    "--tuples-only", "--no-align", "--no-psqlrc", "--set", "ON_ERROR_STOP=1", "--command", command,
+                ],
+                timeout: timeout)
+            return result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard try await query(MigrationLedger.ledgerExistsSQL) == "t" else { return nil }
+        let head = try await query(MigrationLedger.headSQL)
+        return head.isEmpty ? nil : head
+    }
+
+    /// `validateRestoredDatabase`: public tables exist, the Kysely ledger exists (a backup
+    /// without it predates the TypeScript baseline and is refused) and its head matches the
+    /// backup's.
     private func validateRestoredDatabase(_ database: String, _ config: DatabaseConfig, expectedSchemaHead: String)
         async throws
     {
         let target = try validateIdentifier(database, "database name")
-        let psql = try tool("psql")
         let result = try await runAsOwner(
-            config, psql,
+            config, try tool("psql"),
             [
                 "-h", host, "-p", String(config.port), "-U", config.ownerRole, "-d", target, "--tuples-only",
                 "--no-align", "--no-psqlrc", "--set", "ON_ERROR_STOP=1", "--command",
-                PostgresSQL.restoredDatabaseQuery,
+                PostgresSQL.publicTableCountQuery,
             ],
             timeout: 30)
-        let lines = result.stdout.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        guard let last = lines.last, let tableCount = Int(last), tableCount > 0 else {
+        guard let tableCount = Int(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)), tableCount > 0
+        else {
             throw NativeRuntimeError("RESTORE_VALIDATION_FAILED", "Restored database has no public schema tables")
         }
-        let restoredHeads = lines.dropLast().sorted()
-        let expectedHeads = expectedSchemaHead.split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.sorted()
-        guard !expectedHeads.isEmpty else { return }
-        let matches =
-            expectedHeads.count > 1
-            ? restoredHeads == expectedHeads : restoredHeads.contains(expectedHeads[0])
-        guard matches else {
+        guard let head = try await readSchemaLedger(target, config, timeout: 30) else {
+            throw MigrationLedger.preBaselineBackupError()
+        }
+        let expected = expectedSchemaHead.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard expected.isEmpty || head == expected else {
             throw NativeRuntimeError(
                 "RESTORE_VALIDATION_FAILED", "Restored database schema revision does not match backup metadata")
         }
@@ -1053,19 +1034,41 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
 
     // MARK: - Backup and restore (phase 1d)
 
-    /// `getSchemaHead`: the highest `alembic_version` row of the live database.
+    /// `getSchemaHead`: the highest `public.kysely_migration` name of the live database,
+    /// or "" without a ledger.
     public func schemaHead() async throws -> String {
         let config = try prepareLayout()
         try await ensureDiscovered()
+        return try await readSchemaLedger(config.database, config, timeout: 10) ?? ""
+    }
+
+    /// `getAppliedMigrations`: every migration name in the live database's ledger; empty
+    /// without a ledger.
+    public func appliedMigrations() async throws -> [String] {
+        let config = try prepareLayout()
+        try await ensureDiscovered()
+        guard try await readSchemaLedger(config.database, config, timeout: 10) != nil else { return [] }
         let result = try await runAsOwner(
             config, try tool("psql"),
             [
                 "-h", host, "-p", String(config.port), "-U", config.ownerRole, "-d", config.database,
-                "--tuples-only", "--no-align", "--no-psqlrc", "--command",
-                "SELECT version_num FROM alembic_version ORDER BY version_num;",
+                "--tuples-only", "--no-align", "--no-psqlrc", "--set", "ON_ERROR_STOP=1", "--command",
+                MigrationLedger.appliedSQL,
             ],
             timeout: 10)
-        return BackupRestore.pickHighestRevision(result.stdout.components(separatedBy: "\n"))
+        return result.stdout.split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+    }
+
+    /// `pendingMigrations`: the packaged migrations an existing database has not applied
+    /// yet. A database without a ledger is new, so there is no user data to protect.
+    public func pendingMigrations() async throws -> PendingMigrations? {
+        let packagedHead = try MigrationLedger.chainHead(
+            migrationsDirectory: PathUtilities.join(runtimeRoot, "db", "migrations"), fileSystem: fileSystem)
+        guard !packagedHead.isEmpty else { return nil }
+        let appliedHead = try await schemaHead()
+        guard !appliedHead.isEmpty, packagedHead > appliedHead else { return nil }
+        return PendingMigrations(appliedHead: appliedHead, packagedHead: packagedHead)
     }
 
     /// `dumpDatabase(destination, { format: "plain" })`: `pg_dump` as the migration owner
@@ -1099,19 +1102,11 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         }
     }
 
-    /// `getLocalMigrationChainHead`: the highest numbered revision file in the payload's
-    /// `alembic/versions`, by file name; empty when the payload has none.
+    /// `getLocalMigrationChainHead`: the highest `NNNN_name` migration in the payload's
+    /// `db/migrations` (rollback files excluded); empty when the payload has none.
     public func migrationChainHead() async -> String {
-        let versions = PathUtilities.join(runtimeRoot, "alembic", "versions")
-        guard let names = try? fileSystem.contentsOfDirectory(versions) else { return "" }
-        var best = ""
-        for name in names.sorted() where name.hasSuffix(".py") && !name.hasPrefix("_") {
-            let revision = String(name.dropLast(3))
-            guard let candidate = BackupRestore.revisionNumericPrefix(revision) else { continue }
-            if let current = BackupRestore.revisionNumericPrefix(best), candidate <= current { continue }
-            best = revision
-        }
-        return best
+        (try? MigrationLedger.chainHead(
+            migrationsDirectory: PathUtilities.join(runtimeRoot, "db", "migrations"), fileSystem: fileSystem)) ?? ""
     }
 
     /// `exportAttachments`: a private copy of the attachments tree.

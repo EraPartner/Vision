@@ -9,18 +9,13 @@ struct NativeSettingsAITests {
     @Test func modelSelectionsRetainIndependentRawPresenceAndSourceFallbacks() async throws {
         let service = SettingsAIFixtureService()
         let model = NativeSettingsAIModel(service: service)
-        model.configure(
-            appRaw: .object(["aiDefaultModel": .string("unknown-local"), "openAiDefaultModel": .string("invalid")]))
+        model.configure(appRaw: .object(["aiDefaultModel": .string("unknown-local")]))
         await model.load()
         #expect(model.selectedLocalModel == "unknown-local")
-        #expect(model.selectedOpenAiModel == "server-absent-from-catalog")
         #expect(model.selectedAnswerDepth == "product-default")
         model.configure(
-            appRaw: .object([
-                "aiDefaultModel": .string(""), "openAiDefaultModel": .string("allowed"),
-                "aiAnswerDepth": .string("detailed"),
-            ]))
-        #expect(model.selectedLocalModel == "" && model.selectedOpenAiModel == "allowed")
+            appRaw: .object(["aiDefaultModel": .string(""), "aiAnswerDepth": .string("detailed")]))
+        #expect(model.selectedLocalModel == "")
         #expect(model.selectedAnswerDepth == "detailed")
         model.didDisappear()
     }
@@ -46,13 +41,11 @@ struct NativeSettingsAITests {
         let model = NativeSettingsAIModel(service: service, now: { date })
         let status = try settingsAIStatusFixture()
         let models = [try AIChatOllamaModel(raw: .object(["name": .string("local")]))]
-        let research = try settingsAIResearch()
         model.seedSharedStatus(status, fetchedAt: date)
         model.seedSharedModels(models, fetchedAt: date)
-        model.seedSharedResearch(research, fetchedAt: date)
         await model.load()
         let reads = await service.counts()
-        #expect(reads.status == 0 && reads.models == 0 && reads.research == 0)
+        #expect(reads.status == 0 && reads.models == 0)
         model.seedSharedStatus(try settingsAIStatusFixture(ok: false), fetchedAt: date.addingTimeInterval(-1))
         #expect(model.ollamaStatus?.ok == true)
         model.seedSharedStatus(try settingsAIStatusFixture(ok: false), fetchedAt: date.addingTimeInterval(1))
@@ -69,29 +62,23 @@ struct NativeSettingsAITests {
         await model.load()
         model.seedSharedStatus(try settingsAIStatusFixture(), fetchedAt: date)
         model.seedSharedModels([], fetchedAt: date)
-        model.seedSharedResearch(try settingsAIResearch(), fetchedAt: date)
         let providers = AsyncStream<Void>.makeStream()
-        let desktop = AsyncStream<Void>.makeStream()
         defer {
             model.didDisappear()
             providers.continuation.finish()
-            desktop.continuation.finish()
         }
         withObservationTracking { _ = model.providerStatuses } onChange: { providers.continuation.yield(()) }
-        withObservationTracking { _ = model.desktopStatus } onChange: { desktop.continuation.yield(()) }
         model.isOnline = true
         model.isForeground = true
         var providerUpdates = providers.stream.makeAsyncIterator()
-        var desktopUpdates = desktop.stream.makeAsyncIterator()
         _ = await providerUpdates.next()
-        _ = await desktopUpdates.next()
         let reads = await service.counts()
-        #expect(reads.status == 0 && reads.models == 0 && reads.research == 0)
-        #expect(reads.providers == 1 && reads.desktop == 1)
-        #expect(model.providerStatuses != nil && model.desktopStatus != nil)
+        #expect(reads.status == 0 && reads.models == 0)
+        #expect(reads.providers == 1)
+        #expect(model.providerStatuses != nil)
     }
     @Test(.timeLimit(.minutes(1)))
-    func reconnectAndFocusCannotReplayALaneResumedWhileAnotherLaneWasPaused() async throws {
+    func reconnectAndFocusCannotReplayALaneAlreadyResumedByTheReconnect() async throws {
         let service = SettingsAIFixtureService()
         let clock = SettingsAIClock(Date(timeIntervalSince1970: 100))
         let model = NativeSettingsAIModel(service: service, now: { clock.value() })
@@ -99,7 +86,6 @@ struct NativeSettingsAITests {
         await model.load()
         model.seedSharedStatus(try settingsAIStatusFixture(), fetchedAt: clock.value())
         model.seedSharedModels([], fetchedAt: clock.value())
-        model.seedSharedResearch(try settingsAIResearch(), fetchedAt: clock.value())
         var starts = await service.pausePrivateStatusReads().makeAsyncIterator()
         let reconnectCompleted = AsyncStream<Void>.makeStream()
         defer {
@@ -110,30 +96,20 @@ struct NativeSettingsAITests {
         model.didReceiveStatus = { _ in reconnectCompleted.continuation.yield(()) }
         model.isOnline = true
         let first = try #require(await starts.next())
+        #expect(first == .providers)
         model.isForeground = false
         model.isForeground = true
-        let second = try #require(await starts.next())
-        #expect(first != second)
-
-        let published = AsyncStream<Void>.makeStream()
-        defer { published.continuation.finish() }
-        withObservationTracking {
-            if second == .providers { _ = model.providerStatuses } else { _ = model.desktopStatus }
-        } onChange: { published.continuation.yield(()) }
-        await service.releasePrivateStatusRead(second)
-        var updates = published.stream.makeAsyncIterator()
-        _ = await updates.next()
 
         // Only Ollama status expires. Its receipt follows the reconnect's entire paused-read loop,
-        // so the final counts include any stale-snapshot replay of the already completed second lane.
+        // so the final counts include any replay of the already resumed providers lane.
         clock.advance(16)
         await service.releasePrivateStatusRead(first)
         var completed = reconnectCompleted.stream.makeAsyncIterator()
         _ = await completed.next()
         let reads = await service.counts()
-        #expect(reads.providers == 1 && reads.desktop == 1)
-        #expect(reads.status == 1 && reads.models == 0 && reads.research == 0)
-        #expect(model.providerStatuses != nil && model.desktopStatus != nil)
+        #expect(reads.providers == 1)
+        #expect(reads.status == 1 && reads.models == 0)
+        #expect(model.providerStatuses != nil)
     }
     @Test func saveClearsImmediatelyOnFailureWithoutLeakingTheErrorAndDoesNotClearEnv() async throws {
         let service = SettingsAIFixtureService()
@@ -180,56 +156,18 @@ struct NativeSettingsAITests {
         await write.value
         #expect(await service.savedInput() == "synthetic")
     }
-    @Test func lateAgentCloakAcknowledgmentRefreshesCurrentVisitAndInvalidatesOnlyItsKeys() async throws {
-        let service = SettingsAIFixtureService()
-        let model = NativeSettingsAIModel(service: service)
-        await model.load()
-        var invalidations: [[String]] = []
-        model.didInvalidateSharedReads = { invalidations.append($0) }
-        let write = Task { await model.toggleAgentCloak() }
-        await service.waitForWrite()
-        model.didDisappear()
-        await model.load()
-        let before = await service.counts()
-        await service.releaseWrite()
-        await write.value
-        let after = await service.counts()
-        #expect(after.desktop == before.desktop + 1 && after.research == before.research + 1)
-        #expect(model.desktopStatus?.enabled == true)
-        #expect(invalidations == [["agentcloak-desktop", "openai-research-status"]])
-        model.didDisappear()
-    }
-    @Test func failedOldToggleDoesNotRetireAReenteredDesktopRead() async throws {
-        let service = SettingsAIFixtureService()
-        let model = NativeSettingsAIModel(service: service)
-        await model.load()
-        await service.setDesktopWriteFailure(true)
-        let write = Task { await model.toggleAgentCloak() }
-        await service.waitForWrite()
-        model.didDisappear()
-        await model.load()
-        await service.gateNextDesktopRead()
-        let read = Task { await model.checkAgentCloak() }
-        await service.waitForDesktopRead()
-        await service.releaseWrite()
-        await write.value
-        #expect(model.isFetchingDesktop && model.desktopMutationError == nil)
-        await service.releaseDesktopRead()
-        await read.value
-        #expect(!model.isFetchingDesktop && model.desktopStatus?.enabled == false)
-        model.didDisappear()
-    }
     @Test func modelsStartAfterHealthyStatusWithoutWaitingForOtherStatusQueries() async throws {
         let service = SettingsAIFixtureService()
-        await service.gateNextDesktopRead()
+        var starts = await service.pausePrivateStatusReads().makeAsyncIterator()
+        defer { Task { await service.releasePrivateStatusReads() } }
         let model = NativeSettingsAIModel(service: service)
         let load = Task { await model.load() }
-        await service.waitForDesktopRead()
+        _ = await starts.next()
         let deadline = ContinuousClock.now.advanced(by: .seconds(10))
         while await service.counts().models == 0 && ContinuousClock.now < deadline { await Task.yield() }
         #expect(await service.counts().models == 1)
         #expect(model.ollamaModels?.first?.name == "local")
-        await service.releaseDesktopRead()
+        await service.releasePrivateStatusRead(.providers)
         await load.value
         model.didDisappear()
     }
@@ -240,7 +178,7 @@ struct NativeSettingsAITests {
         model.isForeground = false
         await model.load()
         let first = await service.counts()
-        #expect(first.status == 1 && first.models == 1 && first.research == 1)
+        #expect(first.status == 1 && first.models == 1)
         clock.advance(200)
         model.isForeground = true
         await Task.yield()
@@ -276,12 +214,10 @@ struct NativeSettingsAITests {
         let model = NativeSettingsAIModel(service: service)
         var statusReads = 0
         var modelReads = 0
-        var researchReads = 0
         model.didReceiveStatus = { _ in statusReads += 1 }
         model.didReceiveModels = { _ in modelReads += 1 }
-        model.didReceiveResearch = { _ in researchReads += 1 }
         await model.load()
-        #expect(statusReads == 1 && modelReads == 1 && researchReads == 1)
+        #expect(statusReads == 1 && modelReads == 1)
         let receipt = try #require(model.sharedStatusReceipt)
         model.seedSharedStatus(receipt.value, fetchedAt: receipt.fetchedAt.addingTimeInterval(1))
         #expect(statusReads == 1)
@@ -297,9 +233,9 @@ private final class SettingsAIClock: @unchecked Sendable {
     func advance(_ seconds: TimeInterval) { lock.withLock { date = date.addingTimeInterval(seconds) } }
 }
 private struct SettingsAIReadCounts: Equatable, Sendable {
-    var status = 0, models = 0, research = 0, providers = 0, desktop = 0
+    var status = 0, models = 0, providers = 0
 }
-private enum SettingsAIPrivateRead: Hashable, Sendable { case providers, desktop }
+private enum SettingsAIPrivateRead: Hashable, Sendable { case providers }
 private actor SettingsAIFixtureService: NativeSettingsAIService {
     private var reads = SettingsAIReadCounts()
     private var providerFailures = 0
@@ -309,7 +245,7 @@ private actor SettingsAIFixtureService: NativeSettingsAIService {
     func pausePrivateStatusReads() -> AsyncStream<SettingsAIPrivateRead> {
         let starts = AsyncStream<SettingsAIPrivateRead>.makeStream()
         privateReadStarts = starts.continuation
-        privateReadsToPause = [.providers, .desktop]
+        privateReadsToPause = [.providers]
         return starts.stream
     }
     func releasePrivateStatusRead(_ lane: SettingsAIPrivateRead) {
@@ -329,26 +265,6 @@ private actor SettingsAIFixtureService: NativeSettingsAIService {
     }
     func setProviderFailures(_ value: Int) { providerFailures = value }
     private var saveFailure = false
-    private var desktopWriteFailure = false
-    private var gateDesktopRead = false
-    private var desktopReadStarted = false
-    private var desktopReadWaiters: [CheckedContinuation<Void, Never>] = []
-    private var desktopReadFinish: CheckedContinuation<Void, Never>?
-    func setDesktopWriteFailure(_ value: Bool) { desktopWriteFailure = value }
-    func gateNextDesktopRead() {
-        gateDesktopRead = true
-        desktopReadStarted = false
-    }
-    func waitForDesktopRead() async {
-        if desktopReadStarted { return }
-        await withCheckedContinuation { desktopReadWaiters.append($0) }
-    }
-    func releaseDesktopRead() {
-        desktopReadFinish?.resume()
-        desktopReadFinish = nil
-    }
-
-    private var enabled = false
     private var input: String?
     private var clears = 0
     private var started = false
@@ -382,10 +298,6 @@ private actor SettingsAIFixtureService: NativeSettingsAIService {
         reads.models += 1
         return [try .init(raw: .object(["name": .string("local")]))]
     }
-    func settingsAIResearchStatus() throws -> AIResearchStatus {
-        reads.research += 1
-        return try settingsAIResearch()
-    }
     func settingsAIProviderKeys() async throws -> NativeSettingsAIProviderStatuses {
         reads.providers += 1
         await pausePrivateReadIfNeeded(.providers)
@@ -402,46 +314,12 @@ private actor SettingsAIFixtureService: NativeSettingsAIService {
         return try settingsAIProviders()
     }
     func settingsAIClearProviderKey(provider: String) { clears += 1 }
-    func settingsAIDesktopStatus() async throws -> NativeSettingsAIAgentCloakStatus {
-        reads.desktop += 1
-        await pausePrivateReadIfNeeded(.desktop)
-        if gateDesktopRead {
-            gateDesktopRead = false
-            await withCheckedContinuation { continuation in
-                desktopReadFinish = continuation
-                desktopReadStarted = true
-                for waiter in desktopReadWaiters { waiter.resume() }
-                desktopReadWaiters = []
-            }
-        }
-        return try settingsAIDesktop(enabled: enabled)
-    }
-    func settingsAIConfigureDesktop(enabled: Bool) async throws -> NativeSettingsAIAgentCloakStatus {
-        await gatedWrite()
-        if desktopWriteFailure { throw APIError.network("synthetic desktop failure") }
-        self.enabled = enabled
-        return try settingsAIDesktop(enabled: enabled)
-    }
 }
 private func settingsAIStatusFixture(ok: Bool = true, enabled: Bool = true) throws -> AIChatOllamaStatus {
     try .init(
         raw: .object([
             "ok": .bool(ok), "enabled": .bool(enabled), "baseUrl": .string("http://fixture.invalid"),
             "defaultModel": .string("local"),
-        ]))
-}
-private func settingsAIResearch() throws -> AIResearchStatus {
-    try .init(
-        raw: .object([
-            "openai": .object([
-                "enabled": .bool(true), "model": .string("server-absent-from-catalog"),
-                "models": .array([
-                    .object([
-                        "id": .string("allowed"), "label": .string("Allowed"), "inputMicrosPerMillion": .number(1),
-                        "outputMicrosPerMillion": .number(2), "isDefault": .bool(true),
-                    ])
-                ]),
-            ])
         ]))
 }
 private func settingsAIProviders() throws -> NativeSettingsAIProviderStatuses {
@@ -455,12 +333,5 @@ private func settingsAIProviders() throws -> NativeSettingsAIProviderStatuses {
                         "configured": .bool(true), "source": .string(source), "masked": .string("***tail"),
                     ])
                 }),
-        ]))
-}
-private func settingsAIDesktop(enabled: Bool) throws -> NativeSettingsAIAgentCloakStatus {
-    try .init(
-        raw: .object([
-            "enabled": .bool(enabled), "available": .bool(true), "mappingKeyConfigured": .bool(true),
-            "openAiEnabled": .bool(true),
         ]))
 }

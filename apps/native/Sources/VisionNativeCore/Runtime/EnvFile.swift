@@ -114,6 +114,19 @@ public enum RuntimeEnvFile {
         return "\(base)VISION_POSTGRES_ADMIN_ROLE=\(names.adminRole)\nVISION_POSTGRES_ADMIN_PASSWORD=\(random.hex(byteCount: 32))\n"
     }
 
+    /// `stripRetiredNativeEnv`: removes every line that assigns a retired key; other lines
+    /// stay byte-identical, and the text is returned unchanged when nothing was removed.
+    public static func stripRetired(_ contents: String) -> String {
+        let lines = contents.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let kept = lines.filter { line in
+            guard let key = PathUtilities.firstMatchGroups(line, #"^\s*([A-Z_][A-Z0-9_]*)\s*="#)?[1] else {
+                return true
+            }
+            return !RuntimeConstants.retiredEnvironmentKeys.contains(key)
+        }
+        return kept.count == lines.count ? contents : kept.joined(separator: "\n")
+    }
+
     /// `databaseConfigFromEnv`: validates the generated URLs, roles and secrets.
     public static func databaseConfig(_ contents: String) throws -> DatabaseConfig {
         let environment = parse(contents)

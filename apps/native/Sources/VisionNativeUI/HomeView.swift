@@ -109,9 +109,8 @@ public struct HomeView: View {
 
     private func reload(force: Bool = false) async {
         async let home: Void = model.appear(settings: settings, route: shell.route, force: force)
-        async let rates: Void = shell.accounts.rates.appear()
         async let pickers: Void = shell.transactions.pickers.load()
-        _ = await (home, rates, pickers)
+        _ = await (home, pickers)
     }
     private func navigate(_ route: String) { shell.navigate(to: route) }
     private func money(_ value: Decimal, currency code: String? = nil) -> String {
@@ -147,10 +146,14 @@ public struct HomeView: View {
                 signed: false, colored: false
             ).font(.visionLargeTitle)
             Text(paceDescription(pace)).font(.callout).foregroundStyle(theme.secondaryLabel)
+            if pace.unconvertedCount > 0 {
+                Text(strings.tc("common.fxUnavailableTransactions", pace.unconvertedCount))
+                    .font(.footnote).foregroundStyle(theme.warning)
+            }
             HStack(alignment: .top, spacing: 12) {
                 heroFigure(strings.t("home.incomeSoFar"), amount: pace.income, colored: true)
-                heroFigure(strings.t("home.plannedIn"), amount: plannedTotal(income: true), colored: true)
-                heroFigure(strings.t("home.plannedOut"), amount: plannedTotal(income: false), colored: false)
+                heroFigure(strings.t("home.plannedIn"), amount: model.plannedIncoming, colored: true)
+                heroFigure(strings.t("home.plannedOut"), amount: model.plannedOutgoing, colored: false)
             }.padding(.top, 8)
         }
     }
@@ -196,12 +199,6 @@ public struct HomeView: View {
             strings.language == .nl ? Locale(identifier: "nl_NL") : Locale(identifier: "en_US")
         format.dateFormat = "LLLL"
         return format.string(from: Date())
-    }
-    private func plannedTotal(income: Bool) -> Decimal {
-        // Home's web hero adds the stored planned amounts; it does not convert currencies.
-        model.remainingPlanned.filter { income ? $0.amount > 0 : $0.amount < 0 }.reduce(0) {
-            $0 + $1.amount
-        }
     }
     private func paceDescription(_ pace: HomeSpendingPace) -> String {
         if pace.current_month.total_spending <= 0 { return strings.t("home.pace.nothingYet") }
@@ -328,6 +325,9 @@ public struct HomeView: View {
                         .foregroundStyle(theme.secondaryLabel)
                     }
                 }.font(.footnote)
+                if !(worth.unconvertedCurrencies ?? []).isEmpty {
+                    Text(strings.t("accounts.totalIncomplete")).font(.footnote).foregroundStyle(theme.warning)
+                }
                 VStack(spacing: 10) {
                     netWorthBar(
                         "home.netWorth.assets", worth.assets, scale: max(worth.assets, worth.debt, 1),
@@ -384,7 +384,7 @@ public struct HomeView: View {
             if model.accounts.isEmpty {
                 Text(strings.t("home.accounts.none")).foregroundStyle(theme.secondaryLabel)
             }
-            ForEach(sortedAccounts.prefix(6), id: \.id) { account in
+            ForEach(model.sortedAccounts.prefix(6), id: \.id) { account in
                 routeRow(
                     account.displayName ?? account.name, route: "/accounts/\(account.id)",
                     subtitle: [
@@ -394,19 +394,6 @@ public struct HomeView: View {
                     .compactMap { $0 }.joined(separator: " · "),
                     trailing: "—", amount: account.computedBalance.map { ($0, account.currency) }, signed: false,
                     colored: false)
-            }
-        }
-    }
-    private var sortedAccounts: [OpenAPI.Account] {
-        let converter = shell.accounts.converter
-        return model.accounts.filter(\.isActive).sorted { lhs, rhs in
-            let left = lhs.computedBalance.flatMap { converter.convert($0, from: lhs.currency) }
-            let right = rhs.computedBalance.flatMap { converter.convert($0, from: rhs.currency) }
-            switch (left, right) {
-            case (.some(let l), .some(let r)): return l == r ? lhs.id < rhs.id : l > r
-            case (.some, .none): return true
-            case (.none, .some): return false
-            case (.none, .none): return lhs.id < rhs.id
             }
         }
     }
@@ -461,6 +448,9 @@ public struct HomeView: View {
             if let balances = model.balances {
                 LabeledContent(
                     strings.t("bankWidget.netPosition"), value: money(balances.total_net_position))
+                if balances.unconvertedCount > 0 {
+                    Text(strings.t("accounts.totalIncomplete")).font(.footnote).foregroundStyle(theme.warning)
+                }
                 ForEach(
                     model.accounts.filter {
                         $0.isActive && !AccountKinds.isHoldingsOnly($0)
@@ -579,6 +569,10 @@ public struct HomeView: View {
             if model.isForecastLoading {
                 ProgressView().frame(height: 240)
             } else if let forecast = model.forecast {
+                if forecast.unconvertedCount > 0 {
+                    Text(strings.tc("common.fxUnavailableTransactions", forecast.unconvertedCount))
+                        .font(.footnote).foregroundStyle(theme.warning)
+                }
                 InsightTimelineChart(
                     series: forecast.series(
                         cumulative: model.cumulativeForecast, visible: model.visibleMethods,

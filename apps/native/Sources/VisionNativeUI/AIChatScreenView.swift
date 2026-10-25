@@ -41,14 +41,14 @@ struct AIChatScreenView: View {
                     await screens.chat.pollStatus()
                 }
             }
+            // `document.visibilityState` of useModelResidency's re-warm tick.
+            .onChange(of: scenePhase, initial: true) { _, phase in screens.chat.isForeground = phase == .active }
             .onAppear {
                 visible = true
-                screens.investigation.isForeground = scenePhase == .active
                 connectivity.start { online in
                     guard visible else { return }
                     let reconnecting = !screens.isOnline && online
                     screens.isOnline = online
-                    screens.investigation.isOnline = online
                     if reconnecting {
                         Task {
                             guard visible, shell.route.path == path else { return }
@@ -56,11 +56,6 @@ struct AIChatScreenView: View {
                         }
                     }
                 }
-            }
-            .onChange(of: scenePhase) { _, phase in
-                screens.investigation.isForeground = phase == .active
-                // App.tsx disables query refetchOnWindowFocus globally. A foreground
-                // transition resumes paused work through isForeground, not new reads.
             }
             .onDisappear {
                 visible = false

@@ -76,6 +76,24 @@ public enum PIDRecord {
     }
 }
 
+/// The backend's own log (`logs/backend.log`).
+public enum BackendLog {
+    /// `lastStartupError`: the `error` of the last "Failed to start application" log line,
+    /// so the shell can show why startup stopped; `nil` when there is none.
+    public static func lastStartupError(_ log: String) -> String? {
+        guard
+            let line = log.split(separator: "\n", omittingEmptySubsequences: false).reversed()
+                .first(where: { $0.contains("Failed to start application") }),
+            let brace = line.firstIndex(of: "{"),
+            let parsed = try? JSONValue.parse(Data(line[brace...].utf8)),
+            let message = parsed["error"]?.stringValue, !message.isEmpty
+        else {
+            return nil
+        }
+        return message
+    }
+}
+
 /// Backend health parsing.
 public enum HealthReadiness {
     /// `isDetailedHealthReady`: `/health/detailed` reports a connected database.

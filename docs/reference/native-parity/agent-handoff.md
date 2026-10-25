@@ -3,12 +3,15 @@ title: "Vision Native agent handoff"
 type: reference
 status: active
 date: 2026-10-15
-updated: 2026-10-18
+updated: 2026-10-25
 tags: [reference, swift-rewrite, native-parity, handoff]
 description: "Resumable checkpoint for the Swift port: published branch, current phase, ownership, remaining work, verification evidence and subsequent-phase gates."
 ---
 
 # Vision Native agent handoff
+
+> [!warning] Historical log
+> This log ends at the retirement of the first Swift port ([[docs/adr/214-retire-vision-native-swift-port|ADR-214]]). The `codex/native-phase-*` branches and `native-branch.yml` it names are gone. [[docs/adr/249-revive-swift-app|ADR-249]] revived the app as native-only (no web view or bridge) and removed audit history, cloud AI, the Life scenario and the admin token; Swift is now built by the manual `swift-build` workflow. See [[docs/architecture/native-app|the architecture page]] for the current state.
 
 ## Resume here (2026-10-17 continuation)
 

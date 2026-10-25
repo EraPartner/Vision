@@ -6,6 +6,9 @@ import Observation
 public protocol PlannedPaymentsService: Sendable {
     /// `getPlannedTransactions({ active: !showAll, limit: 1000 })`: the rows.
     func plannedPayments(includePaused: Bool) async throws -> [OpenAPI.PlannedTransaction]
+    /// `getPlannedTotals(currency)`: rest-of-month, Estimated monthly and the next-days window,
+    /// computed and converted on the server (ADR-216). `nil` when a service has no totals.
+    func plannedTotals(currency: String) async throws -> OpenAPI.PlannedTotals?
     /// `updatePlannedTransaction(id, { is_active })`: Pause, Resume and their Undo.
     func setPlannedPaymentActive(id: Int, isActive: Bool) async throws -> OpenAPI.PlannedTransaction
     /// `deletePlannedTransaction(id)`.
@@ -14,7 +17,15 @@ public protocol PlannedPaymentsService: Sendable {
     func transaction(id: Int) async throws -> OpenAPI.Transaction?
 }
 
+extension PlannedPaymentsService {
+    public func plannedTotals(currency: String) async throws -> OpenAPI.PlannedTotals? { nil }
+}
+
 extension APIClient: PlannedPaymentsService {
+    public func plannedTotals(currency: String) async throws -> OpenAPI.PlannedTotals? {
+        try await send(OpenAPIOperations.GetPlannedTotals(currency: currency))
+    }
+
     public func plannedPayments(includePaused: Bool) async throws -> [OpenAPI.PlannedTransaction] {
         try await send(OpenAPIOperations.GetPlannedTransactions(limit: 1000, active: !includePaused)).items
     }
@@ -49,7 +60,8 @@ public struct PlannedEditorRequest: Equatable, Sendable, Identifiable {
 }
 
 /// The state of the Planned page (`PlannedPaymentsPage` with `usePlannedPayments`): the list
-/// for the `show_all` view, the eight-day strip and Estimated monthly in the default currency,
+/// for the `show_all` view, the eight-day strip and Estimated monthly (server totals in the
+/// default currency, `usePlannedTotals`),
 /// the table's search, filters and sort, Pause and Resume with Undo, Delete behind its
 /// confirmation, and the Payment history dialog.
 ///
@@ -97,8 +109,8 @@ public final class PlannedPaymentsModel {
     public private(set) var pendingDelete: PlannedPayment?
     public private(set) var isHistoryPresented = false
     public let history: PlannedHistoryModel
-    /// `ExchangeRatesModel` is the web app's shared exchange-rate query.
-    public let rates: ExchangeRatesModel
+    /// `usePlannedTotals(currency)`: `nil` until the server answers (the totals show skeletons).
+    public private(set) var totals: OpenAPI.PlannedTotals?
     /// The open planned-payment sheet's request.
     public private(set) var editorRequest: PlannedEditorRequest?
     /// The planned-payment sheet (`PlannedPaymentForm`) while it is open.
@@ -117,6 +129,11 @@ public final class PlannedPaymentsModel {
     @ObservationIgnored private let service: any PlannedPaymentsService
     @ObservationIgnored private let editing: any PlannedEditingService
     @ObservationIgnored private let pickerService: any PickerDataService
+    @ObservationIgnored private var totalsKey: String?
+    @ObservationIgnored private var totalsFetchedAt: Date?
+    @ObservationIgnored private var totalsInFlight: Task<Void, Never>?
+    /// The totals refetch a planned mutation starts (tests await it).
+    @ObservationIgnored private(set) var totalsRefresh: Task<Void, Never>?
     @ObservationIgnored private var suggestionsFetchedAt: Date?
     @ObservationIgnored private var suggestionsInFlight: Task<Void, Never>?
     /// The suggestions refetch Mark as paid starts after it closes (tests await it).
@@ -131,7 +148,7 @@ public final class PlannedPaymentsModel {
 
     public init(
         service: any PlannedPaymentsService, editing: any PlannedEditingService, pickers: any PickerDataService,
-        rates: ExchangeRatesModel, dismissals: PlannedDismissalStore = .userDefaults,
+        rates: ExchangeRatesModel? = nil, dismissals: PlannedDismissalStore = .userDefaults,
         calendar: Calendar = PlannedDates.local, now: @escaping @Sendable () -> Date = { Date() },
         retryDelay: Duration = .seconds(1)
     ) {
@@ -139,7 +156,6 @@ public final class PlannedPaymentsModel {
         self.retryDelay = retryDelay
         self.editing = editing
         pickerService = pickers
-        self.rates = rates
         self.calendar = calendar
         self.now = now
         history = PlannedHistoryModel(service: service)
@@ -162,19 +178,61 @@ public final class PlannedPaymentsModel {
     public var isLoading: Bool { current.payments == nil && current.error == nil }
 
     /// The page appeared or the route's `show_all` changed: fetch unless a fresh answer for
-    /// that view is cached. The exchange rates load alongside.
+    /// that view is cached. The server totals load alongside.
     public func appear(showAll: Bool, defaultCurrency: String) async {
         setDefaultCurrency(defaultCurrency)
         self.showAll = showAll
-        let ratesModel = rates
-        let ratesTask = Task { await ratesModel.appear() }
+        let totalsTask = Task { [weak self] in await self?.loadTotals() }
         let state = current
         if let fetchedAt = state.fetchedAt, state.error == nil, now().timeIntervalSince(fetchedAt) < Self.staleAfter {
-            await ratesTask.value
+            await totalsTask.value
             return
         }
         await fetch(showAll)
-        await ratesTask.value
+        await totalsTask.value
+    }
+
+    /// `usePlannedTotals`: keyed by the default currency and today, 5 minute stale time. A
+    /// failed fetch keeps the last answer.
+    func loadTotals() async {
+        let key = "\(defaultCurrency)|\(Self.dayKey(now(), calendar: calendar))"
+        if key == totalsKey, let fetched = totalsFetchedAt,
+            now().timeIntervalSince(fetched) < Self.totalsStaleAfter
+        {
+            return
+        }
+        if let totalsInFlight {
+            await totalsInFlight.value
+            if key == totalsKey, totalsFetchedAt != nil { return }
+        }
+        let currency = defaultCurrency
+        let service = service
+        let task = Task { [weak self] in
+            let answer = try? await service.plannedTotals(currency: currency)
+            guard let self, !Task.isCancelled else { return }
+            if key != self.totalsKey { self.totals = nil }
+            if let answer {
+                self.totals = answer
+                self.totalsKey = key
+                self.totalsFetchedAt = self.now()
+            }
+        }
+        totalsInFlight = task
+        await task.value
+        totalsInFlight = nil
+    }
+
+    /// Planned mutations invalidate the totals through the upcoming prefix.
+    private func invalidateTotals() {
+        totalsFetchedAt = nil
+        totalsRefresh = Task { [weak self] in await self?.loadTotals() }
+    }
+
+    static let totalsStaleAfter: TimeInterval = 5 * 60
+
+    private static func dayKey(_ date: Date, calendar: Calendar) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return "\(parts.year ?? 0)-\(parts.month ?? 0)-\(parts.day ?? 0)"
     }
 
     /// The error state's Retry: `refetch()`.
@@ -243,50 +301,51 @@ public final class PlannedPaymentsModel {
         let currency = defaultCurrency
         list = list.map { $0.id == wire.id ? PlannedPayment(wire, defaultCurrency: currency) : $0 }
         lists[key]?.payments = list
+        invalidateTotals()
     }
 
     private func remove(id: Int, in key: Bool) {
         lists[key]?.payments?.removeAll { $0.id == id }
+        invalidateTotals()
     }
 
     /// `setList((prev) => [...prev, created])` on the view the mutation started on.
     private func append(_ wire: OpenAPI.PlannedTransaction, in key: Bool) {
         guard lists[key]?.payments != nil else { return }
         lists[key]?.payments?.append(PlannedPayment(wire, defaultCurrency: defaultCurrency))
+        invalidateTotals()
     }
 
     /// Another native screen moved or removed planned rows (an account merge or close): both
     /// lists and the pickers refetch on the next load.
     public func invalidate() {
         for key in Array(lists.keys) { lists[key]?.fetchedAt = nil }
+        totalsFetchedAt = nil
         pickers.reset()
     }
 
     /// Track invalidated every planned list: both views go stale and the shown one refetches.
     private func invalidateLists() async {
         for key in Array(lists.keys) { lists[key]?.fetchedAt = nil }
+        invalidateTotals()
         await fetch(showAll)
     }
 
     // MARK: Figures
 
-    /// `useCurrencyConverter(defaultCurrency)` over the shared exchange-rate query.
-    public var converter: PlannedCurrencyConverter {
-        PlannedCurrencyConverter(rates: rates.data, target: defaultCurrency)
-    }
-
-    /// The exchange rates are still loading: the totals show skeletons.
-    public var isRatesLoading: Bool { rates.isLoading }
+    /// The server's totals are still loading: the totals show skeletons.
+    public var isTotalsLoading: Bool { totals == nil }
 
     /// The Next 7 days strip from today.
     public var strip: PlannedStrip {
-        PlannedStrip(payments: payments, today: now(), calendar: calendar, converter: converter)
+        PlannedStrip(payments: payments, today: now(), calendar: calendar)
     }
 
-    /// Estimated monthly: every loaded active recurring row.
-    public var estimatedMonthly: PlannedConvertedTotal {
-        PlannedTotals.monthly(payments, converter: converter)
-    }
+    /// The window total (`next_days_total`): net money due and the occurrences left out.
+    public var windowTotal: OpenAPI.PlannedTotals.NextDaysTotal? { totals?.nextDaysTotal }
+
+    /// Estimated monthly (`monthly_equivalent`): active recurring rows, converted on the server.
+    public var estimatedMonthly: OpenAPI.PlannedTotals.MonthlyEquivalent? { totals?.monthlyEquivalent }
 
     /// The Due date badge of a row, relative to today.
     public func dueState(_ payment: PlannedPayment) -> PlannedDueState {

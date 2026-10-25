@@ -60,6 +60,10 @@ dialogs and some controls used stock macOS presentation instead of Vision's.
    `workflow_dispatch` alone. Changes under `apps/native/` skip the application CI, as `docs/`
    does. The generator tests run with `bun run native:test-generators`, outside CI.
 
+Addendum (2026-10-25, Tor): the Claude GitHub App cannot dispatch workflows (HTTP 403), so the
+workflow also runs on a push to a `claude/*` branch that touches `apps/native/` when the commit
+message contains `[swift-build]`. Every other push skips the job; pull requests never run it.
+
 ## Consequences
 
 - Every feature change lands in both frontends until Electron is retired.

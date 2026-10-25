@@ -898,87 +898,86 @@ enum ImportFixture {
 
 @MainActor
 @Suite struct ImportShellTests {
-    func makeShell(_ imports: ImportsModel, recorder: ShellRecorder, adminMode: Bool = false) -> NativeShellModel {
+    func makeShell(_ imports: ImportsModel, adminMode: Bool = false) -> NativeShellModel {
         NativeShellModel(
             strings: ImportFixture.strings, theme: ThemeSelection(appearance: .light),
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()), admin: AdminFixture.screens(),
             planned: PlannedFixture.idleModel(), imports: imports, transactions: TransactionsFixture.idleModel(),
             accounts: AccountsFixture.idleModel(),
             categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
-            loadSettings: { NativeAppSettings(adminMode: adminMode) }, onNavigate: { recorder.actions.append($0) })
+            loadSettings: { NativeAppSettings(adminMode: adminMode) })
     }
 
     @Test func importIsNativeWithoutAdminModeOnceSettingsLoad() async throws {
-        let recorder = ShellRecorder()
-        let shell = makeShell(ImportFixture.model(), recorder: recorder)
-        shell.routeDidChange(try #require(NativeRoute("/import")))
-        #expect(shell.detail == .web)
+        let shell = makeShell(ImportFixture.model())
+        shell.show(try #require(NativeRoute("/import")))
+        #expect(shell.detail == .loading)
         await shell.settingsSettled()
         #expect(shell.detail == .native(.importExport))
-        shell.routeDidChange(try #require(NativeRoute("/import/3/review")))
-        let review: NativeShellDetail = ImportRoutes.reviewIsNative ? .native(.importReview(batchId: 3)) : .web
-        #expect(shell.detail == review)
+        shell.show(try #require(NativeRoute("/import/3/review")))
+        #expect(shell.detail == .native(.importReview(batchId: 3)))
     }
 
     @Test func aFinderFileGoesToTheNativeCardOnceSettingsLoad() async throws {
-        let recorder = ShellRecorder()
         let imports = ImportFixture.model()
-        let shell = makeShell(imports, recorder: recorder)
+        let shell = makeShell(imports)
         let file = ImportFixture.file()
-        // Before `app_settings` is read the web app takes the file.
-        #expect(!shell.openImportFile(file))
-        shell.routeDidChange(try #require(NativeRoute("/transactions")))
+        shell.show(try #require(NativeRoute("/transactions")))
         await shell.settingsSettled()
         #expect(shell.openImportFile(file))
-        #expect(recorder.actions == [.navigate("/import")])
-        shell.routeDidChange(try #require(NativeRoute("/import")))
+        #expect(shell.route.path == "/import")
         await imports.appear(strings: ImportFixture.strings)
+        shell.nativeIntentConsumerDidBecomeReady(for: .importExport)
         #expect(imports.file == file)
-        // Already on the page: no navigation, the file replaces the dropzone's.
+        // Already on the page: like React Router's navigate("/import") from ElectronBridge, the
+        // open pushes another /import entry, and the file replaces the dropzone's.
+        let entries = shell.nativeNavigation.count
         let next = ImportFixture.file("second.csv")
         #expect(shell.openImportFile(next))
-        #expect(recorder.actions == [.navigate("/import")])
+        #expect(shell.nativeNavigation.count == entries + 1)
+        #expect(shell.route.path == "/import")
         #expect(imports.file == next)
     }
 
     @Test func aFinderFileOpenedBeforeSettingsLoadPrefillsTheNativeCard() async throws {
-        let recorder = ShellRecorder()
         let imports = ImportFixture.model()
-        let shell = makeShell(imports, recorder: recorder)
+        let shell = makeShell(imports)
         let file = ImportFixture.file()
-        // Cold launch: the web app also takes the file and moves to `/import`.
-        #expect(!shell.openImportFile(file))
-        #expect(recorder.actions.isEmpty)
-        shell.routeDidChange(try #require(NativeRoute("/import")))
-        #expect(shell.detail == .web)
+        // Cold launch: the file waits for the document and the settings.
+        #expect(shell.openImportFile(file))
+        #expect(shell.route == .home)
+        shell.show(try #require(NativeRoute("/import")))
+        #expect(shell.detail == .loading)
         // `app_settings` is read: `/import` draws natively and its card has the file.
         await shell.settingsSettled()
+        shell.nativeIntentReadinessDidChange()
         #expect(shell.detail == .native(.importExport))
         await imports.appear(strings: ImportFixture.strings)
+        shell.nativeIntentConsumerDidBecomeReady(for: .importExport)
         #expect(imports.file == file)
         #expect(imports.source == nil)
         #expect(!imports.isImporting)
     }
 
     @Test func aChosenFileHoldsANavigationUntilStayOrLeave() async throws {
-        let recorder = ShellRecorder()
         let imports = ImportFixture.model()
-        let shell = makeShell(imports, recorder: recorder)
-        shell.routeDidChange(try #require(NativeRoute("/import")))
+        let shell = makeShell(imports)
+        shell.show(try #require(NativeRoute("/import")))
         await shell.settingsSettled()
         shell.setLeaveGuard(imports.leaveGuard)
         shell.navigate(to: "/transactions")
-        #expect(recorder.actions == [.navigate("/transactions")])
-        recorder.actions = []
+        #expect(shell.route.path == "/transactions")
+        shell.navigate(to: "/import")
+        #expect(shell.route.path == "/import")
         imports.chooseFile(ImportFixture.file())
         shell.navigate(to: "/transactions")
         #expect(shell.leaveConfirmation?.path == "/transactions")
-        #expect(recorder.actions.isEmpty)
+        #expect(shell.route.path == "/import")
         shell.stayOnPage()
         #expect(imports.file != nil)
         shell.navigate(to: "/transactions")
         shell.leavePage()
         #expect(imports.file == nil)
-        #expect(recorder.actions == [.navigate("/transactions")])
+        #expect(shell.route.path == "/transactions")
     }
 }

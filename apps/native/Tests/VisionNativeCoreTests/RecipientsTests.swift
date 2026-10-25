@@ -169,7 +169,7 @@ enum RecipientsFixture {
     }
 
     @MainActor
-    static func shell(_ model: RecipientsModel, recorder: ShellRecorder, settings: NativeAppSettings) -> NativeShellModel {
+    static func shell(_ model: RecipientsModel, settings: NativeAppSettings) -> NativeShellModel {
         NativeShellModel(
             strings: strings, theme: ThemeSelection(appearance: .light),
             notices: NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false),
@@ -177,19 +177,18 @@ enum RecipientsFixture {
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
             transactions: TransactionsFixture.idleModel(), accounts: AccountsFixture.idleModel(),
             categories: CategoriesFixture.idleModel(), recipients: model,
-            loadSettings: { settings }, onNavigate: { recorder.actions.append($0) },
-            settingsReloadDelay: .milliseconds(1))
+            loadSettings: { settings })
     }
 
     /// A shell on `route` with its settings read and the screen appeared; pages of two.
     @MainActor
     static func opened(
-        _ service: FakeRecipientsService, route: String = "/recipients", recorder: ShellRecorder = ShellRecorder(),
+        _ service: FakeRecipientsService, route: String = "/recipients",
         settings: NativeAppSettings = NativeAppSettings(defaultPageSize: 2)
     ) async throws -> (RecipientsModel, NativeShellModel) {
         let model = RecipientsModel(service: service)
-        let shell = shell(model, recorder: recorder, settings: settings)
-        shell.routeDidChange(try #require(NativeRoute(route)))
+        let shell = shell(model, settings: settings)
+        shell.show(try #require(NativeRoute(route)))
         await shell.settingsSettled()
         await model.appear()
         return (model, shell)
@@ -357,9 +356,8 @@ enum RecipientsFixture {
     }
 
     @Test func viewSearchAndSortWriteTheRouteAndReload() async throws {
-        let recorder = ShellRecorder()
         let service = FakeRecipientsService(payees: RecipientsFixture.payees())
-        let (model, shell) = try await RecipientsFixture.opened(service, recorder: recorder)
+        let (model, shell) = try await RecipientsFixture.opened(service)
         defer { withExtendedLifetime(shell) {} }
         await model.setShowAll(true)
         await model.setUncategorizedOnly(true)

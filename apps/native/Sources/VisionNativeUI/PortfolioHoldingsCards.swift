@@ -52,8 +52,6 @@ struct PortfolioAssetCard: View {
     let model: PortfolioModel
     let editing: PortfolioEditingModel
     let shell: NativeShellModel
-    /// RealEstatePage's converted latest rent, in the display currency.
-    var monthlyRent: Decimal?
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     private var isProperty: Bool { holding.assetClass == "real_estate" }
@@ -105,7 +103,9 @@ struct PortfolioAssetCard: View {
                         signed: true,
                         tone: holding.totalAppreciation >= 0 ? theme.gain : theme.loss)
                     TaxMoneyRow(title: strings.t("portfolio.rentalIncome"), amount: holding.totalIncome, shell: shell)
-                    if let monthly = monthlyRent ?? holding.estimatedMonthlyRent {
+                    // The server converts the latest rent at the stored rate (`monthlyRent`, ADR-216).
+                    let monthly = holding.monthlyRent ?? 0
+                    if monthly > 0 {
                         Text(
                             "~"
                                 + MoneyText.text(
@@ -114,12 +114,12 @@ struct PortfolioAssetCard: View {
                                 + strings.t("realestate.perMonth")
                         )
                         .font(.caption).foregroundStyle(theme.secondaryLabel)
-                        let yield = holding.currentValue > 0 ? monthly * 12 / holding.currentValue * 100 : 0
-                        LabeledContent(
-                            strings.t("portfolio.yield"),
-                            value: VisionFormat.percent(yield, digits: 2, locale: shell.settings.numberFormat.locale)
-                                + " " + strings.t("portfolio.annual"))
                     }
+                    let yield = holding.currentValue > 0 ? monthly * 12 / holding.currentValue * 100 : 0
+                    LabeledContent(
+                        strings.t("portfolio.yield"),
+                        value: VisionFormat.percent(yield, digits: 1, locale: shell.settings.numberFormat.locale)
+                            + " " + strings.t("portfolio.annual"))
                     if let municipality = holding.municipality, !municipality.isEmpty {
                         LabeledContent(strings.t("invDetail.municipality"), value: municipality)
                     }
@@ -135,8 +135,7 @@ struct PortfolioAssetCard: View {
                             strings.t("invDetail.municipalityTaxRate"),
                             value: VisionFormat.percent(rate, digits: 2, locale: shell.settings.numberFormat.locale))
                     }
-                    let returnAmount =
-                        holding.totalAppreciation + holding.totalIncome - holding.totalFees - holding.totalTaxes
+                    let returnAmount = holding.propertyReturn ?? 0
                     let roi = holding.totalBuyCost > 0 ? returnAmount / holding.totalBuyCost * 100 : 0
                     LabeledContent(strings.t("portfolio.totalROI")) {
                         DeltaPill(
@@ -174,7 +173,7 @@ struct PortfolioAssetCard: View {
                 if holding.totalFees + holding.totalTaxes > 0 {
                     TaxMoneyRow(
                         title: strings.t(isProperty ? "portfolio.feesAndTaxes" : "portfolio.feesAndTaxesPaid"),
-                        amount: -(holding.totalFees + holding.totalTaxes), shell: shell, signed: true, tone: theme.loss)
+                        amount: -(holding.feesAndTaxes ?? 0), shell: shell, signed: true, tone: theme.loss)
                 }
             }
         }.overlay(

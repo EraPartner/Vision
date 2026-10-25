@@ -10,10 +10,11 @@ public protocol SplitsService: Sendable {
     /// `createBulkSplits({ transaction_ids, recipient_id, mode })`.
     func bulkSplit(transactionIds: [Int], recipientId: Int, mode: BulkSplitMode) async throws
         -> OpenAPI.BulkSplitResult
-    /// `getOwedSummary()`.
-    func owedSummary() async throws -> [OpenAPI.SplitOwed]
-    /// `getOwedByRecipient(recipientId)`.
-    func owed(recipientId: Int) async throws -> [OpenAPI.SplitOwedDetail]
+    /// `getOwedSummary(currency)`: the server converts the amounts to `currency` and totals the
+    /// outstanding amount (`summary`, ADR-216).
+    func owedSummary(currency: String) async throws -> OwedSummaryPage
+    /// `getOwedByRecipient(recipientId, currency)`: the open splits and their server total.
+    func owed(recipientId: Int, currency: String) async throws -> OwedDetailPage
     /// `exportOwedByRecipientCsv(recipientId)`: the file's bytes.
     func exportOwedCsv(recipientId: Int) async throws -> Data
     /// `recordSplitPayment(splitId, amount)`.
@@ -27,6 +28,28 @@ public protocol SplitsService: Sendable {
     /// `getTransactions({ recipient_group_id, limit, offset, sort_by: "transaction_date",
     /// sort_dir: "desc" })`: the person detail's Recent transactions.
     func recipientTransactions(groupId: Int, offset: Int, limit: Int) async throws -> TransactionPage
+}
+
+/// `GET /api/splits/owed`: who owes what, and the total outstanding (`OwedTotals`).
+public struct OwedSummaryPage: Equatable, Sendable {
+    public let items: [OpenAPI.SplitOwed]
+    public let summary: OpenAPI.OwedTotals
+
+    public init(items: [OpenAPI.SplitOwed], summary: OpenAPI.OwedTotals) {
+        self.items = items
+        self.summary = summary
+    }
+}
+
+/// `GET /api/splits/owed/{id}`: one person's open splits, and their total outstanding.
+public struct OwedDetailPage: Equatable, Sendable {
+    public let items: [OpenAPI.SplitOwedDetail]
+    public let summary: OpenAPI.OwedTotals
+
+    public init(items: [OpenAPI.SplitOwedDetail], summary: OpenAPI.OwedTotals) {
+        self.items = items
+        self.summary = summary
+    }
 }
 
 /// One person's share the Split transaction dialog sends (`SplitCreateInput`).
@@ -77,12 +100,14 @@ extension APIClient: SplitsService {
                 body: .init(transactionIds: transactionIds, recipientId: recipientId, mode: mode.rawValue)))
     }
 
-    public func owedSummary() async throws -> [OpenAPI.SplitOwed] {
-        try await send(OpenAPIOperations.GetSplitsOwed()).items
+    public func owedSummary(currency: String) async throws -> OwedSummaryPage {
+        let page = try await send(OpenAPIOperations.GetSplitsOwed(currency: currency))
+        return OwedSummaryPage(items: page.items, summary: page.summary)
     }
 
-    public func owed(recipientId: Int) async throws -> [OpenAPI.SplitOwedDetail] {
-        try await send(OpenAPIOperations.GetSplitOwedByRecipient(id: recipientId)).items
+    public func owed(recipientId: Int, currency: String) async throws -> OwedDetailPage {
+        let page = try await send(OpenAPIOperations.GetSplitOwedByRecipient(id: recipientId, currency: currency))
+        return OwedDetailPage(items: page.items, summary: page.summary)
     }
 
     public func exportOwedCsv(recipientId: Int) async throws -> Data {

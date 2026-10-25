@@ -13,6 +13,8 @@ struct PortfolioTaxDataTests {
         #expect(value.totals.totalManualCosts == 917)
         #expect(value.totals.portfolioTaxesPlusPIT == 2468)
         #expect(value.dividend.dividendWhtReclaim == nil)
+        // Amounts without a stored rate are left out and named, never converted at a guess (ADR-216).
+        #expect(value.unconvertedCurrencies == ["CHF"])
         #expect(value.records[0].value["2026:1"]?["future"] == .number(Decimal(string: "0.1234567890123456789")!))
         try value.validate(year: 2025, currency: "EUR")
     }
@@ -260,7 +262,8 @@ private func portfolioTaxFixture(year: Int = 2025, currency: String = "EUR", rec
     throws -> PortfolioTaxDashboard
 {
     let raw = #"""
-        {"year":2025,"currency":"EUR","isEmpty":false,"hasProfile":true,"hasInKindIncomeUnclassified":true,
+        {"unconvertedCurrencies":["CHF"],"incompleteFigures":["totals","estimates.cgtEstimate"],
+        "year":2025,"currency":"EUR","isEmpty":false,"hasProfile":true,"hasInKindIncomeUnclassified":true,
         "totals":{"totalTaxes":123456789.123456789012345,"totalFees":2,"totalTaxesAndFees":3,"totalRecordedTaxes":4,"totalRecordedFees":5,"totalManualTaxes":6,"totalManualFees":7,"totalManualCosts":917,"totalRealizedGain":8,"totalUnrealizedGain":9,"effectiveTaxRate":10,"totalPIT":500,"portfolioTaxesPlusPIT":2468},
         "taxBreakdown":[{"nameKey":"tax.transactionTax","value":1}],"feeBreakdown":[],"taxByAssetClass":[{"assetClass":"etf","taxes":1,"fees":2,"total":3}],
         "investmentBreakdown":[{"id":1,"name":"Alpha ETF","symbol":"A","assetClass":"etf","recordedTaxes":1,"recordedFees":2,"manualTaxes":3,"manualFees":4,"taxes":5,"fees":6,"total":11,"realizedGain":789.123456789012345,"currency":"EUR"}],

@@ -25,6 +25,8 @@ public struct InsightForecast: Decodable, Equatable, Sendable {
     }
     public struct Diagnostics: Decodable, Equatable, Sendable {
         public let history_months: Int
+        /// The weights the ensemble applied to each point method, computed on the server.
+        public let ensemble_weights: [String: Decimal]?
         public let backtest: [Backtest]
     }
     public struct Backtest: Decodable, Equatable, Sendable, Identifiable {
@@ -57,6 +59,10 @@ public struct InsightForecast: Decodable, Equatable, Sendable {
     public let today: String?
     public let window_start: String?
     public let window_end: String?
+    /// Inputs left out for want of a stored rate; absent on older cache entries (ADR-216).
+    public let unconverted_count: Int?
+    public let unconverted_currencies: [String]?
+    public var unconvertedCount: Int { unconverted_count ?? 0 }
 
     /// The server already includes scheduled ledger rows and planned payments in every
     /// method. Adding them again here would count future transactions twice.
@@ -163,27 +169,4 @@ public struct InsightForecastAccuracy: Decodable, Equatable, Sendable {
         public var id: String { method_id }
     }
     public let methods: [Method]
-}
-
-extension InsightForecast.Diagnostics {
-    /// The diagnostics' weight preview, matching CashFlowForecastDiagnostics. This only
-    /// displays the backend's errors; it does not generate a forecast or select an ensemble.
-    public var suggestedWeights: [String: Decimal] {
-        let rows = backtest.filter { !$0.rmse.isNaN && $0.rmse > 0 }
-        guard !rows.isEmpty else { return [:] }
-        let mean = rows.reduce(0) { $0 + $1.rmse } / Decimal(rows.count)
-        let raw = rows.map { row -> (String, Decimal) in
-            let count = row.per_month.reduce(0) { $0 + $1.sample_days }
-            let samples = Decimal(count > 0 ? count : 30)
-            let shrunk = max(
-                (samples * row.rmse + 30 * mean) / (samples + 30), Decimal(string: "0.000001")!)
-            return (row.method_id, 1 / (shrunk * shrunk))
-        }
-        let total = raw.reduce(0) { $0 + $1.1 }
-        let floor = Decimal(string: "0.05")!
-        return Dictionary(
-            uniqueKeysWithValues: raw.map {
-                ($0.0, (1 - floor) * $0.1 / total + floor / Decimal(rows.count))
-            })
-    }
 }

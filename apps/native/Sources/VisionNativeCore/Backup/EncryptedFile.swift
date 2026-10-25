@@ -1,50 +1,45 @@
-import CommonCrypto
 import Foundation
 
-/// The two encrypted formats of `packaging/electron/backup/encrypted-file.ts`:
+/// The encrypted format of `packaging/electron/backup/encrypted-file.ts`:
 ///
-///     v1 (legacy, read only)  magic(10) | iv(16) | AES-256-CBC(PKCS#7) ciphertext
-///                             key = scrypt(passphrase, <static salt>, N=2^14, r=8, p=1)
-///     v2                      magic(10) | salt(16) | nonce(12) | AES-256-GCM ciphertext | tag(16)
-///                             key = scrypt(passphrase, salt, N=2^15, r=8, p=1)
+///     v2  magic(10) | salt(16) | nonce(12) | AES-256-GCM ciphertext | tag(16)
+///         key = scrypt(passphrase, salt, N=2^15, r=8, p=1)
 ///
-/// The magic is 10 ASCII bytes (`VISIONBAK1`/`VISIONBAK2` for bundles, `VISIONENC1`/
-/// `VISIONENC2` for legacy SQL dumps).
+/// The v1 format (AES-256-CBC, static salt) is retired: its magic is recognised only to
+/// refuse it by name (`RETIRED_V1_MESSAGE`). The magic is 10 ASCII bytes (`VISIONBAK1`/
+/// `VISIONBAK2` for bundles, `VISIONENC1`/`VISIONENC2` for legacy SQL dumps).
 public enum EncryptedFile {
-    public static let v1IVBytes = 16
     public static let v2SaltBytes = 16
     public static let v2IVBytes = 12
     public static let v2TagBytes = 16
+    /// `RETIRED_V1_MESSAGE`.
+    public static let retiredV1Message =
+        "This backup uses the retired v1 encryption format, which Vision no longer restores."
 
     /// `DecryptFileOptions` without the paths and the key.
     public struct Format: Sendable, Equatable {
-        public let v1Magic: [UInt8]
+        /// Magic of the retired v1 format, refused by name.
+        public let retiredV1Magic: [UInt8]
         public let v2Magic: [UInt8]
-        public let v1Salt: String
         public let requiredError: String
         public let invalidError: String
         public let invalidHeaderMessage: String
         public let unsupportedFormatMessage: String
+        public let retiredFormatMessage: String
 
         public init(
-            v1Magic: [UInt8], v2Magic: [UInt8], v1Salt: String, requiredError: String, invalidError: String,
-            invalidHeaderMessage: String, unsupportedFormatMessage: String
+            retiredV1Magic: [UInt8], v2Magic: [UInt8], requiredError: String, invalidError: String,
+            invalidHeaderMessage: String, unsupportedFormatMessage: String,
+            retiredFormatMessage: String = EncryptedFile.retiredV1Message
         ) {
-            self.v1Magic = v1Magic
+            self.retiredV1Magic = retiredV1Magic
             self.v2Magic = v2Magic
-            self.v1Salt = v1Salt
             self.requiredError = requiredError
             self.invalidError = invalidError
             self.invalidHeaderMessage = invalidHeaderMessage
             self.unsupportedFormatMessage = unsupportedFormatMessage
+            self.retiredFormatMessage = retiredFormatMessage
         }
-    }
-
-    /// `deriveKeyV1`: `nil` for an empty passphrase.
-    public static func deriveKeyV1(_ passphrase: String?, salt: String) throws -> [UInt8]? {
-        guard let passphrase, !passphrase.isEmpty else { return nil }
-        return try Scrypt.derive(
-            password: Array(passphrase.utf8), salt: Array(salt.utf8), parameters: Scrypt.legacy, length: 32)
     }
 
     /// `deriveKeyV2`: `nil` for an empty passphrase; the salt must be 16 bytes.
@@ -99,8 +94,9 @@ public enum EncryptedFile {
         }
     }
 
-    /// `decryptFile`: v1 (CBC) or v2 (GCM) by magic. Plaintext is streamed to `destination`
-    /// and removed again when authentication or padding fails, which reports `invalidError`.
+    /// `decryptFile`: the v2 (GCM) format only; the retired v1 magic is refused by name.
+    /// Plaintext is streamed to `destination` and removed again when authentication fails,
+    /// which reports `invalidError`.
     public static func decrypt(
         encryptedPath: String, destinationPath: String, passphrase: String?, format: Format
     ) throws {
@@ -108,72 +104,10 @@ public enum EncryptedFile {
         let input = try BackupFiles.openForReading(encryptedPath)
         defer { try? input.close() }
         let magic = try BackupFiles.read(
-            input, at: 0, count: format.v1Magic.count, message: format.invalidHeaderMessage)
-        if magic == format.v1Magic {
-            try decryptV1(input, destinationPath: destinationPath, passphrase: passphrase, format: format)
-        } else if magic == format.v2Magic {
-            try decryptV2(input, destinationPath: destinationPath, passphrase: passphrase, format: format)
-        } else {
-            throw BackupFailure(format.unsupportedFormatMessage)
-        }
-    }
-
-    private static func decryptV1(
-        _ input: FileHandle, destinationPath: String, passphrase: String, format: Format
-    ) throws {
-        let iv = try BackupFiles.read(
-            input, at: UInt64(format.v1Magic.count), count: v1IVBytes, message: format.invalidHeaderMessage)
-        guard var key = try deriveKeyV1(passphrase, salt: format.v1Salt) else {
-            throw BackupFailure(format.requiredError)
-        }
-        defer { key.withUnsafeMutableBufferPointer { $0.update(repeating: 0) } }
-        // CBC without CommonCrypto's padding: its PKCS#7 removal does not reliably report a
-        // bad pad, so the last block is held back and checked here like OpenSSL's
-        // `decipher.final()` ("bad decrypt", "wrong final block length").
-        let cryptor = try AESCryptor(operation: kCCDecrypt, key: key, iv: iv, options: 0)
-        let output = try BackupFiles.createFile(destinationPath)
-        do {
-            defer { try? output.close() }
-            var held: [UInt8] = []
-            var ciphertextBytes = 0
-            while true {
-                let chunk = try BackupFiles.read(input, upTo: BackupFiles.chunkSize)
-                if chunk.isEmpty { break }
-                ciphertextBytes += chunk.count
-                held += try cryptor.update([UInt8](chunk))
-                if held.count > kCCBlockSizeAES128 {
-                    let ready = held.count - kCCBlockSizeAES128
-                    try output.write(contentsOf: Array(held[..<ready]))
-                    held.removeFirst(ready)
-                }
-            }
-            guard ciphertextBytes > 0, ciphertextBytes % kCCBlockSizeAES128 == 0 else {
-                throw AESCryptorError(status: CCCryptorStatus(kCCAlignmentError))
-            }
-            held += try cryptor.finish()
-            guard let plaintext = pkcs7Unpad(held) else {
-                throw AESCryptorError(status: CCCryptorStatus(kCCDecodeError))
-            }
-            try output.write(contentsOf: plaintext)
-        } catch is AESCryptorError {
-            // Bad padding or length: the wrong passphrase ("bad decrypt" / "wrong final block length").
-            BackupFiles.remove(destinationPath)
-            throw BackupFailure(format.invalidError)
-        } catch {
-            BackupFiles.remove(destinationPath)
-            throw error
-        }
-    }
-
-    /// Removes PKCS#7 padding from the final block; `nil` when the padding is invalid.
-    static func pkcs7Unpad(_ block: [UInt8]) -> [UInt8]? {
-        guard block.count == kCCBlockSizeAES128, let last = block.last else { return nil }
-        let pad = Int(last)
-        guard pad >= 1, pad <= kCCBlockSizeAES128 else { return nil }
-        var difference: UInt8 = 0
-        for byte in block.suffix(pad) { difference |= byte ^ last }
-        guard difference == 0 else { return nil }
-        return Array(block.prefix(block.count - pad))
+            input, at: 0, count: format.v2Magic.count, message: format.invalidHeaderMessage)
+        if magic == format.retiredV1Magic { throw BackupFailure(format.retiredFormatMessage) }
+        guard magic == format.v2Magic else { throw BackupFailure(format.unsupportedFormatMessage) }
+        try decryptV2(input, destinationPath: destinationPath, passphrase: passphrase, format: format)
     }
 
     private static func decryptV2(

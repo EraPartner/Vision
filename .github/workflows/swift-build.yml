@@ -1,8 +1,12 @@
 name: Swift app build
 
-# Manual only (ADR-249). It never runs on pull requests or pushes, so it adds no time to CI.
-# Agents start it on a branch with workflow_dispatch to compile and test apps/native.
+# Manual only (ADR-249). It never runs on pull requests, so it adds no time to CI. Start it with
+# workflow_dispatch, or by pushing a claude/* commit whose message contains "[swift-build]" (the
+# Claude GitHub App cannot dispatch workflows); every other push skips the job.
 on:
+  push:
+    branches: ["claude/**"]
+    paths: ["apps/native/**", ".github/workflows/swift-build.yml"]
   workflow_dispatch:
     inputs:
       tests:
@@ -19,6 +23,7 @@ concurrency:
 jobs:
   swift-build:
     name: Swift app (macOS)
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[swift-build]')
     runs-on: macos-26
     timeout-minutes: 40
     permissions:
@@ -48,14 +53,35 @@ jobs:
       - name: Generate the Xcode project
         run: xcodegen generate --spec apps/native/project.yml
 
-      # -quiet keeps the log to warnings and errors so build failures are easy to read.
+            # On failure print only the unique compiler errors; the full log holds huge command lines.
       - name: Build the app (Debug, unsigned)
-        run: xcodebuild -quiet -project apps/native/VisionNative.xcodeproj -scheme "Vision Native" -configuration Debug CODE_SIGNING_ALLOWED=NO build
+        run: |
+          xcodebuild -quiet -project apps/native/VisionNative.xcodeproj -scheme "Vision Native" \
+            -configuration Debug CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/build.log" 2>&1 || {
+            grep -E ': (error|fatal error): ' "$RUNNER_TEMP/build.log" | sed "s#^$GITHUB_WORKSPACE/##" | sort -u | head -500
+            exit 1
+          }
 
       - name: Test the Swift package
-        if: inputs.tests
+        if: github.event_name == 'push' || inputs.tests
         run: |
           # Run AppKit layouts separately so they cannot starve Core watchdogs/polling on MainActor.
-          swift test --package-path apps/native --skip VisionNativeUITests
+          # Print only errors and failed tests; the full log is mostly deprecation warnings.
+          summarize() {
+            # Issue comments follow their "recorded an issue" line, so keep a few lines after it.
+            grep -E -A40 '(error|fatal error): |✘|Fatal error' "$1" | grep -v -E 'warning: |^--$' \
+              | sed "s#^$GITHUB_WORKSPACE/##" | awk '!seen[$0]++' | head -800
+          }
+          # Both suites run even when the first fails, so one round reports every failure.
+          status=0
+          swift test --package-path apps/native --skip VisionNativeUITests > "$RUNNER_TEMP/test.log" 2>&1 || {
+            summarize "$RUNNER_TEMP/test.log"; status=1
+          }
+          tail -3 "$RUNNER_TEMP/test.log"
           # AppKit activation, key windows and display transactions are process-global.
-          swift test --package-path apps/native --skip-build --no-parallel --filter VisionNativeUITests
+          swift test --package-path apps/native --skip-build --no-parallel --filter VisionNativeUITests \
+            > "$RUNNER_TEMP/ui-test.log" 2>&1 || {
+            summarize "$RUNNER_TEMP/ui-test.log"; status=1
+          }
+          tail -3 "$RUNNER_TEMP/ui-test.log"
+          exit $status

@@ -1,8 +1,8 @@
 import Foundation
 
-/// One factory graph's authority to mutate retained frontend storage. A restore
-/// drains accepted JavaScript operations and holds late receipt handlers until it
-/// either resumes the same storage or retires the original graph.
+/// One factory graph's authority to mutate the shell's local storage (`NativeRawStateStore`).
+/// A restore drains accepted writes and holds late receipt handlers until it either resumes
+/// the same storage or retires the original graph.
 public actor NativeLocalStateSession {
     private enum State { case active, paused, retired }
     private var state = State.active
@@ -17,7 +17,7 @@ public actor NativeLocalStateSession {
 
     public init() {}
 
-    /// The host must finish every returned token after the actual WK delegate
+    /// The host must finish every returned token after the actual storage operation
     /// completes, including failed and cancelled operations. Caller cancellation
     /// cannot establish that an accepted storage mutation stopped executing.
     public func beginWrite() async throws -> UUID {
@@ -49,7 +49,7 @@ public actor NativeLocalStateSession {
     }
 
     /// Pause new admission before draining. Late server-receipt handlers wait here
-    /// instead of writing old drafts into newly restored frontend storage.
+    /// instead of writing old drafts into newly restored storage.
     public func suspendAndDrain() async {
         if state == .active { state = .paused }
         guard !activeWrites.isEmpty else { return }
@@ -76,7 +76,7 @@ public actor NativeLocalStateSession {
         for continuation in pending { continuation.resume(throwing: CancellationError()) }
     }
 
-    /// The host checks before and after a frontend read. Retired graphs cannot
+    /// The host checks before and after a storage read. Retired graphs cannot
     /// publish a value from the restored storage through an old callback.
     public func checkRead() throws {
         try Task.checkCancellation()

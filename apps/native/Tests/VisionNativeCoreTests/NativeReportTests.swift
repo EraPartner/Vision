@@ -7,28 +7,33 @@ actor ReportTestService: NativeReportService {
     private(set) var requests: [NativeReportRequest] = []
     var failure: APIError?
     private var hold = false
-    private var release: CheckedContinuation<APIResponse, Error>?
+    private var release: CheckedContinuation<NativeReportFile, Error>?
     private var observers: [CheckedContinuation<Void, Never>] = []
     init(failure: APIError? = nil, hold: Bool = false) {
         self.failure = failure
         self.hold = hold
     }
-    func generate(_ request: NativeReportRequest) async throws -> APIResponse {
+    func generate(_ request: NativeReportRequest) async throws -> NativeReportFile {
         requests.append(request)
         for observer in observers { observer.resume() }
         observers.removeAll()
         if let failure { throw failure }
         if hold { return try await withCheckedThrowingContinuation { release = $0 } }
-        return APIResponse(status: 200, body: Data("%PDF-synthetic".utf8), headers: ["content-type": "application/pdf"])
+        return NativeReportFile(filename: "vision-\(request.type.rawValue)-2026-09-22.pdf", pdf: Data("%PDF-synthetic".utf8))
     }
     func waitForRequest() async {
         if !requests.isEmpty { return }
         await withCheckedContinuation { observers.append($0) }
     }
     func finish() {
-        release?.resume(returning: APIResponse(status: 200, body: Data("%PDF-delayed".utf8)))
+        release?.resume(returning: NativeReportFile(filename: "vision-financial-2026-09-22.pdf", pdf: Data("%PDF-delayed".utf8)))
         release = nil
     }
+}
+
+actor ReportPrintedDocuments {
+    private(set) var documents: [NativeReportDocument] = []
+    func record(_ document: NativeReportDocument) { documents.append(document) }
 }
 
 actor ReportTestTransport: APITransport {
@@ -137,7 +142,8 @@ actor ReportTestTransport: APITransport {
                     "excludedRecipientIds": .array([.number(7)]),
                 ]))
         #expect(recorder.saves.first?.0 == Data("%PDF-synthetic".utf8))
-        #expect(recorder.saves.first?.1 == "vision-financial-\(model.today).pdf")
+        // The file keeps the document's own name, dated by the server (ADR-234).
+        #expect(recorder.saves.first?.1 == "vision-financial-2026-09-22.pdf")
         #expect(recorder.notices.map(\.key) == ["statsPage.report.downloadSuccess"] && recorder.closes == 1)
     }
     @Test func partialSelectionPreservesJavaScriptSetReinsertOrder() async throws {
@@ -346,21 +352,39 @@ actor ReportTestTransport: APITransport {
         #expect(await service.requests.isEmpty)
         #expect(recorder.closes == 0 && recorder.notices.isEmpty)
     }
-    @Test func binaryServicePreservesHeadersAndOneAttemptForReportPost() async throws {
-        let response = APIResponse(
-            status: 200, body: Data("%PDF-source".utf8),
-            headers: ["content-disposition": "attachment; filename=source.pdf"])
-        let transport = ReportTestTransport(response)
+    @Test func serviceDecodesTheReportDocumentPrintsItAndKeepsOneAttempt() async throws {
+        let body = #"""
+            {"ok":true,"data":{"filename":"vision-tax-2026-09-22.pdf","html":"<!DOCTYPE html><p>tax</p>","footerTemplate":"<span class=\"pageNumber\"></span>"}}
+            """#
+        let transport = ReportTestTransport(APIResponse(status: 200, body: Data(body.utf8)))
         let client = APIClient(baseURL: { URL(string: "http://127.0.0.1:54331") }, transport: transport)
-        let service = NativeReportsAPIService(client: client)
+        let printed = ReportPrintedDocuments()
+        let service = NativeReportsAPIService(
+            client: client,
+            render: { document in
+                await printed.record(document)
+                return Data("%PDF-printed".utf8)
+            })
         let result = try await service.generate(.init(type: .tax, body: .object(["currency": .string("EUR")])))
-        #expect(result == response)
+        #expect(result == NativeReportFile(filename: "vision-tax-2026-09-22.pdf", pdf: Data("%PDF-printed".utf8)))
+        let document = try #require(await printed.documents.first)
+        #expect(document.html == "<!DOCTYPE html><p>tax</p>" && document.footerTemplate.contains("pageNumber"))
         let request = try #require(await transport.requests.first)
         #expect(request.method == .post && request.url.path == "/api/reports/tax")
         #expect(request.headers["Content-Type"] == "application/json")
         #expect(
             try JSONDecoder().decode(TaxValue.self, from: #require(request.body))
                 == .object(["currency": .string("EUR")]))
+    }
+    @Test func aPrintFailureReachesTheCaller() async {
+        let body = #"{"ok":true,"data":{"filename":"vision-financial-2026-09-22.pdf","html":"<!DOCTYPE html>","footerTemplate":""}}"#
+        let transport = ReportTestTransport(APIResponse(status: 200, body: Data(body.utf8)))
+        let client = APIClient(baseURL: { URL(string: "http://127.0.0.1:54331") }, transport: transport)
+        let service = NativeReportsAPIService(client: client, render: { _ in throw APIError.network("Synthetic print failure") })
+        do {
+            _ = try await service.generate(.init(type: .financial, body: .object([:])))
+            Issue.record("A failed print must fail the report")
+        } catch { #expect(error as? APIError == .network("Synthetic print failure")) }
     }
     @Test func binaryServiceDoesNotReplayRetryableFailure() async {
         let transport = ReportTestTransport(

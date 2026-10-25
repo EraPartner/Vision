@@ -2,8 +2,8 @@
 title: "Native parity inventory: Admin and developer tools"
 type: reference
 status: active
-date: 2026-10-17
-updated: 2026-10-17
+date: 2026-10-25
+updated: 2026-10-25
 tags:
   [
     reference,
@@ -42,14 +42,9 @@ Native mapping: the switch is in `apps/native/Sources/VisionNativeUI/Screens/Set
 
 Used by `/admin/db`, `/admin/db/:table` and `/admin/providers` when their query fails. Source: `apps/frontend/src/components/shared/AdminErrorState.tsx`.
 
-- On HTTP 401/403 (`ApiClientError.status`): destructive alert `admin.authError.title` "Admin authentication required", body `admin.authError.description` "This page needs an admin token. Set it on the Admin Overview page, then try again."
-- Otherwise: destructive alert titled with the page's fallback message and a humanized `apiErrorToMessage` body.
+- Destructive alert titled with the page's fallback message and a humanized `apiErrorToMessage` body. There is no authentication variant any more.
 
-| #   | Where            | Element                                                  | Trigger | What it does                                       | Source                                                       | Status |
-| --- | ---------------- | -------------------------------------------------------- | ------- | -------------------------------------------------- | ------------------------------------------------------------ | ------ |
-| 1   | Auth error alert | `admin.authError.action` "Go to admin token" button-link | click   | Navigates to `/admin` (where the token card lives) | `apps/frontend/src/components/shared/AdminErrorState.tsx:43` | native |
-
-Native mapping: `AdminErrorBanner` in `apps/native/Sources/VisionNativeUI/AdminComponents.swift`, used by `DatabaseMaintenanceView`, `TableDataEditorView` and `ProviderHealthView`, navigates to `AdminErrorState.tokenRoute`.
+Native mapping: `AdminErrorBanner` in `apps/native/Sources/VisionNativeUI/AdminComponents.swift`, used by `DatabaseMaintenanceView`, `TableDataEditorView` and `ProviderHealthView`; it shows `AdminErrorState.title` over `AdminErrorState.body` and has no action.
 
 ## Screens
 
@@ -64,77 +59,19 @@ Component: `apps/frontend/src/pages/admin/AdminOverviewPage.tsx`. Feature doc: [
   - `admin.overview.dbSize` "Database size": value `db_size`, sub "N `admin.overview.tables`" (`:211`). Data: `GET /api/admin/database/stats`.
   - `admin.overview.dataSources` "Data sources": "ok / total" providers, sub "N `admin.overview.failing`" or `admin.overview.allHealthy` "All healthy"; ring warn when 1-2 failing, error when 3 or more (`:167`, `:218`). Data: `GET /api/admin/providers/health`.
   - `admin.overview.endpoints` "Endpoints": overall error rate percent + `admin.overview.errorRate`, sub "N `admin.overview.requests`"; warn when above 2 %, error at 10 % or more (`:173`, `:234`). Data: `GET /api/admin/metrics/requests`.
-- Admin API token card `admin.token.title` "Admin API token", description `admin.token.description` (`apps/frontend/src/pages/admin/AdminOverviewPage.tsx:83`). Active-state line `admin.token.active` "A token is set for this session." (`:143`). Token lives in sessionStorage key `vision.adminToken` only (`apps/frontend/src/lib/adminToken.ts:15`).
-- Audit history card (`AuditHistoryCard`), described below (`apps/frontend/src/pages/admin/AdminOverviewPage.tsx:251`).
+- No audit history card: removed by [[docs/adr/231-remove-audit-history|ADR-231]] (see below).
 
 **URL state:** none.
 
-| #   | Where      | Element                                                                                       | Trigger       | What it does                                                                                                                                                                  | Source                                                                                                               | Status |
-| --- | ---------- | --------------------------------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------ |
-| 1   | Tiles      | `admin.overview.dbSize` tile (whole card is a link)                                           | click         | Navigates to `/admin/db`                                                                                                                                                      | `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:216`                                                            | native |
-| 2   | Tiles      | `admin.overview.dataSources` tile                                                             | click         | Navigates to `/admin/providers`                                                                                                                                               | `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:231`                                                            | native |
-| 3   | Tiles      | `admin.overview.endpoints` tile                                                               | click         | Navigates to `/admin/endpoints`                                                                                                                                               | `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:243`                                                            | native |
-| 4   | Token card | Password input, placeholder `admin.token.placeholder` "Paste admin token", `autoComplete=off` | type          | Holds the draft token                                                                                                                                                         | `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:122`                                                            | native |
-| 5   | Token card | `admin.token.save` "Save token" submit button (disabled when blank) / Enter in input          | click / Enter | Trims and stores token in sessionStorage, clears input, toast `admin.token.saved` "Admin token saved for this session"; all admin API calls then send `Authorization: Bearer` | `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:117`, `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:131` | native |
-| 6   | Token card | `admin.token.clear` "Clear" button (disabled when no token)                                   | click         | Removes stored token, toast `admin.token.cleared` "Admin token cleared"                                                                                                       | `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:134`                                                            | native |
+| #   | Where | Element                                             | Trigger | What it does                    | Source                                                    | Status |
+| --- | ----- | --------------------------------------------------- | ------- | ------------------------------- | --------------------------------------------------------- | ------ |
+| 1   | Tiles | `admin.overview.dbSize` tile (whole card is a link) | click   | Navigates to `/admin/db`        | `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:216` | native |
+| 2   | Tiles | `admin.overview.dataSources` tile                   | click   | Navigates to `/admin/providers` | `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:231` | native |
+| 3   | Tiles | `admin.overview.endpoints` tile                     | click   | Navigates to `/admin/endpoints` | `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:243` | native |
 
-#### Card: Audit history (`AuditHistoryCard`)
+#### Card: Audit history (removed)
 
-Opened from: always rendered on `/admin`. Source: `apps/frontend/src/pages/admin/AuditHistoryCard.tsx`. Electron-only data path: everything goes through `window.electronAudit` (preload bridge `packaging/electron/preload.ts:163`); in a browser the card shows `admin.audit.unavailable`.
-
-Regions:
-
-- Title `admin.audit.title` "Audit history", description `admin.audit.description` (`apps/frontend/src/pages/admin/AuditHistoryCard.tsx:248`).
-- Loading skeleton with sr-only `admin.audit.loading` (`:265`).
-- Status line: `admin.audit.unavailable`, `admin.audit.noTrustedAnchor` or `admin.audit.failed` (`:275`).
-- Change notice `admin.audit.changed` when a paged read no longer matches the first page (`:318`).
-- Verification summary: `admin.audit.verified` "Verified through entry {sequence}" or `admin.audit.partial` "Anchored through entry {anchored}"; `admin.audit.pending` count; `admin.audit.enrollmentCaveat`; `admin.audit.retentionCaveat`; `admin.audit.legacy` counts of older unverified rows (`:325`).
-- Entry list (100 per page): "#sequence stream · event", anchor badge `admin.audit.enrollmentBaseline` / `admin.audit.anchor` / `admin.audit.pendingAnchor`, `createdAt`; empty state `admin.audit.empty` (`:370`).
-- Export limits note `admin.audit.exportLimit`, and `admin.audit.exportUnavailable` when history exceeds 500 entries (`:455`).
-- Transfer explanation `admin.audit.transferExplanation` (`:484`); rotate explanation `admin.audit.rotateExplanation` (`:543`).
-- Result notes (polite on success, assertive on failure): `admin.audit.exportSuccess`/`exportFailed`, `transferSuccess`/`transferFailed`, `rotateSuccess`/`rotateFailed` (`:43`); enroll failure `admin.audit.enrollFailed` (`:308`).
-
-Fields:
-
-- Transfer password: password input, label `admin.audit.transferPassword` "Transfer password (at least 16 characters)", `minLength=16`, `maxLength=1024`, `autoComplete=new-password`; cleared after every transfer attempt (`apps/frontend/src/pages/admin/AuditHistoryCard.tsx:490`, `:208`).
-
-| #   | Where                                  | Element                                                                                                                                                | Trigger | What it does                                                                                                              | Source                                                                                      | Status |
-| --- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------ |
-| 1   | Card header                            | `admin.audit.refresh` "Refresh" button (disabled while busy)                                                                                           | click   | Re-reads the audit chain from the start (`electronAudit.read`, afterSequence 0, limit 100)                                | `apps/frontend/src/pages/admin/AuditHistoryCard.tsx:259`                                    | native |
-| 2   | No-anchor state                        | `admin.audit.enroll` "Start audit protection" button (only when reason is `no_trusted_anchor` and bridge exists), with `admin.audit.enrollExplanation` | click   | Calls `electronAudit.enroll()`; Electron shows a native warning box (see below); on success reloads                       | `apps/frontend/src/pages/admin/AuditHistoryCard.tsx:304`                                    | native |
-| 3   | Entry row                              | `admin.audit.details` "Entry details" disclosure                                                                                                       | click   | Expands a JSON block with `hash`, `previousHash`, `payload`                                                               | `apps/frontend/src/pages/admin/AuditHistoryCard.tsx:417`                                    | native |
-| 4   | Below list                             | `admin.audit.loadMore` "Load more" button (when `hasMore`)                                                                                             | click   | Reads next 100 entries after the last sequence; if the chain head changed, drops the page and shows `admin.audit.changed` | `apps/frontend/src/pages/admin/AuditHistoryCard.tsx:448`                                    | native |
-| 5   | Export block                           | `admin.audit.export` "Export snapshot" button (disabled when busy or over 500 entries)                                                                 | click   | `electronAudit.exportSnapshot()`; Electron native save dialog, default `vision-audit-snapshot.json`, JSON filter          | `apps/frontend/src/pages/admin/AuditHistoryCard.tsx:467`, `packaging/electron/main.ts:1883` | native |
-| 6   | Transfer block                         | `admin.audit.transferExport` "Export protected transfer" button (needs password of 16 or more and a loaded page)                                       | click   | `electronAudit.exportTransfer(password)`; native save dialog                                                              | `apps/frontend/src/pages/admin/AuditHistoryCard.tsx:512`, `packaging/electron/main.ts:1923` | native |
-| 7   | Transfer block                         | `admin.audit.transferImport` "Import protected transfer" button (needs password of 16 or more)                                                         | click   | `electronAudit.importTransfer(password)`; native open dialog (`.vat` filter) then native confirm box; on success reloads  | `apps/frontend/src/pages/admin/AuditHistoryCard.tsx:525`, `packaging/electron/main.ts:1963` | native |
-| 8   | Rotate block (only with a loaded page) | `admin.audit.rotate` "Rotate audit key" button                                                                                                         | click   | `electronAudit.rotateKey()`; native confirm box; on success reloads                                                       | `apps/frontend/src/pages/admin/AuditHistoryCard.tsx:549`                                    | native |
-
-#### Native alert: Start audit protection (Electron main process)
-
-Opened from: Audit history row 2. Source: `packaging/electron/main.ts:1802`. Title `admin.audit.enrollTitle` "Start audit protection", message `admin.audit.enrollWarning`.
-
-| #   | Where       | Element                                            | Trigger     | What it does                                     | Source                            | Status |
-| --- | ----------- | -------------------------------------------------- | ----------- | ------------------------------------------------ | --------------------------------- | ------ |
-| 1   | Message box | `admin.audit.enrollConfirm` "Start protection"     | click       | Proceeds with enrollment                         | `packaging/electron/main.ts:1805` | native |
-| 2   | Message box | `settings.restore.cancelButton` "Cancel" (default) | click / Esc | Cancels; renderer treats as cancelled (no error) | `packaging/electron/main.ts:1806` | native |
-
-#### Native alert: Import protected transfer (Electron main process)
-
-Opened from: Audit history row 7, after a `.vat` file is chosen. Source: `packaging/electron/main.ts:1980`. Message `admin.audit.transferImportWarning`.
-
-| #   | Where       | Element                                               | Trigger     | What it does         | Source                            | Status |
-| --- | ----------- | ----------------------------------------------------- | ----------- | -------------------- | --------------------------------- | ------ |
-| 1   | Message box | `admin.audit.transferImportConfirm` "Import transfer" | click       | Imports the transfer | `packaging/electron/main.ts:1983` | native |
-| 2   | Message box | `settings.restore.cancelButton` "Cancel" (default)    | click / Esc | Cancels              | `packaging/electron/main.ts:1984` | native |
-
-#### Native alert: Rotate audit key (Electron main process)
-
-Opened from: Audit history row 8. Source: `packaging/electron/main.ts:2032`. Title `admin.audit.rotate`, message `admin.audit.rotateWarning`.
-
-| #   | Where       | Element                                            | Trigger     | What it does                            | Source                            | Status |
-| --- | ----------- | -------------------------------------------------- | ----------- | --------------------------------------- | --------------------------------- | ------ |
-| 1   | Message box | `admin.audit.rotateConfirm` "Rotate key"           | click       | Rotates the key after full verification | `packaging/electron/main.ts:2035` | native |
-| 2   | Message box | `settings.restore.cancelButton` "Cancel" (default) | click / Esc | Cancels                                 | `packaging/electron/main.ts:2036` | native |
+Removed by [[docs/adr/231-remove-audit-history|ADR-231]]. The card, its `window.electronAudit` bridge, the three Electron confirmation alerts (start protection, import transfer, rotate key) and every `admin.audit.*` string are gone from the React app and from Vision Native (the audit anchor and Keychain witness no longer exist). `/admin` shows the three summary tiles only. The inventory of the card is kept in the git history of this page.
 
 ### `/admin/db` — Database maintenance
 
@@ -152,17 +89,16 @@ Component: `apps/frontend/src/pages/DbMaintenancePage.tsx`. Feature doc: [[docs/
 
 **URL state:** none.
 
-| #   | Where       | Element                                                                                                          | Trigger | What it does                                                                                                                                                                                             | Source                                                       | Status |
-| --- | ----------- | ---------------------------------------------------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------ |
-| 1   | Header      | `admin.moreActions` "More actions" menu (icon button)                                                            | click   | Opens dropdown                                                                                                                                                                                           | `apps/frontend/src/pages/DbMaintenancePage.tsx:232`          | native |
-| 2   | Header menu | `dbMaintenance.refresh` "Refresh" item (disabled while loading, spinner icon)                                    | select  | Invalidates the DB stats query                                                                                                                                                                           | `apps/frontend/src/pages/DbMaintenancePage.tsx:239`          | native |
-| 3   | Header      | `dbMaintenance.vacuumAll` "Vacuum all tables" button; label `dbMaintenance.vacuuming` "Vacuuming…" while running | click   | `POST /api/admin/database/vacuum` with `{table: null}`; no confirmation; toast `dbMaintenance.vacuumSuccess` with `dbMaintenance.allTables`, or `dbMaintenance.vacuumFailed` with error; refreshes stats | `apps/frontend/src/pages/DbMaintenancePage.tsx:252`, `:189`  | native |
-| 4   | Table row   | Table name link (monospace)                                                                                      | click   | Navigates to `/admin/db/:table`                                                                                                                                                                          | `apps/frontend/src/pages/DbMaintenancePage.tsx:125`          | native |
-| 5   | Table row   | Row menu, label `dbMaintenance.rowMenu` "Actions for {table}"                                                    | click   | Opens dropdown                                                                                                                                                                                           | `apps/frontend/src/pages/DbMaintenancePage.tsx:151`          | native |
-| 6   | Row menu    | `dbMaintenance.openTable` "Browse rows"                                                                          | select  | Navigates to `/admin/db/:table`                                                                                                                                                                          | `apps/frontend/src/pages/DbMaintenancePage.tsx:156`          | native |
-| 7   | Row menu    | `dbMaintenance.vacuumTable` "Run vacuum" (disabled while any vacuum runs)                                        | select  | `POST /api/admin/database/vacuum` with `{table}`; same toasts with the table name; refreshes stats                                                                                                       | `apps/frontend/src/pages/DbMaintenancePage.tsx:165`          | native |
-| 8   | Empty state | `dbMaintenance.refresh` "Refresh" button                                                                         | click   | Invalidates the DB stats query                                                                                                                                                                           | `apps/frontend/src/pages/DbMaintenancePage.tsx:351`          | native |
-| 9   | Error state | `admin.authError.action` link (on 401/403)                                                                       | click   | See Admin error state row 1                                                                                                                                                                              | `apps/frontend/src/components/shared/AdminErrorState.tsx:43` | native |
+| #   | Where       | Element                                                                                                          | Trigger | What it does                                                                                                                                                                                             | Source                                                      | Status |
+| --- | ----------- | ---------------------------------------------------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------ |
+| 1   | Header      | `admin.moreActions` "More actions" menu (icon button)                                                            | click   | Opens dropdown                                                                                                                                                                                           | `apps/frontend/src/pages/DbMaintenancePage.tsx:232`         | native |
+| 2   | Header menu | `dbMaintenance.refresh` "Refresh" item (disabled while loading, spinner icon)                                    | select  | Invalidates the DB stats query                                                                                                                                                                           | `apps/frontend/src/pages/DbMaintenancePage.tsx:239`         | native |
+| 3   | Header      | `dbMaintenance.vacuumAll` "Vacuum all tables" button; label `dbMaintenance.vacuuming` "Vacuuming…" while running | click   | `POST /api/admin/database/vacuum` with `{table: null}`; no confirmation; toast `dbMaintenance.vacuumSuccess` with `dbMaintenance.allTables`, or `dbMaintenance.vacuumFailed` with error; refreshes stats | `apps/frontend/src/pages/DbMaintenancePage.tsx:252`, `:189` | native |
+| 4   | Table row   | Table name link (monospace)                                                                                      | click   | Navigates to `/admin/db/:table`                                                                                                                                                                          | `apps/frontend/src/pages/DbMaintenancePage.tsx:125`         | native |
+| 5   | Table row   | Row menu, label `dbMaintenance.rowMenu` "Actions for {table}"                                                    | click   | Opens dropdown                                                                                                                                                                                           | `apps/frontend/src/pages/DbMaintenancePage.tsx:151`         | native |
+| 6   | Row menu    | `dbMaintenance.openTable` "Browse rows"                                                                          | select  | Navigates to `/admin/db/:table`                                                                                                                                                                          | `apps/frontend/src/pages/DbMaintenancePage.tsx:156`         | native |
+| 7   | Row menu    | `dbMaintenance.vacuumTable` "Run vacuum" (disabled while any vacuum runs)                                        | select  | `POST /api/admin/database/vacuum` with `{table}`; same toasts with the table name; refreshes stats                                                                                                       | `apps/frontend/src/pages/DbMaintenancePage.tsx:165`         | native |
+| 8   | Empty state | `dbMaintenance.refresh` "Refresh" button                                                                         | click   | Invalidates the DB stats query                                                                                                                                                                           | `apps/frontend/src/pages/DbMaintenancePage.tsx:351`         | native |
 
 ### `/admin/db/:table` — Table data editor
 
@@ -211,7 +147,6 @@ Component: `apps/frontend/src/pages/admin/TableDataEditorPage.tsx`. Feature doc:
 | 26  | Footer                                                      | `dbEditor.prevPage` "Previous page" icon button (disabled on page 1, pending, or fetching)                                                              | click                              | Goes back one cursor page                                                                                                                        | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:976`                                                             | native |
 | 27  | Footer                                                      | `dbEditor.nextPage` "Next page" icon button (disabled when no more, pending, or fetching)                                                               | click                              | Stores `nextCursor` and advances a page                                                                                                          | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:992`                                                             | native |
 | 28  | Page                                                        | Unsaved-changes guard (`useUnsavedChanges(hasPending)`)                                                                                                 | navigate away / reload / close tab | Blocks in-app navigation to another path with the Leave dialog; browser `beforeunload` prompt on unload (native: see Gaps)                       | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:399`, `apps/frontend/src/contexts/UnsavedChangesContext.tsx:102` | native |
-| 29  | Error state                                                 | `admin.authError.action` link (on 401/403)                                                                                                              | click                              | See Admin error state row 1                                                                                                                      | `apps/frontend/src/components/shared/AdminErrorState.tsx:43`                                                            | native |
 
 #### Dialog: Review pending changes (inline `Dialog` in `TableDataEditorPage`)
 
@@ -251,7 +186,6 @@ Component: `apps/frontend/src/pages/admin/ProviderHealthPage.tsx`. Feature doc: 
 | --- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------ |
 | 1   | Provider row | Last-error link button (`aria-expanded`)                                                                                              | click   | Toggles the full-error row below                                                                                                                                                                           | `apps/frontend/src/pages/admin/ProviderHealthPage.tsx:123`         | native |
 | 2   | Provider row | `admin.providers.checkNow` "Check now" button (spinner and disabled while that provider probes; probes run concurrently per provider) | click   | `POST /api/admin/providers/:provider/probe`; toast `admin.providers.probeOk` or `admin.providers.probeFail` (with error description), or `admin.providers.probeError` on request failure; refetches health | `apps/frontend/src/pages/admin/ProviderHealthPage.tsx:140`, `:189` | native |
-| 3   | Error state  | `admin.authError.action` link (on 401/403)                                                                                            | click   | See Admin error state row 1                                                                                                                                                                                | `apps/frontend/src/components/shared/AdminErrorState.tsx:43`       | native |
 
 ### `/admin/endpoints` — Endpoint liveness
 
@@ -276,24 +210,21 @@ Component: `apps/frontend/src/pages/admin/ExchangeRatesPage.tsx`. Feature doc: [
 
 **Regions shown:**
 
-- Page header `exchangeRates.title` "Exchange rates", subtitle `exchangeRates.subtitle` (`apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:145`).
-- Loading skeleton: three cards, segmented-control and table placeholders (`:165`).
+- Page header `exchangeRates.title` "Exchange rates", subtitle `exchangeRates.subtitle` (`apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:127`).
+- Loading skeleton: two cards and a table placeholder (the fallback view is gone).
 - Error: `PageError` with message `exchangeRates.failedToLoad` (`:189`).
-- Three summary cards (`apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:213`): `exchangeRates.storedRates` (`total_rates`, sub `storedRatesDesc`), `exchangeRates.fallbackCurrencies` (count excluding EUR, sub `fallbackCurrenciesDesc`), `exchangeRates.latestFetch` (rate date, sub `exchangeRates.fetchedAt` or `exchangeRates.noDataFetched`).
-- Live view: card `exchangeRates.latestEcbRates` "Latest ECB rates" with description `exchangeRates.latestEcbDesc`, or empty state with `exchangeRates.noRates` (`:284`).
-- Fallback view: card `exchangeRates.fallbackRates` with `exchangeRates.fallbackDesc`, caption `exchangeRates.fallbackNote` (`:342`, `:62`).
-- Rates table (both views): `exchangeRates.col.currency`, `col.unitToEur` (6 decimals), `col.eurToUnit` (4 decimals), `col.hundredInEur` (currency formatted) (`apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:49`).
+- Two summary cards (`apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:191`): `exchangeRates.storedRates` (`total_rates`, sub `storedRatesDesc`), `exchangeRates.latestFetch` (rate date, sub `exchangeRates.fetchedAt` or `exchangeRates.noDataFetched`). The built-in fallback rates and their cards were removed; conversions use stored rates only (ADR-216).
+- Rates card: card `exchangeRates.latestEcbRates` "Latest ECB rates" with description `exchangeRates.latestEcbDesc`, or empty state with `exchangeRates.noRates` (`:284`).
+- Rates table: `exchangeRates.col.currency`, `col.unitToEur` (6 decimals), `col.eurToUnit` (4 decimals), `col.hundredInEur` (currency formatted) (`apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:49`).
 - Data: `GET /api/info/exchange-rates?db_only=true` (shared cache `exchangeRateKeys.all`) (`apps/frontend/src/features/admin/useAdminQueries.ts:59`, `apps/frontend/src/lib/api/info.ts:493`).
 
-**URL state:** `?tab=live|fallback` (default `live`, unknown values fall back, written with replace) via `useTabParam` (`apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:122`, `apps/frontend/src/hooks/useTabParam.ts:20`).
+**URL state:** none (the `?tab=` parameter went away with the fallback view).
 
-| #   | Where            | Element                                                                                        | Trigger | What it does                                                                                                                                         | Source                                                                                                            | Status |
-| --- | ---------------- | ---------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------ |
-| 1   | Header           | `exchangeRates.refresh` "Refresh" button (spinner; disabled while refreshing/fetching/loading) | click   | `POST /api/info/exchange-rates/refresh`; invalidates all exchange-rate queries; toast `exchangeRates.refreshSuccess` or `exchangeRates.refreshError` | `apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:152`, `:131`                                                 | native |
-| 2   | View switch      | Segmented control `exchangeRates.viewLabel`: `exchangeRates.liveRates` "Live rates"            | select  | Shows live ECB table; writes `?tab=live`                                                                                                             | `apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:274`                                                         | native |
-| 3   | View switch      | `exchangeRates.fallbackRates` "Fallback rates"                                                 | select  | Shows fallback table; writes `?tab=fallback`                                                                                                         | `apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:278`                                                         | native |
-| 4   | Live empty state | `exchangeRates.refresh` "Refresh" button                                                       | click   | Same as row 1                                                                                                                                        | `apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:296`                                                         | native |
-| 5   | Error state      | `common.retry` "Retry" button                                                                  | click   | Refetches the exchange-rates query                                                                                                                   | `apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:195`, `apps/frontend/src/components/shared/PageError.tsx:22` | native |
+| #   | Where       | Element                                                                                        | Trigger | What it does                                                                                                                                         | Source                                                                                                            | Status |
+| --- | ----------- | ---------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | Header      | `exchangeRates.refresh` "Refresh" button (spinner; disabled while refreshing/fetching/loading) | click   | `POST /api/info/exchange-rates/refresh`; invalidates all exchange-rate queries; toast `exchangeRates.refreshSuccess` or `exchangeRates.refreshError` | `apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:152`, `:131`                                                 | native |
+| 2   | Empty state | `exchangeRates.refresh` "Refresh" button                                                       | click   | Same as row 1                                                                                                                                        | `apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:250`                                                         | native |
+| 3   | Error state | `common.retry` "Retry" button                                                                  | click   | Refetches the exchange-rates query                                                                                                                   | `apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:195`, `apps/frontend/src/components/shared/PageError.tsx:22` | native |
 
 ## Developer tools (floating API inspector)
 
@@ -326,24 +257,22 @@ Native mapping: `apps/native/Sources/VisionNativeUI/Components/NativeAPIInspecto
 
 ## Keyboard shortcuts
 
-| Key                        | Scope                                 | Action                             | Source                                                       |
-| -------------------------- | ------------------------------------- | ---------------------------------- | ------------------------------------------------------------ |
-| Cmd+Shift+A / Ctrl+Shift+A | Global, whenever devtools are mounted | Toggle API inspector               | `apps/frontend/src/lib/devtools/devtoolsHotkey.ts:34`        |
-| Enter                      | Admin token input                     | Submit (save token) when non-blank | `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:117`    |
-| Enter                      | Table editor filter input             | Apply filters                      | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:709`  |
-| Enter / Space              | Focused editable table-editor cell    | Open inline editor                 | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:264`  |
-| Enter                      | Table-editor inline editor            | Stage value, refocus cell          | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:239`  |
-| Escape                     | Table-editor inline editor            | Revert cell, refocus cell          | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:245`  |
-| Escape                     | Table-editor boolean checkbox (dirty) | Revert staged value                | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:205`  |
-| Esc                        | Review pending changes dialog         | Close dialog                       | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:1008` |
+| Key                        | Scope                                 | Action                    | Source                                                       |
+| -------------------------- | ------------------------------------- | ------------------------- | ------------------------------------------------------------ |
+| Cmd+Shift+A / Ctrl+Shift+A | Global, whenever devtools are mounted | Toggle API inspector      | `apps/frontend/src/lib/devtools/devtoolsHotkey.ts:34`        |
+| Enter                      | Table editor filter input             | Apply filters             | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:709`  |
+| Enter / Space              | Focused editable table-editor cell    | Open inline editor        | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:264`  |
+| Enter                      | Table-editor inline editor            | Stage value, refocus cell | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:239`  |
+| Escape                     | Table-editor inline editor            | Revert cell, refocus cell | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:245`  |
+| Escape                     | Table-editor boolean checkbox (dirty) | Revert staged value       | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:205`  |
+| Esc                        | Review pending changes dialog         | Close dialog              | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:1008` |
 
 Admin pages have no go-to shortcuts in the command palette (admin items render without `GoToHint`, `apps/frontend/src/components/shared/CommandPalette.tsx:371`).
 
 ## Cross-cutting notes
 
-- Security boundary is the backend (`apps/node-backend/src/middleware/adminAuth.ts` per the `RequireAdmin` comment); the frontend gate is UX only. Native must keep both: hide admin UI unless admin mode is on, and attach the session-only admin token as a Bearer header when set.
-- Admin token is session-scoped (sessionStorage), never persisted (`apps/frontend/src/lib/adminToken.ts:15`). A native equivalent should be in-memory per app session.
-- Audit history is Electron-only: all six bridge calls (`enroll`, `read`, `exportSnapshot`, `exportTransfer`, `importTransfer`, `rotateKey`) live in `packaging/electron/preload.ts:163` with native dialogs in `packaging/electron/main.ts:1787`-`:2045`. Native SwiftUI must reimplement these flows (save/open panels, confirm alerts, keychain-backed audit key).
+- The backend is loopback-only with no admin credentials (ADR-233; the admin token card, the Bearer header and the 401/403 alert were removed in #339). The `/admin/*` guard is UX only: hide admin UI unless admin mode is on.
+- Audit history was removed by [[docs/adr/231-remove-audit-history|ADR-231]]; there is no audit bridge, anchor or Keychain witness to port.
 - Query staleness: DB stats 30 s (60 s on overview), provider health `QUERY_STALE_TIME_MS.FREQUENT`, request metrics 15 s, endpoint manifest 5 min, exchange rates 10 min (`apps/frontend/src/features/admin/useAdminQueries.ts:14`-`:66`). No polling or auto-refresh on any admin page.
 - Endpoints used: `GET /api/admin/database/stats`, `POST /api/admin/database/vacuum`, `GET /api/admin/database/tables/:table/schema`, `GET /api/admin/database/tables/:table/rows`, `POST /api/admin/database/tables/:table/mutate` (dry run and commit), `GET /api/admin/providers/health`, `POST /api/admin/providers/:provider/probe`, `GET /api/admin/metrics/requests`, `GET /api/admin/endpoints`, `GET /api/info/exchange-rates?db_only=true`, `POST /api/info/exchange-rates/refresh`.
 - The app-wide `FxStatusBanner` (stale/fallback FX warning with its own Refresh) is part of the layout shell, not this area (`apps/frontend/src/components/layout/AppLayout.tsx:286`).
@@ -376,5 +305,5 @@ Admin pages have no go-to shortcuts in the command palette (admin items render w
 ## Counts
 
 - Screens: 6 (plus the non-route devtools overlay and the admin-mode gate)
-- Dialogs/sheets/popovers/menus: 13 (Review pending changes dialog; Leave this page? alert; 3 Electron native audit alerts; DB maintenance header menu and table row menu; editor header menu, new-row menu and existing-row menu; Audit history entry disclosure; API inspector panel; request detail pane)
-- Action rows: 89
+- Dialogs/sheets/popovers/menus: 8 (Review pending changes dialog; Leave this page? alert; DB maintenance header menu and table row menu; editor header menu, new-row menu and existing-row menu; API inspector panel; request detail pane)
+- Action rows: 66

@@ -17,7 +17,7 @@ adminListEndpoints
 getSetting
 # Native Settings reads the whole raw envelope with first-load CAS baselines.
 getSettings
-# Settings AI provider metadata and the existing AgentCloak desktop controls.
+# Settings AI provider metadata (research provider keys).
 researchListProviderKeys
 researchSetProviderKey
 researchClearProviderKey
@@ -240,9 +240,6 @@ listAnalysisMonitorNotifications
 readAnalysisMonitorNotification
 listResearchDossiers
 
-# Analysis CSV/XLSX import/export use handwritten multipart and binary operations:
-# importAnalysisInterchange, exportAnalysisInterchange.
-
 # Research home, Markets, Market lookup, Watchlist and Compare (phase 3l).
 researchSearch
 researchChart
@@ -259,7 +256,6 @@ researchResolveMappings
 researchSaveMappings
 researchDeleteMapping
 researchAuditMappings
-# computeResearchPresentation uses a handwritten submitted-data multipart operation.
 
 # Research Forecast and Chart Builder (phase 3m). Calculations remain TypeScript-owned.
 researchPortfolioForecast
@@ -278,6 +274,9 @@ exportResearchDossier
 listAiResearchDocuments
 getAiStatus
 getAiModels
+getAiModelFit
+warmAiModel
+releaseAiModel
 getAiConversations
 createAiConversation
 getAiConversation
@@ -294,3 +293,8 @@ deleteAiResearchDocument
 
 # Sidebar badges (NavItemBadge): persisted undismissed insight count
 getInsightsCount
+
+# Server-owned figures (ADR-216, ADR-217): the totals the React app reads instead of summing in the browser.
+getAccountTotals
+getNetWorthByAccount
+getPlannedTotals

@@ -7,14 +7,14 @@ import Testing
 /// `lib/__tests__/nativePaletteAnswer.test.ts` and the source evaluator's output for the
 /// JavaScript edge cases (comma operator, comments, `.5`, `**` and calls).
 @Suite struct NativePaletteCalculatorTests {
-    private func rates(_ values: [String: Decimal], fallback: [String: Decimal] = [:]) -> OpenAPI.ExchangeRates {
+    private func rates(_ values: [String: Decimal]) -> OpenAPI.ExchangeRates {
         OpenAPI.ExchangeRates(
             totalRates: values.count,
             rates: values.map {
                 OpenAPI.ExchangeRate(
                     currency: $0.key, rateToEur: $0.value, rateDate: "2026-01-01", fetchedAt: "2026-01-01T00:00:00Z")
             },
-            fallbackRates: fallback, source: "database", isStale: false)
+            source: "database", isStale: false)
     }
 
     /// `Intl` and Foundation put a no-break space before a trailing symbol.
@@ -75,8 +75,8 @@ import Testing
         #expect(await answer("0 * -1", .us) == "-0")
     }
 
-    @Test func conversionsPreferDatabaseRowsAndKeepAmountsWithoutRates() async {
-        let data = rates(["USD": 0.5, "EUR": 2], fallback: ["USD": 0.9, "EUR": 0.1])
+    @Test func conversionsUseStoredRowsAndKeepAmountsWithoutRates() async {
+        let data = rates(["USD": 0.5, "EUR": 2])
         let eur = await NativePaletteCalculator.answer(
             query: "12 USD", format: .us, currency: "EUR", decimals: 2, readRates: { data })
         #expect(eur == .init(kind: .fx, text: "€3.00"))
@@ -117,7 +117,7 @@ import Testing
                 return OpenAPI.ExchangeRates(
                     totalRates: 1,
                     rates: [.init(currency: "USD", rateToEur: rate, rateDate: "d", fetchedAt: "f")],
-                    fallbackRates: [:], source: "database", isStale: false)
+                    source: "database", isStale: false)
             }, now: { clock.now })
         #expect(await cache.read()?.rates.first?.rateToEur == 1)
         clock.now = Date(timeIntervalSince1970: 600)

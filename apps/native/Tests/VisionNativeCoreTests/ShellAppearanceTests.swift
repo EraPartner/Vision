@@ -74,13 +74,6 @@ import Testing
         #expect(PageZoom.zoomedIn(from: 5) == 5)
         #expect(PageZoom.zoomedOut(from: 0.25) == 0.25)
     }
-
-    @Test func titlebarDoubleClickFollowsTheSystemSetting() {
-        #expect(TitlebarDoubleClickAction.from(userDefault: nil) == .zoom)
-        #expect(TitlebarDoubleClickAction.from(userDefault: "Maximize") == .zoom)
-        #expect(TitlebarDoubleClickAction.from(userDefault: "Minimize") == .minimize)
-        #expect(TitlebarDoubleClickAction.from(userDefault: "None") == TitlebarDoubleClickAction.none)
-    }
 }
 
 @Suite struct WindowFrameTests {

@@ -259,7 +259,7 @@ public struct PlannedPaymentsView: View {
     private var stripCard: some View {
         let strip = model.strip
         let monthly = model.estimatedMonthly
-        let ratesLoading = model.isRatesLoading
+        let windowTotal = model.windowTotal
         return AdminCard(padding: VisionPageLayout.padding) {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top, spacing: 16) {
@@ -272,23 +272,23 @@ public struct PlannedPaymentsView: View {
                                 .font(.headline)
                             if strip.dueCount > 0 {
                                 Text(verbatim: "·").foregroundStyle(theme.tertiaryLabel)
-                                if ratesLoading {
-                                    SkeletonBar(width: 80, height: 14)
-                                        .accessibilityLabel(strings.t("common.loading"))
-                                } else {
+                                if let windowTotal {
                                     MoneyText(
-                                        amount: strip.windowTotal.total, currency: settings.defaultCurrency,
+                                        amount: windowTotal.net, currency: settings.defaultCurrency,
                                         settings: settings
                                     )
                                     .font(.headline)
+                                } else {
+                                    SkeletonBar(width: 80, height: 14)
+                                        .accessibilityLabel(strings.t("common.loading"))
                                 }
                             }
                             Text(verbatim: "·").foregroundStyle(theme.tertiaryLabel)
                             Text(strip.rangeText(strings, format: settings.dateFormat))
                                 .foregroundStyle(theme.secondaryLabel)
                         }
-                        if !ratesLoading && strip.windowTotal.unavailableCount > 0 {
-                            fxWarning(strip.windowTotal.unavailableCount)
+                        if let windowTotal, windowTotal.unconvertedCount > 0 {
+                            fxWarning(windowTotal.unconvertedCount)
                         }
                     }
                     Spacer(minLength: 0)
@@ -297,15 +297,15 @@ public struct PlannedPaymentsView: View {
                             .font(.caption2.weight(.medium))
                             .tracking(1.3)
                             .foregroundStyle(theme.secondaryLabel)
-                        if ratesLoading {
-                            SkeletonBar(width: 96, height: 28)
-                                .accessibilityLabel(strings.t("common.loading"))
-                        } else {
+                        if let monthly {
                             MoneyText(amount: monthly.total, currency: settings.defaultCurrency, settings: settings)
                                 .font(.visionCardTitle)
+                        } else {
+                            SkeletonBar(width: 96, height: 28)
+                                .accessibilityLabel(strings.t("common.loading"))
                         }
-                        if !ratesLoading && monthly.unavailableCount > 0 {
-                            fxWarning(monthly.unavailableCount)
+                        if let monthly, monthly.unconvertedCount > 0 {
+                            fxWarning(monthly.unconvertedCount)
                         }
                     }
                 }
