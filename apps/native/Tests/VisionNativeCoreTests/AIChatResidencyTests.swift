@@ -167,17 +167,33 @@ struct AIChatResidencyTests {
     }
 }
 
-/// A sleep that returns only when the test ticks it.
+/// A sleep that returns only when the test ticks it. Like `Task.sleep`, a cancelled sleeper throws
+/// at once and leaves the queue, so a tick always reaches a live loop.
 private actor SleepGate {
     private(set) var requested: [Duration] = []
-    private var waiters: [CheckedContinuation<Void, Error>] = []
+    private var waiters: [(id: UUID, continuation: CheckedContinuation<Void, Error>)] = []
     func sleep(_ duration: Duration) async throws {
         requested.append(duration)
-        try await withCheckedThrowingContinuation { waiters.append($0) }
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                if Task.isCancelled {
+                    continuation.resume(throwing: CancellationError())
+                } else {
+                    waiters.append((id, continuation))
+                }
+            }
+        } onCancel: {
+            Task { await self.cancel(id) }
+        }
+    }
+    private func cancel(_ id: UUID) {
+        guard let index = waiters.firstIndex(where: { $0.id == id }) else { return }
+        waiters.remove(at: index).continuation.resume(throwing: CancellationError())
     }
     func tick() {
         guard !waiters.isEmpty else { return }
-        waiters.removeFirst().resume()
+        waiters.removeFirst().continuation.resume()
     }
     func waitUntilSleeping(_ count: Int) async {
         for _ in 0..<400 {

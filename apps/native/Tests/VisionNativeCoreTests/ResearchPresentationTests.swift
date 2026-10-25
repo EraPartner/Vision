@@ -22,6 +22,31 @@ private func sameJSON(_ a: TaxValue, _ b: TaxValue, tolerance: Double = 0) -> Bo
         return a == b
     }
 }
+/// The first path where `sameJSON` fails, for a readable failure message.
+private func firstDifference(_ a: TaxValue, _ b: TaxValue, tolerance: Double, path: String = "$") -> String? {
+    switch (a, b) {
+    case (.array(let x), .array(let y)):
+        guard x.count == y.count else { return "\(path): \(x.count) vs \(y.count) items" }
+        for (index, pair) in zip(x, y).enumerated() {
+            if let found = firstDifference(pair.0, pair.1, tolerance: tolerance, path: "\(path)[\(index)]") {
+                return found
+            }
+        }
+        return nil
+    case (.object(let x), .object(let y)):
+        guard Set(x.keys) == Set(y.keys) else {
+            return "\(path): keys \(x.keys.sorted()) vs \(y.keys.sorted())"
+        }
+        for key in x.keys.sorted() {
+            if let found = firstDifference(x[key]!, y[key]!, tolerance: tolerance, path: "\(path).\(key)") {
+                return found
+            }
+        }
+        return nil
+    default:
+        return sameJSON(a, b, tolerance: tolerance) ? nil : "\(path): \(a) vs \(b)"
+    }
+}
 private func compute(_ json: String) throws -> TaxValue {
     try #require(try ResearchPresentation.compute(decode(json))["result"])
 }
@@ -52,10 +77,13 @@ struct ResearchPresentationTests {
             let kind = try #require(input["kind"])
             let actual = try ResearchPresentation.compute(input)
             let expected = TaxValue.object(["kind": kind, "result": try #require(item["expected"])])
-            // Compare statistics use Math.log, which a platform libm may round one ulp differently.
-            let tolerance = kind == .string("compare") ? 1e-12 : 0
+            // The figures are Double arithmetic (and Math.log for compare, which a platform libm may
+            // round one ulp differently); the goldens are JavaScript's shortest number text parsed as
+            // Decimal, so compare within a relative 1e-12.
+            let tolerance = 1e-12
             let name = item["name"]?.stringValue ?? ""
-            #expect(sameJSON(actual, expected, tolerance: tolerance), Comment(rawValue: name))
+            let difference = firstDifference(actual, expected, tolerance: tolerance)
+            #expect(difference == nil, Comment(rawValue: "\(name): \(difference ?? "")"))
         }
     }
     @Test func distinctListChartPreviewTargetConventionsAndFirstZeroProviderQuote() throws {

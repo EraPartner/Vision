@@ -622,7 +622,7 @@ extension TransactionPatch {
         model.setAccountFilter(EditingFixture.account(7, "BE00 1234", display: "Everyday"))
         #expect(
             shell.nativeNavigationLocation.raw
-                == "/transactions?sort_key=amount&sort_dir=asc&account_id=7&filter_label=Everyday")
+                == "/transactions?sort_key=amount&sort_dir=asc&uncategorised=true&account_id=7&filter_label=Everyday")
         model.searchText = "a"
         await model.commitSearch()
         let row = try #require(model.rows?.first)
