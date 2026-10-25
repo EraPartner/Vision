@@ -16,11 +16,6 @@ function ev(over: Partial<ApiRequestEvent> = {}): ApiRequestEvent {
   };
 }
 
-// The store publishes a fresh cachedSnapshot via a second bus subscriber that
-// runs after the notifying one, so the React-visible snapshot settles on the
-// *next* notify. clearApiRequestLog() refreshes the snapshot AND notifies, so
-// we use it as a deterministic flush/observation point.
-
 describe("apiRequestLog", () => {
   afterEach(() => {
     act(() => clearApiRequestLog());
@@ -34,13 +29,23 @@ describe("apiRequestLog", () => {
       apiEventBus.emit(ev({ id: "a", phase: "start" }));
       apiEventBus.emit(ev({ id: "a", phase: "success", durationMs: 50 }));
       apiEventBus.emit(ev({ id: "b", phase: "error" }));
-      // Trailing emit flushes the snapshot into the React-visible state.
-      apiEventBus.emit(ev({ id: "c", phase: "success" }));
     });
 
     expect(result.current.inFlight).toHaveLength(0);
-    // c is the trailing flush event; b and a precede it (newest first).
-    expect(result.current.log.map((e) => e.id)).toEqual(["c", "b", "a"]);
+    expect(result.current.log.map((e) => e.id)).toEqual(["b", "a"]);
+  });
+
+  test("the last request of a burst leaves nothing in flight", () => {
+    const { result } = renderHook(() => useApiRequestLog());
+    act(() => {
+      apiEventBus.emit(ev({ id: "x", phase: "start" }));
+    });
+    expect(result.current.inFlight.map((e) => e.id)).toEqual(["x"]);
+
+    act(() => {
+      apiEventBus.emit(ev({ id: "x", phase: "success", durationMs: 5 }));
+    });
+    expect(result.current.inFlight).toHaveLength(0);
   });
 
   test("clearApiRequestLog empties the log and in-flight set", () => {

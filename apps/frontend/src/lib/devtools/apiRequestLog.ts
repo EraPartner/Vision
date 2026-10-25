@@ -11,6 +11,10 @@ let log: ApiRequestEvent[] = [];
 const logListeners = new Set<() => void>();
 
 function notify(): void {
+    // Publish the new snapshot before waking React, so the last event of a
+    // burst is visible too. A stale snapshot here kept a finished request
+    // "in flight" (and the inspector icon pulsing) until the next re-render.
+    cachedSnapshot = getSnapshot();
     for (const fn of logListeners) fn();
 }
 
@@ -35,9 +39,6 @@ function getSnapshot(): { log: ApiRequestEvent[]; inFlight: ApiRequestEvent[] } 
 
 // Stable snapshot reference — only replaced when log/inFlight change
 let cachedSnapshot = getSnapshot();
-apiEventBus.subscribe(() => {
-    cachedSnapshot = getSnapshot();
-});
 
 export function useApiRequestLog() {
     return useSyncExternalStore(
@@ -52,6 +53,5 @@ export function useApiRequestLog() {
 export function clearApiRequestLog(): void {
     log = [];
     inFlight.clear();
-    cachedSnapshot = getSnapshot();
     notify();
 }

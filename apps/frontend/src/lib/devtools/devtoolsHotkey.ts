@@ -30,8 +30,9 @@ export function useInspectorOpen(): boolean {
 
 export function registerInspectorHotkey(): () => void {
     function handleKeyDown(e: KeyboardEvent): void {
-        // Cmd+Shift+A (Mac) or Ctrl+Shift+A (Win/Linux)
-        if (e.key === 'A' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+        // Cmd+Shift+A (Mac) or Ctrl+Shift+A (Win/Linux). With Cmd held, macOS
+        // Chromium reports the key in lowercase, so compare case-insensitively.
+        if (e.key.toLowerCase() === 'a' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             toggleInspector();
         }
