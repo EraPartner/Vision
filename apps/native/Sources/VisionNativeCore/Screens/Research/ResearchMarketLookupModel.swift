@@ -60,7 +60,7 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
     public var providerHolding: PortfolioHolding? {
         guard let raw = state.rawInvestmentId else { return nil }
         return holdings.first {
-            String($0.id.rawValue) == raw && !($0.priceProvider ?? "").isEmpty && $0.priceProvider != "yahoo"
+            String($0.id.rawValue) == raw && !($0.priceProvider?.rawValue ?? "").isEmpty && $0.priceProvider != .yahoo
         }
     }
     public var isProviderAsset: Bool { providerHolding != nil }
@@ -224,7 +224,7 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
                     "investment": .object([
                         "symbol": holding.symbol.map(TaxValue.string) ?? .null, "name": .string(holding.name),
                         "currency": .string(holding.currency.rawValue),
-                        "priceProvider": holding.priceProvider.map(TaxValue.string) ?? .null,
+                        "priceProvider": holding.priceProvider.map { TaxValue.string($0.rawValue) } ?? .null,
                     ]),
                 ])
                 let response = try await service.researchPresentation(body)

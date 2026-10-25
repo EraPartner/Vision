@@ -406,7 +406,7 @@ import Observation
             let result = try await service.exportDossiers(id: id)
             guard active, visit == self.visit, id == nil || context == selection else { return }
             let data = try result.jsonData()
-            let name = id.map { "vision-dossier-" + $0 + ".json" } ?? "vision-dossiers.json"
+            let name = id.map { "vision-dossier-" + $0.rawValue + ".json" } ?? "vision-dossiers.json"
             if let saveExport {
                 _ = try await saveExport(data, name)
             } else {

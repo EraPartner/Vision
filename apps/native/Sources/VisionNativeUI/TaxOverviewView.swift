@@ -52,7 +52,7 @@ public struct TaxOverviewView: View {
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task(id: shell.route.string + shell.settings.defaultCurrency + String(shell.settingsRevision)) {
+        .task(id: shell.route.string + shell.settings.defaultCurrency.rawValue + String(shell.settingsRevision)) {
             await reload()
         }
         .onDisappear { screens.printLocalState = .init() }
@@ -149,7 +149,7 @@ public struct TaxOverviewView: View {
         disclaimer(overview)
         // `tax.fxUnavailable`: amounts without a stored rate are left out, not converted 1:1 (#308).
         if let currencies = data?.unconvertedCurrencies, !currencies.isEmpty {
-            Text(strings.t("tax.fxUnavailable", ["currencies": currencies.joined(separator: ", ")]))
+            Text(strings.t("tax.fxUnavailable", ["currencies": currencies.map(\.rawValue).joined(separator: ", ")]))
                 .font(.footnote)
                 .foregroundStyle(theme.warning)
                 .fixedSize(horizontal: false, vertical: true)

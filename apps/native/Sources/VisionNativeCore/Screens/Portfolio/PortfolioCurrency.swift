@@ -14,7 +14,7 @@ public enum PortfolioCurrency {
 
     /// The reporting currency of the current settings.
     public static func reporting(_ settings: NativeAppSettings) -> CurrencyCode {
-        code(settings.defaultCurrency)
+        settings.defaultCurrency
     }
 }
 

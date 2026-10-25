@@ -296,61 +296,7 @@ public struct PortfolioOverviewView: View {
                 Text(strings.t("portfolio.brokerFilter.empty")).foregroundStyle(theme.secondaryLabel).padding(20)
             }
             ForEach(model.filteredHoldings) { holding in
-                let metrics = model.metrics(for: holding)
-                HStack(spacing: 14) {
-                    Button {
-                        Task { await model.openDetail(id: holding.id) }
-                    } label: {
-                        HStack(spacing: 14) {
-                            Image(systemName: PortfolioOverviewAsset.symbol(holding.assetClass)).foregroundStyle(
-                                theme.primary
-                            )
-                            .frame(width: 32).accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 5) {
-                                HStack {
-                                    Text(holding.name).font(.callout.weight(.medium))
-                                    if metrics.oversold {
-                                        Label(
-                                            strings.t("portfolio.oversold.label"),
-                                            systemImage: "exclamationmark.triangle"
-                                        )
-                                        .font(.caption).foregroundStyle(theme.warning).help(
-                                            strings.t("portfolio.oversold.description"))
-                                    }
-                                }
-                                Text(
-                                    [strings.t("portfolio.assetClass." + holding.assetClass.rawValue), holding.symbol].compactMap
-                                    {
-                                        $0
-                                    }.joined(separator: " · ")
-                                )
-                                .font(.caption).foregroundStyle(theme.secondaryLabel)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 5) {
-                                MoneyText(
-                                    amount: metrics.currentValue, currency: currency, settings: shell.settings,
-                                    signed: false,
-                                    colored: false)
-                                HStack(spacing: 5) {
-                                    MoneyText(amount: metrics.gainLoss, currency: currency, settings: shell.settings)
-                                    Text(
-                                        signedPercent(
-                                            model.brokerFilter.isAll
-                                                ? holding.gainLossPercent : metrics.returnPercent)
-                                    )
-                                    .monospacedDigit().foregroundStyle(metrics.gainLoss >= 0 ? theme.gain : theme.loss)
-                                }.font(.caption)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain).frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityLabel(strings.t("invDetail.trigger") + ": " + holding.name)
-                    PortfolioHoldingActionsMenu(holding: holding, model: model, editing: editing, shell: shell)
-                }.padding(.vertical, 10)
-                if !holding.fullyAssigned {
-                    PortfolioHoldingsUnassignedView(holding: holding, model: model, editing: editing, shell: shell)
-                }
+                holdingRow(holding)
             }
             Divider()
             if let status = model.brokerFilterStatusKey {
@@ -362,6 +308,63 @@ public struct PortfolioOverviewView: View {
                 moneyRow("portfolio.brokerFilter.holdingsSubtotal", model.brokerSubtotal.currentValue)
                 moneyRow("portfolio.brokerFilter.pnlSubtotal", model.brokerSubtotal.gainLoss, signed: true)
             }
+        }
+    }
+    @ViewBuilder private func holdingRow(_ holding: PortfolioHolding) -> some View {
+        let metrics = model.metrics(for: holding)
+        HStack(spacing: 14) {
+            Button {
+                Task { await model.openDetail(id: holding.id) }
+            } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: PortfolioOverviewAsset.symbol(holding.assetClass)).foregroundStyle(
+                        theme.primary
+                    )
+                    .frame(width: 32).accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack {
+                            Text(holding.name).font(.callout.weight(.medium))
+                            if metrics.oversold {
+                                Label(
+                                    strings.t("portfolio.oversold.label"),
+                                    systemImage: "exclamationmark.triangle"
+                                )
+                                .font(.caption).foregroundStyle(theme.warning).help(
+                                    strings.t("portfolio.oversold.description"))
+                            }
+                        }
+                        Text(
+                            [strings.t("portfolio.assetClass." + holding.assetClass.rawValue), holding.symbol].compactMap
+                            {
+                                $0
+                            }.joined(separator: " · ")
+                        )
+                        .font(.caption).foregroundStyle(theme.secondaryLabel)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 5) {
+                        MoneyText(
+                            amount: metrics.currentValue, currency: currency, settings: shell.settings,
+                            signed: false,
+                            colored: false)
+                        HStack(spacing: 5) {
+                            MoneyText(amount: metrics.gainLoss, currency: currency, settings: shell.settings)
+                            Text(
+                                signedPercent(
+                                    model.brokerFilter.isAll
+                                        ? holding.gainLossPercent : metrics.returnPercent)
+                            )
+                            .monospacedDigit().foregroundStyle(metrics.gainLoss >= 0 ? theme.gain : theme.loss)
+                        }.font(.caption)
+                    }
+                }
+            }
+            .buttonStyle(.plain).frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel(strings.t("invDetail.trigger") + ": " + holding.name)
+            PortfolioHoldingActionsMenu(holding: holding, model: model, editing: editing, shell: shell)
+        }.padding(.vertical, 10)
+        if !holding.fullyAssigned {
+            PortfolioHoldingsUnassignedView(holding: holding, model: model, editing: editing, shell: shell)
         }
     }
     private var allocation: some View {

@@ -332,7 +332,7 @@ public enum TransactionFilterDescriptor {
     /// `amountLabel`: `= x`, `x–y`, `≥ x` or `≤ y` with the default currency; signed bounds
     /// show `+` before a positive value.
     public static func amountLabel(_ filters: TransactionFilters, settings: NativeAppSettings) -> String {
-        let currency = settings.defaultCurrency.isEmpty ? "EUR" : settings.defaultCurrency
+        let currency = settings.defaultCurrency.rawValue
         func format(_ value: Decimal) -> String {
             let text = value.formatted(
                 Decimal.FormatStyle(locale: settings.numberFormat.locale).precision(.fractionLength(0...20)))

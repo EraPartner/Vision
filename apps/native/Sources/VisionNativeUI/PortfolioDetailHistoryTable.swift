@@ -119,7 +119,7 @@ struct PortfolioDetailHistoryTable: View {
                                     Image(systemName: "pencil")
                                 }.buttonStyle(.borderless)
                                     .accessibilityLabel(
-                                        strings.t("aria.editTransaction") + ": " + label(transaction.type) + " · "
+                                        strings.t("aria.editTransaction") + ": " + label(transaction.type.rawValue) + " · "
                                             + VisionFormat.appDate(transaction.date, format: shell.settings.dateFormat)
                                     )
                                     .disabled(!model.historyComplete || model.historyLoading)
@@ -129,7 +129,7 @@ struct PortfolioDetailHistoryTable: View {
                                     Image(systemName: "trash")
                                 }
                                 .buttonStyle(.borderless).accessibilityLabel(
-                                    strings.t("aria.deleteTransaction") + ": " + label(transaction.type) + " · "
+                                    strings.t("aria.deleteTransaction") + ": " + label(transaction.type.rawValue) + " · "
                                         + VisionFormat.appDate(transaction.date, format: shell.settings.dateFormat)
                                 )
                                 .disabled(!model.historyComplete || model.historyLoading)

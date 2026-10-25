@@ -76,7 +76,7 @@ struct PortfolioImportConfigFields: View {
                 ) {
                     field("portfolioImport.defaultAssetClass") {
                         Picker(strings.t("portfolioImport.defaultAssetClass"), selection: $config.defaultAssetClass) {
-                            ForEach(PortfolioAssetKinds.all, id: \.self) { kind in
+                            ForEach(PortfolioAssetKinds.all.map(\.rawValue), id: \.self) { kind in
                                 Text(strings.t("portfolio.assetClass." + kind)).tag(kind)
                             }
                         }.labelsHidden()

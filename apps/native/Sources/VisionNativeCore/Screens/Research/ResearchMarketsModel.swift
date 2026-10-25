@@ -32,7 +32,7 @@ import Observation
             investments.flatMap { investment -> [String] in
                 var values: [String] = []
                 if let symbol = investment.symbol { values.append(symbol.uppercased()) }
-                if investment.priceProvider == "yahoo", let identity = investment.priceProviderId {
+                if investment.priceProvider == .yahoo, let identity = investment.priceProviderId {
                     values.append(identity.uppercased())
                 }
                 return values

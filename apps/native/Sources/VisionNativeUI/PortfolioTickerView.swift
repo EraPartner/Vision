@@ -10,7 +10,7 @@ struct PortfolioTickerView: View {
     @State private var visible = false
     @State private var elapsed: TimeInterval = 0
     @State private var startedAt: Date?
-    @State private var overrides: [Int: Bool] = [:]
+    @State private var overrides: [InvestmentID: Bool] = [:]
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reducedMotion
     @Environment(\.visionTheme) private var theme

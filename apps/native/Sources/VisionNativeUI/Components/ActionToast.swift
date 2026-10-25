@@ -11,7 +11,7 @@ struct ToastSurface: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
-        if effects == "reduced" || reduceTransparency {
+        if effects == .reduced || reduceTransparency {
             RoundedRectangle(cornerRadius: DesignTokens.Radius.card).fill(theme.card)
         } else {
             // sonner.tsx draws every toast as `glass-thick`, with or without Full effects.

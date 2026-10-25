@@ -30,7 +30,7 @@ public struct RebalanceView: View {
                 if let result = model.result { resultCards(result) }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task(id: shell.route.string + settings.defaultCurrency + String(shell.settingsRevision)) {
+        .task(id: shell.route.string + settings.defaultCurrency.rawValue + String(shell.settingsRevision)) {
             await model.load(route: shell.route, settings: settings)
         }
         .onChange(of: model.route) {

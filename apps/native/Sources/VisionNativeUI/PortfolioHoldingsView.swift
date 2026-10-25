@@ -113,7 +113,7 @@ public struct PortfolioHoldingsView: View {
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task(id: shell.settings.defaultCurrency + String(shell.settingsRevision)) { await reload() }
+        .task(id: shell.settings.defaultCurrency.rawValue + String(shell.settingsRevision)) { await reload() }
         .onChange(of: assetClass) { _, _ in
             query.clearAll()
             optionalColumns = []

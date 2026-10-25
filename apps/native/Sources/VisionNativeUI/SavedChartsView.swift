@@ -118,7 +118,7 @@ struct CustomChartPlot: View {
                 Text(
                     strings.t(
                         "customChart.historicalFxFallback",
-                        ["currencies": dataset.fallbackCurrencies.isEmpty ? "—" : dataset.fallbackCurrencies.joined(separator: ", ")]
+                        ["currencies": dataset.fallbackCurrencies.isEmpty ? "—" : dataset.fallbackCurrencies.map(\.rawValue).joined(separator: ", ")]
                     )
                 ).font(.caption).foregroundStyle(theme.warning)
             }

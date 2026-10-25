@@ -37,7 +37,7 @@ struct AIInvestigationDocumentsView: View {
                     strings.t(
                         "aiResearch.effectivePreferences",
                         [
-                            "currency": model.resolvedCurrency,
+                            "currency": model.resolvedCurrency.rawValue,
                             "benchmark": model.resolvedBenchmark ?? strings.t("aiResearch.noBenchmark"),
                         ])
                 )

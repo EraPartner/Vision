@@ -99,7 +99,7 @@ private struct ResearchWatchlistRow: View {
     let shell: NativeShellModel
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
-    private var metric: ResearchWatchlistMetrics? { model.metrics[item.id] }
+    private var metric: ResearchWatchlistMetrics? { model.metrics[item.id.rawValue] }
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(
