@@ -274,6 +274,9 @@ exportResearchDossier
 listAiResearchDocuments
 getAiStatus
 getAiModels
+getAiModelFit
+warmAiModel
+releaseAiModel
 getAiConversations
 createAiConversation
 getAiConversation

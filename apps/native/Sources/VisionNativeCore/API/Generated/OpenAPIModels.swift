@@ -593,6 +593,43 @@ extension OpenAPI {
         }
     }
 
+    public struct AiModelFit: Codable, Equatable, Sendable {
+        public let model: String
+        public let totalMemoryBytes: Int
+        public let weightBytes: Int?
+        public let kvBytesPerToken: Int?
+        public let maxNumCtx: Int?
+
+        public init(model: String, totalMemoryBytes: Int, weightBytes: Int? = nil, kvBytesPerToken: Int? = nil, maxNumCtx: Int? = nil) {
+            self.model = model
+            self.totalMemoryBytes = totalMemoryBytes
+            self.weightBytes = weightBytes
+            self.kvBytesPerToken = kvBytesPerToken
+            self.maxNumCtx = maxNumCtx
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case model = "model"
+            case totalMemoryBytes = "totalMemoryBytes"
+            case weightBytes = "weightBytes"
+            case kvBytesPerToken = "kvBytesPerToken"
+            case maxNumCtx = "maxNumCtx"
+        }
+    }
+
+    public struct AiModelResidencyRequest: Codable, Equatable, Sendable {
+        /// Defaults to the configured default model.
+        public let model: String?
+
+        public init(model: String? = nil) {
+            self.model = model
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case model = "model"
+        }
+    }
+
     /// Additive outgoing-message metadata inferred by shared TypeScript from the original JSON tool
     /// result; stored results and provider prompts remain unchanged. Nested array rows and first-row
     /// ordered keys retain the existing web behavior.
