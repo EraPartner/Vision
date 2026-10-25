@@ -38,7 +38,7 @@ public enum PortfolioBrokerFilter: Hashable, Sendable {
         if case .account(let id) = self { return id }
         return nil
     }
-    var isAll: Bool { self == .all }
+    public var isAll: Bool { self == .all }
 }
 public struct PortfolioBrokerOption: Equatable, Sendable, Identifiable {
     public let id: PortfolioBrokerFilter
