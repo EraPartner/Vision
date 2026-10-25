@@ -1,6 +1,7 @@
 import CryptoKit
 import Darwin
 import Foundation
+import Testing
 @testable import VisionNativeCore
 
 /// Test-only string literals for currency codes (`"EUR"`), so fixtures read like the wire. Production
@@ -17,11 +18,14 @@ extension CurrencyCode: ExpressibleByStringLiteral {
 
 /// Test-only string literals for calendar days (`"2026-10-09"`) and timestamps
 /// (`"2026-10-09T08:05:00.000Z"`), like the currency code literals above. Production code reads
-/// them from decoded models or `CalendarDay(_:)` / `Instant(_:)`. Trap on a malformed literal.
+/// them from decoded models or `CalendarDay(_:)` / `Instant(_:)`. A malformed literal records a
+/// test issue and falls back to the epoch, so one run reports every bad fixture instead of trapping.
 extension CalendarDay: ExpressibleByStringLiteral {
     public init(stringLiteral value: String) {
         guard let day = CalendarDay(value) else {
-            preconditionFailure("\"\(value)\" is not a calendar day (YYYY-MM-DD)")
+            Issue.record("\"\(value)\" is not a calendar day (YYYY-MM-DD)")
+            self = CalendarDay(validYear: 1970, month: 1, day: 1)
+            return
         }
         self = day
     }
@@ -30,7 +34,9 @@ extension CalendarDay: ExpressibleByStringLiteral {
 extension Instant: ExpressibleByStringLiteral {
     public init(stringLiteral value: String) {
         guard let instant = Instant(value) else {
-            preconditionFailure("\"\(value)\" is not an ISO 8601 timestamp with a zone")
+            Issue.record("\"\(value)\" is not an ISO 8601 timestamp with a zone")
+            self = Instant(date: Date(timeIntervalSince1970: 0))
+            return
         }
         self = instant
     }
