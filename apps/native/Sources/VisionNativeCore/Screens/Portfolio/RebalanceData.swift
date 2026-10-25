@@ -45,7 +45,6 @@ public struct RebalanceResult: Codable, Equatable, Sendable {
         currency: String, targetWeights: [String: Decimal], actualValues: [String: Decimal], availableCash: Decimal,
         cashAccounts: [CashAccount], deployment: [String: Decimal], unconvertedCurrencies: [String]? = nil
     ) {
-        self.unconvertedCurrencies = unconvertedCurrencies
         self.currency = currency
         self.targetWeights = targetWeights
         self.actualValues = actualValues
