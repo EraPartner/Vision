@@ -620,7 +620,7 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
             skippedMissing: 0, items: [])
     }
 
-    func owedSummary() async throws -> [OpenAPI.SplitOwed] {
+    func owedSummary(currency: String) async throws -> [OpenAPI.SplitOwed] {
         if failing { throw APIError.network("The network connection was lost.") }
         guard !owedSplits.isEmpty else { return [] }
         let total = owedSplits.reduce(Decimal(0)) { sum, split in sum + split.amount }
@@ -628,11 +628,11 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
         return [
             OpenAPI.SplitOwed(
                 recipientId: 4, recipientName: "Anna", totalOwed: total, totalPaid: paid, remaining: total - paid,
-                splitCount: owedSplits.count)
+                splitCount: owedSplits.count, unconvertedCount: 0, unconvertedCurrencies: [])
         ]
     }
 
-    func owed(recipientId: Int) async throws -> [OpenAPI.SplitOwedDetail] { owedSplits }
+    func owed(recipientId: Int, currency: String) async throws -> [OpenAPI.SplitOwedDetail] { owedSplits }
 
     func exportOwedCsv(recipientId: Int) async throws -> Data { Data("date,amount\n".utf8) }
 

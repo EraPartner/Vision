@@ -118,7 +118,7 @@ actor FakeSplitsService: SplitsService {
         return bulkResult
     }
 
-    func owedSummary() async throws -> [OpenAPI.SplitOwed] {
+    func owedSummary(currency: String) async throws -> [OpenAPI.SplitOwed] {
         summaryLoads += 1
         try check()
         let open = owedSplits.filter { !$0.isSettled }
@@ -128,11 +128,11 @@ actor FakeSplitsService: SplitsService {
         return [
             OpenAPI.SplitOwed(
                 recipientId: 4, recipientName: "Anna", totalOwed: total, totalPaid: paid, remaining: total - paid,
-                splitCount: open.count)
+                splitCount: open.count, unconvertedCount: 0, unconvertedCurrencies: [])
         ]
     }
 
-    func owed(recipientId: Int) async throws -> [OpenAPI.SplitOwedDetail] {
+    func owed(recipientId: Int, currency: String) async throws -> [OpenAPI.SplitOwedDetail] {
         detailLoads.append(recipientId)
         try check()
         return owedSplits.filter { !$0.isSettled }

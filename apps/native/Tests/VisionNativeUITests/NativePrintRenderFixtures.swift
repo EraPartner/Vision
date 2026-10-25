@@ -113,6 +113,7 @@ actor PrintNetWorthService: NetWorthService {
             visible = rows
         }
         return .init(
+            unconvertedCurrencies: [],
             current: .init(liquid: 100, liabilities: 10, investments: 947, netWorth: 1037, currency: currency),
             monthlyChange: 24, monthlyChangePercent: 2, snapshots: visible,
             snapshotsTotal: limit == nil ? nil : 48, snapshotsLimit: limit, snapshotsOffset: offset)

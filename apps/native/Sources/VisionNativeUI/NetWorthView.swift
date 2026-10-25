@@ -146,6 +146,10 @@ public struct NetWorthView: View {
                 )
                 .font(.footnote).foregroundStyle(theme.tertiaryLabel)
             }
+            if !data.unconvertedCurrencies.isEmpty {
+                // Balances in a currency without a stored rate are left out (ADR-216).
+                Text(strings.t("accounts.totalIncomplete")).font(.footnote).foregroundStyle(theme.warning)
+            }
             Text(strings.t("networth.sinceStart")).font(.caption.weight(.medium)).foregroundStyle(theme.tertiaryLabel)
                 .padding(.top, 8)
             if let change = model.allTimeChange {

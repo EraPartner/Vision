@@ -490,6 +490,7 @@ private actor PortfolioReadTransport: APITransport {
                     "currency": .string(currency), "liquid": .number(0), "liabilities": .number(0),
                     "investments": .number(currentValue), "netWorth": .number(currentValue),
                 ]), "monthlyChange": .number(0), "monthlyChangePercent": .number(0),
+                "unconvertedCurrencies": .array([]),
                 "snapshots": .array(offset == 0 ? [snapshot] : []),
             ]
             if let limit {

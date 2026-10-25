@@ -59,7 +59,18 @@ public final class PlannedPaymentFormModel: Identifiable {
     public var isRecurring: Bool
     public var frequency: PlannedFrequency
     public var isLoan: Bool
-    public var loanType: OpenAPI.PlannedLoanType
+    /// The generated `PlannedTransaction.loanType` is an empty struct (the generator drops the
+    /// `allOf` reference of a nullable enum), so an existing loan's stored type cannot be read: the
+    /// picker starts at Amortizing and an edit keeps the stored value unless this is changed.
+    public var loanType: OpenAPI.PlannedLoanType {
+        get { storedLoanType }
+        set {
+            storedLoanType = newValue
+            loanTypeEdited = true
+        }
+    }
+    private var storedLoanType: OpenAPI.PlannedLoanType
+    private var loanTypeEdited = false
     public var loanPrincipal: String
     public var loanRate: String
     public var loanTermMonths: String
@@ -98,7 +109,7 @@ public final class PlannedPaymentFormModel: Identifiable {
             // `initialFingerprint`: the stored string, or today for a new payment.
             dueDate: initial?.dueDate ?? today.ymd,
             isRecurring: initial?.isRecurring ?? false, frequency: initial?.frequency ?? .monthly,
-            isLoan: initial?.isLoan ?? false, loanType: wire?.loanType ?? .amortizing,
+            isLoan: initial?.isLoan ?? false, loanType: .amortizing,
             loanPrincipal: LocaleNumber.editable(wire?.loanPrincipal, format: format),
             loanRate: LocaleNumber.editable(wire?.loanAnnualInterestRate, format: format),
             loanTermMonths: wire?.loanTermMonths.map { String($0) } ?? "",
@@ -119,7 +130,7 @@ public final class PlannedPaymentFormModel: Identifiable {
         isRecurring = start.isRecurring
         frequency = start.frequency
         isLoan = start.isLoan
-        loanType = start.loanType
+        storedLoanType = start.loanType
         loanPrincipal = start.loanPrincipal
         loanRate = start.loanRate
         loanTermMonths = start.loanTermMonths
@@ -337,7 +348,8 @@ public final class PlannedPaymentFormModel: Identifiable {
         patch.maxOccurrences = maximum
         patch.isActive = initial?.isActive ?? true
         patch.isLoan = isLoan
-        patch.loanType = loanType
+        // Saving an existing loan without touching the picker must not overwrite its stored type.
+        patch.loanType = initial?.isLoan == true && !loanTypeEdited ? nil : loanType
         patch.loanPrincipal = principal
         patch.loanAnnualInterestRate = rate
         patch.loanTermMonths = term

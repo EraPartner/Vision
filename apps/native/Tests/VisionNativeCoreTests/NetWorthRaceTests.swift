@@ -92,6 +92,7 @@ private actor NetWorthRaceService: NetWorthService {
             snapshots = rows
         }
         return .init(
+            unconvertedCurrencies: [],
             current: .init(liquid: 6, liabilities: 0, investments: 0, netWorth: 6, currency: currency),
             monthlyChange: 0, monthlyChangePercent: 0, snapshots: snapshots,
             snapshotsTotal: limit == nil ? nil : 6, snapshotsLimit: limit, snapshotsOffset: offset)

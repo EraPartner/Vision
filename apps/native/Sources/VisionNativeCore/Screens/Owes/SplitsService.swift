@@ -10,10 +10,10 @@ public protocol SplitsService: Sendable {
     /// `createBulkSplits({ transaction_ids, recipient_id, mode })`.
     func bulkSplit(transactionIds: [Int], recipientId: Int, mode: BulkSplitMode) async throws
         -> OpenAPI.BulkSplitResult
-    /// `getOwedSummary()`.
-    func owedSummary() async throws -> [OpenAPI.SplitOwed]
-    /// `getOwedByRecipient(recipientId)`.
-    func owed(recipientId: Int) async throws -> [OpenAPI.SplitOwedDetail]
+    /// `getOwedSummary(currency)`: the server converts the amounts to `currency`.
+    func owedSummary(currency: String) async throws -> [OpenAPI.SplitOwed]
+    /// `getOwedByRecipient(recipientId, currency)`.
+    func owed(recipientId: Int, currency: String) async throws -> [OpenAPI.SplitOwedDetail]
     /// `exportOwedByRecipientCsv(recipientId)`: the file's bytes.
     func exportOwedCsv(recipientId: Int) async throws -> Data
     /// `recordSplitPayment(splitId, amount)`.
@@ -77,12 +77,12 @@ extension APIClient: SplitsService {
                 body: .init(transactionIds: transactionIds, recipientId: recipientId, mode: mode.rawValue)))
     }
 
-    public func owedSummary() async throws -> [OpenAPI.SplitOwed] {
-        try await send(OpenAPIOperations.GetSplitsOwed()).items
+    public func owedSummary(currency: String) async throws -> [OpenAPI.SplitOwed] {
+        try await send(OpenAPIOperations.GetSplitsOwed(currency: currency)).items
     }
 
-    public func owed(recipientId: Int) async throws -> [OpenAPI.SplitOwedDetail] {
-        try await send(OpenAPIOperations.GetSplitOwedByRecipient(id: recipientId)).items
+    public func owed(recipientId: Int, currency: String) async throws -> [OpenAPI.SplitOwedDetail] {
+        try await send(OpenAPIOperations.GetSplitOwedByRecipient(id: recipientId, currency: currency)).items
     }
 
     public func exportOwedCsv(recipientId: Int) async throws -> Data {

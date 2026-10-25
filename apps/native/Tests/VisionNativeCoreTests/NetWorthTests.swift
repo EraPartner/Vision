@@ -261,6 +261,7 @@ private actor NetWorthFake: NetWorthService {
             rows = [snapshot("2025-06-03", 3), snapshot("2025-06-02", 2)]
         }
         return .init(
+            unconvertedCurrencies: [],
             current: .init(
                 liquid: 0, liabilities: 0, investments: currency == "EUR" ? 100 : 200,
                 netWorth: currency == "EUR" ? 100 : 200, currency: currency), monthlyChange: 0, monthlyChangePercent: 0,

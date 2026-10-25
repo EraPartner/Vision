@@ -331,9 +331,9 @@ these steps touches Electron Vision or its data.
     page's topbar moves clear of the traffic lights. Switch the app language to Nederlands: the
     sidebar labels change at once.
 12. **Exchange rates (phase 2).** Turn on admin mode in Settings, open Admin > Exchange rates.
-    Expected: the native screen with three summary cards, Live/Fallback (the URL keeps `?tab`, and
-    the tab survives a reload), the rates table and the Refresh button, which spins and shows a
-    toast. `⌘K` opens the command palette over the page. Turn admin mode off: the app goes to Home.
+    Expected: the native screen with two summary cards (stored rates and latest fetch), the stored
+    ECB rates table and the Refresh button, which spins and shows a toast. Amounts in a currency
+    without a stored rate are flagged, never converted at built-in constants. `⌘K` opens the command palette over the page. Turn admin mode off: the app goes to Home.
 13. **Planned payments (phase 3c).** With admin mode off, open Planned. Expected: the native screen
     with the Next 7 days strip, Estimated monthly and the payments table. View > Include paused adds
     `?show_all=true` to the URL and shows paused rows. Pause a row from its ••• menu: a toast with

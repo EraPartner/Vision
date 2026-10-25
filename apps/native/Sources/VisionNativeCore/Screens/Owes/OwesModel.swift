@@ -180,10 +180,11 @@ public final class OwesModel {
             return
         }
         let service = service
+        let currency = defaultCurrency
         let generation = cacheGeneration
         let task = Task { [weak self] in
             do {
-                let items = try await service.owedSummary()
+                let items = try await service.owedSummary(currency: currency)
                 self?.summary = items
                 self?.summaryError = nil
                 self?.summaryFetchedAt = self?.cacheGeneration == generation ? self?.now() : nil
@@ -274,10 +275,11 @@ public final class OwesModel {
             return
         }
         let service = service
+        let currency = defaultCurrency
         let generation = cacheGeneration
         let task = Task { [weak self] in
             do {
-                let items = try await service.owed(recipientId: id)
+                let items = try await service.owed(recipientId: id, currency: currency)
                 guard self?.person?.id == id else { return }
                 self?.splits = items
                 self?.splitsError = nil
