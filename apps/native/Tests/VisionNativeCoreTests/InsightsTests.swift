@@ -142,20 +142,66 @@ struct InsightsTests {
         #expect(InsightForecastOptions(route: NativeRoute("/?rollingDays=999")!).rollingDays == 90)
     }
 
-    @Test func diagnosticPreviewWeightsHaveUniformFloorAndSumToOne() throws {
+    @Test func diagnosticsReadTheServerEnsembleWeights() throws {
         let json =
-            #"{"history_months":12,"backtest":[{"method_id":"a","label":"A","mae":1,"rmse":1,"mape":null,"months":2,"per_month":[]},{"method_id":"b","label":"B","mae":10,"rmse":10,"mape":null,"months":2,"per_month":[]}]}"#
+            #"{"history_months":12,"ensemble_weights":{"a":0.7,"b":0.3},"backtest":[{"method_id":"a","label":"A","mae":1,"rmse":1,"mape":null,"months":2,"per_month":[]},{"method_id":"b","label":"B","mae":10,"rmse":10,"mape":null,"months":2,"per_month":[]}]}"#
         let diagnostics = try insightFixture(InsightForecast.Diagnostics.self, json)
-        let weights = diagnostics.suggestedWeights
-        #expect(abs(weights.values.reduce(0, +) - 1) < Decimal(string: "0.00000000000000000001")!)
-        #expect((weights["a"] ?? 0) > (weights["b"] ?? 0))
-        #expect((weights["b"] ?? 0) >= Decimal(string: "0.025")!)
+        #expect(diagnostics.ensemble_weights == ["a": Decimal(string: "0.7")!, "b": Decimal(string: "0.3")!])
+        let without = try insightFixture(
+            InsightForecast.Diagnostics.self, #"{"history_months":12,"backtest":[]}"#)
+        #expect(without.ensemble_weights == nil)
+    }
+
+    @Test func unconvertedCountsDecodeWhereTheServerSendsThemAndDefaultToZero() throws {
+        let pace = try insightFixture(
+            HomeSpendingPace.self,
+            insightPaceJSON.replacingOccurrences(of: #""comparison""#, with: #""unconverted_count":3,"comparison""#))
+        #expect(pace.unconvertedCount == 3)
+        #expect(try insightFixture(HomeSpendingPace.self, insightPaceJSON).unconvertedCount == 0)
+        let balances = try insightFixture(
+            HomeBankBalances.self,
+            #"{"accounts":[],"total_net_position":0,"history":{},"total_history":[],"unconverted_count":2,"unconverted_currencies":["CHF"]}"#
+        )
+        #expect(balances.unconvertedCount == 2)
+        let forecast = try insightFixture(
+            InsightForecast.self,
+            insightForecastJSON.replacingOccurrences(
+                of: #""currency":"EUR""#, with: #""currency":"EUR","unconverted_count":4,"unconverted_currencies":["USD"]"#)
+        )
+        #expect(forecast.unconvertedCount == 4)
+        #expect(try insightFixture(InsightForecast.self, insightForecastJSON).unconvertedCount == 0)
     }
 }
 
 @Suite("Home query and preference behavior")
 @MainActor
 struct HomeModelTests {
+    @Test func theHeroPlannedFiguresComeFromTheServerTotals() async {
+        let service = HomeFixtureService()
+        let home = HomeModel(service: service)
+        #expect(home.plannedIncoming == 0 && home.plannedOutgoing == 0)
+        await home.appear(settings: .defaults, route: .home)
+        #expect(home.plannedIncoming == 120)
+        #expect(home.plannedOutgoing == -45)
+        #expect(await service.plannedTotalCurrencies == [NativeAppSettings.defaults.defaultCurrency])
+    }
+
+    @Test func accountsOrderByTheServerConvertedBalanceAndKeepUnconvertedOnesLast() async {
+        let service = HomeFixtureService()
+        await service.setAccounts(
+            [
+                AccountsFixture.account(1, "Small", balance: 10),
+                AccountsFixture.account(2, "Dollars", currency: "USD", balance: 900),
+                AccountsFixture.account(3, "Francs", currency: "CHF", balance: 5000),
+                AccountsFixture.account(4, "Big", balance: 300),
+                AccountsFixture.account(5, "Old", balance: 9000, isActive: false),
+            ],
+            converted: [(1, 10, []), (2, 450, []), (3, 0, ["CHF"]), (4, 300, []), (5, 9000, [])])
+        let home = HomeModel(service: service)
+        await home.appear(settings: .defaults, route: .home)
+        #expect(home.sortedAccounts.map(\.id) == [2, 4, 1, 3])
+    }
+
     @Test func sharedUpcomingFeedsHomeAndDockWithoutDuplicateReadsOrPersistence() async {
         let service = HomeFixtureService()
         let local = HomeSharedLocalFixture()
@@ -175,7 +221,7 @@ struct HomeModelTests {
         notifications.didChangeDockBadge = { badge = $0 }
         await notifications.load()
         await home.appear(settings: .defaults, route: .home)
-        #expect(await service.plannedLimits == [200])
+        #expect(await service.plannedLimits.isEmpty)
         #expect(!local.reads.contains("dismissed_upcoming_planned_payments"))
         #expect(home.upcomingRows.map(\.id) == [1, 2] && badge == 2)
         notifications.dismiss(rows[0])
@@ -406,6 +452,7 @@ private actor HomeFixtureService: StatisticsService {
     var requestedOffsets: [Int] = []
     var monthlyCalls = 0
     var plannedLimits: [Int] = []
+    var plannedTotalCurrencies: [String] = []
     var lastExpected: JSONValue?
     private var monthlyFails = false
     private var exclusionsFail = false
@@ -482,12 +529,40 @@ private actor HomeFixtureService: StatisticsService {
             } : []
         return HomeTransactionPage(items: rows, total: 60)
     }
-    func homeAccounts() async throws -> [OpenAPI.Account] { [] }
+    func homeAccounts() async throws -> [OpenAPI.Account] { accountRows }
     func homePlanned(start: String, end: String, limit: Int) async throws -> [OpenAPI
         .PlannedTransaction]
     {
         plannedLimits.append(limit)
         return []
+    }
+    private var accountRows: [OpenAPI.Account] = []
+    private var accountTotalsRows: [OpenAPI.AccountTotals.AccountsItem] = []
+    func setAccounts(_ rows: [OpenAPI.Account], converted: [(Int, Decimal, [String])]) {
+        accountRows = rows
+        accountTotalsRows = converted.map {
+            OpenAPI.AccountTotals.AccountsItem(
+                id: $0.0, group: "cash", convertedBalance: $0.1, unconvertedCurrencies: $0.2)
+        }
+    }
+    func homeAccountTotals(currency: String) async throws -> OpenAPI.AccountTotals? {
+        OpenAPI.AccountTotals(
+            currency: currency,
+            netCash: .init(total: 0, unconvertedCount: 0, unconvertedCurrencies: []),
+            groups: .init(
+                cash: Self.emptyGroup, portfolio: Self.emptyGroup, liabilities: Self.emptyGroup,
+                archived: Self.emptyGroup),
+            accounts: accountTotalsRows)
+    }
+    private static let emptyGroup = OpenAPI.AccountGroupTotal(
+        total: 0, cash: 0, holdings: 0, holdingsUnavailable: false, unconvertedCount: 0, unconvertedCurrencies: [])
+    func homePlannedTotals(currency: String) async throws -> OpenAPI.PlannedTotals? {
+        plannedTotalCurrencies.append(currency)
+        return OpenAPI.PlannedTotals(
+            currency: currency, today: "2026-10-12", monthEnd: "2026-10-31",
+            restOfMonth: .init(incoming: 120, outgoing: -45, unconvertedCount: 1),
+            monthlyEquivalent: .init(total: 0, unconvertedCount: 0), nextDays: [],
+            nextDaysTotal: .init(from: "2026-10-12", to: "2026-10-19", incoming: 0, outgoing: 0, net: 0, unconvertedCount: 0))
     }
     func homeMatchCount() async throws -> Int { 0 }
     func homeExclusions(scope: String) async throws -> InsightExclusions {

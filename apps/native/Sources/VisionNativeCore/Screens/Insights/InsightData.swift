@@ -44,6 +44,9 @@ public struct HomeSpendingPace: Decodable, Equatable, Sendable {
     public let past_6_months: History
     public let current_month: Current
     public let comparison: Comparison
+    /// Transactions left out of the figures for want of a stored rate (ADR-216).
+    public let unconverted_count: Int?
+    public var unconvertedCount: Int { unconverted_count ?? 0 }
     public var income: Decimal { current_month.daily_data.reduce(0) { $0 + $1.income } }
 
     /// Fill days without activity with zero, preserving the web hero's spending staircase.
@@ -89,6 +92,9 @@ public struct HomeBankBalances: Decodable, Equatable, Sendable {
     public let total_net_position: Decimal
     public let history: [String: [Point]]
     public let total_history: [Point]
+    /// Currency partitions left out for want of a stored rate (ADR-216).
+    public let unconverted_count: Int?
+    public var unconvertedCount: Int { unconverted_count ?? 0 }
 }
 
 public struct HomeNetWorth: Decodable, Equatable, Sendable {
@@ -102,6 +108,8 @@ public struct HomeNetWorth: Decodable, Equatable, Sendable {
     public let monthlyChange: Decimal
     public let monthlyChangePercent: Decimal
     public let snapshots: [Snapshot]
+    /// Currencies of balances left out because no stored rate converts them (ADR-216).
+    public let unconvertedCurrencies: [String]?
     public struct Snapshot: Decodable, Equatable, Sendable {
         public let date: String
         public let netWorth: Decimal
