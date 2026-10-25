@@ -929,11 +929,13 @@ enum ImportFixture {
         await imports.appear(strings: ImportFixture.strings)
         shell.nativeIntentConsumerDidBecomeReady(for: .importExport)
         #expect(imports.file == file)
-        // Already on the page: no navigation, the file replaces the dropzone's.
+        // Already on the page: like React Router's navigate("/import") from ElectronBridge, the
+        // open pushes another /import entry, and the file replaces the dropzone's.
         let entries = shell.nativeNavigation.count
         let next = ImportFixture.file("second.csv")
         #expect(shell.openImportFile(next))
-        #expect(shell.nativeNavigation.count == entries)
+        #expect(shell.nativeNavigation.count == entries + 1)
+        #expect(shell.route.path == "/import")
         #expect(imports.file == next)
     }
 

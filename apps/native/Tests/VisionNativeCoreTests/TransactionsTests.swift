@@ -853,6 +853,9 @@ extension TransactionPatch {
         #expect(shell.nativeNavigationLocation.raw == "/transactions")
         model.dismissAdd()
         #expect(shell.detail == .native(.transactions))
+        // The mounted screen acknowledges it (ShellRootView's `.task(id: screen)`), so the sheet
+        // opens in place.
+        shell.nativeIntentConsumerDidBecomeReady(for: .transactions)
         #expect(shell.newTransaction())
         #expect(model.isAddPresented)
         model.disappear()
