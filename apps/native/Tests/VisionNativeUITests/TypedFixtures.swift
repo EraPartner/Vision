@@ -29,3 +29,12 @@ extension OpenAPI.SettingBaseline {
         }
     }
 }
+
+/// The currency code of a fixture written as three capitals, such as `EUR`. Traps on a bad code,
+/// like `fixtureDay`.
+func fixtureCurrency(_ text: String) -> CurrencyCode {
+    guard let code = CurrencyCode(rawValue: text) else {
+        preconditionFailure("\"\(text)\" is not an ISO 4217 currency code")
+    }
+    return code
+}

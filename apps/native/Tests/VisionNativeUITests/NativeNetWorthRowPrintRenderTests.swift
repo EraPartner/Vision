@@ -185,7 +185,7 @@
 
         private func loaded(_ service: NetWorthRowPrintService) async -> NetWorthModel {
             let model = NetWorthModel(service: service, now: { Date(timeIntervalSince1970: 1_791_936_000) })
-            await model.load(currency: "EUR", pageSize: 18, route: NativeRoute("/portfolio/net-worth?period=all")!)
+            await model.load(currency: fixtureCurrency("EUR"), pageSize: 18, route: NativeRoute("/portfolio/net-worth?period=all")!)
             return model
         }
         private func normalized(_ value: String) -> String { value.filter { !$0.isWhitespace } }

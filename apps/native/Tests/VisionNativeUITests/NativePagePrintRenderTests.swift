@@ -236,7 +236,7 @@
         @Test func netWorthLoadedTableAndChartRenderAcrossPagesWithoutFetchingOrRefreshingPrices() async throws {
             let service = PrintNetWorthService()
             let model = NetWorthModel(service: service, now: { Date(timeIntervalSince1970: 1_791_936_000) })
-            await model.load(currency: "EUR", pageSize: 48, route: NativeRoute("/portfolio/net-worth?period=all")!)
+            await model.load(currency: fixtureCurrency("EUR"), pageSize: 48, route: NativeRoute("/portfolio/net-worth?period=all")!)
             try #require(model.data != nil, "\(model.error ?? "missing synthetic net worth")")
             model.selection = "2026-09-24"
             model.rangeStart = "2026-08-01"
