@@ -166,7 +166,7 @@ private struct MarketVolumeBars: View, Equatable {
     let label: String
     let onHover: (Int?) -> Void
 
-    static func == (lhs: MarketVolumeBars, rhs: MarketVolumeBars) -> Bool {
+    nonisolated static func == (lhs: MarketVolumeBars, rhs: MarketVolumeBars) -> Bool {
         lhs.count == rhs.count && lhs.color == rhs.color && lhs.label == rhs.label
             && lhs.bars.count == rhs.bars.count && lhs.bars.first?.volume == rhs.bars.first?.volume
             && lhs.bars.last?.volume == rhs.bars.last?.volume

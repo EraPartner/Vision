@@ -206,7 +206,7 @@ private struct ResearchChartBuilderMarkLayer: View, Equatable {
     let loss: Color
 
     /// What the layer draws; the pointer moving over the chart leaves all of it unchanged.
-    static func == (lhs: Self, rhs: Self) -> Bool {
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.plot == rhs.plot && lhs.left == rhs.left && lhs.right == rhs.right && lhs.gain == rhs.gain
             && lhs.loss == rhs.loss && lhs.marks == rhs.marks && lhs.rows == rhs.rows
     }
