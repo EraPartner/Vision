@@ -68,16 +68,19 @@ jobs:
           # Run AppKit layouts separately so they cannot starve Core watchdogs/polling on MainActor.
           # Print only errors and failed tests; the full log is mostly deprecation warnings.
           summarize() {
-            grep -E '(error|fatal error): |✘|failed|Fatal error' "$1" | grep -v 'warning: ' \
+            grep -E '(error|fatal error): |✘|Fatal error' "$1" | grep -v 'warning: ' \
               | sed "s#^$GITHUB_WORKSPACE/##" | sort -u | head -500
           }
+          # Both suites run even when the first fails, so one round reports every failure.
+          status=0
           swift test --package-path apps/native --skip VisionNativeUITests > "$RUNNER_TEMP/test.log" 2>&1 || {
-            summarize "$RUNNER_TEMP/test.log"; tail -20 "$RUNNER_TEMP/test.log"; exit 1
+            summarize "$RUNNER_TEMP/test.log"; status=1
           }
-          tail -5 "$RUNNER_TEMP/test.log"
+          tail -3 "$RUNNER_TEMP/test.log"
           # AppKit activation, key windows and display transactions are process-global.
           swift test --package-path apps/native --skip-build --no-parallel --filter VisionNativeUITests \
             > "$RUNNER_TEMP/ui-test.log" 2>&1 || {
-            summarize "$RUNNER_TEMP/ui-test.log"; tail -20 "$RUNNER_TEMP/ui-test.log"; exit 1
+            summarize "$RUNNER_TEMP/ui-test.log"; status=1
           }
-          tail -5 "$RUNNER_TEMP/ui-test.log"
+          tail -3 "$RUNNER_TEMP/ui-test.log"
+          exit $status
