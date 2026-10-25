@@ -10,8 +10,10 @@ import {
 import { generateAPI } from "../native-openapi.ts";
 import {
   generateTokens,
+  loadDesignSources,
   resolvePalette,
   ruleDeclarations,
+  uncoveredDesignTokens,
   type ThemeTokens,
 } from "../native-design-tokens.ts";
 import { generateCatalog } from "../native-strings.ts";
@@ -271,14 +273,154 @@ test("design tokens follow the cascade for gain and loss", () => {
   });
   assert.deepEqual(defaultLight.alphas, [["label-secondary-alpha", 0.72]]);
 
-  const swift = generateTokens({ ...sources, variants: ["default", "nord"] });
+  const design = loadDesignSources();
+  const swift = generateTokens({
+    ...sources,
+    variants: ["default", "nord"],
+    design,
+  });
   assert.match(swift, /case \(\.nord, \.dark\): return nordDark/);
   assert.match(swift, /public static let control: Double = 10\n/);
   assert.match(swift, /public static let fast: Double = 0\.15\n/);
   assert.match(swift, /public static let display = \["Fraunces", "serif"\]/);
   assert.equal(
-    generateTokens({ ...sources, variants: ["default", "nord"] }),
+    generateTokens({ ...sources, variants: ["default", "nord"], design }),
     swift,
+  );
+});
+
+const FIXTURE = { tokensCss: TOKENS_CSS, skinCss: SKIN_CSS, themes: THEMES };
+
+function designTokensSwift(
+  edit: (design: ReturnType<typeof loadDesignSources>) => void = () => {},
+): string {
+  const design = loadDesignSources();
+  edit(design);
+  return generateTokens({ ...FIXTURE, variants: ["default", "nord"], design });
+}
+
+test("the design-system tokens come from the web sources", () => {
+  const swift = designTokensSwift();
+  const has = (text: string) => assert.ok(swift.includes(text), text);
+  has(
+    "public static let glide = BezierCurve(x1: 0.32, y1: 0.72, x2: 0, y2: 1)",
+  );
+  has(
+    "public static let inOutQuart = BezierCurve(x1: 0.77, y1: 0, x2: 0.175, y2: 1)",
+  );
+  has("settleDuration: 0.506,");
+  has("mass: 1, stiffness: 300, damping: 30,");
+  has(
+    "ShadowLayer(color: .shadow, alpha: 0.16, x: 0, y: 8, blur: 24, spread: -8, inset: false)",
+  );
+  has(
+    "public static let saturate: AppearanceValue<Double> = AppearanceValue(light: 1.8, dark: 1.5)",
+  );
+  has("public static let thickBlur: Double = 28");
+  has(
+    "public static let grainAlpha: AppearanceValue<Double> = AppearanceValue(light: 0.018, dark: 0.028)",
+  );
+  has("public static let scrim: Double = 0.6");
+  has("public static let scrimFrosted: Double = 0.4");
+  has("public static let scrimFrostedStrong: Double = 0.5");
+  has("public static let blur: Double = 12");
+  has("public static let dialogRadius: Double = 22");
+  has("public static let dialogMaxWidth: Double = 512");
+  has("public static let enterScale: Double = 0.95");
+  has("public static let enterOffsetY: Double = 12");
+  has("public static let scale: Double = 0.97");
+  has("public static let width: Double = 3");
+  has("public static let x2l: Double = 20");
+  has("public static let md: Double = 8");
+  has("public static let heightSm: Double = 32");
+  has("public static let heightLg: Double = 40");
+  has("public enum `Type` {");
+  has(
+    "TypeStyle(face: .display, size: 32, lineHeight: 38, weight: 600, tracking: -0.025)",
+  );
+  has(
+    "TypeStyle(face: .body, size: 11, lineHeight: 14, weight: 400, tracking: 0)",
+  );
+  // The palette is untouched by the design-system section.
+  has("public static let control: Double = 10");
+});
+
+test("every design-system custom property of tokens.css reaches the Swift tokens", () => {
+  const swift = designTokensSwift();
+  const { text } = loadDesignSources().tokensCss;
+  assert.deepEqual(uncoveredDesignTokens(text, swift), []);
+  // A new property without a Swift counterpart is reported, unless it is allow-listed.
+  const orphan = text.replace(
+    "--grain-alpha: 0.018;",
+    "--grain-alpha: 0.018;\n        --aurora-new-alpha: 0.5;\n        --glass-saturate-extra: 1;",
+  );
+  assert.deepEqual(uncoveredDesignTokens(orphan, swift), ["aurora-new-alpha"]);
+  assert.deepEqual(
+    uncoveredDesignTokens(orphan, swift, { "aurora-new-alpha": "not drawn" }),
+    [],
+  );
+  // Generation itself fails on it.
+  assert.throws(
+    () =>
+      designTokensSwift((design) => {
+        design.tokensCss.text = orphan;
+      }),
+    /without a Swift counterpart: --aurora-new-alpha/,
+  );
+  // A new easing or spring curve needs no allow-list: the generator discovers them.
+  const eased = designTokensSwift((design) => {
+    design.tokensCss.text = design.tokensCss.text.replace(
+      "--ease-glide:",
+      "--ease-linear: cubic-bezier(0, 0, 1, 1);\n        --ease-glide:",
+    );
+  });
+  assert.match(
+    eased,
+    /public static let linear = BezierCurve\(x1: 0, y1: 0, x2: 1, y2: 1\)/,
+  );
+});
+
+test("generation fails on an unresolved var(--x)", () => {
+  assert.throws(
+    () =>
+      designTokensSwift((design) => {
+        design.tokensCss.text = design.tokensCss.text.replace(
+          "hsl(var(--glass-highlight) / 0.3)",
+          "hsl(var(--glass-missing) / 0.3)",
+        );
+      }),
+    /unresolved var\(--glass-missing\)/,
+  );
+  assert.throws(
+    () =>
+      designTokensSwift((design) => {
+        design.tokensCss.text = design.tokensCss.text.replace(
+          "--ease-glide: cubic-bezier(0.32, 0.72, 0, 1);",
+          "--ease-glide: var(--ease-missing);",
+        );
+      }),
+    /--ease-missing is not defined/,
+  );
+  assert.throws(
+    () =>
+      designTokensSwift((design) => {
+        design.tokensCss.text = design.tokensCss.text.replace(
+          "0 1px 2px hsl(var(--glass-shadow) / 0.06)",
+          "0 1px var(--blur) hsl(var(--glass-shadow) / 0.06)",
+        );
+      }),
+    /unresolved var\(--x\)/,
+  );
+  // Tailwind class constants are checked too: a missing class fails instead of defaulting.
+  assert.throws(
+    () =>
+      designTokensSwift((design) => {
+        design.buttonTsx.text = design.buttonTsx.text.replace(
+          'lg: "h-10',
+          'lg: "px-6',
+        );
+      }),
+    /button size lg: not found/,
   );
 });
 

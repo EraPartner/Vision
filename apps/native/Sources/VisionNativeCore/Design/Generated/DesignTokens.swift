@@ -130,6 +130,117 @@ public struct ThemePalette: Equatable, Sendable {
     public let colorblindLoss: HSLColor
 }
 
+/// A value that differs between the light and dark appearance (`:root` and `.dark` in tokens.css).
+public struct AppearanceValue<Value: Equatable & Sendable>: Equatable, Sendable {
+    public let light: Value
+    public let dark: Value
+
+    public init(light: Value, dark: Value) {
+        self.light = light
+        self.dark = dark
+    }
+
+    public func value(isDark: Bool) -> Value { isDark ? dark : light }
+}
+
+/// A CSS `cubic-bezier(x1, y1, x2, y2)` easing curve.
+public struct BezierCurve: Equatable, Sendable {
+    public let x1: Double
+    public let y1: Double
+    public let x2: Double
+    public let y2: Double
+
+    public init(x1: Double, y1: Double, x2: Double, y2: Double) {
+        self.x1 = x1
+        self.y1 = y1
+        self.x2 = x2
+        self.y2 = y2
+    }
+}
+
+/// A damped spring: the physical parameters of `lib/motion.ts` (`springs`), the CSS `linear()`
+/// samples that tokens.css derives from them and the settle time that goes with the samples.
+public struct SpringToken: Equatable, Sendable {
+    public let mass: Double
+    public let stiffness: Double
+    public let damping: Double
+    /// Seconds until the spring has settled (`--spring-<name>-duration`).
+    public let settleDuration: Double
+    /// The 41 samples of the spring's step response over `settleDuration`, from 0 to 1.
+    public let samples: [Double]
+
+    public init(mass: Double, stiffness: Double, damping: Double, settleDuration: Double, samples: [Double]) {
+        self.mass = mass
+        self.stiffness = stiffness
+        self.damping = damping
+        self.settleDuration = settleDuration
+        self.samples = samples
+    }
+}
+
+/// The theme colour a shadow or gradient stop is drawn in. The hue comes from the active
+/// `ThemePalette` (see `ThemePalette.color(_:)`), so theme variants keep their own shadow hue.
+public enum ThemeColorRole: String, CaseIterable, Sendable {
+    case highlight
+    case shadow
+    case surface
+    case surfaceSoft
+    case surfaceDeep
+    case tint
+    case border
+    case sidebarBackground
+    case sidebarBorder
+    case background
+    case foreground
+    case primary
+}
+
+/// One layer of a CSS `box-shadow` or `text-shadow`: `[inset] x y blur spread hsl(role / alpha)`,
+/// in points (CSS blur is about twice SwiftUI's shadow radius).
+public struct ShadowLayer: Equatable, Sendable {
+    public let color: ThemeColorRole
+    public let alpha: Double
+    public let x: Double
+    public let y: Double
+    public let blur: Double
+    public let spread: Double
+    public let inset: Bool
+
+    public init(color: ThemeColorRole, alpha: Double, x: Double, y: Double, blur: Double, spread: Double, inset: Bool) {
+        self.color = color
+        self.alpha = alpha
+        self.x = x
+        self.y = y
+        self.blur = blur
+        self.spread = spread
+        self.inset = inset
+    }
+}
+
+/// The face of a type role: `--font-display` (Fraunces) or `--font-body` (Inter).
+public enum TypeFace: String, Sendable {
+    case display
+    case body
+}
+
+/// A `type-*` role of the web's type ramp: size and line height in points, tracking in em.
+public struct TypeStyle: Equatable, Sendable {
+    public let face: TypeFace
+    public let size: Double
+    public let lineHeight: Double
+    public let weight: Int
+    /// `letter-spacing` in em; multiply by `size` for points.
+    public let tracking: Double
+
+    public init(face: TypeFace, size: Double, lineHeight: Double, weight: Int, tracking: Double) {
+        self.face = face
+        self.size = size
+        self.lineHeight = lineHeight
+        self.weight = weight
+        self.tracking = tracking
+    }
+}
+
 public enum DesignTokens {
     public static func palette(_ variant: ThemeVariant, _ appearance: ThemeAppearance) -> ThemePalette {
         switch (variant, appearance) {
@@ -161,6 +272,16 @@ public enum DesignTokens {
         public static let card: Double = 14
         /// `--radius-sheet`
         public static let sheet: Double = 22
+        /// `rounded-lg`: `--radius` (apps/frontend/tailwind.config.ts:123).
+        public static let lg: Double = 10
+        /// `rounded-md`: `--radius` - 2px (apps/frontend/tailwind.config.ts:124).
+        public static let md: Double = 8
+        /// `rounded-sm`: `--radius` - 4px (apps/frontend/tailwind.config.ts:125).
+        public static let sm: Double = 6
+        /// `rounded-xl`: `--radius` + 4px (apps/frontend/tailwind.config.ts:126).
+        public static let xl: Double = 14
+        /// `rounded-2xl`: `--radius` + 10px (apps/frontend/tailwind.config.ts:127).
+        public static let x2l: Double = 20
     }
 
     /// Motion durations in seconds.
@@ -187,6 +308,262 @@ public enum DesignTokens {
         public static let body = ["Inter", "-apple-system", "BlinkMacSystemFont", "SF Pro Text", "Segoe UI", "system-ui", "sans-serif"]
         /// `--font-mono`
         public static let mono = ["SF Mono", "JetBrains Mono", "Menlo", "Consolas", "monospace"]
+    }
+
+    /// Easing curves (cubic-bezier control points).
+    public enum Ease {
+        /// `--ease-glide`
+        public static let glide = BezierCurve(x1: 0.32, y1: 0.72, x2: 0, y2: 1)
+        /// `--ease-out-expo`
+        public static let outExpo = BezierCurve(x1: 0.16, y1: 1, x2: 0.3, y2: 1)
+        /// `--ease-in-out-quart`
+        public static let inOutQuart = BezierCurve(x1: 0.77, y1: 0, x2: 0.175, y2: 1)
+    }
+
+    /// Damped springs, with the CSS samples of tokens.css and the physics of lib/motion.ts.
+    public enum Spring {
+        /// `--spring-snappy` sampled at 41 points, settling in `--spring-snappy-duration`; physics from `springs.snappy` (apps/frontend/src/lib/motion.ts:57).
+        public static let snappy = SpringToken(
+            mass: 0.7, stiffness: 420, damping: 32,
+            settleDuration: 0.287,
+            samples: [0, 0.0139, 0.0497, 0.1005, 0.1608, 0.2262, 0.2936, 0.3608, 0.426, 0.488, 0.5461, 0.5999, 0.6491, 0.6938, 0.7341, 0.7701, 0.802, 0.8302, 0.855, 0.8767, 0.8955, 0.9118, 0.9259, 0.938, 0.9483, 0.9571, 0.9646, 0.9709, 0.9762, 0.9807, 0.9844, 0.9875, 0.99, 0.9921, 0.9938, 0.9952, 0.9964, 0.9973, 0.998, 0.9986, 1])
+        /// `--spring-smooth` sampled at 41 points, settling in `--spring-smooth-duration`; physics from `springs.smooth` (apps/frontend/src/lib/motion.ts:63).
+        public static let smooth = SpringToken(
+            mass: 1, stiffness: 300, damping: 30,
+            settleDuration: 0.506,
+            samples: [0, 0.0212, 0.0746, 0.1479, 0.232, 0.3201, 0.4075, 0.4908, 0.5681, 0.6381, 0.7005, 0.755, 0.8021, 0.8422, 0.8759, 0.9039, 0.9269, 0.9455, 0.9604, 0.9722, 0.9814, 0.9884, 0.9937, 0.9975, 1.0002, 1.0021, 1.0033, 1.004, 1.0043, 1.0043, 1.0042, 1.0039, 1.0036, 1.0032, 1.0028, 1.0024, 1.0021, 1.0018, 1.0015, 1.0012, 1])
+        /// `--spring-bouncy` sampled at 41 points, settling in `--spring-bouncy-duration`; physics from `springs.bouncy` (apps/frontend/src/lib/motion.ts:69).
+        public static let bouncy = SpringToken(
+            mass: 1, stiffness: 260, damping: 20,
+            settleDuration: 0.637,
+            samples: [0, 0.0296, 0.1056, 0.2111, 0.3321, 0.4576, 0.5794, 0.6915, 0.7904, 0.8741, 0.942, 0.9947, 1.0333, 1.0595, 1.0752, 1.0824, 1.083, 1.0788, 1.0713, 1.0618, 1.0515, 1.0411, 1.0312, 1.0223, 1.0145, 1.0081, 1.0029, 0.999, 0.9962, 0.9944, 0.9934, 0.993, 0.9932, 0.9937, 0.9944, 0.9952, 0.9961, 0.9969, 0.9977, 0.9984, 1])
+    }
+
+    /// Contact plus ambient shadow per level (inset highlight first); hues come from the glass tokens.
+    public enum Elevation {
+        /// `--elevation-1`
+        public static let level1: AppearanceValue<[ShadowLayer]> = AppearanceValue(
+            light: [
+                ShadowLayer(color: .highlight, alpha: 0.3, x: 0, y: 1, blur: 0, spread: 0, inset: true),
+                ShadowLayer(color: .shadow, alpha: 0.06, x: 0, y: 1, blur: 2, spread: 0, inset: false),
+                ShadowLayer(color: .shadow, alpha: 0.05, x: 0, y: 1, blur: 18, spread: 0, inset: false),
+            ],
+            dark: [
+                ShadowLayer(color: .highlight, alpha: 0.06, x: 0, y: 1, blur: 0, spread: 0, inset: true),
+                ShadowLayer(color: .shadow, alpha: 0.3, x: 0, y: 1, blur: 2, spread: 0, inset: false),
+                ShadowLayer(color: .shadow, alpha: 0.3, x: 0, y: 1, blur: 24, spread: 0, inset: false),
+            ])
+        /// `--elevation-2`
+        public static let level2: AppearanceValue<[ShadowLayer]> = AppearanceValue(
+            light: [
+                ShadowLayer(color: .highlight, alpha: 0.5, x: 0, y: 1, blur: 0, spread: 0, inset: true),
+                ShadowLayer(color: .shadow, alpha: 0.05, x: 0, y: 2, blur: 4, spread: 0, inset: false),
+                ShadowLayer(color: .shadow, alpha: 0.16, x: 0, y: 8, blur: 24, spread: -8, inset: false),
+            ],
+            dark: [
+                ShadowLayer(color: .highlight, alpha: 0.1, x: 0, y: 1, blur: 0, spread: 0, inset: true),
+                ShadowLayer(color: .shadow, alpha: 0.3, x: 0, y: 2, blur: 4, spread: 0, inset: false),
+                ShadowLayer(color: .shadow, alpha: 0.5, x: 0, y: 8, blur: 24, spread: -8, inset: false),
+            ])
+        /// `--elevation-3`
+        public static let level3: AppearanceValue<[ShadowLayer]> = AppearanceValue(
+            light: [
+                ShadowLayer(color: .highlight, alpha: 0.6, x: 0, y: 1, blur: 0, spread: 0, inset: true),
+                ShadowLayer(color: .shadow, alpha: 0.06, x: 0, y: 4, blur: 8, spread: 0, inset: false),
+                ShadowLayer(color: .shadow, alpha: 0.3, x: 0, y: 18, blur: 46, spread: -16, inset: false),
+            ],
+            dark: [
+                ShadowLayer(color: .highlight, alpha: 0.16, x: 0, y: 1, blur: 0, spread: 0, inset: true),
+                ShadowLayer(color: .shadow, alpha: 0.35, x: 0, y: 4, blur: 8, spread: 0, inset: false),
+                ShadowLayer(color: .shadow, alpha: 0.7, x: 0, y: 22, blur: 56, spread: -18, inset: false),
+            ])
+        /// `--elevation-4`
+        public static let level4: AppearanceValue<[ShadowLayer]> = AppearanceValue(
+            light: [
+                ShadowLayer(color: .highlight, alpha: 0.5, x: 0, y: 1, blur: 0, spread: 0, inset: true),
+                ShadowLayer(color: .shadow, alpha: 0.1, x: 0, y: 8, blur: 16, spread: 0, inset: false),
+                ShadowLayer(color: .shadow, alpha: 0.4, x: 0, y: 32, blur: 80, spread: -24, inset: false),
+            ],
+            dark: [
+                ShadowLayer(color: .highlight, alpha: 0.1, x: 0, y: 1, blur: 0, spread: 0, inset: true),
+                ShadowLayer(color: .shadow, alpha: 0.42, x: 0, y: 8, blur: 16, spread: 0, inset: false),
+                ShadowLayer(color: .shadow, alpha: 0.55, x: 0, y: 32, blur: 80, spread: -28, inset: false),
+            ])
+        /// `shadow-glass-soft` (apps/frontend/tailwind.config.ts:135); the same in both appearances.
+        public static let glassSoft: AppearanceValue<[ShadowLayer]> = AppearanceValue(
+            light: [
+                ShadowLayer(color: .highlight, alpha: 0.35, x: 0, y: 1, blur: 0, spread: 0, inset: true),
+                ShadowLayer(color: .shadow, alpha: 0.35, x: 0, y: 10, blur: 30, spread: -12, inset: false),
+            ],
+            dark: [
+                ShadowLayer(color: .highlight, alpha: 0.35, x: 0, y: 1, blur: 0, spread: 0, inset: true),
+                ShadowLayer(color: .shadow, alpha: 0.35, x: 0, y: 10, blur: 30, spread: -12, inset: false),
+            ])
+        /// `shadow-glass-elevated` (apps/frontend/tailwind.config.ts:141); the same in both appearances.
+        public static let glassElevated: AppearanceValue<[ShadowLayer]> = AppearanceValue(
+            light: [
+                ShadowLayer(color: .highlight, alpha: 0.5, x: 0, y: 1, blur: 0, spread: 0, inset: true),
+                ShadowLayer(color: .shadow, alpha: 0.55, x: 0, y: 22, blur: 48, spread: -18, inset: false),
+            ],
+            dark: [
+                ShadowLayer(color: .highlight, alpha: 0.5, x: 0, y: 1, blur: 0, spread: 0, inset: true),
+                ShadowLayer(color: .shadow, alpha: 0.55, x: 0, y: 22, blur: 48, spread: -18, inset: false),
+            ])
+    }
+
+    /// Backdrop blur (points) and saturation per glass material.
+    public enum Glass {
+        /// `--glass-thin-blur`
+        public static let thinBlur: Double = 12
+        /// `--glass-regular-blur`
+        public static let regularBlur: Double = 20
+        /// `--glass-thick-blur`
+        public static let thickBlur: Double = 28
+        /// `--glass-chrome-blur`
+        public static let chromeBlur: Double = 24
+        /// `--glass-elevated-blur`
+        public static let elevatedBlur: Double = 32
+        /// `--glass-saturate`, as a multiplier (180% is 1.8).
+        public static let saturate: AppearanceValue<Double> = AppearanceValue(light: 1.8, dark: 1.5)
+        /// Opacity of `--card` that replaces every glass material under Reduce Transparency (`prefers-reduced-transparency: reduce`, apps/frontend/src/index.css:1492).
+        public static let reducedTransparencyOpacity: Double = 0.97
+        /// Alpha of the `--foreground` border of glass materials and cards under Increase Contrast (`prefers-contrast: more`, apps/frontend/src/index.css:1449).
+        public static let highContrastBorderAlpha: Double = 0.45
+    }
+
+    /// The liquid canvas: aurora blob and grain alphas.
+    public enum Atmosphere {
+        /// `--aurora-primary-alpha`
+        public static let primaryAlpha: AppearanceValue<Double> = AppearanceValue(light: 0.1, dark: 0.13)
+        /// `--aurora-accent-alpha`
+        public static let accentAlpha: AppearanceValue<Double> = AppearanceValue(light: 0.08, dark: 0.1)
+        /// `--aurora-wash-alpha`
+        public static let washAlpha: AppearanceValue<Double> = AppearanceValue(light: 0.06, dark: 0.08)
+        /// `--grain-alpha`
+        public static let grainAlpha: AppearanceValue<Double> = AppearanceValue(light: 0.018, dark: 0.028)
+    }
+
+    /// The keyboard focus ring: a translucent outline in `ring` (alpha `ThemePalette.focusRingAlpha`).
+    public enum FocusRing {
+        /// Outline width (`outline: 3px solid`, apps/frontend/src/index.css:91).
+        public static let width: Double = 3
+        /// `outline-offset` (apps/frontend/src/index.css:91).
+        public static let offset: Double = 1
+        /// Alpha of the ring under Increase Contrast, where the outline is the opaque `--ring` (`prefers-contrast: more`).
+        public static let highContrastAlpha: Double = 1
+    }
+
+    /// Modal overlay (scrim) and dialog geometry; sheets and alert dialogs share the scrim.
+    public enum Overlay {
+        /// Flat scrim: `--background` at this alpha (`.modal-overlay`, apps/frontend/src/index.css:458).
+        public static let scrim: Double = 0.6
+        /// Frosted scrim (Full effects or the enhanced tier): `--background` at this alpha with `blur` behind (`:root.fx-full .modal-overlay`, apps/frontend/src/index.css:1612).
+        public static let scrimFrosted: Double = 0.4
+        /// Frosted scrim of alert dialogs (`modal-overlay-strong`, apps/frontend/src/index.css:1618); the flat scrim keeps `scrim`.
+        public static let scrimFrostedStrong: Double = 0.5
+        /// Backdrop blur radius of the frosted scrim, in points (apps/frontend/src/index.css:1612).
+        public static let blur: Double = 12
+        /// Corner radius of dialogs and sheets: `rounded-sheet` (`--radius-sheet`, apps/frontend/src/components/ui/dialog.tsx:52).
+        public static let dialogRadius: Double = 22
+        /// Widest a dialog grows: `max-w-lg` (apps/frontend/src/components/ui/dialog.tsx:52).
+        public static let dialogMaxWidth: Double = 512
+        /// Tallest a dialog grows, as a fraction of the window: `max-h-[90vh]` (apps/frontend/src/components/ui/dialog.tsx:52).
+        public static let dialogMaxHeightFraction: Double = 0.9
+        /// Dialog padding: `p-6` (apps/frontend/src/components/ui/dialog.tsx:52).
+        public static let dialogPadding: Double = 24
+        /// Gap between dialog sections: `gap-5` (apps/frontend/src/components/ui/dialog.tsx:52).
+        public static let dialogGap: Double = 20
+        /// Scale a dialog enters from (`dialog-in` keyframes, apps/frontend/tailwind.config.ts:181); it settles on `Spring.smooth`.
+        public static let enterScale: Double = 0.95
+        /// Points a dialog enters below its resting place (`dialog-in` keyframes, same rule).
+        public static let enterOffsetY: Double = 12
+        /// Scale a dialog leaves to when it has no trigger to shrink toward (`dialog-out` fallback, apps/frontend/tailwind.config.ts:188); it exits over `Duration.dismiss` on `Ease.glide`.
+        public static let exitScale: Double = 0.97
+        /// Points a dialog leaves below its resting place (`dialog-out` fallback, same rule).
+        public static let exitOffsetY: Double = 6
+    }
+
+    /// Hover states.
+    public enum Hover {
+        /// `hover:bg-primary/92`: default, destructive and accent buttons (apps/frontend/src/components/ui/button.tsx:15).
+        public static let fillAlpha: Double = 0.92
+        /// `hover:bg-foreground/[0.06]`: ghost buttons (apps/frontend/src/components/ui/button.tsx:22).
+        public static let ghostFillAlpha: Double = 0.06
+        /// Alpha of the `--primary` border of an interactive card on hover (`.premium-frame-interactive:hover`, apps/frontend/src/index.css:892; dark apps/frontend/src/index.css:910).
+        public static let cardBorderAlpha: AppearanceValue<Double> = AppearanceValue(light: 0.4, dark: 0.5)
+        /// The lift shadow an interactive card shows on hover (`.premium-frame-interactive::after`, apps/frontend/src/index.css:880).
+        public static let cardShadow: AppearanceValue<[ShadowLayer]> = AppearanceValue(
+            light: [
+                ShadowLayer(color: .shadow, alpha: 0.1, x: 0, y: 12, blur: 30, spread: 0, inset: false),
+            ],
+            dark: [
+                ShadowLayer(color: .shadow, alpha: 0.48, x: 0, y: 18, blur: 40, spread: 0, inset: false),
+            ])
+    }
+
+    /// Press feedback; it animates over `Duration.press` with ease-out.
+    public enum Press {
+        /// `.press-feedback:active` scale (apps/frontend/src/index.css:1052).
+        public static let scale: Double = 0.97
+    }
+
+    /// Text selection.
+    public enum Selection {
+        /// `::selection` background: `--primary` at this alpha (apps/frontend/src/index.css:102).
+        public static let alpha: Double = 0.25
+    }
+
+    /// Dark-mode text halos (`text-shadow` in `--background`) that keep text legible over the aurora.
+    public enum Halo {
+        /// The single halo of page header titles and subtitles (`.dark .page-header-title`, apps/frontend/src/index.css:73).
+        public static let single = ShadowLayer(color: .background, alpha: 0.55, x: 0, y: 2, blur: 8, spread: 0, inset: false)
+        /// The inner layer of the double halo under Full effects (`.dark.fx-full h1`, apps/frontend/src/index.css:1653).
+        public static let fullInner = ShadowLayer(color: .background, alpha: 0.6, x: 0, y: 1, blur: 2, spread: 0, inset: false)
+        /// The outer layer of the double halo under Full effects (same rule).
+        public static let fullOuter = ShadowLayer(color: .background, alpha: 0.45, x: 0, y: 2, blur: 14, spread: 0, inset: false)
+    }
+
+    /// The type ramp of `@utility type-*`: sizes and line heights in points, tracking in em.
+    public enum `Type` {
+        /// `type-large-title` (apps/frontend/src/index.css:1784).
+        public static let largeTitle = TypeStyle(face: .display, size: 32, lineHeight: 38, weight: 600, tracking: -0.025)
+        /// `type-title-1` (apps/frontend/src/index.css:1792).
+        public static let title1 = TypeStyle(face: .display, size: 24, lineHeight: 30, weight: 600, tracking: -0.02)
+        /// `type-title-2` (apps/frontend/src/index.css:1800).
+        public static let title2 = TypeStyle(face: .display, size: 20, lineHeight: 26, weight: 600, tracking: -0.018)
+        /// `type-title-3` (apps/frontend/src/index.css:1808).
+        public static let title3 = TypeStyle(face: .display, size: 17, lineHeight: 22, weight: 600, tracking: -0.014)
+        /// `type-headline` (apps/frontend/src/index.css:1816).
+        public static let headline = TypeStyle(face: .body, size: 14, lineHeight: 20, weight: 600, tracking: -0.011)
+        /// `type-body` (apps/frontend/src/index.css:1824).
+        public static let body = TypeStyle(face: .body, size: 14, lineHeight: 20, weight: 400, tracking: -0.006)
+        /// `type-callout` (apps/frontend/src/index.css:1832).
+        public static let callout = TypeStyle(face: .body, size: 13, lineHeight: 18, weight: 400, tracking: -0.004)
+        /// `type-footnote` (apps/frontend/src/index.css:1840).
+        public static let footnote = TypeStyle(face: .body, size: 12, lineHeight: 16, weight: 400, tracking: 0)
+        /// `type-caption` (apps/frontend/src/index.css:1848).
+        public static let caption = TypeStyle(face: .body, size: 11, lineHeight: 14, weight: 500, tracking: 0.01)
+        /// `text-2xs`, 11px over 14px in the body face at regular weight (fontSize `2xs`, apps/frontend/tailwind.config.ts:22).
+        public static let twoXS = TypeStyle(face: .body, size: 11, lineHeight: 14, weight: 400, tracking: 0)
+        /// `body { letter-spacing }`: tracking of text outside a `type-*` role, in em (apps/frontend/src/index.css:41).
+        public static let bodyTracking: Double = -0.005
+        /// `h1, h2, h3, .font-display { letter-spacing }`: tracking of headings outside a `type-*` role, in em (apps/frontend/src/index.css:55).
+        public static let headingTracking: Double = -0.02
+    }
+
+    /// `Type` spelled without backticks. `Type` also names a metatype, so `DesignTokens.Type` is not this enum; write DesignTokens.`Type` or use this alias.
+    public typealias Typography = `Type`
+
+    /// Control heights in points (Tailwind `h-*` classes; there are no CSS variables for them).
+    public enum Control {
+        /// Button `size` `default`: `h-9` (apps/frontend/src/components/ui/button.tsx:32); inputs and selects use the same `h-9` (apps/frontend/src/components/ui/input.tsx:22).
+        public static let height: Double = 36
+        /// Button `size` `sm`: `h-8` (apps/frontend/src/components/ui/button.tsx:33).
+        public static let heightSm: Double = 32
+        /// Button `size` `xs`: `h-7` (apps/frontend/src/components/ui/button.tsx:34).
+        public static let heightXs: Double = 28
+        /// Button `size` `lg`: `h-10` (apps/frontend/src/components/ui/button.tsx:35).
+        public static let heightLg: Double = 40
     }
 
     static let defaultLight = ThemePalette(
