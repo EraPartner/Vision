@@ -5,10 +5,12 @@ import Testing
 
 @Suite struct ChartLinePlotTests {
     private func plot(_ count: Int, maxMarks: Int = 400) -> ChartLinePlot {
-        let points = (0..<count).map { index in
-            ChartLinePlot.Input(
-                time: Decimal(index * 86_400_000), close: Decimal(index % 11),
-                volume: index % 2 == 0 ? Decimal(index) : nil)
+        var points: [ChartLinePlot.Input] = []
+        for index in 0..<count {
+            let time = Decimal(index * 86_400_000)
+            let close = Decimal(index % 11)
+            let volume: Decimal? = index.isMultiple(of: 2) ? Decimal(index) : nil
+            points.append(ChartLinePlot.Input(time: time, close: close, volume: volume))
         }
         return ChartLinePlot(points: points, maxMarks: maxMarks)
     }
