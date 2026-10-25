@@ -689,11 +689,23 @@ actor StaticAccountsService: AccountsService {
         return active == "true" ? rows.filter(\.isActive) : rows
     }
 
-    func portfolioAccountRows(currency: String) async throws -> [PortfolioAccountRow] {
-        [
-            PortfolioAccountRow(
-                accountId: 2, contributionKind: "position", oversold: false, currentValue: 4200, gainLoss: 310)
-        ]
+    func portfolioAccountRows(currency: String) async throws -> AccountPortfolioSummary {
+        AccountPortfolioSummary(
+            byAccount: [PortfolioAccountRow(accountId: 2, contributionKind: "position", currentValue: 4200)],
+            accountTotals: [PortfolioAccountTotalsRow(accountId: 2, oversold: false, gainLoss: 310)])
+    }
+
+    func accountTotals(currency: String) async throws -> OpenAPI.AccountTotals {
+        func group(_ total: Decimal) -> OpenAPI.AccountGroupTotal {
+            OpenAPI.AccountGroupTotal(
+                total: total, cash: total, holdings: 0, holdingsUnavailable: false, unconvertedCount: 0,
+                unconvertedCurrencies: [])
+        }
+        return OpenAPI.AccountTotals(
+            currency: currency,
+            netCash: .init(total: Decimal(string: "1234.56")!, unconvertedCount: 0, unconvertedCurrencies: []),
+            groups: .init(cash: group(Decimal(string: "1234.56")!), portfolio: group(4200), liabilities: group(0), archived: group(0)),
+            accounts: [])
     }
 
     func ledger(accountId: Int, offset: Int, limit: Int) async throws -> AccountLedgerPage {

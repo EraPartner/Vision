@@ -162,9 +162,9 @@ public struct AccountGroup: Equatable, Sendable, Identifiable {
     }
 }
 
-/// A sum in the display currency. `incomplete` when a balance could not be converted: the
-/// server left a partition out (`balance_incomplete`), or no exchange rate exists for the
-/// account's currency. A missing rate never counts 1:1.
+/// A sum in the display currency, computed on the server (`GET /api/accounts/totals`,
+/// ADR-216). `incomplete` when `unconverted_count` is above zero: a balance partition has no
+/// stored rate and was left out, never counted 1:1.
 public struct AccountTotal: Equatable, Sendable {
     public let amount: Decimal
     public let incomplete: Bool
@@ -175,7 +175,7 @@ public struct AccountTotal: Equatable, Sendable {
     }
 }
 
-/// groupAccounts.ts.
+/// groupAccounts.ts: grouping and ordering only; the subtotals come from the server.
 public enum AccountGrouping {
     /// `accountGroupId`: archived wins over the type.
     public static func groupId(_ account: OpenAPI.Account) -> AccountGroupID {
@@ -200,70 +200,70 @@ public enum AccountGrouping {
             return members.isEmpty ? nil : AccountGroup(id: id, accounts: members)
         }
     }
-
-    /// `sumConvertedBalances`: the computed balances converted into the display currency. An
-    /// account without a balance adds zero; one without a rate is left out and marks the sum
-    /// incomplete, as does a server-side incomplete balance.
-    public static func sumConverted(_ accounts: [OpenAPI.Account], converter: PlannedCurrencyConverter)
-        -> AccountTotal
-    {
-        var amount = Decimal(0)
-        var incomplete = false
-        for account in accounts {
-            if account.balanceIncomplete == true { incomplete = true }
-            let balance = account.computedBalance ?? 0
-            guard let converted = converter.convert(balance, from: account.currency) else {
-                if balance != 0 { incomplete = true }
-                continue
-            }
-            amount += converted
-        }
-        return AccountTotal(amount: amount, incomplete: incomplete)
-    }
-
-    /// The accounts `computeNetCash` sums: active, in net worth and not portfolio-type.
-    public static func netCashAccounts(_ accounts: [OpenAPI.Account]) -> [OpenAPI.Account] {
-        accounts.filter { $0.isActive && $0.inNetWorth && !AccountKinds.isPortfolio($0) }
-    }
-
-    /// `computeNetCash`, with the incomplete marker.
-    public static func netCash(_ accounts: [OpenAPI.Account], converter: PlannedCurrencyConverter) -> AccountTotal {
-        sumConverted(netCashAccounts(accounts), converter: converter)
-    }
 }
 
-/// One row of `byAccount` in `GET /api/info/portfolio-summary`: what `getBrokerAccountMetrics`
-/// reads.
+/// One row of `byAccount` in `GET /api/info/portfolio-summary`: its `position` row carries
+/// the account's holdings value (`getBrokerAccountMetrics`).
 public struct PortfolioAccountRow: Equatable, Sendable, Decodable {
     public let accountId: Int?
     public let contributionKind: String
-    public let oversold: Bool
     public let currentValue: Decimal
-    public let gainLoss: Decimal
 
-    public init(accountId: Int?, contributionKind: String, oversold: Bool, currentValue: Decimal, gainLoss: Decimal) {
+    public init(accountId: Int?, contributionKind: String, currentValue: Decimal) {
         self.accountId = accountId
         self.contributionKind = contributionKind
-        self.oversold = oversold
         self.currentValue = currentValue
-        self.gainLoss = gainLoss
     }
 
     enum CodingKeys: String, CodingKey {
         case accountId = "account_id"
         case contributionKind = "contribution_kind"
-        case oversold
         case currentValue
-        case gainLoss
     }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         accountId = try container.decodeIfPresent(Int.self, forKey: .accountId)
         contributionKind = try container.decodeIfPresent(String.self, forKey: .contributionKind) ?? ""
-        oversold = try container.decodeIfPresent(Bool.self, forKey: .oversold) ?? false
         currentValue = try container.decodeIfPresent(Decimal.self, forKey: .currentValue) ?? 0
+    }
+}
+
+/// One row of `accountTotals` in `GET /api/info/portfolio-summary`: the server's profit and
+/// loss of an account over every contribution kind (ADR-216).
+public struct PortfolioAccountTotalsRow: Equatable, Sendable, Decodable {
+    public let accountId: Int?
+    public let oversold: Bool
+    public let gainLoss: Decimal
+
+    public init(accountId: Int?, oversold: Bool, gainLoss: Decimal) {
+        self.accountId = accountId
+        self.oversold = oversold
+        self.gainLoss = gainLoss
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case accountId = "account_id"
+        case oversold
+        case gainLoss
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        accountId = try container.decodeIfPresent(Int.self, forKey: .accountId)
+        oversold = try container.decodeIfPresent(Bool.self, forKey: .oversold) ?? false
         gainLoss = try container.decodeIfPresent(Decimal.self, forKey: .gainLoss) ?? 0
+    }
+}
+
+/// The two parts of the portfolio summary the accounts screens read.
+public struct AccountPortfolioSummary: Equatable, Sendable {
+    public let byAccount: [PortfolioAccountRow]
+    public let accountTotals: [PortfolioAccountTotalsRow]
+
+    public init(byAccount: [PortfolioAccountRow], accountTotals: [PortfolioAccountTotalsRow]) {
+        self.byAccount = byAccount
+        self.accountTotals = accountTotals
     }
 }
 
@@ -281,17 +281,18 @@ public struct BrokerAccountMetrics: Equatable, Sendable {
         self.hasPosition = hasPosition
     }
 
-    /// `getBrokerAccountMetrics`: the account's position values, its gain or loss over every
-    /// row, and whether any row is oversold; `nil` without a summary.
-    public static func of(_ rows: [PortfolioAccountRow]?, accountId: Int) -> BrokerAccountMetrics? {
-        guard let rows else { return nil }
-        let mine = rows.filter { $0.accountId == accountId }
-        let positions = mine.filter { $0.contributionKind == "position" }
+    /// `getBrokerAccountMetrics`: the account's `position` row of `byAccount` carries the
+    /// holdings value and its `accountTotals` row the profit and loss and the oversold flag,
+    /// both computed on the server; `nil` without a summary.
+    public static func of(_ summary: AccountPortfolioSummary?, accountId: Int) -> BrokerAccountMetrics? {
+        guard let summary else { return nil }
+        let position = summary.byAccount.first {
+            $0.accountId == accountId && $0.contributionKind == "position"
+        }
+        let totals = summary.accountTotals.first { $0.accountId == accountId }
         return BrokerAccountMetrics(
-            holdingsValue: positions.reduce(Decimal(0)) { $0 + $1.currentValue },
-            gainLoss: mine.reduce(Decimal(0)) { $0 + $1.gainLoss },
-            oversold: mine.contains { $0.oversold },
-            hasPosition: !positions.isEmpty)
+            holdingsValue: position?.currentValue ?? 0, gainLoss: totals?.gainLoss ?? 0,
+            oversold: totals?.oversold ?? false, hasPosition: position != nil)
     }
 }
 

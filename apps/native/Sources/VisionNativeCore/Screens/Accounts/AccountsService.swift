@@ -6,8 +6,12 @@ public protocol AccountsService: Sendable {
     /// `getAccounts({ active })`: `"all"` for the hub and the detail, `"true"` for the broker
     /// destinations of Close account and Transfer lots.
     func accounts(active: String) async throws -> [OpenAPI.Account]
-    /// `getPortfolioSummary({ currency })`: its `byAccount` rows (`getBrokerAccountMetrics`).
-    func portfolioAccountRows(currency: String) async throws -> [PortfolioAccountRow]
+    /// `getPortfolioSummary({ currency })`: its `byAccount` and `accountTotals` rows
+    /// (`getBrokerAccountMetrics`).
+    func portfolioAccountRows(currency: String) async throws -> AccountPortfolioSummary
+    /// `getAccountTotals(currency)`: converted balances, group subtotals and Net cash,
+    /// computed on the server (ADR-216).
+    func accountTotals(currency: String) async throws -> OpenAPI.AccountTotals
     /// `getTransactions({ account_id, limit, offset, sort_by: "date", sort_dir: "desc",
     /// include_balance: true })`: one ledger page.
     func ledger(accountId: Int, offset: Int, limit: Int) async throws -> AccountLedgerPage
@@ -173,8 +177,13 @@ extension APIClient: AccountsService {
         try await send(OpenAPIOperations.GetAccounts(active: active)).items
     }
 
-    public func portfolioAccountRows(currency: String) async throws -> [PortfolioAccountRow] {
-        try await send(PortfolioAccountRowsRequest(currency: currency)).byAccount
+    public func portfolioAccountRows(currency: String) async throws -> AccountPortfolioSummary {
+        let data = try await send(PortfolioAccountRowsRequest(currency: currency))
+        return AccountPortfolioSummary(byAccount: data.byAccount, accountTotals: data.accountTotals)
+    }
+
+    public func accountTotals(currency: String) async throws -> OpenAPI.AccountTotals {
+        try await send(OpenAPIOperations.GetAccountTotals(currency: currency))
     }
 
     public func ledger(accountId: Int, offset: Int, limit: Int) async throws -> AccountLedgerPage {
@@ -388,21 +397,25 @@ public struct PortfolioAccountRowsRequest: APIOperation {
     public static let method = OpenAPIOperations.GetPortfolioSummary.method
     public static let pathTemplate = OpenAPIOperations.GetPortfolioSummary.pathTemplate
 
-    /// `data.byAccount`; absent reads as no rows.
+    /// `data.byAccount` and `data.accountTotals`; absent reads as no rows.
     public struct Response: Decodable, Equatable, Sendable {
         public let byAccount: [PortfolioAccountRow]
+        public let accountTotals: [PortfolioAccountTotalsRow]
 
         enum CodingKeys: String, CodingKey {
-            case byAccount
+            case byAccount, accountTotals
         }
 
-        public init(byAccount: [PortfolioAccountRow]) {
+        public init(byAccount: [PortfolioAccountRow], accountTotals: [PortfolioAccountTotalsRow] = []) {
             self.byAccount = byAccount
+            self.accountTotals = accountTotals
         }
 
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             byAccount = try container.decodeIfPresent([PortfolioAccountRow].self, forKey: .byAccount) ?? []
+            accountTotals =
+                try container.decodeIfPresent([PortfolioAccountTotalsRow].self, forKey: .accountTotals) ?? []
         }
     }
 

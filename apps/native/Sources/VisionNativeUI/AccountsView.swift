@@ -134,10 +134,13 @@ public struct AccountsView: View {
                 case .amount(let total):
                     MoneyText(amount: total.amount, currency: model.displayCurrency, settings: settings, signed: false, colored: false)
                         .font(Font.visionTitle1)
-                case .pending, .unavailable:
-                    Text(strings.t("accounts.group.subtotalPending"))
-                        .font(.callout)
-                        .foregroundStyle(theme.secondaryLabel)
+                case .pending:
+                    SkeletonBar(width: 128, height: 32)
+                        .accessibilityLabel(strings.t("common.loading"))
+                case .unavailable:
+                    Text(strings.t("accounts.group.subtotalUnavailable"))
+                        .font(.footnote)
+                        .foregroundStyle(theme.warning)
                 }
             }
         }

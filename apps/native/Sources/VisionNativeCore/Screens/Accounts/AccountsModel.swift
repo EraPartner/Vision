@@ -10,9 +10,10 @@ public enum AccountsScreen: Equatable, Hashable, Sendable {
 
 /// A group header's or Net cash's figure.
 public enum AccountSubtotal: Equatable, Sendable {
-    /// `accounts.group.subtotalPending`: the portfolio summary or the exchange rates load.
+    /// `accounts.group.subtotalPending`: the server totals load.
     case pending
-    /// `accounts.group.subtotalUnavailable`: the portfolio summary failed.
+    /// `accounts.group.subtotalUnavailable`: the totals failed, or the portfolio summary they
+    /// add holdings from could not be computed.
     case unavailable
     case amount(AccountTotal)
 }
@@ -74,9 +75,13 @@ public final class AccountsModel {
     /// `useAccounts({ active: "all" })`; `nil` until the first answer.
     public private(set) var accounts: [OpenAPI.Account]?
     public private(set) var accountsError: APIError?
-    /// `byAccount` of the portfolio summary; `nil` until the first answer.
-    public private(set) var portfolioRows: [PortfolioAccountRow]?
+    /// `byAccount` and `accountTotals` of the portfolio summary; `nil` until the first answer.
+    public private(set) var portfolioRows: AccountPortfolioSummary?
     public private(set) var portfolioError: APIError?
+    /// `useAccountTotals(displayCurrency)`: the hub's converted balances, group subtotals and
+    /// Net cash, computed on the server (ADR-216); `nil` until the first answer.
+    public private(set) var totals: OpenAPI.AccountTotals?
+    public private(set) var totalsError: APIError?
     /// The Archived disclosure, collapsed by default.
     public var archivedOpen = false
 
@@ -107,9 +112,6 @@ public final class AccountsModel {
     public internal(set) var isReopening = false
     public internal(set) var notice: ScreenNotice?
 
-    /// The shared exchange rates (hub subtotals and Net cash convert with them).
-    public let rates: ExchangeRatesModel
-
     @ObservationIgnored let service: any AccountsService
     @ObservationIgnored weak var shell: NativeShellModel?
     @ObservationIgnored public let calendar: Calendar
@@ -121,6 +123,9 @@ public final class AccountsModel {
     @ObservationIgnored private var inFlight: Task<Void, Never>?
     @ObservationIgnored private var cacheGeneration = 0
     @ObservationIgnored private var portfolioFetchedAt: Date?
+    @ObservationIgnored private var totalsFetchedAt: Date?
+    @ObservationIgnored private var totalsCurrency: String?
+    @ObservationIgnored private var totalsInFlight: (currency: String, task: Task<Void, Never>)?
     @ObservationIgnored private var portfolioCurrency: String?
     @ObservationIgnored private var portfolioInFlight: (currency: String, task: Task<Void, Never>)?
     @ObservationIgnored private(set) var detailId: Int?
@@ -129,12 +134,11 @@ public final class AccountsModel {
     @ObservationIgnored private var plannedInFlight: (id: Int, task: Task<Void, Never>)?
 
     public init(
-        service: any AccountsService, rates: ExchangeRatesModel, calendar: Calendar = PlannedDates.local,
+        service: any AccountsService, rates: ExchangeRatesModel? = nil, calendar: Calendar = PlannedDates.local,
         now: @escaping @Sendable () -> Date = { Date() },
         makeKey: @escaping @Sendable () -> String = { UUID().uuidString.lowercased() }
     ) {
         self.service = service
-        self.rates = rates
         self.calendar = calendar
         self.now = now
         self.makeKey = makeKey
@@ -162,13 +166,16 @@ public final class AccountsModel {
         let arriving = visible == nil
         visible = screen
         if case .detail(let id) = screen, detailId != id { resetDetail(id) }
-        let rates = rates
-        let ratesTask = Task { await rates.appear() }
         var portfolioTask: Task<Void, Never>?
+        var totalsTask: Task<Void, Never>?
         if screen == .hub {
             portfolioTask = Task { [weak self] in
                 guard let self else { return }
                 await self.loadPortfolio()
+            }
+            totalsTask = Task { [weak self] in
+                guard let self else { return }
+                await self.loadTotals()
             }
         }
         await load(force: arriving && accounts != nil)
@@ -176,7 +183,7 @@ public final class AccountsModel {
             await loadDetail(id, force: arriving)
         }
         await portfolioTask?.value
-        await ratesTask.value
+        await totalsTask?.value
     }
 
     /// A screen went away. A newer screen (the hub opening a detail) keeps the state.
@@ -228,6 +235,7 @@ public final class AccountsModel {
         cacheGeneration += 1
         fetchedAt = nil
         portfolioFetchedAt = nil
+        totalsFetchedAt = nil
     }
 
     /// `useAccounts({ active: "all" })`: one request at a time; a fresh answer is reused
@@ -318,17 +326,56 @@ public final class AccountsModel {
         await loadPortfolio(force: true)
     }
 
+    // MARK: Server totals
+
+    /// The totals are on their way (only meaningful once requested).
+    public var isTotalsLoading: Bool { totals == nil && totalsError == nil }
+
+    /// `useAccountTotals(displayCurrency)`: keyed by the currency, 2 minute stale time.
+    public func loadTotals(force: Bool = false) async {
+        let currency = displayCurrency
+        if let totalsInFlight, totalsInFlight.currency == currency {
+            await totalsInFlight.task.value
+            if !force { return }
+        }
+        if !force, totalsCurrency == currency, totals != nil, totalsError == nil, let totalsFetchedAt,
+            now().timeIntervalSince(totalsFetchedAt) < Self.staleAfter
+        {
+            return
+        }
+        if totalsCurrency != currency {
+            totals = nil
+            totalsError = nil
+        }
+        totalsCurrency = currency
+        let service = service
+        let generation = cacheGeneration
+        let task = Task { [weak self] in
+            do {
+                let answer = try await service.accountTotals(currency: currency)
+                guard self?.totalsCurrency == currency else { return }
+                self?.totals = answer
+                self?.totalsError = nil
+                self?.totalsFetchedAt = self?.cacheGeneration == generation ? self?.now() : nil
+            } catch is CancellationError {
+                return
+            } catch {
+                guard self?.totalsCurrency == currency else { return }
+                self?.totalsError = APIError.wrapping(error)
+                self?.totalsFetchedAt = nil
+            }
+        }
+        totalsInFlight = (currency, task)
+        await task.value
+        if totalsInFlight?.task == task { totalsInFlight = nil }
+    }
+
     /// `getBrokerAccountMetrics(portfolioSummary, id)`.
     public func metrics(_ account: OpenAPI.Account) -> BrokerAccountMetrics? {
         BrokerAccountMetrics.of(portfolioRows, accountId: account.id)
     }
 
     // MARK: Hub
-
-    /// `useCurrencyConverter(displayCurrency)` over the shared rates.
-    public var converter: PlannedCurrencyConverter {
-        PlannedCurrencyConverter(rates: rates.data, target: displayCurrency)
-    }
 
     private var collationLocale: Locale { Locale(identifier: strings.language.rawValue) }
 
@@ -343,25 +390,31 @@ public final class AccountsModel {
     /// The collapsed Archived group.
     public var archivedGroup: AccountGroup? { groups.first { $0.id == .archived } }
 
-    /// `renderGroupSubtotal`: the converted cash balances plus the broker holdings.
+    /// `renderGroupSubtotal`: the server's subtotal of the group (ledger cash plus the
+    /// portfolio summary's holdings), with `unconverted_count` marking it incomplete.
     public func subtotal(_ group: AccountGroup) -> AccountSubtotal {
-        let needsPortfolio = group.accounts.contains { AccountKinds.isPortfolio($0) }
-        if needsPortfolio && isPortfolioLoading { return .pending }
-        if needsPortfolio && portfolioError != nil { return .unavailable }
-        if rates.isLoading { return .pending }
-        let cash = AccountGrouping.sumConverted(
-            group.accounts.filter { !AccountKinds.isHoldingsOnly($0) }, converter: converter)
-        var holdings = Decimal(0)
-        for account in group.accounts where AccountKinds.isPortfolio(account) {
-            holdings += metrics(account)?.holdingsValue ?? 0
+        if isTotalsLoading { return .pending }
+        guard let totals, let figure = groupTotal(group.id, in: totals), !figure.holdingsUnavailable else {
+            return .unavailable
         }
-        return .amount(AccountTotal(amount: cash.amount + holdings, incomplete: cash.incomplete))
+        return .amount(AccountTotal(amount: figure.total, incomplete: figure.unconvertedCount > 0))
     }
 
-    /// Net cash; pending while the rates load.
+    private func groupTotal(_ id: AccountGroupID, in totals: OpenAPI.AccountTotals) -> OpenAPI.AccountGroupTotal? {
+        switch id {
+        case .cash: return totals.groups.cash
+        case .portfolio: return totals.groups.portfolio
+        case .liabilities: return totals.groups.liabilities
+        case .archived: return totals.groups.archived
+        }
+    }
+
+    /// Net cash from `totals.net_cash`: pending while the totals load, unavailable when they
+    /// failed.
     public var netCash: AccountSubtotal {
-        if rates.isLoading { return .pending }
-        return .amount(AccountGrouping.netCash(accounts ?? [], converter: converter))
+        if isTotalsLoading { return .pending }
+        guard let net = totals?.netCash else { return .unavailable }
+        return .amount(AccountTotal(amount: net.total, incomplete: net.unconvertedCount > 0))
     }
 
     /// The meta line: type, currency and institution.
@@ -668,6 +721,9 @@ public final class AccountsModel {
         await load(force: true)
         if visible == .hub || portfolioRows != nil {
             await loadPortfolio(force: true)
+        }
+        if visible == .hub || totals != nil {
+            await loadTotals(force: true)
         }
         if case .detail(let id) = visible {
             await loadDetail(id, force: true)
