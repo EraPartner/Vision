@@ -97,20 +97,20 @@ tokens and components. Phase 2a builds the shared foundation; screens follow in 
    `.visionDialog` at the `DashboardSettingsDialog` geometry (256 pt rail, `primary/0.10`
    selection, 82% height). Retained state, dismissal rules, focus return and the unsaved-changes
    alert (now `.visionAlert`) are kept.
-8. **Bundled fonts.** Inter (400, 400 italic, 500, 600, 700) and Fraunces (400, 700) are
+8. **Bundled fonts.** Inter (400, 400 italic, 500, 600, 700) and Fraunces (400, 600, 700) are
    bundled as TrueType under their OFL licences and registered by `VisionFonts`, so the app does
    not depend on installed fonts.
 9. **Phase 2b** applies this foundation to every screen: it moves call sites to the new dialogs
    and controls, replaces remaining system sheets and alerts and signs off each screen against the
-   React app. The foundation lands in these commits, each mirroring a CSS source:
+   React app. The foundation lands in these packages, each mirroring a CSS source:
 
-| Package | Commits                            | What it adds                                                                    | CSS source it mirrors                                                                           |
-| ------- | ---------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| A       | `ab8f8770`, `bb5167db`             | Tokens, `GlassMaterialSpec`, `VisionGlassSurface`, fonts                        | `tokens.css`, `index.css` glass utilities, `tailwind.config.ts`, `lib/motion.ts`                |
-| B       | `c3ab8f38`                         | `VisionGlassDialog`, `VisionModalHost`, the four modifiers                      | `components/ui/dialog.tsx`, `alert-dialog.tsx`, `sheet.tsx`, `.modal-overlay`                   |
-| C       | `a8c298d8`                         | Buttons, inputs, toggles, segmented control, select, tooltip, badge, focus ring | `components/ui/button.tsx`, `input.tsx`, `select.tsx`, `switch.tsx`, `tooltip.tsx`, `badge.tsx` |
-| D       | `96694885`, `d50515ac`, `8ee52c0b` | `visionFullEffects`, glass card, toasts, chrome blur, aurora drift, header halo | `:root.fx-full`, `.page-header-title`, `components/ui/card.tsx`                                 |
-| E       | `c3ab8f38`                         | Settings as an in-window dialog, shell overlay host                             | `DashboardSettingsDialog.tsx`                                                                   |
+| Package | What it adds                                                                    | CSS source it mirrors                                                                           |
+| ------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| A       | Tokens, `GlassMaterialSpec`, `VisionGlassSurface`, fonts                        | `tokens.css`, `index.css` glass utilities, `tailwind.config.ts`, `lib/motion.ts`                |
+| B       | `VisionGlassDialog`, `VisionModalHost`, the four modifiers                      | `components/ui/dialog.tsx`, `alert-dialog.tsx`, `sheet.tsx`, `.modal-overlay`                   |
+| C       | Buttons, inputs, toggles, segmented control, select, tooltip, badge, focus ring | `components/ui/button.tsx`, `input.tsx`, `select.tsx`, `switch.tsx`, `tooltip.tsx`, `badge.tsx` |
+| D       | `visionFullEffects`, glass card, toasts, chrome blur, aurora drift, header halo | `:root.fx-full`, `.page-header-title`, `components/ui/card.tsx`                                 |
+| E       | Settings as an in-window dialog, shell overlay host                             | `DashboardSettingsDialog.tsx`                                                                   |
 
 ## Consequences
 
