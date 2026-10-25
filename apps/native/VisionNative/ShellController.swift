@@ -9,9 +9,9 @@ import VisionNativeUI
 
 /// Owns the window, menus, dock and the native shell (`ShellRootView`): the launch state, the
 /// per-device storage behind the native screens, the backup and restore workflow, and the
-/// audit shell (the main-process side of packaging/electron/main.ts).
+/// main-process side of packaging/electron/main.ts.
 @MainActor
-final class ShellController: NSObject, NSWindowDelegate, AuditShell {
+final class ShellController: NSObject, NSWindowDelegate {
     /// "Vision Native" or "Vision Native Demo" (`APP_NAME`).
     static var appName: String { AppRuntime.variant.appName }
 
@@ -27,8 +27,6 @@ final class ShellController: NSObject, NSWindowDelegate, AuditShell {
     private let backupService: BackupService
     /// Lets the backup service reach this controller around a backup snapshot; set after `init`.
     private let backupMaintenance: BackupMaintenanceRelay
-    /// The six `electronAudit` channels, the closure timer and the audit notices.
-    private lazy var auditChannels = makeAuditChannels()
     /// The typed API client of native screens (`client.ts`).
     private lazy var apiClient = makeAPIClient()
     private var dataSession = NativeDataSession()
@@ -79,7 +77,7 @@ final class ShellController: NSObject, NSWindowDelegate, AuditShell {
     private var isDocumentReady = false
     private var launchTask: Task<Void, Never>?
     private var startTask: Task<Void, Never>?
-    /// Electron's `notify`, for the launch, audit and quit notices.
+    /// Electron's `notify`, for the launch and quit notices.
     private lazy var notifier = SystemNotifier(appName: Self.appName, logger: logger)
     /// Set when a launch or Retry reaches the backend; the reveal that follows posts
     /// `app.running`, as `pollAndLoad` does once the application has loaded.
@@ -93,12 +91,6 @@ final class ShellController: NSObject, NSWindowDelegate, AuditShell {
     private var lastSettingsClockRefresh = Date.distantPast
     private var lastSettingsDisplayPixels: Double?
     private var lastSettingsSystemIsDark: Bool?
-
-    private func makeAuditChannels() -> AuditChannels {
-        AuditChannels(
-            runtimeProvider: { await AppRuntime.supervisor.auditRuntime() }, shell: self,
-            log: { message in AppRuntime.shellLogger.warning("\(message, privacy: .public)") })
-    }
 
     private func makeAPIClient(session: NativeDataSession? = nil, timeout: TimeInterval = 30) -> APIClient {
         let transport = URLSessionAPITransport()
@@ -424,8 +416,7 @@ final class ShellController: NSObject, NSWindowDelegate, AuditShell {
                 splashTheme: LaunchAppearance.theme(fromSettings: initialSettings), systemIsDark: systemIsDark),
             exchangeRates: rates,
             admin: AdminScreens.make(
-                service: client, database: client, token: makeAdminTokenAccess(generation: settingsGeneration),
-                audit: auditChannels),
+                service: client, database: client, token: makeAdminTokenAccess(generation: settingsGeneration)),
             planned: PlannedPaymentsModel(service: client, editing: client, pickers: client, rates: rates),
             imports: imports,
             transactions: transactions,
@@ -756,21 +747,14 @@ final class ShellController: NSObject, NSWindowDelegate, AuditShell {
         settings.didReceiveModels = { [weak chat] receipt in
             chat?.chat.seedSharedModels(receipt.value, fetchedAt: receipt.fetchedAt)
         }
-        settings.didReceiveResearch = { [weak chat] receipt in
-            chat?.investigation.seedSharedResearch(receipt.value, fetchedAt: receipt.fetchedAt)
-        }
         chat.chat.didReceiveStatus = { [weak settings] receipt in
             settings?.seedSharedStatus(receipt.value, fetchedAt: receipt.fetchedAt)
         }
         chat.chat.didReceiveModels = { [weak settings] receipt in
             settings?.seedSharedModels(receipt.value, fetchedAt: receipt.fetchedAt)
         }
-        chat.investigation.didReceiveResearch = { [weak settings] receipt in
-            settings?.seedSharedResearch(receipt.value, fetchedAt: receipt.fetchedAt)
-        }
         settings.didInvalidateSharedReads = { [weak chat] keys in
             chat?.chat.invalidateSharedAIReads(keys)
-            if keys.contains("openai-research-status") { chat?.investigation.invalidateSharedResearch() }
         }
         chat.chat.didInvalidateSharedReads = { [weak settings] keys in settings?.invalidateSharedAIReads(keys) }
     }
@@ -944,7 +928,7 @@ final class ShellController: NSObject, NSWindowDelegate, AuditShell {
         old.settingsAI?.didDisappear()
         old.settingsBackup?.didDisappear()
         await apiClient.invalidateSharedAIReads(keys: [
-            "ollama-status", "ollama-models", "openai-research-status", "provider-keys", "agentcloak-desktop",
+            "ollama-status", "ollama-models", "provider-keys",
         ])
         onboardingRestoreIntent = nil
         restoredFrontendSession = nil
@@ -1110,14 +1094,34 @@ final class ShellController: NSObject, NSWindowDelegate, AuditShell {
                 KeychainPassphraseStore(account: account, service: service)
             },
             logger: OSLogRuntimeLog(logger: AppRuntime.shellLogger),
-            auditProvider: { await AppRuntime.supervisor.auditRuntime() },
             maintenance: BackupMaintenanceHooks(
                 willBeginSnapshot: { await maintenanceRelay.owner?.backupSnapshotWillBegin() },
                 didEndSnapshot: { await maintenanceRelay.owner?.backupSnapshotDidEnd() }))
         super.init()
         backupMaintenance.owner = self
+        installPreMigrationBackup()
         launchModel.onRetry = { [weak self] in self?.launch() }
         launchModel.onOpenLogs = { [weak self] in _ = try? self?.openLogs() }
+    }
+
+    /// `backupBeforeMigrations` in `main.ts` (ADR-242): the supervisor calls this after PostgreSQL is up
+    /// and before a backend that will migrate an existing database starts. A failure aborts the launch
+    /// with the localized `app.preMigrationBackupFailed` message.
+    private func installPreMigrationBackup() {
+        let service = backupService
+        AppRuntime.preMigrationBackup.install { [weak self] pending, runtime in
+            do {
+                _ = try await service.backupBeforeMigrations(pending, runtime: runtime)
+            } catch {
+                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                AppRuntime.shellLogger.error(
+                    "[pre-migration-backup] failed: \(message, privacy: .public)")
+                let strings = await self?.strings
+                throw NativeRuntimeError(
+                    "PRE_MIGRATION_BACKUP_FAILED",
+                    strings?.t("app.preMigrationBackupFailed", ["error": message], fallback: message) ?? message)
+            }
+        }
     }
 
     /// `readSavedWindowBounds`: a synchronous read before the window exists.
@@ -1214,8 +1218,6 @@ final class ShellController: NSObject, NSWindowDelegate, AuditShell {
         // services stop; its end may have restarted the watchdog.
         await backupService.waitForMaintenance()
         stopHealthWatchdog()
-        // After the quit backup, before the services stop (Electron's `will-quit`).
-        await auditChannels.endSession()
     }
 
     /// Quit while a native screen holds unsaved changes shows the Leave this page? alert
@@ -1325,8 +1327,6 @@ final class ShellController: NSObject, NSWindowDelegate, AuditShell {
                 self.apply(.unavailable(self.strings.t("app.errorPageMessage")))
                 return
             }
-            guard !Task.isCancelled, self.appURL == url else { return }
-            await self.auditChannels.applicationWillLoad()
             guard !Task.isCancelled, self.appURL == url else { return }
             if self.shellHost == nil { self.installShellHost(for: self.shellModel, hidden: true) }
             self.shellHost?.isHidden = true
@@ -1740,8 +1740,8 @@ final class ShellController: NSObject, NSWindowDelegate, AuditShell {
         }
     }
 
-    /// `startHealthWatchdog`: a lost backend ends the audit session and is announced once;
-    /// recovery re-verifies the audit history and restarts the closure timer.
+    /// `startHealthWatchdog`: a lost backend is announced once and its recovery clears the
+    /// notice.
     private func startHealthWatchdog(_ url: URL) {
         stopHealthWatchdog()
         healthWatchdogTask = Task { [weak self] in
@@ -1754,15 +1754,10 @@ final class ShellController: NSObject, NSWindowDelegate, AuditShell {
                 guard !Task.isCancelled, let self, self.appURL == url else { return }
                 switch watchdog.record(healthy: BackendHealthWatchdog.isHealthy(status: status)) {
                 case .lost:
-                    await self.auditChannels.endSession()
                     self.backendNoticeID = self.shellModel.notices.publish(
                         .init(id: 0, kind: .warning, key: "app.backendLost"), source: self.backendNoticeSource,
                         lifetime: 30, replacementKey: "backend-health")
                 case .restored:
-                    // `endSession` on loss reset the session; trust is re-established at
-                    // the exact trusted checkpoint, never from an unanchored tail.
-                    await self.auditChannels.checkIntegrity(establishSession: true)
-                    await self.auditChannels.startClosureTimer()
                     if let id = self.backendNoticeID { self.shellModel.notices.dismiss(id) }
                     self.backendNoticeID = nil
                 case nil:
@@ -1992,16 +1987,10 @@ final class ShellController: NSObject, NSWindowDelegate, AuditShell {
         }
         let operation = UUID()
         let fileName = (path as NSString).lastPathComponent
-        // `stopHealthWatchdog` stops the closure timer for the restore;
-        // `startHealthWatchdog` starts it again.
-        auditChannels.stopClosureTimer()
         let result = await backupService.restore(
             path: path, passphrase: passphrase,
             confirm: { [weak self] in
                 await self?.confirmAndSuspendForRestore(fileName: fileName, operation: operation) ?? false
-            },
-            confirmAuditRecovery: { [weak self] status in
-                await self?.confirmAuditRecovery(fileName: fileName, auditStatus: status) ?? false
             })
         if restoreFenceEntered, restoreFenceOwner == operation {
             if result["success"] == .bool(true) {
@@ -2028,10 +2017,6 @@ final class ShellController: NSObject, NSWindowDelegate, AuditShell {
             restoreFenceEntered = false
             restoreFenceOwner = nil
         }
-        if result["auditStatus"]?.stringValue == "unavailable" {
-            auditChannels.report("unavailable")
-        }
-        await auditChannels.startClosureTimer()
         return result
     }
 
@@ -2071,7 +2056,7 @@ final class ShellController: NSObject, NSWindowDelegate, AuditShell {
 
     private func confirmRestore(fileName: String) async -> Bool {
         await confirm(
-            AuditConfirmation(
+            RestoreConfirmation(
                 title: strings.t("settings.restore.title", fallback: "Restore Backup"),
                 message: strings.t(
                     "settings.restore.warning",
@@ -2081,16 +2066,9 @@ final class ShellController: NSObject, NSWindowDelegate, AuditShell {
                 cancelLabel: strings.t("settings.restore.cancelButton", fallback: "Cancel")))
     }
 
-    /// The second warning of `restoreWithAuditRecovery`.
-    private func confirmAuditRecovery(fileName: String, auditStatus: String?) async -> Bool {
-        await auditChannels.confirmAuditRecovery(fileName: fileName, auditStatus: auditStatus)
-    }
-
-    // MARK: - Audit
-
     /// A warning alert, as a sheet when the window is visible; Cancel is the default
     /// button (`defaultId: 1, cancelId: 1`).
-    func confirm(_ confirmation: AuditConfirmation) async -> Bool {
+    private func confirm(_ confirmation: RestoreConfirmation) async -> Bool {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = confirmation.title
@@ -2145,49 +2123,6 @@ final class ShellController: NSObject, NSWindowDelegate, AuditShell {
         }
         return AIResearchDocumentFile(
             name: url.lastPathComponent, contentType: values.contentType?.preferredMIMEType ?? "text/plain", data: data)
-    }
-
-    /// `dialog.showSaveDialog`.
-    func chooseSaveLocation(_ request: AuditFilePanel) async -> String? {
-        let panel = NSSavePanel()
-        panel.title = request.title
-        panel.canCreateDirectories = true
-        if let name = request.defaultName { panel.nameFieldStringValue = name }
-        panel.allowedContentTypes = request.extensions.compactMap { UTType(filenameExtension: $0) }
-        guard await runPanel(panel) == .OK, let url = panel.url else { return nil }
-        return url.path
-    }
-
-    /// `dialog.showOpenDialog` with one file.
-    func chooseFile(_ request: AuditFilePanel) async -> String? {
-        let panel = NSOpenPanel()
-        panel.title = request.title
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = request.extensions.compactMap { UTType(filenameExtension: $0) }
-        guard await runPanel(panel) == .OK, let url = panel.url else { return nil }
-        return url.path
-    }
-
-    /// Electron's `notify`: a system notification. The notice is also logged (by
-    /// `AuditChannels`); when notifications are not allowed it falls back to a
-    /// non-blocking informational sheet while the window is visible.
-    func showAuditNotice(_ message: String) {
-        let notifier = notifier
-        Task { [weak self] in
-            guard !(await notifier.post(message)) else { return }
-            self?.showAuditSheet(message)
-        }
-    }
-
-    private func showAuditSheet(_ message: String) {
-        guard let window, window.isVisible, window.attachedSheet == nil else { return }
-        let alert = NSAlert()
-        alert.alertStyle = .informational
-        alert.messageText = Self.appName
-        alert.informativeText = message
-        alert.beginSheetModal(for: window, completionHandler: nil)
     }
 
     func backupEncryptionStatus() async -> PassphraseStatus {
@@ -2263,4 +2198,13 @@ extension NSColor {
 @MainActor
 private final class BackupMaintenanceRelay {
     weak var owner: ShellController?
+}
+
+/// A warning dialog with Cancel as the default button (`defaultId: 1, cancelId: 1`).
+private struct RestoreConfirmation {
+    var title: String
+    var message: String
+    var detail: String?
+    var confirmLabel: String
+    var cancelLabel: String
 }

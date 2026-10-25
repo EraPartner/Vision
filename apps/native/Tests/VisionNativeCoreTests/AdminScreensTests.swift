@@ -285,13 +285,6 @@ enum AdminFixture {
         await model.appear()
         #expect(model.hasToken)
     }
-
-    @Test func theTokenScriptsUseTheSessionKeyAndAnArgument() {
-        #expect(AdminTokenScript.read.contains(AdminTokenScript.storageKey))
-        #expect(AdminTokenScript.write.contains("sessionStorage.setItem(\"vision.adminToken\", value)"))
-        #expect(AdminTokenScript.write.contains("removeItem(\"vision.adminToken\")"))
-        #expect(AdminTokenScript.write.contains("String(\(AdminTokenScript.argument) ?? \"\").trim()"))
-    }
 }
 
 @MainActor

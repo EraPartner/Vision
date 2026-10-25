@@ -99,13 +99,15 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         homeDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path,
         resourcesDirectory: String? = Bundle.main.resourcePath,
         allowPayloadOverride: Bool,
-        variant: NativeVariant = .standard
+        variant: NativeVariant = .standard,
+        beforeMigrations: (@Sendable (PendingMigrations, NativeRuntime) async throws -> Void)? = nil
     ) -> RuntimeSupervisor {
         let userData = variant.userDataDirectory(homeDirectory: homeDirectory)
         return RuntimeSupervisor(
             configuration: SupervisorConfiguration(
                 environment: environment, homeDirectory: homeDirectory, resourcesDirectory: resourcesDirectory,
-                allowPayloadOverride: allowPayloadOverride, variant: variant),
+                allowPayloadOverride: allowPayloadOverride, variant: variant,
+                beforeMigrations: beforeMigrations),
             dependencies: .live(),
             instanceLock: FileInstanceLock(),
             logger: FileRuntimeLog(path: PathUtilities.join(userData, "logs", "main.log"), rotate: false)

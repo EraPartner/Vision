@@ -88,8 +88,6 @@ admin.overview.requests
 admin.overview.tables
 admin.overview.title
 
-# Admin > Overview, Audit history card
-
 # Admin > Data sources
 admin.providers.checkNow
 admin.providers.colFailures

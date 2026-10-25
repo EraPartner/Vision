@@ -1,42 +1,19 @@
 import Foundation
 import Observation
 
-/// The page's admin token (`sessionStorage["vision.adminToken"]`, apps/frontend/src/lib/adminToken.ts).
-/// The native card reads and writes the page's own storage, so the web admin pages and the
-/// native API client see the same token, and nothing else stores it.
+/// The admin token (`apps/frontend/src/lib/adminToken.ts`). The native card and the native API
+/// client share one session-scoped store, and nothing else stores it.
 public struct AdminTokenAccess: Sendable {
-    /// `getAdminToken()` before trimming; `nil` when unset or the page cannot answer.
+    /// `getAdminToken()` before trimming; `nil` when unset or the store cannot answer.
     public let read: @Sendable () async -> String?
     /// `setAdminToken(value)`: stores the trimmed value; a blank value removes it. `false` when
-    /// the page is not ready or did not answer, so the storage is unchanged.
+    /// the shell is not ready or the write is refused, so the storage is unchanged.
     public let write: @Sendable (String) async -> Bool
 
     public init(read: @escaping @Sendable () async -> String?, write: @escaping @Sendable (String) async -> Bool) {
         self.read = read
         self.write = write
     }
-}
-
-/// The page scripts behind `AdminTokenAccess`, run with `callAsyncJavaScript`.
-public enum AdminTokenScript {
-    /// `vision.adminToken`.
-    public static let storageKey = "vision.adminToken"
-    /// The stored token, or an empty string.
-    public static let read = """
-        try { return String(window.sessionStorage.getItem("vision.adminToken") || ""); } catch { return ""; }
-        """
-    /// `setAdminToken(token)`, with `token` passed as an argument (never spliced into the
-    /// script). Returns "ok", or an empty string when `sessionStorage` is unavailable.
-    public static let write = """
-        try {
-            const value = String(token ?? "").trim();
-            if (value) window.sessionStorage.setItem("vision.adminToken", value);
-            else window.sessionStorage.removeItem("vision.adminToken");
-            return "ok";
-        } catch { return ""; }
-        """
-    /// The argument name `write` reads.
-    public static let argument = "token"
 }
 
 /// A summary tile of the overview (`OverviewCard`).
