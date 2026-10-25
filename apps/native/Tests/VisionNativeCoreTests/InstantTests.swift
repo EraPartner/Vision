@@ -8,29 +8,29 @@ import Testing
     private let reference = Date(timeIntervalSince1970: 1_705_314_600)
 
     @Test func parsesTimestampsWithAndWithoutFractionalSeconds() throws {
-        let plain = try #require(Instant("2024-01-15T10:30:00Z"))
+        let plain = try #require(Instant(String("2024-01-15T10:30:00Z")))
         #expect(plain.date == reference)
-        let millis = try #require(Instant("2024-01-15T10:30:00.500Z"))
+        let millis = try #require(Instant(String("2024-01-15T10:30:00.500Z")))
         #expect(abs(millis.date.timeIntervalSince(reference) - 0.5) < 0.000_001)
-        let micros = try #require(Instant("2024-01-15T10:30:00.123456+00:00"))
+        let micros = try #require(Instant(String("2024-01-15T10:30:00.123456+00:00")))
         #expect(abs(micros.date.timeIntervalSince(reference) - 0.123456) < 0.000_001)
     }
 
     @Test func offsetsAreAppliedToTheInstant() throws {
-        let plus = try #require(Instant("2024-01-15T12:30:00+02:00"))
+        let plus = try #require(Instant(String("2024-01-15T12:30:00+02:00")))
         #expect(plus.date == reference)
-        let minus = try #require(Instant("2024-01-15T05:30:00-05:00"))
+        let minus = try #require(Instant(String("2024-01-15T05:30:00-05:00")))
         #expect(minus.date == reference)
-        let compact = try #require(Instant("2024-01-15T12:30:00+0200"))
+        let compact = try #require(Instant(String("2024-01-15T12:30:00+0200")))
         #expect(compact.date == reference)
-        let hoursOnly = try #require(Instant("2024-01-15T12:30:00+02"))
+        let hoursOnly = try #require(Instant(String("2024-01-15T12:30:00+02")))
         #expect(hoursOnly.date == reference)
     }
 
     @Test func thePostgresTextFormIsAccepted() throws {
-        let spaced = try #require(Instant("2024-01-15 10:30:00+00"))
+        let spaced = try #require(Instant(String("2024-01-15 10:30:00+00")))
         #expect(spaced.date == reference)
-        let noSeconds = try #require(Instant("2024-01-15T10:30Z"))
+        let noSeconds = try #require(Instant(String("2024-01-15T10:30Z")))
         #expect(noSeconds.date == reference)
     }
 
@@ -66,9 +66,9 @@ import Testing
     }
 
     @Test func equalityAndOrderCompareTheInstantNotTheText() throws {
-        let utc = try #require(Instant("2024-01-15T10:30:00Z"))
-        let offset = try #require(Instant("2024-01-15T12:30:00+02:00"))
-        let later = try #require(Instant("2024-01-15T10:30:01Z"))
+        let utc = try #require(Instant(String("2024-01-15T10:30:00Z")))
+        let offset = try #require(Instant(String("2024-01-15T12:30:00+02:00")))
+        let later = try #require(Instant(String("2024-01-15T10:30:01Z")))
         #expect(utc == offset)
         #expect(utc.hashValue == offset.hashValue)
         #expect(utc.text != offset.text)
@@ -77,10 +77,10 @@ import Testing
     }
 
     @Test func theWrittenDayIsTheDayBeforeAnyZoneConversion() throws {
-        let evening = try #require(Instant("2024-01-15T23:30:00-05:00"))
+        let evening = try #require(Instant(String("2024-01-15T23:30:00-05:00")))
         #expect(evening.writtenDay.description == "2024-01-15")
-        #expect(evening.date == reference.addingTimeInterval(13 * 3600))
-        let utc = try #require(Instant("2024-01-15T00:00:00.000Z"))
+        #expect(evening.date == reference.addingTimeInterval(18 * 3600))
+        let utc = try #require(Instant(String("2024-01-15T00:00:00.000Z")))
         #expect(utc.writtenDay.description == "2024-01-15")
     }
 
@@ -92,7 +92,7 @@ import Testing
     }
 
     @Test func anInstantInAQueryIsItsWireText() throws {
-        let instant = try #require(Instant("2024-01-15T10:30:00Z"))
+        let instant = try #require(Instant(String("2024-01-15T10:30:00Z")))
         #expect(APIQuery.value(instant) == "2024-01-15T10:30:00Z")
     }
 }

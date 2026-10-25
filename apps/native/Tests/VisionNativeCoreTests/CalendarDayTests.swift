@@ -11,7 +11,7 @@ import Testing
     }
 
     @Test func aRealDayParsesAndPrintsAsItWasWritten() throws {
-        let day = try #require(CalendarDay("2026-10-25"))
+        let day = try #require(CalendarDay(String("2026-10-25")))
         #expect(day.year == 2026)
         #expect(day.month == 10)
         #expect(day.day == 25)
@@ -19,18 +19,18 @@ import Testing
     }
 
     @Test func leapDaysExistOnlyInLeapYears() {
-        #expect(CalendarDay("2024-02-29") != nil)
-        #expect(CalendarDay("2000-02-29") != nil)
-        #expect(CalendarDay("2023-02-29") == nil)
-        #expect(CalendarDay("1900-02-29") == nil)
+        #expect(CalendarDay(String("2024-02-29")) != nil)
+        #expect(CalendarDay(String("2000-02-29")) != nil)
+        #expect(CalendarDay(String("2023-02-29")) == nil)
+        #expect(CalendarDay(String("1900-02-29")) == nil)
     }
 
     @Test func daysThatDoNotExistAreRejected() {
-        #expect(CalendarDay("2024-02-30") == nil)
-        #expect(CalendarDay("2024-04-31") == nil)
-        #expect(CalendarDay("2024-13-01") == nil)
-        #expect(CalendarDay("2024-00-10") == nil)
-        #expect(CalendarDay("2024-01-00") == nil)
+        #expect(CalendarDay(String("2024-02-30")) == nil)
+        #expect(CalendarDay(String("2024-04-31")) == nil)
+        #expect(CalendarDay(String("2024-13-01")) == nil)
+        #expect(CalendarDay(String("2024-00-10")) == nil)
+        #expect(CalendarDay(String("2024-01-00")) == nil)
         #expect(CalendarDay(year: 2024, month: 1, day: 32) == nil)
     }
 
@@ -62,15 +62,15 @@ import Testing
     }
 
     @Test func daysOrderChronologically() throws {
-        let earlier = try #require(CalendarDay("2025-12-31"))
-        let later = try #require(CalendarDay("2026-01-01"))
+        let earlier = try #require(CalendarDay(String("2025-12-31")))
+        let later = try #require(CalendarDay(String("2026-01-01")))
         #expect(earlier < later)
         #expect(!(later < earlier))
         #expect([later, earlier].sorted() == [earlier, later])
     }
 
     @Test func aDayConvertsToADateInTheCalendarGiven() throws {
-        let day = try #require(CalendarDay("2026-03-08"))
+        let day = try #require(CalendarDay(String("2026-03-08")))
         let date = try #require(day.date(in: utc))
         let parts = utc.dateComponents([.year, .month, .day, .hour], from: date)
         #expect(parts.year == 2026)
@@ -94,7 +94,7 @@ import Testing
     }
 
     @Test func aDayInAQueryIsItsWireText() throws {
-        let day = try #require(CalendarDay("2026-10-25"))
+        let day = try #require(CalendarDay(String("2026-10-25")))
         #expect(APIQuery.value(day) == "2026-10-25")
     }
 }
