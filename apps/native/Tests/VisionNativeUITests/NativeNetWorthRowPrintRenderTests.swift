@@ -268,35 +268,25 @@
                 monthlyChange: 24, monthlyChangePercent: 2, snapshots: visible,
                 snapshotsTotal: limit == nil ? nil : 36, snapshotsLimit: limit, snapshotsOffset: offset)
         }
-        func netWorthAccounts() async throws -> [OpenAPI.Account] {
+        func netWorthByAccount(currency: String) async throws -> OpenAPI.NetWorthByAccountResponse {
             calls.append("accounts")
             if unavailableAccounts { throw APIError.backendUnavailable }
-            return (1...12).map { id in
+            var total: Decimal = 0
+            var rows: [OpenAPI.NetWorthByAccountRow] = (1...12).map { id in
                 let token = String(format: "%03d", id)
                 let details =
                     id.isMultiple(of: 2)
                     ? "Synthetic account with a deliberately long complete label and additional ownership details that require several printed lines"
                     : "Synthetic account"
+                let cash = Decimal(1000 + id)
+                total += cash + 200
                 return .init(
-                    id: id, name: "StartAccount\(token) \(details) EndAccount\(token)", currency: "EUR",
-                    type: "checking",
-                    liquidityClass: "cash", spendable: true, inNetWorth: true, taxWrapper: "none", owner: "joint",
-                    multiCurrencyCash: false, hasCashSleeve: false, computedBalance: Decimal(1000 + id),
-                    isActive: true, createdAt: "2026-01-01", updatedAt: "2026-01-01")
+                    accountId: id, name: "StartAccount\(token) \(details) EndAccount\(token)", type: "checking",
+                    cashCurrency: "EUR", cash: cash, holdings: 200, total: cash + 200, unconverted: false)
             }
-        }
-        func netWorthPartitions(currency: String) async throws -> NetWorthPartitions {
-            calls.append("partitions")
-            let rows =
-                (1...12).map { "{\"account_id\":\($0),\"currentValue\":200}" }
-                + ["{\"account_id\":null,\"currentValue\":50}"]
-            return try JSONDecoder().decode(
-                NetWorthPartitions.self,
-                from: Data("{\"currency\":\"EUR\",\"byAccount\":[\(rows.joined(separator: ","))]}".utf8))
-        }
-        func netWorthRates() async throws -> OpenAPI.ExchangeRates {
-            calls.append("rates")
-            return .init(totalRates: 0, rates: [], source: "synthetic", isStale: false)
+            rows.append(.init(accountId: nil, holdings: 50, total: 50, unconverted: false))
+            total += 50
+            return .init(currency: currency, rows: rows, total: total, unconvertedAccountIds: [])
         }
         func netWorthPrices() async throws -> [NetWorthInvestmentPrice] {
             calls.append("prices")

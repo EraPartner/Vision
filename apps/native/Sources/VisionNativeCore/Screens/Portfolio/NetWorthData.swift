@@ -64,76 +64,53 @@ public struct NetWorthTableRow: Identifiable, Equatable, Sendable {
     }
 }
 
+/// One row of `GET /api/info/net-worth/by-account`: the server converts the cash balance at the
+/// stored rate and sums it with the live holdings (ADR-093, ADR-216). The client only labels and
+/// orders the rows.
 public struct NetWorthAccountRow: Identifiable, Equatable, Sendable {
     public let accountId: Int?
     public let label: String?
     public let type: String?
     public let cash: Decimal
     public let holdings: Decimal
-    public var total: Decimal { Self.cents(cash + holdings) }
+    /// The server's `cash + holdings` for the row.
+    public let total: Decimal
     public var id: String { accountId.map { "account-\($0)" } ?? "unassigned" }
-    public static func build(
-        accounts: [OpenAPI.Account], partitions: NetWorthPartitions, rates: OpenAPI.ExchangeRates, currency: String
-    ) throws -> [Self] {
-        guard partitions.currency == currency else {
-            throw APIError.invalidRequest("Wrong portfolio breakdown currency")
-        }
-        // Stored rates only: a currency without one is unavailable, never converted at a constant (ADR-216).
-        var byCurrency: [String: Decimal] = ["EUR": 1]
-        for rate in rates.rates { byCurrency[rate.currency] = rate.rateToEur }
-        var values: [String: (Int?, Decimal, Decimal)] = [:]
-        for account in accounts where account.inNetWorth {
-            var cash: Decimal = 0
-            if !["crypto_exchange", "wallet"].contains(account.type) {
-                let amount = account.computedBalance ?? 0
-                if account.currency == currency {
-                    cash = amount
-                } else {
-                    guard let from = byCurrency[account.currency], from > 0, let target = byCurrency[currency],
-                        target > 0
-                    else {
-                        throw APIError.invalidRequest("Unavailable exchange rate for net worth breakdown")
-                    }
-                    cash = amount * from / target
-                }
-            }
-            values["account-\(account.id)"] = (account.id, cash, 0)
-        }
-        for partition in partitions.byAccount {
-            let key = partition.accountId.map { "account-\($0)" } ?? "unassigned"
-            let previous = values[key] ?? (partition.accountId, 0, 0)
-            values[key] = (previous.0, previous.1, previous.2 + partition.currentValue)
-        }
-        return values.values.map { id, cash, holdings in
-            let account = accounts.first { $0.id == id }
-            return Self(
-                accountId: id,
-                label: account.map { $0.displayName.flatMap { $0.isEmpty ? nil : $0 } ?? $0.name }
-                    ?? id.map { "#\($0)" }, type: account?.type, cash: cents(cash), holdings: cents(holdings))
+
+    public init(accountId: Int?, label: String?, type: String?, cash: Decimal, holdings: Decimal, total: Decimal) {
+        self.accountId = accountId
+        self.label = label
+        self.type = type
+        self.cash = cash
+        self.holdings = holdings
+        self.total = total
+    }
+
+    /// The breakdown, or `nil` when a cash balance has no stored rate (`total == nil`): the
+    /// breakdown is then unavailable rather than mixing currencies, as on the web. Rows sort by
+    /// label with the unassigned holdings last.
+    public static func rows(from response: OpenAPI.NetWorthByAccountResponse) -> (rows: [Self], total: Decimal)? {
+        guard let total = response.total else { return nil }
+        let rows = response.rows.map { row in
+            Self(
+                accountId: row.accountId,
+                label: row.accountId.map { id in
+                    let name = row.name ?? ""
+                    return name.isEmpty ? "#\(id)" : name
+                }, type: row.type, cash: row.cash ?? 0, holdings: row.holdings, total: row.total ?? 0)
         }.sorted { left, right in
             if left.accountId == nil { return false }
             if right.accountId == nil { return true }
             return (left.label ?? "").localizedStandardCompare(right.label ?? "") == .orderedAscending
         }
+        return (rows, total)
     }
+
     public static func cents(_ value: Decimal) -> Decimal {
         var input = value
         var result = Decimal()
         NSDecimalRound(&result, &input, 2, .plain)
         return result
-    }
-}
-
-public struct NetWorthPartitions: Decodable, Equatable, Sendable {
-    public let currency: String
-    public let byAccount: [Partition]
-    public struct Partition: Decodable, Equatable, Sendable {
-        public let accountId: Int?
-        public let currentValue: Decimal
-        enum CodingKeys: String, CodingKey {
-            case accountId = "account_id"
-            case currentValue
-        }
     }
 }
 

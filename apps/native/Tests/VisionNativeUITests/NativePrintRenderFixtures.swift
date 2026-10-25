@@ -118,18 +118,9 @@ actor PrintNetWorthService: NetWorthService {
             monthlyChange: 24, monthlyChangePercent: 2, snapshots: visible,
             snapshotsTotal: limit == nil ? nil : 48, snapshotsLimit: limit, snapshotsOffset: offset)
     }
-    func netWorthAccounts() async throws -> [OpenAPI.Account] {
+    func netWorthByAccount(currency: String) async throws -> OpenAPI.NetWorthByAccountResponse {
         calls += 1
-        return []
-    }
-    func netWorthPartitions(currency: String) async throws -> NetWorthPartitions {
-        calls += 1
-        return try JSONDecoder().decode(
-            NetWorthPartitions.self, from: Data("{\"currency\":\"\(currency)\",\"byAccount\":[]}".utf8))
-    }
-    func netWorthRates() async throws -> OpenAPI.ExchangeRates {
-        calls += 1
-        return .init(totalRates: 0, rates: [], source: "synthetic", isStale: false)
+        return .init(currency: currency, rows: [], total: 0, unconvertedAccountIds: [])
     }
     func netWorthPrices() async throws -> [NetWorthInvestmentPrice] {
         calls += 1

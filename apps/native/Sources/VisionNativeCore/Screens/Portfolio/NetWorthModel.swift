@@ -5,6 +5,8 @@ import Observation
 public final class NetWorthModel {
     public private(set) var data: OpenAPI.NetWorthResponse?
     public private(set) var accountRows: [NetWorthAccountRow]?
+    /// The server's sum of the row totals, shown as the displayed total of the breakdown.
+    public private(set) var accountsTotal: Decimal?
     public private(set) var tableSnapshots: [OpenAPI.NetWorthSnapshot] = []
     public private(set) var tableTotal = 0
     public private(set) var error: String?
@@ -117,6 +119,7 @@ public final class NetWorthModel {
             data = nil
             snapshots = []
             accountRows = nil
+            accountsTotal = nil
             prices = []
             tableSnapshots = []
             tableTotal = 0
@@ -214,17 +217,22 @@ public final class NetWorthModel {
     }
     private func fetchAccounts(token: UUID) async {
         do {
-            async let accounts = service.netWorthAccounts()
-            async let partitions = service.netWorthPartitions(currency: currency)
-            async let rates = service.netWorthRates()
-            let rows = try await NetWorthAccountRow.build(
-                accounts: accounts, partitions: partitions, rates: rates, currency: currency)
+            let response = try await service.netWorthByAccount(currency: currency)
             guard token == revision, !Task.isCancelled else { return }
-            accountRows = rows
+            guard response.currency == currency else {
+                throw APIError.invalidRequest("Wrong net worth breakdown currency")
+            }
+            // A cash balance without a stored rate leaves the breakdown unavailable (ADR-216).
+            guard let breakdown = NetWorthAccountRow.rows(from: response) else {
+                throw APIError.invalidRequest("Unavailable exchange rate for net worth breakdown")
+            }
+            accountRows = breakdown.rows
+            accountsTotal = breakdown.total
             accountsError = nil
         } catch {
             if token == revision, !Task.isCancelled {
                 accountRows = nil
+                accountsTotal = nil
                 accountsError = error.localizedDescription
             }
         }

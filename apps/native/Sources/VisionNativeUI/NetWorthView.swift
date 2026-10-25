@@ -246,7 +246,7 @@ public struct NetWorthView: View {
         AdminCard(padding: VisionPageLayout.padding) {
             Text(strings.t("networth.byAccount.title")).font(Font.visionTitle3)
             Text(strings.t("networth.byAccount.description")).foregroundStyle(theme.secondaryLabel)
-            if let rows = model.accountRows {
+            if let rows = model.accountRows, let total = model.accountsTotal {
                 if rows.isEmpty { Text(strings.t("networth.byAccount.none")) }
                 // The web's inset list: one bordered surface, hairlines between compact rows.
                 VStack(spacing: 0) {
@@ -261,7 +261,6 @@ public struct NetWorthView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
                         .strokeBorder(theme.border.opacity(0.6), lineWidth: 1))
-                let total = rows.reduce(Decimal.zero) { $0 + $1.total }
                 let difference = NetWorthAccountRow.cents(total - data.current.netWorth)
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
