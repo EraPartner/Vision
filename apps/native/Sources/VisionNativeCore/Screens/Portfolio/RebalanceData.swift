@@ -1,6 +1,6 @@
 import Foundation
 
-public enum RebalancePreset: String, CaseIterable, Sendable {
+public enum RebalancePreset: String, CaseIterable, Codable, Sendable {
     case sixtyForty = "sixty_forty"
     case allWeather = "all_weather"
     case threeFund = "three_fund"
