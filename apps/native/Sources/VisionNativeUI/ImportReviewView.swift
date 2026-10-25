@@ -48,16 +48,15 @@ public struct ImportReviewView: View {
             ImportToastStack(center: toasts, strings: strings) { route in shell.navigate(to: route) }
         }
         // `useConfirmDialog`, destructive. The buttons decide; the binding only reads.
-        .alert(
-            strings.t("importReview.discard.title"),
+        .visionAlert(
+            title: strings.t("importReview.discard.title"),
+            message: strings.t("importReview.discard.desc", ["n": String(model.totalRows)]),
             isPresented: Binding(get: { model.isDiscardConfirmationPresented }, set: { _ in })
         ) {
-            Button(strings.t("common.cancel"), role: .cancel) { model.cancelDiscard() }
-            Button(strings.t("importReview.discard.confirm"), role: .destructive) {
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.cancelDiscard() }
+            VisionDialogAction(strings.t("importReview.discard.confirm"), role: .destructive) {
                 Task { await model.confirmDiscard(strings: strings) }
             }
-        } message: {
-            Text(strings.t("importReview.discard.desc", ["n": String(model.totalRows)]))
         }
     }
 
@@ -81,8 +80,7 @@ public struct ImportReviewView: View {
         } label: {
             Label(strings.t("importReview.back"), systemImage: "chevron.left")
         }
-        .buttonStyle(.borderless)
-        .controlSize(.small)
+        .buttonStyle(.vision(.ghost, size: .sm))
     }
 
     /// `PageError`: `common.error`, the message and Retry.
@@ -424,7 +422,7 @@ struct ImportReviewGroupView: View {
                             get: { model.state(for: group).persistAsDefault },
                             set: { model.setPersistDefault($0, for: group) })
                     )
-                    .toggleStyle(.checkbox)
+                    .toggleStyle(.visionCheckbox)
                     .font(.footnote)
                     .disabled(model.isBusy || state.categorySaving)
                 }

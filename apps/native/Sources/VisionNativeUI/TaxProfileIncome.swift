@@ -12,6 +12,7 @@ extension TaxProfileSheet {
                 activityRow(row.index, row.value, removable: model.partner == "B" || activities.count > 1)
             }
             Button(strings.t("tax.household.activity.add")) { model.edit { $0.addActivity(partner: model.partner) } }
+                .buttonStyle(.visionOutline)
             Divider()
             Text(strings.t("tax.profile.section.professionalExpenses.title")).font(.headline)
             ForEach(draft.expenseCategories(model.partner), id: \.self) { category in
@@ -33,24 +34,25 @@ extension TaxProfileSheet {
         let kind = activity["kind"]?.stringValue ?? "employee"
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Picker(
-                    strings.t("tax.household.activity.kindLabel", ["n": String(index + 1)]),
+                Text(strings.t("tax.household.activity.kindLabel", ["n": String(index + 1)]))
+                    .foregroundStyle(theme.foreground)
+                VisionSelect(
                     selection: Binding(
                         get: { kind },
                         set: { value in
                             model.edit { $0.setActivityKind(partner: model.partner, index: index, kind: value) }
-                        })
-                ) {
-                    ForEach(TaxProfileDraft.activityKinds, id: \.self) { kind in
-                        Text(strings.t("tax.household.activity.kind.\(kind)")).tag(kind)
-                    }
-                }
+                        }),
+                    options: TaxProfileDraft.activityKinds.map { kind in
+                        VisionSelectOption(value: kind, title: strings.t("tax.household.activity.kind.\(kind)"))
+                    },
+                    accessibilityLabel: strings.t("tax.household.activity.kindLabel", ["n": String(index + 1)]))
                 if removable {
                     Button {
                         model.edit { $0.removeActivity(partner: model.partner, index: index) }
                     } label: {
                         Image(systemName: "trash")
                     }
+                    .buttonStyle(.vision(.ghost, size: .iconSm))
                     .accessibilityLabel(strings.t("tax.household.activity.remove", ["n": String(index + 1)]))
                 }
             }
@@ -77,7 +79,7 @@ extension TaxProfileSheet {
                 date("tax.household.activity.startDate", path: path + ["startDate"])
                 date("tax.household.activity.endDate", path: path + ["endDate"])
             }
-        }.padding(12).background(theme.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+        }.padding(12).background(theme.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
     }
     func expenseChoice(_ category: String) -> some View {
         let path = partnerPath + ["professionalExpenses", category]
@@ -86,8 +88,7 @@ extension TaxProfileSheet {
             if draft.expenseCategories(model.partner).count > 1 {
                 Text(strings.t("tax.household.expenseCategory.\(category)")).font(.callout.weight(.medium))
             }
-            Picker(
-                strings.t("tax.profile.section.professionalExpenses.title"),
+            VisionSegmentedControl(
                 selection: Binding(
                     get: { method },
                     set: { value in
@@ -95,11 +96,12 @@ extension TaxProfileSheet {
                             $0.set(path + ["method"], .string(value))
                             if $0.get(path + ["actualAmount"]) == nil { $0.set(path + ["actualAmount"], .number(0)) }
                         }
-                    })
-            ) {
-                Text(strings.t("tax.profile.profExp.lump.label")).tag("lump_sum")
-                Text(strings.t("tax.profile.profExp.actual.label")).tag("actual")
-            }.pickerStyle(.segmented).labelsHidden()
+                    }),
+                options: [
+                    VisionSegmentOption(value: "lump_sum", title: strings.t("tax.profile.profExp.lump.label")),
+                    VisionSegmentOption(value: "actual", title: strings.t("tax.profile.profExp.actual.label")),
+                ]
+            ).accessibilityLabel(strings.t("tax.profile.section.professionalExpenses.title"))
             Text(strings.t(method == "actual" ? "tax.profile.profExp.actual.desc" : "tax.profile.profExp.lump.desc"))
                 .font(.footnote).foregroundStyle(theme.secondaryLabel)
             if method == "actual" {

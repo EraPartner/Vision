@@ -14,6 +14,7 @@ extension TaxProfileSheet {
                     .footnote)
                 if !selectedCategoryIds.isEmpty {
                     Button(strings.t("common.clear")) { model.edit { $0.set(["taxIncomeCategoryIds"], .array([])) } }
+                        .buttonStyle(.vision(.ghost, size: .xs))
                 }
             }
             TextField(strings.t("tax.profile.section.incomeSources.searchPlaceholder"), text: $model.categorySearch)
@@ -22,6 +23,7 @@ extension TaxProfileSheet {
             if let error = model.categoriesError {
                 Text(verbatim: error).foregroundStyle(theme.destructive)
                 Button(strings.t("common.retry")) { Task { await model.loadCategories() } }
+                    .buttonStyle(.visionOutline)
             }
             if model.categories.isEmpty && !model.categoriesLoading {
                 Text(strings.t("tax.profile.section.incomeSources.empty")).foregroundStyle(theme.secondaryLabel)
@@ -46,7 +48,7 @@ extension TaxProfileSheet {
                                         $0.set(["taxIncomeCategoryIds"], .array(ids.map { .number(Decimal($0.rawValue)) }))
                                     }
                                 })
-                        ).toggleStyle(.checkbox)
+                        ).toggleStyle(.visionCheckbox)
                     }
                 }.padding(.vertical, 8)
             }.frame(height: 260)
@@ -109,18 +111,16 @@ extension TaxProfileSheet {
     }
     func dependentCount(_ label: String, key: String, maximum: Int) -> some View {
         field(label) {
-            Picker(
-                strings.t(label),
+            VisionSelect(
                 selection: Binding(
                     get: { dependent(key) },
                     set: { value in
                         model.edit { $0.setDependent(key, count: value) }
-                    })
-            ) {
-                ForEach(Array(Set(Array(0...max(0, maximum)) + [dependent(key)])).sorted(), id: \.self) { count in
-                    Text(count == 0 ? strings.t("common.none") : String(count)).tag(count)
-                }
-            }.labelsHidden()
+                    }),
+                options: Array(Set(Array(0...max(0, maximum)) + [dependent(key)])).sorted().map { count in
+                    VisionSelectOption(value: count, title: count == 0 ? strings.t("common.none") : String(count))
+                },
+                accessibilityLabel: strings.t(label), expands: true)
         }
     }
 }

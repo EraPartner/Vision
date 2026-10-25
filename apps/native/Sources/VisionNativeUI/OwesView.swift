@@ -5,7 +5,8 @@ import VisionNativeCore
 /// people who owe you; a person opens their detail (`RecipientOwesDetail`) with Back, Export
 /// CSV in the ••• menu, Settle all, the open splits with Record payment and the row menu
 /// (Mark as settled, Delete split), and the Recent transactions table. Confirms are alerts;
-/// Record payment is a sheet.
+/// Record payment is a dialog. Both present from this view, not from the detail inside the
+/// scrolling page, so they centre over the page.
 public struct OwesView: View {
     private let model: OwesModel
     private let shell: NativeShellModel
@@ -38,6 +39,34 @@ public struct OwesView: View {
                 notice: model.notice, strings: strings, actionTitle: nil, duration: OwesModel.noticeDuration,
                 action: {}, clear: { model.clearNotice($0) }, bindsUndoShortcut: false)
         }
+        .visionDialog(
+            isPresented: Binding(
+                get: { model.payment != nil },
+                set: { presented in
+                    if !presented { model.closePayment() }
+                }),
+            metrics: .init(maxWidth: nil, padding: 0, spacing: 0)
+        ) {
+            OwesPaymentSheet(model: model, shell: shell)
+                .environment(\.visionTheme, theme)
+                .environment(\.colorScheme, theme.colorScheme)
+        }
+        // `useConfirmDialog`. The buttons decide; the binding only reads.
+        .visionAlert(
+            title: model.confirmationText()?.title ?? "",
+            message: model.confirmationText()?.message,
+            isPresented: Binding(get: { model.confirmation != nil }, set: { _ in })
+        ) {
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.cancelConfirmation() }
+            VisionDialogAction(model.confirmationText()?.action ?? "", role: confirmRole) {
+                Task { await model.confirm() }
+            }
+        }
+    }
+
+    private var confirmRole: VisionDialogActionRole? {
+        if case .deleteSplit? = model.confirmation { return .destructive }
+        return nil
     }
 
     // MARK: Summary
@@ -182,7 +211,7 @@ struct OwesPersonDetail: View {
             } label: {
                 Label(strings.t("common.back"), systemImage: "chevron.left")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.vision(.ghost, size: .sm))
             VisionPageHeader(title: person.name, subtitle: strings.t("owesPage.outstandingSplits"), symbol: "person.crop.circle") {
                 HStack(spacing: 8) {
                     Menu {
@@ -197,9 +226,11 @@ struct OwesPersonDetail: View {
                     } label: {
                         Image(systemName: "ellipsis")
                     }
+                    .menuStyle(.button)
+                    .buttonStyle(.vision(.outline, size: .icon))
                     .menuIndicator(.hidden)
                     .fixedSize()
-                    .help(strings.t("owesPage.menu"))
+                    .visionTooltip(strings.t("owesPage.menu"))
                     .accessibilityLabel(strings.t("owesPage.menu"))
                     Button(strings.t(model.isSettlingAll ? "owesPage.settleAll.loading" : "owesPage.settleAll.button")) {
                         model.requestSettleAll()
@@ -211,34 +242,6 @@ struct OwesPersonDetail: View {
             content
         }
         .task(id: person.id) { await model.loadSplits() }
-        .sheet(
-            isPresented: Binding(
-                get: { model.payment != nil },
-                set: { presented in
-                    if !presented { model.closePayment() }
-                })
-        ) {
-            OwesPaymentSheet(model: model, shell: shell)
-                .environment(\.visionTheme, theme)
-                .environment(\.colorScheme, theme.colorScheme)
-        }
-        // `useConfirmDialog`. The buttons decide; the binding only reads.
-        .alert(
-            model.confirmationText()?.title ?? "",
-            isPresented: Binding(get: { model.confirmation != nil }, set: { _ in })
-        ) {
-            Button(strings.t("common.cancel"), role: .cancel) { model.cancelConfirmation() }
-            Button(model.confirmationText()?.action ?? "", role: confirmRole) {
-                Task { await model.confirm() }
-            }
-        } message: {
-            Text(model.confirmationText()?.message ?? "")
-        }
-    }
-
-    private var confirmRole: ButtonRole? {
-        if case .deleteSplit? = model.confirmation { return .destructive }
-        return nil
     }
 
     @ViewBuilder
@@ -338,8 +341,9 @@ struct OwesPersonDetail: View {
             } label: {
                 Image(systemName: "ellipsis")
             }
+            .menuStyle(.button)
+            .buttonStyle(.vision(.ghost, size: .iconXs))
             .menuIndicator(.hidden)
-            .menuStyle(.borderlessButton)
             .fixedSize()
             .accessibilityLabel(strings.t("owesPage.rowMenu", ["name": context]))
         }

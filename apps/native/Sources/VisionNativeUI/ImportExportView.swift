@@ -69,31 +69,29 @@ public struct ImportExportView: View {
             ImportToastStack(center: model.toasts, strings: strings) { route in shell.navigate(to: route) }
         }
         // `useConfirmDialog`, destructive. The buttons decide; the binding only reads.
-        .alert(
-            strings.t("importPage.customParser.deleteTitle"),
+        .visionAlert(
+            title: strings.t("importPage.customParser.deleteTitle"),
+            message: strings.t(
+                "importPage.customParser.deleteConfirm", ["name": model.pendingParserDelete?.name ?? ""]),
             isPresented: Binding(get: { model.pendingParserDelete != nil }, set: { _ in })
         ) {
-            Button(strings.t("common.cancel"), role: .cancel) { model.cancelParserDelete() }
-            Button(strings.t("importPage.customParser.delete"), role: .destructive) {
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.cancelParserDelete() }
+            VisionDialogAction(strings.t("importPage.customParser.delete"), role: .destructive) {
                 Task { await model.confirmParserDelete(strings: strings) }
             }
-        } message: {
-            Text(strings.t("importPage.customParser.deleteConfirm", ["name": model.pendingParserDelete?.name ?? ""]))
         }
-        .alert(
-            strings.t("importHistory.rollbackTitle"),
+        .visionAlert(
+            title: strings.t("importHistory.rollbackTitle"),
+            message: model.pendingRollback.map { batch in
+                strings.t(
+                    "importHistory.rollbackDesc",
+                    ["n": String(batch.transactionsRemaining), "file": batch.title(strings)])
+            },
             isPresented: Binding(get: { model.pendingRollback != nil }, set: { _ in })
         ) {
-            Button(strings.t("common.cancel"), role: .cancel) { model.cancelRollback() }
-            Button(strings.t("importHistory.rollbackConfirm"), role: .destructive) {
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.cancelRollback() }
+            VisionDialogAction(strings.t("importHistory.rollbackConfirm"), role: .destructive) {
                 Task { await model.confirmRollback(strings: strings) }
-            }
-        } message: {
-            if let batch = model.pendingRollback {
-                Text(
-                    strings.t(
-                        "importHistory.rollbackDesc",
-                        ["n": String(batch.transactionsRemaining), "file": batch.title(strings)]))
             }
         }
     }
@@ -167,9 +165,9 @@ struct ImportCommitReceiptCard: View {
             Button(action: dismiss) {
                 Image(systemName: "xmark")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.vision(.ghost, size: .iconSm))
             .accessibilityLabel(strings.t("importPage.dismissCommitReceipt"))
-            .help(strings.t("importPage.dismissCommitReceipt"))
+            .visionTooltip(strings.t("importPage.dismissCommitReceipt"))
         }
         .padding(24)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -230,41 +228,41 @@ struct ImportBankCard: View {
     private static let loadingTag = ImportSource.adapter("\u{0}loading")
     private static let noneTag = ImportSource.adapter("\u{0}none")
 
+    /// The Select items: banks, saved parsers, then Other (custom), with the disabled Loading and
+    /// No banks rows.
+    private var bankSourceEntries: [VisionSelectEntry<ImportSource>] {
+        var entries: [VisionSelectEntry<ImportSource>] = []
+        if model.isLoadingAdapters {
+            entries.append(
+                .option(VisionSelectOption(value: Self.loadingTag, title: strings.t("importPage.loading"), isDisabled: true)))
+        } else if let adapters = model.adapters, !adapters.isEmpty {
+            for adapter in adapters {
+                entries.append(.option(VisionSelectOption(value: .adapter(adapter.key), title: adapter.name)))
+            }
+        } else {
+            entries.append(
+                .option(VisionSelectOption(value: Self.noneTag, title: strings.t("importPage.noParsers"), isDisabled: true)))
+        }
+        if let parsers = model.savedParsers, !parsers.isEmpty {
+            entries.append(.separator)
+            for parser in parsers {
+                entries.append(.option(VisionSelectOption(value: .saved(parser.id), title: parser.name)))
+            }
+        }
+        entries.append(.separator)
+        entries.append(.option(VisionSelectOption(value: .custom, title: strings.t("importPage.customOther"))))
+        return entries
+    }
+
     private var bankSource: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(strings.t("importPage.bankSource"))
                 .font(.body.weight(.medium))
-            Picker(
-                strings.t("importPage.bankSource"),
-                selection: Binding(get: { model.source }, set: { model.selectSource($0) })
-            ) {
-                Text(strings.t("importPage.bankSourcePlaceholder"))
-                    .foregroundStyle(theme.secondaryLabel)
-                    .tag(ImportSource?.none)
-                    .disabled(true)
-                if model.isLoadingAdapters {
-                    Text(strings.t("importPage.loading")).tag(Optional(Self.loadingTag)).disabled(true)
-                } else if let adapters = model.adapters, !adapters.isEmpty {
-                    ForEach(adapters, id: \.key) { adapter in
-                        Label(adapter.name, systemImage: "building.columns")
-                            .tag(Optional(ImportSource.adapter(adapter.key)))
-                    }
-                } else {
-                    Text(strings.t("importPage.noParsers")).tag(Optional(Self.noneTag)).disabled(true)
-                }
-                if let parsers = model.savedParsers, !parsers.isEmpty {
-                    Divider()
-                    ForEach(parsers, id: \.id) { parser in
-                        Label(parser.name, systemImage: "bookmark")
-                            .tag(Optional(ImportSource.saved(parser.id)))
-                    }
-                }
-                Divider()
-                Label(strings.t("importPage.customOther"), systemImage: "pencil.line")
-                    .tag(Optional(ImportSource.custom))
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
+            VisionSelect(
+                selection: Binding(get: { model.source }, set: { model.selectSource($0) }),
+                entries: bankSourceEntries, placeholder: strings.t("importPage.bankSourcePlaceholder"),
+                accessibilityLabel: strings.t("importPage.bankSource"), expands: true
+            )
             .frame(maxWidth: 420, alignment: .leading)
             Text(strings.t("importPage.bankHint"))
                 .font(.footnote)
@@ -368,7 +366,7 @@ struct ImportBankCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if model.isImporting {
                     Button(strings.t("importPage.cancelBtn")) { model.cancelImport() }
-                        .buttonStyle(.borderless)
+                        .buttonStyle(.vision(.ghost, size: .default))
                 }
                 Button {
                     Task { await model.startImport(strings: strings) }

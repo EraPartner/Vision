@@ -182,10 +182,10 @@ struct TaxTrendStripView: View {
                             .padding(12).frame(maxWidth: .infinity, alignment: .leading)
                             .background(
                                 theme.primary.opacity(year.year == overview.year ? 0.08 : 0.02),
-                                in: RoundedRectangle(cornerRadius: 10)
+                                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.lg)
                             )
                             .overlay(
-                                RoundedRectangle(cornerRadius: 10)
+                                RoundedRectangle(cornerRadius: DesignTokens.Radius.lg)
                                     .strokeBorder(year.year == overview.year ? theme.primary.opacity(0.45) : .clear))
                         }
                         .buttonStyle(.plain)
@@ -241,31 +241,31 @@ struct TaxYearComparisonView: View {
         available.first(where: { $0.year == compareYear }) ?? available.first(where: { $0.year == defaultYear })
     }
 
+    /// The year, with its filed or frozen status in words where the system picker showed an icon.
+    private func yearTitle(_ year: TaxDashboardYearCalculation) -> String {
+        if year.isFiled { return String(year.year) + " · " + shell.strings.t("tax.yearSwitcher.filedAria") }
+        if year.hasFrozenCalculation { return String(year.year) + " · " + shell.strings.t("tax.yearSwitcher.frozenAria") }
+        return String(year.year)
+    }
+
     var body: some View {
         if let data, data.yearCalculations.count > 1, let selected {
             TaxChartCard(
                 title: shell.strings.t("tax.comparison.title", ["year": String(overview.year)]),
                 description: shell.strings.t("tax.comparison.description"), small: true
             ) {
-                Picker(
-                    shell.strings.t("tax.comparison.versus"),
+                VisionSelect(
                     selection: Binding(
                         get: { selected.year },
                         set: { value in
                             compareYear = value
                             onComparisonChange?(value)
-                        })
-                ) {
-                    ForEach(available, id: \.year) { year in
-                        HStack {
-                            Text(String(year.year))
-                            TaxChartYearStatusView(
-                                isFiled: year.isFiled,
-                                hasFrozenCalculation: year.hasFrozenCalculation, strings: shell.strings)
-                        }.tag(year.year)
-                    }
-                }
-                .accessibilityLabel(shell.strings.t("tax.comparison.selectYear"))
+                        }),
+                    options: available.map { year in
+                        VisionSelectOption(value: year.year, title: yearTitle(year))
+                    },
+                    accessibilityLabel: shell.strings.t("tax.comparison.selectYear"), expands: true
+                )
                 .frame(maxWidth: 240, alignment: .leading)
                 TaxTableViewport(isPrinting: printLayout) {
                     Grid(alignment: .leading, horizontalSpacing: printLayout ? 10 : 24, verticalSpacing: 12) {

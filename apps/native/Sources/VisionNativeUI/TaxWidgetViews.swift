@@ -60,13 +60,19 @@ struct TaxMoneyRow: View {
 struct TaxWidgetsSheet: View {
     let model: TaxWidgetsModel
     let strings: any Localizing
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var systemDismiss
+    @Environment(\.visionDismissDialog) private var dialogDismiss
     @Environment(\.visionTheme) private var theme
+    /// Inside a `visionDialog` only the dialog dismissal acts; under a system sheet only the other.
+    private func close() {
+        dialogDismiss()
+        systemDismiss()
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VisionDialogHeader(
                 title: strings.t("widgets.title"), description: strings.t("widgets.description"),
-                closeLabel: strings.t("common.close"), onClose: { dismiss() }
+                closeLabel: strings.t("common.close"), onClose: { close() }
             )
             .keyboardShortcut(.cancelAction)
             VStack(alignment: .leading, spacing: 0) {
@@ -85,7 +91,7 @@ struct TaxWidgetsSheet: View {
                                 get: { model.isVisible(widget.id) },
                                 set: { value in Task { await model.setVisible(widget.id, value) } })
                         )
-                        .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                        .labelsHidden().toggleStyle(.visionSwitch)
                         .disabled(model.isSaving || !model.isLoaded)
                     }
                     .padding(.horizontal, 16).padding(.vertical, 10)

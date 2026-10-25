@@ -467,7 +467,7 @@ private struct TaxHouseholdPrintFooter: View {
                 }
             }
             Text(overview.result.assessment.legalBasis).font(.caption)
-                .padding(6).overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
+                .padding(6).overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.md).stroke(theme.border))
             Text(strings.t("tax.household.assessment.reason." + overview.result.assessment.reason.rawValue))
                 .font(.caption).foregroundStyle(theme.secondaryLabel)
         }.padding(NativeTaxPrintTable.inset).frame(maxWidth: .infinity, alignment: .leading)

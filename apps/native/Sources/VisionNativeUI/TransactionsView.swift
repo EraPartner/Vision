@@ -74,28 +74,33 @@ public struct TransactionsView: View {
         // The Delete alert, the Add sheet and the Split dialog present from here, or from
         // inside the inspector sheet while it is open (one sheet per presenter).
         .modifier(TransactionDialogs(model: model, shell: shell, theme: theme, hosts: !inspectorIsSheet))
-        .sheet(
+        .modifier(TransactionBulkPresentations(model: model, shell: shell, theme: theme))
+        .visionDialog(
             item: Binding(
                 get: { model.quickLookRow },
                 set: { row in
                     if row == nil { model.closeQuickLook() }
-                })
+                }),
+            metrics: .init(maxWidth: nil, padding: 0, spacing: 0)
         ) { row in
             TransactionQuickLookSheet(row: row, model: model, shell: shell)
                 .environment(\.visionTheme, theme)
                 .environment(\.colorScheme, theme.colorScheme)
         }
-        // Below the `lg` width the inspector is a sheet.
-        .sheet(
+        // Below the `lg` width the inspector is a sheet (`SheetContent sm:max-w-md`, `p-0`).
+        .visionDialog(
             isPresented: Binding(
                 get: { inspectorIsSheet },
                 set: { presented in
                     if !presented { model.closeInspector() }
-                })
+                }),
+            metrics: .init(
+                maxWidth: 448, height: .fraction(DesignTokens.Overlay.dialogMaxHeightFraction), padding: 0,
+                spacing: 0)
         ) {
             if let row = model.selectedRow, let inspector = model.inspector {
                 TransactionInspectorView(model: model, inspector: inspector, row: row, shell: shell, docked: false)
-                    .frame(minWidth: 380, idealWidth: 420, minHeight: 520)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .modifier(TransactionDialogs(model: model, shell: shell, theme: theme, hosts: true))
                     .environment(\.visionTheme, theme)
                     .environment(\.colorScheme, theme.colorScheme)
@@ -218,23 +223,47 @@ private struct TransactionDialogs: ViewModifier {
     func body(content: Content) -> some View {
         content
             // The buttons decide; the binding only reads.
-            .alert(
-                strings.t("txPage.delete.title"),
+            .visionAlert(
+                title: strings.t("txPage.delete.title"),
+                message: strings.t(
+                    "txPage.delete.desc", ["desc": model.pendingDelete?.deleteDescription(model.labels) ?? ""]),
                 isPresented: Binding(get: { hosts && model.pendingDelete != nil }, set: { _ in })
             ) {
-                Button(strings.t("common.cancel"), role: .cancel) { model.cancelDelete() }
-                Button(strings.t("txPage.delete.confirm"), role: .destructive) {
+                VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.cancelDelete() }
+                VisionDialogAction(strings.t("txPage.delete.confirm"), role: .destructive) {
                     Task { await model.confirmDelete() }
                 }
-            } message: {
-                Text(strings.t("txPage.delete.desc", ["desc": model.pendingDelete?.deleteDescription(model.labels) ?? ""]))
             }
-            .sheet(
+            // `AttachmentPanel`'s delete confirm. It presents from here, not from the panel, so the
+            // alert covers the page or the inspector sheet rather than the small panel.
+            .visionAlert(
+                title: strings.t("txPage.deleteAttachment"),
+                message: strings.t(
+                    "txPage.deleteAttachment.desc",
+                    ["name": model.inspector?.attachments.pendingDelete?.filename ?? ""]),
+                isPresented: Binding(
+                    get: { hosts && model.inspector?.attachments.pendingDelete != nil }, set: { _ in })
+            ) {
+                VisionDialogAction(strings.t("common.cancel"), role: .cancel) {
+                    model.inspector?.attachments.cancelDelete()
+                }
+                VisionDialogAction(strings.t("common.delete"), role: .destructive) {
+                    Task {
+                        await model.inspector?.attachments.confirmDelete()
+                        model.reportAttachmentDeleteFailure()
+                    }
+                }
+            }
+            // `SheetContent sm:max-w-[470px]`, `p-0`.
+            .visionDialog(
                 isPresented: Binding(
                     get: { hosts && model.isAddPresented },
                     set: { presented in
                         if !presented { model.dismissAdd() }
-                    })
+                    }),
+                metrics: .init(
+                    maxWidth: 470, height: .fraction(DesignTokens.Overlay.dialogMaxHeightFraction), padding: 0,
+                    spacing: 0)
             ) {
                 if let form = model.addForm {
                     TransactionAddSheet(model: model, form: form, shell: shell)
@@ -242,12 +271,15 @@ private struct TransactionDialogs: ViewModifier {
                         .environment(\.colorScheme, theme.colorScheme)
                 }
             }
-            .sheet(
+            .visionDialog(
                 item: Binding(
                     get: { hosts ? model.splitForm.map { SplitSheetItem(form: $0) } : nil },
                     set: { item in
                         if item == nil { model.dismissSplit() }
-                    })
+                    }),
+                metrics: .init(
+                    maxWidth: 512, height: .fraction(DesignTokens.Overlay.dialogMaxHeightFraction), padding: 0,
+                    spacing: 0)
             ) { item in
                 TransactionSplitSheet(model: model, form: item.form, shell: shell)
                     .environment(\.visionTheme, theme)
@@ -522,8 +554,8 @@ struct TransactionFilterBanner: View {
                             Image(systemName: "xmark")
                                 .imageScale(.small)
                         }
-                        .buttonStyle(.borderless)
-                        .help(strings.t("filter.tags.clearAll"))
+                        .buttonStyle(.vision(.ghost, size: .iconXs))
+                        .visionTooltip(strings.t("filter.tags.clearAll"))
                         .accessibilityLabel(strings.t("filter.tags.clearAll"))
                     }
                 }
@@ -537,9 +569,9 @@ struct TransactionFilterBanner: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.vision(.ghost, size: .iconSm))
                 .foregroundStyle(theme.secondaryLabel)
-                .help(strings.t("aria.clearFilter"))
+                .visionTooltip(strings.t("aria.clearFilter"))
                 .accessibilityLabel(strings.t("aria.clearFilter"))
             }
         }

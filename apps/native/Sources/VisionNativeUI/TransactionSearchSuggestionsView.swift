@@ -27,9 +27,10 @@ struct TransactionSearchSuggestionsView: View {
         }
         .frame(width: 340, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                .fill(theme.card)
-                .shadow(color: .black.opacity(0.18), radius: 12, y: 4))
+            // `bg-popover shadow-elevation-3`.
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                .fill(Color(token: theme.palette.popover))
+                .visionElevation(DesignTokens.Elevation.level3))
         .overlay(
             RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
                 .strokeBorder(theme.border.opacity(0.6), lineWidth: 1))
@@ -106,8 +107,8 @@ struct TransactionSearchSuggestionsView: View {
             } label: {
                 Image(systemName: "chevron.left")
             }
-            .buttonStyle(.borderless)
-            .help(strings.t("common.back"))
+            .buttonStyle(.vision(.ghost, size: .iconSm))
+            .visionTooltip(strings.t("common.back"))
             .accessibilityLabel(strings.t("common.back"))
             Text(title)
                 .font(.callout.weight(.medium))

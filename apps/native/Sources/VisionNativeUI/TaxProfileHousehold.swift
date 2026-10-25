@@ -21,19 +21,19 @@ extension TaxProfileSheet {
                     }
                     Text(strings.t("tax.household.assessment.reason.\(assessment.reason.rawValue)")).font(.footnote)
                     Text(verbatim: assessment.legalBasis).font(.caption).foregroundStyle(theme.tertiaryLabel)
-                }.padding(12).background(theme.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+                }.padding(12).background(theme.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
             }
             if model.isComputing { ProgressView().controlSize(.small) }
             if let error = model.previewError {
                 Text(verbatim: error).font(.footnote).foregroundStyle(theme.destructive)
-                Button(strings.t("common.retry")) { model.retryPreview() }
+                Button(strings.t("common.retry")) { model.retryPreview() }.buttonStyle(.visionOutline)
             }
             Toggle(
                 strings.t("tax.household.field.hasPartner"),
                 isOn: Binding(
                     get: { draft.partners.contains { $0["id"]?.stringValue == "B" } },
                     set: { value in model.edit { $0.setHasPartner(value) } })
-            ).toggleStyle(.switch)
+            ).toggleStyle(.visionSwitch)
             Text(strings.t("tax.household.field.hasPartner.desc")).font(.footnote).foregroundStyle(theme.secondaryLabel)
             if model.assessment?.electable == true {
                 Toggle(
@@ -46,7 +46,7 @@ extension TaxProfileSheet {
                             }
                         })
                 )
-                .toggleStyle(.switch)
+                .toggleStyle(.visionSwitch)
             }
             if draft.partners.count > 1 {
                 Text(strings.t("tax.household.events.title")).font(.headline)
@@ -58,6 +58,7 @@ extension TaxProfileSheet {
                     eventRow(row.index, row.value)
                 }
                 Button(strings.t("tax.household.event.add")) { model.edit { $0.addEvent() } }
+                    .buttonStyle(.visionOutline)
                 Divider()
                 Text(strings.t("tax.household.claims.title")).font(.headline)
                 claimant("tax.household.field.dependantsClaimant", path: ["dependents", "claimantPartnerId"])
@@ -80,21 +81,21 @@ extension TaxProfileSheet {
     func eventRow(_ index: Int, _ event: TaxValue) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Picker(
-                    strings.t("tax.household.event.kindLabel"),
+                Text(strings.t("tax.household.event.kindLabel")).foregroundStyle(theme.foreground)
+                VisionSelect(
                     selection: Binding(
                         get: { event["kind"]?.stringValue ?? "marriage" },
-                        set: { value in model.edit { $0.setEventKind(index: index, kind: value) } })
-                ) {
-                    ForEach(TaxProfileDraft.eventKinds, id: \.self) { kind in
-                        Text(strings.t("tax.household.event.kind.\(kind)")).tag(kind)
-                    }
-                }
+                        set: { value in model.edit { $0.setEventKind(index: index, kind: value) } }),
+                    options: TaxProfileDraft.eventKinds.map { kind in
+                        VisionSelectOption(value: kind, title: strings.t("tax.household.event.kind.\(kind)"))
+                    },
+                    accessibilityLabel: strings.t("tax.household.event.kindLabel"))
                 Button {
                     model.edit { $0.removeEvent(index: index) }
                 } label: {
                     Image(systemName: "trash")
                 }
+                .buttonStyle(.vision(.ghost, size: .iconSm))
                 .accessibilityLabel(
                     strings.t(
                         "tax.household.event.remove",
@@ -106,21 +107,21 @@ extension TaxProfileSheet {
                     "tax.household.event.deceased", path: ["relationship", "events", String(index), "partnerId"],
                     fallback: "B")
             }
-        }.padding(12).background(theme.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+        }.padding(12).background(theme.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
     }
     func claimant(_ key: String, path: [String], fallback: String = "A", shown: String? = nil) -> some View {
         field(key) {
-            Picker(
-                strings.t(key),
+            VisionSelect(
                 selection: Binding(
                     get: { shown ?? draft.get(path)?.stringValue ?? fallback },
                     set: { value in
                         model.edit { $0.set(path, .string(value)) }
-                    })
-            ) {
-                Text(label("A")).tag("A")
-                Text(label("B")).tag("B")
-            }.labelsHidden()
+                    }),
+                options: [
+                    VisionSelectOption(value: "A", title: label("A")),
+                    VisionSelectOption(value: "B", title: label("B")),
+                ],
+                accessibilityLabel: strings.t(key), expands: true)
         }
     }
 }

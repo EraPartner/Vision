@@ -54,7 +54,8 @@ public struct NativeCommandPaletteView: View {
                         return .handled
                     }
                 Button(shell.strings.t("common.close"), systemImage: "xmark") { model.close() }
-                    .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(theme.secondaryLabel)
+                    .labelStyle(.iconOnly).buttonStyle(.vision(.ghost, size: .iconSm))
+                    .foregroundStyle(theme.secondaryLabel)
                     .keyboardShortcut(.cancelAction)
             }.padding(18)
             Divider().overlay(theme.border)
@@ -82,10 +83,8 @@ public struct NativeCommandPaletteView: View {
                     }
             }
         }.frame(minWidth: 460, idealWidth: 600, maxWidth: 680)
-            .background(theme.card, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.border))
+            // The shell's glass dialog supplies the surface, border and shadow.
             .foregroundStyle(theme.foreground)
-            .shadow(color: .black.opacity(0.2), radius: 24, y: 10)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(shell.strings.t("commandPalette.openLabel"))
             .onKeyPress(.escape) {

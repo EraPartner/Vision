@@ -26,7 +26,7 @@ extension TaxProfileSheet {
                         }
                     }
                 }
-            }
+            }.buttonStyle(.visionOutline)
             Divider()
             intro("ownHome")
             toggle("tax.profile.field.mortgageIsPrimaryResidence", path: ["home", "mortgageIsPrimaryResidence"])
@@ -74,7 +74,7 @@ extension TaxProfileSheet {
                 "tax.profile.field.regionLabel", path: path + ["region"], values: TaxProfileDraft.regions,
                 prefix: "tax.profile.region.", suffix: ".label",
                 fallback: draft.get(["region"])?.stringValue ?? "flanders")
-        }.padding(12).background(theme.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+        }.padding(12).background(theme.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
     }
     var regionStep: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -108,7 +108,7 @@ extension TaxProfileSheet {
                                 .font(.footnote).foregroundStyle(theme.secondaryLabel)
                             }.frame(maxWidth: .infinity, alignment: .leading)
                         }.padding(12).contentShape(Rectangle())
-                    }.buttonStyle(.plain).background(theme.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+                    }.buttonStyle(.plain).background(theme.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
                 }
             }
             number("tax.profile.field.communalSurcharge", path: ["communalSurchargePercent"])

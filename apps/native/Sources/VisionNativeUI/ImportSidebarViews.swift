@@ -226,7 +226,7 @@ struct ImportSetupReferenceCard: View {
                     }
                     .buttonStyle(.visionOutline)
                     .accessibilityLabel(strings.t("importPage.toggleSetupReference"))
-                    .help(strings.t("importPage.toggleSetupReference"))
+                    .visionTooltip(strings.t("importPage.toggleSetupReference"))
                 }
                 if model.isSetupReferenceExpanded {
                     VStack(alignment: .leading, spacing: 16) {
@@ -277,31 +277,25 @@ struct SimpleCSVImportCard: View {
                 }
                 LazyVGrid(columns: Self.columns, alignment: .leading, spacing: 12) {
                     ImportField(label: strings.t("importPage.separator")) {
-                        Picker(
-                            strings.t("importPage.separator"),
-                            selection: Binding(get: { model.separator }, set: { model.separator = $0 })
-                        ) {
-                            ForEach(CSVSeparator.candidates, id: \.self) { separator in
-                                Text(CSVSeparator.labelKey(separator).map { strings.t($0) } ?? separator).tag(separator)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
+                        VisionSelect(
+                            selection: Binding(get: { model.separator }, set: { model.separator = $0 }),
+                            options: CSVSeparator.candidates.map { separator in
+                                VisionSelectOption(
+                                    value: separator,
+                                    title: CSVSeparator.labelKey(separator).map { strings.t($0) } ?? separator)
+                            },
+                            accessibilityLabel: strings.t("importPage.separator"), expands: true)
                     }
                     if model.kind.showsEncoding {
                         ImportField(label: strings.t("importPage.encoding")) {
-                            Picker(
-                                strings.t("importPage.encoding"),
+                            VisionSelect(
                                 selection: Binding(
                                     get: { CSVFormatOptions.selectedEncoding(model.encoding) },
-                                    set: { model.encoding = $0 })
-                            ) {
-                                ForEach(CSVFormatOptions.encodings, id: \.value) { option in
-                                    Text(verbatim: option.label).tag(option.value)
-                                }
-                            }
-                            .labelsHidden()
-                            .pickerStyle(.menu)
+                                    set: { model.encoding = $0 }),
+                                options: CSVFormatOptions.encodings.map { option in
+                                    VisionSelectOption(value: option.value, title: option.label)
+                                },
+                                accessibilityLabel: strings.t("importPage.encoding"), expands: true)
                         }
                     }
                 }

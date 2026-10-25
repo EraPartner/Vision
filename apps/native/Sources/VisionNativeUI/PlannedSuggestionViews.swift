@@ -156,10 +156,10 @@ struct PlannedRecurringPanel: View {
                     Image(systemName: "xmark")
                         .imageScale(.small)
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.vision(.ghost, size: .iconSm))
                 .foregroundStyle(theme.secondaryLabel)
                 .accessibilityLabel(strings.t("aria.dismiss"))
-                .help(strings.t("aria.dismiss"))
+                .visionTooltip(strings.t("aria.dismiss"))
             }
         }
     }
@@ -227,13 +227,11 @@ struct PlannedRecurringPanel: View {
                     } label: {
                         Label(strings.t("recurring.track"), systemImage: "plus")
                     }
-                    .buttonStyle(.visionPrimary)
-                    .controlSize(.small)
+                    .buttonStyle(.vision(.default, size: .sm))
                     Button(strings.t("recurring.dismissBtn")) {
                         recurring.dismiss(pattern.recipientId)
                     }
-                    .buttonStyle(.borderless)
-                    .controlSize(.small)
+                    .buttonStyle(.vision(.ghost, size: .sm))
                     .foregroundStyle(theme.secondaryLabel)
                 }
             }
@@ -270,7 +268,7 @@ struct PlannedRecurringPanel: View {
                         .accessibilityHidden(true)
                 }
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.vision(.ghost, size: .sm))
             .accessibilityLabel("\(action): \(title)")
         }
     }

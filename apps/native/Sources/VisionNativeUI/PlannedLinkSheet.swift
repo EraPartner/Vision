@@ -44,7 +44,7 @@ struct PlannedLinkSheet: View {
             Divider()
             footer
         }
-        .frame(minWidth: 600, idealWidth: 672, minHeight: 520, idealHeight: 680)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .foregroundStyle(theme.foreground)
         .task { await link.resolveCluster() }
         .task(id: link.filters.requestKey) {
@@ -149,7 +149,7 @@ struct PlannedLinkSheet: View {
                         .foregroundStyle(theme.secondaryLabel)
                 }
             }
-            .toggleStyle(.checkbox)
+            .toggleStyle(.visionCheckbox)
         }
         .padding(12)
         .background(

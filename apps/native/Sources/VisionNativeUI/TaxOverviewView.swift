@@ -33,6 +33,7 @@ public struct TaxOverviewView: View {
                 if let error = screens.routeLoadError ?? screens.overview.error ?? screens.dashboard.error {
                     Text(strings.t("tax.page.loadError", ["msg": error])).foregroundStyle(theme.destructive)
                     Button(strings.t("common.retry")) { Task { await reload(force: true) } }
+                        .buttonStyle(.visionOutline)
                 } else if screens.overview.isLoading || screens.dashboard.isLoading || overview == nil {
                     ProgressView().frame(maxWidth: .infinity).padding(60)
                 } else if let overview {
@@ -68,17 +69,22 @@ public struct TaxOverviewView: View {
                 }
             }
         }
-        .sheet(isPresented: $customize) { TaxWidgetsSheet(model: screens.widgets, strings: strings) }
-        .sheet(isPresented: $filing) {
+        .modifier(TaxDeductionsConfirmation(host: overview.map { deductionsView($0) }))
+        .visionDialog(isPresented: $customize, metrics: .init(maxWidth: nil, padding: 0, spacing: 0)) {
+            TaxWidgetsSheet(model: screens.widgets, strings: strings)
+        }
+        .visionDialog(isPresented: $filing, metrics: .init(maxWidth: nil, padding: 0, spacing: 0)) {
             if let overview { TaxMarkFiledSheet(overview: overview, actions: screens.actions, shell: shell) }
         }
-        .sheet(isPresented: $history) {
+        .visionDialog(isPresented: $history, metrics: .init(maxWidth: nil, padding: 0, spacing: 0)) {
             if let overview { TaxHistorySheet(overview: overview, shell: shell) }
         }
-        .sheet(
+        .visionDialog(
             isPresented: Binding(
                 get: { screens.profile.isPresented },
-                set: { value in if !value { Task { await screens.profile.close() } } })
+                set: { value in if !value { Task { await screens.profile.close() } } }),
+            metrics: .init(
+                maxWidth: 620, height: .fraction(DesignTokens.Overlay.dialogMaxHeightFraction), padding: 0, spacing: 0)
         ) {
             TaxProfileSheet(
                 model: screens.profile, shell: shell,
@@ -138,6 +144,8 @@ public struct TaxOverviewView: View {
         } label: {
             Image(systemName: "ellipsis")
         }
+        .menuStyle(.button)
+        .buttonStyle(.vision(.outline, size: .icon))
         .menuIndicator(.hidden)
         .accessibilityLabel(strings.t("tax.menu.label")).disabled(screens.actions.isSaving)
     }
@@ -249,7 +257,10 @@ public struct TaxOverviewView: View {
         return overview.result.issues.filter { seen.insert($0.code).inserted }
     }
     @ViewBuilder private func deductions(_ overview: OpenAPI.BelgianTaxOverview) -> some View {
-        // The two deduction cards use the live household, including on historical views.
+        deductionsView(overview)
+    }
+    /// The two deduction cards use the live household, including on historical views.
+    private func deductionsView(_ overview: OpenAPI.BelgianTaxOverview) -> TaxDeductionsView {
         TaxDeductionsView(
             model: screens.deductions, shell: shell,
             household: try? TaxValue(encoding: overview.liveHousehold),

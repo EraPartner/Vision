@@ -19,7 +19,7 @@ struct NativeShellUnavailableView: View {
                 // ErrorBoundary's fallback: Retry, then Reload page.
                 HStack(spacing: 8) {
                     if let retry { Button(strings.t("common.retry"), action: retry).buttonStyle(.visionPrimary) }
-                    if let reload { Button(strings.t("common.reload"), action: reload) }
+                    if let reload { Button(strings.t("common.reload"), action: reload).buttonStyle(.visionOutline) }
                 }
             }
         }

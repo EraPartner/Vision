@@ -56,6 +56,8 @@ struct TaxYearSwitcherView: View {
         } label: {
             Text(strings.t("tax.yearSwitcher.label", ["year": String(overview.year)]))
         }
+        .menuStyle(.button)
+        .buttonStyle(.vision(.outline, size: .sm))
         .accessibilityLabel(strings.t("tax.yearSwitcher.trigger"))
         .disabled(actions.isSaving)
     }
@@ -116,7 +118,7 @@ struct TaxMastheadView: View {
                     Button(strings.t("tax.historical.banner.returnCta", ["year": String(overview.liveYear)])) {
                         shell.replaceQuery("year", with: String(overview.liveYear))
                     }
-                }
+                }.buttonStyle(.visionOutline)
             }
         }
     }
@@ -167,15 +169,21 @@ struct TaxMarkFiledSheet: View {
     let actions: TaxActionsModel
     let shell: NativeShellModel
     @State private var reference = ""
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var systemDismiss
+    @Environment(\.visionDismissDialog) private var dialogDismiss
     @Environment(\.visionTheme) private var theme
     @FocusState private var referenceFocused: Bool
+    /// Inside a `visionDialog` only the dialog dismissal acts; under a system sheet only the other.
+    private func close() {
+        dialogDismiss()
+        systemDismiss()
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VisionDialogHeader(
                 title: shell.strings.t("tax.markFiled.title", ["year": String(overview.year)]),
                 description: shell.strings.t("tax.markFiled.description"),
-                closeLabel: shell.strings.t("common.close"), onClose: { dismiss() })
+                closeLabel: shell.strings.t("common.close"), onClose: { close() })
             if !TaxYearMutation.canFile(overview) {
                 Text(shell.strings.t("tax.markFiled.prerequisite")).font(.footnote)
                     .foregroundStyle(theme.secondaryLabel)
@@ -194,7 +202,7 @@ struct TaxMarkFiledSheet: View {
             }
             if let error = actions.error { Text(error).foregroundStyle(theme.destructive) }
             VisionDialogFooter {
-                Button(shell.strings.t("common.cancel")) { dismiss() }
+                Button(shell.strings.t("common.cancel")) { close() }
                     .buttonStyle(.visionOutline).keyboardShortcut(.cancelAction)
                 Button(shell.strings.t("tax.markFiled.confirm")) { confirm() }
                     .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction)
@@ -206,22 +214,28 @@ struct TaxMarkFiledSheet: View {
     private func confirm() {
         guard TaxYearMutation.canFile(overview) else { return }
         let value = reference.trimmingCharacters(in: .whitespacesAndNewlines)
-        Task { if await actions.perform(.file(reference: value.isEmpty ? nil : value)) { dismiss() } }
+        Task { if await actions.perform(.file(reference: value.isEmpty ? nil : value)) { close() } }
     }
 }
 
 struct TaxHistorySheet: View {
     let overview: OpenAPI.BelgianTaxOverview
     let shell: NativeShellModel
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var systemDismiss
+    @Environment(\.visionDismissDialog) private var dialogDismiss
     @Environment(\.visionTheme) private var theme
+    /// Inside a `visionDialog` only the dialog dismissal acts; under a system sheet only the other.
+    private func close() {
+        dialogDismiss()
+        systemDismiss()
+    }
     private var entries: [TaxValue] { (TaxYearPresentation.metadata(overview)["history"]?.arrayValue ?? []).reversed() }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VisionDialogHeader(
                 title: shell.strings.t("tax.history.title", ["year": String(overview.year)]),
                 description: shell.strings.t("tax.history.description"),
-                closeLabel: shell.strings.t("common.close"), onClose: { dismiss() }
+                closeLabel: shell.strings.t("common.close"), onClose: { close() }
             )
             .keyboardShortcut(.cancelAction)
             if entries.isEmpty {
