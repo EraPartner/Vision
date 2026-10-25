@@ -152,12 +152,19 @@ struct TaxRulesView: View {
                     })
             ) {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text(strings.t("tax.rules.description")).foregroundStyle(theme.secondaryLabel)
+                    Text(strings.t("tax.rules.description")).font(.footnote).foregroundStyle(theme.secondaryLabel)
                     ForEach(sections, id: \.0) { title, keys in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(strings.t("tax.rules." + title)).font(.headline)
-                            ForEach(keys, id: \.self) { key in Text("• " + strings.t("tax.rules." + key)) }
+                        // `rounded-card bg-foreground/[0.04] p-4` with a headline and footnote bullets.
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(strings.t("tax.rules." + title)).font(.headline).foregroundStyle(theme.foreground)
+                            VisionBulletList(items: keys.map { strings.t("tax.rules." + $0) })
+                                .font(.footnote).foregroundStyle(theme.secondaryLabel)
                         }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: CGFloat(DesignTokens.Radius.card), style: .continuous)
+                                .fill(theme.foreground.opacity(0.04)))
                     }
                 }.padding(.top, 12)
             }

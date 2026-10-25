@@ -27,6 +27,7 @@ struct TaxYearSwitcherView: View {
     let availableYears: [Int]
     let actions: TaxActionsModel
     let shell: NativeShellModel
+    @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     private var years: [Int] {
         Array(
@@ -54,10 +55,19 @@ struct TaxYearSwitcherView: View {
                 }
             }
         } label: {
-            Text(strings.t("tax.yearSwitcher.label", ["year": String(overview.year)]))
+            // `Button variant="outline" className="tabular-nums"` with a trailing `ChevronDown`.
+            HStack(spacing: 8) {
+                Text(strings.t("tax.yearSwitcher.label", ["year": String(overview.year)])).monospacedDigit()
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(theme.secondaryLabel)
+                    .accessibilityHidden(true)
+            }
         }
         .menuStyle(.button)
-        .buttonStyle(.vision(.outline, size: .sm))
+        .buttonStyle(.vision(.outline))
+        .menuIndicator(.hidden)
+        .fixedSize()
         .accessibilityLabel(strings.t("tax.yearSwitcher.trigger"))
         .disabled(actions.isSaving)
     }
@@ -122,13 +132,20 @@ struct TaxMastheadView: View {
             }
         }
     }
+    /// `STATUS_ICON`: Sparkles, History, History, Snowflake, Lock.
+    static func statusSymbol(_ status: String) -> String {
+        statusSymbols[status] ?? "clock.arrow.circlepath"
+    }
+    /// Sparkles, snowflake and lock mark live, frozen and filed years.
+    private static let statusSymbols = ["live": "sparkles", "frozen": "snowflake", "filed": "lock"]
     private var identity: some View {
         HStack(spacing: 12) {
             Text(String(overview.year)).font(.visionLargeTitle).monospacedDigit()
                 .accessibilityAddTraits(.isHeader)
             VisionBadge(
                 text: strings.t("tax.masthead.status." + status),
-                tone: status == "filed" ? .warning : status == "live" ? .primary : .secondary)
+                tone: status == "filed" ? .warning : status == "live" ? .primary : .secondary,
+                symbol: Self.statusSymbol(status))
         }
     }
     /// The web masthead meta: Region and Marginal rate as small labelled figures, then a

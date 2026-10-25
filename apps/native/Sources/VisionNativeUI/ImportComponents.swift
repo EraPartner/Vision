@@ -503,8 +503,9 @@ struct ImportHistoryCard: View {
                 .controlSize(.small)
                 .frame(maxWidth: .infinity, minHeight: 80)
         } else if model.historyBatches.isEmpty {
-            VisionEmptyState(symbol: "clock.arrow.circlepath", title: strings.t("importHistory.empty")) { EmptyView() }
-                .padding(.vertical, 16)
+            VisionEmptyState(
+                symbol: "clock.arrow.circlepath", title: strings.t("importHistory.empty"), compact: true
+            ) { EmptyView() }
         } else {
             VStack(spacing: 0) {
                 ForEach(Array(model.historyBatches.enumerated()), id: \.element.id) { index, batch in

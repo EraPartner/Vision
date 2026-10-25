@@ -114,11 +114,10 @@ struct AccountDetailContent: View {
                 menuRow(item)
             }
         } label: {
-            Label(strings.t("accounts.actionsMenu"), systemImage: "ellipsis.circle")
+            Label(strings.t("accounts.actionsMenu"), systemImage: "ellipsis")
                 .labelStyle(.iconOnly)
         }
-        .menuIndicator(.hidden)
-        .fixedSize()
+        .visionMoreActionsMenu()
         .visionTooltip(strings.t("accounts.actionsMenu"))
         .accessibilityLabel(strings.t("accounts.actionsMenu"))
     }
@@ -203,9 +202,11 @@ struct AccountDetailContent: View {
                                 .font(Font.visionTitle3)
                                 .foregroundStyle(theme.secondaryLabel)
                         } else if let balance = account.computedBalance {
-                            MoneyText(amount: balance, currency: account.currency, settings: settings, signed: false, colored: false)
-                                .font(.visionLargeTitle)
-                                .visionTooltip(strings.t("accounts.balanceTooltip"))
+                            MoneyText(
+                                amount: balance, currency: account.currency, settings: settings, signed: false,
+                                colored: false, display: .largeTitle
+                            )
+                            .visionTooltip(strings.t("accounts.balanceTooltip"))
                             if let provenance = model.provenance(account) {
                                 Text(provenance)
                                     .font(.footnote)
@@ -278,9 +279,8 @@ struct AccountDetailContent: View {
                                 .foregroundStyle(theme.secondaryLabel)
                             MoneyText(
                                 amount: metrics.holdingsValue, currency: model.displayCurrency, settings: settings,
-                                signed: false, colored: false
+                                signed: false, colored: false, display: .title1
                             )
-                            .font(Font.visionTitle1)
                         }
                         VStack(alignment: .leading, spacing: 2) {
                             Text(strings.t("accounts.portfolio.pnl"))
@@ -290,7 +290,7 @@ struct AccountDetailContent: View {
                                 MoneyText.text(
                                     metrics.gainLoss, currency: model.displayCurrency, settings: settings, signed: true),
                                 decimalSeparator: settings.numberFormat.locale.decimalSeparator?.first,
-                                color: AccountHubRow.gainColor(metrics.gainLoss, theme: theme)
+                                color: AccountHubRow.gainColor(metrics.gainLoss, theme: theme), display: .title1
                             )
                                 .monospacedDigit()
                                 .font(Font.visionTitle1)
@@ -407,12 +407,13 @@ struct AccountLedgerCard: View {
                     Text(strings.t("accounts.detail.ledgerTitle"))
                         .font(Font.visionTitle3)
                         .accessibilityAddTraits(.isHeader)
+                    // `justify-between`: the count sits at the trailing edge of the card header.
+                    Spacer()
                     if canView && model.ledgerTotal > 0 {
                         Text(strings.tc("accounts.detail.ledgerCount", model.ledgerTotal))
                             .font(.footnote)
                             .foregroundStyle(theme.secondaryLabel)
                     }
-                    Spacer()
                 }
                 if let since = model.since {
                     HStack(spacing: 8) {
@@ -458,7 +459,10 @@ struct AccountLedgerCard: View {
             Text(APIErrorMessage.text(error, strings: strings))
                 .foregroundStyle(theme.destructive)
         } else if model.visibleLedger.isEmpty {
-            VisionEmptyState(symbol: "tray", title: strings.t("accounts.detail.noTransactions")) {
+            VisionEmptyState(
+                symbol: "list.bullet.rectangle.portrait", title: strings.t("accounts.detail.noTransactions"),
+                compact: true
+            ) {
                 EmptyView()
             }
         } else {

@@ -198,6 +198,6 @@ private struct PortfolioTaxBarChart: View {
     }
     private func coordinate(_ value: Decimal) -> Double { NSDecimalNumber(decimal: value).doubleValue }
     private func money(_ value: Decimal) -> String {
-        MoneyText.text(value, currency: currency, settings: shell.settings)
+        MoneyText.text(value, currency: currency, settings: shell.settings, signed: false)
     }
 }

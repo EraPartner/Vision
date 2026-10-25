@@ -116,9 +116,14 @@ public struct PortfolioTaxView: View {
         }
     }
 
+    /// `PAGE_ICONS["/portfolio/tax"]` (Landmark).
+    static var symbol: String {
+        NavigationRegistry.matchItem(path: "/portfolio/tax")?.symbol ?? "building.columns"
+    }
+
     private var header: some View {
         VisionPageHeader(
-            title: strings.t("tax.portfolioTitle"), subtitle: strings.t("tax.portfolioDesc"), symbol: "percent"
+            title: strings.t("tax.portfolioTitle"), subtitle: strings.t("tax.portfolioDesc"), symbol: Self.symbol
         ) {
             if let overview, tax.overview.error == nil {
                 TaxYearSwitcherView(
@@ -127,11 +132,11 @@ public struct PortfolioTaxView: View {
                 // YearActionsMenu: filing and CSV export are visible buttons beside the switcher.
                 if TaxYearPresentation.metadata(overview)["filing"]?.objectValue == nil {
                     Button(strings.t("tax.yearActions.markFiled"), systemImage: "lock") { filing = true }
-                        .buttonStyle(.visionOutline).controlSize(.small).disabled(tax.actions.isSaving)
+                        .buttonStyle(.visionOutline).disabled(tax.actions.isSaving)
                 }
                 Button(strings.t("tax.yearActions.exportCsv"), systemImage: "arrow.down.document") {
                     Task { await tax.exportYearCsv() }
-                }.buttonStyle(.visionOutline).controlSize(.small).disabled(tax.actions.isSaving || tax.isExporting)
+                }.buttonStyle(.visionOutline).disabled(tax.actions.isSaving || tax.isExporting)
                 actionsMenu(overview)
             }
             // PortfolioTaxPage always shows the button; the sheet needs loaded data, so it waits for it.
@@ -172,9 +177,9 @@ public struct PortfolioTaxView: View {
                 Task { await tax.exportYearCsv() }
             }.disabled(tax.isExporting)
         } label: {
-            Image(systemName: "ellipsis").visionChipChrome()
+            Image(systemName: "ellipsis")
         }
-        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        .visionMoreActionsMenu()
         .accessibilityLabel(strings.t("tax.menu.label"))
         .disabled(tax.actions.isSaving || model.isSavingAdjustments)
     }
@@ -183,8 +188,9 @@ public struct PortfolioTaxView: View {
     {
         if overview.isHistorical { historicalBanner(overview) }
         if !data.isEmpty {
-            TaxCard(title: strings.t("tax.portfolioDisclaimerTitle")) {
-                Text(strings.t("tax.portfolioDisclaimerText")).font(.callout).foregroundStyle(theme.secondaryLabel)
+            // TaxDisclaimerBanner: an info `Alert`, not a titled card.
+            VisionCallout(title: strings.t("tax.portfolioDisclaimerTitle")) {
+                Text(strings.t("tax.portfolioDisclaimerText"))
             }
         }
         if !data.unconvertedCurrencies.isEmpty {
@@ -194,7 +200,7 @@ public struct PortfolioTaxView: View {
         if data.isEmpty {
             TaxCard {
                 VisionEmptyState(
-                    symbol: "percent", title: strings.t("tax.noData"), description: strings.t("tax.noDataDesc")
+                    symbol: Self.symbol, title: strings.t("tax.noData"), description: strings.t("tax.noDataDesc")
                 ) {
                     Button(strings.t("tax.noDataCta")) { shell.navigate(to: "/portfolio") }.buttonStyle(.visionOutline)
                 }
@@ -202,13 +208,16 @@ public struct PortfolioTaxView: View {
         } else {
             sectionHeading("tax.costsSection", description: "tax.costsHelp")
             if model.widgets.isVisible("summaryCards") { PortfolioTaxSummaryView(data: data, shell: shell) }
-            if model.widgets.isVisible("taxByAssetClass"), !data.taxByAssetClass.isEmpty {
-                PortfolioTaxAssetClassChart(data: data, shell: shell)
+            // `grid-cols-1 gap-6 lg:grid-cols-2`: tax by asset class beside the tax and fee types.
+            VisionResponsiveGrid {
+                if model.widgets.isVisible("taxByAssetClass"), !data.taxByAssetClass.isEmpty {
+                    PortfolioTaxAssetClassChart(data: data, shell: shell)
+                }
+                if model.widgets.isVisible("taxTypes"), !data.taxBreakdown.isEmpty || !data.feeBreakdown.isEmpty {
+                    PortfolioTaxCostTypesView(data: data, shell: shell)
+                }
+                PortfolioTaxRecordedManualView(data: data, shell: shell)
             }
-            if model.widgets.isVisible("taxTypes"), !data.taxBreakdown.isEmpty || !data.feeBreakdown.isEmpty {
-                PortfolioTaxCostTypesView(data: data, shell: shell)
-            }
-            PortfolioTaxRecordedManualView(data: data, shell: shell)
             if model.widgets.isVisible("yearlyTaxFeeTrend"), !data.yearlyCostTrend.isEmpty {
                 PortfolioTaxMonthlyCostChart(data: data, shell: shell)
             }
@@ -226,9 +235,11 @@ public struct PortfolioTaxView: View {
                     tax.profile.begin(overview: overview)
                 }.buttonStyle(.visionOutline).disabled(tax.actions.isSaving || model.isSavingAdjustments)
             }
-            PortfolioTaxBudgetView(data: data, shell: shell)
-            if model.widgets.isVisible("profileInputs"), let taxData {
-                PortfolioTaxProfileInputsView(inputs: taxData.currentInputs, overview: overview, shell: shell)
+            VisionResponsiveGrid {
+                PortfolioTaxBudgetView(data: data, shell: shell)
+                if model.widgets.isVisible("profileInputs"), let taxData {
+                    PortfolioTaxProfileInputsView(inputs: taxData.currentInputs, overview: overview, shell: shell)
+                }
             }
             if data.hasInKindIncomeUnclassified {
                 Text(strings.t("tax.inKindIncomeUnclassified")).font(.footnote).foregroundStyle(theme.secondaryLabel)

@@ -263,7 +263,6 @@ struct ImportBankCard: View {
                 entries: bankSourceEntries, placeholder: strings.t("importPage.bankSourcePlaceholder"),
                 accessibilityLabel: strings.t("importPage.bankSource"), expands: true
             )
-            .frame(maxWidth: 420, alignment: .leading)
             Text(strings.t("importPage.bankHint"))
                 .font(.footnote)
                 .foregroundStyle(theme.secondaryLabel)

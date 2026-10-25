@@ -86,12 +86,8 @@ public struct RecipientsView: View {
                     get: { model.uncategorizedOnly }, set: { on in Task { await model.setUncategorizedOnly(on) } }))
         } label: {
             Label(strings.t("txPage.view.menu"), systemImage: "slider.horizontal.3")
-                .visionChipChrome(active: model.showAll || model.uncategorizedOnly)
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
+        .visionViewMenu()
         .accessibilityLabel(strings.t("txPage.view.menu"))
     }
 
@@ -106,10 +102,7 @@ public struct RecipientsView: View {
         } label: {
             Image(systemName: "ellipsis")
         }
-        .menuStyle(.button)
-        .buttonStyle(.vision(.outline, size: .icon))
-        .menuIndicator(.hidden)
-        .fixedSize()
+        .visionMoreActionsMenu()
         .visionTooltip(strings.t("recipientsPage.menu"))
         .accessibilityLabel(strings.t("recipientsPage.menu"))
     }
@@ -241,7 +234,10 @@ public struct RecipientsView: View {
                             payee.isActive ? "recipientsPage.statusActive" : "recipientsPage.statusInactive"),
                         tone: .muted, small: true))
             },
-            LocalDataColumn(key: "actions", title: "", width: 72, minWidth: 72, alignment: .trailing) { payee in
+            LocalDataColumn(
+                key: "actions", title: "", width: 72, minWidth: 72, alignment: .trailing,
+                plainHeader: strings.t("table.edit")
+            ) { payee in
                 AnyView(actionsCell(payee))
             },
         ]
@@ -298,7 +294,9 @@ public struct RecipientsView: View {
     }
 
     private func accountCell(_ payee: OpenAPI.Recipient) -> some View {
-        Text(payee.primaryBankAccount ?? "")
+        // `primary_bank_account || t("recipientsPage.none")`.
+        let account = payee.primaryBankAccount.flatMap { $0.isEmpty ? nil : $0 }
+        return Text(account ?? strings.t("recipientsPage.none"))
             .font(.callout.monospaced())
             .foregroundStyle(theme.secondaryLabel)
             .strikethrough(!payee.isActive)

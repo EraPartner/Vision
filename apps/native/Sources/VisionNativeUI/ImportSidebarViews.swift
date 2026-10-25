@@ -120,7 +120,11 @@ struct ImportExportCard: View {
                                         Text(strings.t("importPage.exporting"))
                                     }
                                 } else {
-                                    Label(strings.t(format.labelKey), systemImage: "arrow.down.doc")
+                                    // `<Download className="mr-2 h-4 w-4" />` and the full label.
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "arrow.down.to.line").accessibilityHidden(true)
+                                        Text(strings.t(format.labelKey)).minimumScaleFactor(0.85)
+                                    }
                                 }
                             }
                             .frame(maxWidth: .infinity)

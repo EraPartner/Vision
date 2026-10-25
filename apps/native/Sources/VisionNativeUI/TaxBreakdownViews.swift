@@ -2,6 +2,38 @@ import AppKit
 import SwiftUI
 import VisionNativeCore
 
+/// One line item applied to a stage on the way to the next one (`FlowOperation`).
+private struct TaxFlowOperation: Identifiable {
+    let id: String
+    let label: String
+    let amount: Decimal?
+    let sign: String
+}
+
+/// The operations of a stage: a signed list under an optional heading, or one prose sentence
+/// (`FlowOperationGroup`).
+private struct TaxFlowGroup {
+    var heading: String?
+    var items: [TaxFlowOperation] = []
+    var prose: String?
+}
+
+/// One anchor of the computation (`FlowStage`).
+private struct TaxFlowStage: Identifiable {
+    let id: String
+    let label: String
+    let amount: Decimal?
+    let tone: Color
+    var note: String?
+    var chip: String?
+    /// Emphasis rank: 0 = step, 1 = subtotal, 2 = the document's conclusion.
+    var weight = 0
+    var then: TaxFlowGroup?
+}
+
+/// TaxComputationFlow: the assessment notice as a vertical timeline. Each stage is a node on a
+/// rail with its figure, an optional note and chip, and the operations that carry it into the
+/// next stage in a tinted inset box.
 struct TaxComputationFlowView: View {
     let overview: OpenAPI.BelgianTaxOverview
     let shell: NativeShellModel
@@ -12,75 +44,267 @@ struct TaxComputationFlowView: View {
     private var c: OpenAPI.BelgianTaxHistoricalCalculation { overview.calculation }
     private var strings: any Localizing { shell.strings }
 
+    private func money(_ amount: Decimal?) -> String {
+        amount.map {
+            MoneyText.text($0, currency: shell.settings.portfolioCurrency, settings: shell.settings, signed: false)
+        } ?? "—"
+    }
+
+    private func operation(_ key: String, _ amount: Decimal?, _ sign: String) -> TaxFlowOperation {
+        TaxFlowOperation(id: key + sign, label: strings.t(key), amount: amount, sign: sign)
+    }
+
+    private var stages: [TaxFlowStage] {
+        [grossStage, taxableStage, federalStage, totalPITStage, burdenStage, netStage]
+    }
+
+    private var grossStage: TaxFlowStage {
+        TaxFlowStage(
+            id: "gross", label: strings.t("tax.card.profileGrossIncome"), amount: c.grossIncome, tone: theme.gain,
+            note: strings.t("tax.card.profileGrossIncome.desc"), weight: 1,
+            then: TaxFlowGroup(
+                heading: strings.t("tax.flow.opGroup.deductions"),
+                items: [
+                    operation("tax.pit.row.employeeSS", c.employeeSocialSecurity, "−"),
+                    operation("tax.profile.field.professionalExpenses", c.professionalExpenses, "−"),
+                    operation("tax.profile.section.otherDeductions.title", c.otherDeductionsTotal, "−"),
+                ]))
+    }
+
+    private var taxableStage: TaxFlowStage {
+        TaxFlowStage(
+            id: "taxable", label: strings.t("tax.pit.row.taxableIncome"), amount: c.taxableIncome,
+            tone: theme.foreground, then: TaxFlowGroup(prose: strings.t("tax.flow.op.brackets")))
+    }
+
+    private var federalStage: TaxFlowStage {
+        TaxFlowStage(
+            id: "federal", label: strings.t("tax.pit.row.federalAfter"), amount: c.federalPITAfterReductions,
+            tone: theme.loss,
+            then: TaxFlowGroup(items: [operation("tax.pit.row.communalSurcharge", c.communalSurcharge, "+")]))
+    }
+
+    private var totalPITStage: TaxFlowStage {
+        TaxFlowStage(
+            id: "totalPit", label: strings.t("tax.pit.row.totalPIT"), amount: c.totalPIT, tone: theme.loss,
+            chip: strings.t("tax.card.monthlyTaxReserve") + " · " + money(c.monthlyTaxReserve), weight: 1,
+            then: TaxFlowGroup(
+                heading: strings.t("tax.flow.opGroup.alsoOwed"),
+                items: [
+                    operation("tax.pit.row.employeeSS", c.employeeSocialSecurity, "+"),
+                    operation("tax.pit.row.specialSS", c.specialSocialSecurityContribution, "+"),
+                    operation("tax.pit.row.propertyTaxEstimate", c.propertyTaxEstimate, "+"),
+                ]))
+    }
+
+    private var burdenStage: TaxFlowStage {
+        let locale = shell.settings.numberFormat.locale
+        let effective = c.effectiveRate.map { VisionFormat.percent($0, digits: 1, locale: locale) } ?? "—"
+        let netOut = strings.t("tax.flow.op.netOut")
+        var then = TaxFlowGroup(prose: netOut)
+        // The prose line stays a line of its own; the spouse row, when there is one, follows it.
+        if let income = c.spouseProfessionalIncome, income > 0 {
+            then = TaxFlowGroup(
+                items: [
+                    TaxFlowOperation(id: "netOut", label: netOut, amount: nil, sign: ""),
+                    operation("tax.pit.row.spouseIncome", income, "+"),
+                ])
+        }
+        return TaxFlowStage(
+            id: "burden", label: strings.t("tax.pit.row.totalBurden"), amount: c.totalTaxBurden, tone: theme.loss,
+            chip: strings.t("tax.masthead.meta.effectiveBurden") + " · " + effective, weight: 1, then: then)
+    }
+
+    private var netStage: TaxFlowStage {
+        TaxFlowStage(
+            id: "net", label: strings.t("tax.card.netTakeHome"), amount: c.netTakeHome,
+            tone: (c.netTakeHome ?? 0) >= 0 ? theme.gain : theme.loss,
+            note: strings.t("tax.card.netTakeHome.desc"), weight: 2)
+    }
+
     var body: some View {
         TaxCard(
             title: strings.t("tax.flow.title"),
             description: strings.t("tax.flow.description", ["year": String(overview.year)])
         ) {
-            VStack(alignment: .leading, spacing: 14) {
-                stage(
-                    "tax.card.profileGrossIncome", c.grossIncome, tone: theme.gain,
-                    note: "tax.card.profileGrossIncome.desc")
-                Text(strings.t("tax.flow.opGroup.deductions")).font(.caption).foregroundStyle(theme.secondaryLabel)
-                operation("tax.pit.row.employeeSS", c.employeeSocialSecurity, sign: "−")
-                operation("tax.profile.field.professionalExpenses", c.professionalExpenses, sign: "−")
-                operation("tax.profile.section.otherDeductions.title", c.otherDeductionsTotal, sign: "−")
-                stage("tax.pit.row.taxableIncome", c.taxableIncome)
-                Text(strings.t("tax.flow.op.brackets")).foregroundStyle(theme.secondaryLabel)
-                stage("tax.pit.row.federalAfter", c.federalPITAfterReductions, tone: theme.loss)
-                operation("tax.pit.row.communalSurcharge", c.communalSurcharge, sign: "+")
-                stage("tax.pit.row.totalPIT", c.totalPIT, tone: theme.loss)
-                TaxMoneyRow(title: strings.t("tax.card.monthlyTaxReserve"), amount: c.monthlyTaxReserve, shell: shell)
-                Text(strings.t("tax.flow.opGroup.alsoOwed")).font(.caption).foregroundStyle(theme.secondaryLabel)
-                operation("tax.pit.row.employeeSS", c.employeeSocialSecurity, sign: "+")
-                operation("tax.pit.row.specialSS", c.specialSocialSecurityContribution, sign: "+")
-                operation("tax.pit.row.propertyTaxEstimate", c.propertyTaxEstimate, sign: "+")
-                stage("tax.pit.row.totalBurden", c.totalTaxBurden, tone: theme.loss)
-                if let rate = c.effectiveRate {
-                    LabeledContent(
-                        strings.t("tax.masthead.meta.effectiveBurden"),
-                        value: VisionFormat.percent(rate, digits: 1, locale: shell.settings.numberFormat.locale))
+            let all = stages
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(all.enumerated()), id: \.element.id) { index, stage in
+                    TaxFlowStageRow(stage: stage, isLast: index == all.count - 1, shell: shell)
                 }
-                Text(strings.t("tax.flow.op.netOut")).foregroundStyle(theme.secondaryLabel)
-                if let income = c.spouseProfessionalIncome, income > 0 {
-                    operation("tax.pit.row.spouseIncome", income, sign: "+")
-                }
-                stage(
-                    "tax.card.netTakeHome", c.netTakeHome,
-                    tone: (c.netTakeHome ?? 0) >= 0 ? theme.gain : theme.loss, note: "tax.card.netTakeHome.desc")
-                Divider()
-                Text(strings.t("tax.flow.coda.title")).font(.caption).foregroundStyle(theme.secondaryLabel)
-                TaxMoneyRow(
-                    title: strings.t("tax.pit.row.portfolioTaxesYear", ["year": String(overview.year)]),
-                    amount: portfolioTaxes, shell: shell, tone: theme.loss)
-                TaxMoneyRow(
-                    title: strings.t("tax.pit.row.totalTaxInclPortfolio"),
-                    amount: totalIncludingPortfolio, shell: shell, strong: true)
-                TaxMoneyRow(
-                    title: strings.t("tax.pit.row.totalWithPropertyEstimate"),
-                    amount: totalIncludingProperty, shell: shell, strong: true)
+            }
+            coda
+        }
+    }
+
+    /// Figures that sit outside the personal-income-tax chain (`KeyValueRows`).
+    private var coda: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(strings.t("tax.flow.coda.title")).font(.caption).foregroundStyle(theme.tertiaryLabel)
+            codaRow(
+                strings.t("tax.pit.row.portfolioTaxesYear", ["year": String(overview.year)]), portfolioTaxes,
+                tone: theme.loss)
+            Divider().opacity(0.5)
+            codaRow(strings.t("tax.pit.row.totalTaxInclPortfolio"), totalIncludingPortfolio, tone: theme.primary)
+            Divider().opacity(0.5)
+            codaRow(strings.t("tax.pit.row.totalWithPropertyEstimate"), totalIncludingProperty, tone: theme.primary)
+        }
+        .padding(.top, 16)
+        .overlay(alignment: .top) { Rectangle().fill(theme.border.opacity(0.6)).frame(height: 1) }
+        .padding(.top, 8)
+    }
+
+    private func codaRow(_ title: String, _ amount: Decimal?, tone: Color) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(title).font(.footnote).foregroundStyle(theme.secondaryLabel)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(money(amount)).font(.body.weight(.medium)).monospacedDigit().foregroundStyle(tone)
+        }
+        .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// One node of the TaxComputationFlow timeline.
+private struct TaxFlowStageRow: View {
+    let stage: TaxFlowStage
+    let isLast: Bool
+    let shell: NativeShellModel
+    @Environment(\.visionTheme) private var theme
+    private var settings: NativeAppSettings { shell.settings }
+
+    /// `FIGURE_TYPE`: `type-title-3`, `type-title-2`, `type-title-1`.
+    private var figureSize: MoneyDisplaySize {
+        switch stage.weight {
+        case 2: return .title1
+        case 1: return .title2
+        default: return .title3
+        }
+    }
+
+    private func moneyText(_ amount: Decimal?) -> String {
+        amount.map {
+            MoneyText.text($0, currency: settings.portfolioCurrency, settings: settings, signed: false)
+        } ?? "—"
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 20) {
+            gutter
+            VStack(alignment: .leading, spacing: 0) {
+                anchor
+                if stage.note != nil || stage.chip != nil { detail.padding(.top, 6) }
+                if let group = stage.then { operations(group) }
+            }
+            .padding(.bottom, isLast ? 4 : 20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// The document's spine: the rail from this node down into the next, and the node.
+    private var gutter: some View {
+        ZStack(alignment: .top) {
+            if !isLast {
+                Rectangle().fill(theme.border).frame(width: 1).padding(.top, 12)
+            }
+            node.padding(.top, 3)
+        }
+        .frame(width: 16)
+        .frame(maxHeight: .infinity)
+        .accessibilityHidden(true)
+    }
+
+    private var node: some View {
+        ZStack {
+            if stage.weight > 0 {
+                Circle().fill(theme.primary.opacity(0.10)).frame(width: 18, height: 18)
+            }
+            Circle().fill(Color(token: theme.palette.background)).frame(width: 12, height: 12)
+            Circle()
+                .strokeBorder(stage.weight == 0 ? theme.border : theme.primary.opacity(0.6), lineWidth: 1)
+                .frame(width: 12, height: 12)
+        }
+        .frame(width: 18, height: 18)
+    }
+
+    private var anchor: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                label
+                Spacer(minLength: 0)
+                figure
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                label
+                figure
             }
         }
     }
-    private func stage(_ key: String, _ amount: Decimal?, tone: Color? = nil, note: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            TaxMoneyRow(title: strings.t(key), amount: amount, shell: shell, strong: true, tone: tone, rolling: true)
-            if let note { Text(strings.t(note)).font(.caption).foregroundStyle(theme.secondaryLabel) }
-        }.padding(.top, 4)
+
+    private var label: some View {
+        Text(stage.label)
+            .font(stage.weight == 2 ? Font.headline : Font.body.weight(.medium))
+            .foregroundStyle(theme.foreground)
+            .fixedSize(horizontal: false, vertical: true)
     }
-    private func operation(_ key: String, _ amount: Decimal?, sign: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(strings.t(key)).foregroundStyle(theme.secondaryLabel)
-            Spacer()
-            Text(
-                amount.map {
-                    sign
-                        + MoneyText.text(
-                            $0, currency: shell.settings.portfolioCurrency,
-                            settings: shell.settings, signed: false)
-                } ?? "—"
-            ).monospacedDigit()
-        }.font(.callout).padding(.leading, 16).accessibilityElement(children: .combine)
+
+    private var figure: some View {
+        RollingNumber(
+            value: moneyText(stage.amount), decimalSeparator: settings.numberFormat.locale.decimalSeparator?.first,
+            display: figureSize
+        )
+        .foregroundStyle(stage.tone)
+    }
+
+    private var detail: some View {
+        HStack(alignment: .center, spacing: 12) {
+            if let note = stage.note {
+                Text(note).font(.footnote).foregroundStyle(theme.secondaryLabel)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let chip = stage.chip {
+                VisionBadge(text: chip, tone: .muted, small: true)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func operations(_ group: TaxFlowGroup) -> some View {
+        if let prose = group.prose {
+            Text(prose)
+                .font(.footnote.italic())
+                .foregroundStyle(theme.secondaryLabel)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 10)
+        } else if !group.items.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                if let heading = group.heading {
+                    Text(heading).font(.caption).foregroundStyle(theme.tertiaryLabel)
+                }
+                ForEach(group.items) { item in operationRow(item) }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: CGFloat(DesignTokens.Radius.card), style: .continuous)
+                    .fill(theme.foreground.opacity(0.04))
+            )
+            .padding(.top, 12)
+        }
+    }
+
+    private func operationRow(_ item: TaxFlowOperation) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            Text(item.label).foregroundStyle(theme.secondaryLabel)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if !item.sign.isEmpty {
+                Text(item.sign + moneyText(item.amount))
+                    .fontWeight(.medium).monospacedDigit().foregroundStyle(theme.foreground)
+            }
+        }
+        .font(.footnote)
+        .accessibilityElement(children: .combine)
     }
 }
 

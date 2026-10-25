@@ -74,8 +74,7 @@ public struct CategoriesView: View {
         } label: {
             Label(strings.t("txPage.view.menu"), systemImage: "slider.horizontal.3")
         }
-        .menuStyle(.button)
-        .fixedSize()
+        .visionViewMenu()
         .accessibilityLabel(strings.t("txPage.view.menu"))
     }
 
@@ -104,8 +103,6 @@ public struct CategoriesView: View {
             AdminCard(padding: 0) {
                 if rows.isEmpty {
                     VisionEmptyState(symbol: Self.symbol, title: strings.t("categoriesPage.empty")) { EmptyView() }
-                        .padding(.vertical, 32)
-                        .padding(.horizontal, 16)
                 } else {
                     let tree = model.tree
                     let expanded = model.expanded
@@ -241,8 +238,9 @@ struct CategoryTreeRowView: View {
         } label: {
             Image(systemName: "ellipsis")
         }
+        .menuStyle(.button)
+        .buttonStyle(.vision(.ghost, size: .iconSm))
         .menuIndicator(.hidden)
-        .menuStyle(.borderlessButton)
         .fixedSize()
         .visionTooltip(strings.t("categoriesPage.rowMenu", ["name": label]))
         .accessibilityLabel(strings.t("categoriesPage.rowMenu", ["name": label]))

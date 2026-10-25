@@ -148,12 +148,8 @@ public struct PlannedPaymentsView: View {
             Toggle(strings.t("plannedPage.includePaused"), isOn: Binding(get: { showAll }, set: { setShowAll($0) }))
         } label: {
             Label(strings.t("txPage.view.menu"), systemImage: "slider.horizontal.3")
-                .visionChipChrome(active: showAll)
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
+        .visionViewMenu()
         .accessibilityLabel(strings.t("txPage.view.menu"))
     }
 
@@ -168,10 +164,7 @@ public struct PlannedPaymentsView: View {
         } label: {
             Image(systemName: "ellipsis")
         }
-        .menuStyle(.button)
-        .buttonStyle(.vision(.outline, size: .icon))
-        .menuIndicator(.hidden)
-        .fixedSize()
+        .visionMoreActionsMenu()
         .accessibilityLabel(strings.t("plannedPage.menu"))
         .visionTooltip(strings.t("plannedPage.menu"))
     }
