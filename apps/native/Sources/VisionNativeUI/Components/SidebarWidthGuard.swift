@@ -46,6 +46,7 @@ enum SidebarWidthGuard {
         private var window: NSWindow? { root?.window }
         private var widened = false
         private var pending = false
+        private var scheduled = false
         /// Bounds the corrections per launch, so a split view that keeps undoing them cannot
         /// make the probe fight it forever.
         private var corrections = 0
@@ -63,6 +64,20 @@ enum SidebarWidthGuard {
             self.root = root
             self.minimum = minimum
             self.ideal = ideal
+            super.init()
+            // SwiftUI sizes the split view's columns in its own passes, which need not lay out
+            // the hosting view again, so any split resize inside it triggers a check as well.
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(anySplitViewDidResize(_:)),
+                name: NSSplitView.didResizeSubviewsNotification, object: nil)
+            SidebarWidthGuard.note("keeper created")
+        }
+
+        @objc private func anySplitViewDidResize(_ note: Notification) {
+            guard let split = note.object as? NSView, let root, split.isDescendant(of: root),
+                split !== observedSplitView
+            else { return }
+            scheduleCorrection()
         }
 
         /// The first layout can run before the split view has sized its columns, and SwiftUI can
@@ -75,6 +90,10 @@ enum SidebarWidthGuard {
 
         /// Called by the hosting view on every layout and window change.
         func scheduleCorrection() {
+            if !scheduled {
+                scheduled = true
+                SidebarWidthGuard.note("first check window=\(window != nil)")
+            }
             guard window != nil, !pending, corrections < 8 else {
                 if corrections >= 8 || window == nil {
                     SidebarWidthGuard.note("skip window=\(window != nil) corrections=\(corrections)")
