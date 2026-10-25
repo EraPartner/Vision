@@ -53,9 +53,14 @@ jobs:
       - name: Generate the Xcode project
         run: xcodegen generate --spec apps/native/project.yml
 
-      # -quiet keeps the log to warnings and errors so build failures are easy to read.
+            # On failure print only the unique compiler errors; the full log holds huge command lines.
       - name: Build the app (Debug, unsigned)
-        run: xcodebuild -quiet -project apps/native/VisionNative.xcodeproj -scheme "Vision Native" -configuration Debug CODE_SIGNING_ALLOWED=NO build
+        run: |
+          xcodebuild -quiet -project apps/native/VisionNative.xcodeproj -scheme "Vision Native" \
+            -configuration Debug CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/build.log" 2>&1 || {
+            grep -E ': (error|fatal error): ' "$RUNNER_TEMP/build.log" | sed "s#^$GITHUB_WORKSPACE/##" | sort -u | head -500
+            exit 1
+          }
 
       - name: Test the Swift package
         if: github.event_name == 'push' || inputs.tests

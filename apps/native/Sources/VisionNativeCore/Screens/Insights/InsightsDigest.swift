@@ -49,7 +49,7 @@ public struct StatisticsDigest: Decodable, Equatable, Sendable {
     }
     public let subscriptionCreep: Subscriptions
     public let categoryOutliers: [Outlier]
-    public let cashForecast: OpenAPI.InsightsDigestData.CashForecast?
+    public let cashForecast: OpenAPI.CashForecastInsight?
     public var findingCount: Int {
         subscriptionCreep.new.count + subscriptionCreep.priceChanges.count + categoryOutliers.count
     }
