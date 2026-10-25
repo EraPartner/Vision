@@ -104,7 +104,7 @@ public final class ResearchWatchlistModel {
             metricsRevision = UUID()
             if selectedItemID != nil, selectedItem == nil { closeChart() }
             let symbols = Self.symbols(result)
-            if quoteSymbols != symbols {
+            if quoteSymbols != symbols || quotes.isEmpty {
                 quotesRevision = UUID()
                 isQuotesLoading = false
                 await loadQuotes()
@@ -126,8 +126,8 @@ public final class ResearchWatchlistModel {
     public func loadQuotes() async {
         guard isVisible, isOnline, !isQuotesLoading else { return }
         let symbols = page.map(Self.symbols) ?? []
-        quoteSymbols = symbols
         guard !symbols.isEmpty else {
+            quoteSymbols = symbols
             quotes = [:]
             metrics = [:]
             return
@@ -155,6 +155,9 @@ public final class ResearchWatchlistModel {
             }
             guard quotesRevision == revision, !Task.isCancelled else { return }
             quotes = Dictionary(result.map { ($0.symbol, $0) }, uniquingKeysWith: { _, latest in latest })
+            // Only a delivered response marks this symbol set as loaded. Recording it before the
+            // request meant a cancelled or superseded fetch left the rows on "Quote unavailable".
+            quoteSymbols = symbols
             quotesError = nil
             await updateMetrics()
         } catch {

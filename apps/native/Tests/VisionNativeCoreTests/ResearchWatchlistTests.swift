@@ -306,6 +306,17 @@ import Testing
         #expect(model.page?.items.map(\.id) == [2, 1] && !model.isLoading && model.error == nil)
     }
 
+    @Test func failedFirstQuoteFetchIsRetriedByTheNextLoadOfTheSameSymbols() async throws {
+        let transport = WatchlistTransport()
+        let model = ResearchWatchlistModel(service: client(transport))
+        await transport.failQuotes(true)
+        await model.load()
+        #expect(model.quotes.isEmpty && model.quotesError != nil)
+        await transport.failQuotes(false)
+        await model.load(force: true)
+        #expect(model.quotes["BBB"]?.currency == "USD" && model.quotesError == nil)
+    }
+
     @Test func deletingSelectedItemClosesChartAndCallsMutationCallback() async throws {
         let transport = WatchlistTransport()
         let model = ResearchWatchlistModel(service: client(transport))
