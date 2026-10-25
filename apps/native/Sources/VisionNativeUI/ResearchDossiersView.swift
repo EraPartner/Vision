@@ -27,7 +27,7 @@ public struct ResearchDossiersView: View {
                     } label: {
                         Image(systemName: "ellipsis")
                     }
-                    .menuStyle(.button).buttonStyle(.vision(.outline, size: .icon)).menuIndicator(.hidden).fixedSize()
+                    .visionMoreActionsMenu()
                     .accessibilityLabel(strings.t("dossiers.menu"))
                     Button(strings.t("dossiers.new"), systemImage: "plus") { model.requestNew() }
                         .buttonStyle(.visionPrimary)

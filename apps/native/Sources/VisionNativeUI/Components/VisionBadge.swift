@@ -23,12 +23,14 @@ struct VisionBadge: View {
     var small = false
     /// `className="font-mono"`: tickers and other identifiers.
     var monospaced = false
+    /// A leading 12 pt SF Symbol (`<Icon className="h-3 w-3" />` with `gap-1.5`).
+    var symbol: String?
     @Environment(\.visionTheme) var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
 
     var body: some View {
-        Text(text)
+        label
             .font(
                 monospaced
                     ? Font.system(size: CGFloat(DesignTokens.Typography.footnote.size), weight: .medium, design: .monospaced)
@@ -43,6 +45,20 @@ struct VisionBadge: View {
             .visionFocusRing(in: Capsule())
             .animation(VisionControlMetrics.fastTransition(reduceMotion: reduceMotion), value: hovering)
             .onHover { hovering = $0 }
+    }
+
+    @ViewBuilder
+    private var label: some View {
+        if let symbol {
+            HStack(spacing: 6) {
+                Image(systemName: symbol)
+                    .font(.system(size: 11, weight: .medium))
+                    .accessibilityHidden(true)
+                Text(text)
+            }
+        } else {
+            Text(text)
+        }
     }
 
     private var foreground: Color {

@@ -111,22 +111,44 @@ extension VisionPageHeader where Actions == EmptyView {
     }
 }
 
-/// `EmptyState` (compact): an icon, a title, a description and an action.
+/// `EmptyState` / `StateBlock`: a 40 pt rounded tile (`bg-foreground/[0.05]`) holding a 20 pt
+/// icon, a title (`type-title-3`, or `type-headline` when `compact`), an optional description
+/// (`type-callout`, `max-w-sm`/`max-w-xs`) and the action row. `framed` draws it on the card
+/// surface, for the pages whose web `<Card>` wraps the block.
 struct VisionEmptyState<Action: View>: View {
     let symbol: String
     let title: String
     var description: String?
+    /// `size="compact"`: `py-6`, the headline title, `max-w-xs`, `mt-4` before the action.
+    var compact = false
+    /// Wrap the block in a bordered card.
+    var framed = false
     @ViewBuilder var action: () -> Action
     @Environment(\.visionTheme) var theme
 
     var body: some View {
-        VStack(spacing: 8) {
+        if framed {
+            block.visionCardBackground()
+        } else {
+            block
+        }
+    }
+
+    private var block: some View {
+        VStack(spacing: 0) {
             Image(systemName: symbol)
-                .font(.title2)
-                .foregroundStyle(theme.tertiaryLabel)
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(theme.secondaryLabel)
+                .frame(width: 40, height: 40)
+                .background(
+                    RoundedRectangle(cornerRadius: CGFloat(DesignTokens.Radius.control), style: .continuous)
+                        .fill(theme.foreground.opacity(0.05))
+                )
+                .padding(.bottom, 12)
                 .accessibilityHidden(true)
             Text(title)
-                .font(.headline)
+                .font(compact ? .headline : .visionTitle3)
+                .foregroundStyle(theme.foreground)
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
             if let description {
@@ -134,11 +156,14 @@ struct VisionEmptyState<Action: View>: View {
                     .font(.callout)
                     .foregroundStyle(theme.secondaryLabel)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 420)
+                    .frame(maxWidth: compact ? 320 : 384)
+                    .padding(.top, 4)
             }
             action()
-                .padding(.top, 4)
+                .padding(.top, compact ? 16 : 20)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, compact ? 24 : 44)
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)
     }

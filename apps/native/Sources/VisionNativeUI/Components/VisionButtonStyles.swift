@@ -308,4 +308,24 @@ struct VisionChipChrome: ViewModifier {
 
 extension View {
     func visionChipChrome(active: Bool = false) -> some View { modifier(VisionChipChrome(active: active)) }
+
+    /// The page-header "View" menu (`Button variant="outline"` with the sliders icon and the label,
+    /// the trigger of the Categories, Planned and Payees view dropdowns): the outline button chrome
+    /// on a `Menu` whose label is a `Label`, with no menu indicator.
+    func visionViewMenu() -> some View {
+        menuStyle(.button)
+            .buttonStyle(.vision(.outline))
+            .menuIndicator(.hidden)
+            .fixedSize()
+    }
+
+    /// The page-header "more actions" menu (`RowMenu variant="outline" size="icon"`): an outline
+    /// icon square (`h-9 w-9`) with no menu indicator, for a `Menu` whose label is the ellipsis.
+    /// Without the explicit button style a bare `Menu` draws a tiny grey pill.
+    func visionMoreActionsMenu() -> some View {
+        menuStyle(.button)
+            .buttonStyle(.vision(.outline, size: .icon))
+            .menuIndicator(.hidden)
+            .fixedSize()
+    }
 }

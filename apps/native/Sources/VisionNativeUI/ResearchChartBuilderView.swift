@@ -80,8 +80,7 @@ public struct ResearchChartBuilderView: View {
             } label: {
                 Image(systemName: "ellipsis")
             }
-            .menuStyle(.button).buttonStyle(.vision(.outline, size: .icon)).menuIndicator(.hidden).fixedSize()
-            .accessibilityLabel(strings.t("research.builder.menu")).disabled(!controlsEnabled)
+            .visionMoreActionsMenu().accessibilityLabel(strings.t("research.builder.menu")).disabled(!controlsEnabled)
             Button {
                 model.isSaveDialogPresented = true
             } label: {

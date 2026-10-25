@@ -88,7 +88,7 @@ public struct StatisticsView: View {
                     } label: {
                         Image(systemName: "ellipsis")
                     }
-                    .menuIndicator(.hidden)
+                    .visionMoreActionsMenu()
                     .accessibilityLabel(strings.t("statsPage.menu.label"))
                 }
                 if model.isLoading {

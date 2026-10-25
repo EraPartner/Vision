@@ -31,8 +31,7 @@ public struct ResearchMarketLookupView: View {
                         } label: {
                             Image(systemName: "ellipsis")
                         }
-                        .menuStyle(.button).buttonStyle(.vision(.outline, size: .icon)).menuIndicator(.hidden)
-                        .fixedSize().accessibilityLabel(strings.t("marketLookup.menu"))
+                        .visionMoreActionsMenu().accessibilityLabel(strings.t("marketLookup.menu"))
                         addPortfolioButton
                     }
                 }

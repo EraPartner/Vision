@@ -12,6 +12,9 @@ struct LocalDataColumn<Row>: Identifiable {
     /// The column that takes the remaining width (`minWidth` only on the web).
     var flexible = false
     var alignment: Alignment = .leading
+    /// A plain header label for a column that neither sorts nor filters (the web's `table.edit`
+    /// header of the inline-edit column).
+    var plainHeader: String?
     let cell: (Row) -> AnyView
 
     var id: String { key }
@@ -296,6 +299,12 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
                     hoveredHeader = nil
                 }
             }
+        } else if let label = column.plainHeader {
+            Text(label)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(theme.secondaryLabel)
+                .lineLimit(1)
+                .padding(.vertical, 11)
         } else {
             Color.clear.frame(height: 1)
         }
