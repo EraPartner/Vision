@@ -543,7 +543,7 @@ public struct NativeNetWorthPrintSectionView: View {
                         if let value = value.as(Double.self) {
                             Text(
                                 VisionFormat.currency(
-                                    Decimal(value), code: snapshot.currency.rawValue,
+                                    Decimal(value), code: snapshot.currency,
                                     locale: snapshot.settings.numberFormat.locale, fractionDigits: 0))
                         }
                     }

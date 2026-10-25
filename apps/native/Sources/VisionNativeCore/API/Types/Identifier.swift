@@ -11,7 +11,7 @@ public protocol IdentifierTag: Sendable {}
 /// `Int` it replaces. The integer literal conformance is for tests and previews; production
 /// code takes ids from decoded models.
 public struct IntIdentifier<Tag: IdentifierTag>: RawRepresentable, Hashable, Comparable, Sendable, Codable,
-    CustomStringConvertible, ExpressibleByIntegerLiteral
+    LosslessStringConvertible, ExpressibleByIntegerLiteral
 {
     public let rawValue: Int
 
@@ -62,7 +62,7 @@ public struct IntIdentifier<Tag: IdentifierTag>: RawRepresentable, Hashable, Com
 /// A string entity id (a UUID, or a BIGINT the backend serializes as text). It encodes and
 /// decodes as a bare JSON string, exactly like the `String` it replaces.
 public struct StringIdentifier<Tag: IdentifierTag>: RawRepresentable, Hashable, Comparable, Sendable, Codable,
-    CustomStringConvertible, ExpressibleByStringLiteral
+    LosslessStringConvertible, ExpressibleByStringLiteral
 {
     public let rawValue: String
 
