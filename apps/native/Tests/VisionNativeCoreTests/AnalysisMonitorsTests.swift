@@ -13,7 +13,7 @@ struct AnalysisMonitorsDataTests {
         raw["lastObservation"] = monitorObservationValue(monitorID: monitorFirstID, status: .partial)
         let rule = try raw.decode(AnalysisMonitorRule.self)
         #expect(rule.threshold == raw["threshold"]?.stringValue && rule.savedAnalysisId == nil)
-        #expect(rule.historicalTargetId == monitorTargetID && !rule.targetAvailable)
+        #expect(rule.historicalTargetId == monitorTargetRaw && !rule.targetAvailable)
         #expect(rule.lastObservation?.status == .partial)
         #expect(
             rule.lastObservation?.analysisWindow?["futureAmount"] == .number(Decimal(string: "0.1234567890123456789")!))
@@ -65,7 +65,7 @@ struct AnalysisMonitorsDataTests {
         let edit = try draft.editPayload()
         #expect(edit["savedAnalysisId"] == nil && edit["dossierId"] == nil && edit["kind"] == nil)
         draft.kind = .evidence
-        draft.dossierId = monitorTargetID
+        draft.dossierId = monitorDossierID
         #expect(try draft.createPayload()["threshold"] == nil)
         #expect(try draft.editPayload()["fieldId"] == nil)
     }
@@ -171,7 +171,7 @@ struct AnalysisMonitorsModelTests {
         )
         model.updateNew {
             $0.title = "Evidence"
-            $0.dossierId = monitorTargetID
+            $0.dossierId = monitorDossierID
             $0.cooldownMinutes = "120"
         }
         await model.changeDossierPage(500)
@@ -321,17 +321,24 @@ struct AnalysisMonitorsModelTests {
     }
 }
 
-private let monitorFirstID = "11111111-1111-4111-8111-111111111111"
-private let monitorSecondID = "22222222-2222-4222-8222-222222222222"
-private let monitorCreatedID = "33333333-3333-4333-8333-333333333333"
-private let monitorTargetID = "44444444-4444-4444-8444-444444444444"
-private let monitorObservationID = "55555555-5555-4555-8555-555555555555"
-private let monitorNotificationID = "66666666-6666-4666-8666-666666666666"
+private let monitorFirstRaw = "11111111-1111-4111-8111-111111111111"
+private let monitorFirstID = AnalysisMonitorID(monitorFirstRaw)
+private let monitorSecondRaw = "22222222-2222-4222-8222-222222222222"
+private let monitorSecondID = AnalysisMonitorID(monitorSecondRaw)
+private let monitorCreatedID = AnalysisMonitorID("33333333-3333-4333-8333-333333333333")
+private let monitorTargetRaw = "44444444-4444-4444-8444-444444444444"
+private let monitorTargetID = SavedAnalysisID(monitorTargetRaw)
+private let monitorDossierID = ResearchDossierID(monitorTargetRaw)
+private let monitorRunID = AnalysisRunID(monitorTargetRaw)
+private let monitorObservationRaw = "55555555-5555-4555-8555-555555555555"
+private let monitorObservationID = AnalysisMonitorObservationID(monitorObservationRaw)
+private let monitorNotificationRaw = "66666666-6666-4666-8666-666666666666"
+private let monitorNotificationID = AnalysisMonitorNotificationID(monitorNotificationRaw)
 private let monitorTimestamp = "2026-10-13T12:00:00.000Z"
-private func monitorRuleValue(id: String, title: String = "Rule 1") -> TaxValue {
+private func monitorRuleValue(id: AnalysisMonitorID, title: String = "Rule 1") -> TaxValue {
     .object([
-        "id": .string(id), "kind": .string("analysis-threshold"), "title": .string(title), "enabled": .bool(true),
-        "savedAnalysisId": .string(monitorTargetID), "dossierId": .null, "historicalTargetId": .string(monitorTargetID),
+        "id": .string(id.rawValue), "kind": .string("analysis-threshold"), "title": .string(title), "enabled": .bool(true),
+        "savedAnalysisId": .string(monitorTargetRaw), "dossierId": .null, "historicalTargetId": .string(monitorTargetRaw),
         "targetLabel": .string("Synthetic saved analysis"), "targetAvailable": .bool(true),
         "fieldId": .string("amount"),
         "operator": .string("above"), "threshold": .string("1.00"), "intervalMinutes": .number(1440),
@@ -340,12 +347,12 @@ private func monitorRuleValue(id: String, title: String = "Rule 1") -> TaxValue 
         "createdAt": .string(monitorTimestamp), "updatedAt": .string(monitorTimestamp),
     ])
 }
-private func monitorObservationValue(monitorID: String, status: AnalysisMonitorStatus = .baseline) -> TaxValue {
+private func monitorObservationValue(monitorID: AnalysisMonitorID, status: AnalysisMonitorStatus = .baseline) -> TaxValue {
     .object([
-        "id": .string(monitorObservationID), "monitorId": .string(monitorID), "status": .string(status.rawValue),
+        "id": .string(monitorObservationRaw), "monitorId": .string(monitorID.rawValue), "status": .string(status.rawValue),
         "previousValue": .string("0.1234567890123456789"), "currentValue": .null,
         "previousEvidenceVersion": .null, "currentEvidenceVersion": .null, "analysisDefinitionVersion": .number(1),
-        "analysisRunId": .string(monitorTargetID), "historicalAnalysisRunId": .string(monitorTargetID),
+        "analysisRunId": .string(monitorTargetRaw), "historicalAnalysisRunId": .string(monitorTargetRaw),
         "analysisRunStatus": .string("completed"),
         "analysisWindow": .object([
             "kind": .string("page"), "futureAmount": .number(Decimal(string: "0.1234567890123456789")!),
@@ -358,8 +365,8 @@ private func monitorObservationValue(monitorID: String, status: AnalysisMonitorS
 }
 private func monitorNotificationValue(read: Bool = false) -> TaxValue {
     .object([
-        "id": .string(monitorNotificationID), "monitorId": .string(monitorFirstID),
-        "observationId": .string(monitorObservationID),
+        "id": .string(monitorNotificationRaw), "monitorId": .string(monitorFirstRaw),
+        "observationId": .string(monitorObservationRaw),
         "kind": .string("analysis-threshold"), "title": .string("Synthetic alert"),
         "reasonCode": .string("threshold-crossed"),
         "reason": .string("Synthetic reason"), "previousValue": .string("1.000"), "currentValue": .string("2.000"),
@@ -368,7 +375,7 @@ private func monitorNotificationValue(read: Bool = false) -> TaxValue {
 }
 private func monitorAnalysisValue() -> TaxValue {
     .object([
-        "id": .string(monitorTargetID), "definitionId": .string(monitorTargetID),
+        "id": .string(monitorTargetRaw), "definitionId": .string(monitorTargetRaw),
         "name": .string("Synthetic saved analysis"),
         "workspace": .string("portfolio"), "version": .number(1), "refreshMode": .string("live"),
         "parameters": .object([:]),
@@ -417,7 +424,7 @@ private actor MonitorTestTransport: APITransport {
             data = .object(["items": .array([monitorAnalysisValue()])])
         } else if request.url.path == "/api/research-dossiers" {
             data = monitorPage(
-                [.object(["id": .string(monitorTargetID), "title": .string("Synthetic dossier")])], offset: 500,
+                [.object(["id": .string(monitorTargetRaw), "title": .string("Synthetic dossier")])], offset: 500,
                 limit: 500)
         } else if request.url.path.hasSuffix("/observations") {
             data = monitorPage([monitorObservationValue(monitorID: invalid ? monitorSecondID : monitorFirstID)])
@@ -444,7 +451,7 @@ private actor MonitorTestService: AnalysisMonitorsService {
     var ruleValues = [monitorRuleValue(id: monitorFirstID), monitorRuleValue(id: monitorSecondID, title: "Rule 2")]
     var creates: [TaxValue] = []
     var patches: [TaxValue] = []
-    var deletes: [String] = []
+    var deletes: [AnalysisMonitorID] = []
     var checks = 0
     var read = false
     var readFailure = false
@@ -480,9 +487,9 @@ private actor MonitorTestService: AnalysisMonitorsService {
     }
     func monitorAnalyses() async throws -> [AnalysisSaved] { [try monitorAnalysisValue().decode(AnalysisSaved.self)] }
     func monitorDossiers(offset: Int) async throws -> AnalysisMonitorPage<AnalysisMonitorDossier> {
-        .init(items: [.init(id: monitorTargetID, title: "Synthetic dossier")], total: 501, limit: 500, offset: offset)
+        .init(items: [.init(id: monitorDossierID, title: "Synthetic dossier")], total: 501, limit: 500, offset: offset)
     }
-    func monitorObservations(id: String, offset: Int) async throws -> AnalysisMonitorPage<AnalysisMonitorObservation> {
+    func monitorObservations(id: AnalysisMonitorID, offset: Int) async throws -> AnalysisMonitorPage<AnalysisMonitorObservation> {
         let value = try monitorObservationValue(monitorID: id, status: checks > 0 ? .failed : .baseline).decode(
             AnalysisMonitorObservation.self)
         await wait("observations")
@@ -505,10 +512,10 @@ private actor MonitorTestService: AnalysisMonitorsService {
         ruleValues.insert(value, at: 0)
         return try value.decode(AnalysisMonitorRule.self)
     }
-    func monitorUpdate(id: String, patch: TaxValue) async throws -> AnalysisMonitorRule {
+    func monitorUpdate(id: AnalysisMonitorID, patch: TaxValue) async throws -> AnalysisMonitorRule {
         patches.append(patch)
         await wait("update")
-        let index = ruleValues.firstIndex { $0["id"] == .string(id) }!
+        let index = ruleValues.firstIndex { $0["id"] == .string(id.rawValue) }!
         for (key, value) in patch.objectValue! { ruleValues[index][key] = value }
         ruleValues[index]["updatedAt"] = .string("2026-10-13T12:01:00.000Z")
         if lostUpdate {
@@ -517,15 +524,15 @@ private actor MonitorTestService: AnalysisMonitorsService {
         }
         return try ruleValues[index].decode(AnalysisMonitorRule.self)
     }
-    func monitorDelete(id: String) async throws {
+    func monitorDelete(id: AnalysisMonitorID) async throws {
         deletes.append(id)
-        ruleValues.removeAll { $0["id"] == .string(id) }
+        ruleValues.removeAll { $0["id"] == .string(id.rawValue) }
     }
-    func monitorCheck(id: String) async throws -> AnalysisMonitorObservation {
+    func monitorCheck(id: AnalysisMonitorID) async throws -> AnalysisMonitorObservation {
         checks += 1
         return try monitorObservationValue(monitorID: id, status: .failed).decode(AnalysisMonitorObservation.self)
     }
-    func monitorReadNotification(id: String) async throws -> AnalysisMonitorNotification {
+    func monitorReadNotification(id: AnalysisMonitorNotificationID) async throws -> AnalysisMonitorNotification {
         read = true
         return try monitorNotificationValue(read: true).decode(AnalysisMonitorNotification.self)
     }

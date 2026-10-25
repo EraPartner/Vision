@@ -7,7 +7,7 @@ public enum NativeNetWorthPrintSection: String, CaseIterable, Identifiable, Send
 
 public struct NativeNetWorthPrintAccount: Identifiable, Equatable, Sendable {
     public let id: String
-    public let accountId: Int?
+    public let accountId: AccountID?
     public let label: String?
     public let type: String?
     public let cash: Decimal
@@ -60,7 +60,7 @@ public struct NativeNetWorthPrintSnapshot: Sendable {
     public let rangeStart: String?
     public let series: [InsightChartSeries]
     public let readouts: [NativeNetWorthPrintReadout]
-    public var currency: String { data.current.currency }
+    public var currency: CurrencyCode { data.current.currency }
     public var visibleWidgets: Set<String> { Set(sections.map(\.rawValue)) }
     public var sections: [NativeNetWorthPrintSection] {
         var result: [NativeNetWorthPrintSection] = [.header]
@@ -85,7 +85,8 @@ public struct NativeNetWorthPrintSnapshot: Sendable {
         model: NetWorthModel, settings: NativeAppSettings, strings: any Localizing, theme: ThemeSelection
     ) throws -> Self {
         guard !model.isLoading, model.error == nil, let data = model.data,
-            model.currency == settings.defaultCurrency, data.current.currency == settings.defaultCurrency
+            NativeReportCurrency.matches(model.currency, settings.defaultCurrency),
+            NativeReportCurrency.matches(data.current.currency, settings.defaultCurrency)
         else { throw APIError.invalidRequest("Net worth print requires loaded values in the displayed currency") }
         let display = model.displaySnapshots
         let accounts = model.accountRows?.map {

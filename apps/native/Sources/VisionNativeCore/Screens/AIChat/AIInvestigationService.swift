@@ -2,13 +2,13 @@ import Foundation
 
 public protocol AIInvestigationService: Sendable {
     func investigationCreate(_ input: TaxValue) async throws -> AIInvestigation
-    func investigationGet(id: String) async throws -> AIInvestigation
-    func investigationDelete(id: String) async throws
-    func investigationCancel(id: String) async throws -> AIInvestigation
-    func investigationResume(id: String, clarification: String, scope: TaxValue) async throws -> AIInvestigation
+    func investigationGet(id: AiInvestigationID) async throws -> AIInvestigation
+    func investigationDelete(id: AiInvestigationID) async throws
+    func investigationCancel(id: AiInvestigationID) async throws -> AIInvestigation
+    func investigationResume(id: AiInvestigationID, clarification: String, scope: TaxValue) async throws -> AIInvestigation
     func investigationDocuments() async throws -> [AIResearchDocument]
     func investigationUpload(_ file: AIResearchDocumentFile) async throws -> AIResearchDocument
-    func investigationDeleteDocument(id: String) async throws
+    func investigationDeleteDocument(id: ResearchDocumentID) async throws
 }
 private struct AIInvestigationDocuments: Decodable, Sendable {
     let items: [AIResearchDocument]
@@ -20,26 +20,26 @@ extension APIClient: AIInvestigationService {
             ResearchRequest<OpenAPIOperations.CreateAiInvestigation, AIInvestigation>(
                 OpenAPIOperations.CreateAiInvestigation.self, body: input))
     }
-    public func investigationGet(id: String) async throws -> AIInvestigation {
+    public func investigationGet(id: AiInvestigationID) async throws -> AIInvestigation {
         try await send(
             ResearchRequest<OpenAPIOperations.GetAiInvestigation, AIInvestigation>(
-                OpenAPIOperations.GetAiInvestigation.self, parameters: ["id": id]))
+                OpenAPIOperations.GetAiInvestigation.self, parameters: ["id": id.rawValue]))
     }
-    public func investigationDelete(id: String) async throws {
+    public func investigationDelete(id: AiInvestigationID) async throws {
         let _: APIEmpty = try await send(
             ResearchRequest<OpenAPIOperations.DeleteAiInvestigation, APIEmpty>(
-                OpenAPIOperations.DeleteAiInvestigation.self, parameters: ["id": id]))
+                OpenAPIOperations.DeleteAiInvestigation.self, parameters: ["id": id.rawValue]))
     }
-    public func investigationCancel(id: String) async throws -> AIInvestigation {
+    public func investigationCancel(id: AiInvestigationID) async throws -> AIInvestigation {
         try await send(
             ResearchRequest<OpenAPIOperations.CancelAiInvestigation, AIInvestigation>(
-                OpenAPIOperations.CancelAiInvestigation.self, parameters: ["id": id]))
+                OpenAPIOperations.CancelAiInvestigation.self, parameters: ["id": id.rawValue]))
     }
-    public func investigationResume(id: String, clarification: String, scope: TaxValue) async throws -> AIInvestigation
+    public func investigationResume(id: AiInvestigationID, clarification: String, scope: TaxValue) async throws -> AIInvestigation
     {
         try await send(
             ResearchRequest<OpenAPIOperations.ResumeAiInvestigation, AIInvestigation>(
-                OpenAPIOperations.ResumeAiInvestigation.self, parameters: ["id": id],
+                OpenAPIOperations.ResumeAiInvestigation.self, parameters: ["id": id.rawValue],
                 body: .object(["clarification": .string(clarification), "scope": scope])))
     }
     public func investigationDocuments() async throws -> [AIResearchDocument] {
@@ -52,10 +52,10 @@ extension APIClient: AIInvestigationService {
     public func investigationUpload(_ file: AIResearchDocumentFile) async throws -> AIResearchDocument {
         try await send(AIInvestigationUploadRequest(file: file))
     }
-    public func investigationDeleteDocument(id: String) async throws {
+    public func investigationDeleteDocument(id: ResearchDocumentID) async throws {
         let _: APIEmpty = try await send(
             ResearchRequest<OpenAPIOperations.DeleteAiResearchDocument, APIEmpty>(
-                OpenAPIOperations.DeleteAiResearchDocument.self, parameters: ["id": id]))
+                OpenAPIOperations.DeleteAiResearchDocument.self, parameters: ["id": id.rawValue]))
     }
 }
 public struct AIInvestigationUploadRequest: APIOperation {

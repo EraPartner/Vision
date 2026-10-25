@@ -221,7 +221,7 @@
             let columnWidth = (width - 32) * 0.75 / 5
             let columnStart = headerBounds.midX - columnWidth / 2
             let printedAmount = NativePDFGlyphs.text(page, from: columnStart, to: headerBounds.midX + columnWidth / 2)
-            let expected = MoneyText.text(Decimal(string: amount)!, currency: "EUR", settings: settings, signed: false)
+            let expected = MoneyText.text(Decimal(string: amount)!, currency: ReportingFallbackCurrency.euro, settings: settings, signed: false)
             #expect(
                 printedAmount.contains(expected.filter { !$0.isWhitespace }),
                 "Amount column \(headerBounds): \(printedAmount)\n\(NativePDFGlyphs.layout(page))")

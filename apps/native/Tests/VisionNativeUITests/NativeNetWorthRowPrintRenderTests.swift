@@ -97,7 +97,7 @@
             #expect(footers.count == 1)
             let documents = try render(pages)
             for account in accounts where account.accountId != nil {
-                let identifier = String(format: "%03d", account.accountId!)
+                let identifier = String(format: "%03d", account.accountId!.rawValue)
                 let containing = documents.filter { $0.string?.contains("StartAccount" + identifier) == true }
                 #expect(containing.count == 1)
                 #expect(containing.first?.string?.contains("EndAccount" + identifier) == true)
@@ -264,7 +264,7 @@
             let visible = limit.map { Array(rows.reversed().dropFirst(offset ?? 0).prefix($0)) } ?? rows
             return .init(
                 unconvertedCurrencies: [],
-                current: .init(liquid: 100, liabilities: 10, investments: 947, netWorth: 1037, currency: currency),
+                current: .init(liquid: 100, liabilities: 10, investments: 947, netWorth: 1037, currency: CurrencyCode(rawValue: currency) ?? ReportingFallbackCurrency.euro),
                 monthlyChange: 24, monthlyChangePercent: 2, snapshots: visible,
                 snapshotsTotal: limit == nil ? nil : 36, snapshotsLimit: limit, snapshotsOffset: offset)
         }
@@ -281,12 +281,12 @@
                 let cash = Decimal(1000 + id)
                 total += cash + 200
                 return .init(
-                    accountId: id, name: "StartAccount\(token) \(details) EndAccount\(token)", type: "checking",
-                    cashCurrency: "EUR", cash: cash, holdings: 200, total: cash + 200, unconverted: false)
+                    accountId: AccountID(id), name: "StartAccount\(token) \(details) EndAccount\(token)", type: "checking",
+                    cashCurrency: ReportingFallbackCurrency.euro, cash: cash, holdings: 200, total: cash + 200, unconverted: false)
             }
             rows.append(.init(accountId: nil, holdings: 50, total: 50, unconverted: false))
             total += 50
-            return .init(currency: currency, rows: rows, total: total, unconvertedAccountIds: [])
+            return .init(currency: CurrencyCode(rawValue: currency) ?? ReportingFallbackCurrency.euro, rows: rows, total: total, unconvertedAccountIds: [])
         }
         func netWorthPrices() async throws -> [NetWorthInvestmentPrice] {
             calls.append("prices")

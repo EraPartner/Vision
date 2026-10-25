@@ -8,10 +8,10 @@ struct AnalysisMonitorsStatus: View {
         VisionBadge(text: strings.t("monitors.status." + (status ?? "never")), tone: tone, small: true)
     }
     private var tone: BadgeTone {
-        switch status {
-        case "triggered", "partial", "stale": .warning
-        case "failed": .destructive
-        case "baseline", "cooldown-pending": .secondary
+        switch status.flatMap(AnalysisMonitorStatus.init(rawValue:)) {
+        case .triggered?, .partial?, .stale?: .warning
+        case .failed?: .destructive
+        case .baseline?, .cooldownPending?: .secondary
         default: .muted
         }
     }
@@ -48,7 +48,9 @@ struct AnalysisMonitorsObservationView: View {
                 )
                 .font(.callout).monospacedDigit()
             }
-            if item.coverage["status"]?.stringValue == "unknown" {
+            if item.coverage["status"]?.stringValue.map(OpenAPI.AnalysisMonitorObservation.Coverage.Status.init(rawValue:))
+                == .some(.unknownValue)
+            {
                 Text(strings.t("monitors.coverage")).font(.caption).foregroundStyle(theme.secondaryLabel)
             }
         }.padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)

@@ -64,11 +64,11 @@ public enum TableChange: Equatable, Sendable {
     case update(pk: [String: JSONValue], xmin: JSONValue?, set: [String: JSONValue])
     case delete(pk: [String: JSONValue], xmin: JSONValue?)
 
-    public var op: String {
+    public var op: OpenAPIOperations.AdminMutateTableRows.Body.ChangesItem.Op {
         switch self {
-        case .insert: return "insert"
-        case .update: return "update"
-        case .delete: return "delete"
+        case .insert: return .insert
+        case .update: return .update
+        case .delete: return .delete
         }
     }
 

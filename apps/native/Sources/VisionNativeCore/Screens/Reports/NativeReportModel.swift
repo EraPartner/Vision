@@ -8,7 +8,7 @@ import Observation
     public var customYear = ""
     public var customFrom = ""
     public var customTo = ""
-    public var currency = "EUR"
+    public var currency: CurrencyCode = ReportingFallbackCurrency.euro
     public private(set) var selectedSections: Set<String> = []
     private var sectionOrder: [String] = []
     public private(set) var isSubmitting = false
@@ -67,8 +67,7 @@ import Observation
         customYear = String(currentYear)
         customFrom = "\(currentYear - 1)-01-01"
         customTo = today
-        let preferred = callbacks.preferences().currency
-        currency = preferred.isEmpty ? "EUR" : preferred
+        currency = callbacks.preferences().currency
         sectionOrder = type.sections.map(\.id)
         selectedSections = Set(sectionOrder)
         isSubmitting = false
@@ -129,12 +128,12 @@ import Observation
         let preferences = callbacks.preferences()
         let filtered = preferences.exclusionsApply(type: reportType)
         var body: [String: TaxValue] = [
-            "currency": .string(currency), "period": period.value,
+            "currency": .string(currency.rawValue), "period": period.value,
             "sections": .array(selected.map(TaxValue.string)),
             "excludedCategoryIds": .array(
-                (filtered ? preferences.excludedCategoryIds : []).map { .number(Decimal($0)) }),
+                (filtered ? preferences.excludedCategoryIds : []).map { .number(Decimal($0.rawValue)) }),
             "excludedRecipientIds": .array(
-                (filtered ? preferences.excludedRecipientIds : []).map { .number(Decimal($0)) }),
+                (filtered ? preferences.excludedRecipientIds : []).map { .number(Decimal($0.rawValue)) }),
         ]
         isSubmitting = true
         errorDetail = nil

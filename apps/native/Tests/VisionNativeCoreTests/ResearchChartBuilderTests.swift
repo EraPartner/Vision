@@ -346,7 +346,7 @@ struct ResearchChartBuilderTests {
         state.series = (0..<5).map { .init(id: "s\($0)", symbol: "S\($0)") }
         state.oscillatorSeriesId = "s0"
         model.state = state
-        model.preset("priceVolume")
+        model.preset(.priceVolume)
         #expect(model.state == state)
         model.addIndicator(type: "ema")
         let indicator = try #require(model.state.indicators.first)
@@ -371,7 +371,7 @@ struct ResearchChartBuilderTests {
         let model = chartTestModel(transport, store: store)
         await model.load(route: chartTestRoute)
         #expect(await transport.chartReads == 1)
-        model.preset("priceVolume")
+        model.preset(.priceVolume)
         await model.loadSeries()
         #expect(model.state.series.count == 2)
         #expect(await transport.chartReads == 1)
@@ -401,7 +401,7 @@ struct ResearchChartBuilderTests {
         await model.load(route: chartTestRoute)
         await model.flushStorage()
         clock.advance(61)
-        model.preset("priceVolume")
+        model.preset(.priceVolume)
         await model.loadSeries()
         #expect(model.state.series.count == 2)
         #expect(await transport.chartReads == 1)

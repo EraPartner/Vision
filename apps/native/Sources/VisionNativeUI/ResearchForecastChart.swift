@@ -6,13 +6,13 @@ import VisionNativeCore
 /// Double is used only for the chart coordinates and date hit testing.
 struct ResearchForecastChart: View {
     let points: [ResearchForecastPoint]
-    let currency: String
+    let currency: CurrencyCode
     let shell: NativeShellModel
     let isLoading: Bool
     @State private var selected: Int?
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
-    init(points: [ResearchForecastPoint], currency: String, shell: NativeShellModel, isLoading: Bool) {
+    init(points: [ResearchForecastPoint], currency: CurrencyCode, shell: NativeShellModel, isLoading: Bool) {
         self.points = points
         self.currency = currency
         self.shell = shell

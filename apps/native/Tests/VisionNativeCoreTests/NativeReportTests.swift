@@ -47,7 +47,8 @@ actor ReportTestTransport: APITransport {
 }
 
 @MainActor private final class ReportCallbackRecorder {
-    var preferences = NativeReportPreferences(currency: "USD", excludedCategoryIds: [3], excludedRecipientIds: [7])
+    var preferences = NativeReportPreferences(
+        currency: CurrencyCode(rawValue: "USD")!, excludedCategoryIds: [3], excludedRecipientIds: [7])
     var theme: TaxValue = .object(["mode": .string("dark"), "primary": .string("158 62% 32%")])
     var contexts: [Int: TaxValue] = [:]
     var contextYears: [Int] = []
@@ -99,7 +100,7 @@ actor ReportTestTransport: APITransport {
         let recorder = ReportCallbackRecorder()
         let model = model(ReportTestService(), recorder)
         model.configure(type: .financial, origin: "/tax?year=2020")
-        #expect(model.periodPreset == .rolling12 && model.currency == "USD")
+        #expect(model.periodPreset == .rolling12 && model.currency == CurrencyCode(rawValue: "USD"))
         #expect(model.customYear == String(model.currentYear))
         #expect(model.customFrom == "\(model.currentYear - 1)-01-01" && model.customTo == model.today)
         #expect(model.sections.count == 7 && model.allSectionsSelected && model.canSubmit)
@@ -110,7 +111,7 @@ actor ReportTestTransport: APITransport {
         model.setType(.tax)
         #expect(model.sections.count == 7 && model.allSectionsSelected)
         #expect(
-            NativeReportForm.currencies == [
+            NativeReportForm.currencies.map(\.rawValue) == [
                 "EUR", "USD", "GBP", "CHF", "JPY", "CAD", "AUD", "SEK", "NOK", "DKK", "PLN", "CZK",
             ])
     }
@@ -235,9 +236,9 @@ actor ReportTestTransport: APITransport {
         recorder.saved = false
         let model = model(service, recorder)
         model.configure(type: .portfolio)
-        model.currency = "GBP"
+        model.currency = CurrencyCode(rawValue: "GBP")!
         await model.submit()
-        #expect(model.isPresented && model.canSubmit && model.currency == "GBP")
+        #expect(model.isPresented && model.canSubmit && model.currency == CurrencyCode(rawValue: "GBP"))
         #expect(recorder.saves.count == 1 && recorder.notices.isEmpty && recorder.closes == 0)
     }
     @Test func receiptFailureKeepsDialogAndShowsSourceFailure() async {
@@ -269,10 +270,10 @@ actor ReportTestTransport: APITransport {
         await service.waitForRequest()
         model.didDisappear()
         model.configure(type: .tax)
-        model.currency = "CHF"
+        model.currency = CurrencyCode(rawValue: "CHF")!
         await service.finish()
         await task.value
-        #expect(model.isPresented && model.type == .tax && model.currency == "CHF" && model.canSubmit)
+        #expect(model.isPresented && model.type == .tax && model.currency == CurrencyCode(rawValue: "CHF") && model.canSubmit)
         #expect(recorder.saves.isEmpty && recorder.closes == 0 && recorder.notices.isEmpty)
     }
     @Test func staleThemeCallbackCannotStartReportRequest() async {
@@ -320,23 +321,23 @@ actor ReportTestTransport: APITransport {
         model.setType(.financial)
         model.periodPreset = .year
         model.customYear = "2020"
-        model.currency = "CHF"
+        model.currency = CurrencyCode(rawValue: "CHF")!
         model.setSection("plannedOutlook", selected: false)
         model.didDisappear()
         model.configure(type: .tax, origin: "/tax?year=2024&export=pdf")
         #expect(model.type == .financial && model.periodPreset == .year && model.customYear == "2020")
-        #expect(model.currency == "CHF" && !model.selectedSections.contains("plannedOutlook"))
+        #expect(model.currency == CurrencyCode(rawValue: "CHF") && !model.selectedSections.contains("plannedOutlook"))
         #expect(model.isPresented && model.canSubmit)
     }
     @Test func pageUnmountDropsDraftBeforeSameRouteReturns() {
         let model = model(ReportTestService(), ReportCallbackRecorder())
         model.configure(type: .tax, origin: "/tax?year=2025&export=pdf")
-        model.currency = "CHF"
+        model.currency = CurrencyCode(rawValue: "CHF")!
         model.periodPreset = .year
         model.customYear = "2020"
         model.didLeavePage()
         model.configure(type: .tax, origin: "/tax?year=2025&export=pdf")
-        #expect(model.type == .tax && model.periodPreset == .rolling12 && model.currency == "USD")
+        #expect(model.type == .tax && model.periodPreset == .rolling12 && model.currency == CurrencyCode(rawValue: "USD"))
         #expect(model.customYear == String(model.currentYear) && model.allSectionsSelected)
     }
     @Test func graphRetirementPermanentlyRejectsReconfigureAndSubmission() async {

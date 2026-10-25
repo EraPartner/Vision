@@ -346,13 +346,13 @@ public struct ResearchAnalystData: Codable, Equatable, Sendable {
 
 public struct ResearchWatchlistItem: Codable, Equatable, Sendable, Identifiable {
     public let raw: TaxValue
-    public let id: Int
+    public let id: WatchlistItemID
     public let name: String
     public let symbol: String?
     public let assetClass: String
     public let targetPrice: Decimal
     public let addedPrice: Decimal?
-    public let currency: String
+    public let currency: CurrencyCode
     public let notes: String?
     public let priceProviderId: String?
     public let createdAt: String
@@ -361,13 +361,16 @@ public struct ResearchWatchlistItem: Codable, Equatable, Sendable, Identifiable 
     public init(raw: TaxValue) throws {
         try ResearchDecode.requireObject(raw)
         self.raw = raw
-        id = try ResearchDecode.count(raw["id"])
+        id = WatchlistItemID(try ResearchDecode.count(raw["id"]))
         name = try ResearchDecode.string(raw["name"])
         symbol = try ResearchDecode.optionalString(raw["symbol"])
         assetClass = try ResearchDecode.string(raw["asset_class"])
         targetPrice = try ResearchDecode.decimal(raw["target_price"])
         addedPrice = try ResearchDecode.optionalDecimal(raw["added_price"])
-        currency = try ResearchDecode.string(raw["currency"])
+        guard let code = CurrencyCode(rawValue: try ResearchDecode.string(raw["currency"])) else {
+            throw ResearchDecode.failure("Invalid watchlist currency")
+        }
+        currency = code
         notes = try ResearchDecode.optionalString(raw["notes"])
         priceProviderId = try ResearchDecode.optionalString(raw["price_provider_id"])
         createdAt = try ResearchDecode.string(raw["created_at"])
@@ -413,14 +416,14 @@ public struct ResearchPriceHistoryPoint: Codable, Equatable, Sendable {
 
 public struct ResearchPriceHistoryData: Codable, Equatable, Sendable {
     public let raw: TaxValue
-    public let investmentId: Int
+    public let investmentId: InvestmentID
     public let provider: String
     public let points: [ResearchPriceHistoryPoint]
 
     public init(raw: TaxValue) throws {
         try ResearchDecode.requireObject(raw)
         self.raw = raw
-        investmentId = try ResearchDecode.count(raw["investment_id"])
+        investmentId = InvestmentID(try ResearchDecode.count(raw["investment_id"]))
         provider = try ResearchDecode.string(raw["provider"])
         points = try ResearchDecode.required(raw["points"], [ResearchPriceHistoryPoint].self)
     }
@@ -430,7 +433,7 @@ public struct ResearchPriceHistoryData: Codable, Equatable, Sendable {
 
 public struct ResearchMapping: Codable, Equatable, Sendable, Identifiable {
     public let raw: TaxValue
-    public let id: Int
+    public let id: InstrumentProviderMappingID
     public let instrumentKey: String
     public let keyType: String
     public let provider: String
@@ -446,7 +449,7 @@ public struct ResearchMapping: Codable, Equatable, Sendable, Identifiable {
     public init(raw: TaxValue) throws {
         try ResearchDecode.requireObject(raw)
         self.raw = raw
-        id = try ResearchDecode.count(raw["id"])
+        id = InstrumentProviderMappingID(try ResearchDecode.count(raw["id"]))
         instrumentKey = try ResearchDecode.string(raw["instrument_key"])
         keyType = try ResearchDecode.string(raw["key_type"])
         provider = try ResearchDecode.string(raw["provider"])

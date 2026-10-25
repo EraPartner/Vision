@@ -221,7 +221,7 @@ private struct ResearchWatchlistRow: View {
 
 enum ResearchWatchlistUI {
     static func name(_ item: ResearchWatchlistItem) -> String { item.name.isEmpty ? item.symbol ?? "" : item.name }
-    @MainActor static func money(_ value: Decimal, currency: String, shell: NativeShellModel) -> String {
+    @MainActor static func money(_ value: Decimal, currency: CurrencyCode, shell: NativeShellModel) -> String {
         VisionFormat.currency(
             value, code: currency, locale: shell.settings.numberFormat.locale,
             fractionDigits: shell.settings.showDecimalPlaces)

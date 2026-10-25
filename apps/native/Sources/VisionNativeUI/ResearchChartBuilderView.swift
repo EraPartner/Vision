@@ -158,8 +158,8 @@ public struct ResearchChartBuilderView: View {
         }
     }
     private var presets: some View {
-        ForEach(["priceVolume", "sma", "bollinger", "rsi", "macd", "rebased"], id: \.self) { name in
-            Button(strings.t("research.builder.preset." + name)) { model.preset(name) }.disabled(
+        ForEach(ResearchChartBuilderPreset.allCases, id: \.self) { name in
+            Button(strings.t("research.builder.preset." + name.rawValue)) { model.preset(name) }.disabled(
                 !model.state.series.contains { $0.field == "price" })
         }
     }

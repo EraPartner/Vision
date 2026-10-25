@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 @MainActor @Observable public final class AIChatModel {
-    public private(set) var selectedID: String?
+    public private(set) var selectedID: AiConversationID?
     public private(set) var mode: AIChatMode = .chat
     public var draft = ""
     public var modelOverride: String? = nil { didSet { syncResidency() } }
@@ -72,7 +72,7 @@ import Observation
         selectedID.flatMap { streams.details[$0] } ?? (selectedID == nil ? nil : placeholderDetail)
     }
     public var streamSnapshot: AIChatStreamSnapshot { streams.snapshot(id: selectedID) }
-    public var streamingIDs: [String] { streams.activeIDs }
+    public var streamingIDs: [AiConversationID] { streams.activeIDs }
     public var activeModel: String? {
         modelOverride ?? detail?.conversation.model ?? settings.aiDefaultModel ?? status?.defaultModel
     }
@@ -91,7 +91,7 @@ import Observation
         var result = persisted
         let snapshot = streamSnapshot
         if let user = snapshot.userMessage, !seen.contains(user.id),
-            !(user.isOptimistic && persisted.contains { $0.role == "user" && $0.content == user.content })
+            !(user.isOptimistic && persisted.contains { $0.role == .user && $0.content == user.content })
         {
             result.append(user)
             seen.insert(user.id)
@@ -155,8 +155,8 @@ import Observation
             visit = UUID()
         }
         self.route = route
-        mode = route.value("mode") == "investigation" ? .investigation : .chat
-        let id = route.value("c") ?? streams.activeIDs.first
+        mode = route.value("mode").flatMap(AIChatMode.init(rawValue:)) == .investigation ? .investigation : .chat
+        let id = route.value("c").map { AiConversationID($0) } ?? streams.activeIDs.first
         let selectionChanged = selectedID != id
         if selectionChanged {
             placeholderDetail = detail
@@ -165,7 +165,7 @@ import Observation
             isLoadingDetail = false
         }
         if route.value("c") == nil, let id {
-            self.route = route.setting("c", to: id)
+            self.route = route.setting("c", to: id.rawValue)
             didReplaceRoute?(self.route)
         }
         syncResidency()
@@ -188,13 +188,13 @@ import Observation
         route = route.setting("mode", to: mode.rawValue)
         didReplaceRoute?(route)
     }
-    public func select(id: String?) async {
+    public func select(id: AiConversationID?) async {
         guard selectedID != id else { return }
         placeholderDetail = detail
         selectedID = id
         selectionRevision = UUID()
         isLoadingDetail = false
-        route = id.map { route.setting("c", to: $0) } ?? route.removing("c")
+        route = id.map { route.setting("c", to: $0.rawValue) } ?? route.removing("c")
         didReplaceRoute?(route)
         syncResidency()
         await loadDetail()
@@ -347,17 +347,17 @@ import Observation
             syncResidency()
         } catch { if revision == selectionRevision, isActive { errors["detail"] = error.localizedDescription } }
     }
-    private func sweep(id: String) {
+    private func sweep(id: AiConversationID) {
         let snapshot = streams.snapshot(id: id)
         guard snapshot.isStreaming, let user = snapshot.userMessage, !user.isOptimistic,
             let messages = streams.details[id]?.messages,
             let userIndex = messages.firstIndex(where: { $0.id == user.id }),
-            let last = messages.indices.last, last > userIndex, messages[last].role == "assistant"
+            let last = messages.indices.last, last > userIndex, messages[last].role == .assistant
         else { return }
         streams.clear(id: id)
     }
-    @discardableResult public func create() async -> String? { await create(model: nil) }
-    private func create(model: String?) async -> String? {
+    @discardableResult public func create() async -> AiConversationID? { await create(model: nil) }
+    private func create(model: String?) async -> AiConversationID? {
         guard !isCreating else { return nil }
         isCreating = true
         let capturedVisit = visit
@@ -379,7 +379,7 @@ import Observation
             return nil
         }
     }
-    @discardableResult public func rename(id: String, title: String) async -> Bool {
+    @discardableResult public func rename(id: AiConversationID, title: String) async -> Bool {
         let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !isRenaming, !title.isEmpty, title.utf16.count <= 120 else { return false }
         isRenaming = true
@@ -403,7 +403,7 @@ import Observation
             return false
         }
     }
-    @discardableResult public func delete(id: String) async -> Bool {
+    @discardableResult public func delete(id: AiConversationID) async -> Bool {
         guard !isDeleting else { return false }
         isDeleting = true
         defer { isDeleting = false }
@@ -436,7 +436,7 @@ import Observation
     private func send(message: String, digest: Bool) async {
         let model = activeModel
         let tools = digest ? true : useTools
-        let id: String
+        let id: AiConversationID
         if let selectedID {
             id = selectedID
         } else {

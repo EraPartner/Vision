@@ -27,7 +27,7 @@ struct ResearchDossierEvidenceListView: View {
 
 struct ResearchDossierEvidenceView: View {
     let model: ResearchDossiersModel
-    let evidenceId: String
+    let evidenceId: ResearchDossierEvidenceID
     let index: Int
     let shell: NativeShellModel
     @Environment(\.visionTheme) private var theme
@@ -38,7 +38,7 @@ struct ResearchDossierEvidenceView: View {
             HStack {
                 Text(
                     strings.t("dossiers.evidenceNumber", ["number": String(index + 1)]) + " · "
-                        + strings.t("dossiers.origin." + (item?.origin ?? "user"))
+                        + strings.t("dossiers.origin." + (item?.origin ?? .user).rawValue)
                 )
                 .font(.headline).accessibilityAddTraits(.isHeader)
                 Spacer()
@@ -48,14 +48,16 @@ struct ResearchDossierEvidenceView: View {
             }
             HStack(alignment: .top, spacing: 16) {
                 ResearchDossierField(label: strings.t("dossiers.field.origin")) {
-                    Picker("", selection: text(\.origin)) {
-                        ForEach(["user", "ai-draft"], id: \.self) { Text(strings.t("dossiers.origin." + $0)).tag($0) }
+                    Picker("", selection: choice(\.origin, fallback: .user)) {
+                        ForEach(ResearchDossierOrigin.allCases, id: \.self) {
+                            Text(strings.t("dossiers.origin." + $0.rawValue)).tag($0)
+                        }
                     }.pickerStyle(.segmented).accessibilityLabel(strings.t("dossiers.field.origin"))
                 }
                 ResearchDossierField(label: strings.t("dossiers.field.stance")) {
-                    Picker("", selection: text(\.stance)) {
-                        ForEach(["support", "oppose", "context"], id: \.self) {
-                            Text(strings.t("dossiers.stance." + $0)).tag($0)
+                    Picker("", selection: choice(\.stance, fallback: .context)) {
+                        ForEach(ResearchDossierStance.allCases, id: \.self) {
+                            Text(strings.t("dossiers.stance." + $0.rawValue)).tag($0)
                         }
                     }.pickerStyle(.segmented).accessibilityLabel(strings.t("dossiers.field.stance"))
                 }
@@ -65,21 +67,19 @@ struct ResearchDossierEvidenceView: View {
                 Picker(
                     "",
                     selection: Binding(
-                        get: { item?.source.documentId ?? "" },
-                        set: {
-                            model.updateSourceDocument(evidenceId: evidenceId, documentId: $0.isEmpty ? nil : $0)
-                        })
+                        get: { item?.source.documentId },
+                        set: { model.updateSourceDocument(evidenceId: evidenceId, documentId: $0) })
                 ) {
-                    Text(strings.t("dossiers.noDocument")).tag("")
+                    Text(strings.t("dossiers.noDocument")).tag(ResearchDocumentID?.none)
                     if let id = item?.source.documentId, !model.readyDocuments.contains(where: { $0.id == id }) {
                         // Keep the stored pin visible without treating an unready document as selectable.
                         Text(
                             model.documents.first(where: { $0.id == id })?.title
                                 ?? strings.t("dossiers.documentUnavailable")
-                        ).tag(id)
+                        ).tag(Optional(id))
                             .disabled(true)
                     }
-                    ForEach(model.readyDocuments) { Text($0.title).tag($0.id) }
+                    ForEach(model.readyDocuments) { Text($0.title).tag(Optional($0.id)) }
                 }.labelsHidden().accessibilityLabel(strings.t("dossiers.field.document"))
                 if model.pickerErrors["documents"] != nil {
                     Text(strings.t("dossiers.documentsError")).font(.caption).foregroundStyle(theme.destructive)
@@ -116,7 +116,7 @@ struct ResearchDossierEvidenceView: View {
                     strings.t(
                         "dossiers.documentAnchor",
                         [
-                            "id": source.documentId ?? "—", "version": source.documentVersion.map(String.init) ?? "—",
+                            "id": source.documentId?.rawValue ?? "—", "version": source.documentVersion.map(String.init) ?? "—",
                             "passage": source.passageOrdinal.map(String.init) ?? "—",
                             "hash": source.contentSha256 ?? "—",
                         ])
@@ -131,6 +131,9 @@ struct ResearchDossierEvidenceView: View {
             edit(&draft.evidence[index])
             model.draft = draft
         }
+    }
+    private func choice<Value>(_ path: WritableKeyPath<ResearchDossierEvidence, Value>, fallback: Value) -> Binding<Value> {
+        Binding(get: { item?[keyPath: path] ?? fallback }, set: { value in mutate { $0[keyPath: path] = value } })
     }
     private func text(_ path: WritableKeyPath<ResearchDossierEvidence, String>) -> Binding<String> {
         Binding(get: { item?[keyPath: path] ?? "" }, set: { value in mutate { $0[keyPath: path] = value } })

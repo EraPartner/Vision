@@ -3,8 +3,8 @@ import Observation
 
 public struct ResearchMarketBrokerContext: Sendable {
     public let accounts: [OpenAPI.Account]
-    public let preferredBrokerId: Int?
-    public init(accounts: [OpenAPI.Account], preferredBrokerId: Int?) {
+    public let preferredBrokerId: AccountID?
+    public init(accounts: [OpenAPI.Account], preferredBrokerId: AccountID?) {
         self.accounts = accounts
         self.preferredBrokerId = preferredBrokerId
     }
@@ -14,9 +14,15 @@ public struct ResearchMarketInvestmentDraft: Equatable, Sendable {
     public init() {}
 }
 public struct ResearchMarketTradeDraft: Equatable, Sendable {
+    /// Which account the trade books to: the one the history suggests, none, or a chosen one.
+    public enum BrokerChoice: Equatable, Sendable {
+        case preferred
+        case unassigned
+        case account(AccountID)
+    }
     public var type = "buy", date = "", amount = "", units = "", price = "", fees = "", taxes = "", fx = "", note = ""
     public var dividendConvention = "unknown", recurrenceInterval = "monthly", recurrenceEndDate = ""
-    public var accountId: String?
+    public var broker: BrokerChoice = .preferred
     public var isRecurring = false
     public init() {}
 }
@@ -29,7 +35,7 @@ public struct ResearchMarketTradeDraft: Equatable, Sendable {
     public private(set) var quote: ResearchQuote?
     public private(set) var holding: PortfolioHolding?
     public private(set) var brokers: [OpenAPI.Account] = []
-    public private(set) var preferredBrokerId: Int?
+    public private(set) var preferredBrokerId: AccountID?
     public private(set) var unitMath: TaxValue?
     public private(set) var isComputing = false
     public private(set) var isSubmitting = false
@@ -40,7 +46,7 @@ public struct ResearchMarketTradeDraft: Equatable, Sendable {
     public private(set) var notice: ScreenNotice?
     public private(set) var globalNoticesAttached = false
     @ObservationIgnored private var notices = NoticeCounter()
-    public var brokerContext: (@MainActor (Int?) async -> ResearchMarketBrokerContext)?
+    public var brokerContext: (@MainActor (InvestmentID?) async -> ResearchMarketBrokerContext)?
     public var didMutate: (@MainActor () async -> Void)?
     @ObservationIgnored private let service: any ResearchService
     @ObservationIgnored private var baselineInvestment = ResearchMarketInvestmentDraft()
@@ -62,7 +68,13 @@ public struct ResearchMarketTradeDraft: Equatable, Sendable {
         return "stock"
     }
     public var deriveUnits: Bool { ["buy", "sell"].contains(trade.type) }
-    public var effectiveBrokerId: Int? { trade.accountId.map { Int($0) } ?? preferredBrokerId }
+    public var effectiveBrokerId: AccountID? {
+        switch trade.broker {
+        case .preferred: preferredBrokerId
+        case .unassigned: nil
+        case .account(let id): id
+        }
+    }
     public func configure(quote: ResearchQuote?, holding: PortfolioHolding?, numberFormat: NumberFormat) {
         let changesSymbol = self.quote?.symbol != quote?.symbol
         let changesBookingContext = self.holding?.id != holding?.id || self.holding?.currency != holding?.currency
@@ -230,7 +242,7 @@ public struct ResearchMarketTradeDraft: Equatable, Sendable {
             }
             var body: [String: TaxValue] = [
                 "type": .string(trade.type), "date": .string(trade.date), "amount": .number(amount),
-                "currency": .string(holding.currency),
+                "currency": .string(holding.currency.rawValue),
                 "dividend_amount_convention": .string(trade.type == "dividend" ? trade.dividendConvention : "unknown"),
                 "is_recurring": .bool(trade.isRecurring),
             ]
@@ -241,7 +253,7 @@ public struct ResearchMarketTradeDraft: Equatable, Sendable {
                     body[key] = .number(value)
                 }
             }
-            if let broker = effectiveBrokerId { body["account_id"] = .number(Decimal(broker)) }
+            if let broker = effectiveBrokerId { body["account_id"] = .number(Decimal(broker.rawValue)) }
             let note = trade.note.trimmingCharacters(in: .whitespacesAndNewlines)
             if !note.isEmpty { body["note"] = .string(note) }
             if trade.isRecurring {

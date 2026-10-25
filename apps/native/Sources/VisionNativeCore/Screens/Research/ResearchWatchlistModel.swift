@@ -13,7 +13,7 @@ public final class ResearchWatchlistModel {
     public var isOnline = true
     public var quotesUnavailable: Bool { !isOnline || quotesError != nil }
     public private(set) var metrics: [Int: ResearchWatchlistMetrics] = [:]
-    public private(set) var selectedItemID: Int?
+    public private(set) var selectedItemID: WatchlistItemID?
     public var selectedItem: ResearchWatchlistItem? { page?.items.first { $0.id == selectedItemID } }
     public private(set) var range: ResearchWatchlistRange = .month
     public private(set) var chart: ResearchChartData?
@@ -175,7 +175,7 @@ public final class ResearchWatchlistModel {
         metricsRevision = revision
         let entries: [TaxValue] = page.items.map { item in
             .object([
-                "id": .number(Decimal(item.id)), "targetPrice": .number(item.targetPrice),
+                "id": .number(Decimal(item.id.rawValue)), "targetPrice": .number(item.targetPrice),
                 "currentPrice": item.symbol.flatMap { quotes[$0]?.price }.map(TaxValue.number) ?? .null,
                 "addedPrice": item.addedPrice.map(TaxValue.number) ?? .null,
             ])
@@ -198,7 +198,7 @@ public final class ResearchWatchlistModel {
         } catch { if metricsRevision == revision { metrics = [:] } }
     }
 
-    public func openChart(id: Int) async {
+    public func openChart(id: WatchlistItemID) async {
         guard page?.items.contains(where: { $0.id == id }) == true else { return }
         if selectedItemID != id {
             closeChart()

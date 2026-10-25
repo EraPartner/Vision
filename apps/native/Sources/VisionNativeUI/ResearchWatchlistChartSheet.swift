@@ -254,7 +254,7 @@ private struct ResearchWatchlistPriceChart: View {
                             shell.strings.t(
                                 "watchlistChart.targetLabel",
                                 [
-                                    "currency": item.currency,
+                                    "currency": item.currency.rawValue,
                                     "price": ResearchWatchlistUI.money(
                                         item.targetPrice, currency: item.currency, shell: shell),
                                 ])

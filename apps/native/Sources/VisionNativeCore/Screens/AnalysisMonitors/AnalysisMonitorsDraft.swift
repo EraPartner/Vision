@@ -4,8 +4,8 @@ public enum AnalysisMonitorInput: String, Sendable { case title, target, field, 
 public struct AnalysisMonitorDraft: Equatable, Sendable {
     public var kind: AnalysisMonitorKind = .threshold
     public var title = ""
-    public var savedAnalysisId = ""
-    public var dossierId = ""
+    public var savedAnalysisId: SavedAnalysisID?
+    public var dossierId: ResearchDossierID?
     public var fieldId = ""
     public var `operator`: AnalysisMonitorOperator = .above
     public var threshold = ""
@@ -17,8 +17,8 @@ public struct AnalysisMonitorDraft: Equatable, Sendable {
     public init(rule: AnalysisMonitorRule) {
         kind = rule.kind
         title = rule.title
-        savedAnalysisId = rule.savedAnalysisId ?? ""
-        dossierId = rule.dossierId ?? ""
+        savedAnalysisId = rule.savedAnalysisId
+        dossierId = rule.dossierId
         fieldId = rule.fieldId ?? ""
         self.operator = rule.operator ?? .above
         threshold = rule.threshold ?? ""
@@ -51,12 +51,12 @@ public struct AnalysisMonitorDraft: Equatable, Sendable {
             "intervalMinutes": .number(Decimal(interval)), "cooldownMinutes": .number(Decimal(cooldown)),
         ]
         if kind == .threshold {
-            value["savedAnalysisId"] = .string(savedAnalysisId)
+            value["savedAnalysisId"] = .string(savedAnalysisId?.rawValue ?? "")
             value["fieldId"] = .string(fieldId)
             value["operator"] = .string(self.operator.rawValue)
             value["threshold"] = .string(threshold)
         } else {
-            value["dossierId"] = .string(dossierId)
+            value["dossierId"] = .string(dossierId?.rawValue ?? "")
         }
         return .object(value)
     }
@@ -96,6 +96,6 @@ public enum AnalysisMonitorTargets {
         }
     }
     public static func eligible(_ analysis: AnalysisSaved) -> Bool {
-        analysis.refreshMode == "live" && !numericColumns(analysis).isEmpty
+        analysis.refreshMode == .live && !numericColumns(analysis).isEmpty
     }
 }

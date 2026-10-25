@@ -11,7 +11,7 @@ public enum NativeStatisticsPrintSection: Hashable, Identifiable, Sendable {
     case header, rhythm, digest, monthly, netTrend, categoryPie, categoryTrend
     case recipients, yearlyComparison, yearlySummary, flow, customHeader, customStatus
     case pivotTable(Int)
-    case savedChart(Int)
+    case savedChart(SavedChartID)
     public var id: String {
         switch self {
         case .pivotTable(let page): return "pivotTable:\(page)"
@@ -49,8 +49,8 @@ public struct NativeStatisticsPrintSnapshot: Sendable {
     public let digestError: String?
     public let digestExpanded: Bool
     public let savedCharts: [OpenAPI.SavedChart]
-    public let savedDatasets: [Int: CustomChartDataset]
-    public let savedErrors: [Int: String]
+    public let savedDatasets: [SavedChartID: CustomChartDataset]
+    public let savedErrors: [SavedChartID: String]
     public let savedError: String?
     public let savedLocalState: NativeStatisticsPrintLocalState
     public let settings: NativeAppSettings

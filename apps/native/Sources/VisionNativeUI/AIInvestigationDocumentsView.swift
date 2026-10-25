@@ -74,7 +74,7 @@ struct AIInvestigationDocumentsView: View {
             Image(systemName: "doc.text").foregroundStyle(theme.secondaryLabel).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(document.title).font(.callout)
-                Text(document.extractionStatus).font(.caption).foregroundStyle(theme.secondaryLabel)
+                Text(document.extractionStatus.rawValue).font(.caption).foregroundStyle(theme.secondaryLabel)
             }
             Spacer(minLength: 12)
             Button {

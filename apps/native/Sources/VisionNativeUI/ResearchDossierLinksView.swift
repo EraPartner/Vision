@@ -9,7 +9,7 @@ struct ResearchDossierLinksView: View {
     var body: some View {
         ResearchCard(title: strings.t("dossiers.links")) {
             Text(strings.t("dossiers.linksHint")).font(.callout).foregroundStyle(theme.secondaryLabel)
-            ForEach(model.detail?.linkDetails.filter { $0.status == "deleted" } ?? []) { item in
+            ForEach(model.detail?.linkDetails.filter { $0.status == .deleted } ?? []) { item in
                 ResearchDossierMessage(
                     text: strings.t("dossiers.deletedLink", ["label": item.labelSnapshot, "id": item.historicalId]),
                     kind: .info
@@ -32,19 +32,19 @@ struct ResearchDossierLinksView: View {
     private var categories: some View {
         ResearchDossierLinkPicker(
             label: strings.t("dossiers.linkCategories"), items: model.categories,
-            selected: (model.draft?.links.categoryIds ?? []).map(String.init),
+            selected: model.draft?.links.categoryIds ?? [],
             hasError: model.pickerErrors["categories"] != nil, shell: shell
         ) {
-            model.toggleLink(.categoryIds, id: $0)
+            model.toggleLink(category: $0)
         }
     }
     private var investments: some View {
         ResearchDossierLinkPicker(
             label: strings.t("dossiers.linkInvestments"), items: model.investments,
-            selected: (model.draft?.links.investmentIds ?? []).map(String.init),
+            selected: model.draft?.links.investmentIds ?? [],
             hasError: model.pickerErrors["investments"] != nil, shell: shell
         ) {
-            model.toggleLink(.investmentIds, id: $0)
+            model.toggleLink(investment: $0)
         }
     }
     private var analyses: some View {
@@ -53,23 +53,23 @@ struct ResearchDossierLinksView: View {
             selected: model.draft?.links.savedAnalysisIds ?? [], hasError: model.pickerErrors["analyses"] != nil,
             shell: shell
         ) {
-            model.toggleLink(.savedAnalysisIds, id: $0)
+            model.toggleLink(analysis: $0)
         }
     }
 }
 
-struct ResearchDossierLinkPicker: View {
+struct ResearchDossierLinkPicker<ID: Hashable & Sendable>: View {
     let label: String
-    let items: [ResearchDossierPickerItem]
-    let selected: [String]
+    let items: [ResearchDossierPickerItem<ID>]
+    let selected: [ID]
     let hasError: Bool
     let shell: NativeShellModel
-    let toggle: (String) -> Void
+    let toggle: (ID) -> Void
     @State private var query = ""
     @State private var isExpanded = false
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
-    private var visible: [ResearchDossierPickerItem] {
+    private var visible: [ResearchDossierPickerItem<ID>] {
         let filter = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(with: .current)
         return items.filter { $0.label.lowercased(with: .current).contains(filter) }
     }

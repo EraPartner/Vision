@@ -116,17 +116,17 @@ struct AnalysisCoreTests {
         let model = AnalysisModel(service: AnalysisFixtureService())
         model.configure(
             settings: .init(
-                defaultCurrency: "usd", analysisBenchmark: "sp500", aiAnswerDepth: "detailed", language: "nl"))
-        #expect(model.effectivePreferences.currency == "EUR")
+                defaultCurrency: "USD", analysisBenchmark: "sp500", aiAnswerDepth: "detailed", language: "nl"))
+        #expect(model.effectivePreferences.currency == CurrencyCode(rawValue: "USD"))
         #expect(model.effectivePreferences.benchmark == "SP500")
-        #expect(model.effectivePreferences.answerDepth == "detailed")
-        #expect(model.effectivePreferences.language == "nl")
+        #expect(model.effectivePreferences.answerDepth == .detailed)
+        #expect(model.effectivePreferences.language == .nl)
         model.runCurrency = "GBP"
         model.runWithoutBenchmark = true
         model.runLanguage = "en"
-        #expect(model.effectivePreferences.currency == "GBP")
+        #expect(model.effectivePreferences.currency == CurrencyCode(rawValue: "GBP"))
         #expect(model.effectivePreferences.benchmark == nil)
-        #expect(model.effectivePreferences.language == "en")
+        #expect(model.effectivePreferences.language == .en)
     }
     @Test func delayedSavedRunCannotResetNewPreferenceEditsAndStillRefreshesLibrary() async throws {
         let service = AnalysisFixtureService()
@@ -414,9 +414,9 @@ private func analysisResultWire(id: String? = nil, offset: Int = 0, partial: Boo
     if let id { result["requestId"] = .string(id) }
     return result
 }
-private func analysisSavedWire(id: String = "saved-A", version: Int = 2) -> TaxValue {
+private func analysisSavedWire(id: SavedAnalysisID = "saved-A", version: Int = 2) -> TaxValue {
     .object([
-        "id": .string(id), "definitionId": .string("definition-A"), "name": .string("Synthetic saved"),
+        "id": .string(id.rawValue), "definitionId": .string("definition-A"), "name": .string("Synthetic saved"),
         "workspace": .string("budgeting"), "version": .number(Decimal(version)), "refreshMode": .string("live"),
         "parameters": .object(["future": .string("retain"), "currency": .string("USD"), "benchmark": .null]),
         "charts": .array([]), "sourceReferences": .array([]), "refreshStatus": .string("succeeded"),
@@ -434,9 +434,9 @@ private func analysisSavedWire(id: String = "saved-A", version: Int = 2) -> TaxV
         ]),
     ])
 }
-private func analysisProposalWire(id: String = "saved-A") -> TaxValue {
+private func analysisProposalWire(id: SavedAnalysisID = "saved-A") -> TaxValue {
     .object([
-        "schemaVersion": .number(1), "savedAnalysisId": .string(id), "baseVersion": .number(2),
+        "schemaVersion": .number(1), "savedAnalysisId": .string(id.rawValue), "baseVersion": .number(2),
         "rationale": .string("Synthetic edit"),
         "operations": .array([
             .object(["op": .string("replace"), "path": .string("/name"), "value": .string("Synthetic name")])
@@ -528,7 +528,7 @@ private actor AnalysisFixtureService: AnalysisService {
         if hadSaveFailure { readsAfterSaveFailure += 1 }
         return [try analysisSavedWire().decode(AnalysisSaved.self)]
     }
-    func analysisSave(id: String?, input: TaxValue) async throws -> AnalysisSaved {
+    func analysisSave(id: SavedAnalysisID?, input: TaxValue) async throws -> AnalysisSaved {
         await wait("save")
         if saveFails {
             hadSaveFailure = true
@@ -536,16 +536,16 @@ private actor AnalysisFixtureService: AnalysisService {
         }
         return try analysisSavedWire(id: id ?? "saved-A", version: 3).decode(AnalysisSaved.self)
     }
-    func analysisRunSaved(id: String) async throws -> AnalysisSaved {
+    func analysisRunSaved(id: SavedAnalysisID) async throws -> AnalysisSaved {
         await wait("saved-run")
         return try analysisSavedWire(id: id, version: 3).decode(AnalysisSaved.self)
     }
-    func analysisDeleteSaved(id: String) async throws {}
-    func analysisVersions(id: String) async throws -> [AnalysisSavedVersion] {
+    func analysisDeleteSaved(id: SavedAnalysisID) async throws {}
+    func analysisVersions(id: SavedAnalysisID) async throws -> [AnalysisSavedVersion] {
         await wait("versions")
         return []
     }
-    func analysisRestore(id: String, version: Int, expectedVersion: Int) async throws -> AnalysisSaved {
+    func analysisRestore(id: SavedAnalysisID, version: Int, expectedVersion: Int) async throws -> AnalysisSaved {
         try analysisSavedWire(id: id, version: expectedVersion + 1).decode(AnalysisSaved.self)
     }
     func analysisPreviewProposal(_ proposal: AnalysisEditProposal) async throws -> AnalysisProposalPreview {
@@ -558,7 +558,7 @@ private actor AnalysisFixtureService: AnalysisService {
     func analysisApplyProposal(_ proposal: AnalysisEditProposal) async throws -> AnalysisSaved {
         try analysisSavedWire(id: proposal.savedAnalysisId, version: 3).decode(AnalysisSaved.self)
     }
-    func analysisGenerateProposal(id: String, instruction: String, model: String?) async throws
+    func analysisGenerateProposal(id: SavedAnalysisID, instruction: String, model: String?) async throws
         -> AnalysisProposalPreview
     { try await analysisPreviewProposal(analysisProposalWire(id: id).decode(AnalysisEditProposal.self)) }
     func analysisImport(file: AnalysisInterchangeFile, format: String) async throws -> AnalysisAttachment {

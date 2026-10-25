@@ -149,12 +149,12 @@ struct ResearchMarketActionSheet: View {
                 tradeField("addPortTxn.units", \.units)
                 tradeField("addPortTxn.pricePerUnit", \.price)
             }
-            tradeField("addPortTxn.totalAmount", \.amount, variables: ["currency": model.holding?.currency ?? "EUR"])
+            tradeField("addPortTxn.totalAmount", \.amount, variables: ["currency": model.holding?.currency.rawValue ?? ReportingFallbackCurrency.euro.rawValue])
             if model.deriveUnits, model.unitMath?["isConsistent"] == .bool(false) {
                 Text(strings.t("addPortTxn.error.twoOfThreeRequired")).font(.caption).foregroundStyle(theme.destructive)
             }
             if let amount = model.unitMath?["derivedAmount"]?.decimalValue {
-                Text(ResearchMarketDisplay.money(amount, currency: model.holding?.currency ?? "EUR", shell: shell))
+                Text(ResearchMarketDisplay.money(amount, currency: model.holding?.currency.rawValue ?? ReportingFallbackCurrency.euro.rawValue, shell: shell))
                     .font(.caption).foregroundStyle(theme.secondaryLabel)
             }
             if ["buy", "sell", "dividend"].contains(model.trade.type) {
@@ -209,11 +209,11 @@ struct ResearchMarketActionSheet: View {
                 Picker(
                     strings.t("addPortTxn.broker"),
                     selection: Binding(
-                        get: { model.trade.accountId ?? model.preferredBrokerId.map(String.init) ?? "" },
-                        set: { model.trade.accountId = $0 })
+                        get: { model.effectiveBrokerId },
+                        set: { model.trade.broker = $0.map { .account($0) } ?? .unassigned })
                 ) {
-                    Text(strings.t("addPortTxn.broker.unassigned")).tag("")
-                    ForEach(model.brokers, id: \.id) { Text($0.name).tag(String($0.id)) }
+                    Text(strings.t("addPortTxn.broker.unassigned")).tag(AccountID?.none)
+                    ForEach(model.brokers, id: \.id) { Text($0.name).tag(Optional($0.id)) }
                 }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
             }
         }

@@ -296,12 +296,12 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
         state.indicators.removeAll { $0.id == id }
         self.state = state
     }
-    public func preset(_ preset: String) {
+    public func preset(_ preset: ResearchChartBuilderPreset) {
         guard let primary = state.series.first(where: { $0.field == "price" }) else { return }
         var next = state
         let priceOnly = state.series.filter { $0.field == "price" }
         switch preset {
-        case "priceVolume":
+        case .priceVolume:
             guard let base = priceOnly.first(where: { $0.macro == nil }) else { return }
             next.series =
                 priceOnly.map {
@@ -315,7 +315,7 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
                 ]
             next.indicators = []
             next.oscillator = "none"
-        case "sma", "bollinger":
+        case .sma, .bollinger:
             next.series = priceOnly.map {
                 var series = $0
                 series.type = "line"
@@ -323,15 +323,15 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
             }
             next.oscillator = "none"
             next.indicators =
-                preset == "sma"
+                preset == .sma
                 ? [
                     .init(id: makeID(), type: "sma", period: 50, seriesId: primary.id),
                     .init(id: makeID(), type: "sma", period: 200, seriesId: primary.id),
                 ] : [.init(id: makeID(), type: "bollinger", period: 20, seriesId: primary.id)]
-        case "rsi", "macd":
-            next.oscillator = preset
+        case .rsi, .macd:
+            next.oscillator = preset.rawValue
             next.oscillatorSeriesId = primary.id
-        case "rebased":
+        case .rebased:
             next.rebase = true
             next.series = priceOnly.map {
                 var series = $0
@@ -339,7 +339,7 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
                 series.axis = "left"
                 return series
             }
-        default: return
+        case .unknown: return
         }
         state = next
     }

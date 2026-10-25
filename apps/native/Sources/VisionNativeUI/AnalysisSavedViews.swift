@@ -72,7 +72,7 @@ struct AnalysisReusableView: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 5) {
                 Text(strings.t("analysis.reportingCurrency")).font(.callout)
-                TextField(model.effectivePreferences.currency, text: normalized(\.runCurrency, limit: 3))
+                TextField(model.effectivePreferences.currency.rawValue, text: normalized(\.runCurrency, limit: 3))
                     .textFieldStyle(.vision).accessibilityLabel(strings.t("analysis.reportingCurrency"))
             }
             VStack(alignment: .leading, spacing: 5) {
@@ -197,7 +197,7 @@ struct AnalysisSavedLibraryView: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(saved.name).fontWeight(.medium).foregroundStyle(theme.foreground)
-                                Text("v\(saved.version) · \(refreshStatusLabel(saved.refreshStatus))").font(.footnote).foregroundStyle(
+                                Text("v\(saved.version) · \(refreshStatusLabel(saved.refreshStatus.rawValue))").font(.footnote).foregroundStyle(
                                     theme.secondaryLabel)
                                 if let error = saved.lastError?["message"]?.stringValue {
                                     Text(error).font(.footnote).foregroundStyle(theme.destructive)

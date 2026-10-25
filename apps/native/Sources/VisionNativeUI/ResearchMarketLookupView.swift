@@ -255,8 +255,8 @@ enum ResearchMarketDisplay {
     @MainActor static func money(_ value: Decimal, currency: String, shell: NativeShellModel, digits: Int? = nil)
         -> String
     {
-        VisionFormat.currency(
-            value, code: currency, locale: shell.settings.numberFormat.locale,
+        ResearchMoney.text(
+            value, currency: currency, locale: shell.settings.numberFormat.locale,
             fractionDigits: digits ?? shell.settings.showDecimalPlaces)
     }
     @MainActor static func number(_ value: Decimal, shell: NativeShellModel, digits: Int? = nil) -> String {

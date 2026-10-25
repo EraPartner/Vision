@@ -6,7 +6,7 @@ import Observation
     public var isPresented = false
     public private(set) var instrumentKey = ""
     public private(set) var displayName = ""
-    public private(set) var investmentId: Int?
+    public private(set) var investmentId: InvestmentID?
     public private(set) var existing: [ResearchMapping] = []
     public private(set) var proposals: [ResearchMappingProposal] = []
     public var selected: [String: Bool] = [:]
@@ -29,7 +29,7 @@ import Observation
     }
     public var selectedCount: Int { proposals.filter { $0.isConfirmable && selected[$0.provider] == true }.count }
     private var cacheKey: String { "lookup-mapping:" + instrumentKey }
-    public func configure(instrumentKey: String, displayName: String, investmentId: Int?) {
+    public func configure(instrumentKey: String, displayName: String, investmentId: InvestmentID?) {
         if self.instrumentKey != instrumentKey || self.investmentId != investmentId {
             revision = UUID()
             self.instrumentKey = instrumentKey
@@ -84,7 +84,7 @@ import Observation
         let stamp = revision
         var body = scope
         body["query"] = .string(instrumentKey)
-        if let investmentId { body["investment_id"] = .number(Decimal(investmentId)) }
+        if let investmentId { body["investment_id"] = .number(Decimal(investmentId.rawValue)) }
         isResolving = true
         resolveError = nil
         defer { if stamp == revision { isResolving = false } }

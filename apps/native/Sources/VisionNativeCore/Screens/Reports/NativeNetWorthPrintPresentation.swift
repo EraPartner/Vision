@@ -9,7 +9,7 @@ import Foundation
     }
     public func money(_ value: Decimal, signed: Bool = false) -> String {
         VisionFormat.currency(
-            value, code: snapshot.currency.uppercased(), locale: snapshot.settings.numberFormat.locale,
+            value, code: snapshot.currency.rawValue, locale: snapshot.settings.numberFormat.locale,
             fractionDigits: snapshot.settings.showDecimalPlaces, signed: signed)
     }
     public func percent(_ value: Decimal) -> String {

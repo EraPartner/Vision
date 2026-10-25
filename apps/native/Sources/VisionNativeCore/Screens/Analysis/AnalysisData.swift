@@ -284,17 +284,17 @@ public struct AnalysisExtensionOutput: Decodable, Equatable, Sendable {
 }
 public struct AnalysisSaved: Decodable, Equatable, Sendable, Identifiable {
     public let raw: TaxValue
-    public let id: String
+    public let id: SavedAnalysisID
     public let definitionId: String
     public let name: String
     public let workspace: AnalysisWorkspace
     public let version: Int
-    public let refreshMode: String
+    public let refreshMode: AnalysisRefreshMode
     public let parameters: TaxValue
     public let charts: [TaxValue]
     public let sourceReferences: [TaxValue]
-    public let refreshStatus: String
-    public let lastSuccessfulRunId: String?
+    public let refreshStatus: AnalysisRefreshStatus
+    public let lastSuccessfulRunId: AnalysisRunID?
     public let lastError: TaxValue?
     public let definition: TaxValue
     public let lastResult: AnalysisResult?
@@ -304,16 +304,16 @@ public struct AnalysisSaved: Decodable, Equatable, Sendable, Identifiable {
     public init(from decoder: any Decoder) throws {
         let raw = try TaxValue(from: decoder)
         self.raw = raw
-        id = try AnalysisDecode.string(raw["id"])
+        id = SavedAnalysisID(try AnalysisDecode.string(raw["id"]))
         definitionId = try AnalysisDecode.string(raw["definitionId"])
         name = try AnalysisDecode.string(raw["name"])
         workspace = try AnalysisDecode.required(raw["workspace"], AnalysisWorkspace.self)
         version = try AnalysisDecode.count(raw["version"])
         guard version > 0 else { throw AnalysisDecode.failure("Invalid analysis definition version") }
-        refreshMode = try AnalysisDecode.string(raw["refreshMode"])
-        refreshStatus = try AnalysisDecode.string(raw["refreshStatus"])
-        guard ["live", "frozen"].contains(refreshMode),
-            ["never-run", "running", "succeeded", "failed", "cancelled"].contains(refreshStatus)
+        refreshMode = AnalysisRefreshMode(rawValue: try AnalysisDecode.string(raw["refreshMode"]))
+        refreshStatus = AnalysisRefreshStatus(rawValue: try AnalysisDecode.string(raw["refreshStatus"]))
+        guard AnalysisRefreshMode.allCases.contains(refreshMode),
+            AnalysisRefreshStatus.allCases.contains(refreshStatus)
         else { throw AnalysisDecode.failure("Invalid saved analysis status") }
         parameters = try AnalysisDecode.object(raw["parameters"])
         definition = try AnalysisDecode.object(raw["definition"])
@@ -322,7 +322,7 @@ public struct AnalysisSaved: Decodable, Equatable, Sendable, Identifiable {
         guard raw["lastResult"] != nil, raw["lastError"] != nil, raw["lastSuccessfulRunId"] != nil else {
             throw AnalysisDecode.failure("Missing saved result metadata")
         }
-        lastSuccessfulRunId = try AnalysisDecode.optionalString(raw["lastSuccessfulRunId"])
+        lastSuccessfulRunId = try AnalysisDecode.optionalString(raw["lastSuccessfulRunId"]).map { AnalysisRunID($0) }
         lastError = raw["lastError"] == .null ? nil : raw["lastError"]
         lastResultRaw = raw["lastResult"] == .null ? nil : raw["lastResult"]
         lastResult = try? lastResultRaw?.decode(AnalysisResult.self)
@@ -338,7 +338,7 @@ public struct AnalysisSavedVersion: Decodable, Equatable, Sendable {
 }
 public struct AnalysisEditProposal: Codable, Equatable, Sendable {
     public let schemaVersion: Int
-    public let savedAnalysisId: String
+    public let savedAnalysisId: SavedAnalysisID
     public let baseVersion: Int
     public let rationale: String
     public let operations: [Operation]

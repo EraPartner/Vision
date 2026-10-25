@@ -13,9 +13,11 @@ struct AIInvestigationAnswerView: View {
     var body: some View {
         ResearchCard(padding: 16) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(translated("aiResearch.status." + answer.status, fallback: answer.status))
+                Text(translated("aiResearch.status." + answer.status.rawValue, fallback: answer.status.rawValue))
                 Spacer(minLength: 12)
-                Text(answer.language.uppercased() + " · " + translated("aiResearch." + answer.depth, fallback: answer.depth))
+                Text(
+                    answer.language.rawValue.uppercased() + " · "
+                        + translated("aiResearch." + answer.depth.rawValue, fallback: answer.depth.rawValue))
             }.font(.footnote).foregroundStyle(theme.secondaryLabel)
             Text(answer.summary).font(.body).textSelection(.enabled)
             statementSection("aiResearch.facts", statements: answer.facts)
@@ -81,7 +83,7 @@ struct AIInvestigationAnswerView: View {
             if let excerpt = evidence.excerpt {
                 Text(excerpt).font(.footnote).foregroundStyle(theme.secondaryLabel).textSelection(.enabled)
             }
-            if evidence.kind == "web", evidence.locator.hasPrefix("https://"), let url = URL(string: evidence.locator) {
+            if evidence.kind == .web, evidence.locator.hasPrefix("https://"), let url = URL(string: evidence.locator) {
                 Link(evidence.locator, destination: url).font(.caption).textSelection(.enabled)
             } else {
                 Text(evidence.locator).font(.caption.monospaced()).foregroundStyle(theme.secondaryLabel).textSelection(

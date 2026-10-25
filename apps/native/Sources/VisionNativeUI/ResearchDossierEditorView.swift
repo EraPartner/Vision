@@ -18,7 +18,7 @@ struct ResearchDossierEditorView: View {
                         .font(.researchCardTitle).lineLimit(1).accessibilityAddTraits(.isHeader)
                     if let detail = model.detail, model.selectedId != nil {
                         Text(
-                            strings.t("dossiers.workspace." + detail.workspace) + " · "
+                            strings.t("dossiers.workspace." + detail.workspace.rawValue) + " · "
                                 + strings.t("dossiers.version", ["version": String(detail.version)])
                         )
                         .foregroundStyle(theme.secondaryLabel)
@@ -49,9 +49,9 @@ struct ResearchDossierEditorView: View {
                     )
                 }
                 ResearchDossierField(label: strings.t("dossiers.field.workspace")) {
-                    Picker("", selection: text(\.workspace)) {
+                    Picker("", selection: choice(\.workspace, fallback: .research)) {
                         ForEach(ResearchDossierContent.workspaces, id: \.self) {
-                            Text(strings.t("dossiers.workspace." + $0)).tag($0)
+                            Text(strings.t("dossiers.workspace." + $0.rawValue)).tag($0)
                         }
                     }.labelsHidden().accessibilityLabel(strings.t("dossiers.field.workspace"))
                 }
@@ -71,6 +71,9 @@ struct ResearchDossierEditorView: View {
                 ) { model.draft?.reviewDate = $0?.ymd }.submitScope()
             }.frame(maxWidth: 280)
         }
+    }
+    private func choice<Value>(_ path: WritableKeyPath<ResearchDossierContent, Value>, fallback: Value) -> Binding<Value> {
+        Binding(get: { model.draft?[keyPath: path] ?? fallback }, set: { model.draft?[keyPath: path] = $0 })
     }
     private func text(_ path: WritableKeyPath<ResearchDossierContent, String>) -> Binding<String> {
         Binding(get: { model.draft?[keyPath: path] ?? "" }, set: { model.draft?[keyPath: path] = $0 })

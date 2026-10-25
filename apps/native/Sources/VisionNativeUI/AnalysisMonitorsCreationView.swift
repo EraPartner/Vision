@@ -61,8 +61,8 @@ struct AnalysisMonitorsCreationView: View {
                 strings.t("monitors.analysis"),
                 selection: Binding(get: { draft.savedAnalysisId }, set: { value in model.chooseAnalysis(value) })
             ) {
-                Text(strings.t("monitors.selectAnalysis")).tag("")
-                ForEach(model.eligibleAnalyses) { Text($0.name).tag($0.id) }
+                Text(strings.t("monitors.selectAnalysis")).tag(SavedAnalysisID?.none)
+                ForEach(model.eligibleAnalyses) { Text($0.name).tag(Optional($0.id)) }
             }.disabled(model.eligibleAnalyses.isEmpty)
             if model.analysesLoading && model.analyses.isEmpty { ProgressView(strings.t("monitors.targetsLoading")) }
             if model.analysesError != nil {
@@ -80,9 +80,12 @@ struct AnalysisMonitorsCreationView: View {
     }
     private var dossierTarget: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker(strings.t("monitors.dossier"), selection: text(\.dossierId)) {
-                Text(strings.t("monitors.selectDossier")).tag("")
-                ForEach(model.dossiers?.items ?? []) { Text($0.title).tag($0.id) }
+            Picker(
+                strings.t("monitors.dossier"),
+                selection: Binding(get: { draft.dossierId }, set: { value in model.updateNew { $0.dossierId = value } })
+            ) {
+                Text(strings.t("monitors.selectDossier")).tag(ResearchDossierID?.none)
+                ForEach(model.dossiers?.items ?? []) { Text($0.title).tag(Optional($0.id)) }
             }
             if model.dossiersLoading && model.dossiers == nil { ProgressView(strings.t("monitors.targetsLoading")) }
             if model.dossiersError != nil {

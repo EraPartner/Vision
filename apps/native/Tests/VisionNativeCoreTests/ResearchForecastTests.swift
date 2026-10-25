@@ -84,9 +84,9 @@ struct ResearchForecastTests {
         await model.load()
         #expect(await transport.forecasts.count == 2)
         model.contributionText = "900"
-        model.returnSource = "blended"
+        model.returnSource = .blended
         model.didDisappear()
-        #expect(model.contributionText.isEmpty && model.returnSource == "historical" && model.blendPct == 50)
+        #expect(model.contributionText.isEmpty && model.returnSource == .historical && model.blendPct == 50)
         model.isOnline = false
         model.isOnline = true
         for _ in 0..<20 { await Task.yield() }

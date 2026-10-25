@@ -23,9 +23,9 @@ struct AIChatToolResultCard: View {
             } else {
                 if let parsed {
                     switch parsed.renderAs {
-                    case "table": table(parsed)
-                    case "line", "bar", "pie": AIChatToolChart(presentation: parsed, shell: shell)
-                    default: json(result["data"] ?? .null)
+                    case .table: table(parsed)
+                    case .line, .bar, .pie: AIChatToolChart(presentation: parsed, shell: shell)
+                    case .unknown: json(result["data"] ?? .null)
                     }
                     footer(parsed.rowCount)
                 } else {
@@ -105,7 +105,7 @@ struct AIChatToolResultCard: View {
 }
 
 struct AIChatToolPresentation: Equatable {
-    let renderAs: String
+    let renderAs: AIChatToolRender
     let rows: [TaxValue]
     let columns: [String]
     let xKey: String
@@ -131,7 +131,7 @@ struct AIChatToolPresentation: Equatable {
             let canRenderPie = raw["pieRenderable"]?.boolValue,
             let pie = raw["pieRows"]?.arrayValue
         else { return nil }
-        renderAs = kind
+        renderAs = AIChatToolRender(rawValue: kind)
         self.rows = rows
         self.columns = columns.compactMap(\.stringValue)
         xKey = x
@@ -184,5 +184,38 @@ enum AIChatToolDisplay {
     static func axis(_ value: TaxValue?) -> String {
         guard let value, value != .null else { return "" }
         return AIChatText.javascriptString(value)
+    }
+}
+
+/// `AiToolPresentation.renderAs`; a value this client does not know falls back to the JSON view.
+internal enum AIChatToolRender: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+    case table
+    case line
+    case bar
+    case pie
+    case unknown(String)
+
+    internal static var allCases: [AIChatToolRender] { [.table, .line, .bar, .pie] }
+
+    private static let known: [String: Self] = ["table": .table, "line": .line, "bar": .bar, "pie": .pie]
+    internal init(rawValue: String) { self = Self.known[rawValue] ?? .unknown(rawValue) }
+
+    internal var rawValue: String {
+        switch self {
+        case .table: return "table"
+        case .line: return "line"
+        case .bar: return "bar"
+        case .pie: return "pie"
+        case .unknown(let value): return value
+        }
+    }
+
+    internal init(from decoder: any Decoder) throws {
+        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+    }
+
+    internal func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
 }

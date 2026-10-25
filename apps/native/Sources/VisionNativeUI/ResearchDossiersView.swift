@@ -87,7 +87,7 @@ public struct ResearchDossiersView: View {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(item.title).font(.body.weight(model.selectedId == item.id ? .medium : .regular))
                             Text(
-                                strings.t("dossiers.workspace." + item.workspace) + " · "
+                                strings.t("dossiers.workspace." + item.workspace.rawValue) + " · "
                                     + strings.t("dossiers.version", ["version": String(item.version)])
                             )
                             .font(.caption).foregroundStyle(theme.secondaryLabel)

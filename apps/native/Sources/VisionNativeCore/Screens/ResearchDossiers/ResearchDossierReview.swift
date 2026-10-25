@@ -4,10 +4,10 @@ public enum ResearchDossierLinesField: Sendable { case assumptions, openQuestion
 public struct ResearchDossierReview: Identifiable, Equatable, Sendable {
     public enum Action: Equatable, Sendable {
         case discardForNew
-        case discardForSelection(id: String)
-        case delete(id: String)
-        case restore(id: String, version: Int, expectedVersion: Int)
-        case reload(id: String)
+        case discardForSelection(id: ResearchDossierID)
+        case delete(id: ResearchDossierID)
+        case restore(id: ResearchDossierID, version: Int, expectedVersion: Int)
+        case reload(id: ResearchDossierID)
     }
     public let id: UUID
     public let action: Action
