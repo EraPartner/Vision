@@ -1,4 +1,5 @@
 import Testing
+import VisionNativeCore
 
 @testable import VisionNativeUI
 
@@ -19,5 +20,11 @@ struct ChartAxisTicksTests {
         #expect(ChartAxisTicks.evenlySpaced(["a", "b", "c"]) == ["a", "b", "c"])
         #expect(ChartAxisTicks.evenlySpaced([String]()) == [])
         #expect(ChartAxisTicks.evenlySpaced(Array("abcdef").map(String.init)) == ["a", "b", "c", "d", "e", "f"])
+    }
+
+    /// The web `xTickPattern`: day ticks up to six months, month ticks beyond.
+    @Test func portfolioPeriodsPickTheWebTickPattern() {
+        #expect(
+            PortfolioPeriod.allCases.filter(PortfolioChartTicks.usesDayTicks) == [.oneMonth, .threeMonths, .sixMonths])
     }
 }

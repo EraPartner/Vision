@@ -62,14 +62,35 @@ public protocol HomeService: Sendable {
     /// `nil` when a service has no totals.
     func homeAccountTotals(currency: CurrencyCode) async throws -> OpenAPI.AccountTotals?
     func homeMatchCount() async throws -> Int
+    /// `usePlannedMatchSuggestions` as Needs attention reads it: the count and the payee subtitle.
+    func homeMatches() async throws -> HomeMatches
     func homeExclusions(scope: String) async throws -> InsightExclusions
     func homeWidgetSetting() async throws -> OpenAPI.Setting
     func saveHomeWidgets(_ value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting
 }
 
 extension HomeService {
+    public func homeMatches() async throws -> HomeMatches {
+        HomeMatches(count: try await homeMatchCount(), payees: [])
+    }
     public func homePlannedTotals(currency: CurrencyCode) async throws -> OpenAPI.PlannedTotals? { nil }
     public func homeAccountTotals(currency: CurrencyCode) async throws -> OpenAPI.AccountTotals? { nil }
+}
+
+/// The "looks paid" suggestions Home summarises: how many, and the payees of the first three
+/// (NeedsAttentionList: `suggestions.slice(0, 3).map(planned.recipient_name).filter(Boolean)`).
+public struct HomeMatches: Equatable, Sendable {
+    public let count: Int
+    public let payees: [String]
+    public init(count: Int, payees: [String]) {
+        self.count = count
+        self.payees = payees
+    }
+    public init(suggestions: [PlannedMatchSuggestion]) {
+        self.init(
+            count: suggestions.count,
+            payees: suggestions.prefix(3).compactMap { $0.planned?.recipientName }.filter { !$0.isEmpty })
+    }
 }
 
 public struct HomeTransactionPage: Equatable, Sendable {
@@ -161,6 +182,9 @@ extension APIClient: HomeService {
         try await send(OpenAPIOperations.GetAccountTotals(currency: currency))
     }
     public func homeMatchCount() async throws -> Int { try await matchSuggestions().count }
+    public func homeMatches() async throws -> HomeMatches {
+        HomeMatches(suggestions: try await matchSuggestions())
+    }
     public func homeExclusions(scope: String) async throws -> InsightExclusions {
         let value = try await setting(key: .dashboardSettings).value
         let exclusionScope = InsightExclusions.normalizedScope(value)

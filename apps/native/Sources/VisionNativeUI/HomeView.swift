@@ -260,8 +260,8 @@ public struct HomeView: View {
                         if model.needsCategory > 0 { Divider() }
                         routeRow(
                             strings.tc("home.attention.looksPaid", model.matchCount),
-                            route: "/planned", trailing: strings.t("home.attention.confirm"),
-                            symbol: "checkmark.circle")
+                            route: "/planned", subtitle: model.matchPayees.isEmpty ? nil : model.matchPayees.joined(separator: ", "),
+                            trailing: strings.t("home.attention.confirm"), symbol: "doc.text")
                     }
                     ForEach(model.staleAccounts) { account in
                         if model.needsCategory > 0 || model.matchCount > 0 || account.id != model.staleAccounts.first?.id {

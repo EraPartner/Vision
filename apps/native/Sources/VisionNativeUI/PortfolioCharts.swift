@@ -12,6 +12,8 @@ struct PortfolioSeriesChart: View {
     var percent = false
     var area = false
     var height: CGFloat = 280
+    /// The web's `xTickPattern`: day ticks ("d MMM") for 1M/3M/6M, month ticks ("MMM yy") otherwise.
+    var dayTicks = false
     var colors: [String: Color] = [:]
     @State private var selected: String?
     @State private var rangeStart: String?
@@ -87,7 +89,7 @@ struct PortfolioSeriesChart: View {
                 AxisMarks(values: ChartAxisTicks.evenlySpaced(Array(keys.indices), count: 5)) { value in
                     AxisValueLabel {
                         if let position = value.as(Int.self), keys.indices.contains(position) {
-                            Text(dateLabel(keys[position]))
+                            Text(dateLabel(keys[position], pattern: dayTicks ? "d MMM" : "MMM yy"))
                         }
                     }
                 }
@@ -193,16 +195,28 @@ struct PortfolioSeriesChart: View {
             value, code: currency, locale: shell.settings.numberFormat.locale,
             fractionDigits: axis ? 0 : shell.settings.showDecimalPlaces, signed: signed)
     }
-    private func dateLabel(_ key: String) -> String {
+    /// `formatDate(parseISO(day), pattern, appLanguageToLocale(language))`: month names follow the
+    /// app language, never the system or number-format locale. The default is the web's
+    /// `CHART_DATE_PATTERNS.detail`.
+    private func dateLabel(_ key: String, pattern: String = "d MMM yyyy") -> String {
         let parts = key.split(separator: "-").compactMap { Int($0) }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone.current
         guard parts.count >= 2,
-            let date = Calendar.current.date(
+            let date = calendar.date(
                 from: DateComponents(
                     year: parts[0], month: parts[1], day: parts.count > 2 ? parts[2] : 1))
         else { return key }
-        return date.formatted(
-            Date.FormatStyle(locale: shell.settings.numberFormat.locale)
-                .month(.abbreviated).day(.twoDigits).year(.twoDigits))
+        let locale = LanguageLocale.locale(shell.strings.language)
+        let formatter = FormatterCache.shared("portfolio.chart|\(locale.identifier)|\(pattern)") {
+            () -> DateFormatter in
+            let made = DateFormatter()
+            made.locale = locale
+            made.calendar = Calendar(identifier: .gregorian)
+            made.dateFormat = pattern
+            return made
+        }
+        return formatter.string(from: date)
     }
     private func key(_ x: CGFloat, proxy: ChartProxy, geometry: GeometryProxy) -> String? {
         guard let anchor = proxy.plotFrame else { return nil }
@@ -270,5 +284,15 @@ struct PortfolioInlineDisclosure: View {
         Button(label) { open = true }.buttonStyle(.plain).visionTooltip(explanation)
             .accessibilityLabel(label == "ⓘ" ? explanation : label + ". " + explanation)
             .popover(isPresented: $open) { Text(explanation).padding(16).frame(maxWidth: 320) }
+    }
+}
+
+enum PortfolioChartTicks {
+    /// The web `xTickPattern`: day ticks for 1M, 3M and 6M, month ticks for longer periods.
+    static func usesDayTicks(_ period: PortfolioPeriod) -> Bool {
+        switch period {
+        case .oneMonth, .threeMonths, .sixMonths: return true
+        case .oneYear, .threeYears, .all: return false
+        }
     }
 }

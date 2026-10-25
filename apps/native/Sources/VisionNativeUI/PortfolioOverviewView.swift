@@ -175,7 +175,8 @@ public struct PortfolioOverviewView: View {
                             points: data.snapshots.map { InsightChartPoint(key: $0.date, value: $0.invested) },
                             dashed: true),
                     ], title: strings.t("portfolio.hero.chartAria"), currency: currency, shell: shell, area: true,
-                    height: 200, colors: ["value": theme.primary, "invested": theme.secondaryLabel])
+                    height: 200, dayTicks: PortfolioChartTicks.usesDayTicks(model.period),
+                    colors: ["value": theme.primary, "invested": theme.secondaryLabel])
                 if data.snapshots.last?.isProvisional == true {
                     Label(strings.t("performance.latestSnapshotProvisional"), systemImage: "info.circle")
                         .font(.caption).foregroundStyle(theme.secondaryLabel)
@@ -277,8 +278,22 @@ public struct PortfolioOverviewView: View {
             }
     }
     private var holdings: some View {
-        PortfolioCard(title: strings.t("portfolio.widget.holdings")) {
-            HStack {
+        AdminCard(padding: 24) {
+            VStack(alignment: .leading, spacing: 14) {
+                holdingsHeader
+                holdingsList
+                holdingsFooter
+            }
+        }
+    }
+    /// The web Holdings `CardHeader`: the title with the sort control and broker select inline
+    /// (`flex flex-row flex-wrap items-center justify-between gap-3`; select `h-8 w-44`).
+    private var holdingsHeader: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(strings.t("portfolio.widget.holdings")).font(Font.visionTitle3)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 0)
+            HStack(spacing: 8) {
                 VisionSegmentedControl(
                     selection: Binding(get: { model.sort }, set: { model.sort = $0 }),
                     options: [
@@ -286,36 +301,60 @@ public struct PortfolioOverviewView: View {
                             value: PortfolioHoldingsSort.value, title: strings.t("portfolio.sort.value")),
                         VisionSegmentOption(
                             value: PortfolioHoldingsSort.returnRate, title: strings.t("portfolio.sort.return")),
-                    ], size: .sm
+                    ], size: .sm, compact: true
                 )
+                .fixedSize()
                 .accessibilityElement(children: .contain).accessibilityLabel(strings.t("portfolio.sort.label"))
-                .frame(maxWidth: 250)
-                Spacer()
                 VisionSelect(
                     selection: Binding(get: { model.brokerFilter }, set: { model.brokerFilter = $0 }),
                     options: brokerFilterOptions, accessibilityLabel: strings.t("portfolio.brokerFilter.label"),
                     expands: true
-                ).frame(maxWidth: 300).disabled(model.brokerFilterStatusKey != nil)
-            }
-            if model.filteredHoldings.isEmpty {
-                Text(strings.t("portfolio.brokerFilter.empty")).foregroundStyle(theme.secondaryLabel).padding(20)
-            }
-            ForEach(model.filteredHoldings) { holding in
-                holdingRow(holding)
-            }
-            Divider()
-            if let status = model.brokerFilterStatusKey {
-                let unavailable = status == "portfolio.brokerFilter.unavailable"
-                Text(strings.t(status)).font(.footnote)
-                    .foregroundStyle(unavailable ? theme.warning : theme.secondaryLabel)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            } else {
-                moneyRow("portfolio.brokerFilter.holdingsSubtotal", model.brokerSubtotal.currentValue)
-                moneyRow("portfolio.brokerFilter.pnlSubtotal", model.brokerSubtotal.gainLoss, signed: true)
+                ).frame(width: 176).disabled(model.brokerFilterStatusKey != nil)
             }
         }
     }
+    /// The web `<List>`: `divide-y divide-border/50 overflow-hidden rounded-card border
+    /// border-border/60 bg-card/70`, rows flush and clipped by the group.
+    @ViewBuilder private var holdingsList: some View {
+        if model.filteredHoldings.isEmpty {
+            Text(strings.t("portfolio.brokerFilter.empty")).foregroundStyle(theme.secondaryLabel)
+                .frame(maxWidth: .infinity).padding(.vertical, 24)
+        } else {
+            let shape = RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+            VStack(spacing: 0) {
+                ForEach(Array(model.filteredHoldings.enumerated()), id: \.element.id) { index, holding in
+                    if index > 0 { Rectangle().fill(theme.border.opacity(0.5)).frame(height: 1) }
+                    holdingRow(holding)
+                }
+            }
+            .background(theme.card.opacity(0.7), in: shape)
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(theme.border.opacity(0.6), lineWidth: 1))
+        }
+    }
+    @ViewBuilder private var holdingsFooter: some View {
+        Divider()
+        if let status = model.brokerFilterStatusKey {
+            let unavailable = status == "portfolio.brokerFilter.unavailable"
+            Text(strings.t(status)).font(.footnote)
+                .foregroundStyle(unavailable ? theme.warning : theme.secondaryLabel)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        } else {
+            moneyRow("portfolio.brokerFilter.holdingsSubtotal", model.brokerSubtotal.currentValue)
+            moneyRow("portfolio.brokerFilter.pnlSubtotal", model.brokerSubtotal.gainLoss, signed: true)
+        }
+    }
     @ViewBuilder private func holdingRow(_ holding: PortfolioHolding) -> some View {
+        VStack(spacing: 0) {
+            holdingRowContent(holding)
+            if !holding.fullyAssigned {
+                // The web `<li className="px-4 pb-3">` under the row.
+                PortfolioHoldingsUnassignedView(holding: holding, model: model, editing: editing, shell: shell)
+                    .padding(.horizontal, 16).padding(.bottom, 12)
+            }
+        }
+    }
+    @ViewBuilder private func holdingRowContent(_ holding: PortfolioHolding) -> some View {
         let metrics = model.metrics(for: holding)
         HStack(spacing: 14) {
             Button {
@@ -367,10 +406,7 @@ public struct PortfolioOverviewView: View {
             .buttonStyle(.plain).frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityLabel(strings.t("invDetail.trigger") + ": " + holding.name)
             PortfolioHoldingActionsMenu(holding: holding, model: model, editing: editing, shell: shell)
-        }.padding(.vertical, 10)
-        if !holding.fullyAssigned {
-            PortfolioHoldingsUnassignedView(holding: holding, model: model, editing: editing, shell: shell)
-        }
+        }.padding(.horizontal, 16).padding(.vertical, 10)
     }
     private var allocation: some View {
         // Group values are the server's totals (ADR-216); only the shares are derived here.

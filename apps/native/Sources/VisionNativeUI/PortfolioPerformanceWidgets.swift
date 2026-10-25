@@ -18,7 +18,7 @@ struct PortfolioPerformanceWidgets: View {
                 ) {
                     PortfolioSeriesChart(
                         series: valueSeries(data), title: shell.strings.t("performance.valueOverTime"),
-                        currency: data.currency, shell: shell, area: true, colors: colors)
+                        currency: data.currency, shell: shell, area: true, dayTicks: dayTicks, colors: colors)
                     if hasFxNeutral(data) {
                         HStack {
                             Toggle(
@@ -43,7 +43,7 @@ struct PortfolioPerformanceWidgets: View {
                     PortfolioSeriesChart(
                         series: brokerSeries(broker, data: data),
                         title: shell.strings.t("performance.byBrokerTitle"), currency: data.currency, shell: shell,
-                        area: true)
+                        area: true, dayTicks: dayTicks)
                 }
             }
             if model.widgets.isVisible("relativeChart"), data.snapshots.count > 1 {
@@ -53,7 +53,7 @@ struct PortfolioPerformanceWidgets: View {
                 ) {
                     PortfolioSeriesChart(
                         series: relativeSeries(data), title: shell.strings.t("performance.relativeTitle"),
-                        currency: data.currency, shell: shell, percent: true, area: true, colors: colors)
+                        currency: data.currency, shell: shell, percent: true, area: true, dayTicks: dayTicks, colors: colors)
                 }
             }
             if model.widgets.isVisible("breakdown"), !data.snapshots.isEmpty, !data.breakdownSummary.isEmpty {
@@ -61,6 +61,7 @@ struct PortfolioPerformanceWidgets: View {
             }
         }
     }
+    private var dayTicks: Bool { PortfolioChartTicks.usesDayTicks(model.period) }
     private var period: String { shell.strings.t("performance.period." + model.period.rawValue) }
     private var colors: [String: Color] {
         [

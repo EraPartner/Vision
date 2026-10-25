@@ -65,6 +65,9 @@ struct VisionSegmentedControl<Value: Hashable>: View {
     let options: [VisionSegmentOption<Value>]
     var size: VisionSegmentedControlSize = .default
     var label: String?
+    /// The per-item `className="px-2.5 type-footnote"` the web passes for dense toolbars: 10pt
+    /// side padding and `type-footnote` instead of `px-3 type-body`.
+    var compact = false
 
     @Environment(\.visionTheme) private var theme
     @Environment(\.isEnabled) private var isEnabled
@@ -74,23 +77,24 @@ struct VisionSegmentedControl<Value: Hashable>: View {
 
     init(
         selection: Binding<Value>, options: [VisionSegmentOption<Value>],
-        size: VisionSegmentedControlSize = .default, label: String? = nil
+        size: VisionSegmentedControlSize = .default, label: String? = nil, compact: Bool = false
     ) {
         _selection = selection
         self.options = options
         self.size = size
         self.label = label
+        self.compact = compact
     }
 
     /// Picker-like: `values` shown with `title(value)`.
     init(
         selection: Binding<Value>, values: [Value], title: (Value) -> String,
-        size: VisionSegmentedControlSize = .default, label: String? = nil
+        size: VisionSegmentedControlSize = .default, label: String? = nil, compact: Bool = false
     ) {
         self.init(
             selection: selection,
             options: values.map { VisionSegmentOption(value: $0, title: title($0)) },
-            size: size, label: label)
+            size: size, label: label, compact: compact)
     }
 
     var body: some View {
@@ -142,7 +146,7 @@ struct VisionSegmentedControl<Value: Hashable>: View {
         .buttonStyle(
             VisionSegmentButtonStyle(
                 isSelected: isSelected, radius: segmentRadius, namespace: pillSpace,
-                isDimmed: !isEnabled || option.isDisabled)
+                isDimmed: !isEnabled || option.isDisabled, compact: compact)
         )
         .disabled(option.isDisabled)
         .focused($focus, equals: option.value)
@@ -171,11 +175,12 @@ private struct VisionSegmentButtonStyle: ButtonStyle {
     let radius: CGFloat
     let namespace: Namespace.ID
     let isDimmed: Bool
+    let compact: Bool
 
     func makeBody(configuration: Configuration) -> some View {
         SegmentBody(
             configuration: configuration, isSelected: isSelected, radius: radius, namespace: namespace,
-            isDimmed: isDimmed)
+            isDimmed: isDimmed, compact: compact)
     }
 
     private struct SegmentBody: View {
@@ -184,6 +189,7 @@ private struct VisionSegmentButtonStyle: ButtonStyle {
         let radius: CGFloat
         let namespace: Namespace.ID
         let isDimmed: Bool
+        let compact: Bool
         @Environment(\.visionTheme) private var theme
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @State private var hovering = false
@@ -191,9 +197,12 @@ private struct VisionSegmentButtonStyle: ButtonStyle {
         var body: some View {
             let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
             configuration.label
-                .font(VisionFonts.body(CGFloat(DesignTokens.Typography.body.size), weight: 500, relativeTo: .body))
+                .font(
+                    compact
+                        ? VisionFonts.body(CGFloat(DesignTokens.Typography.footnote.size), weight: 500, relativeTo: .footnote)
+                        : VisionFonts.body(CGFloat(DesignTokens.Typography.body.size), weight: 500, relativeTo: .body))
                 .foregroundStyle(isSelected || hovering ? theme.foreground : theme.secondaryLabel)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, compact ? 10 : 12)
                 .frame(maxHeight: .infinity)
                 .background {
                     if isSelected {

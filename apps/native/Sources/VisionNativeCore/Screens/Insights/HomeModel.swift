@@ -30,6 +30,8 @@ public final class HomeModel {
     public private(set) var transactionCount = 0
     public private(set) var needsCategory = 0
     public private(set) var matchCount = 0
+    /// The payees of the first three suggestions, the "looks paid" row's subtitle.
+    public private(set) var matchPayees: [String] = []
     public private(set) var exclusions = InsightExclusions()
     public private(set) var widgets = InsightWidgetVisibility(nil)
     public private(set) var widgetsLoaded = false
@@ -195,7 +197,7 @@ public final class HomeModel {
             }
         async let count = Self.result { try await service.homeTransactionCount() }
         async let needsCategory = Self.result { try await service.homeNeedsCategory() }
-        async let matches = Self.result { try await service.homeMatchCount() }
+        async let matches = Self.result { try await service.homeMatches() }
         async let widgetSetting = Self.result { try await service.homeWidgetSetting() }
         let monthlyAnswer = await monthly
         let unfilteredAnswer = await unfiltered ?? monthlyAnswer
@@ -225,7 +227,10 @@ public final class HomeModel {
         }
         if case .success(let value) = answers.10 { transactionCount = value }
         if case .success(let value) = answers.11 { self.needsCategory = value }
-        if case .success(let value) = answers.12 { matchCount = value }
+        if case .success(let value) = answers.12 {
+            matchCount = value.count
+            matchPayees = value.payees
+        }
         if case .success(let value) = answers.13, !widgetSavePending, widgetToken == widgetRevision {
             widgetBaseline = value.expected.json
             widgets = InsightWidgetVisibility(value.value)

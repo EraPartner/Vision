@@ -199,6 +199,20 @@ struct InsightsTests {
     }
 }
 
+@Suite("Home match suggestions")
+struct HomeMatchesTests {
+    /// NeedsAttentionList: the subtitle names the payees of the first three suggestions.
+    @Test func payeesComeFromTheFirstThreeSuggestions() {
+        func suggestion(_ name: String?) -> PlannedMatchSuggestion {
+            PlannedMatchSuggestion(planned: .init(recipientName: name))
+        }
+        let matches = HomeMatches(
+            suggestions: [suggestion("Netflix"), suggestion(nil), suggestion("Spotify"), suggestion("Ignored")])
+        #expect(matches.count == 4)
+        #expect(matches.payees == ["Netflix", "Spotify"])
+    }
+}
+
 @Suite("Home query and preference behavior")
 @MainActor
 struct HomeModelTests {
