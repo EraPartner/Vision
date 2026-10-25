@@ -34,6 +34,231 @@ const METHODS = ["get", "put", "post", "delete", "patch", "head", "options"];
 /** The ADR-026 envelope and its error; the client decodes every response with them. */
 const ALWAYS_GENERATED = ["Envelope", "ErrorPayload"];
 
+/*
+ * Typed identifiers (WP-1). Every entity id gets its own Swift type, `<Entity>ID`
+ * (`IntIdentifier<Tag>` / `StringIdentifier<Tag>` in API/Types/Identifier.swift).
+ * An `id` property belongs to the entity named after its schema; an `xId` / `x_id`
+ * property or parameter belongs to the entity its stem names (the last words of a
+ * stem are tried too, so `fromAccountId` and `ancestor_category_id` need no entry).
+ * The tables below carry only the irregular names. An id-like integer or string
+ * field that no rule maps, and that UNTYPED_IDS does not list with a reason, fails
+ * generation.
+ */
+
+/** Schemas whose `id` identifies an entity other than the schema's own name. */
+export const SCHEMA_ID_ENTITY: Record<string, string> = {
+  AnalysisColumnRef: "AnalysisColumn",
+  BelgianPortfolioTaxInvestmentCosts: "Investment",
+  BelgianPortfolioTaxSummary: "Investment",
+  BelgianTaxInputPartnerActivity: "TaxPartnerActivity",
+  BelgianTaxInputRelationshipEvent: "TaxRelationshipEvent",
+  CategoryNode: "Category",
+  PortfolioSummaryItem: "Investment",
+  ResearchDossierSummary: "ResearchDossier",
+  SplitOwedDetail: "Split",
+  TransactionTagRef: "Tag",
+};
+
+/** Entities a `xId` stem names when the stem is not itself an entity name. */
+export const STEM_ENTITY: Record<string, string> = {
+  Activity: "TaxPartnerActivity",
+  AnalysisRun: "AnalysisRun",
+  Conversation: "AiConversation",
+  Document: "ResearchDocument",
+  Dossier: "ResearchDossier",
+  Monitor: "AnalysisMonitor",
+  Observation: "AnalysisMonitorObservation",
+  Pattern: "RecipientPattern",
+  RecipientGroup: "RecipientGroup",
+  SavedAnalysis: "SavedAnalysis",
+  Txn: "PortfolioTransaction",
+};
+
+/**
+ * Per-field entity overrides, keyed `Schema.field`, `Schema.Nested.field`,
+ * `Operation.field` or `*.field` (nested struct names as generated). Checked
+ * before the stem rules.
+ */
+export const FIELD_ENTITY: Record<string, string> = {
+  "*.transfer_peer_id": "Transaction",
+  "AccountTotals.AccountsItem.id": "Account",
+  "AnalysisVisualPlan.OrderByItem.id": "AnalysisColumn",
+  "CategoryNode.parentId": "Category",
+  "CategoryNode.pathIds": "Category",
+  "CategoryNodeCreate.parentId": "Category",
+  "CategoryNodeUpdate.parentId": "Category",
+  "CategoryPivotData.CategoryPivotValueItem.categoryPathIds": "Category",
+  "CreateCategory.ResponseData.id": "Category",
+  "CreateRecipient.ResponseData.id": "Recipient",
+  "CreateRecipientPattern.ResponseData.id": "RecipientPattern",
+  "CreateTag.ResponseData.id": "Tag",
+  "EvaluateAnalysisExtension.Body.outcomeId": "AnalysisColumn",
+  "EvaluateAnalysisExtension.Body.variableId": "AnalysisColumn",
+  "GetPlannedMatchSuggestions.ResponseData.ItemsItem.CandidatesItem.id":
+    "Transaction",
+  "GetPlannedMatchSuggestions.ResponseData.ItemsItem.Planned.id":
+    "PlannedTransaction",
+  "MarkTransfer.Body.aId": "Transaction",
+  "MarkTransfer.Body.bId": "Transaction",
+  "MergeAccounts.Body.source_ids": "Account",
+  "MergeCategoryNode.Body.targetId": "Category",
+  "MergeRecipient.Body.alias_ids": "Recipient",
+  // The spec serializes import batch ids as BIGINT strings on the batch itself (and in
+  // paths) but as numbers wherever a batch is referenced from a portfolio import payload.
+  // They are two wire shapes, so two types: `ImportBatchID` / `PortfolioImportBatchID`
+  // (strings) and the `...NumericID` ones (numbers).
+  "PortfolioImportPreviewData.batch_id": "PortfolioImportBatchNumeric",
+  "PortfolioImportReconciliationCommitResult.BatchesItem.batch_id":
+    "PortfolioImportBatchNumeric",
+  "PortfolioImportReconciliationPlan.ActionsItem.batchId":
+    "PortfolioImportBatchNumeric",
+  "PortfolioImportReconciliationPlan.ActionsItem.duplicateOfRowId":
+    "PortfolioImportRow",
+  "PortfolioImportReconciliationPlan.ActionsItem.rowId": "PortfolioImportRow",
+  "PortfolioImportReconciliationPlan.BatchPoliciesItem.batchId":
+    "PortfolioImportBatchNumeric",
+  "PortfolioImportReconciliationPlan.RowChoicesItem.batchId":
+    "PortfolioImportBatchNumeric",
+  "PortfolioImportReconciliationPlan.RowChoicesItem.rowId":
+    "PortfolioImportRow",
+  "PortfolioImportReconciliationPlan.batchIds": "PortfolioImportBatchNumeric",
+  "PortfolioImportReconciliationRequest.BatchPoliciesItem.batch_id":
+    "PortfolioImportBatchNumeric",
+  "PortfolioImportReconciliationRequest.RowChoicesItem.batch_id":
+    "PortfolioImportBatchNumeric",
+  "PortfolioImportReconciliationRequest.RowChoicesItem.row_id":
+    "PortfolioImportRow",
+  "PortfolioImportReconciliationRequest.batch_ids":
+    "PortfolioImportBatchNumeric",
+  "PortfolioSummaryData.ArchivedInKindIncomeItem.id": "Investment",
+  "PortfolioTransaction.import_batch_id": "PortfolioImportBatch",
+  "ReconcileAccount.ResponseData.Transaction.id": "Transaction",
+  "ResearchDossierExport.DossiersItem.id": "ResearchDossier",
+};
+
+/**
+ * Path parameters whose entity is not the singular of the segment before them
+ * (`/api/accounts/{id}` needs no entry). The longest matching path prefix wins.
+ */
+export const PATH_ID_ENTITY: { prefix: string; param: string; entity: string }[] =
+  [
+    { prefix: "/api/ai-research/documents/{id}", param: "id", entity: "ResearchDocument" },
+    { prefix: "/api/ai-research/investigations/{id}", param: "id", entity: "AiInvestigation" },
+    { prefix: "/api/ai/conversations/{id}", param: "id", entity: "AiConversation" },
+    { prefix: "/api/analysis/monitors/notifications/{id}", param: "id", entity: "AnalysisMonitorNotification" },
+    { prefix: "/api/analysis/monitors/{id}", param: "id", entity: "AnalysisMonitor" },
+    { prefix: "/api/analysis/saved/{id}", param: "id", entity: "SavedAnalysis" },
+    { prefix: "/api/categories/tree/{id}", param: "id", entity: "Category" },
+    { prefix: "/api/import/batches/{id}", param: "id", entity: "ImportBatch" },
+    { prefix: "/api/import/batches/{id}/rows/{rowId}", param: "rowId", entity: "ImportRow" },
+    { prefix: "/api/import/parsers/{id}", param: "id", entity: "CustomParserConfig" },
+    { prefix: "/api/portfolio/import/batches/{id}", param: "id", entity: "PortfolioImportBatch" },
+    { prefix: "/api/portfolio/import/batches/{id}/rows/{rowId}", param: "rowId", entity: "PortfolioImportRow" },
+    { prefix: "/api/portfolio/import/parsers/{id}", param: "id", entity: "PortfolioParserConfig" },
+    { prefix: "/api/recipients/{id}/bank-accounts/{accountId}", param: "accountId", entity: "RecipientBankAccount" },
+    { prefix: "/api/research/mappings/{id}", param: "id", entity: "InstrumentProviderMapping" },
+    { prefix: "/api/splits/owed/{id}", param: "id", entity: "Recipient" },
+    { prefix: "/api/watchlist/{id}", param: "id", entity: "WatchlistItem" },
+  ];
+
+/**
+ * Id-like integer/string fields that deliberately stay plain, each with its
+ * reason. Keys as in FIELD_ENTITY. A stale entry (matching nothing) fails the
+ * generator test.
+ */
+export const UNTYPED_IDS: Record<string, string> = {
+  "*.account_ids":
+    "Comma-separated query string of account ids (wire format), not an array.",
+  "*.category_ids":
+    "Comma-separated query string of category ids (wire format), not an array.",
+  "*.investment_ids":
+    "Comma-separated query string of investment ids (wire format), not an array.",
+  "*.datasetId": "Analysis dataset catalog key (a fixed code), not a stored entity.",
+  "*.fieldId": "Analysis dataset field catalog key (a fixed code), not a stored entity.",
+  "*.historicalId":
+    "Snapshot of a reference to an entity that may no longer exist; the kind varies per row.",
+  "*.historicalTargetId":
+    "Snapshot of a reference to an entity that may no longer exist; the kind varies per row.",
+  "*.issuerId": "Exposure issuer grouping key derived from instrument data, not a stored entity.",
+  "*.methodId": "Cash forecast method code from a fixed catalog, not a stored entity.",
+  "*.price_provider_id":
+    "The market data provider's own symbol or code for the instrument, not a Vision entity.",
+  "*.requestId":
+    "Client-generated correlation token for an in-flight request, not a stored entity.",
+  "*.seriesId": "Macro data series code of the research provider, not a stored entity.",
+  "*.series_id": "Macro data series code of the research provider, not a stored entity.",
+  "BelgianTaxDashboard.SuggestionsItem.id":
+    "Static tax suggestion catalog key (pairs with i18n keys), not a stored entity.",
+  "PortfolioExposureDimension.RowsItem.id":
+    "Exposure bucket key (a dimension value such as a sector), not a stored entity.",
+};
+
+/**
+ * Request-body fields that must be able to send an explicit `null` (clear the
+ * stored value), keyed by the body struct (`Schema` or `Operation.Body`). Only
+ * fields the web frontend demonstrably sends as `null` (apps/frontend callers) are
+ * listed; every other nullable PATCH field stays `T?`.
+ */
+export const NULLABLE_PATCH_FIELDS: Record<string, string[]> = {
+  // accountFormMapping.ts: an edit sends `display_name: null` / `institution: null` to clear.
+  AccountUpdate: ["display_name", "institution"],
+  // TransactionsPage.tsx: "Explicit null clears the category / recipient on the backend".
+  TransactionUpdate: ["category_id", "recipient_id"],
+  // CategoryNodeDialog.tsx sends `parentId` (null = root) and `description || null`.
+  CategoryNodeUpdate: ["parentId", "description"],
+  // useImportReviewData.tsx persists `default_category_id: null` to clear the default.
+  RecipientUpdate: ["default_category_id"],
+  // plannedPaymentMapper.ts: null clears the end date / max count.
+  "UpdatePlannedTransaction.Body": ["recurrence_end_date", "max_occurrences"],
+  // CustomChartBuilderModal.tsx sends `dateRangeStart || null` / `dateRangeEnd || null`.
+  "UpdateSavedChart.Body": ["dateRangeStart", "dateRangeEnd"],
+  // RecipientPatternsDialog.tsx: "null clears an existing note on PATCH".
+  "UpdateRecipientPattern.Body": ["notes"],
+  // EditPortfolioTxnDialog.tsx: cleared note / FX rate / account / end date are explicit null.
+  "UpdatePortfolioTransaction.Body": [
+    "fx_rate_to_eur",
+    "account_id",
+    "note",
+    "recurrence_end_date",
+  ],
+};
+
+type IdKind = "int" | "string";
+
+/** The override tables the generator reads; tests pass their own around a toy spec. */
+export interface GeneratorTables {
+  schemaIdEntity: Record<string, string>;
+  stemEntity: Record<string, string>;
+  fieldEntity: Record<string, string>;
+  pathIdEntity: { prefix: string; param: string; entity: string }[];
+  untypedIds: Record<string, string>;
+  nullablePatchFields: Record<string, string[]>;
+}
+
+export const DEFAULT_TABLES: GeneratorTables = {
+  schemaIdEntity: SCHEMA_ID_ENTITY,
+  stemEntity: STEM_ENTITY,
+  fieldEntity: FIELD_ENTITY,
+  pathIdEntity: PATH_ID_ENTITY,
+  untypedIds: UNTYPED_IDS,
+  nullablePatchFields: NULLABLE_PATCH_FIELDS,
+};
+
+export interface GenerationStats {
+  /** Entity id types emitted. */
+  identifierTypes: number;
+  /** Model fields and operation parameters typed with an identifier. */
+  identifierFields: number;
+  enumsNamed: number;
+  enumsInline: number;
+  currencyFields: number;
+  nullableFields: number;
+  /** Keys of UNTYPED_IDS that matched a field. */
+  untypedIdsHit: string[];
+  /** Keys of NULLABLE_PATCH_FIELDS entries that matched a field (`Struct.field`). */
+  nullableFieldsHit: string[];
+}
+
 type Schema = { [key: string]: unknown };
 
 interface Spec {
@@ -57,6 +282,8 @@ interface Operation {
 export interface GeneratedAPI {
   models: string;
   operations: string;
+  identifiers: string;
+  stats: GenerationStats;
 }
 
 function isObject(value: unknown): value is Schema {
@@ -99,14 +326,348 @@ function indentBlock(block: string, indent: string): string {
     .join("\n");
 }
 
+/** `account_ids` -> stem `account`, plural; `id` -> empty stem; not id-like -> undefined. */
+export function identifierStem(
+  wire: string,
+): { stem: string; plural: boolean } | undefined {
+  if (wire === "id") return { stem: "", plural: false };
+  const match = /^(.+?)(_ids?|Ids?)$/.exec(wire);
+  if (!match) return undefined;
+  return { stem: match[1] ?? "", plural: (match[2] ?? "").endsWith("s") };
+}
+
+/** `batches` -> `batch`, `categories` -> `category`, `tags` -> `tag`. */
+function singular(word: string): string {
+  if (/ies$/.test(word)) return `${word.slice(0, -3)}y`;
+  if (/(ch|sh|x|ss)es$/.test(word)) return word.slice(0, -2);
+  if (/s$/.test(word) && !/ss$/.test(word)) return word.slice(0, -1);
+  return word;
+}
+
+/** Currency fields: names ending in currency/currencies, or the `^[A-Z]{3}$` pattern. */
+function isCurrencyField(wire: string, schema: Schema): boolean {
+  const target =
+    schema.type === "array" && isObject(schema.items) ? schema.items : schema;
+  if (target.type !== "string" || Array.isArray(target.enum)) return false;
+  if (target.pattern === "^[A-Z]{3}$") return true;
+  return /(?:^|[_-])(?:currency|currencies)$|(?:Currency|Currencies)$/.test(
+    wire,
+  );
+}
+
+const RESERVED_TYPE_NAMES = new Set([
+  "Type",
+  "Protocol",
+  "Self",
+  "Any",
+  "String",
+  "Int",
+  "Bool",
+  "Decimal",
+  "Data",
+  "Date",
+  "URL",
+  "Array",
+  "Optional",
+  "Dictionary",
+  "JSONValue",
+  "CurrencyCode",
+  "Nullable",
+  "OpenAPI",
+]);
+
+const RESERVED_CASES = new Set([
+  "unknown",
+  "rawValue",
+  "allCases",
+  "allKnownCases",
+  "hashValue",
+  "init",
+]);
+
+/** Swift case names for enum values, unique and clear of the generated members. */
+export function enumCases(values: string[]): { name: string; value: string }[] {
+  const used = new Set<string>(RESERVED_CASES);
+  return values.map((value, index) => {
+    let name: string;
+    try {
+      name = camelCase(value);
+    } catch {
+      name = `value${index}`;
+    }
+    if (RESERVED_CASES.has(name)) name = `${name}Value`;
+    while (used.has(name)) name = `${name}Value`;
+    used.add(name);
+    return { name: swiftIdentifier(name), value };
+  });
+}
+
+/** The Swift for an enum whose unknown raw values decode to `.unknown(raw)`. */
+function enumDeclaration(
+  name: string,
+  values: string[],
+  description: string | undefined,
+  indent = "",
+): string {
+  const cases = enumCases(values);
+  const lines: string[] = [...docLines(description, "")];
+  lines.push(
+    "/// A value this client does not know decodes to `.unknown` and encodes back unchanged.",
+    `public enum ${name}: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {`,
+  );
+  for (const item of cases) lines.push(`    case ${item.name}`);
+  lines.push(
+    "    case unknown(String)",
+    "",
+    `    public static var allKnownCases: [${name}] {`,
+    `        [${cases.map((item) => `.${item.name}`).join(", ")}]`,
+    "    }",
+    "",
+    `    public static var allCases: [${name}] { allKnownCases }`,
+    "",
+    "    public init(rawValue: String) {",
+    "        switch rawValue {",
+  );
+  for (const item of cases)
+    lines.push(
+      `        case ${swiftString(item.value)}: self = .${item.name}`,
+    );
+  lines.push(
+    "        default: self = .unknown(rawValue)",
+    "        }",
+    "    }",
+    "",
+    "    public var rawValue: String {",
+    "        switch self {",
+  );
+  for (const item of cases)
+    lines.push(`        case .${item.name}: return ${swiftString(item.value)}`);
+  lines.push(
+    "        case .unknown(let value): return value",
+    "        }",
+    "    }",
+    "",
+    "    public init(from decoder: any Decoder) throws {",
+    "        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))",
+    "    }",
+    "",
+    "    public func encode(to encoder: any Encoder) throws {",
+    "        var container = encoder.singleValueContainer()",
+    "        try container.encode(rawValue)",
+    "    }",
+    "}",
+  );
+  return indent ? indentBlock(lines.join("\n"), indent) : lines.join("\n");
+}
+
+interface TypeOptions {
+  /** Keep string enums as `String` (request parameters accept only what the server lists). */
+  plainStrings?: boolean;
+}
+
 class Generator {
   private readonly required = new Set<string>(ALWAYS_GENERATED);
   private readonly pending = [...ALWAYS_GENERATED];
 
   private readonly spec: Spec;
+  private readonly tables: GeneratorTables;
 
-  constructor(spec: Spec) {
+  /** The struct names being generated, outermost first (the context of a field). */
+  private readonly context: string[] = [];
+  /** Entity -> wire kinds seen: from every schema `id` up front, then from each use. */
+  private readonly entities = new Map<string, Set<IdKind>>();
+  private readonly schemaEntities = new Set<string>();
+  private readonly nestedNames = new WeakMap<string[], Set<string>>();
+  readonly unmappedIds = new Set<string>();
+  readonly untypedHits = new Set<string>();
+  readonly nullableHits = new Set<string>();
+  readonly stats = {
+    identifierFields: 0,
+    enumsNamed: 0,
+    enumsInline: 0,
+    currencyFields: 0,
+    nullableFields: 0,
+  };
+
+  constructor(spec: Spec, tables: GeneratorTables) {
     this.spec = spec;
+    this.tables = tables;
+    for (const [name, raw] of Object.entries(spec.components.schemas)) {
+      if (!isObject(raw)) continue;
+      const properties = isObject(raw.properties)
+        ? raw.properties
+        : Array.isArray(raw.allOf)
+          ? this.mergeAllOf(raw.allOf).properties
+          : undefined;
+      const id = properties && isObject(properties.id) ? properties.id : undefined;
+      const shape = id ? this.idShape(id) : undefined;
+      if (!shape || shape.array) continue;
+      const entity = this.tables.schemaIdEntity[name] ?? name;
+      this.schemaEntities.add(name);
+      this.register(entity, shape.kind);
+    }
+  }
+
+  /** Where each entity was first seen with each wire kind, for conflict messages. */
+  private readonly firstSeen = new Map<string, string>();
+
+  private register(entity: string, kind: IdKind, where = "schema id"): void {
+    const kinds = this.entities.get(entity) ?? new Set<IdKind>();
+    kinds.add(kind);
+    this.entities.set(entity, kinds);
+    const key = `${entity}:${kind}`;
+    if (!this.firstSeen.has(key)) this.firstSeen.set(key, where);
+  }
+
+  /** `int` / `string` and whether it is an array, for an id-shaped schema. */
+  private idShape(schema: Schema): { kind: IdKind; array: boolean } | undefined {
+    let current: Schema = schema;
+    let array = false;
+    for (let depth = 0; depth < 4; depth++) {
+      const ref = stringField(current, "$ref");
+      if (ref) {
+        current = this.schema(refName(ref, "schemas"));
+        continue;
+      }
+      if (!array && current.type === "array" && isObject(current.items)) {
+        array = true;
+        current = current.items;
+        continue;
+      }
+      break;
+    }
+    if (current.type === "integer") return { kind: "int", array };
+    if (current.type === "string" && !Array.isArray(current.enum))
+      return { kind: "string", array };
+    return undefined;
+  }
+
+  /** The entity a `xId` stem names, trying shorter word suffixes of the stem. */
+  private entityForStem(stem: string): string | undefined {
+    const words = pascalCase(stem).match(/[A-Z][a-z0-9]*/g) ?? [];
+    for (let index = 0; index < words.length; index++) {
+      const candidate = words.slice(index).join("");
+      const mapped =
+        this.tables.stemEntity[candidate] ??
+        (this.entities.has(candidate) ? candidate : undefined);
+      if (mapped) return mapped;
+    }
+    return undefined;
+  }
+
+  /**
+   * The identifier type of an id-like integer/string field or parameter, or
+   * undefined when it is not id-like, is deliberately untyped, or is unmapped
+   * (recorded in `unmappedIds`). `explicit` is a path-derived entity.
+   */
+  private identifierType(
+    wire: string,
+    schema: Schema,
+    scope: string[],
+    explicit?: string,
+    inUrl = false,
+  ): string | undefined {
+    const stem = identifierStem(wire);
+    if (!stem) return undefined;
+    const shape = this.idShape(schema);
+    if (!shape) return undefined;
+    const keys = [`${scope.join(".")}.${wire}`, `${scope[0]}.${wire}`, `*.${wire}`];
+    let entity = explicit ?? keys.map((key) => this.tables.fieldEntity[key]).find(Boolean);
+    if (!entity) {
+      const untyped = keys.find((key) => this.tables.untypedIds[key] !== undefined);
+      if (untyped) {
+        this.untypedHits.add(untyped);
+        return undefined;
+      }
+      // A plural name must be an array and a singular one a scalar; anything else
+      // (a comma-separated string of ids) needs an explicit decision.
+      if (stem.plural === shape.array) {
+        if (stem.stem === "") {
+          const root = scope[0] ?? "";
+          if (scope.length === 1 && this.schemaEntities.has(root))
+            entity = this.tables.schemaIdEntity[root] ?? root;
+        } else {
+          entity = this.entityForStem(stem.stem);
+        }
+      }
+    }
+    if (!entity) {
+      this.unmappedIds.add(keys[0] ?? wire);
+      return undefined;
+    }
+    // A URL carries the id as text, so a parameter the spec types differently from the
+    // entity's own schema id (a path `integer` for an `Attachment` string id) follows the entity.
+    if (!(inUrl && this.entities.has(entity)))
+      this.register(entity, shape.kind, keys[0]);
+    this.stats.identifierFields++;
+    const type = `${entity}ID`;
+    return shape.array ? `[${type}]` : type;
+  }
+
+  /** The entity of a path parameter: a table entry, else the singular of the segment before it. */
+  private pathEntity(operation: Operation, name: string): string | undefined {
+    const template = operation.path;
+    const marker = `{${name}}`;
+    const at = template.indexOf(marker);
+    if (at < 0) return undefined;
+    const upto = template.slice(0, at + marker.length);
+    const entry = this.tables.pathIdEntity.filter(
+      (item) => item.param === name && upto.startsWith(item.prefix),
+    ).sort((a, b) => b.prefix.length - a.prefix.length)[0];
+    if (entry) return entry.entity;
+    if (name !== "id") return undefined;
+    const segment = upto
+      .slice(0, at)
+      .split("/")
+      .filter(Boolean)
+      .pop();
+    if (!segment || segment.startsWith("{")) return undefined;
+    const candidate = pascalCase(singular(segment));
+    return this.entities.has(candidate) ? candidate : undefined;
+  }
+
+  /** Entities and their wire kind, for the identifier file. */
+  identifierEntities(): [string, IdKind][] {
+    const result: [string, IdKind][] = [];
+    for (const [entity, kinds] of [...this.entities].sort((a, b) =>
+      a[0].localeCompare(b[0]),
+    )) {
+      if (kinds.size > 1) {
+        throw new Error(
+          `${entity} is both an integer (${this.firstSeen.get(`${entity}:int`)}) and a string (${this.firstSeen.get(`${entity}:string`)}) id on the wire; give one a distinct entity in FIELD_ENTITY / SCHEMA_ID_ENTITY.`,
+        );
+      }
+      if (this.spec.components.schemas[`${entity}ID`] !== undefined) {
+        throw new Error(`${entity}ID collides with a schema name.`);
+      }
+      result.push([entity, [...kinds][0] ?? "int"]);
+    }
+    return result;
+  }
+
+  /** A nested type name not yet used in this scope (collisions get a numeric suffix). */
+  private nestedName(
+    nested: string[],
+    base: string,
+    kind: "struct" | "enum" = "struct",
+  ): string {
+    const used = this.nestedNames.get(nested) ?? new Set<string>();
+    this.nestedNames.set(nested, used);
+    // `Type` and `Protocol` would read as metatypes, and a nested type named like a
+    // Foundation or generated type would shadow it inside the struct.
+    // Nested structs keep their historical names (`Data` shadows Foundation's inside the
+    // envelope structs that already declared it); new enums avoid shadowing at all.
+    const reserved =
+      kind === "enum"
+        ? RESERVED_TYPE_NAMES.has(base)
+        : ["Type", "Protocol", "Self"].includes(base);
+    const first = reserved
+      ? `${this.context[this.context.length - 1] ?? ""}${base}`
+      : base;
+    let name = first;
+    for (let index = 2; used.has(name); index++) name = `${first}${index}`;
+    used.add(name);
+    return name;
   }
 
   schema(name: string): Schema {
@@ -123,7 +684,12 @@ class Generator {
   }
 
   /** The Swift type of a schema; inline objects become nested structs in `nested`. */
-  typeFor(schema: unknown, hint: string, nested: string[]): string {
+  typeFor(
+    schema: unknown,
+    hint: string,
+    nested: string[],
+    options: TypeOptions = {},
+  ): string {
     if (!isObject(schema) || Object.keys(schema).length === 0)
       return "JSONValue";
     const ref = stringField(schema, "$ref");
@@ -139,18 +705,28 @@ class Generator {
       // referenced type itself (an enum would otherwise become an empty struct).
       if (schema.allOf.length === 1 && isObject(schema.allOf[0])) {
         const only = stringField(schema.allOf[0], "$ref");
-        if (only) return this.typeFor(schema.allOf[0], hint, nested);
+        if (only) return this.typeFor(schema.allOf[0], hint, nested, options);
       }
       const merged = this.mergeAllOf(schema.allOf);
-      const name = pascalCase(hint);
+      const name = this.nestedName(nested, pascalCase(hint));
       nested.push(
         this.struct(name, merged.properties, merged.required, undefined),
       );
       return name;
     }
     switch (schema.type) {
-      case "string":
-        return "String";
+      case "string": {
+        const values = Array.isArray(schema.enum)
+          ? schema.enum.filter((value) => typeof value === "string")
+          : [];
+        if (options.plainStrings || values.length === 0) return "String";
+        const name = this.nestedName(nested, pascalCase(hint), "enum");
+        this.stats.enumsInline++;
+        nested.push(
+          enumDeclaration(name, values.map(String), stringField(schema, "description")),
+        );
+        return name;
+      }
       case "integer":
         return "Int";
       case "number":
@@ -159,13 +735,13 @@ class Generator {
       case "boolean":
         return "Bool";
       case "array":
-        return `[${this.typeFor(schema.items, `${hint}Item`, nested)}]`;
+        return `[${this.typeFor(schema.items, `${hint}Item`, nested, options)}]`;
       default: {
         const properties = isObject(schema.properties)
           ? schema.properties
           : undefined;
         if (properties && Object.keys(properties).length > 0) {
-          const name = pascalCase(hint);
+          const name = this.nestedName(nested, pascalCase(hint));
           const required = Array.isArray(schema.required)
             ? schema.required.map(String)
             : [];
@@ -177,6 +753,7 @@ class Generator {
             schema.additionalProperties,
             `${hint}Value`,
             nested,
+            options,
           );
           return `[String: ${value}]`;
         }
@@ -216,12 +793,29 @@ class Generator {
     required: string[],
     description: string | undefined,
   ): string {
+    this.context.push(name);
+    try {
+      return this.structBody(name, properties, required, description);
+    } finally {
+      this.context.pop();
+    }
+  }
+
+  private structBody(
+    name: string,
+    properties: Schema,
+    required: string[],
+    description: string | undefined,
+  ): string {
     const nested: string[] = [];
     const nameCounts = new Map<string, number>();
     for (const wire of Object.keys(properties)) {
       const name = camelCase(wire);
       nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
     }
+    const scope = [...this.context];
+    const patchKey = scope.join(".");
+    const nullable = new Set(this.tables.nullablePatchFields[patchKey] ?? []);
     const usedNames = new Set<string>();
     const fields = Object.entries(properties).map(([wire, raw]) => {
       const schema = isObject(raw) ? raw : {};
@@ -236,17 +830,45 @@ class Generator {
       }
       usedNames.add(name);
       const swiftName = swiftIdentifier(name);
-      const base = this.typeFor(schema, wire, nested);
-      const optional = !required.includes(wire) || schema.nullable === true;
+      let base = this.identifierType(wire, schema, scope);
+      if (base === undefined && isCurrencyField(wire, schema)) {
+        base = schema.type === "array" ? "[CurrencyCode]" : "CurrencyCode";
+        this.stats.currencyFields++;
+      }
+      base ??= this.typeFor(schema, wire, nested);
+      let optional = !required.includes(wire) || schema.nullable === true;
+      let type = optional ? `${base}?` : base;
+      const patchable = nullable.has(wire);
+      if (patchable) {
+        if (schema.nullable !== true) {
+          throw new Error(
+            `${patchKey}.${wire} is listed in NULLABLE_PATCH_FIELDS but is not nullable in openapi.yaml.`,
+          );
+        }
+        this.nullableHits.add(`${patchKey}.${wire}`);
+        this.stats.nullableFields++;
+        type = `Nullable<${base}>`;
+        optional = false;
+      }
       return {
         wire,
         swiftName,
         plainName: swiftName.replace(/`/g, ""),
-        type: optional ? `${base}?` : base,
+        base,
+        type,
         optional,
+        patchable,
+        required: required.includes(wire),
         description: stringField(schema, "description"),
       };
     });
+    for (const wire of nullable) {
+      if (!(wire in properties)) {
+        throw new Error(
+          `${patchKey}.${wire} is listed in NULLABLE_PATCH_FIELDS but is not a property.`,
+        );
+      }
+    }
     const lines: string[] = [...docLines(description, "")];
     lines.push(`public struct ${name}: Codable, Equatable, Sendable {`);
     for (const field of fields) {
@@ -257,7 +879,7 @@ class Generator {
     const parameters = fields
       .map(
         (field) =>
-          `${field.swiftName}: ${field.type}${field.optional ? " = nil" : ""}`,
+          `${field.swiftName}: ${field.type}${field.patchable ? " = .absent" : field.optional ? " = nil" : ""}`,
       )
       .join(", ");
     lines.push(`    public init(${parameters}) {`);
@@ -270,6 +892,47 @@ class Generator {
         lines.push(
           `        case ${field.swiftName} = ${swiftString(field.wire)}`,
         );
+      lines.push("    }");
+    }
+    if (fields.some((field) => field.patchable)) {
+      // Synthesized Codable cannot tell an absent key from an explicit null.
+      lines.push(
+        "",
+        "    public init(from decoder: any Decoder) throws {",
+        "        let container = try decoder.container(keyedBy: CodingKeys.self)",
+      );
+      for (const field of fields) {
+        const key = `forKey: .${field.swiftName}`;
+        if (field.patchable) {
+          lines.push(
+            `        self.${field.plainName} = try container.decodeNullable(${field.base}.self, ${key})`,
+          );
+        } else if (field.optional) {
+          lines.push(
+            `        self.${field.plainName} = try container.decodeIfPresent(${field.type.slice(0, -1)}.self, ${key})`,
+          );
+        } else {
+          lines.push(
+            `        self.${field.plainName} = try container.decode(${field.type}.self, ${key})`,
+          );
+        }
+      }
+      lines.push(
+        "    }",
+        "",
+        "    public func encode(to encoder: any Encoder) throws {",
+        "        var container = encoder.container(keyedBy: CodingKeys.self)",
+      );
+      for (const field of fields) {
+        const key = `forKey: .${field.swiftName}`;
+        lines.push(
+          field.patchable
+            ? `        try container.encodeNullable(${field.plainName}, ${key})`
+            : field.optional
+              ? `        try container.encodeIfPresent(${field.plainName}, ${key})`
+              : `        try container.encode(${field.plainName}, ${key})`,
+        );
+      }
       lines.push("    }");
     }
     for (const block of nested) lines.push("", indentBlock(block, "    "));
@@ -302,17 +965,12 @@ class Generator {
       return this.struct(name, merged.properties, merged.required, description);
     }
     if (schema.type === "string" && Array.isArray(schema.enum)) {
-      const lines = [...docLines(description, "")];
-      lines.push(
-        `public enum ${name}: String, Codable, Sendable, CaseIterable {`,
+      this.stats.enumsNamed++;
+      return enumDeclaration(
+        name,
+        schema.enum.filter((value) => typeof value === "string").map(String),
+        description,
       );
-      for (const value of schema.enum.map(String)) {
-        lines.push(
-          `    case ${swiftIdentifier(camelCase(value))} = ${swiftString(value)}`,
-        );
-      }
-      lines.push("}");
-      return lines.join("\n");
     }
     const properties = isObject(schema.properties)
       ? schema.properties
@@ -425,6 +1083,15 @@ class Generator {
   }
 
   operationStruct(operation: Operation): string {
+    this.context.push(pascalCase(operation.id));
+    try {
+      return this.operationStructBody(operation);
+    } finally {
+      this.context.pop();
+    }
+  }
+
+  private operationStructBody(operation: Operation): string {
     const name = pascalCase(operation.id);
     const nested: string[] = [];
     const response = this.responseType(operation, nested);
@@ -453,10 +1120,23 @@ class Generator {
     const field = (parameter: Schema, forcedRequired: boolean): Field => {
       const wire = String(parameter.name);
       const schema = isObject(parameter.schema) ? parameter.schema : {};
-      const base = this.typeFor(schema, wire, nested);
+      let base = this.identifierType(
+        wire,
+        schema,
+        [name],
+        parameter.in === "path" ? this.pathEntity(operation, wire) : undefined,
+        true,
+      );
+      if (base === undefined && isCurrencyField(wire, schema)) {
+        base = schema.type === "array" ? "[CurrencyCode]" : "CurrencyCode";
+        this.stats.currencyFields++;
+      }
+      base ??= this.typeFor(schema, wire, nested, { plainStrings: true });
       if (
-        !["String", "Int", "Decimal", "Bool", "[String]", "[Int]"].includes(
-          base,
+        !(
+          ["String", "Int", "Decimal", "Bool", "[String]", "[Int]"].includes(
+            base,
+          ) || /^\[?(?:[A-Za-z]+ID|CurrencyCode)\]?$/.test(base)
         )
       ) {
         throw new Error(
@@ -601,6 +1281,7 @@ class Generator {
 export function generateAPI(
   specText: string,
   allowListText: string,
+  tables: GeneratorTables = DEFAULT_TABLES,
 ): GeneratedAPI {
   const parsed = parseYaml(specText);
   if (
@@ -613,18 +1294,25 @@ export function generateAPI(
   const spec = parsed as unknown as Spec;
   const ids = parseListFile(allowListText, ALLOW_LIST);
   if (ids.length === 0) throw new Error(`${ALLOW_LIST} lists no operations.`);
-  const generator = new Generator(spec);
+  const generator = new Generator(spec, tables);
   const operations = ids.map((id) =>
     generator.operationStruct(generator.operation(id)),
   );
   const models = generator.models();
+  if (generator.unmappedIds.size > 0) {
+    throw new Error(
+      `${generator.unmappedIds.size} id-like integer/string fields have no identifier type. Map each in SCHEMA_ID_ENTITY, STEM_ENTITY, FIELD_ENTITY or PATH_ID_ENTITY, or list it in UNTYPED_IDS with a reason:\n  ${[...generator.unmappedIds].sort().join("\n  ")}`,
+    );
+  }
+  const entities = generator.identifierEntities();
 
   const modelsFile = [
     generatedHeader(SOURCE, COMMAND),
     "import Foundation",
     "",
     "/// The OpenAPI component schemas the allow-listed operations use",
-    `/// (\`${ALLOW_LIST}\`). Dates stay the wire strings; numbers are \`Decimal\`.`,
+    `/// (\`${ALLOW_LIST}\`). Dates stay the wire strings; numbers are \`Decimal\`; ids, currencies and`,
+    "/// string enums are typed (`OpenAPIIdentifiers.swift`, `CurrencyCode`, enums with `.unknown`).",
     "public enum OpenAPI {}",
     "",
     "extension OpenAPI {",
@@ -648,7 +1336,37 @@ export function generateAPI(
     "",
   ].join("\n");
 
-  return { models: modelsFile, operations: operationsFile };
+  const identifiersFile = [
+    generatedHeader(SOURCE, COMMAND),
+    "/// One identifier type per entity the OpenAPI spec has ids for (`API/Types/Identifier.swift`",
+    "/// holds the generic types). Ids of different entities never convert into one another.",
+    entities
+      .map(([entity, kind]) =>
+        [
+          `/// The id of a ${entity} (${kind === "int" ? "an integer" : "a string"} on the wire).`,
+          `public enum ${entity}IDTag: IdentifierTag {}`,
+          `public typealias ${entity}ID = ${kind === "int" ? "IntIdentifier" : "StringIdentifier"}<${entity}IDTag>`,
+        ].join("\n"),
+      )
+      .join("\n\n"),
+    "",
+  ].join("\n");
+
+  return {
+    models: modelsFile,
+    operations: operationsFile,
+    identifiers: identifiersFile,
+    stats: {
+      identifierTypes: entities.length,
+      identifierFields: generator.stats.identifierFields,
+      enumsNamed: generator.stats.enumsNamed,
+      enumsInline: generator.stats.enumsInline,
+      currencyFields: generator.stats.currencyFields,
+      nullableFields: generator.stats.nullableFields,
+      untypedIdsHit: [...generator.untypedHits].sort(),
+      nullableFieldsHit: [...generator.nullableHits].sort(),
+    },
+  };
 }
 
 function main(): void {
@@ -664,6 +1382,17 @@ function main(): void {
     writeGenerated(
       repoPath(OUTPUT_DIR, "OpenAPIOperations.swift"),
       generated.operations,
+    );
+    writeGenerated(
+      repoPath(OUTPUT_DIR, "OpenAPIIdentifiers.swift"),
+      generated.identifiers,
+    );
+    const stats = generated.stats;
+    console.log(
+      `[native-openapi] ${stats.identifierTypes} identifier types on ${stats.identifierFields} fields/parameters; ` +
+        `${stats.enumsNamed + stats.enumsInline} enums (${stats.enumsNamed} named, ${stats.enumsInline} inline); ` +
+        `${stats.currencyFields} CurrencyCode fields; ${stats.nullableFields} Nullable fields; ` +
+        `${stats.untypedIdsHit.length} untyped id rules used.`,
     );
   } catch (error) {
     console.error(
