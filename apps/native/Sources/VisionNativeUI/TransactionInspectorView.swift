@@ -488,13 +488,21 @@ struct TransactionAttachmentsPanel: View {
             }
             Spacer(minLength: 0)
             Button {
-                Task { await attachments.download(item) }
+                Task {
+                    await attachments.download(item)
+                    model.reportAttachmentDownloadFailure()
+                }
             } label: {
-                Image(systemName: "arrow.down.circle")
+                if attachments.downloadingId == item.id {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "arrow.down.circle")
+                }
             }
             .buttonStyle(.borderless)
-            .help(strings.t("txPage.bulk.exportConfirm"))
-            .accessibilityLabel(strings.t("txPage.bulk.exportConfirm"))
+            .disabled(attachments.downloadingId != nil)
+            .help(strings.t("aria.downloadAttachment", ["name": item.filename]))
+            .accessibilityLabel(strings.t("aria.downloadAttachment", ["name": item.filename]))
             Button {
                 attachments.requestDelete(item)
             } label: {

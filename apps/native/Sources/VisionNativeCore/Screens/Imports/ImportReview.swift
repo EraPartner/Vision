@@ -73,12 +73,15 @@ public struct ImportStagingRow: Decodable, Equatable, Sendable, Identifiable {
     public let matchedPatternId: Int?
     public let userOverrideRecipientId: Int?
     public let overrideCategoryId: Int?
+    /// The ledger already holds this row's import identity, so commit settles it as a
+    /// duplicate (`already_imported`). Absent on older servers.
+    public let alreadyImported: Bool?
 
     public init(
         id: String, rowIndex: Int = 0, recipientRaw: String? = nil, amount: String? = nil, currency: String? = nil,
         txDate: String? = nil, memo: String? = nil, bankAccount: String? = nil, matchSource: String? = nil,
         matchSimilarity: Double? = nil, matchedPatternId: Int? = nil, userOverrideRecipientId: Int? = nil,
-        overrideCategoryId: Int? = nil
+        overrideCategoryId: Int? = nil, alreadyImported: Bool? = nil
     ) {
         self.id = id
         self.rowIndex = rowIndex
@@ -93,6 +96,7 @@ public struct ImportStagingRow: Decodable, Equatable, Sendable, Identifiable {
         self.matchedPatternId = matchedPatternId
         self.userOverrideRecipientId = userOverrideRecipientId
         self.overrideCategoryId = overrideCategoryId
+        self.alreadyImported = alreadyImported
     }
 
     enum CodingKeys: String, CodingKey {
@@ -108,7 +112,11 @@ public struct ImportStagingRow: Decodable, Equatable, Sendable, Identifiable {
         case matchedPatternId = "matched_pattern_id"
         case userOverrideRecipientId = "user_override_recipient_id"
         case overrideCategoryId = "override_category_id"
+        case alreadyImported = "already_imported"
     }
+
+    /// `row.already_imported === true`: the row carries the Already imported badge.
+    public var isAlreadyImported: Bool { alreadyImported == true }
 
     /// `Number(row.amount)`: zero when absent or unreadable.
     public var amountValue: Decimal {
@@ -197,17 +205,27 @@ public struct ImportPreview: Decodable, Equatable, Sendable {
     public let groups: [ImportPreviewGroup]
     /// Rows per match kind (`exact`, `fuzzy`, `pattern`, `new`, `unresolved`).
     public let totals: [String: Int]
+    /// Rows commit settles as duplicates (`already_imported`); absent on older servers.
+    public let alreadyImported: Int?
 
-    public init(batchId: Int, groups: [ImportPreviewGroup], totals: [String: Int]) {
+    public init(batchId: Int, groups: [ImportPreviewGroup], totals: [String: Int], alreadyImported: Int? = nil) {
         self.batchId = batchId
         self.groups = groups
         self.totals = totals
+        self.alreadyImported = alreadyImported
     }
 
     enum CodingKeys: String, CodingKey {
         case batchId = "batch_id"
         case groups, totals
+        case alreadyImported = "already_imported"
     }
+
+    /// `preview?.already_imported ?? 0`.
+    public var alreadyImportedCount: Int { alreadyImported ?? 0 }
+
+    /// Approve's count: `totalRows - alreadyImported`, the rows commit will actually add.
+    public var approvableRows: Int { totalRows - alreadyImportedCount }
 
     /// The sum of the groups' row counts (the subtitle, Approve and Discard).
     public var totalRows: Int { groups.reduce(0) { $0 + $1.rowCount } }
@@ -595,6 +613,9 @@ public final class ImportReviewModel {
     // MARK: Derived
 
     public var totalRows: Int { preview?.totalRows ?? 0 }
+
+    /// `preview.already_imported ?? 0`.
+    public var alreadyImportedCount: Int { preview?.alreadyImportedCount ?? 0 }
 
     public var accountDisclosure: [ImportAccountDisclosure] {
         ImportAccountDisclosure.entries(rows: preview?.rows ?? [], accounts: accounts)

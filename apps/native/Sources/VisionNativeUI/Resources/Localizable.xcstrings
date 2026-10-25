@@ -16723,6 +16723,24 @@
         }
       }
     },
+    "aria.downloadAttachment": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download attachment {name}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bijlage {name} downloaden"
+          }
+        }
+      }
+    },
     "aria.edit": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -29643,6 +29661,42 @@
           "stringUnit": {
             "state": "translated",
             "value": "geen rekening opgegeven"
+          }
+        }
+      }
+    },
+    "importReview.alreadyImported.badge": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already imported"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al geïmporteerd"
+          }
+        }
+      }
+    },
+    "importReview.alreadyImported.summary": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} rows are already in your ledger. They are skipped as duplicates."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} rijen staan al in je grootboek. Ze worden als duplicaat overgeslagen."
           }
         }
       }
@@ -80295,6 +80349,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Transactiedetails"
+          }
+        }
+      }
+    },
+    "txPage.downloadAttachmentError": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not download attachment"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kon bijlage niet downloaden"
           }
         }
       }

@@ -1173,6 +1173,13 @@ public final class TransactionsModel {
         post(.error, "txPage.deleteAttachmentError", detail: APIErrorMessage.text(error, strings: strings))
     }
 
+    /// The attachment download failed: the page's `txPage.downloadAttachmentError` toast.
+    public func reportAttachmentDownloadFailure() {
+        guard let inspector, let error = inspector.attachments.downloadError else { return }
+        inspector.attachments.clearDownloadError()
+        post(.error, "txPage.downloadAttachmentError", detail: APIErrorMessage.text(error, strings: strings))
+    }
+
     // MARK: Export
 
     /// The banner's Export CSV / Export JSON: the filtered rows, saved where the Save panel

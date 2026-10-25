@@ -211,6 +211,10 @@ public final class TransactionAttachmentsModel {
     public private(set) var deletingId: String?
     /// `txPage.deleteAttachmentError` with the reason, for the page's toast.
     public private(set) var deleteError: APIError?
+    /// `txPage.downloadAttachmentError` with the reason, for the page's toast (#342).
+    public private(set) var downloadError: APIError?
+    /// The attachment whose bytes are being fetched; React's `downloading` state.
+    public private(set) var downloadingId: String?
     /// The local copy Quick Look shows.
     public private(set) var previewURL: URL?
     /// Image bytes for the thumbnails, by attachment id.
@@ -317,15 +321,26 @@ public final class TransactionAttachmentsModel {
         previewURL = nil
     }
 
-    /// Download: the file's bytes, saved where the Save panel says under its own name.
+    /// Download: the file's bytes, saved where the Save panel says under its own name. A
+    /// second tap while one runs is ignored (#342 `downloading`); a failure is reported
+    /// through `downloadError` for the toast.
     public func download(_ attachment: OpenAPI.Attachment) async {
-        guard let id = Int(attachment.id) else { return }
+        guard downloadingId == nil, let id = Int(attachment.id) else { return }
+        downloadingId = attachment.id
+        defer { downloadingId = nil }
         do {
             let data = try await service.downloadAttachment(id: id)
             _ = try await save(data, Self.safeName(attachment.filename))
-        } catch {
+        } catch is CancellationError {
             return
+        } catch {
+            downloadError = APIError.wrapping(error)
         }
+    }
+
+    /// The page showed the download failure.
+    public func clearDownloadError() {
+        downloadError = nil
     }
 
     /// A file name without path separators.

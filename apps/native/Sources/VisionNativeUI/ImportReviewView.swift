@@ -155,6 +155,16 @@ public struct ImportReviewView: View {
                     .frame(minHeight: 44)
                     .accessibilityElement(children: .combine)
                 }
+                // `importReview.alreadyImported.summary`: a status line under the list.
+                if preview.alreadyImportedCount > 0 {
+                    Divider().opacity(0.5)
+                    Text(strings.t("importReview.alreadyImported.summary", ["n": String(preview.alreadyImportedCount)]))
+                        .foregroundStyle(theme.secondaryLabel)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
             }
         }
         .accessibilityElement(children: .contain)
@@ -263,7 +273,7 @@ public struct ImportReviewView: View {
                         Text(strings.t("importReview.committing"))
                     }
                 } else {
-                    Text(strings.t("importReview.approve", ["n": String(preview.totalRows)]))
+                    Text(strings.t("importReview.approve", ["n": String(preview.approvableRows)]))
                 }
             }
             .buttonStyle(.visionPrimary)
@@ -446,6 +456,10 @@ struct ImportReviewGroupView: View {
                     .truncationMode(.tail)
                     .foregroundStyle(theme.tertiaryLabel)
                     .layoutPriority(-1)
+            }
+            if row.isAlreadyImported {
+                VisionBadge(text: strings.t("importReview.alreadyImported.badge"), tone: .secondary)
+                    .fixedSize()
             }
             Spacer(minLength: 8)
             MoneyText(amount: row.amountValue, currency: row.currencyCode, settings: settings)

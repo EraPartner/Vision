@@ -630,6 +630,10 @@ importReview.accounts.line
 importReview.accounts.newBadge
 importReview.accounts.title
 importReview.accounts.unspecified
+txPage.downloadAttachmentError
+aria.downloadAttachment
+importReview.alreadyImported.badge
+importReview.alreadyImported.summary
 importReview.approve
 importReview.back
 importReview.category
