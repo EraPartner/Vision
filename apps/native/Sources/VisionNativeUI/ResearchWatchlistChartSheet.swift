@@ -149,11 +149,15 @@ private struct ResearchWatchlistPriceChart: View {
     let close: () -> Void
     @State private var selected: Int?
     @FocusState private var focused: Bool
+    @State private var plotCache = ChartLinePlotCache()
+    @State private var labelMemo = ChartLabelMemo()
     @Environment(\.visionTheme) private var theme
-    private var visible: [ResearchChartPoint] { points.filter { $0.close != nil } }
+    /// The points with a close, converted once per series (the hover re-renders per point).
+    private var priceMarks: [ChartLinePlot.Mark] { plotCache.plot(for: points).closeMarks }
     var body: some View {
+        let plot = plotCache.plot(for: points)
         VStack(alignment: .leading, spacing: 10) {
-            plot
+            marks(plot)
                 .chartXAxis {
                     AxisMarks(values: .automatic(desiredCount: 5)) { value in
                         AxisTick()
@@ -165,7 +169,7 @@ private struct ResearchWatchlistPriceChart: View {
                         }
                     }
                 }
-                .visionChartYAxis(domain: yDomain) { value in
+                .visionChartYAxis(domain: yDomain(plot)) { value in
                     VisionFormat.currency(
                         Decimal(value), code: item.currency, locale: shell.settings.numberFormat.locale,
                         fractionDigits: shell.settings.showDecimalPlaces)
@@ -178,10 +182,8 @@ private struct ResearchWatchlistPriceChart: View {
                                 guard let frame = proxy.plotFrame,
                                     let date: Date = proxy.value(atX: location.x - geometry[frame].origin.x)
                                 else { return }
-                                selected = visible.indices.min(by: {
-                                    abs(instant(visible[$0]).timeIntervalSince(date))
-                                        < abs(instant(visible[$1]).timeIntervalSince(date))
-                                })
+                                let nearest = plot.nearestCloseIndex(to: date)
+                                if nearest != selected { selected = nearest }
                             case .ended: if !focused { selected = nil }
                             }
                         }.onTapGesture { focused = true }
@@ -195,11 +197,13 @@ private struct ResearchWatchlistPriceChart: View {
                     return .handled
                 }
                 .onChange(of: points) { _, _ in selected = nil }
-            if let selected, visible.indices.contains(selected), let close = visible[selected].close {
+            if let selected, plot.closeMarks.indices.contains(selected),
+                let close = points[plot.closeMarks[selected].offset].close
+            {
                 HStack {
                     Text(
                         VisionFormat.appDate(
-                            instant(visible[selected]), format: shell.settings.dateFormat, timeZone: .current))
+                            plot.closeMarks[selected].time, format: shell.settings.dateFormat, timeZone: .current))
                     Spacer()
                     Text(ResearchWatchlistUI.money(close, currency: item.currency, shell: shell)).monospacedDigit()
                 }.font(.caption).padding(10).background(
@@ -209,38 +213,49 @@ private struct ResearchWatchlistPriceChart: View {
     }
     /// The web AreaChart's `yDomain={[minPrice, maxPrice]}`, niced; without metrics the closes and the
     /// target price, padded by 8 %.
-    private var yDomain: ClosedRange<Double> {
+    private func yDomain(_ plot: ChartLinePlot) -> ClosedRange<Double> {
         if let domain = metrics?.domain, domain.count == 2 {
             return ChartAxisTicks.niceDomain(coordinate(domain[0]), coordinate(domain[1]))
         }
-        var values = visible.compactMap { $0.close.map(coordinate) }
+        var values = plot.closes
         if metrics?.hasValidTarget == true { values.append(coordinate(item.targetPrice)) }
         return ChartAxisTicks.fittedDomain(values)
     }
-    private var plot: some View { marks }
-    @ViewBuilder private var marks: some View {
-        let baseline = yDomain.lowerBound
+    /// What the date and money strings of a point depend on besides the point.
+    private var labelContext: String {
+        let settings = shell.settings
+        return "\(settings.dateFormat)|\(settings.numberFormat.locale.identifier)|\(item.currency.rawValue)|\(settings.showDecimalPlaces)"
+    }
+    @ViewBuilder private func marks(_ plot: ChartLinePlot) -> some View {
+        let baseline = yDomain(plot).lowerBound
+        let dateTitle = shell.strings.t("networth.date")
+        let priceTitle = shell.strings.t("watchlistChart.priceLabel")
+        let context = labelContext
         Chart {
-            ForEach(Array(visible.enumerated()), id: \.offset) { _, point in
-                if let close = point.close {
-                    AreaMark(
-                        x: .value(shell.strings.t("networth.date"), instant(point)),
-                        yStart: .value(shell.strings.t("watchlistChart.priceLabel"), baseline),
-                        yEnd: .value(shell.strings.t("watchlistChart.priceLabel"), coordinate(close))
-                    )
-                    .foregroundStyle(ChartFill.areaGradient(theme.primary)).interpolationMethod(.monotone)
-                    .accessibilityHidden(true)
-                    LineMark(
-                        x: .value(shell.strings.t("networth.date"), instant(point)),
-                        y: .value(shell.strings.t("watchlistChart.priceLabel"), coordinate(close))
-                    )
-                    .foregroundStyle(theme.primary).lineStyle(StrokeStyle(lineWidth: 2))
-                    .interpolationMethod(.monotone)
-                    .accessibilityLabel(
-                        VisionFormat.appDate(instant(point), format: shell.settings.dateFormat, timeZone: .current)
-                    )
-                    .accessibilityValue(ResearchWatchlistUI.money(close, currency: item.currency, shell: shell))
-                }
+            ForEach(plot.marks, id: \.offset) { mark in
+                AreaMark(
+                    x: .value(dateTitle, mark.time),
+                    yStart: .value(priceTitle, baseline),
+                    yEnd: .value(priceTitle, mark.close)
+                )
+                .foregroundStyle(ChartFill.areaGradient(theme.primary)).interpolationMethod(.monotone)
+                .accessibilityHidden(true)
+                LineMark(
+                    x: .value(dateTitle, mark.time),
+                    y: .value(priceTitle, mark.close)
+                )
+                .foregroundStyle(theme.primary).lineStyle(StrokeStyle(lineWidth: 2))
+                .interpolationMethod(.monotone)
+                .accessibilityLabel(
+                    labelMemo.label("d|\(mark.offset)", context: context) {
+                        VisionFormat.appDate(mark.time, format: shell.settings.dateFormat, timeZone: .current)
+                    }
+                )
+                .accessibilityValue(
+                    labelMemo.label("v|\(mark.offset)", context: context) {
+                        let value = points[mark.offset].close ?? 0
+                        return ResearchWatchlistUI.money(value, currency: item.currency, shell: shell)
+                    })
             }
             if metrics?.hasValidTarget == true {
                 RuleMark(y: .value(shell.strings.t("watchlistChart.targetPrice"), coordinate(item.targetPrice)))
@@ -260,19 +275,17 @@ private struct ResearchWatchlistPriceChart: View {
                         ).font(.caption2)
                     }
             }
-            if let selected, visible.indices.contains(selected) {
-                RuleMark(x: .value(shell.strings.t("networth.date"), instant(visible[selected]))).foregroundStyle(
+            if let selected, plot.closeMarks.indices.contains(selected) {
+                RuleMark(x: .value(dateTitle, plot.closeMarks[selected].time)).foregroundStyle(
                     theme.secondaryLabel.opacity(0.5))
             }
         }
     }
     private func move(_ delta: Int) -> KeyPress.Result {
-        guard !visible.isEmpty else { return .ignored }
-        selected = max(0, min(visible.count - 1, (selected ?? (delta > 0 ? -1 : visible.count)) + delta))
+        let count = priceMarks.count
+        guard count > 0 else { return .ignored }
+        selected = max(0, min(count - 1, (selected ?? (delta > 0 ? -1 : count)) + delta))
         return .handled
     }
     private func coordinate(_ value: Decimal) -> Double { NSDecimalNumber(decimal: value).doubleValue }
-    private func instant(_ point: ResearchChartPoint) -> Date {
-        Date(timeIntervalSince1970: coordinate(point.time) / 1000)
-    }
 }

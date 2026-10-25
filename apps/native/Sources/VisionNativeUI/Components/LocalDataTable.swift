@@ -59,7 +59,6 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
     var maxBodyHeight: CGFloat?
     @State private var openFilter: String?
     @State private var widths: [String: CGFloat] = [:]
-    @State private var hoveredHeader: String?
     @Environment(\.visionTheme) private var theme
 
     init(
@@ -314,17 +313,14 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
                 .padding(.vertical, 11)
                 .accessibilityAddTraits(.isHeader)
         } else if column.isTitled {
-            HStack(spacing: 4) {
-                sortButton(column)
-                filterButton(column)
-                Spacer(minLength: 0)
-                ColumnResizeHandle(label: column.title, width: widthBinding(column))
-            }
-            .onHover { inside in
-                if inside {
-                    hoveredHeader = column.key
-                } else if hoveredHeader == column.key {
-                    hoveredHeader = nil
+            // The hover lives in the header cell, so moving across the header redraws a cell and
+            // not the whole table with its rows.
+            HoverTracking { hovered in
+                HStack(spacing: 4) {
+                    sortButton(column, hovered: hovered)
+                    filterButton(column, hovered: hovered)
+                    Spacer(minLength: 0)
+                    ColumnResizeHandle(label: column.title, width: widthBinding(column))
                 }
             }
         } else if let label = column.plainHeader {
@@ -338,7 +334,7 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
         }
     }
 
-    private func sortButton(_ column: LocalDataColumn<Row>) -> some View {
+    private func sortButton(_ column: LocalDataColumn<Row>, hovered: Bool) -> some View {
         let active = query.sort?.key == column.key ? query.sort : nil
         return Button {
             query.toggleSort(column.key)
@@ -350,7 +346,7 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
                 Image(systemName: active.map { $0.ascending ? "arrow.up" : "arrow.down" } ?? "arrow.up.arrow.down")
                     .imageScale(.small)
                     .foregroundStyle(active == nil ? theme.tertiaryLabel : theme.primary)
-                    .opacity(active == nil && hoveredHeader != column.key ? 0.5 : 1)
+                    .opacity(active == nil && !hovered ? 0.5 : 1)
                     .accessibilityHidden(true)
             }
             .foregroundStyle(theme.secondaryLabel)
@@ -362,7 +358,7 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
         .accessibilityValue(Text(verbatim: active.map { $0.ascending ? "ascending" : "descending" } ?? ""))
     }
 
-    private func filterButton(_ column: LocalDataColumn<Row>) -> some View {
+    private func filterButton(_ column: LocalDataColumn<Row>, hovered: Bool) -> some View {
         let hasFilter = !query.filter(for: column.key).isEmpty
         let label = strings.t("aria.filterColumn", ["header": column.title])
         return Button {
@@ -373,7 +369,7 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
         }
         .buttonStyle(.borderless)
         .foregroundStyle(hasFilter ? theme.primary : theme.tertiaryLabel)
-        .opacity(hasFilter || hoveredHeader == column.key || openFilter == column.key ? 1 : 0)
+        .opacity(hasFilter || hovered || openFilter == column.key ? 1 : 0)
         .help(label)
         .accessibilityLabel(label)
         .popover(isPresented: filterPresented(column.key), arrowEdge: .bottom) {
@@ -439,6 +435,24 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
             .foregroundStyle(theme.secondaryLabel)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
+    }
+}
+
+/// Hands its content whether the pointer is over it. The hover state belongs to this small view,
+/// so a pointer moving over a header never invalidates the table that contains it.
+struct HoverTracking<Content: View>: View {
+    @State private var hovered = false
+    private let content: (Bool) -> Content
+
+    init(@ViewBuilder content: @escaping (Bool) -> Content) {
+        self.content = content
+    }
+
+    var body: some View {
+        content(hovered)
+            .onHover { inside in
+                if hovered != inside { hovered = inside }
+            }
     }
 }
 

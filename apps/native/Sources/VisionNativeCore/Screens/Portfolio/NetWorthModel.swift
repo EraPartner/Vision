@@ -34,15 +34,32 @@ public final class NetWorthModel {
             + (tableSnapshots.contains { abs($0.liabilities) > Decimal(string: "0.005")! } ? ["liabilities"] : [])
             + ["investments", "netWorth", "change"]
     }
+    /// The table rows before search and filters; rebuilt only when the snapshots change.
     public var allTableRows: [NetWorthTableRow] {
-        tableSnapshots.enumerated().map { index, snapshot in
-            NetWorthTableRow(
-                snapshot: snapshot,
-                change: tableSnapshots.indices.contains(index + 1)
-                    ? snapshot.netWorth - tableSnapshots[index + 1].netWorth : nil)
+        let snapshots = tableSnapshots
+        return allRowsMemo.rows(source: snapshots, context: 0, query: LocalTableQuery()) {
+            snapshots.enumerated().map { index, snapshot in
+                NetWorthTableRow(
+                    snapshot: snapshot,
+                    change: snapshots.indices.contains(index + 1)
+                        ? snapshot.netWorth - snapshots[index + 1].netWorth : nil)
+            }
         }
     }
-    public var tableRows: [NetWorthTableRow] { tableQuery.apply(allTableRows, keys: tableKeys) { $0.rawValue($1) } }
+    /// The rows searched, filtered and sorted by `tableQuery`; the table asks for them on every
+    /// render, so they are kept until the snapshots or the query change.
+    public var tableRows: [NetWorthTableRow] {
+        let query = tableQuery
+        let all = allTableRows
+        let keys = tableKeys
+        return visibleRowsMemo.rows(source: tableSnapshots, context: 0, query: query) {
+            query.apply(all, keys: keys) { $0.rawValue($1) }
+        }
+    }
+    @ObservationIgnored private let allRowsMemo = LocalTableMemo<[OpenAPI.NetWorthSnapshot], Int, NetWorthTableRow>()
+    @ObservationIgnored private let visibleRowsMemo = LocalTableMemo<[OpenAPI.NetWorthSnapshot], Int, NetWorthTableRow>()
+    /// How often the visible table rows were rebuilt, for tests.
+    public var visibleRowBuilds: Int { visibleRowsMemo.builds }
     public func tableFilterValues(_ key: String) -> [String] {
         LocalTableQuery.uniqueValues(allTableRows, key: key) { $0.rawValue($1) }
     }

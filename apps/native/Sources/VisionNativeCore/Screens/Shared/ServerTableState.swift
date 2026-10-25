@@ -123,6 +123,16 @@ public struct ServerTableSelection<ID: Hashable & Sendable>: Equatable, Sendable
         mode == .filter || (!order.isEmpty && order.allSatisfy { ids.contains($0) })
     }
 
+    /// Every row of `order` is checked, without building the id array.
+    public func coversAll<Order: Sequence>(_ order: Order) -> Bool where Order.Element == ID {
+        var any = false
+        for id in order {
+            any = true
+            if !ids.contains(id) { return false }
+        }
+        return any
+    }
+
     /// Some, but not all, loaded rows are checked (the tri-state header box).
     public func someSelected(_ order: [ID]) -> Bool {
         !ids.isEmpty && !allSelected(order)

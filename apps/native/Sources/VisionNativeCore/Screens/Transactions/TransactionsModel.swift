@@ -183,6 +183,11 @@ public final class TransactionsModel {
     @ObservationIgnored private var loadedOffset = 0
     @ObservationIgnored private var listVersion = 0
     @ObservationIgnored private var inFlight: (query: TransactionListQuery, task: Task<Void, Never>)?
+    /// The rows through the column filters, kept while the loaded rows, the filters and the
+    /// labels are the ones it was built from.
+    @ObservationIgnored private var visibleCache: VisibleRowsCache?
+    /// How often the filtered rows were rebuilt, for tests.
+    @ObservationIgnored public private(set) var visibleRowsBuilds = 0
     /// The `?search=` value last read or written, so only a new value from the route
     /// replaces the typed search (a palette search while the page is open).
     @ObservationIgnored private var lastSearchParam: String?
@@ -514,6 +519,8 @@ public final class TransactionsModel {
 
     /// A row was drawn: within the threshold of the end, the next page loads.
     public func rowAppeared(_ id: TransactionID) async {
+        // Nothing to load past the last page: skip the search for the row.
+        guard hasMore else { return }
         let shown = visibleRows
         guard let index = shown.firstIndex(where: { $0.id == id }) else { return }
         let threshold = ServerTablePaging.loadMoreThreshold(pageSize: query?.pageSize ?? 50)
@@ -578,8 +585,18 @@ public final class TransactionsModel {
 
     /// The rows the table shows: the loaded rows through the client column filters.
     public var visibleRows: [TransactionRow] {
+        let loaded = rows ?? []
+        guard !columnFilters.isEmpty else { return loaded }
         let labels = labels
-        return columnFilters.apply(rows ?? []) { row, key in row.rawValue(key, labels: labels) }
+        // Every row drawn, the footer and the header box ask for these rows; filtering a few
+        // thousand of them each time made scrolling and hovering cost a pass over the list.
+        if let cache = visibleCache, cache.filters == columnFilters, cache.labels == labels, cache.source == loaded {
+            return cache.result
+        }
+        let result = columnFilters.apply(loaded) { row, key in row.rawValue(key, labels: labels) }
+        visibleCache = VisibleRowsCache(source: loaded, filters: columnFilters, labels: labels, result: result)
+        visibleRowsBuilds += 1
+        return result
     }
 
     /// The distinct values the column filter lists.
@@ -832,8 +849,8 @@ public final class TransactionsModel {
         selection.toggleAll(shownIds)
     }
 
-    public var allSelected: Bool { selection.allSelected(shownIds) }
-    public var someSelected: Bool { selection.someSelected(shownIds) }
+    public var allSelected: Bool { selection.mode == .filter || selection.coversAll(visibleRows.lazy.map(\.id)) }
+    public var someSelected: Bool { !selection.ids.isEmpty && !allSelected }
 
     public func clearSelection() {
         selection.clear()
@@ -1300,4 +1317,12 @@ public final class TransactionsModel {
         bannerRecipientId = nil
         pickers.reset()
     }
+}
+
+/// The filtered rows of `TransactionsModel.visibleRows` and what they were built from.
+private struct VisibleRowsCache {
+    let source: [TransactionRow]
+    let filters: ServerColumnFilters
+    let labels: TransactionLabels
+    let result: [TransactionRow]
 }

@@ -44,13 +44,16 @@ struct InsightTimelineChart: View {
     @Binding var rangeStart: String?
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
+    /// The sorted keys and their positions, rebuilt only when the series change (a hover
+    /// re-renders this view with the same series, and every pointer move asks for the keys).
+    @State private var layoutCache = ChartKeyLayoutCache()
     /// Month names follow the app language (web `appLanguageToLocale`), never the environment
     /// locale, which several hosts set to the number-format locale for digits.
     private var locale: Locale {
         LanguageLocale.locale(NativeLanguage(rawValue: settings.language.rawValue) ?? .en)
     }
 
-    private var keys: [String] { Array(Set(series.flatMap { $0.points.map(\.key) })).sorted() }
+    private var keys: [String] { layoutCache.layout(for: series).keys }
     private var colors: [Color] {
         let palette = theme.palette
         return [
@@ -63,9 +66,7 @@ struct InsightTimelineChart: View {
     /// Each key's position on a quantitative x axis. A String-keyed (categorical) axis
     /// labels every category whatever tick values it is given, so 24 months or a daily
     /// forecast drew overlapping dates.
-    private var keyIndex: [String: Int] {
-        Dictionary(uniqueKeysWithValues: keys.enumerated().map { ($1, $0) })
-    }
+    private var keyIndex: [String: Int] { layoutCache.layout(for: series).index }
     private var barSeries: [InsightChartSeries] { bars ? series.filter { !$0.dashed } : [] }
 
     /// One bar: drawn as a rectangle so grouped and stacked bars keep a band layout on the

@@ -19,13 +19,15 @@ struct PortfolioSeriesChart: View {
     @State private var rangeStart: String?
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
-    private var keys: [String] { Array(Set(series.flatMap { $0.points.map(\.key) })).sorted() }
+    /// The sorted keys and their positions, rebuilt only when the series change.
+    @State private var layoutCache = ChartKeyLayoutCache()
+    /// Date and value strings of the points' accessibility labels, formatted once per context.
+    @State private var labelMemo = ChartLabelMemo()
+    private var keys: [String] { layoutCache.layout(for: series).keys }
     /// Each key's position: the x axis is quantitative over these indices, so it draws only
     /// the requested ticks. A String-keyed (categorical) axis drew a grid line and a label
     /// for every day of a long series.
-    private var keyIndex: [String: Int] {
-        Dictionary(uniqueKeysWithValues: keys.enumerated().map { ($1, $0) })
-    }
+    private var keyIndex: [String: Int] { layoutCache.layout(for: series).index }
     /// The web AreaChart's fitted domain: the data range plus an 8 % margin, niced, not
     /// zero-based, so a slowly growing portfolio fills the plot instead of a flat line at the top.
     private var yDomain: ClosedRange<Double> {
@@ -63,8 +65,8 @@ struct PortfolioSeriesChart: View {
                                     dash: line.dashed ? [4, 4] : [])
                             )
                             .interpolationMethod(.monotone)
-                            .accessibilityLabel(line.label + ". " + dateLabel(point.key))
-                            .accessibilityValue(format(point.value))
+                            .accessibilityLabel(line.label + ". " + pointDate(point.key))
+                            .accessibilityValue(pointValue(point.value))
                         }
                     }
                 }
@@ -152,6 +154,18 @@ struct PortfolioSeriesChart: View {
                     .accessibilityElement(children: .combine)
             }
         }
+    }
+    /// What the date and value strings of a point depend on besides the point.
+    private var labelContext: String {
+        let locale = shell.settings.numberFormat.locale.identifier
+        let language = shell.strings.language.rawValue
+        return "\(language)|\(locale)|\(currency.rawValue)|\(percent)|\(shell.settings.showDecimalPlaces)"
+    }
+    private func pointDate(_ key: String) -> String {
+        labelMemo.label("d|" + key, context: labelContext) { dateLabel(key) }
+    }
+    private func pointValue(_ value: Decimal) -> String {
+        labelMemo.label("v|" + value.description, context: labelContext) { format(value) }
     }
     private func lineColor(_ line: InsightChartSeries) -> Color {
         let position = series.firstIndex { $0.id == line.id } ?? 0

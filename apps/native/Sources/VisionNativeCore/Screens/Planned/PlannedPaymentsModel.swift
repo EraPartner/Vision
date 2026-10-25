@@ -361,10 +361,17 @@ public final class PlannedPaymentsModel {
 
     /// The rows the table shows: filtered, searched and sorted on the raw fields.
     public var visibleRows: [PlannedPayment] {
-        table.apply(tablePayments, keys: PlannedColumn.allCases.map(\.rawValue)) { payment, key in
-            payment.rawValue(key)
+        let payments = tablePayments
+        let query = table
+        return visibleRowsMemo.rows(source: payments, context: 0, query: query) {
+            query.apply(payments, keys: PlannedColumn.allCases.map(\.rawValue)) { payment, key in
+                payment.rawValue(key)
+            }
         }
     }
+    @ObservationIgnored private let visibleRowsMemo = LocalTableMemo<[PlannedPayment], Int, PlannedPayment>()
+    /// How often the visible rows were rebuilt, for tests.
+    public var visibleRowBuilds: Int { visibleRowsMemo.builds }
 
     /// The distinct values the column filter lists.
     public func filterValues(_ column: PlannedColumn) -> [String] {

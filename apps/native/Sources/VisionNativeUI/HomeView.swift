@@ -194,10 +194,13 @@ public struct HomeView: View {
         }
     }
     private var monthName: String {
-        let format = DateFormatter()
-        format.locale =
-            strings.language == .nl ? Locale(identifier: "nl_NL") : Locale(identifier: "en_US")
-        format.dateFormat = "LLLL"
+        let locale = LanguageLocale.locale(strings.language)
+        let format = FormatterCache.shared("home.monthName|\(locale.identifier)") { () -> DateFormatter in
+            let made = DateFormatter()
+            made.locale = locale
+            made.dateFormat = "LLLL"
+            return made
+        }
         return format.string(from: Date())
     }
     private func paceDescription(_ pace: HomeSpendingPace) -> String {
@@ -777,10 +780,13 @@ public struct HomeView: View {
         return VisionFormat.appDate(day, format: settings.dateFormat)
     }
     private var todayLong: String {
-        let format = DateFormatter()
-        format.locale =
-            strings.language == .nl ? Locale(identifier: "nl_NL") : Locale(identifier: "en_US")
-        format.dateStyle = .full
+        let locale = LanguageLocale.locale(strings.language)
+        let format = FormatterCache.shared("home.todayLong|\(locale.identifier)") { () -> DateFormatter in
+            let made = DateFormatter()
+            made.locale = locale
+            made.dateStyle = .full
+            return made
+        }
         return format.string(from: Date())
     }
     private func routeRow(

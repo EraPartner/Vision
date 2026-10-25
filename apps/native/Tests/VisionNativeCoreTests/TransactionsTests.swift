@@ -972,4 +972,21 @@ extension TransactionPatch {
         #expect(model.emptyState == .noFilterResults)
         #expect(model.footer() == "0 of 2 shown (filtered)")
     }
+
+    @Test func theFilteredRowsAreBuiltOnceUntilTheRowsOrFiltersChange() async throws {
+        let service = FakeTransactionsService(rows: TxFixture.rows(8))
+        let (model, _) = try await TxFixture.opened(service)
+        #expect(model.visibleRows.count == 8)
+        #expect(model.visibleRowsBuilds == 0)
+        model.columnFilters.set(TransactionColumn.recipient.rawValue, to: "bakery")
+        let first = model.visibleRows
+        #expect(first.count == 4)
+        #expect(model.visibleRows == first)
+        _ = model.footer()
+        _ = model.allSelected
+        #expect(model.visibleRowsBuilds == 1)
+        model.columnFilters.set(TransactionColumn.recipient.rawValue, to: "garage")
+        #expect(model.visibleRows.count == 4)
+        #expect(model.visibleRowsBuilds == 2)
+    }
 }
