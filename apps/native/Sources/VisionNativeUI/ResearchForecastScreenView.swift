@@ -14,7 +14,7 @@ struct ResearchForecastScreenView: View {
     }
 
     var body: some View {
-        ResearchForecastView(model: screens.model, life: screens.life, shell: shell)
+        ResearchForecastView(model: screens.model, shell: shell)
             .task(id: visitKey) {
                 let route = shell.route
                 guard route.path == path else { return }

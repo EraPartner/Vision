@@ -297,19 +297,10 @@ actor SleepRecorder {
     }
 
     @Test func modelDefaultsRetainTheDistinctWebMigrationRules() {
-        let raw = NativeAppSettings.migrate(
-            .object([
-                "aiDefaultModel": .string(""), "openAiDefaultModel": .string(String(repeating: "😀", count: 100)),
-            ]))
+        let raw = NativeAppSettings.migrate(.object(["aiDefaultModel": .string("")]))
         #expect(raw.aiDefaultModel == "")
-        #expect(raw.openAiDefaultModel == String(repeating: "😀", count: 100))
-        let invalid = NativeAppSettings.migrate(
-            .object([
-                "aiDefaultModel": .int(123), "openAiDefaultModel": .string(String(repeating: "😀", count: 101)),
-            ]))
+        let invalid = NativeAppSettings.migrate(.object(["aiDefaultModel": .int(123)]))
         #expect(invalid.aiDefaultModel == nil)
-        #expect(invalid.openAiDefaultModel == nil)
-        #expect(NativeAppSettings.migrate(.object(["openAiDefaultModel": .string("")])).openAiDefaultModel == nil)
         #expect(NativeAppSettings.defaults.aiDefaultModel == nil)
     }
 }

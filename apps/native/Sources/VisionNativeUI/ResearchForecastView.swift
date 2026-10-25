@@ -3,14 +3,12 @@ import VisionNativeCore
 
 public struct ResearchForecastView: View {
     let model: ResearchForecastModel
-    let life: ResearchLifeScenarioModel
     let shell: NativeShellModel
     @State private var assumptionsOpen = false
     @State private var width: CGFloat = 0
     @Environment(\.visionTheme) private var theme
-    public init(model: ResearchForecastModel, life: ResearchLifeScenarioModel, shell: NativeShellModel) {
+    public init(model: ResearchForecastModel, shell: NativeShellModel) {
         self.model = model
-        self.life = life
         self.shell = shell
     }
     private var strings: any Localizing { shell.strings }
@@ -92,7 +90,6 @@ public struct ResearchForecastView: View {
                         }
                     }
                 }
-                ResearchLifeScenarioPanel(model: life, shell: shell)
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .onGeometryChange(for: CGFloat.self) {
@@ -100,7 +97,6 @@ public struct ResearchForecastView: View {
         } action: {
             width = $0
         }
-        .overlay(alignment: .bottom) { ResearchLifeScenarioUndoToast(model: life, shell: shell) }
     }
     private var controls: some View {
         ResearchCard {

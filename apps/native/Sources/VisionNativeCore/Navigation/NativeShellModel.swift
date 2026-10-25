@@ -303,7 +303,6 @@ public final class NativeShellModel {
         recipients.attachNotices(notices)
         categories.attachNotices(notices)
         planned.attachNotices(notices)
-        researchForecast?.life.attachNotices(notices)
         researchChartBuilder?.attachNotices(notices)
         aiChat?.chat.attachNotices(notices)
         accounts.attachNotices(notices)

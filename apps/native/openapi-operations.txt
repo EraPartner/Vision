@@ -17,7 +17,7 @@ adminListEndpoints
 getSetting
 # Native Settings reads the whole raw envelope with first-load CAS baselines.
 getSettings
-# Settings AI provider metadata and the existing AgentCloak desktop controls.
+# Settings AI provider metadata (research provider keys).
 researchListProviderKeys
 researchSetProviderKey
 researchClearProviderKey

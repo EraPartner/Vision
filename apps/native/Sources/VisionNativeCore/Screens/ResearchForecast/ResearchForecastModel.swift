@@ -25,8 +25,7 @@ import Observation
         guard inputsValid, !isDebouncing, resultInput == currentInput else { return nil }
         return result
     }
-    /// Immediate camel-case inputs, also supplied to the independent Life panel.
-    /// Invalid main money fields are null placeholders; Life preparation replaces them.
+    /// Immediate camel-case inputs; invalid money fields are null placeholders.
     public var currentInput: TaxValue {
         var fields: [String: TaxValue] = [
             "horizonMonths": .number(Decimal(horizonMonths)),
@@ -40,7 +39,6 @@ import Observation
         return .object(fields)
     }
     public var isOnline = true { didSet { if !isOnline { cancelReads() } } }
-    @ObservationIgnored public var didChangeInput: (@MainActor () -> Void)?
     @ObservationIgnored private let service: any ForecastService
     @ObservationIgnored private let cache: ResearchReadCache
     @ObservationIgnored private let debounceNanoseconds: UInt64
@@ -67,7 +65,7 @@ import Observation
     public func configure(settings: NativeAppSettings) {
         let oldInput = currentInput
         self.settings = settings
-        if oldInput != currentInput { inputsChanged() } else { didChangeInput?() }
+        if oldInput != currentInput { inputsChanged() }
     }
     public func load(force: Bool = false) async {
         active = true
@@ -85,7 +83,6 @@ import Observation
     public func beginVisit() { active = true }
     private func inputsChanged() {
         guard !suppressed else { return }
-        didChangeInput?()
         let input = currentInput
         guard input != previousInput || !inputsValid else { return }
         previousInput = input
@@ -171,7 +168,6 @@ import Observation
         resultInput = nil
         previousInput = currentInput
         error = nil
-        didChangeInput?()
     }
     private func cancelReads() {
         generation = UUID()

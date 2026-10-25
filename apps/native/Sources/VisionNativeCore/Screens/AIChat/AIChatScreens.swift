@@ -5,12 +5,7 @@ import Observation
 @MainActor @Observable public final class AIChatScreens {
     public let chat: AIChatModel
     public let investigation: AIInvestigationModel
-    public var isOnline = true {
-        didSet {
-            chat.isOnline = isOnline
-            investigation.isOnline = isOnline
-        }
-    }
+    public var isOnline = true { didSet { chat.isOnline = isOnline } }
     @ObservationIgnored private var isActive = false
     @ObservationIgnored private var visitRevision = UUID()
     public init(client: APIClient) {
@@ -33,7 +28,7 @@ import Observation
         }
         let visit = visitRevision
         async let transcript: Void = loadChat(route: route, visit: visit, force: force)
-        async let research: Void = loadInvestigation(visit: visit, force: force)
+        async let research: Void = loadInvestigation(visit: visit)
         _ = await (transcript, research)
     }
     public func refresh(route: NativeRoute) async {
@@ -41,7 +36,7 @@ import Observation
         let visit = visitRevision
         await loadChat(route: route, visit: visit, force: false)
         async let transcript: Void = refreshChat(visit: visit)
-        async let research: Void = loadInvestigation(visit: visit, force: true)
+        async let research: Void = loadInvestigation(visit: visit)
         _ = await (transcript, research)
     }
     private func loadChat(route: NativeRoute, visit: UUID, force: Bool) async {
@@ -52,9 +47,9 @@ import Observation
         guard isActive, visit == visitRevision, !Task.isCancelled else { return }
         await chat.refreshPageReads()
     }
-    private func loadInvestigation(visit: UUID, force: Bool) async {
+    private func loadInvestigation(visit: UUID) async {
         guard isActive, visit == visitRevision, !Task.isCancelled else { return }
-        await investigation.load(force: force)
+        await investigation.load()
     }
     public func didAppear(route: NativeRoute) async { await load(route: route) }
     public func didDisappear() {

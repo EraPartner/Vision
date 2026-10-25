@@ -1,40 +1,5 @@
 import Foundation
 
-public struct OpenAIResearchModel: Codable, Equatable, Sendable, Identifiable {
-    public let raw: TaxValue
-    public let id: String
-    public let label: String
-    public let inputMicrosPerMillion: Decimal
-    public let outputMicrosPerMillion: Decimal
-    public let isDefault: Bool
-    public init(raw: TaxValue) throws {
-        try ResearchDecode.requireObject(raw)
-        self.raw = raw
-        id = try ResearchDecode.string(raw["id"])
-        label = try ResearchDecode.string(raw["label"])
-        inputMicrosPerMillion = try ResearchDecode.decimal(raw["inputMicrosPerMillion"])
-        outputMicrosPerMillion = try ResearchDecode.decimal(raw["outputMicrosPerMillion"])
-        isDefault = try ResearchDecode.bool(raw["isDefault"])
-    }
-    public init(from decoder: any Decoder) throws { try self.init(raw: TaxValue(from: decoder)) }
-    public func encode(to encoder: any Encoder) throws { try raw.encode(to: encoder) }
-}
-public struct AIResearchStatus: Codable, Equatable, Sendable {
-    public let raw: TaxValue
-    public let openAiEnabled: Bool
-    public let openAiModel: String?
-    public let openAiModels: [OpenAIResearchModel]
-    public init(raw: TaxValue) throws {
-        try ResearchDecode.requireObject(raw)
-        self.raw = raw
-        guard let openai = raw["openai"] else { throw ResearchDecode.failure("Missing AI status") }
-        openAiEnabled = try ResearchDecode.bool(openai["enabled"])
-        openAiModel = try ResearchDecode.optionalString(openai["model"])
-        openAiModels = try AIInvestigationDecode.array(openai["models"]).map { try .init(raw: $0) }
-    }
-    public init(from decoder: any Decoder) throws { try self.init(raw: TaxValue(from: decoder)) }
-    public func encode(to encoder: any Encoder) throws { try raw.encode(to: encoder) }
-}
 public struct AIResearchDocument: Codable, Equatable, Sendable, Identifiable {
     public let raw: TaxValue
     public let id: String
@@ -161,39 +126,6 @@ public struct AIInvestigation: Codable, Equatable, Sendable, Identifiable {
         plan = raw["plan"] == .null ? nil : raw["plan"]
         error = raw["error"] == .null ? nil : raw["error"]
         result = try raw["result"].flatMap { $0 == .null ? nil : try .init(raw: $0) }
-    }
-    public init(from decoder: any Decoder) throws { try self.init(raw: TaxValue(from: decoder)) }
-    public func encode(to encoder: any Encoder) throws { try raw.encode(to: encoder) }
-}
-public struct AIDisclosurePreview: Codable, Equatable, Sendable {
-    public let raw: TaxValue
-    public let payload: TaxValue
-    public let payloadSha256: String
-    public let payloadBytes: Int
-    public let fieldManifest: [String]
-    public let disclosureUnits: [String]
-    public let referenceScope: TaxValue?
-    public let outboundRequest: TaxValue
-    public let agentCloakPreflight: TaxValue
-    public init(raw: TaxValue) throws {
-        try ResearchDecode.requireObject(raw)
-        self.raw = raw
-        guard let payload = raw["payload"], let outbound = raw["outboundRequest"],
-            let preflight = raw["agentCloakPreflight"]
-        else {
-            throw ResearchDecode.failure("Incomplete AI disclosure preview")
-        }
-        try ResearchDecode.requireObject(payload)
-        try ResearchDecode.requireObject(outbound)
-        try ResearchDecode.requireObject(preflight)
-        self.payload = payload
-        outboundRequest = outbound
-        agentCloakPreflight = preflight
-        payloadSha256 = try ResearchDecode.string(raw["payloadSha256"])
-        payloadBytes = try ResearchDecode.count(raw["payloadBytes"])
-        fieldManifest = try AIInvestigationDecode.strings(raw["fieldManifest"])
-        disclosureUnits = try AIInvestigationDecode.strings(raw["disclosureUnits"])
-        referenceScope = raw["referenceScope"] == .null ? nil : raw["referenceScope"]
     }
     public init(from decoder: any Decoder) throws { try self.init(raw: TaxValue(from: decoder)) }
     public func encode(to encoder: any Encoder) throws { try raw.encode(to: encoder) }

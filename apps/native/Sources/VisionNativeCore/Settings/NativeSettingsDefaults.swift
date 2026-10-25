@@ -21,9 +21,11 @@ public enum NativeSettingsDefaults {
     public static func migrateApp(_ raw: TaxValue?) -> TaxValue {
         guard var fields = raw?.objectValue else { return app }
         for key in app.objectValue!.keys { fields[key] = appValue(key, raw: raw) }
-        for key in ["aiDefaultModel", "openAiDefaultModel", "aiAnswerDepth", "analysisBenchmark"] {
+        for key in ["aiDefaultModel", "aiAnswerDepth", "analysisBenchmark"] {
             fields[key] = appValue(key, raw: raw)
         }
+        // Retired with the OpenAI route (ADR-229); not carried forward.
+        fields["openAiDefaultModel"] = nil
         return .object(fields)
     }
     public static func migrateDashboard(_ raw: TaxValue?) -> TaxValue {
@@ -68,8 +70,6 @@ public enum NativeSettingsDefaults {
             else { return nil }
             return .string(symbol)
         case "aiDefaultModel": return value.stringValue != nil ? value : nil
-        case "openAiDefaultModel":
-            return value.stringValue.map { (1...200).contains($0.utf16.count) } == true ? value : nil
         default: return value
         }
     }

@@ -191,8 +191,7 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
   retained Add to portfolio drafts use the existing leave guard and broker-history defaults.
   Dossiers and AI chat are ported in phase 3n below. Mac/Demo review is pending.
 - `/research/forecast` and `/research/charts` are native (phase 3m). Forecast retains its
-  debounced controls, cached authoritative simulations and independent Life scenario comparisons.
-  Saved scenarios use the existing `life_scenarios` settings CAS contract, with delete/Undo.
+  debounced controls and cached authoritative simulations.
   Chart Builder keeps the original v2 localStorage library, presets, series/indicators, dual axes,
   saved layouts and share links. Failed storage reads block writes until authority is restored;
   late provider, storage and presentation replies cannot apply to an obsolete visit. Financial
@@ -207,9 +206,9 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
 - AI chat retains conversation paging, model/tool controls, literal messages and per-conversation
   streams across navigation. JSON SSE uses the shared native HTTP transport, source 120-second
   stall policy, completion/error handling and explicit Stop/retry. Both Chat and Investigation
-  remain mounted across mode changes. Investigation retains its inspected disclosure/grant flow,
-  documents, evidence answers, clarification and manual job polling every 1.2 seconds.
-  Status alone follows its source freshness/online policy. Text/Markdown/HTML uploads retain the 5 MiB backend limit.
+  remain mounted across mode changes. Investigation runs on the local Ollama route only (ADR-229:
+  no OpenAI, Codex, AgentCloak or disclosure grants/records) and keeps documents, evidence answers,
+  clarification and manual job polling every 1.2 seconds. Text/Markdown/HTML uploads retain the 5 MiB backend limit.
   Tool tables/charts consume additive TypeScript presentation metadata for original member order,
   axes and pie values; raw tool results and model prompts remain unchanged. Full macOS/VoiceOver/
   Demo verification and the shared global notice/Undo host remain pending.
@@ -462,8 +461,7 @@ Demo visual/keyboard checks remain pending.
 
 25. **Forecast and Chart Builder (phase 3m, pending Mac review).** Exercise every horizon, return
     source, method, path count, currency and localized money input. Check stale-input rendering,
-    unavailable simulations, independent Life inputs, calendar months, saved scenario CAS conflicts,
-    deletion and eight-second Undo. On Charts, compare presets, price/OHLC and macro data, dual axes,
+    unavailable simulations and calendar months. On Charts, compare presets, price/OHLC and macro data, dual axes,
     logarithmic fallback, indicators and tooltips. Test saved layouts across route changes, failed
     storage reads/writes and retries, malformed/oversized shared charts and preserved URL parameters.
     Verify Settings and palette coverage, text-field Cmd-Z, chart keyboard focus, EN/NL and VoiceOver.
@@ -473,6 +471,5 @@ Demo visual/keyboard checks remain pending.
     captured full-history exports. Check both retained AI modes, literal transcripts, model/tool
     states, Enter/Shift-Enter, UTF16 limits, partial Stop/retry, unknown SSE frames, terminal errors
     and active streams through navigation. Compare tool tables/axes/pie against the existing app.
-    Test stale status focus/reconnect, exact consent preview and grants, 5 MiB text uploads, selected
-    artifacts, waiting/partial job clarification, cancellation, record/grant controls and safe evidence
-    links. Confirm EN/NL, focus, VoiceOver and synthetic Demo rendering on Mac.
+    Test 5 MiB text uploads, selected artifacts, waiting/partial job clarification, cancellation and
+    safe evidence links. Confirm EN/NL, focus, VoiceOver and synthetic Demo rendering on Mac.

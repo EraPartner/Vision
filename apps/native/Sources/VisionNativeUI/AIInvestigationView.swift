@@ -24,15 +24,9 @@ struct AIInvestigationView: View {
             publicInputs
             Divider()
             AIInvestigationDocumentsView(model: model, shell: shell)
-            if model.route == "openai-api" { cloudInputs }
-            if model.route == "openai-api", let preview = model.preview { payloadPreview(preview) }
-            AIInvestigationPrivacyView(
-                route: model.route, disclosureMode: model.disclosureMode, researchMode: model.researchMode,
-                depth: model.depth, shell: shell)
+            AIInvestigationPrivacyView(researchMode: model.researchMode, depth: model.depth, shell: shell)
             Divider()
             lifecycle
-            Divider()
-            AIInvestigationHistoryView(model: model, shell: shell)
             if let error = model.error {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "exclamationmark.triangle").accessibilityHidden(true)
@@ -72,10 +66,6 @@ struct AIInvestigationView: View {
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 280), alignment: .leading)], alignment: .leading, spacing: 16
                 ) {
-                    Picker(strings.t("aiResearch.route"), selection: field(\.route)) {
-                        Text(strings.t("aiResearch.localModel")).tag("local")
-                        Text(strings.t("aiResearch.openAi")).tag("openai-api").disabled(!model.openAiEnabled)
-                    }.pickerStyle(.segmented)
                     Picker(
                         strings.t("aiResearch.depth"),
                         selection: Binding(get: { model.depth }, set: { model.depthOverride = $0 })
@@ -88,8 +78,7 @@ struct AIInvestigationView: View {
                     Text(strings.t("aiResearch.localOnly")).tag("local-only")
                     Text(strings.t("aiResearch.publicProviders")).tag("public-providers")
                     Text(strings.t("aiResearch.publicWeb")).tag("public-web")
-                }.pickerStyle(.segmented).disabled(
-                    model.route == "openai-api" && model.disclosureMode == "cloud-synthesis-selected")
+                }.pickerStyle(.segmented)
             }.padding(.top, 12)
         } label: {
             VStack(alignment: .leading, spacing: 4) {
@@ -112,100 +101,6 @@ struct AIInvestigationView: View {
             Text(strings.t("aiResearch.publicSymbolsHelp")).font(.caption).foregroundStyle(theme.secondaryLabel)
         }
     }
-    private var openAiModelPicker: some View {
-        Picker(
-            strings.t("aiResearch.openAiModel"),
-            selection: Binding<String>(get: { model.openAiModel }, set: { model.openAiModelOverride = $0 })
-        ) {
-            if model.openAiModels.isEmpty { Text(strings.t("aiResearch.noOpenAiModels")).tag("") }
-            ForEach(model.openAiModels, id: \.id) { (option: OpenAIResearchModel) in
-                Text(openAiOptionLabel(option)).tag(option.id)
-            }
-        }.disabled(!model.openAiEnabled || model.openAiModels.isEmpty)
-    }
-    private func openAiOptionLabel(_ option: OpenAIResearchModel) -> String {
-        let identity: String = "\(option.label) (\(option.id))"
-        guard option.isDefault else { return identity }
-        let defaultLabel: String = strings.t("aiResearch.defaultModel")
-        return "\(identity) — \(defaultLabel)"
-    }
-    private var cloudInputs: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            openAiModelPicker
-            if let option = model.selectedOpenAiModel {
-                Text(
-                    strings.t(
-                        "aiResearch.modelRates",
-                        ["input": rate(option.inputMicrosPerMillion), "output": rate(option.outputMicrosPerMillion)])
-                )
-                .font(.caption).foregroundStyle(theme.secondaryLabel)
-            }
-            Text(strings.t("aiResearch.apiOnlyBilling")).font(.caption).foregroundStyle(theme.secondaryLabel)
-            Picker(
-                strings.t("aiResearch.disclosureMode"),
-                selection: Binding(
-                    get: { model.disclosureMode },
-                    set: { value in
-                        model.disclosureMode = value
-                        if value == "cloud-synthesis-selected" { model.researchMode = "local-only" }
-                    })
-            ) {
-                Text(strings.t("aiResearch.cloudPublic")).tag("cloud-plan-public")
-                Text(strings.t("aiResearch.selectedSummary")).tag("selected-summary")
-                Text(strings.t("aiResearch.cloudSynthesisSelected")).tag("cloud-synthesis-selected")
-            }
-            switch model.disclosureMode {
-            case "selected-summary":
-                textArea(
-                    label: "aiResearch.selectedSummary", placeholder: "aiResearch.selectedSummaryPlaceholder",
-                    text: field(\.selectedSummary), minimumHeight: 70)
-            case "cloud-synthesis-selected":
-                textArea(
-                    label: "aiResearch.cloudSynthesisSelected", placeholder: "aiResearch.selectedEvidencePlaceholder",
-                    text: field(\.selectedEvidence), minimumHeight: 120)
-            default:
-                textArea(
-                    label: "aiResearch.cloudPublic", placeholder: "aiResearch.publicQuestionPlaceholder",
-                    text: field(\.publicQuestion), minimumHeight: 70)
-            }
-            Text(
-                strings.t(
-                    model.disclosureMode == "cloud-synthesis-selected"
-                        ? "aiResearch.summary.reviewEvidence" : "aiResearch.summary.reviewPayload")
-            )
-            .font(.caption).foregroundStyle(theme.secondaryLabel)
-            if let preflight = model.status?.raw["openai"]?["agentCloakPreflight"],
-                preflight["enabled"]?.boolValue == true
-            {
-                Text(
-                    strings.t(
-                        preflight["location"] == .string("desktop-loopback")
-                            ? "aiResearch.agentCloakDesktopPreflight" : "aiResearch.agentCloakPreflight")
-                )
-                .font(.caption).foregroundStyle(theme.secondaryLabel)
-            }
-            if ["selected-summary", "cloud-synthesis-selected"].contains(model.disclosureMode) {
-                Text(strings.t("aiResearch.reversibleReferenceHint")).font(.caption).foregroundStyle(
-                    theme.secondaryLabel)
-            }
-        }
-    }
-    private func payloadPreview(_ preview: AIDisclosurePreview) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if preview.agentCloakPreflight["enabled"]?.boolValue == true {
-                Text(strings.t("aiResearch.agentCloakPassed")).font(.caption).foregroundStyle(theme.secondaryLabel)
-            }
-            if let scope = preview.referenceScope {
-                Text(
-                    strings.t(
-                        "aiResearch.reversibleReferenceWarning",
-                        ["count": scope["count"]?.decimalValue.map(VisionFormat.plain) ?? ""])
-                )
-                .font(.caption).foregroundStyle(theme.warning)
-            }
-            AIInvestigationJSONBlock(value: preview.payload)
-        }
-    }
     private var lifecycle: some View {
         VStack(alignment: .leading, spacing: 12) {
             ViewThatFits(in: .horizontal) {
@@ -225,15 +120,9 @@ struct AIInvestigationView: View {
         } label: {
             HStack(spacing: 8) {
                 if model.busy { ProgressView().controlSize(.small) }
-                Text(
-                    strings.t(
-                        model.route == "local"
-                            ? "aiResearch.run" : model.preview == nil ? "aiResearch.preview" : "aiResearch.consentRun"))
+                Text(strings.t("aiResearch.run"))
             }
         }.buttonStyle(.visionPrimary).disabled(model.runDisabled)
-        if model.grantId != nil {
-            Button(strings.t("aiResearch.revoke")) { Task { await model.revokeActiveGrant() } }
-        }
         if let job = model.job {
             if !["completed", "failed", "cancelled", "partial"].contains(job.state) {
                 Button(strings.t("aiResearch.cancel")) { Task { await model.cancel() } }
@@ -281,10 +170,5 @@ struct AIInvestigationView: View {
             }
             .overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.control).stroke(theme.border))
             .accessibilityLabel(strings.t(label))
-    }
-    private func rate(_ micros: Decimal) -> String {
-        (micros / 1_000_000).formatted(
-            Decimal.FormatStyle(locale: LanguageLocale.locale(strings.language)).precision(.fractionLength(0...6))
-                .rounded(rule: .toNearestOrAwayFromZero))
     }
 }
