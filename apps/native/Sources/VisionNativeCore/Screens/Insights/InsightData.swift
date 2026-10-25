@@ -16,6 +16,9 @@ public struct InsightMonth: Decodable, Equatable, Sendable, Identifiable {
 
 public struct InsightMonthlySummary: Decodable, Equatable, Sendable {
     public let months: [InsightMonth]
+    /// Transactions left out of the figures for want of a stored rate (ADR-216).
+    public let unconverted_count: Int?
+    public var unconvertedCount: Int { unconverted_count ?? 0 }
     public var orderedMonths: [InsightMonth] { months.sorted { $0.id < $1.id } }
     public var latest: InsightMonth? { orderedMonths.last { $0.transaction_count > 0 } }
 }

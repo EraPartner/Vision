@@ -19279,6 +19279,42 @@
         }
       }
     },
+    "common.fxUnavailableTransactions.one": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} transaction left out: exchange rate unavailable"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} transactie niet meegerekend: wisselkoers niet beschikbaar"
+          }
+        }
+      }
+    },
+    "common.fxUnavailableTransactions.other": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} transactions left out: exchange rates unavailable"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} transacties niet meegerekend: wisselkoersen niet beschikbaar"
+          }
+        }
+      }
+    },
     "common.includeInactive": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -38535,6 +38571,42 @@
           "stringUnit": {
             "state": "translated",
             "value": "van {n} persoon"
+          }
+        }
+      }
+    },
+    "owesPage.fxUnavailable.one": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} split left out: exchange rate unavailable"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} splitsing niet meegerekend: wisselkoers niet beschikbaar"
+          }
+        }
+      }
+    },
+    "owesPage.fxUnavailable.other": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} splits left out: exchange rates unavailable"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} splitsingen niet meegerekend: wisselkoersen niet beschikbaar"
           }
         }
       }

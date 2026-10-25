@@ -99,6 +99,11 @@ public struct StatisticsView: View {
                     Text(strings.t("statsPage.noDataDesc")).foregroundStyle(theme.secondaryLabel)
                     Button(strings.t("statsPage.importBtn")) { shell.navigate(to: "/import") }.buttonStyle(.visionPrimary)
                 } else {
+                    // The monthly summary covers every transaction of the window (ADR-216).
+                    if let unconverted = model.unfiltered?.monthly.unconvertedCount, unconverted > 0 {
+                        Text(strings.tc("common.fxUnavailableTransactions", unconverted))
+                            .font(.footnote).foregroundStyle(theme.warning)
+                    }
                     Picker(
                         strings.t("statsPage.title"),
                         selection: Binding(
@@ -739,6 +744,10 @@ public struct StatisticsView: View {
             if model.isFlowLoading {
                 ProgressView().frame(height: 380)
             } else if let flow = model.flow {
+                if flow.unconvertedCount > 0 {
+                    Text(strings.tc("common.fxUnavailableTransactions", flow.unconvertedCount))
+                        .font(.footnote).foregroundStyle(theme.warning)
+                }
                 if flow.nodes.isEmpty {
                     Text(strings.t("statsPage.sankey.noData")).foregroundStyle(theme.secondaryLabel)
                 } else {

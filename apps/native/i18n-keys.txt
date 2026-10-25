@@ -4647,3 +4647,8 @@ app.running
 app.stopped
 backup.done
 backup.failed
+common.fxUnavailableTransactions.one
+common.fxUnavailableTransactions.other
+owesPage.fxUnavailable.one
+owesPage.fxUnavailable.other
+tax.fxUnavailable

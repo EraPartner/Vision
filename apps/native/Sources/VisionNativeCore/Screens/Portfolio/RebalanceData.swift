@@ -52,6 +52,7 @@ public struct RebalanceResult: Codable, Equatable, Sendable {
         self.availableCash = availableCash
         self.cashAccounts = cashAccounts
         self.deployment = deployment
+        self.unconvertedCurrencies = unconvertedCurrencies
     }
     public struct CashAccount: Codable, Equatable, Sendable {
         public let id: Int

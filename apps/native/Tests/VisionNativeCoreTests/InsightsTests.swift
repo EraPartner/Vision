@@ -171,6 +171,32 @@ struct InsightsTests {
         #expect(forecast.unconvertedCount == 4)
         #expect(try insightFixture(InsightForecast.self, insightForecastJSON).unconvertedCount == 0)
     }
+
+    @Test func statisticsReadTheUnconvertedCountsOfTheMonthlySummaryFlowAndPivots() throws {
+        let monthly = try insightFixture(InsightMonthlySummary.self, #"{"months":[],"unconverted_count":4}"#)
+        #expect(monthly.unconvertedCount == 4)
+        #expect(try insightFixture(InsightMonthlySummary.self, #"{"months":[]}"#).unconvertedCount == 0)
+        let flow = try insightFixture(
+            StatisticsFlow.self, #"{"nodes":[],"links":[],"year":2026,"unconverted_count":3}"#)
+        #expect(flow.unconvertedCount == 3)
+        let tags = try insightFixture(
+            CustomTagPivot.self,
+            #"{"tagPivot":{"2026-09":[{"tagId":1,"slug":"trip","total":5}]},"conversion":{"usedHistoricalFallback":true,"affectedCurrencies":["USD"],"unconvertedCount":2,"unconvertedCurrencies":["CHF"]}}"#
+        )
+        var config = CustomChartDraft()
+        config.allTags = true
+        let dataset = CustomChartDataset(
+            configuration: config, statistics: try statisticsSnapshotFixture(),
+            recipients: nil, tags: tags, otherLabel: "Other")
+        // Tag pivots carry the conversion contract too: both notes read it, as the web does.
+        #expect(dataset.usesHistoricalFallback)
+        #expect(dataset.fallbackCurrencies == ["USD"])
+        #expect(dataset.unconvertedCount == 2)
+        let plain = CustomChartDataset(
+            configuration: config, statistics: try statisticsSnapshotFixture(),
+            recipients: nil, tags: nil, otherLabel: "Other")
+        #expect(!plain.usesHistoricalFallback && plain.unconvertedCount == 0)
+    }
 }
 
 @Suite("Home query and preference behavior")
