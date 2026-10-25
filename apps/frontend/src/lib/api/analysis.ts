@@ -9,6 +9,18 @@ import {
 } from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
 import type { CurrencyCode } from "@vision/types/brands";
+import {
+    ANALYSIS_WORKSPACES,
+    type AnalysisWorkspace,
+} from "@vision/types/analysis";
+import type { components, operations } from "@/types/generated";
+
+export type AnalysisExtensionOperation =
+    operations["evaluateAnalysisExtension"]["requestBody"]["content"]["application/json"]["operation"];
+export type AnalysisExecuteMode =
+    components["schemas"]["AnalysisQuerySpec"]["mode"];
+export type AnalysisEditOperationKind =
+    components["schemas"]["AiAnalysisEditProposal"]["operations"][number]["op"];
 
 export interface AnalysisUnit {
     kind: string;
@@ -48,7 +60,10 @@ export interface AnalysisExtensionResult {
     columns?: AnalysisField[];
     [key: string]: unknown;
 }
-export const evaluateAnalysisExtension = (input: Record<string, unknown>) =>
+export type AnalysisExtensionInput = {
+    operation: AnalysisExtensionOperation;
+} & Record<string, unknown>;
+export const evaluateAnalysisExtension = (input: AnalysisExtensionInput) =>
     apiRequest<AnalysisExtensionResult>("/api/analysis/extensions/evaluate", {
         method: "POST",
         body: JSON.stringify(input),
@@ -64,8 +79,11 @@ export const executeAnalysisPivot = (
         schema: AnalysisPivotResultSchema,
     });
 
-export type AnalysisWorkspace =
-    "budgeting" | "portfolio" | "research" | "cross-workspace";
+export type { AnalysisWorkspace };
+export const isAnalysisWorkspace = (
+    value: string,
+): value is AnalysisWorkspace =>
+    ANALYSIS_WORKSPACES.some((workspace) => workspace === value);
 export type AnalysisValue = string | number | boolean | null;
 export interface AnalysisField {
     id: string;
@@ -195,7 +213,7 @@ export const getAnalysisCatalog = () =>
     });
 export function executeAnalysis(input: {
     requestId: string;
-    mode: "visual" | "sql";
+    mode: AnalysisExecuteMode;
     plan?: VisualAnalysisPlan | undefined;
     sql?: string | undefined;
     values?: AnalysisValue[] | undefined;
@@ -300,7 +318,7 @@ export interface AnalysisEditProposal {
     baseVersion: number;
     rationale: string;
     operations: Array<{
-        op: "add" | "replace" | "remove";
+        op: AnalysisEditOperationKind;
         path: string;
         value?: unknown;
     }>;

@@ -64,6 +64,7 @@ import type {
     MappingResolveResponse,
     MappingsResponse,
     PortfolioForecast,
+    PortfolioForecastInput,
     ProviderKeyStatus,
     ProviderKeysResponse,
     ResearchAnalyst,
@@ -98,6 +99,37 @@ import type {
 import type { ReadParams, DbChange } from "@/lib/api/dbEditor";
 import type { AssetClass } from "@vision/types/assetClasses";
 import type { ImportBatch } from "./apiClient";
+import type {
+    AnalysisMonitor,
+    MonitorCreate,
+    MonitorNotification,
+    MonitorObservation,
+    MonitorUpdate,
+} from "@/lib/api/monitors";
+import type {
+    Dossier,
+    DossierContent,
+    DossierEvidence,
+    DossierListItem,
+} from "@/lib/api/dossiers";
+import type {
+    AnalysisEditProposal,
+    AnalysisExtensionInput,
+    SavedAnalysis,
+    VisualAnalysisPlan,
+    executeAnalysis,
+    listSavedAnalyses,
+} from "@/lib/api/analysis";
+import type { InvestigationInput } from "@/lib/api/aiResearch";
+import type { AiInvestigationRequest as SharedAiInvestigationRequest } from "@vision/types/aiResearch";
+import type {
+    getResearchMappings,
+    resolveResearchMappings,
+    saveResearchMappings,
+    auditResearchMappings,
+    getMacroSeries,
+    setResearchProviderKey,
+} from "@/lib/api/research";
 
 type Schemas = components["schemas"];
 
@@ -569,6 +601,177 @@ export type _EnumsDbEditorChange = Expect<
 >;
 
 // ── Enums: research, monitors, dossiers, analysis, AI.
+
+type JsonBody<Operation> = Operation extends {
+    requestBody: { content: { "application/json": infer Body } };
+}
+    ? Body
+    : never;
+type QueryOf<Operation> = Operation extends {
+    parameters: { query?: infer Query };
+}
+    ? NonNullable<Query>
+    : never;
+type PathOf<Operation> = Operation extends {
+    parameters: { path: infer Path };
+}
+    ? Path
+    : never;
+type ArgOf<F extends (...args: never[]) => unknown, N extends number> =
+    Parameters<F>[N];
+
+export type _EnumsResearchMappingsQuery = Expect<
+    Matches<
+        { key_type: ArgOf<typeof getResearchMappings, 1> },
+        QueryOf<operations["researchListMappings"]>
+    >
+>;
+export type _EnumsResearchMappingResolveInput = Expect<
+    Matches<
+        ArgOf<typeof resolveResearchMappings, 0>,
+        JsonBody<operations["researchResolveMappings"]>
+    >
+>;
+export type _EnumsResearchMappingSaveInput = Expect<
+    Matches<
+        ArgOf<typeof saveResearchMappings, 0>,
+        JsonBody<operations["researchSaveMappings"]>
+    >
+>;
+export type _EnumsResearchMappingAuditInput = Expect<
+    Matches<
+        ArgOf<typeof auditResearchMappings, 0>,
+        JsonBody<operations["researchAuditMappings"]>
+    >
+>;
+export type _EnumsResearchMacroSeriesQuery = Expect<
+    Matches<
+        { provider: ArgOf<typeof getMacroSeries, 0> },
+        QueryOf<operations["researchMacroSeries"]>
+    >
+>;
+export type _EnumsResearchPortfolioForecastInput = Expect<
+    Matches<
+        Pick<PortfolioForecastInput, "method">,
+        JsonBody<operations["researchPortfolioForecast"]>
+    >
+>;
+export type _EnumsResearchProviderKeyPath = Expect<
+    Matches<
+        { provider: ArgOf<typeof setResearchProviderKey, 0> },
+        PathOf<operations["researchSetProviderKey"]>
+    >
+>;
+export type _EnumsResearchProviderKeyStatus = Expect<
+    Matches<ProviderKeyStatus, Schemas["ResearchProviderKeyStatus"]>
+>;
+export type _EnumsResearchScorecardFlag = Expect<
+    Matches<ScorecardFlag, Schemas["ResearchScorecardFlag"]>
+>;
+export type _EnumsResearchScorecard = Expect<
+    Matches<ResearchScorecard, Schemas["ResearchScorecard"]>
+>;
+export type _EnumsResearchMeta = Expect<
+    Matches<ResearchMeta, Schemas["ResearchMeta"]>
+>;
+
+export type _EnumsDossierEvidence = Expect<
+    Matches<DossierEvidence, Schemas["ResearchDossierEvidence"]>
+>;
+export type _EnumsDossierContent = Expect<
+    Matches<DossierContent, Schemas["ResearchDossierContent"]>
+>;
+export type _EnumsDossier = Expect<Matches<Dossier, Schemas["ResearchDossier"]>>;
+export type _EnumsDossierLinkDetail = Expect<
+    Matches<
+        NonNullable<Dossier["linkDetails"]>[number],
+        Schemas["ResearchDossier"]["linkDetails"][number]
+    >
+>;
+export type _EnumsDossierSummary = Expect<
+    Matches<DossierListItem, Schemas["ResearchDossierSummary"]>
+>;
+
+export type _EnumsMonitorCreate = Expect<
+    Matches<MonitorCreate, Schemas["AnalysisMonitorCreate"]>
+>;
+export type _EnumsMonitorUpdate = Expect<
+    Matches<MonitorUpdate, Schemas["AnalysisMonitorUpdate"]>
+>;
+export type _EnumsMonitorObservation = Expect<
+    Matches<MonitorObservation, Schemas["AnalysisMonitorObservation"]>
+>;
+export type _EnumsMonitorObservationCoverage = Expect<
+    Matches<
+        NonNullable<MonitorObservation["coverage"]>,
+        Schemas["AnalysisMonitorObservation"]["coverage"]
+    >
+>;
+export type _EnumsMonitor = Expect<
+    Matches<AnalysisMonitor, Schemas["AnalysisMonitor"]>
+>;
+export type _EnumsMonitorNotification = Expect<
+    Matches<MonitorNotification, Schemas["AnalysisMonitorNotification"]>
+>;
+
+export type _EnumsAnalysisVisualPlan = Expect<
+    Matches<VisualAnalysisPlan, Schemas["AnalysisVisualPlan"]>
+>;
+export type _EnumsAnalysisVisualPlanOrderBy = Expect<
+    Matches<
+        VisualAnalysisPlan["orderBy"][number],
+        NonNullable<Schemas["AnalysisVisualPlan"]["orderBy"]>[number]
+    >
+>;
+export type _EnumsAnalysisExecuteMode = Expect<
+    Matches<
+        Pick<ArgOf<typeof executeAnalysis, 0>, "mode">,
+        Schemas["AnalysisQuerySpec"]
+    >
+>;
+export type _EnumsAnalysisExtensionInput = Expect<
+    Matches<
+        Pick<AnalysisExtensionInput, "operation">,
+        JsonBody<operations["evaluateAnalysisExtension"]>
+    >
+>;
+export type _EnumsAnalysisSavedFields = Expect<
+    Matches<
+        Pick<SavedAnalysis, "workspace" | "refreshMode">,
+        Schemas["AnalysisSavedFields"]
+    >
+>;
+export type _EnumsAnalysisSavedWorkspaceQuery = Expect<
+    Matches<
+        { workspace: ArgOf<typeof listSavedAnalyses, 0> },
+        QueryOf<operations["listSavedAnalyses"]>
+    >
+>;
+export type _EnumsAnalysisEditProposal = Expect<
+    Matches<AnalysisEditProposal, Schemas["AiAnalysisEditProposal"]>
+>;
+export type _EnumsAnalysisEditOperation = Expect<
+    Matches<
+        AnalysisEditProposal["operations"][number],
+        Schemas["AiAnalysisEditProposal"]["operations"][number]
+    >
+>;
+
+export type _EnumsAiInvestigationInput = Expect<
+    Matches<InvestigationInput, Schemas["AiInvestigationRequest"]>
+>;
+export type _EnumsAiInvestigationScope = Expect<
+    Matches<
+        InvestigationInput["scope"],
+        Schemas["AiInvestigationRequest"]["scope"]
+    >
+>;
+export type _EnumsAiInvestigationShared = Expect<
+    Matches<SharedAiInvestigationRequest, Schemas["AiInvestigationRequest"]>
+>;
+export type _EnumsAiMessage = Expect<
+    Matches<ChatMessage, Schemas["AiMessage"]>
+>;
 
 // ── Enums: Belgian tax, reports, accounts, transactions, recipients, splits,
 //    saved charts, settings.

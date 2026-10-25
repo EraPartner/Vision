@@ -12,6 +12,7 @@ import {
     ResearchDocumentListSchema,
     ResearchDocumentSchema,
 } from "@vision/types/contracts";
+import type { AnalysisWorkspace } from "@/lib/api/analysis";
 import type {
     AccountId,
     CurrencyCode,
@@ -79,7 +80,7 @@ export interface InvestigationInput {
     depth: "quick" | "detailed";
     language: "en" | "nl";
     scope: {
-        workspaces: string[];
+        workspaces: AnalysisWorkspace[];
         accountIds: AccountId[];
         investmentIds: InvestmentId[];
         dateFrom: string | null;

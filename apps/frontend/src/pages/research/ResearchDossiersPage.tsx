@@ -12,13 +12,15 @@ import {
 import { apiClient, ApiClientError } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { PAGE_ICONS } from "@/lib/pageIcons";
-import type {
-    DossierContent,
-    DossierEvidence,
-    EvidenceOrigin,
-    EvidenceStance,
+import {
+    isEvidenceOrigin,
+    isEvidenceStance,
+    type DossierContent,
+    type DossierEvidence,
+    type EvidenceOrigin,
+    type EvidenceStance,
 } from "@/lib/api/dossiers";
-import type { AnalysisWorkspace } from "@/lib/api/analysis";
+import { isAnalysisWorkspace, type AnalysisWorkspace } from "@/lib/api/analysis";
 import {
     useDossier,
     useDossierActions,
@@ -687,12 +689,16 @@ export default function ResearchDossiersPage() {
                                             </Label>
                                             <Select
                                                 value={draft.workspace}
-                                                onValueChange={(value) =>
-                                                    edit({
-                                                        workspace:
-                                                            value as AnalysisWorkspace,
-                                                    })
-                                                }
+                                                onValueChange={(value) => {
+                                                    if (
+                                                        isAnalysisWorkspace(
+                                                            value,
+                                                        )
+                                                    )
+                                                        edit({
+                                                            workspace: value,
+                                                        });
+                                                }}
                                             >
                                                 <SelectTrigger
                                                     id="dossier-workspace"
@@ -1092,9 +1098,10 @@ function EvidenceEditor({
                     size="sm"
                     className="w-full"
                     value={item.origin}
-                    onValueChange={(value) =>
-                        onChange({ origin: value as EvidenceOrigin })
-                    }
+                    onValueChange={(value) => {
+                        if (isEvidenceOrigin(value))
+                            onChange({ origin: value });
+                    }}
                 >
                     {ORIGINS.map((origin) => (
                         <SegmentedControlItem key={origin} value={origin}>
@@ -1107,9 +1114,10 @@ function EvidenceEditor({
                     size="sm"
                     className="w-full"
                     value={item.stance}
-                    onValueChange={(value) =>
-                        onChange({ stance: value as EvidenceStance })
-                    }
+                    onValueChange={(value) => {
+                        if (isEvidenceStance(value))
+                            onChange({ stance: value });
+                    }}
                 >
                     {STANCES.map((stance) => (
                         <SegmentedControlItem key={stance} value={stance}>

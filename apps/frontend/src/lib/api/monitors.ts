@@ -6,6 +6,7 @@ import {
     MonitorObservationSchema,
 } from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
+import { enumGuard } from "@/lib/enumGuard";
 
 export type MonitorStatus =
     | "baseline"
@@ -17,6 +18,15 @@ export type MonitorStatus =
     | "failed";
 export type MonitorKind = "analysis-threshold" | "dossier-evidence";
 export type MonitorOperator = "above" | "below";
+
+export const isMonitorKind = enumGuard<MonitorKind>({
+    "analysis-threshold": true,
+    "dossier-evidence": true,
+});
+export const isMonitorOperator = enumGuard<MonitorOperator>({
+    above: true,
+    below: true,
+});
 
 export interface MonitorObservation {
     id: string;

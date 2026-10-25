@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/table";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import type { AnalysisResult } from "@/lib/api/analysis";
+import type { AnalysisResult, AnalysisWorkspace } from "@/lib/api/analysis";
 import {
     analysisResultCsv,
     parseScenarioCsv,
@@ -58,7 +58,7 @@ export function AnalysisInterchangePanel({
     result: AnalysisResult | null;
     name: string;
     timezone: string;
-    workspace: string;
+    workspace: AnalysisWorkspace;
     definitionId?: string | undefined;
     definitionVersion?: number | undefined;
     datasetIds: string[];

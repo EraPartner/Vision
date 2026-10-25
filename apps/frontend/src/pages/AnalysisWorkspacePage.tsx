@@ -12,14 +12,15 @@ import {
     Trash2,
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
-import type {
-    AnalysisDataset,
-    AnalysisEditProposal,
-    AnalysisResult,
-    AnalysisValue,
-    AnalysisWorkspace,
-    SavedAnalysis,
-    VisualAnalysisPlan,
+import {
+    isAnalysisWorkspace,
+    type AnalysisDataset,
+    type AnalysisEditProposal,
+    type AnalysisResult,
+    type AnalysisValue,
+    type AnalysisWorkspace,
+    type SavedAnalysis,
+    type VisualAnalysisPlan,
 } from "@/lib/api/analysis";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { PageShell } from "@/components/shared/PageShell";
@@ -1475,11 +1476,10 @@ export default function AnalysisWorkspacePage() {
                                         </SegmentedControl>
                                         <Select
                                             value={workspace}
-                                            onValueChange={(value) =>
-                                                setWorkspace(
-                                                    value as AnalysisWorkspace,
-                                                )
-                                            }
+                                            onValueChange={(value) => {
+                                                if (isAnalysisWorkspace(value))
+                                                    setWorkspace(value);
+                                            }}
                                         >
                                             <SelectTrigger
                                                 aria-label={t(
