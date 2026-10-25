@@ -277,6 +277,9 @@ public struct ShellRootView: View {
         .onDisappear { connectivity.stop() }
         .disabled(model.isReloadingGraph)
         .allowsHitTesting(!model.isReloadingGraph)
+        // Outermost, so the chrome the dialog and alert modifiers add (scrim, glass panel and
+        // their materials) resolves in the app theme rather than the system appearance.
+        .environment(\.colorScheme, theme.colorScheme)
     }
     private var shellBanners: some View {
         VStack(spacing: 0) { shellBannerStack }
