@@ -20,8 +20,8 @@ struct AIInvestigationTests {
         let service = InvestigationFixtureService()
         let model = AIInvestigationModel(service: service)
         let settings = NativeAppSettings(
-            defaultCurrency: "USD", analysisBenchmark: " \u{FEFF}acwi\u{FEFF} ", aiAnswerDepth: "invalid",
-            language: "nl")
+            defaultCurrency: "USD", analysisBenchmark: " \u{FEFF}acwi\u{FEFF} ", aiAnswerDepth: .unknown("invalid"),
+            language: .nl)
         model.configure(settings: settings)
         await model.load()
         #expect(model.resolvedCurrency == CurrencyCode(rawValue: "USD") && model.resolvedBenchmark == "ACWI")
@@ -39,7 +39,7 @@ struct AIInvestigationTests {
         let model = AIInvestigationModel(service: service, pollDelay: .seconds(60))
         model.configure(
             settings: .init(
-                defaultCurrency: "USD", analysisBenchmark: "ACWI", aiAnswerDepth: "detailed", language: "nl"))
+                defaultCurrency: "USD", analysisBenchmark: "ACWI", aiAnswerDepth: .detailed, language: .nl))
         await model.load()
         model.question = " Question "
         model.researchMode = .publicProviders

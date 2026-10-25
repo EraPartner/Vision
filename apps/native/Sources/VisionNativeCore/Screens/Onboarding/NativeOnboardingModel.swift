@@ -77,7 +77,7 @@ import Observation
         let scope = visit
         let completed: Bool
         do {
-            completed = try await persistence.read("onboarding_complete").value == .bool(true)
+            completed = try await persistence.read(.onboardingComplete).value == .bool(true)
         } catch is CancellationError {
             if scope == visit { isLoading = false }
             return
@@ -281,10 +281,10 @@ import Observation
         }
         await draftWrite?.value
         do {
-            if await persistence.baseline("onboarding_complete") == nil {
-                _ = try await persistence.read("onboarding_complete")
+            if await persistence.baseline(.onboardingComplete) == nil {
+                _ = try await persistence.read(.onboardingComplete)
             }
-            _ = try await persistence.save("onboarding_complete", value: .bool(true))
+            _ = try await persistence.save(.onboardingComplete, value: .bool(true))
             guard scope == visit, isPresented else { return }
             try? await store.remove()
             guard scope == visit else { return }

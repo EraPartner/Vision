@@ -231,7 +231,7 @@ final class ShellController: NSObject, NSWindowDelegate {
             settingsAI?.configure(appRaw: raw)
             commandPalette?.configure(settings: settings)
             self.resolveNativeSettingsAppearance()
-            if let language = NativeLanguage(rawValue: settings.language) {
+            if let language = NativeLanguage(rawValue: settings.language.rawValue) {
                 Task { [weak self] in await self?.setLanguage(language) }
             }
         }
@@ -252,7 +252,7 @@ final class ShellController: NSObject, NSWindowDelegate {
             guard let self, let nativeSettings, self.nativeSettingsGeneration == settingsGeneration else {
                 throw APIError.backendUnavailable
             }
-            _ = try await nativeSettings.persistence.save("onboarding_complete", value: .bool(false))
+            _ = try await nativeSettings.persistence.save(.onboardingComplete, value: .bool(false))
             try await self.writeNativeLocalValue(nil, key: .onboardingDraft, generation: settingsGeneration)
             self.shellModel.closeSettings()
         }
@@ -671,11 +671,11 @@ final class ShellController: NSObject, NSWindowDelegate {
         else { throw CancellationError() }
         let currentGeneration = generation
         let persistence = NativeSettingsPersistence(service: makeAPIClient(session: completionSession))
-        let record = try await persistence.read("onboarding_complete")
+        let record = try await persistence.read(.onboardingComplete)
         guard onboardingRestoreIntent == generation, currentGeneration == nativeSettingsGeneration else {
             throw CancellationError()
         }
-        if record.value != .bool(true) { _ = try await persistence.save("onboarding_complete", value: .bool(true)) }
+        if record.value != .bool(true) { _ = try await persistence.save(.onboardingComplete, value: .bool(true)) }
         guard onboardingRestoreIntent == generation, currentGeneration == nativeSettingsGeneration else {
             throw CancellationError()
         }
@@ -821,7 +821,7 @@ final class ShellController: NSObject, NSWindowDelegate {
         let changed = selection != shellModel.theme
         shellModel.theme = selection
         // ElectronBridge's effect: vibrancy only on the effective 'enhanced' tier.
-        setVibrancy(resolved.effectiveVisualEffects == "enhanced")
+        setVibrancy(resolved.effectiveVisualEffects == .enhanced)
         lastSettingsClockRefresh = Date()
         lastSettingsDisplayPixels = pixels
         lastSettingsDisplayBuiltIn = builtIn
@@ -1481,7 +1481,7 @@ final class ShellController: NSObject, NSWindowDelegate {
     /// StartupRedirect's mirror of the hydrated startup section and the current page.
     private func persistNativeNavigation(model: NativeShellModel, generation: UUID) {
         let route = model.nativeNavigationLocation.raw
-        let section = model.settingsLoaded ? model.settings.startupSection : nil
+        let section = model.settingsLoaded ? model.settings.startupSection.rawValue : nil
         Task { [weak self] in
             try? await self?.writeNativeLocalValue(route, key: .lastRoute, generation: generation)
             if let section {
@@ -1731,7 +1731,7 @@ final class ShellController: NSObject, NSWindowDelegate {
                 case .lost:
                     self.backendNoticeID = self.shellModel.notices.publish(
                         .init(id: 0, kind: .warning, key: "app.backendLost"), source: self.backendNoticeSource,
-                        lifetime: 30, replacementKey: "backend-health")
+                        lifetime: 30, replacementKey: .backendHealth)
                 case .restored:
                     if let id = self.backendNoticeID { self.shellModel.notices.dismiss(id) }
                     self.backendNoticeID = nil

@@ -103,7 +103,7 @@ import Observation
     @ObservationIgnored private let now: @Sendable () -> Date
     private var settings = NativeAppSettings.defaults
     private var placeholderDetail: AIChatConversationDetail?
-    @ObservationIgnored private var route = NativeRoute(path: "/ai-chat")
+    @ObservationIgnored private var route = NativeRoute(.aiChat)
     @ObservationIgnored private var isActive = false
     @ObservationIgnored private var visit = UUID()
     @ObservationIgnored private var selectionRevision = UUID()

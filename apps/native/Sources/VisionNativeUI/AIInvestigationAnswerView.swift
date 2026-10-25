@@ -32,7 +32,7 @@ struct AIInvestigationAnswerView: View {
             if let id = answer.analysisReference?["id"]?.stringValue {
                 Button(strings.t("aiResearch.openAnalysis")) {
                     shell.navigate(
-                        to: NativeRoute(path: "/analysis", query: [.init(name: "savedAnalysis", value: id)]).string)
+                        to: NativeRoute(.analysisWorkspace, query: [.init(name: "savedAnalysis", value: id)]).string)
                 }.buttonStyle(.visionOutline).controlSize(.small)
             }
             if let evidence = selectedEvidence { evidenceDetail(evidence) }

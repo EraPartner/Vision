@@ -77,8 +77,8 @@ public struct PortfolioTaxAdjustmentDraft: Equatable, Sendable, Identifiable {
 /// Structural edits only. Unknown top-level entries and unknown fields of each investment
 /// remain intact, including entries belonging to another year or archived holdings.
 public struct PortfolioTaxSettingsDraft: Equatable, Sendable {
-    public static let adjustmentsKey = "portfolio_tax_adjustments_v1"
-    public static let classificationsKey = "portfolio_tax_classifications_v1"
+    public static let adjustmentsKey = SettingKey.portfolioTaxAdjustmentsV1.rawValue
+    public static let classificationsKey = SettingKey.portfolioTaxClassificationsV1.rawValue
     public var adjustments: TaxValue
     public var classifications: TaxValue
     public let records: [PortfolioTaxSetting]

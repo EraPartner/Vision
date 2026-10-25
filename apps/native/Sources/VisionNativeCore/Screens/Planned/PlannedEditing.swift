@@ -20,9 +20,9 @@ public protocol PlannedEditingService: Sendable {
     /// `useLinkTransactionCandidates`: `getTransactions` with the dialog's filters.
     func linkCandidates(_ query: PlannedLinkQuery) async throws -> [OpenAPI.Transaction]
     /// `getSetting(key)`.
-    func setting(key: String) async throws -> OpenAPI.Setting
+    func setting(key: SettingKey) async throws -> OpenAPI.Setting
     /// `saveSetting(key, value)` against the baseline the read produced.
-    func saveSetting(key: String, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting
+    func saveSetting(key: SettingKey, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting
 }
 
 /// A row of `GET /api/planned-transactions/match-suggestions`.
@@ -78,11 +78,11 @@ extension APIClient: PlannedEditingService {
         try await send(query.operation).items
     }
 
-    public func setting(key: String) async throws -> OpenAPI.Setting {
+    public func setting(key: SettingKey) async throws -> OpenAPI.Setting {
         try await send(OpenAPIOperations.GetSetting(key: key))
     }
 
-    public func saveSetting(key: String, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
+    public func saveSetting(key: SettingKey, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
         try await send(
             OpenAPIOperations.SaveSetting(key: key, body: OpenAPIOperations.SaveSetting.Body(value: value, expected: expected)))
     }

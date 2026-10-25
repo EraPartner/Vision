@@ -29,7 +29,7 @@ public enum NumberFormat: String, CaseIterable, Sendable {
 
 /// The part of the web app's `app_settings` that native screens read.
 public struct NativeAppSettings: Equatable, Sendable {
-    public static let settingsKey = "app_settings"
+    public static let settingsKey = SettingKey.appSettings
 
     /// `defaultCurrency`: a three-letter ISO 4217 code. `storedAppSettingsSchema` accepts either
     /// case and upper-cases it (`asCurrencyCode(code.toUpperCase())`), as `migrate` does.
@@ -44,14 +44,14 @@ public struct NativeAppSettings: Equatable, Sendable {
     public var defaultPageSize: Int
     /// Application defaults participate below explicit run and saved-analysis preferences.
     public var analysisBenchmark: String?
-    public var aiAnswerDepth: String
+    public var aiAnswerDepth: AIAnswerDepth
     public var aiDefaultModel: String?
-    public var language: String
-    public var startOfWeek: String
-    public var costBasisMethod: String
-    public var startupSection: String
+    public var language: AppLanguage
+    public var startOfWeek: StartOfWeek
+    public var costBasisMethod: CostBasisMethod
+    public var startupSection: StartupSection
     public var autoClearPlannedOnMatch: Bool
-    public var visualEffects: String
+    public var visualEffects: VisualEffects
     public var autoAdaptDisplay: Bool
     /// `fullEffects` (ADR-244): restores effects that were turned down to save GPU work.
     /// Off by default; the design layer reads it through `NativeSettingsModel.fullEffects`.
@@ -61,10 +61,11 @@ public struct NativeAppSettings: Equatable, Sendable {
         defaultCurrency: CurrencyCode = .eur, dateFormat: AppDateFormat = .dayMonthYearSlash,
         numberFormat: NumberFormat = .eu, showDecimalPlaces: Int = 2, adminMode: Bool = false,
         colorblindGainLoss: Bool = false, defaultPageSize: Int = 50,
-        analysisBenchmark: String? = nil, aiAnswerDepth: String = "quick", language: String = "en",
+        analysisBenchmark: String? = nil, aiAnswerDepth: AIAnswerDepth = .quick, language: AppLanguage = .en,
         aiDefaultModel: String? = nil,
-        startOfWeek: String = "monday", costBasisMethod: String = "weighted_avg", startupSection: String = "budgeting",
-        autoClearPlannedOnMatch: Bool = true, visualEffects: String = "standard", autoAdaptDisplay: Bool = true,
+        startOfWeek: StartOfWeek = .monday, costBasisMethod: CostBasisMethod = .weightedAvg,
+        startupSection: StartupSection = .budgeting,
+        autoClearPlannedOnMatch: Bool = true, visualEffects: VisualEffects = .standard, autoAdaptDisplay: Bool = true,
         fullEffects: Bool = false
     ) {
         self.defaultCurrency = defaultCurrency
@@ -118,29 +119,36 @@ public struct NativeAppSettings: Equatable, Sendable {
                 settings.analysisBenchmark = normalized
             }
         }
-        if let value = fields["aiAnswerDepth"]?.stringValue, ["quick", "detailed"].contains(value) {
+        if let value = knownCase(fields["aiAnswerDepth"]?.stringValue, as: AIAnswerDepth.self) {
             settings.aiAnswerDepth = value
         }
         settings.aiDefaultModel = fields["aiDefaultModel"]?.stringValue
-        if let value = fields["language"]?.stringValue, ["en", "nl"].contains(value) { settings.language = value }
-        if let value = fields["startOfWeek"]?.stringValue, ["monday", "sunday"].contains(value) {
+        if let value = knownCase(fields["language"]?.stringValue, as: AppLanguage.self) { settings.language = value }
+        if let value = knownCase(fields["startOfWeek"]?.stringValue, as: StartOfWeek.self) {
             settings.startOfWeek = value
         }
-        if let value = fields["costBasisMethod"]?.stringValue, ["weighted_avg", "fifo", "lifo"].contains(value) {
+        if let value = knownCase(fields["costBasisMethod"]?.stringValue, as: CostBasisMethod.self) {
             settings.costBasisMethod = value
         }
-        if let value = fields["startupSection"]?.stringValue,
-            ["budgeting", "portfolio", "research", "ai-chat", "last"].contains(value)
-        {
+        if let value = knownCase(fields["startupSection"]?.stringValue, as: StartupSection.self) {
             settings.startupSection = value
         }
         if let value = fields["autoClearPlannedOnMatch"]?.boolValue { settings.autoClearPlannedOnMatch = value }
-        if let value = fields["visualEffects"]?.stringValue, ["reduced", "standard", "enhanced"].contains(value) {
+        if let value = knownCase(fields["visualEffects"]?.stringValue, as: VisualEffects.self) {
             settings.visualEffects = value
         }
         if let value = fields["autoAdaptDisplay"]?.boolValue { settings.autoAdaptDisplay = value }
         if let value = fields["fullEffects"]?.boolValue { settings.fullEffects = value }
         return settings
+    }
+
+    /// The case of `E` stored as `raw`. A value outside the web app's union is `nil` here, so `migrate`
+    /// keeps the default exactly like the store's `.catch(default)`; decoding one elsewhere (the enums'
+    /// `Codable`) yields `.unknown` instead.
+    static func knownCase<E: CaseIterable & RawRepresentable>(_ raw: String?, as _: E.Type) -> E?
+    where E.RawValue == String {
+        guard let raw else { return nil }
+        return E.allCases.first { $0.rawValue == raw }
     }
 
     /// `/^[A-Za-z]{3}$/` of `storedAppSettingsSchema`.

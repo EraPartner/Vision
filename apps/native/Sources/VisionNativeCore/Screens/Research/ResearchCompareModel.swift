@@ -64,7 +64,7 @@ public struct ResearchComparePresentation: Equatable, Sendable {
 @MainActor @Observable
 public final class ResearchCompareModel {
     public let search: ResearchSearchModel
-    public private(set) var route = NativeRoute(path: "/research/compare")
+    public private(set) var route = NativeRoute(.compare)
     public var state: ResearchCompareURLState { .init(route: route) }
     public private(set) var charts: [String: ResearchSnapshot<ResearchChartData>] = [:]
     public private(set) var fundamentals: [String: ResearchSnapshot<ResearchScorecardData?>] = [:]

@@ -2,16 +2,16 @@ import SwiftUI
 import VisionNativeCore
 
 /// The effective visual-effects tier (`reduced`, `standard`, `enhanced`) as a type
-/// (hooks/useVisualEffectsTier.ts). The settings model still publishes the tier as a
-/// `String` in `EnvironmentValues.visionVisualEffects`; `visionEffectsTier` reads it as this enum.
+/// (hooks/useVisualEffectsTier.ts). The settings model publishes the tier as the core
+/// `VisualEffects` in `EnvironmentValues.visionVisualEffects`; `visionEffectsTier` reads it as this enum.
 public enum VisualEffectsTier: String, Sendable {
     case reduced
     case standard
     case enhanced
 
     /// The tier a settings string names; anything unknown is `standard`, the web default.
-    public init(setting: String) {
-        self = VisualEffectsTier(rawValue: setting) ?? .standard
+    public init(setting: VisualEffects) {
+        self = VisualEffectsTier(rawValue: setting.rawValue) ?? .standard
     }
 }
 
@@ -21,10 +21,10 @@ extension EnvironmentValues {
     /// to save GPU work. Off by default; the shell sets it.
     @Entry public var visionFullEffects: Bool = false
 
-    /// The tier as a type, bridged from the `String` key `visionVisualEffects`.
+    /// The tier as a type, bridged from the `VisualEffects` key `visionVisualEffects`.
     public var visionEffectsTier: VisualEffectsTier {
         get { VisualEffectsTier(setting: visionVisualEffects) }
-        set { visionVisualEffects = newValue.rawValue }
+        set { visionVisualEffects = VisualEffects(rawValue: newValue.rawValue) }
     }
 }
 

@@ -3,7 +3,7 @@ import Observation
 
 @MainActor @Observable
 public final class PortfolioTaxWidgetsModel {
-    nonisolated public static let settingsKey = "widget_visibility"
+    nonisolated public static let settingsKey = SettingKey.widgetVisibility
     nonisolated public static let pageKey = "portfolioTax"
     nonisolated public static let definitions: [InsightWidget] = [
         InsightWidget("summaryCards", "tax.widget.summaryCards"),
@@ -86,7 +86,7 @@ public final class PortfolioTaxWidgetsModel {
         }
     }
     private func validate(_ record: OpenAPI.Setting) throws {
-        guard record.key == Self.settingsKey, InsightWidgetVisibility.isValidSetting(record.value),
+        guard record.key == Self.settingsKey.rawValue, InsightWidgetVisibility.isValidSetting(record.value),
             let fields = record.expected.objectValue, let exists = fields["exists"]?.boolValue,
             Set(fields.keys) == (exists ? ["exists", "value"] : ["exists"])
         else {

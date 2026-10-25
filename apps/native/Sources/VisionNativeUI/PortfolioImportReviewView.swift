@@ -63,7 +63,7 @@ public struct PortfolioImportReviewView: View {
         if let id = shell.nativeNavigationLocation.match?.supportedBatchId {
             await model.load(batchId: PortfolioImportBatchNumericID(id))
         } else {
-            await model.load(rawBatchId: batchId)
+            await model.load(rawBatchId: batchId.rawValue)
         }
     }
     private var routingUnavailable: Bool {

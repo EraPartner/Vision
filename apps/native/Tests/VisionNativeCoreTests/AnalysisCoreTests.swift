@@ -116,7 +116,7 @@ struct AnalysisCoreTests {
         let model = AnalysisModel(service: AnalysisFixtureService())
         model.configure(
             settings: .init(
-                defaultCurrency: "USD", analysisBenchmark: "sp500", aiAnswerDepth: "detailed", language: "nl"))
+                defaultCurrency: "USD", analysisBenchmark: "sp500", aiAnswerDepth: .detailed, language: .nl))
         #expect(model.effectivePreferences.currency == CurrencyCode(rawValue: "USD"))
         #expect(model.effectivePreferences.benchmark == "SP500")
         #expect(model.effectivePreferences.answerDepth == .detailed)

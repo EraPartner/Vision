@@ -27,9 +27,9 @@ public protocol TransactionsService: Sendable {
     /// `requestBlob("/api/transactions/export/{csv|json}?…")`.
     func exportFilteredTransactions(_ format: ExportFormat, query: TransactionExportQuery) async throws -> Data
     /// `getSetting(key)`.
-    func setting(key: String) async throws -> OpenAPI.Setting
+    func setting(key: SettingKey) async throws -> OpenAPI.Setting
     /// `saveSetting(key, value)` against the baseline of the last read.
-    func saveSetting(key: String, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting
+    func saveSetting(key: SettingKey, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting
 }
 
 /// The Attachments panel's calls (apps/frontend/src/lib/api/attachments.ts).

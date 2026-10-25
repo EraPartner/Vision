@@ -306,7 +306,7 @@ public enum OptionalTransactionColumn: String, CaseIterable, Sendable {
 /// The View menu's column choices, stored per user under `widget_visibility`'s
 /// `transactionsColumns` page key like `useWidgetVisibility`.
 public struct TransactionColumnVisibility: Equatable, Sendable {
-    public static let settingKey = "widget_visibility"
+    public static let settingKey = SettingKey.widgetVisibility
     public static let pageKey = "transactionsColumns"
 
     /// The page's stored choices; a column without one uses its default (hidden).

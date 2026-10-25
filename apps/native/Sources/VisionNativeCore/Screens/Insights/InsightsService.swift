@@ -162,7 +162,7 @@ extension APIClient: HomeService {
     }
     public func homeMatchCount() async throws -> Int { try await matchSuggestions().count }
     public func homeExclusions(scope: String) async throws -> InsightExclusions {
-        let value = try await setting(key: "dashboard_settings").value
+        let value = try await setting(key: .dashboardSettings).value
         let exclusionScope = InsightExclusions.normalizedScope(value)
         if exclusionScope == "everywhere" || exclusionScope == scope {
             for key in ["excludedCategoryIds", "excludedRecipientIds"] {
@@ -198,10 +198,10 @@ extension APIClient: HomeService {
         return InsightExclusions.resolve(settings: value, scope: scope, hiddenIds: hidden)
     }
     public func homeWidgetSetting() async throws -> OpenAPI.Setting {
-        try Self.validWidgets(try await setting(key: "widget_visibility"))
+        try Self.validWidgets(try await setting(key: .widgetVisibility))
     }
     public func saveHomeWidgets(_ value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
-        try Self.validWidgets(try await saveSetting(key: "widget_visibility", value: value, expected: expected))
+        try Self.validWidgets(try await saveSetting(key: .widgetVisibility, value: value, expected: expected))
     }
     private static func validWidgets(_ record: OpenAPI.Setting) throws -> OpenAPI.Setting {
         guard InsightWidgetVisibility.isValidSetting(record.value) else {

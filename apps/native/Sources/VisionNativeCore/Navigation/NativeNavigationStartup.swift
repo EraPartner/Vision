@@ -11,7 +11,7 @@ public struct NativeNavigationStartup: Sendable {
 
     public enum Settings: Sendable {
         case loading
-        case loaded(startupSection: String)
+        case loaded(startupSection: StartupSection)
     }
 
     public enum Resolution: Equatable, Sendable {
@@ -22,7 +22,7 @@ public struct NativeNavigationStartup: Sendable {
     }
 
     private let context: Context
-    private let mirroredSection: String?
+    private let mirroredSection: StartupSection?
     private let lastRoute: String?
     public private(set) var hasResolved = false
 
@@ -30,8 +30,8 @@ public struct NativeNavigationStartup: Sendable {
     /// whitespace, unknown and differently cased section strings are not valid mirrors.
     public init(context: Context, mirroredStartupSection: String?, lastRoute: String?) {
         self.context = context
-        self.mirroredSection = mirroredStartupSection.flatMap {
-            Self.sectionHomes[$0] != nil || $0 == "last" ? $0 : nil
+        self.mirroredSection = mirroredStartupSection.flatMap { raw in
+            StartupSection.allCases.first { $0.rawValue == raw }
         }
         // Source readLastPage does not validate the complete route. Preserve that
         // selection; NativeNavigationLocation must still admit it before navigation.
@@ -47,7 +47,7 @@ public struct NativeNavigationStartup: Sendable {
     /// silently replace that separate admission check with this startup policy.
     public mutating func evaluate(currentLocation: String, settings: Settings) -> Resolution {
         guard !hasResolved else { return .unchanged }
-        let section: String
+        let section: StartupSection
         if let mirroredSection {
             section = mirroredSection
         } else {
@@ -57,7 +57,7 @@ public struct NativeNavigationStartup: Sendable {
         hasResolved = true
 
         let pathname = currentLocation.prefix { $0 != "?" }
-        let target = section == "last" ? lastRoute ?? "/" : Self.sectionHomes[section] ?? "/"
+        let target = section == .last ? lastRoute ?? "/" : Self.sectionHomes[section] ?? "/"
         // Source checks pathname exactly and only calls navigate for a non-root
         // target. In particular, budgeting must preserve an existing root query.
         let replacement = pathname == "/" && target != "/" ? target : nil
@@ -69,7 +69,8 @@ public struct NativeNavigationStartup: Sendable {
         }
     }
 
-    private static let sectionHomes = [
-        "budgeting": "/", "portfolio": "/portfolio", "research": "/research", "ai-chat": "/ai-chat",
+    private static let sectionHomes: [StartupSection: String] = [
+        .budgeting: NativeRoute.Destination.home.rawValue, .portfolio: NativeRoute.Destination.portfolio.rawValue,
+        .research: NativeRoute.Destination.researchHome.rawValue, .aiChat: NativeRoute.Destination.aiChat.rawValue,
     ]
 }

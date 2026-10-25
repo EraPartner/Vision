@@ -77,7 +77,7 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
     @ObservationIgnored private var storageFailureShown = false
     @ObservationIgnored private var persistedLibrary: ResearchChartBuilderLibrary?
     @ObservationIgnored private var isActive = false
-    @ObservationIgnored private var route = NativeRoute(path: "/research/charts")
+    @ObservationIgnored private var route = NativeRoute(.chartBuilder)
     @ObservationIgnored private var visitRevision = UUID()
     @ObservationIgnored private var readRevision = UUID()
     @ObservationIgnored private var readTask: Task<Void, Never>?

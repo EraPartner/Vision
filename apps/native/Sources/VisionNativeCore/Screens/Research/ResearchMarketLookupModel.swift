@@ -42,7 +42,7 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
     public let search: ResearchSearchModel
     public let mapping: ResearchMarketMappingModel
     public let action: ResearchMarketActionModel
-    public private(set) var route = NativeRoute(path: "/research/market")
+    public private(set) var route = NativeRoute(.marketLookup)
     public var state: ResearchMarketLookupState { .init(route: route) }
     public private(set) var holdings: [PortfolioHolding] = []
     public private(set) var holdingsLoaded = false

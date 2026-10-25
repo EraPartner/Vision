@@ -244,6 +244,6 @@ public enum InsightsRoutes {
         }
         if uncategorised { query.append(URLQueryItem(name: "uncategorised", value: "true")) }
         if let label { query.append(URLQueryItem(name: "filter_label", value: label)) }
-        return NativeRoute(path: "/transactions", query: query)
+        return NativeRoute(.transactions, query: query)
     }
 }

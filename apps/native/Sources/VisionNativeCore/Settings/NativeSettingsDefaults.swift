@@ -52,10 +52,11 @@ public enum NativeSettingsDefaults {
         guard let value = raw?[key] else { return app[key] }
         let choices: [String: [String]] = [
             "dateFormat": AppDateFormat.allCases.map(\.rawValue), "numberFormat": NumberFormat.allCases.map(\.rawValue),
-            "language": ["en", "nl"], "startOfWeek": ["monday", "sunday"],
-            "costBasisMethod": ["weighted_avg", "fifo", "lifo"], "visualEffects": ["reduced", "standard", "enhanced"],
-            "startupSection": ["budgeting", "portfolio", "research", "ai-chat", "last"],
-            "aiAnswerDepth": ["quick", "detailed"],
+            "language": AppLanguage.allCases.map(\.rawValue), "startOfWeek": StartOfWeek.allCases.map(\.rawValue),
+            "costBasisMethod": CostBasisMethod.allCases.map(\.rawValue),
+            "visualEffects": VisualEffects.allCases.map(\.rawValue),
+            "startupSection": StartupSection.allCases.map(\.rawValue),
+            "aiAnswerDepth": AIAnswerDepth.allCases.map(\.rawValue),
         ]
         if let allowed = choices[key] { return value.stringValue.map(allowed.contains) == true ? value : app[key] }
         switch key {

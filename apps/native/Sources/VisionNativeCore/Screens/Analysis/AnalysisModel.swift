@@ -209,7 +209,7 @@ public final class AnalysisModel {
             applicationPreferences
             ?? .object([
                 "benchmark": settings.analysisBenchmark.map(TaxValue.string) ?? .null,
-                "answerDepth": .string(settings.aiAnswerDepth), "language": .string(settings.language),
+                "answerDepth": .string(settings.aiAnswerDepth.rawValue), "language": .string(settings.language.rawValue),
             ])
     }
     private var currentInputs: AnalysisResultInputs {

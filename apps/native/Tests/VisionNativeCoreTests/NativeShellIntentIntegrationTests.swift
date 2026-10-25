@@ -185,14 +185,14 @@ private actor NativeIntentSettingsService: NativeSettingsService {
             settings: ["theme_settings": theme],
             expected: ["theme_settings": .object(["exists": .bool(true), "value": theme])])
     }
-    func readNativeSetting(_ key: String) async throws -> NativeSettingsRecord {
-        .init(key: key, value: theme, expected: .object(["exists": .bool(true), "value": theme]))
+    func readNativeSetting(_ key: SettingKey) async throws -> NativeSettingsRecord {
+        .init(key: key.rawValue, value: theme, expected: .object(["exists": .bool(true), "value": theme]))
     }
-    func saveNativeSetting(_ key: String, value: TaxValue, expected: TaxValue) async throws
+    func saveNativeSetting(_ key: SettingKey, value: TaxValue, expected: TaxValue) async throws
         -> NativeSettingsRecord
     {
         let record = NativeSettingsRecord(
-            key: key, value: value, expected: .object(["exists": .bool(true), "value": value]))
+            key: key.rawValue, value: value, expected: .object(["exists": .bool(true), "value": value]))
         writes.append(record)
         return record
     }

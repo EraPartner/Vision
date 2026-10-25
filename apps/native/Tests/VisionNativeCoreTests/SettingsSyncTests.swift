@@ -56,7 +56,7 @@ actor MirrorRecorder {
         #expect(keep)
         #expect(await mirror.values == [true])
         #expect(
-            await writer.baseline("services_settings")
+            await writer.baseline(.servicesSettings)
                 == .object(["exists": .bool(true), "value": .object(["keepServicesOnQuit": .bool(true)])]))
     }
 
@@ -66,7 +66,7 @@ actor MirrorRecorder {
         let keep = await ServicesSettings.load(
             baseURL: base, transport: transport, writer: writer, mirror: { _ in }, fallback: { true })
         #expect(keep)
-        #expect(await writer.baseline("services_settings") == nil)
+        #expect(await writer.baseline(.servicesSettings) == nil)
     }
 
     @Test func saveNeedsALoadedBaseline() async {
@@ -83,7 +83,7 @@ actor MirrorRecorder {
             json(#"{"ok":true,"data":{"key":"services_settings","value":{"keepServicesOnQuit":false}}}"#)
         ])
         let writer = SettingsWriter(transport: transport)
-        await writer.loaded("services_settings", data: .object(["expected": .object(["exists": .bool(false)])]))
+        await writer.loaded(.servicesSettings, data: .object(["expected": .object(["exists": .bool(false)])]))
         let mirror = MirrorRecorder()
         try await ServicesSettings.save(
             keepServicesOnQuit: false, baseURL: base, writer: writer, mirror: { await mirror.record($0) })
@@ -97,7 +97,7 @@ actor MirrorRecorder {
                 ]))
         #expect(await mirror.values == [false])
         #expect(
-            await writer.baseline("services_settings")
+            await writer.baseline(.servicesSettings)
                 == .object(["exists": .bool(true), "value": .object(["keepServicesOnQuit": .bool(false)])]))
     }
 
@@ -106,7 +106,7 @@ actor MirrorRecorder {
             json(#"{"ok":false,"error":{"message":"Setting changed since it was loaded"}}"#)
         ])
         let writer = SettingsWriter(transport: transport)
-        await writer.loaded("services_settings", data: .object(["expected": .object(["exists": .bool(false)])]))
+        await writer.loaded(.servicesSettings, data: .object(["expected": .object(["exists": .bool(false)])]))
         await #expect(throws: SettingsWriteError("Setting changed since it was loaded")) {
             try await ServicesSettings.save(keepServicesOnQuit: true, baseURL: base, writer: writer, mirror: { _ in })
         }
@@ -114,11 +114,11 @@ actor MirrorRecorder {
 
     @Test func onlyTheFirstBaselineIsKept() async {
         let writer = SettingsWriter(transport: FakeSettingsTransport())
-        await writer.loaded("k", data: .object(["expected": .object(["exists": .bool(false)])]))
-        await writer.loaded("k", data: .object(["expected": .object(["exists": .bool(true), "value": .int(1)])]))
-        #expect(await writer.baseline("k") == .object(["exists": .bool(false)]))
-        await writer.loaded("other", data: .object(["value": .int(1)]))
-        #expect(await writer.baseline("other") == nil)
+        await writer.loaded(.appSettings, data: .object(["expected": .object(["exists": .bool(false)])]))
+        await writer.loaded(.appSettings, data: .object(["expected": .object(["exists": .bool(true), "value": .int(1)])]))
+        #expect(await writer.baseline(.appSettings) == .object(["exists": .bool(false)]))
+        await writer.loaded(.themeSettings, data: .object(["value": .int(1)]))
+        #expect(await writer.baseline(.themeSettings) == nil)
     }
 
     @Test func failedWritePoisonsOnlyItsKeyWithoutRebasingOrAnotherPut() async {
@@ -129,32 +129,32 @@ actor MirrorRecorder {
         ])
         let writer = SettingsWriter(transport: transport)
         let baseline = JSONValue.object(["exists": .bool(false)])
-        await writer.loaded("k", data: .object(["expected": baseline]))
-        await writer.loaded("other", data: .object(["expected": baseline]))
-        await #expect(throws: failure) { try await writer.save("k", value: .int(1), baseURL: base) }
+        await writer.loaded(.appSettings, data: .object(["expected": baseline]))
+        await writer.loaded(.themeSettings, data: .object(["expected": baseline]))
+        await #expect(throws: failure) { try await writer.save(.appSettings, value: .int(1), baseURL: base) }
         // Even a subsequent successful read cannot rebase or revive the rejected queue.
-        await writer.loaded("k", data: .object(["expected": .object(["exists": .bool(true), "value": .int(9)])]))
-        await #expect(throws: failure) { try await writer.save("k", value: .int(2), baseURL: base) }
+        await writer.loaded(.appSettings, data: .object(["expected": .object(["exists": .bool(true), "value": .int(9)])]))
+        await #expect(throws: failure) { try await writer.save(.appSettings, value: .int(2), baseURL: base) }
         #expect(transport.puts.count == 1)
-        #expect(await writer.baseline("k") == baseline)
-        _ = try? await writer.save("other", value: .int(2), baseURL: base)
+        #expect(await writer.baseline(.appSettings) == baseline)
+        _ = try? await writer.save(.themeSettings, value: .int(2), baseURL: base)
         #expect(transport.puts.count == 2)
-        #expect(await writer.baseline("other") == .object(["exists": .bool(true), "value": .int(2)]))
+        #expect(await writer.baseline(.themeSettings) == .object(["exists": .bool(true), "value": .int(2)]))
     }
 
     @Test func acknowledgementWithoutDataCannotAuthorizeAnotherWrite() async {
         let transport = FakeSettingsTransport(put: [json(#"{"ok":true}"#)])
         let writer = SettingsWriter(transport: transport)
         let baseline = JSONValue.object(["exists": .bool(false)])
-        await writer.loaded("k", data: .object(["expected": baseline]))
+        await writer.loaded(.appSettings, data: .object(["expected": baseline]))
         await #expect(throws: SettingsWriteError("Could not save settings")) {
-            try await writer.save("k", value: .int(1), baseURL: base)
+            try await writer.save(.appSettings, value: .int(1), baseURL: base)
         }
         await #expect(throws: SettingsWriteError("Could not save settings")) {
-            try await writer.save("k", value: .int(2), baseURL: base)
+            try await writer.save(.appSettings, value: .int(2), baseURL: base)
         }
         #expect(transport.puts.count == 1)
-        #expect(await writer.baseline("k") == baseline)
+        #expect(await writer.baseline(.appSettings) == baseline)
     }
 }
 
@@ -180,7 +180,7 @@ actor BackupMirrorRecorder {
             baseURL: base, transport: transport, writer: writer, mirror: { await mirror.record($0) }, fallback: { [:] })
         #expect(settings == BackupSettingsValue(backupDir: "/Volumes/B", backupOnQuit: true))
         #expect(await mirror.values == [BackupSettingsValue(backupDir: "  /Volumes/B  ", backupOnQuit: true)])
-        #expect(await writer.baseline("backup_settings") != nil)
+        #expect(await writer.baseline(.backupSettings) != nil)
     }
 
     @Test func loadFallsBackToTheSettingsFileWhenTheBackendIsDown() async {
@@ -237,7 +237,7 @@ actor BackupMirrorRecorder {
             )
         ])
         let writer = SettingsWriter(transport: transport)
-        await writer.loaded("backup_settings", data: .object(["expected": .object(["exists": .bool(false)])]))
+        await writer.loaded(.backupSettings, data: .object(["expected": .object(["exists": .bool(false)])]))
         let mirror = BackupMirrorRecorder()
         let value = BackupSettingsValue(backupDir: "/Volumes/B", backupOnQuit: false)
         try await BackupSettings.save(value, baseURL: base, writer: writer, mirror: { await mirror.record($0) })

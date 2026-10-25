@@ -902,3 +902,44 @@ test("the sidebar registry maps icons to SF Symbols and needs every label key", 
     /nav\.home/,
   );
 });
+
+test("the sidebar registry emits a typed route destination per page", () => {
+  const keys = [
+    "nav.home",
+    "nav.admin",
+    "nav.exchangeRates",
+    "nav.aiChat",
+    "layout.settings",
+  ];
+  const swift = generateNavigation(navigation("ArrowLeftRight"), keys);
+  assert.match(swift, /extension NativeRoute \{/);
+  assert.match(
+    swift,
+    /public enum Destination: String, CaseIterable, Sendable \{\n {8}case home = "\/"\n {8}case exchangeRates = "\/admin\/exchange-rates"\n {8}case aiChat = "\/ai-chat"\n {4}\}/,
+  );
+  assert.equal(swift, generateNavigation(navigation("ArrowLeftRight"), keys));
+  const twice = navigation("ArrowLeftRight");
+  twice.FOOTER_NAV_ITEMS = [
+    { titleKey: "nav.home", url: "/elsewhere", icon: { displayName: "Globe" } },
+  ];
+  assert.throws(
+    () => generateNavigation(twice, keys),
+    /gives the route destination home, already used by \//,
+  );
+  const keyword = navigation("ArrowLeftRight");
+  keyword.FOOTER_NAV_ITEMS = [
+    { titleKey: "nav.import", url: "/import", icon: { displayName: "Globe" } },
+  ];
+  assert.match(
+    generateNavigation(keyword, [...keys, "nav.import"]),
+    /case `import` = "\/import"/,
+  );
+  const badKey = navigation("ArrowLeftRight");
+  badKey.FOOTER_NAV_ITEMS = [
+    { titleKey: "nav.ai-chat", url: "/ai-chat", icon: { displayName: "Globe" } },
+  ];
+  assert.throws(
+    () => generateNavigation(badKey, [...keys, "nav.ai-chat"]),
+    /cannot name a route destination/,
+  );
+});

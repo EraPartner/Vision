@@ -4,7 +4,10 @@ import Observation
 /// Where the dismissed payee ids live on this Mac: the native counterpart of the web's
 /// `localStorage["dismissed_recurring_patterns"]`, a JSON array as text.
 public struct PlannedDismissalStore: Sendable {
-    public static let key = "dismissed_recurring_patterns"
+    /// The server setting that holds the same list (`PlannedEditing.setting(key:)`).
+    public static let settingKey = SettingKey.dismissedRecurringPatterns
+    /// The `UserDefaults` key of the local copy, named like the setting.
+    public static let key = SettingKey.dismissedRecurringPatterns.rawValue
 
     public let read: @Sendable () -> String?
     public let write: @Sendable (String?) -> Void
@@ -174,7 +177,7 @@ public final class PlannedRecurringModel {
     private func loadDismissed() async {
         let local = store.load()
         do {
-            let setting = try await service.setting(key: PlannedDismissalStore.key)
+            let setting = try await service.setting(key: PlannedDismissalStore.settingKey)
             baseline = setting.expected
             let merged = Self.merge(local, PlannedDismissalStore.ids(setting.value))
             dismissed = Set(merged)
@@ -269,7 +272,7 @@ public final class PlannedRecurringModel {
             guard let self, !self.saveBroken, let expected = self.baseline else { return }
             let value = JSONValue.array(ids.map { JSONValue.int($0.rawValue) })
             do {
-                let saved = try await service.saveSetting(key: PlannedDismissalStore.key, value: value, expected: expected)
+                let saved = try await service.saveSetting(key: PlannedDismissalStore.settingKey, value: value, expected: expected)
                 self.baseline = .object(["exists": .bool(true), "value": saved.value])
             } catch {
                 // The local copy stays even if the backend save fails.

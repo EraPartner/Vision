@@ -146,7 +146,7 @@ public struct ShellRootView: View {
         // Prominent buttons, toggles and pickers take the web's emerald `--primary` (or the
         // chosen accent) instead of the system blue.
         .tint(theme.primary)
-        .environment(\.visionVisualEffects, model.nativeSettings?.effectiveVisualEffects ?? "standard")
+        .environment(\.visionVisualEffects, model.nativeSettings?.effectiveVisualEffects ?? .standard)
         .environment(\.visionFullEffects, model.nativeSettings?.fullEffects ?? false)
         .environment(\.visionWealthCanvasTint, model.route.path.hasPrefix("/portfolio"))
         .environment(\.visionStaticAtmosphere, model.nativeSettings?.isLargeDisplay ?? false)

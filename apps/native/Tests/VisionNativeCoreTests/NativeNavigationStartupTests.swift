@@ -5,7 +5,7 @@ import Testing
 @Suite struct NativeNavigationStartupTests {
     private func resolve(
         _ mirror: String?, last: String? = nil, current: String = "/?keep=a+b&keep=%2f&flag",
-        section: String = "budgeting", context: NativeNavigationStartup.Context = .documentReload
+        section: StartupSection = .budgeting, context: NativeNavigationStartup.Context = .documentReload
     ) -> NativeNavigationStartup.Resolution {
         var startup = NativeNavigationStartup(context: context, mirroredStartupSection: mirror, lastRoute: last)
         return startup.evaluate(currentLocation: current, settings: .loaded(startupSection: section))
@@ -18,9 +18,9 @@ import Testing
             let early = startup.evaluate(currentLocation: "/?discard=1", settings: .loading)
             #expect(early == .replaceCurrentEntry(path))
             #expect(startup.hasResolved)
-            let later = startup.evaluate(currentLocation: "/", settings: .loaded(startupSection: "last"))
+            let later = startup.evaluate(currentLocation: "/", settings: .loaded(startupSection: .last))
             #expect(later == .unchanged)
-            #expect(resolve(section, section: "budgeting") == .replaceCurrentEntry(path))
+            #expect(resolve(section, section: .budgeting) == .replaceCurrentEntry(path))
         }
     }
 
@@ -33,7 +33,7 @@ import Testing
             #expect(waiting == .waitingForSettings)
             #expect(!startup.hasResolved)
             let ready = startup.evaluate(
-                currentLocation: "/?settings=backup", settings: .loaded(startupSection: "research"))
+                currentLocation: "/?settings=backup", settings: .loaded(startupSection: .research))
             #expect(ready == .replaceCurrentEntry("/research"))
             #expect(startup.hasResolved)
         }
@@ -41,17 +41,17 @@ import Testing
 
     @Test func budgetingAndRootLastTargetPreserveTheExactRootQuery() {
         let current = "/?settings=backup&x=a+b&x=%2f&bare"
-        #expect(resolve("budgeting", current: current, section: "portfolio") == .unchanged)
+        #expect(resolve("budgeting", current: current, section: .portfolio) == .unchanged)
         #expect(resolve("last", last: "/", current: current) == .unchanged)
-        #expect(resolve(nil, current: current, section: "budgeting", context: .newSession) == .seedNewSession(current))
+        #expect(resolve(nil, current: current, section: .budgeting, context: .newSession) == .seedNewSession(current))
         #expect(resolve("last", last: "/", current: current, context: .newSession) == .seedNewSession(current))
-        #expect(resolve(nil, current: current, section: "future-setting") == .unchanged)
+        #expect(resolve(nil, current: current, section: .unknown("future-setting")) == .unchanged)
     }
 
     @Test func lastPageRetainsRawDuplicateQuerySpellingAndReplacesEvenTheSameRootQuery() {
         let last = "/tax?year=2020&settings=backup&export=pdf&x=a+b&x=%2f&bare"
         #expect(resolve("last", last: last) == .replaceCurrentEntry(last))
-        #expect(resolve(nil, last: last, section: "last", context: .newSession) == .seedNewSession(last))
+        #expect(resolve(nil, last: last, section: .last, context: .newSession) == .seedNewSession(last))
         #expect(resolve("portfolio", last: last) == .replaceCurrentEntry("/portfolio"))
         #expect(resolve("last", last: "/?x=a+b", current: "/?x=a+b") == .replaceCurrentEntry("/?x=a+b"))
     }
@@ -61,7 +61,7 @@ import Testing
         for value in values {
             #expect(resolve("last", last: value) == .unchanged)
             #expect(
-                resolve(nil, last: value, current: "/?keep=1", section: "last", context: .newSession)
+                resolve(nil, last: value, current: "/?keep=1", section: .last, context: .newSession)
                     == .seedNewSession("/?keep=1"))
         }
     }
@@ -88,7 +88,7 @@ import Testing
         var startup = NativeNavigationStartup(
             context: .documentReload, mirroredStartupSection: "portfolio", lastRoute: nil)
         let initial = startup.evaluate(currentLocation: "/tax", settings: .loading)
-        let returnHome = startup.evaluate(currentLocation: "/", settings: .loaded(startupSection: "research"))
+        let returnHome = startup.evaluate(currentLocation: "/", settings: .loaded(startupSection: .research))
         #expect(initial == .unchanged)
         #expect(startup.hasResolved)
         #expect(returnHome == .unchanged)
@@ -99,14 +99,14 @@ import Testing
             context: .documentReload, mirroredStartupSection: nil, lastRoute: "/portfolio")
         let rootWaiting = leavingRoot.evaluate(currentLocation: "/", settings: .loading)
         let arrivedElsewhere = leavingRoot.evaluate(
-            currentLocation: "/tax?year=2020", settings: .loaded(startupSection: "research"))
+            currentLocation: "/tax?year=2020", settings: .loaded(startupSection: .research))
         #expect(rootWaiting == .waitingForSettings)
         #expect(arrivedElsewhere == .unchanged)
 
         var enteringRoot = NativeNavigationStartup(
             context: .documentReload, mirroredStartupSection: nil, lastRoute: "/portfolio")
         let deepWaiting = enteringRoot.evaluate(currentLocation: "/tax", settings: .loading)
-        let arrivedHome = enteringRoot.evaluate(currentLocation: "/?keep=1", settings: .loaded(startupSection: "last"))
+        let arrivedHome = enteringRoot.evaluate(currentLocation: "/?keep=1", settings: .loaded(startupSection: .last))
         #expect(deepWaiting == .waitingForSettings)
         #expect(arrivedHome == .replaceCurrentEntry("/portfolio"))
     }

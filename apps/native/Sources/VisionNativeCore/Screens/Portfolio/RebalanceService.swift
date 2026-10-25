@@ -36,7 +36,7 @@ extension APIClient: RebalanceService {
         }
         return result
     }
-    public func rebalancePlans() async throws -> OpenAPI.Setting { try await setting(key: "rebalance_plans") }
+    public func rebalancePlans() async throws -> OpenAPI.Setting { try await setting(key: .rebalancePlans) }
     public func saveRebalancePlans(_ plans: [RebalancePlan], expected: JSONValue) async throws -> OpenAPI.Setting {
         try await send(RebalancePlansWrite(plans: plans, expected: expected))
     }

@@ -17,11 +17,11 @@ struct NativeNoticeCenterTests {
         let center = NativeNoticeCenter(now: clock.now, automaticExpiry: false)
         var clears = 0
         let first = center.publish(.init(id: 1, kind: .success, key: "first"), source: UUID(),
-            replacementKey: "portfolio-refresh-prices", clear: { clears += 1 })
+            replacementKey: .portfolioRefreshPrices, clear: { clears += 1 })
         let revision = center.entries[0].revision
         clock.advance(3)
         let second = center.publish(.init(id: 2, kind: .warning, key: "second"), source: UUID(),
-            replacementKey: "portfolio-refresh-prices")
+            replacementKey: .portfolioRefreshPrices)
         #expect(first == second && center.entries.count == 1 && clears == 1)
         #expect(center.entries[0].revision != revision && center.entries[0].notice.key == "second")
         clock.advance(2)

@@ -54,9 +54,9 @@ public enum TaxYearMutation {
         let frozen = overview.calculationSource == .frozen
         return overview.hasProfile && !filed && (!overview.isHistorical || overview.hasSnapshot || frozen)
     }
-    public static let householdKey = "belgian_tax_household_v2"
-    public static let snapshotsKey = "belgian_tax_household_snapshots_v2"
-    public static let metadataKey = "belgian_tax_profile_snapshot_meta_v1"
+    public static let householdKey = SettingKey.belgianTaxHouseholdV2.rawValue
+    public static let snapshotsKey = SettingKey.belgianTaxHouseholdSnapshotsV2.rawValue
+    public static let metadataKey = SettingKey.belgianTaxProfileSnapshotMetaV1.rawValue
 
     public static func patch(
         action: TaxYearAction, overview: OpenAPI.BelgianTaxOverview,

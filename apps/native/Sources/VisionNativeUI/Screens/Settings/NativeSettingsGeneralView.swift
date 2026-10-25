@@ -41,12 +41,17 @@ struct NativeSettingsGeneralView: View {
                 NativeSettingsSelectRow(
                     title: strings.t("settings.general.language"),
                     description: strings.t("settings.general.languageHint"),
-                    value: string("language", fallback: "en"),
-                    options: ["en", "nl"].map { .init(value: $0, label: strings.t("settings.general.lang." + $0)) })
+                    value: string("language", fallback: AppLanguage.en.rawValue),
+                    options: AppLanguage.allCases.map {
+                        .init(value: $0.rawValue, label: strings.t("settings.general.lang." + $0.rawValue))
+                    })
                 Divider()
                 NativeSettingsSelectRow(
-                    title: strings.t("settings.general.startOfWeek"), value: string("startOfWeek", fallback: "monday"),
-                    options: ["monday", "sunday"].map { .init(value: $0, label: strings.t("settings.general." + $0)) })
+                    title: strings.t("settings.general.startOfWeek"),
+                    value: string("startOfWeek", fallback: StartOfWeek.monday.rawValue),
+                    options: StartOfWeek.allCases.map {
+                        .init(value: $0.rawValue, label: strings.t("settings.general." + $0.rawValue))
+                    })
                 Divider()
                 NativeSettingsSelectRow(
                     title: strings.t("settings.general.pageSize"),

@@ -33,7 +33,7 @@ import Observation
         self.pollDelay = pollDelay
     }
     public var depth: AIInvestigationDepth {
-        depthOverride ?? AIInvestigationDepth.allCases.first { $0.rawValue == settings.aiAnswerDepth } ?? .quick
+        depthOverride ?? (AIInvestigationDepth.allCases.contains(settings.aiAnswerDepth) ? settings.aiAnswerDepth : .quick)
     }
     public var resolvedCurrency: CurrencyCode {
         ReportingFallbackCurrency.resolve(settings.defaultCurrency)
@@ -45,7 +45,7 @@ import Observation
             ? value : nil
     }
     public var language: AIInvestigationLanguage {
-        AIInvestigationLanguage(rawValue: settings.language) == .nl ? .nl : .en
+        settings.language == .nl ? .nl : .en
     }
     public var runDisabled: Bool {
         busy || trim(question).isEmpty

@@ -72,7 +72,8 @@ public struct NativeNavigationLocation: Equatable, Sendable {
             !parts[3].isEmpty
         {
             let value = parameter(3)
-            return Match(screen: .portfolioImportReview(batchId: value), parameters: ["batchId": value])
+            return Match(
+                screen: .portfolioImportReview(batchId: PortfolioImportBatchID(value)), parameters: ["batchId": value])
         }
         return nil
     }

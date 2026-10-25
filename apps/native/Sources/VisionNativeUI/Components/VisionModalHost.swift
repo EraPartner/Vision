@@ -69,7 +69,7 @@ struct VisionModalPresenter<Panel: View>: ViewModifier {
     @Environment(\.visionTheme) private var theme
 
     /// `:root.fx-full .modal-overlay` or the enhanced tier's frosted rule.
-    private var frosted: Bool { !theme.isPrintReport && (fullEffects || visualEffects == "enhanced") }
+    private var frosted: Bool { !theme.isPrintReport && (fullEffects || visualEffects == .enhanced) }
 
     private var scrimOpacity: Double {
         guard frosted else { return DesignTokens.Overlay.scrim }

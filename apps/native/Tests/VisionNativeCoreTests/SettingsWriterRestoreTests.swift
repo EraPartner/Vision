@@ -42,12 +42,12 @@ struct SettingsWriterRestoreTests {
     @Test func acceptedWriteSettlesBeforeFenceAndFailedRestorePreservesAcknowledgedBaseline() async throws {
         let transport = RestoreSettingsTransport()
         let writer = SettingsWriter(transport: transport)
-        await writer.loaded("k", data: .object(["expected": .object(["exists": .bool(false)])]))
-        let first = Task { try await writer.save("k", value: .int(1), baseURL: base) }
+        await writer.loaded(.appSettings, data: .object(["expected": .object(["exists": .bool(false)])]))
+        let first = Task { try await writer.save(.appSettings, value: .int(1), baseURL: base) }
         await transport.waitForPut()
         let fence = Task { await writer.suspendAndDrain() }
         while !(await writer.isSuspendedForRestore) { await Task.yield() }
-        let second = Task { try await writer.save("k", value: .int(2), baseURL: base) }
+        let second = Task { try await writer.save(.appSettings, value: .int(2), baseURL: base) }
         await transport.releasePut()
         _ = try await first.value
         await fence.value
@@ -61,26 +61,26 @@ struct SettingsWriterRestoreTests {
     @Test func successfulReloadRetiresWaitingAndFutureWritesWithoutReplayingThem() async throws {
         let transport = RestoreSettingsTransport()
         let writer = SettingsWriter(transport: transport)
-        await writer.loaded("k", data: .object(["expected": .object(["exists": .bool(false)])]))
+        await writer.loaded(.appSettings, data: .object(["expected": .object(["exists": .bool(false)])]))
         await writer.suspendAndDrain()
-        let waiting = Task { try await writer.save("k", value: .int(1), baseURL: base) }
+        let waiting = Task { try await writer.save(.appSettings, value: .int(1), baseURL: base) }
         await writer.retireForReload()
         await #expect(throws: CancellationError.self) { try await waiting.value }
         await writer.resumeAfterFailedRestore()
-        await #expect(throws: CancellationError.self) { try await writer.save("k", value: .int(2), baseURL: base) }
+        await #expect(throws: CancellationError.self) { try await writer.save(.appSettings, value: .int(2), baseURL: base) }
         #expect(await transport.puts.isEmpty)
     }
 
     @Test func cancelledPausedEditDoesNotLeakOrWriteWhenRestoreIsRefused() async throws {
         let transport = RestoreSettingsTransport()
         let writer = SettingsWriter(transport: transport)
-        await writer.loaded("k", data: .object(["expected": .object(["exists": .bool(false)])]))
+        await writer.loaded(.appSettings, data: .object(["expected": .object(["exists": .bool(false)])]))
         await writer.suspendAndDrain()
-        let waiting = Task { try await writer.save("k", value: .int(1), baseURL: base) }
+        let waiting = Task { try await writer.save(.appSettings, value: .int(1), baseURL: base) }
         waiting.cancel()
         await #expect(throws: CancellationError.self) { try await waiting.value }
         await writer.resumeAfterFailedRestore()
         #expect(await transport.puts.isEmpty)
-        #expect(await writer.baseline("k") == .object(["exists": .bool(false)]))
+        #expect(await writer.baseline(.appSettings) == .object(["exists": .bool(false)]))
     }
 }

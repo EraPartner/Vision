@@ -98,16 +98,16 @@ actor FakePlannedEditingService: PlannedEditingService {
         return candidateAnswer
     }
 
-    func setting(key: String) async throws -> OpenAPI.Setting {
+    func setting(key: SettingKey) async throws -> OpenAPI.Setting {
         settingReads += 1
         return try settingAnswer.get()
     }
 
-    func saveSetting(key: String, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
+    func saveSetting(key: SettingKey, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
         savedValues.append(value)
         savedBaselines.append(expected)
         if savesFail { throw APIError.network("offline") }
-        return OpenAPI.Setting(key: key, value: value, expected: .object(["exists": .bool(true), "value": value]))
+        return OpenAPI.Setting(key: key.rawValue, value: value, expected: .object(["exists": .bool(true), "value": value]))
     }
 }
 

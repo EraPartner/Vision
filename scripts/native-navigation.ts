@@ -6,6 +6,7 @@ import {
   generatedHeader,
   parseListFile,
   repoPath,
+  swiftIdentifier,
   swiftString,
   writeGenerated,
 } from "./lib/nativeCodegen.ts";
@@ -20,6 +21,11 @@ import {
  *
  * Every label key must be listed in apps/native/i18n-keys.txt, so the String
  * Catalog carries it.
+ *
+ * It also emits `NativeRoute.Destination`, one case per registry url named after
+ * the item's title key (`nav.marketLookup` -> `.marketLookup`), so native code
+ * builds a route from a case instead of a path literal. `NativeRoute(path:)`
+ * stays the parse and serialize edge for paths that are not registry pages.
  */
 
 export const OUTPUT =
@@ -158,6 +164,47 @@ function sectionLiteral(section: NavSection, indent: string): string {
   ].join("\n");
 }
 
+/** `nav.marketLookup` -> `marketLookup`: the `NativeRoute.Destination` case of an item. */
+function destinationCase(item: NavItem): string {
+  const match = /^nav\.([a-z][A-Za-z0-9]*)$/.exec(item.titleKey);
+  if (!match) {
+    throw new Error(
+      `${item.url}: the title key ${item.titleKey} cannot name a route destination (expected nav.camelCase).`,
+    );
+  }
+  const name = match[1]!;
+  return swiftIdentifier(name);
+}
+
+function destinationEnum(items: readonly NavItem[]): string[] {
+  const names = new Map<string, string>();
+  const urls = new Set<string>();
+  const cases: string[] = [];
+  for (const item of items) {
+    const name = destinationCase(item);
+    const owner = names.get(name);
+    if (owner !== undefined) {
+      throw new Error(
+        `${item.url}: its title key ${item.titleKey} gives the route destination ${name}, already used by ${owner}.`,
+      );
+    }
+    if (urls.has(item.url)) {
+      throw new Error(`${item.url} is listed twice in the navigation.`);
+    }
+    names.set(name, item.url);
+    urls.add(item.url);
+    cases.push(`        case ${name} = ${swiftString(item.url)}`);
+  }
+  return [
+    "extension NativeRoute {",
+    "    /// Every page of the sidebar registry, by its path. Build a route with `NativeRoute(_:query:)`.",
+    "    public enum Destination: String, CaseIterable, Sendable {",
+    ...cases,
+    "    }",
+    "}",
+  ];
+}
+
 export function generateNavigation(
   source: NavigationSource,
   listedKeys: readonly string[],
@@ -209,6 +256,8 @@ export function generateNavigation(
     `    public static let settingsTitleKey = ${swiftString(SETTINGS_ITEM.titleKey)}`,
     `    public static let settingsSymbol = ${swiftString(SETTINGS_ITEM.symbol)}`,
     "}",
+    "",
+    ...destinationEnum(allItems),
     "",
   ].join("\n");
 }

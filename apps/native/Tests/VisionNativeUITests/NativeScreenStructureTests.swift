@@ -407,12 +407,12 @@ extension StaticPlannedService: PlannedEditingService {
         ]
     }
 
-    func setting(key: String) async throws -> OpenAPI.Setting {
+    func setting(key: SettingKey) async throws -> OpenAPI.Setting {
         throw APIError.client(APIClientError(status: 404, code: .notFound, message: "Setting not found"))
     }
 
-    func saveSetting(key: String, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
-        OpenAPI.Setting(key: key, value: value, expected: .object(["exists": .bool(true), "value": value]))
+    func saveSetting(key: SettingKey, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
+        OpenAPI.Setting(key: key.rawValue, value: value, expected: .object(["exists": .bool(true), "value": value]))
     }
 }
 
@@ -526,12 +526,12 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
         Data("id,amount\n".utf8)
     }
 
-    func setting(key: String) async throws -> OpenAPI.Setting {
+    func setting(key: SettingKey) async throws -> OpenAPI.Setting {
         throw APIError.client(APIClientError(status: 404, code: .notFound, message: "Setting not found"))
     }
 
-    func saveSetting(key: String, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
-        OpenAPI.Setting(key: key, value: value, expected: .object(["exists": .bool(true), "value": value]))
+    func saveSetting(key: SettingKey, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
+        OpenAPI.Setting(key: key.rawValue, value: value, expected: .object(["exists": .bool(true), "value": value]))
     }
 
     func attachments(transactionId: Int) async throws -> [OpenAPI.Attachment] {

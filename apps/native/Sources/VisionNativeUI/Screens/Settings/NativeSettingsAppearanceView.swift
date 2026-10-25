@@ -69,19 +69,21 @@ struct NativeSettingsAppearanceView: View {
                 NativeSettingsSelectRow(
                     title: strings.t("settings.appearance.visualEffects"),
                     description: strings.t("settings.appearance.visualEffectsHint"),
-                    value: Binding(get: { model.effectiveVisualEffects }, set: { model.selectVisualEffects($0) }),
-                    options: ["reduced", "standard", "enhanced"].map {
-                        .init(value: $0, label: strings.t("settings.appearance.visualEffects." + $0))
+                    value: Binding(
+                        get: { model.effectiveVisualEffects.rawValue },
+                        set: { model.selectVisualEffects(VisualEffects(rawValue: $0)) }),
+                    options: VisualEffects.allCases.map {
+                        .init(value: $0.rawValue, label: strings.t("settings.appearance.visualEffects." + $0.rawValue))
                     })
                 if capped {
                     Text(
                         strings.t(
-                            model.effectiveVisualEffects == "reduced"
+                            model.effectiveVisualEffects == .reduced
                                 ? "settings.appearance.visualEffectsAutoNote"
                                 : "settings.appearance.visualEffectsOverrideNote")
                     )
                     .font(.caption).foregroundStyle(
-                        model.effectiveVisualEffects == "reduced" ? theme.primary : theme.warning
+                        model.effectiveVisualEffects == .reduced ? theme.primary : theme.warning
                     )
                     .padding(.horizontal, 16).padding(.bottom, 12)
                 }

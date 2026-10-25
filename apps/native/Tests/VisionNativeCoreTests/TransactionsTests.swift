@@ -164,17 +164,17 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
         return Data("id,amount\n".utf8)
     }
 
-    func setting(key: String) async throws -> OpenAPI.Setting {
+    func setting(key: SettingKey) async throws -> OpenAPI.Setting {
         guard let stored else {
             throw APIError.client(APIClientError(status: 404, code: .notFound, message: "Setting not found"))
         }
         return stored
     }
 
-    func saveSetting(key: String, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
+    func saveSetting(key: SettingKey, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
         savedSettings.append(value)
         baselines.append(expected)
-        let saved = OpenAPI.Setting(key: key, value: value, expected: .object(["exists": .bool(true), "value": value]))
+        let saved = OpenAPI.Setting(key: key.rawValue, value: value, expected: .object(["exists": .bool(true), "value": value]))
         stored = saved
         return saved
     }

@@ -645,7 +645,7 @@ public final class NativeShellModel {
         }
         notices.publish(
             .init(id: 0, kind: kind, key: key, variables: variables, detail: detail),
-            source: priceNoticeSource, replacementKey: "portfolio-refresh-prices")
+            source: priceNoticeSource, replacementKey: .portfolioRefreshPrices)
     }
 
     /// Import cash and trades can become durable after the user has opened another screen.
@@ -927,16 +927,16 @@ public final class NativeShellModel {
 
     /// Server-owned projections read persisted Settings. Retire only their actual
     /// dependencies after acknowledgement; presentation-only edits keep cached data.
-    public func nativeSettingsDidAcknowledge(_ key: String, value: TaxValue) {
+    public func nativeSettingsDidAcknowledge(_ key: SettingKey, value: TaxValue) {
         switch key {
-        case "dashboard_settings", "includeTransfers":
+        case .dashboardSettings, .includeTransfers:
             home?.invalidate()
             statistics?.model.invalidate()
             settingsRevision &+= 1
-        case "cost_basis_method":
+        case .costBasisMethod:
             portfolio?.dataDidChange()
             settingsRevision &+= 1
-        case "brokerage_cash_category_ids":
+        case .brokerageCashCategoryIds:
             portfolioImports?.invalidate()
             portfolio?.tax.invalidate()
             settingsRevision &+= 1
