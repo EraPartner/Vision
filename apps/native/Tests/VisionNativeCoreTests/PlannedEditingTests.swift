@@ -7,7 +7,7 @@ import Testing
 actor FakePlannedEditingService: PlannedEditingService {
     private(set) var created: [OpenAPI.PlannedTransactionCreate] = []
     private(set) var tracked: [PlannedTrackBody] = []
-    private(set) var patches: [Int: [PlannedPaymentPatch]] = [:]
+    private(set) var patches: [PlannedTransactionID: [PlannedPaymentPatch]] = [:]
     /// `"id:transactionId:executionDate"` per execute.
     private(set) var executed: [String] = []
     private(set) var candidateQueries: [PlannedLinkQuery] = []
@@ -42,7 +42,7 @@ actor FakePlannedEditingService: PlannedEditingService {
         created.append(body)
         if writesFail { throw APIError.network("offline") }
         return OpenAPI.PlannedTransaction(
-            id: 100 + created.count, plannedDate: body.plannedDate, accountId: body.accountId,
+            id: PlannedTransactionID(rawValue: 100 + created.count), plannedDate: body.plannedDate, accountId: body.accountId,
             recipientId: body.recipientId, memo: body.memo, amount: body.amount, currency: body.currency,
             categoryId: body.categoryId, isRecurring: body.isRecurring ?? false,
             recurrencePattern: body.recurrencePattern, isLoan: body.isLoan, isExecuted: false, executionCount: 0,
@@ -53,13 +53,13 @@ actor FakePlannedEditingService: PlannedEditingService {
         tracked.append(body)
         if writesFail { throw APIError.network("offline") }
         return OpenAPI.PlannedTransaction(
-            id: 200 + tracked.count, plannedDate: body.plannedDate, accountId: body.accountId,
+            id: PlannedTransactionID(rawValue: 200 + tracked.count), plannedDate: body.plannedDate, accountId: body.accountId,
             recipientId: body.recipientId, memo: body.memo, amount: body.amount, currency: body.currency,
             categoryId: body.categoryId, isRecurring: true, recurrencePattern: body.recurrencePattern, isExecuted: false,
             executionCount: 0, isActive: true, links: [])
     }
 
-    func updatePlannedPayment(id: Int, patch: PlannedPaymentPatch) async throws -> OpenAPI.PlannedTransaction {
+    func updatePlannedPayment(id: PlannedTransactionID, patch: PlannedPaymentPatch) async throws -> OpenAPI.PlannedTransaction {
         patches[id, default: []].append(patch)
         if writesFail { throw APIError.network("offline") }
         return OpenAPI.PlannedTransaction(
@@ -69,7 +69,7 @@ actor FakePlannedEditingService: PlannedEditingService {
             isActive: patch.isActive ?? true, links: [])
     }
 
-    func executePlannedPayment(id: Int, transactionId: Int, executionDate: String?) async throws
+    func executePlannedPayment(id: PlannedTransactionID, transactionId: TransactionID, executionDate: String?) async throws
         -> OpenAPI.PlannedTransaction
     {
         executed.append("\(id):\(transactionId):\(executionDate ?? "-")")
@@ -114,7 +114,7 @@ actor FakePlannedEditingService: PlannedEditingService {
 /// The picker lists over fixed answers.
 actor FakePickerService: PickerDataService {
     private(set) var recipientSearches: [String?] = []
-    private(set) var recipientLookups: [Int] = []
+    private(set) var recipientLookups: [RecipientID] = []
     private(set) var accountLoads = 0
     private(set) var tagLoads = 0
     private(set) var createdTags: [String] = []
@@ -139,7 +139,7 @@ actor FakePickerService: PickerDataService {
         return recipientList.filter { $0.name.lowercased().contains(search.lowercased()) }
     }
 
-    func recipient(id: Int) async throws -> OpenAPI.Recipient {
+    func recipient(id: RecipientID) async throws -> OpenAPI.Recipient {
         recipientLookups.append(id)
         guard let found = recipientList.first(where: { $0.id == id }) else { throw APIError.network("missing") }
         return found
@@ -159,38 +159,39 @@ actor FakePickerService: PickerDataService {
 
     func createTag(slug: String, color: String?) async throws {
         createdTags.append(slug)
-        tagList.append(OpenAPI.Tag(id: 900 + tagList.count, slug: slug, color: color, isActive: true, createdAt: "", updatedAt: ""))
+        tagList.append(OpenAPI.Tag(id: TagID(rawValue: 900 + tagList.count), slug: slug, color: color, isActive: true, createdAt: "", updatedAt: ""))
     }
 }
 
 enum EditingFixture {
     static let today = PlannedDay(year: 2026, month: 10, day: 12)
 
-    static func recipient(_ id: Int, _ name: String, primary: Int? = nil) -> OpenAPI.Recipient {
+    static func recipient(_ id: RecipientID, _ name: String, primary: RecipientID? = nil) -> OpenAPI.Recipient {
         OpenAPI.Recipient(
             id: id, name: name, primaryRecipientId: primary, isActive: true, createdAt: "2026-01-01", links: [])
     }
 
-    static func account(_ id: Int, _ name: String, display: String? = nil) -> OpenAPI.Account {
+    static func account(_ id: AccountID, _ name: String, display: String? = nil) -> OpenAPI.Account {
         OpenAPI.Account(
-            id: id, name: name, displayName: display, currency: "EUR", type: "checking", liquidityClass: "cash",
-            spendable: true, inNetWorth: true, taxWrapper: "none", owner: "self", multiCurrencyCash: false,
+            id: id, name: name, displayName: display, currency: "EUR", type: .checking,
+            liquidityClass: .init(rawValue: "cash"), spendable: true, inNetWorth: true, taxWrapper: .none,
+            owner: .init(rawValue: "self"), multiCurrencyCash: false,
             hasCashSleeve: false, isActive: true, createdAt: "2026-01-01", updatedAt: "2026-01-01")
     }
 
-    static func category(_ id: Int, _ path: [String], active: Bool = true) -> OpenAPI.CategoryNode {
+    static func category(_ id: CategoryID, _ path: [String], active: Bool = true) -> OpenAPI.CategoryNode {
         OpenAPI.CategoryNode(
             id: id, name: path.last ?? "", pathIds: [id], path: path, categoryName: path.last ?? "",
             depth: path.count - 1, isActive: active, hierarchyOnly: false, legacyCompatible: true)
     }
 
-    static func tag(_ id: Int, _ slug: String) -> OpenAPI.Tag {
+    static func tag(_ id: TagID, _ slug: String) -> OpenAPI.Tag {
         OpenAPI.Tag(id: id, slug: slug, color: "hsl(210, 62%, 50%)", isActive: true, createdAt: "", updatedAt: "")
     }
 
     static func pattern(
-        _ recipientId: Int, _ name: String, direction: String = "expense", detected: String = "monthly",
-        interval: Int = 30, amount: Decimal = 42, accountId: Int? = 7, changes: [PlannedRecurringPattern.AmountChange] = [],
+        _ recipientId: RecipientID, _ name: String, direction: PlannedPatternDirection = .expense,
+        detected: String = "monthly", interval: Int = 30, amount: Decimal = 42, accountId: AccountID? = 7, changes: [PlannedRecurringPattern.AmountChange] = [],
         planned: Bool = false, confidence: Decimal = 90
     ) -> PlannedRecurringPattern {
         PlannedRecurringPattern(
@@ -201,14 +202,14 @@ enum EditingFixture {
     }
 
     static let change = PlannedRecurringPattern.AmountChange(
-        date: "2026-09-01", previousAmount: 10, newAmount: 12, percentChange: 20, direction: "increased")
+        date: "2026-09-01", previousAmount: 10, newAmount: 12, percentChange: 20, direction: .increased)
 
-    static func suggestion(_ plannedId: Int) -> PlannedMatchSuggestion {
+    static func suggestion(_ plannedId: PlannedTransactionID) -> PlannedMatchSuggestion {
         PlannedMatchSuggestion(planned: .init(id: plannedId), candidates: [])
     }
 
-    static func setting(_ ids: [Int]) -> OpenAPI.Setting {
-        let value = JSONValue.array(ids.map { JSONValue.int($0) })
+    static func setting(_ ids: [RecipientID]) -> OpenAPI.Setting {
+        let value = JSONValue.array(ids.map { JSONValue.int($0.rawValue) })
         return OpenAPI.Setting(
             key: PlannedDismissalStore.key, value: value, expected: .object(["exists": .bool(true), "value": value]))
     }
@@ -935,7 +936,7 @@ enum EditingFixture {
         #expect(model.notice?.key == "recurring.toast.created")
         #expect(await editing.patternCalls == 2)
         #expect(await service.loads.count == 2)
-        let income = EditingFixture.pattern(4, "Employer", direction: "income", detected: "custom", interval: 10, amount: 3000)
+        let income = EditingFixture.pattern(4, "Employer", direction: .income, detected: "custom", interval: 10, amount: 3000)
         await model.track(income, strings: EditingFixture.strings)
         let second = try #require(await editing.tracked.last)
         #expect(second.amount == 3000)

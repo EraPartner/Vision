@@ -27,14 +27,14 @@ public enum TransactionBulkConfirmation: Equatable, Sendable {
 /// What the bulk dialogs hold between openings.
 public struct TransactionBulkDrafts: Equatable, Sendable {
     /// Change category: `nil` is No category.
-    public var categoryId: Int?
-    public var recipientId: Int?
+    public var categoryId: CategoryID?
+    public var recipientId: RecipientID?
     /// The export format stays as chosen.
     public var exportFormat: ExportFormat = .csv
     /// Apply tags: the slugs to add and to remove; they stay when the dialog is dismissed.
     public var tagsToAdd: [String] = []
     public var tagsToRemove: [String] = []
-    public var splitRecipientId: Int?
+    public var splitRecipientId: RecipientID?
     public var splitMode: BulkSplitMode = .equal
 
     public init() {}
@@ -71,6 +71,11 @@ extension TransactionsModel {
         } else if !form.checkValid(format: format) {
             return
         }
+        guard form.currencyOrDefault != nil else {
+            // The typed currency is not a code; the server used to refuse it with this toast.
+            post(.error, "transactions.createFailedTitle")
+            return
+        }
         form.isPending = true
         defer { form.isPending = false }
         if form.draft.kind == .transfer {
@@ -95,7 +100,7 @@ extension TransactionsModel {
     private func submitTransfer(_ form: AddTransactionModel, format: NumberFormat) async {
         let draft = form.draft
         guard let magnitude = form.magnitude(format: format), let fromId = draft.accountId,
-            let toId = draft.toAccountId
+            let toId = draft.toAccountId, let currency = form.currencyOrDefault
         else { return }
         let bulk = bulkService
         do {
@@ -104,7 +109,6 @@ extension TransactionsModel {
             let (toRecipient, fromRecipient) = try await (toPayee, fromPayee)
             let memo = AddTransactionModel.trimmedOrNil(draft.memo)
             let comment = AddTransactionModel.trimmedOrNil(draft.comment)
-            let currency = form.currencyOrDefault
             let outflow = try await service.createTransaction(
                 OpenAPI.TransactionCreate(
                     transactionDate: draft.date, accountId: fromId, recipientId: toRecipient.id, memo: memo,
@@ -139,7 +143,7 @@ extension TransactionsModel {
     /// The payee combobox's create row: `POST /api/recipients`, then the payee is known to
     /// the pickers. Toasts `recipients.created`, `recipients.exists` (info) or
     /// `recipients.createFailedTitle`. Returns the payee's id.
-    public func createRecipient(named name: String) async -> Int? {
+    public func createRecipient(named name: String) async -> RecipientID? {
         do {
             let created = try await bulkService.createRecipient(name: name)
             pickers.remember(created.recipient)
@@ -220,16 +224,15 @@ extension TransactionsModel {
     /// (`eligibleExistingTransferPair`).
     public var transferPair: (TransactionRow, TransactionRow)? {
         guard selection.mode == .ids, selection.ids.count == 2 else { return nil }
-        let legs = (rows ?? []).filter { selection.ids.contains($0.id) }
+        let legs = (rows ?? []).filter { selection.contains($0.id) }
         guard legs.count == 2 else { return nil }
         let first = legs[0]
         let second = legs[1]
         func eligible(_ leg: TransactionRow) -> Bool {
-            guard leg.id > 0, let account = leg.accountId, account > 0, leg.isActive, leg.transferPeerId == nil,
-                leg.transferSource == nil || ["auto", "manual"].contains(leg.transferSource ?? ""),
-                leg.amount != 0, !leg.date.isEmpty, let currency = leg.currency
-            else { return false }
-            return currency.range(of: "^[A-Z]{3}$", options: .regularExpression) != nil
+            // A decoded currency already is three capitals (`CurrencyCode`).
+            leg.id.rawValue > 0 && (leg.accountId?.rawValue ?? 0) > 0 && leg.isActive && leg.transferPeerId == nil
+                && (leg.transferSource == nil || ["auto", "manual"].contains(leg.transferSource ?? ""))
+                && leg.amount != 0 && !leg.date.isEmpty && leg.currency != nil
         }
         guard first.id != second.id, eligible(first), eligible(second), first.accountId != second.accountId,
             (first.amount < 0) != (second.amount < 0)
@@ -271,12 +274,12 @@ extension TransactionsModel {
         bulkDialog = nil
     }
 
-    public func setBulkCategory(_ id: Int?) { bulkDrafts.categoryId = id }
-    public func setBulkRecipient(_ id: Int?) { bulkDrafts.recipientId = id }
+    public func setBulkCategory(_ id: CategoryID?) { bulkDrafts.categoryId = id }
+    public func setBulkRecipient(_ id: RecipientID?) { bulkDrafts.recipientId = id }
     public func setBulkExportFormat(_ format: ExportFormat) { bulkDrafts.exportFormat = format }
     public func setBulkTagsToAdd(_ slugs: [String]) { bulkDrafts.tagsToAdd = slugs }
     public func setBulkTagsToRemove(_ slugs: [String]) { bulkDrafts.tagsToRemove = slugs }
-    public func setBulkSplitRecipient(_ id: Int?) { bulkDrafts.splitRecipientId = id }
+    public func setBulkSplitRecipient(_ id: RecipientID?) { bulkDrafts.splitRecipientId = id }
     public func setBulkSplitMode(_ mode: BulkSplitMode) { bulkDrafts.splitMode = mode }
 
     /// Delete: asks first.
@@ -332,12 +335,12 @@ extension TransactionsModel {
     nonisolated static func transferVariables(_ first: TransactionRow, _ second: TransactionRow) -> [String: String] {
         var variables: [String: String] = [:]
         for (prefix, leg) in [("first", first), ("second", second)] {
-            let bank = leg.bank.flatMap { $0.isEmpty ? nil : $0 } ?? leg.accountId.map { String($0) } ?? ""
-            variables["\(prefix)Id"] = String(leg.id)
+            let bank = leg.bank.flatMap { $0.isEmpty ? nil : $0 } ?? leg.accountId.map { String($0.rawValue) } ?? ""
+            variables["\(prefix)Id"] = String(leg.id.rawValue)
             variables["\(prefix)Account"] = bank
             variables["\(prefix)Date"] = leg.date
             variables["\(prefix)Amount"] = VisionFormat.plain(leg.amount)
-            variables["\(prefix)Currency"] = leg.currency ?? ""
+            variables["\(prefix)Currency"] = leg.currency?.rawValue ?? ""
         }
         return variables
     }
@@ -526,7 +529,7 @@ extension TransactionsModel {
         return lines.isEmpty ? nil : lines.joined(separator: " ")
     }
 
-    private func runMarkTransfer(_ first: Int, _ second: Int) async {
+    private func runMarkTransfer(_ first: TransactionID, _ second: TransactionID) async {
         guard !bulkBusy else { return }
         bulkBusy = true
         defer { bulkBusy = false }

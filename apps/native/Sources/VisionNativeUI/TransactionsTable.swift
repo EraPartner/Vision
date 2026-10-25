@@ -16,7 +16,7 @@ struct TransactionsTableCard: View {
     @State private var suggestionsOpen = false
     @State private var suggestions = TransactionSearchSuggestions(thisYear: 2026)
     @FocusState private var searchFocused: Bool
-    @FocusState private var focusedRow: Int?
+    @FocusState private var focusedRow: TransactionID?
     @Environment(\.visionTheme) private var theme
 
     private var strings: any Localizing { shell.strings }
@@ -426,7 +426,7 @@ struct TransactionRowView: View {
     let columns: [TransactionColumn]
     let compact: Bool
     let widths: [String: CGFloat]
-    var focusedRow: FocusState<Int?>.Binding
+    var focusedRow: FocusState<TransactionID?>.Binding
     @Environment(\.visionTheme) private var theme
 
     private var strings: any Localizing { shell.strings }
@@ -545,7 +545,7 @@ struct TransactionRowView: View {
                 .strikethrough(!row.isActive)
         case .tags: tagsCell
         case .currency:
-            Text(row.displayCurrency)
+            Text(row.displayCurrency.rawValue)
                 .foregroundStyle(theme.secondaryLabel)
         case .amount: amountCell
         case .runningBalance:

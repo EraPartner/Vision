@@ -30,14 +30,14 @@ public enum TransactionDetailField: String, CaseIterable, Sendable {
 @MainActor
 @Observable
 public final class TransactionInspectorModel: Identifiable {
-    public let id: Int
+    public let id: TransactionID
     public private(set) var editingField: TransactionDetailField?
     /// The text of the field being edited (description, amount, currency, comment, account).
     public var editingValue = ""
     /// The date being edited.
     public var editingDate: PlannedDay?
     /// The account picked while editing Account.
-    public var editingAccountId: Int?
+    public var editingAccountId: AccountID?
     /// `addTxn.invalidAmount` under the amount field.
     public private(set) var amountError = false
     public internal(set) var isSaving = false
@@ -50,8 +50,8 @@ public final class TransactionInspectorModel: Identifiable {
     public let attachments: TransactionAttachmentsModel
 
     @ObservationIgnored private let service: any TransactionsService
-    @ObservationIgnored private var loadedRecipientId: Int?
-    @ObservationIgnored private var inFlight: (recipientId: Int?, task: Task<Void, Never>)?
+    @ObservationIgnored private var loadedRecipientId: RecipientID?
+    @ObservationIgnored private var inFlight: (recipientId: RecipientID?, task: Task<Void, Never>)?
 
     init(
         row: TransactionRow, service: any TransactionsService, attachments: any TransactionAttachmentsService,
@@ -67,7 +67,7 @@ public final class TransactionInspectorModel: Identifiable {
 
     /// The payee and its uncategorised count for the row's payee; one request per payee at a
     /// time, `force` after a change on the server.
-    public func load(recipientId: Int?, force: Bool = false) async {
+    public func load(recipientId: RecipientID?, force: Bool = false) async {
         if let inFlight, inFlight.recipientId == recipientId {
             await inFlight.task.value
             if !force { return }
@@ -132,7 +132,7 @@ public final class TransactionInspectorModel: Identifiable {
             editingDate = PlannedDay(ymd: row.day, calendar: PlannedDates.local)
         case .memo: editingValue = row.memo ?? ""
         case .amount: editingValue = LocaleNumber.editable(row.amount, format: format)
-        case .currency: editingValue = row.currency ?? ""
+        case .currency: editingValue = row.currency?.rawValue ?? ""
         case .bank: editingValue = row.bank ?? ""
         case .comment: editingValue = row.comment ?? ""
         }
@@ -168,7 +168,11 @@ public final class TransactionInspectorModel: Identifiable {
             patch.memo = .some(trimmed.isEmpty ? nil : trimmed)
         case .currency:
             // currency is NOT NULL: a blank entry changes nothing.
-            if !trimmed.isEmpty { patch.currency = trimmed }
+            if !trimmed.isEmpty {
+                // Like the web's `isCurrencyCode`: anything but three capitals changes nothing.
+                guard let code = CurrencyCode(rawValue: trimmed) else { return nil }
+                patch.currency = code
+            }
         case .bank:
             if trimmed.isEmpty {
                 patch.accountId = .some(nil)
@@ -198,7 +202,7 @@ public final class TransactionAttachmentsModel {
     /// `ALLOWED_MIME`.
     public nonisolated static let allowedTypes = ["image/*", "application/pdf"]
 
-    public let transactionId: Int
+    public let transactionId: TransactionID
     /// `nil` until the first answer.
     public private(set) var items: [OpenAPI.Attachment]?
     /// `txPage.attachmentsError`.
@@ -208,24 +212,24 @@ public final class TransactionAttachmentsModel {
     public private(set) var uploadFailed = false
     /// The attachment the Delete attachment alert asks about.
     public private(set) var pendingDelete: OpenAPI.Attachment?
-    public private(set) var deletingId: String?
+    public private(set) var deletingId: AttachmentID?
     /// `txPage.deleteAttachmentError` with the reason, for the page's toast.
     public private(set) var deleteError: APIError?
     /// `txPage.downloadAttachmentError` with the reason, for the page's toast (#342).
     public private(set) var downloadError: APIError?
     /// The attachment whose bytes are being fetched; React's `downloading` state.
-    public private(set) var downloadingId: String?
+    public private(set) var downloadingId: AttachmentID?
     /// The local copy Quick Look shows.
     public private(set) var previewURL: URL?
     /// Image bytes for the thumbnails, by attachment id.
-    public private(set) var thumbnails: [String: Data] = [:]
+    public private(set) var thumbnails: [AttachmentID: Data] = [:]
 
     @ObservationIgnored private let service: any TransactionAttachmentsService
     @ObservationIgnored private let save: @MainActor (Data, String) async throws -> Bool
     @ObservationIgnored private var inFlight: Task<Void, Never>?
 
     init(
-        transactionId: Int, service: any TransactionAttachmentsService,
+        transactionId: TransactionID, service: any TransactionAttachmentsService,
         save: @escaping @MainActor (Data, String) async throws -> Bool
     ) {
         self.transactionId = transactionId
@@ -293,8 +297,8 @@ public final class TransactionAttachmentsModel {
 
     /// The thumbnail bytes of an image attachment, fetched once.
     public func loadThumbnail(_ attachment: OpenAPI.Attachment) async {
-        guard Self.isImage(attachment), thumbnails[attachment.id] == nil, let id = Int(attachment.id) else { return }
-        if let data = try? await service.downloadAttachment(id: id) {
+        guard Self.isImage(attachment), thumbnails[attachment.id] == nil else { return }
+        if let data = try? await service.downloadAttachment(id: attachment.id) {
             thumbnails[attachment.id] = data
         }
     }
@@ -302,10 +306,10 @@ public final class TransactionAttachmentsModel {
     /// The file name or thumbnail: Quick Look over a copy in the temporary folder (the web
     /// opens the download URL in a new tab).
     public func preview(_ attachment: OpenAPI.Attachment) async {
-        guard let id = Int(attachment.id), let data = try? await service.downloadAttachment(id: id) else { return }
+        guard let data = try? await service.downloadAttachment(id: attachment.id) else { return }
         let folder = FileManager.default.temporaryDirectory
             .appendingPathComponent("VisionAttachments", isDirectory: true)
-            .appendingPathComponent(attachment.id, isDirectory: true)
+            .appendingPathComponent(attachment.id.rawValue, isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let file = folder.appendingPathComponent(Self.safeName(attachment.filename))
@@ -325,11 +329,11 @@ public final class TransactionAttachmentsModel {
     /// second tap while one runs is ignored (#342 `downloading`); a failure is reported
     /// through `downloadError` for the toast.
     public func download(_ attachment: OpenAPI.Attachment) async {
-        guard downloadingId == nil, let id = Int(attachment.id) else { return }
+        guard downloadingId == nil else { return }
         downloadingId = attachment.id
         defer { downloadingId = nil }
         do {
-            let data = try await service.downloadAttachment(id: id)
+            let data = try await service.downloadAttachment(id: attachment.id)
             _ = try await save(data, Self.safeName(attachment.filename))
         } catch is CancellationError {
             return
@@ -363,11 +367,10 @@ public final class TransactionAttachmentsModel {
     public func confirmDelete() async {
         guard let attachment = pendingDelete else { return }
         pendingDelete = nil
-        guard let id = Int(attachment.id) else { return }
         deletingId = attachment.id
         defer { deletingId = nil }
         do {
-            try await service.deleteAttachment(id: id)
+            try await service.deleteAttachment(id: attachment.id)
             thumbnails[attachment.id] = nil
             await load(force: true)
         } catch is CancellationError {

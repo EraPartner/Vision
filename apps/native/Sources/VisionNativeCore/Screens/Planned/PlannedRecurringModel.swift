@@ -53,7 +53,7 @@ public struct PlannedDismissalStore: Sendable {
 
     /// `loadDismissedFromLocalStorage`: the positive integers of a JSON array (`Number(v)`);
     /// anything unreadable is no dismissals.
-    public func load() -> [Int] {
+    public func load() -> [RecipientID] {
         guard let raw = read(), let data = raw.data(using: .utf8), let value = try? JSONValue.parse(data) else {
             return []
         }
@@ -61,18 +61,18 @@ public struct PlannedDismissalStore: Sendable {
     }
 
     /// `persistDismissedToLocalStorage`.
-    public func save(_ ids: [Int]) {
-        write("[" + ids.map(String.init).joined(separator: ",") + "]")
+    public func save(_ ids: [RecipientID]) {
+        write("[" + ids.map { String($0.rawValue) }.joined(separator: ",") + "]")
     }
 
     /// `Array.isArray(v) ? v.map(Number).filter(n => Number.isInteger(n) && n > 0) : []`.
-    public static func ids(_ value: JSONValue?) -> [Int] {
+    public static func ids(_ value: JSONValue?) -> [RecipientID] {
         guard let items = value?.arrayValue else { return [] }
         return items.compactMap { item in
             guard let number = item.numberCoercion, number.isFinite, number.rounded() == number, number > 0,
                 number < 9.0e15
             else { return nil }
-            return Int(number)
+            return RecipientID(rawValue: Int(number))
         }
     }
 }
@@ -96,7 +96,7 @@ public final class PlannedRecurringModel {
     }
 
     public private(set) var patterns: Patterns = .loading
-    public private(set) var dismissed: Set<Int> = []
+    public private(set) var dismissed: Set<RecipientID> = []
     /// The panel renders nothing until the dismissals have loaded.
     public private(set) var dismissedLoaded = false
     /// The Recurring payments found card (collapsed by default).
@@ -189,9 +189,9 @@ public final class PlannedRecurringModel {
     }
 
     /// `new Set([...local, ...setting])` in insertion order.
-    static func merge(_ first: [Int], _ second: [Int]) -> [Int] {
-        var seen = Set<Int>()
-        var merged: [Int] = []
+    static func merge(_ first: [RecipientID], _ second: [RecipientID]) -> [RecipientID] {
+        var seen = Set<RecipientID>()
+        var merged: [RecipientID] = []
         for id in first + second where seen.insert(id).inserted {
             merged.append(id)
         }
@@ -240,7 +240,7 @@ public final class PlannedRecurringModel {
 
     /// The X of an amount-change row or Dismiss of a pattern row: the payee's patterns and
     /// alerts go, here and in the setting.
-    public func dismiss(_ recipientId: Int) {
+    public func dismiss(_ recipientId: RecipientID) {
         guard !dismissed.contains(recipientId) else { return }
         var ordered = orderedDismissed
         ordered.append(recipientId)
@@ -253,13 +253,13 @@ public final class PlannedRecurringModel {
     }
 
     /// The ids in the order they were dismissed, as the stored array keeps them.
-    private var orderedDismissed: [Int] {
+    private var orderedDismissed: [RecipientID] {
         let stored = store.load()
         let extra = dismissed.subtracting(stored).sorted()
         return stored.filter { dismissed.contains($0) } + extra
     }
 
-    private func persist(_ ids: [Int]) {
+    private func persist(_ ids: [RecipientID]) {
         dismissed = Set(ids)
         store.save(ids)
         let previous = saves
@@ -267,7 +267,7 @@ public final class PlannedRecurringModel {
         saves = Task { [weak self] in
             await previous?.value
             guard let self, !self.saveBroken, let expected = self.baseline else { return }
-            let value = JSONValue.array(ids.map { JSONValue.int($0) })
+            let value = JSONValue.array(ids.map { JSONValue.int($0.rawValue) })
             do {
                 let saved = try await service.saveSetting(key: PlannedDismissalStore.key, value: value, expected: expected)
                 self.baseline = .object(["exists": .bool(true), "value": saved.value])

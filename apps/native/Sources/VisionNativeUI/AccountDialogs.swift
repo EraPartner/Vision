@@ -266,10 +266,10 @@ struct AccountFormSheet: View {
             AccountField(label: strings.t("accounts.field.currency")) {
                 Picker(
                     strings.t("accounts.field.currency"),
-                    selection: Binding(get: { model.form?.currency ?? "EUR" }, set: { model.form?.currency = $0 })
+                    selection: Binding(get: { model.form?.currency ?? LedgerCurrency.eur }, set: { model.form?.currency = $0 })
                 ) {
                     ForEach(AccountOptions.currencies(including: form.currency), id: \.self) { code in
-                        Text(verbatim: code).tag(code)
+                        Text(verbatim: code.rawValue).tag(code)
                     }
                 }
                 .labelsHidden()
@@ -279,10 +279,10 @@ struct AccountFormSheet: View {
         AccountField(label: strings.t("accounts.field.type")) {
             Picker(
                 strings.t("accounts.field.type"),
-                selection: Binding(get: { model.form?.type ?? AccountKind.checking.rawValue }, set: { model.form?.setType($0) })
+                selection: Binding(get: { model.form?.type ?? AccountKind.checking.type }, set: { model.form?.setType($0) })
             ) {
                 ForEach(AccountKind.allCases, id: \.self) { kind in
-                    Label(strings.t(kind.labelKey), systemImage: kind.symbol).tag(kind.rawValue)
+                    Label(strings.t(kind.labelKey), systemImage: kind.symbol).tag(kind.type)
                 }
             }
             .labelsHidden()
@@ -347,10 +347,10 @@ struct AccountFormSheet: View {
             AccountField(label: strings.t("accounts.field.owner"), hint: strings.t("accounts.field.ownerHint")) {
                 Picker(
                     strings.t("accounts.field.owner"),
-                    selection: Binding(get: { model.form?.owner ?? "me" }, set: { model.form?.owner = $0 })
+                    selection: Binding(get: { model.form?.owner ?? .me }, set: { model.form?.owner = $0 })
                 ) {
                     ForEach(AccountOptions.owners, id: \.self) { owner in
-                        Text(strings.t("accounts.owner.\(owner)")).tag(owner)
+                        Text(strings.t("accounts.owner.\(owner.rawValue)")).tag(owner)
                     }
                 }
                 .labelsHidden()
@@ -359,10 +359,10 @@ struct AccountFormSheet: View {
                 Picker(
                     strings.t("accounts.field.liquidityClass"),
                     selection: Binding(
-                        get: { model.form?.liquidityClass ?? "liquid" }, set: { model.form?.setLiquidityClass($0) })
+                        get: { model.form?.liquidityClass ?? .liquid }, set: { model.form?.setLiquidityClass($0) })
                 ) {
                     ForEach(AccountOptions.liquidityClasses, id: \.self) { value in
-                        Text(strings.t("accounts.liquidity.\(value)")).tag(value)
+                        Text(strings.t("accounts.liquidity.\(value.rawValue)")).tag(value)
                     }
                 }
                 .labelsHidden()
@@ -438,7 +438,7 @@ struct ReconcileSheet: View {
         }
     }
 
-    private func money(_ amount: Decimal, _ currency: String, signed: Bool = false) -> String {
+    private func money(_ amount: Decimal, _ currency: CurrencyCode, signed: Bool = false) -> String {
         model.money(amount, currency: currency, signed: signed)
     }
 
@@ -455,7 +455,7 @@ struct ReconcileSheet: View {
                                 set: { model.reconcile?.selectCurrency($0) })
                         ) {
                             ForEach(draft.availableCurrencies, id: \.self) { code in
-                                Text(verbatim: code).tag(code)
+                                Text(verbatim: code.rawValue).tag(code)
                             }
                         }
                         .labelsHidden()
@@ -466,7 +466,7 @@ struct ReconcileSheet: View {
                 row(strings.t("accounts.reconcile.computedLabel"), money(draft.computed, draft.account.currency))
                 if !draft.baseIsComputed {
                     row(
-                        strings.t("accounts.reconcile.reconcilableLabel", ["currency": draft.selectedCurrency]),
+                        strings.t("accounts.reconcile.reconcilableLabel", ["currency": draft.selectedCurrency.rawValue]),
                         money(draft.base, draft.selectedCurrency))
                 }
                 if let provenance = model.provenance(draft.account) {
@@ -476,7 +476,7 @@ struct ReconcileSheet: View {
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 if !draft.baseIsComputed {
-                    Text(strings.t("accounts.reconcile.reconcilableHint", ["currency": draft.selectedCurrency]))
+                    Text(strings.t("accounts.reconcile.reconcilableHint", ["currency": draft.selectedCurrency.rawValue]))
                         .font(.footnote)
                         .foregroundStyle(theme.secondaryLabel)
                         .fixedSize(horizontal: false, vertical: true)
@@ -736,7 +736,7 @@ struct MergeAccountSheet: View {
                 AccountField(label: strings.t("accounts.mergeTargetLabel")) {
                     Picker(
                         strings.t("accounts.mergeTargetLabel"),
-                        selection: Binding<Int?>(
+                        selection: Binding<AccountID?>(
                             get: { model.merge?.targetId },
                             set: { id in
                                 guard let id else { return }
@@ -744,10 +744,10 @@ struct MergeAccountSheet: View {
                             })
                     ) {
                         if draft.targetId == nil {
-                            Text(strings.t("accounts.mergeTargetPlaceholder")).tag(Int?.none)
+                            Text(strings.t("accounts.mergeTargetPlaceholder")).tag(AccountID?.none)
                         }
                         ForEach(candidates, id: \.id) { account in
-                            Text(verbatim: candidateLabel(account)).tag(Int?.some(account.id))
+                            Text(verbatim: candidateLabel(account)).tag(AccountID?.some(account.id))
                         }
                     }
                     .labelsHidden()
@@ -771,8 +771,8 @@ struct MergeAccountSheet: View {
                         strings.t(
                             "accounts.mergeTypeMismatch",
                             [
-                                "sourceType": strings.t("accounts.type.\(draft.source.type)"),
-                                "targetType": strings.t("accounts.type.\(target.type)"),
+                                "sourceType": strings.t("accounts.type.\(draft.source.type.rawValue)"),
+                                "targetType": strings.t("accounts.type.\(target.type.rawValue)"),
                             ])
                     )
                     .font(.callout)

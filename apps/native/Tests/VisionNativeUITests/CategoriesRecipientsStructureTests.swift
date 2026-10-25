@@ -16,7 +16,8 @@ actor StaticCategoriesService: CategoriesService {
     }
 
     static func node(
-        _ id: Int, _ name: String, parent: OpenAPI.CategoryNode? = nil, active: Bool = true, description: String? = nil
+        _ id: CategoryID, _ name: String, parent: OpenAPI.CategoryNode? = nil, active: Bool = true,
+        description: String? = nil
     ) -> OpenAPI.CategoryNode {
         let path = (parent?.path ?? []) + [name]
         return OpenAPI.CategoryNode(
@@ -40,10 +41,10 @@ actor StaticCategoriesService: CategoriesService {
     }
 
     func createCategoryNode(_ body: CategoryNodeBody) async throws {}
-    func updateCategoryNode(id: Int, body: CategoryNodeBody) async throws {}
-    func setCategoryActive(id: Int, isActive: Bool) async throws {}
-    func deleteCategoryNode(id: Int) async throws {}
-    func mergeCategoryNode(sourceId: Int, targetId: Int) async throws {}
+    func updateCategoryNode(id: CategoryID, body: CategoryNodeBody) async throws {}
+    func setCategoryActive(id: CategoryID, isActive: Bool) async throws {}
+    func deleteCategoryNode(id: CategoryID) async throws {}
+    func mergeCategoryNode(sourceId: CategoryID, targetId: CategoryID) async throws {}
 }
 
 /// A payees service with fixed answers: a primary with two aliases, a payee with a default
@@ -58,7 +59,8 @@ actor StaticRecipientsService: RecipientsService {
     }
 
     static func payee(
-        _ id: Int, _ name: String, account: String? = nil, category: String? = nil, primary: (Int, String)? = nil,
+        _ id: RecipientID, _ name: String, account: String? = nil, category: String? = nil,
+        primary: (RecipientID, String)? = nil,
         aliases: Int? = nil, notes: String? = nil, active: Bool = true
     ) -> OpenAPI.Recipient {
         OpenAPI.Recipient(
@@ -76,8 +78,8 @@ actor StaticRecipientsService: RecipientsService {
     ]
 
     static let rule = OpenAPI.RecipientPattern(
-        id: 10, pattern: "KBC BANK NV", patternKind: "literal_prefix", caseSensitive: true, priority: 50,
-        isActive: true, source: "merge", notes: "Na het samenvoegen", createdAt: "2026-01-01")
+        id: 10, pattern: "KBC BANK NV", patternKind: .init(rawValue: "literal_prefix"), caseSensitive: true, priority: 50,
+        isActive: true, source: .init(rawValue: "merge"), notes: "Na het samenvoegen", createdAt: "2026-01-01")
 
     func payeePage(_ query: PayeePageQuery, offset: Int, limit: Int) async throws -> PayeePage {
         if failing { throw APIError.network("offline") }
@@ -86,20 +88,20 @@ actor StaticRecipientsService: RecipientsService {
     }
 
     func createPayee(name: String, notes: String?) async throws -> Bool { true }
-    func updatePayee(id: Int, patch: PayeePatch) async throws {}
-    func deletePayee(id: Int) async throws {}
+    func updatePayee(id: RecipientID, patch: PayeePatch) async throws {}
+    func deletePayee(id: RecipientID) async throws {}
 
-    func mergePayees(primaryId: Int, aliasIds: [Int]) async throws -> PayeeMergeResult {
+    func mergePayees(primaryId: RecipientID, aliasIds: [RecipientID]) async throws -> PayeeMergeResult {
         PayeeMergeResult(primary: .init(id: primaryId, name: "KBC"), mergedIds: aliasIds)
     }
 
-    func unmergePayee(id: Int) async throws {}
-    func matchRules(recipientId: Int) async throws -> [OpenAPI.RecipientPattern] { [Self.rule] }
-    func createMatchRule(recipientId: Int, body: MatchRuleBody) async throws {}
-    func updateMatchRule(recipientId: Int, patternId: Int, patch: MatchRulePatch) async throws {}
-    func deleteMatchRule(recipientId: Int, patternId: Int) async throws {}
+    func unmergePayee(id: RecipientID) async throws {}
+    func matchRules(recipientId: RecipientID) async throws -> [OpenAPI.RecipientPattern] { [Self.rule] }
+    func createMatchRule(recipientId: RecipientID, body: MatchRuleBody) async throws {}
+    func updateMatchRule(recipientId: RecipientID, patternId: RecipientPatternID, patch: MatchRulePatch) async throws {}
+    func deleteMatchRule(recipientId: RecipientID, patternId: RecipientPatternID) async throws {}
 
-    func previewMatchRule(recipientId: Int, pattern: String, kind: MatchRuleKind, caseSensitive: Bool)
+    func previewMatchRule(recipientId: RecipientID, pattern: String, kind: MatchRuleKind, caseSensitive: Bool)
         async throws -> Int
     { 4 }
 }

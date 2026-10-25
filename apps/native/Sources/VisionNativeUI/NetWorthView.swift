@@ -12,7 +12,7 @@ public struct NetWorthView: View {
     }
     private var strings: any Localizing { shell.strings }
     private var settings: NativeAppSettings { shell.settings }
-    private var currency: String { settings.defaultCurrency }
+    private var currency: CurrencyCode { LedgerCurrency.display(settings) }
 
     public var body: some View {
         ScrollView {
@@ -55,7 +55,7 @@ public struct NetWorthView: View {
                 if let error = model.pricesError { Text(error).font(.callout).foregroundStyle(theme.destructive) }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task(id: currency + String(settings.defaultPageSize) + shell.route.string + String(shell.settingsRevision)) {
+        .task(id: currency.rawValue + String(settings.defaultPageSize) + shell.route.string + String(shell.settingsRevision)) {
             await reload()
         }
         .onAppear { connectivity.start { model.isOnline = $0 } }

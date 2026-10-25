@@ -1,13 +1,13 @@
 import Foundation
 
 public struct StatisticsQuery: Equatable, Sendable {
-    public let currency: String
+    public let currency: CurrencyCode
     public let window: StatisticsWindow
     public let exclusions: InsightExclusions
     public let today: Date
     public let calendar: Calendar
     public init(
-        currency: String, window: StatisticsWindow, exclusions: InsightExclusions,
+        currency: CurrencyCode, window: StatisticsWindow, exclusions: InsightExclusions,
         today: Date, calendar: Calendar
     ) {
         self.currency = currency
@@ -17,7 +17,7 @@ public struct StatisticsQuery: Equatable, Sendable {
         self.calendar = calendar
     }
     public func queryItems(includeAllTime: Bool = false) -> [URLQueryItem] {
-        [URLQueryItem(name: "currency", value: currency)] + exclusions.queryItems
+        [URLQueryItem(name: "currency", value: currency.rawValue)] + exclusions.queryItems
             + window.queryItems(now: today, calendar: calendar, includeAllTime: includeAllTime)
     }
     public var unfiltered: StatisticsQuery {
@@ -31,7 +31,7 @@ public protocol StatisticsService: HomeService {
     func statisticsCategories(_ query: StatisticsQuery) async throws -> StatisticsCategoryPivot
     func statisticsRecipients(_ query: StatisticsQuery) async throws -> StatisticsRecipientInsights
     func statisticsRecipientYears(_ query: StatisticsQuery) async throws -> StatisticsRecipientYears
-    func statisticsFlow(currency: String, year: Int, exclusions: InsightExclusions) async throws -> StatisticsFlow
+    func statisticsFlow(currency: CurrencyCode, year: Int, exclusions: InsightExclusions) async throws -> StatisticsFlow
 }
 
 extension StatisticsService {
@@ -62,13 +62,13 @@ extension APIClient: StatisticsService {
         try await sendAggregation(
             OpenAPIOperations.GetRecipientByYear(), query: query.queryItems())
     }
-    public func statisticsFlow(currency: String, year: Int, exclusions: InsightExclusions) async throws
+    public func statisticsFlow(currency: CurrencyCode, year: Int, exclusions: InsightExclusions) async throws
         -> StatisticsFlow
     {
         try await sendAggregation(
             OpenAPIOperations.GetSankey(),
             query: [
-                URLQueryItem(name: "currency", value: currency),
+                URLQueryItem(name: "currency", value: currency.rawValue),
                 URLQueryItem(name: "year", value: String(year)),
             ] + exclusions.queryItems)
     }

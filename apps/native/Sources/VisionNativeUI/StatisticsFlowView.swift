@@ -4,7 +4,7 @@ import VisionNativeCore
 struct StatisticsFlowView: View {
     let flow: StatisticsFlow
     let settings: NativeAppSettings
-    let currency: String
+    let currency: CurrencyCode
     let strings: any Localizing
     @State private var hoveredNode: String?
     private let onHoverChange: (String?, String?) -> Void
@@ -12,7 +12,7 @@ struct StatisticsFlowView: View {
     @Environment(\.visionTheme) private var theme
 
     init(
-        flow: StatisticsFlow, settings: NativeAppSettings, currency: String, strings: any Localizing,
+        flow: StatisticsFlow, settings: NativeAppSettings, currency: CurrencyCode, strings: any Localizing,
         initialNode: String? = nil, initialLink: String? = nil,
         onHoverChange: @escaping (String?, String?) -> Void = { _, _ in }
     ) {

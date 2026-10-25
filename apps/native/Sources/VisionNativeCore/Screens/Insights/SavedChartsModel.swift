@@ -6,14 +6,14 @@ import Observation
 public final class SavedChartsModel {
     public var printLocalState = NativeStatisticsPrintLocalState()
     public private(set) var charts: [OpenAPI.SavedChart] = []
-    public private(set) var datasets: [Int: CustomChartDataset] = [:]
-    public private(set) var errors: [Int: String] = [:]
+    public private(set) var datasets: [SavedChartID: CustomChartDataset] = [:]
+    public private(set) var errors: [SavedChartID: String] = [:]
     public private(set) var isLoading = true
     public private(set) var error: String?
     public private(set) var recipients: [OpenAPI.Recipient] = []
     public private(set) var tags: [OpenAPI.Tag] = []
     public var draft: CustomChartDraft?
-    public private(set) var editingId: Int?
+    public private(set) var editingId: SavedChartID?
     public private(set) var preview: CustomChartDataset?
     public private(set) var previewError: String?
     public private(set) var isPreviewLoading = false
@@ -25,7 +25,7 @@ public final class SavedChartsModel {
 
     @ObservationIgnored private let service: any SavedChartsService
     @ObservationIgnored private var snapshot: StatisticsSnapshot?
-    @ObservationIgnored private var currency = "EUR"
+    @ObservationIgnored private var currency = LedgerCurrency.eur
     @ObservationIgnored private var otherLabel = ""
     @ObservationIgnored private var previewRevision = UUID()
     @ObservationIgnored private var previewTask: Task<Void, Never>?
@@ -40,7 +40,7 @@ public final class SavedChartsModel {
     public func clearNotice(_ id: Int) {
         if notice?.id == id { notice = nil }
     }
-    public func appear(snapshot: StatisticsSnapshot, currency: String, strings: any Localizing) async {
+    public func appear(snapshot: StatisticsSnapshot, currency: CurrencyCode, strings: any Localizing) async {
         self.strings = strings
         if self.currency != currency || self.snapshot != snapshot {
             printLocalState = .init()
@@ -81,7 +81,7 @@ public final class SavedChartsModel {
         } catch { if token == revision { self.error = error.localizedDescription } }
         if token == revision { isLoading = false }
     }
-    func matchesPrintSnapshot(_ snapshot: StatisticsSnapshot, currency: String) -> Bool {
+    func matchesPrintSnapshot(_ snapshot: StatisticsSnapshot, currency: CurrencyCode) -> Bool {
         !isLoading && self.snapshot == snapshot && self.currency == currency
             && charts.allSatisfy { datasets[$0.id] != nil || errors[$0.id] != nil }
     }

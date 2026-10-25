@@ -23,7 +23,7 @@ public struct StatisticsView: View {
     private var model: StatisticsModel { screens.model }
     private var strings: any Localizing { shell.strings }
     private var settings: NativeAppSettings { shell.settings }
-    private var currency: String { settings.defaultCurrency }
+    private var currency: CurrencyCode { LedgerCurrency.display(settings) }
     private var languageLocale: Locale { LanguageLocale.locale(strings.language) }
     private func periodLabel(_ period: String) -> String {
         StatisticsPeriodFormat.label(period, locale: languageLocale)
@@ -118,7 +118,7 @@ public struct StatisticsView: View {
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task(id: shell.route.string + currency + String(shell.settingsRevision)) { await reload() }
+        .task(id: shell.route.string + currency.rawValue + String(shell.settingsRevision)) { await reload() }
         // Saved-chart toasts go to the shell's notice host, like the screens it wires itself.
         .onDisappear {
             model.printLocalState = .init()
@@ -453,7 +453,7 @@ public struct StatisticsView: View {
         Text(money(value)).monospacedDigit().frame(width: pivotColumnWidth, alignment: .trailing)
             .fixedSize(horizontal: false, vertical: true)
     }
-    private func pivotRow(values: [String: Decimal], ids: [Int], name: String, uncategorised: Bool = false) -> some View
+    private func pivotRow(values: [String: Decimal], ids: [CategoryID], name: String, uncategorised: Bool = false) -> some View
     {
         HStack(spacing: 0) {
             ForEach(displayedPivotPeriods, id: \.self) { period in
@@ -462,7 +462,7 @@ public struct StatisticsView: View {
             pivotCell(values.values.reduce(0, +), ids: ids, period: nil, name: name, uncategorised: uncategorised)
         }
     }
-    private func pivotCell(_ value: Decimal, ids: [Int], period: String?, name: String, uncategorised: Bool = false)
+    private func pivotCell(_ value: Decimal, ids: [CategoryID], period: String?, name: String, uncategorised: Bool = false)
         -> some View
     {
         Group {
@@ -640,11 +640,11 @@ public struct StatisticsView: View {
     private func recipientBars(_ snapshot: StatisticsSnapshot?) -> [CustomChartEntity] {
         if let year = model.recipientYear {
             return (snapshot?.recipientYears.recipientsByYear[String(year)] ?? []).prefix(10).map {
-                CustomChartEntity(id: String($0.id), name: $0.name, values: ["total": $0.totalSpend])
+                CustomChartEntity(id: String($0.id.rawValue), name: $0.name, values: ["total": $0.totalSpend])
             }
         }
         return (snapshot?.recipients.topMerchants.prefix(10) ?? []).map {
-            CustomChartEntity(id: String($0.id), name: $0.name, values: ["total": $0.totalSpend])
+            CustomChartEntity(id: String($0.id.rawValue), name: $0.name, values: ["total": $0.totalSpend])
         }
     }
     private var recipientColumns: [LocalDataColumn<StatisticsRecipientInsights.Merchant>] {
@@ -912,7 +912,7 @@ public struct StatisticsView: View {
                 id: "statistics.recipients", headings: headings, columns: recipientColumns.map(\.title),
                 rows: visible.map { row in
                     .init(
-                        id: String(row.recipientId),
+                        id: String(row.recipientId.rawValue),
                         values: [
                             row.name, money(row.totalSpend), String(row.transactionCount), money(row.avgAmount),
                             VisionFormat.appDate(row.firstSeen, format: settings.dateFormat),

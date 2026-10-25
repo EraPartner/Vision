@@ -116,7 +116,7 @@ struct PlannedRecurringPanel: View {
     @ViewBuilder
     private func alertRow(_ pattern: PlannedRecurringPattern) -> some View {
         if let change = pattern.lastChange {
-            let increased = change.direction == "increased"
+            let increased = change.direction == .increased
             let tint = increased ? theme.loss : theme.gain
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -305,7 +305,7 @@ struct PlannedRecurringPanel: View {
         return model.pickers.categoryName(pattern.categoryId) ?? own
     }
 
-    private func money(_ amount: Decimal, _ currency: String) -> String {
+    private func money(_ amount: Decimal, _ currency: CurrencyCode) -> String {
         MoneyText.text(amount, currency: currency, settings: settings, signed: false)
     }
 

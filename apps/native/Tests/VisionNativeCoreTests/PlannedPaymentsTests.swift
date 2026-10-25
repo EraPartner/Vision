@@ -29,13 +29,13 @@ actor FakePlannedService: PlannedPaymentsService {
     private(set) var loads: [Bool] = []
     /// `"id:isActive"` per update.
     private(set) var updates: [String] = []
-    private(set) var deletes: [Int] = []
-    private(set) var lookups: [Int] = []
+    private(set) var deletes: [PlannedTransactionID] = []
+    private(set) var lookups: [TransactionID] = []
     private var loadFailures = 0
     private var updateFails = false
     private var deleteFails = false
-    private var transactions: [Int: OpenAPI.Transaction] = [:]
-    private var failingLookups: Set<Int> = []
+    private var transactions: [TransactionID: OpenAPI.Transaction] = [:]
+    private var failingLookups: Set<TransactionID> = []
     private var loadGate: CallGate?
     private var lookupGate: CallGate?
     private var updateGate: CallGate?
@@ -51,17 +51,17 @@ actor FakePlannedService: PlannedPaymentsService {
     func holdLookups(_ gate: CallGate?) { lookupGate = gate }
     func holdUpdates(_ gate: CallGate?) { updateGate = gate }
 
-    func setTransactions(_ list: [OpenAPI.Transaction], failing: Set<Int> = []) {
+    func setTransactions(_ list: [OpenAPI.Transaction], failing: Set<TransactionID> = []) {
         transactions = Dictionary(uniqueKeysWithValues: list.map { transaction in (transaction.id, transaction) })
         failingLookups = failing
     }
 
-    private(set) var totalsCurrencies: [String] = []
+    private(set) var totalsCurrencies: [CurrencyCode] = []
     private var totalsAnswer: OpenAPI.PlannedTotals?
 
     func setTotals(_ totals: OpenAPI.PlannedTotals?) { totalsAnswer = totals }
 
-    func plannedTotals(currency: String) async throws -> OpenAPI.PlannedTotals? {
+    func plannedTotals(currency: CurrencyCode) async throws -> OpenAPI.PlannedTotals? {
         totalsCurrencies.append(currency)
         return totalsAnswer
     }
@@ -76,7 +76,7 @@ actor FakePlannedService: PlannedPaymentsService {
         return includePaused ? rows : rows.filter { row in row.isActive }
     }
 
-    func setPlannedPaymentActive(id: Int, isActive: Bool) async throws -> OpenAPI.PlannedTransaction {
+    func setPlannedPaymentActive(id: PlannedTransactionID, isActive: Bool) async throws -> OpenAPI.PlannedTransaction {
         updates.append("\(id):\(isActive)")
         if let updateGate { await updateGate.wait() }
         if updateFails { throw APIError.network("offline") }
@@ -86,13 +86,13 @@ actor FakePlannedService: PlannedPaymentsService {
         return updated
     }
 
-    func deletePlannedPayment(id: Int) async throws {
+    func deletePlannedPayment(id: PlannedTransactionID) async throws {
         deletes.append(id)
         if deleteFails { throw APIError.network("offline") }
         rows.removeAll { row in row.id == id }
     }
 
-    func transaction(id: Int) async throws -> OpenAPI.Transaction? {
+    func transaction(id: TransactionID) async throws -> OpenAPI.Transaction? {
         lookups.append(id)
         if let lookupGate { await lookupGate.wait() }
         if failingLookups.contains(id) { throw APIError.network("offline") }
@@ -113,14 +113,15 @@ enum PlannedFixture {
     }
 
     static func row(
-        id: Int, name: String? = nil, date: String = "2026-10-14", amount: Decimal = -50, currency: String? = "EUR",
+        id: PlannedTransactionID, name: String? = nil, date: String = "2026-10-14", amount: Decimal = -50,
+        currency: CurrencyCode? = "EUR",
         recipient: String? = nil, category: String? = nil, url: String? = nil, recurring: Bool = false,
         pattern: String? = nil, isLoan: Bool? = nil, loanTermMonths: Int? = nil, isExecuted: Bool = false,
-        lastExecutedDate: String? = nil, executedTransactionId: Int? = nil, executionCount: Int = 0,
+        lastExecutedDate: String? = nil, executedTransactionId: TransactionID? = nil, executionCount: Int = 0,
         executions: [OpenAPI.PlannedTransactionExecution]? = nil, isActive: Bool = true
     ) -> OpenAPI.PlannedTransaction {
         OpenAPI.PlannedTransaction(
-            id: id, plannedDate: date, recipientName: recipient, memo: name ?? "Payment \(id)", amount: amount,
+            id: id, plannedDate: date, recipientName: recipient, memo: name ?? "Payment \(id.rawValue)", amount: amount,
             currency: currency, categoryName: category, url: url, isRecurring: recurring, recurrencePattern: pattern,
             isLoan: isLoan, loanTermMonths: loanTermMonths, isExecuted: isExecuted, lastExecutedDate: lastExecutedDate,
             executedTransactionId: executedTransactionId, executionCount: executionCount, executions: executions,
@@ -144,13 +145,13 @@ enum PlannedFixture {
             updatedAt: "2026-10-12T08:00:00.000Z", links: row.links)
     }
 
-    static func execution(_ transactionId: Int, _ date: String) -> OpenAPI.PlannedTransactionExecution {
+    static func execution(_ transactionId: TransactionID, _ date: String) -> OpenAPI.PlannedTransactionExecution {
         OpenAPI.PlannedTransactionExecution(
-            id: transactionId * 10, executedTransactionId: transactionId, executionDate: date)
+            id: PlannedTransactionExecutionID(rawValue: transactionId.rawValue * 10), executedTransactionId: transactionId, executionDate: date)
     }
 
     static func transaction(
-        _ id: Int, date: String = "2026-10-01", memo: String? = nil, recipient: String? = nil, category: String? = nil,
+        _ id: TransactionID, date: String = "2026-10-01", memo: String? = nil, recipient: String? = nil, category: String? = nil,
         amount: Decimal = -50
     ) -> OpenAPI.Transaction {
         OpenAPI.Transaction(
@@ -158,7 +159,7 @@ enum PlannedFixture {
             categoryName: category, links: [])
     }
 
-    static func payment(_ row: OpenAPI.PlannedTransaction, currency: String = "EUR") -> PlannedPayment {
+    static func payment(_ row: OpenAPI.PlannedTransaction, currency: CurrencyCode = "EUR") -> PlannedPayment {
         PlannedPayment(row, defaultCurrency: currency)
     }
 
@@ -172,7 +173,7 @@ enum PlannedFixture {
                 OpenAPI.ExchangeRate(
                     currency: "JPY", rateToEur: 0, rateDate: "2026-10-09", fetchedAt: "2026-10-09T15:05:00.000Z"),
             ],
-            source: "database", isStale: false, lastFetchedAt: nil)
+            source: .database, isStale: false, lastFetchedAt: nil)
     }
 
     @MainActor

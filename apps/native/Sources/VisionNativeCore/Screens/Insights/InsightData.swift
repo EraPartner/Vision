@@ -75,7 +75,7 @@ public struct InsightChartPoint: Equatable, Sendable, Identifiable {
 
 public struct HomeBankBalances: Decodable, Equatable, Sendable {
     public struct Account: Decodable, Equatable, Sendable, Identifiable {
-        public let account_id: Int
+        public let account_id: AccountID
         public let bank_account: String
         public let display_name: String?
         public let balance: Decimal
@@ -84,7 +84,7 @@ public struct HomeBankBalances: Decodable, Equatable, Sendable {
         public let post_anchor_count: Int?
         public let transaction_count: Int
         public let last_transaction: String
-        public var id: Int { account_id }
+        public var id: AccountID { account_id }
         public var name: String { display_name.flatMap { $0.isEmpty ? nil : $0 } ?? bank_account }
     }
     public struct Point: Decodable, Equatable, Sendable {
@@ -112,7 +112,7 @@ public struct HomeNetWorth: Decodable, Equatable, Sendable {
     public let monthlyChangePercent: Decimal
     public let snapshots: [Snapshot]
     /// Currencies of balances left out because no stored rate converts them (ADR-216).
-    public let unconvertedCurrencies: [String]?
+    public let unconvertedCurrencies: [CurrencyCode]?
     public struct Snapshot: Decodable, Equatable, Sendable {
         public let date: String
         public let netWorth: Decimal
@@ -123,22 +123,22 @@ public struct HomeNetWorth: Decodable, Equatable, Sendable {
 }
 
 public struct InsightExclusions: Equatable, Sendable {
-    public var categoryIds: [Int]
-    public var recipientIds: [Int]
-    public init(categoryIds: [Int] = [], recipientIds: [Int] = []) {
+    public var categoryIds: [CategoryID]
+    public var recipientIds: [RecipientID]
+    public init(categoryIds: [CategoryID] = [], recipientIds: [RecipientID] = []) {
         self.categoryIds = Array(Set(categoryIds)).sorted()
         self.recipientIds = Array(Set(recipientIds)).sorted()
     }
     public var isEmpty: Bool { categoryIds.isEmpty && recipientIds.isEmpty }
     public var queryItems: [URLQueryItem] {
-        categoryIds.map { URLQueryItem(name: "excluded_category_ids", value: String($0)) }
-            + recipientIds.map { URLQueryItem(name: "excluded_recipient_ids", value: String($0)) }
+        categoryIds.map { URLQueryItem(name: "excluded_category_ids", value: String($0.rawValue)) }
+            + recipientIds.map { URLQueryItem(name: "excluded_recipient_ids", value: String($0.rawValue)) }
     }
     public func includes(_ row: OpenAPI.Transaction) -> Bool {
         !(row.categoryId.map(categoryIds.contains) ?? false)
             && !(row.recipientId.map(recipientIds.contains) ?? false)
     }
-    public static func resolve(settings: JSONValue?, scope: String, hiddenIds: [Int])
+    public static func resolve(settings: JSONValue?, scope: String, hiddenIds: [CategoryID])
         -> InsightExclusions
     {
         let configuredScope = normalizedScope(settings)
@@ -158,8 +158,8 @@ public struct InsightExclusions: Equatable, Sendable {
         }
         let includeHidden = settings?["excludeHiddenCategories"]?.boolValue ?? true
         return InsightExclusions(
-            categoryIds: ids("excludedCategoryIds") + (includeHidden ? hiddenIds : []),
-            recipientIds: ids("excludedRecipientIds"))
+            categoryIds: ids("excludedCategoryIds").map { CategoryID(rawValue: $0) } + (includeHidden ? hiddenIds : []),
+            recipientIds: ids("excludedRecipientIds").map { RecipientID(rawValue: $0) })
     }
     public static func normalizedScope(_ settings: JSONValue?) -> String {
         let raw = settings?["exclusionScope"]?.stringValue ?? "everywhere"
@@ -225,7 +225,7 @@ public enum InsightsRoutes {
     public static let statistics = "/statistics"
     public static func drill(
         month: InsightMonth? = nil, type: String? = nil,
-        categoryIds: [Int] = [], uncategorised: Bool = false, label: String? = nil
+        categoryIds: [CategoryID] = [], uncategorised: Bool = false, label: String? = nil
     ) -> NativeRoute {
         var query: [URLQueryItem] = []
         if let month {
@@ -236,11 +236,11 @@ public enum InsightsRoutes {
         }
         if let type { query.append(URLQueryItem(name: "transaction_type", value: type)) }
         if categoryIds.count == 1 {
-            query.append(URLQueryItem(name: "category_id", value: String(categoryIds[0])))
+            query.append(URLQueryItem(name: "category_id", value: String(categoryIds[0].rawValue)))
         } else if !categoryIds.isEmpty {
             query.append(
                 URLQueryItem(
-                    name: "category_ids", value: categoryIds.map(String.init).joined(separator: ",")))
+                    name: "category_ids", value: categoryIds.map { String($0.rawValue) }.joined(separator: ",")))
         }
         if uncategorised { query.append(URLQueryItem(name: "uncategorised", value: "true")) }
         if let label { query.append(URLQueryItem(name: "filter_label", value: label)) }

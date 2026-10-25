@@ -11,7 +11,7 @@ public struct ExchangeRatesPresentation: Equatable, Sendable {
     }
 
     public struct Row: Equatable, Sendable, Identifiable {
-        public let currency: String
+        public let currency: CurrencyCode
         /// `1 CUR = x EUR`, six fraction digits.
         public let rate: String
         /// `1 EUR = x CUR`, four fraction digits.
@@ -19,7 +19,7 @@ public struct ExchangeRatesPresentation: Equatable, Sendable {
         /// `100 CUR` in euros, with the money decimal places.
         public let hundredInEuro: String
 
-        public var id: String { currency }
+        public var id: String { currency.rawValue }
     }
 
     public struct Table: Equatable, Sendable {
@@ -67,13 +67,13 @@ public struct ExchangeRatesPresentation: Equatable, Sendable {
             strings.t("exchangeRates.col.eurToUnit"), strings.t("exchangeRates.col.hundredInEur"),
         ]
 
-        func row(_ currency: String, _ rate: Decimal) -> Row {
+        func row(_ currency: CurrencyCode, _ rate: Decimal) -> Row {
             Row(
                 currency: currency,
                 rate: VisionFormat.decimal(rate, fractionDigits: 6, locale: locale),
                 inverse: VisionFormat.inverse(rate, fractionDigits: 4, locale: locale),
                 hundredInEuro: VisionFormat.currency(
-                    100 * rate, code: "EUR", locale: locale, fractionDigits: settings.showDecimalPlaces))
+                    100 * rate, code: LedgerCurrency.eur, locale: locale, fractionDigits: settings.showDecimalPlaces))
         }
 
         if live.isEmpty {

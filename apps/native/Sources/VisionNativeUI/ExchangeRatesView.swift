@@ -212,7 +212,7 @@ public struct ExchangeRatesView: View {
                     ForEach(table.rows) { row in
                         Divider().gridCellUnsizedAxes(.horizontal)
                         GridRow {
-                            cell(row.currency, font: .body.monospaced().weight(.medium))
+                            cell(row.currency.rawValue, font: .body.monospaced().weight(.medium))
                             cell(row.rate, font: .body.monospaced())
                             cell(row.inverse, font: .body.monospaced())
                             cell(row.hundredInEuro, font: .body)

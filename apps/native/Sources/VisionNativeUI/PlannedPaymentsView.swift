@@ -23,15 +23,15 @@ public struct PlannedPaymentsView: View {
     /// What the list depends on: the `show_all` view and the default currency.
     private struct LoadKey: Equatable {
         let showAll: Bool
-        let currency: String
+        let currency: CurrencyCode
     }
 
     public var body: some View {
         AdminPage {
             content
         }
-        .task(id: LoadKey(showAll: showAll, currency: settings.defaultCurrency)) {
-            await model.appear(showAll: showAll, defaultCurrency: settings.defaultCurrency)
+        .task(id: LoadKey(showAll: showAll, currency: LedgerCurrency.display(settings))) {
+            await model.appear(showAll: showAll, defaultCurrency: LedgerCurrency.display(settings))
         }
         .task { await model.loadSuggestions() }
         .task { await model.recurring.load() }
@@ -274,7 +274,7 @@ public struct PlannedPaymentsView: View {
                                 Text(verbatim: "·").foregroundStyle(theme.tertiaryLabel)
                                 if let windowTotal {
                                     MoneyText(
-                                        amount: windowTotal.net, currency: settings.defaultCurrency,
+                                        amount: windowTotal.net, currency: LedgerCurrency.display(settings),
                                         settings: settings
                                     )
                                     .font(.headline)
@@ -298,7 +298,7 @@ public struct PlannedPaymentsView: View {
                             .tracking(1.3)
                             .foregroundStyle(theme.secondaryLabel)
                         if let monthly {
-                            MoneyText(amount: monthly.total, currency: settings.defaultCurrency, settings: settings)
+                            MoneyText(amount: monthly.total, currency: LedgerCurrency.display(settings), settings: settings)
                                 .font(.visionCardTitle)
                         } else {
                             SkeletonBar(width: 96, height: 28)
@@ -587,7 +587,7 @@ public struct PlannedPaymentsView: View {
     /// Mark as paid, or the Paid badge that links to the transaction.
     @ViewBuilder
     private func statusCell(_ payment: PlannedPayment) -> some View {
-        let linked = strings.t("plannedPage.execute.linked", ["n": String(payment.executedTransactionId ?? 0)])
+        let linked = strings.t("plannedPage.execute.linked", ["n": String(payment.executedTransactionId?.rawValue ?? 0)])
         if payment.isExecuted {
             if let route = payment.linkedTransactionRoute {
                 Button {
@@ -764,7 +764,7 @@ struct PlannedHistorySheet: View {
             }
             HStack(spacing: 8) {
                 MoneyText(
-                    amount: entry.amount, currency: entry.currency ?? shell.settings.defaultCurrency,
+                    amount: entry.amount, currency: entry.currency ?? LedgerCurrency.display(shell.settings),
                     settings: shell.settings
                 )
                 .fontWeight(.semibold)

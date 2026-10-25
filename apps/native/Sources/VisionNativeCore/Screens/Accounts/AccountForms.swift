@@ -3,19 +3,19 @@ import Foundation
 /// The option lists of the Add / Edit account sheet (AddAccountDialog.tsx).
 public enum AccountOptions {
     /// `SUPPORTED_CURRENCIES` (apps/frontend/src/utils/currency.ts).
-    public static let currencies = [
+    public static let currencies: [CurrencyCode] = [
         "EUR", "USD", "GBP", "CHF", "JPY", "CAD", "AUD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN",
         "HRK", "TRY", "SAR", "AED", "INR", "BRL", "MXN", "ZAR", "SGD", "HKD", "NZD", "KRW", "THB", "MYR", "PHP",
-    ]
+    ].compactMap { CurrencyCode(rawValue: $0) }
     /// `OWNERS`, labelled `accounts.owner.<owner>`.
-    public static let owners = ["me", "partner", "joint"]
+    public static let owners: [OpenAPI.Account.Owner] = [.me, .partner, .joint]
     /// `LIQUIDITY`, labelled `accounts.liquidity.<class>`.
-    public static let liquidityClasses = ["liquid", "semi_liquid", "illiquid"]
+    public static let liquidityClasses: [OpenAPI.Account.LiquidityClass] = [.liquid, .semiLiquid, .illiquid]
     /// The sheet's name, display name and institution `maxLength`.
     public static let maxTextLength = 200
 
     /// The currency select: an unknown existing code is listed first.
-    public static func currencies(including code: String) -> [String] {
+    public static func currencies(including code: CurrencyCode) -> [CurrencyCode] {
         currencies.contains(code) ? currencies : [code] + currencies
     }
 }
@@ -31,28 +31,28 @@ public enum AccountFlag: String, Sendable, CaseIterable {
 
 /// `flagsForType`: the ADR-089 suggestions a type pre-fills.
 public struct AccountTypeFlags: Equatable, Sendable {
-    public let liquidityClass: String
+    public let liquidityClass: OpenAPI.Account.LiquidityClass
     public let spendable: Bool
     public let hasCashSleeve: Bool
-    public let taxWrapper: String
+    public let taxWrapper: OpenAPI.Account.TaxWrapper
 
-    public static func of(_ type: String) -> AccountTypeFlags {
-        switch AccountKind(rawValue: type) {
+    public static func of(_ type: OpenAPI.Account.AccountType) -> AccountTypeFlags {
+        switch AccountKind(type) {
         case .savings:
-            return AccountTypeFlags(liquidityClass: "liquid", spendable: false, hasCashSleeve: true, taxWrapper: "none")
+            return AccountTypeFlags(liquidityClass: .liquid, spendable: false, hasCashSleeve: true, taxWrapper: .none)
         case .brokerage, .cryptoExchange:
             return AccountTypeFlags(
-                liquidityClass: "semi_liquid", spendable: false, hasCashSleeve: true, taxWrapper: "none")
+                liquidityClass: .semiLiquid, spendable: false, hasCashSleeve: true, taxWrapper: .none)
         case .wallet:
             return AccountTypeFlags(
-                liquidityClass: "semi_liquid", spendable: false, hasCashSleeve: false, taxWrapper: "none")
+                liquidityClass: .semiLiquid, spendable: false, hasCashSleeve: false, taxWrapper: .none)
         case .pension:
             return AccountTypeFlags(
-                liquidityClass: "illiquid", spendable: false, hasCashSleeve: false, taxWrapper: "pension")
+                liquidityClass: .illiquid, spendable: false, hasCashSleeve: false, taxWrapper: .pension)
         case .liability:
-            return AccountTypeFlags(liquidityClass: "illiquid", spendable: false, hasCashSleeve: false, taxWrapper: "none")
+            return AccountTypeFlags(liquidityClass: .illiquid, spendable: false, hasCashSleeve: false, taxWrapper: .none)
         case .checking, nil:
-            return AccountTypeFlags(liquidityClass: "liquid", spendable: true, hasCashSleeve: true, taxWrapper: "none")
+            return AccountTypeFlags(liquidityClass: .liquid, spendable: true, hasCashSleeve: true, taxWrapper: .none)
         }
     }
 }
@@ -62,7 +62,7 @@ public struct AccountFormDraft: Equatable, Sendable {
     public enum Mode: Equatable, Sendable {
         case create
         /// Edit mode for the account with this id.
-        case edit(id: Int)
+        case edit(id: AccountID)
     }
 
     /// What the submit button finds (`handleSubmit`).
@@ -81,11 +81,11 @@ public struct AccountFormDraft: Equatable, Sendable {
     public private(set) var name = ""
     public private(set) var displayName = ""
     public private(set) var institution = ""
-    public var currency = "EUR"
-    public private(set) var type = AccountKind.checking.rawValue
-    public var owner = "me"
-    public private(set) var liquidityClass = "liquid"
-    public private(set) var taxWrapper = "none"
+    public var currency = LedgerCurrency.eur
+    public private(set) var type = AccountKind.checking.type
+    public var owner = OpenAPI.Account.Owner.me
+    public private(set) var liquidityClass = OpenAPI.Account.LiquidityClass.liquid
+    public private(set) var taxWrapper = OpenAPI.Account.TaxWrapper.none
     public private(set) var spendable = true
     public var inNetWorth = true
     public private(set) var multiCurrencyCash = false
@@ -163,18 +163,18 @@ public struct AccountFormDraft: Equatable, Sendable {
 
     /// `onTypeChange`: the type defaults apply to every flag the user has not touched, and a
     /// holdings-only type clears the opening balance.
-    public mutating func setType(_ next: String) {
+    public mutating func setType(_ next: OpenAPI.Account.AccountType) {
         let defaults = AccountTypeFlags.of(next)
         type = next
         if !touched.contains(.liquidityClass) { liquidityClass = defaults.liquidityClass }
         if !touched.contains(.spendable) { spendable = defaults.spendable }
         if !touched.contains(.hasCashSleeve) { hasCashSleeve = defaults.hasCashSleeve }
         if !touched.contains(.taxWrapper) { taxWrapper = defaults.taxWrapper }
-        if AccountKind(rawValue: next)?.isHoldingsOnly == true { openingBalance = "" }
+        if AccountKind(next)?.isHoldingsOnly == true { openingBalance = "" }
     }
 
     /// The Liquidity select: marks it touched.
-    public mutating func setLiquidityClass(_ value: String) {
+    public mutating func setLiquidityClass(_ value: OpenAPI.Account.LiquidityClass) {
         touched.insert(.liquidityClass)
         liquidityClass = value
     }
@@ -195,14 +195,14 @@ public struct AccountFormDraft: Equatable, Sendable {
     }
 
     /// `isHoldingsOnlyPortfolioType(form.type)`.
-    public var isHoldingsOnly: Bool { AccountKind(rawValue: type)?.isHoldingsOnly ?? false }
+    public var isHoldingsOnly: Bool { AccountKind(type)?.isHoldingsOnly ?? false }
 
     /// The opening balance and its date show: create mode, not a wallet or exchange.
     public var showsOpeningBalance: Bool { isCreate && !isHoldingsOnly }
 
     /// `accounts.openingBalance.createDebtLabel` for a liability.
     public var openingLabelKey: String {
-        type == AccountKind.liability.rawValue
+        type == .liability
             ? "accounts.openingBalance.createDebtLabel" : "accounts.openingBalance.createLabel"
     }
 
@@ -244,10 +244,7 @@ public struct AccountFormDraft: Equatable, Sendable {
     }
 
     /// `currencyCode("EUR")`.
-    public var normalizedCurrency: String {
-        let code = Self.trimmed(currency).uppercased()
-        return code.isEmpty ? "EUR" : code
-    }
+    public var normalizedCurrency: CurrencyCode { currency }
 
     /// `toAccountPayload(values, "create")`: empty optionals are left out.
     public var createBody: OpenAPI.AccountCreate {
@@ -255,9 +252,11 @@ public struct AccountFormDraft: Equatable, Sendable {
         let place = Self.trimmed(institution)
         return OpenAPI.AccountCreate(
             name: Self.trimmed(name), displayName: display.isEmpty ? nil : display,
-            institution: place.isEmpty ? nil : place, currency: normalizedCurrency, type: type,
-            liquidityClass: liquidityClass, spendable: spendable, inNetWorth: inNetWorth, taxWrapper: taxWrapper,
-            owner: owner, multiCurrencyCash: multiCurrencyCash, hasCashSleeve: hasCashSleeve)
+            institution: place.isEmpty ? nil : place, currency: normalizedCurrency,
+            type: OpenAPI.AccountCreate.AccountCreateType(rawValue: type.rawValue),
+            liquidityClass: OpenAPI.AccountCreate.LiquidityClass(rawValue: liquidityClass.rawValue), spendable: spendable,
+            inNetWorth: inNetWorth, taxWrapper: OpenAPI.AccountCreate.TaxWrapper(rawValue: taxWrapper.rawValue),
+            owner: OpenAPI.AccountCreate.Owner(rawValue: owner.rawValue), multiCurrencyCash: multiCurrencyCash, hasCashSleeve: hasCashSleeve)
     }
 
     /// `toAccountEditPayload`: empty optionals are sent as `null` so the server clears them.
@@ -269,10 +268,10 @@ public struct AccountFormDraft: Equatable, Sendable {
         patch.displayName = .some(display.isEmpty ? nil : display)
         patch.institution = .some(place.isEmpty ? nil : place)
         patch.currency = normalizedCurrency
-        patch.type = type
-        patch.owner = owner
-        patch.liquidityClass = liquidityClass
-        patch.taxWrapper = taxWrapper
+        patch.type = OpenAPI.AccountUpdate.AccountUpdateType(rawValue: type.rawValue)
+        patch.owner = OpenAPI.AccountUpdate.Owner(rawValue: owner.rawValue)
+        patch.liquidityClass = OpenAPI.AccountUpdate.LiquidityClass(rawValue: liquidityClass.rawValue)
+        patch.taxWrapper = OpenAPI.AccountUpdate.TaxWrapper(rawValue: taxWrapper.rawValue)
         patch.spendable = spendable
         patch.inNetWorth = inNetWorth
         patch.multiCurrencyCash = multiCurrencyCash
@@ -312,7 +311,7 @@ public struct ReconcileDraft: Equatable, Sendable {
     public let account: OpenAPI.Account
     public let numberFormat: NumberFormat
     /// The statement currency.
-    public private(set) var selectedCurrency: String
+    public private(set) var selectedCurrency: CurrencyCode
     /// The new statement reading as typed.
     public private(set) var reading = ""
     /// The As of date; `nil` once cleared.
@@ -328,10 +327,10 @@ public struct ReconcileDraft: Equatable, Sendable {
     }
 
     /// `reconcilable_currency ?? currency`.
-    public var defaultCurrency: String { account.reconcilableCurrency ?? account.currency }
+    public var defaultCurrency: CurrencyCode { account.reconcilableCurrency ?? account.currency }
 
     /// Every currency the account holds or has a statement for, sorted.
-    public var availableCurrencies: [String] {
+    public var availableCurrencies: [CurrencyCode] {
         var codes = Set([defaultCurrency])
         for part in account.balanceParts ?? [] { codes.insert(part.currency) }
         for statement in account.statementBalances ?? [] { codes.insert(statement.currency) }
@@ -342,7 +341,7 @@ public struct ReconcileDraft: Equatable, Sendable {
     public var showsCurrencyPicker: Bool { account.multiCurrencyCash && availableCurrencies.count > 1 }
 
     /// Switching the currency clears the reading.
-    public mutating func selectCurrency(_ code: String) {
+    public mutating func selectCurrency(_ code: CurrencyCode) {
         selectedCurrency = code
         reading = ""
     }
@@ -448,10 +447,10 @@ public enum ReconcileAction: Equatable, Sendable {
 
 /// The Set opening balance dialog (`OpeningBalanceDialog`).
 public struct OpeningBalanceDraft: Equatable, Sendable {
-    public let accountId: Int
+    public let accountId: AccountID
     public let accountName: String
     /// `reconcilable_currency ?? currency`: the anchor's currency.
-    public let currency: String
+    public let currency: CurrencyCode
     public let numberFormat: NumberFormat
     public var balance: String
     /// `nil` once cleared.
@@ -504,11 +503,11 @@ public enum AccountLoad<Value: Equatable & Sendable>: Equatable, Sendable {
 /// The Merge account dialog (`MergeAccountDialog`).
 public struct MergeDraft: Equatable, Sendable {
     public let source: OpenAPI.Account
-    public private(set) var targetId: Int?
+    public private(set) var targetId: AccountID?
     /// The preview of the chosen pair; `nil` before a target is chosen.
     public var preview: AccountLoad<AccountMergePreview>?
     /// The acknowledgement holds only for the pair it was given for.
-    public private(set) var acknowledgedTarget: Int?
+    public private(set) var acknowledgedTarget: AccountID?
     public var isMerging = false
 
     public init(source: OpenAPI.Account) {
@@ -516,7 +515,7 @@ public struct MergeDraft: Equatable, Sendable {
     }
 
     /// A new target: the preview reloads and the acknowledgement clears.
-    public mutating func selectTarget(_ id: Int) {
+    public mutating func selectTarget(_ id: AccountID) {
         targetId = id
         acknowledgedTarget = nil
         preview = .loading
@@ -551,10 +550,10 @@ public enum LotDestination: Equatable, Hashable, Sendable {
     case keep
     /// `UNASSIGNED_PORTFOLIO_LOTS`.
     case unassigned
-    case account(Int)
+    case account(AccountID)
 
     /// The request's `to_account_id`.
-    public var toAccountId: Int? {
+    public var toAccountId: AccountID? {
         if case .account(let id) = self { return id }
         return nil
     }
@@ -566,14 +565,14 @@ public struct LotMoveKey: Equatable, Sendable {
     public let key: String
 
     /// `${transaction_ids.join(",")}|${account.id}|${destination ?? "unassigned"}`.
-    public static func fingerprint(ids: [Int], from accountId: Int, to destination: Int?) -> String {
-        "\(ids.map(String.init).joined(separator: ","))|\(accountId)|\(destination.map(String.init) ?? "unassigned")"
+    public static func fingerprint(ids: [TransactionID], from accountId: AccountID, to destination: AccountID?) -> String {
+        "\(ids.map { String($0.rawValue) }.joined(separator: ","))|\(accountId)|\(destination.map { String($0.rawValue) } ?? "unassigned")"
     }
 }
 
 /// One currency part of a residual balance.
 public struct AccountResidual: Equatable, Sendable {
-    public let currency: String
+    public let currency: CurrencyCode
     public let balance: Decimal
 }
 

@@ -8,13 +8,13 @@ public protocol CategoriesService: Sendable {
     /// `createCategoryNode({ name, parentId, description })`.
     func createCategoryNode(_ body: CategoryNodeBody) async throws
     /// `updateCategoryNode(id, { name, parentId, description })` (the dialog's edit).
-    func updateCategoryNode(id: Int, body: CategoryNodeBody) async throws
+    func updateCategoryNode(id: CategoryID, body: CategoryNodeBody) async throws
     /// `updateCategoryNode(id, { is_active })` (Mark inactive / Mark active and their Undo).
-    func setCategoryActive(id: Int, isActive: Bool) async throws
+    func setCategoryActive(id: CategoryID, isActive: Bool) async throws
     /// `deleteCategoryNode(id)`.
-    func deleteCategoryNode(id: Int) async throws
+    func deleteCategoryNode(id: CategoryID) async throws
     /// `mergeCategoryNode(sourceId, targetId)`.
-    func mergeCategoryNode(sourceId: Int, targetId: Int) async throws
+    func mergeCategoryNode(sourceId: CategoryID, targetId: CategoryID) async throws
 }
 
 /// The body `CategoryNodeDialog` sends on create and edit: `{ name, parentId, description }`
@@ -23,10 +23,10 @@ public protocol CategoriesService: Sendable {
 /// moves the node to the root.
 public struct CategoryNodeBody: Equatable, Sendable, Encodable {
     public let name: String
-    public let parentId: Int?
+    public let parentId: CategoryID?
     public let description: String?
 
-    public init(name: String, parentId: Int?, description: String?) {
+    public init(name: String, parentId: CategoryID?, description: String?) {
         self.name = name
         self.parentId = parentId
         self.description = description
@@ -63,19 +63,19 @@ extension APIClient: CategoriesService {
         _ = try await send(CategoryNodeCreateRequest(body: body))
     }
 
-    public func updateCategoryNode(id: Int, body: CategoryNodeBody) async throws {
+    public func updateCategoryNode(id: CategoryID, body: CategoryNodeBody) async throws {
         _ = try await send(CategoryNodeUpdateRequest(id: id, body: body))
     }
 
-    public func setCategoryActive(id: Int, isActive: Bool) async throws {
+    public func setCategoryActive(id: CategoryID, isActive: Bool) async throws {
         _ = try await send(CategoryNodeStatusRequest(id: id, isActive: isActive))
     }
 
-    public func deleteCategoryNode(id: Int) async throws {
+    public func deleteCategoryNode(id: CategoryID) async throws {
         _ = try await send(OpenAPIOperations.DeleteCategoryNode(id: id))
     }
 
-    public func mergeCategoryNode(sourceId: Int, targetId: Int) async throws {
+    public func mergeCategoryNode(sourceId: CategoryID, targetId: CategoryID) async throws {
         _ = try await send(CategoryMergeRequest(sourceId: sourceId, targetId: targetId))
     }
 }
@@ -142,10 +142,10 @@ public struct CategoryNodeUpdateRequest: APIOperation {
     public static let method = OpenAPIOperations.UpdateCategoryNode.method
     public static let pathTemplate = OpenAPIOperations.UpdateCategoryNode.pathTemplate
 
-    public let id: Int
+    public let id: CategoryID
     public let body: CategoryNodeBody
 
-    public init(id: Int, body: CategoryNodeBody) {
+    public init(id: CategoryID, body: CategoryNodeBody) {
         self.id = id
         self.body = body
     }
@@ -164,10 +164,10 @@ public struct CategoryNodeStatusRequest: APIOperation {
     public static let method = OpenAPIOperations.UpdateCategoryNode.method
     public static let pathTemplate = OpenAPIOperations.UpdateCategoryNode.pathTemplate
 
-    public let id: Int
+    public let id: CategoryID
     public let isActive: Bool
 
-    public init(id: Int, isActive: Bool) {
+    public init(id: CategoryID, isActive: Bool) {
         self.id = id
         self.isActive = isActive
     }
@@ -187,10 +187,10 @@ public struct CategoryMergeRequest: APIOperation {
     public static let method = OpenAPIOperations.MergeCategoryNode.method
     public static let pathTemplate = OpenAPIOperations.MergeCategoryNode.pathTemplate
 
-    public let sourceId: Int
-    public let targetId: Int
+    public let sourceId: CategoryID
+    public let targetId: CategoryID
 
-    public init(sourceId: Int, targetId: Int) {
+    public init(sourceId: CategoryID, targetId: CategoryID) {
         self.sourceId = sourceId
         self.targetId = targetId
     }

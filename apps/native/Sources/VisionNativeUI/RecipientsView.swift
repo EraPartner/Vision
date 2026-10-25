@@ -828,7 +828,7 @@ struct MatchRulesSheet: View {
     }
 
     private func ruleRow(_ rule: OpenAPI.RecipientPattern, state: MatchRulesState) -> some View {
-        let kindLabel = MatchRuleKind(rawValue: rule.patternKind).map { strings.t($0.labelKey) } ?? rule.patternKind
+        let kindLabel = MatchRuleKind(rule.patternKind).map { strings.t($0.labelKey) } ?? rule.patternKind.rawValue
         return HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
@@ -842,8 +842,8 @@ struct MatchRulesSheet: View {
                             .help(strings.t("recipientPatterns.caseSensitive"))
                             .accessibilityLabel(strings.t("recipientPatterns.caseSensitive"))
                     }
-                    if rule.source != "user" {
-                        VisionBadge(text: rule.source, tone: .secondary, small: true)
+                    if rule.source != .user {
+                        VisionBadge(text: rule.source.rawValue, tone: .secondary, small: true)
                     }
                 }
                 if let notes = rule.notes, !notes.isEmpty {

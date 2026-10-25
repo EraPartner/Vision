@@ -8,10 +8,10 @@ import VisionNativeCore
 public struct AccountDetailView: View {
     private let model: AccountsModel
     private let shell: NativeShellModel
-    private let accountId: Int
+    private let accountId: AccountID
     @Environment(\.visionTheme) private var theme
 
-    public init(model: AccountsModel, shell: NativeShellModel, accountId: Int) {
+    public init(model: AccountsModel, shell: NativeShellModel, accountId: AccountID) {
         self.model = model
         self.shell = shell
         self.accountId = accountId
@@ -350,7 +350,7 @@ struct AccountDetailContent: View {
                                     .lineLimit(1)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 MoneyText(
-                                    amount: row.amount, currency: row.currency ?? account.currency, settings: settings,
+                                    amount: row.amount, currency: (row.currency ?? account.currency), settings: settings,
                                     signed: true)
                             }
                         }

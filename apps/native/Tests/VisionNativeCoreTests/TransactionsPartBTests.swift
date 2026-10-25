@@ -11,18 +11,18 @@ actor FakeTransactionBulkService: TransactionBulkService {
     private(set) var exportFormats: [ExportFormat] = []
     /// `"ids|add|remove"` per bulk tag.
     private(set) var tagCalls: [String] = []
-    private(set) var transfers: [[Int]] = []
+    private(set) var transfers: [[TransactionID]] = []
     private(set) var createdNames: [String] = []
     private var failing = false
     private var exportedCount: Int? = 3
-    private var existing: [String: Int] = [:]
+    private var existing: [String: RecipientID] = [:]
     private var nextRecipient = 300
 
     init() {}
 
     func fail(_ on: Bool) { failing = on }
     func setExportedCount(_ count: Int?) { exportedCount = count }
-    func setExisting(_ names: [String: Int]) { existing = names }
+    func setExisting(_ names: [String: RecipientID]) { existing = names }
 
     private func check() throws {
         if failing { throw APIError.network("offline") }
@@ -48,13 +48,13 @@ actor FakeTransactionBulkService: TransactionBulkService {
         return BulkExportFile(data: Data("id\n".utf8), exportedCount: exportedCount)
     }
 
-    func bulkTag(ids: [Int], add: [String], remove: [String]) async throws -> OpenAPI.BulkTagResult {
-        tagCalls.append("\(ids.map(String.init).joined(separator: ","))|\(add.joined(separator: ","))|\(remove.joined(separator: ","))")
+    func bulkTag(ids: [TransactionID], add: [String], remove: [String]) async throws -> OpenAPI.BulkTagResult {
+        tagCalls.append("\(ids.map { String($0.rawValue) }.joined(separator: ","))|\(add.joined(separator: ","))|\(remove.joined(separator: ","))")
         try check()
         return OpenAPI.BulkTagResult(added: add.count, removed: remove.count, transactionsAffected: ids.count)
     }
 
-    func markTransfer(_ first: Int, _ second: Int) async throws {
+    func markTransfer(_ first: TransactionID, _ second: TransactionID) async throws {
         transfers.append([first, second])
         try check()
     }
@@ -66,9 +66,10 @@ actor FakeTransactionBulkService: TransactionBulkService {
             return CreatedRecipient(id: id, name: name, isActive: true, createdAt: "2026-01-01", links: [], created: false)
         }
         nextRecipient += 1
-        existing[name] = nextRecipient
+        let created = RecipientID(rawValue: nextRecipient)
+        existing[name] = created
         return CreatedRecipient(
-            id: nextRecipient, name: name, isActive: true, createdAt: "2026-10-12", links: [], created: true)
+            id: created, name: name, isActive: true, createdAt: "2026-10-12", links: [], created: true)
     }
 }
 
@@ -77,13 +78,13 @@ actor FakeSplitsService: SplitsService {
     private(set) var batches: [[SplitShare]] = []
     private(set) var bulkCalls: [String] = []
     private(set) var payments: [String] = []
-    private(set) var settled: [Int] = []
-    private(set) var settledAll: [Int] = []
-    private(set) var deletedSplits: [Int] = []
+    private(set) var settled: [SplitID] = []
+    private(set) var settledAll: [RecipientID] = []
+    private(set) var deletedSplits: [SplitID] = []
     private(set) var summaryLoads = 0
-    private(set) var detailLoads: [Int] = []
+    private(set) var detailLoads: [RecipientID] = []
     private(set) var recentOffsets: [Int] = []
-    private var existing: [Int: [OpenAPI.Split]] = [:]
+    private var existing: [TransactionID: [OpenAPI.Split]] = [:]
     private var owedSplits: [OpenAPI.SplitOwedDetail]
     private var recentRows: [OpenAPI.Transaction]
     private var failing = false
@@ -96,30 +97,30 @@ actor FakeSplitsService: SplitsService {
     }
 
     func fail(_ on: Bool) { failing = on }
-    func setExisting(_ splits: [OpenAPI.Split], transactionId: Int) { existing[transactionId] = splits }
+    func setExisting(_ splits: [OpenAPI.Split], transactionId: TransactionID) { existing[transactionId] = splits }
     func setBulkResult(_ result: OpenAPI.BulkSplitResult) { bulkResult = result }
 
     private func check() throws {
         if failing { throw APIError.network("offline") }
     }
 
-    func splits(transactionId: Int) async throws -> [OpenAPI.Split] {
+    func splits(transactionId: TransactionID) async throws -> [OpenAPI.Split] {
         existing[transactionId] ?? []
     }
 
-    func createSplits(transactionId: Int, shares: [SplitShare]) async throws {
+    func createSplits(transactionId: TransactionID, shares: [SplitShare]) async throws {
         batches.append(shares)
         try check()
     }
 
-    func bulkSplit(transactionIds: [Int], recipientId: Int, mode: BulkSplitMode) async throws -> OpenAPI.BulkSplitResult {
-        bulkCalls.append("\(transactionIds.map(String.init).joined(separator: ","))|\(recipientId)|\(mode.rawValue)")
+    func bulkSplit(transactionIds: [TransactionID], recipientId: RecipientID, mode: BulkSplitMode) async throws -> OpenAPI.BulkSplitResult {
+        bulkCalls.append("\(transactionIds.map { String($0.rawValue) }.joined(separator: ","))|\(recipientId)|\(mode.rawValue)")
         try check()
         return bulkResult
     }
 
     /// The server's `OwedTotals` for the open splits (`unconverted` counts the rows left out).
-    private func totals(_ open: [OpenAPI.SplitOwedDetail], currency: String) -> OpenAPI.OwedTotals {
+    private func totals(_ open: [OpenAPI.SplitOwedDetail], currency: CurrencyCode) -> OpenAPI.OwedTotals {
         OpenAPI.OwedTotals(
             currency: currency, remaining: open.reduce(Decimal(0)) { $0 + $1.remaining },
             unconvertedCount: unconvertedCount, unconvertedCurrencies: unconvertedCount > 0 ? ["CHF"] : [])
@@ -128,7 +129,7 @@ actor FakeSplitsService: SplitsService {
     private var unconvertedCount = 0
     func setUnconvertedCount(_ count: Int) { unconvertedCount = count }
 
-    func owedSummary(currency: String) async throws -> OwedSummaryPage {
+    func owedSummary(currency: CurrencyCode) async throws -> OwedSummaryPage {
         summaryLoads += 1
         try check()
         let open = owedSplits.filter { !$0.isSettled }
@@ -144,30 +145,30 @@ actor FakeSplitsService: SplitsService {
             ], summary: totals)
     }
 
-    func owed(recipientId: Int, currency: String) async throws -> OwedDetailPage {
+    func owed(recipientId: RecipientID, currency: CurrencyCode) async throws -> OwedDetailPage {
         detailLoads.append(recipientId)
         try check()
         let open = owedSplits.filter { !$0.isSettled }
         return OwedDetailPage(items: open, summary: totals(open, currency: currency))
     }
 
-    func exportOwedCsv(recipientId: Int) async throws -> Data {
+    func exportOwedCsv(recipientId: RecipientID) async throws -> Data {
         try check()
         return Data("date,amount\n".utf8)
     }
 
-    func recordPayment(splitId: Int, amount: Decimal) async throws {
+    func recordPayment(splitId: SplitID, amount: Decimal) async throws {
         payments.append("\(splitId):\(amount)")
         try check()
     }
 
-    func settle(splitId: Int) async throws {
+    func settle(splitId: SplitID) async throws {
         settled.append(splitId)
         try check()
         owedSplits.removeAll { $0.id == splitId }
     }
 
-    func settleAll(recipientId: Int) async throws -> Int {
+    func settleAll(recipientId: RecipientID) async throws -> Int {
         settledAll.append(recipientId)
         try check()
         let count = owedSplits.count
@@ -175,13 +176,13 @@ actor FakeSplitsService: SplitsService {
         return count
     }
 
-    func deleteSplit(id: Int) async throws {
+    func deleteSplit(id: SplitID) async throws {
         deletedSplits.append(id)
         try check()
         owedSplits.removeAll { $0.id == id }
     }
 
-    func recipientTransactions(groupId: Int, offset: Int, limit: Int) async throws -> TransactionPage {
+    func recipientTransactions(groupId: RecipientGroupID, offset: Int, limit: Int) async throws -> TransactionPage {
         recentOffsets.append(offset)
         let end = min(recentRows.count, offset + limit)
         let items = offset < end ? Array(recentRows[offset..<end]) : []
@@ -190,15 +191,15 @@ actor FakeSplitsService: SplitsService {
 }
 
 enum SplitFixture {
-    static func owed(_ id: Int, amount: Decimal, paid: Decimal = 0, memo: String? = "Dinner") -> OpenAPI.SplitOwedDetail {
+    static func owed(_ id: SplitID, amount: Decimal, paid: Decimal = 0, memo: String? = "Dinner") -> OpenAPI.SplitOwedDetail {
         OpenAPI.SplitOwedDetail(
-            id: id, transactionId: 40 + id, recipientId: 4, recipientName: "Anna", amount: amount, amountPaid: paid,
+            id: id, transactionId: TransactionID(rawValue: 40 + id.rawValue), recipientId: 4, recipientName: "Anna", amount: amount, amountPaid: paid,
             note: id == 1 ? "Half" : nil, isSettled: false, createdAt: "2026-10-01", updatedAt: "2026-10-01",
-            transactionDate: "2026-10-0\(id)", transactionMemo: memo, transactionAmount: -amount * 2,
+            transactionDate: "2026-10-0\(id.rawValue)", transactionMemo: memo, transactionAmount: -amount * 2,
             transactionCurrency: "EUR", transactionRecipientName: "Bistro", remaining: amount - paid)
     }
 
-    static func split(_ id: Int, transactionId: Int, amount: Decimal, name: String?) -> OpenAPI.Split {
+    static func split(_ id: SplitID, transactionId: TransactionID, amount: Decimal, name: String?) -> OpenAPI.Split {
         OpenAPI.Split(
             id: id, transactionId: transactionId, recipientId: 4, recipientName: name, amount: amount, amountPaid: 0,
             isSettled: false, createdAt: "2026-10-01", updatedAt: "2026-10-01")
@@ -231,8 +232,9 @@ enum SplitFixture {
 @MainActor
 @Suite struct AddTransactionTests {
     static let anchored = OpenAPI.Account(
-        id: 7, name: "BE00 1234", displayName: "Everyday", currency: "USD", type: "checking", liquidityClass: "cash",
-        spendable: true, inNetWorth: true, taxWrapper: "none", owner: "self", multiCurrencyCash: false,
+        id: 7, name: "BE00 1234", displayName: "Everyday", currency: "USD", type: .checking,
+        liquidityClass: .init(rawValue: "cash"), spendable: true, inNetWorth: true, taxWrapper: .none,
+        owner: .init(rawValue: "self"), multiCurrencyCash: false,
         hasCashSleeve: false, anchorDate: "2026-10-10", isActive: true, createdAt: "2026-01-01",
         updatedAt: "2026-01-01")
 
@@ -250,7 +252,7 @@ enum SplitFixture {
         model.requestAdd()
         let form = try #require(model.addForm)
         #expect(form.draft.date == "2026-10-12")
-        #expect(form.draft.currency == "EUR")
+        #expect(form.draft.currencyText == "EUR")
         #expect(!form.isDirty)
         #expect(form.hintKey == "addTxn.hint.amount")
         #expect(form.visibleErrors(format: .eu).isEmpty)
@@ -276,7 +278,7 @@ enum SplitFixture {
         form.setKind(.transfer)
         #expect(form.hintKey == "addTxn.hint.account")
         form.pickAccount(name: "BE00 1234", id: 7)
-        #expect(form.draft.currency == "USD")
+        #expect(form.draft.currencyText == "USD")
         #expect(form.hintKey == "addTxn.hint.toAccount")
         form.pickToAccount(name: "BE00 1234", id: 7)
         #expect(form.errors(format: .eu)[.toAccount] == "addTxn.transferSameAccount")
@@ -285,7 +287,7 @@ enum SplitFixture {
         #expect(form.hintKey == "addTxn.hint.ready")
         // Currency is upper-cased and at most 10 characters; memo and comment are capped.
         form.setCurrency("usdollarsxyz")
-        #expect(form.draft.currency == "USDOLLARSX")
+        #expect(form.draft.currencyText == "USDOLLARSX")
         form.setMemo(String(repeating: "m", count: 600))
         #expect(form.draft.memo.count == 500)
         form.setComment(String(repeating: "c", count: 1200))
@@ -643,7 +645,7 @@ enum SplitFixture {
     @Test func recentTransactionsPageByTenAndFilterLocally() async throws {
         let recent = (1...23).map { index in
             TxFixture.wire(
-                id: index, categoryId: index == 1 ? nil : 5, category: index == 1 ? nil : "Food",
+                id: TransactionID(rawValue: index), categoryId: index == 1 ? nil : 5, category: index == 1 ? nil : "Food",
                 bank: index == 2 ? nil : "BE00 1234", memo: index == 3 ? nil : "Lunch \(index)")
         }
         let splits = FakeSplitsService(owed: [SplitFixture.owed(1, amount: 20)], recent: recent)

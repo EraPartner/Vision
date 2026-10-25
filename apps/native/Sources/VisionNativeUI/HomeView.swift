@@ -21,7 +21,7 @@ public struct HomeView: View {
     }
     private var strings: any Localizing { shell.strings }
     private var settings: NativeAppSettings { shell.settings }
-    private var currency: String { settings.defaultCurrency }
+    private var currency: CurrencyCode { LedgerCurrency.display(settings) }
 
     public var body: some View {
         ScrollView {
@@ -75,7 +75,7 @@ public struct HomeView: View {
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task(id: shell.route.string + currency + String(shell.settingsRevision)) { await reload() }
+        .task(id: shell.route.string + currency.rawValue + String(shell.settingsRevision)) { await reload() }
         .onAppear {
             shell.setLeaveGuard(
                 NativeLeaveGuard(
@@ -113,7 +113,7 @@ public struct HomeView: View {
         _ = await (home, pickers)
     }
     private func navigate(_ route: String) { shell.navigate(to: route) }
-    private func money(_ value: Decimal, currency code: String? = nil) -> String {
+    private func money(_ value: Decimal, currency code: CurrencyCode? = nil) -> String {
         MoneyText.text(value, currency: code ?? currency, settings: settings, signed: false)
     }
 
@@ -386,7 +386,7 @@ public struct HomeView: View {
             }
             ForEach(model.sortedAccounts.prefix(6), id: \.id) { account in
                 routeRow(
-                    account.displayName ?? account.name, route: "/accounts/\(account.id)",
+                    account.displayName ?? account.name, route: "/accounts/\(account.id.rawValue)",
                     subtitle: [
                         strings.t("accounts.type.\(account.type)"),
                         AccountProvenance.text(account, settings: settings, strings: strings),
@@ -458,7 +458,7 @@ public struct HomeView: View {
                     }, id: \.id
                 ) { account in
                     routeRow(
-                        AccountKinds.label(account), route: "/accounts/\(account.id)",
+                        AccountKinds.label(account), route: "/accounts/\(account.id.rawValue)",
                         subtitle: AccountProvenance.text(account, settings: settings, strings: strings),
                         trailing: money(account.computedBalance ?? 0, currency: account.currency))
                     if let drift = AccountDrift.of(
@@ -525,7 +525,7 @@ public struct HomeView: View {
             }
             ForEach(model.recentRows(), id: \.id) { row in
                 routeRow(
-                    row.recipientName ?? row.memo ?? "", route: "/transactions?id=\(row.id)",
+                    row.recipientName ?? row.memo ?? "", route: "/transactions?id=\(row.id.rawValue)",
                     subtitle: VisionFormat.appDate(row.transactionDate, format: settings.dateFormat),
                     amount: (row.amount, row.currency ?? currency))
             }
@@ -676,7 +676,7 @@ public struct HomeView: View {
     }
     private func routeRow(
         _ title: String, route: String, subtitle: String? = nil, trailing: String? = nil,
-        amount: (Decimal, String)? = nil, signed: Bool = true, colored: Bool = true, symbol: String? = nil
+        amount: (Decimal, CurrencyCode)? = nil, signed: Bool = true, colored: Bool = true, symbol: String? = nil
     ) -> some View {
         Button {
             navigate(route)

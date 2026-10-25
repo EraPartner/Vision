@@ -52,7 +52,7 @@ public enum SplitType: String, CaseIterable, Sendable {
 /// One person card of the dialog.
 public struct SplitEntry: Equatable, Sendable, Identifiable {
     public let id: Int
-    public var recipientId: Int?
+    public var recipientId: RecipientID?
     /// The amount owed as typed (custom only).
     public var amount = ""
     public var note = ""
@@ -111,7 +111,7 @@ public final class SplitDialogModel {
         splitType = type
     }
 
-    public func setRecipient(_ entryId: Int, to recipientId: Int?) {
+    public func setRecipient(_ entryId: Int, to recipientId: RecipientID?) {
         guard let index = entries.firstIndex(where: { $0.id == entryId }) else { return }
         entries[index].recipientId = recipientId
     }
@@ -150,7 +150,7 @@ public final class SplitDialogModel {
     public var absoluteAmount: Decimal { row.amount < 0 ? -row.amount : row.amount }
 
     /// The transaction's currency for the amounts.
-    public var currency: String { row.displayCurrency }
+    public var currency: CurrencyCode { row.displayCurrency }
 
     /// The cards with a person chosen.
     public var validEntries: [SplitEntry] { entries.filter { $0.recipientId != nil } }

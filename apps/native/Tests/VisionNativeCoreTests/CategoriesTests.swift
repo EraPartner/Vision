@@ -35,23 +35,23 @@ actor FakeCategoriesService: CategoriesService {
         bodies.append(String(decoding: try APIBody.encode(body), as: UTF8.self))
     }
 
-    func updateCategoryNode(id: Int, body: CategoryNodeBody) async throws {
+    func updateCategoryNode(id: CategoryID, body: CategoryNodeBody) async throws {
         log.append("update \(id)")
         if let writeFailure { throw writeFailure }
         bodies.append(String(decoding: try APIBody.encode(body), as: UTF8.self))
     }
 
-    func setCategoryActive(id: Int, isActive: Bool) async throws {
+    func setCategoryActive(id: CategoryID, isActive: Bool) async throws {
         log.append("active \(id) \(isActive)")
         if let writeFailure { throw writeFailure }
     }
 
-    func deleteCategoryNode(id: Int) async throws {
+    func deleteCategoryNode(id: CategoryID) async throws {
         log.append("delete \(id)")
         if let writeFailure { throw writeFailure }
     }
 
-    func mergeCategoryNode(sourceId: Int, targetId: Int) async throws {
+    func mergeCategoryNode(sourceId: CategoryID, targetId: CategoryID) async throws {
         log.append("merge \(sourceId)->\(targetId)")
         if let writeFailure { throw writeFailure }
     }
@@ -68,7 +68,7 @@ enum CategoriesFixture {
         ])
 
     static func node(
-        _ id: Int, _ name: String, parent: OpenAPI.CategoryNode? = nil, active: Bool = true, description: String? = nil
+        _ id: CategoryID, _ name: String, parent: OpenAPI.CategoryNode? = nil, active: Bool = true, description: String? = nil
     ) -> OpenAPI.CategoryNode {
         let path = (parent?.path ?? []) + [name]
         return OpenAPI.CategoryNode(

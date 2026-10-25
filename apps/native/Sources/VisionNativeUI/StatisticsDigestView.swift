@@ -45,7 +45,7 @@ struct StatisticsDigestView: View {
                         ForEach(data.subscriptionCreep.new) { row in
                             finding(
                                 title: row.recipientName, kind: "insights.panel.newSubscriptions", body: row.dismissal,
-                                key: "new:\(row.id)"
+                                key: "new:\(row.id.rawValue)"
                             ) {
                                 Text(strings.t("recurring.pattern.\(row.detectedPattern)")).font(.caption)
                                 amount(row.latestAmount, currency: row.currency)
@@ -54,7 +54,7 @@ struct StatisticsDigestView: View {
                         ForEach(data.subscriptionCreep.priceChanges) { row in
                             finding(
                                 title: row.recipientName, kind: "insights.panel.priceChanges", body: row.dismissal,
-                                key: "price:\(row.id)"
+                                key: "price:\(row.id.rawValue)"
                             ) {
                                 amount(row.previousAmount, currency: row.currency)
                                 Image(systemName: "arrow.right")
@@ -72,14 +72,14 @@ struct StatisticsDigestView: View {
                                 title: row.categoryName, kind: "insights.panel.categoryOverspend", body: row.dismissal,
                                 key: "outlier:\(row.id)"
                             ) {
-                                amount(row.currentAmount, currency: settings.defaultCurrency)
+                                amount(row.currentAmount, currency: LedgerCurrency.display(settings))
                                 Text(
                                     strings.t(
                                         "insights.panel.vsTypical",
                                         [
                                             "day": String(row.comparisonEndDay),
                                             "amount": MoneyText.text(
-                                                row.baselineMedian, currency: settings.defaultCurrency,
+                                                row.baselineMedian, currency: LedgerCurrency.display(settings),
                                                 settings: settings, signed: false),
                                         ])
                                 )
@@ -94,7 +94,7 @@ struct StatisticsDigestView: View {
             Text(error).foregroundStyle(theme.destructive)
         }
     }
-    private func amount(_ value: Decimal, currency: String) -> some View {
+    private func amount(_ value: Decimal, currency: CurrencyCode) -> some View {
         MoneyText(amount: value, currency: currency, settings: settings, signed: false, colored: false)
     }
     private func finding<Content: View>(

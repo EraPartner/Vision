@@ -54,29 +54,29 @@ actor FakeRecipientsService: RecipientsService {
         return createdNew
     }
 
-    func updatePayee(id: Int, patch: PayeePatch) async throws {
+    func updatePayee(id: RecipientID, patch: PayeePatch) async throws {
         log.append("update \(id)")
         if let writeFailure { throw writeFailure }
         bodies.append(String(decoding: try APIBody.encode(patch), as: UTF8.self))
     }
 
-    func deletePayee(id: Int) async throws {
+    func deletePayee(id: RecipientID) async throws {
         log.append("delete \(id)")
         if let writeFailure { throw writeFailure }
     }
 
-    func mergePayees(primaryId: Int, aliasIds: [Int]) async throws -> PayeeMergeResult {
-        log.append("merge \(aliasIds)->\(primaryId)")
+    func mergePayees(primaryId: RecipientID, aliasIds: [RecipientID]) async throws -> PayeeMergeResult {
+        log.append("merge \(aliasIds.map(\.rawValue))->\(primaryId)")
         if let writeFailure { throw writeFailure }
         return mergeResult
     }
 
-    func unmergePayee(id: Int) async throws {
+    func unmergePayee(id: RecipientID) async throws {
         log.append("unmerge \(id)")
         if let writeFailure { throw writeFailure }
     }
 
-    func matchRules(recipientId: Int) async throws -> [OpenAPI.RecipientPattern] {
+    func matchRules(recipientId: RecipientID) async throws -> [OpenAPI.RecipientPattern] {
         log.append("rules \(recipientId)")
         let answer = rules
         if let gate = rulesGate {
@@ -86,7 +86,7 @@ actor FakeRecipientsService: RecipientsService {
         return answer
     }
 
-    func createMatchRule(recipientId: Int, body: MatchRuleBody) async throws {
+    func createMatchRule(recipientId: RecipientID, body: MatchRuleBody) async throws {
         log.append("create rule \(recipientId)")
         if let gate = ruleWriteGate {
             ruleWriteGate = nil
@@ -96,18 +96,18 @@ actor FakeRecipientsService: RecipientsService {
         bodies.append(String(decoding: try APIBody.encode(body), as: UTF8.self))
     }
 
-    func updateMatchRule(recipientId: Int, patternId: Int, patch: MatchRulePatch) async throws {
+    func updateMatchRule(recipientId: RecipientID, patternId: RecipientPatternID, patch: MatchRulePatch) async throws {
         log.append("update rule \(recipientId)/\(patternId)")
         if let writeFailure { throw writeFailure }
         bodies.append(String(decoding: try APIBody.encode(patch), as: UTF8.self))
     }
 
-    func deleteMatchRule(recipientId: Int, patternId: Int) async throws {
+    func deleteMatchRule(recipientId: RecipientID, patternId: RecipientPatternID) async throws {
         log.append("delete rule \(recipientId)/\(patternId)")
         if let writeFailure { throw writeFailure }
     }
 
-    func previewMatchRule(recipientId: Int, pattern: String, kind: MatchRuleKind, caseSensitive: Bool)
+    func previewMatchRule(recipientId: RecipientID, pattern: String, kind: MatchRuleKind, caseSensitive: Bool)
         async throws -> Int
     {
         log.append("preview \(recipientId) \(pattern) \(kind.rawValue) \(caseSensitive)")
@@ -135,8 +135,8 @@ enum RecipientsFixture {
         ])
 
     static func payee(
-        _ id: Int, _ name: String, account: String? = nil, category: String? = nil, categoryId: Int? = nil,
-        primary: (id: Int, name: String)? = nil, aliases: Int? = nil, notes: String? = nil, active: Bool = true
+        _ id: RecipientID, _ name: String, account: String? = nil, category: String? = nil,
+        categoryId: CategoryID? = nil, primary: (id: RecipientID, name: String)? = nil, aliases: Int? = nil, notes: String? = nil, active: Bool = true
     ) -> OpenAPI.Recipient {
         OpenAPI.Recipient(
             id: id, name: name, primaryBankAccount: account, defaultCategoryId: categoryId,
@@ -145,11 +145,12 @@ enum RecipientsFixture {
     }
 
     static func rule(
-        _ id: Int, _ pattern: String, kind: String = "literal_prefix", active: Bool = true, notes: String? = nil
+        _ id: RecipientPatternID, _ pattern: String, kind: String = "literal_prefix", active: Bool = true,
+        notes: String? = nil
     ) -> OpenAPI.RecipientPattern {
         OpenAPI.RecipientPattern(
-            id: id, pattern: pattern, patternKind: kind, caseSensitive: false, priority: 100, isActive: active,
-            source: "user", notes: notes, createdAt: "2026-01-01")
+            id: id, pattern: pattern, patternKind: .init(rawValue: kind), caseSensitive: false, priority: 100, isActive: active,
+            source: .user, notes: notes, createdAt: "2026-01-01")
     }
 
     /// KBC (two aliases), its aliases Kbc Bank and KBC NV, Albert Heijn and Delhaize.

@@ -63,9 +63,9 @@ public enum StatisticsMetric: String, CaseIterable, Sendable {
 
 public struct StatisticsCategoryPivot: Decodable, Equatable, Sendable {
     public struct Item: Decodable, Equatable, Sendable {
-        public let categoryId: Int?
+        public let categoryId: CategoryID?
         public let categoryName: String
-        public let categoryPathIds: [Int]?
+        public let categoryPathIds: [CategoryID]?
         public let categoryPathSegments: [String]?
         public let total: Decimal
         public let income: Decimal?
@@ -86,14 +86,14 @@ public struct StatisticsCategoryPivot: Decodable, Equatable, Sendable {
 
 public struct StatisticsRecipientInsights: Decodable, Equatable, Sendable {
     public struct Merchant: Decodable, Equatable, Sendable, Identifiable {
-        public let recipientId: Int
+        public let recipientId: RecipientID
         public let name: String
         public let totalSpend: Decimal
         public let transactionCount: Int
         public let avgAmount: Decimal
         public let firstSeen: String
         public let lastSeen: String
-        public var id: Int { recipientId }
+        public var id: RecipientID { recipientId }
         public static let tableKeys = ["name", "totalSpend", "transactionCount", "avgAmount", "firstSeen", "lastSeen"]
         public func rawValue(_ key: String) -> TableRawValue {
             switch key {
@@ -108,12 +108,12 @@ public struct StatisticsRecipientInsights: Decodable, Equatable, Sendable {
         }
     }
     public struct Change: Decodable, Equatable, Sendable, Identifiable {
-        public let recipientId: Int
+        public let recipientId: RecipientID
         public let name: String
         public let currentSpend: Decimal
         public let previousSpend: Decimal
         public let changePercent: Decimal
-        public var id: Int { recipientId }
+        public var id: RecipientID { recipientId }
     }
     public let topMerchants: [Merchant]
     public let monthOverMonth: [Change]
@@ -121,11 +121,11 @@ public struct StatisticsRecipientInsights: Decodable, Equatable, Sendable {
 
 public struct StatisticsRecipientYears: Decodable, Equatable, Sendable {
     public struct Merchant: Decodable, Equatable, Sendable, Identifiable {
-        public let recipientId: Int
+        public let recipientId: RecipientID
         public let name: String
         public let totalSpend: Decimal
         public let transactionCount: Int
-        public var id: Int { recipientId }
+        public var id: RecipientID { recipientId }
     }
     public let recipientsByYear: [String: [Merchant]]
 }
@@ -164,9 +164,9 @@ public struct StatisticsYear: Equatable, Sendable, Identifiable {
 public struct StatisticsCategory: Equatable, Sendable, Identifiable {
     public let id: String
     public let name: String
-    public let categoryIds: [Int]
+    public let categoryIds: [CategoryID]
     public let path: [String]
-    public let pathIds: [Int]
+    public let pathIds: [CategoryID]
     public let values: [String: Decimal]
     public let incomeByOwner: [String: [String: Decimal]]
     public var total: Decimal { values.values.reduce(0, +) }
@@ -175,7 +175,7 @@ public struct StatisticsCategory: Equatable, Sendable, Identifiable {
 public struct StatisticsCategoryGroup: Equatable, Sendable, Identifiable {
     public let id: String
     public let name: String
-    public let categoryIds: [Int]
+    public let categoryIds: [CategoryID]
     public let values: [String: Decimal]
     public let children: [StatisticsCategory]
     public var total: Decimal { values.values.reduce(0, +) }
@@ -214,7 +214,7 @@ public struct StatisticsSnapshot: Equatable, Sendable {
         var rows: [String: StatisticsCategory] = [:]
         for (period, items) in entries {
             for item in items {
-                let id = item.categoryId.map(String.init) ?? "null"
+                let id = item.categoryId.map { String($0.rawValue) } ?? "null"
                 let old = rows[id]
                 var values = old?.values ?? [:]
                 values[period, default: 0] += item.amount(for: metric)
@@ -236,7 +236,7 @@ public struct StatisticsSnapshot: Equatable, Sendable {
     public func categoryGroups(metric: StatisticsMetric, periods: Set<String>? = nil) -> [StatisticsCategoryGroup] {
         let rows = categories(metric: metric, periods: periods).filter { metric == .net ? $0.total != 0 : $0.total > 0 }
         return Dictionary(grouping: rows) { row in
-            row.pathIds.first.map { "id:\($0)" } ?? "name:\(row.path.first ?? row.name)"
+            row.pathIds.first.map { "id:\($0.rawValue)" } ?? "name:\(row.path.first ?? row.name)"
         }.map { key, children in
             var values: [String: Decimal] = [:]
             for child in children { for (period, value) in child.values { values[period, default: 0] += value } }

@@ -53,7 +53,7 @@ extension AccountsModel {
 
     private func create(_ draft: AccountFormDraft) async {
         let stamp = draft.openingStamp
-        let created: Int
+        let created: AccountID
         do {
             created = try await service.createAccount(draft.createBody)
         } catch {
@@ -72,7 +72,7 @@ extension AccountsModel {
         await refreshAfterWrite()
     }
 
-    private func saveEdit(_ draft: AccountFormDraft, id: Int) async {
+    private func saveEdit(_ draft: AccountFormDraft, id: AccountID) async {
         do {
             try await service.updateAccount(id: id, patch: draft.patch)
         } catch {
@@ -86,7 +86,7 @@ extension AccountsModel {
 
     /// `setOpeningBalance` with the saved / warning / failed toast.
     @discardableResult
-    private func stampOpeningBalance(id: Int, balance: Decimal, date: String, currency: String) async -> Bool {
+    private func stampOpeningBalance(id: AccountID, balance: Decimal, date: String, currency: CurrencyCode) async -> Bool {
         do {
             let warning = try await service.setOpeningBalance(id: id, balance: balance, date: date, currency: currency)
             if let warning {
@@ -224,7 +224,7 @@ extension AccountsModel {
     }
 
     /// The survivor select: the preview of the new pair loads.
-    public func selectMergeTarget(_ id: Int) async {
+    public func selectMergeTarget(_ id: AccountID) async {
         guard merge != nil else { return }
         merge?.selectTarget(id)
         await loadMergePreview()
@@ -258,7 +258,7 @@ extension AccountsModel {
 
     /// The preview's summary line.
     public func mergeSummary(_ preview: AccountMergePreview, target: OpenAPI.Account) -> String {
-        let currency = preview.projectedBalanceCurrency.flatMap { $0.isEmpty ? nil : $0 } ?? target.currency
+        let currency = preview.projectedBalanceCurrency ?? target.currency
         return t(
             "accounts.mergePreview.summary",
             [
@@ -363,7 +363,9 @@ extension AccountsModel {
     }
 
     /// The key of this exact move: kept while the fingerprint is unchanged.
-    private func moveKey(_ current: LotMoveKey?, ids: [Int], from accountId: Int, to destination: Int?) -> LotMoveKey {
+    private func moveKey(
+        _ current: LotMoveKey?, ids: [TransactionID], from accountId: AccountID, to destination: AccountID?
+    ) -> LotMoveKey {
         let fingerprint = LotMoveKey.fingerprint(ids: ids, from: accountId, to: destination)
         if let current, current.fingerprint == fingerprint { return current }
         return LotMoveKey(fingerprint: fingerprint, key: makeKey())

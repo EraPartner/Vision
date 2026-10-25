@@ -4,30 +4,30 @@ import Foundation
 /// (apps/frontend/src/lib/api/splits.ts), so tests can use a fake.
 public protocol SplitsService: Sendable {
     /// `getSplitsByTransaction(transactionId)`.
-    func splits(transactionId: Int) async throws -> [OpenAPI.Split]
+    func splits(transactionId: TransactionID) async throws -> [OpenAPI.Split]
     /// `createSplitsBatch(transactionId, splits)`.
-    func createSplits(transactionId: Int, shares: [SplitShare]) async throws
+    func createSplits(transactionId: TransactionID, shares: [SplitShare]) async throws
     /// `createBulkSplits({ transaction_ids, recipient_id, mode })`.
-    func bulkSplit(transactionIds: [Int], recipientId: Int, mode: BulkSplitMode) async throws
+    func bulkSplit(transactionIds: [TransactionID], recipientId: RecipientID, mode: BulkSplitMode) async throws
         -> OpenAPI.BulkSplitResult
     /// `getOwedSummary(currency)`: the server converts the amounts to `currency` and totals the
     /// outstanding amount (`summary`, ADR-216).
-    func owedSummary(currency: String) async throws -> OwedSummaryPage
+    func owedSummary(currency: CurrencyCode) async throws -> OwedSummaryPage
     /// `getOwedByRecipient(recipientId, currency)`: the open splits and their server total.
-    func owed(recipientId: Int, currency: String) async throws -> OwedDetailPage
+    func owed(recipientId: RecipientID, currency: CurrencyCode) async throws -> OwedDetailPage
     /// `exportOwedByRecipientCsv(recipientId)`: the file's bytes.
-    func exportOwedCsv(recipientId: Int) async throws -> Data
+    func exportOwedCsv(recipientId: RecipientID) async throws -> Data
     /// `recordSplitPayment(splitId, amount)`.
-    func recordPayment(splitId: Int, amount: Decimal) async throws
+    func recordPayment(splitId: SplitID, amount: Decimal) async throws
     /// `settleSplit(splitId)`.
-    func settle(splitId: Int) async throws
+    func settle(splitId: SplitID) async throws
     /// `settleAllSplitsByRecipient(recipientId)`: `settled_count`.
-    func settleAll(recipientId: Int) async throws -> Int
+    func settleAll(recipientId: RecipientID) async throws -> Int
     /// `deleteSplit(splitId)`.
-    func deleteSplit(id: Int) async throws
+    func deleteSplit(id: SplitID) async throws
     /// `getTransactions({ recipient_group_id, limit, offset, sort_by: "transaction_date",
     /// sort_dir: "desc" })`: the person detail's Recent transactions.
-    func recipientTransactions(groupId: Int, offset: Int, limit: Int) async throws -> TransactionPage
+    func recipientTransactions(groupId: RecipientGroupID, offset: Int, limit: Int) async throws -> TransactionPage
 }
 
 /// `GET /api/splits/owed`: who owes what, and the total outstanding (`OwedTotals`).
@@ -54,12 +54,12 @@ public struct OwedDetailPage: Equatable, Sendable {
 
 /// One person's share the Split transaction dialog sends (`SplitCreateInput`).
 public struct SplitShare: Equatable, Sendable {
-    public let recipientId: Int
+    public let recipientId: RecipientID
     public let amount: Decimal
     /// `note || undefined`: `nil` leaves it out.
     public let note: String?
 
-    public init(recipientId: Int, amount: Decimal, note: String?) {
+    public init(recipientId: RecipientID, amount: Decimal, note: String?) {
         self.recipientId = recipientId
         self.amount = amount
         self.note = note
@@ -79,11 +79,11 @@ public enum BulkSplitMode: String, CaseIterable, Sendable {
 }
 
 extension APIClient: SplitsService {
-    public func splits(transactionId: Int) async throws -> [OpenAPI.Split] {
+    public func splits(transactionId: TransactionID) async throws -> [OpenAPI.Split] {
         try await send(OpenAPIOperations.GetSplitsByTransaction(id: transactionId)).items
     }
 
-    public func createSplits(transactionId: Int, shares: [SplitShare]) async throws {
+    public func createSplits(transactionId: TransactionID, shares: [SplitShare]) async throws {
         let rows = shares.map { share in
             OpenAPIOperations.CreateSplitBatch.Body.SplitsItem(
                 recipientId: share.recipientId, amount: share.amount, note: share.note)
@@ -92,46 +92,48 @@ extension APIClient: SplitsService {
             OpenAPIOperations.CreateSplitBatch(body: .init(transactionId: transactionId, splits: rows)))
     }
 
-    public func bulkSplit(transactionIds: [Int], recipientId: Int, mode: BulkSplitMode) async throws
+    public func bulkSplit(transactionIds: [TransactionID], recipientId: RecipientID, mode: BulkSplitMode) async throws
         -> OpenAPI.BulkSplitResult
     {
         try await send(
             OpenAPIOperations.CreateBulkSplits(
-                body: .init(transactionIds: transactionIds, recipientId: recipientId, mode: mode.rawValue)))
+                body: .init(
+                    transactionIds: transactionIds, recipientId: recipientId,
+                    mode: OpenAPIOperations.CreateBulkSplits.Body.Mode(rawValue: mode.rawValue))))
     }
 
-    public func owedSummary(currency: String) async throws -> OwedSummaryPage {
+    public func owedSummary(currency: CurrencyCode) async throws -> OwedSummaryPage {
         let page = try await send(OpenAPIOperations.GetSplitsOwed(currency: currency))
         return OwedSummaryPage(items: page.items, summary: page.summary)
     }
 
-    public func owed(recipientId: Int, currency: String) async throws -> OwedDetailPage {
+    public func owed(recipientId: RecipientID, currency: CurrencyCode) async throws -> OwedDetailPage {
         let page = try await send(OpenAPIOperations.GetSplitOwedByRecipient(id: recipientId, currency: currency))
         return OwedDetailPage(items: page.items, summary: page.summary)
     }
 
-    public func exportOwedCsv(recipientId: Int) async throws -> Data {
+    public func exportOwedCsv(recipientId: RecipientID) async throws -> Data {
         try await download(OpenAPIOperations.ExportSplitsOwedCsv(id: recipientId))
     }
 
-    public func recordPayment(splitId: Int, amount: Decimal) async throws {
+    public func recordPayment(splitId: SplitID, amount: Decimal) async throws {
         _ = try await send(OpenAPIOperations.PaySplit(id: splitId, body: .init(amount: amount)))
     }
 
-    public func settle(splitId: Int) async throws {
+    public func settle(splitId: SplitID) async throws {
         _ = try await send(OpenAPIOperations.SettleSplit(id: splitId))
     }
 
-    public func settleAll(recipientId: Int) async throws -> Int {
+    public func settleAll(recipientId: RecipientID) async throws -> Int {
         let answer = try await send(OpenAPIOperations.SettleAllSplitsForRecipient(id: recipientId))
         return answer.objectValue?["settled_count"].flatMap(Self.wholeNumber) ?? 0
     }
 
-    public func deleteSplit(id: Int) async throws {
+    public func deleteSplit(id: SplitID) async throws {
         _ = try await send(OpenAPIOperations.DeleteSplit(id: id))
     }
 
-    public func recipientTransactions(groupId: Int, offset: Int, limit: Int) async throws -> TransactionPage {
+    public func recipientTransactions(groupId: RecipientGroupID, offset: Int, limit: Int) async throws -> TransactionPage {
         let list = try await send(
             OpenAPIOperations.GetTransactions(
                 limit: limit, offset: offset, sortBy: "transaction_date", sortDir: "desc", recipientGroupId: groupId))

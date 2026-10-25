@@ -19,19 +19,19 @@ public struct TransactionLabels: Equatable, Sendable {
 /// One loaded transaction of `/transactions` (`TableTransaction` with the wire fields Undo
 /// and Duplicate need). Patches from the inspector and the row editors land here.
 public struct TransactionRow: Equatable, Sendable, Identifiable {
-    public let id: Int
+    public let id: TransactionID
     /// `transaction_date`, `YYYY-MM-DD`.
     public var date: String
     public var memo: String?
-    public var recipientId: Int?
+    public var recipientId: RecipientID?
     public var recipientName: String?
-    public var categoryId: Int?
+    public var categoryId: CategoryID?
     public var categoryName: String?
-    public var accountId: Int?
+    public var accountId: AccountID?
     /// `bank_account`: the account's canonical name.
     public var bank: String?
     public var amount: Decimal
-    public var currency: String?
+    public var currency: CurrencyCode?
     /// The import-stamped statement balance (ADR-094), read-only.
     public var balance: Decimal?
     public var runningBalance: Decimal?
@@ -40,7 +40,7 @@ public struct TransactionRow: Equatable, Sendable, Identifiable {
     public var isActive: Bool
     public var tags: [OpenAPI.TransactionTagRef]
     /// `transfer_peer_id`: the paired leg, once linked as an internal transfer.
-    public var transferPeerId: Int?
+    public var transferPeerId: TransactionID?
     /// `transfer_source`: how the row became (or stays) a transfer; protected classifications
     /// (opening, adjustment, brokerage) are never relinked by hand.
     public var transferSource: String?
@@ -93,9 +93,8 @@ public struct TransactionRow: Equatable, Sendable, Identifiable {
     }
 
     /// `tx.currency ?? "EUR"`, as the backend's running-balance window assumes.
-    public var displayCurrency: String {
-        guard let currency, !currency.isEmpty else { return "EUR" }
-        return currency
+    public var displayCurrency: CurrencyCode {
+        currency ?? LedgerCurrency.eur
     }
 
     public func category(_ labels: TransactionLabels) -> String {
@@ -114,7 +113,7 @@ public struct TransactionRow: Equatable, Sendable, Identifiable {
     }
 
     /// The Account cell: the account's display name, else the bank string.
-    public func accountLabel(_ names: [Int: String]) -> String {
+    public func accountLabel(_ names: [AccountID: String]) -> String {
         if let accountId, let name = names[accountId], !name.isEmpty { return name }
         return bank ?? ""
     }
@@ -152,7 +151,7 @@ public struct TransactionRow: Equatable, Sendable, Identifiable {
     /// `getRowLabel`: "date, payee, amount" for the row's accessibility names.
     public func accessibilityLabel(_ labels: TransactionLabels, settings: NativeAppSettings) -> String {
         let amountText = VisionFormat.currency(
-            amount, code: displayCurrency.uppercased(), locale: settings.numberFormat.locale,
+            amount, code: displayCurrency, locale: settings.numberFormat.locale,
             fractionDigits: settings.showDecimalPlaces)
         return [VisionFormat.appDate(date, format: settings.dateFormat), recipient(labels), amountText]
             .filter { !$0.isEmpty }
@@ -167,7 +166,7 @@ public struct TransactionRow: Equatable, Sendable, Identifiable {
         case .category: return .text(category(labels))
         case .bank: return .text(bank ?? "")
         case .tags: return .text(tags.map(\.slug).joined(separator: ","))
-        case .currency: return .text(displayCurrency)
+        case .currency: return .text(displayCurrency.rawValue)
         case .amount: return .number(amount)
         case .runningBalance: return runningBalance.map { .number($0) } ?? .none
         case .isActive: return .bool(isActive)

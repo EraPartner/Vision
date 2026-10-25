@@ -71,7 +71,7 @@ struct PlannedPaymentFormSheet: View {
                 field("plannedForm.currency") {
                     Picker(strings.t("plannedForm.currency"), selection: $form.currency) {
                         ForEach(currencyOptions, id: \.self) { code in
-                            Text(verbatim: code).tag(code)
+                            Text(verbatim: code.rawValue).tag(code)
                         }
                     }
                     .labelsHidden()
@@ -149,7 +149,7 @@ struct PlannedPaymentFormSheet: View {
     }
 
     /// The six offered currencies, plus a stored one outside them so an edit still shows it.
-    private var currencyOptions: [String] {
+    private var currencyOptions: [CurrencyCode] {
         let offered = PlannedPaymentFormModel.currencies
         return offered.contains(form.currency) ? offered : offered + [form.currency]
     }

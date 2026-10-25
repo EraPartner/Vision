@@ -209,7 +209,7 @@ struct HomeModelTests {
         await home.appear(settings: .defaults, route: .home)
         #expect(home.plannedIncoming == 120)
         #expect(home.plannedOutgoing == -45)
-        #expect(await service.plannedTotalCurrencies == [NativeAppSettings.defaults.defaultCurrency])
+        #expect(await service.plannedTotalCurrencies == [LedgerCurrency.display(.defaults)])
     }
 
     @Test func accountsOrderByTheServerConvertedBalanceAndKeepUnconvertedOnesLast() async {
@@ -313,7 +313,7 @@ struct HomeModelTests {
         #expect(local.writes.count == 1)
     }
 
-    private static func sharedPayment(_ id: Int) -> OpenAPI.PlannedTransaction {
+    private static func sharedPayment(_ id: PlannedTransactionID) -> OpenAPI.PlannedTransaction {
         .init(
             id: id, plannedDate: "2026-10-15", amount: -12, isRecurring: true,
             isExecuted: false, executionCount: 0, isActive: true, links: [])
@@ -478,12 +478,12 @@ private actor HomeFixtureService: StatisticsService {
     var requestedOffsets: [Int] = []
     var monthlyCalls = 0
     var plannedLimits: [Int] = []
-    var plannedTotalCurrencies: [String] = []
+    var plannedTotalCurrencies: [CurrencyCode] = []
     var lastExpected: JSONValue?
     private var monthlyFails = false
     private var exclusionsFail = false
     private var widgetSaveFails = false
-    private var exclusionIds = [9]
+    private var exclusionIds: [CategoryID] = [9]
     private var pauseMonthly = false
     private var monthlyContinuation: CheckedContinuation<Void, Never>?
     private var monthlyWaiters: [CheckedContinuation<Void, Never>] = []
@@ -496,12 +496,12 @@ private actor HomeFixtureService: StatisticsService {
         monthlyContinuation?.resume()
         monthlyContinuation = nil
     }
-    func chooseExclusions(_ ids: [Int]) { exclusionIds = ids }
+    func chooseExclusions(_ ids: [CategoryID]) { exclusionIds = ids }
     private var widgets: JSONValue = .object(["statistics": .object(["rhythm": .bool(false)])])
     func failMonthly() { monthlyFails = true }
     func failExclusions() { exclusionsFail = true }
     func failWidgetSave() { widgetSaveFails = true }
-    func homeMonthly(currency: String, exclusions: InsightExclusions) async throws
+    func homeMonthly(currency: CurrencyCode, exclusions: InsightExclusions) async throws
         -> InsightMonthlySummary
     {
         monthlyCalls += 1
@@ -519,22 +519,22 @@ private actor HomeFixtureService: StatisticsService {
             ? insightMonthsJSON.replacingOccurrences(of: "1000.99", with: "2000") : insightMonthsJSON
         return try insightFixture(InsightMonthlySummary.self, json)
     }
-    func homePace(currency: String) async throws -> HomeSpendingPace {
+    func homePace(currency: CurrencyCode) async throws -> HomeSpendingPace {
         try insightFixture(HomeSpendingPace.self, insightPaceJSON)
     }
-    func homeBalances(currency: String) async throws -> HomeBankBalances {
+    func homeBalances(currency: CurrencyCode) async throws -> HomeBankBalances {
         try insightFixture(
             HomeBankBalances.self,
             #"{"accounts":[],"total_net_position":0,"history":{},"total_history":[]}"#)
     }
-    func homeNetWorth(currency: String) async throws -> HomeNetWorth {
+    func homeNetWorth(currency: CurrencyCode) async throws -> HomeNetWorth {
         try insightFixture(
             HomeNetWorth.self,
             #"{"current":{"liquid":1,"liabilities":-2,"investments":3,"netWorth":2},"monthlyChange":1,"monthlyChangePercent":5,"snapshots":[]}"#
         )
     }
     func homeForecast(
-        currency: String, exclusions: InsightExclusions, options: InsightForecastOptions
+        currency: CurrencyCode, exclusions: InsightExclusions, options: InsightForecastOptions
     ) async throws -> InsightForecast {
         try insightFixture(InsightForecast.self, insightForecastJSON)
     }
@@ -550,7 +550,7 @@ private actor HomeFixtureService: StatisticsService {
             offset < last
             ? ((offset + 1)...last).map { id in
                 OpenAPI.Transaction(
-                    id: id, transactionDate: "2026-10-01", amount: -1,
+                    id: TransactionID(rawValue: id), transactionDate: "2026-10-01", amount: -1,
                     categoryId: id <= 50 ? 9 : 1, categoryName: "FOOD:Groceries", links: [])
             } : []
         return HomeTransactionPage(items: rows, total: 60)
@@ -564,14 +564,14 @@ private actor HomeFixtureService: StatisticsService {
     }
     private var accountRows: [OpenAPI.Account] = []
     private var accountTotalsRows: [OpenAPI.AccountTotals.AccountsItem] = []
-    func setAccounts(_ rows: [OpenAPI.Account], converted: [(Int, Decimal, [String])]) {
+    func setAccounts(_ rows: [OpenAPI.Account], converted: [(AccountID, Decimal, [CurrencyCode])]) {
         accountRows = rows
         accountTotalsRows = converted.map {
             OpenAPI.AccountTotals.AccountsItem(
-                id: $0.0, group: "cash", convertedBalance: $0.1, unconvertedCurrencies: $0.2)
+                id: $0.0, group: .init(rawValue: "cash"), convertedBalance: $0.1, unconvertedCurrencies: $0.2)
         }
     }
-    func homeAccountTotals(currency: String) async throws -> OpenAPI.AccountTotals? {
+    func homeAccountTotals(currency: CurrencyCode) async throws -> OpenAPI.AccountTotals? {
         OpenAPI.AccountTotals(
             currency: currency,
             netCash: .init(total: 0, unconvertedCount: 0, unconvertedCurrencies: []),
@@ -582,7 +582,7 @@ private actor HomeFixtureService: StatisticsService {
     }
     private static let emptyGroup = OpenAPI.AccountGroupTotal(
         total: 0, cash: 0, holdings: 0, holdingsUnavailable: false, unconvertedCount: 0, unconvertedCurrencies: [])
-    func homePlannedTotals(currency: String) async throws -> OpenAPI.PlannedTotals? {
+    func homePlannedTotals(currency: CurrencyCode) async throws -> OpenAPI.PlannedTotals? {
         plannedTotalCurrencies.append(currency)
         return OpenAPI.PlannedTotals(
             currency: currency, today: "2026-10-12", monthEnd: "2026-10-31",
@@ -617,7 +617,7 @@ private actor HomeFixtureService: StatisticsService {
     func statisticsRecipientYears(_ query: StatisticsQuery) async throws -> StatisticsRecipientYears {
         try insightFixture(StatisticsRecipientYears.self, #"{"recipientsByYear":{}}"#)
     }
-    func statisticsFlow(currency: String, year: Int, exclusions: InsightExclusions) async throws -> StatisticsFlow {
+    func statisticsFlow(currency: CurrencyCode, year: Int, exclusions: InsightExclusions) async throws -> StatisticsFlow {
         try insightFixture(StatisticsFlow.self, statisticsFlowJSON)
     }
 }
@@ -676,7 +676,7 @@ struct StatisticsDataTests {
     @Test func yearlyCustomChartBoundsUseTheSamePrefixAsYearBuckets() throws {
         var config = CustomChartDraft()
         config.categoryIds = [3]
-        config.timeBucket = "yearly"
+        config.timeBucket = .yearly
         config.dateRangeStart = "2026-06-01"
         config.dateRangeEnd = "2026-12-31"
         let dataset = CustomChartDataset(
@@ -693,10 +693,10 @@ struct StatisticsDataTests {
         #expect(json["name"] == .string("Synthetic chart"))
         #expect(json["dateRangeStart"] == .null && json["dateRangeEnd"] == .null)
         #expect(CustomChartKind.allCases.count == 7)
-        #expect(CustomChartKind.stackedArea.chartType == "area")
-        #expect(CustomChartKind.stackedArea.variant == "stacked")
-        #expect(CustomChartKind.bar.variant == "default")
-        #expect(CustomChartKind.groupedBar.variant == "grouped")
+        #expect(CustomChartKind.stackedArea.chartType == .area)
+        #expect(CustomChartKind.stackedArea.variant == .stacked)
+        #expect(CustomChartKind.bar.variant == .default)
+        #expect(CustomChartKind.groupedBar.variant == .grouped)
     }
     @Test func dynamicAllSourcesRetainTheLongTailAsOther() throws {
         let items = (1...10).map { #"{"recipientId":\#($0),"name":"Synthetic \#($0)","total":\#($0)}"# }.joined(

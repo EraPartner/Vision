@@ -8,35 +8,35 @@ public protocol AccountsService: Sendable {
     func accounts(active: String) async throws -> [OpenAPI.Account]
     /// `getPortfolioSummary({ currency })`: its `byAccount` and `accountTotals` rows
     /// (`getBrokerAccountMetrics`).
-    func portfolioAccountRows(currency: String) async throws -> AccountPortfolioSummary
+    func portfolioAccountRows(currency: CurrencyCode) async throws -> AccountPortfolioSummary
     /// `getAccountTotals(currency)`: converted balances, group subtotals and Net cash,
     /// computed on the server (ADR-216).
-    func accountTotals(currency: String) async throws -> OpenAPI.AccountTotals
+    func accountTotals(currency: CurrencyCode) async throws -> OpenAPI.AccountTotals
     /// `getTransactions({ account_id, limit, offset, sort_by: "date", sort_dir: "desc",
     /// include_balance: true })`: one ledger page.
-    func ledger(accountId: Int, offset: Int, limit: Int) async throws -> AccountLedgerPage
+    func ledger(accountId: AccountID, offset: Int, limit: Int) async throws -> AccountLedgerPage
     /// `getPlannedTransactions({ account_id, active: true, is_executed: false, limit: 5000 })`.
-    func plannedRows(accountId: Int) async throws -> AccountPlannedPage
+    func plannedRows(accountId: AccountID) async throws -> AccountPlannedPage
     /// `createAccount(data)`: the new account's id.
-    func createAccount(_ body: OpenAPI.AccountCreate) async throws -> Int
+    func createAccount(_ body: OpenAPI.AccountCreate) async throws -> AccountID
     /// `updateAccount(id, data)` with explicit nulls.
-    func updateAccount(id: Int, patch: AccountPatch) async throws
+    func updateAccount(id: AccountID, patch: AccountPatch) async throws
     /// `deleteAccount(id)`.
-    func deleteAccount(id: Int) async throws
+    func deleteAccount(id: AccountID) async throws
     /// `setOpeningBalance(id, { balance, date, currency })`: the server's `warning`, if any.
-    func setOpeningBalance(id: Int, balance: Decimal, date: String, currency: String) async throws -> String?
+    func setOpeningBalance(id: AccountID, balance: Decimal, date: String, currency: CurrencyCode) async throws -> String?
     /// `setStatementBalance(id, currency, { balance, date })`.
-    func setStatementBalance(id: Int, currency: String, balance: Decimal, date: String) async throws
+    func setStatementBalance(id: AccountID, currency: CurrencyCode, balance: Decimal, date: String) async throws
     /// `reconcileAccount(id, mode, currency)`.
-    func reconcile(id: Int, mode: ReconcileMode, currency: String) async throws
+    func reconcile(id: AccountID, mode: ReconcileMode, currency: CurrencyCode) async throws
     /// `previewMerge(sourceId, targetId)`.
-    func mergePreview(sourceId: Int, targetId: Int) async throws -> AccountMergePreview
+    func mergePreview(sourceId: AccountID, targetId: AccountID) async throws -> AccountMergePreview
     /// `mergeAccounts(targetId, sourceIds)`: the moved counts.
-    func merge(targetId: Int, sourceIds: [Int]) async throws -> AccountMergeCounts
+    func merge(targetId: AccountID, sourceIds: [AccountID]) async throws -> AccountMergeCounts
     /// `closeAccount(id, balanceHandling)`.
-    func closeAccount(id: Int, balanceHandling: CloseBalanceHandling) async throws
+    func closeAccount(id: AccountID, balanceHandling: CloseBalanceHandling) async throws
     /// `getAccountPortfolioLotRetagPreview(id)`.
-    func lotPreview(accountId: Int) async throws -> AccountLotPreview
+    func lotPreview(accountId: AccountID) async throws -> AccountLotPreview
     /// `bulkRetagPortfolioTransactions({ transaction_ids, from_account_id, to_account_id,
     /// idempotency_key })`: `to_account_id: null` moves the lots to Unassigned.
     func retagLots(_ request: LotRetagRequest) async throws -> LotRetagReceipt
@@ -56,21 +56,21 @@ public enum CloseBalanceHandling: String, Sendable {
 
 /// `AccountMergePreview`, with the server's optional fields read leniently.
 public struct AccountMergePreview: Equatable, Sendable {
-    public let into: Int
-    public let source: Int
+    public let into: AccountID
+    public let source: AccountID
     public let transactions: Int
     public let planned: Int
     public let projectedBalance: Decimal
-    public let projectedBalanceCurrency: String?
+    public let projectedBalanceCurrency: CurrencyCode?
     public let balanceParts: [OpenAPI.Account.BalancePartsItem]
     public let projectedBalanceIncomplete: Bool
-    public let unconvertedCurrencies: [String]
+    public let unconvertedCurrencies: [CurrencyCode]
     public let stampsInterleaved: Bool
 
     public init(
-        into: Int, source: Int, transactions: Int, planned: Int, projectedBalance: Decimal,
-        projectedBalanceCurrency: String? = nil, balanceParts: [OpenAPI.Account.BalancePartsItem] = [],
-        projectedBalanceIncomplete: Bool = false, unconvertedCurrencies: [String] = [], stampsInterleaved: Bool = false
+        into: AccountID, source: AccountID, transactions: Int, planned: Int, projectedBalance: Decimal,
+        projectedBalanceCurrency: CurrencyCode? = nil, balanceParts: [OpenAPI.Account.BalancePartsItem] = [],
+        projectedBalanceIncomplete: Bool = false, unconvertedCurrencies: [CurrencyCode] = [], stampsInterleaved: Bool = false
     ) {
         self.into = into
         self.source = source
@@ -103,12 +103,12 @@ public struct AccountMergeCounts: Equatable, Sendable {
 
 /// `AccountPortfolioLotRetagPreview`.
 public struct AccountLotPreview: Equatable, Sendable {
-    public let accountId: Int
+    public let accountId: AccountID
     public let eligibleCount: Int
-    public let transactionIds: [Int]
+    public let transactionIds: [TransactionID]
     public let limit: Int
 
-    public init(accountId: Int, eligibleCount: Int, transactionIds: [Int], limit: Int) {
+    public init(accountId: AccountID, eligibleCount: Int, transactionIds: [TransactionID], limit: Int) {
         self.accountId = accountId
         self.eligibleCount = eligibleCount
         self.transactionIds = transactionIds
@@ -124,13 +124,13 @@ public struct AccountLotPreview: Equatable, Sendable {
 
 /// `PortfolioBrokerRetagRequest`.
 public struct LotRetagRequest: Equatable, Sendable, Encodable {
-    public let transactionIds: [Int]
-    public let fromAccountId: Int
+    public let transactionIds: [TransactionID]
+    public let fromAccountId: AccountID
     /// `nil` sends `null`: Unassigned.
-    public let toAccountId: Int?
+    public let toAccountId: AccountID?
     public let idempotencyKey: String
 
-    public init(transactionIds: [Int], fromAccountId: Int, toAccountId: Int?, idempotencyKey: String) {
+    public init(transactionIds: [TransactionID], fromAccountId: AccountID, toAccountId: AccountID?, idempotencyKey: String) {
         self.transactionIds = transactionIds
         self.fromAccountId = fromAccountId
         self.toAccountId = toAccountId
@@ -177,16 +177,16 @@ extension APIClient: AccountsService {
         try await send(OpenAPIOperations.GetAccounts(active: active)).items
     }
 
-    public func portfolioAccountRows(currency: String) async throws -> AccountPortfolioSummary {
+    public func portfolioAccountRows(currency: CurrencyCode) async throws -> AccountPortfolioSummary {
         let data = try await send(PortfolioAccountRowsRequest(currency: currency))
         return AccountPortfolioSummary(byAccount: data.byAccount, accountTotals: data.accountTotals)
     }
 
-    public func accountTotals(currency: String) async throws -> OpenAPI.AccountTotals {
+    public func accountTotals(currency: CurrencyCode) async throws -> OpenAPI.AccountTotals {
         try await send(OpenAPIOperations.GetAccountTotals(currency: currency))
     }
 
-    public func ledger(accountId: Int, offset: Int, limit: Int) async throws -> AccountLedgerPage {
+    public func ledger(accountId: AccountID, offset: Int, limit: Int) async throws -> AccountLedgerPage {
         let list = try await send(
             OpenAPIOperations.GetTransactions(
                 limit: limit, offset: offset, accountId: accountId, sortBy: "date", sortDir: "desc",
@@ -194,45 +194,46 @@ extension APIClient: AccountsService {
         return AccountLedgerPage(rows: list.items.map(AccountLedgerRow.init), total: list.total)
     }
 
-    public func plannedRows(accountId: Int) async throws -> AccountPlannedPage {
+    public func plannedRows(accountId: AccountID) async throws -> AccountPlannedPage {
         let list = try await send(
             OpenAPIOperations.GetPlannedTransactions(limit: 5000, accountId: accountId, isExecuted: false, active: true))
         return AccountPlannedPage(rows: list.items.map(AccountPlannedRow.init), total: list.total)
     }
 
-    public func createAccount(_ body: OpenAPI.AccountCreate) async throws -> Int {
+    public func createAccount(_ body: OpenAPI.AccountCreate) async throws -> AccountID {
         try await send(OpenAPIOperations.CreateAccount(body: body)).id
     }
 
-    public func updateAccount(id: Int, patch: AccountPatch) async throws {
+    public func updateAccount(id: AccountID, patch: AccountPatch) async throws {
         _ = try await send(AccountPatchRequest(id: id, patch: patch))
     }
 
-    public func deleteAccount(id: Int) async throws {
+    public func deleteAccount(id: AccountID) async throws {
         _ = try await send(OpenAPIOperations.DeleteAccount(id: id))
     }
 
-    public func setOpeningBalance(id: Int, balance: Decimal, date: String, currency: String) async throws -> String? {
+    public func setOpeningBalance(id: AccountID, balance: Decimal, date: String, currency: CurrencyCode) async throws -> String? {
         let answer = try await send(
             OpenAPIOperations.SetAccountOpeningBalance(
                 id: id, body: .init(balance: balance, date: date, currency: currency)))
         return answer.objectValue?["warning"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    public func setStatementBalance(id: Int, currency: String, balance: Decimal, date: String) async throws {
+    public func setStatementBalance(id: AccountID, currency: CurrencyCode, balance: Decimal, date: String) async throws {
         _ = try await send(
             OpenAPIOperations.SetAccountStatementBalance(
                 id: id, currency: currency, body: .init(balance: balance, date: date)))
     }
 
-    public func reconcile(id: Int, mode: ReconcileMode, currency: String) async throws {
-        _ = try await send(OpenAPIOperations.ReconcileAccount(id: id, body: .init(mode: mode.rawValue, currency: currency)))
+    public func reconcile(id: AccountID, mode: ReconcileMode, currency: CurrencyCode) async throws {
+        _ = try await send(OpenAPIOperations.ReconcileAccount(id: id, body: .init(mode: .init(rawValue: mode.rawValue), currency: currency)))
     }
 
-    public func mergePreview(sourceId: Int, targetId: Int) async throws -> AccountMergePreview {
-        let data = try await send(OpenAPIOperations.PreviewAccountMerge(id: sourceId, into: targetId))
+    public func mergePreview(sourceId: AccountID, targetId: AccountID) async throws -> AccountMergePreview {
+        let data = try await send(OpenAPIOperations.PreviewAccountMerge(id: sourceId, into: targetId.rawValue))
         return AccountMergePreview(
-            into: data.into ?? targetId, source: data.source ?? sourceId,
+            into: data.into.map(AccountID.init(rawValue:)) ?? targetId,
+            source: data.source.map(AccountID.init(rawValue:)) ?? sourceId,
             transactions: data.reassigned?.transactions ?? 0, planned: data.reassigned?.planned ?? 0,
             projectedBalance: data.projectedBalance ?? 0, projectedBalanceCurrency: data.projectedBalanceCurrency,
             balanceParts: (data.balanceParts ?? []).map { part in
@@ -242,7 +243,7 @@ extension APIClient: AccountsService {
             unconvertedCurrencies: data.unconvertedCurrencies ?? [], stampsInterleaved: data.stampsInterleaved ?? false)
     }
 
-    public func merge(targetId: Int, sourceIds: [Int]) async throws -> AccountMergeCounts {
+    public func merge(targetId: AccountID, sourceIds: [AccountID]) async throws -> AccountMergeCounts {
         let answer = try await send(OpenAPIOperations.MergeAccounts(id: targetId, body: .init(sourceIds: sourceIds)))
         let reassigned = answer.objectValue?["reassigned"]?.objectValue
         return AccountMergeCounts(
@@ -250,11 +251,11 @@ extension APIClient: AccountsService {
             planned: reassigned?["planned"].flatMap(Self.wholeNumber) ?? 0)
     }
 
-    public func closeAccount(id: Int, balanceHandling: CloseBalanceHandling) async throws {
-        _ = try await send(OpenAPIOperations.CloseAccount(id: id, body: .init(balanceHandling: balanceHandling.rawValue)))
+    public func closeAccount(id: AccountID, balanceHandling: CloseBalanceHandling) async throws {
+        _ = try await send(OpenAPIOperations.CloseAccount(id: id, body: .init(balanceHandling: .init(rawValue: balanceHandling.rawValue))))
     }
 
-    public func lotPreview(accountId: Int) async throws -> AccountLotPreview {
+    public func lotPreview(accountId: AccountID) async throws -> AccountLotPreview {
         let data = try await send(OpenAPIOperations.PreviewAccountPortfolioLots(id: accountId))
         return AccountLotPreview(
             accountId: data.accountId, eligibleCount: data.eligibleCount, transactionIds: data.transactionIds,
@@ -278,11 +279,11 @@ public struct AccountPatch: Equatable, Sendable, Encodable {
     public var displayName: String??
     /// `.some(nil)` sends `null`.
     public var institution: String??
-    public var currency: String?
-    public var type: String?
-    public var owner: String?
-    public var liquidityClass: String?
-    public var taxWrapper: String?
+    public var currency: CurrencyCode?
+    public var type: OpenAPI.AccountUpdate.AccountUpdateType?
+    public var owner: OpenAPI.AccountUpdate.Owner?
+    public var liquidityClass: OpenAPI.AccountUpdate.LiquidityClass?
+    public var taxWrapper: OpenAPI.AccountUpdate.TaxWrapper?
     public var spendable: Bool?
     public var inNetWorth: Bool?
     public var multiCurrencyCash: Bool?
@@ -352,10 +353,10 @@ public struct AccountPatchRequest: APIOperation {
     public static let method = OpenAPIOperations.UpdateAccount.method
     public static let pathTemplate = OpenAPIOperations.UpdateAccount.pathTemplate
 
-    public let id: Int
+    public let id: AccountID
     public let patch: AccountPatch
 
-    public init(id: Int, patch: AccountPatch) {
+    public init(id: AccountID, patch: AccountPatch) {
         self.id = id
         self.patch = patch
     }
@@ -419,9 +420,9 @@ public struct PortfolioAccountRowsRequest: APIOperation {
         }
     }
 
-    public let currency: String
+    public let currency: CurrencyCode
 
-    public init(currency: String) {
+    public init(currency: CurrencyCode) {
         self.currency = currency
     }
 

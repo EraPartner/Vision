@@ -328,11 +328,11 @@ struct CategoryNodeSheet: View {
                 AccountField(label: strings.t("categoriesPage.parent")) {
                     Picker(
                         strings.t("categoriesPage.parent"),
-                        selection: Binding<Int?>(get: { model.form?.parentId }, set: { model.form?.parentId = $0 })
+                        selection: Binding<CategoryID?>(get: { model.form?.parentId }, set: { model.form?.parentId = $0 })
                     ) {
-                        Text(strings.t("categoriesPage.root")).tag(Int?.none)
+                        Text(strings.t("categoriesPage.root")).tag(CategoryID?.none)
                         ForEach(model.parentOptions, id: \.id) { node in
-                            Text(verbatim: CategoryTree.pathLabel(node)).tag(Int?.some(node.id))
+                            Text(verbatim: CategoryTree.pathLabel(node)).tag(CategoryID?.some(node.id))
                         }
                     }
                     .labelsHidden()
@@ -406,13 +406,13 @@ struct CategoryMergeSheet: View {
                 AccountField(label: strings.t("categoriesPage.mergeTarget")) {
                     Picker(
                         strings.t("categoriesPage.mergeTarget"),
-                        selection: Binding<Int?>(get: { model.merge?.targetId }, set: { model.merge?.targetId = $0 })
+                        selection: Binding<CategoryID?>(get: { model.merge?.targetId }, set: { model.merge?.targetId = $0 })
                     ) {
                         if draft.targetId == nil {
-                            Text(verbatim: "—").tag(Int?.none)
+                            Text(verbatim: "—").tag(CategoryID?.none)
                         }
                         ForEach(model.mergeTargets, id: \.id) { node in
-                            Text(verbatim: CategoryTree.pathLabel(node)).tag(Int?.some(node.id))
+                            Text(verbatim: CategoryTree.pathLabel(node)).tag(CategoryID?.some(node.id))
                         }
                     }
                     .labelsHidden()

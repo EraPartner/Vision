@@ -6,7 +6,7 @@ import VisionNativeCore
 /// walking. Readouts use the original Decimal values; Double is only a plot coordinate.
 struct InsightTimelineChart: View {
     let series: [InsightChartSeries]
-    let currency: String
+    let currency: CurrencyCode
     let settings: NativeAppSettings
     let title: String
     var bars = false

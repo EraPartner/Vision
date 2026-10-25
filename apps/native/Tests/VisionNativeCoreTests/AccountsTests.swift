@@ -18,7 +18,7 @@ actor FakeAccountsService: AccountsService {
     var ledgerRows: [AccountLedgerRow]
     var plannedPage: AccountPlannedPage
     var plannedFailure: APIError?
-    var createdId = 99
+    var createdId: AccountID = 99
     var createFailure: APIError?
     var updateFailure: APIError?
     var deleteFailure: APIError?
@@ -75,50 +75,50 @@ actor FakeAccountsService: AccountsService {
         return active == "true" ? list.filter { $0.isActive } : list
     }
 
-    func portfolioAccountRows(currency: String) async throws -> AccountPortfolioSummary {
+    func portfolioAccountRows(currency: CurrencyCode) async throws -> AccountPortfolioSummary {
         log.append("portfolio \(currency)")
         if let portfolioFailure { throw portfolioFailure }
         return AccountPortfolioSummary(byAccount: portfolio, accountTotals: portfolioTotals)
     }
 
-    func accountTotals(currency: String) async throws -> OpenAPI.AccountTotals {
+    func accountTotals(currency: CurrencyCode) async throws -> OpenAPI.AccountTotals {
         log.append("totals \(currency)")
         if let totalsFailure { throw totalsFailure }
         return totals
     }
 
-    func ledger(accountId: Int, offset: Int, limit: Int) async throws -> AccountLedgerPage {
+    func ledger(accountId: AccountID, offset: Int, limit: Int) async throws -> AccountLedgerPage {
         ledgerRequests.append("\(accountId):\(offset):\(limit)")
         let end = min(ledgerRows.count, offset + limit)
         let rows = offset < end ? Array(ledgerRows[offset..<end]) : []
         return AccountLedgerPage(rows: rows, total: ledgerRows.count)
     }
 
-    func plannedRows(accountId: Int) async throws -> AccountPlannedPage {
+    func plannedRows(accountId: AccountID) async throws -> AccountPlannedPage {
         log.append("planned \(accountId)")
         if let plannedFailure { throw plannedFailure }
         return plannedPage
     }
 
-    func createAccount(_ body: OpenAPI.AccountCreate) async throws -> Int {
+    func createAccount(_ body: OpenAPI.AccountCreate) async throws -> AccountID {
         log.append("create")
         if let createFailure { throw createFailure }
         created.append(body)
         return createdId
     }
 
-    func updateAccount(id: Int, patch: AccountPatch) async throws {
+    func updateAccount(id: AccountID, patch: AccountPatch) async throws {
         log.append("update \(id)")
         if let updateFailure { throw updateFailure }
         patches.append(String(decoding: try APIBody.encode(patch), as: UTF8.self))
     }
 
-    func deleteAccount(id: Int) async throws {
+    func deleteAccount(id: AccountID) async throws {
         log.append("delete \(id)")
         if let deleteFailure { throw deleteFailure }
     }
 
-    func setOpeningBalance(id: Int, balance: Decimal, date: String, currency: String) async throws -> String? {
+    func setOpeningBalance(id: AccountID, balance: Decimal, date: String, currency: CurrencyCode) async throws -> String? {
         log.append("opening \(id) \(balance) \(date) \(currency)")
         if let gate = openingGate {
             openingGate = nil
@@ -128,17 +128,17 @@ actor FakeAccountsService: AccountsService {
         return openingWarning
     }
 
-    func setStatementBalance(id: Int, currency: String, balance: Decimal, date: String) async throws {
+    func setStatementBalance(id: AccountID, currency: CurrencyCode, balance: Decimal, date: String) async throws {
         log.append("statement \(id) \(currency) \(balance) \(date)")
         if let statementFailure { throw statementFailure }
     }
 
-    func reconcile(id: Int, mode: ReconcileMode, currency: String) async throws {
+    func reconcile(id: AccountID, mode: ReconcileMode, currency: CurrencyCode) async throws {
         log.append("reconcile \(id) \(mode.rawValue) \(currency)")
         if let reconcileFailure { throw reconcileFailure }
     }
 
-    func mergePreview(sourceId: Int, targetId: Int) async throws -> AccountMergePreview {
+    func mergePreview(sourceId: AccountID, targetId: AccountID) async throws -> AccountMergePreview {
         log.append("preview \(sourceId)->\(targetId)")
         guard let preview else {
             return AccountMergePreview(
@@ -147,18 +147,18 @@ actor FakeAccountsService: AccountsService {
         return try preview.get()
     }
 
-    func merge(targetId: Int, sourceIds: [Int]) async throws -> AccountMergeCounts {
-        log.append("merge \(sourceIds)->\(targetId)")
+    func merge(targetId: AccountID, sourceIds: [AccountID]) async throws -> AccountMergeCounts {
+        log.append("merge \(sourceIds.map(\.rawValue))->\(targetId)")
         if let mergeFailure { throw mergeFailure }
         return mergeCounts
     }
 
-    func closeAccount(id: Int, balanceHandling: CloseBalanceHandling) async throws {
+    func closeAccount(id: AccountID, balanceHandling: CloseBalanceHandling) async throws {
         log.append("close \(id) \(balanceHandling.rawValue)")
         if !closeFailures.isEmpty { throw closeFailures.removeFirst() }
     }
 
-    func lotPreview(accountId: Int) async throws -> AccountLotPreview {
+    func lotPreview(accountId: AccountID) async throws -> AccountLotPreview {
         log.append("lots \(accountId)")
         return try lots.get()
     }
@@ -201,18 +201,19 @@ enum AccountsFixture {
         ])
 
     static func account(
-        _ id: Int, _ name: String, type: String = "checking", currency: String = "EUR", balance: Decimal? = 0,
+        _ id: AccountID, _ name: String, type: String = "checking", currency: CurrencyCode = "EUR", balance: Decimal? = 0,
         displayName: String? = nil, institution: String? = nil, isActive: Bool = true, inNetWorth: Bool = true,
         multiCurrencyCash: Bool = false, statements: [OpenAPI.Account.StatementBalancesItem]? = nil,
-        parts: [OpenAPI.Account.BalancePartsItem]? = nil, incomplete: Bool? = nil, unconverted: [String]? = nil,
-        reconcilableBalance: Decimal? = nil, reconcilableCurrency: String? = nil, drift: Decimal? = nil,
+        parts: [OpenAPI.Account.BalancePartsItem]? = nil, incomplete: Bool? = nil, unconverted: [CurrencyCode]? = nil,
+        reconcilableBalance: Decimal? = nil, reconcilableCurrency: CurrencyCode? = nil, drift: Decimal? = nil,
         anchorDate: String? = nil, postAnchorCount: Int? = nil, hasTransactions: Bool? = true
     ) -> OpenAPI.Account {
-        let flags = AccountTypeFlags.of(type)
+        let kind = OpenAPI.Account.AccountType(rawValue: type)
+        let flags = AccountTypeFlags.of(kind)
         return OpenAPI.Account(
-            id: id, name: name, displayName: displayName, institution: institution, currency: currency, type: type,
+            id: id, name: name, displayName: displayName, institution: institution, currency: currency, type: kind,
             liquidityClass: flags.liquidityClass, spendable: flags.spendable, inNetWorth: inNetWorth,
-            taxWrapper: flags.taxWrapper, owner: "me", multiCurrencyCash: multiCurrencyCash,
+            taxWrapper: flags.taxWrapper, owner: .me, multiCurrencyCash: multiCurrencyCash,
             hasCashSleeve: flags.hasCashSleeve, statementBalances: statements, computedBalance: balance,
             balanceParts: parts, balanceIncomplete: incomplete, unconvertedCurrencies: unconverted,
             reconcilableBalance: reconcilableBalance, reconcilableCurrency: reconcilableCurrency, drift: drift,
@@ -226,7 +227,7 @@ enum AccountsFixture {
 
     /// The server's `GET /api/accounts/totals` answer; the groups default to zero.
     static func totals(
-        netCash: Decimal = 0, netCashMissing: [String] = [], cash: OpenAPI.AccountGroupTotal = group(),
+        netCash: Decimal = 0, netCashMissing: [CurrencyCode] = [], cash: OpenAPI.AccountGroupTotal = group(),
         portfolio: OpenAPI.AccountGroupTotal = group(), liabilities: OpenAPI.AccountGroupTotal = group(),
         archived: OpenAPI.AccountGroupTotal = group()
     ) -> OpenAPI.AccountTotals {
@@ -238,18 +239,18 @@ enum AccountsFixture {
     }
 
     static func group(
-        total: Decimal = 0, missing: [String] = [], holdingsUnavailable: Bool = false
+        total: Decimal = 0, missing: [CurrencyCode] = [], holdingsUnavailable: Bool = false
     ) -> OpenAPI.AccountGroupTotal {
         OpenAPI.AccountGroupTotal(
             total: total, cash: total, holdings: 0, holdingsUnavailable: holdingsUnavailable,
             unconvertedCount: missing.count, unconvertedCurrencies: missing)
     }
 
-    static func row(_ id: Int, date: String, amount: Decimal, running: Decimal?, currency: String = "EUR")
+    static func row(_ id: TransactionID, date: String, amount: Decimal, running: Decimal?, currency: CurrencyCode = "EUR")
         -> AccountLedgerRow
     {
         AccountLedgerRow(
-            id: id, date: date, recipientName: "Payee \(id)", memo: "Memo \(id)", categoryName: nil, amount: amount,
+            id: id, date: date, recipientName: "Payee \(id.rawValue)", memo: "Memo \(id.rawValue)", categoryName: nil, amount: amount,
             currency: currency, runningBalance: running)
     }
 
@@ -356,9 +357,9 @@ enum AccountsFixture {
     @Test func brokerMetricsReadThePositionRowAndTheServerAccountTotals() {
         let summary = AccountPortfolioSummary(
             byAccount: [
-                PortfolioAccountRow(accountId: 3, contributionKind: "position", currentValue: 500),
-                PortfolioAccountRow(accountId: 3, contributionKind: "income", currentValue: 0),
-                PortfolioAccountRow(accountId: 4, contributionKind: "position", currentValue: 9),
+                PortfolioAccountRow(accountId: 3, contributionKind: .position, currentValue: 500),
+                PortfolioAccountRow(accountId: 3, contributionKind: .nonPosition, currentValue: 0),
+                PortfolioAccountRow(accountId: 4, contributionKind: .position, currentValue: 9),
             ],
             accountTotals: [
                 PortfolioAccountTotalsRow(accountId: 3, oversold: true, gainLoss: 25),
@@ -408,7 +409,7 @@ enum AccountsFixture {
                 AccountsFixture.account(1, "Checking", balance: 100),
                 AccountsFixture.account(3, "Broker", type: "brokerage", balance: 10),
             ],
-            portfolio: [PortfolioAccountRow(accountId: 3, contributionKind: "position", currentValue: 400)])
+            portfolio: [PortfolioAccountRow(accountId: 3, contributionKind: .position, currentValue: 400)])
         await service.set(portfolioTotals: [PortfolioAccountTotalsRow(accountId: 3, oversold: false, gainLoss: -5)])
         await service.set(
             totals: AccountsFixture.totals(
@@ -533,16 +534,16 @@ enum AccountsFixture {
     @Test func aTypeChangeFillsOnlyUntouchedFlagsAndHoldingsOnlyClearsTheOpeningBalance() {
         var draft = AccountFormDraft(today: PlannedDay(year: 2026, month: 10, day: 12), numberFormat: .eu)
         draft.setSpendable(true)
-        draft.setType("pension")
+        draft.setType(.pension)
         #expect(draft.spendable)
-        #expect(draft.liquidityClass == "illiquid")
-        #expect(draft.taxWrapper == "pension")
+        #expect(draft.liquidityClass == .illiquid)
+        #expect(draft.taxWrapper == .pension)
         draft.setOpeningBalance("100")
-        draft.setType("wallet")
+        draft.setType(.wallet)
         #expect(draft.openingBalance.isEmpty)
         #expect(!draft.showsOpeningBalance)
         #expect(!draft.hasCashSleeve)
-        draft.setType("liability")
+        draft.setType(.liability)
         #expect(draft.openingLabelKey == "accounts.openingBalance.createDebtLabel")
     }
 
@@ -590,7 +591,7 @@ enum AccountsFixture {
         defer { withExtendedLifetime(shell) {} }
         model.openCreate()
         model.form?.setName("New")
-        model.form?.currency = "usd"
+        model.form?.currency = "USD"
         model.form?.setOpeningBalance("250,75")
         await model.submitForm()
         #expect(model.form == nil)
@@ -1001,7 +1002,7 @@ enum AccountsFixture {
             let day = 28 - (index % 28)
             let month = index < 28 ? 10 : 9
             return AccountsFixture.row(
-                index + 1, date: String(format: "2026-%02d-%02d", month, day), amount: 1,
+                TransactionID(rawValue: index + 1), date: String(format: "2026-%02d-%02d", month, day), amount: 1,
                 running: Decimal(1000 - index))
         }
     }

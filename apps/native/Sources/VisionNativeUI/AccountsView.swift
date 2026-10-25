@@ -181,7 +181,7 @@ public struct AccountsView: View {
 /// "(incomplete)".
 struct AccountSubtotalText: View {
     let subtotal: AccountSubtotal
-    let currency: String
+    let currency: CurrencyCode
     let strings: any Localizing
     let settings: NativeAppSettings
     @Environment(\.visionTheme) private var theme

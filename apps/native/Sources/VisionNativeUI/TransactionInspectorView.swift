@@ -189,7 +189,7 @@ struct TransactionInspectorView: View {
                 Divider()
                 fieldRow(.amount) { MoneyText(amount: row.amount, currency: row.displayCurrency, settings: settings) }
                 Divider()
-                fieldRow(.currency) { valueText(row.currency) }
+                fieldRow(.currency) { valueText(row.currency?.rawValue) }
                 Divider()
                 fieldRow(.bank) { valueText(row.bank) }
                 if let balance = row.balance {
@@ -203,7 +203,7 @@ struct TransactionInspectorView: View {
                 Divider()
                 fieldRow(.comment) { valueText(row.comment) }
                 Divider()
-                staticRow(strings.t("txPage.field.id")) { Text(verbatim: String(row.id)).monospacedDigit() }
+                staticRow(strings.t("txPage.field.id")) { Text(verbatim: String(row.id.rawValue)).monospacedDigit() }
             }
         }
     }

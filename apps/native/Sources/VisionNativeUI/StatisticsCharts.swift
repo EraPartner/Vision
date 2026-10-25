@@ -5,7 +5,7 @@ import VisionNativeCore
 struct InsightRankedChart: View {
     let rows: [CustomChartEntity]
     let settings: NativeAppSettings
-    let currency: String
+    let currency: CurrencyCode
     let strings: any Localizing
     @State private var selection: String?
     private let onSelectionChange: (String?) -> Void
@@ -13,7 +13,7 @@ struct InsightRankedChart: View {
     @FocusState private var focused: Bool
 
     init(
-        rows: [CustomChartEntity], settings: NativeAppSettings, currency: String, strings: any Localizing,
+        rows: [CustomChartEntity], settings: NativeAppSettings, currency: CurrencyCode, strings: any Localizing,
         initialSelection: String? = nil, onSelectionChange: @escaping (String?) -> Void = { _ in }
     ) {
         self.rows = rows
@@ -105,7 +105,7 @@ struct InsightRankedChart: View {
 struct StatisticsCategoryDonut: View {
     let rows: [StatisticsCategory]
     let settings: NativeAppSettings
-    let currency: String
+    let currency: CurrencyCode
     let strings: any Localizing
     @State private var selected: String?
     private let onSelectionChange: (String?) -> Void
@@ -114,7 +114,7 @@ struct StatisticsCategoryDonut: View {
     @Environment(\.visionTheme) private var theme
 
     init(
-        rows: [StatisticsCategory], settings: NativeAppSettings, currency: String, strings: any Localizing,
+        rows: [StatisticsCategory], settings: NativeAppSettings, currency: CurrencyCode, strings: any Localizing,
         initialSelection: String? = nil, onSelectionChange: @escaping (String?) -> Void = { _ in }
     ) {
         self.rows = rows

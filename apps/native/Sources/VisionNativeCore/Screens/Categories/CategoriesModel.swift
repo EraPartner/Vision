@@ -6,7 +6,7 @@ import Observation
 public struct CategoryNodeDraft: Equatable, Sendable {
     public enum Mode: Equatable, Sendable {
         case create
-        case edit(id: Int)
+        case edit(id: CategoryID)
     }
 
     /// The Name input's `maxLength`.
@@ -19,7 +19,7 @@ public struct CategoryNodeDraft: Equatable, Sendable {
     public let editing: OpenAPI.CategoryNode?
     public private(set) var name: String
     /// `nil`: `categoriesPage.root`.
-    public var parentId: Int?
+    public var parentId: CategoryID?
     public private(set) var description: String
     /// `validation.required` under the name after an empty submit.
     public internal(set) var showsNameError = false
@@ -73,7 +73,7 @@ public struct CategoryNodeDraft: Equatable, Sendable {
 public struct CategoryMergeDraft: Equatable, Sendable {
     public let source: OpenAPI.CategoryNode
     /// `nil` until a target is chosen ("—").
-    public var targetId: Int?
+    public var targetId: CategoryID?
     public internal(set) var isMerging = false
 
     public init(source: OpenAPI.CategoryNode) {
@@ -201,12 +201,12 @@ public final class CategoriesModel {
     }
 
     /// The `expanded` ids in URL order.
-    public var expandedIds: [Int] {
+    public var expandedIds: [CategoryID] {
         guard visible, let shell else { return [] }
         return CategoriesRoutes.expanded(in: shell.route)
     }
 
-    public var expanded: Set<Int> { Set(expandedIds) }
+    public var expanded: Set<CategoryID> { Set(expandedIds) }
 
     /// The tree for the current `show_all`.
     public var tree: CategoryTree {
@@ -237,7 +237,7 @@ public final class CategoriesModel {
     }
 
     /// A row's chevron.
-    public func toggleExpanded(_ id: Int) {
+    public func toggleExpanded(_ id: CategoryID) {
         var ids = expandedIds
         if let index = ids.firstIndex(of: id) {
             ids.remove(at: index)
@@ -247,7 +247,7 @@ public final class CategoriesModel {
         writeExpanded(ids)
     }
 
-    private func writeExpanded(_ ids: [Int]) {
+    private func writeExpanded(_ ids: [CategoryID]) {
         guard visible, let shell else { return }
         shell.replaceQuery(CategoriesRoutes.writingExpanded(ids, to: shell.route))
     }
@@ -389,7 +389,7 @@ public final class CategoriesModel {
         await restoreStatus(id: pending.node.id, active: pending.restore)
     }
 
-    private func restoreStatus(id: Int, active: Bool) async {
+    private func restoreStatus(id: CategoryID, active: Bool) async {
         isTogglingStatus = true
         defer { isTogglingStatus = false }
         do {

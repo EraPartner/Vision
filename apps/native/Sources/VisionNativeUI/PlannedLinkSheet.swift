@@ -212,7 +212,7 @@ struct PlannedLinkSheet: View {
             }
             Spacer(minLength: 8)
             MoneyText(
-                amount: transaction.amount, currency: transaction.currency ?? settings.defaultCurrency,
+                amount: transaction.amount, currency: transaction.currency ?? LedgerCurrency.display(settings),
                 settings: settings
             )
             .fontWeight(.semibold)

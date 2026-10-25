@@ -182,7 +182,7 @@ struct TransactionAddSheet: View {
                 .accessibilityLabel(strings.t("form.addTransaction.amount"))
                 TextField(
                     strings.t("addTxn.currencyPlaceholder"),
-                    text: Binding(get: { draft.currency }, set: { form.setCurrency($0) })
+                    text: Binding(get: { draft.currencyText }, set: { form.setCurrency($0) })
                 )
                 .textFieldStyle(.vision)
                 .frame(width: 64)

@@ -14,7 +14,7 @@ struct TransactionSearchSuggestionsView: View {
     let close: () -> Void
     @Environment(\.visionTheme) private var theme
 
-    private var currency: String { settings.defaultCurrency.isEmpty ? "EUR" : settings.defaultCurrency }
+    private var currency: String { LedgerCurrency.display(settings).rawValue }
 
     var body: some View {
         Group {

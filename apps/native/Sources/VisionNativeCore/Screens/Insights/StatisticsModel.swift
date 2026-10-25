@@ -36,7 +36,7 @@ public final class StatisticsModel {
     @ObservationIgnored private let calendar: Calendar
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private var frozenPeriod: String?
-    @ObservationIgnored private var currency = "EUR"
+    @ObservationIgnored private var currency = LedgerCurrency.eur
     @ObservationIgnored private var day = ""
     @ObservationIgnored private var fetchedAt: Date?
     @ObservationIgnored private var task: Task<Void, Never>?
@@ -70,7 +70,7 @@ public final class StatisticsModel {
         widgetsLoaded = true
         printLocalState = value.localState
         frozenPeriod = value.currentPeriod
-        currency = value.settings.defaultCurrency
+        currency = LedgerCurrency.display(value.settings)
         recipientQuery = value.recipientQuery
         recipientVisibleCount = value.recipientVisibleCount
         categoryMetric = value.categoryMetric
@@ -83,7 +83,7 @@ public final class StatisticsModel {
         flow = value.flow
         flowError = value.flowError
     }
-    func matchesPrintRoute(_ route: NativeRoute, currency: String) -> Bool {
+    func matchesPrintRoute(_ route: NativeRoute, currency: CurrencyCode) -> Bool {
         self.currency == currency
             && window == (route.value("window") == "all" ? .all : .rolling24)
             && tab == (StatisticsTab(rawValue: route.value("tab") ?? "") ?? .overview)
@@ -104,7 +104,7 @@ public final class StatisticsModel {
         let nextWindow: StatisticsWindow = route.value("window") == "all" ? .all : .rolling24
         tab = StatisticsTab(rawValue: route.value("tab") ?? "") ?? .overview
         let nextDay = StatisticsWindow.day(now(), calendar: calendar)
-        let changed = currency != settings.defaultCurrency || window != nextWindow || day != nextDay
+        let changed = currency != LedgerCurrency.display(settings) || window != nextWindow || day != nextDay
         if changed {
             task?.cancel()
             revision = UUID()
@@ -120,7 +120,7 @@ public final class StatisticsModel {
             pivotPage = 0
             recipientVisibleCount = settings.defaultPageSize
         }
-        currency = settings.defaultCurrency
+        currency = LedgerCurrency.display(settings)
         window = nextWindow
         day = nextDay
         if !force, let fetchedAt, now().timeIntervalSince(fetchedAt) < 30 {
@@ -235,7 +235,7 @@ public final class StatisticsModel {
     public func toggleGroup(_ id: String) {
         if collapsedGroups.contains(id) { collapsedGroups.remove(id) } else { collapsedGroups.insert(id) }
     }
-    public func pivotDrill(categoryIds: [Int], period: String?, label: String, uncategorised: Bool = false)
+    public func pivotDrill(categoryIds: [CategoryID], period: String?, label: String, uncategorised: Bool = false)
         -> NativeRoute
     {
         let month = period.flatMap { target in filtered?.monthly.months.first { $0.id == target } }

@@ -11,7 +11,7 @@ public final class PlannedLinkModel: Identifiable {
     public static let debounce: Duration = .milliseconds(250)
 
     public let payment: PlannedPayment
-    public nonisolated var id: Int { payment.id }
+    public nonisolated var id: PlannedTransactionID { payment.id }
 
     /// The local search (`txSearchQuery`): memo, payee or amount.
     public var search = ""
@@ -22,7 +22,7 @@ public final class PlannedLinkModel: Identifiable {
     public private(set) var candidates: [OpenAPI.Transaction] = []
     /// No answer yet (`isLoading`).
     public private(set) var isLoading = true
-    public private(set) var selectedTransactionId: Int?
+    public private(set) var selectedTransactionId: TransactionID?
     /// Link and mark as paid is running.
     public internal(set) var isExecuting = false
 
@@ -161,7 +161,7 @@ public final class PlannedLinkModel: Identifiable {
         }
     }
 
-    public func select(_ transactionId: Int?) {
+    public func select(_ transactionId: TransactionID?) {
         selectedTransactionId = transactionId
     }
 
@@ -184,7 +184,7 @@ public final class PlannedLinkModel: Identifiable {
     public static func title(_ transaction: OpenAPI.Transaction, strings: any Localizing) -> String {
         if let memo = transaction.memo, !memo.isEmpty { return memo }
         if let payee = transaction.recipientName, !payee.isEmpty { return payee }
-        return strings.t("plannedPage.link.txFallback", ["id": String(transaction.id)])
+        return strings.t("plannedPage.link.txFallback", ["id": String(transaction.id.rawValue)])
     }
 
     /// "payee · date" of the non-empty parts.

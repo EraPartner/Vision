@@ -7,11 +7,11 @@ public protocol PlannedEditingService: Sendable {
     /// `createPlannedTransaction(mapToCreateAPI(payment))`.
     func createPlannedPayment(_ body: OpenAPI.PlannedTransactionCreate) async throws -> OpenAPI.PlannedTransaction
     /// `updatePlannedTransaction(id, mapToUpdateAPI(updates))`.
-    func updatePlannedPayment(id: Int, patch: PlannedPaymentPatch) async throws -> OpenAPI.PlannedTransaction
+    func updatePlannedPayment(id: PlannedTransactionID, patch: PlannedPaymentPatch) async throws -> OpenAPI.PlannedTransaction
     /// Track: `createPlannedTransaction` with the detected pattern's body.
     func trackPlannedPayment(_ body: PlannedTrackBody) async throws -> OpenAPI.PlannedTransaction
     /// `executePlannedTransaction(id, { executed_transaction_id, execution_date })`.
-    func executePlannedPayment(id: Int, transactionId: Int, executionDate: String?) async throws
+    func executePlannedPayment(id: PlannedTransactionID, transactionId: TransactionID, executionDate: String?) async throws
         -> OpenAPI.PlannedTransaction
     /// `getPlannedMatchSuggestions()`: the rows of the `{ items, total }` body.
     func matchSuggestions() async throws -> [PlannedMatchSuggestion]
@@ -35,7 +35,7 @@ extension APIClient: PlannedEditingService {
         try await send(OpenAPIOperations.CreatePlannedTransaction(body: body))
     }
 
-    public func updatePlannedPayment(id: Int, patch: PlannedPaymentPatch) async throws -> OpenAPI.PlannedTransaction {
+    public func updatePlannedPayment(id: PlannedTransactionID, patch: PlannedPaymentPatch) async throws -> OpenAPI.PlannedTransaction {
         try await send(PlannedPaymentPatchRequest(id: id, patch: patch))
     }
 
@@ -43,7 +43,7 @@ extension APIClient: PlannedEditingService {
         try await send(PlannedTrackRequest(body: body))
     }
 
-    public func executePlannedPayment(id: Int, transactionId: Int, executionDate: String?) async throws
+    public func executePlannedPayment(id: PlannedTransactionID, transactionId: TransactionID, executionDate: String?) async throws
         -> OpenAPI.PlannedTransaction
     {
         try await send(
@@ -95,12 +95,12 @@ extension APIClient: PlannedEditingService {
 /// (clear) as well as leave them out.
 public struct PlannedPaymentPatch: Equatable, Sendable, Encodable {
     public var plannedDate: String?
-    public var accountId: Int?
-    public var recipientId: Int?
+    public var accountId: AccountID?
+    public var recipientId: RecipientID?
     public var memo: String?
     public var amount: Decimal?
-    public var currency: String?
-    public var categoryId: Int?
+    public var currency: CurrencyCode?
+    public var categoryId: CategoryID?
     public var comment: String?
     public var url: String?
     public var isRecurring: Bool?
@@ -193,10 +193,10 @@ public struct PlannedPaymentPatchRequest: APIOperation {
     public static let method = OpenAPIOperations.UpdatePlannedTransaction.method
     public static let pathTemplate = OpenAPIOperations.UpdatePlannedTransaction.pathTemplate
 
-    public var id: Int
+    public var id: PlannedTransactionID
     public var patch: PlannedPaymentPatch
 
-    public init(id: Int, patch: PlannedPaymentPatch) {
+    public init(id: PlannedTransactionID, patch: PlannedPaymentPatch) {
         self.id = id
         self.patch = patch
     }
@@ -214,19 +214,19 @@ public struct PlannedPaymentPatchRequest: APIOperation {
 /// missing-field 400.
 public struct PlannedTrackBody: Equatable, Sendable, Encodable {
     public let plannedDate: String
-    public let accountId: Int?
-    public let recipientId: Int
+    public let accountId: AccountID?
+    public let recipientId: RecipientID
     public let memo: String
     public let amount: Decimal
-    public let currency: String
-    public let categoryId: Int?
+    public let currency: CurrencyCode
+    public let categoryId: CategoryID?
     public let recurrencePattern: String
     /// Always `true`: Track creates a recurring payment.
     public var isRecurring: Bool { true }
 
     public init(
-        plannedDate: String, accountId: Int?, recipientId: Int, memo: String, amount: Decimal, currency: String,
-        categoryId: Int?, recurrencePattern: String
+        plannedDate: String, accountId: AccountID?, recipientId: RecipientID, memo: String, amount: Decimal,
+        currency: CurrencyCode, categoryId: CategoryID?, recurrencePattern: String
     ) {
         self.plannedDate = plannedDate
         self.accountId = accountId
@@ -286,6 +286,70 @@ public struct PlannedTrackRequest: APIOperation {
 
 // MARK: Recurring patterns
 
+/// `direction` of a detected pattern: `income` or `expense`; another value is kept as sent.
+public enum PlannedPatternDirection: Codable, Hashable, Sendable, RawRepresentable {
+    case income
+    case expense
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "income": self = .income
+        case "expense": self = .expense
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .income: return "income"
+        case .expense: return "expense"
+        case .unknown(let value): return value
+        }
+    }
+
+    public init(from decoder: any Decoder) throws {
+        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+/// `direction` of an amount change: `increased` or `decreased`; another value is kept as sent.
+public enum PlannedChangeDirection: Codable, Hashable, Sendable, RawRepresentable {
+    case increased
+    case decreased
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "increased": self = .increased
+        case "decreased": self = .decreased
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .increased: return "increased"
+        case .decreased: return "decreased"
+        case .unknown(let value): return value
+        }
+    }
+
+    public init(from decoder: any Decoder) throws {
+        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
 /// One detected pattern of `GET /api/info/recurring-patterns` (the fields
 /// `RecurringDetectionPanel` reads). The operation's schema is untyped, so the envelope's
 /// `data` is decoded here.
@@ -295,10 +359,12 @@ public struct PlannedRecurringPattern: Equatable, Sendable, Decodable, Identifia
         public let previousAmount: Decimal
         public let newAmount: Decimal
         public let percentChange: Decimal
-        /// `increased` or `decreased`.
-        public let direction: String
+        public let direction: PlannedChangeDirection
 
-        public init(date: String, previousAmount: Decimal, newAmount: Decimal, percentChange: Decimal, direction: String) {
+        public init(
+            date: String, previousAmount: Decimal, newAmount: Decimal, percentChange: Decimal,
+            direction: PlannedChangeDirection
+        ) {
             self.date = date
             self.previousAmount = previousAmount
             self.newAmount = newAmount
@@ -307,29 +373,30 @@ public struct PlannedRecurringPattern: Equatable, Sendable, Decodable, Identifia
         }
     }
 
-    public let recipientId: Int
+    public let recipientId: RecipientID
     public let recipientName: String
-    /// `income` or `expense`: a payee can yield one pattern per direction.
-    public let direction: String
+    /// A payee can yield one pattern per direction.
+    public let direction: PlannedPatternDirection
     public let detectedPattern: String
     public let intervalDays: Int
     public let occurrences: Int
     public let latestAmount: Decimal
-    public let currency: String
-    public let categoryId: Int?
+    public let currency: CurrencyCode
+    public let categoryId: CategoryID?
     public let categoryName: String?
-    public let accountId: Int?
+    public let accountId: AccountID?
     public let predictedNext: String
     public let amountChanges: [AmountChange]
     public let isAlreadyPlanned: Bool
     public let confidence: Decimal
 
-    public var id: String { "\(recipientId)-\(direction)" }
+    public var id: String { "\(recipientId.rawValue)-\(direction.rawValue)" }
 
     public init(
-        recipientId: Int, recipientName: String, direction: String = "expense", detectedPattern: String = "monthly",
-        intervalDays: Int = 30, occurrences: Int = 3, latestAmount: Decimal, currency: String = "EUR",
-        categoryId: Int? = nil, categoryName: String? = nil, accountId: Int? = nil, predictedNext: String,
+        recipientId: RecipientID, recipientName: String, direction: PlannedPatternDirection = .expense,
+        detectedPattern: String = "monthly", intervalDays: Int = 30, occurrences: Int = 3, latestAmount: Decimal,
+        currency: CurrencyCode = LedgerCurrency.eur, categoryId: CategoryID? = nil, categoryName: String? = nil,
+        accountId: AccountID? = nil, predictedNext: String,
         amountChanges: [AmountChange] = [], isAlreadyPlanned: Bool = false, confidence: Decimal = 90
     ) {
         self.recipientId = recipientId
@@ -393,7 +460,7 @@ public struct PlannedRecurringPattern: Equatable, Sendable, Decodable, Identifia
         let magnitude = latestAmount < 0 ? -latestAmount : latestAmount
         return PlannedTrackBody(
             plannedDate: predictedNext, accountId: accountId, recipientId: recipientId, memo: memo,
-            amount: direction == "income" ? magnitude : -magnitude, currency: currency, categoryId: categoryId,
+            amount: direction == .income ? magnitude : -magnitude, currency: currency, categoryId: categoryId,
             recurrencePattern: detectedPattern == "custom" ? "every \(intervalDays) days" : detectedPattern)
     }
 }
@@ -407,7 +474,7 @@ public struct PlannedLinkQuery: Equatable, Sendable {
     public var bankAccount = ""
     public var recipientName = ""
     /// The payee's merge-cluster root, while the dialog searches by it.
-    public var recipientId: Int?
+    public var recipientId: RecipientID?
     public var uncategorised = false
     public var active = true
     public var matchAmount = true

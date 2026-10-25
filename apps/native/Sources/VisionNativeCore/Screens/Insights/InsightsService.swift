@@ -40,13 +40,13 @@ extension APIClient {
 }
 
 public protocol HomeService: Sendable {
-    func homeMonthly(currency: String, exclusions: InsightExclusions) async throws
+    func homeMonthly(currency: CurrencyCode, exclusions: InsightExclusions) async throws
         -> InsightMonthlySummary
-    func homePace(currency: String) async throws -> HomeSpendingPace
-    func homeBalances(currency: String) async throws -> HomeBankBalances
-    func homeNetWorth(currency: String) async throws -> HomeNetWorth
+    func homePace(currency: CurrencyCode) async throws -> HomeSpendingPace
+    func homeBalances(currency: CurrencyCode) async throws -> HomeBankBalances
+    func homeNetWorth(currency: CurrencyCode) async throws -> HomeNetWorth
     func homeForecast(
-        currency: String, exclusions: InsightExclusions, options: InsightForecastOptions
+        currency: CurrencyCode, exclusions: InsightExclusions, options: InsightForecastOptions
     ) async throws -> InsightForecast
     func homeForecastAccuracy() async throws -> InsightForecastAccuracy
     func homeTransactionCount() async throws -> Int
@@ -57,10 +57,10 @@ public protocol HomeService: Sendable {
         .PlannedTransaction]
     /// `usePlannedTotals(currency)`: rest-of-month incoming and outgoing, converted on the
     /// server (ADR-216). `nil` when a service has no totals.
-    func homePlannedTotals(currency: String) async throws -> OpenAPI.PlannedTotals?
+    func homePlannedTotals(currency: CurrencyCode) async throws -> OpenAPI.PlannedTotals?
     /// `useAccountTotals(currency)`: per-account converted balances (the Accounts list order).
     /// `nil` when a service has no totals.
-    func homeAccountTotals(currency: String) async throws -> OpenAPI.AccountTotals?
+    func homeAccountTotals(currency: CurrencyCode) async throws -> OpenAPI.AccountTotals?
     func homeMatchCount() async throws -> Int
     func homeExclusions(scope: String) async throws -> InsightExclusions
     func homeWidgetSetting() async throws -> OpenAPI.Setting
@@ -68,8 +68,8 @@ public protocol HomeService: Sendable {
 }
 
 extension HomeService {
-    public func homePlannedTotals(currency: String) async throws -> OpenAPI.PlannedTotals? { nil }
-    public func homeAccountTotals(currency: String) async throws -> OpenAPI.AccountTotals? { nil }
+    public func homePlannedTotals(currency: CurrencyCode) async throws -> OpenAPI.PlannedTotals? { nil }
+    public func homeAccountTotals(currency: CurrencyCode) async throws -> OpenAPI.AccountTotals? { nil }
 }
 
 public struct HomeTransactionPage: Equatable, Sendable {
@@ -82,28 +82,28 @@ public struct HomeTransactionPage: Equatable, Sendable {
 }
 
 extension APIClient: HomeService {
-    public func homeMonthly(currency: String, exclusions: InsightExclusions) async throws
+    public func homeMonthly(currency: CurrencyCode, exclusions: InsightExclusions) async throws
         -> InsightMonthlySummary
     {
         try await sendAggregation(
             OpenAPIOperations.GetMonthlySummary(),
             query: currencyItems(currency) + exclusions.queryItems)
     }
-    public func homePace(currency: String) async throws -> HomeSpendingPace {
+    public func homePace(currency: CurrencyCode) async throws -> HomeSpendingPace {
         try await sendAggregation(
             OpenAPIOperations.GetAverageVsCurrent(), query: currencyItems(currency))
     }
-    public func homeBalances(currency: String) async throws -> HomeBankBalances {
+    public func homeBalances(currency: CurrencyCode) async throws -> HomeBankBalances {
         try await sendAggregation(
             OpenAPIOperations.GetBankBalances(), query: currencyItems(currency))
     }
-    public func homeNetWorth(currency: String) async throws -> HomeNetWorth {
+    public func homeNetWorth(currency: CurrencyCode) async throws -> HomeNetWorth {
         try await send(
             InsightRequest<OpenAPIOperations.GetNetWorth, HomeNetWorth>(
                 OpenAPIOperations.GetNetWorth(), query: currencyItems(currency)))
     }
     public func homeForecast(
-        currency: String, exclusions: InsightExclusions, options: InsightForecastOptions
+        currency: CurrencyCode, exclusions: InsightExclusions, options: InsightForecastOptions
     ) async throws -> InsightForecast {
         let query = currencyItems(currency) + exclusions.queryItems + options.queryItems
         if options.mode == .month {
@@ -154,10 +154,10 @@ extension APIClient: HomeService {
                 ])
         ).items
     }
-    public func homePlannedTotals(currency: String) async throws -> OpenAPI.PlannedTotals? {
+    public func homePlannedTotals(currency: CurrencyCode) async throws -> OpenAPI.PlannedTotals? {
         try await send(OpenAPIOperations.GetPlannedTotals(currency: currency))
     }
-    public func homeAccountTotals(currency: String) async throws -> OpenAPI.AccountTotals? {
+    public func homeAccountTotals(currency: CurrencyCode) async throws -> OpenAPI.AccountTotals? {
         try await send(OpenAPIOperations.GetAccountTotals(currency: currency))
     }
     public func homeMatchCount() async throws -> Int { try await matchSuggestions().count }
@@ -182,7 +182,7 @@ extension APIClient: HomeService {
         let needsHidden =
             (exclusionScope == "everywhere" || exclusionScope == scope)
             && (value["excludeHiddenCategories"]?.boolValue ?? true)
-        var hidden: [Int] = []
+        var hidden: [CategoryID] = []
         if needsHidden {
             async let tree = send(
                 InsightRequest<OpenAPIOperations.GetCategoryTree, InsightCategoryTree>(
@@ -211,8 +211,8 @@ extension APIClient: HomeService {
         }
         return record
     }
-    private func currencyItems(_ code: String) -> [URLQueryItem] {
-        [URLQueryItem(name: "currency", value: code)]
+    private func currencyItems(_ code: CurrencyCode) -> [URLQueryItem] {
+        [URLQueryItem(name: "currency", value: code.rawValue)]
     }
 }
 

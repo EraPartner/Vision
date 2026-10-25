@@ -2,10 +2,12 @@ import Foundation
 
 public enum CustomChartKind: String, CaseIterable, Sendable {
     case line, bar, stackedBar, groupedBar, rankedBar, area, stackedArea
-    public var chartType: String { self == .line ? "line" : self == .area || self == .stackedArea ? "area" : "bar" }
-    public var variant: String {
+    public var chartType: OpenAPI.SavedChart.ChartType {
+        self == .line ? .line : self == .area || self == .stackedArea ? .area : .bar
+    }
+    public var variant: OpenAPI.SavedChart.ChartVariant {
         self == .stackedBar || self == .stackedArea
-            ? "stacked" : self == .rankedBar ? "ranked" : self == .groupedBar ? "grouped" : "default"
+            ? .stacked : self == .rankedBar ? .ranked : self == .groupedBar ? .grouped : .default
     }
     public var labelKey: String {
         switch self {
@@ -23,10 +25,10 @@ public enum CustomChartKind: String, CaseIterable, Sendable {
 public struct CustomChartDraft: Equatable, Sendable, Encodable {
     public var name = ""
     public var kind: CustomChartKind = .line
-    public var timeBucket = "monthly"
-    public var categoryIds: [Int] = []
-    public var recipientIds: [Int] = []
-    public var tagIds: [Int] = []
+    public var timeBucket: OpenAPI.SavedChart.TimeBucket = .monthly
+    public var categoryIds: [CategoryID] = []
+    public var recipientIds: [RecipientID] = []
+    public var tagIds: [TagID] = []
     public var allCategories = false
     public var allRecipients = false
     public var allTags = false
@@ -39,7 +41,7 @@ public struct CustomChartDraft: Equatable, Sendable, Encodable {
         kind =
             CustomChartKind.allCases.first { $0.chartType == chart.chartType && $0.variant == chart.chartVariant }
             ?? .line
-        categoryIds = chart.categoryIds
+        categoryIds = chart.categoryIds.map { CategoryID(rawValue: $0) }
         recipientIds = chart.recipientIds
         tagIds = chart.tagIds
         allCategories = chart.allCategories
@@ -91,17 +93,17 @@ public struct CustomChartDraft: Equatable, Sendable, Encodable {
 
 public struct CustomRecipientPivot: Decodable, Equatable, Sendable {
     public struct Item: Decodable, Equatable, Sendable {
-        public let recipientId: Int
+        public let recipientId: RecipientID
         public let name: String
         public let total: Decimal
     }
     /// The conversion contract of a period pivot (recipient and tag pivots alike).
     public struct Conversion: Decodable, Equatable, Sendable {
         public let usedHistoricalFallback: Bool
-        public let affectedCurrencies: [String]?
+        public let affectedCurrencies: [CurrencyCode]?
         /// Transactions left out because no stored rate converts them (ADR-216).
         public let unconvertedCount: Int?
-        public let unconvertedCurrencies: [String]?
+        public let unconvertedCurrencies: [CurrencyCode]?
     }
     public let recipientPivot: [String: [Item]]
     public let conversion: Conversion?
@@ -109,7 +111,7 @@ public struct CustomRecipientPivot: Decodable, Equatable, Sendable {
 
 public struct CustomTagPivot: Decodable, Equatable, Sendable {
     public struct Item: Decodable, Equatable, Sendable {
-        public let tagId: Int
+        public let tagId: TagID
         public let slug: String
         public let total: Decimal
     }
@@ -134,7 +136,7 @@ public struct CustomChartDataset: Equatable, Sendable {
     public let entities: [CustomChartEntity]
     public let usesHistoricalFallback: Bool
     /// Currencies whose totals used today's rate because the historical one was unavailable.
-    public let fallbackCurrencies: [String]
+    public let fallbackCurrencies: [CurrencyCode]
     /// Transactions of the recipient and tag pivots left out for want of a stored rate; the
     /// category series come from the Statistics snapshot (ADR-216).
     public let unconvertedCount: Int
@@ -150,29 +152,29 @@ public struct CustomChartDataset: Equatable, Sendable {
         {
             var values: [String: Decimal] = [:]
             for (period, amount) in row.values {
-                let key = configuration.timeBucket == "yearly" ? String(period.prefix(4)) : period
+                let key = configuration.timeBucket == .yearly ? String(period.prefix(4)) : period
                 if configuration.includesPeriod(key) { values[key, default: 0] += amount }
             }
             entities.append(
                 CustomChartEntity(id: "cat:\(row.id)", name: row.name, values: values.mapValues { abs($0) }))
         }
-        var recipientRows: [Int: CustomChartEntity] = [:]
+        var recipientRows: [RecipientID: CustomChartEntity] = [:]
         for (period, items) in recipients?.recipientPivot ?? [:] where configuration.includesPeriod(period) {
             for item in items where configuration.allRecipients || configuration.recipientIds.contains(item.recipientId)
             {
                 var values = recipientRows[item.recipientId]?.values ?? [:]
                 values[period, default: 0] += abs(item.total)
                 recipientRows[item.recipientId] = CustomChartEntity(
-                    id: "rec:\(item.recipientId)", name: item.name, values: values)
+                    id: "rec:\(item.recipientId.rawValue)", name: item.name, values: values)
             }
         }
         entities += recipientRows.values.sorted { $0.id < $1.id }
-        var tagRows: [Int: CustomChartEntity] = [:]
+        var tagRows: [TagID: CustomChartEntity] = [:]
         for (period, items) in tags?.tagPivot ?? [:] where configuration.includesPeriod(period) {
             for item in items where configuration.allTags || configuration.tagIds.contains(item.tagId) {
                 var values = tagRows[item.tagId]?.values ?? [:]
                 values[period, default: 0] += abs(item.total)
-                tagRows[item.tagId] = CustomChartEntity(id: "tag:\(item.tagId)", name: "#" + item.slug, values: values)
+                tagRows[item.tagId] = CustomChartEntity(id: "tag:\(item.tagId.rawValue)", name: "#" + item.slug, values: values)
             }
         }
         entities += tagRows.values.sorted { $0.id < $1.id }

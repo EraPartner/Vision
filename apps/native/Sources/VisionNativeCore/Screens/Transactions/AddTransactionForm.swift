@@ -63,23 +63,24 @@ public struct AddTransactionDraft: Equatable, Sendable {
     public var date: String
     /// The chosen account's name (`bank_account`).
     public var accountName = ""
-    public var accountId: Int?
+    public var accountId: AccountID?
     /// Transfer only: the receiving account.
     public var toAccountName = ""
-    public var toAccountId: Int?
-    public var recipientId: Int?
-    public var categoryId: Int?
+    public var toAccountId: AccountID?
+    public var recipientId: RecipientID?
+    public var categoryId: CategoryID?
     public var memo = ""
     /// The magnitude as typed; the kind decides the sign.
     public var amount = ""
-    public var currency: String
+    /// The currency field as typed (it holds a currency code once the text is three capitals).
+    public var currencyText: String
     public var comment = ""
 
     /// `createAddTransactionFormState(defaultCurrency, kind)`.
-    public init(defaultCurrency: String, kind: TransactionKind = .expense, today: PlannedDay) {
+    public init(defaultCurrency: CurrencyCode, kind: TransactionKind = .expense, today: PlannedDay) {
         self.kind = kind
         date = today.ymd
-        currency = defaultCurrency.isEmpty ? "EUR" : defaultCurrency
+        currencyText = defaultCurrency.rawValue
     }
 }
 
@@ -112,13 +113,13 @@ public final class AddTransactionModel {
     /// The field a blocked submit moves focus to; the view clears it once moved.
     public private(set) var focusRequest: AddTransactionField?
 
-    @ObservationIgnored public let defaultCurrency: String
+    @ObservationIgnored public let defaultCurrency: CurrencyCode
     @ObservationIgnored private let pickers: PickerDataModel
     @ObservationIgnored private let calendar: Calendar
     @ObservationIgnored private let today: @MainActor () -> PlannedDay
 
     public init(
-        defaultCurrency: String, pickers: PickerDataModel, calendar: Calendar,
+        defaultCurrency: CurrencyCode, pickers: PickerDataModel, calendar: Calendar,
         today: @escaping @MainActor () -> PlannedDay
     ) {
         self.defaultCurrency = defaultCurrency
@@ -152,7 +153,7 @@ public final class AddTransactionModel {
 
     /// Upper-cased, at most 10 characters.
     public func setCurrency(_ text: String) {
-        edit { $0.currency = String(text.uppercased().prefix(Self.currencyMaxLength)) }
+        edit { $0.currencyText = String(text.uppercased().prefix(Self.currencyMaxLength)) }
     }
 
     public func setMemo(_ text: String) {
@@ -165,7 +166,7 @@ public final class AddTransactionModel {
 
     /// A payee pick: it clears a category the previous payee filled, then the new payee's
     /// usual category fills an empty (or auto-filled) category.
-    public func selectRecipient(_ id: Int?) async {
+    public func selectRecipient(_ id: RecipientID?) async {
         let wasAuto = categoryAuto
         edit { draft in
             draft.recipientId = id
@@ -186,24 +187,24 @@ public final class AddTransactionModel {
     }
 
     /// A category pick stops the auto-fill.
-    public func selectCategory(_ id: Int?) {
+    public func selectCategory(_ id: CategoryID?) {
         categoryAuto = false
         usualCategorySource = nil
         edit { $0.categoryId = id }
     }
 
     /// The (From) account: its name and id, and its currency.
-    public func pickAccount(name: String, id: Int) {
+    public func pickAccount(name: String, id: AccountID) {
         let currency = account(named: name)?.currency
         edit { draft in
             draft.accountName = name
             draft.accountId = id
-            if let currency { draft.currency = currency }
+            if let currency { draft.currencyText = currency.rawValue }
         }
     }
 
     /// The To account of a transfer.
-    public func pickToAccount(name: String, id: Int) {
+    public func pickToAccount(name: String, id: AccountID) {
         edit { draft in
             draft.toAccountName = name
             draft.toAccountId = id
@@ -293,10 +294,10 @@ public final class AddTransactionModel {
         if draft.kind != .transfer && draft.recipientId == nil {
             errors[.recipient] = "validation.required"
         }
-        if (draft.accountId ?? 0) <= 0 {
+        if (draft.accountId?.rawValue ?? 0) <= 0 {
             errors[.account] = "portfolio.move.selectAccount"
         }
-        if draft.kind == .transfer && (draft.toAccountId ?? 0) <= 0 {
+        if draft.kind == .transfer && (draft.toAccountId?.rawValue ?? 0) <= 0 {
             errors[.toAccount] = "portfolio.move.selectAccount"
         }
         if draft.date.isEmpty {
@@ -344,18 +345,18 @@ public final class AddTransactionModel {
     /// The create body of an expense or income (`transactionFromForm`).
     func transactionBody(format: NumberFormat, allowDuplicate: Bool) -> OpenAPI.TransactionCreate? {
         guard let magnitude = magnitude(format: format), let accountId = draft.accountId,
-            let recipientId = draft.recipientId
+            let recipientId = draft.recipientId, let currency = currencyOrDefault
         else { return nil }
         return OpenAPI.TransactionCreate(
             transactionDate: draft.date, accountId: accountId, recipientId: recipientId,
-            memo: Self.trimmedOrNil(draft.memo), amount: draft.kind.signed(magnitude), currency: currencyOrDefault,
+            memo: Self.trimmedOrNil(draft.memo), amount: draft.kind.signed(magnitude), currency: currency,
             categoryId: draft.categoryId, comment: Self.trimmedOrNil(draft.comment),
             allowDuplicate: allowDuplicate ? true : nil)
     }
 
-    /// `form.currency || defaultCurrency`.
-    var currencyOrDefault: String {
-        draft.currency.isEmpty ? defaultCurrency : draft.currency
+    /// `form.currency || defaultCurrency`; `nil` when the typed text is not a currency code.
+    var currencyOrDefault: CurrencyCode? {
+        draft.currencyText.isEmpty ? defaultCurrency : CurrencyCode(rawValue: draft.currencyText)
     }
 
     /// The 409 answer: the duplicate prompt shows.

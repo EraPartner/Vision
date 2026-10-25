@@ -16,8 +16,8 @@ public final class PayeeMergeState {
     /// `merge.loadFailed` with Retry.
     public private(set) var loadFailed = false
     public private(set) var isLoadingList = false
-    public private(set) var primaryId: Int?
-    public private(set) var aliasIds: [Int] = []
+    public private(set) var primaryId: RecipientID?
+    public private(set) var aliasIds: [RecipientID] = []
     public var primarySearch = ""
     public var aliasSearch = ""
     public private(set) var isMerging = false
@@ -79,7 +79,7 @@ public final class PayeeMergeState {
         isMerging ? strings.t("merge.merging") : strings.tc("merge.mergeCount", aliasIds.count)
     }
 
-    public func selectPrimary(_ id: Int) {
+    public func selectPrimary(_ id: RecipientID) {
         primaryId = id
         aliasIds.removeAll { $0 == id }
     }
@@ -91,7 +91,7 @@ public final class PayeeMergeState {
     }
 
     /// A list item adds or removes the alias; a chip's × removes it.
-    public func toggleAlias(_ id: Int) {
+    public func toggleAlias(_ id: RecipientID) {
         guard id != primaryId else { return }
         if let index = aliasIds.firstIndex(of: id) {
             aliasIds.remove(at: index)
@@ -213,7 +213,7 @@ public struct MatchRuleForm: Equatable, Sendable {
     /// Edit: the rule's values.
     public init(rule: OpenAPI.RecipientPattern) {
         pattern = rule.pattern
-        kind = MatchRuleKind(rawValue: rule.patternKind) ?? .literalPrefix
+        kind = MatchRuleKind(rule.patternKind) ?? .literalPrefix
         caseSensitive = rule.caseSensitive
         priorityText = String(rule.priority)
         notes = rule.notes ?? ""
@@ -257,14 +257,14 @@ public struct MatchRulesState: Equatable, Sendable {
     /// Identifies this opening of the dialog, so an answer that lands after it was closed and
     /// reopened is dropped.
     let session = UUID()
-    public let recipientId: Int
+    public let recipientId: RecipientID
     public let recipientName: String
     /// The rules; `nil` while loading.
     public internal(set) var patterns: [OpenAPI.RecipientPattern]?
     /// The form, while adding or editing.
     public internal(set) var form: MatchRuleForm?
     /// The rule in the form (its row is highlighted).
-    public internal(set) var editingId: Int?
+    public internal(set) var editingId: RecipientPatternID?
     /// `recipientPatterns.previewCount` / `previewZero` after Preview.
     public internal(set) var previewCount: Int?
     public internal(set) var isPreviewing = false
@@ -275,7 +275,7 @@ public struct MatchRulesState: Equatable, Sendable {
     /// The Delete pattern alert, for this rule.
     public internal(set) var pendingDelete: OpenAPI.RecipientPattern?
 
-    public init(recipientId: Int, recipientName: String) {
+    public init(recipientId: RecipientID, recipientName: String) {
         self.recipientId = recipientId
         self.recipientName = recipientName
     }

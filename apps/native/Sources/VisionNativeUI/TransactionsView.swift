@@ -344,7 +344,7 @@ struct TransactionsToolbar: View {
             else { continue }
             options.append(
                 PickerOption(
-                    id: String(account.id), title: label,
+                    id: String(account.id.rawValue), title: label,
                     detail: account.isActive ? nil : strings.t("accounts.archived"),
                     isSelected: filters.accountId == account.id
                 ) {
@@ -392,7 +392,7 @@ struct TransactionsToolbar: View {
             let label = PickerDataModel.label(node)
             guard query.isEmpty || "\(label) \(node.id)".lowercased().contains(query) else { continue }
             options.append(
-                PickerOption(id: String(node.id), title: label, isSelected: filters.categoryId == node.id) {
+                PickerOption(id: String(node.id.rawValue), title: label, isSelected: filters.categoryId == node.id) {
                     model.setCategoryFilter(node.id)
                     categoriesOpen = false
                 })
