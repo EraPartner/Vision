@@ -51,6 +51,21 @@ public struct RestorePathAllowList: Sendable {
     public func contains(_ resolvedPath: String) -> Bool {
         paths.contains(resolvedPath)
     }
+
+    /// `pickedRestorePath` in `runtime/ipc-schemas.ts`: the resolved path when `path` is
+    /// absolute and the restore picker returned it, otherwise `nil`. The native screens hold the
+    /// picked path in the app process, but the host still refuses any other path.
+    public func pickedPath(_ path: String) -> String? {
+        guard path.hasPrefix("/") else { return nil }
+        let resolved = PathUtilities.normalize(path)
+        return contains(resolved) ? resolved : nil
+    }
+
+    /// `hasAllowedRestoreExt`: `.visionbak`, `.visionbak.enc`, `.enc` or `.sql`, any case.
+    public static func hasAllowedExtension(_ path: String) -> Bool {
+        let lower = path.lowercased()
+        return [".visionbak.enc", ".visionbak", ".enc", ".sql"].contains { lower.hasSuffix($0) }
+    }
 }
 
 /// Runs blocking file and crypto work off the cooperative thread pool.

@@ -1144,7 +1144,7 @@ final class ShellController: NSObject, NSWindowDelegate {
         launch()
     }
 
-    /// Shows the launch state and resolves the runtime; Retry and `recovery:retry` call it again.
+    /// Shows the launch state and resolves the runtime; the launch screen's Try again calls it again.
     func launch() {
         launchTask?.cancel()
         startTask?.cancel()
@@ -1974,7 +1974,9 @@ final class ShellController: NSObject, NSWindowDelegate {
     }
 
     func isBackupEncrypted(_ path: String) async -> Bool {
-        await backupService.isEncrypted(path)
+        // `backup:is-encrypted`: only a path the restore picker returned.
+        guard let picked = restorePathAllowList.pickedPath(path) else { return false }
+        return await backupService.isEncrypted(picked)
     }
 
     /// The restore: the localized confirmation, then the restore, which stops and restarts the
@@ -1985,10 +1987,20 @@ final class ShellController: NSObject, NSWindowDelegate {
         guard !restoreFenceEntered, pendingRestoreReload == nil, !shellModel.isReloadingGraph else {
             return .object(["success": .bool(false), "error": .string("A restore is already in progress")])
         }
+        // `ALLOWED_RESTORE_PATHS` and `hasAllowedRestoreExt`: only a file the restore picker returned,
+        // with a backup extension, is restored.
+        guard let picked = restorePathAllowList.pickedPath(path) else {
+            return .object([
+                "success": .bool(false), "error": .string("Restore path was not selected via the file picker"),
+            ])
+        }
+        guard RestorePathAllowList.hasAllowedExtension(picked) else {
+            return .object(["success": .bool(false), "error": .string("Unsupported backup file extension")])
+        }
         let operation = UUID()
-        let fileName = (path as NSString).lastPathComponent
+        let fileName = (picked as NSString).lastPathComponent
         let result = await backupService.restore(
-            path: path, passphrase: passphrase,
+            path: picked, passphrase: passphrase,
             confirm: { [weak self] in
                 await self?.confirmAndSuspendForRestore(fileName: fileName, operation: operation) ?? false
             })

@@ -237,6 +237,21 @@ final class StringBox: @unchecked Sendable {
         #expect(allowList.contains("/Users/a/Backups/x.visionbak"))
         #expect(!allowList.contains("/Users/a/Backups/y.visionbak"))
     }
+
+    @Test func onlyAPickedAbsolutePathPasses() {
+        var allowList = RestorePathAllowList()
+        allowList.add("/Users/a/Backups/x.visionbak")
+        #expect(allowList.pickedPath("/Users/a/Backups/../Backups/x.visionbak") == "/Users/a/Backups/x.visionbak")
+        #expect(allowList.pickedPath("/etc/passwd") == nil)
+        #expect(allowList.pickedPath("x.visionbak") == nil)
+    }
+
+    @Test func restoreExtensionsAreTheBackupFormats() {
+        for name in ["a.visionbak", "a.VISIONBAK.ENC", "a.enc", "a.sql"] {
+            #expect(RestorePathAllowList.hasAllowedExtension("/b/" + name), Comment(rawValue: name))
+        }
+        #expect(!RestorePathAllowList.hasAllowedExtension("/b/a.txt"))
+    }
 }
 
 @Suite struct DirectorySwitchTests {
