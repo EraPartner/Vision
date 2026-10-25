@@ -3,8 +3,8 @@ import SwiftUI
 
 /// Hosted in an `NSHostingView` (not a SwiftUI scene), `NavigationSplitView` ignores its
 /// sidebar column's `min`/`ideal` widths on first layout and can start far narrower, which
-/// squeezes the sidebar's search field. This probe sits inside the sidebar column, finds the
-/// enclosing `NSSplitView` once it has been laid out, widens the sidebar to `ideal` once per
+/// squeezes the sidebar's search field. This probe sits beside the split view, finds the
+/// `NSSplitView` once it has been laid out, widens the sidebar to `ideal` once per
 /// launch and afterwards only keeps it from falling below `minimum`.
 struct SidebarWidthGuard: NSViewRepresentable {
     /// The sidebar column's widths (AppSidebar's 248 pt default).
@@ -81,8 +81,7 @@ struct SidebarWidthGuard: NSViewRepresentable {
             scheduleCorrection()
         }
 
-        /// SwiftUI resets the column without a split resize notification; the probe fills the
-        /// sidebar column, so its own frame change is the reliable signal.
+        /// The probe's own frame changes with the window's layout, a cheap extra signal.
         override func setFrameSize(_ newSize: NSSize) {
             super.setFrameSize(newSize)
             scheduleCorrection()
@@ -198,11 +197,23 @@ struct SidebarWidthGuard: NSViewRepresentable {
             return false
         }
 
+        /// The enclosing vertical split view, or, for a probe hosted beside the split view, the
+        /// window's `NavigationSplitView` split view.
         private func enclosingSplitView() -> NSSplitView? {
             var view = superview
             while let current = view {
                 if let split = current as? NSSplitView, split.isVertical { return split }
                 view = current.superview
+            }
+            return window?.contentView.flatMap(Self.navigationSplitView(in:))
+        }
+
+        private static func navigationSplitView(in view: NSView) -> NSSplitView? {
+            if let split = view as? NSSplitView, split.isVertical, split.delegate is NSSplitViewController {
+                return split
+            }
+            for child in view.subviews {
+                if let split = navigationSplitView(in: child) { return split }
             }
             return nil
         }

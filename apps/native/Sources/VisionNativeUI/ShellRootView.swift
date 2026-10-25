@@ -130,8 +130,6 @@ public struct ShellRootView: View {
                 .navigationSplitViewColumnWidth(
                     min: SidebarWidthGuard.minimumWidth, ideal: SidebarWidthGuard.idealWidth,
                     max: SidebarWidthGuard.maximumWidth)
-                .background(
-                    SidebarWidthGuard(minimum: SidebarWidthGuard.minimumWidth, ideal: SidebarWidthGuard.idealWidth))
                 .environment(\.colorScheme, theme.colorScheme)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
                     if frozenDetailWidth == nil, width > 0 { columnWidths.sidebar = width }
@@ -142,6 +140,9 @@ public struct ShellRootView: View {
         } detail: {
             detailColumn(theme)
         }
+        // Outside the sidebar column: on macOS 26 SwiftUI rebuilds that column after the first
+        // width correction, taking a probe inside it out of the window.
+        .background(SidebarWidthGuard(minimum: SidebarWidthGuard.minimumWidth, ideal: SidebarWidthGuard.idealWidth))
         .environment(\.visionTheme, theme)
         // Prominent buttons, toggles and pickers take the web's emerald `--primary` (or the
         // chosen accent) instead of the system blue.
