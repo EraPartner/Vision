@@ -10,12 +10,20 @@ struct PortfolioInvestmentForm: View {
     private var strings: any Localizing { shell.strings }
     private var draft: PortfolioInvestmentDraft? { model.investmentDraft }
     private var isEditing: Bool { draft?.isEditing ?? false }
-    private var typeSelection: Bool { !isEditing && (selectingType || draft?.assetClass.isEmpty == true) }
-    private var unitBased: Bool { PortfolioAssetKinds.unitBased(draft?.assetClass ?? "") }
-    private var currencies: [String] {
-        let choices = ["EUR", "USD", "GBP", "CHF", "SAR", "BTC"]
+    private var typeSelection: Bool { !isEditing && (selectingType || draft.map { $0.assetClass == nil } == true) }
+    private var unitBased: Bool { draft?.assetClass.map(PortfolioAssetKinds.unitBased) ?? false }
+    private var currencies: [CurrencyCode] {
+        let choices = ["EUR", "USD", "GBP", "CHF", "SAR", "BTC"].map(PortfolioCurrency.code)
         guard let current = draft?.currency, !choices.contains(current) else { return choices }
         return choices + [current]
+    }
+    private var currencySelection: Binding<CurrencyCode> {
+        Binding(
+            get: { draft?.currency ?? .eur },
+            set: {
+                model.investmentDraft?.currency = $0
+                model.clearIssue()
+            })
     }
     private func text(_ path: WritableKeyPath<PortfolioInvestmentDraft, String>, field: String = "") -> Binding<
         String
@@ -36,7 +44,7 @@ struct PortfolioInvestmentForm: View {
                         ? strings.t("addInv.chooseType")
                         : strings.t(
                             "addInv.assetTitle",
-                            ["assetClass": strings.t("portfolio.assetClass." + (draft?.assetClass ?? ""))])),
+                            ["assetClass": strings.t("portfolio.assetClass." + (draft?.assetClass?.rawValue ?? ""))])),
                 description: typeSelection ? strings.t("addInv.chooseTypeDesc") : nil,
                 closeLabel: strings.t("common.close"), onClose: { model.dismissEditor() }
             )
@@ -52,8 +60,8 @@ struct PortfolioInvestmentForm: View {
                                     selectingType = false
                                 } label: {
                                     VStack(alignment: .leading, spacing: 5) {
-                                        Text(strings.t("portfolio.assetClass." + value)).font(.headline)
-                                        Text(strings.t("addInv.desc." + value)).font(.callout).foregroundStyle(
+                                        Text(strings.t("portfolio.assetClass." + value.rawValue)).font(.headline)
+                                        Text(strings.t("addInv.desc." + value.rawValue)).font(.callout).foregroundStyle(
                                             theme.secondaryLabel)
                                     }.frame(maxWidth: .infinity, alignment: .leading).padding(12)
                                 }.buttonStyle(.visionOutline)
@@ -90,16 +98,16 @@ struct PortfolioInvestmentForm: View {
         }.frame(width: 512, height: 700).disabled(model.isSaving).interactiveDismissDisabled(model.isSaving)
             .task { await model.loadOptions() }
     }
-    private var fixedIncome: Bool { PortfolioAssetKinds.fixedIncome(draft?.assetClass ?? "") }
-    private var realEstate: Bool { draft?.assetClass == "real_estate" }
+    private var fixedIncome: Bool { draft?.assetClass.map(PortfolioAssetKinds.fixedIncome) ?? false }
+    private var realEstate: Bool { draft?.assetClass == .realEstate }
     /// `InvestmentFormFields` order: identity, class fields, initial purchase, price source, notes.
     @ViewBuilder private var fields: some View {
         field("addInv.label.name", \.name, "name")
         if unitBased { field("addInv.label.ticker", \.symbol, "symbol", monospaced: true) }
         VStack(alignment: .leading, spacing: 6) {
             fieldLabel("addInv.label.currency")
-            Picker(strings.t("addInv.label.currency"), selection: text(\.currency)) {
-                ForEach(currencies, id: \.self) { Text($0).tag($0) }
+            Picker(strings.t("addInv.label.currency"), selection: currencySelection) {
+                ForEach(currencies, id: \.self) { Text($0.rawValue).tag($0) }
             }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
         }
         if !isEditing {
@@ -118,7 +126,7 @@ struct PortfolioInvestmentForm: View {
         if isEditing || unitBased {
             Divider()
             PortfolioProviderFields(model: model, shell: shell)
-            if unitBased && draft?.provider.provider == "manual" {
+            if unitBased && draft?.provider.provider == .manual {
                 field("addInv.label.currentPrice", \.currentPrice, "currentPrice")
             }
         }

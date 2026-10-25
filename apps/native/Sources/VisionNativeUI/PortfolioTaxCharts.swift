@@ -13,7 +13,8 @@ struct PortfolioTaxAssetClassChart: View {
             PortfolioTaxBarChart(
                 rows: data.taxByAssetClass.map {
                     PortfolioTaxBarRow(
-                        id: $0.assetClass, label: shell.strings.t("portfolio.assetClass." + $0.assetClass),
+                        id: $0.assetClass.rawValue,
+                        label: shell.strings.t("portfolio.assetClass." + $0.assetClass.rawValue),
                         taxes: $0.taxes, fees: $0.fees)
                 }, title: shell.strings.t("tax.widget.taxByAssetClass"), currency: data.currency, shell: shell)
         }
@@ -48,7 +49,7 @@ private struct PortfolioTaxBarRow: Identifiable, Equatable {
 private struct PortfolioTaxBarChart: View {
     let rows: [PortfolioTaxBarRow]
     let title: String
-    let currency: String
+    let currency: CurrencyCode
     let shell: NativeShellModel
     @State private var selection: String?
     @FocusState private var focused: Bool

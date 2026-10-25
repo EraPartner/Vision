@@ -30,7 +30,7 @@ struct PortfolioImportHistoryView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(verbatim: batch.sourceFilename ?? batch.adapterName).lineLimit(1)
                                         .truncationMode(.middle)
-                                    Text(strings.t("portfolioImport.session.batch", ["id": String(batch.id)]))
+                                    Text(strings.t("portfolioImport.session.batch", ["id": String(batch.id.rawValue)]))
                                         .font(.caption).foregroundStyle(theme.secondaryLabel)
                                 }
                                 Spacer()

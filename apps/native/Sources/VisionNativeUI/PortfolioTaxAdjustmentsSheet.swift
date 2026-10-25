@@ -4,7 +4,7 @@ import VisionNativeCore
 struct PortfolioTaxAdjustmentsSheet: View {
     let model: PortfolioTaxModel
     let shell: NativeShellModel
-    @FocusState private var interestFocused: Int?
+    @FocusState private var interestFocused: InvestmentID?
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
 
@@ -71,7 +71,7 @@ struct PortfolioTaxAdjustmentsSheet: View {
                 if let symbol = row.symbol {
                     Text(symbol).font(.footnote.monospaced()).foregroundStyle(theme.secondaryLabel)
                 }
-                VisionBadge(text: strings.t("portfolio.assetClass." + row.assetClass), small: true)
+                VisionBadge(text: strings.t("portfolio.assetClass." + row.assetClass.rawValue), small: true)
             }
             HStack(alignment: .top, spacing: 12) {
                 amount("tax.taxes", row: row, path: \.taxes)
@@ -150,13 +150,13 @@ struct PortfolioTaxAdjustmentsSheet: View {
     private func total(_ title: String, value: Decimal) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(strings.t(title)).font(.caption).foregroundStyle(theme.tertiaryLabel)
-            Text(MoneyText.text(value, currency: shell.settings.defaultCurrency, settings: shell.settings))
+            Text(MoneyText.text(value, currency: shell.settings.portfolioCurrency, settings: shell.settings))
                 .font(.visionCardTitle).monospacedDigit().foregroundStyle(theme.loss)
         }.frame(maxWidth: .infinity, alignment: .leading).accessibilityElement(children: .combine)
     }
-    private func draft(_ id: Int) -> PortfolioTaxAdjustmentDraft? { model.draftRows.first { $0.id == id } }
+    private func draft(_ id: InvestmentID) -> PortfolioTaxAdjustmentDraft? { model.draftRows.first { $0.id == id } }
     private func binding<Value>(
-        _ id: Int, _ path: WritableKeyPath<PortfolioTaxAdjustmentDraft, Value>, default fallback: Value
+        _ id: InvestmentID, _ path: WritableKeyPath<PortfolioTaxAdjustmentDraft, Value>, default fallback: Value
     ) -> Binding<Value> {
         Binding(
             get: { draft(id)?[keyPath: path] ?? fallback },

@@ -3,12 +3,12 @@ import VisionNativeCore
 
 enum PortfolioPricePresentation {
     static func isStale(_ holding: PortfolioHolding, now: Date = Date()) -> Bool {
-        guard (holding.priceProvider ?? "manual") != "manual" else { return false }
+        guard (holding.priceProvider ?? .manual) != .manual else { return false }
         guard let stamp = holding.priceUpdatedAt, let date = VisionFormat.parseTimestamp(stamp) else { return true }
         return now.timeIntervalSince(date) > 86_400
     }
     @MainActor static func freshness(_ holdings: [PortfolioHolding], shell: NativeShellModel) -> String? {
-        let live = holdings.filter { $0.isActive && ($0.priceProvider ?? "manual") != "manual" }
+        let live = holdings.filter { $0.isActive && ($0.priceProvider ?? .manual) != .manual }
         guard !live.isEmpty else { return nil }
         let dates = live.compactMap { $0.priceUpdatedAt.flatMap { VisionFormat.parseTimestamp($0) } }
         guard dates.count == live.count, let oldest = dates.min() else {

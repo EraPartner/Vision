@@ -25,7 +25,7 @@ struct PortfolioScreenView: View {
             screens.editing.configure(settings: shell.settings, strings: shell.strings)
         }
         .task(id: screens.dataRevision) {
-            await screens.model.load(currency: shell.settings.defaultCurrency, route: shell.route)
+            await screens.model.load(currency: shell.settings.portfolioCurrency, route: shell.route)
         }
         .onAppear {
             connectivity.start { screens.model.isOnline = $0 }

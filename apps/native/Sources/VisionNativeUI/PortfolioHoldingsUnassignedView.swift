@@ -10,15 +10,15 @@ struct PortfolioHoldingsUnassignedView: View {
     @State private var history: [PortfolioTransaction]?
     @State private var loading = false
     @State private var loadFailed = false
-    @State private var brokerId: Int?
+    @State private var brokerId: AccountID?
     @State private var confirming = false
     @State private var loadRevision = UUID()
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
-    private var ids: [Int] {
+    private var ids: [PortfolioTransactionID] {
         PortfolioEditingModel.unassignedLotIds(investmentId: holding.id, history: history ?? [])
     }
-    private var effectiveBroker: Int? {
+    private var effectiveBroker: AccountID? {
         brokerId ?? editing.preferredBrokerId(investmentId: holding.id) ?? editing.brokers.first?.id
     }
     var body: some View {

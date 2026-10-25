@@ -68,7 +68,7 @@ public struct NetWorthTableRow: Identifiable, Equatable, Sendable {
 /// stored rate and sums it with the live holdings (ADR-093, ADR-216). The client only labels and
 /// orders the rows.
 public struct NetWorthAccountRow: Identifiable, Equatable, Sendable {
-    public let accountId: Int?
+    public let accountId: AccountID?
     public let label: String?
     public let type: String?
     public let cash: Decimal
@@ -77,7 +77,7 @@ public struct NetWorthAccountRow: Identifiable, Equatable, Sendable {
     public let total: Decimal
     public var id: String { accountId.map { "account-\($0)" } ?? "unassigned" }
 
-    public init(accountId: Int?, label: String?, type: String?, cash: Decimal, holdings: Decimal, total: Decimal) {
+    public init(accountId: AccountID?, label: String?, type: String?, cash: Decimal, holdings: Decimal, total: Decimal) {
         self.accountId = accountId
         self.label = label
         self.type = type
@@ -115,11 +115,11 @@ public struct NetWorthAccountRow: Identifiable, Equatable, Sendable {
 }
 
 public struct NetWorthInvestmentPrice: Decodable, Equatable, Sendable {
-    public let id: Int
-    public let priceProvider: String?
+    public let id: InvestmentID
+    public let priceProvider: OpenAPI.PriceProvider?
     public let priceUpdatedAt: String?
     public let isActive: Bool
-    public var isLive: Bool { isActive && (priceProvider ?? "manual") != "manual" }
+    public var isLive: Bool { isActive && (priceProvider ?? .manual) != .manual }
     enum CodingKeys: String, CodingKey {
         case id
         case priceProvider = "price_provider"

@@ -6,46 +6,53 @@ public struct PortfolioHoldingsView: View {
     let model: PortfolioModel
     let editing: PortfolioEditingModel
     let shell: NativeShellModel
-    let assetClass: String
+    let assetClass: OpenAPI.AssetClass
     @State private var query = LocalTableQuery()
     @State private var optionalColumns = Set<String>()
     @Environment(\.visionTheme) private var theme
 
-    public init(model: PortfolioModel, editing: PortfolioEditingModel, shell: NativeShellModel, assetClass: String) {
+    /// `assetClass` is the route's segment: "stocks" and "real-estate" name the stock and real estate classes.
+    public init(
+        model: PortfolioModel, editing: PortfolioEditingModel, shell: NativeShellModel, assetClass route: String
+    ) {
         self.model = model
         self.editing = editing
         self.shell = shell
-        self.assetClass = assetClass == "stocks" ? "stock" : assetClass == "real-estate" ? "real_estate" : assetClass
+        switch route {
+        case "stocks": assetClass = .stock
+        case "real-estate": assetClass = .realEstate
+        default: assetClass = OpenAPI.AssetClass(rawValue: route)
+        }
     }
     private var strings: any Localizing { shell.strings }
     private var prefix: String {
         switch assetClass {
-        case "crypto": "crypto"
-        case "metals": "metals"
-        case "real_estate": "realestate"
-        case "savings", "bond": "savings"
+        case .crypto: "crypto"
+        case .metals: "metals"
+        case .realEstate: "realestate"
+        case .savings, .bond: "savings"
         default: "stocks"
         }
     }
-    private var classes: [String] {
+    private var classes: [OpenAPI.AssetClass] {
         switch assetClass {
-        case "stock", "etf": ["stock", "etf"]
-        case "savings", "bond": ["savings", "bond"]
+        case .stock, .etf: [.stock, .etf]
+        case .savings, .bond: [.savings, .bond]
         default: [assetClass]
         }
     }
     private var symbol: String {
         switch assetClass {
-        case "crypto": "bitcoinsign.circle"
-        case "metals": "diamond"
-        case "real_estate": "building.2"
-        case "savings", "bond": "banknote"
+        case .crypto: "bitcoinsign.circle"
+        case .metals: "diamond"
+        case .realEstate: "building.2"
+        case .savings, .bond: "banknote"
         default: "chart.line.uptrend.xyaxis"
         }
     }
     private var holdings: [PortfolioHolding] { model.active.filter { classes.contains($0.assetClass) } }
-    private var isUnitBased: Bool { !["real_estate", "savings", "bond"].contains(assetClass) }
-    private var isRealEstate: Bool { assetClass == "real_estate" }
+    private var isUnitBased: Bool { ![.realEstate, .savings, .bond].contains(assetClass) }
+    private var isRealEstate: Bool { assetClass == .realEstate }
     /// `findHoldingTotals`: the page figures are the server's totals of these classes (ADR-216).
     private var totals: PortfolioHoldingTotals { model.holdingTotals(assetClasses: classes) }
     /// RealEstatePage: a property's rent without a stored rate makes the monthly rent unavailable.
@@ -69,7 +76,7 @@ public struct PortfolioHoldingsView: View {
                         }
                         .buttonStyle(.visionPrimary)
                         Menu {
-                            if assetClass != "crypto" {
+                            if assetClass != .crypto {
                                 Button(strings.t("portfolio.menu.exportPdf")) { shell.openPortfolioReport() }
                             }
                             Button(strings.t("nav.portfolioImport")) { shell.navigate(to: "/portfolio/import") }
@@ -113,11 +120,11 @@ public struct PortfolioHoldingsView: View {
         }
     }
     private func reload(force: Bool = false) async {
-        await model.load(currency: shell.settings.defaultCurrency, force: force)
+        await model.load(currency: shell.settings.portfolioCurrency, force: force)
     }
-    private func money(_ amount: Decimal, currency: String? = nil, signed: Bool = false) -> String {
+    private func money(_ amount: Decimal, currency: CurrencyCode? = nil, signed: Bool = false) -> String {
         MoneyText.text(
-            amount, currency: currency ?? shell.settings.defaultCurrency, settings: shell.settings, signed: signed)
+            amount, currency: currency ?? shell.settings.portfolioCurrency, settings: shell.settings, signed: signed)
     }
     private var summary: some View {
         let value = totals.totalPortfolioValue
@@ -127,13 +134,13 @@ public struct PortfolioHoldingsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text(
                     strings.t(
-                        assetClass == "real_estate"
+                        assetClass == .realEstate
                             ? "portfolio.totalValue"
                             : isUnitBased ? "portfolio.portfolioValue" : "portfolio.totalBalance")
                 ).font(.caption2.weight(.medium)).tracking(1.3).textCase(.uppercase)
                     .foregroundStyle(Color(token: theme.palette.mutedForeground).opacity(0.8))
                 MoneyText(
-                    amount: value, currency: shell.settings.defaultCurrency, settings: shell.settings, signed: false,
+                    amount: value, currency: shell.settings.portfolioCurrency, settings: shell.settings, signed: false,
                     colored: false
                 ).font(.visionLargeTitle)
                 if isUnitBased { PortfolioPriceFreshnessCaption(holdings: holdings, shell: shell) }
@@ -146,15 +153,15 @@ public struct PortfolioHoldingsView: View {
                     if isUnitBased {
                         figure("portfolio.realizedPnl", totals.totalRealizedGain, signed: true)
                         figure("portfolio.unrealizedPnl", totals.totalUnrealizedGain, signed: true)
-                        if assetClass != "crypto" { figure("portfolio.dividends", totals.totalDividends) }
+                        if assetClass != .crypto { figure("portfolio.dividends", totals.totalDividends) }
                         figure("portfolio.feesAndTaxes", -totals.totalFeesAndTaxes)
                         // Custody fees and standalone deductions sit in the server's net return; the
                         // pages add only the income they show (crypto shows no dividends).
                         figure(
                             "portfolio.netReturn",
-                            assetClass == "crypto" ? totals.netReturnExcludingIncome : totals.netReturnWithDividends,
+                            assetClass == .crypto ? totals.netReturnExcludingIncome : totals.netReturnWithDividends,
                             signed: true)
-                    } else if assetClass == "real_estate" {
+                    } else if assetClass == .realEstate {
                         figure("portfolio.appreciation", totals.totalAppreciation, signed: true)
                         figure("portfolio.rentalIncome", totals.totalIncome, signed: true)
                         Group {
@@ -225,7 +232,7 @@ public struct PortfolioHoldingsView: View {
                     Menu(strings.t("portfolio.columns")) {
                         ForEach(
                             ["avgCost", "realized", "fx", "dividends"].filter {
-                                ($0 != "dividends" || assetClass != "crypto")
+                                ($0 != "dividends" || assetClass != .crypto)
                                     && ($0 != "fx" || holdings.contains { $0.originalCurrency != $0.currency })
                             }, id: \.self
                         ) { key in
@@ -288,7 +295,7 @@ public struct PortfolioHoldingsView: View {
                                             path: "/research/market",
                                             query: [
                                                 URLQueryItem(name: "symbol", value: symbol),
-                                                URLQueryItem(name: "investmentId", value: String(holding.id)),
+                                                URLQueryItem(name: "investmentId", value: String(holding.id.rawValue)),
                                             ]
                                         ).string)
                                 }
@@ -310,7 +317,7 @@ public struct PortfolioHoldingsView: View {
                     AnyView(
                         Text(
                             VisionFormat.decimal(
-                                h.totalUnits, fractionDigits: assetClass == "crypto" ? 8 : 4,
+                                h.totalUnits, fractionDigits: assetClass == .crypto ? 8 : 4,
                                 locale: shell.settings.numberFormat.locale)
                         ).monospacedDigit())
                 }),
@@ -354,7 +361,7 @@ public struct PortfolioHoldingsView: View {
                             ).monospacedDigit()
                             // `unrealizedPercentOf`: crypto keeps its total-return pill; the others show
                             // the server's unrealized percent (0 when absent).
-                            let percent = assetClass == "crypto" ? h.gainLossPercent : (h.unrealizedGainPercent ?? 0)
+                            let percent = assetClass == .crypto ? h.gainLossPercent : (h.unrealizedGainPercent ?? 0)
                             DeltaPill(
                                 percent,
                                 label: VisionFormat.percent(

@@ -7,7 +7,7 @@ import VisionNativeCore
 struct PortfolioSeriesChart: View {
     let series: [InsightChartSeries]
     let title: String
-    let currency: String
+    let currency: CurrencyCode
     let shell: NativeShellModel
     var percent = false
     var area = false

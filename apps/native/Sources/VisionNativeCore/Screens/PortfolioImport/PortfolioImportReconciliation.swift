@@ -8,9 +8,9 @@ public enum PortfolioImportReconciliationPolicy: String, Codable, CaseIterable, 
     case preferSource = "prefer_source"
 }
 public struct PortfolioImportReconciliationBatchPolicy: Codable, Equatable, Sendable {
-    public let batchId: Int
+    public let batchId: PortfolioImportBatchNumericID
     public let adoptPolicy: PortfolioImportReconciliationPolicy
-    public init(batchId: Int, adoptPolicy: PortfolioImportReconciliationPolicy) {
+    public init(batchId: PortfolioImportBatchNumericID, adoptPolicy: PortfolioImportReconciliationPolicy) {
         self.batchId = batchId
         self.adoptPolicy = adoptPolicy
     }
@@ -22,10 +22,10 @@ public struct PortfolioImportRowChoice: Codable, Equatable, Sendable {
         case keepBoth = "keep_both"
         case sameTransaction = "same_transaction"
     }
-    public let batchId: Int
-    public let rowId: Int
+    public let batchId: PortfolioImportBatchNumericID
+    public let rowId: PortfolioImportRowID
     public let choice: Choice
-    public init(batchId: Int, rowId: Int, choice: Choice) {
+    public init(batchId: PortfolioImportBatchNumericID, rowId: PortfolioImportRowID, choice: Choice) {
         self.batchId = batchId
         self.rowId = rowId
         self.choice = choice
@@ -36,12 +36,12 @@ public struct PortfolioImportRowChoice: Codable, Equatable, Sendable {
     }
 }
 public struct PortfolioImportReconciliationScope: Equatable, Sendable {
-    public var batchIds: [Int]
+    public var batchIds: [PortfolioImportBatchNumericID]
     public var adoptPolicy: PortfolioImportReconciliationPolicy?
     public var batchPolicies: [PortfolioImportReconciliationBatchPolicy]
     public var rowChoices: [PortfolioImportRowChoice]
     public init(
-        batchIds: [Int], adoptPolicy: PortfolioImportReconciliationPolicy? = nil,
+        batchIds: [PortfolioImportBatchNumericID], adoptPolicy: PortfolioImportReconciliationPolicy? = nil,
         batchPolicies: [PortfolioImportReconciliationBatchPolicy] = [], rowChoices: [PortfolioImportRowChoice] = []
     ) {
         self.batchIds = batchIds
@@ -56,39 +56,42 @@ public struct PortfolioImportReconciliationScope: Equatable, Sendable {
     /// The shared preview and commit body. Optional parts are omitted when empty, like the web client.
     public func request() throws -> OpenAPI.PortfolioImportReconciliationRequest {
         let safe = ImportProof.safeInteger
-        guard (1...100).contains(batchIds.count), batchIds.allSatisfy({ $0 > 0 && Decimal($0) <= safe }),
+        guard (1...100).contains(batchIds.count),
+            batchIds.allSatisfy({ $0.rawValue > 0 && Decimal($0.rawValue) <= safe }),
             batchPolicies.count <= 100, Set(batchPolicies.map(\.batchId)).count == batchPolicies.count,
             batchPolicies.allSatisfy({ batchIds.contains($0.batchId) }), rowChoices.count <= 10_000,
             Set(rowChoices.map { "\($0.batchId):\($0.rowId)" }).count == rowChoices.count,
             rowChoices.allSatisfy({
-                $0.batchId > 0 && $0.rowId > 0 && Decimal($0.batchId) <= safe && Decimal($0.rowId) <= safe
-                    && batchIds.contains($0.batchId)
+                $0.batchId.rawValue > 0 && $0.rowId.rawValue > 0 && Decimal($0.batchId.rawValue) <= safe
+                    && Decimal($0.rowId.rawValue) <= safe && batchIds.contains($0.batchId)
             })
         else { throw APIError.invalidRequest("Invalid selected statements, statement policies or row choices") }
         let policies = sortedBatchPolicies.map {
             OpenAPI.PortfolioImportReconciliationRequest.BatchPoliciesItem(
-                batchId: $0.batchId, adoptPolicy: $0.adoptPolicy.rawValue)
+                batchId: $0.batchId, adoptPolicy: .init(rawValue: $0.adoptPolicy.rawValue))
         }
         let choices = rowChoices.map {
             OpenAPI.PortfolioImportReconciliationRequest.RowChoicesItem(
-                batchId: $0.batchId, rowId: $0.rowId, choice: $0.choice.rawValue)
+                batchId: $0.batchId, rowId: $0.rowId, choice: .init(rawValue: $0.choice.rawValue))
         }
         return OpenAPI.PortfolioImportReconciliationRequest(
-            batchIds: batchIds, adoptPolicy: adoptPolicy?.rawValue, batchPolicies: policies.isEmpty ? nil : policies,
-            rowChoices: choices.isEmpty ? nil : choices)
+            batchIds: batchIds,
+            adoptPolicy: adoptPolicy.map {
+                OpenAPI.PortfolioImportReconciliationRequest.AdoptPolicy(rawValue: $0.rawValue)
+            }, batchPolicies: policies.isEmpty ? nil : policies, rowChoices: choices.isEmpty ? nil : choices)
     }
 }
 
 /// One reviewed outcome per staged row. `source`, `existing`, `adjustment` and `transfer` stay
 /// dynamic values because the server adds fields per action kind.
 public struct PortfolioImportReconciliationAction: Decodable, Equatable, Sendable, Identifiable {
-    public let batchId: Int
-    public let rowId: Int
+    public let batchId: PortfolioImportBatchNumericID
+    public let rowId: PortfolioImportRowID
     public let rowOrdinal: Int
     public let action: String
-    public let investmentId: Int?
+    public let investmentId: InvestmentID?
     public let policy: String?
-    public let existingTransactionId: Int?
+    public let existingTransactionId: PortfolioTransactionID?
     public let source: TaxValue?
     public let existing: TaxValue?
     public let corrections: [String]?
@@ -100,18 +103,20 @@ public struct PortfolioImportReconciliationAction: Decodable, Equatable, Sendabl
     /// The existing transaction is brokerage cash, not a portfolio transaction.
     public let cash: Bool?
     /// For `duplicate_source`, the selected staged row that records the same event.
-    public let duplicateOfRowId: Int?
+    public let duplicateOfRowId: PortfolioImportRowID?
     public var id: String { "\(batchId):\(rowId)" }
     public init(from decoder: any Decoder) throws {
         let raw = try TaxValue(from: decoder)
         try ImportProof.object(raw)
-        batchId = try ImportProof.integer(raw["batchId"], positive: true)
-        rowId = try ImportProof.integer(raw["rowId"], positive: true)
+        batchId = PortfolioImportBatchNumericID(try ImportProof.integer(raw["batchId"], positive: true))
+        rowId = PortfolioImportRowID(try ImportProof.integer(raw["rowId"], positive: true))
         rowOrdinal = try ImportProof.integer(raw["rowOrdinal"], positive: true)
         action = try ImportProof.string(raw["action"])
-        investmentId = try ImportProof.optionalInteger(raw["investmentId"], nullable: true)
-        existingTransactionId = try ImportProof.optionalInteger(raw["existingTransactionId"])
-        duplicateOfRowId = try ImportProof.optionalInteger(raw["duplicateOfRowId"])
+        investmentId = try ImportProof.optionalInteger(raw["investmentId"], nullable: true).map { InvestmentID($0) }
+        existingTransactionId = try ImportProof.optionalInteger(raw["existingTransactionId"]).map {
+            PortfolioTransactionID($0)
+        }
+        duplicateOfRowId = try ImportProof.optionalInteger(raw["duplicateOfRowId"]).map { PortfolioImportRowID($0) }
         economicsProven = try ImportProof.optionalBool(raw["economicsProven"])
         crossFormat = try ImportProof.optionalBool(raw["crossFormat"])
         cash = try ImportProof.optionalBool(raw["cash"])
@@ -130,16 +135,16 @@ public struct PortfolioImportReconciliationAction: Decodable, Equatable, Sendabl
     }
 }
 public struct PortfolioImportReconciliationBlocker: Decodable, Equatable, Sendable {
-    public let batchId: Int
-    public let rowId: Int?
+    public let batchId: PortfolioImportBatchNumericID
+    public let rowId: PortfolioImportRowID?
     public let rowOrdinal: Int?
     public let reason: String
     public let candidateTransactionIds: [Decimal]
     public init(from decoder: any Decoder) throws {
         let raw = try TaxValue(from: decoder)
         try ImportProof.object(raw)
-        batchId = try ImportProof.integer(raw["batchId"], positive: true)
-        rowId = try ImportProof.optionalInteger(raw["rowId"])
+        batchId = PortfolioImportBatchNumericID(try ImportProof.integer(raw["batchId"], positive: true))
+        rowId = try ImportProof.optionalInteger(raw["rowId"]).map { PortfolioImportRowID($0) }
         rowOrdinal = try ImportProof.optionalInteger(raw["rowOrdinal"])
         reason = try ImportProof.string(raw["reason"])
         guard let values = raw["candidateTransactionIds"]?.arrayValue else { throw ImportProof.failure() }
@@ -150,7 +155,7 @@ public struct PortfolioImportReconciliationBlocker: Decodable, Equatable, Sendab
     }
 }
 public struct PortfolioImportReconciliationPlan: Decodable, Equatable, Sendable {
-    public let batchIds: [Int]
+    public let batchIds: [PortfolioImportBatchNumericID]
     public let adoptPolicy: PortfolioImportReconciliationPolicy?
     public let batchPolicies: [PortfolioImportReconciliationBatchPolicy]
     public let rowChoices: [PortfolioImportRowChoice]
@@ -161,15 +166,19 @@ public struct PortfolioImportReconciliationPlan: Decodable, Equatable, Sendable 
     public init(from decoder: any Decoder) throws {
         let raw = try TaxValue(from: decoder)
         try ImportProof.object(raw)
-        batchIds = try ImportProof.integers(raw["batchIds"], positive: true)
+        batchIds = try ImportProof.integers(raw["batchIds"], positive: true).map {
+            PortfolioImportBatchNumericID($0)
+        }
         adoptPolicy = try ImportProof.policy(raw["adoptPolicy"], nullable: true)
         let policies = try (raw["batchPolicies"] ?? .array([])).decode([PortfolioImportReconciliationBatchPolicy].self)
         let choices = try (raw["rowChoices"] ?? .array([])).decode([PortfolioImportRowChoice].self)
         let safe = ImportProof.safeInteger
         try ImportProof.require(
-            policies.count <= 100 && policies.allSatisfy { $0.batchId > 0 && Decimal($0.batchId) <= safe }
+            policies.count <= 100
+                && policies.allSatisfy { $0.batchId.rawValue > 0 && Decimal($0.batchId.rawValue) <= safe }
                 && choices.allSatisfy {
-                    $0.batchId > 0 && $0.rowId > 0 && Decimal($0.batchId) <= safe && Decimal($0.rowId) <= safe
+                    $0.batchId.rawValue > 0 && $0.rowId.rawValue > 0 && Decimal($0.batchId.rawValue) <= safe
+                        && Decimal($0.rowId.rawValue) <= safe
                 })
         batchPolicies = policies
         rowChoices = choices
@@ -195,7 +204,7 @@ public struct PortfolioImportReconciliationPlan: Decodable, Equatable, Sendable 
 /// are disjoint; `errors` is zero on success.
 public struct PortfolioImportReconciliationResult: Decodable, Equatable, Sendable {
     public struct Batch: Decodable, Equatable, Sendable {
-        public let batchId: Int
+        public let batchId: PortfolioImportBatchNumericID
         public let imported: Int
         public let duplicates: Int
         public let adopted: Int
@@ -203,7 +212,7 @@ public struct PortfolioImportReconciliationResult: Decodable, Equatable, Sendabl
         public init(from decoder: any Decoder) throws {
             let raw = try TaxValue(from: decoder)
             try ImportProof.object(raw)
-            batchId = try ImportProof.integer(raw["batch_id"], positive: true)
+            batchId = PortfolioImportBatchNumericID(try ImportProof.integer(raw["batch_id"], positive: true))
             imported = try ImportProof.integer(raw["imported"])
             duplicates = try ImportProof.integer(raw["duplicates"])
             adopted = try ImportProof.integer(raw["adopted"])

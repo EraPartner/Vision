@@ -287,9 +287,9 @@ private func profileOverview(year: Int = 2025, filed: Bool = false, invalidLive:
             """.utf8))
     let result = OpenAPI.BelgianTaxHouseholdTaxResult(
         engineVersion: 2, incomeYear: year,
-        assessment: .init(mode: "single", reason: "single", legalBasis: "fixture", partnerIds: ["A"]), partners: [],
+        assessment: .init(mode: .single, reason: .onePartner, legalBasis: "fixture", partnerIds: [.a]), partners: [],
         quotient: .init(applied: false, transfer: 0, target: 0, cap: 0, benefit: 0),
-        csss: .init(scale: "single", base: 0, total: 0),
+        csss: .init(scale: .single, base: 0, total: 0),
         propertyTaxEstimate: 0, totals: totals, issues: [])
     return .init(
         year: year, liveYear: 2025, isHistorical: historical, hasSnapshot: historical, hasProfile: true,
@@ -299,10 +299,10 @@ private func profileOverview(year: Int = 2025, filed: Bool = false, invalidLive:
         householdSnapshots: historical
             ? [String(year): try selected.decode(OpenAPI.BelgianTaxHouseholdInput.self)] : [:], snapshotMetas: [:],
         metadata: .object([:]),
-        calculation: .init(totalPIT: 123), result: result, calculationSource: filed ? "frozen" : "computed",
-        householdResultSource: "computed",
+        calculation: .init(totalPIT: 123), result: result, calculationSource: filed ? .frozen : .computed,
+        householdResultSource: .computed,
         warnings: invalidLive
-            ? [.init(key: TaxYearMutation.householdKey, kind: "invalid_stored", issues: ["invalid fixture"])] : [],
+            ? [.init(key: TaxYearMutation.householdKey, kind: .invalidStored, issues: ["invalid fixture"])] : [],
         records: records)
 }
 private actor ProfileFixtureService: TaxComputationService, TaxSettingsService {

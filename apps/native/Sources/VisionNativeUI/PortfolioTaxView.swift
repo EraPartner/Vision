@@ -19,7 +19,7 @@ public struct PortfolioTaxView: View {
     }
     private var strings: any Localizing { shell.strings }
     private var requestedYear: Int? { TaxYearRoute.parse(shell.route.value("year")) }
-    private var currency: String { shell.settings.defaultCurrency.uppercased() }
+    private var currency: CurrencyCode { shell.settings.portfolioCurrency }
     private var overview: OpenAPI.BelgianTaxOverview? {
         guard let source = tax.overview.overview, source.year == (requestedYear ?? source.liveYear) else { return nil }
         return source
@@ -56,7 +56,7 @@ public struct PortfolioTaxView: View {
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task(id: shell.route.string + currency + String(shell.settingsRevision) + "|" + String(dataRevision)) {
+        .task(id: shell.route.string + currency.rawValue + String(shell.settingsRevision) + "|" + String(dataRevision)) {
             await reload()
         }
         .onDisappear { model.closeAdjustments() }
@@ -143,7 +143,7 @@ public struct PortfolioTaxView: View {
 
     private func actionsMenu(_ overview: OpenAPI.BelgianTaxOverview) -> some View {
         let filed = TaxYearPresentation.metadata(overview)["filing"]?.objectValue != nil
-        let frozen = overview.calculationSource == "frozen"
+        let frozen = overview.calculationSource == .frozen
         return Menu {
             Button(strings.t(data?.hasProfile == true ? "tax.menu.editProfile" : "tax.menu.setupProfile")) {
                 tax.profile.begin(overview: overview)
@@ -185,7 +185,7 @@ public struct PortfolioTaxView: View {
             }
         }
         if !data.unconvertedCurrencies.isEmpty {
-            Text(strings.t("tax.fxUnavailable", ["currencies": data.unconvertedCurrencies.joined(separator: ", ")]))
+            Text(strings.t("tax.fxUnavailable", ["currencies": data.unconvertedCurrencies.map(\.rawValue).joined(separator: ", ")]))
                 .font(.footnote).foregroundStyle(theme.warning)
         }
         if data.isEmpty {

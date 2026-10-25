@@ -30,7 +30,7 @@ public enum RebalancePreset: String, CaseIterable, Sendable {
 }
 
 public struct RebalanceResult: Codable, Equatable, Sendable {
-    public let currency: String
+    public let currency: CurrencyCode
     public let targetWeights: [String: Decimal]
     public let actualValues: [String: Decimal]
     public let availableCash: Decimal
@@ -38,12 +38,13 @@ public struct RebalanceResult: Codable, Equatable, Sendable {
     public let deployment: [String: Decimal]
     /// Currencies of cash left out for want of a stored exchange rate (ADR-216, #308); absent or
     /// empty when everything converted.
-    public let unconvertedCurrencies: [String]?
+    public let unconvertedCurrencies: [CurrencyCode]?
     public var sleeves: [String] { Set(actualValues.keys).union(targetWeights.keys).sorted() }
     public var totalDeployed: Decimal { deployment.values.reduce(0, +) }
     public init(
-        currency: String, targetWeights: [String: Decimal], actualValues: [String: Decimal], availableCash: Decimal,
-        cashAccounts: [CashAccount], deployment: [String: Decimal], unconvertedCurrencies: [String]? = nil
+        currency: CurrencyCode, targetWeights: [String: Decimal], actualValues: [String: Decimal],
+        availableCash: Decimal, cashAccounts: [CashAccount], deployment: [String: Decimal],
+        unconvertedCurrencies: [CurrencyCode]? = nil
     ) {
         self.currency = currency
         self.targetWeights = targetWeights
@@ -54,13 +55,16 @@ public struct RebalanceResult: Codable, Equatable, Sendable {
         self.unconvertedCurrencies = unconvertedCurrencies
     }
     public struct CashAccount: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: AccountID
         public let name: String
-        public let accountCurrency: String
+        public let accountCurrency: CurrencyCode
         /// Already converted. Never relabel this amount using accountCurrency.
         public let balance: Decimal
-        public let balanceCurrency: String
-        public init(id: Int, name: String, accountCurrency: String, balance: Decimal, balanceCurrency: String) {
+        public let balanceCurrency: CurrencyCode
+        public init(
+            id: AccountID, name: String, accountCurrency: CurrencyCode, balance: Decimal,
+            balanceCurrency: CurrencyCode
+        ) {
             self.id = id
             self.name = name
             self.accountCurrency = accountCurrency
@@ -71,7 +75,7 @@ public struct RebalanceResult: Codable, Equatable, Sendable {
 }
 
 public struct RebalanceCashProjection: Codable, Equatable, Sendable {
-    public let currency: String
+    public let currency: CurrencyCode
     public let today: String
     public let horizonEnd: String
     public let horizonDays: Int
@@ -83,7 +87,7 @@ public struct RebalanceCashProjection: Codable, Equatable, Sendable {
     public let occurrenceCount: Int
     public let assumptions: Assumptions
     public init(
-        currency: String, today: String, horizonEnd: String, horizonDays: Int, currentCash: Decimal,
+        currency: CurrencyCode, today: String, horizonEnd: String, horizonDays: Int, currentCash: Decimal,
         reserveFloor: Decimal, minimumProjectedBalance: Decimal, minimumDate: String, candidateCashCap: Decimal,
         occurrenceCount: Int, assumptions: Assumptions
     ) {
@@ -119,16 +123,16 @@ public struct RebalanceCashProjection: Codable, Equatable, Sendable {
 }
 
 public struct RebalanceRequest: Encodable, Equatable, Sendable {
-    public let currency: String
-    public let model: String?
+    public let currency: CurrencyCode
+    public let model: RebalancePreset?
     public let targetWeights: [String: Decimal]?
     public let availableCash: Decimal?
     public init(
-        currency: String, model: RebalancePreset? = nil, targetWeights: [String: Decimal]? = nil,
+        currency: CurrencyCode, model: RebalancePreset? = nil, targetWeights: [String: Decimal]? = nil,
         availableCash: Decimal? = nil
     ) {
         self.currency = currency
-        self.model = model?.rawValue
+        self.model = model
         self.targetWeights = targetWeights
         self.availableCash = availableCash
     }

@@ -327,8 +327,8 @@ private struct MutationFixture: Sendable {
             household: household, liveHousehold: live.decode(OpenAPI.BelgianTaxHouseholdInput.self),
             householdSnapshots: snapshots.decode([String: OpenAPI.BelgianTaxHouseholdInput].self),
             snapshotMetas: metadata.decode([String: JSONValue].self), metadata: meta.decode(JSONValue.self),
-            calculation: calculation, result: computation.result, calculationSource: frozen ? "frozen" : "computed",
-            householdResultSource: meta["frozenHouseholdResult"] == nil ? "computed" : "frozen", warnings: [],
+            calculation: calculation, result: computation.result, calculationSource: frozen ? .frozen : .computed,
+            householdResultSource: meta["frozenHouseholdResult"] == nil ? .computed : .frozen, warnings: [],
             records: records ?? self.records())
     }
 }

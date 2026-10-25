@@ -77,7 +77,7 @@ private actor NetWorthRaceService: NetWorthService {
             entered = nil
         }
     }
-    func netWorth(currency: String, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse {
+    func netWorth(currency: CurrencyCode, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse {
         let rows = (1...6).map { day in
             OpenAPI.NetWorthSnapshot(
                 date: "2025-06-0\(day)", liquid: Decimal(day), liabilities: 0,
@@ -97,7 +97,7 @@ private actor NetWorthRaceService: NetWorthService {
             monthlyChange: 0, monthlyChangePercent: 0, snapshots: snapshots,
             snapshotsTotal: limit == nil ? nil : 6, snapshotsLimit: limit, snapshotsOffset: offset)
     }
-    func netWorthByAccount(currency: String) async throws -> OpenAPI.NetWorthByAccountResponse {
+    func netWorthByAccount(currency: CurrencyCode) async throws -> OpenAPI.NetWorthByAccountResponse {
         .init(currency: currency, rows: [], total: 0, unconvertedAccountIds: [])
     }
     func netWorthPrices() async throws -> [NetWorthInvestmentPrice] { [] }

@@ -5,45 +5,46 @@ import Observation
 /// `useImportReviewData`), so tests can use a fake.
 public protocol ImportReviewService: Sendable {
     /// `getImportPreview(batchId)`.
-    func importPreview(batchId: Int) async throws -> ImportPreview
+    func importPreview(batchId: ImportBatchID) async throws -> ImportPreview
     /// `overrideImportRow(batchId, rowId, recipientId)`; `nil` clears the override.
-    func overrideImportRow(batchId: Int, rowId: String, recipientId: Int?) async throws
+    func overrideImportRow(batchId: ImportBatchID, rowId: String, recipientId: RecipientID?) async throws
     /// `overrideImportRowCategory(batchId, rowId, categoryId)`; `nil` clears the override.
-    func overrideImportRowCategory(batchId: Int, rowId: String, categoryId: Int?) async throws
+    func overrideImportRowCategory(batchId: ImportBatchID, rowId: String, categoryId: CategoryID?) async throws
     /// `updateRecipient(recipientId, { default_category_id })`.
-    func setRecipientDefaultCategory(recipientId: Int, categoryId: Int) async throws
+    func setRecipientDefaultCategory(recipientId: RecipientID, categoryId: CategoryID) async throws
     /// `commitImportBatch(batchId)`.
-    func commitImportBatch(batchId: Int) async throws -> ImportCommitResult
+    func commitImportBatch(batchId: ImportBatchID) async throws -> ImportCommitResult
     /// `rollbackImportBatch(batchId)`: a parked batch has committed nothing, so this only
     /// clears its staging rows.
-    func discardImportBatch(batchId: Int) async throws
+    func discardImportBatch(batchId: ImportBatchID) async throws
     /// `useAccounts({ active: "all" })`: every account, for the new-account badges.
     func allAccounts() async throws -> [OpenAPI.Account]
 }
 
 extension APIClient: ImportReviewService {
-    public func importPreview(batchId: Int) async throws -> ImportPreview {
+    public func importPreview(batchId: ImportBatchID) async throws -> ImportPreview {
         try await send(ImportPreviewRequest(batchId: batchId))
     }
 
-    public func overrideImportRow(batchId: Int, rowId: String, recipientId: Int?) async throws {
+    public func overrideImportRow(batchId: ImportBatchID, rowId: String, recipientId: RecipientID?) async throws {
         _ = try await send(ImportRowOverrideRequest(batchId: batchId, rowId: rowId, recipientId: recipientId))
     }
 
-    public func overrideImportRowCategory(batchId: Int, rowId: String, categoryId: Int?) async throws {
+    public func overrideImportRowCategory(batchId: ImportBatchID, rowId: String, categoryId: CategoryID?) async throws {
         _ = try await send(ImportRowCategoryOverrideRequest(batchId: batchId, rowId: rowId, categoryId: categoryId))
     }
 
-    public func setRecipientDefaultCategory(recipientId: Int, categoryId: Int) async throws {
+    public func setRecipientDefaultCategory(recipientId: RecipientID, categoryId: CategoryID) async throws {
         _ = try await send(
-            OpenAPIOperations.UpdateRecipient(id: recipientId, body: OpenAPI.RecipientUpdate(defaultCategoryId: categoryId)))
+            OpenAPIOperations.UpdateRecipient(
+                id: recipientId, body: OpenAPI.RecipientUpdate(defaultCategoryId: .value(categoryId))))
     }
 
-    public func commitImportBatch(batchId: Int) async throws -> ImportCommitResult {
+    public func commitImportBatch(batchId: ImportBatchID) async throws -> ImportCommitResult {
         try await send(ImportCommitRequest(batchId: batchId))
     }
 
-    public func discardImportBatch(batchId: Int) async throws {
+    public func discardImportBatch(batchId: ImportBatchID) async throws {
         _ = try await send(OpenAPIOperations.DeleteImportBatch(id: batchId))
     }
 
@@ -62,7 +63,7 @@ public struct ImportStagingRow: Decodable, Equatable, Sendable, Identifiable {
     public let recipientRaw: String?
     /// The amount as the backend writes it (`"-4.50"`).
     public let amount: String?
-    public let currency: String?
+    public let currency: CurrencyCode?
     /// `YYYY-MM-DD`.
     public let txDate: String?
     public let memo: String?
@@ -70,18 +71,19 @@ public struct ImportStagingRow: Decodable, Equatable, Sendable, Identifiable {
     public let bankAccount: String?
     public let matchSource: String?
     public let matchSimilarity: Double?
-    public let matchedPatternId: Int?
-    public let userOverrideRecipientId: Int?
-    public let overrideCategoryId: Int?
+    public let matchedPatternId: RecipientPatternID?
+    public let userOverrideRecipientId: RecipientID?
+    public let overrideCategoryId: CategoryID?
     /// The ledger already holds this row's import identity, so commit settles it as a
     /// duplicate (`already_imported`). Absent on older servers.
     public let alreadyImported: Bool?
 
     public init(
-        id: String, rowIndex: Int = 0, recipientRaw: String? = nil, amount: String? = nil, currency: String? = nil,
-        txDate: String? = nil, memo: String? = nil, bankAccount: String? = nil, matchSource: String? = nil,
-        matchSimilarity: Double? = nil, matchedPatternId: Int? = nil, userOverrideRecipientId: Int? = nil,
-        overrideCategoryId: Int? = nil, alreadyImported: Bool? = nil
+        id: String, rowIndex: Int = 0, recipientRaw: String? = nil, amount: String? = nil,
+        currency: CurrencyCode? = nil, txDate: String? = nil, memo: String? = nil, bankAccount: String? = nil,
+        matchSource: String? = nil, matchSimilarity: Double? = nil, matchedPatternId: RecipientPatternID? = nil,
+        userOverrideRecipientId: RecipientID? = nil, overrideCategoryId: CategoryID? = nil,
+        alreadyImported: Bool? = nil
     ) {
         self.id = id
         self.rowIndex = rowIndex
@@ -125,30 +127,31 @@ public struct ImportStagingRow: Decodable, Equatable, Sendable, Identifiable {
     }
 
     /// `row.currency ?? "EUR"`.
-    public var currencyCode: String { currency ?? "EUR" }
+    public var currencyCode: CurrencyCode { currency ?? .eur }
 
     public var matchKind: ImportMatchKind { ImportMatchKind(source: matchSource) }
 }
 
 /// One payee group of the preview.
 public struct ImportPreviewGroup: Decodable, Equatable, Sendable {
-    public let recipientId: Int?
+    public let recipientId: RecipientID?
     public let recipientName: String?
-    public let recipientDefaultCategoryId: Int?
+    public let recipientDefaultCategoryId: CategoryID?
     public let recipientDefaultCategoryLabel: String?
-    public let overrideCategoryId: Int?
-    public let currentCategoryId: Int?
+    public let overrideCategoryId: CategoryID?
+    public let currentCategoryId: CategoryID?
     public let currentCategoryLabel: String?
-    public let matchedPatternId: Int?
+    public let matchedPatternId: RecipientPatternID?
     public let matchedPatternText: String?
     public let matchedPatternKind: String?
     public let rowCount: Int
     public let rows: [ImportStagingRow]
 
     public init(
-        recipientId: Int? = nil, recipientName: String? = nil, recipientDefaultCategoryId: Int? = nil,
-        recipientDefaultCategoryLabel: String? = nil, overrideCategoryId: Int? = nil, currentCategoryId: Int? = nil,
-        currentCategoryLabel: String? = nil, matchedPatternId: Int? = nil, matchedPatternText: String? = nil,
+        recipientId: RecipientID? = nil, recipientName: String? = nil, recipientDefaultCategoryId: CategoryID? = nil,
+        recipientDefaultCategoryLabel: String? = nil, overrideCategoryId: CategoryID? = nil,
+        currentCategoryId: CategoryID? = nil, currentCategoryLabel: String? = nil,
+        matchedPatternId: RecipientPatternID? = nil, matchedPatternText: String? = nil,
         matchedPatternKind: String? = nil, rowCount: Int, rows: [ImportStagingRow]
     ) {
         self.recipientId = recipientId
@@ -183,7 +186,7 @@ public struct ImportPreviewGroup: Decodable, Equatable, Sendable {
     /// The group's identity on the page (`groupKey`): the recipient id, else the unresolved
     /// name and the first row's memo.
     public var key: String {
-        if let recipientId { return String(recipientId) }
+        if let recipientId { return String(recipientId.rawValue) }
         return "__unresolved__:\(recipientName ?? ""):\(rows.first?.memo ?? "")"
     }
 
@@ -201,6 +204,7 @@ public struct ImportPreviewGroup: Decodable, Equatable, Sendable {
 
 /// `GET /api/import/batches/:id/preview` (`ImportPreviewSchema`).
 public struct ImportPreview: Decodable, Equatable, Sendable {
+    /// The batch as the preview answers it (a number).
     public let batchId: Int
     public let groups: [ImportPreviewGroup]
     /// Rows per match kind (`exact`, `fuzzy`, `pattern`, `new`, `unresolved`).
@@ -288,13 +292,13 @@ public struct ImportPreviewRequest: APIOperation {
     public static let method = HTTPMethod.get
     public static let pathTemplate = "/api/import/batches/{id}/preview"
 
-    public let batchId: Int
+    public let batchId: ImportBatchID
 
-    public init(batchId: Int) {
+    public init(batchId: ImportBatchID) {
         self.batchId = batchId
     }
 
-    public var path: String { "/api/import/batches/\(APIPath.segment(String(batchId)))/preview" }
+    public var path: String { "/api/import/batches/\(APIPath.segment(batchId.rawValue))/preview" }
 }
 
 /// `POST /api/import/batches/{id}/commit`, typed.
@@ -304,13 +308,13 @@ public struct ImportCommitRequest: APIOperation {
     public static let method = HTTPMethod.post
     public static let pathTemplate = "/api/import/batches/{id}/commit"
 
-    public let batchId: Int
+    public let batchId: ImportBatchID
 
-    public init(batchId: Int) {
+    public init(batchId: ImportBatchID) {
         self.batchId = batchId
     }
 
-    public var path: String { "/api/import/batches/\(APIPath.segment(String(batchId)))/commit" }
+    public var path: String { "/api/import/batches/\(APIPath.segment(batchId.rawValue))/commit" }
 }
 
 /// `POST /api/import/batches/{id}/rows/{rowId}/override` with `{ recipient_id }`: the web
@@ -321,18 +325,18 @@ public struct ImportRowOverrideRequest: APIOperation {
     public static let method = HTTPMethod.post
     public static let pathTemplate = "/api/import/batches/{id}/rows/{rowId}/override"
 
-    public let batchId: Int
+    public let batchId: ImportBatchID
     public let rowId: String
-    public let recipientId: Int?
+    public let recipientId: RecipientID?
 
-    public init(batchId: Int, rowId: String, recipientId: Int?) {
+    public init(batchId: ImportBatchID, rowId: String, recipientId: RecipientID?) {
         self.batchId = batchId
         self.rowId = rowId
         self.recipientId = recipientId
     }
 
     public var path: String {
-        "/api/import/batches/\(APIPath.segment(String(batchId)))/rows/\(APIPath.segment(rowId))/override"
+        "/api/import/batches/\(APIPath.segment(batchId.rawValue))/rows/\(APIPath.segment(rowId))/override"
     }
 
     public func encodedBody() throws -> Data? {
@@ -348,18 +352,18 @@ public struct ImportRowCategoryOverrideRequest: APIOperation {
     public static let method = HTTPMethod.post
     public static let pathTemplate = "/api/import/batches/{id}/rows/{rowId}/category-override"
 
-    public let batchId: Int
+    public let batchId: ImportBatchID
     public let rowId: String
-    public let categoryId: Int?
+    public let categoryId: CategoryID?
 
-    public init(batchId: Int, rowId: String, categoryId: Int?) {
+    public init(batchId: ImportBatchID, rowId: String, categoryId: CategoryID?) {
         self.batchId = batchId
         self.rowId = rowId
         self.categoryId = categoryId
     }
 
     public var path: String {
-        "/api/import/batches/\(APIPath.segment(String(batchId)))/rows/\(APIPath.segment(rowId))/category-override"
+        "/api/import/batches/\(APIPath.segment(batchId.rawValue))/rows/\(APIPath.segment(rowId))/category-override"
     }
 
     public func encodedBody() throws -> Data? {
@@ -368,9 +372,9 @@ public struct ImportRowCategoryOverrideRequest: APIOperation {
 }
 
 /// `{ "<key>": <id or null> }`.
-struct NullableIdBody: Encodable {
+struct NullableIdBody<Tag: IdentifierTag>: Encodable {
     let key: String
-    let value: Int?
+    let value: IntIdentifier<Tag>?
 
     struct Key: CodingKey {
         let stringValue: String
@@ -394,9 +398,9 @@ struct NullableIdBody: Encodable {
 /// One payee group's local state (`GroupState`): the picked payee and category, the
 /// Save as default checkbox and the saves in flight.
 public struct ImportReviewGroupState: Equatable, Sendable {
-    public var recipientId: Int?
+    public var recipientId: RecipientID?
     public var recipientName: String?
-    public var categoryId: Int?
+    public var categoryId: CategoryID?
     public var categoryLabel: String?
     public var persistAsDefault: Bool
     public var recipientSaving = false
@@ -481,7 +485,7 @@ public final class ImportReviewModel {
     /// How long the new-accounts toast stays (10 s).
     public nonisolated static let newAccountsDuration: Duration = .seconds(10)
 
-    public private(set) var batchId: Int?
+    public private(set) var batchId: ImportBatchID?
     public private(set) var preview: ImportPreview?
     /// The preview failed to load; the page shows the error state with Retry.
     public private(set) var error: APIError?
@@ -515,7 +519,7 @@ public final class ImportReviewModel {
 
     @ObservationIgnored private let service: any ImportReviewService
     @ObservationIgnored private let toasts: ImportNoticeCenter
-    @ObservationIgnored private var loading: (batchId: Int, task: Task<Void, Never>)?
+    @ObservationIgnored private var loading: (batchId: ImportBatchID, task: Task<Void, Never>)?
 
     public init(service: any ImportReviewService, pickers: any PickerDataService, toasts: ImportNoticeCenter) {
         self.service = service
@@ -527,7 +531,8 @@ public final class ImportReviewModel {
 
     /// The page showed for a batch: the preview, the accounts and the picker lists load.
     /// Another batch starts from a clean page.
-    public func appear(batchId: Int) async {
+    public func appear(batchId rawBatchId: Int) async {
+        let batchId = ImportBatchID(numeric: rawBatchId)
         if self.batchId != batchId {
             self.batchId = batchId
             preview = nil
@@ -707,8 +712,9 @@ public final class ImportReviewModel {
 
     /// A payee pick (or No payee): one override per staged row, then the preview again. A
     /// failure toasts and drops the group's local state.
-    public func setRecipient(_ recipientId: Int?, name: String?, for group: ImportPreviewGroup, strings: any Localizing)
-        async
+    public func setRecipient(
+        _ recipientId: RecipientID?, name: String?, for group: ImportPreviewGroup, strings: any Localizing
+    ) async
     {
         guard let batchId else { return }
         update(group) { state in
@@ -735,8 +741,9 @@ public final class ImportReviewModel {
 
     /// A category pick (or No category): one override per staged row; with Save as default
     /// on and a payee, a picked category also becomes the payee's default.
-    public func setCategory(_ categoryId: Int?, label: String?, for group: ImportPreviewGroup, strings: any Localizing)
-        async
+    public func setCategory(
+        _ categoryId: CategoryID?, label: String?, for group: ImportPreviewGroup, strings: any Localizing
+    ) async
     {
         guard let batchId else { return }
         let before = state(for: group)
@@ -762,7 +769,7 @@ public final class ImportReviewModel {
         update(group) { $0.categorySaving = false }
         if before.persistAsDefault, let recipientId = before.recipientId, let categoryId {
             do {
-                try await edit("default:\(recipientId)") {
+                try await edit("default:\(recipientId.rawValue)") {
                     try await service.setRecipientDefaultCategory(recipientId: recipientId, categoryId: categoryId)
                 }
             } catch {
@@ -856,7 +863,7 @@ public final class ImportReviewModel {
     }
 
     /// A committed or discarded batch is not reviewed again.
-    private func forget(_ id: Int) {
+    private func forget(_ id: ImportBatchID) {
         guard batchId == id else { return }
         groupStates = [:]
         expandedGroups = []

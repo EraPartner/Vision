@@ -39,7 +39,7 @@ struct PortfolioImportReconciliationTests {
         let answer = PortfolioImportRowChoice(batchId: 1, rowId: 4, choice: .keepBoth)
         for scope in [
             PortfolioImportReconciliationScope(batchIds: [], adoptPolicy: .preserveExisting),
-            .init(batchIds: Array(1...101)),
+            .init(batchIds: (1...101).map { PortfolioImportBatchNumericID($0) }),
             .init(batchIds: [9_007_199_254_740_992]),
             .init(batchIds: [1], batchPolicies: [.init(batchId: 2, adoptPolicy: .preserveExisting)]),
             .init(

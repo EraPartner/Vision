@@ -32,7 +32,7 @@ struct SuggestedDeductionsView: View {
                             if let estimate = suggestion.estimate, estimate > 0 {
                                 Text(
                                     MoneyText.text(
-                                        estimate, currency: shell.settings.defaultCurrency, settings: shell.settings)
+                                        estimate, currency: shell.settings.portfolioCurrency, settings: shell.settings)
                                 )
                                 .font(.headline).monospacedDigit().foregroundStyle(theme.gain)
                             } else {
@@ -69,7 +69,7 @@ struct TaxDeductionsView: View {
     private var twoPartners: Bool {
         household?["partners"]?.arrayValue?.contains { $0["id"]?.stringValue == "B" } ?? false
     }
-    private var currency: String { model.data?.currency ?? "EUR" }
+    private var currency: CurrencyCode { model.data?.currency ?? .eur }
 
     var body: some View {
         Group {

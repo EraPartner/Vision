@@ -17,9 +17,9 @@ extension TaxProfileSheet {
                                         ?? String(model.year)
                                 ]))
                         Spacer()
-                        Text(strings.t("tax.household.assessment.mode.\(assessment.mode)")).font(.footnote)
+                        Text(strings.t("tax.household.assessment.mode.\(assessment.mode.rawValue)")).font(.footnote)
                     }
-                    Text(strings.t("tax.household.assessment.reason.\(assessment.reason)")).font(.footnote)
+                    Text(strings.t("tax.household.assessment.reason.\(assessment.reason.rawValue)")).font(.footnote)
                     Text(verbatim: assessment.legalBasis).font(.caption).foregroundStyle(theme.tertiaryLabel)
                 }.padding(12).background(theme.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
             }

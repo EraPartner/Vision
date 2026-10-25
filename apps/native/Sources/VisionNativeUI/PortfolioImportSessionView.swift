@@ -32,8 +32,8 @@ struct PortfolioImportSessionView: View {
                 HStack(spacing: 12) {
                     Button(strings.t("portfolioImport.session.stage")) { Task { await model.stage() } }
                         .buttonStyle(.visionPrimary).disabled(
-                            !model.canStage || model.operation != "idle" || isLocked)
-                    if model.operation == "staging" {
+                            !model.canStage || model.operation != .idle || isLocked)
+                    if model.operation == .staging {
                         Button(strings.t("portfolioImport.session.stop")) { model.stop() }
                     }
                     Button(strings.t("portfolioImport.session.preview")) { Task { await model.preview() } }
@@ -45,7 +45,7 @@ struct PortfolioImportSessionView: View {
                 if model.stopped {
                     Text(strings.t("portfolioImport.session.stopped")).foregroundStyle(theme.secondaryLabel)
                 }
-                if model.operation == "preview" {
+                if model.operation == .preview {
                     HStack {
                         ProgressView().controlSize(.small)
                         Text(strings.t("portfolioImport.session.previewing"))
@@ -72,11 +72,11 @@ struct PortfolioImportSessionView: View {
                 strings.t("portfolioImport.session.policy"),
                 selection: Binding(get: { model.policy }, set: { model.setPolicy($0) })
             ) {
-                Text(strings.t("portfolioImport.session.auto")).tag("auto")
-                Text(strings.t("portfolioImport.session.preserve")).tag("preserve_existing")
-                Text(strings.t("portfolioImport.session.source")).tag("prefer_source")
+                Text(strings.t("portfolioImport.session.auto")).tag(PortfolioImportSessionPolicy.auto)
+                Text(strings.t("portfolioImport.session.preserve")).tag(PortfolioImportSessionPolicy.preserveExisting)
+                Text(strings.t("portfolioImport.session.source")).tag(PortfolioImportSessionPolicy.preferSource)
             }.disabled(locked)
-            Text(strings.t("portfolioImport.session.policyHint." + model.policy)).font(.caption).foregroundStyle(
+            Text(strings.t("portfolioImport.session.policyHint." + model.policy.rawValue)).font(.caption).foregroundStyle(
                 theme.secondaryLabel)
         }
     }

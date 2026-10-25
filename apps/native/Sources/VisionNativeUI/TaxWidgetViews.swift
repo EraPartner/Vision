@@ -36,7 +36,7 @@ struct TaxMoneyRow: View {
     var body: some View {
         let text =
             amount.map {
-                MoneyText.text($0, currency: shell.settings.defaultCurrency, settings: shell.settings, signed: signed)
+                MoneyText.text($0, currency: shell.settings.portfolioCurrency, settings: shell.settings, signed: signed)
             } ?? "—"
         HStack(alignment: .firstTextBaseline, spacing: 16) {
             Text(title).frame(maxWidth: .infinity, alignment: .leading)

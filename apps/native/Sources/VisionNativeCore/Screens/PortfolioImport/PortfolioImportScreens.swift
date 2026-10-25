@@ -24,8 +24,8 @@ public final class PortfolioImportScreens {
         advanced.didImport = { [weak self] outcome in
             guard let self else { return }
             if outcome.requiresReview {
-                requestedReviewBatchId = outcome.batchId
-                navigateToReview?(outcome.batchId)
+                requestedReviewBatchId = outcome.batchId.rawValue
+                navigateToReview?(outcome.batchId.rawValue)
             }
         }
         advanced.didMutate = { [weak self] in await self?.serverChanged() }

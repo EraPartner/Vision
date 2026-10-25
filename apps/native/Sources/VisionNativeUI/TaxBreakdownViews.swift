@@ -76,7 +76,7 @@ struct TaxComputationFlowView: View {
                 amount.map {
                     sign
                         + MoneyText.text(
-                            $0, currency: shell.settings.defaultCurrency,
+                            $0, currency: shell.settings.portfolioCurrency,
                             settings: shell.settings, signed: false)
                 } ?? "—"
             ).monospacedDigit()
@@ -269,7 +269,7 @@ struct TaxHouseholdBreakdownView: View {
                                     ForEach(partners, id: \.partnerId) { partner in
                                         Text(
                                             TaxYearPresentation.partner(
-                                                partner.partnerId, overview: overview, strings: strings)
+                                                partner.partnerId.rawValue, overview: overview, strings: strings)
                                         ).font(.caption.weight(.semibold))
                                     }
                                     Text(strings.t("tax.householdBreakdown.column.household")).font(
@@ -283,7 +283,7 @@ struct TaxHouseholdBreakdownView: View {
                                                     ? "tax.pit.row.taxableIncome"
                                                     : "tax.householdBreakdown.row." + row.key))
                                         ForEach(partners, id: \.partnerId) { partner in
-                                            amount(row.partnerAmounts[partner.partnerId], tone: row.tone)
+                                            amount(row.partnerAmounts[partner.partnerId.rawValue], tone: row.tone)
                                         }
                                         amount(row.household, tone: row.tone)
                                     }
@@ -299,7 +299,7 @@ struct TaxHouseholdBreakdownView: View {
                                     GridRow {
                                         Text(strings.t("tax.householdBreakdown.recorded.transactions"))
                                         ForEach(partners, id: \.partnerId) { partner in
-                                            amount(partner.partnerId == "A" ? recorded.A : recorded.B)
+                                            amount(partner.partnerId == .a ? recorded.A : recorded.B)
                                         }
                                         amount(recorded.A + recorded.B)
                                     }
@@ -312,8 +312,8 @@ struct TaxHouseholdBreakdownView: View {
                         }
                         LabeledContent(
                             strings.t("tax.householdBreakdown.assessment"),
-                            value: strings.t("tax.household.assessment.mode." + overview.result.assessment.mode))
-                        if overview.result.assessment.mode == "joint" {
+                            value: strings.t("tax.household.assessment.mode." + overview.result.assessment.mode.rawValue))
+                        if overview.result.assessment.mode == .joint {
                             LabeledContent(strings.t("tax.householdBreakdown.quotient"), value: quotientDescription)
                             if overview.result.quotient.applied {
                                 TaxMoneyRow(
@@ -322,7 +322,7 @@ struct TaxHouseholdBreakdownView: View {
                             }
                         }
                         VisionBadge(text: overview.result.assessment.legalBasis, tone: .outline)
-                        Text(strings.t("tax.household.assessment.reason." + overview.result.assessment.reason)).font(
+                        Text(strings.t("tax.household.assessment.reason." + overview.result.assessment.reason.rawValue)).font(
                             .caption
                         ).foregroundStyle(theme.secondaryLabel)
                     }.padding(.top, 12)
@@ -341,9 +341,9 @@ struct TaxHouseholdBreakdownView: View {
             "tax.householdBreakdown.quotient.transfer",
             [
                 "amount": MoneyText.text(
-                    q.transfer, currency: shell.settings.defaultCurrency, settings: shell.settings, signed: false),
-                "from": TaxYearPresentation.partner(from, overview: overview, strings: strings),
-                "to": TaxYearPresentation.partner(to, overview: overview, strings: strings),
+                    q.transfer, currency: shell.settings.portfolioCurrency, settings: shell.settings, signed: false),
+                "from": TaxYearPresentation.partner(from.rawValue, overview: overview, strings: strings),
+                "to": TaxYearPresentation.partner(to.rawValue, overview: overview, strings: strings),
             ])
     }
     private func amount(_ value: Decimal?, tone: String = "base") -> some View {
@@ -351,7 +351,7 @@ struct TaxHouseholdBreakdownView: View {
             value.map {
                 MoneyText.text(
                     tone == "reduction" ? -$0 : $0,
-                    currency: shell.settings.defaultCurrency, settings: shell.settings,
+                    currency: shell.settings.portfolioCurrency, settings: shell.settings,
                     signed: tone == "reduction" || tone == "adjustment")
             } ?? "—"
         )
@@ -372,7 +372,7 @@ extension TaxPITBreakdownView {
             let value =
                 amount.map {
                     MoneyText.text(
-                        $0, currency: shell.settings.defaultCurrency, settings: shell.settings,
+                        $0, currency: shell.settings.portfolioCurrency, settings: shell.settings,
                         signed: tone == "reduction")
                 } ?? "—"
             let numeric = NativeTaxPrintCell(
@@ -394,14 +394,14 @@ extension TaxHouseholdBreakdownView {
         guard !data.householdBreakdownRows.isEmpty, partners.count > 1 else { return nil }
         var columns = [NativeTaxPrintCell(text: strings.t("tax.pit.table.component"))]
         columns += partners.map {
-            NativeTaxPrintCell(text: TaxYearPresentation.partner($0.partnerId, overview: overview, strings: strings))
+            NativeTaxPrintCell(text: TaxYearPresentation.partner($0.partnerId.rawValue, overview: overview, strings: strings))
         }
         columns.append(.init(text: strings.t("tax.householdBreakdown.column.household")))
         var printedRows: [[NativeTaxPrintCell]] = data.householdBreakdownRows.map { row in
             let title = strings.t(
                 row.key == "taxableIncome" ? "tax.pit.row.taxableIncome" : "tax.householdBreakdown.row." + row.key)
             var cells = [NativeTaxPrintCell(text: title)]
-            cells += partners.map { printAmount(row.partnerAmounts[$0.partnerId], tone: row.tone) }
+            cells += partners.map { printAmount(row.partnerAmounts[$0.partnerId.rawValue], tone: row.tone) }
             cells.append(printAmount(row.household, tone: row.tone))
             return cells
         }
@@ -414,7 +414,7 @@ extension TaxHouseholdBreakdownView {
             entered.append(printAmount(overview.result.totals.grossIncome))
             printedRows.append(entered)
             var transactions = [NativeTaxPrintCell(text: strings.t("tax.householdBreakdown.recorded.transactions"))]
-            transactions += partners.map { printAmount($0.partnerId == "A" ? recorded.A : recorded.B) }
+            transactions += partners.map { printAmount($0.partnerId == .a ? recorded.A : recorded.B) }
             transactions.append(printAmount(recorded.A + recorded.B))
             printedRows.append(transactions)
         }
@@ -435,7 +435,7 @@ extension TaxHouseholdBreakdownView {
         let text =
             value.map {
                 MoneyText.text(
-                    tone == "reduction" ? -$0 : $0, currency: shell.settings.defaultCurrency,
+                    tone == "reduction" ? -$0 : $0, currency: shell.settings.portfolioCurrency,
                     settings: shell.settings, signed: tone == "reduction" || tone == "adjustment")
             } ?? "—"
         return .init(text: text, strong: tone == "total", tone: tone == "reduction" ? .gain : .normal)
@@ -457,8 +457,8 @@ private struct TaxHouseholdPrintFooter: View {
             }
             LabeledContent(
                 strings.t("tax.householdBreakdown.assessment"),
-                value: strings.t("tax.household.assessment.mode." + overview.result.assessment.mode))
-            if overview.result.assessment.mode == "joint" {
+                value: strings.t("tax.household.assessment.mode." + overview.result.assessment.mode.rawValue))
+            if overview.result.assessment.mode == .joint {
                 LabeledContent(strings.t("tax.householdBreakdown.quotient"), value: quotientDescription)
                 if overview.result.quotient.applied {
                     TaxMoneyRow(
@@ -468,7 +468,7 @@ private struct TaxHouseholdPrintFooter: View {
             }
             Text(overview.result.assessment.legalBasis).font(.caption)
                 .padding(6).overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
-            Text(strings.t("tax.household.assessment.reason." + overview.result.assessment.reason))
+            Text(strings.t("tax.household.assessment.reason." + overview.result.assessment.reason.rawValue))
                 .font(.caption).foregroundStyle(theme.secondaryLabel)
         }.padding(NativeTaxPrintTable.inset).frame(maxWidth: .infinity, alignment: .leading)
     }

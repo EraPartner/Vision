@@ -63,7 +63,7 @@ public struct ImportReviewView: View {
 
     @ViewBuilder
     private var content: some View {
-        if model.batchId != batchId || model.isLoading {
+        if model.batchId != ImportBatchID(numeric: batchId) || model.isLoading {
             ProgressView()
                 .controlSize(.regular)
                 .frame(maxWidth: .infinity, minHeight: 240)
@@ -483,13 +483,13 @@ struct ImportReviewGroupView: View {
 /// opens again; this picker never creates a payee.
 struct ImportReviewPayeePicker: View {
     let pickers: PickerDataModel
-    let value: Int?
+    let value: RecipientID?
     /// The group's payee name while the lists do not have it.
     let fallbackLabel: String?
     let accessibilityName: String
     var disabled = false
     let strings: any Localizing
-    let onSelect: (Int?, String?) -> Void
+    let onSelect: (RecipientID?, String?) -> Void
     @State private var isOpen = false
     @State private var search = ""
 
@@ -520,14 +520,14 @@ struct ImportReviewPayeePicker: View {
         ]
         for recipient in pickers.recipients(matching: search) {
             options.append(
-                PickerOption(id: String(recipient.id), title: recipient.name, isSelected: recipient.id == value) {
+                PickerOption(id: String(recipient.id.rawValue), title: recipient.name, isSelected: recipient.id == value) {
                     pick(recipient.id, recipient.name)
                 })
         }
         return options
     }
 
-    private func pick(_ id: Int?, _ name: String?) {
+    private func pick(_ id: RecipientID?, _ name: String?) {
         onSelect(id, name)
         isOpen = false
     }

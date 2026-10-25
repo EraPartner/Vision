@@ -13,7 +13,7 @@ public struct TaxDeductionCandidates: Decodable, Equatable, Sendable {
     public let year: Int
     public let from: String
     public let to: String
-    public let currency: String
+    public let currency: CurrencyCode
     public let byDeductionType: [TaxDeductionGroup]
 }
 

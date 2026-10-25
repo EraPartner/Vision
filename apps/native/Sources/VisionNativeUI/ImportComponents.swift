@@ -614,7 +614,7 @@ struct ImportHistoryCard: View {
         .padding(.vertical, 10)
     }
 
-    private func tone(_ status: String) -> BadgeTone {
+    private func tone(_ status: OpenAPI.ImportBatch.Status) -> BadgeTone {
         switch ImportBatchStatus.tone(status) {
         case .primary: return .primary
         case .secondary: return .secondary

@@ -15,7 +15,7 @@ public final class PortfolioTaxModel {
     public private(set) var settingsLoaded = false
     public private(set) var adjustmentYear: Int?
     public private(set) var draftRows: [PortfolioTaxAdjustmentDraft] = []
-    public private(set) var focusInvestmentID: Int?
+    public private(set) var focusInvestmentID: InvestmentID?
     public private(set) var notice: ScreenNotice?
     /// Invalidates related screens after any write attempt, including a lost acknowledgement.
     /// Completion does not indicate that the mutation was acknowledged successfully.
@@ -33,7 +33,7 @@ public final class PortfolioTaxModel {
     @ObservationIgnored private var notices = NoticeCounter()
     private struct Context: Equatable {
         let year: Int
-        let currency: String
+        let currency: CurrencyCode
     }
 
     public init(service: any PortfolioTaxService, now: @escaping @Sendable () -> Date = { Date() }) {
@@ -65,7 +65,7 @@ public final class PortfolioTaxModel {
             settingsDraft = nil
         }
     }
-    public func load(year: Int, liveYear: Int, currency: String, force: Bool = false) async {
+    public func load(year: Int, liveYear: Int, currency: CurrencyCode, force: Bool = false) async {
         self.liveYear = liveYear
         let next = Context(year: year, currency: currency)
         if context != next {
@@ -135,7 +135,7 @@ public final class PortfolioTaxModel {
         isAdjustmentsPresented = true
         return true
     }
-    public func updateDraft(id: Int, _ update: (inout PortfolioTaxAdjustmentDraft) -> Void) {
+    public func updateDraft(id: InvestmentID, _ update: (inout PortfolioTaxAdjustmentDraft) -> Void) {
         guard isAdjustmentsPresented, !isSavingAdjustments,
             let index = draftRows.firstIndex(where: { $0.id == id })
         else { return }

@@ -13,7 +13,7 @@ public struct PortfolioOverviewView: View {
         self.shell = shell
     }
     private var strings: any Localizing { shell.strings }
-    private var currency: String { shell.settings.defaultCurrency }
+    private var currency: CurrencyCode { shell.settings.portfolioCurrency }
     private var summary: PortfolioSummaryData? { model.summary?.currency == currency ? model.summary : nil }
     private var performance: PortfolioPerformanceData? {
         model.performance?.currency == currency ? model.performance : nil
@@ -95,7 +95,7 @@ public struct PortfolioOverviewView: View {
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task(id: currency + shell.route.string + String(shell.settingsRevision)) { await reload() }
+        .task(id: currency.rawValue + shell.route.string + String(shell.settingsRevision)) { await reload() }
         .sheet(isPresented: $customize) {
             PortfolioWidgetsSheet(
                 definitions: PortfolioWidgetsModel.definitions, visible: model.widgets.isVisible,
@@ -185,7 +185,7 @@ public struct PortfolioOverviewView: View {
                         .help(strings.t("performance.latestSnapshotProvisionalDescription"))
                 }
             }
-        } else if let error = model.errors[currency + "|" + model.period.rawValue] {
+        } else if let error = model.errors[currency.rawValue + "|" + model.period.rawValue] {
             VStack(alignment: .leading, spacing: 8) {
                 Text(strings.t("common.loadError", ["msg": error])).foregroundStyle(theme.destructive)
                 Button(strings.t("common.retry")) { Task { await reload(force: true) } }
@@ -285,9 +285,9 @@ public struct PortfolioOverviewView: View {
                     strings.t("portfolio.brokerFilter.label"),
                     selection: Binding(get: { model.brokerFilter }, set: { model.brokerFilter = $0 })
                 ) {
-                    Text(strings.t("portfolio.brokerFilter.all")).tag("all")
+                    Text(strings.t("portfolio.brokerFilter.all")).tag(PortfolioBrokerFilter.all)
                     ForEach(model.brokerOptions) { option in
-                        Text(option.id == "unassigned" ? strings.t("portfolio.brokerFilter.unassigned") : option.name)
+                        Text(option.id == .unassigned ? strings.t("portfolio.brokerFilter.unassigned") : option.name)
                             .tag(option.id)
                     }
                 }.frame(maxWidth: 300).disabled(model.brokerFilterStatusKey != nil)
@@ -319,7 +319,7 @@ public struct PortfolioOverviewView: View {
                                     }
                                 }
                                 Text(
-                                    [strings.t("portfolio.assetClass." + holding.assetClass), holding.symbol].compactMap
+                                    [strings.t("portfolio.assetClass." + holding.assetClass.rawValue), holding.symbol].compactMap
                                     {
                                         $0
                                     }.joined(separator: " · ")
@@ -336,7 +336,7 @@ public struct PortfolioOverviewView: View {
                                     MoneyText(amount: metrics.gainLoss, currency: currency, settings: shell.settings)
                                     Text(
                                         signedPercent(
-                                            model.brokerFilter == "all"
+                                            model.brokerFilter.isAll
                                                 ? holding.gainLossPercent : metrics.returnPercent)
                                     )
                                     .monospacedDigit().foregroundStyle(metrics.gainLoss >= 0 ? theme.gain : theme.loss)
@@ -519,16 +519,16 @@ private struct PortfolioFigureInfo: View {
 }
 
 enum PortfolioOverviewAsset {
-    static let groups: [(String, [String])] = [
-        ("stocksEtfs", ["stock", "etf"]), ("crypto", ["crypto"]),
-        ("metals", ["metals"]), ("realEstate", ["real_estate"]), ("savingsBonds", ["savings", "bond"]),
+    static let groups: [(String, [OpenAPI.AssetClass])] = [
+        ("stocksEtfs", [.stock, .etf]), ("crypto", [.crypto]),
+        ("metals", [.metals]), ("realEstate", [.realEstate]), ("savingsBonds", [.savings, .bond]),
     ]
-    static func symbol(_ asset: String) -> String {
+    static func symbol(_ asset: OpenAPI.AssetClass) -> String {
         switch asset {
-        case "crypto": "bitcoinsign.circle"
-        case "metals": "diamond"
-        case "real_estate": "building.2"
-        case "savings", "bond": "banknote"
+        case .crypto: "bitcoinsign.circle"
+        case .metals: "diamond"
+        case .realEstate: "building.2"
+        case .savings, .bond: "banknote"
         default: "chart.line.uptrend.xyaxis"
         }
     }

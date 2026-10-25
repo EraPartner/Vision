@@ -54,7 +54,7 @@ struct PortfolioAssetCard: View {
     let shell: NativeShellModel
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
-    private var isProperty: Bool { holding.assetClass == "real_estate" }
+    private var isProperty: Bool { holding.assetClass == .realEstate }
     private var maturity: Date? { holding.maturityDate.flatMap { VisionFormat.parseTimestamp($0 + "T00:00:00") } }
     private var days: Int? {
         maturity.map {
@@ -68,7 +68,7 @@ struct PortfolioAssetCard: View {
         AdminCard {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top) {
-                    Image(systemName: isProperty ? "building.2" : holding.assetClass == "bond" ? "shield" : "banknote")
+                    Image(systemName: isProperty ? "building.2" : holding.assetClass == .bond ? "shield" : "banknote")
                         .font(.title2).foregroundStyle(theme.primary).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
                         Button(holding.name) { Task { await model.openDetail(id: holding.id) } }
@@ -76,7 +76,7 @@ struct PortfolioAssetCard: View {
                         if isProperty, let location = holding.location, !location.isEmpty {
                             Label(location, systemImage: "mappin").font(.callout).foregroundStyle(theme.secondaryLabel)
                         } else if !isProperty {
-                            VisionBadge(text: strings.t("portfolio.assetClass." + holding.assetClass))
+                            VisionBadge(text: strings.t("portfolio.assetClass." + holding.assetClass.rawValue))
                             if holding.interestRate != 0 {
                                 let rate = holding.interestRate
                                 Text(
@@ -109,7 +109,7 @@ struct PortfolioAssetCard: View {
                         Text(
                             "~"
                                 + MoneyText.text(
-                                    monthly, currency: shell.settings.defaultCurrency, settings: shell.settings,
+                                    monthly, currency: shell.settings.portfolioCurrency, settings: shell.settings,
                                     signed: false) + " "
                                 + strings.t("realestate.perMonth")
                         )

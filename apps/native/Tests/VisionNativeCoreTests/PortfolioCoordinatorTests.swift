@@ -126,7 +126,7 @@ private actor PortfolioCoordinatorTransport: APITransport {
                 securitiesAccountTaxThreshold: 1_000_000,
                 badgePercent: .init(
                     securitiesAccountTaxRate: 0, capitalGainsTaxRate: 0, reyndersTaxRate: 0, dividendWHTRate: 0)),
-            summaries: [.init(id: 7, name: "Synthetic ETF", symbol: nil, assetClass: "etf", currency: "EUR")],
+            summaries: [.init(id: 7, name: "Synthetic ETF", symbol: nil, assetClass: .etf, currency: "EUR")],
             records: [
                 .init(
                     key: PortfolioTaxSettingsDraft.adjustmentsKey, value: stored,

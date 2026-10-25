@@ -6,7 +6,7 @@ struct PortfolioPerformanceWidgets: View {
     let shell: NativeShellModel
     @Environment(\.visionTheme) private var theme
     private var data: PortfolioPerformanceData? {
-        guard model.performance?.currency == shell.settings.defaultCurrency else { return nil }
+        guard model.performance?.currency == shell.settings.portfolioCurrency else { return nil }
         return model.performance
     }
     var body: some View {
@@ -118,7 +118,7 @@ struct PortfolioPerformanceWidgets: View {
         broker.series.map { entry in
             InsightChartSeries(
                 id: entry.accountKey,
-                label: entry.assignment == "unassigned"
+                label: entry.assignment == .unassigned
                     ? shell.strings.t("portfolio.brokerFilter.unassigned") : entry.accountName,
                 points: broker.rows.filter {
                     $0.accountKey == entry.accountKey && $0.date >= data.startDate && $0.date <= data.endDate
@@ -132,17 +132,17 @@ struct PortfolioBreakdownView: View {
     let data: PortfolioPerformanceData
     let shell: NativeShellModel
     @Environment(\.visionTheme) private var theme
-    private var groups: [String: [PortfolioPerformanceBreakdown]] {
+    private var groups: [OpenAPI.AssetClass: [PortfolioPerformanceBreakdown]] {
         Dictionary(grouping: data.breakdownSummary, by: \.assetClass)
     }
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), alignment: .leading)], alignment: .leading) {
-            ForEach(groups.keys.sorted(), id: \.self) { group in
+            ForEach(groups.keys.sorted { $0.rawValue < $1.rawValue }, id: \.self) { group in
                 let rows = groups[group] ?? []
                 let value = rows.reduce(0) { $0 + $1.currentValue }
                 let gain = rows.reduce(0) { $0 + $1.gainLoss }
                 let invested = rows.reduce(0) { $0 + $1.totalInvested }
-                PortfolioCard(title: shell.strings.t("portfolio.assetClass." + group)) {
+                PortfolioCard(title: shell.strings.t("portfolio.assetClass." + group.rawValue)) {
                     Text(shell.strings.tc("performance.holdings", rows.count)).font(.caption).foregroundStyle(
                         theme.secondaryLabel)
                     MoneyText(
@@ -224,7 +224,7 @@ struct PortfolioBreakdownView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(row.name).font(.callout.weight(.medium))
-                        Text(row.symbol ?? shell.strings.t("portfolio.assetClass." + row.assetClass)).font(.caption)
+                        Text(row.symbol ?? shell.strings.t("portfolio.assetClass." + row.assetClass.rawValue)).font(.caption)
                             .foregroundStyle(theme.secondaryLabel)
                     }
                     Spacer()

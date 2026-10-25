@@ -21,6 +21,16 @@ struct PortfolioTransactionForm: View {
                 model.clearIssue()
             })
     }
+    private func choice<Value>(_ path: WritableKeyPath<PortfolioTradeDraft, Value>, fallback: Value) -> Binding<
+        Value
+    > {
+        Binding(
+            get: { draft?[keyPath: path] ?? fallback },
+            set: {
+                model.tradeDraft?[keyPath: path] = $0
+                model.clearIssue()
+            })
+    }
     var body: some View {
         VStack(spacing: 0) {
             VisionDialogHeader(
@@ -60,12 +70,14 @@ struct PortfolioTransactionForm: View {
             fieldLabel("addPortTxn.type")
             if isEditing {
                 // EditPortfolioTxnDialog shows the type as a disabled input.
-                TextField("", text: .constant(typeLabel(draft?.type ?? ""))).textFieldStyle(.vision).disabled(true)
+                TextField("", text: .constant(typeLabel(draft?.type.rawValue ?? ""))).textFieldStyle(.vision).disabled(true)
                     .accessibilityLabel(strings.t("addPortTxn.type"))
             } else {
-                Picker(strings.t("addPortTxn.type"), selection: text(\.type)) {
-                    ForEach(PortfolioAssetKinds.tradeTypes(draft?.investment.assetClass ?? ""), id: \.self) {
-                        Text(strings.t("portfolio.txnType." + $0)).tag($0)
+                Picker(strings.t("addPortTxn.type"), selection: choice(\.type, fallback: .buy)) {
+                    ForEach(
+                        PortfolioAssetKinds.tradeTypes(draft?.investment.assetClass ?? .unknown("")), id: \.self
+                    ) {
+                        Text(strings.t("portfolio.txnType." + $0.rawValue)).tag($0)
                     }
                 }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -76,7 +88,7 @@ struct PortfolioTransactionForm: View {
             field("addPortTxn.pricePerUnit", \.pricePerUnit, "pricePerUnit")
         }
         field(
-            "addPortTxn.totalAmount", \.amount, "amount", variables: ["currency": draft?.currency ?? "EUR"],
+            "addPortTxn.totalAmount", \.amount, "amount", variables: ["currency": draft?.currency.rawValue ?? "EUR"],
             lockGift: !isEditing && draft?.isGift == true)
         if let draft, draft.isBuySell {
             let input = draft.unitInput(format: shell.settings.numberFormat)
@@ -92,12 +104,12 @@ struct PortfolioTransactionForm: View {
             field("addPortTxn.fees", \.fees, "fees")
             field("addPortTxn.taxes", \.taxes, "taxes")
         }
-        if draft?.type == "dividend" {
+        if draft?.type == .dividend {
             VStack(alignment: .leading, spacing: 6) {
                 fieldLabel("addPortTxn.dividendAmountConvention")
-                Picker(strings.t("addPortTxn.dividendAmountConvention"), selection: text(\.dividendAmountConvention)) {
-                    ForEach(["gross", "net", "unknown"], id: \.self) {
-                        Text(strings.t("addPortTxn.dividendConvention." + $0)).tag($0)
+                Picker(strings.t("addPortTxn.dividendAmountConvention"), selection: choice(\.dividendAmountConvention, fallback: .unknownValue)) {
+                    ForEach(OpenAPI.PortfolioTransaction.DividendAmountConvention.allKnownCases, id: \.self) {
+                        Text(strings.t("addPortTxn.dividendConvention." + $0.rawValue)).tag($0)
                     }
                 }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
                 Text(strings.t("addPortTxn.dividendConvention.help")).font(.footnote).foregroundStyle(
@@ -119,9 +131,12 @@ struct PortfolioTransactionForm: View {
             if draft?.isRecurring == true {
                 VStack(alignment: .leading, spacing: 6) {
                     fieldLabel("addPortTxn.interval")
-                    Picker(strings.t("addPortTxn.interval"), selection: text(\.recurrenceInterval)) {
-                        ForEach(["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"], id: \.self) {
-                            Text(strings.t("addPortTxn.recurrence." + $0)).tag($0)
+                    Picker(strings.t("addPortTxn.interval"), selection: choice(\.recurrenceInterval, fallback: .monthly)) {
+                        ForEach(
+                            [OpenAPI.RecurrenceInterval.daily, .weekly, .biweekly, .monthly, .quarterly, .yearly],
+                            id: \.self
+                        ) {
+                            Text(strings.t("addPortTxn.recurrence." + $0.rawValue)).tag($0)
                         }
                     }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -242,7 +257,7 @@ private struct PortfolioEditingPresenter: ViewModifier {
         case .archive(let investment): strings.t("portfolio.archiveInvestmentDesc", ["name": investment.name])
         case .deleteInvestment(let investment, _, let key): strings.t(key, ["name": investment.name])
         case .deleteTransaction(let transaction):
-            strings.t("invDetail.delete.desc", ["txType": txnTypeLabel(transaction.type)])
+            strings.t("invDetail.delete.desc", ["txType": txnTypeLabel(transaction.type.rawValue)])
         case nil: ""
         }
     }

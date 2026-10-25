@@ -20,7 +20,7 @@ public struct TaxOverviewView: View {
     }
     private var data: TaxDashboardData? {
         guard let data = screens.dashboard.data, data.year == overview?.year,
-            data.currency == shell.settings.defaultCurrency
+            data.currency == shell.settings.portfolioCurrency
         else { return nil }
         return data
     }
@@ -64,7 +64,7 @@ public struct TaxOverviewView: View {
             if let value {
                 Task {
                     await screens.dashboard.load(
-                        year: value.year, currency: shell.settings.defaultCurrency, force: true)
+                        year: value.year, currency: shell.settings.portfolioCurrency, force: true)
                 }
             }
         }
@@ -111,7 +111,7 @@ public struct TaxOverviewView: View {
     private func actionsMenu(_ overview: OpenAPI.BelgianTaxOverview) -> some View {
         let meta = TaxYearPresentation.metadata(overview)
         let filed = meta["filing"]?.objectValue != nil
-        let frozen = overview.calculationSource == "frozen"
+        let frozen = overview.calculationSource == .frozen
         return Menu {
             Button(strings.t("tax.menu.exportPdf"), systemImage: "arrow.down.document") { shell.openTaxReport() }
             Button(strings.t("tax.menu.customize"), systemImage: "square.grid.2x2") { customize = true }
@@ -231,10 +231,10 @@ public struct TaxOverviewView: View {
                 if !overview.isHistorical {
                     ForEach(uniqueIssues(overview), id: \.code) { issue in
                         Text(
-                            "• " + strings.t("tax.household.issue.severity." + issue.severity) + ": "
-                                + strings.t("tax.household.issue." + issue.code)
+                            "• " + strings.t("tax.household.issue.severity." + issue.severity.rawValue) + ": "
+                                + strings.t("tax.household.issue." + issue.code.rawValue)
                         )
-                        .font(.callout).foregroundStyle(issue.severity == "info" ? theme.secondaryLabel : theme.warning)
+                        .font(.callout).foregroundStyle(issue.severity == .info ? theme.secondaryLabel : theme.warning)
                         .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -245,7 +245,7 @@ public struct TaxOverviewView: View {
         .visionCardBackground()
     }
     private func uniqueIssues(_ overview: OpenAPI.BelgianTaxOverview) -> [OpenAPI.BelgianTaxHouseholdTaxIssue] {
-        var seen = Set<String>()
+        var seen = Set<OpenAPI.BelgianTaxHouseholdTaxIssue.Code>()
         return overview.result.issues.filter { seen.insert($0.code).inserted }
     }
     @ViewBuilder private func deductions(_ overview: OpenAPI.BelgianTaxOverview) -> some View {
@@ -274,9 +274,9 @@ public struct TaxOverviewView: View {
     }
     private func reload(force: Bool = false) async {
         let route = shell.route
-        let currency = shell.settings.defaultCurrency
+        let currency = shell.settings.portfolioCurrency
         guard let canonical = await screens.loadRoute(route: route, currency: currency, force: force),
-            !Task.isCancelled, shell.route == route, shell.settings.defaultCurrency == currency
+            !Task.isCancelled, shell.route == route, shell.settings.portfolioCurrency == currency
         else { return }
         if canonical != route { shell.replaceQuery(canonical.query) }
     }

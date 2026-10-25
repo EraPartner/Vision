@@ -45,13 +45,13 @@ actor FakeImportExportService: ImportExportService {
 
 /// The review calls over one scripted preview, recording every call.
 actor FakeImportReviewService: ImportReviewService {
-    private(set) var previewLoads: [Int] = []
+    private(set) var previewLoads: [ImportBatchID] = []
     /// `"rowId:recipientId"` (`nil` written as `null`).
     private(set) var recipientOverrides: [String] = []
     private(set) var categoryOverrides: [String] = []
     private(set) var defaults: [String] = []
-    private(set) var commits: [Int] = []
-    private(set) var discards: [Int] = []
+    private(set) var commits: [ImportBatchID] = []
+    private(set) var discards: [ImportBatchID] = []
     private var preview: ImportPreview
     private var accounts: [OpenAPI.Account]
     private var previewFails = false
@@ -79,7 +79,7 @@ actor FakeImportReviewService: ImportReviewService {
     /// Holds the next preview request, which answers with the preview it started with.
     func holdNextPreview(_ gate: CallGate) { previewGate = gate }
 
-    func importPreview(batchId: Int) async throws -> ImportPreview {
+    func importPreview(batchId: ImportBatchID) async throws -> ImportPreview {
         previewLoads.append(batchId)
         if previewFails { throw APIError.client(APIClientError(status: 404, code: .notFound, message: "Batch not found")) }
         let answer = preview
@@ -90,28 +90,28 @@ actor FakeImportReviewService: ImportReviewService {
         return answer
     }
 
-    func overrideImportRow(batchId: Int, rowId: String, recipientId: Int?) async throws {
-        recipientOverrides.append("\(rowId):\(recipientId.map(String.init) ?? "null")")
+    func overrideImportRow(batchId: ImportBatchID, rowId: String, recipientId: RecipientID?) async throws {
+        recipientOverrides.append("\(rowId):\(recipientId.map { String($0.rawValue) } ?? "null")")
         if overrideFailsFor == rowId { throw APIError.network("offline") }
     }
 
-    func overrideImportRowCategory(batchId: Int, rowId: String, categoryId: Int?) async throws {
-        categoryOverrides.append("\(rowId):\(categoryId.map(String.init) ?? "null")")
+    func overrideImportRowCategory(batchId: ImportBatchID, rowId: String, categoryId: CategoryID?) async throws {
+        categoryOverrides.append("\(rowId):\(categoryId.map { String($0.rawValue) } ?? "null")")
         if categoryFails { throw APIError.network("offline") }
     }
 
-    func setRecipientDefaultCategory(recipientId: Int, categoryId: Int) async throws {
-        defaults.append("\(recipientId):\(categoryId)")
+    func setRecipientDefaultCategory(recipientId: RecipientID, categoryId: CategoryID) async throws {
+        defaults.append("\(recipientId.rawValue):\(categoryId.rawValue)")
         if defaultFails { throw APIError.network("offline") }
     }
 
-    func commitImportBatch(batchId: Int) async throws -> ImportCommitResult {
+    func commitImportBatch(batchId: ImportBatchID) async throws -> ImportCommitResult {
         commits.append(batchId)
         if commitFails { throw APIError.client(APIClientError(status: 409, code: .conflict, message: "Batch is busy")) }
         return result
     }
 
-    func discardImportBatch(batchId: Int) async throws {
+    func discardImportBatch(batchId: ImportBatchID) async throws {
         discards.append(batchId)
         if discardFails { throw APIError.network("offline") }
     }
@@ -125,7 +125,7 @@ enum ReviewFixture {
         similarity: Double? = nil
     ) -> ImportStagingRow {
         ImportStagingRow(
-            id: id, recipientRaw: payee, amount: amount, currency: "EUR", txDate: date, memo: "memo \(id)",
+            id: id, recipientRaw: payee, amount: amount, currency: .eur, txDate: date, memo: "memo \(id)",
             bankAccount: account, matchSource: source, matchSimilarity: similarity)
     }
 
@@ -410,7 +410,7 @@ enum ReviewFixture {
         #expect(review.totalRows == 4)
         #expect(review.pickers.isLoaded)
         #expect(review.expandedGroups.isEmpty)
-        #expect(await service.previewLoads == [42])
+        #expect(await service.previewLoads == ["42"])
         // Concurrent appearances share the request.
         let first = Task { await review.load() }
         let second = Task { await review.load() }
@@ -463,7 +463,7 @@ enum ReviewFixture {
         await review.appear(batchId: 42)
         await review.setRecipient(77, name: "Bakery & Co", for: ReviewFixture.bakery, strings: ImportFixture.strings)
         #expect(await service.recipientOverrides.sorted() == ["101:77", "102:77"])
-        #expect(await service.previewLoads == [42, 42])
+        #expect(await service.previewLoads == ["42", "42"])
         let state = review.state(for: ReviewFixture.bakery)
         #expect(state.recipientId == 77)
         #expect(state.recipientName == "Bakery & Co")
@@ -496,7 +496,7 @@ enum ReviewFixture {
         await stale.value
         await picking.value
         // The change waited for the running request, then asked again.
-        #expect(await service.previewLoads == [42, 42, 42])
+        #expect(await service.previewLoads == ["42", "42", "42"])
         #expect(review.preview == updated)
     }
 
@@ -565,7 +565,7 @@ enum ReviewFixture {
         #expect(await service.previewLoads.count == loads + 1)
         await service.failOverride(row: nil)
         await review.commit(strings: ImportFixture.strings)
-        #expect(await service.commits == [42])
+        #expect(await service.commits == ["42"])
     }
 
     @Test func discardAsksFirstThenReturnsToImport() async {
@@ -587,7 +587,7 @@ enum ReviewFixture {
         await service.failDiscard(false)
         review.requestDiscard()
         await review.confirmDiscard(strings: ImportFixture.strings)
-        #expect(await service.discards == [42, 42])
+        #expect(await service.discards == ["42", "42"])
         #expect(page.notice?.key == "importReview.toast.discarded")
         #expect(review.navigationRequest == .replace("/import"))
         review.didHandleNavigation()
@@ -603,7 +603,7 @@ enum ReviewFixture {
         let review = page.review
         await review.appear(batchId: 42)
         await review.commit(strings: ImportFixture.strings)
-        #expect(await service.commits == [42])
+        #expect(await service.commits == ["42"])
         let keys = page.toasts.notices.map { $0.key }
         #expect(keys == ["importReview.toast.success", "importReview.toast.autoLinked", "importReview.toast.newAccounts"])
         #expect(page.toasts.notices.first?.variables == ["imported": "3", "duplicates": "1", "errors": "0"])
@@ -664,7 +664,7 @@ enum ReviewFixture {
         review.setExpanded(ReviewFixture.bakery, true)
         review.setPersistDefault(false, for: ReviewFixture.bakery)
         await review.appear(batchId: 43)
-        #expect(review.batchId == 43)
+        #expect(review.batchId == "43")
         #expect(review.expandedGroups.isEmpty)
         #expect(review.groupStates.isEmpty)
         review.setExpanded(ReviewFixture.bakery, true)
@@ -675,16 +675,16 @@ enum ReviewFixture {
 
 @Suite struct ImportReviewWireTests {
     @Test func overridesSendAnExplicitNull() throws {
-        let clear = ImportRowOverrideRequest(batchId: 4, rowId: "101", recipientId: nil)
+        let clear = ImportRowOverrideRequest(batchId: "4", rowId: "101", recipientId: nil)
         #expect(clear.path == "/api/import/batches/4/rows/101/override")
         #expect(String(decoding: try #require(try clear.encodedBody()), as: UTF8.self) == #"{"recipient_id":null}"#)
-        let set = ImportRowOverrideRequest(batchId: 4, rowId: "101", recipientId: 9)
+        let set = ImportRowOverrideRequest(batchId: "4", rowId: "101", recipientId: 9)
         #expect(String(decoding: try #require(try set.encodedBody()), as: UTF8.self) == #"{"recipient_id":9}"#)
-        let category = ImportRowCategoryOverrideRequest(batchId: 4, rowId: "7", categoryId: nil)
+        let category = ImportRowCategoryOverrideRequest(batchId: "4", rowId: "7", categoryId: nil)
         #expect(category.path == "/api/import/batches/4/rows/7/category-override")
         #expect(String(decoding: try #require(try category.encodedBody()), as: UTF8.self) == #"{"category_id":null}"#)
-        #expect(ImportCommitRequest(batchId: 4).path == "/api/import/batches/4/commit")
-        #expect(ImportPreviewRequest(batchId: 4).path == "/api/import/batches/4/preview")
+        #expect(ImportCommitRequest(batchId: "4").path == "/api/import/batches/4/commit")
+        #expect(ImportPreviewRequest(batchId: "4").path == "/api/import/batches/4/preview")
     }
 
     @Test func thePreviewAndCommitDecode() throws {
@@ -701,7 +701,7 @@ enum ReviewFixture {
         let row = try #require(preview.rows.first)
         #expect(row.id == "9007199254740993")
         #expect(row.amountValue == Decimal(string: "-12.34"))
-        #expect(row.currencyCode == "EUR")
+        #expect(row.currencyCode == .eur)
         #expect(row.bankAccount == nil)
         #expect(row.matchKind == .fuzzy)
         #expect(preview.totals["fuzzy"] == 1)

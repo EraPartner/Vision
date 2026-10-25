@@ -11,7 +11,7 @@ struct PortfolioExposureView: View {
     @State private var importError: String?
     @Environment(\.visionTheme) private var theme
     private var data: PortfolioExposureData? {
-        guard model.exposure?.currency == shell.settings.defaultCurrency else { return nil }
+        guard model.exposure?.currency == shell.settings.portfolioCurrency else { return nil }
         return model.exposure
     }
     private var selected: PortfolioExposureDimension? {
@@ -89,7 +89,7 @@ struct PortfolioExposureView: View {
                                 HStack(alignment: .firstTextBaseline) {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(
-                                            (item.sourceType == "direct"
+                                            (item.sourceType == .direct
                                                 ? shell.strings.t("portfolio.exposure.direct")
                                                 : shell.strings.t(
                                                     "portfolio.exposure.fundContribution",

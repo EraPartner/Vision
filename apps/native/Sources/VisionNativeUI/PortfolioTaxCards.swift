@@ -186,7 +186,7 @@ struct PortfolioTaxInvestmentBreakdownView: View {
                             if let symbol = investment.symbol {
                                 Text(symbol).font(.caption.monospaced()).foregroundStyle(theme.secondaryLabel)
                             }
-                            VisionBadge(text: strings.t("portfolio.assetClass." + investment.assetClass))
+                            VisionBadge(text: strings.t("portfolio.assetClass." + investment.assetClass.rawValue))
                         }
                         Text(
                             strings.t("tax.taxes") + ": " + money(investment.recordedTaxes) + " + "

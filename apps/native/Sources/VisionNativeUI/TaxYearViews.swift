@@ -9,11 +9,11 @@ enum TaxYearPresentation {
         // TaxFilingMasthead: the current profile year also shows its filed status.
         if metadata(overview)["filing"]?.objectValue != nil { return "filed" }
         guard overview.isHistorical else { return "live" }
-        if overview.calculationSource == "frozen" { return "frozen" }
+        if overview.calculationSource == .frozen { return "frozen" }
         return overview.hasSnapshot ? "snapshot" : "estimate"
     }
     static func partner(_ id: String, overview: OpenAPI.BelgianTaxOverview, strings: any Localizing) -> String {
-        if let name = overview.household.partners.first(where: { $0.id == id })?.displayName,
+        if let name = overview.household.partners.first(where: { $0.id.rawValue == id })?.displayName,
             !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         {
             return name
@@ -108,7 +108,7 @@ struct TaxMastheadView: View {
                     Text(strings.t("tax.historical.banner.filedReferencePrefix") + " " + reference).font(.caption)
                 }
                 HStack {
-                    if !overview.hasSnapshot && overview.calculationSource != "frozen" {
+                    if !overview.hasSnapshot && overview.calculationSource != .frozen {
                         Button(strings.t("tax.yearSwitcher.createSnapshot", ["year": String(overview.year)])) {
                             Task { await actions.perform(.createSnapshot) }
                         }.disabled(actions.isSaving)
@@ -135,7 +135,7 @@ struct TaxMastheadView: View {
         HStack(alignment: .bottom, spacing: 24) {
             meta(
                 strings.t("tax.masthead.meta.region"),
-                value: strings.t("tax.profile.region." + overview.household.region + ".label"))
+                value: strings.t("tax.profile.region." + overview.household.region.rawValue + ".label"))
             meta(
                 strings.t("tax.masthead.meta.marginalRate"),
                 value: overview.calculation.marginalRate.map {
@@ -344,7 +344,7 @@ struct TaxHistorySheet: View {
         }
     }
     private func money(_ value: Decimal) -> String {
-        MoneyText.text(value, currency: shell.settings.defaultCurrency, settings: shell.settings, signed: false)
+        MoneyText.text(value, currency: shell.settings.portfolioCurrency, settings: shell.settings, signed: false)
     }
     private func describe(_ value: TaxValue) -> String {
         switch value {

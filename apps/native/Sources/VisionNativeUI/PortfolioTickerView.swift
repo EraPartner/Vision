@@ -15,7 +15,7 @@ struct PortfolioTickerView: View {
     @Environment(\.accessibilityReduceMotion) private var reducedMotion
     @Environment(\.visionTheme) private var theme
     private var quotable: [PortfolioInvestment] {
-        model.investments.filter { $0.isActive && $0.priceProvider == "yahoo" && !symbol($0).isEmpty }
+        model.investments.filter { $0.isActive && $0.priceProvider == .yahoo && !symbol($0).isEmpty }
     }
     private var included: [PortfolioInvestment] { quotable.filter { overrides[$0.id] ?? ($0.showInTicker != false) } }
     private var active: Bool { visible && scenePhase == .active && model.isOnline }

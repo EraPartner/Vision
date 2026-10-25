@@ -57,7 +57,7 @@ struct PortfolioEditingDraftTests {
     @Test func giftAddIsZeroBasisButEditRetainsTheEnteredBasis() throws {
         let investment = try editingInvestment()
         var add = PortfolioTradeDraft(investment: investment, bookingCurrency: "EUR", today: "2026-10-13")
-        add.type = "gift"
+        add.type = .gift
         add.units = "2"
         add.amount = "10"
         add.pricePerUnit = "5"
@@ -93,9 +93,9 @@ struct PortfolioEditingDraftTests {
     @Test func localeInputAndBookingCurrencyArePreservedWithoutFxConversion() throws {
         var draft = PortfolioTradeDraft(
             investment: try editingInvestment(currency: "USD"), bookingCurrency: "EUR", today: "2026-10-13")
-        draft.type = "dividend"
+        draft.type = .dividend
         draft.amount = "1.234,56789"
-        draft.dividendAmountConvention = "net"
+        draft.dividendAmountConvention = .net
         let body = try draft.payload(format: .eu, defaultBroker: nil)
         #expect(body.fields["amount"] == .number(Decimal(string: "1234.56789")!))
         #expect(body.fields["currency"] == .string("EUR"))
@@ -116,19 +116,19 @@ struct PortfolioEditingDraftTests {
     }
     @Test func emptyProviderFieldsRemainOmittedAndSelectionClearsOnlyTheProviderId() {
         var provider = PortfolioProviderDraft()
-        provider.provider = "custom"
+        provider.provider = .custom
         provider.id = " older "
         provider.latestUrl = " https://example.org/quotes "
         provider.latestPath = " "
         #expect(provider.payload["price_provider_latest_url"] == .string("https://example.org/quotes"))
         #expect(provider.payload["price_provider_latest_path"] == nil)
-        provider.select("yahoo")
+        provider.select(.yahoo)
         #expect(provider.id.isEmpty)
         #expect(provider.latestUrl == " https://example.org/quotes ")
     }
     @Test func initialPurchaseRequiresAmountUnitsAndDateBeforeAnInvestmentIsWritten() throws {
         var draft = PortfolioInvestmentDraft(
-            settings: .init(numberFormat: .us), today: "2026-10-13", allowedAssetClasses: ["stock"])
+            settings: .init(numberFormat: .us), today: "2026-10-13", allowedAssetClasses: [.stock])
         draft.name = "Synthetic holding"
         draft.initialAmount = "100"
         #expect(throws: PortfolioFormIssue.self) { try draft.initialPurchase(format: .us, defaultBroker: nil) }
@@ -190,7 +190,7 @@ struct PortfolioEditingAPITests {
                 #"{"ok":true,"data":{"providers":[{"key":"new_provider","name":"New provider","description":"Backend hint"}]}}"#
         )
         let client = APIClient(baseURL: { URL(string: "http://127.0.0.1:3002") }, transport: catalog, maxRetries: 0)
-        #expect(try await client.portfolioPriceProviders().first?.key == "new_provider")
+        #expect(try await client.portfolioPriceProviders().first?.key == .unknown("new_provider"))
         #expect(await catalog.requests.first?.url.path == "/api/investments/providers")
         let transport = PortfolioEditingTransport(body: #"{"ok":true,"data":{"saved":1}}"#)
         let importer = APIClient(baseURL: { URL(string: "http://127.0.0.1:3002") }, transport: transport, maxRetries: 0)
@@ -210,7 +210,7 @@ struct PortfolioEditingModelTests {
         let service = EditingFixtureService()
         let model = PortfolioEditingModel(service: service)
         model.configure(settings: .init(numberFormat: .us))
-        model.beginAddInvestment(allowedAssetClasses: ["stock"])
+        model.beginAddInvestment(allowedAssetClasses: [.stock])
         model.investmentDraft?.name = "Synthetic holding"
         model.investmentDraft?.initialAmount = "100"
         #expect(await model.saveEditor(strings: strings) == false)
@@ -222,7 +222,7 @@ struct PortfolioEditingModelTests {
         await service.failFirstTrade()
         let model = PortfolioEditingModel(service: service)
         model.configure(settings: .init(numberFormat: .us))
-        model.beginAddInvestment(allowedAssetClasses: ["stock"])
+        model.beginAddInvestment(allowedAssetClasses: [.stock])
         model.investmentDraft?.name = "Synthetic holding"
         model.investmentDraft?.initialAmount = "100"
         model.investmentDraft?.initialUnits = "2"
@@ -437,7 +437,7 @@ struct PortfolioEditingModelTests {
         await service.failFirstTrade()
         let model = PortfolioEditingModel(service: service)
         model.configure(settings: .init(numberFormat: .us))
-        model.beginAddInvestment(allowedAssetClasses: ["stock"])
+        model.beginAddInvestment(allowedAssetClasses: [.stock])
         model.investmentDraft?.name = "Synthetic holding"
         model.investmentDraft?.initialAmount = "100"
         model.investmentDraft?.initialUnits = "2"
@@ -454,7 +454,7 @@ struct PortfolioEditingModelTests {
         #expect(model.notice?.key == "portfolio.updateInvestmentFailedTitle")
         await service.failFirstCreate()
         model.discardDrafts()
-        model.beginAddInvestment(allowedAssetClasses: ["stock"])
+        model.beginAddInvestment(allowedAssetClasses: [.stock])
         model.investmentDraft?.name = "Synthetic holding"
         model.investmentDraft?.addInitialPurchase = false
         #expect(await model.saveEditor(strings: strings) == false)
@@ -478,14 +478,14 @@ private func editingTransaction(
 }
 private func editingBroker(id: Int, active: Bool = true) -> OpenAPI.Account {
     .init(
-        id: id, name: "Synthetic broker \(id)", currency: "EUR", type: "brokerage", liquidityClass: "portfolio",
+        id: AccountID(id), name: "Synthetic broker \(id)", currency: "EUR", type: .brokerage, liquidityClass: .liquid,
         spendable: false,
-        inNetWorth: true, taxWrapper: "none", owner: "me", multiCurrencyCash: false, hasCashSleeve: true,
+        inNetWorth: true, taxWrapper: .none, owner: .me, multiCurrencyCash: false, hasCashSleeve: true,
         isActive: active, createdAt: "2025-01-01", updatedAt: "2025-01-01")
 }
 private actor EditingFixtureService: PortfolioEditingService {
     var createdInvestmentCalls = 0
-    var createdTradeInvestmentIds: [Int] = []
+    var createdTradeInvestmentIds: [InvestmentID] = []
     var retags: [PortfolioEditingPayload] = []
     private var tradeFails = false
     private var retagFails = false
@@ -525,14 +525,14 @@ private actor EditingFixtureService: PortfolioEditingService {
         createdInvestmentCalls += 1
         return try editingInvestment()
     }
-    func portfolioUpdateInvestment(id: Int, payload: PortfolioEditingPayload) async throws -> PortfolioInvestment {
+    func portfolioUpdateInvestment(id: InvestmentID, payload: PortfolioEditingPayload) async throws -> PortfolioInvestment {
         if updateFails { throw APIError.backendUnavailable }
         return try editingInvestment()
     }
-    func portfolioDeleteInvestment(id: Int) async throws {
+    func portfolioDeleteInvestment(id: InvestmentID) async throws {
         if deleteFails { throw APIError.backendUnavailable }
     }
-    func portfolioCreateTransaction(investmentId: Int, payload: PortfolioEditingPayload) async throws
+    func portfolioCreateTransaction(investmentId: InvestmentID, payload: PortfolioEditingPayload) async throws
         -> PortfolioTransaction
     {
         createdTradeInvestmentIds.append(investmentId)
@@ -542,14 +542,14 @@ private actor EditingFixtureService: PortfolioEditingService {
         }
         return try editingTransaction()
     }
-    func portfolioUpdateTransaction(id: Int, payload: PortfolioEditingPayload) async throws -> PortfolioTransaction {
+    func portfolioUpdateTransaction(id: PortfolioTransactionID, payload: PortfolioEditingPayload) async throws -> PortfolioTransaction {
         try editingTransaction()
     }
-    func portfolioDeleteTransaction(id: Int) async throws {
+    func portfolioDeleteTransaction(id: PortfolioTransactionID) async throws {
         if deleteFails { throw APIError.backendUnavailable }
     }
     func portfolioPriceProviders() async throws -> [PortfolioPriceProvider] { PortfolioPriceProvider.fallback }
-    func portfolioEditingTransactions(investmentIds: [Int]) async throws -> [PortfolioTransaction] {
+    func portfolioEditingTransactions(investmentIds: [InvestmentID]) async throws -> [PortfolioTransaction] {
         bulkCalls += 1
         let snapshot = bulkRows
         if pauseBulk {

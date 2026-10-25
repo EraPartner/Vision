@@ -43,7 +43,7 @@ extension TaxProfileSheet {
                                     var ids = selectedCategoryIds
                                     if enabled { ids.append(category.id) } else { ids.removeAll { $0 == category.id } }
                                     model.edit {
-                                        $0.set(["taxIncomeCategoryIds"], .array(ids.map { .number(Decimal($0)) }))
+                                        $0.set(["taxIncomeCategoryIds"], .array(ids.map { .number(Decimal($0.rawValue)) }))
                                     }
                                 })
                         ).toggleStyle(.checkbox)
@@ -52,9 +52,9 @@ extension TaxProfileSheet {
             }.frame(height: 260)
         }
     }
-    var selectedCategoryIds: [Int] {
+    var selectedCategoryIds: [CategoryID] {
         (draft.get(["taxIncomeCategoryIds"])?.arrayValue ?? []).compactMap {
-            $0.decimalValue.map { NSDecimalNumber(decimal: $0).intValue }
+            $0.decimalValue.map { CategoryID(NSDecimalNumber(decimal: $0).intValue) }
         }
     }
     var exemptionsStep: some View {

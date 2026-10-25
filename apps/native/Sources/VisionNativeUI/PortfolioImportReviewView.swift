@@ -61,7 +61,7 @@ public struct PortfolioImportReviewView: View {
     private func load() async {
         guard case .native(.portfolioImportReview(let batchId)) = shell.detail else { return }
         if let id = shell.nativeNavigationLocation.match?.supportedBatchId {
-            await model.load(batchId: id)
+            await model.load(batchId: PortfolioImportBatchNumericID(id))
         } else {
             await model.load(rawBatchId: batchId)
         }
@@ -87,7 +87,7 @@ public struct PortfolioImportReviewView: View {
                         selection: Binding(
                             get: { model.selectedRepairBrokerId }, set: { model.selectedRepairBrokerId = $0 })
                     ) {
-                        Text(strings.t("addPortTxn.broker.unassigned")).tag(Optional<Int>.none)
+                        Text(strings.t("addPortTxn.broker.unassigned")).tag(Optional<AccountID>.none)
                         ForEach(model.brokerAccounts, id: \.id) { account in
                             Text(verbatim: account.displayName ?? account.name).tag(Optional(account.id))
                         }
@@ -191,7 +191,7 @@ private struct PortfolioImportPreviewGroupView: View {
                 ForEach(group.rows) { row in
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         Text(verbatim: row.txDate ?? "").foregroundStyle(theme.secondaryLabel)
-                        Text(verbatim: row.type ?? row.typeRaw ?? "").padding(3)
+                        Text(verbatim: row.type?.rawValue ?? row.typeRaw ?? "").padding(3)
                             .overlay(RoundedRectangle(cornerRadius: 4).stroke(theme.border))
                         if let units = row.units { Text(verbatim: "\(units) @ \(row.pricePerUnit ?? "—")") }
                         if let amount = row.amount {

@@ -192,7 +192,7 @@ struct RebalanceModelTests {
         await model.compute()
         #expect(model.result != nil)
         #expect(await service.requests.last?.availableCash == 500)
-        #expect(await service.requests.last?.model == "sixty_forty")
+        #expect(await service.requests.last?.model == .sixtyForty)
         #expect(await service.requests.last?.targetWeights == nil)
     }
     @Test func editedWeightsInvalidateInFlightResultsButRenamingDoesNot() async throws {
@@ -368,7 +368,7 @@ private actor RebalanceFixtureService: RebalanceService {
             actualValues: ["stocks": 250, "bonds": 750], availableCash: request.availableCash ?? 1000, cashAccounts: [],
             deployment: ["stocks": 200])
     }
-    func rebalanceCash(currency: String, reserveFloor: Decimal) async throws -> RebalanceCashProjection {
+    func rebalanceCash(currency: CurrencyCode, reserveFloor: Decimal) async throws -> RebalanceCashProjection {
         events.append("cash")
         let value = try JSONDecoder().decode(RebalanceCashProjection.self, from: Data(rebalanceCashWireFixture.utf8))
         return .init(

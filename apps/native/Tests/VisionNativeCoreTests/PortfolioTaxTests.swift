@@ -89,7 +89,7 @@ struct PortfolioTaxDataTests {
         #expect(draft.patch.expected.values.allSatisfy { $0 == .object(["exists": .bool(false)]) })
         #expect(draft.adjustments["2026:1"]?["taxes"] == .number(Decimal(string: "12.5")!))
         #expect(draft.classifications == .object([:]))
-        try source.validate(year: 2025, currency: "eur")
+        try source.validate(year: 2025, currency: PortfolioCurrency.code("eur"))
     }
     @Test func transportKeepsGeneratedPathQueryAtomicBodyAndDecimalAmounts() async throws {
         let transport = PortfolioTaxTestTransport()
@@ -345,8 +345,8 @@ private actor PortfolioTaxTestService: PortfolioTaxService {
             key: records[0].key, value: records[0].value,
             expected: .object(["exists": .bool(true), "value": .string("changed")]))
     }
-    func portfolioTaxDashboard(year: Int, currency: String) async throws -> PortfolioTaxDashboard {
-        let value = try portfolioTaxFixture(year: year, currency: currency, records: records)
+    func portfolioTaxDashboard(year: Int, currency: CurrencyCode) async throws -> PortfolioTaxDashboard {
+        let value = try portfolioTaxFixture(year: year, currency: currency.rawValue, records: records)
         await wait("dashboard")
         return value
     }

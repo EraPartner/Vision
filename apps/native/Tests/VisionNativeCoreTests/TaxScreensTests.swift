@@ -9,7 +9,7 @@ struct TaxScreensTests {
     @Test func historicalOverviewKeepsLiveEditorAndDeductionYearsIndependent() async throws {
         let transport = try TaxScreenTransport()
         let screens = TaxScreens(client: screenClient(transport))
-        await screens.load(year: 2024, currency: "EUR")
+        await screens.load(year: 2024, currency: .eur)
         #expect(screens.overview.overview?.year == 2024)
         #expect(screens.dashboard.data?.year == 2024)
         #expect(screens.deductions.data?.year == 2025)
@@ -28,7 +28,7 @@ struct TaxScreensTests {
         let transport = try TaxScreenTransport()
         let client = screenClient(transport)
         let screens = TaxScreens(client: client)
-        await screens.load(year: 2024, currency: "EUR")
+        await screens.load(year: 2024, currency: .eur)
         screens.profile.begin(overview: try await client.taxOverview(year: 2023))
         #expect(screens.profile.isFiled)
         #expect(await screens.unfileProfileYear())
@@ -47,17 +47,17 @@ struct TaxScreensTests {
         let transport = try TaxScreenTransport()
         let screens = TaxScreens(client: screenClient(transport))
         await transport.pauseNextSettingsRead()
-        let old = Task { await screens.load(year: 2024, currency: "EUR") }
+        let old = Task { await screens.load(year: 2024, currency: .eur) }
         await transport.waitForPause()
         await transport.setExcludedCategory(22)
-        await screens.load(year: 2023, currency: "USD")
+        await screens.load(year: 2023, currency: PortfolioCurrency.code("USD"))
         #expect(screens.dashboard.data?.year == 2023)
-        #expect(screens.dashboard.data?.currency == "USD")
+        #expect(screens.dashboard.data?.currency == PortfolioCurrency.code("USD"))
         await transport.release()
         await old.value
         #expect(screens.overview.overview?.year == 2023)
         #expect(screens.dashboard.data?.year == 2023)
-        #expect(screens.dashboard.data?.currency == "USD")
+        #expect(screens.dashboard.data?.currency == PortfolioCurrency.code("USD"))
         let requests = await transport.requests.filter { $0.url.path == "/api/belgian-tax/dashboard" }
         let current = try #require(requests.last)
         #expect(screenQuery(current, "excluded_category_ids") == "22")
@@ -66,7 +66,7 @@ struct TaxScreensTests {
     @Test func csvSavesTheViewedFiledYearWithoutSubstitutingComputedPartnerFigures() async throws {
         let transport = try TaxScreenTransport()
         let screens = TaxScreens(client: screenClient(transport))
-        await screens.load(year: 2024, currency: "EUR")
+        await screens.load(year: 2024, currency: .eur)
         var exported: (Data, String)?
         screens.save = { data, filename in
             exported = (data, filename)
@@ -87,7 +87,7 @@ struct TaxScreensTests {
     @Test func csvRefusesAValidShapedDashboardWithTheWrongCurrency() async throws {
         let transport = try TaxScreenTransport()
         let screens = TaxScreens(client: screenClient(transport))
-        await screens.load(year: 2024, currency: "EUR")
+        await screens.load(year: 2024, currency: .eur)
         screens.dashboard.invalidate()
         await transport.respondWithWrongCurrency()
         var saves = 0
@@ -105,7 +105,7 @@ struct TaxScreensTests {
     @Test func csvRefusesTheCapturedYearAfterNavigationDuringItsRead() async throws {
         let transport = try TaxScreenTransport()
         let screens = TaxScreens(client: screenClient(transport))
-        await screens.load(year: 2024, currency: "EUR")
+        await screens.load(year: 2024, currency: .eur)
         screens.dashboard.invalidate()
         await transport.pauseNextSettingsRead()
         var saves = 0
@@ -115,20 +115,20 @@ struct TaxScreensTests {
         }
         let export = Task { await screens.exportYearCsv() }
         await transport.waitForPause()
-        await screens.load(year: 2023, currency: "USD")
+        await screens.load(year: 2023, currency: PortfolioCurrency.code("USD"))
         await transport.release()
         await export.value
         #expect(saves == 0)
         #expect(screens.exportError != nil)
         #expect(screens.overview.overview?.year == 2023)
         #expect(screens.dashboard.data?.year == 2023)
-        #expect(screens.dashboard.data?.currency == "USD")
+        #expect(screens.dashboard.data?.currency == PortfolioCurrency.code("USD"))
     }
 
     @Test func deductionLostAcknowledgementRefreshesLiveInputsWithoutChangingHistoricalSnapshots() async throws {
         let transport = try TaxScreenTransport()
         let screens = TaxScreens(client: screenClient(transport))
-        await screens.load(year: 2024, currency: "EUR")
+        await screens.load(year: 2024, currency: .eur)
         let originalSnapshot = await transport.settings[TaxYearMutation.snapshotsKey]?["2024"]
         let group = try #require(screens.deductions.groups.first)
         await transport.loseNextWriteAcknowledgement()
@@ -226,7 +226,7 @@ private actor TaxScreenTransport: APITransport {
             data = engine
         case "/api/belgian-tax/dashboard":
             let year = screenQuery(request, "year").flatMap(Int.init) ?? 2025
-            let currency = wrongCurrency ? "WRONG" : screenQuery(request, "currency") ?? "EUR"
+            let currency = wrongCurrency ? "GBP" : screenQuery(request, "currency") ?? "EUR"
             data = dashboard(year: year, currency: currency)
         case "/api/settings/dashboard_settings":
             data = setting(

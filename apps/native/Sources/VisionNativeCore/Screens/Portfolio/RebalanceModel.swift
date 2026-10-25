@@ -24,7 +24,7 @@ public final class RebalanceModel {
     public private(set) var noticeRevision = 0
     public private(set) var notice: ScreenNotice?
     public var deletingPlan: RebalancePlan?
-    public private(set) var currency = "EUR"
+    public private(set) var currency = PortfolioCurrency.eur
     public private(set) var numberFormat: NumberFormat = .eu
     public var availableCash: Decimal { inputs?.availableCash ?? 0 }
     public var showEditor: Bool { draft.preset == nil }
@@ -75,7 +75,7 @@ public final class RebalanceModel {
         resetComputation()
     }
     public func load(route: NativeRoute, settings: NativeAppSettings, force: Bool = false) async {
-        let currency = settings.defaultCurrency.isEmpty ? "EUR" : settings.defaultCurrency.uppercased()
+        let currency = PortfolioCurrency.reporting(settings)
         let before = signature
         if currency != self.currency {
             invalidate()
@@ -264,7 +264,7 @@ public final class RebalanceModel {
             cap: draft.cap, floor: reserveFloor, available: availableCash, format: numberFormat)
     }
     private struct ComputeSignature: Equatable {
-        let currency: String
+        let currency: CurrencyCode
         let source: String
         let rows: [RebalanceDraftRow]
         let capEnabled: Bool

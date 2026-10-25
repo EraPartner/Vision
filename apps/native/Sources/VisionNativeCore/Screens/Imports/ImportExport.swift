@@ -80,10 +80,11 @@ public struct ExportFilters: Equatable, Sendable {
     /// The account labels, in the order they were picked.
     public var bankAccounts: [String] = []
     /// The category ids, ascending (descendants of a picked parent included).
-    public var categoryIds: [Int] = []
+    public var categoryIds: [CategoryID] = []
 
     public init(
-        startDate: PlannedDay? = nil, endDate: PlannedDay? = nil, bankAccounts: [String] = [], categoryIds: [Int] = []
+        startDate: PlannedDay? = nil, endDate: PlannedDay? = nil, bankAccounts: [String] = [],
+        categoryIds: [CategoryID] = []
     ) {
         self.startDate = startDate
         self.endDate = endDate
@@ -98,7 +99,7 @@ public struct ExportFilters: Equatable, Sendable {
 
     /// `category_ids`, comma-joined; `nil` when none is picked.
     public var categoryIdsParameter: String? {
-        categoryIds.isEmpty ? nil : categoryIds.map(String.init).joined(separator: ",")
+        categoryIds.isEmpty ? nil : categoryIds.map { String($0.rawValue) }.joined(separator: ",")
     }
 
     /// The query the web builds, in its order (only the set filters).
@@ -135,7 +136,7 @@ public enum MultiSelection {
 
     /// `selectWithDescendants` of `CategoryMultiCombobox`: every node under a picked one is
     /// picked too, and the ids come back ascending.
-    public static func withDescendants(_ ids: [Int], nodes: [OpenAPI.CategoryNode]) -> [Int] {
+    public static func withDescendants(_ ids: [CategoryID], nodes: [OpenAPI.CategoryNode]) -> [CategoryID] {
         var expanded = Set(ids)
         for node in nodes where node.pathIds.contains(where: { expanded.contains($0) }) {
             expanded.insert(node.id)
@@ -236,7 +237,7 @@ public final class TransactionExportModel {
     }
 
     /// A category click: toggled, then every descendant of a picked category joins.
-    public func toggleCategory(_ id: Int) {
+    public func toggleCategory(_ id: CategoryID) {
         filters.categoryIds = MultiSelection.withDescendants(
             MultiSelection.toggle(id, in: filters.categoryIds), nodes: categories)
     }

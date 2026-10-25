@@ -8,7 +8,7 @@ struct TaxYearCSVTests {
     @Test func singlePartnerExportKeepsTheWebColumnsOrderAndFilename() throws {
         let file = TaxYearCSV.build(
             year: 2025, profile: try value(profileFixture), calculation: try value(calculationFixture),
-            currency: "EUR", isFiled: false, calculationSource: "computed", householdResultSource: "computed",
+            currency: "EUR", isFiled: false, calculationSource: .computed, householdResultSource: .computed,
             generatedAt: "2026-10-13T12:00:00.000Z")
         #expect(file.filename == "vision-tax-2025.csv")
         #expect(String(decoding: file.data, as: UTF8.self) == singlePartnerGolden)
@@ -20,7 +20,7 @@ struct TaxYearCSVTests {
         let file = TaxYearCSV.build(
             year: 2024, profile: try value(profileFixture),
             calculation: .object(["totalPIT": .number(decimal("123.4567"))]),
-            currency: "EUR", isFiled: true, calculationSource: "frozen", householdResultSource: "computed",
+            currency: "EUR", isFiled: true, calculationSource: .frozen, householdResultSource: .computed,
             generatedAt: "stamp", household: try value(partnerHousehold), householdResult: try value(partnerResult))
         let csv = String(decoding: file.data, as: UTF8.self)
         #expect(file.filename == "vision-tax-2024-filed.csv")
@@ -35,7 +35,7 @@ struct TaxYearCSVTests {
     @Test func frozenHouseholdUsesStoredPartnerOrderInputsAssessmentAndQuotient() throws {
         let file = TaxYearCSV.build(
             year: 2025, profile: try value(profileFixture), calculation: .object(["totalPIT": .number(777)]),
-            currency: "EUR", isFiled: false, calculationSource: "frozen", householdResultSource: "frozen",
+            currency: "EUR", isFiled: false, calculationSource: .frozen, householdResultSource: .frozen,
             generatedAt: "stamp", household: try value(partnerHousehold), householdResult: try value(partnerResult))
         let csv = String(decoding: file.data, as: UTF8.self)
         #expect(file.filename == "vision-tax-2025.csv")
@@ -51,7 +51,7 @@ struct TaxYearCSVTests {
         result["partners"] = .array(Array(result["partners"]!.arrayValue!.prefix(1)))
         let file = TaxYearCSV.build(
             year: 2025, profile: try value(profileFixture), calculation: .object(["totalPIT": .number(5)]),
-            currency: "EUR", isFiled: false, calculationSource: "computed", householdResultSource: "computed",
+            currency: "EUR", isFiled: false, calculationSource: .computed, householdResultSource: .computed,
             generatedAt: "stamp", household: try value(partnerHousehold), householdResult: result)
         #expect(!String(decoding: file.data, as: UTF8.self).contains("# Per-partner"))
     }
@@ -69,7 +69,7 @@ struct TaxYearCSVTests {
         household["partners"] = .array(partners)
         let file = TaxYearCSV.build(
             year: 2025, profile: profile, calculation: .object(["totalPIT": .number(5)]),
-            currency: "EUR", isFiled: false, calculationSource: "frozen", householdResultSource: "frozen",
+            currency: "EUR", isFiled: false, calculationSource: .frozen, householdResultSource: .frozen,
             generatedAt: "stamp", household: household, householdResult: try value(partnerResult))
         let csv = String(decoding: file.data, as: UTF8.self)
         #expect(csv.contains("Dependent children under 3,0\n"))
@@ -81,12 +81,15 @@ struct TaxYearCSVTests {
     }
 
     @Test func filingStatusFollowsTheServersAssessmentOfTheYear() throws {
-        func status(_ result: TaxValue?, source: String = "computed", frozen: Bool = false) throws -> String {
+        func status(
+            _ result: TaxValue?, source: OpenAPI.BelgianTaxOverview.HouseholdResultSource = .computed,
+            frozen: Bool = false
+        ) throws -> String {
             var profile = try value(profileFixture)
             profile["filingStatus"] = nil
             let file = TaxYearCSV.build(
                 year: 2025, profile: profile, calculation: .object(["totalPIT": .number(5)]), currency: "EUR",
-                isFiled: false, calculationSource: frozen ? "frozen" : "computed", householdResultSource: source,
+                isFiled: false, calculationSource: frozen ? .frozen : .computed, householdResultSource: source,
                 generatedAt: "stamp", household: try value(partnerHousehold), householdResult: result)
             let csv = String(decoding: file.data, as: UTF8.self)
             return try #require(csv.split(separator: "\n", omittingEmptySubsequences: false)
@@ -98,8 +101,8 @@ struct TaxYearCSVTests {
         #expect(try status(separated) == "Filing status,single")
         // No household result, or a year frozen before it was stored: the browser does not decide.
         #expect(try status(nil) == "Filing status,")
-        #expect(try status(try value(partnerResult), source: "computed", frozen: true) == "Filing status,")
-        #expect(try status(try value(partnerResult), source: "frozen", frozen: true) == "Filing status,married_joint")
+        #expect(try status(try value(partnerResult), source: .computed, frozen: true) == "Filing status,")
+        #expect(try status(try value(partnerResult), source: .frozen, frozen: true) == "Filing status,married_joint")
     }
 
     @Test func stringsHaveTheSameFormulaGuardAndQuotingAsFrontendCsv() {
@@ -124,7 +127,7 @@ struct TaxYearCSVTests {
         let file = TaxYearCSV.build(
             year: 2025, profile: profile,
             calculation: .object(["totalPIT": .number(decimal("2.6754")), "netTakeHome": .number(decimal("-12.3451"))]),
-            currency: "EUR", isFiled: false, calculationSource: "frozen", householdResultSource: "computed",
+            currency: "EUR", isFiled: false, calculationSource: .frozen, householdResultSource: .computed,
             generatedAt: "stamp")
         let csv = String(decoding: file.data, as: UTF8.self)
         #expect(csv.contains("Gross annual income,123.4567890123456789\n"))

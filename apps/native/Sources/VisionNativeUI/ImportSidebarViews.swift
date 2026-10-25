@@ -188,7 +188,9 @@ struct ImportExportCard: View {
             model.activeCategories, selection: picked, value: { $0.id }, searchText: { PickerDataModel.label($0) },
             search: search
         ).map { node in
-            MultiSelectOption(id: String(node.id), title: PickerDataModel.label(node), isSelected: picked.contains(node.id)) {
+            MultiSelectOption(
+                id: String(node.id.rawValue), title: PickerDataModel.label(node), isSelected: picked.contains(node.id)
+            ) {
                 model.toggleCategory(node.id)
             }
         }

@@ -21,7 +21,7 @@ public final class NetWorthModel {
     @ObservationIgnored private var notices = NoticeCounter()
     @ObservationIgnored public var pricesDidChange: (@MainActor () -> Void)?
     @ObservationIgnored public var didPriceRefresh: (@MainActor (PortfolioPriceRefreshReceipt) -> Void)?
-    public private(set) var currency = "EUR"
+    public private(set) var currency = PortfolioCurrency.eur
     public var isOnline = true
     public var period: NetWorthPeriod = .year
     public var tableQuery = LocalTableQuery()
@@ -102,7 +102,7 @@ public final class NetWorthModel {
         isFetching = false
         isFetchingMore = false
     }
-    public func load(currency: String, pageSize: Int, route: NativeRoute, force: Bool = false) async {
+    public func load(currency: CurrencyCode, pageSize: Int, route: NativeRoute, force: Bool = false) async {
         latestRoute = route
         let nextPeriod = NetWorthPeriod(route: route)
         if period != nextPeriod {
@@ -110,7 +110,7 @@ public final class NetWorthModel {
             rangeStart = nil
         }
         period = nextPeriod
-        let key = "\(currency)|\(pageSize)"
+        let key = "\(currency.rawValue)|\(pageSize)"
         if context != key {
             invalidate()
             context = key

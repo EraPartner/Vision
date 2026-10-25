@@ -28,7 +28,7 @@ public final class TaxDashboardModel {
         if clearData { data = nil }
     }
     public func load(
-        year: Int? = nil, currency: String, now: Date? = nil, calendar: Calendar = .current, force: Bool = false
+        year: Int? = nil, currency: CurrencyCode, now: Date? = nil, calendar: Calendar = .current, force: Bool = false
     ) async {
         let today = now ?? clock()
         let key = "\(year.map(String.init) ?? "live")|\(currency)|\(StatisticsWindow.day(today, calendar: calendar))"
@@ -52,7 +52,7 @@ public final class TaxDashboardModel {
                 let exclusions = try await service.homeExclusions(scope: "statistics")
                 guard token == revision, !Task.isCancelled else { return }
                 let query = StatisticsQuery(
-                    currency: currency, window: .rolling24, exclusions: exclusions, today: today, calendar: calendar)
+                    currency: currency.rawValue, window: .rolling24, exclusions: exclusions, today: today, calendar: calendar)
                 let value = try await service.taxDashboard(year: year, query: query)
                 guard token == revision, !Task.isCancelled else { return }
                 guard value.currency == currency, year == nil || value.year == year else {

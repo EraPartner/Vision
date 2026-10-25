@@ -44,7 +44,9 @@ struct PortfolioImportAdvancedView: View {
                             })
                     ) {
                         ForEach(sources, id: \.0) { source, key in Text(strings.t(key)).tag(source) }
-                        ForEach(model.savedParsers) { parser in Text(verbatim: parser.name).tag("saved:\(parser.id)") }
+                        ForEach(model.savedParsers) { parser in
+                            Text(verbatim: parser.name).tag("saved:\(parser.id.rawValue)")
+                        }
                     }.frame(maxWidth: 420).disabled(model.isBusy || isLocked)
                     if model.isDetecting {
                         HStack {
@@ -159,7 +161,7 @@ struct PortfolioImportAdvancedView: View {
             strings.t("addPortTxn.broker"),
             selection: Binding(get: { model.config.accountId }, set: { model.setAccount($0) })
         ) {
-            Text(strings.t("addPortTxn.broker.unassigned")).tag(Optional<Int>.none)
+            Text(strings.t("addPortTxn.broker.unassigned")).tag(Optional<AccountID>.none)
             ForEach(model.brokerAccounts, id: \.id) { account in Text(verbatim: account.name).tag(Optional(account.id))
             }
         }.frame(maxWidth: 420).disabled(model.isBusy || isLocked)

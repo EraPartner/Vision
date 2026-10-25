@@ -9,7 +9,7 @@ public struct TaxYearCSVFile: Equatable, Sendable {
 public enum TaxYearCSV {
     public static func make(
         overview: OpenAPI.BelgianTaxOverview, profile: TaxValue,
-        currency: String, generatedAt: String
+        currency: CurrencyCode, generatedAt: String
     ) throws -> TaxYearCSVFile {
         build(
             year: overview.year, profile: profile, calculation: try TaxValue(encoding: overview.calculation),
@@ -20,21 +20,22 @@ public enum TaxYearCSV {
     }
 
     static func build(
-        year: Int, profile: TaxValue, calculation: TaxValue, currency: String, isFiled: Bool,
-        calculationSource: String, householdResultSource: String, generatedAt: String,
+        year: Int, profile: TaxValue, calculation: TaxValue, currency: CurrencyCode, isFiled: Bool,
+        calculationSource: OpenAPI.BelgianTaxOverview.CalculationSource,
+        householdResultSource: OpenAPI.BelgianTaxOverview.HouseholdResultSource, generatedAt: String,
         household: TaxValue? = nil, householdResult: TaxValue? = nil
     ) -> TaxYearCSVFile {
-        let frozen = calculationSource == "frozen"
+        let frozen = calculationSource == .frozen
         var lines = [
             row([.string("# Vision tax year export")]),
             row([.string("Income year"), .number(Decimal(year))]),
-            row([.string("Currency"), .string(currency)]),
+            row([.string("Currency"), .string(currency.rawValue)]),
             row([.string("Status"), .string(isFiled ? "filed" : frozen ? "frozen" : "live")]),
             row([.string("Generated at"), .string(generatedAt)]), "",
             row([.string("# Profile inputs")]), row([.string("Field"), .string("Value")]),
         ]
         // A year frozen before its household result was stored has none to read the assessment from.
-        let assessed = frozen && householdResultSource != "frozen" ? nil : householdResult
+        let assessed = frozen && householdResultSource != .frozen ? nil : householdResult
         for (label, key) in profileRows {
             if key == "filingStatus" {
                 lines.append(row([.string(label), filingStatus(profile, assessed)]))
@@ -49,7 +50,7 @@ public enum TaxYearCSV {
             let value = coalesce(calculation[key], !frozen && key == "pensionReduction" ? .number(0) : nil)
             lines.append(row([.string(label), rounded(value)]))
         }
-        if !frozen || householdResultSource == "frozen" {
+        if !frozen || householdResultSource == .frozen {
             lines += partnerLines(household: household, result: householdResult, currency: currency)
         }
         return TaxYearCSVFile(
@@ -134,7 +135,7 @@ public enum TaxYearCSV {
         ("Special social security contribution", ["specialSocialSecurityContribution"]),
     ]
 
-    private static func partnerLines(household: TaxValue?, result: TaxValue?, currency: String) -> [String] {
+    private static func partnerLines(household: TaxValue?, result: TaxValue?, currency: CurrencyCode) -> [String] {
         guard let household, let result, let partners = result["partners"]?.arrayValue, partners.count >= 2 else {
             return []
         }

@@ -10,7 +10,7 @@ public enum TaxYearAction: Equatable, Sendable {
     public func needsComputation(_ overview: OpenAPI.BelgianTaxOverview) -> Bool {
         switch self {
         case .freeze: return true
-        case .file: return overview.calculationSource != "frozen"
+        case .file: return overview.calculationSource != .frozen
         default: return false
         }
     }
@@ -51,7 +51,7 @@ public enum TaxYearMutation {
     /// with its own household snapshot, or one with a frozen calculation), not filed yet.
     public static func canFile(_ overview: OpenAPI.BelgianTaxOverview) -> Bool {
         let filed = (try? TaxValue(encoding: overview.metadata))?["filing"]?.objectValue != nil
-        let frozen = overview.calculationSource == "frozen"
+        let frozen = overview.calculationSource == .frozen
         return overview.hasProfile && !filed && (!overview.isHistorical || overview.hasSnapshot || frozen)
     }
     public static let householdKey = "belgian_tax_household_v2"

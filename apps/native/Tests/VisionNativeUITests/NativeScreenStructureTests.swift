@@ -19,11 +19,11 @@ actor StaticImportService: ImportService {
 
     static let sample = [
         OpenAPI.ImportBatch(
-            id: "12", adapterName: "kbc", sourceFilename: "kbc-oktober-2026-rekeningafschriften.csv", status: "complete",
+            id: "12", adapterName: "kbc", sourceFilename: "kbc-oktober-2026-rekeningafschriften.csv", status: .complete,
             rowsTotal: 40, rowsImported: 37, rowsDuplicate: 2, rowsError: 1, errorSummary: "1 row has no amount",
             startedAt: "2026-10-12T08:30:00.000Z", transactionsRemaining: 37),
         OpenAPI.ImportBatch(
-            id: "13", adapterName: "generic", status: "awaiting_review", rowsTotal: 5, rowsImported: 0,
+            id: "13", adapterName: "generic", status: .awaitingReview, rowsTotal: 5, rowsImported: 0,
             rowsDuplicate: 0, rowsError: 0, startedAt: "2026-10-12T09:00:00.000Z", transactionsRemaining: 0),
     ]
 
@@ -70,7 +70,7 @@ actor StaticImportService: ImportService {
         return ImportBatchPage(total: batches.count + 20, limit: limit, offset: offset, items: batches)
     }
 
-    func rollbackImportBatch(id: Int) async throws -> Int { 37 }
+    func rollbackImportBatch(id: ImportBatchID) async throws -> Int { 37 }
 }
 
 extension StaticImportService: ImportExportService {
@@ -101,10 +101,10 @@ extension StaticImportService: ImportReviewService {
                 rows: [
                     ImportStagingRow(
                         id: "501", recipientRaw: "HUISBAAS NV OVERSCHRIJVING HUUR OKTOBER", amount: "-950.00",
-                        currency: "EUR", txDate: "2026-10-01", memo: "Huur oktober 2026 appartement", bankAccount: "BE00 1234",
+                        currency: .eur, txDate: "2026-10-01", memo: "Huur oktober 2026 appartement", bankAccount: "BE00 1234",
                         matchSource: "exact"),
                     ImportStagingRow(
-                        id: "502", recipientRaw: "HUISBAAS NV", amount: "-950.00", currency: "EUR", txDate: "2026-09-01",
+                        id: "502", recipientRaw: "HUISBAAS NV", amount: "-950.00", currency: .eur, txDate: "2026-09-01",
                         memo: nil, bankAccount: "BE00 1234", matchSource: "fuzzy", matchSimilarity: 0.86),
                 ]),
             ImportPreviewGroup(
@@ -123,22 +123,22 @@ extension StaticImportService: ImportReviewService {
         ],
         totals: ["exact": 1, "fuzzy": 1, "pattern": 1, "new": 0, "unresolved": 1])
 
-    func importPreview(batchId: Int) async throws -> ImportPreview {
+    func importPreview(batchId: ImportBatchID) async throws -> ImportPreview {
         if failing { throw APIError.client(APIClientError(status: 404, code: .notFound, message: "Batch not found")) }
         return Self.preview
     }
 
-    func overrideImportRow(batchId: Int, rowId: String, recipientId: Int?) async throws {}
+    func overrideImportRow(batchId: ImportBatchID, rowId: String, recipientId: RecipientID?) async throws {}
 
-    func overrideImportRowCategory(batchId: Int, rowId: String, categoryId: Int?) async throws {}
+    func overrideImportRowCategory(batchId: ImportBatchID, rowId: String, categoryId: CategoryID?) async throws {}
 
-    func setRecipientDefaultCategory(recipientId: Int, categoryId: Int) async throws {}
+    func setRecipientDefaultCategory(recipientId: RecipientID, categoryId: CategoryID) async throws {}
 
-    func commitImportBatch(batchId: Int) async throws -> ImportCommitResult {
+    func commitImportBatch(batchId: ImportBatchID) async throws -> ImportCommitResult {
         ImportCommitResult(imported: 4, duplicates: 0, errors: 0, autoLinkedCount: 1)
     }
 
-    func discardImportBatch(batchId: Int) async throws {}
+    func discardImportBatch(batchId: ImportBatchID) async throws {}
 
     func allAccounts() async throws -> [OpenAPI.Account] { [] }
 }
