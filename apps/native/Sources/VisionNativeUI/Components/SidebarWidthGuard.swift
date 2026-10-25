@@ -58,7 +58,7 @@ enum SidebarWidthGuard {
         /// that stays put for `settleDelay` is treated as SwiftUI's own column default.
         private var narrowWidth: (width: CGFloat, since: ContinuousClock.Instant)?
         private var settleCheckPending = false
-        private static let settleDelay: Duration = .milliseconds(350)
+        private static let settleDelay: TimeInterval = 0.35
 
         init(root: NSView, minimum: CGFloat = SidebarWidthGuard.minimumWidth, ideal: CGFloat = SidebarWidthGuard.idealWidth) {
             self.root = root
@@ -102,9 +102,22 @@ enum SidebarWidthGuard {
             }
             pending = true
             // Moving the divider inside a layout pass would re-enter it.
-            Task { @MainActor [weak self] in
+            Self.onRunLoop(after: 0) { [weak self] in
                 self?.pending = false
                 self?.correctIfNeeded()
+            }
+        }
+
+        /// Runs `body` on the main run loop's next pass (or after `delay` seconds) in every
+        /// common mode. Not a main-actor `Task`: those wait for the main queue, which does not
+        /// drain while a synchronous main-queue caller (a modal loop, or a test pumping events)
+        /// spins the run loop itself, so the sidebar stayed narrow until that caller returned.
+        private static func onRunLoop(after delay: TimeInterval, _ body: @escaping @MainActor @Sendable () -> Void) {
+            let run: @Sendable () -> Void = { MainActor.assumeIsolated { body() } }
+            if delay <= 0 {
+                RunLoop.main.perform(inModes: [.common], block: run)
+            } else {
+                RunLoop.main.add(Timer(timeInterval: delay, repeats: false) { _ in run() }, forMode: .common)
             }
         }
 
@@ -163,11 +176,8 @@ enum SidebarWidthGuard {
                 // SwiftUI can put its own column width back on a later pass without resizing
                 // the probe, posting a split resize or a frame change (seen on macOS 26 about
                 // 0.1-0.5 s after the first correction), so check again a few times after it.
-                Task { @MainActor [weak self] in
-                    for delay in [50, 300, 900] {
-                        try? await Task.sleep(for: .milliseconds(delay))
-                        self?.scheduleCorrection()
-                    }
+                for delay in [0.05, 0.35, 1.25] {
+                    Self.onRunLoop(after: delay) { [weak self] in self?.scheduleCorrection() }
                 }
             }
             SidebarWidthGuard.note(
@@ -179,15 +189,14 @@ enum SidebarWidthGuard {
         private func hasSettled(at width: CGFloat) -> Bool {
             let now = ContinuousClock.now
             if let narrowWidth, narrowWidth.width == width,
-                narrowWidth.since.duration(to: now) >= Self.settleDelay
+                narrowWidth.since.duration(to: now) >= .seconds(Self.settleDelay)
             {
                 return true
             }
             if narrowWidth?.width != width { narrowWidth = (width, now) }
             if !settleCheckPending {
                 settleCheckPending = true
-                Task { @MainActor [weak self] in
-                    try? await Task.sleep(for: Self.settleDelay + .milliseconds(30))
+                Self.onRunLoop(after: Self.settleDelay + 0.03) { [weak self] in
                     self?.settleCheckPending = false
                     self?.scheduleCorrection()
                 }
