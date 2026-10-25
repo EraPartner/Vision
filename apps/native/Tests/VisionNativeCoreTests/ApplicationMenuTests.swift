@@ -46,32 +46,32 @@ import Testing
                 "About Vision Native", "Settings…", "Hide Vision Native", "Hide Others", "Show All",
                 "Quit Vision Native",
             ])
-        #expect(app[1].command == .renderer(.openSettings))
+        #expect(app[1].command == .action(.openSettings))
         #expect(app[1].keyEquivalent == KeyEquivalent(","))
         #expect(!app.contains { $0.title.localizedCaseInsensitiveContains("update") })
     }
 
-    @Test func rendererItemsCarryElectronsActionsAndShortcuts() {
+    @Test func actionItemsCarryElectronsActionsAndShortcuts() {
         let menu = ApplicationMenu.build(appName: "Vision Native", strings: Self.english)
         let file = items(submenu(menu, "File"))
         #expect(
-            file.map(\.command) == [.renderer(.newTransaction), .renderer(.navigate("/import")), .print, .closeWindow])
+            file.map(\.command) == [.action(.newTransaction), .action(.navigate("/import")), .print, .closeWindow])
         #expect(
             file.map(\.keyEquivalent) == [
                 KeyEquivalent("n"), KeyEquivalent("i", [.command, .shift]), KeyEquivalent("p"), KeyEquivalent("w"),
             ])
         let view = items(submenu(menu, "View"))
-        #expect(view.first?.command == .renderer(.toggleSidebar))
+        #expect(view.first?.command == .action(.toggleSidebar))
         #expect(view.first?.keyEquivalent == KeyEquivalent("s", [.command, .control]))
         let appearance = items(submenu(submenu(menu, "View"), "Appearance"))
         #expect(
             appearance.map(\.command)
-                == ["light", "dark", "system", "schedule"].map { MenuCommand.renderer(.setTheme($0)) })
+                == ["light", "dark", "system", "schedule"].map { MenuCommand.action(.setTheme($0)) })
         #expect(appearance.first?.title == "Light")
         let help = items(submenu(menu, "Help"))
         #expect(
             help.map(\.command) == [
-                .renderer(.openShortcuts), .openExternal(ShellLinks.repository),
+                .action(.openShortcuts), .openExternal(ShellLinks.repository),
                 .openExternal(ShellLinks.documentation),
             ])
     }
@@ -80,7 +80,7 @@ import Testing
         let go = items(submenu(ApplicationMenu.build(appName: "Vision Native", strings: Self.english), "Go"))
         #expect(go.count == 9)
         #expect(go.map(\.keyEquivalent) == (1...9).map { Optional(KeyEquivalent("\($0)")) })
-        #expect(go.map(\.command) == ApplicationMenu.goRoutes.map { MenuCommand.renderer(.navigate($0.path)) })
+        #expect(go.map(\.command) == ApplicationMenu.goRoutes.map { MenuCommand.action(.navigate($0.path)) })
         #expect(go.first?.title == "Home")
         // A missing translation falls back to the key, like t().
         #expect(go[1].title == "nav.transactions")
@@ -92,19 +92,6 @@ import Testing
         #expect(zoomIn.map(\.keyEquivalent) == [KeyEquivalent("+"), KeyEquivalent("=")])
         #expect(zoomIn.map(\.isHidden) == [false, true])
         #expect(view.filter(\.isHidden).count == 1)
-    }
-
-    @Test func developerToolsAreOnlyInTheDebugMenu() {
-        let release = items(submenu(ApplicationMenu.build(appName: "Vision Native", strings: Self.english), "View"))
-        #expect(!release.contains { $0.command == .toggleDeveloperTools })
-        let debugMenu = ApplicationMenu.build(appName: "Vision Native", strings: Self.english, includeDeveloperTools: true)
-        let debug = items(submenu(debugMenu, "View"))
-        let tools = debug.filter { $0.command == .toggleDeveloperTools }
-        #expect(tools.map(\.keyEquivalent) == [KeyEquivalent("i", [.command, .option])])
-        let reload = debug.firstIndex { $0.command == .reload }
-        #expect(reload.map { debug[$0 + 1].command } == .toggleDeveloperTools)
-        let keys = ApplicationMenu.keyEquivalents(debugMenu)
-        #expect(Set(keys.map(\.key)).count == keys.count)
     }
 
     @Test func keyEquivalentsAreUnique() {
@@ -127,7 +114,7 @@ import Testing
     @Test func dockMenuOffersNewTransactionAndHome() {
         let dock = items(ApplicationMenu.dock(strings: Self.english))
         #expect(dock.map(\.title) == ["New transaction", "Home"])
-        #expect(dock.map(\.command) == [.renderer(.newTransaction), .renderer(.navigate("/"))])
+        #expect(dock.map(\.command) == [.action(.newTransaction), .action(.navigate("/"))])
     }
 }
 

@@ -31,7 +31,7 @@ import Foundation
             transactions: TransactionsModel(
                 service: inert, attachments: inert, pickers: inert, bulk: inert, splits: inert),
             accounts: AccountsModel(service: inert, rates: rates), categories: CategoriesModel(service: inert),
-            recipients: RecipientsModel(service: inert), loadSettings: { snapshot.settings }, onNavigate: { _ in })
+            recipients: RecipientsModel(service: inert), loadSettings: { snapshot.settings })
         shell.apply(settings: snapshot.settings)
         let dashboard = TaxDashboardModel(service: NativeTaxPrintDashboard(data: snapshot.dashboard))
         await dashboard.load(year: snapshot.year, currency: snapshot.dashboard.currency)

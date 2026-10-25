@@ -1,6 +1,6 @@
 import Foundation
 
-/// A `menu:action` message for the renderer (`ElectronMenuAction`).
+/// A menu or dock action the native shell performs (Electron's `ElectronMenuAction`).
 public struct MenuAction: Hashable, Sendable {
     public let action: String
     public let payload: String?
@@ -11,30 +11,22 @@ public struct MenuAction: Hashable, Sendable {
     }
 
     public static let openSettings = MenuAction("open-settings")
-    /// The source router decides Back versus query replacement when Settings closes.
+    /// Native history decides Back versus query replacement when Settings closes.
     public static let closeSettings = MenuAction("close-settings")
     public static let openShortcuts = MenuAction("open-shortcuts")
     public static let newTransaction = MenuAction("new-transaction")
     public static let toggleSidebar = MenuAction("toggle-sidebar")
-    /// Native navigation only: opens CommandPalette (the web sidebar's search field).
+    /// Opens the command palette.
     public static let openPalette = MenuAction("open-palette")
 
-    /// Native navigation only: whether the native sidebar is shown, so the page insets its
-    /// topbar for the traffic lights only while the sidebar is hidden.
-    public static func nativeSidebar(visible: Bool) -> MenuAction {
-        MenuAction("native-sidebar", payload: visible ? "visible" : "hidden")
-    }
-
     public static func navigate(_ path: String) -> MenuAction { MenuAction("navigate", payload: path) }
-    /// Native navigation only: `navigate(path, { replace: true })`, for `?tab` changes.
-    public static func replaceRoute(_ path: String) -> MenuAction { MenuAction("replace-route", payload: path) }
     public static func setTheme(_ mode: String) -> MenuAction { MenuAction("set-theme", payload: mode) }
 }
 
-/// What a menu item does. Renderer actions go through the bridge (`menu:action`); the
-/// others are the Electron menu roles, performed natively.
+/// What a menu item does. Shell actions go to the native owners (`NativeShellModel`); the
+/// others are the Electron menu roles, performed by AppKit.
 public enum MenuCommand: Hashable, Sendable {
-    case renderer(MenuAction)
+    case action(MenuAction)
     case openExternal(String)
     case about
     case services
@@ -51,8 +43,6 @@ public enum MenuCommand: Hashable, Sendable {
     case selectAll
     case print
     case reload
-    /// Debug builds only: the web view's inspector (Electron's unpackaged `toggleDevTools`).
-    case toggleDeveloperTools
     case resetZoom
     case zoomIn
     case zoomOut
@@ -130,7 +120,7 @@ public enum ApplicationMenu {
         ("/ai-chat", "nav.aiChat"),
     ]
 
-    /// `THEME_MENU_MODES`; the ids match the renderer's `ThemeMode`.
+    /// `THEME_MENU_MODES`; the ids match `ThemeMode`.
     public static let themeModes: [(id: String, titleKey: String)] = [
         ("light", "layout.light"),
         ("dark", "layout.dark"),
@@ -138,16 +128,12 @@ public enum ApplicationMenu {
         ("schedule", "layout.schedule"),
     ]
 
-    /// `includeDeveloperTools`: Electron adds Toggle Developer Tools (⌥⌘I) to unpackaged
-    /// builds only; Vision Native adds it to Debug builds.
-    public static func build(
-        appName: String, strings: ShellStrings, includeDeveloperTools: Bool = false
-    ) -> [MenuEntry] {
+    public static func build(appName: String, strings: ShellStrings) -> [MenuEntry] {
         let t = { (key: String) in strings.t(key) }
         let app: [MenuEntry] = [
             .item(MenuItemModel("About \(appName)", .about)),
             .separator,
-            .item(MenuItemModel(t("menu.settings"), .renderer(.openSettings), KeyEquivalent(","))),
+            .item(MenuItemModel(t("menu.settings"), .action(.openSettings), KeyEquivalent(","))),
             .separator,
             .submenu(title: "Services", role: .services, entries: []),
             .separator,
@@ -158,10 +144,10 @@ public enum ApplicationMenu {
             .item(MenuItemModel("Quit \(appName)", .quit, KeyEquivalent("q"))),
         ]
         let file: [MenuEntry] = [
-            .item(MenuItemModel(t("menu.newTransaction"), .renderer(.newTransaction), KeyEquivalent("n"))),
+            .item(MenuItemModel(t("menu.newTransaction"), .action(.newTransaction), KeyEquivalent("n"))),
             .item(
                 MenuItemModel(
-                    t("menu.importCsv"), .renderer(.navigate("/import")), KeyEquivalent("i", [.command, .shift]))),
+                    t("menu.importCsv"), .action(.navigate("/import")), KeyEquivalent("i", [.command, .shift]))),
             .separator,
             .item(MenuItemModel("Print…", .print, KeyEquivalent("p"))),
             .separator,
@@ -177,24 +163,16 @@ public enum ApplicationMenu {
             .item(MenuItemModel("Select All", .selectAll, KeyEquivalent("a"))),
         ]
         let appearance: [MenuEntry] = themeModes.map { mode in
-            .item(MenuItemModel(t(mode.titleKey), .renderer(.setTheme(mode.id))))
+            .item(MenuItemModel(t(mode.titleKey), .action(.setTheme(mode.id))))
         }
-        let developerTools: [MenuEntry] =
-            includeDeveloperTools
-            ? [
-                .item(
-                    MenuItemModel(
-                        "Toggle Developer Tools", .toggleDeveloperTools, KeyEquivalent("i", [.command, .option])))
-            ] : []
         let view: [MenuEntry] = [
             .item(
                 MenuItemModel(
-                    t("menu.toggleSidebar"), .renderer(.toggleSidebar), KeyEquivalent("s", [.command, .control]))
+                    t("menu.toggleSidebar"), .action(.toggleSidebar), KeyEquivalent("s", [.command, .control]))
             ),
             .submenu(title: t("menu.appearance"), role: .plain, entries: appearance),
             .separator,
             .item(MenuItemModel("Reload", .reload, KeyEquivalent("r"))),
-        ] + developerTools + [
             .separator,
             .item(MenuItemModel("Actual Size", .resetZoom, KeyEquivalent("0"))),
             .item(MenuItemModel("Zoom In", .zoomIn, KeyEquivalent("+"))),
@@ -205,7 +183,7 @@ public enum ApplicationMenu {
             .item(MenuItemModel("Toggle Full Screen", .toggleFullScreen, KeyEquivalent("f", [.command, .control]))),
         ]
         let go: [MenuEntry] = goRoutes.enumerated().map { index, route in
-            .item(MenuItemModel(t(route.titleKey), .renderer(.navigate(route.path)), KeyEquivalent("\(index + 1)")))
+            .item(MenuItemModel(t(route.titleKey), .action(.navigate(route.path)), KeyEquivalent("\(index + 1)")))
         }
         let window: [MenuEntry] = [
             .item(MenuItemModel("Minimize", .minimize, KeyEquivalent("m"))),
@@ -214,7 +192,7 @@ public enum ApplicationMenu {
             .item(MenuItemModel("Bring All to Front", .bringAllToFront)),
         ]
         let help: [MenuEntry] = [
-            .item(MenuItemModel(t("menu.keyboardShortcuts"), .renderer(.openShortcuts))),
+            .item(MenuItemModel(t("menu.keyboardShortcuts"), .action(.openShortcuts))),
             .separator,
             .item(MenuItemModel(t("menu.sourceCode"), .openExternal(ShellLinks.repository))),
             .item(MenuItemModel(t("menu.documentation"), .openExternal(ShellLinks.documentation))),
@@ -233,8 +211,8 @@ public enum ApplicationMenu {
     /// `setupDockMenu`.
     public static func dock(strings: ShellStrings) -> [MenuEntry] {
         [
-            .item(MenuItemModel(strings.t("menu.newTransaction"), .renderer(.newTransaction))),
-            .item(MenuItemModel(strings.t("nav.home"), .renderer(.navigate("/")))),
+            .item(MenuItemModel(strings.t("menu.newTransaction"), .action(.newTransaction))),
+            .item(MenuItemModel(strings.t("nav.home"), .action(.navigate("/")))),
         ]
     }
 

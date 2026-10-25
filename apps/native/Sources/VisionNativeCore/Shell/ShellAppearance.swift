@@ -155,19 +155,3 @@ public enum PageZoom {
         return factor(forLevel: level(forFactor: raw))
     }
 }
-
-/// What a double-click on the drag region does: the system setting "Double-click a window's
-/// title bar to" (`AppleActionOnDoubleClick`).
-public enum TitlebarDoubleClickAction: Equatable, Sendable {
-    case zoom
-    case minimize
-    case none
-
-    public static func from(userDefault value: String?) -> TitlebarDoubleClickAction {
-        switch value {
-        case "Minimize": return .minimize
-        case "None": return .none
-        default: return .zoom
-        }
-    }
-}

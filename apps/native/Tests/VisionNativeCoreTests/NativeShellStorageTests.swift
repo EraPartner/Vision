@@ -3,45 +3,44 @@ import Testing
 
 @testable import VisionNativeCore
 
-/// The native-only shell's storage keeps each page-storage script's semantics (ADR-211).
+/// The native shell's storage keeps the page-storage semantics the web app had (ADR-211).
 @Suite struct NativeShellStorageTests {
     private func withStorage(
-        _ values: [String: String] = [:], _ body: (NativeShellStorage, URL) async throws -> Void
+        _ seed: [String: String] = [:], _ body: (NativeShellStorage, URL) async throws -> Void
     ) async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("vision-shell-storage-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("raw-state.json")
-        let source = try NativeRawStateStore.Source(webOrigin: URL(string: "http://127.0.0.1:43123")!, storeIdentifier: "default")
-        let store = try NativeRawStateStore(persistenceURL: url, source: source)
-        try await store.migrate(
-            .init(source: source, identifier: UUID(), status: .complete, localValues: values, sessionValues: [:]))
+        if !seed.isEmpty {
+            let document: [String: Any] = ["version": 1, "localValues": seed]
+            try JSONSerialization.data(withJSONObject: document).write(to: url)
+        }
+        let store = try NativeRawStateStore(persistenceURL: url)
         try await body(NativeShellStorage(store: store), url)
     }
 
-    @Test func typedLocalKeysMapOneToOneAndKeepAbsentEmptyAndNullDistinct() async throws {
+    @Test func typedLocalKeysKeepAbsentEmptyAndNullDistinct() async throws {
         try await withStorage(["vision.backup.passphrase.reminder.dismissed": "1"]) { storage, _ in
-            #expect(try await storage.value(for: .reminder) == "1")
-            #expect(try await storage.value(for: .paletteRecents) == nil)
+            #expect(await storage.value(for: .backupReminder) == "1")
+            #expect(await storage.value(for: .paletteRecents) == nil)
             try await storage.setValue("", for: .paletteRecents)
-            #expect(try await storage.value(for: .paletteRecents) == "")
+            #expect(await storage.value(for: .paletteRecents) == "")
             try await storage.setValue("null", for: .lastRoute)
-            #expect(try await storage.value(for: .lastRoute) == "null")
-            try await storage.setValue(nil, for: .reminder)
-            #expect(try await storage.value(for: .reminder) == nil)
+            #expect(await storage.value(for: .lastRoute) == "null")
+            try await storage.setValue(nil, for: .backupReminder)
+            #expect(await storage.value(for: .backupReminder) == nil)
         }
-        for key in NativeSettingsStorageBridge.LocalKey.allCases {
-            #expect(NativeShellStorage.rawKey(key).rawValue == key.rawValue)
-        }
+        let raw = NativeRawStateStore.LocalKey.allCases.map(\.rawValue)
+        #expect(Set(raw).count == raw.count)
+        #expect(Set(NativeRawStateStore.backupKeys).isSubset(of: Set(raw)))
     }
 
-    @Test func exportMatchesTheBackupRegistryAndRestoreUsesJavaScriptStrings() async throws {
+    @Test func theBackupStateMatchesTheRegistryAndRestoreUsesJavaScriptStrings() async throws {
         try await withStorage(["vision_theme": "dark", "fx-status-banner-dismissed-at": "5", "legacy.unknown": "kept"]) {
             storage, _ in
-            let reply = try await storage.exportReply()
-            #expect(try NativeSettingsStorageBridge.readReply(reply) != nil)
-            let snapshot = try JSONValue.parse(Data(try #require(reply.stringValue).utf8))
-            #expect(snapshot == .object(["keys": .object(["vision_theme": .string("dark")])]))
+            let json = try await storage.backupStateJSON()
+            #expect(try JSONValue.parse(Data(json.utf8)) == .object(["keys": .object(["vision_theme": .string("dark")])]))
             let restored = await storage.restore(
                 .object([
                     "keys": .object([
@@ -50,24 +49,50 @@ import Testing
                     ])
                 ]))
             #expect(restored)
-            #expect(try await storage.store.value(for: .sidebarCollapsed) == "true")
-            #expect(try await storage.store.value(for: .paletteRecents) == "/a,")
-            #expect(try await storage.store.value(for: .language) == "7")
-            #expect(try await storage.store.value(for: .lastRoute) == "null")
-            #expect(try await storage.store.value(for: .startupSection) == "[object Object]")
-            #expect(try await storage.store.value(for: .theme) == "dark")
+            #expect(await storage.value(for: .sidebarCollapsed) == "true")
+            #expect(await storage.value(for: .paletteRecents) == "/a,")
+            #expect(await storage.value(for: .language) == "7")
+            #expect(await storage.value(for: .lastRoute) == "null")
+            #expect(await storage.value(for: .startupSection) == "[object Object]")
+            #expect(await storage.value(for: .theme) == "dark")
             #expect(await storage.restore(.object([:])))
             #expect(await storage.restore(.null))
+            #expect(await storage.restore(.object(["keys": .null])))
+        }
+    }
+
+    @Test func aRestoreThatCannotBeWrittenReportsFailure() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("vision-shell-storage-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("raw-state.json")
+        struct Refused: Error {}
+        let persistence = NativeRawStateStore.Persistence(load: { _ in nil }, save: { _, _ in throw Refused() })
+        let storage = NativeShellStorage(store: try NativeRawStateStore(persistenceURL: url, persistence: persistence))
+        #expect(await storage.restore(.object(["keys": .object(["vision.language": .string("nl")])])) == false)
+        #expect(await storage.value(for: .language) == nil)
+    }
+
+    @Test func theLegacyThemeIsReportedFromTheStore() async throws {
+        try await withStorage(["vision_theme": "light"]) { storage, _ in
+            let legacy = await storage.legacyTheme()
+            #expect(legacy.mode == "light")
+            #expect(legacy.variant == nil)
+        }
+        try await withStorage { storage, _ in
+            let legacy = await storage.legacyTheme()
+            #expect(legacy.mode == nil && legacy.variant == nil)
         }
     }
 
     @Test func adminTokensTrimAndBlankRemoves() async throws {
-        try await withStorage { storage, _ in
+        try await withStorage { storage, url in
             #expect(await storage.adminToken() == nil)
-            #expect(await storage.setAdminToken("  secret \n"))
+            await storage.setAdminToken("  secret \n")
             #expect(await storage.adminToken() == "secret")
-            #expect(await storage.setAdminToken("   "))
+            await storage.setAdminToken("   ")
             #expect(await storage.adminToken() == nil)
+            #expect(!FileManager.default.fileExists(atPath: url.path))
         }
     }
 
@@ -79,56 +104,37 @@ import Testing
             #expect(await storage.webStorage(key: "dismissed_upcoming_planned_payments", value: ids, session: false) == ids)
             #expect(
                 await storage.webStorage(key: "dismissed_upcoming_planned_payments", value: .null, session: false) == .null)
-            let dismissals = try await storage.store.value(for: .upcomingDismissals)
-            #expect(dismissals != nil)
+            #expect(await storage.value(for: .upcomingDismissals) != nil)
             let review: JSONValue = .object(["mode": .string("strict")])
             let sessionKey = "vision.portfolio-import.latest-review-settings.v1"
             #expect(await storage.webStorage(key: sessionKey, value: review, session: true) == review)
             #expect(await storage.webStorage(key: sessionKey, value: .null, session: true) == .null)
-            let storedReview = try await storage.store.sessionValue(for: .portfolioReview)
-            #expect(storedReview == nil)
+            #expect(await storage.store.sessionValue(for: .portfolioReview) == nil)
         }
     }
 
-    @Test func chartLayoutsWriteThenReadAndLegacyThemeIsReported() async throws {
-        try await withStorage(["vision_theme": "light"]) { storage, _ in
+    @Test func chartLayoutsWriteThenRead() async throws {
+        try await withStorage { storage, _ in
             #expect(try await storage.chartLayouts(writing: nil) == nil)
             #expect(try await storage.chartLayouts(writing: "{\"v\":2}") == "{\"v\":2}")
-            let legacy = try JSONValue.parse(Data(try #require(await storage.legacyThemeReply().stringValue).utf8))
-            #expect(legacy == .object(["mode": .string("light"), "variant": .null]))
+            #expect(try await storage.chartLayouts(writing: nil) == "{\"v\":2}")
         }
     }
 
-    @Test func theFixedScriptsAreAnsweredInThePagesReplyShape() async throws {
-        try await withStorage(["vision_theme": "dark"]) { storage, _ in
-            let bridge = NativeSettingsStorageBridge.self
-            let write = try await storage.answer(
-                script: bridge.writeScript, arguments: bridge.arguments(for: .paletteRecents, value: "[\"/a\"]"))
-            #expect(try bridge.mutationReply(write))
-            let read = try await storage.answer(script: bridge.readScript, arguments: bridge.arguments(for: .paletteRecents))
-            #expect(try bridge.readLocalReply(read) == "[\"/a\"]")
-            #expect(
-                try bridge.mutationReply(
-                    try await storage.answer(script: bridge.removeScript, arguments: bridge.arguments(for: .paletteRecents))))
-            #expect(
-                try await storage.answer(script: bridge.readScript, arguments: bridge.arguments(for: .paletteRecents))
-                    == .null)
-            #expect(try bridge.readReply(try await storage.answer(script: bridge.exportScript, arguments: [:])) != nil)
-            let restore = try await storage.answer(
-                script: bridge.restoreScript,
-                arguments: try bridge.restoreArguments(.object(["keys": .object(["vision.language": .string("nl")])])))
-            #expect(try bridge.mutationReply(restore))
-            #expect(try await storage.store.value(for: .language) == "nl")
-            #expect(try await storage.answer(script: bridge.editingScript, arguments: [:]) == .bool(false))
-            #expect(try await storage.answer(script: bridge.legacyThemeScript, arguments: [:]).stringValue != nil)
-            let event = "window.dispatchEvent(new CustomEvent('vision:native-settings', {detail}));"
-            #expect(try await storage.answer(script: event, arguments: [:]) == .bool(true))
-            await #expect(throws: NativeShellStorage.ScriptError.unsupportedScript) {
-                try await storage.answer(script: "return document.title;", arguments: [:])
-            }
-            await #expect(throws: NativeShellStorage.ScriptError.unsupportedScript) {
-                try await storage.answer(script: bridge.readScript, arguments: ["key": .string("vision_theme")])
-            }
+    @Test func chartLayoutValuesAreBoundedUTF8() throws {
+        let limit = NativeShellStorage.maximumChartLayoutBytes
+        #expect(try NativeShellStorage.chartLayoutValue(Data(repeating: 0x61, count: limit)).utf8.count == limit)
+        #expect(throws: APIError.self) {
+            try NativeShellStorage.chartLayoutValue(Data(repeating: 0x61, count: limit + 1))
+        }
+        #expect(throws: APIError.self) { try NativeShellStorage.chartLayoutValue(Data([0xFF, 0xFE])) }
+    }
+
+    @Test func theDashboardArrivalFlagClears() async throws {
+        try await withStorage { storage, _ in
+            await storage.store.setSessionValue("1", for: .dashboardArrival)
+            await storage.clearDashboardArrival()
+            #expect(await storage.store.sessionValue(for: .dashboardArrival) == nil)
         }
     }
 
@@ -144,5 +150,17 @@ import Testing
         let layout = try RuntimeLayout(
             userDataDirectory: "/Users/demo/Library/Application Support/Vision Native Demo", runtimeId: "vision_native_demo")
         #expect(layout.rawState == layout.nativeRoot + "/raw-state.json")
+    }
+
+    @Test func validLargeChartSharesRemainBoundedToTheChartRoute() throws {
+        let token = String(repeating: "A", count: 20_000)
+        let route = try #require(NativeRoute("/research/charts?chart=" + token + "&unrelated=keep"))
+        #expect(route.value("chart") == token)
+        #expect(route.value("unrelated") == "keep")
+        #expect(NativeRoute("/research/compare?chart=" + token) == nil)
+        #expect(NativeRoute("/research/charts/extra?chart=" + token) == nil)
+        #expect(NativeRoute("//research/charts?chart=" + token) == nil)
+        #expect(NativeRoute("/research/charts?chart=" + token + "#fragment") == nil)
+        #expect(NativeRoute("/research/charts?chart=" + String(repeating: "A", count: 32_768)) == nil)
     }
 }

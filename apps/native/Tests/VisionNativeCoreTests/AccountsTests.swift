@@ -244,7 +244,7 @@ enum AccountsFixture {
 
     @MainActor
     static func shell(
-        _ model: AccountsModel, recorder: ShellRecorder, settings: NativeAppSettings = NativeAppSettings()
+        _ model: AccountsModel, settings: NativeAppSettings = NativeAppSettings()
     ) -> NativeShellModel {
         NativeShellModel(
             strings: strings, theme: ThemeSelection(appearance: .light),
@@ -252,19 +252,19 @@ enum AccountsFixture {
             exchangeRates: model.rates, admin: AdminFixture.screens(), planned: PlannedFixture.idleModel(),
             imports: ImportFixture.idleModel(), transactions: TransactionsFixture.idleModel(), accounts: model,
             categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
-            loadSettings: { settings }, onNavigate: { recorder.actions.append($0) }, settingsReloadDelay: .milliseconds(1))
+            loadSettings: { settings })
     }
 
     /// A shell on `route` with its settings read and the screen appeared.
     @MainActor
     static func opened(
-        _ service: FakeAccountsService, route: String = "/accounts", recorder: ShellRecorder = ShellRecorder(),
+        _ service: FakeAccountsService, route: String = "/accounts",
         rates: [Result<OpenAPI.ExchangeRates, APIError>] = [.success(rates())], keys: KeyCounter = KeyCounter()
     ) async throws -> (AccountsModel, NativeShellModel) {
         let model = model(service, rates: rates, keys: keys)
-        let shell = shell(model, recorder: recorder)
+        let shell = shell(model)
         let parsed = try #require(NativeRoute(route))
-        shell.routeDidChange(parsed)
+        shell.show(parsed)
         await shell.settingsSettled()
         let id = AccountsRoutes.detailId(forPath: parsed.path)
         await model.appear(id.map { AccountsScreen.detail($0) } ?? .hub)
@@ -459,18 +459,17 @@ enum AccountsFixture {
     }
 
     @Test func rowActionsNavigateOnlyWhileShown() async throws {
-        let recorder = ShellRecorder()
         let account = AccountsFixture.account(5, "kbc", displayName: "My Bank")
-        let (model, shell) = try await AccountsFixture.opened(FakeAccountsService(list: [account]), recorder: recorder)
+        let (model, shell) = try await AccountsFixture.opened(FakeAccountsService(list: [account]))
         defer { withExtendedLifetime(shell) {} }
         model.openDetail(account)
-        #expect(recorder.actions.last == .navigate("/accounts/5"))
+        #expect(shell.nativeNavigationLocation.raw == "/accounts/5")
         model.openTransactions(account)
-        #expect(recorder.actions.last == .navigate("/transactions?account_id=5&filter_label=My%20Bank"))
+        #expect(shell.nativeNavigationLocation.raw == "/transactions?account_id=5&filter_label=My%20Bank")
         model.disappear(.hub)
-        let before = recorder.actions.count
+        let before = shell.nativeNavigationLocation.raw
         model.openDetail(account)
-        #expect(recorder.actions.count == before)
+        #expect(shell.nativeNavigationLocation.raw == before)
     }
 
     @Test func reconcileShowsForDriftOrMultiCurrencyCashButNotHoldingsOnly() async throws {
@@ -487,8 +486,8 @@ enum AccountsFixture {
 
     @Test func accountsIsNativeWithoutAdminMode() async throws {
         let model = AccountsFixture.idleModel()
-        let shell = AccountsFixture.shell(model, recorder: ShellRecorder())
-        shell.routeDidChange(try #require(NativeRoute("/accounts/4?since=2026-01-01")))
+        let shell = AccountsFixture.shell(model)
+        shell.show(try #require(NativeRoute("/accounts/4?since=2026-01-01")))
         await shell.settingsSettled()
         #expect(shell.detail == .native(.accountDetail(id: 4)))
     }
@@ -750,9 +749,8 @@ enum AccountsFixture {
 
     @Test func saveReadingBackfillAndShowSince() async throws {
         let account = Self.drifting()
-        let recorder = ShellRecorder()
         let service = FakeAccountsService(list: [account])
-        let (model, shell) = try await AccountsFixture.opened(service, recorder: recorder)
+        let (model, shell) = try await AccountsFixture.opened(service)
         defer { withExtendedLifetime(shell) {} }
         model.openReconcile(account)
         model.reconcile?.setReading("940,10")
@@ -766,7 +764,7 @@ enum AccountsFixture {
         model.openReconcile(account)
         model.showSince()
         #expect(model.reconcile == nil)
-        #expect(recorder.actions.last == .navigate("/accounts/7?since=2026-09-30"))
+        #expect(shell.nativeNavigationLocation.raw == "/accounts/7?since=2026-09-30")
     }
 
     @Test func theOpeningBalancePrefillsFromTheStatementThenTheBase() async throws {
@@ -925,9 +923,8 @@ enum AccountsFixture {
 
     @Test func deleteAsksFirstThenLeavesForTheHub() async throws {
         let account = AccountsFixture.account(6, "Unused", hasTransactions: false)
-        let recorder = ShellRecorder()
         let service = FakeAccountsService(list: [account, AccountsFixture.account(7, "Kept")])
-        let (model, shell) = try await AccountsFixture.opened(service, route: "/accounts/6", recorder: recorder)
+        let (model, shell) = try await AccountsFixture.opened(service, route: "/accounts/6")
         defer { withExtendedLifetime(shell) {} }
         #expect(model.menuItems(account).last == .delete)
         model.requestDelete(account)
@@ -938,7 +935,7 @@ enum AccountsFixture {
         await model.confirmDelete()
         #expect(await service.log.contains("delete 6"))
         #expect(model.notice?.key == "accounts.deleted")
-        #expect(recorder.actions.contains(.navigate("/accounts")))
+        #expect(shell.nativeNavigationLocation.raw == "/accounts")
     }
 
     @Test func aStillReferencedAccountOpensCloseInstead() async throws {
@@ -1031,17 +1028,15 @@ enum AccountsFixture {
 
     @Test func sinceFiltersTheLoadedRowsAndStopsLoadMore() async throws {
         let account = AccountsFixture.account(2, "Daily")
-        let recorder = ShellRecorder()
         let service = FakeAccountsService(list: [account], ledgerRows: Self.ledger(150))
-        let (model, shell) = try await AccountsFixture.opened(
-            service, route: "/accounts/2?since=2026-10-20", recorder: recorder)
+        let (model, shell) = try await AccountsFixture.opened(service, route: "/accounts/2?since=2026-10-20")
         defer { withExtendedLifetime(shell) {} }
         #expect(model.since == "2026-10-20")
         #expect(model.visibleLedger.allSatisfy { $0.date >= "2026-10-20" })
         #expect(!model.visibleLedger.isEmpty)
         #expect(!model.ledgerHasMore)
         model.clearSince()
-        #expect(recorder.actions.last == .replaceRoute("/accounts/2"))
+        #expect(shell.nativeNavigationLocation.raw == "/accounts/2")
         #expect(model.since == nil)
         #expect(model.ledgerHasMore)
     }

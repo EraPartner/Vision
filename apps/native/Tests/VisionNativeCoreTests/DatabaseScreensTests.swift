@@ -893,7 +893,7 @@ enum DatabaseFixture {
 
 @MainActor
 @Suite struct UnsavedChangesGuardTests {
-    func makeShell(database: FakeDatabaseService, recorder: ShellRecorder) -> NativeShellModel {
+    func makeShell(database: FakeDatabaseService) -> NativeShellModel {
         NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]), theme: ThemeSelection(appearance: .light),
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()),
@@ -902,52 +902,49 @@ enum DatabaseFixture {
             transactions: TransactionsFixture.idleModel(),
             accounts: AccountsFixture.idleModel(),
             categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
-            loadSettings: { NativeAppSettings(adminMode: true) }, onNavigate: { recorder.actions.append($0) })
+            loadSettings: { NativeAppSettings(adminMode: true) })
     }
 
     @Test func pendingEditsHoldANavigationUntilStayOrLeave() async throws {
-        let recorder = ShellRecorder()
-        let shell = makeShell(database: FakeDatabaseService(), recorder: recorder)
-        shell.routeDidChange(try #require(NativeRoute("/admin/db/categories")))
+        let shell = makeShell(database: FakeDatabaseService())
+        shell.show(try #require(NativeRoute("/admin/db/categories")))
         await shell.settingsSettled()
         #expect(shell.detail == .native(.tableEditor(table: "categories")))
         let editor = try #require(shell.admin.database.editor)
         await editor.appear()
         shell.setLeaveGuard(editor.leaveGuard)
-        // Without changes a navigation goes straight to the page.
-        shell.navigate(to: "/admin/db")
-        #expect(recorder.actions == [.navigate("/admin/db")])
+        // Without changes a navigation goes straight through.
+        shell.navigate(to: "/admin/db/categories?x=1")
+        #expect(shell.nativeNavigationLocation.raw == "/admin/db/categories?x=1")
         editor.addRow()
         shell.navigate(to: "/transactions")
         #expect(shell.leaveConfirmation?.path == "/transactions")
-        #expect(recorder.actions.count == 1)
+        #expect(shell.route.path == "/admin/db/categories")
         // Stay on page cancels the navigation and keeps the changes.
         shell.stayOnPage()
         #expect(shell.leaveConfirmation == nil)
         #expect(editor.hasPending)
-        #expect(recorder.actions.count == 1)
         // A navigation on the same path (only the query changes) is not held.
-        shell.navigate(to: "/admin/db/categories?x=1")
-        #expect(recorder.actions.count == 2)
+        shell.navigate(to: "/admin/db/categories?x=2")
+        #expect(shell.leaveConfirmation == nil)
+        #expect(shell.nativeNavigationLocation.raw == "/admin/db/categories?x=2")
         // The Back link, a shortcut or a menu item all go through `navigate`.
         shell.navigate(to: TableEditorRoute.maintenancePath)
         #expect(shell.leaveConfirmation?.path == "/admin/db")
         shell.leavePage()
         #expect(shell.leaveConfirmation == nil)
         #expect(!editor.hasPending)
-        #expect(recorder.actions.last == .navigate("/admin/db"))
-        #expect(shell.pendingRoute?.path == "/admin/db")
-        shell.routeDidChange(try #require(NativeRoute("/admin/db")))
+        #expect(shell.route.path == "/admin/db")
         #expect(shell.detail == .native(.databaseMaintenance))
         let dropped = shell.admin.database.editor == nil
         #expect(dropped)
         // Leaving without a held navigation does nothing.
         shell.leavePage()
-        #expect(recorder.actions.count == 3)
+        #expect(shell.route.path == "/admin/db")
     }
 
     @Test func quitAsksWhileTheGuardReportsChanges() async {
-        let shell = makeShell(database: FakeDatabaseService(), recorder: ShellRecorder())
+        let shell = makeShell(database: FakeDatabaseService())
         #expect(!shell.hasGuardedUnsavedChanges)
         let editor = TableDataEditorModel(table: "categories", service: FakeDatabaseService())
         await editor.appear()
@@ -960,8 +957,7 @@ enum DatabaseFixture {
     }
 
     @Test func onlyTheRegisteringScreenRemovesItsGuard() async throws {
-        let recorder = ShellRecorder()
-        let shell = makeShell(database: FakeDatabaseService(), recorder: recorder)
+        let shell = makeShell(database: FakeDatabaseService())
         let editor = TableDataEditorModel(table: "categories", service: FakeDatabaseService())
         await editor.appear()
         editor.addRow()
@@ -973,29 +969,30 @@ enum DatabaseFixture {
         shell.removeLeaveGuard(id: editor.leaveGuard.id)
         shell.navigate(to: "/transactions")
         #expect(shell.leaveConfirmation == nil)
-        #expect(recorder.actions == [.navigate("/transactions")])
+        #expect(shell.route.path == "/transactions")
     }
 
-    @Test func theEditorKeepsPendingChangesWhenThePageMovesOnItsOwn() async throws {
-        let shell = makeShell(database: FakeDatabaseService(), recorder: ShellRecorder())
-        shell.routeDidChange(try #require(NativeRoute("/admin/db/categories")))
+    @Test func theEditorKeepsPendingChangesWhenTheRouteMovesOnItsOwn() async throws {
+        let shell = makeShell(database: FakeDatabaseService())
+        shell.show(try #require(NativeRoute("/admin/db/categories")))
+        await shell.settingsSettled()
         let editor = try #require(shell.admin.database.editor)
         await editor.appear()
         editor.addRow()
-        // The command palette moved the page: the pending changes stay for that table.
-        shell.routeDidChange(try #require(NativeRoute("/transactions")))
+        // The command palette moved the shell: the pending changes stay for that table.
+        shell.show(try #require(NativeRoute("/transactions")))
         let kept = shell.admin.database.editor === editor
         #expect(kept)
-        shell.routeDidChange(try #require(NativeRoute("/admin/db/categories")))
+        shell.show(try #require(NativeRoute("/admin/db/categories")))
         let reused = shell.admin.database.editor === editor
         #expect(reused)
         // Another table starts fresh.
-        shell.routeDidChange(try #require(NativeRoute("/admin/db/budgets")))
+        shell.show(try #require(NativeRoute("/admin/db/budgets")))
         #expect(shell.admin.database.editor?.table == "budgets")
         let replaced = shell.admin.database.editor !== editor
         #expect(replaced)
         // Without pending changes the editor goes with the route.
-        shell.routeDidChange(try #require(NativeRoute("/admin/db")))
+        shell.show(try #require(NativeRoute("/admin/db")))
         let dropped = shell.admin.database.editor == nil
         #expect(dropped)
     }

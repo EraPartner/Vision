@@ -2,7 +2,7 @@
 
 Vision Native is the Swift macOS app that replaces the Electron shell in phases
 ([ADR-204](../../docs/adr/204-vision-native-swift-app-target.md)). Phase 1 hosts the existing
-React frontend in a `WKWebView` and runs its own PostgreSQL 18 cluster and backend on synthetic
+React frontend in a `WKWebView` (since removed: the app is native-only, see Shell) and runs its own PostgreSQL 18 cluster and backend on synthetic
 Demo data in `~/Library/Application Support/Vision Native Demo/` (or `Vision Native/` for the
 standard variant). It never reads or changes the Vision or Vision Demo data directories. The
 phase 1 hand-over is recorded in
@@ -21,10 +21,10 @@ stays the project-file tool (ADR-204 decision 3). The deployment target and the 
 | -------------------------------------- | ------------------------------------------------------------------------------ |
 | `project.yml`                          | XcodeGen spec for the "Vision Native" app target                               |
 | `Config/Signing.xcconfig`              | Signing team from `VISION_NATIVE_TEAM_ID`                                      |
-| `VisionNative/`                        | AppKit app, window, menus and the `WKWebView` shell                            |
+| `VisionNative/`                        | AppKit app, window, menus and the native shell host                           |
 | `Package.swift`                        | SwiftPM package: `VisionNativeCore`, `VisionNativeUI`                          |
 | `Sources/VisionNativeCore/`            | Non-UI logic: runtime supervision, health, override                            |
-| `Sources/VisionNativeCore/Shell/`      | Bridge contract and codec, web view policy, menus                              |
+| `Sources/VisionNativeCore/Shell/`      | Shell state store, menus, appearance, CSV handoff                              |
 | `Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption and restore (phase 1d)                              |
 | `Sources/VisionNativeCore/API/`        | `APIClient` and the generated OpenAPI client (2)                               |
 | `Sources/VisionNativeCore/Design/`     | Generated design tokens, `ThemeSelection` (2)                                  |
@@ -113,20 +113,18 @@ Edit Scheme > Run > Arguments).
 
 ## Shell
 
-The window hosts the unchanged React frontend and behaves like the Electron shell
-(see [the architecture page](../../docs/architecture/native-app.md#shell-phase-1c)):
+The app is native-only: there is no web view, no JavaScript bridge and no captured browser
+storage. The window hosts SwiftUI screens, and the backend is reached over HTTP.
 
-- A user script defines the `window.electron*` bridges of `packaging/electron/preload.ts`, backed by
-  a `WKScriptMessageHandlerWithReply` named `visionNative`. `Shell/BridgeContract.swift` maps every
-  Electron channel to its Swift handler. The updater is not ported (ADR-204 decision 5).
-- The web view loads only the backend origin. The repository and documentation links open in the
-  default browser, other navigations and new windows are cancelled, and downloads open a save
-  panel. A replaced file is swapped in only after its download finished.
+- Per-device state (theme variant, dismissals, last route, palette recents, chart layouts) lives in
+  `raw-state.json` in the runtime directory (`NativeRawStateStore`). A missing file is an empty
+  store and the app starts on defaults; nothing is imported from browser storage. A file that
+  cannot be read shows the unavailable state and is never overwritten.
 - The menu bar, dock menu, dock badge, window frame (`windowBounds` in `settings.json`), hide on
   close, full screen and vibrancy follow `packaging/electron/main.ts`. Menu labels come from
   `i18n/source/{en,nl}.json`, copied to `Contents/Resources/i18n/` by a build phase.
 - The launch screen uses the splash palette and shows the runtime status, or the error with Open
-  logs and Try again.
+  logs.
 
 ## Native navigation and screens (phase 2)
 

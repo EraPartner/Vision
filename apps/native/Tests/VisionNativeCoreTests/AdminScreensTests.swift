@@ -536,31 +536,29 @@ enum AdminFixture {
 @MainActor
 @Suite struct AdminRoutesTests {
     @Test func theAdminPagesAreNativeInAdminMode() async throws {
-        let recorder = ShellRecorder()
         let model = NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]), theme: ThemeSelection(appearance: .light),
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()), admin: AdminFixture.screens(),
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
             transactions: TransactionsFixture.idleModel(), accounts: AccountsFixture.idleModel(),
             categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
-            loadSettings: { NativeAppSettings(adminMode: true) },
-            onNavigate: { recorder.actions.append($0) })
-        model.routeDidChange(try #require(NativeRoute("/admin")))
-        #expect(model.detail == .web)
+            loadSettings: { NativeAppSettings(adminMode: true) })
+        model.show(try #require(NativeRoute("/admin")))
+        #expect(model.detail == .loading)
         await model.settingsSettled()
         #expect(model.detail == .native(.adminOverview))
-        model.routeDidChange(try #require(NativeRoute("/admin/providers")))
+        model.show(try #require(NativeRoute("/admin/providers")))
         #expect(model.detail == .native(.providerHealth))
-        model.routeDidChange(try #require(NativeRoute("/admin/endpoints")))
+        model.show(try #require(NativeRoute("/admin/endpoints")))
         #expect(model.detail == .native(.endpointLiveness))
-        model.routeDidChange(try #require(NativeRoute("/admin/db")))
+        model.show(try #require(NativeRoute("/admin/db")))
         #expect(model.detail == .native(.databaseMaintenance))
-        model.routeDidChange(try #require(NativeRoute("/admin/db/transactions")))
+        model.show(try #require(NativeRoute("/admin/db/transactions")))
         #expect(model.detail == .native(.tableEditor(table: "transactions")))
         #expect(model.admin.database.editor?.table == "transactions")
-        // A tile or the auth error link asks the page to move.
+        // A tile or the auth error link moves the shell.
         model.navigate(to: AdminErrorState.tokenRoute)
-        #expect(recorder.actions.last == .navigate("/admin"))
+        #expect(model.nativeNavigationLocation.raw == AdminErrorState.tokenRoute)
         await model.settingsSettled()
     }
 

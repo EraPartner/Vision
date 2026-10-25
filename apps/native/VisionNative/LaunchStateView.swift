@@ -2,11 +2,11 @@ import Observation
 import SwiftUI
 import VisionNativeCore
 
-/// What the window shows: a check in progress, the web shell, or the reason the
+/// What the window shows: a check in progress, the native shell, or the reason the
 /// backend is unavailable.
 enum ShellState: Equatable, Sendable {
     case checking
-    case ready(URL, NativeShellBackendSource)
+    case ready(URL)
     case unavailable(String)
 }
 
@@ -27,7 +27,7 @@ enum ShellResolver {
         }
         do {
             let url = try await AppRuntime.supervisor.launch()
-            return .ready(url, .supervised(runtimeIdentifier: AppRuntime.variant.runtimeId))
+            return .ready(url)
         } catch {
             let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             return .unavailable(reason)
@@ -42,7 +42,7 @@ enum ShellResolver {
             guard status == 200 else {
                 return .unavailable("\(healthURL.absoluteString) answered HTTP \(status).")
             }
-            return .ready(baseURL, .developerOverride)
+            return .ready(baseURL)
         } catch {
             return .unavailable(
                 "The backend is not running at \(healthURL.absoluteString): \(error.localizedDescription)"

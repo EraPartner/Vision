@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import VisionNativeCore
 
-/// Native presentation for startup and unavailable routes; never reveals infrastructure.
+/// Native presentation for startup and unavailable routes.
 struct NativeShellUnavailableView: View {
     let detail: NativeShellDetail
     let strings: any Localizing
@@ -27,20 +27,5 @@ struct NativeShellUnavailableView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .foregroundStyle(theme.foreground)
         .background(theme.background)
-    }
-}
-
-/// The retained presentation keeps its previous hierarchy; native-only has no document view.
-struct NativeShellWebPresentation<Content: View>: View {
-    let mode: NativeShellPresentationMode
-    let hidden: Bool
-    @ViewBuilder let content: (Bool) -> Content
-
-    var body: some View {
-        if mode == .nativeOnly {
-            EmptyView()
-        } else {
-            content(hidden)
-        }
     }
 }

@@ -556,7 +556,6 @@ enum EditingFixture {
     }
 
     @Test func leavingThePageWithEditsAsksFirstAndDiscardCloses() async throws {
-        let recorder = ShellRecorder()
         let model = await EditingFixture.page([PlannedFixture.row(id: 1)])
         let shell = NativeShellModel(
             strings: EditingFixture.strings, theme: ThemeSelection(appearance: .light),
@@ -565,8 +564,8 @@ enum EditingFixture {
             transactions: TransactionsFixture.idleModel(),
             accounts: AccountsFixture.idleModel(),
             categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
-            loadSettings: { NativeAppSettings() }, onNavigate: { recorder.actions.append($0) })
-        shell.routeDidChange(try #require(NativeRoute("/planned")))
+            loadSettings: { NativeAppSettings() })
+        shell.show(try #require(NativeRoute("/planned")))
         await shell.settingsSettled()
         shell.setLeaveGuard(model.leaveGuard)
         // An untouched sheet does not hold the navigation.
@@ -581,7 +580,7 @@ enum EditingFixture {
         shell.navigate(to: "/transactions")
         shell.leavePage()
         #expect(model.editor == nil)
-        #expect(recorder.actions.last == .navigate("/transactions"))
+        #expect(shell.route.path == "/transactions")
         shell.removeLeaveGuard(id: PlannedPaymentsRoute.path)
         #expect(!shell.hasGuardedUnsavedChanges)
     }

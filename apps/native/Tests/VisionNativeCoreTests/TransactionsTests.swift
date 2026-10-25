@@ -267,7 +267,7 @@ enum TxFixture {
 
     @MainActor
     static func shell(
-        _ model: TransactionsModel, recorder: ShellRecorder, settings: NativeAppSettings = NativeAppSettings()
+        _ model: TransactionsModel, settings: NativeAppSettings = NativeAppSettings()
     ) -> NativeShellModel {
         NativeShellModel(
             strings: strings, theme: ThemeSelection(appearance: .light),
@@ -276,19 +276,19 @@ enum TxFixture {
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(), transactions: model,
             accounts: AccountsFixture.idleModel(),
             categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
-            loadSettings: { settings }, onNavigate: { recorder.actions.append($0) }, settingsReloadDelay: .milliseconds(1))
+            loadSettings: { settings })
     }
 
     /// A shell on `route` with its settings read and the list synced.
     @MainActor
     static func opened(
-        _ service: FakeTransactionsService, route: String = "/transactions", recorder: ShellRecorder = ShellRecorder(),
+        _ service: FakeTransactionsService, route: String = "/transactions",
         settings: NativeAppSettings = NativeAppSettings(), pickers: FakePickerService = FakePickerService(),
         bulk: FakeTransactionBulkService = FakeTransactionBulkService(), splits: FakeSplitsService = FakeSplitsService()
     ) async throws -> (TransactionsModel, NativeShellModel) {
         let model = model(service, pickers: pickers, bulk: bulk, splits: splits)
-        let shell = shell(model, recorder: recorder, settings: settings)
-        shell.routeDidChange(try #require(NativeRoute(route)))
+        let shell = shell(model, settings: settings)
+        shell.show(try #require(NativeRoute(route)))
         await shell.settingsSettled()
         await model.sync()
         return (model, shell)
@@ -588,17 +588,16 @@ extension TransactionPatch {
     }
 
     @Test func theSearchSettlesIntoTheURLWithReplace() async throws {
-        let recorder = ShellRecorder()
         let service = FakeTransactionsService(rows: TxFixture.rows(6))
-        let (model, shell) = try await TxFixture.opened(service, recorder: recorder)
+        let (model, shell) = try await TxFixture.opened(service)
         model.searchText = "garage"
         await model.commitSearch()
         #expect(model.search == "garage")
         #expect(shell.route.value("search") == "garage")
-        #expect(recorder.actions.last == .replaceRoute("/transactions?search=garage"))
+        #expect(shell.nativeNavigationLocation.raw == "/transactions?search=garage")
         #expect(model.rows?.map(\.id) == [2, 4, 6])
         // A search the route brings (the palette) lands in the field.
-        shell.routeDidChange(try #require(NativeRoute("/transactions?search=bakery")))
+        shell.show(try #require(NativeRoute("/transactions?search=bakery")))
         await model.sync()
         #expect(model.searchText == "bakery")
         #expect(model.rows?.map(\.id) == [1, 3, 5])
@@ -608,27 +607,28 @@ extension TransactionPatch {
     }
 
     @Test func theSortIsWrittenWithReplaceAndFiltersArePushed() async throws {
-        let recorder = ShellRecorder()
         let service = FakeTransactionsService(rows: TxFixture.rows(3))
-        let (model, shell) = try await TxFixture.opened(service, recorder: recorder)
+        let (model, shell) = try await TxFixture.opened(service)
         await model.toggleSort(.amount)
-        #expect(recorder.actions.last == .replaceRoute("/transactions?sort_key=amount&sort_dir=asc"))
+        #expect(shell.nativeNavigationLocation.raw == "/transactions?sort_key=amount&sort_dir=asc")
+        let entries = shell.nativeNavigation.count
         #expect(model.sort == LocalTableSort(key: "amount", ascending: true))
         #expect(model.query?.sort == LocalTableSort(key: "amount", ascending: true))
         await model.toggleSort(.tags)
         #expect(model.sort?.key == "amount")
         model.setNeedsCategory(true)
-        #expect(recorder.actions.last == .navigate("/transactions?sort_key=amount&sort_dir=asc&uncategorised=true"))
+        #expect(shell.nativeNavigationLocation.raw == "/transactions?sort_key=amount&sort_dir=asc&uncategorised=true")
+        #expect(shell.nativeNavigation.count == entries + 1)
         model.setAccountFilter(EditingFixture.account(7, "BE00 1234", display: "Everyday"))
         #expect(
-            recorder.actions.last
-                == .navigate("/transactions?sort_key=amount&sort_dir=asc&account_id=7&filter_label=Everyday"))
+            shell.nativeNavigationLocation.raw
+                == "/transactions?sort_key=amount&sort_dir=asc&account_id=7&filter_label=Everyday")
         model.searchText = "a"
         await model.commitSearch()
         let row = try #require(model.rows?.first)
         model.showAllFrom(row)
         #expect(model.searchText.isEmpty)
-        #expect(recorder.actions.last == .navigate("/transactions?recipient_id=1&filter_label=Bakery"))
+        #expect(shell.nativeNavigationLocation.raw == "/transactions?recipient_id=1&filter_label=Bakery")
         await model.clearAll()
         #expect(shell.route.value("sort_key") == nil)
         #expect(model.sort == nil)
@@ -844,15 +844,13 @@ extension TransactionPatch {
     }
 
     @Test func deepLinksOpenAddAndSelectThenLeaveTheURL() async throws {
-        let recorder = ShellRecorder()
         let service = FakeTransactionsService(rows: TxFixture.rows(3))
-        let (model, shell) = try await TxFixture.opened(service, route: "/transactions?new=1&id=2", recorder: recorder)
+        let (model, shell) = try await TxFixture.opened(service, route: "/transactions?new=1&id=2")
         #expect(model.isAddPresented)
         #expect(model.selectedId == 2)
         #expect(model.inspector?.id == 2)
         #expect(shell.route.string == "/transactions")
-        #expect(recorder.actions.contains(.replaceRoute("/transactions?id=2")))
-        #expect(recorder.actions.last == .replaceRoute("/transactions"))
+        #expect(shell.nativeNavigationLocation.raw == "/transactions")
         model.dismissAdd()
         #expect(shell.detail == .native(.transactions))
         #expect(shell.newTransaction())
@@ -863,26 +861,27 @@ extension TransactionPatch {
     }
 
     @Test func theNewTransactionShortcutGoesToTheNativeScreen() async throws {
-        let recorder = ShellRecorder()
         let model = TransactionsFixture.idleModel()
-        let shell = TxFixture.shell(model, recorder: recorder)
-        // Before the settings are read the page handles it.
-        #expect(!shell.newTransaction())
-        shell.routeDidChange(try #require(NativeRoute("/planned")))
-        await shell.settingsSettled()
-        // The page is sent to `/transactions` without `new=1`, so its own sheet stays shut;
-        // the native sheet opens once the screen syncs there.
+        let shell = TxFixture.shell(model)
+        // Before the shell is ready the shortcut waits.
         #expect(shell.newTransaction())
-        #expect(recorder.actions.last == .navigate("/transactions"))
-        #expect(shell.handleKey("n"))
-        #expect(recorder.actions.last == .navigate("/transactions"))
+        #expect(shell.route == .home)
+        shell.show(try #require(NativeRoute("/planned")))
+        await shell.settingsSettled()
+        // The shell moves to `/transactions`; the native sheet opens once the screen is ready there.
+        shell.nativeIntentReadinessDidChange()
+        #expect(shell.route.path == "/transactions")
         #expect(!model.isAddPresented)
-        shell.routeDidChange(try #require(NativeRoute("/transactions")))
+        shell.nativeIntentConsumerDidBecomeReady(for: .transactions)
         await model.sync()
         #expect(model.isAddPresented)
         model.dismissAdd()
         await model.sync()
         #expect(!model.isAddPresented)
+        // The `N` shortcut asks again; the screen is already there.
+        #expect(shell.handleKey("n"))
+        #expect(shell.route.path == "/transactions")
+        #expect(model.isAddPresented)
     }
 
     @Test func theBannerExportsUnderItsFileName() async throws {
@@ -961,7 +960,7 @@ extension TransactionPatch {
         #expect(model.allSelected)
         await model.toggleSort(.date)
         #expect(model.selection.ids.count == 4)
-        shell.routeDidChange(try #require(NativeRoute("/transactions?recipient_id=2&sort_key=date&sort_dir=asc")))
+        shell.show(try #require(NativeRoute("/transactions?recipient_id=2&sort_key=date&sort_dir=asc")))
         await model.sync()
         #expect(model.selection.isEmpty)
         model.columnFilters.set(TransactionColumn.recipient.rawValue, to: "zzz")

@@ -2,14 +2,10 @@ import AppKit
 import SwiftUI
 import VisionNativeCore
 
-/// The window content of Vision Native from phase 2: a native sidebar built from
-/// `NavigationRegistry`, and a detail column that shows a native screen or the web app.
-///
-/// The web view is passed in by the app target and never leaves the hierarchy, so the page
-/// keeps its state; `webContent` receives `true` while a native screen covers it.
-public struct ShellRootView<WebContent: View>: View {
+/// The window content of Vision Native: a native sidebar built from `NavigationRegistry`, and
+/// a detail column that shows the native screen of the current route.
+public struct ShellRootView: View {
     private let model: NativeShellModel
-    private let webContent: (_ hidden: Bool) -> WebContent
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var connectivity = PortfolioConnectivity()
     @State private var overlayFocusReturn = NativeOverlayFocusReturnCoordinator()
@@ -29,9 +25,8 @@ public struct ShellRootView<WebContent: View>: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    public init(model: NativeShellModel, @ViewBuilder webContent: @escaping (_ hidden: Bool) -> WebContent) {
+    public init(model: NativeShellModel) {
         self.model = model
-        self.webContent = webContent
         _columnVisibility = State(initialValue: model.isSidebarVisible ? .all : .detailOnly)
     }
 
@@ -50,17 +45,14 @@ public struct ShellRootView<WebContent: View>: View {
             .accessibilityHidden(true)
     }
 
-    /// The detail column: banners, the web presentation and the native screen, the topbar.
+    /// The detail column: banners, the native screen, the topbar.
     @ViewBuilder
     private func detailColumn(_ theme: VisionTheme) -> some View {
         VStack(spacing: 0) {
-            // Over web pages the banners stack above the web view; native pages take them as a
-            // top inset so the page canvas runs behind them and under the titlebar strip.
+            // Native pages take the banners as a top inset so the page canvas runs behind them
+            // and under the titlebar strip; the other states stack them above.
             if !isNativeDetail { shellBanners }
             ZStack {
-                NativeShellWebPresentation(mode: model.presentationMode, hidden: model.isWebContentHidden) {
-                    webContent($0)
-                }.ignoresSafeArea()
                 if case .native(let screen) = model.detail {
                     FrozenWidthLayout(width: frozenDetailWidth) {
                         NativePageZoomView(factor: model.pageZoom) {
@@ -166,10 +158,7 @@ public struct ShellRootView<WebContent: View>: View {
         }
         .overlay(alignment: .bottom) {
             if !model.isPresentingNativeOverlay {
-                NativeNoticeHost(
-                    center: model.notices, strings: model.strings, isWebVisible: model.detail == .web,
-                    isEditingWebText: model.isEditingWebText
-                )
+                NativeNoticeHost(center: model.notices, strings: model.strings)
                 .environment(\.visionTheme, theme)
             }
         }
@@ -233,7 +222,7 @@ public struct ShellRootView<WebContent: View>: View {
                 model.settingsAI?.isOnline = online
                 model.onboarding?.isOnline = online
                 model.shellNotifications?.isOnline = online
-                if reconnecting, model.isRendererReady, !model.isReloadingGraph,
+                if reconnecting, model.nativeDocumentState == .ready, !model.isReloadingGraph,
                     model.nativeSettings?.isSuspendedForRestore != true
                 {
                     Task {
@@ -244,7 +233,7 @@ public struct ShellRootView<WebContent: View>: View {
             }
         }
         .task(id: startupIdentity) {
-            guard model.isRendererReady, !model.isReloadingGraph,
+            guard model.nativeDocumentState == .ready, !model.isReloadingGraph,
                 model.nativeSettings?.isSuspendedForRestore != true
             else { return }
             async let notifications: Void = loadNotifications()
@@ -273,7 +262,7 @@ public struct ShellRootView<WebContent: View>: View {
         }
     }
     private var startupIdentity: String {
-        "\(ObjectIdentifier(model))|\(model.isRendererReady)|\(model.isReloadingGraph)|\(model.nativeSettings?.isSuspendedForRestore == true)"
+        "\(ObjectIdentifier(model))|\(model.nativeDocumentState == .ready)|\(model.isReloadingGraph)|\(model.nativeSettings?.isSuspendedForRestore == true)"
     }
     private func loadNotifications() async { await model.shellNotifications?.load() }
     private func loadOnboarding() async {

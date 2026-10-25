@@ -25,8 +25,6 @@ extension EnvironmentValues {
 struct NativeNoticeHost: View {
     let center: NativeNoticeCenter
     let strings: any Localizing
-    var isWebVisible = false
-    var isEditingWebText: (@MainActor () async -> Bool)? = nil
     @Environment(\.visionTheme) private var theme
     @Environment(\.visionVisualEffects) private var effects
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -93,13 +91,7 @@ struct NativeNoticeHost: View {
             NSApp.sendAction(Selector(("undo:")), to: nil, from: nil)
             return
         }
-        Task {
-            if isWebVisible, await isEditingWebText?() ?? true {
-                NSApp.sendAction(Selector(("undo:")), to: nil, from: nil)
-                return
-            }
-            await center.consumeUndo()
-        }
+        Task { await center.consumeUndo() }
     }
 
     private func displayVariables(_ notice: ScreenNotice) -> [String: String] {

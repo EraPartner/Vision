@@ -936,7 +936,7 @@ enum PlannedFixture {
         #expect(PlannedPaymentsRoute.showAllValue(false) == nil)
     }
 
-    func makeShell(settings: NativeAppSettings, recorder: ShellRecorder) -> NativeShellModel {
+    func makeShell(settings: NativeAppSettings) -> NativeShellModel {
         NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]), theme: ThemeSelection(appearance: .light),
             notices: NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false),
@@ -944,36 +944,34 @@ enum PlannedFixture {
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
             transactions: TransactionsFixture.idleModel(), accounts: AccountsFixture.idleModel(),
             categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
-            loadSettings: { settings },
-            onNavigate: { recorder.actions.append($0) })
+            loadSettings: { settings })
     }
 
     @Test func plannedIsNativeWithoutAdminModeOnceSettingsLoad() async throws {
-        let recorder = ShellRecorder()
-        let shell = makeShell(settings: NativeAppSettings(adminMode: false), recorder: recorder)
-        shell.routeDidChange(try #require(NativeRoute("/planned?show_all=true")))
-        #expect(shell.detail == .web)
+        let shell = makeShell(settings: NativeAppSettings(adminMode: false))
+        shell.show(try #require(NativeRoute("/planned?show_all=true")))
+        #expect(shell.detail == .loading)
         await shell.settingsSettled()
         #expect(shell.detail == .native(.plannedPayments))
-        shell.routeDidChange(try #require(NativeRoute("/admin/exchange-rates")))
+        // Without admin mode an admin route goes home instead.
+        shell.show(try #require(NativeRoute("/admin/exchange-rates")))
         await shell.settingsSettled()
-        #expect(shell.detail == .web)
-        shell.routeDidChange(try #require(NativeRoute("/planned")))
+        #expect(shell.route == .home)
+        shell.show(try #require(NativeRoute("/planned")))
         #expect(shell.detail == .native(.plannedPayments))
     }
 
     @Test func theViewMenuReplacesTheRoute() async throws {
-        let recorder = ShellRecorder()
-        let shell = makeShell(settings: NativeAppSettings(adminMode: true), recorder: recorder)
-        shell.routeDidChange(try #require(NativeRoute("/planned")))
+        let shell = makeShell(settings: NativeAppSettings(adminMode: true))
+        shell.show(try #require(NativeRoute("/planned")))
         await shell.settingsSettled()
         shell.replaceQuery(PlannedPaymentsRoute.showAllParameter, with: PlannedPaymentsRoute.showAllValue(true))
         #expect(shell.route.string == "/planned?show_all=true")
         #expect(PlannedPaymentsRoute.showAll(in: shell.route))
-        #expect(recorder.actions.last == .replaceRoute("/planned?show_all=true"))
+        #expect(shell.nativeNavigationLocation.raw == "/planned?show_all=true")
         shell.replaceQuery(PlannedPaymentsRoute.showAllParameter, with: PlannedPaymentsRoute.showAllValue(false))
         #expect(shell.route.string == "/planned")
-        #expect(recorder.actions.last == .replaceRoute("/planned"))
+        #expect(shell.nativeNavigationLocation.raw == "/planned")
         #expect(shell.detail == .native(.plannedPayments))
     }
 }

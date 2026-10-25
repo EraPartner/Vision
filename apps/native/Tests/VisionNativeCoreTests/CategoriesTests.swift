@@ -95,7 +95,7 @@ enum CategoriesFixture {
     }
 
     @MainActor
-    static func shell(_ model: CategoriesModel, recorder: ShellRecorder) -> NativeShellModel {
+    static func shell(_ model: CategoriesModel) -> NativeShellModel {
         NativeShellModel(
             strings: strings, theme: ThemeSelection(appearance: .light),
             notices: NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false),
@@ -103,18 +103,17 @@ enum CategoriesFixture {
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
             transactions: TransactionsFixture.idleModel(), accounts: AccountsFixture.idleModel(),
             categories: model, recipients: RecipientsFixture.idleModel(),
-            loadSettings: { NativeAppSettings() }, onNavigate: { recorder.actions.append($0) },
-            settingsReloadDelay: .milliseconds(1))
+            loadSettings: { NativeAppSettings() })
     }
 
     /// A shell on `route` with its settings read and the screen appeared.
     @MainActor
     static func opened(
-        _ service: FakeCategoriesService, route: String = "/categories", recorder: ShellRecorder = ShellRecorder()
+        _ service: FakeCategoriesService, route: String = "/categories"
     ) async throws -> (CategoriesModel, NativeShellModel) {
         let model = CategoriesModel(service: service)
-        let shell = shell(model, recorder: recorder)
-        shell.routeDidChange(try #require(NativeRoute(route)))
+        let shell = shell(model)
+        shell.show(try #require(NativeRoute(route)))
         await shell.settingsSettled()
         await model.appear()
         return (model, shell)
@@ -251,14 +250,13 @@ enum CategoriesFixture {
     }
 
     @Test func showAllAndExpandWriteTheRoute() async throws {
-        let recorder = ShellRecorder()
         let (model, shell) = try await CategoriesFixture.opened(
-            FakeCategoriesService(nodes: CategoriesFixture.tree()), recorder: recorder)
+            FakeCategoriesService(nodes: CategoriesFixture.tree()))
         defer { withExtendedLifetime(shell) {} }
         model.toggleExpanded(4)
         model.toggleExpanded(1)
         #expect(model.expandedIds == [4, 1])
-        #expect(recorder.actions.last == .replaceRoute("/categories?expanded=4&expanded=1"))
+        #expect(shell.nativeNavigationLocation.raw == "/categories?expanded=4&expanded=1")
         model.toggleExpanded(4)
         #expect(model.expandedIds == [1])
         model.toggleExpandAll()
@@ -273,17 +271,16 @@ enum CategoriesFixture {
     }
 
     @Test func theNameLinkNavigatesOnlyWhileShown() async throws {
-        let recorder = ShellRecorder()
         let (model, shell) = try await CategoriesFixture.opened(
-            FakeCategoriesService(nodes: CategoriesFixture.tree()), recorder: recorder)
+            FakeCategoriesService(nodes: CategoriesFixture.tree()))
         defer { withExtendedLifetime(shell) {} }
         let bills = try #require(model.tree.node(8))
         model.openTransactions(bills)
-        #expect(recorder.actions.last == .navigate("/transactions?category_id=8&filter_label=Bills"))
+        #expect(shell.nativeNavigationLocation.raw == "/transactions?category_id=8&filter_label=Bills")
         model.disappear()
-        let before = recorder.actions.count
+        let before = shell.nativeNavigationLocation.raw
         model.openTransactions(bills)
-        #expect(recorder.actions.count == before)
+        #expect(shell.nativeNavigationLocation.raw == before)
     }
 
     @Test func addValidatesThenCreatesAndRefetches() async throws {

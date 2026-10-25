@@ -3,7 +3,7 @@ import Testing
 
 @testable import VisionNativeCore
 
-@Suite("Native-only router parameter matching")
+@Suite("Native router parameter matching")
 struct NativeNavigationParameterTests {
     @Test func parametersMatchInstalledReactRouterEightPointThreeOracle() throws {
         // Values from installed react-router 8.3.0 matchRoutes, including its
@@ -61,12 +61,12 @@ struct NativeNavigationParameterTests {
         #expect(try #require(NativeNavigationLocation("/")).match?.screen == .home)
     }
 
-    @Test func rendererModeRouteAndScreenDecodingRemainUnchanged() throws {
+    @Test func routeAndScreenPathDecodingKeepTheirPolicies() throws {
         let raw = "/portfolio/import/%31/review?q=%C3%28%zz"
-        let renderer = try #require(NativeRoute(raw))
-        #expect(renderer.path == "/portfolio/import/%31/review")
-        #expect(NativeScreen.screen(forPath: renderer.path) == .portfolioImportReview(batchId: "%31"))
-        #expect(renderer.value("q") == "%C3%28%zz")
+        let route = try #require(NativeRoute(raw))
+        #expect(route.path == "/portfolio/import/%31/review")
+        #expect(NativeScreen.screen(forPath: route.path) == .portfolioImportReview(batchId: "%31"))
+        #expect(route.value("q") == "%C3%28%zz")
         #expect(NativeScreen.screen(forPath: "/admin/db/%252F") == .tableEditor(table: "%2F"))
         #expect(NativeScreen.screen(forPath: "/import/%31/review") == nil)
         #expect(try #require(NativeNavigationLocation(raw)).match?.screen == .portfolioImportReview(batchId: "1"))
@@ -112,7 +112,7 @@ struct NativeNavigationParameterTests {
         }
     }
 
-    @Test @MainActor func rendererNumericParsersRetainTheirExistingPolicies() {
+    @Test @MainActor func pathAndBatchParsersKeepTheirPolicies() {
         for value in ["01", "1e2", "+1", " 1 ", "0x10"] {
             #expect(PortfolioImportReviewModel.parseBatchId(value) == nil)
         }
@@ -123,7 +123,7 @@ struct NativeNavigationParameterTests {
 
 @MainActor @Suite("Native matched parameters reach shell consumers")
 struct NativeNavigationParameterShellTests {
-    private func makeShell(native: Bool, initial: String, recorder: ShellRecorder) -> NativeShellModel {
+    private func makeShell(initial: String) -> NativeShellModel {
         let settings = NativeAppSettings(adminMode: true)
         let client = APIClient(baseURL: { nil }, maxRetries: 0)
         let shell = NativeShellModel(
@@ -134,57 +134,39 @@ struct NativeNavigationParameterShellTests {
             transactions: TransactionsFixture.idleModel(), accounts: AccountsFixture.idleModel(),
             categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
             portfolio: PortfolioScreens(client: client), portfolioImports: PortfolioImportScreens(service: client),
-            nativeFallback: true,
-            nativeNavigation: native ? NativeNavigationHistory(initial: NativeNavigationLocation(initial)!) : nil,
-            loadSettings: { settings }, onNavigate: { recorder.actions.append($0) })
+            nativeNavigation: NativeNavigationHistory(initial: NativeNavigationLocation(initial)!),
+            loadSettings: { settings })
+        shell.setNativeDocumentState(.ready)
         shell.apply(settings: settings)
-        if !native { shell.routeDidChange(NativeRoute(initial)!) }
         return shell
     }
 
-    @Test func nativeTableMatchReachesEditorWithoutASecondDecodeWhileRendererKeepsItsParser() async {
+    @Test func tableMatchReachesTheEditorWithoutASecondDecode() async {
         let raw = "/admin/db/%252F?q=a+b&flag"
-        let recorder = ShellRecorder()
-        let native = makeShell(native: true, initial: raw, recorder: recorder)
-        #expect(native.detail == .native(.tableEditor(table: "/")))
-        #expect(native.admin.database.editor?.table == "/")
-        #expect(native.nativeNavigationLocation?.raw == raw)
-        let renderer = makeShell(native: false, initial: raw, recorder: recorder)
-        #expect(renderer.detail == .native(.tableEditor(table: "%2F")))
-        #expect(renderer.admin.database.editor?.table == "%2F")
-        #expect(renderer.route.path == "/admin/db/%252F" && recorder.actions.isEmpty)
-        await native.settingsSettled()
-        await renderer.settingsSettled()
+        let shell = makeShell(initial: raw)
+        #expect(shell.detail == .native(.tableEditor(table: "/")))
+        #expect(shell.admin.database.editor?.table == "/")
+        #expect(shell.nativeNavigationLocation.raw == raw)
+        await shell.settingsSettled()
     }
 
-    @Test func nativePortfolioMatchPublishesDecodedBatchWhileRendererRetainsItsRawSegment() async {
+    @Test func portfolioMatchPublishesTheDecodedBatch() async {
         let raw = "/portfolio/import/%31/review?flag"
-        let recorder = ShellRecorder()
-        let native = makeShell(native: true, initial: raw, recorder: recorder)
-        let renderer = makeShell(native: false, initial: raw, recorder: recorder)
-        #expect(native.detail == .native(.portfolioImportReview(batchId: "1")))
-        #expect(renderer.detail == .native(.portfolioImportReview(batchId: "%31")))
-        #expect(native.route.path == renderer.route.path && native.nativeNavigationLocation?.raw == raw)
-        #expect(recorder.actions.isEmpty)
-        await native.settingsSettled()
-        await renderer.settingsSettled()
+        let shell = makeShell(initial: raw)
+        #expect(shell.detail == .native(.portfolioImportReview(batchId: "1")))
+        #expect(shell.route.path == "/portfolio/import/%31/review" && shell.nativeNavigationLocation.raw == raw)
+        await shell.settingsSettled()
     }
 
-    @Test func nativeNumericAliasesSelectExistingTypedScreensWhileRendererUsesItsOriginalParsers() async {
-        let recorder = ShellRecorder()
+    @Test func numericAliasesSelectTheExistingTypedScreens() async {
         for (raw, expected) in [
             ("/accounts/1e2", NativeScreen.accountDetail(id: 100)),
             ("/import/0x10/review", NativeScreen.importReview(batchId: 16)),
         ] {
-            let native = makeShell(native: true, initial: raw, recorder: recorder)
-            let renderer = makeShell(native: false, initial: raw, recorder: recorder)
-            #expect(native.detail == .native(expected))
-            #expect(native.nativeNavigationLocation?.raw == raw)
-            if raw.hasPrefix("/accounts/") { #expect(renderer.detail == .native(.accountDetail(id: 0))) }
-            else { #expect(renderer.detail == .notFound) }
-            #expect(renderer.route.path == raw && recorder.actions.isEmpty)
-            await native.settingsSettled()
-            await renderer.settingsSettled()
+            let shell = makeShell(initial: raw)
+            #expect(shell.detail == .native(expected))
+            #expect(shell.nativeNavigationLocation.raw == raw)
+            await shell.settingsSettled()
         }
     }
 }

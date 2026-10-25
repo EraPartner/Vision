@@ -3,8 +3,6 @@ import Observation
 
 /// What the detail column shows for the current route.
 public enum NativeShellDetail: Equatable, Sendable {
-    /// The web app, already at the route.
-    case web
     case native(NativeScreen)
     case notFound
     case loading
@@ -34,13 +32,12 @@ public struct NativeLeaveGuard {
     }
 }
 
-/// The state behind the native navigation shell (ADR-204 phase 2): the web router's
-/// route, the `app_settings` native screens read, the theme and the sidebar.
+/// The state behind the native shell: the route (owned by native history), the
+/// `app_settings` native screens read, the theme and the sidebar.
 ///
-/// By default the web router stays the source of truth. The page reports every route through
-/// `shell:route-changed`; a sidebar click only asks the page to move with the `navigate`
-/// menu action, and the route here changes when the page reports it. The page may keep
-/// its route (an unsaved-changes prompt) or redirect (`RequireAdmin`).
+/// Native history is the only route authority. A sidebar click, menu action or link asks the
+/// history for a push or replace; the history applies the admin and legacy redirects and holds
+/// a navigation while a native screen has unsaved changes (the Leave this page? alert).
 @MainActor
 @Observable
 public final class NativeShellModel {
@@ -48,11 +45,8 @@ public final class NativeShellModel {
     public private(set) var settings: NativeAppSettings = .defaults
     /// `false` until `app_settings` has been read once; native screens wait for it.
     public private(set) var settingsLoaded = false
-    /// Chosen before document construction; never switches authority during a session.
-    public let presentationMode: NativeShellPresentationMode
     public private(set) var nativeDocumentState: NativeDocumentState = .loading
     private var initialSettingsLoadFailed = false
-    public var isRendererReady = false
     public var isReloadingGraph = false
     public private(set) var pageZoom: Double = 1
     public func setPageZoom(_ factor: Double) {
@@ -66,18 +60,11 @@ public final class NativeShellModel {
     public var theme: ThemeSelection
     public private(set) var isSidebarVisible = true
     public private(set) var hiddenSections: [NavSectionID: Bool]
-    /// The page is presenting something over its route (palette, settings, shortcuts), so
-    /// the web view shows even where a native screen exists, until the page reports a route
-    /// again (it re-reports the same route when the palette or shortcuts overlay closes).
-    public private(set) var isPresentingWeb = false
-    public var isPresentingOnboarding = false
-    /// The route a sidebar click or shortcut asked the page for, until the page reports one.
-    public private(set) var pendingRoute: NativeRoute?
-    /// Native history: the route authority whenever the presentation is native (ADR-211).
-    public private(set) var nativeNavigation: NativeNavigationHistory?
-    public var nativeNavigationLocation: NativeNavigationLocation? { nativeNavigation?.location }
-    public var canGoBack: Bool { nativeNavigation?.canGoBack ?? false }
-    public var canGoForward: Bool { nativeNavigation?.canGoForward ?? false }
+    /// Native history: the route authority.
+    public private(set) var nativeNavigation: NativeNavigationHistory
+    public var nativeNavigationLocation: NativeNavigationLocation { nativeNavigation.location }
+    public var canGoBack: Bool { nativeNavigation.canGoBack }
+    public var canGoForward: Bool { nativeNavigation.canGoForward }
     public let exchangeRates: ExchangeRatesModel
     public let notices: NativeNoticeCenter
     /// `/admin`, `/admin/db`, `/admin/db/:table`, `/admin/providers` and `/admin/endpoints`.
@@ -124,13 +111,12 @@ public final class NativeShellModel {
 
     /// The offset to restore for the current visit: only when it was reached by Back/Forward.
     public func restorableScrollOffset() -> Double? {
-        guard let history = nativeNavigation, history.lastCommitWasTraversal else { return nil }
-        return scrollOffsets[history.entryID]
+        guard nativeNavigation.lastCommitWasTraversal else { return nil }
+        return scrollOffsets[nativeNavigation.entryID]
     }
 
     public func recordScrollOffset(_ offset: Double) {
-        guard let history = nativeNavigation else { return }
-        scrollOffsets[history.entryID] = max(0, offset)
+        scrollOffsets[nativeNavigation.entryID] = max(0, offset)
     }
 
     /// The count beside a sidebar row, 0 when none is shown.
@@ -139,9 +125,7 @@ public final class NativeShellModel {
     }
     public let onboarding: NativeOnboardingModel?
     public let reports: NativeReportModel?
-    public let nativeFallback: Bool
     public private(set) var isPresentingShortcuts = false
-    public var isEditingWebText: (@MainActor () async -> Bool)?
     /// ErrorBoundary's Reload page: View › Reload for the current graph (set by the app).
     public var reloadPage: (@MainActor () -> Void)?
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
@@ -149,29 +133,24 @@ public final class NativeShellModel {
 
     @ObservationIgnored private let loadSettings: @Sendable () async throws -> NativeAppSettings
     @ObservationIgnored private let saveHiddenSections: @MainActor ([NavSectionID: Bool]) -> Void
-    @ObservationIgnored private let onNavigate: @MainActor (MenuAction) -> Void
     @ObservationIgnored private let copyToClipboard: @MainActor (String) -> Bool
     @ObservationIgnored private let clipboardNoticeSource = UUID()
     @ObservationIgnored private var clipboardNoticeID = 0
     @ObservationIgnored private let onSidebarVisibilityChange: @MainActor (Bool) -> Void
     @ObservationIgnored private var settingsTask: Task<Void, Never>?
-    @ObservationIgnored private var delayedSettingsTask: Task<Void, Never>?
-    @ObservationIgnored private let settingsReloadDelay: Duration
     @ObservationIgnored private var shortcuts = NativeShortcuts()
     @ObservationIgnored private var leaveGuard: NativeLeaveGuard?
-    @ObservationIgnored private var needsInitialRouteActivation = false
     @ObservationIgnored private let priceNoticeSource = UUID()
-    @ObservationIgnored private let nativeIntents: NativeShellIntentCoordinator?
-    @ObservationIgnored private var nativeIntentLease: NativeShellIntentCoordinator.Lease?
+    @ObservationIgnored private let nativeIntents: NativeShellIntentCoordinator
+    @ObservationIgnored private var nativeIntentLease: NativeShellIntentCoordinator.Lease
     @ObservationIgnored private var nativeIntentConsumer: NativeScreen?
 
     /// - Parameters:
     ///   - hiddenSections: the stored section choices; `nil` uses the `defaultHidden` flags.
-    ///   - onNavigate: sends a menu action to the page (`navigate`, `replace-route`,
-    ///     `open-palette`, `open-shortcuts`, `open-settings`).
+    ///   - nativeNavigation: the history to start from; `nil` starts at `initialRoute`.
+    ///   - nativeIntents: the session's intent coordinator, kept across graph rebuilds; `nil`
+    ///     gives this graph its own.
     ///   - onSidebarVisibilityChange: the sidebar was shown or hidden.
-    ///   - settingsReloadDelay: how long after the settings dialog closes `app_settings` is
-    ///     read once more; the page saves them 500 ms after a change.
     public init(
         strings: any Localizing,
         theme: ThemeSelection,
@@ -204,18 +183,14 @@ public final class NativeShellModel {
         shellNotifications: NativeShellNotificationsModel? = nil,
         onboarding: NativeOnboardingModel? = nil,
         reports: NativeReportModel? = nil,
-        nativeFallback: Bool = false,
-        presentationMode: NativeShellPresentationMode = .retainedWeb,
         initialRoute: NativeRoute = .home,
         nativeNavigation: NativeNavigationHistory? = nil,
         nativeIntents: NativeShellIntentCoordinator? = nil,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
-        onNavigate: @escaping @MainActor (MenuAction) -> Void,
         copyToClipboard: @escaping @MainActor (String) -> Bool = { _ in false },
-        onSidebarVisibilityChange: @escaping @MainActor (Bool) -> Void = { _ in },
-        settingsReloadDelay: Duration = .milliseconds(600)
+        onSidebarVisibilityChange: @escaping @MainActor (Bool) -> Void = { _ in }
     ) {
         self.strings = strings
         self.theme = theme
@@ -248,37 +223,26 @@ public final class NativeShellModel {
         self.shellNotifications = shellNotifications
         self.onboarding = onboarding
         self.reports = reports
-        self.nativeFallback = nativeFallback
-        self.presentationMode = presentationMode
-        self.nativeNavigation = nativeNavigation
-        self.nativeIntents = nativeNavigation == nil ? nil : nativeIntents
-        self.route = nativeNavigation?.location.route ?? initialRoute
-        self.needsInitialRouteActivation = nativeNavigation == nil && initialRoute != .home
+        let coordinator = nativeIntents ?? NativeShellIntentCoordinator()
+        let attachment = coordinator.attach(
+            initialHistory: nativeNavigation
+                ?? NativeNavigationHistory(initial: NativeNavigationLocation(initialRoute.string) ?? .home))
+        self.nativeIntents = coordinator
+        self.nativeIntentLease = attachment.lease
+        self.nativeNavigation = attachment.history
+        self.route = attachment.history.location.route
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections
-        self.onNavigate = onNavigate
         self.copyToClipboard = copyToClipboard
         self.onSidebarVisibilityChange = onSidebarVisibilityChange
-        self.settingsReloadDelay = settingsReloadDelay
-        if let nativeIntents = self.nativeIntents, let nativeNavigation {
-            let attachment = nativeIntents.attach(initialHistory: nativeNavigation)
-            self.nativeIntentLease = attachment.lease
-            self.nativeNavigation = attachment.history
-            self.route = attachment.history.location.route
-        }
         commandPalette?.onAction = { [weak self] action in self?.activatePaletteAction(action) }
         shellNotifications?.fx.attachNotices(notices)
         onboarding?.attachNotices(notices)
         onboarding?.strings = strings
         onboarding?.navigate = { [weak self] path in self?.navigate(to: path) }
-        onboarding?.openSettings = { [weak self] section in
-            guard let self else { return }
-            if self.nativeNavigation != nil { self.openNativeSettings(section: section) }
-            else { self.onNavigate(.navigate(self.route.setting("settings", to: section).string)) }
-        }
+        onboarding?.openSettings = { [weak self] section in self?.openNativeSettings(section: section) }
         onboarding?.didComplete = { [weak self] in
-            self?.isPresentingOnboarding = false
             self?.nativeIntentReadinessDidChange()
         }
         onboarding?.didMutateCategories = { [weak self] in
@@ -334,37 +298,27 @@ public final class NativeShellModel {
     // MARK: Route
 
     private var matchedScreen: NativeScreen? {
-        if let location = nativeNavigation?.location { return location.match?.screen }
-        return NativeScreen.screen(forPath: route.path)
+        nativeNavigation.location.match?.screen
     }
 
-    /// The native screen for the route, or the web app. A native screen is shown once
-    /// `app_settings` has been read (its formats and default currency); an admin screen only
-    /// while it says admin mode is on, otherwise the page shows the route and its
-    /// `RequireAdmin` redirects, which the page then reports.
+    /// The native screen for the route, or the startup, not-found and unavailable states. A
+    /// native screen is shown once the host marked the document ready and `app_settings` has
+    /// been read (its formats and default currency); an admin screen only while it says admin
+    /// mode is on (the history redirects the route otherwise).
     public var detail: NativeShellDetail {
-        guard presentationMode.isNative else { return retainedWebDetail }
-        // Without native history there is no route authority and no web fallback.
-        guard nativeNavigation != nil else { return .unavailable }
         guard nativeDocumentState != .failed, !initialSettingsLoadFailed else { return .unavailable }
         guard nativeDocumentState == .ready, settingsLoaded, !isReloadingGraph else { return .loading }
-        guard !isPresentingWeb, onboarding != nil || !isPresentingOnboarding,
-            route.value("settings") == nil || nativeSettings != nil,
+        guard route.value("settings") == nil || nativeSettings != nil,
             route.value("export") != "pdf" || reports != nil
         else { return .unavailable }
-        guard matchedScreen != nil else { return .notFound }
-        let resolved = retainedWebDetail
-        return resolved == .web ? .unavailable : resolved
+        guard let screen = matchedScreen else { return .notFound }
+        return nativeScreenDetail(screen)
     }
-
-    /// Infrastructure is permanently hidden in native mode, independently of route state.
-    public var isWebContentHidden: Bool { presentationMode.isNative || detail != .web }
 
     /// The SDK must also apply its existing overlay, restore and operation fences.
     /// In particular a cached native snapshot must not print while native startup is pending.
     public var printDisposition: NativeShellPrintDisposition {
         switch detail {
-        case .web: return presentationMode == .retainedWeb ? .webDocument : .unavailable
         case .native: return .nativePage
         case .notFound, .loading, .unavailable: return .unavailable
         }
@@ -373,50 +327,41 @@ public final class NativeShellModel {
     /// Called only by the native document owner after its independent document/generation
     /// checks. This display state neither authenticates a document nor releases SDK gates.
     public func setNativeDocumentState(_ state: NativeDocumentState) {
-        guard presentationMode.isNative else { return }
         nativeDocumentState = state
     }
 
     public var canRetryInitialSettings: Bool {
-        presentationMode.isNative && initialSettingsLoadFailed
-            && nativeDocumentState == .ready
+        initialSettingsLoadFailed && nativeDocumentState == .ready
     }
 
-    private var retainedWebDetail: NativeShellDetail {
-        guard !needsInitialRouteActivation, !isPresentingWeb,
-            onboarding != nil || !isPresentingOnboarding, settingsLoaded
-        else {
-            return .web
-        }
-        guard let screen = matchedScreen else {
-            if route.path == "/portfolio/performance" { return .web }
-            return nativeFallback ? .notFound : .web
-        }
-        if screen.requiresAdmin && !settings.adminMode { return .web }
-        if screen == .home && home == nil { return .web }
+    /// The screen, unless the model it needs was not supplied (shell-only test fixtures), which
+    /// shows the unavailable state.
+    private func nativeScreenDetail(_ screen: NativeScreen) -> NativeShellDetail {
+        if screen.requiresAdmin && !settings.adminMode { return .unavailable }
+        if screen == .home && home == nil { return .unavailable }
         if screen == .statistics && (statistics == nil || reports == nil && route.value("export") == "pdf") {
-            return .web
+            return .unavailable
         }
-        if screen == .tax && (tax == nil || reports == nil && route.value("export") == "pdf") { return .web }
+        if screen == .tax && (tax == nil || reports == nil && route.value("export") == "pdf") { return .unavailable }
         if screen.path == "/portfolio" || screen.path.hasPrefix("/portfolio/") {
-            if portfolio == nil || reports == nil && route.value("export") == "pdf" { return .web }
+            if portfolio == nil || reports == nil && route.value("export") == "pdf" { return .unavailable }
         }
-        if screen == .portfolioTax && tax == nil { return .web }
-        if screen == .portfolioImport && portfolioImports == nil { return .web }
-        if case .portfolioImportReview = screen, portfolioImports == nil { return .web }
-        if screen == .analysis && analysis == nil { return .web }
-        if screen == .analysisMonitors && analysisMonitors == nil { return .web }
-        if screen == .researchForecast && researchForecast == nil { return .web }
-        if screen == .researchChartBuilder && researchChartBuilder == nil { return .web }
-        if screen == .researchDossiers && researchDossiers == nil { return .web }
-        if screen == .aiChat && aiChat == nil { return .web }
+        if screen == .portfolioTax && tax == nil { return .unavailable }
+        if screen == .portfolioImport && portfolioImports == nil { return .unavailable }
+        if case .portfolioImportReview = screen, portfolioImports == nil { return .unavailable }
+        if screen == .analysis && analysis == nil { return .unavailable }
+        if screen == .analysisMonitors && analysisMonitors == nil { return .unavailable }
+        if screen == .researchForecast && researchForecast == nil { return .unavailable }
+        if screen == .researchChartBuilder && researchChartBuilder == nil { return .unavailable }
+        if screen == .researchDossiers && researchDossiers == nil { return .unavailable }
+        if screen == .aiChat && aiChat == nil { return .unavailable }
         if [
             .researchHome, .researchMarkets, .researchMarketLookup, .researchWatchlist, .researchCompare,
         ].contains(
             screen),
             research == nil
         {
-            return .web
+            return .unavailable
         }
         return .native(screen)
     }
@@ -430,23 +375,15 @@ public final class NativeShellModel {
         NavigationRegistry.matchItem(path: route.path)?.url
     }
 
-    /// Settings and global overlays cover the native view while React keeps its page mounted.
+    /// Settings and global overlays cover the native view of the route they are shown over.
     public func isTemporarilyCovered(_ path: String) -> Bool {
         route.path == path
-            && (isPresentingWeb || isPresentingOnboarding || isPresentingNativeOverlay
-                || route.value("settings") != nil)
-    }
-
-    /// `shell:route-changed`: the page's router moved, or an overlay closed on the same route.
-    public func routeDidChange(_ next: NativeRoute) {
-        guard nativeNavigation == nil else { return }
-        needsInitialRouteActivation = false
-        applyRouteChange(next)
+            && (isPresentingNativeOverlay || route.value("settings") != nil)
     }
 
     private func applyRouteChange(_ next: NativeRoute) {
         let pathChanged = next.path != route.path
-        if next.path != TransactionsRoutes.path, let nativeIntents, let nativeIntentLease {
+        if next.path != TransactionsRoutes.path {
             nativeIntents.cancelNewTransaction(for: nativeIntentLease)
         }
         if pathChanged {
@@ -460,14 +397,6 @@ public final class NativeShellModel {
             if route.path == "/ai-chat" { aiChat?.didDisappear() }
             if route.path == "/research/market" { removeLeaveGuard(id: route.path) }
         }
-        let settingsClosed = route.value("settings") != nil && next.value("settings") == nil
-        let webSettingsClosed = settingsClosed && nativeSettings == nil
-        let reportClosed = route.value("export") == "pdf" && next.value("export") != "pdf"
-        // A new page, the settings dialog closing (`?settings` removed), or the same route
-        // again (the palette or shortcuts overlay closed) ends a web presentation over a
-        // native screen.
-        if pathChanged || settingsClosed || reportClosed || next == route { isPresentingWeb = false }
-        pendingRoute = nil
         route = next
         if let reports {
             if next.value("export") == "pdf", let type = Self.reportType(for: next.path) {
@@ -477,83 +406,50 @@ public final class NativeShellModel {
             }
         }
         if pathChanged { leaveConfirmation = nil }
-        if nativeNavigation != nil {
-            if case .some(.tableEditor(let table)) = matchedScreen { admin.database.routeDidChange(table: table) }
-            else { admin.database.routeDidChange(table: nil) }
-        } else {
-            admin.database.routeDidChange(path: next.path)
-        }
-        // ⌘N's pending Add sheet belongs to the arrival at `/transactions`; landing elsewhere
-        // (a redirect, the page's own prompt) drops it.
-        if next.path != TransactionsRoutes.path { transactions.cancelAddOnArrival() }
+        if case .some(.tableEditor(let table)) = matchedScreen { admin.database.routeDidChange(table: table) }
+        else { admin.database.routeDidChange(table: nil) }
         if let section = NavigationRegistry.matchSection(path: next.path), hiddenSections[section] == true {
             // Landing inside a hidden section shows it for good, like the web sidebar.
             setSection(section, expanded: true)
         }
-        // The page may have changed `app_settings` (admin mode, formats) in its settings
-        // dialog or on the previous page.
-        if pathChanged || webSettingsClosed { reloadSettings() }
-        // The page saves `app_settings` 500 ms after a change, so a read right after the
-        // dialog closes can still see the old values.
-        if webSettingsClosed { reloadSettingsLater() }
-        if webSettingsClosed { home?.invalidate() }
+        // Another page may have changed `app_settings` (admin mode, formats).
+        if pathChanged { reloadSettings() }
         if pathChanged && next.path == InsightsRoutes.home { home?.invalidate() }
-        if webSettingsClosed || pathChanged && next.path == InsightsRoutes.statistics { statistics?.model.invalidate() }
-        if webSettingsClosed || pathChanged && next.path == "/tax" { tax?.invalidate() }
-        if webSettingsClosed || pathChanged && next.path == "/portfolio/tax" { tax?.invalidate() }
-        if webSettingsClosed || pathChanged && (next.path == "/portfolio" || next.path.hasPrefix("/portfolio/")) {
+        if pathChanged && next.path == InsightsRoutes.statistics { statistics?.model.invalidate() }
+        if pathChanged && next.path == "/tax" { tax?.invalidate() }
+        if pathChanged && next.path == "/portfolio/tax" { tax?.invalidate() }
+        if pathChanged && (next.path == "/portfolio" || next.path.hasPrefix("/portfolio/")) {
             portfolio?.invalidate()
         }
-        if webSettingsClosed || pathChanged && next.path.hasPrefix("/portfolio/import") {
-            portfolioImports?.invalidate()
-        }
-        if webSettingsClosed || pathChanged && next.path == "/analysis" { analysis?.invalidate() }
-        if webSettingsClosed || pathChanged && next.path == "/analysis/monitors" { analysisMonitors?.invalidate() }
+        if pathChanged && next.path.hasPrefix("/portfolio/import") { portfolioImports?.invalidate() }
+        if pathChanged && next.path == "/analysis" { analysis?.invalidate() }
+        if pathChanged && next.path == "/analysis/monitors" { analysisMonitors?.invalidate() }
     }
 
-    /// A sidebar click, a menu or shortcut navigation, or another native link. The page moves
-    /// (or keeps its route behind its own unsaved-changes prompt) and reports the result; until
-    /// then the route stays. While a native screen has unsaved changes, a navigation to another
-    /// path waits on the Leave this page? alert instead (`useBlocker`).
+    /// A sidebar click, a menu or shortcut navigation, or another native link: pushes a history
+    /// entry. While a native screen has unsaved changes, a navigation to another path waits on
+    /// the Leave this page? alert instead (`useBlocker`).
     public func navigate(to url: String) {
-        if nativeNavigation != nil {
-            guard let next = NativeNavigationLocation(url) else { return }
-            requestNativeNavigation(.push(next))
-            return
-        }
-        guard let next = NativeRoute(url) else { return }
-        if next.path != route.path, let leaveGuard, leaveGuard.hasUnsavedChanges() {
-            leaveConfirmation = next
-            return
-        }
-        send(next)
+        guard let next = NativeNavigationLocation(url) else { return }
+        requestNativeNavigation(.push(next))
     }
 
     /// `navigate(url, { replace: true })` from a native screen (Review import's Commit and
-    /// Discard): the page replaces its history entry and reports the new route.
+    /// Discard): the current history entry is replaced.
     public func replace(with url: String) {
-        if nativeNavigation != nil {
-            guard let next = NativeNavigationLocation(url) else { return }
-            requestNativeNavigation(.replace(next))
-            return
-        }
-        guard let next = NativeRoute(url) else { return }
-        pendingRoute = next
-        onNavigate(.replaceRoute(next.string))
+        guard let next = NativeNavigationLocation(url) else { return }
+        requestNativeNavigation(.replace(next))
     }
-    /// The existing report dialog owns PDF rendering and report serialization.
+
+    /// The report overlay owns PDF rendering and report serialization.
     public func openStatisticsReport() {
         guard route.path == InsightsRoutes.statistics else { return }
-        if nativeNavigation != nil { replaceQuery("export", with: "pdf"); return }
-        isPresentingWeb = true
-        replace(with: route.setting("export", to: "pdf").string)
+        replaceQuery("export", with: "pdf")
     }
 
     public func openTaxReport() {
         guard route.path == "/tax" else { return }
-        if nativeNavigation != nil { replaceQuery("export", with: "pdf"); return }
-        isPresentingWeb = true
-        replace(with: route.setting("export", to: "pdf").string)
+        replaceQuery("export", with: "pdf")
     }
 
     public func openPortfolioReport() {
@@ -561,14 +457,7 @@ public final class NativeShellModel {
         case .portfolio, .portfolioHoldings: break
         default: return
         }
-        if nativeNavigation != nil { replaceQuery("export", with: "pdf"); return }
-        isPresentingWeb = true
-        replace(with: route.setting("export", to: "pdf").string)
-    }
-
-    private func send(_ next: NativeRoute) {
-        pendingRoute = next
-        onNavigate(.navigate(next.string))
+        replaceQuery("export", with: "pdf")
     }
 
     public func goBack() { requestNativeNavigation(.traverse(-1)) }
@@ -577,76 +466,53 @@ public final class NativeShellModel {
     private var nativeAdminMode: Bool? { settingsLoaded ? settings.adminMode : nil }
 
     private func requestNativeNavigation(_ intent: NativeNavigationHistory.Intent) {
-        guard var history = nativeNavigation else { return }
+        var history = nativeNavigation
         let outcome = history.request(intent, adminMode: nativeAdminMode, hasUnsavedChanges: hasGuardedUnsavedChanges)
         nativeNavigation = history
         applyNativeNavigation(outcome)
     }
 
     private func applyNativeNavigation(_ outcome: NativeNavigationHistory.Outcome) {
-        if let nativeIntents, let nativeIntentLease, let nativeNavigation {
-            nativeIntents.checkpoint(nativeNavigation, for: nativeIntentLease)
-        }
+        nativeIntents.checkpoint(nativeNavigation, for: nativeIntentLease)
         switch outcome {
         case .committed(let location):
             leaveConfirmation = nil
-            pendingRoute = nil
             applyRouteChange(location.route)
         case .blocked(let location):
-            pendingRoute = nil
             leaveConfirmation = location.route
         case .waitingForSettings:
             leaveConfirmation = nil
         case .unchanged:
-            if nativeNavigation?.pending == nil { leaveConfirmation = nil }
+            if nativeNavigation.pending == nil { leaveConfirmation = nil }
         }
     }
 
     private func openNativeSettings(section: String) {
-        guard var history = nativeNavigation else { return }
-        let outcome = history.openSettings(section: section, adminMode: nativeAdminMode, hasUnsavedChanges: hasGuardedUnsavedChanges)
+        var history = nativeNavigation
+        let outcome = history.openSettings(
+            section: section, adminMode: nativeAdminMode, hasUnsavedChanges: hasGuardedUnsavedChanges)
         nativeNavigation = history
         applyNativeNavigation(outcome)
     }
 
-    /// A CSV opened from Finder or the dock, or dropped on a native screen
-    /// (`registerPendingImportFile` and `navigate("/import")` of `ElectronBridge`): the native
-    /// import card always gets the file (pre-filled, not started, within the handoff's 30
-    /// seconds), so it is not lost when `/import` turns native after `app_settings` is read.
-    /// Once the settings are read the shell moves to `/import` itself and returns `true`.
-    /// Before that it returns `false`: the web app takes the file too (`app:csv-opened`) and
-    /// navigates, in case `/import` stays a web page.
+    /// A CSV opened from Finder or the dock, or dropped on a native screen: the native import
+    /// card gets the file (pre-filled, not started, within the handoff's 30 seconds) once the
+    /// document, settings and onboarding are ready, and the shell moves to `/import`. Returns
+    /// `false` when this graph has been replaced.
     public func openImportFile(_ file: ImportFile) -> Bool {
-        if nativeIntents != nil { return enqueueNativeIntent(.openCSV(file)) }
-        guard NativeScreen.screen(forPath: ImportRoutes.path) != nil else { return false }
-        imports.handoff(file)
-        guard settingsLoaded else { return false }
-        if detail != .native(.importExport) { navigate(to: ImportRoutes.path) }
-        return true
+        enqueueNativeIntent(.openCSV(file))
     }
 
-    /// ⌘N, the dock menu's New transaction and the `N` shortcut (`/transactions?new=1`): while
-    /// `/transactions` is native, the Add transaction sheet opens on the native screen, at once
-    /// when it is already shown, otherwise once the shell arrives at `/transactions`. The
-    /// navigation leaves out `new=1`: the page behind the native screen would open its own
-    /// sheet for it too. Returns `false` when the page handles it.
+    /// ⌘N, the dock menu's New transaction and the `N` shortcut: the Add transaction sheet
+    /// opens on the native `/transactions` screen, at once when it is already shown, otherwise
+    /// once the shell arrives there. Returns `false` when this graph has been replaced.
     public func newTransaction() -> Bool {
-        if nativeIntents != nil { return enqueueNativeIntent(.newTransaction) }
-        guard settingsLoaded, NativeScreen.screen(forPath: TransactionsRoutes.path) != nil else {
-            return false
-        }
-        if detail == .native(.transactions) {
-            transactions.requestAdd()
-        } else {
-            transactions.requestAddOnArrival()
-            navigate(to: TransactionsRoutes.path)
-        }
-        return true
+        enqueueNativeIntent(.newTransaction)
     }
 
-    /// Explicit native-authority menu admission. The SDK still uses its renderer path by
-    /// default; this optional session executes Settings/theme commands through native owners.
-    /// Invalid payloads of known source commands are ignored, as in ElectronBridge.
+    /// Menu admission: each menu or dock action runs through its native owner. Invalid
+    /// payloads of known commands are ignored, as in ElectronBridge; an unknown action is
+    /// refused.
     @discardableResult
     public func acceptNativeMenuAction(_ action: MenuAction) -> Bool {
         guard hasCurrentNativeIntentLease else { return false }
@@ -666,11 +532,11 @@ public final class NativeShellModel {
                 return true
             }
             intent = .setTheme(mode)
-        case "navigate", "replace-route":
+        case "navigate":
             guard let raw = action.payload, let location = NativeNavigationLocation(raw) else {
                 return true
             }
-            intent = .navigate(location, replace: action.action == "replace-route")
+            intent = .navigate(location, replace: false)
         case "toggle-sidebar": intent = .toggleSidebar
         case "open-palette":
             guard commandPalette != nil else { return false }
@@ -684,22 +550,19 @@ public final class NativeShellModel {
     }
 
     private var hasCurrentNativeIntentLease: Bool {
-        guard let nativeIntents, let nativeIntentLease else { return false }
-        return nativeIntents.isCurrent(nativeIntentLease)
+        nativeIntents.isCurrent(nativeIntentLease)
     }
 
     private var nativeIntentReadiness: NativeShellIntentCoordinator.Readiness {
         .init(
-            document: presentationMode.isNative
-                ? nativeDocumentState == .ready : isRendererReady,
+            document: nativeDocumentState == .ready,
             settings: settingsLoaded && (nativeSettings?.isLoaded ?? true),
-            onboarding: (onboarding?.isLoaded ?? true) && onboarding?.isPresented != true
-                && !isPresentingOnboarding,
+            onboarding: (onboarding?.isLoaded ?? true) && onboarding?.isPresented != true,
             acceptingInput: !isReloadingGraph && nativeSettings?.isSuspendedForRestore != true)
     }
 
     private func enqueueNativeIntent(_ intent: NativeShellIntentCoordinator.Intent) -> Bool {
-        guard hasCurrentNativeIntentLease, let nativeIntents else { return false }
+        guard hasCurrentNativeIntentLease else { return false }
         nativeIntents.enqueue(intent)
         nativeIntentReadinessDidChange()
         return true
@@ -708,7 +571,6 @@ public final class NativeShellModel {
     /// The host calls this after document/settings/onboarding/input readiness changes.
     /// It must retain its independent document and generation checks before opening gates.
     public func nativeIntentReadinessDidChange() {
-        guard let nativeIntents, let nativeIntentLease else { return }
         let readiness = nativeIntentReadiness
         nativeIntents.drain(for: nativeIntentLease, readiness: readiness) { [self] intent in
             switch intent {
@@ -726,7 +588,7 @@ public final class NativeShellModel {
             }
             switch intent {
             case .openCSV, .newTransaction:
-                if let pending = nativeNavigation?.pending {
+                if let pending = nativeNavigation.pending {
                     nativeIntents.preserveBlockedColdNavigation(
                         pending, newTransaction: intent == .newTransaction, for: nativeIntentLease)
                 }
@@ -841,61 +703,39 @@ public final class NativeShellModel {
 
     /// Stay on page (`blocker.reset`): the navigation is cancelled.
     public func stayOnPage() {
-        nativeNavigation?.cancelPending()
-        if let nativeIntents, let nativeIntentLease {
-            nativeIntents.cancelNewTransaction(for: nativeIntentLease)
-            if let nativeNavigation { nativeIntents.checkpoint(nativeNavigation, for: nativeIntentLease) }
-        }
+        nativeNavigation.cancelPending()
+        nativeIntents.cancelNewTransaction(for: nativeIntentLease)
+        nativeIntents.checkpoint(nativeNavigation, for: nativeIntentLease)
         leaveConfirmation = nil
-        transactions.cancelAddOnArrival()
     }
 
     /// Leave and discard (`blocker.proceed`): the unsaved work is dropped and the navigation
     /// continues.
     public func leavePage() {
-        guard let next = leaveConfirmation else { return }
-        if var history = nativeNavigation {
-            leaveGuard?.discard()
-            let outcome = history.confirmPending(adminMode: nativeAdminMode)
-            nativeNavigation = history
-            applyNativeNavigation(outcome)
-            return
-        }
-        leaveConfirmation = nil
+        guard leaveConfirmation != nil else { return }
+        var history = nativeNavigation
         leaveGuard?.discard()
-        send(next)
+        let outcome = history.confirmPending(adminMode: nativeAdminMode)
+        nativeNavigation = history
+        applyNativeNavigation(outcome)
     }
 
     /// `setSearchParams(..., { replace: true })` for the current route; `nil` deletes the
     /// parameter (`useSearchParamState` writing a default value).
     public func replaceQuery(_ name: String, with value: String?) {
-        if let history = nativeNavigation {
-            guard let next = history.location.setting(name, to: value) else { return }
-            requestNativeNavigation(.replace(next))
-            return
-        }
-        let next = value.map { route.setting(name, to: $0) } ?? route.removing(name)
-        route = next
-        onNavigate(.replaceRoute(next.string))
+        guard let next = nativeNavigation.location.setting(name, to: value) else { return }
+        requestNativeNavigation(.replace(next))
     }
 
     /// `setSearchParams(next, { replace: true })` with a whole new query for the current path
     /// (the sort pair, written together).
     public func replaceQuery(_ query: [URLQueryItem]) {
-        if let history = nativeNavigation {
-            guard let next = history.location.replacingQuery(query) else { return }
-            requestNativeNavigation(.replace(next))
-            return
-        }
-        let next = NativeRoute(path: route.path, query: query)
-        route = next
-        onNavigate(.replaceRoute(next.string))
+        guard let next = nativeNavigation.location.replacingQuery(query) else { return }
+        requestNativeNavigation(.replace(next))
     }
 
     public func openSettings() {
-        if nativeNavigation != nil { openNativeSettings(section: "general"); return }
-        willPresent(.openSettings)
-        onNavigate(.openSettings)
+        openNativeSettings(section: "general")
     }
 
     public var settingsSection: String? {
@@ -909,21 +749,16 @@ public final class NativeShellModel {
         guard isPresentingNativeSettings,
             ["general", "appearance", "statistics", "behavior", "ai", "backup", "about"].contains(section)
         else { return }
-        if nativeNavigation != nil { openNativeSettings(section: section); return }
-        replace(with: route.setting("settings", to: section).string)
+        openNativeSettings(section: section)
     }
     public func closeSettings() {
-        if var history = nativeNavigation {
-            let outcome = history.closeSettings(adminMode: nativeAdminMode, hasUnsavedChanges: hasGuardedUnsavedChanges)
-            nativeNavigation = history
-            applyNativeNavigation(outcome)
-        } else { onNavigate(.closeSettings) }
+        var history = nativeNavigation
+        let outcome = history.closeSettings(adminMode: nativeAdminMode, hasUnsavedChanges: hasGuardedUnsavedChanges)
+        nativeNavigation = history
+        applyNativeNavigation(outcome)
     }
 
     public var nativeOverlayKind: NativeShellOverlayKind? {
-        // A restore seed has not yet been accepted by the new document generation.
-        // Mounting Settings now would let its .task start storage reads before readiness.
-        guard !needsInitialRouteActivation else { return nil }
         if commandPalette?.isOpen == true { return .palette }
         if isPresentingShortcuts { return .shortcuts }
         if isPresentingNativeSettings { return .settings }
@@ -934,23 +769,14 @@ public final class NativeShellModel {
     public var isPresentingNativeOverlay: Bool { nativeOverlayKind != nil }
     public func openPalette() {
         guard !isReloadingGraph, nativeSettings?.isSuspendedForRestore != true else { return }
-        guard let commandPalette else {
-            willPresent(.openPalette)
-            onNavigate(.openPalette)
-            return
-        }
+        guard let commandPalette else { return }
         commandPalette.configure(settings: settings)
         commandPalette.open()
     }
     public func closePalette() { commandPalette?.close() }
     public func openShortcuts() {
         guard !isReloadingGraph, nativeSettings?.isSuspendedForRestore != true else { return }
-        if commandPalette == nil {
-            willPresent(.openShortcuts)
-            onNavigate(.openShortcuts)
-        } else {
-            isPresentingShortcuts = true
-        }
+        if commandPalette != nil { isPresentingShortcuts = true }
     }
     public func closeShortcuts() { isPresentingShortcuts = false }
     public func closeReport() {
@@ -994,26 +820,6 @@ public final class NativeShellModel {
             return .portfolio
         }
         return nil
-    }
-
-    /// A menu action is about to reach the page. One that opens a page dialog shows the web
-    /// view, since the dialog belongs to the page.
-    public func willPresent(_ action: MenuAction) {
-        if action == .openSettings, nativeSettings != nil { return }
-        if action == .openPalette, commandPalette != nil {
-            openPalette()
-            return
-        }
-        if action == .openShortcuts, commandPalette != nil {
-            openShortcuts()
-            return
-        }
-        switch action.action {
-        case MenuAction.toggleSidebar.action, "navigate", "replace-route", "set-theme", "native-sidebar":
-            return
-        default:
-            if case .native = detail { isPresentingWeb = true }
-        }
     }
 
     /// A key press on a native screen. Returns `false` when the key is not a shortcut.
@@ -1094,18 +900,14 @@ public final class NativeShellModel {
         theme.colorblindGainLoss = next.colorblindGainLoss
         commandPalette?.configure(settings: next)
         onboarding?.strings = strings
-        if var history = nativeNavigation {
-            let outcome = history.settingsDidLoad(adminMode: next.adminMode, hasUnsavedChanges: hasGuardedUnsavedChanges)
-            nativeNavigation = history
-            applyNativeNavigation(outcome)
-            if firstSettingsLoad, outcome == .unchanged { applyRouteChange(history.location.route) }
-        } else if needsInitialRouteActivation, isRendererReady {
-            needsInitialRouteActivation = false
-            applyRouteChange(route)
-        }
+        var history = nativeNavigation
+        let outcome = history.settingsDidLoad(adminMode: next.adminMode, hasUnsavedChanges: hasGuardedUnsavedChanges)
+        nativeNavigation = history
+        applyNativeNavigation(outcome)
+        if firstSettingsLoad, outcome == .unchanged { applyRouteChange(history.location.route) }
     }
 
-    /// Reads `app_settings` again; the page may have changed them. A newer request
+    /// Reads `app_settings` again; another page may have changed them. A newer request
     /// replaces a pending one, and a failure keeps the last known settings.
     public func reloadSettings() {
         settingsTask?.cancel()
@@ -1160,21 +962,8 @@ public final class NativeShellModel {
         settingsRevision &+= 1
     }
 
-    /// Reads `app_settings` once more after `settingsReloadDelay`, replacing a pending
-    /// delayed read.
-    private func reloadSettingsLater() {
-        delayedSettingsTask?.cancel()
-        let delay = settingsReloadDelay
-        delayedSettingsTask = Task { [weak self] in
-            try? await Task.sleep(for: delay)
-            guard !Task.isCancelled else { return }
-            self?.reloadSettings()
-        }
-    }
-
-    /// Waits for the pending settings requests, the delayed one included, for tests.
+    /// Waits for the pending settings request, for tests.
     public func settingsSettled() async {
-        await delayedSettingsTask?.value
         await settingsTask?.value
     }
 }

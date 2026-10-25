@@ -180,8 +180,6 @@ public final class TransactionsModel {
     @ObservationIgnored let now: @Sendable () -> Date
     @ObservationIgnored public let calendar: Calendar
     @ObservationIgnored var fetchedAt: Date?
-    /// ⌘N from another screen: the sheet opens once the native screen syncs.
-    @ObservationIgnored var addOnArrival = false
     @ObservationIgnored private var loadedOffset = 0
     @ObservationIgnored private var listVersion = 0
     @ObservationIgnored private var inFlight: (query: TransactionListQuery, task: Task<Void, Never>)?
@@ -245,10 +243,7 @@ public final class TransactionsModel {
     /// `new=1` and `id` are handled and removed with replace, and the list loads for the
     /// filters, search, sort, Show excluded and page size.
     public func sync() async {
-        guard let shell, shell.route.path == TransactionsRoutes.path else {
-            addOnArrival = false
-            return
-        }
+        guard let shell, shell.route.path == TransactionsRoutes.path else { return }
         let param = shell.route.value(TransactionsRoutes.searchParameter)
         if param != lastSearchParam {
             lastSearchParam = param
@@ -260,10 +255,6 @@ public final class TransactionsModel {
         if TransactionsRoutes.wantsNewTransaction(shell.route) {
             requestAdd()
             shell.replaceQuery(TransactionsRoutes.newParameter, with: nil)
-        }
-        if addOnArrival {
-            addOnArrival = false
-            requestAdd()
         }
         if shell.route.value(TransactionsRoutes.selectParameter) != nil {
             if let id = TransactionsRoutes.selectedId(shell.route) { select(id) }
@@ -1217,17 +1208,6 @@ public final class TransactionsModel {
         isAddPresented = true
     }
 
-    /// ⌘N from another screen: the shell moves to `/transactions` without `new=1` (the page
-    /// would open its own sheet too), and the sheet opens on the next sync.
-    func requestAddOnArrival() {
-        addOnArrival = true
-    }
-
-    /// The navigation that would have opened the sheet was cancelled.
-    func cancelAddOnArrival() {
-        addOnArrival = false
-    }
-
     /// Cancel, Escape or the close button: the form stays for next time.
     public func dismissAdd() {
         isAddPresented = false
@@ -1298,7 +1278,6 @@ public final class TransactionsModel {
         quickLookId = nil
         isAddPresented = false
         addForm = nil
-        addOnArrival = false
         splitRequest = nil
         splitForm = nil
         bulkDialog = nil
