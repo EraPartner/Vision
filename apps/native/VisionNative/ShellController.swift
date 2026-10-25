@@ -90,6 +90,7 @@ final class ShellController: NSObject, NSWindowDelegate {
     private var settingsAppearanceTask: Task<Void, Never>?
     private var lastSettingsClockRefresh = Date.distantPast
     private var lastSettingsDisplayPixels: Double?
+    private var lastSettingsDisplayBuiltIn: Bool?
     private var lastSettingsSystemIsDark: Bool?
 
     private func makeAPIClient(session: NativeDataSession? = nil, timeout: TimeInterval = 30) -> APIClient {
@@ -789,6 +790,15 @@ final class ShellController: NSObject, NSWindowDelegate {
         if model.isLoaded { await model.load(force: true) }
     }
 
+    /// Electron's `app:display-is-internal` (`screen.getDisplayMatching(window).internal`): whether the
+    /// window's screen is the Mac's built-in panel, nil when the display is unknown.
+    private static func isBuiltInDisplay(_ screen: NSScreen?) -> Bool? {
+        guard let number = screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
+            return nil
+        }
+        return CGDisplayIsBuiltin(CGDirectDisplayID(number.uint32Value)) != 0
+    }
+
     private func resolveNativeSettingsAppearance() {
         // Reading `shellModel` builds the graph; appearance must not do that before launch has
         // built it (the accent observer runs at start).
@@ -796,10 +806,11 @@ final class ShellController: NSObject, NSWindowDelegate {
         let screen = window?.screen ?? NSScreen.main
         let scale = screen?.backingScaleFactor ?? 1
         let pixels = Double((screen?.frame.width ?? 0) * (screen?.frame.height ?? 0) * scale * scale)
+        let builtIn = Self.isBuiltInDisplay(screen)
         let systemDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         let resolved = NativeSettingsAppearanceResolver.resolve(
             theme: settings.themeRaw, settings: shellModel.settings, systemIsDark: systemDark,
-            physicalPixelCount: pixels, sessionTierOverride: settings.sessionTierOverride,
+            physicalPixelCount: pixels, isBuiltInDisplay: builtIn, sessionTierOverride: settings.sessionTierOverride,
             previousAppearance: shellModel.theme.appearance)
         if settings.isLargeDisplay != resolved.isLargeDisplay { settings.isLargeDisplay = resolved.isLargeDisplay }
         var selection = resolved.theme
@@ -813,6 +824,7 @@ final class ShellController: NSObject, NSWindowDelegate {
         setVibrancy(resolved.effectiveVisualEffects == "enhanced")
         lastSettingsClockRefresh = Date()
         lastSettingsDisplayPixels = pixels
+        lastSettingsDisplayBuiltIn = builtIn
         lastSettingsSystemIsDark = systemDark
         if changed {
             let palette = selection.palette
@@ -848,7 +860,7 @@ final class ShellController: NSObject, NSWindowDelegate {
                 let clockDue =
                     self.shellModel.nativeSettings?.themeString("mode", fallback: "dark") == "schedule"
                     && Date().timeIntervalSince(self.lastSettingsClockRefresh) >= 60
-                if pixels != self.lastSettingsDisplayPixels || dark != self.lastSettingsSystemIsDark || clockDue {
+                if pixels != self.lastSettingsDisplayPixels || Self.isBuiltInDisplay(screen) != self.lastSettingsDisplayBuiltIn || dark != self.lastSettingsSystemIsDark || clockDue {
                     self.resolveNativeSettingsAppearance()
                 }
             }

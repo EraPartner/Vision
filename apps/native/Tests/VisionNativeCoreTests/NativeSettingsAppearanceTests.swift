@@ -104,6 +104,17 @@ struct NativeSettingsAppearanceTests {
             sessionTierOverride: "reduced")
         #expect(uncapped.effectiveVisualEffects == "enhanced")
     }
+    @Test func builtInDisplayIsNeverLargeAndUnknownFallsBackToPixels() {
+        // A "More Space" MacBook Air mode: 7.06 MP backing store on a built-in panel (ADR-244).
+        #expect(!NativeSettingsAppearanceResolver.isLargeDisplay(physicalPixelCount: 7_056_000, isBuiltIn: true))
+        #expect(NativeSettingsAppearanceResolver.isLargeDisplay(physicalPixelCount: 7_056_000, isBuiltIn: false))
+        #expect(NativeSettingsAppearanceResolver.isLargeDisplay(physicalPixelCount: 7_056_000, isBuiltIn: nil))
+        var settings = NativeAppSettings.defaults
+        settings.visualEffects = "enhanced"
+        let builtIn = NativeSettingsAppearanceResolver.resolve(
+            theme: nil, settings: settings, systemIsDark: true, physicalPixelCount: 8_294_400, isBuiltInDisplay: true)
+        #expect(!builtIn.isLargeDisplay && builtIn.effectiveVisualEffects == "enhanced")
+    }
 }
 
 private func resolve(
