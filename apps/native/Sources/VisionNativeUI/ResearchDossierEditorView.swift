@@ -49,11 +49,11 @@ struct ResearchDossierEditorView: View {
                     )
                 }
                 ResearchDossierField(label: strings.t("dossiers.field.workspace")) {
-                    Picker("", selection: choice(\.workspace, fallback: .research)) {
-                        ForEach(ResearchDossierContent.workspaces, id: \.self) {
-                            Text(strings.t("dossiers.workspace." + $0.rawValue)).tag($0)
-                        }
-                    }.labelsHidden().accessibilityLabel(strings.t("dossiers.field.workspace"))
+                    VisionSelect(
+                        selection: choice(\.workspace, fallback: .research),
+                        options: ResearchDossierContent.workspaces.map {
+                            VisionSelectOption(value: $0, title: strings.t("dossiers.workspace." + $0.rawValue))
+                        }, accessibilityLabel: strings.t("dossiers.field.workspace"), expands: true)
                 }
             }
             area("dossiers.field.question", \.question)
@@ -113,12 +113,9 @@ struct ResearchDossierTextArea: View {
     @Binding var text: String
     let label: String
     var height: CGFloat = 65
-    @Environment(\.visionTheme) private var theme
+    @FocusState private var focused: Bool
     var body: some View {
-        TextEditor(text: $text).font(.body).scrollContentBackground(.hidden).padding(5).frame(
-            minHeight: height, maxHeight: height
-        )
-        .background(theme.card, in: RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border)).accessibilityLabel(label)
+        TextEditor(text: $text).focused($focused).visionTextEditor(isFocused: focused, minHeight: height)
+            .frame(height: height).accessibilityLabel(label)
     }
 }

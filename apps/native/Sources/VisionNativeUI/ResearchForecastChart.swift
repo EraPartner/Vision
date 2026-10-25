@@ -56,7 +56,7 @@ struct ResearchForecastChart: View {
             }
             Text(shell.strings.t("research.forecast.intervalHint")).font(.caption).foregroundStyle(theme.secondaryLabel)
             if isLoading {
-                RoundedRectangle(cornerRadius: 10).fill(theme.muted).frame(height: 360)
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.control).fill(theme.muted).frame(height: 360)
                     .accessibilityLabel(shell.strings.t("common.loading"))
             } else if points.isEmpty {
                 VisionEmptyState(
@@ -137,7 +137,7 @@ struct ResearchForecastChart: View {
                                 Text(money(points[index][keyPath: line.value])).monospacedDigit()
                             }.font(.caption)
                         }
-                    }.padding(12).background(theme.muted, in: RoundedRectangle(cornerRadius: 8))
+                    }.padding(12).background(theme.muted, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
                         .accessibilityElement(children: .combine)
                 }
             }

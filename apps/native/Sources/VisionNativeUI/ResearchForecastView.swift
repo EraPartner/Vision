@@ -83,7 +83,7 @@ public struct ResearchForecastView: View {
                                             .monospacedDigit().foregroundStyle(
                                                 holding.expectedAnnual >= 0 ? theme.gain : theme.loss)
                                         }.font(.caption).padding(8).background(
-                                            theme.muted, in: RoundedRectangle(cornerRadius: 8))
+                                            theme.muted, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
                                     }
                                 }
                             }
@@ -111,10 +111,11 @@ public struct ResearchForecastView: View {
             }
             DisclosureGroup(isExpanded: $assumptionsOpen) {
                 VStack(alignment: .leading, spacing: 18) {
-                    Picker(strings.t("research.forecast.returnSource"), selection: binding(\.returnSource)) {
-                        Text(strings.t("research.forecast.sourceHistorical")).tag(ResearchForecastReturnSource.historical)
-                        Text(strings.t("research.forecast.sourceBlended")).tag(ResearchForecastReturnSource.blended)
-                    }.pickerStyle(.segmented)
+                    VisionSegmentedControl(
+                        selection: binding(\.returnSource),
+                        values: [ResearchForecastReturnSource.historical, .blended],
+                        title: { strings.t("research.forecast.source" + ($0 == .historical ? "Historical" : "Blended")) },
+                        label: strings.t("research.forecast.returnSource"))
                     if model.returnSource == .blended {
                         VStack(spacing: 8) {
                             HStack {
@@ -132,15 +133,20 @@ public struct ResearchForecastView: View {
                             .accessibilityValue(blendLabel)
                         }
                     }
-                    Picker(strings.t("research.forecast.method"), selection: binding(\.method)) {
-                        Text(strings.t("research.forecast.methodParametric")).tag(ResearchForecastMethod.parametric)
-                        Text(strings.t("research.forecast.methodBootstrap")).tag(ResearchForecastMethod.blockBootstrap)
-                    }.pickerStyle(.segmented)
-                    Picker(strings.t("research.forecast.paths"), selection: binding(\.paths)) {
-                        ForEach([500, 1000, 2000], id: \.self) { value in
-                            Text(VisionFormat.integer(value, locale: shell.settings.numberFormat.locale)).tag(value)
-                        }
-                    }.pickerStyle(.segmented)
+                    VisionSegmentedControl(
+                        selection: binding(\.method),
+                        options: [
+                            VisionSegmentOption(
+                                value: ResearchForecastMethod.parametric,
+                                title: strings.t("research.forecast.methodParametric")),
+                            VisionSegmentOption(
+                                value: ResearchForecastMethod.blockBootstrap,
+                                title: strings.t("research.forecast.methodBootstrap")),
+                        ], label: strings.t("research.forecast.method"))
+                    VisionSegmentedControl(
+                        selection: binding(\.paths), values: [500, 1000, 2000],
+                        title: { VisionFormat.integer($0, locale: shell.settings.numberFormat.locale) },
+                        label: strings.t("research.forecast.paths"))
                 }.padding(.top, 14)
             } label: {
                 VStack(alignment: .leading, spacing: 5) {
@@ -153,11 +159,10 @@ public struct ResearchForecastView: View {
     private var horizon: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(strings.t("research.forecast.horizon")).font(.callout.weight(.medium))
-            Picker(strings.t("research.forecast.horizon"), selection: binding(\.horizonMonths)) {
-                ForEach([12, 36, 60, 120], id: \.self) { months in
-                    Text(strings.t("research.forecast.h" + String(months / 12) + "y")).tag(months)
-                }
-            }.pickerStyle(.segmented).labelsHidden()
+            VisionSegmentedControl(
+                selection: binding(\.horizonMonths), values: [12, 36, 60, 120],
+                title: { strings.t("research.forecast.h" + String($0 / 12) + "y") }
+            ).accessibilityLabel(strings.t("research.forecast.horizon"))
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
     private var contribution: some View {

@@ -4,68 +4,66 @@ import VisionNativeCore
 
 struct ResearchWatchlistChartSheet: View {
     let model: ResearchWatchlistModel
+    /// The item being charted. The dialog keeps it through its exit motion, after the model has
+    /// already cleared `selectedItem`.
+    let item: ResearchWatchlistItem
     let shell: NativeShellModel
     @FocusState private var targetFocused: Bool
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     var body: some View {
-        if let item = model.selectedItem {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(item.name).font(.visionCardTitle).foregroundStyle(theme.foreground)
-                        .accessibilityAddTraits(.isHeader)
-                    if let symbol = item.symbol {
-                        Text(symbol).font(.caption.monospaced()).foregroundStyle(theme.secondaryLabel)
-                    }
-                    Spacer()
-                    VisionDialogCloseButton(label: strings.t("common.close")) { model.closeChart() }
-                        .keyboardShortcut(.cancelAction)
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(item.name).font(.visionCardTitle).foregroundStyle(theme.foreground)
+                    .accessibilityAddTraits(.isHeader)
+                if let symbol = item.symbol {
+                    Text(symbol).font(.caption.monospaced()).foregroundStyle(theme.secondaryLabel)
                 }
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        HStack(alignment: .top, spacing: 14) {
-                            target(item).frame(maxWidth: .infinity, alignment: .leading)
-                            current(item).frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        if model.chartMetrics?.isAtOrBelowTarget == true {
-                            Text(strings.t("watchlistChart.atTarget")).font(.callout.weight(.medium)).foregroundStyle(
-                                theme.gain
-                            )
-                            .padding(12).frame(maxWidth: .infinity)
-                            .background(
-                theme.gain.opacity(0.08),
-                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous))
-                        }
-                        Picker(
-                            "",
-                            selection: Binding(
-                                get: { model.range }, set: { range in Task { await model.selectRange(range) } })
-                        ) {
-                            ForEach(ResearchWatchlistRange.allCases, id: \.self) {
-                                Text(strings.t("research.range." + $0.rawValue)).tag($0)
-                            }
-                        }.pickerStyle(.segmented).labelsHidden().accessibilityLabel(strings.t("research.builder.range"))
-                        if model.isChartLoading {
-                            ProgressView().frame(maxWidth: .infinity).frame(height: 320)
-                        } else if let points = model.chart?.points, points.contains(where: { $0.close != nil }) {
-                            ResearchWatchlistPriceChart(
-                                points: points, item: item, metrics: model.chartMetrics, shell: shell,
-                                close: model.closeChart)
-                        } else {
-                            Text(strings.t("watchlistChart.noData")).foregroundStyle(theme.secondaryLabel)
-                                .frame(maxWidth: .infinity).frame(height: 200)
-                        }
-                        if let notes = item.notes, !notes.isEmpty {
-                            ResearchCard(title: strings.t("watchlistChart.notes")) {
-                                Text(notes).font(.callout).fixedSize(horizontal: false, vertical: true)
-                            }
+                Spacer()
+                VisionDialogCloseButton(label: strings.t("common.close")) { model.closeChart() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    HStack(alignment: .top, spacing: 14) {
+                        target(item).frame(maxWidth: .infinity, alignment: .leading)
+                        current(item).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if model.chartMetrics?.isAtOrBelowTarget == true {
+                        Text(strings.t("watchlistChart.atTarget")).font(.callout.weight(.medium)).foregroundStyle(
+                            theme.gain
+                        )
+                        .padding(12).frame(maxWidth: .infinity)
+                        .background(
+            theme.gain.opacity(0.08),
+            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous))
+                    }
+                    VisionSegmentedControl(
+                        selection: Binding(
+                            get: { model.range }, set: { range in Task { await model.selectRange(range) } }),
+                        values: ResearchWatchlistRange.allCases,
+                        title: { strings.t("research.range." + $0.rawValue) }
+                    ).accessibilityLabel(strings.t("research.builder.range"))
+                    if model.isChartLoading {
+                        ProgressView().frame(maxWidth: .infinity).frame(height: 320)
+                    } else if let points = model.chart?.points, points.contains(where: { $0.close != nil }) {
+                        ResearchWatchlistPriceChart(
+                            points: points, item: item, metrics: model.chartMetrics, shell: shell,
+                            close: model.closeChart)
+                    } else {
+                        Text(strings.t("watchlistChart.noData")).foregroundStyle(theme.secondaryLabel)
+                            .frame(maxWidth: .infinity).frame(height: 200)
+                    }
+                    if let notes = item.notes, !notes.isEmpty {
+                        ResearchCard(title: strings.t("watchlistChart.notes")) {
+                            Text(notes).font(.callout).fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
-            }.padding(24).frame(width: 760, height: 640)
-                .onChange(of: model.isEditingTarget) { _, editing in if editing { targetFocused = true } }
-                .onChange(of: model.validationRevision) { _, _ in targetFocused = true }
-        }
+            }
+        }.padding(24).frame(width: 760, height: 640)
+            .onChange(of: model.isEditingTarget) { _, editing in if editing { targetFocused = true } }
+            .onChange(of: model.validationRevision) { _, _ in targetFocused = true }
     }
     private func target(_ item: ResearchWatchlistItem) -> some View {
         ResearchCard {
@@ -84,7 +82,7 @@ struct ResearchWatchlistChartSheet: View {
                 Button(ResearchWatchlistUI.money(item.targetPrice, currency: item.currency, shell: shell)) {
                     model.beginTargetEdit(numberFormat: shell.settings.numberFormat)
                 }.buttonStyle(.visionLink).font(.title2.weight(.semibold)).monospacedDigit()
-                    .help(editLabel(item)).accessibilityLabel(
+                    .visionTooltip(editLabel(item)).accessibilityLabel(
                         editLabel(item) + ", "
                             + ResearchWatchlistUI.money(item.targetPrice, currency: item.currency, shell: shell)
                     )
@@ -212,7 +210,7 @@ private struct ResearchWatchlistPriceChart: View {
                     Spacer()
                     Text(ResearchWatchlistUI.money(close, currency: item.currency, shell: shell)).monospacedDigit()
                 }.font(.caption).padding(10).background(
-                    theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                    theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
             }
         }
     }

@@ -90,7 +90,7 @@ struct ResearchDossierLinkPicker<ID: Hashable & Sendable>: View {
                                     item.label,
                                     isOn: Binding(get: { selected.contains(item.id) }, set: { _ in toggle(item.id) })
                                 )
-                                .toggleStyle(.checkbox).frame(maxWidth: .infinity, alignment: .leading)
+                                .toggleStyle(.visionCheckbox).frame(maxWidth: .infinity, alignment: .leading)
                             }
                             if !hasError && visible.isEmpty {
                                 Text(strings.t("dossiers.noMatchingLinks")).font(.caption).foregroundStyle(
@@ -105,7 +105,7 @@ struct ResearchDossierLinkPicker<ID: Hashable & Sendable>: View {
                     Text(strings.t("dossiers.linksSelected", ["count": String(selected.count)])).font(.caption)
                         .foregroundStyle(theme.secondaryLabel)
                 }
-            }.padding(12).background(theme.foreground.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
+            }.padding(12).background(theme.foreground.opacity(0.025), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -139,6 +139,7 @@ struct ResearchDossierHistoryView: View {
                     Button(strings.t("dossiers.restore"), systemImage: "arrow.counterclockwise") {
                         model.requestRestore(version.version)
                     }
+                    .buttonStyle(.vision(.outline, size: .sm))
                     .disabled(model.busy || version.version == model.detail?.version)
                 }.padding(.vertical, 6)
                 if version.version != model.history.last?.version { Divider() }

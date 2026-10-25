@@ -61,19 +61,31 @@ struct SavedChartsView: View {
         .task(id: snapshot) {
             await model.appear(snapshot: snapshot, currency: LedgerCurrency.display(settings), strings: strings)
         }
-        .sheet(isPresented: Binding(get: { model.draft != nil }, set: { if !$0 { model.close() } })) {
+        .visionDialog(
+            isPresented: Binding(get: { model.draft != nil }, set: { if !$0 { model.close() } }),
+            metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0)
+        ) {
             CustomChartBuilderSheet(model: model, snapshot: snapshot, settings: settings, strings: strings)
         }
-        .alert(
-            strings.t("customChart.deleteTitle"),
-            isPresented: Binding(get: { model.pendingDelete != nil }, set: { if !$0 { model.pendingDelete = nil } })
-        ) {
-            Button(strings.t("common.cancel"), role: .cancel) { model.pendingDelete = nil }
-            Button(strings.t("common.delete"), role: .destructive) { Task { await model.confirmDelete() } }
-        } message: {
-            Text(strings.t("customChart.deleteDesc", ["name": model.pendingDelete?.name ?? ""]))
+        // The buttons decide: `confirmDelete()` reads `pendingDelete`, so a dismissal must not
+        // clear it before the confirming task runs.
+        .visionAlert(
+            title: strings.t("customChart.deleteTitle"),
+            message: { pending in strings.t("customChart.deleteDesc", ["name": pending.chart.name]) },
+            item: Binding(get: { model.pendingDelete.map(PendingChartDeletion.init) }, set: { _ in })
+        ) { _ in
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.pendingDelete = nil }
+            VisionDialogAction(strings.t("common.delete"), role: .destructive) {
+                Task { await model.confirmDelete() }
+            }
         }
     }
+}
+
+/// A saved chart awaiting delete confirmation; `SavedChart` has no `Identifiable` conformance.
+private struct PendingChartDeletion: Identifiable {
+    let chart: OpenAPI.SavedChart
+    var id: Int { chart.id }
 }
 
 struct CustomChartPlot: View {
@@ -180,16 +192,25 @@ private struct CustomChartBuilderSheet: View {
                         }
                         VStack(alignment: .leading, spacing: 6) {
                             fieldLabel("customChart.chartType")
-                            Picker(strings.t("customChart.chartType"), selection: binding(\.kind)) {
-                                ForEach(CustomChartKind.allCases, id: \.self) { Text(strings.t($0.labelKey)).tag($0) }
-                            }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+                            VisionSelect(
+                                selection: binding(\.kind),
+                                options: CustomChartKind.allCases.map {
+                                    VisionSelectOption(value: $0, title: strings.t($0.labelKey))
+                                }, accessibilityLabel: strings.t("customChart.chartType"), expands: true)
                         }
                         VStack(alignment: .leading, spacing: 6) {
                             fieldLabel("customChart.timeBucket")
-                            Picker(strings.t("customChart.timeBucket"), selection: binding(\.timeBucket)) {
-                                Text(strings.t("customChart.monthly")).tag(OpenAPI.SavedChart.TimeBucket.monthly)
-                                Text(strings.t("customChart.yearly")).tag(OpenAPI.SavedChart.TimeBucket.yearly)
-                            }.pickerStyle(.segmented).labelsHidden()
+                            VisionSegmentedControl(
+                                selection: binding(\.timeBucket),
+                                options: [
+                                    VisionSegmentOption(
+                                        value: OpenAPI.SavedChart.TimeBucket.monthly,
+                                        title: strings.t("customChart.monthly")),
+                                    VisionSegmentOption(
+                                        value: OpenAPI.SavedChart.TimeBucket.yearly,
+                                        title: strings.t("customChart.yearly")),
+                                ]
+                            ).accessibilityLabel(strings.t("customChart.timeBucket"))
                         }
                         HStack(alignment: .top, spacing: 8) {
                             VStack(alignment: .leading, spacing: 6) {
@@ -239,7 +260,7 @@ private struct CustomChartBuilderSheet: View {
                 .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction).disabled(
                     !draft.canSave || model.isSaving)
             }
-        }.visionDialogPadding().frame(width: 896, height: 680).interactiveDismissDisabled(model.isSaving)
+        }.visionDialogPadding().frame(width: 896, height: 680).visionInteractiveDismissDisabled(model.isSaving)
             .task(id: model.draft) { await model.refreshPreview() }
     }
     /// The web `Label`: `type-body font-medium text-label-primary` above its control.
@@ -272,11 +293,8 @@ private struct CustomChartBuilderSheet: View {
             HStack {
                 Text(strings.t(title)).font(.body.weight(.medium)).foregroundStyle(theme.foreground)
                 Spacer()
-                HStack(spacing: 8) {
-                    Toggle(strings.t(allKey), isOn: all).toggleStyle(.switch).controlSize(.mini).labelsHidden()
-                    Text(strings.t(allKey)).font(.footnote).foregroundStyle(theme.secondaryLabel)
-                        .accessibilityHidden(true)
-                }
+                Toggle(strings.t(allKey), isOn: all).toggleStyle(.visionSwitch)
+                    .font(.footnote).foregroundStyle(theme.secondaryLabel)
             }
             if all.wrappedValue {
                 Text(strings.t("customChart.allHint")).font(.footnote).foregroundStyle(theme.secondaryLabel)

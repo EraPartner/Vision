@@ -87,7 +87,7 @@ struct InsightRankedChart: View {
         .onHover { hovering in
             if hovering { selection = row.id } else if selection == row.id { selection = nil }
         }
-        .help(row.name)
+        .visionTooltip(row.name)
         .accessibilityElement(children: .combine)
         .animation(.easeOut(duration: DesignTokens.Duration.fast), value: dimmed)
     }

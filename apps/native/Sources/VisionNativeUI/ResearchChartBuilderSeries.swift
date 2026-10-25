@@ -17,7 +17,7 @@ struct ResearchChartBuilderSeriesView: View {
                         Circle().fill(ResearchCompareStyle.color(index, palette: theme.palette)).frame(
                             width: 10, height: 10
                         ).accessibilityHidden(true)
-                        Text(series.macro?.title ?? series.symbol).font(.callout.weight(.medium)).lineLimit(2).help(
+                        Text(series.macro?.title ?? series.symbol).font(.callout.weight(.medium)).lineLimit(2).visionTooltip(
                             series.macro?.title ?? series.symbol)
                         if series.field == "volume" {
                             Text(strings.t("research.builder.volume")).font(.caption).foregroundStyle(
@@ -53,32 +53,45 @@ struct ResearchChartBuilderSeriesView: View {
     }
     @ViewBuilder private func seriesControls(_ series: ResearchChartBuilderSeries) -> some View {
         if series.field != "volume" {
-            Picker(strings.t("customChart.chartType") + ": " + label(series), selection: field(series, \.type)) {
-                Text(strings.t("research.builder.type.line")).tag("line")
-                Text(strings.t("research.builder.type.area")).tag("area")
-                if series.macro == nil { Text(strings.t("research.builder.type.candlestick")).tag("candlestick") }
-            }.labelsHidden().frame(minWidth: 110)
+            VisionSelect(
+                selection: field(series, \.type), options: typeOptions(series),
+                accessibilityLabel: strings.t("customChart.chartType") + ": " + label(series)
+            ).frame(minWidth: 110)
         }
-        Picker(strings.t("research.builder.axisLabel") + ": " + label(series), selection: field(series, \.axis)) {
-            Text(strings.t("research.builder.axisLeft")).tag("left")
-            Text(strings.t("research.builder.axisRight")).tag("right")
-        }.labelsHidden().frame(minWidth: 120)
+        VisionSelect(
+            selection: field(series, \.axis),
+            options: [
+                VisionSelectOption(value: "left", title: strings.t("research.builder.axisLeft")),
+                VisionSelectOption(value: "right", title: strings.t("research.builder.axisRight")),
+            ], accessibilityLabel: strings.t("research.builder.axisLabel") + ": " + label(series)
+        ).frame(minWidth: 120)
         if let macro = series.macro {
-            Text(macro.provider.capitalized).font(.caption).padding(.horizontal, 8).padding(.vertical, 4).overlay(
-                Capsule().stroke(theme.border)
-            ).accessibilityLabel(strings.t("research.builder.providerLabel") + ": " + macro.provider)
+            VisionBadge(text: macro.provider.capitalized, tone: .secondary, small: true)
+                .accessibilityLabel(strings.t("research.builder.providerLabel") + ": " + macro.provider)
         } else {
-            Picker(
-                strings.t("research.builder.providerLabel") + ": " + label(series), selection: field(series, \.provider)
-            ) {
-                ForEach(providers, id: \.self) { provider in
-                    Text(
-                        provider.isEmpty
-                            ? strings.t("research.builder.providerAuto")
-                            : provider.replacingOccurrences(of: "_", with: " ")
-                    ).tag(provider)
-                }
-            }.labelsHidden().frame(minWidth: 150)
+            VisionSelect(
+                selection: field(series, \.provider), options: providerOptions,
+                accessibilityLabel: strings.t("research.builder.providerLabel") + ": " + label(series)
+            ).frame(minWidth: 150)
+        }
+    }
+    private func typeOptions(_ series: ResearchChartBuilderSeries) -> [VisionSelectOption<String>] {
+        var options = [
+            VisionSelectOption(value: "line", title: strings.t("research.builder.type.line")),
+            VisionSelectOption(value: "area", title: strings.t("research.builder.type.area")),
+        ]
+        if series.macro == nil {
+            options.append(
+                VisionSelectOption(value: "candlestick", title: strings.t("research.builder.type.candlestick")))
+        }
+        return options
+    }
+    private var providerOptions: [VisionSelectOption<String>] {
+        providers.map { provider in
+            VisionSelectOption(
+                value: provider,
+                title: provider.isEmpty
+                    ? strings.t("research.builder.providerAuto") : provider.replacingOccurrences(of: "_", with: " "))
         }
     }
     private func field(
@@ -110,7 +123,7 @@ struct ResearchChartBuilderIndicatorsView: View {
                         model.addIndicator(type: type)
                     } label: {
                         Label(type.uppercased(), systemImage: "plus")
-                    }.disabled(model.state.indicators.count >= 20)
+                    }.buttonStyle(.vision(.outline, size: .sm)).disabled(model.state.indicators.count >= 20)
                 }
             }
             ForEach(model.state.indicators) { indicator in

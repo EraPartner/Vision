@@ -67,17 +67,19 @@ public struct StatisticsView: View {
                 VisionPageHeader(
                     title: strings.t("statsPage.title"), subtitle: strings.t("statsPage.subtitle"), symbol: "chart.bar"
                 ) {
-                    Picker(
-                        strings.t("statsPage.window.label"),
+                    VisionSegmentedControl(
                         selection: Binding(
                             get: { model.window },
                             set: { value in
                                 shell.replaceQuery("window", with: value == .all ? "all" : nil)
-                            })
-                    ) {
-                        Text(strings.t("statsPage.window.rolling24")).tag(StatisticsWindow.rolling24)
-                        Text(strings.t("statsPage.window.allTime")).tag(StatisticsWindow.all)
-                    }.pickerStyle(.segmented).labelsHidden().fixedSize()
+                            }),
+                        options: [
+                            VisionSegmentOption(
+                                value: StatisticsWindow.rolling24, title: strings.t("statsPage.window.rolling24")),
+                            VisionSegmentOption(
+                                value: StatisticsWindow.all, title: strings.t("statsPage.window.allTime")),
+                        ]
+                    ).accessibilityLabel(strings.t("statsPage.window.label")).fixedSize()
                     Menu {
                         if model.hasData {
                             Button(strings.t("statsPage.menu.exportPdf")) { shell.openStatisticsReport() }
@@ -94,6 +96,7 @@ public struct StatisticsView: View {
                 } else if let error = model.error, !model.hasData {
                     Text(strings.t("statsPage.error", ["msg": error])).foregroundStyle(theme.destructive)
                     Button(strings.t("common.retry")) { Task { await reload(force: true) } }
+                        .buttonStyle(.visionOutline)
                 } else if !model.hasData {
                     Text(strings.t("statsPage.noDataTitle")).font(.title2)
                     Text(strings.t("statsPage.noDataDesc")).foregroundStyle(theme.secondaryLabel)
@@ -104,16 +107,14 @@ public struct StatisticsView: View {
                         Text(strings.tc("common.fxUnavailableTransactions", unconverted))
                             .font(.footnote).foregroundStyle(theme.warning)
                     }
-                    Picker(
-                        strings.t("statsPage.title"),
+                    VisionSegmentedControl(
                         selection: Binding(
                             get: { model.tab },
                             set: { value in
                                 shell.replaceQuery("tab", with: value.rawValue)
-                            })
-                    ) {
-                        ForEach(StatisticsTab.allCases, id: \.self) { tab in Text(strings.t(tab.labelKey)).tag(tab) }
-                    }.pickerStyle(.segmented).labelsHidden().fixedSize()
+                            }),
+                        values: StatisticsTab.allCases, title: { strings.t($0.labelKey) }
+                    ).accessibilityLabel(strings.t("statsPage.title")).fixedSize()
                     content
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
@@ -124,7 +125,10 @@ public struct StatisticsView: View {
             model.printLocalState = .init()
             screens.saved.printLocalState = .init()
         }
-        .sheet(isPresented: $customize) { StatisticsWidgetsSheet(model: model, strings: strings) }
+        .visionDialog(
+            isPresented: $customize, metrics: PortfolioWidgetsSheet.metrics,
+            accessibilityTitle: strings.t("widgets.title")
+        ) { StatisticsWidgetsSheet(model: model, strings: strings) }
         .onChange(of: model.recipientQuery) { _, _ in model.recipientVisibleCount = settings.defaultPageSize }
     }
 
@@ -177,13 +181,11 @@ public struct StatisticsView: View {
             if includes(.monthly), model.isVisible("monthly") {
                 card("statsPage.widget.monthly", graph: "monthly") {
                     if !isPrinting {
-                        Toggle(
+                        InsightToggleButton(
                             strings.t("statsPage.toggleRollingAvg", ["n": "3"]),
                             isOn: Binding(
                                 get: { model.printLocalState.rollingAverage },
-                                set: { model.printLocalState.rollingAverage = $0 })
-                        ).toggleStyle(
-                            .button)
+                                set: { model.printLocalState.rollingAverage = $0 }))
                     }
                     chart(
                         monthlySeries(model.data(for: "monthly"), average: model.printLocalState.rollingAverage),
@@ -285,20 +287,22 @@ public struct StatisticsView: View {
         card("statsPage.pivotTitle", graph: "pivotTable") {
             if !isPrinting {
                 HStack {
-                    Picker(
-                        strings.t("statsPage.pivot.metric"),
-                        selection: Binding(get: { model.categoryMetric }, set: { model.categoryMetric = $0 })
-                    ) {
-                        ForEach(StatisticsMetric.allCases, id: \.self) { metric in
-                            Text(strings.t("statsPage.pivot.metric.\(metric.rawValue)")).tag(metric)
-                        }
-                    }.frame(maxWidth: 220)
+                    Text(strings.t("statsPage.pivot.metric")).font(.callout).foregroundStyle(theme.secondaryLabel)
+                        .accessibilityHidden(true)
+                    VisionSelect(
+                        selection: Binding(get: { model.categoryMetric }, set: { model.categoryMetric = $0 }),
+                        options: StatisticsMetric.allCases.map {
+                            VisionSelectOption(
+                                value: $0, title: strings.t("statsPage.pivot.metric.\($0.rawValue)"))
+                        }, accessibilityLabel: strings.t("statsPage.pivot.metric")
+                    ).frame(maxWidth: 220)
                     yearPicker(Binding(get: { model.pivotYear }, set: { model.pivotYear = $0 }))
                     if !model.pivotExpandableGroupIds.isEmpty {
                         Button(
                             strings.t(
                                 model.pivotAllCollapsed ? "statsPage.pivot.expandAll" : "statsPage.pivot.collapseAll")
                         ) { model.toggleAllGroups() }
+                        .buttonStyle(.vision(.outline, size: .sm))
                     }
                 }
             } else {
@@ -314,14 +318,14 @@ public struct StatisticsView: View {
             } else if model.pivotPageCount > 1 {
                 HStack {
                     Button(strings.t("common.previous")) { model.pivotPage += 1 }
-                        .disabled(!model.pivotHasPrevious)
+                        .buttonStyle(.vision(.outline, size: .sm)).disabled(!model.pivotHasPrevious)
                     Text(
                         displayedPivotPeriods.first.map { first in
                             periodShort(first) + " – " + periodShort(displayedPivotPeriods.last ?? first)
                         } ?? "—"
                     ).font(.caption).monospacedDigit()
-                    Button(strings.t("common.next")) { model.pivotPage = max(0, model.pivotPage - 1) }.disabled(
-                        model.pivotPage == 0)
+                    Button(strings.t("common.next")) { model.pivotPage = max(0, model.pivotPage - 1) }
+                        .buttonStyle(.vision(.outline, size: .sm)).disabled(model.pivotPage == 0)
                 }
             }
             if isPrinting {
@@ -486,7 +490,7 @@ public struct StatisticsView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain).disabled(value == 0).monospacedDigit()
-                .help(money(value)).accessibilityLabel(strings.t("statsPage.pivot.drillAria", ["label": name]))
+                .visionTooltip(money(value)).accessibilityLabel(strings.t("statsPage.pivot.drillAria", ["label": name]))
             }
         }
     }
@@ -717,26 +721,16 @@ public struct StatisticsView: View {
             if !isPrinting {
                 HStack {
                     Spacer()
-                    Picker(
-                        strings.t("statistics.selectYear"),
+                    VisionSelect(
                         selection: Binding(
                             get: { model.flowYear },
                             set: { value in
                                 model.flowYear = value
                                 Task { await model.loadFlow() }
-                            })
-                    ) {
-                        ForEach(
-                            Array(
-                                Set(
-                                    (model.filtered?.years.map(\.year) ?? []) + [
-                                        Calendar.current.component(.year, from: Date())
-                                    ])
-                            ).sorted(by: >), id: \.self
-                        ) { Text(String($0)).tag($0) }
-                    }
-                    .labelsHidden().pickerStyle(.menu).fixedSize()
-                    .accessibilityLabel(strings.t("statistics.selectYear"))
+                            }),
+                        options: flowYears.map { VisionSelectOption(value: $0, title: String($0)) },
+                        accessibilityLabel: strings.t("statistics.selectYear")
+                    ).frame(width: 140)
                 }
             } else {
                 Text(String(model.flowYear))
@@ -770,24 +764,38 @@ public struct StatisticsView: View {
                 }
             } else if let error = model.flowError {
                 Text(error).foregroundStyle(theme.destructive)
-                if !isPrinting { Button(strings.t("common.retry")) { Task { await model.loadFlow() } } }
+                if !isPrinting {
+                    Button(strings.t("common.retry")) { Task { await model.loadFlow() } }
+                        .buttonStyle(.visionOutline)
+                }
             }
         }
+    }
+    private var flowYears: [Int] {
+        Array(
+            Set((model.filtered?.years.map(\.year) ?? []) + [Calendar.current.component(.year, from: Date())])
+        ).sorted(by: >)
     }
     @ViewBuilder private func yearPicker(_ binding: Binding<Int?>) -> some View {
         if isPrinting {
             Text(binding.wrappedValue.map(String.init) ?? strings.t("statsPage.allYears"))
         } else {
-            Picker(strings.t("statistics.selectYear"), selection: binding) {
-                Text(strings.t("statsPage.allYears")).tag(nil as Int?)
-                ForEach((model.unfiltered?.years.map(\.year) ?? []).sorted(by: >), id: \.self) {
-                    Text(String($0)).tag(Optional($0))
-                }
-            }
             // The web ChartControls `w-[140px]` select: no visible "Select year" label.
-            .labelsHidden().pickerStyle(.menu).fixedSize()
-            .accessibilityLabel(strings.t("statistics.selectYear"))
+            VisionSelect(
+                selection: Binding(
+                    get: { binding.wrappedValue ?? Self.allYearsTag },
+                    set: { binding.wrappedValue = $0 == Self.allYearsTag ? nil : $0 }),
+                options: yearOptions, accessibilityLabel: strings.t("statistics.selectYear")
+            ).frame(width: 140)
         }
+    }
+    /// The select's tag for "All years": a year is never 0, and the bound year is nil for it.
+    private static let allYearsTag = 0
+    private var yearOptions: [VisionSelectOption<Int>] {
+        let years = (model.unfiltered?.years.map(\.year) ?? []).sorted(by: >)
+        var options = [VisionSelectOption(value: Self.allYearsTag, title: strings.t("statsPage.allYears"))]
+        options += years.map { VisionSelectOption(value: $0, title: String($0)) }
+        return options
     }
     @ViewBuilder private func horizontalContent<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         if isPrinting { content() } else { ScrollView(.horizontal) { content() } }
@@ -977,7 +985,7 @@ public struct StatisticsView: View {
                         ).font(.caption)
                     }
                     if let graph, model.hasExclusions, !isPrinting {
-                        Toggle(
+                        InsightToggleButton(
                             strings.t(
                                 model.graphExclusions[graph] != false
                                     ? "exclusion.filtersActive" : "exclusion.filtersIgnored"),
@@ -986,8 +994,7 @@ public struct StatisticsView: View {
                                 set: { value in
                                     model.graphExclusions[graph] = value
                                     if graph == "sankey" { Task { await model.loadFlow() } }
-                                })
-                        ).toggleStyle(.button).controlSize(.small)
+                                }))
                     }
                 }
                 content()
@@ -1006,7 +1013,7 @@ private struct StatisticsWidgetsSheet: View {
             setVisible: { id, value in await model.setWidget(id, visible: value) },
             setAll: { value in await model.allWidgets(visible: value) }, reset: { await model.resetWidgets() },
             reload: {}, isLoaded: model.widgetsLoaded, isSaving: model.widgetSavePending,
-            error: model.widgetError, strings: strings)
+            error: model.widgetError, strings: strings, inDialog: true)
     }
 }
 
@@ -1028,7 +1035,7 @@ private struct StatisticsStatCard<Value: View, Subtitle: View>: View {
                     .accessibilityHidden(true)
             }
             value()
-                .font(.system(size: 26, weight: .semibold))
+                .font(Font.visionTitle1)
                 .monospacedDigit()
                 .foregroundStyle(theme.foreground)
                 .padding(.top, 10)

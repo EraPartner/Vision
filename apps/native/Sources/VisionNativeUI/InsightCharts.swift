@@ -256,7 +256,7 @@ struct InsightTimelineChart: View {
                     }
                 }
                 .padding(8).background(
-                    theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: 8)
+                    theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md)
                 )
                 .accessibilityElement(children: .combine)
             }
@@ -446,5 +446,32 @@ struct HomeCategoryChart: View {
             end += slice.count
             return position < CGFloat(end)
         }
+    }
+}
+
+/// A `Toggle(.button)` drawn as the web's pressed-state button: `variant="outline"` while off and
+/// `variant="secondary"` while on, at `size="sm"`. It reads to VoiceOver as a toggle, with the
+/// selected trait carrying the on state.
+struct InsightToggleButton<Label: View>: View {
+    @Binding var isOn: Bool
+    var size: VisionButtonSize = .sm
+    @ViewBuilder var label: () -> Label
+
+    private var traits: AccessibilityTraits { isOn ? [.isToggle, .isSelected] : [.isToggle] }
+
+    var body: some View {
+        Button {
+            isOn.toggle()
+        } label: {
+            label()
+        }
+        .buttonStyle(.vision(isOn ? .secondary : .outline, size: size))
+        .accessibilityAddTraits(traits)
+    }
+}
+
+extension InsightToggleButton where Label == Text {
+    init(_ title: String, isOn: Binding<Bool>, size: VisionButtonSize = .sm) {
+        self.init(isOn: isOn, size: size) { Text(title) }
     }
 }

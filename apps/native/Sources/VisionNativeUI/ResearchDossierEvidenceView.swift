@@ -15,7 +15,7 @@ struct ResearchDossierEvidenceListView: View {
                 }
                 Spacer()
                 Button(shell.strings.t("dossiers.addEvidence"), systemImage: "plus") { model.addEvidence() }
-                    .disabled((model.draft?.evidence.count ?? 0) >= 30)
+                    .buttonStyle(.vision(.outline, size: .sm)).disabled((model.draft?.evidence.count ?? 0) >= 30)
             }
             ForEach(Array((model.draft?.evidence ?? []).enumerated()), id: \.element.id) { index, item in
                 if index > 0 { Divider() }
@@ -44,43 +44,29 @@ struct ResearchDossierEvidenceView: View {
                 Spacer()
                 Button(strings.t("dossiers.removeEvidence"), systemImage: "trash", role: .destructive) {
                     model.removeEvidence(evidenceId)
-                }
+                }.buttonStyle(.vision(.ghost, size: .sm))
             }
             HStack(alignment: .top, spacing: 16) {
                 ResearchDossierField(label: strings.t("dossiers.field.origin")) {
-                    Picker("", selection: choice(\.origin, fallback: .user)) {
-                        ForEach(ResearchDossierOrigin.allCases, id: \.self) {
-                            Text(strings.t("dossiers.origin." + $0.rawValue)).tag($0)
-                        }
-                    }.pickerStyle(.segmented).accessibilityLabel(strings.t("dossiers.field.origin"))
+                    VisionSegmentedControl(
+                        selection: choice(\.origin, fallback: .user), values: ResearchDossierOrigin.allCases,
+                        title: { strings.t("dossiers.origin." + $0.rawValue) }
+                    ).accessibilityLabel(strings.t("dossiers.field.origin"))
                 }
                 ResearchDossierField(label: strings.t("dossiers.field.stance")) {
-                    Picker("", selection: choice(\.stance, fallback: .context)) {
-                        ForEach(ResearchDossierStance.allCases, id: \.self) {
-                            Text(strings.t("dossiers.stance." + $0.rawValue)).tag($0)
-                        }
-                    }.pickerStyle(.segmented).accessibilityLabel(strings.t("dossiers.field.stance"))
+                    VisionSegmentedControl(
+                        selection: choice(\.stance, fallback: .context), values: ResearchDossierStance.allCases,
+                        title: { strings.t("dossiers.stance." + $0.rawValue) }
+                    ).accessibilityLabel(strings.t("dossiers.field.stance"))
                 }
             }
             area("dossiers.field.claim", \.claim)
             ResearchDossierField(label: strings.t("dossiers.field.document")) {
-                Picker(
-                    "",
+                VisionSelect(
                     selection: Binding(
                         get: { item?.source.documentId },
-                        set: { model.updateSourceDocument(evidenceId: evidenceId, documentId: $0) })
-                ) {
-                    Text(strings.t("dossiers.noDocument")).tag(ResearchDocumentID?.none)
-                    if let id = item?.source.documentId, !model.readyDocuments.contains(where: { $0.id == id }) {
-                        // Keep the stored pin visible without treating an unready document as selectable.
-                        Text(
-                            model.documents.first(where: { $0.id == id })?.title
-                                ?? strings.t("dossiers.documentUnavailable")
-                        ).tag(Optional(id))
-                            .disabled(true)
-                    }
-                    ForEach(model.readyDocuments) { Text($0.title).tag(Optional($0.id)) }
-                }.labelsHidden().accessibilityLabel(strings.t("dossiers.field.document"))
+                        set: { model.updateSourceDocument(evidenceId: evidenceId, documentId: $0) }),
+                    options: documentOptions, accessibilityLabel: strings.t("dossiers.field.document"), expands: true)
                 if model.pickerErrors["documents"] != nil {
                     Text(strings.t("dossiers.documentsError")).font(.caption).foregroundStyle(theme.destructive)
                 }
@@ -124,6 +110,19 @@ struct ResearchDossierEvidenceView: View {
                 .font(.caption).foregroundStyle(theme.tertiaryLabel).textSelection(.enabled)
             }
         }.accessibilityElement(children: .contain)
+    }
+    private var documentOptions: [VisionSelectOption<ResearchDocumentID?>] {
+        var options = [VisionSelectOption<ResearchDocumentID?>(value: nil, title: strings.t("dossiers.noDocument"))]
+        if let id = item?.source.documentId, !model.readyDocuments.contains(where: { $0.id == id }) {
+            // Keep the stored pin visible without treating an unready document as selectable.
+            options.append(
+                VisionSelectOption<ResearchDocumentID?>(
+                    value: Optional(id),
+                    title: model.documents.first(where: { $0.id == id })?.title
+                        ?? strings.t("dossiers.documentUnavailable"), isDisabled: true))
+        }
+        options += model.readyDocuments.map { VisionSelectOption<ResearchDocumentID?>(value: Optional($0.id), title: $0.title) }
+        return options
     }
     private func mutate(_ edit: (inout ResearchDossierEvidence) -> Void) {
         guard let index = model.draft?.evidence.firstIndex(where: { $0.id == evidenceId }) else { return }

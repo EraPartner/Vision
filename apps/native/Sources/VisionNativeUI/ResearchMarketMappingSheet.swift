@@ -19,7 +19,7 @@ struct ResearchMarketMappingSheet: View {
                         Spacer()
                         Button(strings.t("research.mapping.reresolve"), systemImage: "arrow.clockwise") {
                             Task { await model.resolve() }
-                        }.buttonStyle(.borderless).disabled(model.isResolving)
+                        }.buttonStyle(.vision(.ghost, size: .sm)).disabled(model.isResolving)
                     }
                     if model.isResolving {
                         ProgressView().frame(maxWidth: .infinity).frame(height: 90)
@@ -36,7 +36,7 @@ struct ResearchMarketMappingSheet: View {
                                         isOn: Binding(
                                             get: { model.selected[proposal.provider] == true },
                                             set: { model.selected[proposal.provider] = $0 })
-                                    ).labelsHidden().toggleStyle(.checkbox).accessibilityLabel(proposal.provider)
+                                    ).labelsHidden().toggleStyle(.visionCheckbox).accessibilityLabel(proposal.provider)
                                 } else if proposal.fromHolding == true {
                                     Image(systemName: "checkmark.circle.fill").foregroundStyle(theme.success)
                                         .accessibilityLabel(strings.t("research.mapping.fromHolding"))
@@ -143,23 +143,6 @@ struct ResearchMarketMappingSheet: View {
                     model.selectedCount == 0 || model.isSaving || model.isResolving)
             }
         }.visionDialogPadding().frame(width: 672).frame(maxHeight: 760)
-            .confirmationDialog(
-                strings.t("research.mapping.remove"),
-                isPresented: Binding(
-                    get: { model.pendingRemoval != nil }, set: { if !$0 { model.pendingRemoval = nil } }),
-                titleVisibility: .visible
-            ) {
-                Button(strings.t("common.delete"), role: .destructive) { Task { await model.remove() } }
-                Button(strings.t("common.cancel"), role: .cancel) { model.pendingRemoval = nil }
-            } message: {
-                Text(
-                    strings.t(
-                        "research.mapping.removeDesc",
-                        [
-                            "provider": model.pendingRemoval?.provider ?? "",
-                            "symbol": model.pendingRemoval?.providerSymbol ?? "—",
-                        ]))
-            }
     }
     private func status(_ value: String) -> String {
         switch value {

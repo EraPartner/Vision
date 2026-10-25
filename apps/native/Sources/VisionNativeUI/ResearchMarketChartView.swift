@@ -134,7 +134,7 @@ struct ResearchMarketChartView: View {
                                 close, currency: data.currency ?? "USD", shell: shell, digits: 2)
                         ).monospacedDigit()
                     }
-                }.font(.caption).padding(10).background(theme.card, in: RoundedRectangle(cornerRadius: 8))
+                }.font(.caption).padding(10).background(theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
             }
         }
     }

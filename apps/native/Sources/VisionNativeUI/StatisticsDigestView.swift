@@ -21,6 +21,7 @@ struct StatisticsDigestView: View {
                             Button(
                                 strings.t(model.expanded ? "insights.panel.hideDetails" : "insights.panel.showDetails")
                             ) { model.expanded.toggle() }
+                            .buttonStyle(.vision(.outline, size: .sm))
                         }
                     }
                     Text(strings.t("insights.panel.desc")).foregroundStyle(theme.secondaryLabel)
@@ -114,7 +115,7 @@ struct StatisticsDigestView: View {
                 } label: {
                     Image(systemName: "xmark")
                 }
-                .buttonStyle(.plain).disabled(model.dismissing.contains(key))
+                .buttonStyle(.vision(.ghost, size: .iconXs)).disabled(model.dismissing.contains(key))
                 .accessibilityLabel(strings.t("insights.dismissFinding", ["kind": strings.t(kind), "name": title]))
             }
         }.padding(.vertical, 4)

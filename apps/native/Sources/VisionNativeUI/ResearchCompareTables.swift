@@ -168,7 +168,7 @@ struct ResearchCompareFundamentalsView: View {
                                         .background(
                                             model.state.sort == metric.id ? theme.foreground.opacity(0.04) : .clear
                                         )
-                                        .help(flag?.reason ?? "")
+                                        .visionTooltip(flag?.reason ?? "")
                                 }
                             }
                         }

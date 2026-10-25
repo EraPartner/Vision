@@ -7,7 +7,7 @@ struct HomeForecastDiagnostics: View {
     let strings: any Localizing
     @State private var selected: [String: String] = [:]
     @State private var range: [String: String] = [:]
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.visionDismissDialog) private var dismiss
     @Environment(\.visionTheme) private var theme
 
     var body: some View {

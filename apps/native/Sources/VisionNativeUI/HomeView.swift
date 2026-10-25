@@ -48,6 +48,7 @@ public struct HomeView: View {
                         Text(model.errors["settings"] ?? model.errors["monthly"] ?? "").foregroundStyle(
                             theme.destructive)
                         Button(strings.t("common.retry")) { Task { await reload(force: true) } }
+                            .buttonStyle(.visionOutline)
                     }
                 } else {
                     if model.isVisible("hero") { hero }
@@ -84,25 +85,26 @@ public struct HomeView: View {
                     discard: { shell.transactions.leaveGuard.discard() }))
         }
         .onDisappear { shell.removeLeaveGuard(id: InsightsRoutes.home) }
-        .sheet(isPresented: $customize) {
+        .visionDialog(
+            isPresented: $customize, metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0),
+            accessibilityTitle: strings.t("widgets.title")
+        ) {
             HomeWidgetsSheet(model: model, strings: strings)
-                .environment(\.visionTheme, theme)
-                .environment(\.colorScheme, theme.colorScheme)
         }
-        .sheet(isPresented: $diagnostics) {
+        .visionDialog(
+            isPresented: $diagnostics, metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0),
+            accessibilityTitle: strings.t("cashflow.diagnostics.title")
+        ) {
             HomeForecastDiagnostics(model: model, settings: settings, strings: strings)
-                .environment(\.visionTheme, theme)
-                .environment(\.colorScheme, theme.colorScheme)
         }
-        .sheet(
+        .visionDialog(
             isPresented: Binding(
                 get: { shell.transactions.isAddPresented },
-                set: { if !$0 { shell.transactions.dismissAdd() } })
+                set: { if !$0 { shell.transactions.dismissAdd() } }),
+            metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0)
         ) {
             if let form = shell.transactions.addForm {
                 TransactionAddSheet(model: shell.transactions, form: form, shell: shell)
-                    .environment(\.visionTheme, theme)
-                    .environment(\.colorScheme, theme.colorScheme)
             }
         }
     }
@@ -281,7 +283,7 @@ public struct HomeView: View {
                             } label: {
                                 Image(systemName: "xmark").foregroundStyle(theme.secondaryLabel)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.vision(.ghost, size: .iconXs))
                             .padding(.trailing, 12)
                             .accessibilityLabel(strings.t("home.attention.dismissInactivity", ["name": account.name]))
                         }
@@ -465,7 +467,7 @@ public struct HomeView: View {
                         account, today: VisionFormat.appDate(Date(), format: .isoDate), settings: settings,
                         strings: strings)
                     {
-                        Text(drift.label).font(.caption).help(strings.t(drift.tooltipKey))
+                        Text(drift.label).font(.caption).visionTooltip(strings.t(drift.tooltipKey))
                     }
                 }
                 InsightTimelineChart(
@@ -534,27 +536,33 @@ public struct HomeView: View {
     private var forecast: some View {
         card("dashboard.cashFlowComparison") {
             HStack {
-                Picker(strings.t("cashflow.modeMonth"), selection: forecastMode) {
-                    Text(strings.t("cashflow.modeMonth")).tag(InsightForecastOptions.Mode.month)
-                    Text(strings.t("cashflow.modeRolling")).tag(InsightForecastOptions.Mode.rolling)
-                }.pickerStyle(.segmented).frame(maxWidth: 360)
+                VisionSegmentedControl(
+                    selection: forecastMode,
+                    options: [
+                        VisionSegmentOption(value: InsightForecastOptions.Mode.month, title: strings.t("cashflow.modeMonth")),
+                        VisionSegmentOption(
+                            value: InsightForecastOptions.Mode.rolling, title: strings.t("cashflow.modeRolling")),
+                    ]
+                ).accessibilityLabel(strings.t("cashflow.modeMonth")).frame(maxWidth: 360)
                 if model.forecastOptions.mode == .rolling {
-                    Picker(strings.t("cashflow.rollingWindow"), selection: rollingDays) {
-                        ForEach([30, 60, 90, 180], id: \.self) { days in
-                            Text(strings.t("cashflow.windowDays", ["days": String(days)])).tag(days)
-                        }
-                    }.frame(maxWidth: 150)
+                    VisionSelect(
+                        selection: rollingDays,
+                        options: [30, 60, 90, 180].map {
+                            VisionSelectOption(
+                                value: $0, title: strings.t("cashflow.windowDays", ["days": String($0)]))
+                        }, accessibilityLabel: strings.t("cashflow.rollingWindow")
+                    ).frame(maxWidth: 150)
                 }
             }
             HStack {
-                Picker(
-                    strings.t("cashflow.cumulative"),
+                VisionSegmentedControl(
                     selection: Binding(
-                        get: { model.cumulativeForecast }, set: { model.cumulativeForecast = $0 })
-                ) {
-                    Text(strings.t("cashflow.cumulative")).tag(true)
-                    Text(strings.t("cashflow.dailyNet")).tag(false)
-                }.pickerStyle(.segmented).frame(maxWidth: 260)
+                        get: { model.cumulativeForecast }, set: { model.cumulativeForecast = $0 }),
+                    options: [
+                        VisionSegmentOption(value: true, title: strings.t("cashflow.cumulative")),
+                        VisionSegmentOption(value: false, title: strings.t("cashflow.dailyNet")),
+                    ]
+                ).accessibilityLabel(strings.t("cashflow.cumulative")).frame(maxWidth: 260)
                 Toggle(
                     strings.t("cashflow.withPlanned"),
                     isOn: Binding(
@@ -562,9 +570,11 @@ public struct HomeView: View {
                         set: {
                             model.forecastOptions.includePlanned = $0
                             Task { await model.loadForecast() }
-                        }))
+                        })
+                ).toggleStyle(.visionSwitch)
                 Spacer()
                 Button(strings.t("cashflow.diagnostics")) { diagnostics = true }
+                    .buttonStyle(.vision(.outline, size: .sm))
             }
             if model.isForecastLoading {
                 ProgressView().frame(height: 240)
@@ -595,7 +605,7 @@ public struct HomeView: View {
                         .accessibilityElement(children: .combine)
                         // Every method stays toggleable; a failed one carries the web's Error badge.
                         ForEach(forecast.methods) { method in
-                            Toggle(
+                            InsightToggleButton(
                                 isOn: Binding(
                                     get: { model.visibleMethods.contains(method.id) },
                                     set: { _ in model.toggleMethod(method.id) })
@@ -611,13 +621,13 @@ public struct HomeView: View {
                                     }
                                 }
                             }
-                            .toggleStyle(.button)
                         }
                     }
                 }
             } else if let error = model.forecastError {
                 Text(error).foregroundStyle(theme.destructive)
                 Button(strings.t("common.retry")) { Task { await model.loadForecast() } }
+                    .buttonStyle(.visionOutline)
             }
         }
     }
@@ -737,15 +747,13 @@ public struct HomeView: View {
                 }
                 Spacer()
                 if let exclusion, model.hasExclusions {
-                    Toggle(
+                    InsightToggleButton(
                         strings.t(
                             model.graphExclusions[exclusion] != false
                                 ? "exclusion.filtersActive" : "exclusion.filtersIgnored"),
                         isOn: Binding(
                             get: { model.graphExclusions[exclusion] != false },
-                            set: { model.graphExclusions[exclusion] = $0 })
-                    )
-                    .toggleStyle(.button).controlSize(.small)
+                            set: { model.graphExclusions[exclusion] = $0 }))
                 }
                 if let action { Button(strings.t(action.0)) { navigate(action.1) }.buttonStyle(.visionLink) }
             }
@@ -810,7 +818,7 @@ private struct HomePaceChart: View {
 private struct HomeWidgetsSheet: View {
     let model: HomeModel
     let strings: any Localizing
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.visionDismissDialog) private var dismiss
     @Environment(\.visionTheme) private var theme
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -833,15 +841,16 @@ private struct HomeWidgetsSheet: View {
                             }
                             Spacer(minLength: 8)
                             Toggle(
-                                strings.t(widget.labelKey),
                                 isOn: Binding(
                                     get: { model.isVisible(widget.id) },
                                     set: { value in
                                         Task { await model.setWidget(widget.id, visible: value) }
                                     })
-                            )
-                            .labelsHidden()
-                            .toggleStyle(.switch)
+                            ) {
+                                EmptyView()
+                            }
+                            .toggleStyle(.visionSwitch)
+                            .accessibilityLabel(strings.t(widget.labelKey))
                             .disabled(!model.widgetsLoaded || model.widgetSavePending)
                         }
                         .padding(.horizontal, 14)
@@ -868,7 +877,7 @@ private struct HomeWidgetsSheet: View {
                 } label: {
                     Label(strings.t("widgets.reset"), systemImage: "arrow.counterclockwise")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.vision(.ghost, size: .sm))
             }
             .controlSize(.small)
             .disabled(model.widgetSavePending || !model.widgetsLoaded)

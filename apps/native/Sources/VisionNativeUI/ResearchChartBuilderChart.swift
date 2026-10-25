@@ -196,8 +196,8 @@ struct ResearchChartBuilderChart: View {
                     }.font(.caption)
                 }
             }
-        }.padding(12).background(theme.card, in: RoundedRectangle(cornerRadius: 10)).overlay(
-            RoundedRectangle(cornerRadius: 10).stroke(theme.border))
+        }.padding(12).background(theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control)).overlay(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.control).stroke(theme.border))
     }
 }
 

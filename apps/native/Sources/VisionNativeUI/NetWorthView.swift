@@ -26,6 +26,7 @@ public struct NetWorthView: View {
                         Text(strings.t("networth.unableToLoad")).font(.headline)
                         Text(error).foregroundStyle(theme.destructive)
                         Button(strings.t("common.retry")) { Task { await reload(force: true) } }
+                            .buttonStyle(.visionOutline)
                     }
                 } else if let data = model.data, data.current.currency == currency {
                     if model.snapshots.isEmpty {
@@ -77,8 +78,8 @@ public struct NetWorthView: View {
         } label: {
             if model.isRefreshingPrices { ProgressView().controlSize(.small) }
             Label(strings.t("portfolio.refreshPrices"), systemImage: "arrow.clockwise")
-        }.disabled(!model.isOnline || model.isRefreshingPrices)
-            .help(model.isOnline ? strings.t("portfolio.refreshPrices") : strings.t("portfolio.refreshPricesOffline"))
+        }.buttonStyle(.visionOutline).disabled(!model.isOnline || model.isRefreshingPrices)
+            .visionTooltip(model.isOnline ? strings.t("portfolio.refreshPrices") : strings.t("portfolio.refreshPricesOffline"))
     }
     @ViewBuilder private var stalePrices: some View {
         if model.stalePriceCount > 0 {
@@ -300,8 +301,7 @@ public struct NetWorthView: View {
                     Text(strings.t("networth.chartDesc")).font(.callout).foregroundStyle(theme.secondaryLabel)
                 }
                 Spacer()
-                Picker(
-                    strings.t("networth.overTime"),
+                VisionSegmentedControl(
                     selection: Binding(
                         get: { model.period },
                         set: { value in
@@ -309,13 +309,10 @@ public struct NetWorthView: View {
                             model.selection = nil
                             model.rangeStart = nil
                             shell.replaceQuery("period", with: value == .year ? nil : value.rawValue)
-                        })
-                ) {
-                    ForEach(NetWorthPeriod.allCases, id: \.self) { period in
-                        Text(strings.t("performance.period." + period.rawValue)).tag(period)
-                    }
-                }
-                .pickerStyle(.segmented).frame(maxWidth: 420)
+                        }),
+                    values: NetWorthPeriod.allCases, title: { strings.t("performance.period." + $0.rawValue) }
+                )
+                .accessibilityLabel(strings.t("networth.overTime")).frame(maxWidth: 420)
             }
             InsightTimelineChart(
                 series: series, currency: currency, settings: settings, title: strings.t("networth.overTime"),
@@ -372,6 +369,7 @@ public struct NetWorthView: View {
                         if model.tableSnapshots.isEmpty { await reload(force: true) } else { await model.loadMore() }
                     }
                 }
+                .buttonStyle(.visionOutline)
             }
         }
     }

@@ -43,13 +43,14 @@ public struct ResearchCompareView: View {
                         ) {}.padding(.vertical, 28)
                     }
                 } else {
-                    Picker(
-                        strings.t("research.compare.title"),
-                        selection: Binding(get: { model.state.tab }, set: { replace(model.selectTab($0)) })
-                    ) {
-                        Text(strings.t("research.compare.tabPerformance")).tag("performance")
-                        Text(strings.t("research.compare.tabFundamentals")).tag("fundamentals")
-                    }.pickerStyle(.segmented).frame(maxWidth: 440)
+                    VisionSegmentedControl(
+                        selection: Binding(get: { model.state.tab }, set: { replace(model.selectTab($0)) }),
+                        options: [
+                            VisionSegmentOption(value: "performance", title: strings.t("research.compare.tabPerformance")),
+                            VisionSegmentOption(
+                                value: "fundamentals", title: strings.t("research.compare.tabFundamentals")),
+                        ]
+                    ).accessibilityLabel(strings.t("research.compare.title")).frame(maxWidth: 440)
                     if model.state.tab == "fundamentals" {
                         ResearchCompareFundamentalsView(model: model, shell: shell)
                     } else {
@@ -88,14 +89,10 @@ public struct ResearchCompareView: View {
                     Text(strings.t("research.compare.rebased")).font(.researchCardTitle)
                         .accessibilityAddTraits(.isHeader)
                     Spacer()
-                    Picker(
-                        strings.t("research.compare.rebased"),
-                        selection: Binding(get: { model.state.range }, set: { replace(model.selectRange($0)) })
-                    ) {
-                        ForEach(ResearchCompareURLState.ranges, id: \.self) { range in
-                            Text(strings.t("research.range." + range)).tag(range)
-                        }
-                    }.pickerStyle(.segmented).frame(maxWidth: 360)
+                    VisionSegmentedControl(
+                        selection: Binding(get: { model.state.range }, set: { replace(model.selectRange($0)) }),
+                        values: ResearchCompareURLState.ranges, title: { strings.t("research.range." + $0) }
+                    ).accessibilityLabel(strings.t("research.compare.rebased")).frame(maxWidth: 360)
                 }
                 Text(strings.t("research.compare.rebasedHint")).font(.callout).foregroundStyle(theme.secondaryLabel)
                 if model.isLoading || model.isPreparing && model.presentation == nil {

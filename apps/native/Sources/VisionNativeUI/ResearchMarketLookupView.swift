@@ -58,16 +58,13 @@ public struct ResearchMarketLookupView: View {
                         HStack {
                             Text(strings.t("market.priceChart")).font(.researchCardTitle)
                             Spacer()
-                            Picker(
-                                strings.t("market.priceChart"),
+                            VisionSegmentedControl(
                                 selection: Binding(
                                     get: { model.state.range.range },
-                                    set: { shell.replace(with: model.selectRange($0).string) })
-                            ) {
-                                ForEach(ResearchRangeOption.lookup) {
-                                    Text(strings.t("research.range." + $0.range)).tag($0.range)
-                                }
-                            }.pickerStyle(.segmented).frame(maxWidth: 510)
+                                    set: { shell.replace(with: model.selectRange($0).string) }),
+                                values: ResearchRangeOption.lookup.map(\.range),
+                                title: { strings.t("research.range." + $0) }
+                            ).accessibilityLabel(strings.t("market.priceChart")).frame(maxWidth: 510)
                         }
                         if model.isChartFetching || model.isResolvingProvider {
                             ProgressView().frame(maxWidth: .infinity).frame(height: 320)
@@ -85,15 +82,15 @@ public struct ResearchMarketLookupView: View {
                         if let quote = model.quote { tradingInfo(quote) }
                         ResearchCard {
                             Text(strings.t("research.details")).font(.researchCardTitle)
-                            Picker(
-                                strings.t("research.details"),
+                            VisionSegmentedControl(
                                 selection: Binding(
-                                    get: { model.state.tab }, set: { shell.replace(with: model.selectTab($0).string) })
-                            ) {
-                                Text(strings.t("market.fundamentals")).tag("fundamentals")
-                                Text(strings.t("market.analystRatings")).tag("analyst")
-                                Text(strings.t("market.latestNews")).tag("news")
-                            }.pickerStyle(.segmented).frame(maxWidth: 500)
+                                    get: { model.state.tab }, set: { shell.replace(with: model.selectTab($0).string) }),
+                                options: [
+                                    VisionSegmentOption(value: "fundamentals", title: strings.t("market.fundamentals")),
+                                    VisionSegmentOption(value: "analyst", title: strings.t("market.analystRatings")),
+                                    VisionSegmentOption(value: "news", title: strings.t("market.latestNews")),
+                                ]
+                            ).accessibilityLabel(strings.t("research.details")).frame(maxWidth: 500)
                             if model.isDetailFetching
                                 && (model.state.tab == "analyst"
                                     ? model.analyst == nil
@@ -133,13 +130,39 @@ public struct ResearchMarketLookupView: View {
                 await model.refreshQuotes()
             }
         }
-        .sheet(isPresented: Binding(get: { model.mapping.isPresented }, set: { if !$0 { model.mapping.close() } })) {
+        .visionDialog(
+            isPresented: Binding(get: { model.mapping.isPresented }, set: { if !$0 { model.mapping.close() } }),
+            metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0),
+            accessibilityTitle: strings.t("research.mapping.title")
+        ) {
             ResearchMarketMappingSheet(model: model.mapping, shell: shell)
         }
-        .sheet(isPresented: Binding(get: { model.action.isPresented }, set: { if !$0 { model.action.close() } })) {
+        // Presented from the screen, above the mapping dialog, as the web `AlertDialog` is. The
+        // buttons decide: `remove()` reads `pendingRemoval`, so a dismissal must not clear it first.
+        .visionConfirmationDialog(
+            title: strings.t("research.mapping.remove"),
+            message: { mapping in
+                strings.t(
+                    "research.mapping.removeDesc",
+                    ["provider": mapping.provider, "symbol": mapping.providerSymbol ?? "—"])
+            },
+            item: Binding(get: { model.mapping.pendingRemoval }, set: { _ in })
+        ) { _ in
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.mapping.pendingRemoval = nil }
+            VisionDialogAction(strings.t("common.delete"), role: .destructive) {
+                Task { await model.mapping.remove() }
+            }
+        }
+        .visionDialog(
+            isPresented: Binding(get: { model.action.isPresented }, set: { if !$0 { model.action.close() } }),
+            metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0)
+        ) {
             ResearchMarketActionSheet(model: model.action, shell: shell)
         }
-        .sheet(isPresented: Binding(get: { watchlistAdd.isPresented }, set: { if !$0 { watchlistAdd.close() } })) {
+        .visionDialog(
+            isPresented: Binding(get: { watchlistAdd.isPresented }, set: { if !$0 { watchlistAdd.close() } }),
+            metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0)
+        ) {
             ResearchWatchlistAddSheet(model: watchlistAdd, shell: shell)
         }
     }
