@@ -23,14 +23,14 @@ struct AIChatConversationRail: View {
                 } label: {
                     Image(systemName: "plus")
                 }
-                .buttonStyle(.borderless).disabled(model.isCreating)
+                .buttonStyle(.vision(.ghost, size: .iconSm)).disabled(model.isCreating)
                 .accessibilityLabel(strings.t("aiChat.newConversation"))
             }.padding(.horizontal, 16).padding(.vertical, 12)
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
                     if model.isLoadingConversations && model.conversations.isEmpty {
                         ForEach(0..<5, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: 8).fill(theme.muted).frame(height: 38).accessibilityHidden(
+                            RoundedRectangle(cornerRadius: DesignTokens.Radius.md).fill(theme.muted).frame(height: 38).accessibilityHidden(
                                 true)
                         }
                     } else if model.conversations.isEmpty {
@@ -79,35 +79,36 @@ struct AIChatConversationRail: View {
                         }.padding(.horizontal, 10).padding(.vertical, 9)
                             .background(
                                 model.selectedID == conversation.id ? theme.primary.opacity(0.12) : .clear,
-                                in: RoundedRectangle(cornerRadius: 8))
+                                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
                     }
                     if model.hasMore {
                         Button(strings.t(model.isLoadingMore ? "aiChat.loading" : "aiChat.loadMore")) {
                             Task { await model.loadMore() }
                         }
-                        .buttonStyle(.borderless).disabled(model.isLoadingMore).frame(maxWidth: .infinity).padding(10)
+                        .buttonStyle(.vision(.ghost, size: .sm)).disabled(model.isLoadingMore).frame(maxWidth: .infinity)
+                        .padding(10)
                     }
                 }.padding(.horizontal, 8).padding(.bottom, 12)
             }
         }.frame(maxHeight: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
             .visionCardBackground()
-            .sheet(item: $renameTarget) { target in
+            .visionDialog(
+                item: $renameTarget, metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0)
+            ) { target in
                 AIChatRenameSheet(model: model, conversation: target, shell: shell)
             }
-            .confirmationDialog(
-                strings.t("aiChat.deleteTitle"),
-                isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }),
-                titleVisibility: .visible
+            .visionConfirmationDialog(
+                title: strings.t("aiChat.deleteTitle"),
+                message: strings.t("aiChat.deleteConfirm"),
+                isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } })
             ) {
-                Button(strings.t("aiChat.delete"), role: .destructive) {
+                VisionDialogAction(strings.t("common.cancel"), role: .cancel) { deleteTarget = nil }
+                VisionDialogAction(strings.t("aiChat.delete"), role: .destructive) {
                     guard let target = deleteTarget else { return }
                     deleteTarget = nil
                     Task { _ = await model.delete(id: target.id) }
                 }
-                Button(strings.t("common.cancel"), role: .cancel) { deleteTarget = nil }
-            } message: {
-                Text(strings.t("aiChat.deleteConfirm"))
             }
     }
 }
@@ -118,7 +119,7 @@ private struct AIChatRenameSheet: View {
     let shell: NativeShellModel
     @State private var title: String
     @FocusState private var focused: Bool
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.visionDismissDialog) private var dismiss
     @Environment(\.visionTheme) private var theme
     init(model: AIChatModel, conversation: AIChatConversation, shell: NativeShellModel) {
         self.model = model
@@ -129,7 +130,8 @@ private struct AIChatRenameSheet: View {
     private var strings: any Localizing { shell.strings }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            VisionDialogHeader(title: strings.t("aiChat.renameTitle"), closeLabel: strings.t("common.close"))
+            VisionDialogHeader(
+                title: strings.t("aiChat.renameTitle"), closeLabel: strings.t("common.close"), onClose: { dismiss() })
             VStack(alignment: .leading, spacing: 8) {
                 Text(strings.t("aiChat.renameLabel")).font(.body.weight(.medium)).foregroundStyle(theme.foreground)
                 TextField(

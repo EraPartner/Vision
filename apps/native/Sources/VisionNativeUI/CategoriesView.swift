@@ -149,7 +149,7 @@ struct CategoryTreeRowView: View {
                         .frame(width: 20, height: 20)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.vision(.ghost, size: .iconXs))
                 .foregroundStyle(theme.secondaryLabel)
                 .accessibilityLabel(
                     "\(strings.t(isExpanded ? "categoriesPage.collapseAll" : "categoriesPage.expandAll")): \(label)")
@@ -171,7 +171,7 @@ struct CategoryTreeRowView: View {
             }
             .buttonStyle(.plain)
             .pointerStyle(.link)
-            .help(label)
+            .visionTooltip(label)
             .accessibilityAddTraits(.isLink)
             if row.isBranch {
                 VisionBadge(text: String(tree.subtreeCount(node.id)), tone: .secondary, small: true)
@@ -244,7 +244,7 @@ struct CategoryTreeRowView: View {
         .menuIndicator(.hidden)
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .help(strings.t("categoriesPage.rowMenu", ["name": label]))
+        .visionTooltip(strings.t("categoriesPage.rowMenu", ["name": label]))
         .accessibilityLabel(strings.t("categoriesPage.rowMenu", ["name": label]))
     }
 }
@@ -258,35 +258,58 @@ struct CategoryDialogs: ViewModifier {
 
     private var strings: any Localizing { shell.strings }
 
+    /// The Delete alert's copy, kept through the exit motion once the model has cleared it.
+    private struct DeleteCopy {
+        let title: String
+        let message: String
+        let action: String
+    }
+    @State private var deleteCopy: DeleteCopy?
+    private var shownDeleteCopy: DeleteCopy? {
+        if let text = model.deleteText() {
+            return DeleteCopy(title: text.title, message: text.message, action: text.action)
+        }
+        return deleteCopy
+    }
+
+    /// The dialog content pads and sizes itself (`AccountDialogFrame`), so the host adds nothing.
+    private static var metrics: VisionDialogMetrics {
+        VisionDialogMetrics(maxWidth: AccountDialogFrame<EmptyView, EmptyView>.defaultWidth, padding: 0, spacing: 0)
+    }
+
+    private func binding(_ isUp: @escaping () -> Bool, close: @escaping () -> Void) -> Binding<Bool> {
+        Binding(
+            get: { isUp() },
+            set: { presented in
+                if !presented { close() }
+            })
+    }
+
     func body(content: Content) -> some View {
         content
             // `useConfirmDialog`. The buttons decide; the binding only reads.
-            .alert(
-                model.deleteText()?.title ?? "",
+            .visionAlert(
+                title: shownDeleteCopy?.title ?? "",
+                message: shownDeleteCopy?.message,
                 isPresented: Binding(get: { model.pendingDelete != nil }, set: { _ in })
             ) {
-                Button(strings.t("common.cancel"), role: .cancel) { model.cancelDelete() }
-                Button(model.deleteText()?.action ?? "", role: .destructive) {
+                VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.cancelDelete() }
+                VisionDialogAction(shownDeleteCopy?.action ?? "", role: .destructive) {
                     Task { await model.confirmDelete() }
                 }
-            } message: {
-                Text(model.deleteText()?.message ?? "")
             }
-            .sheet(
-                isPresented: Binding(
-                    get: { model.form != nil },
-                    set: { presented in
-                        if !presented { model.closeForm() }
-                    })
+            .onChange(of: model.pendingDelete != nil, initial: true) { _, isUp in
+                if isUp, let text = model.deleteText() {
+                    deleteCopy = DeleteCopy(title: text.title, message: text.message, action: text.action)
+                }
+            }
+            .visionDialog(
+                isPresented: binding({ model.form != nil }, close: { model.closeForm() }), metrics: Self.metrics
             ) {
                 themed(CategoryNodeSheet(model: model, shell: shell))
             }
-            .sheet(
-                isPresented: Binding(
-                    get: { model.merge != nil },
-                    set: { presented in
-                        if !presented { model.closeMerge() }
-                    })
+            .visionDialog(
+                isPresented: binding({ model.merge != nil }, close: { model.closeMerge() }), metrics: Self.metrics
             ) {
                 themed(CategoryMergeSheet(model: model, shell: shell))
             }
@@ -296,6 +319,7 @@ struct CategoryDialogs: ViewModifier {
         sheet
             .environment(\.visionTheme, theme)
             .environment(\.colorScheme, theme.colorScheme)
+            .environment(\.accountDialogHosted, true)
     }
 }
 
@@ -326,32 +350,19 @@ struct CategoryNodeSheet: View {
                     }
                 }
                 AccountField(label: strings.t("categoriesPage.parent")) {
-                    Picker(
-                        strings.t("categoriesPage.parent"),
-                        selection: Binding<CategoryID?>(get: { model.form?.parentId }, set: { model.form?.parentId = $0 })
-                    ) {
-                        Text(strings.t("categoriesPage.root")).tag(CategoryID?.none)
-                        ForEach(model.parentOptions, id: \.id) { node in
-                            Text(verbatim: CategoryTree.pathLabel(node)).tag(CategoryID?.some(node.id))
-                        }
-                    }
-                    .labelsHidden()
+                    VisionSelect(
+                        selection: Binding(
+                            get: { ParentChoice(model.form?.parentId) },
+                            set: { model.form?.parentId = $0.parentId }),
+                        options: parentOptions,
+                        accessibilityLabel: strings.t("categoriesPage.parent"), expands: true)
                 }
                 AccountField(label: strings.t("addCat.descriptionOptional")) {
                     TextEditor(
                         text: Binding(get: { model.form?.description ?? "" }, set: { model.form?.setDescription($0) })
                     )
-                    .font(.body)
-                    .frame(minHeight: 64, maxHeight: 120)
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                            .fill(Color(token: theme.palette.background, opacity: 0.8)))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                            .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
+                    .visionTextEditor(minHeight: 64)
+                    .frame(maxHeight: 120)
                     .accessibilityLabel(strings.t("addCat.descriptionOptional"))
                 }
             } footer: {
@@ -371,6 +382,29 @@ struct CategoryNodeSheet: View {
             .onAppear { nameFocused = true }
             .onChange(of: model.nameFocusRequest) { _, _ in nameFocused = true }
         }
+    }
+
+    /// The parent select's choices: the root, or one category.
+    private enum ParentChoice: Hashable {
+        case root
+        case node(CategoryID)
+
+        init(_ id: CategoryID?) { self = id.map { .node($0) } ?? .root }
+
+        var parentId: CategoryID? {
+            switch self {
+            case .root: return nil
+            case .node(let id): return id
+            }
+        }
+    }
+
+    private var parentOptions: [VisionSelectOption<ParentChoice>] {
+        var options = [VisionSelectOption(value: ParentChoice.root, title: strings.t("categoriesPage.root"))]
+        for node in model.parentOptions {
+            options.append(VisionSelectOption(value: ParentChoice.node(node.id), title: CategoryTree.pathLabel(node)))
+        }
+        return options
     }
 
     private func submit() {
@@ -404,18 +438,12 @@ struct CategoryMergeSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 AccountField(label: strings.t("categoriesPage.mergeTarget")) {
-                    Picker(
-                        strings.t("categoriesPage.mergeTarget"),
-                        selection: Binding<CategoryID?>(get: { model.merge?.targetId }, set: { model.merge?.targetId = $0 })
-                    ) {
-                        if draft.targetId == nil {
-                            Text(verbatim: "—").tag(CategoryID?.none)
-                        }
-                        ForEach(model.mergeTargets, id: \.id) { node in
-                            Text(verbatim: CategoryTree.pathLabel(node)).tag(CategoryID?.some(node.id))
-                        }
-                    }
-                    .labelsHidden()
+                    VisionSelect(
+                        selection: Binding<CategoryID?>(get: { model.merge?.targetId }, set: { model.merge?.targetId = $0 }),
+                        entries: model.mergeTargets.map {
+                            VisionSelectEntry.option(VisionSelectOption(value: $0.id, title: CategoryTree.pathLabel($0)))
+                        },
+                        placeholder: "—", accessibilityLabel: strings.t("categoriesPage.mergeTarget"), expands: true)
                 }
                 if let summary = model.mergeSummary {
                     Text(summary)

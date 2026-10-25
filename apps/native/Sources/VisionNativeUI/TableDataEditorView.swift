@@ -69,7 +69,9 @@ public struct TableDataEditorView: View {
         .overlay(alignment: .bottom) {
             NoticeToast(notice: model.notice, strings: strings) { model.clearNotice($0) }
         }
-        .sheet(isPresented: reviewPresented) {
+        .visionDialog(
+            isPresented: reviewPresented, metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0)
+        ) {
             ReviewChangesSheet(model: model, strings: strings)
                 .environment(\.visionTheme, theme)
                 .environment(\.colorScheme, theme.colorScheme)
@@ -112,7 +114,7 @@ public struct TableDataEditorView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel(strings.t("admin.moreActions"))
-        .help(strings.t("admin.moreActions"))
+        .visionTooltip(strings.t("admin.moreActions"))
     }
 
     /// The warning alert, with the dashboard note on the materialized-view base tables.
@@ -162,7 +164,7 @@ public struct TableDataEditorView: View {
                 } label: {
                     Label(strings.t("dbEditor.discard"), systemImage: "arrow.uturn.backward")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.visionGhost)
                 .disabled(locked)
                 Button {
                     Task { await model.preview(strings: strings) }
@@ -423,7 +425,7 @@ public struct TableDataEditorView: View {
             ) {
                 Text(label)
             }
-            .toggleStyle(.checkbox)
+            .toggleStyle(.visionCheckbox)
             .labelsHidden()
             .disabled(!editable)
             .accessibilityLabel(label)
@@ -477,9 +479,9 @@ public struct TableDataEditorView: View {
                     Image(systemName: "nosign")
                         .imageScale(.small)
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.vision(.ghost, size: .iconXs))
                 .foregroundStyle(theme.tertiaryLabel)
-                .help(strings.t("dbEditor.setNull"))
+                .visionTooltip(strings.t("dbEditor.setNull"))
                 .accessibilityLabel(strings.t("dbEditor.setNull"))
             }
         }
@@ -508,9 +510,9 @@ public struct TableDataEditorView: View {
             Image(systemName: "arrow.uturn.backward")
                 .imageScale(.small)
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.vision(.ghost, size: .iconXs))
         .foregroundStyle(theme.warning)
-        .help(strings.t("dbEditor.revertCell"))
+        .visionTooltip(strings.t("dbEditor.revertCell"))
         .accessibilityLabel(strings.t("dbEditor.revertCell"))
     }
 
@@ -528,7 +530,7 @@ public struct TableDataEditorView: View {
             .buttonStyle(.visionOutline)
             .disabled(!model.canGoToPreviousPage)
             .accessibilityLabel(strings.t("dbEditor.prevPage"))
-            .help(strings.t("dbEditor.prevPage"))
+            .visionTooltip(strings.t("dbEditor.prevPage"))
             Text(strings.t("dbEditor.pageNumber", ["page": String(model.pageNumber)]))
                 .monospacedDigit()
             Button {
@@ -539,7 +541,7 @@ public struct TableDataEditorView: View {
             .buttonStyle(.visionOutline)
             .disabled(!model.canGoToNextPage)
             .accessibilityLabel(strings.t("dbEditor.nextPage"))
-            .help(strings.t("dbEditor.nextPage"))
+            .visionTooltip(strings.t("dbEditor.nextPage"))
         }
         .font(.footnote)
         .foregroundStyle(theme.secondaryLabel)
@@ -555,11 +557,11 @@ private struct RowMenuStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
             .menuStyle(.button)
-            .buttonStyle(.borderless)
+            .buttonStyle(.vision(.ghost, size: .iconSm))
             .menuIndicator(.hidden)
             .fixedSize()
             .accessibilityLabel(label)
-            .help(label)
+            .visionTooltip(label)
             .frame(width: TableDataEditorView.actionColumnWidth)
     }
 }
@@ -636,8 +638,7 @@ struct ReviewChangesSheet: View {
                 Button(model.isCommitting ? strings.t("dbEditor.committing") : strings.t("dbEditor.commit")) {
                     Task { await model.commit(strings: strings) }
                 }
-                .buttonStyle(.visionPrimary)
-                .tint(model.hasDeletes ? theme.destructive : theme.primary)
+                .buttonStyle(.vision(model.hasDeletes ? .destructive : .default))
                 .disabled(!model.canCommit)
             }
         }

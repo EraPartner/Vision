@@ -29,7 +29,7 @@ struct AnalysisReusableView: View {
             DisclosureGroup(strings.t("analysis.sourcesLabel"), isExpanded: $sourcesOpen) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(strings.t("analysis.sourcesPlaceholder")).font(.footnote).foregroundStyle(theme.secondaryLabel)
-                    TextEditor(text: text(\.sourceReferences)).frame(minHeight: 100)
+                    TextEditor(text: text(\.sourceReferences)).visionTextEditor(minHeight: 100)
                         .accessibilityLabel(strings.t("analysis.sourcesLabel"))
                 }.padding(.top, 8)
             }
@@ -86,18 +86,23 @@ struct AnalysisReusableView: View {
                 Toggle(
                     strings.t("analysis.noBenchmarkForRun"),
                     isOn: Binding(
-                        get: { model.runWithoutBenchmark }, set: { model.runWithoutBenchmark = $0 }))
+                        get: { model.runWithoutBenchmark }, set: { model.runWithoutBenchmark = $0 })
+                ).toggleStyle(.visionCheckbox)
             }
-            Picker(strings.t("analysis.answerDepth"), selection: text(\.runAnswerDepth)) {
-                Text(strings.t("analysis.useDefault")).tag("")
-                Text(strings.t("aiResearch.quick")).tag("quick")
-                Text(strings.t("aiResearch.detailed")).tag("detailed")
-            }.pickerStyle(.segmented)
-            Picker(strings.t("analysis.language"), selection: text(\.runLanguage)) {
-                Text(strings.t("analysis.useDefault")).tag("")
-                Text(strings.t("settings.general.lang.en")).tag("en")
-                Text(strings.t("settings.general.lang.nl")).tag("nl")
-            }.pickerStyle(.segmented)
+            VisionSegmentedControl(
+                selection: text(\.runAnswerDepth),
+                options: [
+                    VisionSegmentOption(value: "", title: strings.t("analysis.useDefault")),
+                    VisionSegmentOption(value: "quick", title: strings.t("aiResearch.quick")),
+                    VisionSegmentOption(value: "detailed", title: strings.t("aiResearch.detailed")),
+                ], label: strings.t("analysis.answerDepth"))
+            VisionSegmentedControl(
+                selection: text(\.runLanguage),
+                options: [
+                    VisionSegmentOption(value: "", title: strings.t("analysis.useDefault")),
+                    VisionSegmentOption(value: "en", title: strings.t("settings.general.lang.en")),
+                    VisionSegmentOption(value: "nl", title: strings.t("settings.general.lang.nl")),
+                ], label: strings.t("analysis.language"))
             Text(strings.t("analysis.preferencePrecedence")).font(.footnote).foregroundStyle(theme.secondaryLabel)
         }
     }
@@ -117,7 +122,7 @@ struct AnalysisReusableView: View {
                 ForEach(earlier, id: \.self) { version in
                     Button(strings.t("analysis.restoreVersion", ["version": String(version)])) {
                         Task { await model.restoreVersion(version) }
-                    }.buttonStyle(.borderless).disabled(model.savedAction || model.isSaving)
+                    }.buttonStyle(.visionGhost).controlSize(.small).disabled(model.savedAction || model.isSaving)
                 }
             }
         }
@@ -126,9 +131,8 @@ struct AnalysisReusableView: View {
     private var proposal: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(strings.t("analysis.aiEditProposalPlaceholder")).font(.footnote).foregroundStyle(theme.secondaryLabel)
-            TextEditor(text: text(\.proposalJson)).font(.caption.monospaced()).frame(minHeight: 150)
+            TextEditor(text: text(\.proposalJson)).font(.caption.monospaced()).visionTextEditor(minHeight: 150)
                 .accessibilityLabel(strings.t("analysis.aiEditProposalPlaceholder"))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border.opacity(0.6)))
             ViewThatFits(in: .horizontal) {
                 HStack { proposalButtons }
                 VStack(alignment: .leading) { proposalButtons }
@@ -182,6 +186,7 @@ struct AnalysisSavedLibraryView: View {
             if let error = model.savedError {
                 Text(error).foregroundStyle(theme.destructive)
                 Button(strings.t("common.retry")) { Task { await model.loadSavedList() } }
+                    .buttonStyle(.visionOutline)
             }
             if model.isSavedLoading && model.saved.isEmpty {
                 ProgressView().frame(maxWidth: .infinity).padding(20)
@@ -221,26 +226,22 @@ struct AnalysisSavedLibraryView: View {
                     }.padding(10)
                         .background(
                             model.selectedSaved?.id == saved.id ? theme.primary.opacity(0.07) : Color.clear,
-                            in: RoundedRectangle(cornerRadius: 8)
+                            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md)
                         )
                         .accessibilityElement(children: .contain)
                     if saved.id != model.saved.last?.id { Divider() }
                 }
             }
         }
-        .alert(
-            strings.t("analysis.deleteConfirmTitle"),
-            isPresented: Binding(
-                get: { deletion != nil }, set: { if !$0 { deletion = nil } })
-        ) {
-            Button(strings.t("common.cancel"), role: .cancel) { deletion = nil }
-            Button(strings.t("common.delete"), role: .destructive) {
-                guard let saved = deletion else { return }
+        .visionAlert(
+            title: strings.t("analysis.deleteConfirmTitle"),
+            message: { strings.t("analysis.deleteConfirm", ["name": $0.name]) }, item: $deletion
+        ) { saved in
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { deletion = nil }
+            VisionDialogAction(strings.t("common.delete"), role: .destructive) {
                 deletion = nil
                 Task { await model.deleteSaved(id: saved.id) }
             }
-        } message: {
-            Text(strings.t("analysis.deleteConfirm", ["name": deletion?.name ?? ""]))
         }
     }
     /// The saved analysis `refreshStatus` wire value through its locale key, or as-is.

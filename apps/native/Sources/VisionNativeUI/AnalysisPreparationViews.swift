@@ -56,7 +56,7 @@ struct AnalysisPreparationStepView: View {
             if model.step.hasUnpivotConflict(columnIds: model.columnIds) {
                 Text(t("outputNamesConflict")).foregroundStyle(theme.destructive)
             }
-            Button(t("addStep")) { if model.addStep() { onAdded() } }.disabled(
+            Button(t("addStep")) { if model.addStep() { onAdded() } }.buttonStyle(.visionOutline).disabled(
                 !model.step.isValid(columnIds: model.columnIds))
         }.padding(12)
                 .background(

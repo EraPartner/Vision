@@ -55,18 +55,16 @@ struct AIInvestigationDocumentsView: View {
             }
         }
         .padding(.vertical, 10)
-        .alert(
-            strings.t("aiResearch.deleteDocument"),
-            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-            presenting: pendingDelete
+        .visionAlert(
+            title: strings.t("aiResearch.deleteDocument"),
+            message: { strings.t("aiResearch.deleteDocumentConfirm", ["name": $0.title]) },
+            item: $pendingDelete
         ) { document in
-            Button(strings.t("common.cancel"), role: .cancel) { pendingDelete = nil }
-            Button(strings.t("common.delete"), role: .destructive) {
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { pendingDelete = nil }
+            VisionDialogAction(strings.t("common.delete"), role: .destructive) {
                 pendingDelete = nil
                 Task { await model.deleteDocumentConfirmed(document.id) }
             }
-        } message: { document in
-            Text(strings.t("aiResearch.deleteDocumentConfirm", ["name": document.title]))
         }
     }
     private func documentRow(_ document: AIResearchDocument) -> some View {
@@ -82,7 +80,7 @@ struct AIInvestigationDocumentsView: View {
             } label: {
                 Image(systemName: "trash")
             }
-            .buttonStyle(.borderless).foregroundStyle(theme.destructive)
+            .buttonStyle(.vision(.ghost, size: .iconSm)).foregroundStyle(theme.destructive)
             .accessibilityLabel(strings.t("aiResearch.deleteDocument") + ": " + document.title)
         }.padding(.vertical, 10)
     }

@@ -69,7 +69,7 @@ struct AIInvestigationAnswerView: View {
             let evidence = answer.evidence.last { $0.id == id }
             Button(evidence?.label ?? id) { selectedEvidenceID = id }
                 .buttonStyle(.visionLink).font(.caption).multilineTextAlignment(.leading)
-                .help(evidence?.excerpt ?? "")
+                .visionTooltip(evidence?.excerpt ?? "")
         }
     }
     private func annotation(_ key: String, lines: [String], warning: Bool) -> some View {

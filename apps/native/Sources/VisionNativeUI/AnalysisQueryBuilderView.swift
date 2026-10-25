@@ -21,27 +21,27 @@ struct AnalysisQueryBuilderView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Picker(
-                    strings.t("analysis.mode"),
-                    selection: Binding(get: { model.mode }, set: { value in model.setMode(value) })
-                ) {
-                    Text(strings.t("analysis.visual")).tag(AnalysisMode.visual)
-                    Text(strings.t("analysis.sql")).tag(AnalysisMode.sql)
-                }.pickerStyle(.segmented)
-                Picker(
-                    strings.t("analysis.workspace"),
-                    selection: Binding(get: { model.workspace }, set: { model.workspace = $0 })
-                ) {
-                    ForEach(AnalysisWorkspace.allCases, id: \.self) { workspace in
-                        Text(strings.t("analysis.workspace." + workspace.rawValue)).tag(workspace)
-                    }
+            HStack(alignment: .bottom, spacing: 16) {
+                VisionSegmentedControl(
+                    selection: Binding(get: { model.mode }, set: { value in model.setMode(value) }),
+                    values: [AnalysisMode.visual, AnalysisMode.sql],
+                    title: { strings.t($0 == .visual ? "analysis.visual" : "analysis.sql") },
+                    label: strings.t("analysis.mode"))
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(strings.t("analysis.workspace")).font(.callout.weight(.medium))
+                    VisionSelect(
+                        selection: Binding(get: { model.workspace }, set: { model.workspace = $0 }),
+                        options: AnalysisWorkspace.allCases.map {
+                            VisionSelectOption(value: $0, title: strings.t("analysis.workspace." + $0.rawValue))
+                        },
+                        accessibilityLabel: strings.t("analysis.workspace"))
                 }
             }
             if let error = model.catalogError {
                 Text(strings.t("analysis.catalogError")).font(.headline)
                 Text(error).foregroundStyle(theme.destructive)
                 Button(strings.t("common.retry")) { Task { await model.load(force: true, route: shell.route) } }
+                    .buttonStyle(.visionOutline)
             } else if model.catalog == nil {
                 ProgressView(strings.t("analysis.catalogLoading")).frame(maxWidth: .infinity).padding(30)
             } else if model.datasets.isEmpty {
@@ -51,16 +51,17 @@ struct AnalysisQueryBuilderView: View {
             } else if let dataset {
                 visual(dataset)
             }
-        }
+        }.toggleStyle(.visionCheckbox)
     }
 
     private func visual(_ dataset: AnalysisDataset) -> some View {
         VStack(alignment: .leading, spacing: 18) {
-            Picker(
-                strings.t("analysis.dataset"),
-                selection: Binding(get: { model.plan.datasetId }, set: { value in model.selectDataset(value) })
-            ) {
-                ForEach(model.datasets) { entry in Text(label(entry.label)).tag(entry.id) }
+            VStack(alignment: .leading, spacing: 8) {
+                Text(strings.t("analysis.dataset")).font(.callout.weight(.medium))
+                VisionSelect(
+                    selection: Binding(get: { model.plan.datasetId }, set: { value in model.selectDataset(value) }),
+                    options: model.datasets.map { VisionSelectOption(value: $0.id, title: label($0.label)) },
+                    accessibilityLabel: strings.t("analysis.dataset"), expands: true)
             }
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 290), alignment: .leading)], alignment: .leading, spacing: 24
@@ -134,22 +135,24 @@ struct AnalysisQueryBuilderView: View {
         let field = dataset.fields.first { $0.id == filter.fieldId }
         let context = ["number": String(index + 1), "field": field.map { label($0.label ?? $0.id) } ?? filter.fieldId]
         return HStack(alignment: .top, spacing: 10) {
-            Picker(
-                strings.t("analysis.filterField", ["number": String(index + 1)]),
-                selection: filterText(index, \.fieldId)
-            ) {
-                ForEach(dataset.fields) { field in Text(label(field.label ?? field.id)).tag(field.id) }
-            }.labelsHidden().accessibilityLabel(strings.t("analysis.filterField", ["number": String(index + 1)]))
-            Picker(strings.t("analysis.filterOperator", context), selection: filterText(index, \.operator)) {
-                ForEach(operators, id: \.self) { item in Text(strings.t("analysis.operator." + item)).tag(item) }
-            }.labelsHidden().accessibilityLabel(strings.t("analysis.filterOperator", context))
+            VisionSelect(
+                selection: filterText(index, \.fieldId),
+                options: dataset.fields.map { VisionSelectOption(value: $0.id, title: label($0.label ?? $0.id)) },
+                accessibilityLabel: strings.t("analysis.filterField", ["number": String(index + 1)]))
+            VisionSelect(
+                selection: filterText(index, \.operator),
+                options: operators.map { VisionSelectOption(value: $0, title: strings.t("analysis.operator." + $0)) },
+                accessibilityLabel: strings.t("analysis.filterOperator", context))
             Group {
                 if field?.type == "boolean" {
-                    Picker(strings.t("analysis.filterValue", context), selection: valueText(index)) {
-                        Text("—").tag("")
-                        Text(strings.t("common.yes")).tag("true")
-                        Text(strings.t("common.no")).tag("false")
-                    }.labelsHidden()
+                    VisionSelect(
+                        selection: valueText(index),
+                        options: [
+                            VisionSelectOption(value: "", title: "—"),
+                            VisionSelectOption(value: "true", title: strings.t("common.yes")),
+                            VisionSelectOption(value: "false", title: strings.t("common.no")),
+                        ],
+                        accessibilityLabel: strings.t("analysis.filterValue", context))
                 } else {
                     TextField(strings.t("analysis.filterValue", context), text: valueText(index)).textFieldStyle(
                         .vision)
@@ -161,7 +164,8 @@ struct AnalysisQueryBuilderView: View {
             } label: {
                 Image(systemName: "xmark")
             }
-            .buttonStyle(.borderless).accessibilityLabel(strings.t("analysis.removeFilterContext", context))
+            .buttonStyle(.vision(.ghost, size: .iconSm))
+            .accessibilityLabel(strings.t("analysis.removeFilterContext", context))
         }.accessibilityElement(children: .contain)
     }
     private func filterText(_ index: Int, _ path: WritableKeyPath<AnalysisFilter, String>) -> Binding<String> {
@@ -205,9 +209,8 @@ struct AnalysisSQLEditorView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text(strings.t("analysis.sqlEditor")).font(.callout.weight(.medium))
             TextEditor(text: Binding(get: { model.sql }, set: { model.sql = $0 }))
-                .font(.body.monospaced()).frame(minHeight: 220)
+                .font(.body.monospaced()).visionTextEditor(minHeight: 220)
                 .accessibilityLabel(strings.t("analysis.sqlEditor"))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border.opacity(0.6)))
             VStack(alignment: .leading, spacing: 10) {
                 Text(strings.t("analysis.approvedDatasets")).font(.callout.weight(.medium))
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), alignment: .leading)], alignment: .leading) {
@@ -233,7 +236,7 @@ struct AnalysisSQLEditorView: View {
                         }
                     }
                 }
-            }.padding(12).overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.border.opacity(0.6)))
+            }.padding(12).overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.control).stroke(theme.border.opacity(0.6)))
             VStack(alignment: .leading, spacing: 6) {
                 Text(strings.t("analysis.sqlParameters")).font(.callout)
                 TextField(
@@ -253,11 +256,11 @@ struct AnalysisSQLEditorView: View {
                             } label: {
                                 Text(query).font(.caption.monospaced()).lineLimit(2).frame(
                                     maxWidth: .infinity, alignment: .leading)
-                            }.buttonStyle(.borderless).padding(.vertical, 4).help(query)
+                            }.buttonStyle(.visionGhost).padding(.vertical, 4).visionTooltip(query)
                         }
                     }.padding(.top, 8)
                 }
             }
-        }
+        }.toggleStyle(.visionCheckbox)
     }
 }

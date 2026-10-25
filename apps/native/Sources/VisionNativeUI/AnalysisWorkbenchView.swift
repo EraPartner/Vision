@@ -28,6 +28,7 @@ public struct AnalysisWorkbenchView: View {
                     DisclosureGroup(t("preparation"), isExpanded: $preparationOpen) {
                         VStack(alignment: .leading, spacing: 12) {
                             Button(t(addingStep ? "cancelStep" : "newStep")) { addingStep.toggle() }
+                                .buttonStyle(.visionOutline)
                             if addingStep {
                                 AnalysisPreparationStepView(model: model, shell: shell) { addingStep = false }
                             }
@@ -35,7 +36,8 @@ public struct AnalysisWorkbenchView: View {
                                 HStack(alignment: .top) {
                                     Text("\(index + 1). " + stepSummary(model.draft.steps[index])).frame(
                                         maxWidth: .infinity, alignment: .leading)
-                                    Button(t("remove")) { model.draft.steps.remove(at: index) }
+                                    Button(t("remove"), role: .destructive) { model.draft.steps.remove(at: index) }
+                                        .buttonStyle(.visionOutline).controlSize(.small)
                                 }.padding(.vertical, 6)
                             }
                             if !model.draft.steps.isEmpty {
@@ -115,16 +117,31 @@ struct AnalysisWorkbenchPicker: View {
     var clearable = true
     var labels: ((String) -> String)?
     var segmented = false
-    @ViewBuilder var body: some View {
-        if segmented { picker.pickerStyle(.segmented) } else { picker.pickerStyle(.menu) }
+    private var title: String { shell.strings.t("analysis.ext.workbench." + key) }
+    /// The clear entry, each choice, and the current value when it is not one of the choices.
+    private var entries: [(value: String, title: String)] {
+        var items: [(value: String, title: String)] = []
+        if clearable { items.append((value: "", title: "—")) }
+        for choice in choices {
+            items.append((value: choice, title: labels?(choice) ?? shell.strings.t("analysis.ext.workbench.option." + choice)))
+        }
+        if !value.isEmpty, !choices.contains(value) { items.append((value: value, title: value)) }
+        return items
     }
-    private var picker: some View {
-        Picker(shell.strings.t("analysis.ext.workbench." + key), selection: $value) {
-            if clearable { Text("—").tag("") }
-            ForEach(Array(choices.enumerated()), id: \.offset) { _, choice in
-                Text(labels?(choice) ?? shell.strings.t("analysis.ext.workbench.option." + choice)).tag(choice)
+    @ViewBuilder var body: some View {
+        if segmented {
+            VisionSegmentedControl(
+                selection: $value,
+                options: entries.map { VisionSegmentOption(value: $0.value, title: $0.title) },
+                label: title)
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.callout)
+                VisionSelect(
+                    selection: $value,
+                    options: entries.map { VisionSelectOption(value: $0.value, title: $0.title) },
+                    accessibilityLabel: title, expands: true)
             }
-            if !value.isEmpty, !choices.contains(value) { Text(value).tag(value) }
         }
     }
 }
@@ -166,7 +183,7 @@ struct AnalysisWorkbenchColumnChecks: View {
                             ids.removeAll { $0 == column.id }
                         }
                     })
-            ).toggleStyle(.checkbox)
+            ).toggleStyle(.visionCheckbox)
         }
     }
 }

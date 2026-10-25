@@ -12,71 +12,85 @@ struct AccountDialogs: ViewModifier {
 
     private var strings: any Localizing { shell.strings }
 
+    /// The Delete alert's copy, kept through the exit motion once the model has cleared it.
+    private struct DeleteCopy {
+        let title: String
+        let message: String
+        let action: String
+    }
+    @State private var deleteCopy: DeleteCopy?
+    private var shownDeleteCopy: DeleteCopy? {
+        if let text = model.deleteText() {
+            return DeleteCopy(title: text.title, message: text.message, action: text.action)
+        }
+        return deleteCopy
+    }
+
+    /// The dialog content pads and sizes itself (`AccountDialogFrame`), so the host adds nothing.
+    private static func metrics(width: CGFloat = AccountDialogFrame<EmptyView, EmptyView>.defaultWidth)
+        -> VisionDialogMetrics
+    {
+        VisionDialogMetrics(maxWidth: width, padding: 0, spacing: 0)
+    }
+
+    private func binding(_ isUp: @escaping () -> Bool, close: @escaping () -> Void) -> Binding<Bool> {
+        Binding(
+            get: { isUp() },
+            set: { presented in
+                if !presented { close() }
+            })
+    }
+
     func body(content: Content) -> some View {
         content
             // `useConfirmDialog`. The buttons decide; the binding only reads.
-            .alert(
-                model.deleteText()?.title ?? "",
+            .visionAlert(
+                title: shownDeleteCopy?.title ?? "",
+                message: shownDeleteCopy?.message,
                 isPresented: Binding(get: { model.pendingDelete != nil }, set: { _ in })
             ) {
-                Button(strings.t("common.cancel"), role: .cancel) { model.cancelDelete() }
-                Button(model.deleteText()?.action ?? "", role: .destructive) {
+                VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.cancelDelete() }
+                VisionDialogAction(shownDeleteCopy?.action ?? "", role: .destructive) {
                     Task { await model.confirmDelete() }
                 }
-            } message: {
-                Text(model.deleteText()?.message ?? "")
             }
-            .sheet(
-                isPresented: Binding(
-                    get: { model.form != nil },
-                    set: { presented in
-                        if !presented { model.closeForm() }
-                    })
+            .onChange(of: model.pendingDelete != nil, initial: true) { _, isUp in
+                if isUp, let text = model.deleteText() {
+                    deleteCopy = DeleteCopy(title: text.title, message: text.message, action: text.action)
+                }
+            }
+            .visionDialog(
+                isPresented: binding({ model.form != nil }, close: { model.closeForm() }),
+                metrics: Self.metrics(width: AccountFormSheet.dialogWidth)
             ) {
                 themed(AccountFormSheet(model: model, shell: shell))
             }
-            .sheet(
-                isPresented: Binding(
-                    get: { model.reconcile != nil },
-                    set: { presented in
-                        if !presented { model.closeReconcile() }
-                    })
+            .visionDialog(
+                isPresented: binding({ model.reconcile != nil }, close: { model.closeReconcile() }),
+                metrics: Self.metrics()
             ) {
                 themed(ReconcileSheet(model: model, shell: shell))
             }
-            .sheet(
-                isPresented: Binding(
-                    get: { model.opening != nil },
-                    set: { presented in
-                        if !presented { model.closeOpeningBalance() }
-                    })
+            .visionDialog(
+                isPresented: binding({ model.opening != nil }, close: { model.closeOpeningBalance() }),
+                metrics: Self.metrics()
             ) {
                 themed(OpeningBalanceSheet(model: model, shell: shell))
             }
-            .sheet(
-                isPresented: Binding(
-                    get: { model.merge != nil },
-                    set: { presented in
-                        if !presented { model.closeMerge() }
-                    })
+            .visionDialog(
+                isPresented: binding({ model.merge != nil }, close: { model.closeMerge() }), metrics: Self.metrics()
             ) {
                 themed(MergeAccountSheet(model: model, shell: shell))
             }
-            .sheet(
-                isPresented: Binding(
-                    get: { model.close != nil },
-                    set: { presented in
-                        if !presented { model.closeCloseDialog() }
-                    })
+            .visionDialog(
+                isPresented: binding({ model.close != nil }, close: { model.closeCloseDialog() }),
+                metrics: Self.metrics()
             ) {
                 themed(CloseAccountSheet(model: model, shell: shell))
             }
-            .sheet(
-                isPresented: Binding(
-                    get: { model.transfer != nil },
-                    set: { presented in
-                        if !presented { model.closeTransfer() }
-                    })
+            .visionDialog(
+                isPresented: binding({ model.transfer != nil }, close: { model.closeTransfer() }),
+                metrics: Self.metrics()
             ) {
                 themed(BrokerTransferSheet(model: model, shell: shell))
             }
@@ -86,7 +100,15 @@ struct AccountDialogs: ViewModifier {
         sheet
             .environment(\.visionTheme, theme)
             .environment(\.colorScheme, theme.colorScheme)
+            .environment(\.accountDialogHosted, true)
     }
+}
+
+extension EnvironmentValues {
+    /// Set where an `AccountDialogFrame` sits in a `visionDialog` whose host scrolls and pads it
+    /// (`DialogContent`'s `overflow-y-auto`): the frame then skips its own scroll view and fills the
+    /// panel's width. Unset (a system `.sheet`), the frame scrolls its body and sizes itself.
+    @Entry var accountDialogHosted: Bool = false
 }
 
 /// The `DialogContent` frame the account, category and recipient dialogs share: the web
@@ -94,27 +116,35 @@ struct AccountDialogs: ViewModifier {
 /// `p-6` padding and the `gap-5` rhythm. Footer buttons default to the outline style; the
 /// primary action sets `.visionPrimary` itself.
 struct AccountDialogFrame<Content: View, Footer: View>: View {
+    /// `sm:max-w-md`.
+    static var defaultWidth: CGFloat { 448 }
+
     let title: String
     var description: String?
     let closeLabel: String
-    /// `sm:max-w-md`.
-    var width: CGFloat = 448
+    var width: CGFloat = AccountDialogFrame.defaultWidth
     @ViewBuilder var content: () -> Content
     @ViewBuilder var footer: () -> Footer
     @Environment(\.visionTheme) private var theme
+    @Environment(\.accountDialogHosted) private var hosted
+    @Environment(\.visionDismissDialog) private var dismissDialog
+    @Environment(\.dismiss) private var dismissSheet
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VisionDialogHeader(title: title, description: description, closeLabel: closeLabel)
-                .padding([.horizontal, .top], 24)
-                .padding(.bottom, 20)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    content()
+            VisionDialogHeader(
+                title: title, description: description, closeLabel: closeLabel,
+                onClose: {
+                    dismissDialog()
+                    dismissSheet()
                 }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 2)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            )
+            .padding([.horizontal, .top], 24)
+            .padding(.bottom, 20)
+            if hosted {
+                fields
+            } else {
+                ScrollView { fields }
             }
             HStack(spacing: 8) {
                 footer()
@@ -124,8 +154,20 @@ struct AccountDialogFrame<Content: View, Footer: View>: View {
             .padding([.horizontal, .bottom], 24)
             .padding(.top, 20)
         }
-        .frame(minWidth: width, idealWidth: width, minHeight: 240)
+        .frame(
+            minWidth: hosted ? nil : width, idealWidth: hosted ? nil : width, maxWidth: hosted ? CGFloat.infinity : nil,
+            minHeight: hosted ? nil : 240, alignment: .topLeading
+        )
         .foregroundStyle(theme.foreground)
+    }
+
+    private var fields: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            content()
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -184,6 +226,8 @@ struct AccountCallout<Content: View>: View {
 /// Opening balance with its As of date, and the Advanced section (Owner, Liquidity,
 /// Spendable, Include in net worth).
 struct AccountFormSheet: View {
+    static var dialogWidth: CGFloat { 470 }
+
     let model: AccountsModel
     let shell: NativeShellModel
     @FocusState private var focus: Field?
@@ -200,7 +244,9 @@ struct AccountFormSheet: View {
 
     var body: some View {
         if let form = model.form {
-            AccountDialogFrame(title: strings.t(form.titleKey), closeLabel: strings.t("common.close"), width: 470) {
+            AccountDialogFrame(
+                title: strings.t(form.titleKey), closeLabel: strings.t("common.close"), width: Self.dialogWidth
+            ) {
                 fields(form)
             } footer: {
                 Spacer()
@@ -216,7 +262,6 @@ struct AccountFormSheet: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(model.isSavingForm || !form.canSubmit)
             }
-            .frame(minHeight: 560)
             .onAppear { focus = .name }
             .onChange(of: model.formFocusRequest) { _, _ in
                 switch model.formFocus {
@@ -264,28 +309,25 @@ struct AccountFormSheet: View {
                 .accessibilityLabel(strings.t("accounts.field.institution"))
             }
             AccountField(label: strings.t("accounts.field.currency")) {
-                Picker(
-                    strings.t("accounts.field.currency"),
-                    selection: Binding(get: { model.form?.currency ?? LedgerCurrency.eur }, set: { model.form?.currency = $0 })
-                ) {
-                    ForEach(AccountOptions.currencies(including: form.currency), id: \.self) { code in
-                        Text(verbatim: code.rawValue).tag(code)
-                    }
-                }
-                .labelsHidden()
+                VisionSelect(
+                    selection: Binding(get: { model.form?.currency ?? LedgerCurrency.eur }, set: { model.form?.currency = $0 }),
+                    options: AccountOptions.currencies(including: form.currency).map {
+                        VisionSelectOption(value: $0, title: $0.rawValue)
+                    },
+                    accessibilityLabel: strings.t("accounts.field.currency"), expands: true
+                )
                 .frame(width: 110)
             }
         }
         AccountField(label: strings.t("accounts.field.type")) {
-            Picker(
-                strings.t("accounts.field.type"),
-                selection: Binding(get: { model.form?.type ?? AccountKind.checking.type }, set: { model.form?.setType($0) })
-            ) {
-                ForEach(AccountKind.allCases, id: \.self) { kind in
-                    Label(strings.t(kind.labelKey), systemImage: kind.symbol).tag(kind.type)
-                }
-            }
-            .labelsHidden()
+            VisionSelect(
+                selection: Binding(
+                    get: { model.form?.type ?? AccountKind.checking.type }, set: { model.form?.setType($0) }),
+                options: AccountKind.allCases.map {
+                    VisionSelectOption(value: $0.type, title: strings.t($0.labelKey))
+                },
+                accessibilityLabel: strings.t("accounts.field.type"), expands: true
+            )
         }
         if form.showsOpeningBalance {
             openingFields(form)
@@ -345,27 +387,23 @@ struct AccountFormSheet: View {
     private func advanced(_ form: AccountFormDraft) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             AccountField(label: strings.t("accounts.field.owner"), hint: strings.t("accounts.field.ownerHint")) {
-                Picker(
-                    strings.t("accounts.field.owner"),
-                    selection: Binding(get: { model.form?.owner ?? .me }, set: { model.form?.owner = $0 })
-                ) {
-                    ForEach(AccountOptions.owners, id: \.self) { owner in
-                        Text(strings.t("accounts.owner.\(owner.rawValue)")).tag(owner)
-                    }
-                }
-                .labelsHidden()
+                VisionSelect(
+                    selection: Binding(get: { model.form?.owner ?? .me }, set: { model.form?.owner = $0 }),
+                    options: AccountOptions.owners.map {
+                        VisionSelectOption(value: $0, title: strings.t("accounts.owner.\($0.rawValue)"))
+                    },
+                    accessibilityLabel: strings.t("accounts.field.owner"), expands: true
+                )
             }
             AccountField(label: strings.t("accounts.field.liquidityClass"), hint: strings.t("accounts.field.liquidityHint")) {
-                Picker(
-                    strings.t("accounts.field.liquidityClass"),
+                VisionSelect(
                     selection: Binding(
-                        get: { model.form?.liquidityClass ?? .liquid }, set: { model.form?.setLiquidityClass($0) })
-                ) {
-                    ForEach(AccountOptions.liquidityClasses, id: \.self) { value in
-                        Text(strings.t("accounts.liquidity.\(value.rawValue)")).tag(value)
-                    }
-                }
-                .labelsHidden()
+                        get: { model.form?.liquidityClass ?? .liquid }, set: { model.form?.setLiquidityClass($0) }),
+                    options: AccountOptions.liquidityClasses.map {
+                        VisionSelectOption(value: $0, title: strings.t("accounts.liquidity.\($0.rawValue)"))
+                    },
+                    accessibilityLabel: strings.t("accounts.field.liquidityClass"), expands: true
+                )
             }
             Toggle(
                 isOn: Binding(get: { model.form?.spendable ?? false }, set: { model.form?.setSpendable($0) })
@@ -377,12 +415,12 @@ struct AccountFormSheet: View {
                         .foregroundStyle(theme.secondaryLabel)
                 }
             }
-            .toggleStyle(.switch)
+            .toggleStyle(.visionSwitch)
             Toggle(
                 strings.t("accounts.field.inNetWorth"),
                 isOn: Binding(get: { model.form?.inNetWorth ?? true }, set: { model.form?.inNetWorth = $0 })
             )
-            .toggleStyle(.switch)
+            .toggleStyle(.visionSwitch)
         }
     }
 }
@@ -434,7 +472,6 @@ struct ReconcileSheet: View {
                     .keyboardShortcut(.cancelAction)
                     .disabled(busy)
             }
-            .frame(minHeight: 620)
         }
     }
 
@@ -448,17 +485,13 @@ struct ReconcileSheet: View {
             VStack(alignment: .leading, spacing: 8) {
                 if draft.showsCurrencyPicker {
                     AccountField(label: strings.t("accounts.reconcile.currencyLabel")) {
-                        Picker(
-                            strings.t("accounts.reconcile.currencyLabel"),
+                        VisionSelect(
                             selection: Binding(
                                 get: { model.reconcile?.selectedCurrency ?? draft.defaultCurrency },
-                                set: { model.reconcile?.selectCurrency($0) })
-                        ) {
-                            ForEach(draft.availableCurrencies, id: \.self) { code in
-                                Text(verbatim: code.rawValue).tag(code)
-                            }
-                        }
-                        .labelsHidden()
+                                set: { model.reconcile?.selectCurrency($0) }),
+                            options: draft.availableCurrencies.map { VisionSelectOption(value: $0, title: $0.rawValue) },
+                            accessibilityLabel: strings.t("accounts.reconcile.currencyLabel"), expands: true
+                        )
                         .disabled(busy)
                     }
                 }
@@ -648,7 +681,7 @@ private struct SinceButtonStyle: ViewModifier {
         if emphasized {
             content.buttonStyle(.visionOutline)
         } else {
-            content.buttonStyle(.borderless)
+            content.buttonStyle(.visionGhost).controlSize(.small)
         }
     }
 }
@@ -734,23 +767,19 @@ struct MergeAccountSheet: View {
                 closeLabel: strings.t("common.close")
             ) {
                 AccountField(label: strings.t("accounts.mergeTargetLabel")) {
-                    Picker(
-                        strings.t("accounts.mergeTargetLabel"),
+                    VisionSelect(
                         selection: Binding<AccountID?>(
                             get: { model.merge?.targetId },
                             set: { id in
                                 guard let id else { return }
                                 Task { await model.selectMergeTarget(id) }
-                            })
-                    ) {
-                        if draft.targetId == nil {
-                            Text(strings.t("accounts.mergeTargetPlaceholder")).tag(AccountID?.none)
-                        }
-                        ForEach(candidates, id: \.id) { account in
-                            Text(verbatim: candidateLabel(account)).tag(AccountID?.some(account.id))
-                        }
-                    }
-                    .labelsHidden()
+                            }),
+                        entries: candidates.map {
+                            VisionSelectEntry.option(VisionSelectOption(value: $0.id, title: candidateLabel($0)))
+                        },
+                        placeholder: strings.t("accounts.mergeTargetPlaceholder"),
+                        accessibilityLabel: strings.t("accounts.mergeTargetLabel"), expands: true
+                    )
                 }
                 if let target {
                     preview(draft, target: target)
@@ -785,7 +814,7 @@ struct MergeAccountSheet: View {
                     Text(strings.t("accounts.mergeAcknowledge"))
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .toggleStyle(.checkbox)
+                .toggleStyle(.visionCheckbox)
                 .disabled(!draft.canAcknowledge)
             } footer: {
                 Spacer()
@@ -799,8 +828,7 @@ struct MergeAccountSheet: View {
                         Text(strings.t("accounts.mergeConfirm"))
                     }
                 }
-                .buttonStyle(.visionPrimary)
-                .tint(theme.destructive)
+                .buttonStyle(.visionDestructive)
                 .disabled(!draft.canMerge)
             }
         }
@@ -869,6 +897,22 @@ struct LotDestinationChoice: View {
     let onChange: (LotDestination) -> Void
     @Environment(\.visionTheme) private var theme
 
+    private var destinationEntries: [VisionSelectEntry<LotDestination>] {
+        var entries: [VisionSelectEntry<LotDestination>] = []
+        if allowKeep {
+            entries.append(
+                .option(VisionSelectOption(value: LotDestination.keep, title: strings.t("accounts.close.portfolioKeep"))))
+        }
+        entries.append(
+            .option(
+                VisionSelectOption(value: LotDestination.unassigned, title: strings.t("accounts.close.portfolioUnassigned"))))
+        for account in destinations {
+            entries.append(
+                .option(VisionSelectOption(value: LotDestination.account(account.id), title: AccountKinds.label(account))))
+        }
+        return entries
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
@@ -878,28 +922,16 @@ struct LotDestinationChoice: View {
                     .font(.caption)
                     .foregroundStyle(theme.secondaryLabel)
             }
-            Picker(
-                strings.t("accounts.close.portfolioDestination"),
+            VisionSelect(
                 selection: Binding<LotDestination?>(
                     get: { selection },
                     set: { next in
                         if let next { onChange(next) }
-                    })
-            ) {
-                if selection == nil {
-                    Text(placeholder ?? "").tag(LotDestination?.none)
-                }
-                if allowKeep {
-                    Text(strings.t("accounts.close.portfolioKeep")).tag(LotDestination?.some(.keep))
-                }
-                Text(strings.t("accounts.close.portfolioUnassigned")).tag(LotDestination?.some(.unassigned))
-                ForEach(destinations, id: \.id) { account in
-                    Text(verbatim: AccountKinds.label(account)).tag(LotDestination?.some(.account(account.id)))
-                }
-            }
-            .labelsHidden()
+                    }),
+                entries: destinationEntries, placeholder: placeholder ?? "",
+                accessibilityLabel: strings.t("accounts.close.portfolioDestination"), expands: true
+            )
             .disabled(disabled)
-            .accessibilityLabel(strings.t("accounts.close.portfolioDestination"))
         }
     }
 }
@@ -938,7 +970,7 @@ struct CloseAccountSheet: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
-                        .toggleStyle(.checkbox)
+                        .toggleStyle(.visionCheckbox)
                         .accessibilityLabel(strings.t("accounts.close.zeroOut"))
                     }
                 }

@@ -12,28 +12,19 @@ struct AnalysisMonitorsCreationView: View {
         AdminCard(padding: 24) {
             VStack(alignment: .leading, spacing: 14) {
                 Text(strings.t("monitors.newRule")).font(Font.visionTitle3).accessibilityAddTraits(.isHeader)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(strings.t("monitors.kind")).font(.caption)
-                    ForEach(AnalysisMonitorKind.allCases, id: \.self) { kind in
-                        Button {
-                            model.chooseKind(kind)
-                        } label: {
-                            HStack(alignment: .top) {
-                                Image(systemName: kind == draft.kind ? "largecircle.fill.circle" : "circle")
-                                Text(strings.t(kind.labelKey)).multilineTextAlignment(.leading)
-                                Spacer(minLength: 0)
-                            }.frame(maxWidth: .infinity, alignment: .leading)
-                        }.buttonStyle(.visionOutline).tint(kind == draft.kind ? .accentColor : .secondary)
-                    }
-                }
+                VisionSegmentedControl(
+                    selection: Binding(get: { draft.kind }, set: { model.chooseKind($0) }),
+                    values: AnalysisMonitorKind.allCases, title: { strings.t($0.labelKey) },
+                    label: strings.t("monitors.kind"))
                 if draft.kind == .threshold { analysisTarget } else { dossierTarget }
                 if model.hasNewTarget {
                     if draft.kind == .threshold {
                         VStack(alignment: .leading, spacing: 6) {
-                            Picker(strings.t("monitors.field"), selection: text(\.fieldId)) {
-                                Text(strings.t("monitors.selectField")).tag("")
-                                ForEach(model.newColumns, id: \.self) { Text($0).tag($0) }
-                            }
+                            Text(strings.t("monitors.field")).font(.caption)
+                            VisionSelect(
+                                selection: text(\.fieldId),
+                                options: fieldOptions,
+                                accessibilityLabel: strings.t("monitors.field"), expands: true)
                             condition
                         }
                     }
@@ -55,15 +46,25 @@ struct AnalysisMonitorsCreationView: View {
             }
         }
     }
+    private var fieldOptions: [VisionSelectOption<String>] {
+        var options = [VisionSelectOption(value: "", title: strings.t("monitors.selectField"))]
+        for column in model.newColumns { options.append(VisionSelectOption(value: column, title: column)) }
+        return options
+    }
+    private var analysisEntries: [VisionSelectEntry<SavedAnalysisID>] {
+        model.eligibleAnalyses.map { .option(VisionSelectOption(value: $0.id, title: $0.name)) }
+    }
+    private var dossierEntries: [VisionSelectEntry<ResearchDossierID>] {
+        (model.dossiers?.items ?? []).map { .option(VisionSelectOption(value: $0.id, title: $0.title)) }
+    }
     private var analysisTarget: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker(
-                strings.t("monitors.analysis"),
-                selection: Binding(get: { draft.savedAnalysisId }, set: { value in model.chooseAnalysis(value) })
-            ) {
-                Text(strings.t("monitors.selectAnalysis")).tag(SavedAnalysisID?.none)
-                ForEach(model.eligibleAnalyses) { Text($0.name).tag(Optional($0.id)) }
-            }.disabled(model.eligibleAnalyses.isEmpty)
+            Text(strings.t("monitors.analysis")).font(.caption)
+            VisionSelect(
+                selection: Binding(get: { draft.savedAnalysisId }, set: { value in model.chooseAnalysis(value) }),
+                entries: analysisEntries, placeholder: strings.t("monitors.selectAnalysis"),
+                accessibilityLabel: strings.t("monitors.analysis"), expands: true
+            ).disabled(model.eligibleAnalyses.isEmpty)
             if model.analysesLoading && model.analyses.isEmpty { ProgressView(strings.t("monitors.targetsLoading")) }
             if model.analysesError != nil {
                 AnalysisMonitorsRetry(
@@ -71,7 +72,7 @@ struct AnalysisMonitorsCreationView: View {
                 ) { await model.loadAnalyses() }
             } else if !model.analysesLoading && model.eligibleAnalyses.isEmpty {
                 Text(strings.t("monitors.noEligibleAnalyses")).font(.callout)
-                Button(strings.t("monitors.openAnalysis")) { shell.navigate(to: "/analysis") }
+                Button(strings.t("monitors.openAnalysis")) { shell.navigate(to: "/analysis") }.buttonStyle(.visionOutline)
             }
             DisclosureGroup(strings.t("monitors.howAlertsWork")) {
                 Text(strings.t("monitors.analysisHint")).font(.caption).foregroundStyle(theme.secondaryLabel).padding(.top, 4)
@@ -80,13 +81,12 @@ struct AnalysisMonitorsCreationView: View {
     }
     private var dossierTarget: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker(
-                strings.t("monitors.dossier"),
-                selection: Binding(get: { draft.dossierId }, set: { value in model.updateNew { $0.dossierId = value } })
-            ) {
-                Text(strings.t("monitors.selectDossier")).tag(ResearchDossierID?.none)
-                ForEach(model.dossiers?.items ?? []) { Text($0.title).tag(Optional($0.id)) }
-            }
+            Text(strings.t("monitors.dossier")).font(.caption)
+            VisionSelect(
+                selection: Binding(
+                    get: { draft.dossierId }, set: { value in model.updateNew { $0.dossierId = value } }),
+                entries: dossierEntries, placeholder: strings.t("monitors.selectDossier"),
+                accessibilityLabel: strings.t("monitors.dossier"), expands: true)
             if model.dossiersLoading && model.dossiers == nil { ProgressView(strings.t("monitors.targetsLoading")) }
             if model.dossiersError != nil {
                 AnalysisMonitorsRetry(
@@ -95,6 +95,7 @@ struct AnalysisMonitorsCreationView: View {
             } else if !model.dossiersLoading && model.dossiers?.total == 0 {
                 Text(strings.t("monitors.noDossiers")).font(.callout)
                 Button(strings.t("monitors.openDossiers")) { shell.navigate(to: "/research/dossiers") }
+                    .buttonStyle(.visionOutline)
             }
             if let page = model.dossiers, page.total > 500 || model.dossierOffset > 0 {
                 AnalysisMonitorsPager(
@@ -105,14 +106,10 @@ struct AnalysisMonitorsCreationView: View {
     }
     private var condition: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker(
-                strings.t("monitors.operator"),
-                selection: Binding(get: { draft.operator }, set: { value in model.updateNew { $0.operator = value } })
-            ) {
-                ForEach(AnalysisMonitorOperator.allCases, id: \.self) {
-                    Text(strings.t("monitors." + $0.rawValue)).tag($0)
-                }
-            }.pickerStyle(.segmented)
+            VisionSegmentedControl(
+                selection: Binding(get: { draft.operator }, set: { value in model.updateNew { $0.operator = value } }),
+                values: AnalysisMonitorOperator.allCases, title: { strings.t("monitors." + $0.rawValue) },
+                label: strings.t("monitors.operator"))
             VStack(alignment: .leading, spacing: 4) {
                 Text(strings.t("monitors.threshold")).font(.caption)
                 TextField(strings.t("monitors.threshold"), text: text(\.threshold)).textFieldStyle(.vision)

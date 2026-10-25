@@ -60,25 +60,32 @@ struct AIInvestigationView: View {
             }.buttonStyle(.visionOutline)
         }
     }
+    private static func researchModeKey(_ mode: AIResearchMode) -> String {
+        switch mode {
+        case .localOnly: return "aiResearch.localOnly"
+        case .publicProviders: return "aiResearch.publicProviders"
+        case .publicWeb: return "aiResearch.publicWeb"
+        }
+    }
     private var settings: some View {
         DisclosureGroup(isExpanded: $settingsExpanded) {
             VStack(alignment: .leading, spacing: 16) {
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 280), alignment: .leading)], alignment: .leading, spacing: 16
                 ) {
-                    Picker(
-                        strings.t("aiResearch.depth"),
-                        selection: Binding(get: { model.depth }, set: { model.depthOverride = $0 })
-                    ) {
-                        Text(strings.t("aiResearch.quick")).tag(AIInvestigationDepth.quick)
-                        Text(strings.t("aiResearch.detailed")).tag(AIInvestigationDepth.detailed)
-                    }.pickerStyle(.segmented)
+                    VisionSegmentedControl(
+                        selection: Binding(get: { model.depth }, set: { model.depthOverride = $0 }),
+                        values: [AIInvestigationDepth.quick, .detailed],
+                        title: { strings.t($0 == .quick ? "aiResearch.quick" : "aiResearch.detailed") }
+                    )
+                    .visionAccessibilityLabel(strings.t("aiResearch.depth"))
                 }
-                Picker(strings.t("aiResearch.researchMode"), selection: field(\.researchMode)) {
-                    Text(strings.t("aiResearch.localOnly")).tag(AIResearchMode.localOnly)
-                    Text(strings.t("aiResearch.publicProviders")).tag(AIResearchMode.publicProviders)
-                    Text(strings.t("aiResearch.publicWeb")).tag(AIResearchMode.publicWeb)
-                }.pickerStyle(.segmented)
+                VisionSegmentedControl(
+                    selection: field(\.researchMode),
+                    values: [AIResearchMode.localOnly, .publicProviders, .publicWeb],
+                    title: { strings.t(Self.researchModeKey($0)) }
+                )
+                .visionAccessibilityLabel(strings.t("aiResearch.researchMode"))
             }.padding(.top, 12)
         } label: {
             VStack(alignment: .leading, spacing: 4) {
@@ -126,11 +133,14 @@ struct AIInvestigationView: View {
         if let job = model.job {
             if ![.completed, .failed, .cancelled, .partial].contains(job.state) {
                 Button(strings.t("aiResearch.cancel")) { Task { await model.cancel() } }
+                    .buttonStyle(.visionOutline)
             }
             if [.partial, .failed].contains(job.state) {
                 Button(strings.t("aiResearch.resume")) { Task { await model.resume() } }
+                    .buttonStyle(.visionOutline)
             }
             Button(strings.t("aiResearch.deleteInvestigation"), role: .destructive) { Task { await model.deleteJob() } }
+                .buttonStyle(.visionOutline)
         }
     }
     private var clarification: some View {
@@ -141,7 +151,7 @@ struct AIInvestigationView: View {
                 TextField(strings.t("aiResearch.clarificationPlaceholder"), text: field(\.clarification))
                     .textFieldStyle(.vision).accessibilityLabel(strings.t("aiResearch.clarificationNeeded"))
                 Button(strings.t("aiResearch.resume")) { Task { await model.resume() } }
-                    .disabled(!model.canClarify)
+                    .buttonStyle(.visionPrimary).disabled(!model.canClarify)
             }
         }
     }
@@ -161,17 +171,15 @@ struct AIInvestigationView: View {
     private func textArea(label: String, placeholder: String, text: Binding<String>, minimumHeight: CGFloat)
         -> some View
     {
-        TextEditor(text: text).font(.body).scrollContentBackground(.hidden)
-            .padding(8).frame(minHeight: minimumHeight)
-            .background(theme.background, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control))
+        TextEditor(text: text).visionTextEditor(minHeight: minimumHeight)
             .overlay(alignment: .topLeading) {
                 if text.wrappedValue.isEmpty {
-                    Text(strings.t(placeholder)).font(.body).foregroundStyle(theme.tertiaryLabel)
-                        .padding(.horizontal, 13).padding(.vertical, 16).allowsHitTesting(false).accessibilityHidden(
-                            true)
+                    Text(strings.t(placeholder)).font(VisionControlMetrics.fieldFont).foregroundStyle(theme.tertiaryLabel)
+                        .padding(.horizontal, VisionControlMetrics.fieldHorizontalPadding)
+                        .padding(.vertical, VisionControlMetrics.textAreaVerticalPadding)
+                        .allowsHitTesting(false).accessibilityHidden(true)
                 }
             }
-            .overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.control).stroke(theme.border))
             .accessibilityLabel(strings.t(label))
     }
 }

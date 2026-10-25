@@ -252,7 +252,7 @@ public struct ExchangeRatesView: View {
             )
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(.regularMaterial, in: Capsule())
+            .background { ToastSurface() }
             .foregroundStyle(notice.kind == .success ? theme.foreground : theme.destructive)
             .padding(.bottom, 20)
             .transition(.move(edge: .bottom).combined(with: .opacity))

@@ -69,7 +69,7 @@ public struct AccountDetailView: View {
         } label: {
             Label(strings.t("accounts.detail.back"), systemImage: "chevron.left")
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.vision(.ghost, size: .sm))
     }
 }
 
@@ -119,7 +119,7 @@ struct AccountDetailContent: View {
         }
         .menuIndicator(.hidden)
         .fixedSize()
-        .help(strings.t("accounts.actionsMenu"))
+        .visionTooltip(strings.t("accounts.actionsMenu"))
         .accessibilityLabel(strings.t("accounts.actionsMenu"))
     }
 
@@ -205,7 +205,7 @@ struct AccountDetailContent: View {
                         } else if let balance = account.computedBalance {
                             MoneyText(amount: balance, currency: account.currency, settings: settings, signed: false, colored: false)
                                 .font(.visionLargeTitle)
-                                .help(strings.t("accounts.balanceTooltip"))
+                                .visionTooltip(strings.t("accounts.balanceTooltip"))
                             if let provenance = model.provenance(account) {
                                 Text(provenance)
                                     .font(.footnote)
@@ -253,7 +253,7 @@ struct AccountDetailContent: View {
                         .accessibilityAddTraits(.isHeader)
                     if metrics?.oversold == true {
                         VisionBadge(text: strings.t("portfolio.oversold.label"), tone: .warning, small: true)
-                            .help(strings.t("portfolio.oversold.description"))
+                            .visionTooltip(strings.t("portfolio.oversold.description"))
                             .accessibilityLabel(
                                 "\(strings.t("portfolio.oversold.label")). \(strings.t("portfolio.oversold.description"))")
                     }
@@ -426,8 +426,8 @@ struct AccountLedgerCard: View {
                             Image(systemName: "xmark")
                                 .imageScale(.small)
                         }
-                        .buttonStyle(.borderless)
-                        .help(strings.t("aria.clearFilter"))
+                        .buttonStyle(.vision(.ghost, size: .iconXs))
+                        .visionTooltip(strings.t("aria.clearFilter"))
                         .accessibilityLabel(strings.t("aria.clearFilter"))
                     }
                     .padding(.horizontal, 10)

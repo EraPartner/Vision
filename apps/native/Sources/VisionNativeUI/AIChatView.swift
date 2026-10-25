@@ -30,13 +30,12 @@ public struct AIChatView: View {
                 symbol: "bubble.left.and.bubble.right"
             ) {
                 // The web header's trailing Chat / Investigation toggle; the label stays for VoiceOver.
-                Picker(
-                    strings.t("aiChat.mode.label"),
-                    selection: Binding(get: { model.mode }, set: { value in model.setMode(value) })
-                ) {
-                    Text(strings.t("aiChat.mode.chat")).tag(AIChatMode.chat)
-                    Text(strings.t("aiChat.mode.investigation")).tag(AIChatMode.investigation)
-                }.pickerStyle(.segmented).labelsHidden().fixedSize()
+                VisionSegmentedControl(
+                    selection: Binding(get: { model.mode }, set: { value in model.setMode(value) }),
+                    values: [AIChatMode.chat, AIChatMode.investigation],
+                    title: { strings.t($0 == .chat ? "aiChat.mode.chat" : "aiChat.mode.investigation") }
+                )
+                .visionAccessibilityLabel(strings.t("aiChat.mode.label")).fixedSize()
             }
             HStack(alignment: .top, spacing: isChat && width >= 768 ? 16 : 0) {
                 AIChatConversationRail(model: model, shell: shell)
@@ -60,14 +59,16 @@ public struct AIChatView: View {
             } action: {
                 width = $0
             }
-            .sheet(isPresented: $conversationsOpen) {
+            .visionDialog(
+                isPresented: $conversationsOpen, metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0)
+            ) {
                 VStack(alignment: .leading, spacing: 16) {
                     VisionDialogHeader(
                         title: strings.t("aiChat.conversations"), closeLabel: strings.t("common.close"),
                         onClose: { conversationsOpen = false }
                     ).keyboardShortcut(.cancelAction)
                     AIChatConversationRail(model: model, shell: shell, didSelect: { conversationsOpen = false })
-                }.visionDialogPadding().frame(minWidth: 320, idealWidth: 380, minHeight: 450, idealHeight: 620)
+                }.visionDialogPadding().frame(width: 380, height: 620)
             }
             .overlay(alignment: .bottom) {
                 NoticeToast(notice: model.notice, strings: strings, clear: model.clearNotice)
@@ -83,7 +84,7 @@ public struct AIChatView: View {
                     } label: {
                         Image(systemName: "sidebar.left")
                     }
-                    .buttonStyle(.borderless).accessibilityLabel(strings.t("aiChat.conversations"))
+                    .buttonStyle(.vision(.ghost, size: .icon)).accessibilityLabel(strings.t("aiChat.conversations"))
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(conversationTitle)
@@ -149,6 +150,6 @@ struct AIChatStatusBanner: View {
                 }
             }.font(.callout)
         }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            .background(theme.muted, in: RoundedRectangle(cornerRadius: 10))
+            .background(theme.muted, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control))
     }
 }

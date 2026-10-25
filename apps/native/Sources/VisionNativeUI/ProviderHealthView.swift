@@ -46,6 +46,14 @@ public struct ProviderHealthView: View {
         }
     }
 
+    private func badgeTone(_ tone: ProviderHealthRow.Tone) -> BadgeTone {
+        switch tone {
+        case .success: return .success
+        case .warning: return .warning
+        case .destructive: return .destructive
+        }
+    }
+
     private var table: some View {
         Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
             GridRow {
@@ -96,20 +104,11 @@ public struct ProviderHealthView: View {
                 Text(row.label).fontWeight(.medium)
             }
             .padding(.vertical, 6)
-            Text(row.kind)
-                .font(.caption)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Capsule().fill(theme.muted))
+            VisionBadge(text: row.kind, tone: .muted, small: true)
             Text(row.lastSuccess)
                 .foregroundStyle(theme.secondaryLabel)
-            Text(row.failures)
-                .font(.caption.weight(.medium))
+            VisionBadge(text: row.failures, tone: badgeTone(row.tone), small: true)
                 .monospacedDigit()
-                .foregroundStyle(tone(row.tone))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Capsule().fill(tone(row.tone).opacity(0.12)))
             if let error = row.lastError {
                 Button {
                     model.toggleExpanded(row.provider)

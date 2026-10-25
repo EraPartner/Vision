@@ -43,16 +43,16 @@ public struct AnalysisMonitorsView: View {
                 await model.poll()
             }
         }
-        .confirmationDialog(
-            strings.t("monitors.deleteTitle"),
-            isPresented: Binding(
-                get: { model.deletingRule != nil }, set: { if !$0 { model.deletingRule = nil } }),
-            titleVisibility: .visible
+        // The buttons decide: the confirm Task reads `deletingRule` after the dialog has dismissed, so
+        // the binding only reads and Cancel (also Escape) clears it.
+        .visionConfirmationDialog(
+            title: strings.t("monitors.deleteTitle"), message: strings.t("monitors.deleteConfirm"),
+            isPresented: Binding(get: { model.deletingRule != nil }, set: { _ in })
         ) {
-            Button(strings.t("common.delete"), role: .destructive) { Task { await model.deleteConfirmed() } }
-            Button(strings.t("common.cancel"), role: .cancel) { model.deletingRule = nil }
-        } message: {
-            Text(strings.t("monitors.deleteConfirm"))
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.deletingRule = nil }
+            VisionDialogAction(strings.t("common.delete"), role: .destructive) {
+                Task { await model.deleteConfirmed() }
+            }
         }
     }
     private var left: some View {

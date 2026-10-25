@@ -16,6 +16,13 @@ public struct AnalysisResultView: View {
         self.focusRequest = focusRequest
     }
     private var strings: any Localizing { shell.strings }
+    private static func tabKey(_ tab: String) -> String {
+        switch tab {
+        case "chart": return "analysis.chart"
+        case "pivot": return "analysis.pivot"
+        default: return "analysis.tableView"
+        }
+    }
     public var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             if let result = model.displayedResult {
@@ -43,11 +50,10 @@ public struct AnalysisResultView: View {
                             }
                         }.foregroundStyle(theme.warning)
                     }
-                    Picker(strings.t("analysis.resultViews"), selection: $tab) {
-                        Text(strings.t("analysis.tableView")).tag("table")
-                        Text(strings.t("analysis.chart")).tag("chart")
-                        Text(strings.t("analysis.pivot")).tag("pivot")
-                    }.pickerStyle(.segmented)
+                    VisionSegmentedControl(
+                        selection: $tab, values: ["table", "chart", "pivot"],
+                        title: { strings.t(Self.tabKey($0)) },
+                        label: strings.t("analysis.resultViews"))
                     if tab == "table" {
                         AnalysisResultTable(
                             result: result, datasets: model.datasets, shell: shell,
@@ -72,7 +78,7 @@ public struct AnalysisResultView: View {
                             .disabled(
                                 result.window.kind != "page" || result.window.hasMore != true
                                     || model.activeRequest != nil)
-                        }
+                        }.buttonStyle(.visionOutline).controlSize(.small)
                         DisclosureGroup(strings.t("analysis.generatedSql"), isExpanded: $sqlExpanded) {
                             AnalysisCodeText(text: result.generatedSql).padding(.top, 8)
                         }

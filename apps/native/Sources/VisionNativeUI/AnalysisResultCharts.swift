@@ -41,21 +41,22 @@ struct AnalysisResultCharts: View {
         if points.isEmpty { return "analysis.ext.chart.empty" }
         return nil
     }
+    private var xOptions: [VisionSelectOption<String>] {
+        var options = [VisionSelectOption(value: "", title: "—")]
+        for column in columns { options.append(VisionSelectOption(value: column.id, title: label(column.id))) }
+        return options
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Picker(
-                strings.t("analysis.ext.chart.type"),
-                selection: Binding(get: { kind }, set: { spec["kind"] = .string($0) })
-            ) {
-                ForEach(["bar", "line", "stacked-bar", "scatter", "waterfall"], id: \.self) { type in
-                    Text(strings.t("analysis.ext.chart.\(type)")).tag(type)
-                }
-            }.pickerStyle(.segmented)
-            Picker(
-                strings.t("analysis.ext.chart.x"), selection: Binding(get: { xID }, set: { spec["x"] = .string($0) })
-            ) {
-                Text("—").tag("")
-                ForEach(columns) { column in Text(label(column.id)).tag(column.id) }
+            VisionSegmentedControl(
+                selection: Binding(get: { kind }, set: { spec["kind"] = .string($0) }),
+                values: ["bar", "line", "stacked-bar", "scatter", "waterfall"],
+                title: { strings.t("analysis.ext.chart.\($0)") }, label: strings.t("analysis.ext.chart.type"))
+            VStack(alignment: .leading, spacing: 8) {
+                Text(strings.t("analysis.ext.chart.x")).font(.callout.weight(.medium))
+                VisionSelect(
+                    selection: Binding(get: { xID }, set: { spec["x"] = .string($0) }), options: xOptions,
+                    accessibilityLabel: strings.t("analysis.ext.chart.x"), expands: true)
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text(strings.t("analysis.ext.chart.series")).font(.callout.weight(.medium))
@@ -70,7 +71,7 @@ struct AnalysisResultCharts: View {
                                         (on ? yIDs + [column.id] : yIDs.filter { $0 != column.id }).map(TaxValue.string)
                                     )
                                 })
-                        ).toggleStyle(.checkbox)
+                        ).toggleStyle(.visionCheckbox)
                     }
                 }
             }

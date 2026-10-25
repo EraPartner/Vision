@@ -74,7 +74,7 @@ public struct DatabaseMaintenanceView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel(strings.t("admin.moreActions"))
-        .help(strings.t("admin.moreActions"))
+        .visionTooltip(strings.t("admin.moreActions"))
     }
 
     // MARK: Summary cards
@@ -230,10 +230,10 @@ public struct DatabaseMaintenanceView: View {
             Image(systemName: "ellipsis")
         }
         .menuStyle(.button)
-        .buttonStyle(.borderless)
+        .buttonStyle(.vision(.ghost, size: .iconSm))
         .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel(strings.t("dbMaintenance.rowMenu", ["table": row.table]))
-        .help(strings.t("dbMaintenance.rowMenu", ["table": row.table]))
+        .visionTooltip(strings.t("dbMaintenance.rowMenu", ["table": row.table]))
     }
 }

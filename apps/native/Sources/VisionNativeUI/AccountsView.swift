@@ -353,7 +353,7 @@ struct AccountHubRow: View {
         } else if let balance = account.computedBalance {
             MoneyText(amount: balance, currency: account.currency, settings: settings, signed: false, colored: false)
                 .font(.body.weight(.medium))
-                .help(strings.t("accounts.balanceTooltip"))
+                .visionTooltip(strings.t("accounts.balanceTooltip"))
         }
     }
 
@@ -390,7 +390,7 @@ struct AccountHubRow: View {
         .menuIndicator(.hidden)
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .help(strings.t("accounts.rowMenu", ["name": label]))
+        .visionTooltip(strings.t("accounts.rowMenu", ["name": label]))
         .accessibilityLabel(strings.t("accounts.rowMenu", ["name": label]))
     }
 }
@@ -407,7 +407,7 @@ struct AccountDriftChip: View {
             VisionBadge(text: drift.label, tone: drift.stale ? .warning : .destructive, small: true)
         }
         .buttonStyle(.plain)
-        .help(strings.t(drift.tooltipKey))
+        .visionTooltip(strings.t(drift.tooltipKey))
         .accessibilityLabel(strings.t("accounts.reconcile.open"))
         .accessibilityValue(drift.label)
     }

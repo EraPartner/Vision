@@ -28,19 +28,17 @@ struct AnalysisResultPivot: View {
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text(strings.t("analysis.ext.pivot.filtersHelp")).font(.caption).foregroundStyle(theme.secondaryLabel)
-                Picker(
-                    strings.t("analysis.ext.pivot.filterField"),
+                Text(strings.t("analysis.ext.pivot.filterField")).font(.callout.weight(.medium))
+                VisionSelect(
                     selection: Binding(
                         get: { "" },
                         set: { id in
                             if !id.isEmpty {
                                 model.pivotConfig.filters.append(.init(fieldId: id, operator: "eq", value: .string("")))
                             }
-                        })
-                ) {
-                    Text("—").tag("")
-                    ForEach(dataset.fields) { Text(fieldLabel($0.id)).tag($0.id) }
-                }
+                        }),
+                    options: filterFieldOptions,
+                    accessibilityLabel: strings.t("analysis.ext.pivot.filterField"), expands: true)
                 ForEach(Array(config.filters.enumerated()), id: \.offset) { index, filter in
                     HStack {
                         TextField(
@@ -57,6 +55,7 @@ struct AnalysisResultPivot: View {
                                         ? .bool(text == "true") : .string(text)
                                 }))
                         Button(strings.t("analysis.ext.remove")) { model.pivotConfig.filters.remove(at: index) }
+                            .buttonStyle(.visionOutline).controlSize(.small)
                     }
                 }
             }
@@ -65,7 +64,7 @@ struct AnalysisResultPivot: View {
                     hasRun = true
                     Task { await model.runPivot() }
                 }.buttonStyle(.visionPrimary).disabled(model.isPivotLoading || config.values.isEmpty)
-                Toggle(strings.t("analysis.ext.pivot.share"), isOn: $percentages)
+                Toggle(strings.t("analysis.ext.pivot.share"), isOn: $percentages).toggleStyle(.visionSwitch)
             }
             if let error = model.pivotError {
                 VStack(alignment: .leading) {
@@ -106,6 +105,11 @@ struct AnalysisResultPivot: View {
             expandedColumns = []
         }
     }
+    private var filterFieldOptions: [VisionSelectOption<String>] {
+        var options = [VisionSelectOption(value: "", title: "—")]
+        for field in dataset.fields { options.append(VisionSelectOption(value: field.id, title: fieldLabel(field.id))) }
+        return options
+    }
     private func axisEditor(_ axis: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(strings.t("analysis.ext.pivot.\(axis)")).font(.headline)
@@ -133,16 +137,17 @@ struct AnalysisResultPivot: View {
                         Image(systemName: "xmark")
                     }
                     .accessibilityLabel(strings.t("analysis.ext.pivot.removeField", ["field": fieldLabel(id)]))
-                }.buttonStyle(.borderless).font(.caption)
+                }.buttonStyle(.vision(.ghost, size: .iconXs)).font(.caption)
             }
             Button(strings.t("analysis.ext.pivot.addField")) {
                 choosing = choosing == axis ? nil : axis
                 search = ""
                 searchFocused = choosing != nil
-            }.focused($addFocus, equals: axis)
+            }.buttonStyle(.visionOutline).controlSize(.small).focused($addFocus, equals: axis)
             if choosing == axis {
                 VStack(alignment: .leading, spacing: 8) {
-                    TextField(strings.t("analysis.ext.pivot.searchFields"), text: $search).focused($searchFocused)
+                    TextField(strings.t("analysis.ext.pivot.searchFields"), text: $search).textFieldStyle(.vision)
+                        .focused($searchFocused)
                     let fields = (axis == "values" ? dataset.measures : dataset.fields).filter {
                         !ids(axis).contains($0.id)
                             && (search.isEmpty || ($0.label ?? $0.id).localizedCaseInsensitiveContains(search))
@@ -159,7 +164,7 @@ struct AnalysisResultPivot: View {
                             }
                         }
                     }.frame(maxHeight: 180)
-                }.padding(10).background(theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                }.padding(10).background(theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
                     .onKeyPress(.escape) {
                         closePicker(axis)
                         return .handled
@@ -316,7 +321,7 @@ struct AnalysisResultPivot: View {
                                     let values = Dictionary(
                                         uniqueKeysWithValues: source.groups.map { ($0, cell[$0] ?? .null) })
                                     Task { await model.drill(row: values, groups: source.groups) }
-                                }.buttonStyle(.plain).disabled(cell == nil).help(strings.t("analysis.ext.pivot.drill"))
+                                }.buttonStyle(.plain).disabled(cell == nil).visionTooltip(strings.t("analysis.ext.pivot.drill"))
                             }
                         }
                         if !config.columns.isEmpty {
@@ -329,7 +334,7 @@ struct AnalysisResultPivot: View {
                     }
                 }
             }.font(.caption).monospacedDigit().textSelection(.enabled).padding(12)
-        }.overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
+        }.overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.md).stroke(theme.border))
     }
     private func matches(_ row: AnalysisRow, _ entry: Entry) -> Bool {
         unique((result?.partitions ?? []) + Array(config.rows.prefix(entry.depth))).allSatisfy {
@@ -347,7 +352,7 @@ struct AnalysisResultPivot: View {
         } label: {
             Image(systemName: open ? "minus" : "plus")
         }
-        .buttonStyle(.borderless).accessibilityLabel(
+        .buttonStyle(.vision(.ghost, size: .iconXs)).accessibilityLabel(
             strings.t(open ? "analysis.ext.pivot.collapse" : "analysis.ext.pivot.expand", ["field": label]))
     }
     private func displayCell(_ row: AnalysisRow?, _ id: String) -> String {

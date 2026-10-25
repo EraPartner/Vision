@@ -171,7 +171,7 @@ struct AIChatToolChart: View {
                 }
             }
         }.padding(8).frame(maxWidth: .infinity, alignment: .leading).background(
-            theme.muted, in: RoundedRectangle(cornerRadius: 8))
+            theme.muted, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
     }
     private func axisLabel(_ index: Int) -> String {
         AIChatToolDisplay.axis(AIChatToolPresentation.value(presentation.rows[index], key: presentation.xKey))

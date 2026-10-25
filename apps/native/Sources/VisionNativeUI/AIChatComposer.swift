@@ -9,22 +9,33 @@ struct AIChatComposer: View {
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     private var streaming: Bool { model.streamSnapshot.isStreaming }
+    private var modelSelection: Binding<String> {
+        Binding(get: { model.activeModel ?? model.models.first?.name ?? "" }, set: { model.modelOverride = $0 })
+    }
+    private var modelOptions: [VisionSelectOption<String>] {
+        if model.models.isEmpty { return [VisionSelectOption(value: "", title: strings.t("aiChat.selectModel"))] }
+        return model.models.map { VisionSelectOption(value: $0.name, title: $0.name) }
+    }
+    /// The web `Label` (type-footnote, label-secondary) and the `Select` of the model.
+    private var modelSelect: some View {
+        HStack(spacing: 8) {
+            Text(strings.t("aiChat.model")).foregroundStyle(theme.secondaryLabel).accessibilityHidden(true)
+            VisionSelect(
+                selection: modelSelection, options: modelOptions, accessibilityLabel: strings.t("aiChat.model")
+            )
+            .frame(maxWidth: 300)
+            .disabled(model.status?.ok != true || model.models.isEmpty)
+        }
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 16) {
-                Picker(
-                    strings.t("aiChat.model"),
-                    selection: Binding(
-                        get: { model.activeModel ?? model.models.first?.name ?? "" }, set: { model.modelOverride = $0 })
-                ) {
-                    if model.models.isEmpty { Text(strings.t("aiChat.selectModel")).tag("") }
-                    ForEach(model.models) { item in Text(item.name).tag(item.name) }
-                }.frame(maxWidth: 300).disabled(model.status?.ok != true || model.models.isEmpty)
+                modelSelect
                 Toggle(
                     strings.t(model.useTools ? "aiChat.toolsOn" : "aiChat.toolsOff"),
                     isOn: Binding(get: { model.useTools }, set: { model.useTools = $0 })
                 )
-                .toggleStyle(.switch).fixedSize().disabled(model.composerDisabled || streaming)
+                .toggleStyle(.visionSwitch).fixedSize().disabled(model.composerDisabled || streaming)
                 .accessibilityLabel(strings.t("aiChat.tools"))
                 Spacer(minLength: 0)
             }.font(.footnote)
@@ -42,9 +53,7 @@ struct AIChatComposer: View {
                         onSend: send
                     )
                     .frame(height: textHeight)
-                }.padding(4)
-                    .background(theme.background, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control))
-                    .overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.control).stroke(theme.border))
+                }.modifier(VisionFieldChromeModifier(horizontalPadding: 4, verticalPadding: 4, alignment: .topLeading))
                 Button {
                     if streaming { model.stop() } else { send() }
                 } label: {
