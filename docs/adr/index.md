@@ -282,6 +282,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-25: Swift design-system parity foundation (accepted)
+
+[[docs/adr/250-swift-design-system-parity|ADR-250]] makes the token generator the single source of
+the Swift design system and adds glass materials, centred in-window glass dialogs, web-sized
+controls, Full effects in Swift and Settings as an in-window dialog. Phase 2b applies it to every
+screen. It adds to [[docs/adr/249-revive-swift-app|ADR-249]] without editing it.
+
 ### 2026-10-25: Revive the Swift app (accepted)
 
 [[docs/adr/249-revive-swift-app|ADR-249]] restores the Swift app from `d9b0836`, catches it up to

@@ -22,11 +22,13 @@ struct VisionPageHeader<Actions: View>: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.visionLargeTitle)
+                    .visionCanvasTextHalo(.pageHeader)
                     .accessibilityAddTraits(.isHeader)
                 if !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.body)
                         .foregroundStyle(theme.secondaryLabel)
+                        .visionCanvasTextHalo(.pageHeader)
                 }
             }
             Spacer(minLength: 16)

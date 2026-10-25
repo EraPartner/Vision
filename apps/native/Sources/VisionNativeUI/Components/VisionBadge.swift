@@ -13,23 +13,30 @@ enum BadgeTone: Sendable {
     case destructive
 }
 
-/// `Badge`: a small capsule label.
+/// `Badge` (components/ui/badge.tsx): `inline-flex items-center rounded-full border px-2.5 py-0.5
+/// type-footnote font-medium` with a fast colour transition and the focus ring. Hover brightens the
+/// fill as `hover:bg-*` does for the variants that define one.
 struct VisionBadge: View {
     let text: String
     var tone: BadgeTone = .secondary
-    /// `size="sm"`.
+    /// `size="sm"`: `px-2 py-0.5`.
     var small = false
     @Environment(\.visionTheme) var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hovering = false
 
     var body: some View {
         Text(text)
-            .font(small ? .caption2.weight(.medium) : .caption.weight(.medium))
+            .font(VisionFonts.body(CGFloat(DesignTokens.Typography.footnote.size), weight: 500, relativeTo: .footnote))
             .lineLimit(1)
-            .padding(.horizontal, small ? 6 : 8)
-            .padding(.vertical, small ? 1 : 2)
+            .padding(.horizontal, small ? 8 : 10)
+            .padding(.vertical, 2)
             .foregroundStyle(foreground)
             .background(Capsule().fill(fill))
-            .overlay(Capsule().strokeBorder(stroke, lineWidth: 1))
+            .overlay(Capsule().strokeBorder(stroke, lineWidth: VisionControlMetrics.borderWidth))
+            .visionFocusRing(in: Capsule())
+            .animation(VisionControlMetrics.fastTransition(reduceMotion: reduceMotion), value: hovering)
+            .onHover { hovering = $0 }
     }
 
     private var foreground: Color {
@@ -46,14 +53,14 @@ struct VisionBadge: View {
 
     private var fill: Color {
         switch tone {
-        case .primary: return theme.primary.opacity(0.15)
-        case .secondary: return theme.foreground.opacity(0.06)
+        case .primary: return theme.primary.opacity(hovering ? 0.2 : 0.15)
+        case .secondary: return theme.foreground.opacity(hovering ? 0.1 : 0.06)
         case .muted: return theme.muted
-        case .outline: return Color.clear
-        case .accent: return Color(token: theme.palette.accent, opacity: 0.2)
+        case .outline: return theme.foreground.opacity(hovering ? 0.04 : 0)
+        case .accent: return Color(token: theme.palette.accent, opacity: hovering ? 0.25 : 0.2)
         case .success: return theme.success.opacity(0.15)
-        case .warning: return theme.warning.opacity(0.15)
-        case .destructive: return theme.destructive.opacity(0.15)
+        case .warning: return theme.warning.opacity(hovering ? 0.2 : 0.15)
+        case .destructive: return theme.destructive.opacity(hovering ? 0.2 : 0.15)
         }
     }
 

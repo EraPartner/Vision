@@ -31,15 +31,22 @@ extension EnvironmentValues {
 struct AuroraCanvas: View {
     @Environment(\.visionTheme) private var theme
     @Environment(\.visionVisualEffects) private var visualEffects
+    @Environment(\.visionFullEffects) private var fullEffects
     @Environment(\.visionWealthCanvasTint) private var wealth
     @Environment(\.visionStaticAtmosphere) private var staticAtmosphere
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
-    /// tokens.css `--aurora-*-alpha` and `--grain-alpha` (light, dark).
+    /// tokens.css `--aurora-*-alpha` and `--grain-alpha` (light, dark): `DesignTokens.Atmosphere`.
     private var alphas: (primary: Double, accent: Double, wash: Double, grain: Double) {
-        theme.isDark ? (0.13, 0.1, 0.08, 0.028) : (0.1, 0.08, 0.06, 0.018)
+        let dark = theme.isDark
+        return (
+            DesignTokens.Atmosphere.primaryAlpha.value(isDark: dark),
+            DesignTokens.Atmosphere.accentAlpha.value(isDark: dark),
+            DesignTokens.Atmosphere.washAlpha.value(isDark: dark),
+            DesignTokens.Atmosphere.grainAlpha.value(isDark: dark)
+        )
     }
 
     var body: some View {
@@ -54,8 +61,10 @@ struct AuroraCanvas: View {
                         size: proxy.size, first: wealth ? theme.accent : theme.primary,
                         second: wealth ? theme.primary : theme.accent,
                         firstAlpha: alphas.primary, secondAlpha: alphas.accent,
-                        // The shader takes over the motion; static atmosphere and reduced motion hold.
-                        animated: !enhanced && !staticAtmosphere && !reduceMotion)
+                        // The shader takes over the motion on Enhanced, unless Full effects keep
+                        // the blobs drifting under it (index.css "Full effects": "also under the
+                        // live WebGL aurora"); static atmosphere and reduced motion hold.
+                        animated: (!enhanced || fullEffects) && !staticAtmosphere && !reduceMotion)
                     if enhanced {
                         AuroraShaderView(
                             primary: theme.palette.primary, accent: theme.palette.accent,
@@ -82,8 +91,11 @@ struct AuroraCanvas: View {
     }
 }
 
-/// `::before` / `::after`: radial blobs drifting with `aurora-drift-a` (64 s) and
-/// `aurora-drift-b` (76 s), infinite alternate on `--ease-in-out-quart`.
+/// `::before` / `::after`: radial blobs drifting with `aurora-drift-a-smooth` (64 s) and
+/// `aurora-drift-b-smooth` (76 s), infinite alternate on `--ease-in-out-quart`: the
+/// `:root.fx-full:not(.fx-static-atmosphere) .liquid-canvas` path (index.css "Full effects").
+/// The caller turns `animated` off for static atmosphere, Reduce Motion and the Enhanced
+/// shader, which are the cases where the web rule does not apply.
 private struct AuroraBlobs: View {
     let size: CGSize
     let first: Color
@@ -92,8 +104,6 @@ private struct AuroraBlobs: View {
     let secondAlpha: Double
     let animated: Bool
     @State private var drifted = false
-
-    private static let easeInOutQuart = (0.77, 0.0, 0.175, 1.0)
 
     var body: some View {
         let a = max(size.width * 0.55, 544)
@@ -116,8 +126,11 @@ private struct AuroraBlobs: View {
 
     private func animation(_ seconds: Double) -> Animation? {
         guard animated else { return nil }
-        let curve = Self.easeInOutQuart
-        return .timingCurve(curve.0, curve.1, curve.2, curve.3, duration: seconds).repeatForever(autoreverses: true)
+        // The smooth path: continuous alternate drift on `--ease-in-out-quart`. Native drawing is
+        // GPU-composited, so this is the Full-effects drift whether or not the switch is on; the
+        // web's 100 ms stepped default (index.css `aurora-drift-a`) is not modelled.
+        return Animation.visionCurve(DesignTokens.Ease.inOutQuart, duration: seconds)
+            .repeatForever(autoreverses: true)
     }
 
     /// `radial-gradient(closest-side, colour / alpha, transparent 72%)`.

@@ -21,7 +21,7 @@ struct NativeOverlayFocusContext: Equatable {
     }
 }
 
-/// Lives in the route window, before AppKit moves focus into the shared overlay sheet.
+/// Lives in the route window, before the shared overlay dialog takes focus.
 struct NativeOverlayFocusReturnBridge: NSViewRepresentable {
     let owner: NativeOverlayFocusReturnCoordinator
     let context: NativeOverlayFocusContext
@@ -93,7 +93,7 @@ struct NativeOverlayFocusReturnBridge: NSViewRepresentable {
         self.isPresented = isPresented
     }
 
-    /// AppKit has ended the sheet; a model's close request alone is too early to return focus.
+    /// The overlay dialog has finished leaving; a model's close request alone is too early to return focus.
     @discardableResult
     func didDismiss(context: NativeOverlayFocusContext, isPresented: Bool) -> Task<Void, Never>? {
         update(context, isPresented: isPresented)

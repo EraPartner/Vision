@@ -64,7 +64,7 @@ aliases: [vision native, native app, swift app]
 | `apps/native/Package.swift`                        | SwiftPM package (Swift 6), libraries `VisionNativeCore` and `VisionNativeUI`, no deps                                                                                                                  |
 | `apps/native/Sources/VisionNativeCore/`            | Non-UI logic (runtime, health, API, screens), testable without the Xcode UI                                                                                                                            |
 | `apps/native/Sources/VisionNativeCore/API/`        | `APIClient` (the Swift `client.ts`) and the generated OpenAPI models and operations                                                                                                                    |
-| `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens and `ThemeSelection` (variant and appearance)                                                                                                                                  |
+| `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens, `GlassMaterialSpec` and `ThemeSelection` (variant and appearance)                                                                                                             |
 | `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)                                                                                                                     |
 | `apps/native/Sources/VisionNativeCore/Screens/`    | View models of native screens (Exchange rates, Admin, Planned, Imports, Transactions, Owes, Accounts, Categories, Recipients, Home/Insights, Tax, Portfolio/wealth tools, Analysis/Monitors, Research) |
 | `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)                                                                                                                      |
@@ -264,7 +264,11 @@ the effective `enhanced` tier, which is Electron's `setVibrancy("under-window")`
 follows the shell palette, not macOS. A built-in display is never treated as large
 ([[docs/adr/244-full-effects-switch|ADR-244]]), so the automatic reduction applies to external
 displays above 6,000,000 pixels only, and Settings > Appearance carries the Full effects switch
-(`fullEffects`) that restores the effects turned down to save GPU work.
+(`fullEffects`) that restores the effects turned down to save GPU work. The shell publishes the
+switch as the `visionFullEffects` environment value, and the aurora, cards, toasts, chrome, dialog
+scrim and canvas text halos read it; see [[docs/features/appearance|Appearance]] for the effects
+it restores and [[docs/adr/250-swift-design-system-parity|ADR-250]] for the design-system
+foundation.
 
 ### Local state
 
@@ -502,12 +506,12 @@ states); no route shows the web app.
 `bun run native:generate` runs the four generators; CI's Verify Generated Artifacts job reruns it
 and fails when `apps/native/` changes. The outputs are committed.
 
-| Script                            | Inputs                                                        | Output                                                         |
-| --------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------- |
-| `scripts/native-openapi.ts`       | `openapi.yaml`, `apps/native/openapi-operations.txt`          | `Sources/VisionNativeCore/API/Generated/` (models, operations) |
-| `scripts/native-design-tokens.ts` | `styles/tokens.css`, `styles/skin-v2.css`, `styles/themes.ts` | `Sources/VisionNativeCore/Design/Generated/DesignTokens.swift` |
-| `scripts/native-strings.ts`       | `i18n/source/{en,nl}.json`, `apps/native/i18n-keys.txt`       | `Sources/VisionNativeUI/Resources/Localizable.xcstrings`       |
-| `scripts/native-navigation.ts`    | `apps/frontend/src/lib/navigation.ts`                         | `Sources/VisionNativeCore/Navigation/Generated/`               |
+| Script                            | Inputs                                                                                                                                  | Output                                                         |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `scripts/native-openapi.ts`       | `openapi.yaml`, `apps/native/openapi-operations.txt`                                                                                    | `Sources/VisionNativeCore/API/Generated/` (models, operations) |
+| `scripts/native-design-tokens.ts` | `styles/tokens.css`, `styles/index.css`, `styles/skin-v2.css`, `styles/themes.ts`, `tailwind.config.ts`, `lib/motion.ts`, UI components | `Sources/VisionNativeCore/Design/Generated/DesignTokens.swift` |
+| `scripts/native-strings.ts`       | `i18n/source/{en,nl}.json`, `apps/native/i18n-keys.txt`                                                                                 | `Sources/VisionNativeUI/Resources/Localizable.xcstrings`       |
+| `scripts/native-navigation.ts`    | `apps/frontend/src/lib/navigation.ts`                                                                                                   | `Sources/VisionNativeCore/Navigation/Generated/`               |
 
 The OpenAPI generator emits one `APIOperation` struct per allow-listed operationId and the
 component schemas they reach, plus the ADR-026 `Envelope` and `ErrorPayload`. Numbers become
@@ -540,7 +544,19 @@ token ([[docs/adr/233-loopback-only-backend|ADR-233]]), so a request carries `Co
 palette: the resolved mode, and the variant whose `--background` and `--foreground` match.
 `VisionNativeUI` exposes it to SwiftUI as the `visionTheme` environment value, together with
 `Color(token:)`; the colorblind skin follows `app_settings`. The sidebar and native screens take
-the app's appearance; menus and dialogs follow the system.
+the app's appearance; native menus follow the system.
+
+`DesignTokens` also carries the non-colour design system, generated from the CSS
+([[docs/adr/250-swift-design-system-parity|ADR-250]]): `Ease`, `Spring`, `Elevation`, `Glass`,
+`Atmosphere`, `FocusRing`, `Overlay`, `Hover`, `Press`, `Selection`, `Halo`, `Typography`,
+`Control` and the extended `Radius` scale. `GlassMaterialSpec` describes the web glass recipes and
+`VisionGlassSurface` draws them with system materials. Vision's dialogs, alerts, confirmation
+dialogs and side sheets are centred glass panels inside the window (`.visionDialog`,
+`.visionAlert`, `.visionConfirmationDialog`, `.visionSideSheet`), not system sheets; the scrim is
+frosted, and the content under it blurred, only under Full effects or the Enhanced tier. Inside
+them `\.dismiss` does nothing, so callers pass `onClose` or read `visionDismissDialog`. Controls
+take their sizes from `VisionControlMetrics`, and Inter and Fraunces are bundled and registered by
+`VisionFonts`.
 
 `CatalogStrings` is the native `t()`: it reads the compiled String Catalog of `VisionNativeUI`
 for the app's language, fills every `{name}` placeholder and falls back to the key. `tc(key,
@@ -591,7 +607,8 @@ read shows the unavailable state with a retry. The native shell never leaves a r
 unknown paths get the native Not found screen.
 
 The command palette, the shortcuts overlay, Settings, onboarding and the report sheet are native
-overlays (`NativeShellOverlayKind`; the palette's inline calculator and rate conversion are
+overlays (`NativeShellOverlayKind`; Settings is a glass dialog in the main window at the
+`DashboardSettingsDialog` geometry, not a system sheet; the palette's inline calculator and rate conversion are
 `NativePaletteCalculator`). `NativeShortcuts` handles ⌘K (palette), ⌘B (sidebar), `?` (shortcuts
 overlay), `g` then a key, `[`, `]` and `N`; the single-key ones stay inert while a text field has
 focus. Opening an overlay keeps the screen underneath mounted, and the overlay returns focus to

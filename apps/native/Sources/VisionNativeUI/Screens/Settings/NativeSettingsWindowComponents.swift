@@ -118,3 +118,41 @@ struct NativeSettingsSelectRow: View {
         }
     }
 }
+
+/// One section of the settings rail: `ListRow` in a `rounded-control` button, `bg-primary/10` while
+/// selected (`/15` on hover), a faint foreground fill on hover otherwise.
+struct NativeSettingsRailRow: View {
+    let title: String
+    let symbol: String
+    let isSelected: Bool
+    @Environment(\.visionTheme) private var theme
+    @State private var hovering = false
+
+    private var fill: Color {
+        if isSelected {
+            return theme.primary.opacity(
+                hovering ? NativeSettingsWindow.Layout.selectedHoverAlpha : NativeSettingsWindow.Layout.selectedAlpha)
+        }
+        return hovering ? theme.foreground.opacity(DesignTokens.Hover.ghostFillAlpha) : Color.clear
+    }
+
+    var body: some View {
+        Label(title, systemImage: symbol).font(.body)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 12)
+            .contentShape(Rectangle())
+            .background(fill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous))
+            .onHover { hovering = $0 }
+    }
+}
+
+/// A 1 pt `border-border/60` rule: between the rail and the pane, and under the pane header.
+struct NativeSettingsHairline: View {
+    let vertical: Bool
+    @Environment(\.visionTheme) private var theme
+
+    var body: some View {
+        Rectangle().fill(theme.border.opacity(NativeSettingsWindow.Layout.borderAlpha))
+            .frame(width: vertical ? 1 : nil, height: vertical ? nil : 1)
+            .accessibilityHidden(true)
+    }
+}

@@ -17,7 +17,7 @@ struct NativeSettingsConfirmSheet: View {
     @Environment(\.visionTheme) private var theme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: DesignTokens.Overlay.dialogGap) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
                     .font(.visionCardTitle)
@@ -46,7 +46,7 @@ struct NativeSettingsConfirmSheet: View {
             }
         }
         .visionDialogPadding()
-        .frame(width: 512, alignment: .leading)
+        .frame(width: DesignTokens.Overlay.dialogMaxWidth, alignment: .leading)
         .background(theme.card)
     }
 }

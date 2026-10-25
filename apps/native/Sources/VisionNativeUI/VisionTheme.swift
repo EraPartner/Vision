@@ -50,6 +50,29 @@ public struct VisionTheme: Equatable, Sendable {
     public var mutedForeground: Color {
         isPrintReport ? Color(token: HSLColor(hue: 210, saturation: 8, lightness: 34)) : secondaryLabel
     }
+    /// `--expense`.
+    public var expense: Color { Color(token: palette.expense) }
+    /// `--chart-1` to `--chart-8`, in order.
+    public var chartColors: [Color] {
+        let p = palette
+        return [p.chart1, p.chart2, p.chart3, p.chart4, p.chart5, p.chart6, p.chart7, p.chart8].map {
+            Color(token: $0)
+        }
+    }
+    /// `--input`: the border of form controls (`border-input`).
+    public var input: Color { Color(token: palette.input) }
+    /// `--popover` and `--popover-foreground`.
+    public var popover: Color { Color(token: palette.popover) }
+    public var popoverForeground: Color { Color(token: palette.popoverForeground) }
+    /// `--secondary` and `--secondary-foreground`.
+    public var secondary: Color { Color(token: palette.secondary) }
+    public var secondaryForeground: Color { Color(token: palette.secondaryForeground) }
+    /// `text-label-primary`: `--foreground` at `--label-primary-alpha`.
+    public var primaryLabel: Color { Color(token: foregroundToken, opacity: DesignTokens.labelPrimaryAlpha) }
+    /// `text-label-quaternary`: disabled text only.
+    public var quaternaryLabel: Color { Color(token: foregroundToken, opacity: palette.labelQuaternaryAlpha) }
+    /// `--focus-ring-alpha`: the alpha of the `ring` focus outline (`DesignTokens.FocusRing`).
+    public var focusRingAlpha: Double { palette.focusRingAlpha }
     /// The sidebar and detail-column glass of the native shell.
     public var glass: ShellGlass { ShellGlass(selection: selection) }
     public var gain: Color { Color(token: selection.gain) }

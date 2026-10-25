@@ -12,7 +12,10 @@ struct NativeSettingsScreenView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var connectivity = PortfolioConnectivity()
     @State private var visible = false
-    private var section: String { shell.settingsSection ?? "general" }
+    /// The last section the shell reported: the dialog animates out after the shell has cleared
+    /// it, and the pane must not jump to General (or reload) while it fades.
+    @State private var lastSection = "general"
+    private var section: String { shell.settingsSection ?? lastSection }
     private var loadKey: String { section + "|" + String(model.isOnline) }
     private var pollKey: String {
         section + "|" + String(visible) + "|" + String(ai.isOnline) + "|"
@@ -76,6 +79,7 @@ struct NativeSettingsScreenView: View {
                 ai.isOnline = online
             }
         }
+        .onChange(of: shell.settingsSection, initial: true) { _, next in if let next { lastSection = next } }
         .onChange(of: section) { old, new in
             if old == "ai", new != "ai" { ai.didDisappear() }
             if old == "backup", new != "backup" { backup.didDisappear() }
