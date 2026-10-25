@@ -3,17 +3,14 @@ import SwiftUI
 
 /// Hosted in an `NSHostingView` (not a SwiftUI scene), `NavigationSplitView` ignores its
 /// sidebar column's `min`/`ideal` widths on first layout and can start far narrower, which
-/// squeezes the sidebar's search field. This probe sits beside the split view, finds the
+/// squeezes the sidebar's search field. `ShellHostingView` owns a `Keeper` that finds the
 /// `NSSplitView` once it has been laid out, widens the sidebar to `ideal` once per
 /// launch and afterwards only keeps it from falling below `minimum`.
-struct SidebarWidthGuard: NSViewRepresentable {
+enum SidebarWidthGuard {
     /// The sidebar column's widths (AppSidebar's 248 pt default).
     static let minimumWidth: CGFloat = 200
     static let idealWidth: CGFloat = 248
     static let maximumWidth: CGFloat = 340
-
-    let minimum: CGFloat
-    let ideal: CGFloat
 
     /// The last corrections the probe attempted, newest last, for test diagnostics.
     @MainActor static var trace: [String] = []
@@ -24,9 +21,6 @@ struct SidebarWidthGuard: NSViewRepresentable {
         trace.append("+\(ms)ms \(line)")
         if trace.count > 20 { trace.removeFirst(trace.count - 20) }
     }
-
-    func makeNSView(context: Context) -> ProbeView { ProbeView(minimum: minimum, ideal: ideal) }
-    func updateNSView(_ view: ProbeView, context: Context) {}
 
     /// The width to move the divider to, or `nil` to leave it. On the first measured layout a
     /// sidebar narrower than `ideal` widens to `ideal`. Afterwards only a sidebar below `minimum`
@@ -42,9 +36,14 @@ struct SidebarWidthGuard: NSViewRepresentable {
         return sidebar < minimum ? max(minimum, ideal) : nil
     }
 
-    final class ProbeView: NSView {
+    /// Lives as long as the hosting view. A probe view inside SwiftUI's tree did not: on macOS 26
+    /// SwiftUI rebuilds the split view's hosted subviews after the first correction, which took
+    /// the probe out of the window before SwiftUI put its 140 pt column default back.
+    @MainActor final class Keeper: NSObject {
+        private weak var root: NSView?
         private let minimum: CGFloat
         private let ideal: CGFloat
+        private var window: NSWindow? { root?.window }
         private var widened = false
         private var pending = false
         /// Bounds the corrections per launch, so a split view that keeps undoing them cannot
@@ -60,31 +59,10 @@ struct SidebarWidthGuard: NSViewRepresentable {
         private var settleCheckPending = false
         private static let settleDelay: Duration = .milliseconds(350)
 
-        init(minimum: CGFloat, ideal: CGFloat) {
+        init(root: NSView, minimum: CGFloat = SidebarWidthGuard.minimumWidth, ideal: CGFloat = SidebarWidthGuard.idealWidth) {
+            self.root = root
             self.minimum = minimum
             self.ideal = ideal
-            super.init(frame: .zero)
-        }
-
-        @available(*, unavailable)
-        required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-        override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            scheduleCorrection()
-        }
-
-        override func layout() {
-            super.layout()
-            scheduleCorrection()
-        }
-
-        /// The probe's own frame changes with the window's layout, a cheap extra signal.
-        override func setFrameSize(_ newSize: NSSize) {
-            super.setFrameSize(newSize)
-            scheduleCorrection()
         }
 
         /// The first layout can run before the split view has sized its columns, and SwiftUI can
@@ -95,7 +73,8 @@ struct SidebarWidthGuard: NSViewRepresentable {
         /// without resizing the probe or posting a split resize, so the column's frame is watched too.
         @objc private func sidebarFrameDidChange(_ note: Notification) { scheduleCorrection() }
 
-        private func scheduleCorrection() {
+        /// Called by the hosting view on every layout and window change.
+        func scheduleCorrection() {
             guard window != nil, !pending, corrections < 8 else {
                 if corrections >= 8 || window == nil {
                     SidebarWidthGuard.note("skip window=\(window != nil) corrections=\(corrections)")
@@ -197,15 +176,9 @@ struct SidebarWidthGuard: NSViewRepresentable {
             return false
         }
 
-        /// The enclosing vertical split view, or, for a probe hosted beside the split view, the
-        /// window's `NavigationSplitView` split view.
+        /// The `NavigationSplitView` split view inside the hosting view.
         private func enclosingSplitView() -> NSSplitView? {
-            var view = superview
-            while let current = view {
-                if let split = current as? NSSplitView, split.isVertical { return split }
-                view = current.superview
-            }
-            return window?.contentView.flatMap(Self.navigationSplitView(in:))
+            root.flatMap(Self.navigationSplitView(in:))
         }
 
         private static func navigationSplitView(in view: NSView) -> NSSplitView? {
@@ -217,5 +190,28 @@ struct SidebarWidthGuard: NSViewRepresentable {
             }
             return nil
         }
+    }
+}
+
+/// Hosts the shell. Owns the sidebar width keeper, which must outlive SwiftUI's rebuilds of
+/// the split view's subviews.
+public final class ShellHostingView: NSHostingView<ShellRootView> {
+    private lazy var sidebarWidthKeeper = SidebarWidthGuard.Keeper(root: self)
+
+    public required init(rootView: ShellRootView) {
+        super.init(rootView: rootView)
+    }
+
+    @available(*, unavailable)
+    public required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    public override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        sidebarWidthKeeper.scheduleCorrection()
+    }
+
+    public override func layout() {
+        super.layout()
+        sidebarWidthKeeper.scheduleCorrection()
     }
 }

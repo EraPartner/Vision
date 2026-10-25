@@ -28,11 +28,11 @@ struct NativeShellPresentationStructureTests {
         }
     }
 
-    /// Regression: hosted in an `NSHostingView` without sizing options (as ShellController
-    /// hosts it), the sidebar started narrower than its minimum and wrapped the search hint.
+    /// Regression: hosted without sizing options (as ShellController hosts it), the sidebar
+    /// started narrower than its minimum and wrapped the search hint.
     @Test func sidebarStartsAtLeastAtItsMinimumWidth() throws {
         let shell = makeShell()
-        let fixture = ShellPresentationWindow(ShellRootView(model: shell))
+        let fixture = ShellPresentationWindow(ShellRootView(model: shell)) { ShellHostingView(rootView: $0) }
         fixture.host.sizingOptions = []
         defer { fixture.close() }
         do {
@@ -139,7 +139,7 @@ private func sidebarDiagnostics(_ host: NSView) -> String {
                 lines.append(
                     "  item\(index) behavior=\(item.behavior.rawValue) min=\(item.minimumThickness) max=\(item.maximumThickness) collapsed=\(item.isCollapsed) holding=\(item.holdingPriority.rawValue) view=\(item.viewController.view.frame.width)")
             }
-        } else if depth <= 3 || name.contains("Split") || name.contains("ProbeView") {
+        } else if depth <= 3 || name.contains("Split") {
             lines.append("\(depth) \(name) \(view.frame.size)")
         }
         for child in view.subviews where depth < 40 { walk(child, depth: depth + 1) }
@@ -153,9 +153,9 @@ private func sidebarDiagnostics(_ host: NSView) -> String {
 private final class ShellPresentationWindow<Content: View> {
     let window: NSWindow
     let host: NSHostingView<Content>
-    init(_ content: Content) {
+    init(_ content: Content, host makeHost: (Content) -> NSHostingView<Content> = { NSHostingView(rootView: $0) }) {
         _ = NSApplication.shared
-        host = NSHostingView(rootView: content)
+        host = makeHost(content)
         window = ShellPresentationNonKeyWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1100, height: 760), styleMask: [.borderless],
             backing: .buffered, defer: false)

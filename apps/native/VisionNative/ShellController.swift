@@ -1320,7 +1320,7 @@ final class ShellController: NSObject, NSWindowDelegate {
     /// Replaces the SwiftUI shell with one for `model`, below the launch view.
     private func installShellHost(for model: NativeShellModel, hidden: Bool) {
         shellHost?.removeFromSuperview()
-        let host = NSHostingView(rootView: ShellRootView(model: model))
+        let host = ShellHostingView(rootView: ShellRootView(model: model))
         host.sizingOptions = []
         // The window keeps its own title and has no toolbar; SwiftUI must not add either.
         host.sceneBridgingOptions = []
