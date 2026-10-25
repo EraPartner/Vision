@@ -49,6 +49,25 @@ describe("selectToolSchemas", () => {
     );
     expect(sent).toEqual(names(all).filter((name) => sent.includes(name)));
   });
+
+  // Mac bench 2026-10-25: the follow-up alone matched year-over-year and the
+  // model called the wrong tool.
+  it("matches a short follow-up together with the previous question", () => {
+    const followUp =
+      "Now exclude January and compare only 2026-02-01 through 2026-03-31.";
+    expect(
+      names(selectToolSchemas({ schemas: all, question: followUp })),
+    ).not.toContain("getMonthlySpend");
+    expect(
+      names(
+        selectToolSchemas({
+          schemas: all,
+          question: followUp,
+          previousQuestion: "Compare monthly spending for Q1 2026.",
+        }),
+      ),
+    ).toContain("getMonthlySpend");
+  });
 });
 
 describe("withCalledTools", () => {
