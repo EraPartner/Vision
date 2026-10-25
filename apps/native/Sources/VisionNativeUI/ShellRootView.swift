@@ -19,6 +19,9 @@ public struct ShellRootView: View {
     @State private var pageScrolled = false
     /// The titlebar strip the topbar occupies.
     @State private var titlebarHeight: CGFloat = 28
+    /// The titlebar safe area the detail column really receives (zero when the window has no
+    /// toolbar), so the topbar clearance only adds what the system does not already reserve.
+    @State private var titlebarSafeInset: CGFloat = 0
     /// The native page's width while the sidebar animates in or out (see `FrozenWidthLayout`).
     @State private var frozenDetailWidth: CGFloat?
     /// The last settled column widths, the frozen width's sources. A plain reference, so the
@@ -47,9 +50,22 @@ public struct ShellRootView: View {
             .accessibilityHidden(true)
     }
 
-    /// The detail column: banners, the native screen, the topbar.
+    /// The detail column: while the sidebar is collapsed, the icon rail (`AppSidebar`
+    /// `collapsible="icon"`) beside the page; the page itself is `pageColumn`.
     @ViewBuilder
     private func detailColumn(_ theme: VisionTheme) -> some View {
+        HStack(spacing: 0) {
+            if !model.isSidebarVisible {
+                NativeSidebarRail(model: model, topInset: max(0, 28 - titlebarSafeInset))
+                    .environment(\.colorScheme, theme.colorScheme)
+            }
+            pageColumn(theme)
+        }
+    }
+
+    /// The banners, the native screen and the topbar.
+    @ViewBuilder
+    private func pageColumn(_ theme: VisionTheme) -> some View {
         VStack(spacing: 0) {
             // Native pages take the banners as a top inset so the page canvas runs behind them
             // and under the titlebar strip; the other states stack them above.
@@ -59,7 +75,15 @@ public struct ShellRootView: View {
                     FrozenWidthLayout(width: frozenDetailWidth) {
                         NativePageZoomView(factor: model.pageZoom) {
                             NativeScreenContainer(screen: screen, model: model)
-                                .safeAreaInset(edge: .top, spacing: 0) { shellBanners }
+                                .safeAreaInset(edge: .top, spacing: 0) {
+                                    VStack(spacing: 0) {
+                                        // The web topbar (`h-14`) is in flow above `<main>`: the page starts
+                                        // below it, so titles and banners clear the traffic lights and the
+                                        // sidebar and search buttons drawn in the titlebar strip.
+                                        Color.clear.frame(height: max(0, NativeTopbar.barHeight - titlebarSafeInset))
+                                        shellBanners
+                                    }
+                                }
                                 .overlay(alignment: .topLeading) { contentLanding }
                                 .background { PageScrollObserver { pageScrollDidChange($0) } }
                                 .environment(\.colorScheme, theme.colorScheme)
@@ -89,7 +113,10 @@ public struct ShellRootView: View {
                 }
             }
         }
-        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { titlebarHeight = max($0, 28) }
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { inset in
+            titlebarSafeInset = inset
+            titlebarHeight = max(inset, 28)
+        }
         .overlay(alignment: .top) {
             if isNativeDetail {
                 NativeTopbar(model: model, height: titlebarHeight, scrolled: pageScrolled)
@@ -106,7 +133,8 @@ public struct ShellRootView: View {
     private func freezeDetailForSidebarAnimation(opening: Bool) {
         let widths = columnWidths
         guard !reduceMotion, isNativeDetail, widths.detail > 0 else { return }
-        frozenDetailWidth = opening ? widths.detail : widths.detail + widths.sidebar
+        // The rail takes its width from the page when the sidebar closes.
+        frozenDetailWidth = opening ? widths.detail : widths.detail + widths.sidebar - NativeSidebarRail.width
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(DesignTokens.Duration.normal + 0.12))
             frozenDetailWidth = nil
@@ -409,19 +437,7 @@ struct NativeSidebar: View {
         }
     }
 
-    private func badgeLabel(_ item: NavItem) -> String {
-        guard let badge = item.badge else { return "" }
-        let count = model.badgeCount(badge)
-        guard count > 0 else { return "" }
-        let key =
-            switch badge {
-            case .needsCategory: "nav.needsCategoryCount"
-            case .plannedDue: "nav.plannedDueCount"
-            case .insights: "nav.insightsCount"
-            case .monitors: "monitors.unreadCount"
-            }
-        return model.strings.t(key, ["count": String(count)])
-    }
+    private func badgeLabel(_ item: NavItem) -> String { model.sidebarBadgeLabel(item) }
 
     /// `layout.skipToContent`: first in keyboard order and shown only while focused, as the
     /// web's `sr-only focus:not-sr-only` link; it moves focus to the page content.
@@ -477,19 +493,7 @@ struct NativeSidebar: View {
         } label: {
             HStack(spacing: 10) {
                 // The web logo: the Vision mark on a 28 pt primary-to-accent gradient chip.
-                VisionBrandMark()
-                    .fill(theme.primaryForeground)
-                    .frame(width: 14, height: 14)
-                    .frame(width: 28, height: 28)
-                    .background(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.chip, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [theme.primary, theme.primary.opacity(0.85), theme.accent.opacity(0.7)],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing))
-                    )
-                    .shadow(color: theme.primary.opacity(0.35), radius: 9, y: 6)
-                    .accessibilityHidden(true)
+                SidebarBrandChip()
                 Text(verbatim: "Vision").font(.visionDisplayHeadline)
                     .foregroundStyle(Color(token: theme.glass.foreground))
                 Spacer(minLength: 0)

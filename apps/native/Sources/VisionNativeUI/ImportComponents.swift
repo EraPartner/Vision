@@ -417,6 +417,8 @@ struct ImportHeadersPanel: View {
 /// Lays chips out in rows, wrapping at the available width.
 struct FlowLayout: Layout {
     var spacing: CGFloat = 6
+    /// Pins the last subview to the trailing edge of its row (the web's `ml-auto`).
+    var lastTrailing = false
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? .infinity
@@ -442,13 +444,14 @@ struct FlowLayout: Layout {
         var x = bounds.minX
         var y = bounds.minY
         var rowHeight: CGFloat = 0
-        for subview in subviews {
+        for (index, subview) in subviews.enumerated() {
             let size = subview.sizeThatFits(.unspecified)
             if x > bounds.minX, x + size.width > bounds.maxX {
                 y += rowHeight + spacing
                 x = bounds.minX
                 rowHeight = 0
             }
+            if lastTrailing, index == subviews.count - 1 { x = max(x, bounds.maxX - size.width) }
             subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
             x += size.width + spacing
             rowHeight = max(rowHeight, size.height)

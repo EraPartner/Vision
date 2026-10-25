@@ -233,7 +233,8 @@ struct TransactionsTableCard: View {
 
     static let selectWidth: CGFloat = 32
     static let editWidth: CGFloat = 64
-    static let summaryWidth: CGFloat = 280
+    /// The stacked summary column's `min-w-48` (192 pt); it takes the remaining width.
+    static let summaryWidth: CGFloat = 192
 
     // MARK: Header
 

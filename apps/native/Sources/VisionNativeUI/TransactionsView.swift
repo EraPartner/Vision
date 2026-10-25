@@ -303,15 +303,17 @@ struct TransactionsToolbar: View {
 
     var body: some View {
         let filters = model.filters
-        HStack(spacing: 8) {
+        // `flex flex-wrap items-center gap-2`, the View menu `ml-auto`: the chips wrap onto
+        // further rows at narrow widths instead of running past the window.
+        FlowLayout(spacing: 8, lastTrailing: true) {
             accountChip(filters)
             categoryChip(filters)
             dateMenu(filters)
             typeMenu(filters)
             needsCategoryChip(filters)
-            Spacer(minLength: 0)
             viewMenu
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(strings.t("txPage.filter.toolbar"))
     }

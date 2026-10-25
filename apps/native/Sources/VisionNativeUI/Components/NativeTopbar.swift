@@ -14,10 +14,13 @@ struct NativeTopbar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.visionTheme) private var theme
 
+    /// AppLayout's topbar `h-14`: the page content starts below it.
+    static let barHeight: CGFloat = 56
     /// `INLINE_TITLE_THRESHOLD` in AppLayout.
     static let titleThreshold: CGFloat = 96
-    /// Room for the traffic lights when the sidebar no longer holds them.
-    private static let trafficLightsWidth: CGFloat = 78
+    /// Room for the traffic lights when the sidebar no longer holds them: the icon rail
+    /// under them already takes its own width of it.
+    private static let trafficLightsWidth: CGFloat = 78 - NativeSidebarRail.width
 
     var body: some View {
         HStack(spacing: 6) {
