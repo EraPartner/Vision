@@ -16,7 +16,7 @@ import Foundation
 //       "phases": [ {                                               // idle, scroll, pageSwitch, sustained
 //           "name", "startEpochMs", "endEpochMs", "wallMs",
 //           "cpuSeconds", "cpuUserSeconds", "cpuSystemSeconds",     // this process, over the phase
-//           "footprintStartMb", "footprintEndMb",                   // phys_footprint (task_vm_info)
+//           "footprintStartMb", "footprintEndMb",                   // phys_footprint (proc_pid_rusage)
 //           "framesTracked",                                        // false for idle: no display link runs
 //           "frameStampsMs",                                        // display-link timestamps, monotonic ms
 //           "frames": { "frames", "refreshMs", "hitches", "maxIntervalMs" } | null,

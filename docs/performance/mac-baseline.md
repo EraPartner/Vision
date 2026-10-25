@@ -151,7 +151,7 @@ on Home, scrolls the largest scroll view on Transactions down and back up at 150
 the sustained scroll/switch loop. It records display-link frame timestamps for every window except
 idle (the link stays off there so it does not add wakeups), frames later than 1.5x the refresh
 interval as hitches, the process's own CPU time (`getrusage`) and `phys_footprint`
-(`task_vm_info`) per window, and writes `results.json` to the directory it was given. It deletes the
+(`proc_pid_rusage`) per window, and writes `results.json` to the directory it was given. It deletes the
 persistent setting as soon as the run starts (a crashed run never repeats) and quits at the end, so
 the next normal launch is clean. When it is not set, the only cost is one
 `UserDefaults` read at launch.
