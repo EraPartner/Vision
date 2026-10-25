@@ -361,7 +361,7 @@ extension View {
                 kind: .alert, item: item, metrics: .standard, dismissDisabled: false,
                 accessibilityTitle: title, onDismiss: nil
             ) { current in
-                VisionAlertPanel(title: title, message: message(current), actions: actions(current))
+                VisionAlertPanel(title: title, message: message(current), actions: { actions(current) })
             })
     }
 
