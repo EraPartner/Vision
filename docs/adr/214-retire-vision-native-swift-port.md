@@ -1,7 +1,7 @@
 ---
 title: "ADR-214: Retire the Vision Native Swift port"
 type: adr
-status: accepted
+status: superseded
 date: 2026-10-19
 tags:
   [
@@ -20,6 +20,8 @@ aliases: [adr-214, retire vision native, retire swift port]
 ---
 
 # ADR-214: Retire the Vision Native Swift port
+
+> [!note] Superseded by [[docs/adr/249-revive-swift-app|ADR-249]] on 2026-10-25.
 
 ## Status
 
