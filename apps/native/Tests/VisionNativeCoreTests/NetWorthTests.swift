@@ -233,7 +233,7 @@ private actor NetWorthFake: NetWorthService {
     private var releaseWaiter: CheckedContinuation<Void, Never>?
     private var pauseWaiter: CheckedContinuation<Void, Never>?
     func setEmptyPage() { emptyPage = true }
-    func failBreakdown() { failingRates = true }
+    func failBreakdown() { failingBreakdown = true }
     func pauseEuroHistory() { pauseEuro = true }
     func waitForPause() async { if releaseWaiter == nil { await withCheckedContinuation { pauseWaiter = $0 } } }
     func release() {

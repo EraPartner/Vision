@@ -104,9 +104,12 @@ import Testing
 
     @Test func chartLayoutsWriteThenRead() async throws {
         try await withStorage { storage, _ in
-            #expect(try await storage.chartLayouts(writing: nil) == nil)
-            #expect(try await storage.chartLayouts(writing: "{\"v\":2}") == "{\"v\":2}")
-            #expect(try await storage.chartLayouts(writing: nil) == "{\"v\":2}")
+            let empty = try await storage.chartLayouts(writing: nil)
+            #expect(empty == nil)
+            let written = try await storage.chartLayouts(writing: "{\"v\":2}")
+            #expect(written == "{\"v\":2}")
+            let reread = try await storage.chartLayouts(writing: nil)
+            #expect(reread == "{\"v\":2}")
         }
     }
 
