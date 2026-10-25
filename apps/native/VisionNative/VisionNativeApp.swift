@@ -77,6 +77,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         shell.start()
+        // Off unless the VisionPerfRun default is set: one UserDefaults read.
+        PerfRun.startIfRequested(shell: shell)
     }
 
     /// Electron's `activate`: a dock click shows the hidden window again.

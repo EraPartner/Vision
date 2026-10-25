@@ -1408,6 +1408,21 @@ final class ShellController: NSObject, NSWindowDelegate {
         revealShell()
     }
 
+    // MARK: - Perf run hooks (PerfRun.swift)
+
+    /// The shell is on screen and showing a native page, not the launch state or the loading page.
+    var perfShellIsReady: Bool {
+        guard let host = shellHost, !host.isHidden, case .native = shellModel.detail else { return false }
+        return true
+    }
+
+    var perfRoutePath: String { shellModel.route.path }
+
+    /// The Go menu's navigation: the same intent path as `run(.action(.navigate(_)))`.
+    func perfNavigate(to path: String) {
+        _ = shellModel.acceptNativeMenuAction(.navigate(path))
+    }
+
     func showWindow() {
         guard let window else { return }
         if window.isMiniaturized { window.deminiaturize(nil) }

@@ -81,12 +81,25 @@ import {
   type AnimationSample,
   type AnimationSeen,
 } from "./lib/mac-baseline/launchProbe.ts";
+import {
+  renderNativeSection,
+  parseNativePerfResults,
+  runNamesNewestFirst,
+  summarizeNativeRun,
+  type MemorySample,
+  type NativeAppResult,
+  type PsSample,
+} from "./lib/mac-baseline/native.ts";
 import { isEntrypoint } from "./lib/isEntrypoint.ts";
 
 const TIERS: readonly Tier[] = ["reduced", "standard", "enhanced"];
 const DEFAULT_APPS = [
   "/Applications/Vision Demo.app",
   "/Applications/Vision.app",
+];
+const DEFAULT_NATIVE_APPS = [
+  "/Applications/Vision Native Demo.app",
+  "/Applications/Vision Native.app",
 ];
 const DEFAULT_PAGES = [
   "/",
@@ -122,6 +135,16 @@ const USAGE = `Usage: bun scripts/mac-baseline.ts [options]
                         A diagnostic: it delays the idle window, so leave it off
                         for before/after runs (default 0 = off)
   --quick               Smoke run: idle 10, sustained 30, cooldown 5, scroll 4000
+  --native              Measure the installed native (Swift) apps (${DEFAULT_NATIVE_APPS.join(", ")}
+                        when present) instead of the Electron apps, with the app's own
+                        scripted run (-VisionPerfRun). Pass --app as well to measure
+                        Electron apps in the same run. Idle and sustained default to the
+                        app's 30 s and 60 s; --idle, --sustained and --quick override them.
+                        --tiers, --full-effects, --repeat, --scroll-px, --pages and --no-trace
+                        do not apply to native apps.
+  --native-app <path>   A native app bundle to measure; repeat for several (implies --native)
+  --compare <path>      Electron results to compare the native apps with: a run directory
+                        or a results root (default: the newest run in --out with Electron apps)
   --leak <min>          Leak check instead of the tier matrix: one launch of the
                         first app at its current tier, alternating active and
                         idle windows for <min> minutes (45 is enough for a
@@ -132,6 +155,11 @@ const USAGE = `Usage: bun scripts/mac-baseline.ts [options]
 
 interface Options {
   apps: string[];
+  nativeApps: string[];
+  /** Seconds passed to the native app; null keeps the app's own default. */
+  nativeIdleSeconds: number | null;
+  nativeSustainedSeconds: number | null;
+  compare: string | null;
   tiers: Tier[];
   fullEffects: boolean[];
   repeat: number;
@@ -154,6 +182,9 @@ function parseOptions(argv: string[]): Options | null {
     args: argv,
     options: {
       app: { type: "string", multiple: true },
+      native: { type: "boolean" },
+      "native-app": { type: "string", multiple: true },
+      compare: { type: "string" },
       tiers: { type: "string" },
       "full-effects": { type: "string" },
       repeat: { type: "string" },
@@ -206,9 +237,33 @@ function parseOptions(argv: string[]): Options | null {
   const repeat = number(values.repeat, 1, "repeat");
   if (!Number.isInteger(repeat) || repeat < 1)
     throw new Error("--repeat must be a whole number ≥ 1");
-  const apps = values.app ?? DEFAULT_APPS.filter((app) => fs.existsSync(app));
+  const native = values.native === true || values["native-app"] !== undefined;
+  // --native alone replaces the Electron default; an explicit --app keeps it.
+  const apps =
+    values.app ??
+    (native ? [] : DEFAULT_APPS.filter((app) => fs.existsSync(app)));
+  const nativeApps = native
+    ? (
+        values["native-app"] ??
+        DEFAULT_NATIVE_APPS.filter((app) => fs.existsSync(app))
+      ).map((app) => path.resolve(app))
+    : [];
   return {
     apps: apps.map((app) => path.resolve(app)),
+    nativeApps,
+    nativeIdleSeconds:
+      values.idle !== undefined
+        ? number(values.idle, 0, "idle")
+        : quick
+          ? 10
+          : null,
+    nativeSustainedSeconds:
+      values.sustained !== undefined
+        ? number(values.sustained, 0, "sustained")
+        : quick
+          ? 30
+          : null,
+    compare: values.compare ? path.resolve(values.compare) : null,
     tiers: tiers as Tier[],
     fullEffects: [...new Set(fullEffects)],
     repeat,
@@ -988,7 +1043,11 @@ function backendLogTail(userData: string, lines: number): string[] {
     return [];
   }
   if (!newest) return [];
-  return fs.readFileSync(newest.file, "utf8").trimEnd().split("\n").slice(-lines);
+  return fs
+    .readFileSync(newest.file, "utf8")
+    .trimEnd()
+    .split("\n")
+    .slice(-lines);
 }
 
 async function launchProbe(
@@ -1009,7 +1068,9 @@ async function launchProbe(
         atS: Math.round((Date.now() - startedAt) / 100) / 10,
         running: await page<AnimationSeen[]>(app, RUNNING_ANIMATIONS),
       });
-      await sleep(Math.min(5000, Math.max(0, seconds * 1000 - (Date.now() - startedAt))));
+      await sleep(
+        Math.min(5000, Math.max(0, seconds * 1000 - (Date.now() - startedAt))),
+      );
     }
   });
   const records = requests.stop();
@@ -1256,7 +1317,9 @@ async function measureApp(ctx: Context, appPath: string): Promise<AppResult> {
           dirty = true;
           await quitApp(running);
           running = undefined;
-          log(`${info.name} ${name}: cooldown ${ctx.options.cooldownSeconds} s`);
+          log(
+            `${info.name} ${name}: cooldown ${ctx.options.cooldownSeconds} s`,
+          );
           await sleep(ctx.options.cooldownSeconds * 1000);
           running = await launchApp(info, logPath);
           const label = [
@@ -1292,6 +1355,230 @@ async function measureApp(ctx: Context, appPath: string): Promise<AppResult> {
   }
   result.restored = !dirty;
   return result;
+}
+
+// ── Native (Swift) app ───────────────────────────────────────────────────────
+
+const NATIVE_MEMORY_INTERVAL_MS = 15_000;
+/** Allowed beyond the scripted windows: launch, settle, scroll, switches and quit. */
+const NATIVE_RUN_SLACK_SECONDS = 600;
+
+function roleFootprint(pids: number[]): MemorySample["backend"] {
+  if (pids.length === 0) return null;
+  const text = run("footprint", pids.map(String));
+  if (text === null) return null;
+  const { perProcess, totalBytes } = parseFootprintOutput(text);
+  const mb = (bytes: number) => Math.round((bytes / 1024 ** 2) * 10) / 10;
+  const summed = [...perProcess.values()].reduce((a, b) => a + b, 0);
+  return {
+    processes: pids.length,
+    footprintMb: perProcess.size > 0 ? mb(summed) : null,
+    sharedOnceMb: totalBytes === null ? null : mb(totalBytes),
+  };
+}
+
+function bundleInfo(info: ReturnType<typeof appInfo>): AppInfo {
+  return {
+    path: info.path,
+    name: info.name,
+    bundleId: info.bundleId,
+    version: info.version,
+    bundleMtime: info.bundleMtime,
+    sizeMb: info.sizeMb,
+    sizeBreakdownMb: info.sizeBreakdownMb,
+  };
+}
+
+function nativeFailure(
+  info: ReturnType<typeof appInfo>,
+  error: string,
+): NativeAppResult {
+  return {
+    app: bundleInfo(info),
+    variant: "unknown",
+    launchToReadyMs: null,
+    display: null,
+    memory: { afterLaunch: {}, afterIdle: {}, afterSustained: null },
+    windows: {},
+    warnings: [],
+    error,
+  };
+}
+
+/**
+ * Launches the native app with -VisionPerfRun and samples its processes (the
+ * Swift app, its Bun backend and PostgreSQL, found through the runtime's pid
+ * files) until the app has run its scenario and quit. The app times its own
+ * phases; ps samples every second are matched to those windows afterwards.
+ */
+async function measureNativeApp(
+  ctx: Context,
+  appPath: string,
+): Promise<NativeAppResult> {
+  const { options } = ctx;
+  const info = appInfo(appPath);
+  if (psSnapshot().some((row) => row.command.startsWith(info.executable))) {
+    return nativeFailure(
+      info,
+      `${info.name} is already running; quit it and run again`,
+    );
+  }
+  const slug = info.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const perfDir = path.join(ctx.outDir, slug);
+  fs.mkdirSync(perfDir, { recursive: true });
+  const logPath = path.join(ctx.outDir, "logs", `${slug}.log`);
+  fs.mkdirSync(path.dirname(logPath), { recursive: true });
+  const logFile = fs.createWriteStream(logPath, { flags: "a" });
+
+  log(`${info.name}: cooldown ${options.cooldownSeconds} s`);
+  await sleep(options.cooldownSeconds * 1000);
+
+  const args = ["-VisionPerfRun", perfDir];
+  if (options.nativeIdleSeconds !== null) {
+    args.push("-VisionPerfIdleSeconds", String(options.nativeIdleSeconds));
+  }
+  if (options.nativeSustainedSeconds !== null) {
+    args.push(
+      "-VisionPerfSustainedSeconds",
+      String(options.nativeSustainedSeconds),
+    );
+  }
+  const scripted =
+    (options.nativeIdleSeconds ?? 30) + (options.nativeSustainedSeconds ?? 60);
+  log(`${info.name}: native run (about ${scripted + 60} s)`);
+  logFile.write(`\n=== launch ${new Date().toISOString()} ${args.join(" ")}\n`);
+  const child = spawn(info.executable, args, {
+    detached: true,
+    stdio: ["ignore", "pipe", "pipe"],
+    env: cleanEnv(),
+  });
+  child.stdout?.on("data", (chunk: Buffer) => logFile.write(chunk));
+  child.stderr?.on("data", (chunk: Buffer) => logFile.write(chunk));
+  let exitCode: number | null | undefined;
+  child.once("exit", (code) => {
+    exitCode = code;
+  });
+  const mainPid = child.pid ?? -1;
+
+  const samples: PsSample[] = [];
+  const memory: MemorySample[] = [];
+  let lastMemoryAt = 0;
+  let lastPostgresPid: number | undefined;
+  let error: string | null = null;
+  const deadline = Date.now() + (scripted + NATIVE_RUN_SLACK_SECONDS) * 1000;
+  try {
+    await sleep(1000);
+    run("osascript", [
+      "-e",
+      `tell application id "${info.bundleId}" to activate`,
+    ]);
+    while (exitCode === undefined) {
+      const now = Date.now();
+      const rows = psSnapshot();
+      const roots = runtimeRoots(info.userData, mainPid);
+      lastPostgresPid = roots.postgresPid ?? lastPostgresPid;
+      const roles = classifyProcesses(rows, roots);
+      samples.push({
+        t: now,
+        rows: rows.filter((row) => roles.has(row.pid)),
+        roles,
+      });
+      if (now - lastMemoryAt >= NATIVE_MEMORY_INTERVAL_MS) {
+        lastMemoryAt = now;
+        const pidsOf = (role: string) =>
+          [...roles].filter(([, r]) => r === role).map(([pid]) => pid);
+        memory.push({
+          t: now,
+          backend: roleFootprint(pidsOf("backend")),
+          postgres: roleFootprint(pidsOf("postgres")),
+        });
+      }
+      if (now > deadline) {
+        error = `${info.name} did not finish within ${scripted + NATIVE_RUN_SLACK_SECONDS} s`;
+        child.kill("SIGTERM");
+        break;
+      }
+      await sleep(1000);
+    }
+  } catch (caught) {
+    // Aborted (Ctrl-C): ask the app to quit, then stop the run.
+    run("osascript", ["-e", `tell application id "${info.bundleId}" to quit`]);
+    throw caught;
+  } finally {
+    logFile.end();
+  }
+  // PostgreSQL stops after the app; wait so the next launch is clean.
+  const pgDeadline = Date.now() + 30_000;
+  while (
+    lastPostgresPid !== undefined &&
+    processAlive(lastPostgresPid) &&
+    Date.now() < pgDeadline
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  const resultsFile = path.join(perfDir, "results.json");
+  if (!fs.existsSync(resultsFile)) {
+    return nativeFailure(
+      info,
+      error ??
+        `${info.name} exited (code ${exitCode}) without writing results.json; see ${logPath}`,
+    );
+  }
+  try {
+    const results = parseNativePerfResults(
+      fs.readFileSync(resultsFile, "utf8"),
+    );
+    const summary = summarizeNativeRun({
+      app: bundleInfo(info),
+      results,
+      samples,
+      memory,
+      power: (start, end) => ctx.powermetrics?.summarize(start, end) ?? null,
+    });
+    if (error) summary.warnings.push(error);
+    if (exitCode !== 0 && exitCode !== null && exitCode !== undefined) {
+      summary.warnings.push(`app exited with code ${exitCode}`);
+    }
+    return summary;
+  } catch (caught) {
+    return nativeFailure(info, (caught as Error).message);
+  }
+}
+
+/** The newest earlier run with Electron apps, or the one named by --compare. */
+function loadElectronReference(
+  options: Options,
+  outDir: string,
+): BaselineResults | null {
+  const readRun = (dir: string): BaselineResults | null => {
+    try {
+      const parsed = JSON.parse(
+        fs.readFileSync(path.join(dir, "results.json"), "utf8"),
+      ) as BaselineResults;
+      return parsed.apps?.some((app) => app.tiers.length > 0) ? parsed : null;
+    } catch {
+      return null;
+    }
+  };
+  if (
+    options.compare &&
+    fs.existsSync(path.join(options.compare, "results.json"))
+  ) {
+    return readRun(options.compare);
+  }
+  const root = options.compare ?? options.outRoot;
+  let names: string[] = [];
+  try {
+    names = fs.readdirSync(root);
+  } catch {
+    return null;
+  }
+  for (const name of runNamesNewestFirst(names, path.basename(outDir))) {
+    const found = readRun(path.join(root, name));
+    if (found) return found;
+  }
+  return null;
 }
 
 // ── Leak check ───────────────────────────────────────────────────────────────
@@ -1458,9 +1745,11 @@ async function main(): Promise<number> {
     console.error("mac-baseline runs on macOS only.");
     return 1;
   }
-  if (options.apps.length === 0) {
+  if (options.apps.length === 0 && options.nativeApps.length === 0) {
     console.error(
-      "No Vision app found. Install it (./install.sh, ./install-demo.sh) or pass --app.",
+      options.compare !== null || process.argv.includes("--native")
+        ? "No Vision Native app found. Install it (apps/native, install-native.sh) or pass --native-app."
+        : "No Vision app found. Install it (./install.sh, ./install-demo.sh) or pass --app.",
     );
     return 1;
   }
@@ -1567,6 +1856,7 @@ async function main(): Promise<number> {
       powermetrics: options.powermetrics,
       trace: options.trace,
       quick: options.quick,
+      native: options.nativeApps.length > 0,
     },
     machine,
     repoHead: run("git", [
@@ -1592,10 +1882,15 @@ async function main(): Promise<number> {
   };
 
   const ctx: Context = { options, powermetrics: recorder, outDir };
+  const nativeResults: NativeAppResult[] = [];
   try {
     for (const appPath of options.apps) {
       if (abort.signal.aborted) break;
       results.apps.push(await measureApp(ctx, appPath));
+    }
+    for (const appPath of options.nativeApps) {
+      if (abort.signal.aborted) break;
+      nativeResults.push(await measureNativeApp(ctx, appPath));
     }
   } finally {
     await recorder?.stop();
@@ -1604,13 +1899,33 @@ async function main(): Promise<number> {
     results.finishedAt = new Date().toISOString();
     fs.writeFileSync(
       path.join(outDir, "results.json"),
-      `${JSON.stringify(results, null, 2)}\n`,
+      `${JSON.stringify({ ...results, native: nativeResults }, null, 2)}\n`,
     );
-    fs.writeFileSync(path.join(outDir, "summary.md"), renderSummary(results));
+    const parts: string[] = [];
+    if (results.apps.length > 0) {
+      parts.push(renderSummary(results));
+    } else {
+      parts.push(
+        `# Vision Mac performance baseline\n\nRun ${results.startedAt} → ${results.finishedAt}. ${machine.model ?? "Mac"}, ${machine.chip ?? "?"}, ${machine.memoryGb} GB, macOS ${machine.macos ?? "?"}. Power: ${machine.powerSource ?? "?"}. Low Power Mode: ${machine.lowPowerMode ?? "?"}. Repo HEAD ${results.repoHead ?? "?"}.\n`,
+      );
+    }
+    if (options.nativeApps.length > 0) {
+      parts.push(
+        renderNativeSection(
+          nativeResults,
+          loadElectronReference(options, outDir),
+          results.apps.length > 0 ? [] : results.warnings,
+        ),
+      );
+    }
+    fs.writeFileSync(path.join(outDir, "summary.md"), parts.join("\n"));
     caffeinate.kill();
   }
   log(`Done. Summary: ${path.join(outDir, "summary.md")}`);
-  return results.apps.some((app) => app.error || !app.restored) ? 1 : 0;
+  return results.apps.some((app) => app.error || !app.restored) ||
+    nativeResults.some((native) => native.error)
+    ? 1
+    : 0;
 }
 
 if (isEntrypoint(import.meta)) {
