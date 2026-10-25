@@ -80,7 +80,8 @@ public struct ResearchChartBuilderView: View {
             } label: {
                 Image(systemName: "ellipsis")
             }
-            .menuIndicator(.hidden).accessibilityLabel(strings.t("research.builder.menu")).disabled(!controlsEnabled)
+            .menuStyle(.button).buttonStyle(.vision(.outline, size: .icon)).menuIndicator(.hidden).fixedSize()
+            .accessibilityLabel(strings.t("research.builder.menu")).disabled(!controlsEnabled)
             Button {
                 model.isSaveDialogPresented = true
             } label: {
@@ -152,8 +153,8 @@ public struct ResearchChartBuilderView: View {
                         model.state = candidate
                     }),
                 values: ResearchRangeOption.research.map(\.range),
-                title: { strings.t("research.range." + $0) }, size: .sm
-            ).accessibilityLabel(strings.t("research.builder.range"))
+                title: { strings.t("research.range." + $0) }, size: .sm, compact: true
+            ).fixedSize().accessibilityLabel(strings.t("research.builder.range"))
         }
     }
     private var presets: some View {

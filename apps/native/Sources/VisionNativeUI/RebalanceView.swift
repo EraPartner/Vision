@@ -19,7 +19,8 @@ public struct RebalanceView: View {
                 VisionPageHeader(
                     title: strings.t("rebalance.title"), subtitle: strings.t("rebalance.subtitle"), symbol: "scalemass"
                 ) { EmptyView() }
-                inputsCard
+                // `<Card className="max-w-4xl">`: the form sizes to its content, 896 pt at most.
+                inputsCard.frame(maxWidth: 896, alignment: .leading)
                 if let projection = model.projection { projectionCard(projection) }
                 if model.showEditor { editorCard }
                 Text(strings.t("rebalance.noSellNote")).foregroundStyle(theme.secondaryLabel)
@@ -135,7 +136,8 @@ public struct RebalanceView: View {
     var reserveInput: some View {
         field("rebalance.commitment.reserveFloor") {
             TextField("0", text: Binding(get: { model.reserveFloor }, set: { model.setReserveFloor($0) }))
-                .textFieldStyle(.vision).frame(width: 160).focused($focus, equals: "reserve")
+                .textFieldStyle(.vision).multilineTextAlignment(.trailing).monospacedDigit()
+                .frame(width: 160).focused($focus, equals: "reserve")
                 .accessibilityLabel(strings.t("rebalance.commitment.reserveFloor"))
             Text(strings.t("rebalance.reserveHelp", ["currency": model.currency.rawValue])).font(.footnote)
                 .foregroundStyle(theme.secondaryLabel).frame(maxWidth: 260, alignment: .leading)
@@ -146,7 +148,11 @@ public struct RebalanceView: View {
             Task { await model.compute() }
         } label: {
             HStack {
-                if model.isComputing { ProgressView().controlSize(.small) }
+                if model.isComputing {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "scalemass").accessibilityHidden(true)
+                }
                 Text(strings.t("rebalance.compute"))
             }
         }.buttonStyle(.visionPrimary).disabled(!model.canCompute)
@@ -170,12 +176,14 @@ public struct RebalanceView: View {
                 .foregroundStyle(theme.secondaryLabel).frame(maxWidth: .infinity, alignment: .leading)
             }
             DisclosureGroup(strings.t("rebalance.commitment.methodology"), isExpanded: $methodology) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(strings.t("rebalance.commitment.includes", ["date": value.horizonEnd]))
-                    Text(strings.t("rebalance.commitment.exchangeRates"))
-                    Text(strings.t("rebalance.commitment.exclusions"))
+                VStack(alignment: .leading, spacing: 8) {
+                    bullet(strings.t("rebalance.commitment.includes", ["date": value.horizonEnd]))
+                    bullet(strings.t("rebalance.commitment.exchangeRates"))
+                    bullet(strings.t("rebalance.commitment.exclusions"))
                 }.font(.footnote).foregroundStyle(theme.secondaryLabel).padding(.top, 8)
             }
+            // `Disclosure variant="inset" px-3 py-2`: a bordered inset row.
+            .visionInsetPanel(padding: 10, cornerRadius: DesignTokens.Radius.control, bordered: true)
         }
     }
     @ViewBuilder func resultCards(_ result: RebalanceResult) -> some View {
@@ -218,6 +226,12 @@ public struct RebalanceView: View {
                     }
                 }
             }
+        }
+    }
+    func bullet(_ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("•").accessibilityHidden(true)
+            Text(text)
         }
     }
     func targetChip(_ sleeve: String, _ weight: Decimal) -> some View {

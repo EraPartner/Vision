@@ -21,13 +21,19 @@ struct VisionBadge: View {
     var tone: BadgeTone = .secondary
     /// `size="sm"`: `px-2 py-0.5`.
     var small = false
+    /// `className="font-mono"`: tickers and other identifiers.
+    var monospaced = false
     @Environment(\.visionTheme) var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
 
     var body: some View {
         Text(text)
-            .font(VisionFonts.body(CGFloat(DesignTokens.Typography.footnote.size), weight: 500, relativeTo: .footnote))
+            .font(
+                monospaced
+                    ? Font.system(size: CGFloat(DesignTokens.Typography.footnote.size), weight: .medium, design: .monospaced)
+                    : VisionFonts.body(CGFloat(DesignTokens.Typography.footnote.size), weight: 500, relativeTo: .footnote)
+            )
             .lineLimit(1)
             .padding(.horizontal, small ? 8 : 10)
             .padding(.vertical, 2)

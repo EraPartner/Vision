@@ -46,6 +46,9 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
     var onRowDoubleClick: ((Row) -> Void)?
     /// The search field's placeholder; `table.searchAllColumns` when `nil`.
     var searchPrompt: String?
+    /// A short list drops the search field and the count footer (the web `Table` has neither);
+    /// they return once a search or filter is active.
+    var isMinimal = false
     @State private var openFilter: String?
     @State private var widths: [String: CGFloat] = [:]
     @State private var hoveredHeader: String?
@@ -85,6 +88,15 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
         return copy
     }
 
+    /// A short list shows only the header and rows, like the web `Table`.
+    func minimalChrome(_ minimal: Bool) -> Self {
+        var copy = self
+        copy.isMinimal = minimal
+        return copy
+    }
+
+    private var showsChrome: Bool { !isMinimal || !query.search.isEmpty || query.showsClearAll }
+
     /// A server search names what it looks through (`serverMode.search.placeholder`).
     func searchPlaceholder(_ text: String) -> Self {
         var copy = self
@@ -96,7 +108,7 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             // A page whose header already names the table passes no title.
             if !title.isEmpty || !subtitle.isEmpty { heading }
-            toolbar
+            if showsChrome { toolbar }
             if !query.filters.isEmpty { chips }
             ScrollView(.horizontal) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -131,8 +143,10 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
                 }
             }
             .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-            Divider()
-            footer
+            if showsChrome {
+                Divider()
+                footer
+            }
         }
     }
 

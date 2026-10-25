@@ -70,6 +70,9 @@ struct VisionSegmentedControl<Value: Hashable>: View {
     var compact = false
     /// `className="w-full"`: the track fills the width and the segments share it equally.
     var fillsWidth = false
+    /// `orientation="vertical"` with `grid h-auto w-full grid-cols-1`: the segments stack at the
+    /// full width of the control and wrap their labels (`min-h-10 whitespace-normal py-2`).
+    var vertical = false
 
     @Environment(\.visionTheme) private var theme
     @Environment(\.isEnabled) private var isEnabled
@@ -79,24 +82,27 @@ struct VisionSegmentedControl<Value: Hashable>: View {
 
     init(
         selection: Binding<Value>, options: [VisionSegmentOption<Value>],
-        size: VisionSegmentedControlSize = .default, label: String? = nil, compact: Bool = false
+        size: VisionSegmentedControlSize = .default, label: String? = nil, compact: Bool = false,
+        vertical: Bool = false
     ) {
         _selection = selection
         self.options = options
         self.size = size
         self.label = label
         self.compact = compact
+        self.vertical = vertical
     }
 
     /// Picker-like: `values` shown with `title(value)`.
     init(
         selection: Binding<Value>, values: [Value], title: (Value) -> String,
-        size: VisionSegmentedControlSize = .default, label: String? = nil, compact: Bool = false
+        size: VisionSegmentedControlSize = .default, label: String? = nil, compact: Bool = false,
+        vertical: Bool = false
     ) {
         self.init(
             selection: selection,
             options: values.map { VisionSegmentOption(value: $0, title: title($0)) },
-            size: size, label: label, compact: compact)
+            size: size, label: label, compact: compact, vertical: vertical)
     }
 
     var body: some View {
@@ -121,14 +127,15 @@ struct VisionSegmentedControl<Value: Hashable>: View {
 
     private var track: some View {
         let shape = RoundedRectangle(cornerRadius: VisionControlMetrics.radius, style: .continuous)
-        return HStack(spacing: 0) {
+        let axis = vertical ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
+        return axis {
             ForEach(options) { option in
                 segment(option)
             }
         }
         .padding(trackPadding)
         .frame(maxWidth: fillsWidth ? .infinity : nil)
-        .frame(height: size.height)
+        .frame(height: vertical ? nil : size.height)
         .background(shape.fill(theme.foreground.opacity(0.06)))
         .animation(VisionControlMetrics.snappySpring(reduceMotion: reduceMotion), value: selection)
         .accessibilityElement(children: .contain)
@@ -150,9 +157,10 @@ struct VisionSegmentedControl<Value: Hashable>: View {
                 if let symbol = option.systemImage {
                     Image(systemName: symbol).accessibilityHidden(true)
                 }
-                Text(option.title).lineLimit(1)
+                Text(option.title).lineLimit(vertical ? nil : 1)
             }
-            .frame(maxWidth: fillsWidth ? .infinity : nil)
+            .frame(maxWidth: (vertical || fillsWidth) ? .infinity : nil, minHeight: vertical ? 40 : nil)
+            .padding(.vertical, vertical ? 2 : 0)
         }
         .buttonStyle(
             VisionSegmentButtonStyle(

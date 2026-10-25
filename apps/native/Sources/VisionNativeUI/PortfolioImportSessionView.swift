@@ -4,6 +4,9 @@ import VisionNativeCore
 struct PortfolioImportSessionView: View {
     let model: PortfolioImportSessionModel
     let shell: NativeShellModel
+    /// The web card holds the history disclosure under its title (`PortfolioImportHistory`).
+    let history: PortfolioImportHistoryModel
+    @Binding var historyExpanded: Bool
     var isLocked = false
     var onReviewHistory: () -> Void = {}
     var onRecover: () async -> Void = {}
@@ -14,8 +17,14 @@ struct PortfolioImportSessionView: View {
     var body: some View {
         AdminCard {
             VStack(alignment: .leading, spacing: 20) {
-                Text(strings.t("portfolioImport.session.title")).font(.headline)
-                Text(strings.t("portfolioImport.session.description")).foregroundStyle(theme.secondaryLabel)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(strings.t("portfolioImport.session.title")).font(.visionCardTitle)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(strings.t("portfolioImport.session.description")).foregroundStyle(theme.secondaryLabel)
+                }
+                PortfolioImportHistoryView(
+                    model: history, shell: shell, expanded: $historyExpanded,
+                    isLocked: model.locked || isLocked)
                 PortfolioImportFileDropzone(
                     multiple: true, strings: strings, isDisabled: locked,
                     maximumFiles: max(0, 100 - model.statements.count),
@@ -84,7 +93,7 @@ struct PortfolioImportSessionView: View {
                         value: PortfolioImportSessionPolicy.preferSource,
                         title: strings.t("portfolioImport.session.source")),
                 ], accessibilityLabel: strings.t("portfolioImport.session.policy"), expands: true
-            ).frame(maxWidth: 420).disabled(locked)
+            ).disabled(locked)
             Text(strings.t("portfolioImport.session.policyHint." + model.policy.rawValue)).font(.caption).foregroundStyle(
                 theme.secondaryLabel)
         }

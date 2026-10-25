@@ -164,9 +164,7 @@ private struct ResearchWatchlistRow: View {
                 if let symbol = item.symbol, !symbol.isEmpty {
                     Button(ResearchWatchlistUI.name(item), action: lookup).buttonStyle(.visionLink).font(.headline)
                         .multilineTextAlignment(.leading)
-                    Text(symbol).font(.caption2.monospaced().weight(.medium))
-                        .foregroundStyle(theme.foreground.opacity(0.8)).padding(.horizontal, 6).padding(.vertical, 1)
-                        .overlay(Capsule().strokeBorder(theme.border.opacity(0.7), lineWidth: 1))
+                    VisionBadge(text: symbol, tone: .outline, small: true, monospaced: true)
                 } else {
                     Text(ResearchWatchlistUI.name(item)).font(.headline)
                 }

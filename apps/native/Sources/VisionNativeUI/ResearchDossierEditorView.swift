@@ -37,7 +37,8 @@ struct ResearchDossierEditorView: View {
                     } label: {
                         Image(systemName: "ellipsis")
                     }
-                    .menuIndicator(.hidden).accessibilityLabel(strings.t("dossiers.editorMenu"))
+                    .menuStyle(.button).buttonStyle(.vision(.outline, size: .icon)).menuIndicator(.hidden).fixedSize()
+                    .accessibilityLabel(strings.t("dossiers.editorMenu"))
                 }
                 Button(strings.t("dossiers.save"), systemImage: "square.and.arrow.down") { Task { await model.save() } }
                     .buttonStyle(.visionPrimary).disabled(model.busy)
@@ -62,7 +63,7 @@ struct ResearchDossierEditorView: View {
                 lines("dossiers.field.assumptions", \.assumptions, .assumptions)
                 lines("dossiers.field.openQuestions", \.openQuestions, .openQuestions)
             }
-            area("dossiers.field.conclusion", \.conclusion, height: 105)
+            area("dossiers.field.conclusion", \.conclusion, height: 120)
             ResearchDossierField(label: strings.t("dossiers.field.reviewDate")) {
                 VisionDateField(
                     day: PlannedDay(ymd: model.draft?.reviewDate, calendar: .current), placeholder: "",
@@ -78,7 +79,8 @@ struct ResearchDossierEditorView: View {
     private func text(_ path: WritableKeyPath<ResearchDossierContent, String>) -> Binding<String> {
         Binding(get: { model.draft?[keyPath: path] ?? "" }, set: { model.draft?[keyPath: path] = $0 })
     }
-    private func area(_ key: String, _ path: WritableKeyPath<ResearchDossierContent, String>, height: CGFloat = 65)
+    private func area(_ key: String, _ path: WritableKeyPath<ResearchDossierContent, String>,
+        height: CGFloat = VisionControlMetrics.textAreaMinHeight)
         -> some View
     {
         ResearchDossierField(label: strings.t(key)) {
@@ -112,7 +114,8 @@ struct ResearchDossierField<Content: View>: View {
 struct ResearchDossierTextArea: View {
     @Binding var text: String
     let label: String
-    var height: CGFloat = 65
+    /// `Textarea`: `min-h-20`; `rows={5}` on the conclusion.
+    var height: CGFloat = VisionControlMetrics.textAreaMinHeight
     @FocusState private var focused: Bool
     var body: some View {
         TextEditor(text: $text).focused($focused).visionTextEditor(isFocused: focused, minHeight: height)

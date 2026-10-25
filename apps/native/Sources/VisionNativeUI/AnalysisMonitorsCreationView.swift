@@ -15,7 +15,7 @@ struct AnalysisMonitorsCreationView: View {
                 VisionSegmentedControl(
                     selection: Binding(get: { draft.kind }, set: { model.chooseKind($0) }),
                     values: AnalysisMonitorKind.allCases, title: { strings.t($0.labelKey) },
-                    label: strings.t("monitors.kind"))
+                    label: strings.t("monitors.kind"), vertical: true)
                 if draft.kind == .threshold { analysisTarget } else { dossierTarget }
                 if model.hasNewTarget {
                     if draft.kind == .threshold {
@@ -71,8 +71,14 @@ struct AnalysisMonitorsCreationView: View {
                     message: strings.t("monitors.targetsFailed"), loading: model.analysesLoading, strings: strings
                 ) { await model.loadAnalyses() }
             } else if !model.analysesLoading && model.eligibleAnalyses.isEmpty {
-                Text(strings.t("monitors.noEligibleAnalyses")).font(.callout)
-                Button(strings.t("monitors.openAnalysis")) { shell.navigate(to: "/analysis") }.buttonStyle(.visionOutline)
+                // `<Alert>`: the notice and its button in a tinted inset row.
+                HStack(spacing: 8) {
+                    Text(strings.t("monitors.noEligibleAnalyses")).font(.callout)
+                    Spacer(minLength: 0)
+                    Button(strings.t("monitors.openAnalysis")) { shell.navigate(to: "/analysis") }
+                        .buttonStyle(.vision(.outline, size: .sm))
+                }
+                .visionInsetPanel(padding: 12, cornerRadius: DesignTokens.Radius.control, bordered: true)
             }
             DisclosureGroup(strings.t("monitors.howAlertsWork")) {
                 Text(strings.t("monitors.analysisHint")).font(.caption).foregroundStyle(theme.secondaryLabel).padding(.top, 4)

@@ -44,7 +44,10 @@ public struct NetWorthView: View {
                         hero(data)
                         accounts(data)
                         chart
-                        HStack(spacing: 16) {
+                        // `grid grid-cols-1 gap-4 sm:grid-cols-3`.
+                        VisionResponsiveColumns(
+                            weights: [1, 1, 1], minimumPageWidth: VisionBreakpoint.sm, spacing: 16
+                        ) {
                             stat("networth.peak", value: model.peak.map(money) ?? "—", symbol: "arrow.up.right")
                             stat("networth.lowest", value: model.trough.map(money) ?? "—", symbol: "arrow.down.right")
                             stat(
@@ -101,16 +104,10 @@ public struct NetWorthView: View {
     }
     private func hero(_ data: OpenAPI.NetWorthResponse) -> some View {
         AdminCard(padding: VisionPageLayout.padding) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 40) {
-                    identity(data)
-                    Spacer()
-                    assetBars(data).frame(minWidth: 240)
-                }
-                VStack(alignment: .leading, spacing: 24) {
-                    identity(data)
-                    assetBars(data)
-                }
+            // `grid gap-6 lg:grid-cols-5`: the value on three fifths, the asset bars on two.
+            VisionResponsiveColumns(weights: [3, 2]) {
+                identity(data)
+                assetBars(data)
             }
         }
     }
@@ -119,11 +116,12 @@ public struct NetWorthView: View {
             Text(strings.t("networth.title").uppercased())
                 .font(.caption2.weight(.medium)).tracking(1.3)
                 .foregroundStyle(Color(token: theme.palette.mutedForeground).opacity(0.8))
-            RollingNumber(
-                value: MoneyText.text(data.current.netWorth, currency: currency, settings: settings, signed: false),
-                decimalSeparator: settings.numberFormat.locale.decimalSeparator?.first
-            )
-            .font(.visionLargeTitle)
+            // The same hero figure as Home: `<RollingNumber parts={fmtParts(...)}>` with the small
+            // currency symbol and decimals.
+            MoneyText(
+                amount: data.current.netWorth, currency: currency, settings: settings, signed: false,
+                colored: false, rolling: true
+            ).font(.visionLargeTitle)
             HStack {
                 MoneyText.styled(
                     MoneyText.text(data.monthlyChange, currency: currency, settings: settings),
@@ -310,9 +308,11 @@ public struct NetWorthView: View {
                             model.rangeStart = nil
                             shell.replaceQuery("period", with: value == .year ? nil : value.rawValue)
                         }),
-                    values: NetWorthPeriod.allCases, title: { strings.t("performance.period." + $0.rawValue) }
+                    values: NetWorthPeriod.allCases, title: { strings.t("performance.period." + $0.rawValue) },
+                    size: .sm, compact: true
                 )
-                .accessibilityLabel(strings.t("networth.overTime")).frame(maxWidth: 420)
+                .fixedSize()
+                .accessibilityLabel(strings.t("networth.overTime"))
             }
             InsightTimelineChart(
                 series: series, currency: currency, settings: settings, title: strings.t("networth.overTime"),

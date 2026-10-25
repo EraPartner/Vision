@@ -9,21 +9,30 @@ struct AIChatComposer: View {
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     private var streaming: Bool { model.streamSnapshot.isStreaming }
-    private var modelSelection: Binding<String> {
-        Binding(get: { model.activeModel ?? model.models.first?.name ?? "" }, set: { model.modelOverride = $0 })
+    /// `effectiveModel`: nil (the placeholder) while the chosen model is not one of the installed ones.
+    private var modelSelection: Binding<String?> {
+        Binding(
+            get: {
+                let active = model.activeModel ?? model.models.first?.name
+                return model.models.contains { $0.name == active } ? active : nil
+            },
+            set: { if let value = $0 { model.modelOverride = value } })
     }
-    private var modelOptions: [VisionSelectOption<String>] {
-        if model.models.isEmpty { return [VisionSelectOption(value: "", title: strings.t("aiChat.selectModel"))] }
-        return model.models.map { VisionSelectOption(value: $0.name, title: $0.name) }
+    private var modelEntries: [VisionSelectEntry<String>] {
+        model.models.map { .option(VisionSelectOption(value: $0.name, title: $0.name)) }
     }
-    /// The web `Label` (type-footnote, label-secondary) and the `Select` of the model.
+    /// The web `Label` (type-footnote, label-secondary) and the `Select` of the model
+    /// (`h-8 w-auto min-w-40`).
     private var modelSelect: some View {
         HStack(spacing: 8) {
-            Text(strings.t("aiChat.model")).foregroundStyle(theme.secondaryLabel).accessibilityHidden(true)
+            Text(strings.t("aiChat.model")).font(.footnote).foregroundStyle(theme.secondaryLabel)
+                .accessibilityHidden(true)
             VisionSelect(
-                selection: modelSelection, options: modelOptions, accessibilityLabel: strings.t("aiChat.model")
+                selection: modelSelection, entries: modelEntries, placeholder: strings.t("aiChat.selectModel"),
+                accessibilityLabel: strings.t("aiChat.model"), expands: true
             )
-            .frame(maxWidth: 300)
+            .frame(minWidth: 160, maxWidth: 300)
+            .fixedSize(horizontal: true, vertical: false)
             .disabled(model.status?.ok != true || model.models.isEmpty)
         }
     }

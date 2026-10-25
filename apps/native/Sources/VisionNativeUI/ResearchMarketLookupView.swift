@@ -19,7 +19,6 @@ public struct ResearchMarketLookupView: View {
                 // The web PageHeader: the sidebar icon tile and the title, without a subtitle.
                 VisionPageHeader(title: strings.t("marketLookup.title"), subtitle: "", symbol: "chart.xyaxis.line") {
                     if let quote = model.quote, !model.isProviderAsset {
-                        addPortfolioButton
                         Menu {
                             Button(strings.t("addWatchlist.title")) {
                                 watchlistAdd.begin(
@@ -32,7 +31,9 @@ public struct ResearchMarketLookupView: View {
                         } label: {
                             Image(systemName: "ellipsis")
                         }
-                        .menuIndicator(.hidden).accessibilityLabel(strings.t("marketLookup.menu"))
+                        .menuStyle(.button).buttonStyle(.vision(.outline, size: .icon)).menuIndicator(.hidden)
+                        .fixedSize().accessibilityLabel(strings.t("marketLookup.menu"))
+                        addPortfolioButton
                     }
                 }
                 ResearchSymbolSearchView(
@@ -174,7 +175,10 @@ public struct ResearchMarketLookupView: View {
         return .init(id: notice.id, kind: notice.kind, key: notice.key, variables: variables, detail: notice.detail)
     }
     private var addPortfolioButton: some View {
-        Button(strings.t(model.existingHolding == nil ? "portfolio.addInvestment" : "form.addTransaction.title")) {
+        Button(
+            strings.t(model.existingHolding == nil ? "portfolio.addInvestment" : "form.addTransaction.title"),
+            systemImage: "plus"
+        ) {
             let date = VisionFormat.appDate(Date(), format: shell.settings.dateFormat, timeZone: .current)
             Task { await model.action.begin(notes: strings.t("addInvFromMarket.notesDefault", ["date": date])) }
         }.buttonStyle(.visionPrimary)
@@ -226,8 +230,9 @@ public struct ResearchMarketLookupView: View {
     }
     private func tradingInfo(_ quote: ResearchQuote) -> some View {
         ResearchCard(title: strings.t("market.tradingInfo")) {
-            HStack(alignment: .top, spacing: 32) {
-                VStack(spacing: 10) {
+            // `grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-3`: two bordered lists.
+            VisionResponsiveColumns(weights: [1, 1], minimumPageWidth: 700, spacing: 12) {
+                VStack(spacing: 0) {
                     metric(
                         "market.open",
                         quote.open.map {
@@ -247,9 +252,9 @@ public struct ResearchMarketLookupView: View {
                         "market.prevClose",
                         quote.prevClose.map {
                             ResearchMarketDisplay.money($0, currency: quote.currency, shell: shell, digits: 2)
-                        })
-                }.frame(maxWidth: .infinity)
-                VStack(spacing: 10) {
+                        }, last: true)
+                }.visionListSurface()
+                VStack(spacing: 0) {
                     metric("market.volume", quote.volume.map { ResearchMarketDisplay.compact($0, shell: shell) })
                     metric("market.avgVolume", quote.avgVolume.map { ResearchMarketDisplay.compact($0, shell: shell) })
                     metric(
@@ -260,16 +265,22 @@ public struct ResearchMarketLookupView: View {
                                     + " – "
                                     + ResearchMarketDisplay.money($0, currency: quote.currency, shell: shell, digits: 2)
                             }
-                        })
-                }.frame(maxWidth: .infinity)
+                        }, last: true)
+                }.visionListSurface()
             }
         }
     }
-    private func metric(_ key: String, _ value: String?) -> some View {
-        HStack {
-            Text(strings.t(key)).foregroundStyle(theme.secondaryLabel)
-            Spacer()
-            Text(value ?? "—").monospacedDigit()
+    /// A `ListRow` (`min-h-10`): the label on the left, the value on the right, a hairline below
+    /// every row but the last of its list.
+    private func metric(_ key: String, _ value: String?, last: Bool = false) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(strings.t(key)).foregroundStyle(theme.secondaryLabel)
+                Spacer()
+                Text(value ?? "—").monospacedDigit().foregroundStyle(theme.foreground)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 40)
+            if !last { VisionListDivider() }
         }
     }
 }

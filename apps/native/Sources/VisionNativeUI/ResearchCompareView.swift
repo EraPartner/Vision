@@ -32,7 +32,10 @@ public struct ResearchCompareView: View {
                             placeholder: strings.t("research.compare.addPlaceholder"), shell: shell,
                             onSelect: { item in
                                 if let symbol = item.symbol { replace(model.addSymbol(symbol)) }
-                            })
+                            }
+                        )
+                        // `SymbolSearchBox className="max-w-2xl"`.
+                        .frame(maxWidth: 672, alignment: .leading)
                     }
                 }
                 if model.state.symbols.isEmpty {

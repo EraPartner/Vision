@@ -64,84 +64,151 @@ struct PortfolioAssetCard: View {
         }
     }
     private var nearingMaturity: Bool { days.map { $0 <= 30 } ?? false }
+    private var currency: CurrencyCode { shell.settings.portfolioCurrency }
+    private func money(_ amount: Decimal, signed: Bool = false) -> String {
+        MoneyText.text(amount, currency: currency, settings: shell.settings, signed: signed)
+    }
+    private func percent(_ value: Decimal, digits: Int, signed: Bool = false) -> String {
+        (signed && value > 0 ? "+" : "") + VisionFormat.percent(value, digits: digits, locale: shell.settings.numberFormat.locale)
+    }
+    private var actionsMenu: some View {
+        PortfolioHoldingActionsMenu(
+            holding: holding, model: model, editing: editing, shell: shell,
+            deletePrefix: isProperty ? "realestate" : "savings")
+    }
+    /// The web property `CardHeader`: a 40 pt icon tile, the serif title and the location.
+    private var propertyHeader: some View {
+        HStack(alignment: .top, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: "building.2").font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(theme.primary).frame(width: 40, height: 40)
+                    .background(
+                        theme.primary.opacity(0.12),
+                        in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                    )
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Button(holding.name) { Task { await model.openDetail(id: holding.id) } }
+                        .buttonStyle(.plain).font(Font.visionTitle3).lineLimit(1)
+                    if let location = holding.location, !location.isEmpty {
+                        Label(location, systemImage: "mappin").font(.callout).foregroundStyle(theme.secondaryLabel)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            actionsMenu
+        }
+    }
+    private var savingsHeader: some View {
+        HStack(alignment: .top) {
+            Image(systemName: holding.assetClass == .bond ? "shield" : "banknote")
+                .font(.title2).foregroundStyle(theme.primary).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Button(holding.name) { Task { await model.openDetail(id: holding.id) } }
+                    .buttonStyle(.plain).font(.headline)
+                VisionBadge(text: strings.t("portfolio.assetClass." + holding.assetClass.rawValue))
+                if holding.interestRate != 0 {
+                    let rate = holding.interestRate
+                    Text(
+                        VisionFormat.percent(rate, digits: 2, locale: shell.settings.numberFormat.locale)
+                            + " " + strings.t("savings.pa")
+                    )
+                    .font(.caption).foregroundStyle(theme.secondaryLabel)
+                }
+            }
+            Spacer()
+            actionsMenu
+        }
+    }
+    /// The web property body: purchase price and current value side by side as large serif
+    /// amounts, then a `dl` of label-left / value-right rows between hairlines.
+    @ViewBuilder private var propertyBody: some View {
+        let monthly = holding.monthlyRent ?? 0
+        let yield = holding.currentValue > 0 ? monthly * 12 / holding.currentValue * 100 : 0
+        let returnAmount = holding.propertyReturn ?? 0
+        let roi = holding.totalBuyCost > 0 ? returnAmount / holding.totalBuyCost * 100 : 0
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(strings.t("portfolio.purchasePrice")).font(.caption).foregroundStyle(theme.tertiaryLabel)
+                MoneyText(
+                    amount: holding.totalBuyCost, currency: currency, settings: shell.settings, signed: false,
+                    colored: false
+                ).font(.visionCardTitle)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(strings.t("portfolio.currentValue")).font(.caption).foregroundStyle(theme.tertiaryLabel)
+                MoneyText(
+                    amount: holding.currentValue, currency: currency, settings: shell.settings, signed: false,
+                    colored: false
+                ).font(.visionCardTitle).foregroundStyle(theme.primary)
+            }.frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        VStack(spacing: 0) {
+            Rectangle().fill(theme.border.opacity(0.5)).frame(height: 1)
+            factRow(
+                strings.t("portfolio.appreciation"), money(holding.totalAppreciation, signed: true),
+                tone: holding.totalAppreciation >= 0 ? theme.gain : theme.loss)
+            factRow(
+                strings.t("portfolio.rentalIncome"), money(holding.totalIncome, signed: true),
+                detail: monthly > 0 ? "~" + money(monthly) + strings.t("realestate.perMonth") : nil,
+                tone: holding.totalIncome >= 0 ? theme.gain : theme.loss)
+            if let municipality = holding.municipality, !municipality.isEmpty {
+                factRow(strings.t("invDetail.municipality"), municipality)
+            }
+            if let cadastral = holding.cadastralIncome {
+                factRow(
+                    strings.t("invDetail.cadastralIncome"),
+                    MoneyText.text(
+                        cadastral, currency: holding.originalCurrency, settings: shell.settings, signed: false))
+            }
+            if let rate = holding.municipalityTaxRate {
+                factRow(strings.t("invDetail.municipalityTaxRate"), percent(rate, digits: 2))
+            }
+            factRow(strings.t("portfolio.yield"), percent(yield, digits: 1) + " " + strings.t("portfolio.annual"))
+            factRow(strings.t("portfolio.totalROI")) {
+                DeltaPill(roi, label: percent(roi, digits: 1, signed: true))
+            }
+            if holding.totalFees + holding.totalTaxes > 0 {
+                factRow(
+                    strings.t("portfolio.feesAndTaxes"), money(-(holding.feesAndTaxes ?? 0), signed: true),
+                    tone: theme.loss)
+            }
+        }
+    }
+    /// `FactRow`: `flex justify-between gap-4 py-2`, the label in the footnote size on the left,
+    /// the value right-aligned with an optional caption under it, a hairline between rows.
+    private func factRow(_ label: String, _ value: String, detail: String? = nil, tone: Color? = nil) -> some View {
+        factRow(label, detail: detail) {
+            MoneyText.styled(
+                value, decimalSeparator: shell.settings.numberFormat.locale.decimalSeparator?.first,
+                color: tone ?? theme.foreground
+            ).monospacedDigit().foregroundStyle(tone ?? theme.foreground)
+        }
+    }
+    private func factRow<Value: View>(
+        _ label: String, detail: String? = nil, @ViewBuilder value: () -> Value
+    ) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 16) {
+                Text(label).font(.footnote).foregroundStyle(theme.secondaryLabel)
+                Spacer(minLength: 0)
+                VStack(alignment: .trailing, spacing: 0) {
+                    value().font(.body)
+                    if let detail {
+                        Text(detail).font(.caption).monospacedDigit().foregroundStyle(theme.tertiaryLabel)
+                    }
+                }.multilineTextAlignment(.trailing)
+            }.padding(.vertical, 8)
+            Rectangle().fill(theme.border.opacity(0.5)).frame(height: 1)
+        }
+    }
     var body: some View {
         AdminCard {
             VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .top) {
-                    Image(systemName: isProperty ? "building.2" : holding.assetClass == .bond ? "shield" : "banknote")
-                        .font(.title2).foregroundStyle(theme.primary).accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Button(holding.name) { Task { await model.openDetail(id: holding.id) } }
-                            .buttonStyle(.plain).font(.headline)
-                        if isProperty, let location = holding.location, !location.isEmpty {
-                            Label(location, systemImage: "mappin").font(.callout).foregroundStyle(theme.secondaryLabel)
-                        } else if !isProperty {
-                            VisionBadge(text: strings.t("portfolio.assetClass." + holding.assetClass.rawValue))
-                            if holding.interestRate != 0 {
-                                let rate = holding.interestRate
-                                Text(
-                                    VisionFormat.percent(rate, digits: 2, locale: shell.settings.numberFormat.locale)
-                                        + " " + strings.t("savings.pa")
-                                )
-                                .font(.caption).foregroundStyle(theme.secondaryLabel)
-                            }
-                        }
-                    }
-                    Spacer()
-                    PortfolioHoldingActionsMenu(
-                        holding: holding, model: model, editing: editing, shell: shell,
-                        deletePrefix: isProperty ? "realestate" : "savings")
-                }
+                if isProperty { propertyHeader } else { savingsHeader }
                 if isProperty {
-                    TaxMoneyRow(title: strings.t("portfolio.purchasePrice"), amount: holding.totalBuyCost, shell: shell)
-                    TaxMoneyRow(
-                        title: strings.t("portfolio.currentValue"), amount: holding.currentValue, shell: shell,
-                        strong: true)
-                    Divider()
-                    TaxMoneyRow(
-                        title: strings.t("portfolio.appreciation"), amount: holding.totalAppreciation, shell: shell,
-                        signed: true,
-                        tone: holding.totalAppreciation >= 0 ? theme.gain : theme.loss)
-                    TaxMoneyRow(title: strings.t("portfolio.rentalIncome"), amount: holding.totalIncome, shell: shell)
-                    // The server converts the latest rent at the stored rate (`monthlyRent`, ADR-216).
-                    let monthly = holding.monthlyRent ?? 0
-                    if monthly > 0 {
-                        Text(
-                            "~"
-                                + MoneyText.text(
-                                    monthly, currency: shell.settings.portfolioCurrency, settings: shell.settings,
-                                    signed: false) + " "
-                                + strings.t("realestate.perMonth")
-                        )
-                        .font(.caption).foregroundStyle(theme.secondaryLabel)
-                    }
-                    let yield = holding.currentValue > 0 ? monthly * 12 / holding.currentValue * 100 : 0
-                    LabeledContent(
-                        strings.t("portfolio.yield"),
-                        value: VisionFormat.percent(yield, digits: 1, locale: shell.settings.numberFormat.locale)
-                            + " " + strings.t("portfolio.annual"))
-                    if let municipality = holding.municipality, !municipality.isEmpty {
-                        LabeledContent(strings.t("invDetail.municipality"), value: municipality)
-                    }
-                    if let cadastral = holding.cadastralIncome {
-                        LabeledContent(
-                            strings.t("invDetail.cadastralIncome"),
-                            value: MoneyText.text(
-                                cadastral,
-                                currency: holding.originalCurrency, settings: shell.settings, signed: false))
-                    }
-                    if let rate = holding.municipalityTaxRate {
-                        LabeledContent(
-                            strings.t("invDetail.municipalityTaxRate"),
-                            value: VisionFormat.percent(rate, digits: 2, locale: shell.settings.numberFormat.locale))
-                    }
-                    let returnAmount = holding.propertyReturn ?? 0
-                    let roi = holding.totalBuyCost > 0 ? returnAmount / holding.totalBuyCost * 100 : 0
-                    LabeledContent(strings.t("portfolio.totalROI")) {
-                        DeltaPill(
-                            roi,
-                            label: VisionFormat.percent(roi, digits: 2, locale: shell.settings.numberFormat.locale))
-                    }
+                    propertyBody
                 } else {
                     TaxMoneyRow(
                         title: strings.t("portfolio.currentBalance"), amount: holding.currentValue, shell: shell,
@@ -159,10 +226,11 @@ struct PortfolioAssetCard: View {
                         }
                     }
                     if let date = holding.maturityDate {
-                        LabeledContent(
-                            strings.t((days ?? 1) <= 0 ? "portfolio.matured" : "portfolio.matures"),
-                            value: VisionFormat.appDate(date, format: shell.settings.dateFormat)
-                        )
+                        HStack {
+                            Text(strings.t((days ?? 1) <= 0 ? "portfolio.matured" : "portfolio.matures"))
+                            Spacer(minLength: 0)
+                            Text(VisionFormat.appDate(date, format: shell.settings.dateFormat))
+                        }
                         .foregroundStyle(nearingMaturity ? theme.warning : theme.secondaryLabel)
                         if let days, days > 0 {
                             Text(strings.t("portfolio.daysRemaining", ["days": String(days)]))
@@ -170,9 +238,9 @@ struct PortfolioAssetCard: View {
                         }
                     }
                 }
-                if holding.totalFees + holding.totalTaxes > 0 {
+                if !isProperty, holding.totalFees + holding.totalTaxes > 0 {
                     TaxMoneyRow(
-                        title: strings.t(isProperty ? "portfolio.feesAndTaxes" : "portfolio.feesAndTaxesPaid"),
+                        title: strings.t("portfolio.feesAndTaxesPaid"),
                         amount: -(holding.feesAndTaxes ?? 0), shell: shell, signed: true, tone: theme.loss)
                 }
             }

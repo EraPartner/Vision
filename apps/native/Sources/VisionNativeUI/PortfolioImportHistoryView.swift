@@ -9,8 +9,8 @@ struct PortfolioImportHistoryView: View {
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     var body: some View {
-        AdminCard {
-            DisclosureGroup(strings.t("portfolioImport.session.history.title"), isExpanded: $expanded) {
+        // `Disclosure variant="card"`: a bordered, rounded disclosure inside the session card.
+        DisclosureGroup(strings.t("portfolioImport.session.history.title"), isExpanded: $expanded) {
                 VStack(alignment: .leading, spacing: 14) {
                     if model.isLoading {
                         HStack {
@@ -65,8 +65,9 @@ struct PortfolioImportHistoryView: View {
                     }
                     if let notice = model.notice { Text(strings.t(notice)).foregroundStyle(theme.success) }
                 }.padding(.top, 14)
-            }
-        }.task(id: expanded) { if expanded { await model.load(offset: model.offset) } }
+        }
+        .visionInsetPanel(padding: 12, cornerRadius: DesignTokens.Radius.card, bordered: true)
+        .task(id: expanded) { if expanded { await model.load(offset: model.offset) } }
             .visionAlert(
                 title: strings.t("portfolioImport.session.history.rollbackTitle"),
                 message: strings.t(
