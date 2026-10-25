@@ -26,8 +26,6 @@ struct NativeNoticeHost: View {
     let center: NativeNoticeCenter
     let strings: any Localizing
     @Environment(\.visionTheme) private var theme
-    @Environment(\.visionVisualEffects) private var effects
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.nativeNoticeAnnouncementsEnabled) private var announcementsEnabled
     @FocusState private var focused: Bool
 
@@ -49,13 +47,7 @@ struct NativeNoticeHost: View {
                     }
                 }
                 .padding(.horizontal, 14).padding(.vertical, 10)
-                .background {
-                    if effects == "reduced" || reduceTransparency {
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.card).fill(theme.card)
-                    } else {
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.card).fill(.regularMaterial)
-                    }
-                }
+                .background { ToastSurface() }
                 .foregroundStyle(
                     entry.notice.kind == .error
                         ? theme.destructive : entry.notice.kind == .warning ? theme.warning : theme.foreground

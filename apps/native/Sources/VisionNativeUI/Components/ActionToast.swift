@@ -2,6 +2,27 @@ import AppKit
 import SwiftUI
 import VisionNativeCore
 
+/// The surface of a toast. The web toast is `glass-thick` (components/ui/sonner.tsx
+/// `group toast glass-thick`, index.css `.glass-thick`); under Full effects it is a
+/// `VisionGlassSurface(.thick)`, otherwise the system regular material it has been. The
+/// Reduced tier and Reduce Transparency keep the flat `--card` fill.
+struct ToastSurface: View {
+    @Environment(\.visionTheme) private var theme
+    @Environment(\.visionVisualEffects) private var effects
+    @Environment(\.visionFullEffects) private var fullEffects
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        if effects == "reduced" || reduceTransparency {
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.card).fill(theme.card)
+        } else if fullEffects {
+            VisionGlassSurface(material: .thick, cornerRadius: DesignTokens.Radius.card)
+        } else {
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.card).fill(.regularMaterial)
+        }
+    }
+}
+
 /// A Sonner toast with an optional action button, such as `undoToast`'s Undo: the title, the
 /// description line and the action, for `duration`. The action also answers ⌘Z while the
 /// toast is up, like the web's undo registry, except while a text field is being edited
@@ -20,8 +41,6 @@ struct ActionToast: View {
     var bottomPadding: CGFloat = 20
     @Environment(\.visionTheme) var theme
     @Environment(\.nativeNoticeCenter) private var globalNotices
-    @Environment(\.visionVisualEffects) private var effects
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         if let notice, globalNotices?.contains(notice) != true {
@@ -55,13 +74,7 @@ struct ActionToast: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background {
-                if effects == "reduced" || reduceTransparency {
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card).fill(theme.card)
-                } else {
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card).fill(.regularMaterial)
-                }
-            }
+            .background { ToastSurface() }
             .foregroundStyle(notice.kind == .error ? theme.destructive : theme.foreground)
             .frame(maxWidth: 560)
             .padding(.bottom, bottomPadding)

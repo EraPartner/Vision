@@ -26,16 +26,26 @@ public struct ShellGlass: Equatable, Sendable {
     public let detailTint: HSLColor
     public let detailTintOpacity: Double
 
+    /// `backdrop-filter: blur(...)` of `.glass-chrome` in points (`DesignTokens.Glass.chromeBlur`).
+    public let blur: Double
+    /// `backdrop-filter: saturate(...)` of `.glass-chrome` (`DesignTokens.Glass.saturate`).
+    public let saturate: Double
+
     public init(selection theme: ThemeSelection) {
         let palette = theme.palette
         let dark = theme.appearance == .dark
+        // `.glass-chrome` (index.css) as data: gradient stops, rail border and inset highlight.
+        let chrome = GlassMaterialSpec.chrome
+        let recipe = chrome.appearance(isDark: dark)
         sidebarTop = palette.sidebarBackground
-        sidebarTopOpacity = 0.55
-        sidebarBottomOpacity = dark ? 0.74 : 0.72
+        sidebarTopOpacity = recipe.fill.stops.first?.alpha ?? 0.55
+        sidebarBottomOpacity = recipe.fill.stops.last?.alpha ?? (dark ? 0.74 : 0.72)
         border = palette.sidebarBorder
-        borderOpacity = dark ? 0.6 : 0.5
+        borderOpacity = recipe.border.alpha
         highlight = palette.glassHighlight
-        highlightOpacity = dark ? 0.06 : 0.28
+        highlightOpacity = recipe.shadows.first(where: { $0.inset })?.alpha ?? (dark ? 0.06 : 0.28)
+        blur = chrome.blur
+        saturate = chrome.saturate.value(isDark: dark)
         self.selection = theme.primary
         selectionOpacity = dark ? 0.16 : 0.12
         icon = theme.primary

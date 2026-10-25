@@ -4,13 +4,13 @@ import VisionNativeCore
 /// lib/motion.ts and tokens.css curves and durations.
 enum VisionMotion {
     /// `easings.outExpo` / `--ease-out-expo`.
-    static func outExpo(_ duration: Double) -> Animation { .timingCurve(0.16, 1, 0.3, 1, duration: duration) }
+    static func outExpo(_ duration: Double) -> Animation { .visionCurve(DesignTokens.Ease.outExpo, duration: duration) }
     /// `--ease-glide`.
-    static func glide(_ duration: Double) -> Animation { .timingCurve(0.32, 0.72, 0, 1, duration: duration) }
+    static func glide(_ duration: Double) -> Animation { .visionCurve(DesignTokens.Ease.glide, duration: duration) }
     /// `durations.page`.
     static let page = 0.52
     /// `--duration-reveal`.
-    static let reveal = 0.6
+    static let reveal = DesignTokens.Duration.reveal
 }
 
 /// PageTransition: each pathname enters with opacity 0 → 1 and y 14 → 0 over 0.52 s on the
