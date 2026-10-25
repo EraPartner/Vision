@@ -18,7 +18,7 @@ struct NativeNavigationShellTests {
             admin: AdminFixture.screens(), planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
             transactions: TransactionsFixture.idleModel(), accounts: AccountsFixture.idleModel(),
             categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
-            nativeSettings: NativeSettingsModel(client: APIClient(baseURL: { nil }, adminToken: { nil })),
+            nativeSettings: NativeSettingsModel(client: APIClient(baseURL: { nil })),
             reports: reports, nativeNavigation: NativeNavigationHistory(initial: NativeNavigationLocation(initial)!),
             loadSettings: loadSettings ?? { settings })
         if loaded { model.apply(settings: settings) }

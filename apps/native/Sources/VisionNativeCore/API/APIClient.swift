@@ -175,7 +175,6 @@ public struct APIClient: Sendable {
     public static let retryableStatuses: Set<Int> = [408, 429, 502, 503, 504]
 
     private let baseURL: @Sendable () async -> URL?
-    private let adminToken: @Sendable () async -> String?
     private let transport: any APITransport
     private let sharedAIReadFlights = NativeSettingsAIReadFlights()
     private let streamTransport: any APIStreamTransport
@@ -187,11 +186,9 @@ public struct APIClient: Sendable {
 
     /// - Parameters:
     ///   - baseURL: the running backend's origin; `nil` while it is not ready.
-    ///   - adminToken: the admin Bearer token of the current session, if one is stored.
     ///   - jitter: a value in `0..<1`, scaled to the 200 ms backoff jitter.
     public init(
         baseURL: @escaping @Sendable () async -> URL?,
-        adminToken: @escaping @Sendable () async -> String? = { nil },
         transport: any APITransport = URLSessionAPITransport(),
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
         jitter: @escaping @Sendable () -> Double = { Double.random(in: 0..<1) },
@@ -201,7 +198,6 @@ public struct APIClient: Sendable {
         streamTransport: any APIStreamTransport = URLSessionAPITransport()
     ) {
         self.baseURL = baseURL
-        self.adminToken = adminToken
         self.transport = transport
         self.streamTransport = streamTransport
         self.sleep = sleep
@@ -292,7 +288,7 @@ public struct APIClient: Sendable {
             throw APIError.invalidRequest(label)
         }
         // One correlation id for every attempt, like `apiRequest`.
-        let headers = await requestHeaders(contentType: operation.contentType)
+        let headers = requestHeaders(contentType: operation.contentType)
         let request = APIRequest(method: method, url: url, headers: headers, body: body, timeout: timeout)
         let retries = method.isIdempotent ? max(0, retryLimit ?? maxRetries) : 0
         var lastError = APIError.network("Request failed")
@@ -356,7 +352,7 @@ public struct APIClient: Sendable {
         } catch {
             throw APIError.invalidRequest(label)
         }
-        let headers = await requestHeaders(contentType: operation.contentType)
+        let headers = requestHeaders(contentType: operation.contentType)
         let request = APIRequest(method: Operation.method, url: url, headers: headers, body: body, timeout: timeout)
         let response: APIResponse
         do {
@@ -410,7 +406,7 @@ public struct APIClient: Sendable {
         let label = "POST \(path)"
         guard let base = await baseURL() else { throw APIError.backendUnavailable }
         guard let url = Self.url(base: base, path: path, queryItems: []) else { throw APIError.invalidRequest(label) }
-        var headers = await requestHeaders(contentType: contentType)
+        var headers = requestHeaders(contentType: contentType)
         headers["Accept"] = "text/event-stream"
         let request = APIRequest(
             method: .post, url: url, headers: headers, body: body, timeout: Self.streamTimeout)
@@ -427,15 +423,10 @@ public struct APIClient: Sendable {
         for event in parser.finish() { try await onEvent(event) }
     }
 
-    /// The headers of every request: the body type, one correlation id and, when the session
-    /// stored one, the admin token (without it the backend's loopback allowlist applies, as
-    /// in the web app).
-    func requestHeaders(contentType: String) async -> [String: String] {
-        var headers = ["Content-Type": contentType, "X-Request-Id": makeRequestId()]
-        if let token = await adminToken()?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty {
-            headers["Authorization"] = "Bearer \(token)"
-        }
-        return headers
+    /// The headers of every request: the body type and one correlation id. The backend answers
+    /// loopback requests only and reads no credential (ADR-233).
+    func requestHeaders(contentType: String) -> [String: String] {
+        ["Content-Type": contentType, "X-Request-Id": makeRequestId()]
     }
 
     /// A finished response: the unwrapped `data` of a 2xx, else the failure envelope.

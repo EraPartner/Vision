@@ -85,17 +85,6 @@ import Testing
         }
     }
 
-    @Test func adminTokensTrimAndBlankRemoves() async throws {
-        try await withStorage { storage, url in
-            #expect(await storage.adminToken() == nil)
-            await storage.setAdminToken("  secret \n")
-            #expect(await storage.adminToken() == "secret")
-            await storage.setAdminToken("   ")
-            #expect(await storage.adminToken() == nil)
-            #expect(!FileManager.default.fileExists(atPath: url.path))
-        }
-    }
-
     @Test func webStorageParsesValuesAndOnlySessionNullRemoves() async throws {
         try await withStorage(["vision.analysis.sqlHistory": ""]) { storage, _ in
             #expect(await storage.webStorage(key: "vision.analysis.sqlHistory", value: nil, session: false) == .null)

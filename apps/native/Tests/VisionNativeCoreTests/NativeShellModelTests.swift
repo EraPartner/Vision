@@ -135,7 +135,7 @@ final class ShellRecorder {
 
     private func makePalette() -> NativeCommandPaletteModel {
         NativeCommandPaletteModel(
-            service: APIClient(baseURL: { nil }, adminToken: { nil }),
+            service: APIClient(baseURL: { nil }),
             answers: NativeCommandPaletteAnswerProvider { _, _, _, _ in nil })
     }
 
@@ -192,7 +192,7 @@ final class ShellRecorder {
 
     @Test func nativeOverlayPriorityPreservesSettingsRouteAndPaletteCopyAcknowledgement() async throws {
         let recorder = ShellRecorder()
-        let client = APIClient(baseURL: { nil }, adminToken: { nil })
+        let client = APIClient(baseURL: { nil })
         let model = makeModel(
             recorder: recorder, nativeSettings: NativeSettingsModel(client: client), commandPalette: makePalette())
         let route = try #require(NativeRoute("/planned?settings=general&unrelated=keep"))
@@ -284,7 +284,7 @@ final class ShellRecorder {
     }
 
     @Test func nativeSettingsSectionChangesPreserveTheRouteAndCloseThroughHistory() async throws {
-        let preferences = NativeSettingsModel(client: APIClient(baseURL: { nil }, adminToken: { nil }))
+        let preferences = NativeSettingsModel(client: APIClient(baseURL: { nil }))
         let model = makeModel(recorder: ShellRecorder(), nativeSettings: preferences)
         let route = try #require(NativeRoute("/planned?settings=general&unrelated=keep"))
         model.show(route)
@@ -327,7 +327,7 @@ final class ShellRecorder {
         "/portfolio/savings",
     ])
     func portfolioReportPreservesItsOriginAndQueryAndReturnsToNative(path: String) async throws {
-        let screens = PortfolioScreens(client: APIClient(baseURL: { nil }, adminToken: { nil }))
+        let screens = PortfolioScreens(client: APIClient(baseURL: { nil }))
         let model = makeModel(recorder: ShellRecorder(), portfolio: screens)
         let original = try #require(NativeRoute(path + "?period=1y&fx_neutral=true"))
         model.show(original)
@@ -345,7 +345,7 @@ final class ShellRecorder {
         "/portfolio/import", "/portfolio/import/7/review", "/portfolio/import/invalid/review", "/portfolio/tax",
     ])
     func remainingPortfolioScreensAreNativeWithoutAdminMode(path: String) async throws {
-        let client = APIClient(baseURL: { nil }, adminToken: { nil })
+        let client = APIClient(baseURL: { nil })
         let model = makeModel(
             settings: NativeAppSettings(adminMode: false), recorder: ShellRecorder(),
             portfolio: PortfolioScreens(client: client), portfolioImports: PortfolioImportScreens(service: client),
@@ -357,7 +357,7 @@ final class ShellRecorder {
     }
 
     @Test func portfolioTaxHasNoPortfolioPDFAction() async throws {
-        let client = APIClient(baseURL: { nil }, adminToken: { nil })
+        let client = APIClient(baseURL: { nil })
         let model = makeModel(
             recorder: ShellRecorder(), portfolio: PortfolioScreens(client: client), tax: TaxScreens(client: client))
         model.show(try #require(NativeRoute("/portfolio/tax?year=2024")))
@@ -370,7 +370,7 @@ final class ShellRecorder {
 
     @Test(arguments: ["/analysis", "/analysis/monitors"])
     func analysisScreensAreNativeWithoutAdminModeAndUnavailableWhenOmitted(path: String) async throws {
-        let client = APIClient(baseURL: { nil }, adminToken: { nil })
+        let client = APIClient(baseURL: { nil })
         let model = makeModel(
             settings: NativeAppSettings(adminMode: false), recorder: ShellRecorder(),
             analysis: AnalysisScreens(client: client), analysisMonitors: AnalysisMonitorsModel(service: client))
@@ -391,7 +391,7 @@ final class ShellRecorder {
         "/research/dossiers", "/ai-chat",
     ])
     func researchScreensPreserveDeepLinksWithoutAdminModeAndAreUnavailableWhenOmitted(path: String) async throws {
-        let client = APIClient(baseURL: { nil }, adminToken: { nil })
+        let client = APIClient(baseURL: { nil })
         let model = makeModel(
             settings: NativeAppSettings(adminMode: false), recorder: ShellRecorder(),
             research: ResearchScreens(client: client), researchForecast: ResearchForecastScreens(client: client),

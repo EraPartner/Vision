@@ -35,7 +35,6 @@ public actor NativeRawStateStore {
     }
 
     public enum SessionKey: String, CaseIterable, Sendable {
-        case adminToken = "vision.adminToken"
         case portfolioSession = "vision.portfolio-import.latest-session.v1"
         case portfolioReview = "vision.portfolio-import.latest-review-settings.v1"
         case dashboardArrival = "vision.dashboardArrivalSeen"

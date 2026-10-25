@@ -63,20 +63,6 @@ public struct NativeShellStorage: Sendable {
         (await store.value(for: .theme), await store.value(for: .themeVariant))
     }
 
-    // MARK: Admin token
-
-    /// An empty token is no token.
-    public func adminToken() async -> String? {
-        guard let token = await store.sessionValue(for: .adminToken), !token.isEmpty else { return nil }
-        return token
-    }
-
-    /// The trimmed token, or removal for a blank one.
-    public func setAdminToken(_ token: String) async {
-        let value = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        await store.setSessionValue(value.isEmpty ? nil : value, for: .adminToken)
-    }
-
     // MARK: Chart layouts
 
     public static let maximumChartLayoutBytes = 250_000

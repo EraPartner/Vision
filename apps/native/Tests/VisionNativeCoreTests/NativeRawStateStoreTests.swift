@@ -110,16 +110,13 @@ import Testing
     @Test func sessionValuesStayInMemory() async throws {
         try await withFile { url in
             let store = try NativeRawStateStore(persistenceURL: url)
-            await store.setSessionValue("secret", for: .adminToken)
-            await store.setSessionValue("{}", for: .portfolioSession)
-            #expect(await store.sessionValue(for: .adminToken) == "secret")
+            await store.setSessionValue("session-marker", for: .portfolioSession)
+            #expect(await store.sessionValue(for: .portfolioSession) == "session-marker")
             #expect(!FileManager.default.fileExists(atPath: url.path))
             try await store.setValue("dark", for: .theme)
             let text = try String(contentsOf: url, encoding: .utf8)
-            #expect(!text.contains("secret"))
-            #expect(await store.backupSnapshot().keys.keys.contains("vision.adminToken") == false)
-            await store.setSessionValue(nil, for: .adminToken)
-            #expect(await store.sessionValue(for: .adminToken) == nil)
+            #expect(!text.contains("session-marker"))
+            #expect(await store.backupSnapshot().keys.keys.contains("vision.portfolio-import.latest-session.v1") == false)
             let reopened = try NativeRawStateStore(persistenceURL: url)
             #expect(await reopened.sessionValue(for: .portfolioSession) == nil)
         }

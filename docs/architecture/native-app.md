@@ -651,11 +651,9 @@ retries of idempotent methods on 408, 429, 502, 503 and 504, timeouts and networ
 conflict errors are not retried. The transport is a protocol; the app uses an ephemeral
 `URLSession`, and the tests use a fake.
 
-The admin token stays where the web app keeps it, in the page's `sessionStorage`
-(`vision.adminToken`), never in `settings.json` or the Keychain. Before a request the client reads
-it from the web view with `callAsyncJavaScript` and sends it as `Authorization: Bearer`; a page
-that does not answer within 5 seconds gives no token. Without a token, as in a fresh session, the backend's loopback allowlist decides, exactly as for the web app
-in the same window.
+The client sends no credential: the backend answers loopback requests only and reads no admin Bearer
+token ([[docs/adr/233-loopback-only-backend|ADR-233]]), so a request carries `Content-Type` and
+`X-Request-Id` alone.
 
 ### Theme and strings
 
@@ -734,12 +732,8 @@ page reports its unchanged route again.
 `AdminScreens` holds their models over one `AdminService` (the five admin operations
 of the generated client); `ScreenQuery` mirrors one React Query query (data and error kept side by
 side, stale time, one request at a time) and `AdminErrorState` the page's auth alert, whose link
-navigates to `/admin`. The overview's tiles keep the web thresholds and link to their pages. Its
-admin token card writes the page's own `sessionStorage` (`vision.adminToken`) through
-`callAsyncJavaScript` with the token as an argument, so the web admin pages and the native client
-share one token and nothing else stores it; a write the page does not confirm within 5 seconds
-toasts `apiError.unknown` instead of the saved or cleared notice. The typed token and the audit
-transfer password are cleared when the overview disappears. The audit history card calls
+navigates to `/admin`. The overview's tiles keep the web thresholds and link to their pages. The audit
+transfer password is cleared when the overview disappears. The audit history card calls
 `AuditChannels` directly, so its confirmations, save and open panels and notices are the phase 1e
 ones. A probe on Data sources cancels a provider fetch in flight and fetches again, and marks the
 overview's provider query stale.
