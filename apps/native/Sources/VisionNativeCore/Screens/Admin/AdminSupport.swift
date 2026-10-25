@@ -211,21 +211,20 @@ public enum APIErrorMessage {
     }
 }
 
-/// `AdminErrorState`: the auth alert on 401 or 403, else the page's title over the
-/// humanized error.
-public enum AdminErrorState: Equatable, Sendable {
-    /// `admin.authError.*` with the "Go to admin token" link to `/admin`.
-    case authentication
-    case message(title: String, body: String)
+/// `AdminErrorState` (apps/frontend/src/components/shared/AdminErrorState.tsx): the page's title
+/// over the humanized error. The admin token alert (`admin.authError.*`) is gone with ADR-233.
+public struct AdminErrorState: Equatable, Sendable {
+    public let title: String
+    public let body: String
 
-    public static let tokenRoute = "/admin"
+    public init(title: String, body: String) {
+        self.title = title
+        self.body = body
+    }
 
     public init(error: APIError, fallbackTitle: String, strings: any Localizing) {
-        if case .client(let failure) = error, failure.status == 401 || failure.status == 403 {
-            self = .authentication
-        } else {
-            self = .message(title: fallbackTitle, body: APIErrorMessage.text(error, strings: strings))
-        }
+        title = fallbackTitle
+        body = APIErrorMessage.text(error, strings: strings)
     }
 }
 

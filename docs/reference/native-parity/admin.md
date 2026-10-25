@@ -2,8 +2,8 @@
 title: "Native parity inventory: Admin and developer tools"
 type: reference
 status: active
-date: 2026-10-17
-updated: 2026-10-17
+date: 2026-10-25
+updated: 2026-10-25
 tags:
   [
     reference,
@@ -42,14 +42,9 @@ Native mapping: the switch is in `apps/native/Sources/VisionNativeUI/Screens/Set
 
 Used by `/admin/db`, `/admin/db/:table` and `/admin/providers` when their query fails. Source: `apps/frontend/src/components/shared/AdminErrorState.tsx`.
 
-- On HTTP 401/403 (`ApiClientError.status`): destructive alert `admin.authError.title` "Admin authentication required", body `admin.authError.description` "This page needs an admin token. Set it on the Admin Overview page, then try again."
-- Otherwise: destructive alert titled with the page's fallback message and a humanized `apiErrorToMessage` body.
+- Destructive alert titled with the page's fallback message and a humanized `apiErrorToMessage` body. There is no authentication variant any more.
 
-| #   | Where            | Element                                                  | Trigger | What it does                                       | Source                                                       | Status |
-| --- | ---------------- | -------------------------------------------------------- | ------- | -------------------------------------------------- | ------------------------------------------------------------ | ------ |
-| 1   | Auth error alert | `admin.authError.action` "Go to admin token" button-link | click   | Navigates to `/admin` (where the token card lives) | `apps/frontend/src/components/shared/AdminErrorState.tsx:43` | native |
-
-Native mapping: `AdminErrorBanner` in `apps/native/Sources/VisionNativeUI/AdminComponents.swift`, used by `DatabaseMaintenanceView`, `TableDataEditorView` and `ProviderHealthView`, navigates to `AdminErrorState.tokenRoute`.
+Native mapping: `AdminErrorBanner` in `apps/native/Sources/VisionNativeUI/AdminComponents.swift`, used by `DatabaseMaintenanceView`, `TableDataEditorView` and `ProviderHealthView`; it shows `AdminErrorState.title` over `AdminErrorState.body` and has no action.
 
 ## Screens
 
@@ -64,7 +59,6 @@ Component: `apps/frontend/src/pages/admin/AdminOverviewPage.tsx`. Feature doc: [
   - `admin.overview.dbSize` "Database size": value `db_size`, sub "N `admin.overview.tables`" (`:211`). Data: `GET /api/admin/database/stats`.
   - `admin.overview.dataSources` "Data sources": "ok / total" providers, sub "N `admin.overview.failing`" or `admin.overview.allHealthy` "All healthy"; ring warn when 1-2 failing, error when 3 or more (`:167`, `:218`). Data: `GET /api/admin/providers/health`.
   - `admin.overview.endpoints` "Endpoints": overall error rate percent + `admin.overview.errorRate`, sub "N `admin.overview.requests`"; warn when above 2 %, error at 10 % or more (`:173`, `:234`). Data: `GET /api/admin/metrics/requests`.
-- Admin API token card `admin.token.title` "Admin API token", description `admin.token.description` (`apps/frontend/src/pages/admin/AdminOverviewPage.tsx:83`). Active-state line `admin.token.active` "A token is set for this session." (`:143`). Token lives in sessionStorage key `vision.adminToken` only (`apps/frontend/src/lib/adminToken.ts:15`).
 - Audit history card (`AuditHistoryCard`), described below (`apps/frontend/src/pages/admin/AdminOverviewPage.tsx:251`).
 
 **URL state:** none.
@@ -74,9 +68,6 @@ Component: `apps/frontend/src/pages/admin/AdminOverviewPage.tsx`. Feature doc: [
 | 1   | Tiles      | `admin.overview.dbSize` tile (whole card is a link)                                           | click         | Navigates to `/admin/db`                                                                                                                                                      | `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:216`                                                            | native |
 | 2   | Tiles      | `admin.overview.dataSources` tile                                                             | click         | Navigates to `/admin/providers`                                                                                                                                               | `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:231`                                                            | native |
 | 3   | Tiles      | `admin.overview.endpoints` tile                                                               | click         | Navigates to `/admin/endpoints`                                                                                                                                               | `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:243`                                                            | native |
-| 4   | Token card | Password input, placeholder `admin.token.placeholder` "Paste admin token", `autoComplete=off` | type          | Holds the draft token                                                                                                                                                         | `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:122`                                                            | native |
-| 5   | Token card | `admin.token.save` "Save token" submit button (disabled when blank) / Enter in input          | click / Enter | Trims and stores token in sessionStorage, clears input, toast `admin.token.saved` "Admin token saved for this session"; all admin API calls then send `Authorization: Bearer` | `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:117`, `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:131` | native |
-| 6   | Token card | `admin.token.clear` "Clear" button (disabled when no token)                                   | click         | Removes stored token, toast `admin.token.cleared` "Admin token cleared"                                                                                                       | `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:134`                                                            | native |
 
 #### Card: Audit history (`AuditHistoryCard`)
 
@@ -162,7 +153,6 @@ Component: `apps/frontend/src/pages/DbMaintenancePage.tsx`. Feature doc: [[docs/
 | 6   | Row menu    | `dbMaintenance.openTable` "Browse rows"                                                                          | select  | Navigates to `/admin/db/:table`                                                                                                                                                                          | `apps/frontend/src/pages/DbMaintenancePage.tsx:156`          | native |
 | 7   | Row menu    | `dbMaintenance.vacuumTable` "Run vacuum" (disabled while any vacuum runs)                                        | select  | `POST /api/admin/database/vacuum` with `{table}`; same toasts with the table name; refreshes stats                                                                                                       | `apps/frontend/src/pages/DbMaintenancePage.tsx:165`          | native |
 | 8   | Empty state | `dbMaintenance.refresh` "Refresh" button                                                                         | click   | Invalidates the DB stats query                                                                                                                                                                           | `apps/frontend/src/pages/DbMaintenancePage.tsx:351`          | native |
-| 9   | Error state | `admin.authError.action` link (on 401/403)                                                                       | click   | See Admin error state row 1                                                                                                                                                                              | `apps/frontend/src/components/shared/AdminErrorState.tsx:43` | native |
 
 ### `/admin/db/:table` — Table data editor
 
@@ -211,7 +201,6 @@ Component: `apps/frontend/src/pages/admin/TableDataEditorPage.tsx`. Feature doc:
 | 26  | Footer                                                      | `dbEditor.prevPage` "Previous page" icon button (disabled on page 1, pending, or fetching)                                                              | click                              | Goes back one cursor page                                                                                                                        | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:976`                                                             | native |
 | 27  | Footer                                                      | `dbEditor.nextPage` "Next page" icon button (disabled when no more, pending, or fetching)                                                               | click                              | Stores `nextCursor` and advances a page                                                                                                          | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:992`                                                             | native |
 | 28  | Page                                                        | Unsaved-changes guard (`useUnsavedChanges(hasPending)`)                                                                                                 | navigate away / reload / close tab | Blocks in-app navigation to another path with the Leave dialog; browser `beforeunload` prompt on unload (native: see Gaps)                       | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:399`, `apps/frontend/src/contexts/UnsavedChangesContext.tsx:102` | native |
-| 29  | Error state                                                 | `admin.authError.action` link (on 401/403)                                                                                                              | click                              | See Admin error state row 1                                                                                                                      | `apps/frontend/src/components/shared/AdminErrorState.tsx:43`                                                            | native |
 
 #### Dialog: Review pending changes (inline `Dialog` in `TableDataEditorPage`)
 
@@ -251,7 +240,6 @@ Component: `apps/frontend/src/pages/admin/ProviderHealthPage.tsx`. Feature doc: 
 | --- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------ |
 | 1   | Provider row | Last-error link button (`aria-expanded`)                                                                                              | click   | Toggles the full-error row below                                                                                                                                                                           | `apps/frontend/src/pages/admin/ProviderHealthPage.tsx:123`         | native |
 | 2   | Provider row | `admin.providers.checkNow` "Check now" button (spinner and disabled while that provider probes; probes run concurrently per provider) | click   | `POST /api/admin/providers/:provider/probe`; toast `admin.providers.probeOk` or `admin.providers.probeFail` (with error description), or `admin.providers.probeError` on request failure; refetches health | `apps/frontend/src/pages/admin/ProviderHealthPage.tsx:140`, `:189` | native |
-| 3   | Error state  | `admin.authError.action` link (on 401/403)                                                                                            | click   | See Admin error state row 1                                                                                                                                                                                | `apps/frontend/src/components/shared/AdminErrorState.tsx:43`       | native |
 
 ### `/admin/endpoints` — Endpoint liveness
 
@@ -329,7 +317,6 @@ Native mapping: `apps/native/Sources/VisionNativeUI/Components/NativeAPIInspecto
 | Key                        | Scope                                 | Action                             | Source                                                       |
 | -------------------------- | ------------------------------------- | ---------------------------------- | ------------------------------------------------------------ |
 | Cmd+Shift+A / Ctrl+Shift+A | Global, whenever devtools are mounted | Toggle API inspector               | `apps/frontend/src/lib/devtools/devtoolsHotkey.ts:34`        |
-| Enter                      | Admin token input                     | Submit (save token) when non-blank | `apps/frontend/src/pages/admin/AdminOverviewPage.tsx:117`    |
 | Enter                      | Table editor filter input             | Apply filters                      | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:709`  |
 | Enter / Space              | Focused editable table-editor cell    | Open inline editor                 | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:264`  |
 | Enter                      | Table-editor inline editor            | Stage value, refocus cell          | `apps/frontend/src/pages/admin/TableDataEditorPage.tsx:239`  |
@@ -341,8 +328,7 @@ Admin pages have no go-to shortcuts in the command palette (admin items render w
 
 ## Cross-cutting notes
 
-- Security boundary is the backend (`apps/node-backend/src/middleware/adminAuth.ts` per the `RequireAdmin` comment); the frontend gate is UX only. Native must keep both: hide admin UI unless admin mode is on, and attach the session-only admin token as a Bearer header when set.
-- Admin token is session-scoped (sessionStorage), never persisted (`apps/frontend/src/lib/adminToken.ts:15`). A native equivalent should be in-memory per app session.
+- The backend is loopback-only with no admin credentials (ADR-233; the admin token card, the Bearer header and the 401/403 alert were removed in #339). The `/admin/*` guard is UX only: hide admin UI unless admin mode is on.
 - Audit history is Electron-only: all six bridge calls (`enroll`, `read`, `exportSnapshot`, `exportTransfer`, `importTransfer`, `rotateKey`) live in `packaging/electron/preload.ts:163` with native dialogs in `packaging/electron/main.ts:1787`-`:2045`. Native SwiftUI must reimplement these flows (save/open panels, confirm alerts, keychain-backed audit key).
 - Query staleness: DB stats 30 s (60 s on overview), provider health `QUERY_STALE_TIME_MS.FREQUENT`, request metrics 15 s, endpoint manifest 5 min, exchange rates 10 min (`apps/frontend/src/features/admin/useAdminQueries.ts:14`-`:66`). No polling or auto-refresh on any admin page.
 - Endpoints used: `GET /api/admin/database/stats`, `POST /api/admin/database/vacuum`, `GET /api/admin/database/tables/:table/schema`, `GET /api/admin/database/tables/:table/rows`, `POST /api/admin/database/tables/:table/mutate` (dry run and commit), `GET /api/admin/providers/health`, `POST /api/admin/providers/:provider/probe`, `GET /api/admin/metrics/requests`, `GET /api/admin/endpoints`, `GET /api/info/exchange-rates?db_only=true`, `POST /api/info/exchange-rates/refresh`.

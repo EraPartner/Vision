@@ -87,31 +87,6 @@ actor FakeAdminService: AdminService {
     var isHoldingHealth: Bool { healthGate != nil }
 }
 
-/// The page's `sessionStorage` token.
-actor FakeTokenStorage {
-    private(set) var value: String?
-    private(set) var writes: [String] = []
-    /// A page that is not ready or does not answer: writes change nothing.
-    private let failWrites: Bool
-
-    init(_ value: String? = nil, failWrites: Bool = false) {
-        self.value = value
-        self.failWrites = failWrites
-    }
-
-    func write(_ token: String) -> Bool {
-        writes.append(token)
-        guard !failWrites else { return false }
-        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        value = trimmed.isEmpty ? nil : trimmed
-        return true
-    }
-
-    nonisolated var access: AdminTokenAccess {
-        AdminTokenAccess(read: { await self.value }, write: { await self.write($0) })
-    }
-}
-
 enum AdminFixture {
     static let stats = OpenAPI.DbStats(
         tables: [
@@ -158,8 +133,7 @@ enum AdminFixture {
         service: FakeAdminService = FakeAdminService(), database: FakeDatabaseService = FakeDatabaseService()
     ) -> AdminScreens {
         AdminScreens.make(
-            service: service, database: database, token: FakeTokenStorage().access,
-            now: { PlannedFixture.today })
+            service: service, database: database, now: { PlannedFixture.today })
     }
 
     static let auth = APIError.client(APIClientError(status: 401, code: .unauthorized, message: "Admin token required"))
@@ -171,8 +145,7 @@ enum AdminFixture {
 
     @Test func tilesLoadAndLinkToTheirPages() async {
         let service = FakeAdminService()
-        let model = AdminOverviewModel(
-            service: service, token: FakeTokenStorage().access)
+        let model = AdminOverviewModel(service: service)
         #expect(model.showsTileSkeleton)
         await model.appear()
         #expect(!model.showsTileSkeleton)
@@ -224,66 +197,6 @@ enum AdminFixture {
             metricsLoading: false, settings: .defaults, strings: strings)
         #expect(tiles[1].status == .error)
         #expect(tiles[2].status == .error)
-    }
-
-    @Test func savingAndClearingTheTokenWritesThePageStorage() async {
-        let storage = FakeTokenStorage()
-        let model = AdminOverviewModel(
-            service: FakeAdminService(), token: storage.access)
-        await model.refreshTokenState()
-        #expect(!model.hasToken && !model.canClearToken)
-        model.tokenDraft = "   "
-        #expect(!model.canSaveToken)
-        await model.saveToken()
-        #expect(await storage.writes.isEmpty)
-        model.tokenDraft = "  secret-token "
-        #expect(model.canSaveToken)
-        await model.saveToken()
-        #expect(await storage.value == "secret-token")
-        #expect(model.hasToken && model.canClearToken)
-        #expect(model.tokenDraft.isEmpty)
-        #expect(model.notice?.key == "admin.token.saved")
-        #expect(model.notice?.kind == .success)
-        await model.clearToken()
-        #expect(await storage.value == nil)
-        #expect(!model.hasToken)
-        #expect(model.notice?.key == "admin.token.cleared")
-        let id = model.notice?.id ?? -1
-        model.clearNotice(id)
-        #expect(model.notice == nil)
-    }
-
-    @Test func aWriteThePageDidNotTakeToastsAnError() async {
-        let storage = FakeTokenStorage("abc", failWrites: true)
-        let model = AdminOverviewModel(
-            service: FakeAdminService(), token: storage.access)
-        await model.refreshTokenState()
-        model.tokenDraft = "new-token"
-        await model.saveToken()
-        #expect(await storage.value == "abc")
-        #expect(model.notice?.kind == .error)
-        #expect(model.notice?.key == "apiError.unknown")
-        #expect(model.tokenDraft.isEmpty)
-        #expect(model.hasToken)
-        await model.clearToken()
-        #expect(await storage.writes == ["new-token", ""])
-        #expect(model.notice?.kind == .error)
-        #expect(model.notice?.key == "apiError.unknown")
-        #expect(model.hasToken)
-    }
-
-    @Test func leavingThePageForgetsTheTypedSecrets() {
-        let model = AdminOverviewModel(service: FakeAdminService(), token: FakeTokenStorage().access)
-        model.tokenDraft = "half-typed-token"
-        model.disappear()
-        #expect(model.tokenDraft.isEmpty)
-    }
-
-    @Test func anExistingTokenEnablesClear() async {
-        let model = AdminOverviewModel(
-            service: FakeAdminService(), token: FakeTokenStorage("abc").access)
-        await model.appear()
-        #expect(model.hasToken)
     }
 }
 
@@ -344,22 +257,22 @@ enum AdminFixture {
         #expect(ProviderHealthRow.Tone(failures: 3) == .destructive)
     }
 
-    @Test func authenticationFailuresPointToTheTokenCard() async {
+    @Test func authenticationFailuresShowTheSamePlainMessage() async {
+        // ADR-233: no admin token, so a 401 or 403 is an ordinary failure with no link to `/admin`.
         let model = ProviderHealthModel(service: FakeAdminService(health: [.failure(AdminFixture.auth)]))
         await model.appear()
-        #expect(model.errorState(strings: strings) == .authentication)
+        #expect(model.errorState(strings: strings) == AdminErrorState(title: "Failed to load", body: "Admin token required"))
         let forbidden = ProviderHealthModel(
             service: FakeAdminService(
                 health: [.failure(.client(APIClientError(status: 403, code: .forbidden, message: "Forbidden")))]))
         await forbidden.appear()
-        #expect(forbidden.errorState(strings: strings) == .authentication)
-        #expect(AdminErrorState.tokenRoute == "/admin")
+        #expect(forbidden.errorState(strings: strings) == AdminErrorState(title: "Failed to load", body: "Forbidden"))
     }
 
     @Test func otherFailuresShowTheHumanizedMessage() async {
         let model = ProviderHealthModel(service: FakeAdminService(health: [.failure(.timedOut)]))
         await model.appear()
-        #expect(model.errorState(strings: strings) == .message(title: "Failed to load", body: "apiError.timeout"))
+        #expect(model.errorState(strings: strings) == AdminErrorState(title: "Failed to load", body: "apiError.timeout"))
         #expect(model.rows(settings: .defaults, strings: strings).isEmpty)
     }
 
@@ -549,9 +462,9 @@ enum AdminFixture {
         model.show(try #require(NativeRoute("/admin/db/transactions")))
         #expect(model.detail == .native(.tableEditor(table: "transactions")))
         #expect(model.admin.database.editor?.table == "transactions")
-        // A tile or the auth error link moves the shell.
-        model.navigate(to: AdminErrorState.tokenRoute)
-        #expect(model.nativeNavigationLocation.raw == AdminErrorState.tokenRoute)
+        // A tile moves the shell.
+        model.navigate(to: "/admin/providers")
+        #expect(model.nativeNavigationLocation.raw == "/admin/providers")
         await model.settingsSettled()
     }
 

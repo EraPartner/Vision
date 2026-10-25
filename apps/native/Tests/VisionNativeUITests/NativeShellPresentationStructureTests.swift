@@ -98,8 +98,7 @@ struct NativeShellPresentationStructureTests {
             strings: CatalogStrings(language: .en), theme: ThemeSelection(appearance: .light),
             notices: NativeNoticeCenter(automaticExpiry: false), exchangeRates: rates,
             admin: AdminScreens.make(
-                service: StaticAdminService(), database: StaticDatabaseService(),
-                token: AdminTokenAccess(read: { nil }, write: { _ in true })),
+                service: StaticAdminService(), database: StaticDatabaseService()),
             planned: PlannedPaymentsModel(
                 service: planned, editing: planned, pickers: planned, rates: rates, dismissals: .memory()),
             imports: ImportsModel(

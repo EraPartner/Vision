@@ -81,33 +81,21 @@ struct SkeletonBar: View {
     }
 }
 
-/// `AdminErrorState`: the auth alert with its link to the token card, or the page's
-/// fallback title over the humanized error.
+/// `AdminErrorState`: the page's fallback title over the humanized error.
 struct AdminErrorBanner: View {
     let state: AdminErrorState
     let strings: any Localizing
-    let goToToken: () -> Void
     @Environment(\.visionTheme) var theme
 
     var body: some View {
         let spoken = announcement
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: state == .authentication ? "key" : "exclamationmark.triangle")
+            Image(systemName: "exclamationmark.triangle")
                 .foregroundStyle(theme.destructive)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 6) {
-                switch state {
-                case .authentication:
-                    Text(strings.t("admin.authError.title")).font(.headline)
-                    Text(strings.t("admin.authError.description"))
-                    Button(strings.t("admin.authError.action"), action: goToToken)
-                        .buttonStyle(.visionOutline)
-                        .controlSize(.small)
-                        .padding(.top, 4)
-                case .message(let title, let message):
-                    Text(title).font(.headline)
-                    Text(message)
-                }
+                Text(state.title).font(.headline)
+                Text(state.body)
             }
             .foregroundStyle(theme.destructive)
             Spacer(minLength: 0)
@@ -128,14 +116,7 @@ struct AdminErrorBanner: View {
         .task(id: state) { AccessibilityNotification.Announcement(spoken).post() }
     }
 
-    private var announcement: String {
-        switch state {
-        case .authentication:
-            return "\(strings.t("admin.authError.title")). \(strings.t("admin.authError.description"))"
-        case .message(let title, let message):
-            return "\(title). \(message)"
-        }
-    }
+    private var announcement: String { "\(state.title). \(state.body)" }
 }
 
 /// `toast.success` / `toast.error` at the bottom of a screen, with its description line.

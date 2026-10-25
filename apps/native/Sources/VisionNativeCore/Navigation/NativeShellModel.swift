@@ -274,7 +274,6 @@ public final class NativeShellModel {
         exchangeRates.attachNotices(notices)
         imports.toasts.attachNotices(notices)
         imports.toasts.navigateTo = { [weak self] in self?.navigate(to: $0) }
-        admin.overview.attachNotices(notices)
         admin.providers.attachNotices(notices)
         admin.database.attachNotices(notices)
         portfolio?.editing.attachNotices(notices)

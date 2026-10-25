@@ -260,21 +260,26 @@ enum DatabaseFixture {
         #expect(model.notice == nil)
     }
 
-    @Test func authenticationFailuresPointToTheTokenCard() async {
+    @Test func authenticationFailuresShowThePlainMessage() async {
+        // ADR-233: no admin token, so 401 and 403 are ordinary failures.
         let unauthorized = DatabaseMaintenanceModel(service: FakeDatabaseService(stats: [.failure(AdminFixture.auth)]))
         await unauthorized.appear()
-        #expect(unauthorized.errorState(strings: strings) == .authentication)
+        #expect(
+            unauthorized.errorState(strings: strings)
+                == AdminErrorState(title: "Failed to load database stats", body: "Admin token required"))
         #expect(!unauthorized.showsEmptyState)
         let forbidden = DatabaseMaintenanceModel(
             service: FakeDatabaseService(
                 stats: [.failure(.client(APIClientError(status: 403, code: .forbidden, message: "Forbidden")))]))
         await forbidden.appear()
-        #expect(forbidden.errorState(strings: strings) == .authentication)
+        #expect(
+            forbidden.errorState(strings: strings)
+                == AdminErrorState(title: "Failed to load database stats", body: "Forbidden"))
         let timedOut = DatabaseMaintenanceModel(service: FakeDatabaseService(stats: [.failure(.timedOut)]))
         await timedOut.appear()
         #expect(
             timedOut.errorState(strings: strings)
-                == .message(title: "Failed to load database stats", body: "apiError.timeout"))
+                == AdminErrorState(title: "Failed to load database stats", body: "apiError.timeout"))
     }
 
     @Test func noTablesShowTheEmptyStateAndRefreshFetchesAgain() async {
@@ -860,14 +865,16 @@ enum DatabaseFixture {
 
     @Test func loadErrorsUseTheAdminErrorState() async {
         let unauthorized = await loaded(FakeDatabaseService(pages: [.failure(AdminFixture.auth)]))
-        #expect(unauthorized.errorState(strings: strings) == .authentication)
+        #expect(
+            unauthorized.errorState(strings: strings)
+                == AdminErrorState(title: "Failed to load table data", body: "Admin token required"))
         #expect(!unauthorized.isLoading)
         #expect(unauthorized.isReadOnly)
         // The schema still shows the column headers.
         #expect(unauthorized.columns.count == 5)
         let timedOut = await loaded(FakeDatabaseService(pages: [.failure(.timedOut)]))
         #expect(
-            timedOut.errorState(strings: strings) == .message(title: "Failed to load table data", body: "apiError.timeout"))
+            timedOut.errorState(strings: strings) == AdminErrorState(title: "Failed to load table data", body: "apiError.timeout"))
         let schemaOnly = await loaded(
             FakeDatabaseService(schemas: [.failure(.timedOut)], pages: [.success(DatabaseFixture.page())]))
         #expect(schemaOnly.errorState(strings: strings) == nil)

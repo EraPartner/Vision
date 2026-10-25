@@ -33,9 +33,7 @@ public struct DatabaseMaintenanceView: View {
             }
             summaryCards
             if let error = model.errorState(strings: strings) {
-                AdminErrorBanner(state: error, strings: strings) {
-                    shell.navigate(to: AdminErrorState.tokenRoute)
-                }
+                AdminErrorBanner(state: error, strings: strings)
             }
             AdminCard(padding: 0) {
                 VStack(alignment: .leading, spacing: 0) {

@@ -2,7 +2,7 @@ import SwiftUI
 import VisionNativeCore
 
 /// `/admin` (apps/frontend/src/pages/admin/AdminOverviewPage.tsx) in SwiftUI: the three
-/// tiles and the admin token card, with the parity rows of
+/// tiles, with the parity rows of
 /// docs/reference/native-parity/admin.md.
 public struct AdminOverviewView: View {
     private let model: AdminOverviewModel
@@ -20,13 +20,8 @@ public struct AdminOverviewView: View {
         AdminPage {
             AdminPageHeader(title: strings.t("admin.overview.title"), subtitle: strings.t("admin.overview.description"))
             tiles
-            tokenCard
         }
         .task { await model.appear() }
-        .onDisappear { model.disappear() }
-        .overlay(alignment: .bottom) {
-            NoticeToast(notice: model.notice, strings: strings) { model.clearNotice($0) }
-        }
     }
 
     // MARK: Tiles
@@ -99,51 +94,5 @@ public struct AdminOverviewView: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isLink)
-    }
-
-    // MARK: Admin token
-
-    private var tokenDraft: Binding<String> {
-        Binding(get: { model.tokenDraft }, set: { model.tokenDraft = $0 })
-    }
-
-    private var tokenCard: some View {
-        AdminCard(padding: 24) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top, spacing: 12) {
-                    AdminIconBadge(symbol: "key")
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(strings.t("admin.token.title"))
-                            .font(Font.visionTitle3)
-                            .accessibilityAddTraits(.isHeader)
-                        Text(strings.t("admin.token.description"))
-                            .font(.body)
-                            .foregroundStyle(theme.secondaryLabel)
-                    }
-                }
-                HStack(spacing: 8) {
-                    SecureField(strings.t("admin.token.placeholder"), text: tokenDraft)
-                        .textFieldStyle(.vision)
-                        .frame(maxWidth: 320)
-                        .accessibilityLabel(strings.t("admin.token.title"))
-                        .onSubmit { Task { await model.saveToken() } }
-                    Button(strings.t("admin.token.save")) {
-                        Task { await model.saveToken() }
-                    }
-                    .buttonStyle(.visionPrimary)
-                    .disabled(!model.canSaveToken)
-                    Button(strings.t("admin.token.clear")) {
-                        Task { await model.clearToken() }
-                    }
-                    .buttonStyle(.visionOutline)
-                    .disabled(!model.canClearToken)
-                }
-                if model.hasToken {
-                    Text(strings.t("admin.token.active"))
-                        .font(.footnote)
-                        .foregroundStyle(theme.success)
-                }
-            }
-        }
     }
 }

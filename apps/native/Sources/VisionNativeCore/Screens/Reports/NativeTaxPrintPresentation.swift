@@ -21,8 +21,7 @@ import Foundation
     public static func prepare(_ snapshot: NativeTaxPrintSnapshot) async throws -> NativeTaxPrintPresentation {
         let inert = APIClient(baseURL: { nil })
         let rates = ExchangeRatesModel(service: inert)
-        let admin = AdminScreens.make(
-            service: inert, database: inert, token: .init(read: { nil }, write: { _ in false }))
+        let admin = AdminScreens.make(service: inert, database: inert)
         let shell = NativeShellModel(
             strings: snapshot.strings, theme: snapshot.theme, exchangeRates: rates, admin: admin,
             planned: PlannedPaymentsModel(

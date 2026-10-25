@@ -1,21 +1,6 @@
 import Foundation
 import Observation
 
-/// The admin token (`apps/frontend/src/lib/adminToken.ts`). The native card and the native API
-/// client share one session-scoped store, and nothing else stores it.
-public struct AdminTokenAccess: Sendable {
-    /// `getAdminToken()` before trimming; `nil` when unset or the store cannot answer.
-    public let read: @Sendable () async -> String?
-    /// `setAdminToken(value)`: stores the trimmed value; a blank value removes it. `false` when
-    /// the shell is not ready or the write is refused, so the storage is unchanged.
-    public let write: @Sendable (String) async -> Bool
-
-    public init(read: @escaping @Sendable () async -> String?, write: @escaping @Sendable (String) async -> Bool) {
-        self.read = read
-        self.write = write
-    }
-}
-
 /// A summary tile of the overview (`OverviewCard`).
 public struct AdminOverviewTile: Equatable, Sendable, Identifiable {
     /// The ring: none for `ok`, `ring-warning/40` for `warn`, `ring-destructive/40` for `error`.
@@ -97,8 +82,7 @@ public enum AdminOverviewPresentation {
     }
 }
 
-/// The state of `/admin` (`AdminOverviewPage`): the three `useAdminOverviewQueries`
-/// queries and the admin token card.
+/// The state of `/admin` (`AdminOverviewPage`): the three `useAdminOverviewQueries` queries.
 @MainActor
 @Observable
 public final class AdminOverviewModel {
@@ -108,23 +92,11 @@ public final class AdminOverviewModel {
     public let providers: ScreenQuery<[OpenAPI.ProviderHealth]>
     /// `adminKeys.requestMetrics`, 15 s.
     public let metrics: ScreenQuery<[OpenAPI.RouteMetric]>
-    /// The token input's draft.
-    public var tokenDraft = ""
-    /// `hasAdminToken()`: the "token is set" line and the Clear button.
-    public private(set) var hasToken = false
-    public private(set) var notice: ScreenNotice?
 
-    @ObservationIgnored private let token: AdminTokenAccess
-    @ObservationIgnored private var notices = NoticeCounter()
-
-    public init(
-        service: any AdminService, token: AdminTokenAccess,
-        now: @escaping @Sendable () -> Date = { Date() }
-    ) {
+    public init(service: any AdminService, now: @escaping @Sendable () -> Date = { Date() }) {
         dbStats = ScreenQuery(staleAfter: 60, now: now) { try await service.databaseStats() }
         providers = ScreenQuery(staleAfter: 30, now: now) { try await service.providerHealth() }
         metrics = ScreenQuery(staleAfter: 15, now: now) { try await service.requestMetrics() }
-        self.token = token
     }
 
     /// The skeleton tiles show while the database stats load.
@@ -136,69 +108,16 @@ public final class AdminOverviewModel {
             metrics: metrics.data, metricsLoading: metrics.isLoading, settings: settings, strings: strings)
     }
 
-    /// The page went away: the typed token does not outlive it.
-    public func disappear() {
-        tokenDraft = ""
-    }
-
-    /// The page mounted: the queries (unless fresh) and the token state.
+    /// The page mounted: the queries, unless fresh.
     public func appear() async {
         let dbStats = dbStats
         let providers = providers
         let metrics = metrics
         await withTaskGroup(of: Void.self) { group in
-            group.addTask { await self.refreshTokenState() }
             group.addTask { await dbStats.appear() }
             group.addTask { await providers.appear() }
             group.addTask { await metrics.appear() }
         }
-    }
-
-    // MARK: Admin token
-
-    /// Save is disabled for a blank draft; Enter does nothing then.
-    public var canSaveToken: Bool { !tokenDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    public var canClearToken: Bool { hasToken }
-
-    public func refreshTokenState() async {
-        hasToken = Self.isSet(await token.read())
-    }
-
-    /// `save()`: store the trimmed token, clear the input, toast `admin.token.saved`, or
-    /// `apiError.unknown` when the page could not store it.
-    public func saveToken() async {
-        guard canSaveToken else { return }
-        let value = tokenDraft
-        tokenDraft = ""
-        let stored = await token.write(value)
-        hasToken = Self.isSet(await token.read())
-        notice = notices.make(stored ? .success : .error, stored ? "admin.token.saved" : "apiError.unknown")
-    }
-
-    /// `clear()`: remove the token, toast `admin.token.cleared`, or `apiError.unknown` when the
-    /// page could not remove it.
-    public func clearToken() async {
-        guard canClearToken else { return }
-        if await token.write("") {
-            hasToken = false
-            notice = notices.make(.success, "admin.token.cleared")
-        } else {
-            hasToken = Self.isSet(await token.read())
-            notice = notices.make(.error, "apiError.unknown")
-        }
-    }
-
-    /// The toast was shown.
-    public func attachNotices(_ center: NativeNoticeCenter) {
-        notices.attach(center) { [weak self] in self?.clearNotice($0) }
-    }
-
-    public func clearNotice(_ id: Int) {
-        if notice?.id == id { notice = nil }
-    }
-
-    private static func isSet(_ value: String?) -> Bool {
-        !(value ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 
@@ -226,11 +145,10 @@ public struct AdminScreens: Sendable {
     /// (`adminKeys.dbStats`).
     @MainActor
     public static func make(
-        service: any AdminService, database: any DatabaseAdminService, token: AdminTokenAccess,
+        service: any AdminService, database: any DatabaseAdminService,
         now: @escaping @Sendable () -> Date = { Date() }
     ) -> AdminScreens {
-        let overview = AdminOverviewModel(
-            service: service, token: token, now: now)
+        let overview = AdminOverviewModel(service: service, now: now)
         let providers = ProviderHealthModel(
             service: service, now: now, onProvidersChanged: { [weak overview] in overview?.providers.invalidate() })
         let databaseScreens = DatabaseScreens(
