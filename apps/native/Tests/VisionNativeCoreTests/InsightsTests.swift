@@ -712,15 +712,26 @@ struct StatisticsDataTests {
         #expect(dataset.entities.last?.total == 3)
         #expect(dataset.entities.reduce(0) { $0 + $1.total } == 55)
     }
-    @Test func sankeyCoordinatesStayBoundedAndNodesDoNotOverlap() throws {
+    @Test func sankeyLayoutKeepsNodesInsidePlotAndLinksInInputOrder() throws {
         let flow = try insightFixture(StatisticsFlow.self, statisticsFlowJSON)
-        let layout = StatisticsFlowLayout(flow: flow)
+        let layout = StatisticsFlowLayout(flow: flow, width: 632, height: 332)
         #expect(layout.columnCount == 3)
-        #expect(layout.nodes.allSatisfy { $0.x >= 0 && $0.x <= 1 && $0.y >= 0 && $0.y + $0.height <= 1.000001 })
-        let last = layout.nodes.filter { $0.column == 2 }.sorted { $0.y < $1.y }
+        #expect(layout.nodes.map(\.id) == ["income", "spending", "food", "home"])
+        #expect(layout.nodes.allSatisfy { $0.x0 >= 0 && $0.x1 <= 600 && $0.y0 >= -0.000001 && $0.y1 <= 300.000001 })
+        let last = layout.nodes.filter { $0.column == 2 }.sorted { $0.y0 < $1.y0 }
         #expect(last.count == 2)
-        #expect(last[0].y + last[0].height <= last[1].y)
-        #expect(layout.links.map(\.value) == [100, 60, 40])
+        #expect(last[0].y1 <= last[1].y0)
+        #expect(layout.links.map(\.link.value) == [100, 60, 40])
+        #expect(layout.nodes.first { $0.id == "spending" }?.value == 100)
+        #expect(layout.nodes.first { $0.id == "food" }?.labelsLeading == true)
+    }
+    @Test func sankeyLayoutDrawsNothingWithoutLinksOrForARejectedGraph() throws {
+        let flow = try insightFixture(StatisticsFlow.self, statisticsFlowJSON)
+        #expect(StatisticsFlowLayout(flow: flow, width: 1, height: 332).nodes.isEmpty)
+        let cycle = try insightFixture(
+            StatisticsFlow.self,
+            #"{"nodes":[{"id":"a","label":"A","value":1},{"id":"b","label":"B","value":1}],"links":[{"source":"a","target":"b","value":1},{"source":"b","target":"a","value":1}],"year":2026}"#)
+        #expect(StatisticsFlowLayout(flow: cycle, width: 632, height: 332).nodes.isEmpty)
     }
     @Test func yearlyTotalsAndRhythmKeepCurrentMonthOutOfExtremes() throws {
         let snapshot = try statisticsSnapshotFixture()
