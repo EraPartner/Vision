@@ -18,6 +18,9 @@ import Foundation
     public func date(_ value: String) -> String {
         VisionFormat.appDate(value, format: snapshot.settings.dateFormat)
     }
+    public func date(_ value: CalendarDay) -> String {
+        VisionFormat.appDate(value, format: snapshot.settings.dateFormat)
+    }
     public func tick(_ value: String) -> String {
         let parser = DateFormatter()
         parser.locale = Locale(identifier: "en_US_POSIX")

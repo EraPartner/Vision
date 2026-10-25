@@ -51,7 +51,7 @@ extension APIClient: AnalysisMonitorsService {
     public func monitorCreate(_ input: TaxValue) async throws -> AnalysisMonitorRule {
         try await send(
             InsightRequest<OpenAPIOperations.CreateAnalysisMonitor, AnalysisMonitorRule>(
-                .init(body: .object([:])), query: [], bodyOverride: APIBody.encode(input)))
+                .init(body: .unknown(.object([:]))), query: [], bodyOverride: APIBody.encode(input)))
     }
     public func monitorUpdate(id: AnalysisMonitorID, patch: TaxValue) async throws -> AnalysisMonitorRule {
         let value: AnalysisMonitorRule = try await send(

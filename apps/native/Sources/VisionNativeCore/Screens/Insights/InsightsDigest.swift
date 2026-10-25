@@ -66,7 +66,7 @@ extension APIClient: StatisticsDigestService {
                 OpenAPIOperations.GetInsightsDigest(), query: []))
     }
     public func dismissStatisticsInsight(_ body: JSONValue) async throws {
-        _ = try await send(OpenAPIOperations.DismissInsight(body: body))
+        _ = try await send(OpenAPIOperations.DismissInsight(body: .unknown(body)))
     }
 }
 

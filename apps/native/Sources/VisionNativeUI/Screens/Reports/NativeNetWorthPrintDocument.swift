@@ -487,7 +487,7 @@ public struct NativeNetWorthPrintSectionView: View {
     }
     private var chart: some View {
         // Quantitative index axis: a categorical one labels every snapshot date.
-        let dates = snapshot.displaySnapshots.map(\.date)
+        let dates = snapshot.displaySnapshots.map(\.date.description)
         let index = Dictionary(dates.enumerated().map { ($1, Double($0)) }, uniquingKeysWith: { first, _ in first })
         return AdminCard {
             Text(strings.t("networth.overTime")).font(.headline)
