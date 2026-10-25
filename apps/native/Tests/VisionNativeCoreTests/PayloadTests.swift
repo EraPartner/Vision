@@ -160,33 +160,35 @@ import Testing
         #expect(try RuntimePayload.postgresBinDirectory(runtimeRoot: "/runtime", fileSystem: FakeFileSystem()) == nil)
     }
 
-    @Test func chromiumMetadataPinsTheShellVersion() throws {
-        let harness = try Harness()
-        let chrome = try RuntimePayload.chromiumExecutable(runtimeRoot: testRuntimeRoot, fileSystem: harness.fileSystem)
-        #expect(chrome == "\(testRuntimeRoot)/chromium/shell/chrome-headless-shell")
-
-        harness.fileSystem.addFile(
-            "\(testRuntimeRoot)/chromium/runtime.json",
-            #"{"version":1,"browser":"chrome-headless-shell","browserVersion":"1.0","platform":"darwin","architecture":"arm64","executableRelative":"shell/chrome-headless-shell"}"#
-        )
-        let error = #expect(throws: NativeRuntimeError.self) {
-            try RuntimePayload.chromiumExecutable(runtimeRoot: testRuntimeRoot, fileSystem: harness.fileSystem)
-        }
-        #expect(error?.code == "CHROMIUM_RUNTIME_MISMATCH")
-    }
-
     @Test func toolDiscoveryVerifiesVersionsAndFindsEveryTool() async throws {
         let harness = try Harness()
+        let modes = LockedValue<[RuntimeVerificationMode]>([])
         let tools = try await RuntimePayload.discoverTools(
-            runtimeRoot: testRuntimeRoot, environment: [:], fileSystem: harness.fileSystem, runner: harness.runner,
-            childEnvironment: ["PATH": "/usr/bin"])
+            runtimeRoot: testRuntimeRoot, markerPath: testMarkerPath, fileSystem: harness.fileSystem,
+            runner: harness.runner, childEnvironment: ["PATH": "/usr/bin"],
+            verification: { mode in modes.withLock { $0.append(mode) } })
         #expect(tools.binDirectory == "\(testRuntimeRoot)/postgres/root/bin")
         #expect(tools.compiledBackend == "\(testRuntimeRoot)/vision-backend")
-        #expect(tools.alembic == "\(testRuntimeRoot)/vision-alembic")
-        #expect(tools.chrome == "\(testRuntimeRoot)/chromium/shell/chrome-headless-shell")
         #expect(tools.versionNumbers["psql"] == 180_006)
+        #expect(modes.withLock { $0 } == [.full])
         let checked = Set(harness.runner.calls.filter { $0.arguments == ["--version"] }.map(\.name))
         #expect(checked.isSuperset(of: RuntimeConstants.versionCheckedPostgresTools))
+    }
+
+    @Test func theBackendIsRequiredButNoAlembicOrBrowserIs() async throws {
+        let harness = try Harness()
+        // Today's payload has no Alembic runtime and no Chrome Headless Shell.
+        for retired in ["vision-alembic", "chromium/runtime.json", "chromium/shell/chrome-headless-shell"] {
+            #expect(harness.fileSystem.node("\(testRuntimeRoot)/\(retired)") == nil)
+        }
+        try harness.fileSystem.remove("\(testRuntimeRoot)/vision-backend")
+        harness.writeManifest()
+        let error = await #expect(throws: NativeRuntimeError.self) {
+            try await RuntimePayload.discoverTools(
+                runtimeRoot: testRuntimeRoot, markerPath: testMarkerPath, fileSystem: harness.fileSystem,
+                runner: harness.runner, childEnvironment: [:])
+        }
+        #expect(error?.code == "BUN_NOT_FOUND")
     }
 
     @Test func postgres17ToolsAreRejected() async throws {
@@ -196,8 +198,75 @@ import Testing
         }
         await #expect(throws: NativeRuntimeError.self) {
             try await RuntimePayload.discoverTools(
-                runtimeRoot: testRuntimeRoot, environment: [:], fileSystem: harness.fileSystem,
+                runtimeRoot: testRuntimeRoot, markerPath: testMarkerPath, fileSystem: harness.fileSystem,
                 runner: harness.runner, childEnvironment: [:])
         }
+    }
+}
+
+private let testMarkerPath = "\(testUserData)/native/\(RuntimeConstants.runtimeVerificationMarker)"
+
+/// ADR-235: the first launch of an installed payload hashes every file; later launches with
+/// the same manifest and location only check that the listed files exist with their sizes.
+@Suite struct LaunchVerificationTests {
+    @Test func theFirstLaunchHashesEverythingAndLaterLaunchesCheckSizes() throws {
+        let harness = try Harness()
+        let first = try RuntimePayload.verifyManifestOnLaunch(
+            runtimeRoot: testRuntimeRoot, markerPath: testMarkerPath, fileSystem: harness.fileSystem)
+        #expect(first.mode == .full)
+        #expect(first.entries > RuntimeConstants.requiredPostgresTools.count)
+        let marker = try #require(harness.fileSystem.json(testMarkerPath))
+        #expect(marker["version"] == .int(1))
+        #expect(marker["runtimeRoot"] == .string(testRuntimeRoot))
+        #expect(marker["entries"] == .int(first.entries))
+        #expect(marker["appVersion"] == .null)
+        #expect(try harness.fileSystem.mode(testMarkerPath) == 0o600)
+
+        let second = try RuntimePayload.verifyManifestOnLaunch(
+            runtimeRoot: testRuntimeRoot, markerPath: testMarkerPath, fileSystem: harness.fileSystem)
+        #expect(second.mode == .cached)
+        #expect(second.entries == first.entries)
+    }
+
+    @Test func aChangedSizeOrFileSetFallsBackToTheFullCheck() throws {
+        let harness = try Harness()
+        _ = try RuntimePayload.verifyManifestOnLaunch(
+            runtimeRoot: testRuntimeRoot, markerPath: testMarkerPath, fileSystem: harness.fileSystem)
+
+        harness.fileSystem.addFile("\(testRuntimeRoot)/vision-backend", "a longer backend", mode: 0o755)
+        let resized = #expect(throws: NativeRuntimeError.self) {
+            try RuntimePayload.verifyManifestOnLaunch(
+                runtimeRoot: testRuntimeRoot, markerPath: testMarkerPath, fileSystem: harness.fileSystem)
+        }
+        #expect(resized?.code == "NATIVE_RUNTIME_CORRUPT")
+
+        harness.installPayload()
+        harness.fileSystem.addFile("\(testRuntimeRoot)/db/migrations/0999_extra.sql", "-- extra\n")
+        let unlisted = #expect(throws: NativeRuntimeError.self) {
+            try RuntimePayload.verifyManifestOnLaunch(
+                runtimeRoot: testRuntimeRoot, markerPath: testMarkerPath, fileSystem: harness.fileSystem)
+        }
+        #expect(unlisted?.message.contains("not covered") == true)
+    }
+
+    @Test func aNewManifestOrLocationInvalidatesTheMarker() throws {
+        let harness = try Harness()
+        _ = try RuntimePayload.verifyManifestOnLaunch(
+            runtimeRoot: testRuntimeRoot, markerPath: testMarkerPath, fileSystem: harness.fileSystem)
+
+        harness.fileSystem.addFile("\(testRuntimeRoot)/db/migrations/0131_next.sql", "-- next\n")
+        harness.writeManifest()
+        let updated = try RuntimePayload.verifyManifestOnLaunch(
+            runtimeRoot: testRuntimeRoot, markerPath: testMarkerPath, fileSystem: harness.fileSystem)
+        #expect(updated.mode == .full)
+    }
+
+    @Test func aMarkerThatCannotBeWrittenNeverBlocksStartup() throws {
+        let harness = try Harness()
+        // A directory in place of the marker file makes the write fail.
+        harness.fileSystem.addDirectory(testMarkerPath)
+        let result = try RuntimePayload.verifyManifestOnLaunch(
+            runtimeRoot: testRuntimeRoot, markerPath: testMarkerPath, fileSystem: harness.fileSystem)
+        #expect(result.mode == .full)
     }
 }

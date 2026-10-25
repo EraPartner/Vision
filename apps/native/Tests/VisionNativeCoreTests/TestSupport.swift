@@ -278,7 +278,21 @@ final class FakeSpawner: ProcessSpawning, @unchecked Sendable {
     private let lock = NSLock()
     private var recorded: [Spawn] = []
     private var nextPID: Int32 = 5000
+    private var exited = Set<Int32>()
     var onSpawn: @Sendable (Spawn) -> Void = { _ in }
+
+    /// The child has exited (a backend that failed during startup).
+    func markExited(_ pid: Int32) {
+        lock.lock()
+        exited.insert(pid)
+        lock.unlock()
+    }
+
+    private func hasExited(_ pid: Int32) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return exited.contains(pid)
+    }
 
     var spawns: [Spawn] {
         lock.lock()
@@ -302,7 +316,7 @@ final class FakeSpawner: ProcessSpawning, @unchecked Sendable {
         recorded.append(spawn)
         lock.unlock()
         onSpawn(spawn)
-        return SpawnedChild(pid: spawn.pid, hasExited: { false })
+        return SpawnedChild(pid: spawn.pid, hasExited: { [self] in hasExited(spawn.pid) })
     }
 }
 
@@ -457,6 +471,8 @@ final class Harness: @unchecked Sendable {
     var psOutput: String? = nil
     var reportedDataDirectory: String? = nil
     var statsOutput = ""
+    /// The Kysely ledger of the fake database: `nil` has no `public.kysely_migration` table.
+    var ledger: [String]? = ["0001_baseline", "0130_head"]
 
     var postgresRunning: Bool {
         get { lock.lock(); defer { lock.unlock() }; return postgresRunningValue }
@@ -500,14 +516,11 @@ final class Harness: @unchecked Sendable {
         for tool in RuntimeConstants.requiredPostgresTools {
             fs.addFile("\(testRuntimeRoot)/postgres/root/bin/\(tool)", "#!/bin/sh\n", mode: 0o755)
         }
-        fs.addFile(
-            "\(testRuntimeRoot)/chromium/runtime.json",
-            """
-            {"version":1,"browser":"chrome-headless-shell","browserVersion":"\(RuntimeConstants.chromiumVersion)","platform":"darwin","architecture":"\(RuntimeConstants.payloadArchitecture)","executableRelative":"shell/chrome-headless-shell"}
-            """)
-        fs.addFile("\(testRuntimeRoot)/chromium/shell/chrome-headless-shell", "binary", mode: 0o755)
         fs.addFile("\(testRuntimeRoot)/vision-backend", "binary", mode: 0o755)
-        fs.addFile("\(testRuntimeRoot)/vision-alembic", "binary", mode: 0o755)
+        fs.addFile("\(testRuntimeRoot)/vision-apple-ai", "binary", mode: 0o755)
+        fs.addFile("\(testRuntimeRoot)/config/postgres/app-role-grants.sql.tpl", "-- grants\n")
+        fs.addFile("\(testRuntimeRoot)/db/migrations/0001_baseline.sql", "-- baseline\n")
+        fs.addFile("\(testRuntimeRoot)/db/migrations/0130_head.sql", "-- head\n")
         fs.addFile("\(testRuntimeRoot)/dist/index.html", "<html></html>")
         writeManifest()
     }
@@ -599,8 +612,14 @@ final class Harness: @unchecked Sendable {
             let sql = fileSystem.text(file) ?? ""
             lock.lock()
             adminSQL.append(sql)
-            if let groups = PathUtilities.firstMatchGroups(sql, #"CREATE ROLE "?([a-z_]+)"?"#), let role = groups[1] {
-                roles.insert(role)
+            if let pattern = try? NSRegularExpression(pattern: #"CREATE ROLE "?([a-z_]+)"?"#) {
+                for match in pattern.matches(in: sql, range: NSRange(sql.startIndex..., in: sql)) {
+                    if let range = Range(match.range(at: 1), in: sql) { roles.insert(String(sql[range])) }
+                }
+            }
+            // `CREATE DATABASE <name> OWNER ...` runs through \gexec in the bootstrap session.
+            if let groups = PathUtilities.firstMatchGroups(sql, #"CREATE DATABASE ([a-z0-9_]+) OWNER"#), let name = groups[1] {
+                databases.insert(name)
             }
             lock.unlock()
             return RunResult()
@@ -630,8 +649,29 @@ final class Harness: @unchecked Sendable {
             databases.insert(to)
             return RunResult()
         }
-        if command == PostgresSQL.restoredDatabaseQuery {
-            return RunResult(stdout: "0130_head\n42\n")
+        if let groups = PathUtilities.firstMatchGroups(command, #"^DROP DATABASE "([a-z0-9_]+)";$"#), let name = groups[1] {
+            lock.lock()
+            defer { lock.unlock() }
+            databases.remove(name)
+            return RunResult()
+        }
+        if command == PostgresSQL.publicTableCountQuery {
+            return RunResult(stdout: "42\n")
+        }
+        if command == MigrationLedger.ledgerExistsSQL {
+            lock.lock()
+            defer { lock.unlock() }
+            return RunResult(stdout: ledger == nil ? "f\n" : "t\n")
+        }
+        if command == MigrationLedger.headSQL {
+            lock.lock()
+            defer { lock.unlock() }
+            return RunResult(stdout: "\(ledger?.max() ?? "")\n")
+        }
+        if command == MigrationLedger.appliedSQL {
+            lock.lock()
+            defer { lock.unlock() }
+            return RunResult(stdout: (ledger ?? []).sorted().map { "\($0)\n" }.joined())
         }
         if command == DatabaseStatistics.sql {
             return RunResult(stdout: statsOutput)

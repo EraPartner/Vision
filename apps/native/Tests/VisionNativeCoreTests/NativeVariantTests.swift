@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import VisionNativeCore
 
-// The Demo variant (phase 1e).
+// The Demo variant (phase 1e): its own identity, port, directory and Keychain service.
 
 @Suite struct NativeVariantTests {
     @Test func eachVariantHasItsOwnIdentity() {

@@ -27,48 +27,56 @@ import Testing
         #expect(environment["LC_CTYPE"] == "C")
     }
 
-    @Test func backendEnvironmentPinsDataMigrationBrowserAndLoopback() throws {
+    @Test func backendEnvironmentPinsDataMigrationsAndLoopback() throws {
         let layout = try RuntimeLayout(userDataDirectory: testUserData)
         let environment = ChildEnvironment.backend(
             inherited: ["PATH": "/usr/bin", "AWS_SECRET_ACCESS_KEY": "leak"],
             runtimeEnvironment: [
                 "DATABASE_URL": "postgresql://vision_native_app:x@127.0.0.1:54331/vision_native",
+                "FRED_API_KEY": "kept",
                 "OPENAI_API_ENABLED": "true",
                 "OPENAI_API_KEY": "synthetic-key",
+                "AI_REFERENCE_MAPPING_KEY": "synthetic-mapping-key",
+                "VISION_SYNTHETIC_SMOKE_OFFLINE": "1",
             ],
             port: 43123,
             layout: layout,
-            runtimeRoot: testRuntimeRoot,
-            alembic: "\(testRuntimeRoot)/vision-alembic",
-            chrome: "/chrome")
+            runtimeRoot: testRuntimeRoot)
         #expect(environment["SERVER_HOST"] == "127.0.0.1")
         #expect(environment["PORT"] == "43123")
         #expect(environment["NODE_ENV"] == "production")
+        #expect(environment["ENVIRONMENT"] == "production")
         #expect(environment["VISION_RUNTIME_ROOT"] == testRuntimeRoot)
         #expect(environment["VISION_DIST_DIR"] == "\(testRuntimeRoot)/dist")
-        #expect(environment["ALEMBIC_CONFIG"] == "\(testRuntimeRoot)/config/alembic.ini")
-        #expect(environment["ALEMBIC_BIN"] == "\(testRuntimeRoot)/vision-alembic")
         #expect(environment["VISION_NATIVE_ENV_FILE"] == layout.env)
         #expect(environment["ATTACHMENTS_DIR"] == layout.attachments)
-        #expect(environment["VISION_CACHE_DIR"] == layout.cache)
-        #expect(environment["VISION_SKIP_CONFIG_ENV_LOCAL"] == "true")
         #expect(environment["OLLAMA_URL"] == "http://127.0.0.1:11434")
-        #expect(environment["ADMIN_ALLOW_TOKENLESS_NONLOOPBACK"] == "false")
-        #expect(environment["PUPPETEER_EXECUTABLE_PATH"] == "/chrome")
-        #expect(environment["OPENAI_API_KEY"] == "synthetic-key")
+        #expect(environment["FRED_API_KEY"] == "kept")
         #expect(environment["DATABASE_URL"]?.hasPrefix("postgresql://vision_native_app") == true)
         #expect(environment["AWS_SECRET_ACCESS_KEY"] == nil)
+        // The migrations run in the backend from the payload; no tool paths are passed.
+        for removed in [
+            "ALEMBIC_BIN", "ALEMBIC_CONFIG", "PUPPETEER_EXECUTABLE_PATH", "VISION_AUDIT_BRIDGE_TOKEN",
+            "VISION_SYNTHETIC_SMOKE_OFFLINE",
+        ] {
+            #expect(environment[removed] == nil, Comment(rawValue: removed))
+        }
     }
 
-    @Test func openAIKeyIsDroppedUnlessExplicitlyEnabled() throws {
+    @Test func retiredSecretsNeverReachTheBackend() throws {
         let layout = try RuntimeLayout(userDataDirectory: testUserData)
         let environment = ChildEnvironment.backend(
             inherited: [:],
-            runtimeEnvironment: ["OPENAI_API_ENABLED": "false", "OPENAI_API_KEY": "synthetic-key"],
-            port: 1, layout: layout, runtimeRoot: "/r", alembic: nil, chrome: nil)
-        #expect(environment["OPENAI_API_ENABLED"] == "false")
-        #expect(environment["OPENAI_API_KEY"] == nil)
-        #expect(environment["ALEMBIC_BIN"] == nil)
+            runtimeEnvironment: [
+                "OPENAI_API_ENABLED": "false", "OPENAI_API_KEY": "synthetic-key", "AI_REFERENCE_MAPPING_KEY": "k",
+                "KEPT": "1",
+            ],
+            port: 1, layout: layout, runtimeRoot: "/r")
+        for retired in ["OPENAI_API_ENABLED", "OPENAI_API_KEY", "AI_REFERENCE_MAPPING_KEY"] {
+            #expect(environment[retired] == nil, Comment(rawValue: retired))
+        }
+        #expect(environment["KEPT"] == "1")
+        #expect(ChildEnvironment.withoutRetired(["OPENAI_API_KEY": "x", "A": "b"]) == ["A": "b"])
     }
 }
 
@@ -101,6 +109,13 @@ import Testing
     @Test func parsingSkipsCommentsBlankLinesAndInvalidKeys() {
         let parsed = RuntimeEnvFile.parse("# comment\n\nA_B=1=2\nlower=x\n=bad\n  SPACED = value \r\n")
         #expect(parsed == ["A_B": "1=2", "SPACED": " value"])
+    }
+
+    @Test func retiredKeysAreStrippedLineByLine() {
+        let contents = "A=1\nOPENAI_API_KEY=sk-x\n  AI_REFERENCE_MAPPING_KEY = y\nOPENAI_API_ENABLED=true\nB=2"
+        #expect(RuntimeEnvFile.stripRetired(contents) == "A=1\nB=2")
+        // Nothing to remove: the text is returned unchanged.
+        #expect(RuntimeEnvFile.stripRetired("A=1\r\nB=2\n") == "A=1\r\nB=2\n")
     }
 
     @Test func olderFilesGainAClusterAdministrator() throws {
@@ -151,26 +166,88 @@ import Testing
     @Test func managedConfigurationMatchesElectron() {
         #expect(
             PostgresSQL.visionConf(port: 54331)
-                == "listen_addresses = '127.0.0.1'\nport = 54331\nunix_socket_directories = ''\npassword_encryption = 'scram-sha-256'\nshared_preload_libraries = 'pg_stat_statements'\nlogging_collector = off\n"
+                == "listen_addresses = '127.0.0.1'\nport = 54331\nunix_socket_directories = ''\npassword_encryption = 'scram-sha-256'\nshared_preload_libraries = 'pg_stat_statements'\nlogging_collector = off\nmax_connections = 40\nio_workers = 1\npg_stat_statements.max = 1000\n"
         )
         #expect(PostgresSQL.includesVisionConf("a\n  include = 'vision.conf'  \n"))
         #expect(!PostgresSQL.includesVisionConf("#include = 'vision.conf'\n"))
     }
 
-    @Test func roleAndExtensionSQLIsLeastPrivilege() throws {
-        let secret = String(repeating: "c", count: 64)
+    private static let secret = String(repeating: "c", count: 64)
+
+    private func config(appRole: String = "vision_native_app", appPassword: String = PostgresSQLTests.secret, analysis: String = PostgresSQLTests.secret)
+        -> DatabaseConfig
+    {
+        DatabaseConfig(
+            database: "vision_native", adminRole: "vision_native_admin", adminPassword: Self.secret,
+            appRole: appRole, appPassword: appPassword, ownerRole: "vision_native_owner",
+            ownerPassword: Self.secret, host: "127.0.0.1", port: 54331, environment: [:], analysisPassword: analysis)
+    }
+
+    @Test func bootstrapIsOneLeastPrivilegeSession() throws {
+        let secret = Self.secret
+        let sql = try PostgresSQL.bootstrapSQL(config(analysis: "a'b\\c"))
+        let lines = sql.components(separatedBy: "\n")
+        // Roles are created once and their attributes and passwords are reset every launch.
         #expect(
-            try PostgresSQL.createLoginRole("vision_native_owner", password: secret)
-                == "CREATE ROLE \"vision_native_owner\" LOGIN PASSWORD '\(secret)' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;"
-        )
-        #expect(throws: NativeRuntimeError.self) { try PostgresSQL.createLoginRole("Bad-Role", password: secret) }
-        #expect(throws: NativeRuntimeError.self) { try PostgresSQL.createLoginRole("ok", password: "x'; DROP") }
+            lines.contains(
+                "SELECT 'CREATE ROLE vision_native_owner NOLOGIN' WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'vision_native_owner') \\gexec"
+            ))
+        #expect(
+            lines.contains(
+                "ALTER ROLE \"vision_native_owner\" WITH LOGIN PASSWORD '\(secret)' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;"
+            ))
+        #expect(
+            lines.contains(
+                "ALTER ROLE \"vision_native_app\" WITH LOGIN PASSWORD '\(secret)' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;"
+            ))
+        #expect(
+            lines.contains(
+                "ALTER ROLE vision_analysis_executor WITH LOGIN PASSWORD E'a''b\\\\c' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;"
+            ))
+        #expect(lines.contains("ALTER ROLE vision_analysis_executor SET default_transaction_read_only = on;"))
+        #expect(lines.contains("ALTER ROLE vision_analysis_executor SET search_path = vision_analysis, pg_catalog;"))
+        // The database belongs to the migration owner, and the extensions follow the
+        // connection to it.
+        #expect(lines.contains("ALTER DATABASE \"vision_native\" OWNER TO \"vision_native_owner\";"))
+        let connect = try #require(lines.firstIndex(of: "\\connect vision_native"))
+        #expect(
+            Array(lines[(connect + 1)...]) == [
+                "CREATE EXTENSION IF NOT EXISTS pg_trgm;", "CREATE EXTENSION IF NOT EXISTS pgcrypto;",
+                "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;",
+            ])
+        #expect(!sql.replacingOccurrences(of: "NOSUPERUSER", with: "").contains("SUPERUSER"))
+    }
+
+    @Test func bootstrapRejectsUnsafeRolesAndSecrets() {
+        #expect(throws: NativeRuntimeError.self) { _ = try PostgresSQL.bootstrapSQL(config(appRole: "Bad-Role")) }
+        #expect(throws: NativeRuntimeError.self) { _ = try PostgresSQL.bootstrapSQL(config(appPassword: "x'; DROP")) }
         #expect(
             PostgresSQL.createExtensions
                 == "CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"
         )
-        #expect(PostgresSQL.configureAnalysisRole(password: "a'b\\c").contains("PASSWORD E'a''b\\\\c' NOSUPERUSER"))
-        #expect(PostgresSQL.roleExistsQuery("o'x") == "SELECT 1 FROM pg_roles WHERE rolname = 'o''x';")
+    }
+
+    @Test func theMigrationLedgerSQLAndNamesAreContracts() {
+        #expect(MigrationLedger.ledgerExistsSQL == "SELECT to_regclass('public.kysely_migration') IS NOT NULL;")
+        #expect(MigrationLedger.headSQL == "SELECT max(name) FROM public.kysely_migration;")
+        #expect(MigrationLedger.appliedSQL == "SELECT name FROM public.kysely_migration ORDER BY name;")
+        #expect(MigrationLedger.numericPrefix("0004_remove_audit_history") == 4)
+        #expect(MigrationLedger.numericPrefix("0004") == nil)
+        let error = MigrationLedger.preBaselineBackupError()
+        #expect(error.code == "BACKUP_PRE_BASELINE")
+        #expect(error.message.hasPrefix("BACKUP_PRE_BASELINE: This backup was taken before Vision switched"))
+    }
+
+    @Test func theBackendsStartupErrorIsReadFromItsLog() {
+        let log = [
+            #"2026-10-19T18:45:41.511Z [ERROR] Failed to start application {"error":"old"}"#,
+            #"2026-10-19T18:45:42.511Z [INFO] migration failed {"migration":"0001_baseline"}"#,
+            #"2026-10-19T18:45:42.512Z [ERROR] Failed to start application {"error":"new"}"#,
+            "",
+        ].joined(separator: "\n")
+        #expect(BackendLog.lastStartupError(log) == "new")
+        #expect(BackendLog.lastStartupError("2026-10-19T09:21:00.000Z [INFO] ready\n") == nil)
+        #expect(BackendLog.lastStartupError("[ERROR] Failed to start application {broken") == nil)
     }
 
     @Test func materializedViewOwnershipIsLimitedToRuntimeManagedViews() throws {
@@ -307,6 +384,14 @@ import Testing
 }
 
 @Suite struct DatabaseStatsTests {
+    @Test func theSchemaIsTheKyselyLedgerHeadAndRuntimeWrittenSettingsAreExcluded() {
+        #expect(DatabaseStatistics.sql.contains("COALESCE((SELECT max(name) FROM public.kysely_migration), '') AS value"))
+        #expect(!DatabaseStatistics.sql.contains("alembic_version"))
+        // Warmup records each daily job's last run as `daily_job_<name>` after the backend is ready.
+        #expect(DatabaseStatistics.sql.contains("AND key NOT LIKE 'daily\\_job\\_%'"))
+        #expect(DatabaseStatistics.sql.contains("'fx_full_history_repair_done', 'transfers_backfilled'"))
+    }
+
     @Test func parsesStatisticsRows() throws {
         let stats = try DatabaseStatistics.parse(
             "schema\t0130_head\npostgres_version_num\t180006\nstable:user_settings\t2\ntable:accounts\t3\ntable:user_settings\t4\n")

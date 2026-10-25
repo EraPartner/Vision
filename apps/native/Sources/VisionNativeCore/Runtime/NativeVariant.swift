@@ -3,7 +3,7 @@ import Foundation
 /// The two builds of one Vision Native target (phase 1e). "Vision Native Demo" is the
 /// synthetic-data variant visual review and agents use; "Vision Native" is the standard
 /// one. Each has its own application-data directory, runtime id, PostgreSQL port and
-/// Keychain service names, so neither ever reads, locks or mutates the other's state, nor
+/// Keychain service name, so neither ever reads, locks or mutates the other's state, nor
 /// the Electron apps' ("Vision" on 54329, "Vision Demo" on 54330).
 ///
 /// The build setting `VISION_NATIVE_VARIANT` (`standard` or `demo`) picks the product
@@ -54,12 +54,6 @@ public enum NativeVariant: String, Sendable, CaseIterable {
 
     /// The backup passphrase (`KeychainPassphraseStore`).
     public var backupPassphraseService: String { "\(keychainServicePrefix).backup-passphrase" }
-
-    /// The audit witness (`KeychainAuditWitness`), account `latest-checkpoint`.
-    public var auditWitnessService: String { "\(keychainServicePrefix).audit-witness" }
-
-    /// The key that wraps the audit anchor key (`KeychainAuditWrappingKeyStore`).
-    public var auditKeyService: String { "\(keychainServicePrefix).audit-key" }
 
     /// `~/Library/Application Support/<appName>`.
     public func userDataDirectory(homeDirectory: String) -> String {

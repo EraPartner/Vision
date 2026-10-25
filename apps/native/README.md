@@ -53,8 +53,9 @@ swift test --package-path apps/native
 
 ## Install
 
-`./install-native.sh` prepares the runtime payload (PostgreSQL 18, the compiled backend, Alembic,
-Chrome Headless Shell and the synthetic Demo seed) with the same scripts as `install-demo.sh`,
+`./install-native.sh` prepares the runtime payload (PostgreSQL 18, the compiled backend with its Kysely
+migrations, the Apple Foundation Models helper, the frontend build and the synthetic Demo seed; no
+Alembic and no Chrome Headless Shell) with the same scripts as `install-demo.sh`,
 into `apps/native/build/payload/`. It then generates the project, builds Release into
 `apps/native/build/`, stages the payload into `Contents/Resources/runtime/` and
 `Contents/Resources/demo-seed/` before signing, and copies the app to
@@ -272,8 +273,13 @@ bundles, so a backup made by either app restores in the other, and restores the 
 - Without a configured directory, backups go to `Vision Native/Backups` in iCloud Drive (not
   Electron's `Vision/Backups`), and the backup on quit is on.
 - Restores accept only files chosen in the restore file picker and ask for confirmation first.
-  A restore refuses a backup from a newer schema, and one with a numbered schema when this
-  install's schema cannot be determined.
+  A restore refuses a backup from a newer schema, one with a numbered schema when this
+  install's schema cannot be determined, and one whose dump has no `public.kysely_migration` ledger
+  (taken before the TypeScript migration baseline, `BACKUP_PRE_BASELINE`). The ledger's highest
+  name is the schema head. Backups in the retired v1 encryption format are refused by name.
+- When an existing database is behind the payload's migrations, the launch first writes a bundle
+  backup to `pre-update-backups` in the application-data directory (ADR-242); if that backup
+  fails, the backend does not start.
 - The quit-time backup runs before the services stop, within the 45-second quit limit.
 
 The Swift tests open the Electron Vision 1.0.2 fixture in

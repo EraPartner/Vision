@@ -165,11 +165,12 @@ final class StringBox: @unchecked Sendable {
 }
 
 @Suite struct BackupSchemaTests {
-    @Test func picksTheHighestRevision() {
-        #expect(BackupRestore.pickHighestRevision(["0129_a", "0130_b\n", "0013_c"]) == "0130_b")
-        #expect(BackupRestore.pickHighestRevision(["0130_a", "0130_b"]) == "0130_b")
-        #expect(BackupRestore.pickHighestRevision(["abc", "0002_x"]) == "0002_x")
-        #expect(BackupRestore.pickHighestRevision([]) == "")
+    @Test func migrationNamesNeedANumberAndAnUnderscore() {
+        #expect(BackupRestore.revisionNumericPrefix("0130_b") == 130)
+        #expect(BackupRestore.revisionNumericPrefix("0004_remove_audit_history") == 4)
+        #expect(BackupRestore.revisionNumericPrefix("0130") == nil)
+        #expect(BackupRestore.revisionNumericPrefix("abc") == nil)
+        #expect(BackupRestore.revisionNumericPrefix("") == nil)
     }
 
     @Test func refusesANewerSchemaOnly() throws {
@@ -186,20 +187,39 @@ final class StringBox: @unchecked Sendable {
         }
     }
 
-    @Test func readsTheSchemaHeadOfAPlainDump() throws {
+    @Test func readsTheKyselyLedgerOfAPlainDump() throws {
         let directory = try makeBackupScratchDirectory()
         defer { try? FileManager.default.removeItem(atPath: directory) }
+        // The highest name wins wherever it sits, rows of other tables are not ledger rows,
+        // and the dump is scanned to its end (no trailing newline, CRLF line endings).
         try writeBytes(
             directory + "/copy.sql",
-            Array("SET x = 1;\r\nCOPY public.alembic_version (version_num) FROM stdin;\r\n0130_head\r\n\\.\r\n".utf8))
+            Array(
+                ("SET x = 1;\r\nCOPY public.other (id, name) FROM stdin;\r\n1\t0999_not_a_migration\r\n\\.\r\n"
+                    + "COPY public.kysely_migration (name, \"timestamp\") FROM stdin;\r\n"
+                    + "0002_b\t2026-01-02\r\n0003_c\t2026-01-03\r\n0001_a\t2026-01-01\r\n\\.\r\n"
+                    + "COPY public.later (id) FROM stdin;\r\n7\r\n\\.").utf8))
         try writeBytes(
             directory + "/insert.sql",
-            Array("-- dump\nINSERT INTO public.alembic_version (version_num) VALUES ('0042_x');\n".utf8))
-        try writeBytes(directory + "/none.sql", Array("SELECT 1;".utf8))
-        #expect(BackupRestore.readDumpSchemaHead(directory + "/copy.sql") == "0130_head")
-        #expect(BackupRestore.readDumpSchemaHead(directory + "/insert.sql") == "0042_x")
-        #expect(BackupRestore.readDumpSchemaHead(directory + "/none.sql") == "")
-        #expect(BackupRestore.readDumpSchemaHead(directory + "/missing.sql") == "")
+            Array(
+                ("-- dump\nINSERT INTO public.kysely_migration (name, timestamp) VALUES ('0042_x', '2026');\n"
+                    + "INSERT INTO kysely_migration VALUES ('0007_y', '2026');\n").utf8))
+        try writeBytes(directory + "/none.sql", Array("SELECT 1;\nCOPY public.t (a) FROM stdin;\n0500_z\n\\.\n".utf8))
+        try writeBytes(
+            directory + "/alembic.sql",
+            Array("COPY public.alembic_version (version_num) FROM stdin;\n0130_head\n\\.\n".utf8))
+        #expect(try BackupRestore.readDumpSchemaLedger(directory + "/copy.sql") == "0003_c")
+        #expect(try BackupRestore.readDumpSchemaLedger(directory + "/insert.sql") == "0042_x")
+        #expect(try BackupRestore.readDumpSchemaLedger(directory + "/none.sql") == "")
+        #expect(try BackupRestore.readDumpSchemaLedger(directory + "/alembic.sql") == "")
+        #expect(throws: (any Error).self) { _ = try BackupRestore.readDumpSchemaLedger(directory + "/missing.sql") }
+    }
+
+    @Test func aDumpWithoutTheLedgerPredatesTheBaseline() throws {
+        #expect(try BackupRestore.assertPostBaselineBackup("0003_c") == "0003_c")
+        let error = #expect(throws: NativeRuntimeError.self) { _ = try BackupRestore.assertPostBaselineBackup("") }
+        #expect(error?.code == "BACKUP_PRE_BASELINE")
+        #expect(error?.message.hasPrefix("BACKUP_PRE_BASELINE: ") == true)
     }
 
     @Test func metadataValuesAreStringifiedLikeJavaScript() {

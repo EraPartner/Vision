@@ -3,10 +3,10 @@ import Testing
 @testable import VisionNativeCore
 
 // The CI interop gate (ADR-204 phase 1): with VISION_NATIVE_INTEROP_DIR set, this writes
-// backup bundles (unencrypted and v2-encrypted) with Vision Native's
-// own code, from synthetic data only. The Linux job `native-interop` opens them with the
-// Electron readers (packaging/electron/backup/native-interop.test.ts). Without the
-// variable the test is skipped.
+// backup bundles (unencrypted and v2-encrypted) with Vision Native's own code, from
+// synthetic data only, so they can be opened with the Electron readers
+// (`packaging/electron/backup/bundle.ts`). The bundle's dump carries a Kysely migration
+// ledger, which the Electron restore requires. Without the variable the test is skipped.
 
 enum NativeInterop {
     static let environmentKey = "VISION_NATIVE_INTEROP_DIR"
@@ -20,7 +20,7 @@ enum NativeInterop {
         "-- synthetic Vision Native interop fixture\n"
         + "CREATE TABLE interop_probe (id integer PRIMARY KEY, value text);\n"
         + "INSERT INTO interop_probe VALUES (1, 'vision-native');\n"
-        + "INSERT INTO alembic_version (version_num) VALUES ('0161_interop_fixture');\n"
+        + "INSERT INTO public.kysely_migration (name, timestamp) VALUES ('0161_interop_fixture', '2026-01-01');\n"
     static let attachments = ["tx-001/receipt.txt": "SYNTHETIC-RECEIPT", "tx-002/notes/a.txt": "synthetic note é"]
     static let frontendState = JSONValue.object([
         "keys": .object(["vision.language": .string("nl"), "vision.theme": .string("dark")])
@@ -62,6 +62,7 @@ enum NativeInterop {
         let reopened = try BackupBundle.open(encryptedTarget, passphrase: NativeInterop.passphrase, temporaryParent: work)
         defer { reopened.cleanup() }
         #expect(try String(contentsOfFile: reopened.dbSqlPath, encoding: .utf8) == NativeInterop.dbSql)
+        #expect(try BackupRestore.readDumpSchemaLedger(reopened.dbSqlPath) == NativeInterop.schemaHead)
 
         var attachments: [String: JSONValue] = [:]
         for (relative, content) in NativeInterop.attachments { attachments[relative] = .string(content) }

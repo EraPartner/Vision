@@ -2,19 +2,16 @@ import Foundation
 import Testing
 @testable import VisionNativeCore
 
-// The runtime side of backup and restore: pg_dump, the schema head and a plain-SQL
+// The runtime side of backup and restore: pg_dump, the Kysely schema head and a plain-SQL
 // restore into a staging database.
 
-private let schemaHeadQuery = "SELECT version_num FROM alembic_version ORDER BY version_num;"
+private let schemaHeadQuery = MigrationLedger.headSQL
 
 private func backupHarness(dumpContent: String = "-- dump\n") throws -> Harness {
     let harness = try Harness()
     let base = harness.runner.handler
     let fileSystem = harness.fileSystem
     harness.runner.handler = { call in
-        if call.name == "psql", call.arguments.contains(schemaHeadQuery) {
-            return RunResult(stdout: "0129_prev\n0130_head\n")
-        }
         if call.name == "pg_dump", let index = call.arguments.firstIndex(of: "--file") {
             fileSystem.addFile(call.arguments[index + 1], dumpContent)
             return RunResult()
@@ -25,7 +22,7 @@ private func backupHarness(dumpContent: String = "-- dump\n") throws -> Harness 
 }
 
 @Suite struct NativeRuntimeBackupTests {
-    @Test func theSchemaHeadIsTheHighestRevision() async throws {
+    @Test func theSchemaHeadIsTheHighestLedgerName() async throws {
         let harness = try backupHarness()
         let runtime = try harness.makeRuntime()
         _ = try await runtime.start()
@@ -34,6 +31,44 @@ private func backupHarness(dumpContent: String = "-- dump\n") throws -> Harness 
         let call = try #require(harness.runner.calls(named: "psql").first { $0.arguments.contains(schemaHeadQuery) })
         #expect(call.arguments.contains("vision_native_owner"))
         #expect(call.options.environment["PGPASSFILE"] != nil)
+        // The ledger is checked first so a database without it reads as empty, not as an error.
+        let exists = harness.runner.calls(named: "psql").contains {
+            $0.arguments.contains(MigrationLedger.ledgerExistsSQL)
+        }
+        #expect(exists)
+    }
+
+    @Test func aDatabaseWithoutALedgerHasNoSchemaHead() async throws {
+        let harness = try backupHarness()
+        harness.ledger = nil
+        let runtime = try harness.makeRuntime()
+        _ = try await runtime.start()
+        #expect(try await runtime.schemaHead() == "")
+        #expect(try await runtime.appliedMigrations() == [])
+        #expect(try await runtime.pendingMigrations() == nil)
+    }
+
+    @Test func appliedMigrationsListTheLedger() async throws {
+        let harness = try backupHarness()
+        harness.ledger = ["0130_head", "0001_baseline"]
+        let runtime = try harness.makeRuntime()
+        _ = try await runtime.start()
+        #expect(try await runtime.appliedMigrations() == ["0001_baseline", "0130_head"])
+    }
+
+    @Test func pendingMigrationsNeedAnExistingDatabaseBehindThePayload() async throws {
+        let harness = try backupHarness()
+        let runtime = try harness.makeRuntime()
+        _ = try await runtime.start()
+        // The ledger ends at the payload's newest migration (0130_head): nothing is pending.
+        #expect(try await runtime.pendingMigrations() == nil)
+        harness.ledger = ["0001_baseline"]
+        #expect(
+            try await runtime.pendingMigrations()
+                == PendingMigrations(appliedHead: "0001_baseline", packagedHead: "0130_head"))
+        // A database from a newer build is not "behind" the payload.
+        harness.ledger = ["0131_future"]
+        #expect(try await runtime.pendingMigrations() == nil)
     }
 
     @Test func dumpsPlainSqlAsTheOwnerIntoAPrivateFile() async throws {
@@ -88,8 +123,115 @@ private func backupHarness(dumpContent: String = "-- dump\n") throws -> Harness 
             harness.runner.calls(named: "psql").first { $0.arguments.contains("/tmp/vision_restore_1/db.sql") })
         #expect(restore.arguments.contains("--single-transaction"))
         #expect(restore.arguments.contains("ON_ERROR_STOP=1"))
+        // The staging database is validated against the ledger before it can become live.
+        let ledgerChecks = harness.runner.calls(named: "psql").filter {
+            $0.arguments.contains(MigrationLedger.headSQL)
+        }
+        #expect(ledgerChecks.contains { $0.arguments.contains(token.activatedDatabase) })
         let state = try #require(harness.fileSystem.json(harness.layout.state))
         #expect(state["pendingDatabaseSwitch"]?["previousDatabase"] == .string(token.previousDatabase))
+    }
+
+    @Test func aRestoredDatabaseWithoutTheLedgerIsRefusedAsPreBaseline() async throws {
+        let harness = try backupHarness()
+        let runtime = try harness.makeRuntime()
+        _ = try await runtime.start()
+        harness.fileSystem.addFile("/tmp/vision_restore_2/db.sql", "CREATE TABLE t (id integer);\n")
+        harness.ledger = nil
+        let error = await #expect(throws: NativeRuntimeError.self) {
+            try await runtime.activateRestoredDatabase(
+                "/tmp/vision_restore_2/db.sql", format: .plain, expectedSchemaHead: "0130_head")
+        }
+        #expect(error?.code == "BACKUP_PRE_BASELINE")
+        // Nothing was switched: the live database stays and no switch plan was persisted.
+        #expect(harness.databases == ["vision_native"])
+        #expect(harness.fileSystem.json(harness.layout.state)?["pendingDatabaseSwitch"] == nil)
+    }
+
+    @Test func aRestoredLedgerThatDisagreesWithTheBackupIsRefused() async throws {
+        let harness = try backupHarness()
+        let runtime = try harness.makeRuntime()
+        _ = try await runtime.start()
+        harness.fileSystem.addFile("/tmp/vision_restore_3/db.sql", "CREATE TABLE t (id integer);\n")
+        let error = await #expect(throws: NativeRuntimeError.self) {
+            try await runtime.activateRestoredDatabase(
+                "/tmp/vision_restore_3/db.sql", format: .plain, expectedSchemaHead: "0129_prev")
+        }
+        #expect(error?.code == "RESTORE_VALIDATION_FAILED")
+        #expect(harness.databases == ["vision_native"])
+    }
+}
+
+/// ADR-242: the backup hook runs after PostgreSQL is ready and before the backend, which
+/// migrates at boot, is spawned.
+@Suite struct NativePreMigrationBackupTests {
+    private func backendSpawns(_ harness: Harness) -> Int {
+        harness.spawner.spawns.filter { $0.executable.hasSuffix("vision-backend") }.count
+    }
+
+    @Test func theHookRunsBeforeTheBackendSpawnsWhenTheDatabaseIsBehind() async throws {
+        let harness = try Harness()
+        harness.ledger = ["0001_baseline"]
+        let seen = LockedValue<[PendingMigrations]>([])
+        let backendsAtHook = LockedValue<Int>(-1)
+        let runtime = try harness.makeRuntime()
+        _ = try await runtime.start(beforeMigrations: { pending in
+            seen.withLock { $0.append(pending) }
+            backendsAtHook.withLock { $0 = harness.spawner.spawns.filter { $0.executable.hasSuffix("vision-backend") }.count }
+        })
+        #expect(seen.withLock { $0 } == [PendingMigrations(appliedHead: "0001_baseline", packagedHead: "0130_head")])
+        #expect(backendsAtHook.withLock { $0 } == 0)
+        #expect(backendSpawns(harness) == 1)
+    }
+
+    @Test func aFailingHookAbortsTheStartWithoutABackend() async throws {
+        let harness = try Harness()
+        harness.ledger = ["0001_baseline"]
+        let runtime = try harness.makeRuntime()
+        let error = await #expect(throws: NativeRuntimeError.self) {
+            try await runtime.start(beforeMigrations: { _ in
+                throw NativeRuntimeError("PRE_MIGRATION_BACKUP_FAILED", "disk full")
+            })
+        }
+        #expect(error?.code == "PRE_MIGRATION_BACKUP_FAILED")
+        #expect(backendSpawns(harness) == 0)
+        #expect(!harness.fileSystem.exists(harness.layout.pid))
+    }
+
+    @Test(arguments: [nil, ["0130_head"], ["0131_future"]] as [[String]?])
+    func theHookIsSkippedForNewUpToDateOrNewerDatabases(_ ledger: [String]?) async throws {
+        let harness = try Harness()
+        harness.ledger = ledger
+        let calls = LockedValue<Int>(0)
+        _ = try await harness.makeRuntime().start(beforeMigrations: { _ in calls.withLock { $0 += 1 } })
+        #expect(calls.withLock { $0 } == 0)
+        #expect(backendSpawns(harness) == 1)
+    }
+
+    @Test func noHookMeansNoCheck() async throws {
+        let harness = try Harness()
+        harness.ledger = ["0001_baseline"]
+        _ = try await harness.makeRuntime().start()
+        #expect(backendSpawns(harness) == 1)
+    }
+
+    @Test func theLaunchTimesThePayloadVerification() async throws {
+        let harness = try Harness()
+        let phases = LockedValue<[String]>([])
+        let runtime = try NativeRuntime(
+            layout: harness.layout, runtimeRoot: testRuntimeRoot, appPort: 41_000,
+            inheritedEnvironment: ["PATH": "/usr/bin", "HOME": testHome], dependencies: harness.dependencies,
+            recordBootPhase: { phase, _ in phases.withLock { $0.append(phase) } })
+        _ = try await runtime.start()
+        #expect(phases.withLock { $0 } == ["runtime_manifest_full"])
+        try await runtime.stop(keepPostgres: false)
+
+        let again = try NativeRuntime(
+            layout: harness.layout, runtimeRoot: testRuntimeRoot, appPort: 41_000,
+            inheritedEnvironment: ["PATH": "/usr/bin", "HOME": testHome], dependencies: harness.dependencies,
+            recordBootPhase: { phase, _ in phases.withLock { $0.append(phase) } })
+        _ = try await again.start()
+        #expect(phases.withLock { $0 } == ["runtime_manifest_full", "runtime_manifest_cached"])
     }
 }
 
@@ -129,12 +271,15 @@ private struct AttachmentRuntime {
 
 @Suite struct NativeRuntimeAttachmentSwitchTests {
     @Test func theMigrationChainHeadComesFromThePayload() async throws {
-        let harness = try Harness()
+        let harness = try Harness(payload: false)
         let runtime = try harness.makeRuntime()
         let empty = await runtime.migrationChainHead()
         #expect(empty == "")
-        for name in ["0129_prev.py", "0130_head.py", "__init__.py", "0131_notes.txt", "_0999_hidden.py", "readme.py"] {
-            harness.fileSystem.addFile("\(testRuntimeRoot)/alembic/versions/\(name)", "# migration\n")
+        for name in [
+            "0129_prev.sql", "0130_head.sql", "0131_undo.down.sql", "0132_notes.txt", "_0999_hidden.sql", "readme.sql",
+            "0133_Upper.sql",
+        ] {
+            harness.fileSystem.addFile("\(testRuntimeRoot)/db/migrations/\(name)", "-- migration\n")
         }
         let head = await runtime.migrationChainHead()
         #expect(head == "0130_head")

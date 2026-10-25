@@ -37,10 +37,10 @@ import Testing
         #expect(harness.roles.isSuperset(of: ["vision_native_owner", "vision_native_app", RuntimeConstants.analysisRole]))
         #expect(harness.databases.contains("vision_native"))
         #expect(harness.adminSQL.allSatisfy { !$0.isEmpty })
-        let extensionCall = harness.runner.calls(named: "psql").first {
-            $0.arguments.contains(PostgresSQL.createExtensions)
-        }
-        #expect(extensionCall != nil)
+        // Roles, the database and the extensions go through one psql session as the administrator.
+        let bootstraps = harness.adminSQL.filter { $0.contains("\\connect vision_native") }
+        #expect(bootstraps.count == 1)
+        #expect(bootstraps.first?.contains("CREATE EXTENSION IF NOT EXISTS pg_stat_statements;") == true)
         // Tool discovery runs `psql --version` without a role; every query runs with a pgpass file.
         for call in harness.runner.calls(named: "psql") where !call.arguments.contains("--version") {
             #expect(call.options.environment["PGPASSFILE"] != nil)
@@ -62,7 +62,6 @@ import Testing
         let state = try #require(harness.fileSystem.json(harness.layout.state))
         #expect(state["activeRuntime"] == .string("native"))
         #expect(state["runtimeId"] == .string("vision_native"))
-        #expect(await runtime.newClusterCreatedThisLaunch)
         #expect(harness.fileSystem.paths(withPrefix: "/tmp/").isEmpty)
     }
 
@@ -75,10 +74,10 @@ import Testing
         let runtime = try harness.makeRuntime()
         _ = try await runtime.start()
         #expect(harness.runner.calls(named: "initdb").count == 1)
-        #expect(!(await runtime.newClusterCreatedThisLaunch))
         let newSQL = harness.adminSQL.dropFirst(sqlCount)
-        #expect(!newSQL.contains { $0.hasPrefix("CREATE ROLE") })
-        #expect(newSQL.contains { $0.hasPrefix("ALTER ROLE \"vision_native_owner\"") })
+        // Roles are only created when missing; their passwords and attributes are reset anyway.
+        #expect(newSQL.allSatisfy { !$0.contains("CREATE ROLE") || $0.contains("WHERE NOT EXISTS") })
+        #expect(newSQL.contains { $0.contains("ALTER ROLE \"vision_native_owner\"") })
     }
 
     @Test func occupiedPostgresPortFailsClosed() async throws {
@@ -294,6 +293,28 @@ import Testing
             try await harness.makeRuntime().waitUntilReady(attempts: 3, intervalMilliseconds: 10)
         }
         #expect(error?.code == "BACKEND_NOT_READY")
+    }
+
+    @Test func aBackendThatExitsDuringStartupReportsItsOwnError() async throws {
+        let harness = try Harness()
+        let runtime = try harness.makeRuntime()
+        let idle = await runtime.backendStartupFailure()
+        #expect(idle == nil)
+        _ = try await runtime.start()
+        let running = await runtime.backendStartupFailure()
+        #expect(running == nil)
+
+        let backend = try #require(harness.spawner.spawns.last)
+        harness.fileSystem.addFile(
+            harness.layout.backendLog,
+            "2026-10-19T18:45:42.512Z [ERROR] Failed to start application {\"error\":\"migration 0004 failed\"}\n")
+        harness.spawner.markExited(backend.pid)
+        let failure = await runtime.backendStartupFailure()
+        #expect(failure == "migration 0004 failed")
+
+        harness.fileSystem.addFile(harness.layout.backendLog, "no structured error\n")
+        let generic = await runtime.backendStartupFailure()
+        #expect(generic == "The Vision backend stopped during startup.")
     }
 
     @Test func backendLogTailIsRedacted() async throws {

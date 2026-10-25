@@ -2,9 +2,10 @@
 set -euo pipefail
 
 # Build Vision Native (apps/native/, ADR-204) in Release, stage its runtime payload
-# (PostgreSQL 18, the compiled backend, Alembic, Chrome Headless Shell and the
-# synthetic Demo seed) into the app, and install it to /Applications. Vision Native
-# runs only on synthetic Demo data in its own application-data directory.
+# (PostgreSQL 18, the compiled backend and its Kysely migrations, the Apple Foundation
+# Models helper, the frontend build and the synthetic Demo seed) into the app, and
+# install it to /Applications. Vision Native runs only on synthetic Demo data in its
+# own application-data directory.
 #
 # VISION_NATIVE_VARIANT picks the build (phase 1e):
 #   demo (default) -> /Applications/Vision Native Demo.app, data in
@@ -13,7 +14,8 @@ set -euo pipefail
 #                     ~/Library/Application Support/Vision Native, PostgreSQL 54331
 #
 # VISION_NATIVE_SKIP_PAYLOAD=1 builds without a payload (the app then explains how to
-# provide one). The payload uses the same prepare scripts as install-demo.sh.
+# provide one). The payload uses the same prepare scripts as install-demo.sh, so it holds
+# what Vision Demo packages: no Alembic and no Chrome Headless Shell.
 #
 # Options:
 #   --debug    build the Debug configuration. A Debug Demo starts in the native-only mode
@@ -51,7 +53,6 @@ APP_DEST="/Applications/$APP_NAME.app"
 DERIVED_DATA="$NATIVE_PATH/build"
 PAYLOAD_DIR="$NATIVE_PATH/build/payload"
 LOCAL_XCCONFIG="$NATIVE_PATH/Config/Local.xcconfig"
-CHROMIUM_VERSION="150.0.7871.24"
 VISION_INSTALLER_COMMAND="./install-native.sh"
 export VISION_INSTALLER_COMMAND
 TEAM_ID="${VISION_NATIVE_TEAM_ID:-}"
@@ -92,8 +93,7 @@ else
   source "$REPO_PATH/scripts/lib/native-mac-build.sh"
   trap cleanup_native_macos_build EXIT
 
-  # Dependencies, the pinned Chrome Headless Shell and the frontend build, exactly as
-  # install-demo.sh prepares them.
+  # Locked dependencies and the frontend build, exactly as install-demo.sh prepares them.
   prepare_native_macos_build
 
   echo "==> Preparing the native runtime payload..."
@@ -154,12 +154,18 @@ APP_SRC="$(find_built_app \
 }
 
 if [ "$STAGE_PAYLOAD" = "1" ]; then
-  for staged in runtime/manifest.json demo-seed/manifest.json demo-seed/demo-seed.dump; do
+  # The same files build-native-package.ts requires of the Electron payload, plus the seed.
+  for staged in runtime/manifest.json runtime/vision-backend runtime/db/migrations/0001_baseline.sql \
+    demo-seed/manifest.json demo-seed/demo-seed.dump; do
     if [ ! -f "$APP_SRC/Contents/Resources/$staged" ]; then
       echo "ERROR: the built app is missing Contents/Resources/$staged."
       exit 1
     fi
   done
+  if [ ! -x "$APP_SRC/Contents/Resources/runtime/vision-backend" ]; then
+    echo "ERROR: Contents/Resources/runtime/vision-backend is not executable."
+    exit 1
+  fi
   if ! codesign --verify --strict "$APP_SRC"; then
     echo "ERROR: the built app's signature does not verify after staging the payload."
     exit 1

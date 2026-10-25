@@ -18,6 +18,26 @@ actor FakeBackupSettings: BackupSettingsStore {
     }
 }
 
+/// A plain `pg_dump` fragment whose Kysely migration ledger ends at `head` (a COPY block, as
+/// pg_dump writes it, with an older row before it).
+func ledgerDump(_ head: String) -> String {
+    "-- dump\nCOPY public.kysely_migration (name, \"timestamp\") FROM stdin;\n0001_baseline\t2026-01-01T00:00:00.000Z\n"
+        + "\(head)\t2026-01-02T00:00:00.000Z\n\\.\n"
+}
+
+/// A boolean the test sets from a task and reads from another.
+final class WaitFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Bool
+
+    init(_ value: Bool) {
+        self.value = value
+    }
+
+    var current: Bool { lock.withLock { value } }
+    func set(_ next: Bool) { lock.withLock { value = next } }
+}
+
 struct FakeRuntimeFailure: Error, LocalizedError {
     let message: String
     var errorDescription: String? { message }
@@ -61,7 +81,7 @@ actor FakeBackupRuntime: BackupRuntime {
             gate.entered.open()
             await gate.release.wait()
         }
-        try writeBytes(destination, Array("-- dump\nINSERT INTO alembic_version VALUES ('\(head)');\n".utf8))
+        try writeBytes(destination, Array(ledgerDump(head).utf8))
     }
 
     func exportAttachments(to destination: String) async throws {
@@ -71,7 +91,7 @@ actor FakeBackupRuntime: BackupRuntime {
     }
 
     func schemaHead() async throws -> String {
-        if schemaHeadFails { throw FakeRuntimeFailure(message: "relation alembic_version does not exist") }
+        if schemaHeadFails { throw FakeRuntimeFailure(message: "relation kysely_migration does not exist") }
         return head
     }
 
@@ -246,17 +266,39 @@ private struct ServiceFixture {
         #expect(calls.isEmpty)
     }
 
-    @Test func theVision102FixtureRestoresWithItsSchemaUnchecked() async throws {
+    @Test func theVision102FixtureOpensButIsRefusedAsPreBaseline() async throws {
         let fixture = try ServiceFixture()
         defer { fixture.remove() }
         let path = try BackupFixture.path()
+        // The fixture decrypts and opens (see BackupBundleTests), but its dump has no Kysely
+        // migration ledger: it predates the TypeScript baseline (BACKUP_PRE_BASELINE).
         let result = await fixture.service.restore(path: path, passphrase: BackupFixture.passphrase, confirm: { true })
-        #expect(result["success"] == .bool(true))
-        #expect(result["frontendState"] == .object(["keys": .object(["vision.language": .string("nl")])]))
+        let error = try #require(result["error"]?.stringValue)
+        #expect(result["success"] == .bool(false))
+        #expect(error.hasPrefix("Error: BACKUP_PRE_BASELINE: "))
         let calls = await fixture.runtime.calls
-        #expect(calls.first == "activate:plain:fixture_schema")
-        let attachments = await fixture.runtime.restoredAttachments
-        #expect(attachments == ["tx-001/receipt.txt"])
+        #expect(calls.isEmpty)
+    }
+
+    @Test func aBundleWhoseMetadataDisagreesWithItsLedgerIsCorrupt() async throws {
+        let fixture = try ServiceFixture()
+        defer { fixture.remove() }
+        let work = fixture.directory + "/forged"
+        try BackupFiles.createDirectory(work)
+        try writeBytes(work + "/db.sql", Array(ledgerDump("0130_head").utf8))
+        let bundle = try BackupBundle.create(
+            destinationDirectory: work, deviceId: "dev", schemaHead: "0129_other", appVersion: "2.0.0",
+            dbSqlPath: work + "/db.sql", attachmentsDirectory: work + "/none", frontendState: nil,
+            now: Date(timeIntervalSince1970: 1_760_000_000))
+        let result = await fixture.service.restore(path: bundle, passphrase: nil, confirm: { true })
+        #expect(
+            result
+                == .object([
+                    "success": .bool(false),
+                    "error": .string("Error: Backup schema revision does not match its metadata; the bundle is corrupt."),
+                ]))
+        let calls = await fixture.runtime.calls
+        #expect(calls.isEmpty)
     }
 
     @Test func aBundleFromANewerSchemaIsRefused() async throws {
@@ -295,13 +337,43 @@ private struct ServiceFixture {
         let fixture = try ServiceFixture()
         defer { fixture.remove() }
         let path = fixture.directory + "/legacy.sql"
-        try writeBytes(path, Array("INSERT INTO public.alembic_version (version_num) VALUES ('0042_x');\n".utf8))
+        try writeBytes(
+            path,
+            Array("INSERT INTO public.kysely_migration (name, timestamp) VALUES ('0042_x', '2026-01-02');\n".utf8))
         let encrypted = await fixture.service.isEncrypted(path)
         #expect(!encrypted)
         let result = await fixture.service.restore(path: path, passphrase: nil, confirm: { true })
         #expect(result == .object(["success": .bool(true), "file": .string(path)]))
         let calls = await fixture.runtime.calls
         #expect(calls == ["activate:plain:0042_x", "start", "finalizeDatabase"])
+    }
+
+    @Test func aLegacySqlDumpWithoutTheLedgerIsRefusedAsPreBaseline() async throws {
+        let fixture = try ServiceFixture()
+        defer { fixture.remove() }
+        let path = fixture.directory + "/legacy.sql"
+        try writeBytes(path, Array("CREATE TABLE public.notes (id int);\n".utf8))
+        let result = await fixture.service.restore(path: path, passphrase: nil, confirm: { true })
+        let error = try #require(result["error"]?.stringValue)
+        #expect(error.hasPrefix("Error: BACKUP_PRE_BASELINE: "))
+        let calls = await fixture.runtime.calls
+        #expect(calls.isEmpty)
+    }
+
+    @Test func aRetiredV1LegacyBackupIsRefusedByName() async throws {
+        let fixture = try ServiceFixture(environment: ["VISION_BACKUP_PASSPHRASE": "env secret"])
+        defer { fixture.remove() }
+        let path = fixture.directory + "/old.sql.enc"
+        try writeBytes(path, Array("VISIONENC1".utf8) + [UInt8](repeating: 0x5A, count: 32))
+        let result = await fixture.service.restore(path: path, passphrase: nil, confirm: { true })
+        #expect(
+            result
+                == .object([
+                    "success": .bool(false),
+                    "error": .string("Error: \(EncryptedFile.retiredV1Message)"),
+                ]))
+        let calls = await fixture.runtime.calls
+        #expect(calls.isEmpty)
     }
 
     @Test func missingFilesAndCancelledConfirmationsDoNothing() async throws {
@@ -466,7 +538,7 @@ private struct ServiceFixture {
         #expect(calls.isEmpty)
 
         let legacy = unknown.directory + "/legacy.sql"
-        try writeBytes(legacy, Array("INSERT INTO alembic_version (version_num) VALUES ('0042_x');\n".utf8))
+        try writeBytes(legacy, Array(ledgerDump("0042_x").utf8))
         let legacyResult = await unknown.service.restore(path: legacy, passphrase: nil, confirm: { true })
         let legacyError = try #require(legacyResult["error"]?.stringValue)
         #expect(legacyError.hasPrefix("Error: SCHEMA_UNKNOWN: This backup was created"))
@@ -559,7 +631,7 @@ private struct ServiceFixture {
         #expect(asked.values.isEmpty)
 
         // The quit waits for the running snapshot before the services stop.
-        let waited = Flag(false)
+        let waited = WaitFlag(false)
         let quit = Task {
             await service.waitForMaintenance()
             waited.set(true)
@@ -580,7 +652,7 @@ private struct ServiceFixture {
         let fixture = try ServiceFixture(runtime: runtime)
         defer { fixture.remove() }
         let path = fixture.directory + "/legacy.sql"
-        try writeBytes(path, Array("SELECT 1;\n".utf8))
+        try writeBytes(path, Array(ledgerDump("0130_head").utf8))
         let entered = Latch()
         let release = Latch()
         await runtime.holdRestore(entered: entered, release: release)
@@ -588,7 +660,7 @@ private struct ServiceFixture {
         let restore = Task { await service.restore(path: path, passphrase: nil, confirm: { true }) }
         await entered.wait()
 
-        let waited = Flag(false)
+        let waited = WaitFlag(false)
         let quit = Task {
             await service.waitForMaintenance()
             waited.set(true)
@@ -605,15 +677,35 @@ private struct ServiceFixture {
     }
 }
 
-/// A lock-guarded flag, set from a task and read from the test.
-final class Flag: @unchecked Sendable {
-    private let lock = NSLock()
-    private var value: Bool
-
-    init(_ value: Bool) {
-        self.value = value
+/// `backupBeforeMigrations` (ADR-242): the backup taken at launch before the backend migrates.
+@Suite struct PreMigrationBackupTests {
+    @Test func theBackupGoesToPreUpdateBackupsWithoutStoppingTheBackend() async throws {
+        let fixture = try ServiceFixture()
+        defer { fixture.remove() }
+        let pending = PendingMigrations(appliedHead: "0003_c", packagedHead: "0004_d")
+        let saved = try await fixture.service.backupBeforeMigrations(pending, runtime: fixture.runtime)
+        let directory = fixture.directory + "/userData/pre-update-backups"
+        #expect(saved.file.hasPrefix(directory + "/vision_backup_"))
+        #expect(saved.file.hasSuffix(".visionbak"))
+        #expect(!saved.encrypted)
+        #expect(saved.warning == "Backup encryption skipped: no passphrase configured.")
+        #expect(BackupFiles.exists(saved.file))
+        // The backend is not running yet: the capture neither stops nor restarts it.
+        let calls = await fixture.runtime.calls
+        #expect(calls == ["dump", "export"])
+        #expect(
+            fixture.log.lines.contains {
+                $0.contains("[pre-migration-backup] database at 0003_c, this build ships 0004_d")
+            })
     }
 
-    var current: Bool { lock.withLock { value } }
-    func set(_ next: Bool) { lock.withLock { value = next } }
+    @Test func aConfiguredPassphraseEncryptsIt() async throws {
+        let fixture = try ServiceFixture(environment: ["VISION_BACKUP_PASSPHRASE": "env secret"])
+        defer { fixture.remove() }
+        let pending = PendingMigrations(appliedHead: "0003_c", packagedHead: "0004_d")
+        let saved = try await fixture.service.backupBeforeMigrations(pending, runtime: fixture.runtime)
+        #expect(saved.file.hasSuffix(".visionbak.enc"))
+        #expect(saved.encrypted)
+        #expect(saved.warning == nil)
+    }
 }

@@ -34,9 +34,8 @@ public enum BackupBundle {
 
     /// The `decryptToTemp` options.
     public static let format = EncryptedFile.Format(
-        v1Magic: encryptedMagicV1,
+        retiredV1Magic: encryptedMagicV1,
         v2Magic: encryptedMagicV2,
-        v1Salt: "vision-backup-v1",
         requiredError: "Invalid passphrase.",
         invalidError: "Invalid passphrase: unable to authenticate encrypted bundle.",
         invalidHeaderMessage: "Invalid encrypted bundle header.",

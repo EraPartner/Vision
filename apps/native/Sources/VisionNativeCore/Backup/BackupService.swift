@@ -73,8 +73,6 @@ public actor BackupService {
     private let context: BackupContext
     private let settings: any BackupSettingsStore
     private let runtimeProvider: @Sendable () async -> (any BackupRuntime)?
-    /// The audit hooks of the active runtime (phase 1e); `nil` restores without them.
-    private let auditProvider: @Sendable () async -> (any AuditRestoreGuard)?
     private let passphraseStoreFactory: @Sendable (String) -> (any PassphraseStore)?
     private let logger: any RuntimeLogging
     private let now: @Sendable () -> Date
@@ -95,14 +93,12 @@ public actor BackupService {
         },
         logger: any RuntimeLogging,
         now: @escaping @Sendable () -> Date = { Date() },
-        auditProvider: @escaping @Sendable () async -> (any AuditRestoreGuard)? = { nil },
         maintenance: BackupMaintenanceHooks = BackupMaintenanceHooks()
     ) {
         self.maintenance = maintenance
         self.context = context
         self.settings = settings
         self.runtimeProvider = runtimeProvider
-        self.auditProvider = auditProvider
         self.passphraseStoreFactory = passphraseStoreFactory
         self.logger = logger
         self.now = now
@@ -208,7 +204,7 @@ public actor BackupService {
     private func withBackupSnapshot<T: Sendable>(
         _ runtime: any BackupRuntime, _ capture: @Sendable () async throws -> T
     ) async throws -> T {
-        let snapshotRuntime = BackupSnapshotRuntime(runtime: runtime, audit: await auditProvider())
+        let snapshotRuntime = BackupSnapshotRuntime(runtime: runtime)
         await maintenance.willBeginSnapshot()
         do {
             let value = try await QuiescentSnapshot.capture(snapshotRuntime, capture)
@@ -230,9 +226,17 @@ public actor BackupService {
 
     /// `runBundleBackup`: dump and attachments into a private work directory, the bundle in
     /// `destination`, v2 encryption when a passphrase is configured, then retention.
-    public func runBundleBackup(destination: String, frontendStateJson: String?) async throws -> JSONValue {
+    /// `backendStopped` (`BundleBackupOptions.backendStopped`): the caller guarantees no
+    /// backend is running while PostgreSQL is up, so the capture is already quiescent and
+    /// does not stop or restart the backend (the pre-migration backup at launch). `runtime`
+    /// overrides the provider's runtime for that launch-time call.
+    public func runBundleBackup(
+        destination: String, frontendStateJson: String?, backendStopped: Bool = false,
+        runtime explicitRuntime: (any BackupRuntime)? = nil
+    ) async throws -> JSONValue {
         guard !destination.isEmpty else { throw BackupFailure("No backup directory configured") }
-        let runtime = try await requireRuntime()
+        let runtime: any BackupRuntime
+        if let explicitRuntime { runtime = explicitRuntime } else { runtime = try await requireRuntime() }
         let deviceId = try await deviceId()
         let work = try BackupFiles.makeTemporaryDirectory(prefix: "vision_bak_", in: context.temporaryDirectory)
         defer { BackupFiles.remove(work) }
@@ -240,10 +244,16 @@ public actor BackupService {
         let attachments = PathUtilities.join(work, "attachments")
         // SQL, attachments and schema head come from one quiescent interval (ADR-207);
         // compression and encryption follow the restart.
-        let schemaHead = try await withBackupSnapshot(runtime) { () async throws -> String in
+        let capture = { @Sendable () async throws -> String in
             try await runtime.dumpDatabase(to: dbSqlPath)
             try await runtime.exportAttachments(to: attachments)
             return try await runtime.schemaHead()
+        }
+        let schemaHead: String
+        if backendStopped {
+            schemaHead = try await capture()
+        } else {
+            schemaHead = try await withBackupSnapshot(runtime, capture)
         }
         var frontendState: JSONValue?
         if let frontendStateJson, !frontendStateJson.isEmpty {
@@ -277,6 +287,32 @@ public actor BackupService {
         ]
         if let warning { result["warning"] = .string(warning) }
         return .object(result)
+    }
+
+    /// `backupBeforeMigrations` in `main.ts` (ADR-242): before the runtime spawns a backend
+    /// that will migrate an existing database, the same bundle backup as the in-app update
+    /// button goes to `<userData>/pre-update-backups`. PostgreSQL is up and no backend runs
+    /// yet. A failure is thrown so the start aborts (`app.preMigrationBackupFailed` in the
+    /// shell's string catalog wraps the message). Returns the saved file and whether it is
+    /// encrypted.
+    public func backupBeforeMigrations(
+        _ pending: PendingMigrations, runtime: any BackupRuntime
+    ) async throws -> (file: String, encrypted: Bool, warning: String?) {
+        logger.log(
+            "log",
+            "[pre-migration-backup] database at \(pending.appliedHead), this build ships \(pending.packagedHead); "
+                + "backing up before migrating")
+        let directory = PathUtilities.join(context.userDataDirectory, "pre-update-backups")
+        try BackupFiles.createDirectory(directory, mode: 0o700)
+        let result = try await runBundleBackup(
+            destination: directory, frontendStateJson: nil, backendStopped: true, runtime: runtime)
+        let file = result["file"]?.stringValue ?? ""
+        let encrypted = result["encrypted"] == .bool(true)
+        let warning = result["warning"]?.stringValue
+        logger.log(
+            "log", "[pre-migration-backup] saved \(PathUtilities.basename(file))\(encrypted ? " (encrypted)" : "")")
+        if let warning { logger.log("warn", "[pre-migration-backup] \(warning)") }
+        return (file, encrypted, warning)
     }
 
     /// The `will-quit` backup: when the effective settings (with the iCloud Drive default)
@@ -323,15 +359,8 @@ public actor BackupService {
     }
 
     /// `backup:restore` for a picked path: the confirmation, then the bundle or legacy
-    /// restore through `restoreWithAuditRecovery`. Errors resolve as
-    /// `{ success: false, error: String(err) }`. A restore whose audit history does not
-    /// verify is offered once more, with `confirmAuditRecovery` (the second warning, given
-    /// the error's `auditStatus`); accepted, it restores without the audit check, ends
-    /// the audit session and answers `auditStatus: "unavailable"`.
-    public func restore(
-        path: String, passphrase: String?, confirm: @Sendable () async -> Bool,
-        confirmAuditRecovery: @Sendable (_ auditStatus: String?) async -> Bool = { _ in false }
-    ) async -> JSONValue {
+    /// restore. Errors resolve as `{ success: false, error: String(err) }`.
+    public func restore(path: String, passphrase: String?, confirm: @Sendable () async -> Bool) async -> JSONValue {
         guard BackupFiles.exists(path) else {
             return .object(["success": .bool(false), "error": .string("Backup file not found")])
         }
@@ -355,28 +384,9 @@ public actor BackupService {
         }
         let lower = path.lowercased()
         let isBundle = lower.hasSuffix(".visionbak") || lower.hasSuffix(".visionbak.enc")
-        func restoreSelected(_ allowUnverifiedAudit: Bool) async throws -> JSONValue {
-            if isBundle {
-                return try await runBundleRestore(
-                    path, passphrase: passphrase, allowUnverifiedAudit: allowUnverifiedAudit)
-            }
-            return try await runRestore(path, passphrase: passphrase, allowUnverifiedAudit: allowUnverifiedAudit)
-        }
         do {
-            do {
-                return try await restoreSelected(false)
-            } catch let error as AuditRestoreError
-                where AuditRestoreError.recoveryCodes.contains(error.code) && !error.recoveryUnsafe
-            {
-                logger.log("warn", "[backup] restore audit check failed: \(error.code)")
-                guard await confirmAuditRecovery(error.auditStatus) else {
-                    return .object(["success": .bool(false), "error": .string("Restore cancelled by user")])
-                }
-                var result = try await restoreSelected(true).objectValue ?? [:]
-                await auditProvider()?.endAuditSession()
-                result["auditStatus"] = .string("unavailable")
-                return .object(result)
-            }
+            if isBundle { return try await runBundleRestore(path, passphrase: passphrase) }
+            return try await runRestore(path, passphrase: passphrase)
         } catch {
             logger.log("error", "[backup] restore failed: \(backupErrorMessage(error))")
             return .object(["success": .bool(false), "error": .string(backupErrorString(error))])
@@ -407,9 +417,7 @@ public actor BackupService {
     }
 
     /// `runBundleRestore`.
-    public func runBundleRestore(
-        _ bundlePath: String, passphrase requested: String?, allowUnverifiedAudit: Bool = false
-    ) async throws -> JSONValue {
+    public func runBundleRestore(_ bundlePath: String, passphrase requested: String?) async throws -> JSONValue {
         guard !bundlePath.isEmpty else { throw BackupFailure("No backup file specified") }
         guard BackupFiles.exists(bundlePath) else { throw BackupFailure("File not found: \(bundlePath)") }
         let encrypted = BackupBundle.isEncrypted(bundlePath)
@@ -435,17 +443,19 @@ public actor BackupService {
         }
         defer { opened.cleanup() }
         let runtime = try await requireRuntime()
-        var schemaHead: String?
-        if let raw = opened.metadata["schemaHead"], raw.isTruthy {
-            let head = BackupRestore.javaScriptString(raw)
-            schemaHead = head
-            try await checkSchema(head, runtime: runtime, noun: "bundle")
+        // metadata.json is untrusted bundle content; the dump's own migration ledger decides
+        // the schema revision and must agree with it.
+        let dbSqlPath = opened.dbSqlPath
+        let schemaHead = try BackupRestore.assertPostBaselineBackup(
+            try await runBlocking { try BackupRestore.readDumpSchemaLedger(dbSqlPath) })
+        if let raw = opened.metadata["schemaHead"], raw.isTruthy, BackupRestore.javaScriptString(raw) != schemaHead {
+            throw BackupFailure("Backup schema revision does not match its metadata; the bundle is corrupt.")
         }
+        try await checkSchema(schemaHead, runtime: runtime, noun: "bundle")
         let logger = self.logger
         let warning = try await BackupRestore.restoreBundle(
             runtime, dbSqlPath: opened.dbSqlPath, attachmentsDirectory: opened.attachmentsDirectory,
-            expectedSchemaHead: schemaHead, audit: await auditProvider(), allowUnverifiedAudit: allowUnverifiedAudit,
-            log: { logger.log("error", "[backup] \($0)") })
+            expectedSchemaHead: schemaHead, log: { logger.log("error", "[backup] \($0)") })
         var result: [String: JSONValue] = [
             "success": .bool(true), "file": .string(bundlePath), "frontendState": opened.frontendState ?? .null,
         ]
@@ -454,9 +464,7 @@ public actor BackupService {
     }
 
     /// `runRestore`: a legacy `.sql` or `.sql.enc` dump.
-    public func runRestore(
-        _ sqlPath: String, passphrase requested: String?, allowUnverifiedAudit: Bool = false
-    ) async throws -> JSONValue {
+    public func runRestore(_ sqlPath: String, passphrase requested: String?) async throws -> JSONValue {
         guard !sqlPath.isEmpty else { throw BackupFailure("No backup file specified") }
         guard BackupFiles.exists(sqlPath) else { throw BackupFailure("File not found: \(sqlPath)") }
         var source = sqlPath
@@ -479,14 +487,12 @@ public actor BackupService {
         }
         let runtime = try await requireRuntime()
         let restoreSource = source
-        let dumpHead = try await runBlocking { BackupRestore.readDumpSchemaHead(restoreSource) }
-        if !dumpHead.isEmpty {
-            try await checkSchema(dumpHead, runtime: runtime, noun: "backup")
-        }
+        let dumpHead = try BackupRestore.assertPostBaselineBackup(
+            try await runBlocking { try BackupRestore.readDumpSchemaLedger(restoreSource) })
+        try await checkSchema(dumpHead, runtime: runtime, noun: "backup")
         let logger = self.logger
         try await BackupRestore.restoreDatabase(
-            runtime, source: source, format: .plain, expectedSchemaHead: dumpHead.isEmpty ? nil : dumpHead,
-            audit: await auditProvider(), allowUnverifiedAudit: allowUnverifiedAudit,
+            runtime, source: source, format: .plain, expectedSchemaHead: dumpHead,
             log: { logger.log("error", "[backup] \($0)") })
         return .object(["success": .bool(true), "file": .string(sqlPath)])
     }
