@@ -634,6 +634,16 @@ export function generateFixtures(
   return { files, schemas: generated.schemas };
 }
 
+/** Reads a file, or returns undefined when it does not exist (no separate existence check). */
+function readIfPresent(file: string): string | undefined {
+  try {
+    return fs.readFileSync(file, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
 /** Writes the files that differ and removes stale fixtures; returns the number written. */
 export function writeFixtures(root: string, generated: GeneratedFixtures): number {
   let written = 0;
@@ -645,7 +655,7 @@ export function writeFixtures(root: string, generated: GeneratedFixtures): numbe
   }
   for (const [relative, text] of generated.files) {
     const file = path.join(root, relative);
-    if (fs.existsSync(file) && fs.readFileSync(file, "utf8") === text) continue;
+    if (readIfPresent(file) === text) continue;
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, text, "utf8");
     written++;
