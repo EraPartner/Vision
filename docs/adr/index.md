@@ -282,6 +282,14 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-25: Swift type strictness (accepted)
+
+[[docs/adr/252-swift-type-strictness|ADR-252]] types the Swift app as strictly as the TypeScript
+app: an identifier type per entity, currency codes, enums with unknown values, calendar days and
+instants, typed unions, typed settings and routes, a decode fixture per generated model and a
+ban-list lint with a ratchet. It mirrors [[docs/adr/220-branded-ids-currency-codes-and-money|ADR-220]]
+without editing it.
+
 ### 2026-10-25: Exhaustive API enums in TypeScript (accepted)
 
 [[docs/adr/251-exhaustive-api-enums-in-typescript|ADR-251]] keeps every `openapi.yaml` string enum
