@@ -63,7 +63,8 @@ struct NativeSettingsAboutView: View {
                 NativeSettingsRow(
                     title: strings.t("settings.app.adminMode"), description: strings.t("settings.app.adminModeHint")
                 ) {
-                    Toggle(strings.t("settings.app.adminMode"), isOn: $adminMode).labelsHidden().toggleStyle(.switch)
+                    Toggle(strings.t("settings.app.adminMode"), isOn: $adminMode)
+                        .labelsHidden().toggleStyle(.visionSwitchLabelless)
                         .disabled(!preferencesLoaded)
                 }
             }

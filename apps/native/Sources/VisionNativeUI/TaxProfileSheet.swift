@@ -82,8 +82,8 @@ struct TaxProfileSheet: View {
                 Button(strings.t(model.step == .region ? "tax.profile.save" : "common.next")) {
                     Task { _ = await model.next() }
                 }.buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction).disabled(model.isSaving)
-            }.controlSize(.large).padding(.horizontal, 24).padding(.vertical, 16)
-        }.frame(minWidth: 560, idealWidth: 620, minHeight: 620, idealHeight: 780)
+            }.padding(.horizontal, 24).padding(.vertical, 16)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
             .foregroundStyle(theme.foreground).visionInteractiveDismissDisabled(true)
             .task { await model.loadCategories() }
     }

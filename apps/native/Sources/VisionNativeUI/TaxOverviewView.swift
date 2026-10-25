@@ -79,12 +79,12 @@ public struct TaxOverviewView: View {
         .visionDialog(isPresented: $history, metrics: .init(maxWidth: nil, padding: 0, spacing: 0)) {
             if let overview { TaxHistorySheet(overview: overview, shell: shell) }
         }
-        .visionDialog(
+        // `SheetContent sm:max-w-lg`, `p-0`.
+        .visionSideSheet(
             isPresented: Binding(
                 get: { screens.profile.isPresented },
                 set: { value in if !value { Task { await screens.profile.close() } } }),
-            metrics: .init(
-                maxWidth: 620, height: .fraction(DesignTokens.Overlay.dialogMaxHeightFraction), padding: 0, spacing: 0)
+            metrics: .sideSheet(maxWidth: 512)
         ) {
             TaxProfileSheet(
                 model: screens.profile, shell: shell,

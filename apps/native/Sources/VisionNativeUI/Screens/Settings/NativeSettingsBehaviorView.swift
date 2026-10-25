@@ -50,7 +50,7 @@ public struct NativeSettingsBehaviorView: View {
                             get: { model.appBool("autoClearPlannedOnMatch", fallback: true) },
                             set: { model.updateApp(["autoClearPlannedOnMatch": .bool($0)]) })
                     )
-                    .labelsHidden().toggleStyle(.switch)
+                    .labelsHidden().toggleStyle(.visionSwitchLabelless)
                 }
                 if model.supportsServices {
                     Divider()
@@ -64,7 +64,7 @@ public struct NativeSettingsBehaviorView: View {
                                 get: { model.keepServicesOnQuit },
                                 set: { value in Task { await model.setKeepServicesOnQuit(value) } })
                         )
-                        .labelsHidden().toggleStyle(.switch).disabled(model.servicesLoading || model.servicesSaving)
+                        .labelsHidden().toggleStyle(.visionSwitchLabelless).disabled(model.servicesLoading || model.servicesSaving)
                     }
                 }
             }

@@ -62,16 +62,13 @@ public struct AIChatView: View {
             } action: {
                 width = $0
             }
-            .visionDialog(
-                isPresented: $conversationsOpen, metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0)
+            // `SheetContent side="left" className="w-72 p-0"` with an sr-only header; Escape and the scrim close it (the web X would sit over the new-chat button).
+            .visionSideSheet(
+                isPresented: $conversationsOpen, metrics: .sideSheet(maxWidth: 288, edge: .leading),
+                accessibilityTitle: strings.t("aiChat.conversations")
             ) {
-                VStack(alignment: .leading, spacing: 16) {
-                    VisionDialogHeader(
-                        title: strings.t("aiChat.conversations"), closeLabel: strings.t("common.close"),
-                        onClose: { conversationsOpen = false }
-                    ).keyboardShortcut(.cancelAction)
-                    AIChatConversationRail(model: model, shell: shell, didSelect: { conversationsOpen = false })
-                }.visionDialogPadding().frame(width: 380, height: 620)
+                AIChatConversationRail(model: model, shell: shell, didSelect: { conversationsOpen = false })
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
             .overlay(alignment: .bottom) {
                 NoticeToast(notice: model.notice, strings: strings, clear: model.clearNotice)

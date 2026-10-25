@@ -1,6 +1,11 @@
 import SwiftUI
 import VisionNativeCore
 
+extension SavedChartsModel {
+    /// `max-w-4xl` form plus preview, padded and fitted by the sheet itself.
+    static var builderMetrics: VisionDialogMetrics { VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0) }
+}
+
 struct SavedChartsView: View {
     let model: SavedChartsModel
     let snapshot: StatisticsSnapshot
@@ -60,12 +65,6 @@ struct SavedChartsView: View {
         }
         .task(id: snapshot) {
             await model.appear(snapshot: snapshot, currency: LedgerCurrency.display(settings), strings: strings)
-        }
-        .visionDialog(
-            isPresented: Binding(get: { model.draft != nil }, set: { if !$0 { model.close() } }),
-            metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0)
-        ) {
-            CustomChartBuilderSheet(model: model, snapshot: snapshot, settings: settings, strings: strings)
         }
         // The buttons decide: `confirmDelete()` reads `pendingDelete`, so a dismissal must not
         // clear it before the confirming task runs.
@@ -157,7 +156,10 @@ struct CustomChartPlot: View {
     }
 }
 
-private struct CustomChartBuilderSheet: View {
+/// The chart editor dialog. `StatisticsView` presents it (`StatisticsView.presentsChartBuilder`),
+/// because a presenter sizes its overlay to the view it modifies and this view is only as tall as
+/// its content: attached here, the dialog was clipped to the height of the empty "Saved charts" tab.
+struct CustomChartBuilderSheet: View {
     let model: SavedChartsModel
     let snapshot: StatisticsSnapshot
     let settings: NativeAppSettings

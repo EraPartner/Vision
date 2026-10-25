@@ -129,6 +129,15 @@ public struct StatisticsView: View {
             isPresented: $customize, metrics: PortfolioWidgetsSheet.metrics,
             accessibilityTitle: strings.t("widgets.title")
         ) { StatisticsWidgetsSheet(model: model, strings: strings) }
+        // Presented from the page, not the tab: the overlay takes the size of the view it modifies.
+        .visionDialog(
+            isPresented: Binding(get: { screens.saved.draft != nil }, set: { if !$0 { screens.saved.close() } }),
+            metrics: SavedChartsModel.builderMetrics
+        ) {
+            if let snapshot = model.filtered {
+                CustomChartBuilderSheet(model: screens.saved, snapshot: snapshot, settings: settings, strings: strings)
+            }
+        }
         .onChange(of: model.recipientQuery) { _, _ in model.recipientVisibleCount = settings.defaultPageSize }
     }
 

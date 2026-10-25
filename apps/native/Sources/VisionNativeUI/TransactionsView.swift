@@ -88,15 +88,13 @@ public struct TransactionsView: View {
                 .environment(\.colorScheme, theme.colorScheme)
         }
         // Below the `lg` width the inspector is a sheet (`SheetContent sm:max-w-md`, `p-0`).
-        .visionDialog(
+        .visionSideSheet(
             isPresented: Binding(
                 get: { inspectorIsSheet },
                 set: { presented in
                     if !presented { model.closeInspector() }
                 }),
-            metrics: .init(
-                maxWidth: 448, height: .fraction(DesignTokens.Overlay.dialogMaxHeightFraction), padding: 0,
-                spacing: 0)
+            metrics: .sideSheet(maxWidth: 448)
         ) {
             if let row = model.selectedRow, let inspector = model.inspector {
                 TransactionInspectorView(model: model, inspector: inspector, row: row, shell: shell, docked: false)
@@ -261,15 +259,13 @@ private struct TransactionDialogs: ViewModifier {
                 }
             }
             // `SheetContent sm:max-w-[470px]`, `p-0`.
-            .visionDialog(
+            .visionSideSheet(
                 isPresented: Binding(
                     get: { hosts && model.isAddPresented },
                     set: { presented in
                         if !presented { model.dismissAdd() }
                     }),
-                metrics: .init(
-                    maxWidth: 470, height: .fraction(DesignTokens.Overlay.dialogMaxHeightFraction), padding: 0,
-                    spacing: 0)
+                metrics: .sideSheet(maxWidth: 470)
             ) {
                 if let form = model.addForm {
                     TransactionAddSheet(model: model, form: form, shell: shell)

@@ -9,6 +9,8 @@ public struct NativeCommandPaletteView: View {
     @State private var selectedID: String?
     @State private var selectionWasMoved = false
     @FocusState private var searchFocused: Bool
+    /// The list's natural height, so the panel fits its content up to `CommandList`'s `max-h-[320px]`.
+    @State private var listContentHeight: CGFloat = 0
     @Environment(\.visionTheme) private var theme
 
     public init(model: NativeCommandPaletteModel, shell: NativeShellModel) {
@@ -21,7 +23,7 @@ public struct NativeCommandPaletteView: View {
     public var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Image(systemName: "magnifyingglass").foregroundStyle(theme.secondaryLabel).accessibilityHidden(true)
+                Image(systemName: "magnifyingglass").foregroundStyle(theme.tertiaryLabel).accessibilityHidden(true)
                 TextField(
                     shell.strings.t("commandPalette.placeholder"),
                     text: Binding(get: { model.query }, set: { model.query = $0 })
@@ -57,8 +59,8 @@ public struct NativeCommandPaletteView: View {
                     .labelStyle(.iconOnly).buttonStyle(.vision(.ghost, size: .iconSm))
                     .foregroundStyle(theme.secondaryLabel)
                     .keyboardShortcut(.cancelAction)
-            }.padding(18)
-            Divider().overlay(theme.border)
+            }.padding(.horizontal, 16).frame(height: 48)
+            Divider().overlay(theme.border.opacity(0.5))
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
@@ -69,7 +71,8 @@ public struct NativeCommandPaletteView: View {
                         }
                         ForEach(groups) { group in
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(group.title).font(.caption.weight(.medium)).foregroundStyle(theme.secondaryLabel)
+                                Text(group.title).font(.caption2.weight(.medium)).tracking(1.4).textCase(.uppercase)
+                                    .foregroundStyle(theme.secondaryLabel.opacity(0.8))
                                     .padding(.horizontal, 12).padding(.bottom, 4).accessibilityAddTraits(.isHeader)
                                 ForEach(group.entries) { entry in
                                     entryRow(entry).id(entry.id)
@@ -77,12 +80,13 @@ public struct NativeCommandPaletteView: View {
                             }
                         }
                     }.padding(8)
-                }.frame(maxHeight: 440)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listContentHeight = $0 }
+                }.frame(height: listContentHeight > 0 ? min(listContentHeight, 320) : 320)
                     .onChange(of: selectedID) { _, id in
                         if let id { proxy.scrollTo(id, anchor: .center) }
                     }
             }
-        }.frame(minWidth: 460, idealWidth: 600, maxWidth: 680)
+        }.frame(maxWidth: .infinity)
             // The shell's glass dialog supplies the surface, border and shadow.
             .foregroundStyle(theme.foreground)
             .accessibilityElement(children: .contain)

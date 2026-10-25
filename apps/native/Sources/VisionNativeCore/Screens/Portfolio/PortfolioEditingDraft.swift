@@ -149,6 +149,8 @@ public struct PortfolioInvestmentDraft: Equatable, Sendable {
     public var allowedAssetClasses: [OpenAPI.AssetClass]
     /// `nil` until the asset type is chosen.
     public var assetClass: OpenAPI.AssetClass?
+    /// The user went back to the asset-type step after choosing one (`step === "type"`).
+    public var isChoosingType = false
     public var name = ""
     public var symbol = ""
     public var currency: CurrencyCode
@@ -209,6 +211,7 @@ public struct PortfolioInvestmentDraft: Equatable, Sendable {
     public mutating func selectAssetClass(_ value: OpenAPI.AssetClass) {
         guard !isEditing, allowedAssetClasses.contains(value) else { return }
         assetClass = value
+        isChoosingType = false
         provider.provider = PortfolioAssetKinds.defaultProvider(value)
     }
     public func payload(format: NumberFormat) throws -> PortfolioEditingPayload {

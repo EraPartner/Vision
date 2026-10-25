@@ -63,7 +63,7 @@ struct HomeForecastDiagnostics: View {
                         .buttonStyle(.visionOutline)
                 }
             }.padding(24)
-        }.frame(width: 720, height: 660)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
             .task { await model.loadDiagnostics() }
             .onDisappear { model.forecastOptions.diagnostics = false }
     }

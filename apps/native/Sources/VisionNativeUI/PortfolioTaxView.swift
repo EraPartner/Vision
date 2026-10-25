@@ -88,14 +88,14 @@ public struct PortfolioTaxView: View {
         .visionDialog(isPresented: $history, metrics: .init(maxWidth: nil, padding: 0, spacing: 0)) {
             if let overview { TaxHistorySheet(overview: overview, shell: shell) }
         }
-        .visionDialog(
+        // `SheetContent sm:max-w-lg`, `p-0`.
+        .visionSideSheet(
             isPresented: Binding(
                 get: { tax.profile.isPresented },
                 set: { value in
                     if !value { Task { await tax.profile.close() } }
                 }),
-            metrics: .init(
-                maxWidth: 620, height: .fraction(DesignTokens.Overlay.dialogMaxHeightFraction), padding: 0, spacing: 0)
+            metrics: .sideSheet(maxWidth: 512)
         ) {
             TaxProfileSheet(model: tax.profile, shell: shell, onUnfile: { await tax.unfileProfileYear() })
         }

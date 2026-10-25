@@ -75,15 +75,13 @@ public struct PlannedPaymentsView: View {
         }
         // The planned-payment sheet (`SheetContent sm:max-w-[470px]`, `p-0`): Escape and the close
         // button leave without saving.
-        .visionDialog(
+        .visionSideSheet(
             item: Binding(
                 get: { model.editor },
                 set: { form in
                     if form == nil { model.dismissEditor() }
                 }),
-            metrics: .init(
-                maxWidth: 470, height: .fraction(DesignTokens.Overlay.dialogMaxHeightFraction), padding: 0,
-                spacing: 0)
+            metrics: .sideSheet(maxWidth: 470)
         ) { form in
             PlannedPaymentFormSheet(model: model, form: form, shell: shell)
                 .environment(\.visionTheme, theme)

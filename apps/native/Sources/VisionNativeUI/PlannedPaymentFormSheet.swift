@@ -114,7 +114,7 @@ struct PlannedPaymentFormSheet: View {
             if form.showsRecurrenceFields { recurrenceFields }
             field("plannedForm.notes") {
                 TextEditor(text: $form.notes)
-                    .visionTextEditor(minHeight: 48)
+                    .visionTextEditor()
                     .overlay(alignment: .topLeading) {
                         if form.notes.isEmpty {
                             Text(strings.t("plannedForm.notesPlaceholder2"))
@@ -156,6 +156,7 @@ struct PlannedPaymentFormSheet: View {
                         systemImage: "arrow.up.right"),
                 ]
             )
+            .fillingWidth()
             .accessibilityLabel(strings.t("plannedForm.direction"))
             .disabled(form.isLoan)
             helpText(form.directionHelpKey)
@@ -265,7 +266,7 @@ struct PlannedPaymentFormSheet: View {
                 form.resetErrors()
                 model.dismissEditor()
             }
-            .buttonStyle(.visionOutline)
+            .buttonStyle(.vision(.ghost))
             .keyboardShortcut(.cancelAction)
             Button(action: save) {
                 HStack(spacing: 6) {
@@ -279,7 +280,6 @@ struct PlannedPaymentFormSheet: View {
             .keyboardShortcut(.defaultAction)
             .disabled(saving)
         }
-        .controlSize(.large)
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
     }
@@ -329,7 +329,7 @@ struct PlannedPaymentFormSheet: View {
             Spacer(minLength: 0)
             Toggle(strings.t(labelKey), isOn: isOn)
                 .labelsHidden()
-                .toggleStyle(.visionSwitch)
+                .toggleStyle(.visionSwitchLabelless)
                 .disabled(disabled)
         }
         .padding(12)

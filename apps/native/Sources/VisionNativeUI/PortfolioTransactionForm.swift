@@ -240,7 +240,8 @@ private struct PortfolioEditingPresenter: ViewModifier {
         }
     }
     private var editorMetrics: VisionDialogMetrics {
-        model.presentation == .investment ? PortfolioInvestmentForm.metrics : PortfolioTransactionForm.metrics
+        model.presentation == .investment
+            ? PortfolioInvestmentForm.metrics(for: model.investmentDraft) : PortfolioTransactionForm.metrics
     }
     private var confirmationTitle: String {
         switch model.confirmation {

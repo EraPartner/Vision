@@ -42,6 +42,9 @@ private struct VisionToggleRow<Control: View>: View {
     let configuration: ToggleStyleConfiguration
     let control: Control
     var isRadio = false
+    /// `false` draws the control alone; the label stays the accessibility name. A custom style does
+    /// not inherit `.labelsHidden()`, so hidden-label call sites use `.visionSwitchLabelless`.
+    var showsLabel = true
     @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
@@ -54,7 +57,7 @@ private struct VisionToggleRow<Control: View>: View {
         } label: {
             HStack(spacing: VisionToggleMetrics.labelGap) {
                 control
-                configuration.label
+                if showsLabel { configuration.label }
             }
             .contentShape(Rectangle())
         }
@@ -73,8 +76,12 @@ private struct VisionToggleRow<Control: View>: View {
 /// colour over `--duration-normal` and the thumb on the snappy spring (no animation under Reduce
 /// Motion). Use as `.toggleStyle(.visionSwitch)`.
 struct VisionSwitchToggleStyle: ToggleStyle {
+    var showsLabel = true
+
     func makeBody(configuration: Configuration) -> some View {
-        VisionToggleRow(configuration: configuration, control: VisionSwitchControl(isOn: configuration.isOn))
+        VisionToggleRow(
+            configuration: configuration, control: VisionSwitchControl(isOn: configuration.isOn),
+            showsLabel: showsLabel)
     }
 }
 
@@ -206,6 +213,12 @@ private struct VisionRadioControl: View {
 extension ToggleStyle where Self == VisionSwitchToggleStyle {
     /// Replaces `.toggleStyle(.switch)`.
     static var visionSwitch: VisionSwitchToggleStyle { VisionSwitchToggleStyle() }
+}
+
+extension ToggleStyle where Self == VisionSwitchToggleStyle {
+    /// `.visionSwitch` without the visible label, for a switch whose name sits beside it (the
+    /// `.labelsHidden()` call sites); VoiceOver still reads the label.
+    static var visionSwitchLabelless: VisionSwitchToggleStyle { VisionSwitchToggleStyle(showsLabel: false) }
 }
 
 extension ToggleStyle where Self == VisionCheckboxToggleStyle {

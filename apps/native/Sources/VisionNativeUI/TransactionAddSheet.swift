@@ -294,7 +294,6 @@ struct TransactionAddSheet: View {
                 .accessibilityHidden(true)
                 .disabled(form.isPending)
         }
-        .controlSize(.large)
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
     }

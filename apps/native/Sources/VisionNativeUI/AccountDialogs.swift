@@ -59,9 +59,10 @@ struct AccountDialogs: ViewModifier {
                     deleteCopy = DeleteCopy(title: text.title, message: text.message, action: text.action)
                 }
             }
-            .visionDialog(
+            // `SheetContent sm:max-w-[470px]`, `p-0`: the add / edit account form is a right sheet.
+            .visionSideSheet(
                 isPresented: binding({ model.form != nil }, close: { model.closeForm() }),
-                metrics: Self.metrics(width: AccountFormSheet.dialogWidth)
+                metrics: .sideSheet(maxWidth: AccountFormSheet.dialogWidth)
             ) {
                 themed(AccountFormSheet(model: model, shell: shell))
             }
@@ -123,6 +124,9 @@ struct AccountDialogFrame<Content: View, Footer: View>: View {
     var description: String?
     let closeLabel: String
     var width: CGFloat = AccountDialogFrame.defaultWidth
+    /// A right sheet (`SheetContent p-0 gap-0`): the body scrolls between the header and a footer
+    /// pinned to the bottom under a `border-border/50` rule, `px-6 py-4`.
+    var pinsFooter = false
     @ViewBuilder var content: () -> Content
     @ViewBuilder var footer: () -> Footer
     @Environment(\.visionTheme) private var theme
@@ -140,23 +144,34 @@ struct AccountDialogFrame<Content: View, Footer: View>: View {
                 }
             )
             .padding([.horizontal, .top], 24)
-            .padding(.bottom, 20)
-            if hosted {
+            .padding(.bottom, pinsFooter ? 0 : 20)
+            if pinsFooter {
+                ScrollView { fields.padding(.vertical, 20) }
+                Divider().overlay(theme.border.opacity(0.5))
+                HStack(spacing: 8) {
+                    footer()
+                }
+                .buttonStyle(.visionOutline)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 16)
+            } else if hosted {
                 fields
             } else {
                 ScrollView { fields }
             }
-            HStack(spacing: 8) {
-                footer()
+            if !pinsFooter {
+                HStack(spacing: 8) {
+                    footer()
+                }
+                .buttonStyle(.visionOutline)
+                .padding([.horizontal, .bottom], 24)
+                .padding(.top, 20)
             }
-            .buttonStyle(.visionOutline)
-            .controlSize(.large)
-            .padding([.horizontal, .bottom], 24)
-            .padding(.top, 20)
         }
         .frame(
-            minWidth: hosted ? nil : width, idealWidth: hosted ? nil : width, maxWidth: hosted ? CGFloat.infinity : nil,
-            minHeight: hosted ? nil : 240, alignment: .topLeading
+            minWidth: hosted ? nil : width, idealWidth: hosted ? nil : width,
+            maxWidth: hosted ? CGFloat.infinity : nil, minHeight: hosted ? nil : 240,
+            maxHeight: pinsFooter ? CGFloat.infinity : nil, alignment: .topLeading
         )
         .foregroundStyle(theme.foreground)
     }
@@ -245,7 +260,8 @@ struct AccountFormSheet: View {
     var body: some View {
         if let form = model.form {
             AccountDialogFrame(
-                title: strings.t(form.titleKey), closeLabel: strings.t("common.close"), width: Self.dialogWidth
+                title: strings.t(form.titleKey), closeLabel: strings.t("common.close"), width: Self.dialogWidth,
+                pinsFooter: true
             ) {
                 fields(form)
             } footer: {

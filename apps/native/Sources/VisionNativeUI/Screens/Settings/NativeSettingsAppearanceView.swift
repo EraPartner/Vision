@@ -62,7 +62,7 @@ struct NativeSettingsAppearanceView: View {
                             get: { model.themeBool("systemAccent", fallback: false) },
                             set: { model.updateTheme(["systemAccent": .bool($0)]) })
                     )
-                    .labelsHidden().toggleStyle(.switch)
+                    .labelsHidden().toggleStyle(.visionSwitchLabelless)
                 }
             }
             NativeSettingsGroup(title: strings.t("settings.group.visualEffects")) {
@@ -98,7 +98,7 @@ struct NativeSettingsAppearanceView: View {
                             get: { model.appBool("autoAdaptDisplay", fallback: true) },
                             set: { model.setAutoAdaptDisplay($0) })
                     )
-                    .labelsHidden().toggleStyle(.switch)
+                    .labelsHidden().toggleStyle(.visionSwitchLabelless)
                 }
                 Divider()
                 NativeSettingsRow(
@@ -111,7 +111,7 @@ struct NativeSettingsAppearanceView: View {
                             get: { model.fullEffects },
                             set: { model.setFullEffects($0) })
                     )
-                    .labelsHidden().toggleStyle(.switch)
+                    .labelsHidden().toggleStyle(.visionSwitchLabelless)
                 }
             }
             NativeSettingsGroup(title: strings.t("settings.group.accessibility")) {
@@ -119,25 +119,23 @@ struct NativeSettingsAppearanceView: View {
                     title: strings.t("settings.appearance.gainLossColors"),
                     description: strings.t("settings.appearance.gainLossColorsHint")
                 ) {
-                    Picker(
-                        strings.t("settings.appearance.gainLossColors"),
+                    VisionSelect(
                         selection: Binding(
                             get: { model.appBool("colorblindGainLoss", fallback: false) ? "colorblind" : "classic" },
-                            set: { model.updateApp(["colorblindGainLoss": .bool($0 == "colorblind")]) })
-                    ) {
-                        ForEach(["colorblind", "classic"], id: \.self) { skin in
-                            HStack {
-                                Circle().fill(
-                                    Color(
-                                        token: skin == "colorblind"
-                                            ? theme.palette.colorblindLoss : theme.palette.destructive)
-                                ).frame(width: 10, height: 10).accessibilityHidden(true)
-                                Text(strings.t("settings.appearance.gainLossColors." + skin))
-                            }.tag(skin)
-                        }
-                    }.labelsHidden()
+                            set: { model.updateApp(["colorblindGainLoss": .bool($0 == "colorblind")]) }),
+                        options: gainLossOptions, accessibilityLabel: strings.t("settings.appearance.gainLossColors"),
+                        expands: true
+                    ).frame(width: 200)
                 }
             }
+        }
+    }
+    private var gainLossOptions: [VisionSelectOption<String>] {
+        ["colorblind", "classic"].map { skin in
+            VisionSelectOption(
+                value: skin, title: strings.t("settings.appearance.gainLossColors." + skin),
+                swatch: Color(
+                    token: skin == "colorblind" ? theme.palette.colorblindLoss : theme.palette.destructive))
         }
     }
     private func variantButton(_ item: ThemeVariant) -> some View {

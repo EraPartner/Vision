@@ -107,11 +107,15 @@ struct VisionModalPresenter<Panel: View>: ViewModifier {
 
     private var layer: some View {
         GeometryReader { proxy in
-            ZStack(alignment: kind == .sideSheet ? .trailing : .center) {
+            ZStack(alignment: kind == .sideSheet ? (metrics.sideEdge == .leading ? .leading : .trailing) : .center) {
                 scrim
                 placed(in: proxy.size)
             }
         }
+        // The panel's system `Material` follows the environment colour scheme, not the app theme.
+        // The presenter sits above the content that sets it, so without this a dark theme under a
+        // light system appearance drew a light material behind dark content.
+        .environment(\.colorScheme, theme.colorScheme)
         .ignoresSafeArea()
     }
 
@@ -127,9 +131,9 @@ struct VisionModalPresenter<Panel: View>: ViewModifier {
     private func placed(in size: CGSize) -> some View {
         switch kind {
         case .sideSheet:
-            VisionSideSheet(available: size) { panelContent }
+            VisionSideSheet(available: size, metrics: metrics) { panelContent }
                 .modifier(modalTraits)
-                .offset(x: shown ? 0 : size.width)
+                .offset(x: shown ? 0 : (metrics.sideEdge == .leading ? -size.width : size.width))
         case .dialog, .alert:
             VisionGlassDialog(metrics: metrics, available: size) { panelContent }
                 .modifier(modalTraits)

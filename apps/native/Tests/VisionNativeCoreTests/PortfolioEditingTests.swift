@@ -126,6 +126,17 @@ struct PortfolioEditingDraftTests {
         #expect(provider.id.isEmpty)
         #expect(provider.latestUrl == " https://example.org/quotes ")
     }
+    @Test func goingBackToTheTypeStepIsClearedByChoosingAClass() {
+        var draft = PortfolioInvestmentDraft(settings: .init(numberFormat: .us), today: "2026-10-13")
+        #expect(draft.assetClass == nil)
+        draft.selectAssetClass(.etf)
+        #expect(draft.assetClass == .etf)
+        #expect(!draft.isChoosingType)
+        draft.isChoosingType = true
+        draft.selectAssetClass(.crypto)
+        #expect(draft.assetClass == .crypto)
+        #expect(!draft.isChoosingType)
+    }
     @Test func initialPurchaseRequiresAmountUnitsAndDateBeforeAnInvestmentIsWritten() throws {
         var draft = PortfolioInvestmentDraft(
             settings: .init(numberFormat: .us), today: "2026-10-13", allowedAssetClasses: [.stock])

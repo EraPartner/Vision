@@ -14,6 +14,10 @@ public struct NativeSettingsWindow: View {
         static let heightFraction = 0.82
         /// `md:w-64` on the `aside`.
         static let railWidth: CGFloat = 256
+        /// A `SettingsRow` item: 42 pt tall in the web rail.
+        static let railRowHeight: CGFloat = 42
+        /// `md:gap-0.5` between rail items.
+        static let railGap: CGFloat = 2
         /// `md:pt-10` on the section list.
         static let railTopInset: CGFloat = 40
         /// `aria-selected:bg-primary/10`.
@@ -62,7 +66,7 @@ public struct NativeSettingsWindow: View {
     public var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                VStack(spacing: 4) {
+                VStack(spacing: Layout.railGap) {
                     ForEach(NativeSettingsWindowSection.allCases, id: \.rawValue) { item in
                         Button {
                             select(item)

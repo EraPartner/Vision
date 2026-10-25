@@ -63,7 +63,7 @@ struct ResearchMarketActionSheet: View {
                             || (model.step == "new"
                                 && model.investment.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     )
-                }.controlSize(.large)
+                }
             }
         }.visionDialogPadding().frame(width: 448).frame(maxHeight: 760)
             .onSubmit {

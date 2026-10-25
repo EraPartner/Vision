@@ -91,17 +91,19 @@ public struct HomeView: View {
         ) {
             HomeWidgetsSheet(model: model, strings: strings)
         }
-        .visionDialog(
-            isPresented: $diagnostics, metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0),
+        // `SheetContent side="right" w-full sm:max-w-2xl`: the sheet pads its own scroll area.
+        .visionSideSheet(
+            isPresented: $diagnostics, metrics: .sideSheet(maxWidth: 672),
             accessibilityTitle: strings.t("cashflow.diagnostics.title")
         ) {
             HomeForecastDiagnostics(model: model, settings: settings, strings: strings)
         }
-        .visionDialog(
+        // `SheetContent sm:max-w-[470px]`, `p-0`.
+        .visionSideSheet(
             isPresented: Binding(
                 get: { shell.transactions.isAddPresented },
                 set: { if !$0 { shell.transactions.dismissAdd() } }),
-            metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0)
+            metrics: .sideSheet(maxWidth: 470)
         ) {
             if let form = shell.transactions.addForm {
                 TransactionAddSheet(model: shell.transactions, form: form, shell: shell)

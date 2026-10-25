@@ -110,11 +110,13 @@ struct NativeSettingsSelectRow: View {
     }
     var body: some View {
         NativeSettingsRow(title: title, description: description) {
-            Picker(title, selection: $value) {
-                ForEach(options) { Text($0.label).tag($0.value) }
-            }.labelsHidden().accessibilityLabel(title)
-                // The web select: a fixed `w-48` field, value at the leading edge.
-                .frame(width: 200)
+            VisionSelect(
+                selection: $value,
+                options: options.map { VisionSelectOption(value: $0.value, title: $0.label) },
+                accessibilityLabel: title, expands: true
+            )
+            // The web select: a fixed `w-48` field, value at the leading edge.
+            .frame(width: 200)
         }
     }
 }
@@ -138,7 +140,9 @@ struct NativeSettingsRailRow: View {
 
     var body: some View {
         Label(title, systemImage: symbol).font(.body)
-            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 12)
+            .foregroundStyle(theme.foreground)
+            .frame(maxWidth: .infinity, minHeight: NativeSettingsWindow.Layout.railRowHeight, alignment: .leading)
+            .padding(.horizontal, 12)
             .contentShape(Rectangle())
             .background(fill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous))
             .onHover { hovering = $0 }

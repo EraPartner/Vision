@@ -68,6 +68,8 @@ struct VisionSegmentedControl<Value: Hashable>: View {
     /// The per-item `className="px-2.5 type-footnote"` the web passes for dense toolbars: 10pt
     /// side padding and `type-footnote` instead of `px-3 type-body`.
     var compact = false
+    /// `className="w-full"`: the track fills the width and the segments share it equally.
+    var fillsWidth = false
 
     @Environment(\.visionTheme) private var theme
     @Environment(\.isEnabled) private var isEnabled
@@ -110,6 +112,13 @@ struct VisionSegmentedControl<Value: Hashable>: View {
         }
     }
 
+    /// `className="w-full"`.
+    func fillingWidth() -> Self {
+        var copy = self
+        copy.fillsWidth = true
+        return copy
+    }
+
     private var track: some View {
         let shape = RoundedRectangle(cornerRadius: VisionControlMetrics.radius, style: .continuous)
         return HStack(spacing: 0) {
@@ -118,6 +127,7 @@ struct VisionSegmentedControl<Value: Hashable>: View {
             }
         }
         .padding(trackPadding)
+        .frame(maxWidth: fillsWidth ? .infinity : nil)
         .frame(height: size.height)
         .background(shape.fill(theme.foreground.opacity(0.06)))
         .animation(VisionControlMetrics.snappySpring(reduceMotion: reduceMotion), value: selection)
@@ -142,6 +152,7 @@ struct VisionSegmentedControl<Value: Hashable>: View {
                 }
                 Text(option.title).lineLimit(1)
             }
+            .frame(maxWidth: fillsWidth ? .infinity : nil)
         }
         .buttonStyle(
             VisionSegmentButtonStyle(
