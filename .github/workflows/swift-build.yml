@@ -1,0 +1,61 @@
+name: Swift app build
+
+# Manual only (ADR-249). It never runs on pull requests or pushes, so it adds no time to CI.
+# Agents start it on a branch with workflow_dispatch to compile and test apps/native.
+on:
+  workflow_dispatch:
+    inputs:
+      tests:
+        description: Also run the Swift package tests
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: swift-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swift-build:
+    name: Swift app (macOS)
+    runs-on: macos-26
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
+
+      - name: Show Xcode
+        run: xcodebuild -version
+
+      # Pinned XcodeGen release, verified by SHA-256 before use (same pin as the retired
+      # Native (macOS) job, hash of the 2.46.0 release zip downloaded on 2026-10-12).
+      - name: Install XcodeGen
+        env:
+          XCODEGEN_VERSION: "2.46.0"
+          XCODEGEN_SHA256: "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806"
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+
+      - name: Generate the Xcode project
+        run: xcodegen generate --spec apps/native/project.yml
+
+      # -quiet keeps the log to warnings and errors so build failures are easy to read.
+      - name: Build the app (Debug, unsigned)
+        run: xcodebuild -quiet -project apps/native/VisionNative.xcodeproj -scheme "Vision Native" -configuration Debug CODE_SIGNING_ALLOWED=NO build
+
+      - name: Test the Swift package
+        if: inputs.tests
+        run: |
+          # Run AppKit layouts separately so they cannot starve Core watchdogs/polling on MainActor.
+          swift test --package-path apps/native --skip VisionNativeUITests
+          # AppKit activation, key windows and display transactions are process-global.
+          swift test --package-path apps/native --skip-build --no-parallel --filter VisionNativeUITests
