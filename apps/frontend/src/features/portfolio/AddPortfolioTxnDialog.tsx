@@ -31,7 +31,7 @@ import type {
     RecurrenceInterval,
     InvestmentSummary,
 } from "@/types/portfolio";
-import { getTxnTypeLabel } from "@/types/portfolio";
+import { getTxnTypeLabel, isPortfolioTxnType } from "@/types/portfolio";
 import { toast } from "sonner";
 import { toYmd } from "@/lib/dateUtils";
 import {
@@ -296,12 +296,10 @@ export function AddPortfolioTxnDialog({
                                 </Label>
                                 <Select
                                     value={form.type}
-                                    onValueChange={(v) =>
-                                        setForm((f) => ({
-                                            ...f,
-                                            type: v as PortfolioTxnType,
-                                        }))
-                                    }
+                                    onValueChange={(v) => {
+                                        if (!isPortfolioTxnType(v)) return;
+                                        setForm((f) => ({ ...f, type: v }));
+                                    }}
                                 >
                                     <SelectTrigger id="txn-type">
                                         <SelectValue />

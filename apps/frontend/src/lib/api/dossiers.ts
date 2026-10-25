@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/api/client";
+import { enumGuard } from "@/lib/enumGuard";
 import type { AnalysisWorkspace } from "@/lib/api/analysis";
 import {
     DossierExportSchema,
@@ -10,6 +11,16 @@ import type { CategoryId, InvestmentId } from "@vision/types/brands";
 
 export type EvidenceStance = "support" | "oppose" | "context";
 export type EvidenceOrigin = "user" | "ai-draft";
+
+export const isEvidenceStance = enumGuard<EvidenceStance>({
+    support: true,
+    oppose: true,
+    context: true,
+});
+export const isEvidenceOrigin = enumGuard<EvidenceOrigin>({
+    user: true,
+    "ai-draft": true,
+});
 
 export interface DossierEvidence {
     id: string;

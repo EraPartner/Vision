@@ -1,10 +1,11 @@
+import type { MarketChartInterval } from '@/lib/api/market';
 import type { ResearchRange } from '@/types/research';
 
 export interface ChartRangeOption {
     label: string;
     range: ResearchRange;
     /** Candle sampling interval for chart fetches; range-only consumers ignore it. */
-    interval: string;
+    interval: MarketChartInterval;
 }
 
 /**

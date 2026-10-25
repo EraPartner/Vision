@@ -8,6 +8,8 @@
  * silent blank.
  */
 
+import type { operations } from "./generated";
+
 /** Provenance of a research response, lifted from the envelope `meta`. */
 export type ResearchSource = "cache" | "live" | "unavailable";
 
@@ -293,8 +295,12 @@ export interface MappingAuditResponse {
 
 // ── Provider API keys (Settings) ──────────────────────────────────────────────
 
+/** Providers whose API key can be set or cleared (`{provider}` path parameter). */
+export type ResearchProviderKeyId =
+    operations["researchSetProviderKey"]["parameters"]["path"]["provider"];
+
 export interface ProviderKeyStatus {
-    provider: string;
+    provider: ResearchProviderKeyId;
     label: string;
     envVar: string;
     configured: boolean;

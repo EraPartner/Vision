@@ -305,6 +305,13 @@ export default tseslint.config(
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
       ...typeAwareRules,
+      // A `default` arm does not excuse a missing union member (ADR-251): list
+      // every known API enum value, and keep `default` only as the fallback for
+      // values a newer server may send.
+      "@typescript-eslint/switch-exhaustiveness-check": [
+        "error",
+        { considerDefaultExhaustiveForUnions: false },
+      ],
     },
   },
   {

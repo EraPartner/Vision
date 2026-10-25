@@ -21,13 +21,16 @@ import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { cn } from "@/lib/utils";
 import type { SavedAnalysis } from "@/lib/api/analysis";
-import type {
-    AnalysisMonitor,
-    MonitorCreate,
-    MonitorKind,
-    MonitorOperator,
-    MonitorUpdate,
-    MonitorObservation,
+import {
+    isMonitorKind,
+    isMonitorOperator,
+    type AnalysisMonitor,
+    type MonitorCreate,
+    type MonitorKind,
+    type MonitorOperator,
+    type MonitorStatus,
+    type MonitorUpdate,
+    type MonitorObservation,
 } from "@/lib/api/monitors";
 import {
     useMonitorActions,
@@ -145,7 +148,7 @@ function dateTime(value: string | null) {
     return value ? new Date(value).toLocaleString() : "—";
 }
 
-const statusTone: Record<string, BadgeProps["variant"]> = {
+const statusTone: Record<MonitorStatus | "never", BadgeProps["variant"]> = {
     triggered: "warning",
     failed: "destructive",
     partial: "warning",
@@ -156,7 +159,11 @@ const statusTone: Record<string, BadgeProps["variant"]> = {
     never: "muted",
 };
 
-function StatusBadge({ status }: { status: string | null | undefined }) {
+function StatusBadge({
+    status,
+}: {
+    status: MonitorStatus | null | undefined;
+}) {
     const { t } = useLanguage();
     const key = status ?? "never";
     return (
@@ -352,7 +359,9 @@ function OperatorControl({
         <SegmentedControl
             label={t("monitors.operator")}
             value={value}
-            onValueChange={(next) => onChange(next as MonitorOperator)}
+            onValueChange={(next) => {
+                if (isMonitorOperator(next)) onChange(next);
+            }}
             className="w-full"
         >
             <SegmentedControlItem value="above">
@@ -662,12 +671,10 @@ export default function AnalysisMonitorsPage() {
                                 <SegmentedControl
                                     label={t("monitors.kind")}
                                     value={form.kind}
-                                    onValueChange={(next) =>
-                                        setForm({
-                                            ...blank,
-                                            kind: next as MonitorKind,
-                                        })
-                                    }
+                                    onValueChange={(next) => {
+                                        if (isMonitorKind(next))
+                                            setForm({ ...blank, kind: next });
+                                    }}
                                     className="grid h-auto w-full grid-cols-1"
                                     orientation="vertical"
                                 >

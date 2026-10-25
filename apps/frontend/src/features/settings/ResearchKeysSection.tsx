@@ -11,7 +11,10 @@ import {
     setResearchProviderKey,
     clearResearchProviderKey,
 } from "@/lib/api/research";
-import type { ProviderKeyStatus } from "@/types/research";
+import type {
+    ProviderKeyStatus,
+    ResearchProviderKeyId,
+} from "@/types/research";
 import {
     SettingsGroup,
     SettingRow,
@@ -37,7 +40,7 @@ export function ResearchKeysSection() {
             provider,
             apiKey,
         }: {
-            provider: string;
+            provider: ResearchProviderKeyId;
             apiKey: string;
         }) => setResearchProviderKey(provider, apiKey),
         onSuccess: () => {
@@ -48,7 +51,7 @@ export function ResearchKeysSection() {
     });
 
     const clearMutation = useMutation({
-        mutationFn: (provider: string) => clearResearchProviderKey(provider),
+        mutationFn: (provider: ResearchProviderKeyId) => clearResearchProviderKey(provider),
         onSuccess: () => {
             void invalidate();
             toast.success(t("settings.research.cleared"));

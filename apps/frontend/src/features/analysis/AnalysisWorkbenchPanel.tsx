@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, useRef } from "react";
 import type {
+    AnalysisExtensionOperation,
     AnalysisResult,
     AnalysisValue,
     AnalysisUnit,
@@ -348,7 +349,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
         props.assumptionValuesJson,
     ]);
     const run = async (
-        operation: string,
+        operation: AnalysisExtensionOperation,
         fields: Record<string, unknown> = {},
         apply = false,
     ) => {

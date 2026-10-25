@@ -2,8 +2,8 @@
 title: TypeScript Types Reference
 type: reference
 status: active
-date: 2026-10-22
-updated: 2026-10-20
+date: 2026-10-25
+updated: 2026-10-25
 tags:
   [
     reference,
@@ -114,9 +114,10 @@ through `tests/helpers/responseBody.ts`, and the backend lint rule
 
 - Imports `components['schemas']` from `generated.ts` and the hand-written types from `api.ts` (plus the per-feature type modules for splits, watchlist, attachments and AI chat)
 - **Key coverage check:** every field the app consumes (`Transaction`, `Category`, `Account`, `Recipient`, `Tag`, `PlannedTransaction`, `Investment`, `PortfolioTransaction`, `SplitItem`, `SplitPayment`, `OwedSummaryItem`, `WatchlistItem`, `Attachment`, `ConversationSummary`, `ChatMessage`, `TokenUsage`, `OllamaModel`) must exist as a key in the corresponding generated schema — `bun run typecheck` fails if a field is renamed or removed in the contract
+- **Enum check ([[docs/adr/251-exhaustive-api-enums-in-typescript|ADR-251]]):** `Matches<A, B>` also requires every contract string enum (or array of one) to stay a subset of that literal union in the consumed type, and names the offending keys when one is widened to `string`. The domain-client types in `src/lib/api/` are pinned the same way. Frontend switches over a union must list every member even with a `default` arm (`considerDefaultExhaustiveForUnions: false`)
 - **Money/quantity check:** money fields (`amount`, `balance`, `amount_eur`, `loan_principal`, `current_price`, `units`, `price_per_unit`, `fees`, `taxes`, `amount_paid`, `total_owed`, `total_paid`, `remaining`, `target_price`, `added_price`) must remain `number` (or `number | null`) in the contract — fails if the OpenAPI spec re-types an amount as a string
 - **Portfolio PATCH type:** `PortfolioTransactionUpdate` is derived directly from the generated `updatePortfolioTransaction` request body, so generated optional fields and nullable clear semantics cannot drift from a handwritten copy
-- **One-directional and optionality-tolerant:** additive contract changes (new fields) and `required`/`| null` nuances do not cause failures — only consumed-field removals/renames and money-type regressions are caught
+- **One-directional and optionality-tolerant:** additive contract changes (new fields) and `required`/`| null` nuances do not cause failures — only consumed-field removals/renames, enums widened to `string` and money-type regressions are caught
 
 > [!note] Money coercion is a separate concern
 > `api.ts` types money fields as `number`, but node-postgres returns NUMERIC columns as strings. The repository layer coerces them on emit via `numericColumn` / `coerceNumericFields` (see [[docs/reference/repository-layer|Repository Layer]] and [[docs/reference/code-patterns#money-utility-pattern-phase-9--june-2026|Money Utility Pattern]]). `contract-guard.ts` does not address this runtime conversion — it only enforces that the OpenAPI schema declares them as numeric.

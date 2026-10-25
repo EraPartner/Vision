@@ -107,7 +107,7 @@ export function ScorecardPanel({
                     })}
                 </span>
                 <div className="ml-auto flex gap-1.5">
-                    {(["risk", "warn", "caution"] as ScorecardSeverity[]).map(
+                    {(["risk", "warn", "caution"] satisfies ScorecardSeverity[]).map(
                         (sev) =>
                             scorecard.counts[sev] > 0 ? (
                                 <Badge

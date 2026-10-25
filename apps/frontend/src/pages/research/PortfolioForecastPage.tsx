@@ -53,6 +53,7 @@ import {
 } from "@/hooks/useCurrencyFormatter";
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
+import { isForecastMethod } from "@/lib/api/research";
 import type { ForecastMethod, ForecastPoint } from "@/types/research";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PAGE_ICONS } from "@/lib/pageIcons";
@@ -404,9 +405,9 @@ export default function PortfolioForecastPage() {
                                 label={t("research.forecast.method")}
                                 size="sm"
                                 value={method}
-                                onValueChange={(v) =>
-                                    setMethod(v as ForecastMethod)
-                                }
+                                onValueChange={(v) => {
+                                    if (isForecastMethod(v)) setMethod(v);
+                                }}
                             >
                                 <SegmentedControlItem value="parametric">
                                     {t("research.forecast.methodParametric")}

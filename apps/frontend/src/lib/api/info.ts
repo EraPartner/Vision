@@ -2,6 +2,7 @@ import logger from "@/lib/logger";
 import { ApiContractError, apiRequest } from "@/lib/api/client";
 import { requestWithQuery } from "@/lib/api/helpers";
 import type { NetWorthResponse } from "@/types/apiClient";
+import type { components, operations } from "@/types/generated";
 import {
     BankNameListSchema,
     BrokerPortfolioPerformanceSchema,
@@ -25,6 +26,8 @@ import type {
     InvestmentId,
     RecipientId,
 } from "@vision/types/brands";
+
+type Schemas = components["schemas"];
 
 // (Removed getStatistics — legacy GET /api/info was deleted in the Phase 9
 // cutover; it had no callers. Use the aggregations endpoints instead.)
@@ -145,6 +148,8 @@ export interface CategoryOutlier {
     direction: string;
 }
 
+export type CashForecastProminence = Schemas["CashForecastInsight"]["prominence"];
+
 /** Zero-based month-end net-cashflow insight (not an account balance). */
 export interface CashForecast {
     month: string;
@@ -153,7 +158,7 @@ export interface CashForecast {
     monthEndNetCashflowLow: number | null;
     monthEndNetCashflowHigh: number | null;
     movedSignificantly: boolean;
-    prominence: string;
+    prominence: CashForecastProminence;
     methodId: string;
 }
 
@@ -185,9 +190,11 @@ export async function getInsightsDigest(): Promise<InsightsDigestResponse> {
     }
 }
 
+export type InsightsCountStatus = Schemas["InsightsCountData"]["status"];
+
 export interface InsightsCountResponse {
     count: number | null;
-    status: "ready" | "pending" | "unavailable";
+    status: InsightsCountStatus;
     computed_at: string | null;
 }
 
@@ -197,12 +204,14 @@ export function getInsightsCount(): Promise<InsightsCountResponse> {
     });
 }
 
+export type InsightDismissalKind = Schemas["InsightDismissalRequest"]["kind"];
+
 export type InsightDismissalRequest =
     | {
-          kind: "subscription_new" | "subscription_price_change";
+          kind: Exclude<InsightDismissalKind, "category_outlier">;
           recipient_id: RecipientId;
       }
-    | { kind: "category_outlier"; category_id: CategoryId; month_key: string };
+    | { kind: Extract<InsightDismissalKind, "category_outlier">; category_id: CategoryId; month_key: string };
 
 export function dismissInsight(
     request: InsightDismissalRequest,
@@ -252,9 +261,13 @@ export function getDeductionCandidates(
     });
 }
 
+export type PortfolioPerformancePeriod = NonNullable<
+    operations["getPortfolioPerformance"]["parameters"]["query"]
+>["period"];
+
 export function getPortfolioPerformance(params?: {
     currency?: CurrencyCode | undefined;
-    period?: string | undefined;
+    period?: PortfolioPerformancePeriod | undefined;
 }): Promise<{
     currency: CurrencyCode;
     start_date: string;
@@ -319,7 +332,7 @@ export interface BrokerPerformanceRow {
     accountKey: string;
     accountId: AccountId | null;
     accountName: string;
-    assignment: "account" | "unassigned";
+    assignment: PortfolioAccountAssignment;
     value: number;
     invested: number;
     gainLoss: number;
@@ -477,20 +490,24 @@ export interface PortfolioAssetClassTotals extends PortfolioHoldingTotals {
     assetClass: string;
 }
 
-export type PortfolioAssetGroup =
-    "stocks_etfs" | "crypto" | "metals" | "real_estate" | "savings_bonds";
+export type PortfolioAssetGroup = Schemas["PortfolioAssetGroupTotals"]["group"];
 
 export interface PortfolioAssetGroupTotals extends PortfolioHoldingTotals {
     group: PortfolioAssetGroup;
     assetClasses: string[];
 }
 
+export type PortfolioAccountAssignment =
+    Schemas["PortfolioSummaryByAccountItem"]["assignment"];
+export type PortfolioContributionKind =
+    Schemas["PortfolioSummaryByAccountItem"]["contribution_kind"];
+
 export interface PortfolioSummaryByAccountItem {
     account_id: AccountId | null;
     /** Machine-readable identity; clients localize `unassigned` for display. */
-    assignment: "account" | "unassigned";
+    assignment: PortfolioAccountAssignment;
     /** Lot-bearing position row or standalone income/adjustment row. */
-    contribution_kind: "position" | "non_position";
+    contribution_kind: PortfolioContributionKind;
     oversold: boolean;
     currentValue: number;
     totalInvested: number;
@@ -585,10 +602,12 @@ export interface ExchangeRate {
     fetched_at: string;
 }
 
+export type ExchangeRatesSource = Schemas["ExchangeRates"]["source"];
+
 export interface ExchangeRatesData {
     total_rates: number;
     rates: ExchangeRate[];
-    source?: "database" | "fallback";
+    source?: ExchangeRatesSource;
     is_stale?: boolean;
     last_fetched_at?: string | null;
 }

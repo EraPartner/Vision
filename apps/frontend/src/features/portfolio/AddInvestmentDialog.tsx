@@ -112,9 +112,13 @@ export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
         bond: t("addInv.desc.bond"),
     };
 
-    const unitBased = isUnitBased(form.assetClass as AssetClass);
-    const fixedIncome = isFixedIncome(form.assetClass as AssetClass);
-    const realEstate = isRealEstate(form.assetClass as AssetClass);
+    const selectedAssetClass = form.assetClass || undefined;
+    const unitBased =
+        selectedAssetClass !== undefined && isUnitBased(selectedAssetClass);
+    const fixedIncome =
+        selectedAssetClass !== undefined && isFixedIncome(selectedAssetClass);
+    const realEstate =
+        selectedAssetClass !== undefined && isRealEstate(selectedAssetClass);
     const computedInitialUnits = parseDecimal(
         form.initialUnits,
         appSettings.numberFormat,
@@ -248,7 +252,7 @@ export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
                 const investment = await addInvestment({
                     name: form.name.trim(),
                     symbol: form.symbol.trim() || undefined,
-                    asset_class: form.assetClass as AssetClass,
+                    asset_class: form.assetClass,
                     currency: currencyOr(form.currency, defaultCurrency),
                     current_price:
                         unitBased &&
@@ -320,10 +324,7 @@ export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
 
             toast.success(
                 t("addInv.toast.added", {
-                    assetClass: getAssetClassLabel(
-                        t,
-                        form.assetClass as AssetClass,
-                    ),
+                    assetClass: getAssetClassLabel(t, form.assetClass),
                     name: form.name,
                 }),
             );
@@ -380,10 +381,10 @@ export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
                         {step === "type"
                             ? t("addInv.chooseType")
                             : t("addInv.assetTitle", {
-                                  assetClass: form.assetClass
+                                  assetClass: selectedAssetClass
                                       ? getAssetClassLabel(
                                             t,
-                                            form.assetClass as AssetClass,
+                                            selectedAssetClass,
                                         )
                                       : t("addInv.title"),
                               })}

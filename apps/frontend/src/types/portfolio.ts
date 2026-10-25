@@ -1,11 +1,12 @@
 /**
  * Portfolio investment types — shared between frontend components.
  */
-import type { PortfolioTransaction } from "./api";
+import type { PortfolioTransaction, PriceProvider } from "./api";
 import type { AssetClass } from "@vision/types/assetClasses";
 import type { PortfolioTxnType as CanonicalPortfolioTxnType } from "@vision/types/portfolioTxnTypes";
 import type { RecurrenceInterval } from "@vision/types/recurrence";
 import type { CurrencyCode, InvestmentId } from "@vision/types/brands";
+import { enumGuard } from "@/lib/enumGuard";
 
 // Derived from the canonical runtime array in @vision/types/assetClasses, so
 // this union can no longer drift from the shared ASSET_CLASSES list.
@@ -48,6 +49,17 @@ export type PortfolioTxnType =
     | "rent_income"
     | "appreciation"
     | "gift";
+export const isPortfolioTxnType = enumGuard<PortfolioTxnType>({
+    buy: true,
+    sell: true,
+    dividend: true,
+    fee: true,
+    tax: true,
+    interest: true,
+    rent_income: true,
+    appreciation: true,
+    gift: true,
+});
 type _TxnTypeSubsetParity = PortfolioTxnType extends CanonicalPortfolioTxnType
     ? true
     : never;
@@ -67,6 +79,15 @@ export function getTxnTypeLabel(
 // tuple in @vision/types/recurrence; re-exported so the portfolio dialogs keep
 // importing it from '@/types/portfolio'.
 export type { RecurrenceInterval };
+
+export const isRecurrenceInterval = enumGuard<RecurrenceInterval>({
+    daily: true,
+    weekly: true,
+    biweekly: true,
+    monthly: true,
+    quarterly: true,
+    yearly: true,
+});
 
 // Computed view model returned by usePortfolio
 export interface InvestmentSummary {
@@ -90,7 +111,7 @@ export interface InvestmentSummary {
     cadastral_income?: number | undefined;
     municipality_tax_rate?: number | undefined;
     notes?: string;
-    price_provider?: "manual" | "binance" | "yahoo" | "custom" | "kinesis";
+    price_provider?: PriceProvider;
     price_provider_id?: string | undefined;
     price_provider_url?: string | undefined;
     price_provider_latest_url?: string | undefined;

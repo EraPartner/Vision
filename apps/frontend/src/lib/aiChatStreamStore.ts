@@ -316,6 +316,8 @@ class AiChatStreamStore {
                         status: "interrupted",
                     };
                     break;
+                // The stream state ignores tool_call frames; tool_result carries the message.
+                case "tool_call":
                 default:
                     return;
             }

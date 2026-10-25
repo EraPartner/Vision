@@ -30,7 +30,7 @@ import type {
     RecurrenceInterval,
     InvestmentSummary,
 } from "@/types/portfolio";
-import { getTxnTypeLabel } from "@/types/portfolio";
+import { getTxnTypeLabel, isPortfolioTxnType } from "@/types/portfolio";
 import { toast } from "sonner";
 import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { todayYmd } from "@/lib/timezone";
@@ -576,12 +576,13 @@ export function AddInvestmentFromMarketDialog({
                                     </Label>
                                     <Select
                                         value={transactionForm.type}
-                                        onValueChange={(v) =>
+                                        onValueChange={(v) => {
+                                            if (!isPortfolioTxnType(v)) return;
                                             setTransactionForm((f) => ({
                                                 ...f,
-                                                type: v as PortfolioTxnType,
-                                            }))
-                                        }
+                                                type: v,
+                                            }));
+                                        }}
                                     >
                                         <SelectTrigger id="market-txn-type">
                                             <SelectValue />

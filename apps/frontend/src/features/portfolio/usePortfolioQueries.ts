@@ -4,7 +4,12 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { ChartPeriod } from "@/components/charts";
 import { apiClient } from "@/lib/api";
 import { listPortfolioImportBatches } from "@/lib/api/portfolioImports";
-import { getMarketQuotes, searchMarket } from "@/lib/api/market";
+import {
+    getMarketQuotes,
+    searchMarket,
+    type MarketChartInterval,
+} from "@/lib/api/market";
+import type { ResearchRange } from "@/types/research";
 import { netWorthKeys, portfolioKeys } from "@/lib/queryKeys";
 import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 import type { AccountId, CurrencyCode } from "@vision/types/brands";
@@ -48,8 +53,8 @@ export function useMarketQuoteQuery(symbol: string | undefined) {
 
 export function useWatchlistMarketQueries(
     symbol: string | null | undefined,
-    range: string,
-    interval: string,
+    range: ResearchRange,
+    interval: MarketChartInterval,
     enabled: boolean,
 ) {
     const chart = useQuery({

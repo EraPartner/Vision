@@ -32,8 +32,11 @@ import {
     fieldErrorProps,
     type FieldErrorMap,
 } from "@/hooks/useFieldErrors";
-import type { RecurrenceInterval } from "@/types/portfolio";
-import type { DividendAmountConvention } from "@/types/api";
+import { isRecurrenceInterval, type RecurrenceInterval } from "@/types/portfolio";
+import {
+    isDividendAmountConvention,
+    type DividendAmountConvention,
+} from "@/types/api";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import {
     formatEditableNumber,
@@ -370,13 +373,13 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                         </Label>
                         <Select
                             value={form.dividendAmountConvention}
-                            onValueChange={(value) =>
+                            onValueChange={(value) => {
+                                if (!isDividendAmountConvention(value)) return;
                                 setForm((f) => ({
                                     ...f,
-                                    dividendAmountConvention:
-                                        value as DividendAmountConvention,
-                                }))
-                            }
+                                    dividendAmountConvention: value,
+                                }));
+                            }}
                         >
                             <SelectTrigger
                                 id={`${idPrefix}-dividend-convention`}
@@ -450,13 +453,13 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                                 </Label>
                                 <Select
                                     value={form.recurrenceInterval}
-                                    onValueChange={(v) =>
+                                    onValueChange={(v) => {
+                                        if (!isRecurrenceInterval(v)) return;
                                         setForm((f) => ({
                                             ...f,
-                                            recurrenceInterval:
-                                                v as RecurrenceInterval,
-                                        }))
-                                    }
+                                            recurrenceInterval: v,
+                                        }));
+                                    }}
                                 >
                                     <SelectTrigger id={`${idPrefix}-interval`}>
                                         <SelectValue />

@@ -30,7 +30,7 @@ export { ChartCard } from "./ChartCard";
 
 export { ChartPeriodSelector } from "./ChartPeriodSelector";
 
-export { CHART_PERIODS, filterByPeriod } from "./chartPeriods";
+export { CHART_PERIODS, filterByPeriod, isChartPeriod } from "./chartPeriods";
 export type { ChartPeriod } from "./chartPeriods";
 
 

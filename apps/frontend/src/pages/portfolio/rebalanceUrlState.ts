@@ -1,4 +1,5 @@
 import type { ModelPortfolio } from "@/lib/api/crossWorkspace";
+import { enumGuard } from "@/lib/enumGuard";
 
 export const REBALANCE_MODELS: readonly ModelPortfolio[] = [
     "sixty_forty",
@@ -6,6 +7,19 @@ export const REBALANCE_MODELS: readonly ModelPortfolio[] = [
     "three_fund",
     "awesome",
 ];
+export const isModelPortfolio = enumGuard<ModelPortfolio>({
+    sixty_forty: true,
+    all_weather: true,
+    three_fund: true,
+    awesome: true,
+});
+
+/** The preset named by a `model:<preset>` source value, if it is one. */
+export function modelFromSource(source: string): ModelPortfolio | undefined {
+    const model = source.startsWith("model:") ? source.slice(6) : undefined;
+    return model !== undefined && isModelPortfolio(model) ? model : undefined;
+}
+
 export const REBALANCE_SLEEVES = [
     "stocks",
     "intl_stocks",

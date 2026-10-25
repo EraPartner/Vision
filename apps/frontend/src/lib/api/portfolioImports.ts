@@ -13,6 +13,7 @@ import { asAccountId, asInvestmentId } from "@vision/types/brands";
 import type { AccountId, InvestmentId } from "@vision/types/brands";
 import type { ImportProgress } from "@/types/apiClient";
 import type { AssetClass } from "@vision/types/assetClasses";
+import type { components } from "@/types/generated";
 import type { PortfolioTxnType } from "@vision/types/portfolioTxnTypes";
 import { ImportCancelledError } from "@/lib/api/importCancelled";
 import {
@@ -54,6 +55,15 @@ const PORTFOLIO_STREAM_SCHEMAS: Record<string, z.ZodType> = {
     review_required: portfolioReviewRequiredSchema,
 };
 
+type PortfolioImportUpload = components["schemas"]["PortfolioImportUpload"];
+/** Specialized statement parsers (`portfolio_format`); omitted for generic column mapping. */
+export type PortfolioImportFormat = NonNullable<
+    PortfolioImportUpload["portfolio_format"]
+>;
+export type PortfolioYieldBasisPolicy = NonNullable<
+    PortfolioImportUpload["yield_basis_policy"]
+>;
+
 export interface PortfolioCustomConfig {
     /** Optional file-level destination for every trade staged with this parser. */
     accountId?: AccountId | undefined;
@@ -62,17 +72,11 @@ export interface PortfolioCustomConfig {
     /** Origin of dated asset returns, when source evidence identifies prior custody. */
     transferOriginAccountId?: AccountId | undefined;
     /** Explicit zero basis for proved existing yield-unit receipts in a bounded scope. */
-    yieldBasisPolicy?: "zero";
+    yieldBasisPolicy?: PortfolioYieldBasisPolicy;
     /** Explicit comma-separated asset symbols for a partial statement import. */
     includedSymbols?: string | undefined;
     /** Format-specific parser. Omit for the generic column mapper. */
-    format?:
-        | "ibkr_transaction_history"
-        | "ibkr_funding_history"
-        | "kinesis_transaction_history"
-        | "nexo_transaction_history"
-        | "nexo_pro_spot_history"
-        | "saxo_transaction_history";
+    format?: PortfolioImportFormat;
     dateColumn: string;
     typeColumn: string;
     symbolColumn: string;
@@ -492,8 +496,9 @@ export function rollbackPortfolioImportBatch(
     );
 }
 
-export type PortfolioReconciliationPolicy =
-    "preserve_existing" | "prefer_source";
+export type PortfolioReconciliationPolicy = NonNullable<
+    components["schemas"]["PortfolioImportReconciliationRequest"]["adopt_policy"]
+>;
 const batchPolicySchema = z.object({
     batchId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
     adoptPolicy: z.enum(["preserve_existing", "prefer_source"]),

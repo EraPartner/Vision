@@ -3,13 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { apiClient } from "@/lib/api";
+import type { MarketChartInterval } from "@/lib/api/market";
 import { getInvestmentPriceHistory } from "@/lib/api/portfolio";
 import { marketKeys } from "@/lib/queryKeys";
+import type { ResearchRange } from "@/types/research";
 import type { CurrencyCode, InvestmentId } from "@vision/types/brands";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export function rangeToFromMs(range: string, now = Date.now()): number {
+export function rangeToFromMs(range: ResearchRange, now = Date.now()): number {
     switch (range) {
         case "1d":
             return now - DAY_MS;
@@ -23,6 +25,8 @@ export function rangeToFromMs(range: string, now = Date.now()): number {
             return now - 182 * DAY_MS;
         case "1y":
             return now - 365 * DAY_MS;
+        case "2y":
+            return now - 2 * 365 * DAY_MS;
         case "5y":
             return now - 5 * 365 * DAY_MS;
         case "max":
@@ -55,8 +59,8 @@ export function useMarketLookupData<Quote>({
     useYahoo,
 }: {
     symbol: string | null;
-    range: string;
-    interval: string;
+    range: ResearchRange;
+    interval: MarketChartInterval;
     providerInvestment: ProviderInvestment | undefined;
     isProviderAsset: boolean;
     useYahoo: boolean;

@@ -64,6 +64,7 @@ import type {
     MappingResolveResponse,
     MappingsResponse,
     PortfolioForecast,
+    PortfolioForecastInput,
     ProviderKeyStatus,
     ProviderKeysResponse,
     ResearchAnalyst,
@@ -82,6 +83,117 @@ import type {
     ScorecardFlag,
 } from "./research";
 import type { UpdateCheckStatus } from "@/lib/api/electron";
+import type {
+    CSV_NUMBER_FORMATS,
+    CsvNumberFormat,
+    ImportCsvResult,
+} from "@/lib/api/imports";
+import type {
+    PortfolioBatchPolicy,
+    PortfolioCustomConfig,
+    PortfolioImportBatchPage,
+    PortfolioReconciliationPlan,
+    PortfolioReconciliationPolicy,
+    PortfolioRowChoice,
+} from "@/lib/api/portfolioImports";
+import type { ReadParams, DbChange } from "@/lib/api/dbEditor";
+import type { AssetClass } from "@vision/types/assetClasses";
+import type { ImportBatch } from "./apiClient";
+import type {
+    AnalysisMonitor,
+    MonitorCreate,
+    MonitorNotification,
+    MonitorObservation,
+    MonitorUpdate,
+} from "@/lib/api/monitors";
+import type {
+    Dossier,
+    DossierContent,
+    DossierEvidence,
+    DossierListItem,
+} from "@/lib/api/dossiers";
+import type {
+    AnalysisEditProposal,
+    AnalysisExtensionInput,
+    SavedAnalysis,
+    VisualAnalysisPlan,
+    executeAnalysis,
+    listSavedAnalyses,
+} from "@/lib/api/analysis";
+import type { InvestigationInput } from "@/lib/api/aiResearch";
+import type { AiInvestigationRequest as SharedAiInvestigationRequest } from "@vision/types/aiResearch";
+import type {
+    getResearchMappings,
+    resolveResearchMappings,
+    saveResearchMappings,
+    auditResearchMappings,
+    getMacroSeries,
+    setResearchProviderKey,
+} from "@/lib/api/research";
+
+import type {
+    PortfolioTransactionCreate,
+    PortfolioTransactionUpdate,
+    PortfolioTxnType,
+    InvestmentCreate,
+    InvestmentUpdate,
+    RecurrenceInterval,
+} from "./api";
+import type {
+    WatchlistCreate,
+    WatchlistUpdate,
+} from "./watchlist";
+import type {
+    CashForecast,
+    ExchangeRatesData,
+    InsightDismissalRequest,
+    InsightsCountResponse,
+    PortfolioAssetGroupTotals,
+    PortfolioSummaryAccountTotals,
+    PortfolioSummaryByAccountItem,
+} from "@/lib/api/info";
+import type { RebalanceRequest } from "@/lib/api/crossWorkspace";
+import type { PortfolioExposureResponse } from "@/lib/api/portfolioExposure";
+import type { MarketChartInterval, MarketQuoteDetail } from "@/lib/api/market";
+import type { ResearchRange } from "./research";
+import type { ChartPeriod } from "@/components/charts/chartPeriods";
+import type { AccountCreate, AccountUpdate, BulkExportRequest, BulkTransactionFilter } from "./api";
+import type {
+    AccountCloseBalanceHandling,
+    ReconcileMode,
+    ReconcileResult,
+} from "@/lib/api/accounts";
+import type { BelgianTaxOverview } from "@/lib/api/belgianTax";
+import type { RecipientPattern, RecipientPatternCreate, RecipientPatternUpdate } from "@/lib/api/recipients";
+import type { ReportThemeTokens } from "@/lib/themeTokens";
+import type { ReportPeriod, TaxReportHousehold, TaxReportProfile } from "@/lib/api/reports";
+import type { BulkSplitRequest } from "@/lib/api/splits";
+import type { getAccounts } from "@/lib/api/accounts";
+import type { getTransactions } from "@/lib/api/transactions";
+import type { getRecipients } from "@/lib/api/recipients";
+import type {
+    getAggregationRecipientPivot,
+    getAggregationTagPivot,
+} from "@/lib/api/aggregations";
+import type { SavedChart, SavedChartCreate } from "./apiClient";
+import type {
+    BelgianTaxHouseholdV2,
+    HouseholdCsssResult,
+    HouseholdTaxIssue,
+    HouseholdTaxResult,
+    MaritalQuotientResult,
+    PartnerTaxResult,
+    ActivityTaxResult,
+    CategoryTaxResult,
+    AssessmentDecision,
+    HouseholdPartner,
+    IncomeActivity,
+    RelationshipEvent,
+    HouseholdRelationship,
+    HouseholdDependents,
+    HouseholdHomeInputs,
+    HouseholdMigrationRecord,
+} from "@/lib/belgianTax/householdTypes";
 
 type Schemas = components["schemas"];
 
@@ -107,6 +219,45 @@ type Expect<T extends true> = T;
  */
 type KeysSubsetOf<A, B> = keyof A extends keyof B ? true : false;
 
+/**
+ * True iff `T`, with `null`/`undefined` stripped, is a finite union of string
+ * literals (an OpenAPI `enum`), not plain `string`.
+ */
+type IsStringEnum<T> = [NonNullable<T>] extends [string]
+    ? string extends NonNullable<T>
+        ? false
+        : true
+    : false;
+
+type EnumOf<T> =
+    NonNullable<T> extends readonly (infer Item)[] ? NonNullable<Item> : NonNullable<T>;
+
+/**
+ * Keys where the contract (`B`) declares a string enum, or an array of one, and
+ * the consumed type (`A`) accepts a value outside it — typically a plain
+ * `string`. Narrower is fine: a consumed type may use a subset of the enum.
+ */
+type WidenedEnumKeys<A, B> = {
+    [K in keyof A & keyof B]-?: IsStringEnum<EnumOf<B[K]>> extends true
+        ? [EnumOf<A[K]>] extends [EnumOf<B[K]>]
+            ? never
+            : K
+        : never;
+}[keyof A & keyof B];
+
+/**
+ * `true` iff `A`'s keys ⊆ `B`'s keys and every string enum in `B` stays a
+ * literal union in `A` (ADR-251). Otherwise it evaluates to the offending key
+ * names, so `Expect<…>` fails with e.g. `Type '"status"' does not satisfy the
+ * constraint 'true'`.
+ */
+type Matches<A, B> =
+    KeysSubsetOf<A, B> extends false
+        ? Exclude<keyof A, keyof B>
+        : [WidenedEnumKeys<A, B>] extends [never]
+          ? true
+          : WidenedEnumKeys<A, B>;
+
 type IsOptionalKey<T, K extends keyof T> =
     Record<never, never> extends Pick<T, K> ? true : false;
 
@@ -117,60 +268,87 @@ type IsNumeric<T> = [NonNullable<T>] extends [number]
         : false
     : false;
 
-// ── Key coverage: every field the consumed type reads must exist in the contract.
+type JsonRequestBody<Operation> = Operation extends {
+    requestBody?: { content: { "application/json": infer Body } };
+}
+    ? Body
+    : never;
+
+type QueryOf<Operation> = Operation extends {
+    parameters: { query?: infer Query };
+}
+    ? NonNullable<Query>
+    : never;
+
+/** Drops the index signature `z.looseObject` adds, keeping the declared keys. */
+type DeclaredKeys<T> = {
+    [K in keyof T as string extends K ? never : K]: T[K];
+};
+
+type PathOf<Operation> = Operation extends {
+    parameters: { path: infer Path };
+}
+    ? Path
+    : never;
+
+type ArgOf<F extends (...args: never[]) => unknown, N extends number> =
+    Parameters<F>[N];
+
+// ── Key and enum coverage: every field the consumed type reads must exist in
+//    the contract, and every contract enum must stay a literal union.
 export type _KeysTransaction = Expect<
-    KeysSubsetOf<Transaction, Schemas["Transaction"]>
+    Matches<Transaction, Schemas["Transaction"]>
 >;
 export type _KeysTransactionCreate = Expect<
-    KeysSubsetOf<TransactionCreate, Schemas["TransactionCreate"]>
+    Matches<TransactionCreate, Schemas["TransactionCreate"]>
 >;
 export type _OptionalTransactionCreateAllowDuplicate = Expect<
     IsOptionalKey<Schemas["TransactionCreate"], "allow_duplicate">
 >;
-export type _KeysCategory = Expect<KeysSubsetOf<Category, Schemas["Category"]>>;
-export type _KeysAccount = Expect<KeysSubsetOf<Account, Schemas["Account"]>>;
+export type _KeysCategory = Expect<Matches<Category, Schemas["Category"]>>;
+export type _KeysAccount = Expect<Matches<Account, Schemas["Account"]>>;
 export type _KeysRecipient = Expect<
-    KeysSubsetOf<Recipient, Schemas["Recipient"]>
+    Matches<Recipient, Schemas["Recipient"]>
 >;
-export type _KeysTag = Expect<KeysSubsetOf<Tag, Schemas["Tag"]>>;
+export type _KeysTag = Expect<Matches<Tag, Schemas["Tag"]>>;
 export type _KeysPlannedTransaction = Expect<
-    KeysSubsetOf<PlannedTransaction, Schemas["PlannedTransaction"]>
+    Matches<PlannedTransaction, Schemas["PlannedTransaction"]>
 >;
 export type _KeysInvestment = Expect<
-    KeysSubsetOf<Investment, Schemas["Investment"]>
+    Matches<Investment, Schemas["Investment"]>
 >;
 export type _KeysPortfolioTransaction = Expect<
-    KeysSubsetOf<PortfolioTransaction, Schemas["PortfolioTransaction"]>
+    Matches<PortfolioTransaction, Schemas["PortfolioTransaction"]>
 >;
 
 // ── Second wave: the schemas the spec had let rot unnoticed because nothing
 //    here referenced them (splits, watchlist, attachments, AI chat). Each of
 //    these described a payload the backend has never sent; guarding them is
 //    what keeps the spec honest now that it has been corrected.
-export type _KeysSplitItem = Expect<KeysSubsetOf<SplitItem, Schemas["Split"]>>;
+export type _KeysSplitItem = Expect<Matches<SplitItem, Schemas["Split"]>>;
 export type _KeysSplitPayment = Expect<
-    KeysSubsetOf<SplitPayment, Schemas["SplitPayment"]>
+    Matches<SplitPayment, Schemas["SplitPayment"]>
 >;
 export type _KeysOwedSummaryItem = Expect<
-    KeysSubsetOf<OwedSummaryItem, Schemas["SplitOwed"]>
+    Matches<OwedSummaryItem, Schemas["SplitOwed"]>
 >;
 export type _KeysWatchlistItem = Expect<
-    KeysSubsetOf<WatchlistItem, Schemas["WatchlistItem"]>
+    Matches<WatchlistItem, Schemas["WatchlistItem"]>
 >;
 export type _KeysAttachment = Expect<
-    KeysSubsetOf<Attachment, Schemas["Attachment"]>
+    Matches<Attachment, Schemas["Attachment"]>
 >;
 export type _KeysConversationSummary = Expect<
-    KeysSubsetOf<ConversationSummary, Schemas["AiConversation"]>
+    Matches<ConversationSummary, Schemas["AiConversation"]>
 >;
 export type _KeysChatMessage = Expect<
-    KeysSubsetOf<ChatMessage, Schemas["AiMessage"]>
+    Matches<ChatMessage, Schemas["AiMessage"]>
 >;
 export type _KeysTokenUsage = Expect<
-    KeysSubsetOf<TokenUsage, Schemas["AiTokenUsage"]>
+    Matches<TokenUsage, Schemas["AiTokenUsage"]>
 >;
 export type _KeysOllamaModel = Expect<
-    KeysSubsetOf<OllamaModel, Schemas["OllamaModel"]>
+    Matches<OllamaModel, Schemas["OllamaModel"]>
 >;
 
 // ── Third wave: the payloads left as bare `Envelope`s after the 2026-07-27
@@ -178,173 +356,173 @@ export type _KeysOllamaModel = Expect<
 //    conversation detail, Ollama status). Now that the spec names them, these
 //    keep them honest.
 export type _KeysOwedDetailItem = Expect<
-    KeysSubsetOf<OwedDetailItem, Schemas["SplitOwedDetail"]>
+    Matches<OwedDetailItem, Schemas["SplitOwedDetail"]>
 >;
 export type _KeysConversationDetail = Expect<
-    KeysSubsetOf<ConversationDetail, Schemas["AiConversationDetail"]>
+    Matches<ConversationDetail, Schemas["AiConversationDetail"]>
 >;
 export type _KeysOllamaStatus = Expect<
-    KeysSubsetOf<OllamaStatus, Schemas["OllamaStatus"]>
+    Matches<OllamaStatus, Schemas["OllamaStatus"]>
 >;
 
 // ── Research endpoints: guard the actual operation response, not merely a
 //    detached component. This closes the gap where every endpoint referenced
 //    the untyped base Envelope while the UI maintained a second DTO universe.
 export type _KeysResearchSearch = Expect<
-    KeysSubsetOf<
+    Matches<
         ResearchSearchResponse,
         ResponseData<operations["researchSearch"]>
     >
 >;
 export type _KeysResearchChart = Expect<
-    KeysSubsetOf<
+    Matches<
         ResearchChartResponse,
         ResponseData<operations["researchChart"]>
     >
 >;
 export type _KeysResearchFundamentals = Expect<
-    KeysSubsetOf<
+    Matches<
         ResearchFundamentals,
         Schemas["ResearchFundamentals"]
     >
 >;
 export type _KeysResearchAnalyst = Expect<
-    KeysSubsetOf<ResearchAnalyst, ResponseData<operations["researchAnalyst"]>>
+    Matches<ResearchAnalyst, ResponseData<operations["researchAnalyst"]>>
 >;
 export type _KeysResearchNews = Expect<
-    KeysSubsetOf<ResearchNewsResponse, ResponseData<operations["researchNews"]>>
+    Matches<ResearchNewsResponse, ResponseData<operations["researchNews"]>>
 >;
 export type _KeysResearchMacroSearch = Expect<
-    KeysSubsetOf<
+    Matches<
         MacroSearchResponse,
         ResponseData<operations["researchMacroSearch"]>
     >
 >;
 export type _KeysResearchMacroSeries = Expect<
-    KeysSubsetOf<
+    Matches<
         MacroSeriesResponse,
         ResponseData<operations["researchMacroSeries"]>
     >
 >;
 export type _KeysResearchScorecard = Expect<
-    KeysSubsetOf<
+    Matches<
         ResearchScorecardResponse,
         ResponseData<operations["researchScorecard"]>
     >
 >;
 export type _KeysResearchPortfolioForecast = Expect<
-    KeysSubsetOf<
+    Matches<
         PortfolioForecast,
         ResponseData<operations["researchPortfolioForecast"]>
     >
 >;
 export type _KeysResearchMappings = Expect<
-    KeysSubsetOf<
+    Matches<
         MappingsResponse,
         ResponseData<operations["researchListMappings"]>
     >
 >;
 export type _KeysResearchSavedMappings = Expect<
-    KeysSubsetOf<
+    Matches<
         MappingsResponse,
         ResponseData<operations["researchSaveMappings"]>
     >
 >;
 export type _KeysResearchMapping = Expect<
-    KeysSubsetOf<
+    Matches<
         InstrumentProviderMapping,
         Schemas["InstrumentProviderMapping"]
     >
 >;
 export type _KeysResearchMappingResolve = Expect<
-    KeysSubsetOf<
+    Matches<
         MappingResolveResponse,
         ResponseData<operations["researchResolveMappings"]>
     >
 >;
 export type _KeysResearchMappingAudit = Expect<
-    KeysSubsetOf<
+    Matches<
         MappingAuditResponse,
         ResponseData<operations["researchAuditMappings"]>
     >
 >;
 export type _KeysResearchProviderKeys = Expect<
-    KeysSubsetOf<
+    Matches<
         ProviderKeysResponse,
         ResponseData<operations["researchListProviderKeys"]>
     >
 >;
 export type _KeysResearchSetProviderKey = Expect<
-    KeysSubsetOf<
+    Matches<
         ProviderKeysResponse,
         ResponseData<operations["researchSetProviderKey"]>
     >
 >;
 export type _KeysResearchAnalystConsensus = Expect<
-    KeysSubsetOf<ResearchAnalystConsensus, Schemas["ResearchAnalystConsensus"]>
+    Matches<ResearchAnalystConsensus, Schemas["ResearchAnalystConsensus"]>
 >;
 export type _KeysResearchAnalystAction = Expect<
-    KeysSubsetOf<ResearchAnalystAction, Schemas["ResearchAnalystAction"]>
+    Matches<ResearchAnalystAction, Schemas["ResearchAnalystAction"]>
 >;
 export type _KeysResearchNewsArticle = Expect<
-    KeysSubsetOf<ResearchNewsArticle, Schemas["ResearchNewsArticle"]>
+    Matches<ResearchNewsArticle, Schemas["ResearchNewsArticle"]>
 >;
 export type _KeysResearchMappingProposal = Expect<
-    KeysSubsetOf<MappingProposal, Schemas["ResearchMappingProposal"]>
+    Matches<MappingProposal, Schemas["ResearchMappingProposal"]>
 >;
 export type _KeysResearchMappingCandidate = Expect<
-    KeysSubsetOf<MappingProposalCandidate, Schemas["ResearchSearchItem"]>
+    Matches<MappingProposalCandidate, Schemas["ResearchSearchItem"]>
 >;
 export type _KeysResearchAuditQuote = Expect<
-    KeysSubsetOf<
+    Matches<
         MappingAuditQuote,
         Schemas["ResearchMappingAuditData"]["quotes"][number]
     >
 >;
 export type _KeysResearchProviderKeyStatus = Expect<
-    KeysSubsetOf<ProviderKeyStatus, Schemas["ResearchProviderKeyStatus"]>
+    Matches<ProviderKeyStatus, Schemas["ResearchProviderKeyStatus"]>
 >;
 export type _KeysResearchScorecardBody = Expect<
-    KeysSubsetOf<ResearchScorecard, Schemas["ResearchScorecard"]>
+    Matches<ResearchScorecard, Schemas["ResearchScorecard"]>
 >;
 export type _KeysResearchScorecardFlag = Expect<
-    KeysSubsetOf<ScorecardFlag, Schemas["ResearchScorecardFlag"]>
+    Matches<ScorecardFlag, Schemas["ResearchScorecardFlag"]>
 >;
 export type _KeysResearchForecastPoint = Expect<
-    KeysSubsetOf<ForecastPoint, Schemas["ResearchForecastPoint"]>
+    Matches<ForecastPoint, Schemas["ResearchForecastPoint"]>
 >;
 export type _KeysResearchForecastHolding = Expect<
-    KeysSubsetOf<
+    Matches<
         ForecastForwardHolding,
         Schemas["ResearchForecastForwardHolding"]
     >
 >;
 export type _KeysResearchMeta = Expect<
-    KeysSubsetOf<ResearchMeta, Schemas["ResearchMeta"]>
+    Matches<ResearchMeta, Schemas["ResearchMeta"]>
 >;
 export type _KeysResearchSearchItem = Expect<
-    KeysSubsetOf<ResearchSearchItem, Schemas["ResearchSearchItem"]>
+    Matches<ResearchSearchItem, Schemas["ResearchSearchItem"]>
 >;
 export type _KeysResearchChartPoint = Expect<
-    KeysSubsetOf<ResearchChartPoint, Schemas["ResearchChartPoint"]>
+    Matches<ResearchChartPoint, Schemas["ResearchChartPoint"]>
 >;
 export type _KeysResearchMacroSeriesItem = Expect<
-    KeysSubsetOf<MacroSeriesItem, Schemas["ResearchMacroSeriesItem"]>
+    Matches<MacroSeriesItem, Schemas["ResearchMacroSeriesItem"]>
 >;
 export type _KeysResearchForecastProjected = Expect<
-    KeysSubsetOf<
+    Matches<
         NonNullable<PortfolioForecast["projected"]>,
         Schemas["ResearchForecastProjected"]
     >
 >;
 export type _KeysResearchScorecardCounts = Expect<
-    KeysSubsetOf<
+    Matches<
         ResearchScorecard["counts"],
         Schemas["ResearchScorecard"]["counts"]
     >
 >;
 export type _KeysUpdateCheckStatus = Expect<
-    KeysSubsetOf<
+    Matches<
         UpdateCheckStatus,
         ResponseData<operations["adminUpdateCheck"]>
     >
@@ -415,4 +593,533 @@ export type _NumOwedDetailTransactionAmount = Expect<
 >;
 export type _NumOwedDetailRemaining = Expect<
     IsNumeric<Schemas["SplitOwedDetail"]["remaining"]>
+>;
+
+// ── Enum coverage for the domain clients in src/lib/api (ADR-251). Each block
+//    pins a hand-written request or response type to its contract schema so a
+//    contract enum cannot decay to `string` in the code that consumes it.
+
+// ── Enums: dashboard, info, aggregations, portfolio, watchlist, market.
+
+export type _EnumsCashForecast = Expect<
+    Matches<CashForecast, Schemas["CashForecastInsight"]>
+>;
+export type _EnumsInsightsCount = Expect<
+    Matches<InsightsCountResponse, Schemas["InsightsCountData"]>
+>;
+export type _EnumsInsightDismissal = Expect<
+    Matches<InsightDismissalRequest, Schemas["InsightDismissalRequest"]>
+>;
+export type _EnumsPortfolioSummaryByAccount = Expect<
+    Matches<
+        PortfolioSummaryByAccountItem,
+        Schemas["PortfolioSummaryByAccountItem"]
+    >
+>;
+export type _EnumsPortfolioSummaryAccountTotals = Expect<
+    Matches<
+        PortfolioSummaryAccountTotals,
+        Schemas["PortfolioSummaryAccountTotals"]
+    >
+>;
+export type _EnumsPortfolioAssetGroupTotals = Expect<
+    Matches<PortfolioAssetGroupTotals, Schemas["PortfolioAssetGroupTotals"]>
+>;
+export type _EnumsExchangeRates = Expect<
+    Matches<ExchangeRatesData, Schemas["ExchangeRates"]>
+>;
+export type _EnumsPortfolioExposureContribution = Expect<
+    Matches<
+        PortfolioExposureResponse["issuer"]["rows"][number]["contributions"][number],
+        Schemas["PortfolioExposureContribution"]
+    >
+>;
+export type _EnumsPortfolioExposureFundSource = Expect<
+    Matches<
+        PortfolioExposureResponse["fundSources"][number],
+        Schemas["PortfolioExposureFundSource"]
+    >
+>;
+export type _EnumsAssetClass = Expect<
+    Matches<{ value: AssetClass }, { value: Schemas["AssetClass"] }>
+>;
+export type _EnumsPortfolioTxnType = Expect<
+    Matches<{ value: PortfolioTxnType }, { value: Schemas["PortfolioTxnType"] }>
+>;
+export type _EnumsRecurrenceInterval = Expect<
+    Matches<
+        { value: RecurrenceInterval },
+        { value: Schemas["RecurrenceInterval"] }
+    >
+>;
+export type _EnumsInvestmentCreate = Expect<
+    Matches<InvestmentCreate, Schemas["InvestmentCreateRequest"]>
+>;
+export type _EnumsInvestmentUpdate = Expect<
+    Matches<InvestmentUpdate, Schemas["InvestmentUpdateRequest"]>
+>;
+// `cash_account_id` is declared on the frontend type (ADR-090) but absent from
+// the contract and the backend; excluded here until that drift is resolved.
+export type _EnumsPortfolioTransactionCreate = Expect<
+    Matches<
+        Omit<PortfolioTransactionCreate, "cash_account_id">,
+        JsonRequestBody<operations["createInvestmentTransaction"]>
+    >
+>;
+export type _EnumsPortfolioTransactionUpdate = Expect<
+    Matches<
+        PortfolioTransactionUpdate,
+        JsonRequestBody<operations["updatePortfolioTransaction"]>
+    >
+>;
+export type _EnumsWatchlistCreate = Expect<
+    Matches<WatchlistCreate, JsonRequestBody<operations["addToWatchlist"]>>
+>;
+export type _EnumsWatchlistUpdate = Expect<
+    Matches<WatchlistUpdate, JsonRequestBody<operations["updateWatchlistItem"]>>
+>;
+export type _EnumsRebalanceRequest = Expect<
+    Matches<RebalanceRequest, JsonRequestBody<operations["computeRebalance"]>>
+>;
+export type _EnumsInvestmentsQuery = Expect<
+    Matches<
+        { asset_class: AssetClass },
+        Pick<QueryOf<operations["getInvestments"]>, "asset_class">
+    >
+>;
+export type _EnumsPortfolioPerformanceQuery = Expect<
+    Matches<
+        { period: ChartPeriod },
+        Pick<QueryOf<operations["getPortfolioPerformance"]>, "period">
+    >
+>;
+export type _EnumsMarketChartQuery = Expect<
+    Matches<
+        { range: ResearchRange; interval: MarketChartInterval },
+        QueryOf<operations["marketChart"]>
+    >
+>;
+export type _EnumsMarketQuoteQuery = Expect<
+    Matches<{ detail: MarketQuoteDetail }, QueryOf<operations["marketQuote"]>>
+>;
+
+// ── Enums: transaction and portfolio imports, admin, database editor.
+
+export type _EnumsImportBatch = Expect<
+    Matches<ImportBatch, Schemas["ImportBatch"]>
+>;
+export type _EnumsImportCsvResult = Expect<
+    Matches<ImportCsvResult, Schemas["ImportCsvResult"]>
+>;
+export type _EnumsCsvNumberFormat = Expect<
+    Matches<
+        { number_format: CsvNumberFormat },
+        { number_format: Schemas["CsvNumberFormat"] }
+    >
+>;
+// The runtime list behind `isCsvNumberFormat` must name every contract value.
+export type _EnumsCsvNumberFormatList = Expect<
+    [Schemas["CsvNumberFormat"]] extends [(typeof CSV_NUMBER_FORMATS)[number]]
+        ? true
+        : false
+>;
+// Status only: the batch-list parser also reads `account_id`, which the
+// contract's PortfolioImportBatch does not declare (key drift, reported).
+export type _EnumsPortfolioImportBatch = Expect<
+    Matches<
+        Pick<PortfolioImportBatchPage["items"][number], "status">,
+        Schemas["PortfolioImportBatch"]
+    >
+>;
+// The upload form fields the parser config flattens into (camelCase in the
+// config, snake_case on the wire). `default_type` is deliberately absent: the
+// contract lists six values, the backend accepts all of PORTFOLIO_TXN_TYPES
+// and the column mapper offers nine (see the report on the import enums).
+export type _EnumsPortfolioImportUpload = Expect<
+    Matches<
+        {
+            portfolio_format: PortfolioCustomConfig["format"];
+            yield_basis_policy: PortfolioCustomConfig["yieldBasisPolicy"];
+            default_asset_class: AssetClass;
+        },
+        Schemas["PortfolioImportUpload"]
+    >
+>;
+export type _EnumsPortfolioParserConfig = Expect<
+    Matches<
+        { yieldBasisPolicy: PortfolioCustomConfig["yieldBasisPolicy"] },
+        Schemas["PortfolioParserConfig"]["config"]
+    >
+>;
+export type _EnumsPortfolioReconciliationRequest = Expect<
+    Matches<
+        { adopt_policy: PortfolioReconciliationPolicy },
+        Schemas["PortfolioImportReconciliationRequest"]
+    >
+>;
+export type _EnumsPortfolioReconciliationBatchPolicy = Expect<
+    Matches<
+        PortfolioBatchPolicy,
+        Schemas["PortfolioImportReconciliationPlan"]["batchPolicies"][number]
+    >
+>;
+export type _EnumsPortfolioReconciliationRowChoice = Expect<
+    Matches<
+        PortfolioRowChoice,
+        Schemas["PortfolioImportReconciliationPlan"]["rowChoices"][number]
+    >
+>;
+export type _EnumsPortfolioReconciliationPlan = Expect<
+    Matches<
+        DeclaredKeys<PortfolioReconciliationPlan>,
+        Schemas["PortfolioImportReconciliationPlan"]
+    >
+>;
+export type _EnumsDbEditorReadParams = Expect<
+    Matches<
+        ReadParams,
+        NonNullable<operations["adminGetTableRows"]["parameters"]["query"]>
+    >
+>;
+export type _EnumsDbEditorChange = Expect<
+    Matches<
+        DbChange,
+        operations["adminMutateTableRows"]["requestBody"]["content"]["application/json"]["changes"][number]
+    >
+>;
+
+// ── Enums: research, monitors, dossiers, analysis, AI.
+
+export type _EnumsResearchMappingsQuery = Expect<
+    Matches<
+        { key_type: ArgOf<typeof getResearchMappings, 1> },
+        QueryOf<operations["researchListMappings"]>
+    >
+>;
+export type _EnumsResearchMappingResolveInput = Expect<
+    Matches<
+        ArgOf<typeof resolveResearchMappings, 0>,
+        JsonRequestBody<operations["researchResolveMappings"]>
+    >
+>;
+export type _EnumsResearchMappingSaveInput = Expect<
+    Matches<
+        ArgOf<typeof saveResearchMappings, 0>,
+        JsonRequestBody<operations["researchSaveMappings"]>
+    >
+>;
+export type _EnumsResearchMappingAuditInput = Expect<
+    Matches<
+        ArgOf<typeof auditResearchMappings, 0>,
+        JsonRequestBody<operations["researchAuditMappings"]>
+    >
+>;
+export type _EnumsResearchMacroSeriesQuery = Expect<
+    Matches<
+        { provider: ArgOf<typeof getMacroSeries, 0> },
+        QueryOf<operations["researchMacroSeries"]>
+    >
+>;
+export type _EnumsResearchPortfolioForecastInput = Expect<
+    Matches<
+        Pick<PortfolioForecastInput, "method">,
+        JsonRequestBody<operations["researchPortfolioForecast"]>
+    >
+>;
+export type _EnumsResearchProviderKeyPath = Expect<
+    Matches<
+        { provider: ArgOf<typeof setResearchProviderKey, 0> },
+        PathOf<operations["researchSetProviderKey"]>
+    >
+>;
+export type _EnumsResearchProviderKeyStatus = Expect<
+    Matches<ProviderKeyStatus, Schemas["ResearchProviderKeyStatus"]>
+>;
+export type _EnumsResearchScorecardFlag = Expect<
+    Matches<ScorecardFlag, Schemas["ResearchScorecardFlag"]>
+>;
+export type _EnumsResearchScorecard = Expect<
+    Matches<ResearchScorecard, Schemas["ResearchScorecard"]>
+>;
+export type _EnumsResearchMeta = Expect<
+    Matches<ResearchMeta, Schemas["ResearchMeta"]>
+>;
+
+export type _EnumsDossierEvidence = Expect<
+    Matches<DossierEvidence, Schemas["ResearchDossierEvidence"]>
+>;
+export type _EnumsDossierContent = Expect<
+    Matches<DossierContent, Schemas["ResearchDossierContent"]>
+>;
+export type _EnumsDossier = Expect<Matches<Dossier, Schemas["ResearchDossier"]>>;
+export type _EnumsDossierLinkDetail = Expect<
+    Matches<
+        NonNullable<Dossier["linkDetails"]>[number],
+        Schemas["ResearchDossier"]["linkDetails"][number]
+    >
+>;
+export type _EnumsDossierSummary = Expect<
+    Matches<DossierListItem, Schemas["ResearchDossierSummary"]>
+>;
+
+export type _EnumsMonitorCreate = Expect<
+    Matches<MonitorCreate, Schemas["AnalysisMonitorCreate"]>
+>;
+export type _EnumsMonitorUpdate = Expect<
+    Matches<MonitorUpdate, Schemas["AnalysisMonitorUpdate"]>
+>;
+export type _EnumsMonitorObservation = Expect<
+    Matches<MonitorObservation, Schemas["AnalysisMonitorObservation"]>
+>;
+export type _EnumsMonitorObservationCoverage = Expect<
+    Matches<
+        NonNullable<MonitorObservation["coverage"]>,
+        Schemas["AnalysisMonitorObservation"]["coverage"]
+    >
+>;
+export type _EnumsMonitor = Expect<
+    Matches<AnalysisMonitor, Schemas["AnalysisMonitor"]>
+>;
+export type _EnumsMonitorNotification = Expect<
+    Matches<MonitorNotification, Schemas["AnalysisMonitorNotification"]>
+>;
+
+export type _EnumsAnalysisVisualPlan = Expect<
+    Matches<VisualAnalysisPlan, Schemas["AnalysisVisualPlan"]>
+>;
+export type _EnumsAnalysisVisualPlanOrderBy = Expect<
+    Matches<
+        VisualAnalysisPlan["orderBy"][number],
+        NonNullable<Schemas["AnalysisVisualPlan"]["orderBy"]>[number]
+    >
+>;
+export type _EnumsAnalysisExecuteMode = Expect<
+    Matches<
+        Pick<ArgOf<typeof executeAnalysis, 0>, "mode">,
+        Schemas["AnalysisQuerySpec"]
+    >
+>;
+export type _EnumsAnalysisExtensionInput = Expect<
+    Matches<
+        Pick<AnalysisExtensionInput, "operation">,
+        JsonRequestBody<operations["evaluateAnalysisExtension"]>
+    >
+>;
+export type _EnumsAnalysisSavedFields = Expect<
+    Matches<
+        Pick<SavedAnalysis, "workspace" | "refreshMode">,
+        Schemas["AnalysisSavedFields"]
+    >
+>;
+export type _EnumsAnalysisSavedWorkspaceQuery = Expect<
+    Matches<
+        { workspace: ArgOf<typeof listSavedAnalyses, 0> },
+        QueryOf<operations["listSavedAnalyses"]>
+    >
+>;
+export type _EnumsAnalysisEditProposal = Expect<
+    Matches<AnalysisEditProposal, Schemas["AiAnalysisEditProposal"]>
+>;
+export type _EnumsAnalysisEditOperation = Expect<
+    Matches<
+        AnalysisEditProposal["operations"][number],
+        Schemas["AiAnalysisEditProposal"]["operations"][number]
+    >
+>;
+
+export type _EnumsAiInvestigationInput = Expect<
+    Matches<InvestigationInput, Schemas["AiInvestigationRequest"]>
+>;
+export type _EnumsAiInvestigationScope = Expect<
+    Matches<
+        InvestigationInput["scope"],
+        Schemas["AiInvestigationRequest"]["scope"]
+    >
+>;
+export type _EnumsAiInvestigationShared = Expect<
+    Matches<SharedAiInvestigationRequest, Schemas["AiInvestigationRequest"]>
+>;
+export type _EnumsAiMessage = Expect<
+    Matches<ChatMessage, Schemas["AiMessage"]>
+>;
+
+// ── Enums: Belgian tax, reports, accounts, transactions, recipients, splits,
+//    saved charts, settings.
+
+export type _EnumsAccountCreate = Expect<
+    Matches<AccountCreate, Schemas["AccountCreate"]>
+>;
+export type _EnumsAccountUpdate = Expect<
+    Matches<AccountUpdate, Schemas["AccountUpdate"]>
+>;
+export type _EnumsBulkTransactionFilter = Expect<
+    Matches<BulkTransactionFilter, Schemas["BulkTransactionFilter"]>
+>;
+export type _EnumsBulkExport = Expect<
+    Matches<
+        Pick<BulkExportRequest, "format">,
+        operations["bulkExportTransactions"]["requestBody"]["content"]["application/json"]
+    >
+>;
+export type _EnumsCloseAccount = Expect<
+    Matches<
+        { balance_handling: AccountCloseBalanceHandling },
+        operations["closeAccount"]["requestBody"]["content"]["application/json"]
+    >
+>;
+export type _EnumsReconcileRequest = Expect<
+    Matches<
+        { mode: ReconcileMode },
+        operations["reconcileAccount"]["requestBody"]["content"]["application/json"]
+    >
+>;
+export type _EnumsReconcileResult = Expect<
+    Matches<ReconcileResult, ResponseData<operations["reconcileAccount"]>>
+>;
+export type _EnumsSavedChart = Expect<
+    Matches<SavedChart, Schemas["SavedChart"]>
+>;
+export type _EnumsSavedChartCreate = Expect<
+    Matches<
+        SavedChartCreate,
+        operations["createSavedChart"]["requestBody"]["content"]["application/json"]
+    >
+>;
+export type _EnumsSavedChartUpdate = Expect<
+    Matches<
+        Partial<SavedChartCreate>,
+        operations["updateSavedChart"]["requestBody"]["content"]["application/json"]
+    >
+>;
+export type _EnumsRecipientPattern = Expect<
+    Matches<RecipientPattern, Schemas["RecipientPattern"]>
+>;
+export type _EnumsRecipientPatternCreate = Expect<
+    Matches<
+        RecipientPatternCreate,
+        operations["createRecipientPattern"]["requestBody"]["content"]["application/json"]
+    >
+>;
+export type _EnumsRecipientPatternUpdate = Expect<
+    Matches<
+        RecipientPatternUpdate,
+        operations["updateRecipientPattern"]["requestBody"]["content"]["application/json"]
+    >
+>;
+export type _EnumsBulkSplit = Expect<
+    Matches<
+        BulkSplitRequest,
+        operations["createBulkSplits"]["requestBody"]["content"]["application/json"]
+    >
+>;
+export type _EnumsReportPeriod = Expect<
+    Matches<ReportPeriod, Schemas["ReportPeriod"]>
+>;
+export type _EnumsReportPrecomputedHousehold = Expect<
+    Matches<TaxReportHousehold, Schemas["ReportPrecomputedHousehold"]>
+>;
+export type _EnumsReportPrecomputedQuotient = Expect<
+    Matches<
+        NonNullable<TaxReportHousehold["quotient"]>,
+        NonNullable<Schemas["ReportPrecomputedHousehold"]["quotient"]>
+    >
+>;
+export type _EnumsReportPrecomputedPartner = Expect<
+    Matches<
+        TaxReportHousehold["partners"][number],
+        Schemas["ReportPrecomputedHousehold"]["partners"][number]
+    >
+>;
+export type _EnumsBelgianTaxOverview = Expect<
+    Matches<BelgianTaxOverview, Schemas["BelgianTaxOverview"]>
+>;
+export type _EnumsBelgianTaxSettingsWarning = Expect<
+    Matches<
+        BelgianTaxOverview["warnings"][number],
+        Schemas["BelgianTaxSettingsWarning"]
+    >
+>;
+export type _EnumsBelgianTaxHouseholdInput = Expect<
+    Matches<BelgianTaxHouseholdV2, Schemas["BelgianTaxHouseholdInput"]>
+>;
+export type _EnumsBelgianTaxInputPartner = Expect<
+    Matches<HouseholdPartner, Schemas["BelgianTaxInputPartner"]>
+>;
+export type _EnumsBelgianTaxInputActivity = Expect<
+    Matches<IncomeActivity, Schemas["BelgianTaxInputPartnerActivity"]>
+>;
+export type _EnumsBelgianTaxInputRelationship = Expect<
+    Matches<HouseholdRelationship, Schemas["BelgianTaxInputRelationship"]>
+>;
+export type _EnumsBelgianTaxInputRelationshipEvent = Expect<
+    Matches<RelationshipEvent, Schemas["BelgianTaxInputRelationshipEvent"]>
+>;
+export type _EnumsBelgianTaxInputDependents = Expect<
+    Matches<HouseholdDependents, Schemas["BelgianTaxInputDependents"]>
+>;
+export type _EnumsBelgianTaxInputHome = Expect<
+    Matches<HouseholdHomeInputs, Schemas["BelgianTaxInputHome"]>
+>;
+export type _EnumsBelgianTaxInputMigratedFrom = Expect<
+    Matches<HouseholdMigrationRecord, Schemas["BelgianTaxInputMigratedFrom"]>
+>;
+export type _EnumsBelgianTaxHouseholdResult = Expect<
+    Matches<HouseholdTaxResult, Schemas["BelgianTaxHouseholdTaxResult"]>
+>;
+export type _EnumsBelgianTaxAssessment = Expect<
+    Matches<AssessmentDecision, Schemas["BelgianTaxAssessmentDecision"]>
+>;
+export type _EnumsBelgianTaxPartnerResult = Expect<
+    Matches<PartnerTaxResult, Schemas["BelgianTaxPartnerTaxResult"]>
+>;
+export type _EnumsBelgianTaxActivityResult = Expect<
+    Matches<ActivityTaxResult, Schemas["BelgianTaxActivityTaxResult"]>
+>;
+export type _EnumsBelgianTaxCategoryResult = Expect<
+    Matches<CategoryTaxResult, Schemas["BelgianTaxCategoryTaxResult"]>
+>;
+export type _EnumsBelgianTaxQuotient = Expect<
+    Matches<MaritalQuotientResult, Schemas["BelgianTaxMaritalQuotientResult"]>
+>;
+export type _EnumsBelgianTaxCsss = Expect<
+    Matches<HouseholdCsssResult, Schemas["BelgianTaxHouseholdCsssResult"]>
+>;
+export type _EnumsBelgianTaxIssue = Expect<
+    Matches<HouseholdTaxIssue, Schemas["BelgianTaxHouseholdTaxIssue"]>
+>;
+export type _EnumsReportTheme = Expect<
+    Matches<ReportThemeTokens, Schemas["ReportTheme"]>
+>;
+export type _EnumsReportTaxProfile = Expect<
+    Matches<TaxReportProfile, Schemas["ReportTaxProfile"]>
+>;
+export type _EnumsAccountsQuery = Expect<
+    Matches<
+        NonNullable<Parameters<typeof getAccounts>[0]>,
+        NonNullable<operations["getAccounts"]["parameters"]["query"]>
+    >
+>;
+export type _EnumsTransactionsQuery = Expect<
+    Matches<
+        NonNullable<Parameters<typeof getTransactions>[0]>,
+        NonNullable<operations["getTransactions"]["parameters"]["query"]>
+    >
+>;
+export type _EnumsRecipientsQuery = Expect<
+    Matches<
+        NonNullable<Parameters<typeof getRecipients>[0]>,
+        NonNullable<operations["getRecipients"]["parameters"]["query"]>
+    >
+>;
+export type _EnumsRecipientPivotQuery = Expect<
+    Matches<
+        NonNullable<Parameters<typeof getAggregationRecipientPivot>[0]>,
+        NonNullable<operations["getRecipientPivot"]["parameters"]["query"]>
+    >
+>;
+export type _EnumsTagPivotQuery = Expect<
+    Matches<
+        NonNullable<Parameters<typeof getAggregationTagPivot>[0]>,
+        NonNullable<operations["getTagPivot"]["parameters"]["query"]>
+    >
 >;

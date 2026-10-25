@@ -13,6 +13,7 @@ import {
     getInsightsCount,
     getInsightsDigest,
     type InsightDismissalRequest,
+    type InsightsCountStatus,
     type InsightsDigestResponse,
 } from "@/lib/api/info";
 import { insightsKeys } from "@/lib/queryKeys";
@@ -41,10 +42,17 @@ export function useInsightsCount() {
     });
 }
 
-export function insightsCountRefetchInterval(status?: string) {
-    if (status === "pending") return 2_000;
-    if (status === "unavailable") return 60_000;
-    return false;
+export function insightsCountRefetchInterval(status?: InsightsCountStatus) {
+    switch (status) {
+        case "pending":
+            return 2_000;
+        case "unavailable":
+            return 60_000;
+        case "ready":
+        case undefined:
+        default:
+            return false;
+    }
 }
 
 export function useDismissInsight() {

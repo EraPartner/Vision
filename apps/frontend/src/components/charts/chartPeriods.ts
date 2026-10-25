@@ -10,6 +10,10 @@ import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 export const CHART_PERIODS = ["1m", "3m", "6m", "1y", "3y", "all"] as const;
 export type ChartPeriod = (typeof CHART_PERIODS)[number];
 
+export function isChartPeriod(value: string): value is ChartPeriod {
+    return CHART_PERIODS.some((period) => period === value);
+}
+
 export const CHART_PERIOD_OFFSET_DAYS: Record<Exclude<ChartPeriod, "all">, number> = {
     "1m": 30,
     "3m": 90,

@@ -18,6 +18,7 @@ import {
     rawFetch,
 } from '@/lib/api/client';
 import { buildQuery, type QueryParams } from '@/lib/api/helpers';
+import { enumGuard } from '@/lib/enumGuard';
 import {
     InstrumentProviderMappingListSchema,
     MacroSearchSchema,
@@ -33,6 +34,7 @@ import {
     ResearchSearchSchema,
 } from '@vision/types/contracts';
 import type {
+    ForecastMethod,
     MappingAuditResponse,
     MappingKeyType,
     MappingResolveResponse,
@@ -50,6 +52,7 @@ import type {
     PortfolioForecast,
     PortfolioForecastInput,
     ProviderKeysResponse,
+    ResearchProviderKeyId,
     MacroProvider,
     MacroSearchResponse,
     MacroSeriesResponse,
@@ -111,6 +114,11 @@ async function researchSend<T>(
     const data = checkResponseContract(schema, body.data as T, `${method} ${endpoint}`);
     return { data, meta: normalizeMeta(body.meta) };
 }
+
+export const isForecastMethod = enumGuard<ForecastMethod>({
+    parametric: true,
+    block_bootstrap: true,
+});
 
 // ── Data endpoints ──────────────────────────────────────────────────────────
 
@@ -299,7 +307,7 @@ export function getResearchProviderKeys(): Promise<ProviderKeysResponse> {
     });
 }
 
-export function setResearchProviderKey(provider: string, apiKey: string): Promise<ProviderKeysResponse> {
+export function setResearchProviderKey(provider: ResearchProviderKeyId, apiKey: string): Promise<ProviderKeysResponse> {
     return apiRequest(`/api/research/provider-keys/${encodeURIComponent(provider)}`, {
         method: 'PUT',
         body: JSON.stringify({ api_key: apiKey }),
@@ -308,7 +316,7 @@ export function setResearchProviderKey(provider: string, apiKey: string): Promis
 }
 
 /** Clear a provider key. Responds 204 No Content — callers refetch the statuses. */
-export async function clearResearchProviderKey(provider: string): Promise<void> {
+export async function clearResearchProviderKey(provider: ResearchProviderKeyId): Promise<void> {
     await apiRequest<void>(`/api/research/provider-keys/${encodeURIComponent(provider)}`, {
         method: 'DELETE',
     });

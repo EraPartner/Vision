@@ -6,6 +6,7 @@ import type {
     PartnerTaxResult,
 } from "@/lib/belgianTax/householdTypes";
 import type { PartnerAmounts } from "@/lib/belgianTax/partnerAttribution";
+import type { BelgianTaxDashboardHouseholdTone } from "@/lib/api/belgianTax";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -33,7 +34,7 @@ interface HouseholdBreakdownCardProps {
     recordedIncome?: PartnerAmounts | undefined;
 }
 
-type RowTone = "base" | "reduction" | "adjustment" | "total";
+type RowTone = BelgianTaxDashboardHouseholdTone;
 
 interface BreakdownRow {
     key: string;
