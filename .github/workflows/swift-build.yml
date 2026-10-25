@@ -68,8 +68,9 @@ jobs:
           # Run AppKit layouts separately so they cannot starve Core watchdogs/polling on MainActor.
           # Print only errors and failed tests; the full log is mostly deprecation warnings.
           summarize() {
-            grep -E '(error|fatal error): |✘|Fatal error' "$1" | grep -v 'warning: ' \
-              | sed "s#^$GITHUB_WORKSPACE/##" | sort -u | head -500
+            # Issue comments follow their "recorded an issue" line, so keep a few lines after it.
+            grep -E -A6 '(error|fatal error): |✘|Fatal error' "$1" | grep -v -E 'warning: |^--$' \
+              | sed "s#^$GITHUB_WORKSPACE/##" | awk '!seen[$0]++' | head -800
           }
           # Both suites run even when the first fails, so one round reports every failure.
           status=0
