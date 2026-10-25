@@ -153,10 +153,13 @@ struct SidebarWidthGuard: NSViewRepresentable {
                 corrections += 1
                 splitView.setPosition(width, ofDividerAt: 0)
                 // SwiftUI can put its own column width back on a later pass without resizing
-                // the probe or posting a split resize, so check again once that pass has run.
+                // the probe, posting a split resize or a frame change (seen on macOS 26 about
+                // 0.1-0.5 s after the first correction), so check again a few times after it.
                 Task { @MainActor [weak self] in
-                    try? await Task.sleep(for: .milliseconds(50))
-                    self?.scheduleCorrection()
+                    for delay in [50, 300, 900] {
+                        try? await Task.sleep(for: .milliseconds(delay))
+                        self?.scheduleCorrection()
+                    }
                 }
             }
             SidebarWidthGuard.note(
