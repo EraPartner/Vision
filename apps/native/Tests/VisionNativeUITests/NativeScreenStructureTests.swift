@@ -274,38 +274,6 @@ actor StaticDatabaseService: DatabaseAdminService {
     }
 }
 
-/// An audit history with one verified, partly anchored page.
-@MainActor
-final class StaticAuditHistory: AuditHistoryService {
-    static func entry(_ sequence: Int, anchored: Bool) -> JSONValue {
-        let hash = String(repeating: String(sequence % 10), count: 64)
-        return .object([
-            "sequence": .int(sequence), "previousHash": .string(hash), "hash": .string(hash), "version": .int(1),
-            "payload": .object(["stream": .string("transactions"), "event": .string("update")]),
-            "createdAt": .string("2026-01-01T00:00:00.000Z"),
-            "anchorStatus": .string(anchored ? "anchored" : "pending_anchor"),
-        ])
-    }
-
-    func read(_ range: AuditViewer.ReadRange) async -> JSONValue {
-        .object([
-            "success": .bool(true),
-            "verification": .object([
-                "status": .string("partially_verified"), "sequence": .int(2),
-                "hash": .string(String(repeating: "2", count: 64)), "anchoredThrough": .int(1),
-            ]),
-            "entries": .array([Self.entry(1, anchored: true), Self.entry(2, anchored: false)]),
-            "hasMore": .bool(false),
-        ])
-    }
-
-    func enroll() async -> JSONValue { .object(["success": .bool(false), "cancelled": .bool(true)]) }
-    func exportSnapshot() async -> JSONValue { .object(["success": .bool(false), "cancelled": .bool(true)]) }
-    func exportTransfer(password: String) async -> JSONValue { .object(["success": .bool(true)]) }
-    func importTransfer(password: String) async -> JSONValue { .object(["success": .bool(true)]) }
-    func rotateKey() async -> JSONValue { .object(["success": .bool(true)]) }
-}
-
 /// A planned-payments service with fixed rows; `failing` fails the list.
 actor StaticPlannedService: PlannedPaymentsService {
     let rows: [OpenAPI.PlannedTransaction]
@@ -807,7 +775,7 @@ actor StaticAccountsService: AccountsService {
             exchangeRates: rates,
             admin: AdminScreens.make(
                 service: StaticAdminService(failing: failing), database: database,
-                token: AdminTokenAccess(read: { "token" }, write: { _ in true }), audit: StaticAuditHistory()),
+                token: AdminTokenAccess(read: { "token" }, write: { _ in true })),
             planned: PlannedPaymentsModel(
                 service: planned, editing: planned, pickers: planned, rates: rates, dismissals: .memory(),
                 now: { StaticPlannedService.today }),
@@ -849,11 +817,10 @@ actor StaticAccountsService: AccountsService {
         #expect(layOut(AdminOverviewView(model: admin.overview, shell: shell).environment(\.visionTheme, theme)).fittingSize.width > 0)
         #expect(layOut(ProviderHealthView(model: admin.providers, shell: shell).environment(\.visionTheme, theme)).fittingSize.width > 0)
         #expect(layOut(EndpointLivenessView(model: admin.endpoints, shell: shell).environment(\.visionTheme, theme)).fittingSize.width > 0)
-        // Loaded, with an expanded error row, a filter and an audit page.
+        // Loaded, with an expanded error row and a filter.
         await admin.overview.appear()
         await admin.providers.appear()
         await admin.endpoints.appear()
-        #expect(admin.overview.audit.page?.entries.count == 2)
         #expect(admin.overview.hasToken)
         admin.providers.toggleExpanded("ecb")
         admin.endpoints.filter = "delete"

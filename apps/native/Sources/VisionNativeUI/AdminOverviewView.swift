@@ -2,7 +2,7 @@ import SwiftUI
 import VisionNativeCore
 
 /// `/admin` (apps/frontend/src/pages/admin/AdminOverviewPage.tsx) in SwiftUI: the three
-/// tiles, the admin token card and the audit history card, with the parity rows of
+/// tiles and the admin token card, with the parity rows of
 /// docs/reference/native-parity/admin.md.
 public struct AdminOverviewView: View {
     private let model: AdminOverviewModel
@@ -21,7 +21,6 @@ public struct AdminOverviewView: View {
             AdminPageHeader(title: strings.t("admin.overview.title"), subtitle: strings.t("admin.overview.description"))
             tiles
             tokenCard
-            AuditHistoryCardView(model: model.audit, strings: strings)
         }
         .task { await model.appear() }
         .onDisappear { model.disappear() }

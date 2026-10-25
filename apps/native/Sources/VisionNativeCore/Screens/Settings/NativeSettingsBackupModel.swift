@@ -225,7 +225,7 @@ import Observation
         pendingConfirmationFile = nil
         await startRestore(file: file)
     }
-    /// Called only after the caller's destructive confirmation; the host retains its own audit confirmations.
+    /// Called only after the caller's destructive confirmation; the host retains its own confirmations.
     public func startRestore(file: String) async {
         guard !file.isEmpty, !restoreRunning else { return }
         workflow = UUID()

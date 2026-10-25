@@ -80,30 +80,6 @@ final class RecordingBridgeHost: BridgeHost {
         calls.append("setPassphrase:\(passphrase)")
         return PassphraseUpdateResult(success: true, available: true)
     }
-    func enrollAudit() async -> JSONValue {
-        calls.append("auditEnroll")
-        return .object(["success": .bool(true), "enrollmentSequence": .int(4)])
-    }
-    func readAudit(_ range: AuditViewer.ReadRange) async -> JSONValue {
-        calls.append("auditRead:\(range.afterSequence):\(range.limit)")
-        return .object(["success": .bool(false), "status": .string("unavailable")])
-    }
-    func exportAuditSnapshot() async -> JSONValue {
-        calls.append("auditExport")
-        return .object(["success": .bool(false), "cancelled": .bool(true)])
-    }
-    func exportAuditTransfer(password: String) async -> JSONValue {
-        calls.append("auditTransferExport:\(password.count)")
-        return .object(["success": .bool(true)])
-    }
-    func importAuditTransfer(password: String) async -> JSONValue {
-        calls.append("auditTransferImport:\(password.count)")
-        return .object(["success": .bool(true)])
-    }
-    func rotateAuditKey() async -> JSONValue {
-        calls.append("auditRotate")
-        return .object(["success": .bool(true), "sequence": .int(9)])
-    }
     func retryLaunch() { calls.append("retry") }
     func openLogs() throws -> String {
         if let logsError { throw logsError }
@@ -314,51 +290,6 @@ final class RecordingBridgeHost: BridgeHost {
         let updater = await reply(#"{"channel":"update:pre-update-backup","args":[]}"#, host: host)
         #expect(
             updater == .reject(BridgeContract.unavailableMessage(BridgeContract.entry(for: .updatePreUpdateBackup))))
-        #expect(host.calls.isEmpty)
-    }
-
-    @Test func auditChannelsReachTheHost() async {
-        let host = RecordingBridgeHost()
-        let password = String(repeating: "p", count: 16)
-        #expect(
-            await reply(#"{"channel":"audit:enroll","args":[]}"#, host: host)
-                == .resolve(.object(["success": .bool(true), "enrollmentSequence": .int(4)])))
-        #expect(
-            await reply(#"{"channel":"audit:read","args":[{"afterSequence":3,"limit":50}]}"#, host: host)
-                == .resolve(.object(["success": .bool(false), "status": .string("unavailable")])))
-        _ = await reply(#"{"channel":"audit:read","args":[null]}"#, host: host)
-        _ = await reply(#"{"channel":"audit:export","args":[]}"#, host: host)
-        _ = await reply(#"{"channel":"audit:transfer-export","args":[""# + password + #""]}"#, host: host)
-        _ = await reply(#"{"channel":"audit:transfer-import","args":[""# + password + #""]}"#, host: host)
-        #expect(
-            await reply(#"{"channel":"audit:rotate-key","args":[]}"#, host: host)
-                == .resolve(.object(["success": .bool(true), "sequence": .int(9)])))
-        #expect(
-            host.calls == [
-                "auditEnroll", "auditRead:3:50", "auditRead:0:100", "auditExport", "auditTransferExport:16",
-                "auditTransferImport:16", "auditRotate",
-            ])
-    }
-
-    @Test func invalidAuditArgumentsAnswerTheChannelShape() async {
-        let host = RecordingBridgeHost()
-        #expect(
-            await reply(#"{"channel":"audit:transfer-export","args":["short"]}"#, host: host)
-                == .resolve(
-                    .object([
-                        "success": .bool(false), "status": .string("failed"),
-                        "reason": .string("transfer_password_invalid"),
-                    ])))
-        #expect(
-            await reply(#"{"channel":"audit:read","args":[{"limit":501}]}"#, host: host)
-                == .resolve(
-                    .object([
-                        "success": .bool(false), "status": .string("failed"),
-                        "error": .string("Invalid audit read range"),
-                    ])))
-        #expect(
-            await reply(#"{"channel":"audit:rotate-key","args":[1]}"#, host: host)
-                == .failed("Unexpected IPC arguments"))
         #expect(host.calls.isEmpty)
     }
 

@@ -21,14 +21,6 @@ import Testing
             "getEncryptionStatus": "backup:get-encryption-status",
             "setPassphrase": "backup:set-passphrase",
         ],
-        "electronAudit": [
-            "enroll": "audit:enroll",
-            "read": "audit:read",
-            "exportSnapshot": "audit:export",
-            "exportTransfer": "audit:transfer-export",
-            "importTransfer": "audit:transfer-import",
-            "rotateKey": "audit:rotate-key",
-        ],
         "electronServices": ["saveSettings": "services:save-settings", "loadSettings": "services:load-settings"],
         "electronAPI": [
             "ready": "app:renderer-ready",
@@ -48,10 +40,10 @@ import Testing
         #expect(BridgeContract.entries.count == BridgeChannel.allCases.count)
     }
 
-    @Test func theElectronInvokeContractHas29Channels() {
-        // ipc-contract.test.ts: `assert.equal(declared.size, 29)`.
+    @Test func theNativeInvokeContractHas23Channels() {
+        // The 29 channels of the contract Vision Native mirrors, less the six audit channels.
         let electron = BridgeContract.entries.filter { $0.availability != .nativeOnly }
-        #expect(electron.count == 29)
+        #expect(electron.count == 23)
         #expect(electron.allSatisfy { !$0.channel.rawValue.hasPrefix("native:") })
         #expect(BridgeEvent.allCases.count == 6)
     }
@@ -77,9 +69,6 @@ import Testing
             case "electronBackup":
                 // Phase 1d answers every backup channel.
                 #expect(entry.availability == .implemented)
-            case "electronAudit":
-                // Phase 1e answers every audit channel.
-                #expect(entry.availability == .implemented)
             case "electronAPI" where entry.channel == .routeChanged: #expect(entry.availability == .nativeOnly)
             case "electronServices", "electronAPI", "electronRecovery": #expect(entry.availability == .implemented)
             default: #expect(entry.method == nil)
@@ -89,10 +78,11 @@ import Testing
 
     @Test func unavailableMessagesNameTheMethodAndPhase() {
         let pending = BridgeEntry(
-            channel: .auditRead, bridge: "electronAudit", method: "read", parameters: ["options"], handler: "x",
+            channel: .backupRun, bridge: "electronBackup", method: "runBackup", parameters: ["destDir", "frontendStateJson"],
+            handler: "x",
             availability: .pending(phase: "2"))
         let message = BridgeContract.unavailableMessage(pending)
-        #expect(message.contains("electronAudit.read is not available in Vision Native yet") && message.contains("phase 2"))
+        #expect(message.contains("electronBackup.runBackup is not available in Vision Native yet") && message.contains("phase 2"))
         let pendingCount = BridgeContract.entries.filter {
             if case .pending = $0.availability { return true }
             return false

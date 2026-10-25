@@ -124,7 +124,7 @@ struct NativeShellPresentationStructureTests {
             notices: NativeNoticeCenter(automaticExpiry: false), exchangeRates: rates,
             admin: AdminScreens.make(
                 service: StaticAdminService(), database: StaticDatabaseService(),
-                token: AdminTokenAccess(read: { nil }, write: { _ in true }), audit: StaticAuditHistory()),
+                token: AdminTokenAccess(read: { nil }, write: { _ in true })),
             planned: PlannedPaymentsModel(
                 service: planned, editing: planned, pickers: planned, rates: rates, dismissals: .memory()),
             imports: ImportsModel(

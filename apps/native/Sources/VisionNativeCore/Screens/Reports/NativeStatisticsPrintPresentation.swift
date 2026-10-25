@@ -15,8 +15,7 @@ import Foundation
         let inert = APIClient(baseURL: { nil })
         let rates = ExchangeRatesModel(service: inert)
         let admin = AdminScreens.make(
-            service: inert, database: inert, token: .init(read: { nil }, write: { _ in false }),
-            audit: NativeStatisticsPrintAudit())
+            service: inert, database: inert, token: .init(read: { nil }, write: { _ in false }))
         let shell = NativeShellModel(
             strings: snapshot.strings, theme: snapshot.theme, exchangeRates: rates, admin: admin,
             planned: PlannedPaymentsModel(
@@ -34,11 +33,3 @@ import Foundation
     }
 }
 
-@MainActor private final class NativeStatisticsPrintAudit: AuditHistoryService {
-    func read(_ range: AuditViewer.ReadRange) async -> JSONValue { .object(["success": .bool(false)]) }
-    func enroll() async -> JSONValue { .object(["success": .bool(false)]) }
-    func exportSnapshot() async -> JSONValue { .object(["success": .bool(false)]) }
-    func exportTransfer(password: String) async -> JSONValue { .object(["success": .bool(false)]) }
-    func importTransfer(password: String) async -> JSONValue { .object(["success": .bool(false)]) }
-    func rotateKey() async -> JSONValue { .object(["success": .bool(false)]) }
-}

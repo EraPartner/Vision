@@ -143,7 +143,7 @@ private struct ServiceFixture {
 
     init(
         environment: [String: String] = [:], runtime: FakeBackupRuntime = FakeBackupRuntime(),
-        storedPassphrase: String? = nil, runtimeAvailable: Bool = true, audit: (any AuditRestoreGuard)? = nil,
+        storedPassphrase: String? = nil, runtimeAvailable: Bool = true,
         maintenance: BackupMaintenanceHooks = BackupMaintenanceHooks()
     ) throws {
         let directory = try makeBackupScratchDirectory()
@@ -166,7 +166,6 @@ private struct ServiceFixture {
             passphraseStoreFactory: { _ in store },
             logger: log,
             now: { Date(timeIntervalSince1970: 1_760_000_000.125) },
-            auditProvider: { audit },
             maintenance: maintenance)
     }
 
@@ -511,9 +510,8 @@ private struct ServiceFixture {
     @Test func theAppHooksSurroundTheQuiescentCapture() async throws {
         let runtime = FakeBackupRuntime()
         let events = StringBox()
-        let audit = FakeAuditGuard([])
         let fixture = try ServiceFixture(
-            runtime: runtime, audit: audit,
+            runtime: runtime,
             maintenance: BackupMaintenanceHooks(
                 willBeginSnapshot: {
                     let count = await runtime.calls.count
@@ -529,8 +527,6 @@ private struct ServiceFixture {
         #expect(events.values == ["begin:0", "end:4"])
         let calls = await runtime.calls
         #expect(calls == ["stop:true", "dump", "export", "start"])
-        let auditCalls = await audit.calls
-        #expect(auditCalls == ["pause", "resume"])
     }
 
     @Test func aRestoreIsRefusedWhileABackupSnapshotRuns() async throws {
@@ -609,121 +605,15 @@ private struct ServiceFixture {
     }
 }
 
-/// The audit hooks a restore drives, with a scripted verdict per attempt.
-actor FakeAuditGuard: AuditRestoreGuard {
-    private(set) var calls: [String] = []
-    private var verdicts: [AuditRestoreError?]
+/// A lock-guarded flag, set from a task and read from the test.
+final class Flag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Bool
 
-    init(_ verdicts: [AuditRestoreError?]) {
-        self.verdicts = verdicts
+    init(_ value: Bool) {
+        self.value = value
     }
 
-    func pauseAuditClosure() async { calls.append("pause") }
-    func resumeAuditClosure() async { calls.append("resume") }
-    func endAuditSession() async { calls.append("end") }
-
-    func assertRestoredAuditHistory(allowUnverifiedAudit: Bool) async throws -> JSONValue {
-        calls.append("assert:\(allowUnverifiedAudit)")
-        let verdict = verdicts.isEmpty ? nil : verdicts.removeFirst()
-        if let verdict { throw verdict }
-        return .object(["status": .string("verified")])
-    }
-}
-
-private let auditFailure = AuditRestoreError(
-    code: "RESTORED_AUDIT_INTEGRITY_FAILED", message: "Restored database failed the trusted audit integrity check",
-    auditStatus: "failed", auditReason: "hash_mismatch")
-
-@Suite struct BackupAuditContinuityTests {
-    @Test func aVerifiedRestoreRunsBetweenPauseAndResume() async throws {
-        let audit = FakeAuditGuard([nil])
-        let fixture = try ServiceFixture(audit: audit)
-        defer { fixture.remove() }
-        let path = fixture.directory + "/legacy.sql"
-        try writeBytes(path, Array("SELECT 1;\n".utf8))
-        let result = await fixture.service.restore(path: path, passphrase: nil, confirm: { true })
-        #expect(result == .object(["success": .bool(true), "file": .string(path)]))
-        let calls = await audit.calls
-        #expect(calls == ["pause", "assert:false", "resume"])
-        let runtimeCalls = await fixture.runtime.calls
-        #expect(runtimeCalls == ["activate:plain:", "start", "finalizeDatabase"])
-    }
-
-    @Test func aFailedAuditCheckRollsBackAndOffersTheRecovery() async throws {
-        let audit = FakeAuditGuard([auditFailure, nil])
-        let fixture = try ServiceFixture(audit: audit)
-        defer { fixture.remove() }
-        let backup = await fixture.service.runBackup(destination: fixture.backups, frontendStateJson: nil)
-        let file = try #require(backup["file"]?.stringValue)
-        let offered = StringBox()
-        let result = await fixture.service.restore(
-            path: file, passphrase: nil, confirm: { true },
-            confirmAuditRecovery: { status in
-                offered.append(status ?? "nil")
-                return true
-            })
-        #expect(offered.values == ["failed"])
-        #expect(result["success"] == .bool(true))
-        #expect(result["auditStatus"] == .string("unavailable"))
-        let calls = await audit.calls
-        // The backup's quiescent snapshot pauses the closure too.
-        #expect(
-            calls == ["pause", "resume", "pause", "assert:false", "resume", "pause", "assert:true", "resume", "end"])
-        let runtimeCalls = await fixture.runtime.calls
-        #expect(
-            Array(runtimeCalls.dropFirst(4)) == [
-                "activate:plain:0130_head", "replaceAttachments", "start", "rollbackAttachments",
-                "rollbackDatabase:vision_previous", "start",
-                "activate:plain:0130_head", "replaceAttachments", "start", "finalizeDatabase", "finalizeAttachments",
-            ])
-    }
-
-    @Test func aDeclinedRecoveryIsACancelledRestore() async throws {
-        let audit = FakeAuditGuard([auditFailure])
-        let fixture = try ServiceFixture(audit: audit)
-        defer { fixture.remove() }
-        let path = fixture.directory + "/legacy.sql"
-        try writeBytes(path, Array("SELECT 1;\n".utf8))
-        let result = await fixture.service.restore(
-            path: path, passphrase: nil, confirm: { true }, confirmAuditRecovery: { _ in false })
-        #expect(result == .object(["success": .bool(false), "error": .string("Restore cancelled by user")]))
-        let calls = await audit.calls
-        #expect(calls == ["pause", "assert:false", "resume"])
-    }
-
-    @Test func aFailedRollbackSuppressesTheRecovery() async throws {
-        let audit = FakeAuditGuard([auditFailure])
-        // The rollback's backend restart fails too.
-        let fixture = try ServiceFixture(runtime: FakeBackupRuntime(startFailures: 0), audit: audit)
-        defer { fixture.remove() }
-        let path = fixture.directory + "/legacy.sql"
-        try writeBytes(path, Array("SELECT 1;\n".utf8))
-        await fixture.runtime.failStarts(after: 1)
-        let offered = StringBox()
-        let result = await fixture.service.restore(
-            path: path, passphrase: nil, confirm: { true },
-            confirmAuditRecovery: { _ in
-                offered.append("offered")
-                return true
-            })
-        #expect(offered.values.isEmpty)
-        #expect(
-            result
-                == .object([
-                    "success": .bool(false),
-                    "error": .string("Error: Restored database failed the trusted audit integrity check"),
-                ]))
-    }
-
-    @Test func otherFailuresAreNotRecoverable() async throws {
-        let unrelated = AuditRestoreError(code: "RESTORED_AUDIT_RECOVERY_INVALID", message: "Restored database audit chain is invalid")
-        let audit = FakeAuditGuard([unrelated])
-        let fixture = try ServiceFixture(audit: audit)
-        defer { fixture.remove() }
-        let path = fixture.directory + "/legacy.sql"
-        try writeBytes(path, Array("SELECT 1;\n".utf8))
-        let result = await fixture.service.restore(
-            path: path, passphrase: nil, confirm: { true }, confirmAuditRecovery: { _ in true })
-        #expect(result == .object(["success": .bool(false), "error": .string("Error: Restored database audit chain is invalid")]))
-    }
+    var current: Bool { lock.withLock { value } }
+    func set(_ next: Bool) { lock.withLock { value = next } }
 }

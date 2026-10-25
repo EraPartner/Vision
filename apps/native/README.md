@@ -26,7 +26,6 @@ stays the project-file tool (ADR-204 decision 3). The deployment target and the 
 | `Sources/VisionNativeCore/`            | Non-UI logic: runtime supervision, health, override                            |
 | `Sources/VisionNativeCore/Shell/`      | Bridge contract and codec, web view policy, menus                              |
 | `Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption and restore (phase 1d)                              |
-| `Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, audit bridge (1e)                              |
 | `Sources/VisionNativeCore/API/`        | `APIClient` and the generated OpenAPI client (2)                               |
 | `Sources/VisionNativeCore/Design/`     | Generated design tokens, `ThemeSelection` (2)                                  |
 | `Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shell model (2)                            |
@@ -76,7 +75,7 @@ launch from `VisionNativeVariant` in `Info.plist`:
 builds the standard one, and `xcodebuild ... VISION_NATIVE_VARIANT=demo` picks the Demo variant in
 a manual build. Both run on the synthetic Demo dataset until the phase 4 switch-over (ADR-204). The
 bundle id, the Keychain service names and the iCloud backup folder follow the variant (for example
-`com.vaultvoyager.vision-native-demo.audit-witness` and `Vision Native Demo/Backups`).
+`com.vaultvoyager.vision-native-demo.backup-passphrase` and `Vision Native Demo/Backups`).
 
 `bun run demo:reset-vision-native` asks Vision Native Demo to restore the canonical seed at its next
 launch (quit it first, then reopen it). `bun run demo:reset-native` still resets Electron's Vision
@@ -217,7 +216,7 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
 - `/admin`, `/admin/providers`, `/admin/endpoints` and `/admin/exchange-rates` are native, in
   admin mode only, and so are `/admin/db` and `/admin/db/:table`; the table editor holds
   navigation and Quit behind a native Leave this page? alert while it has pending changes. The admin token card writes the page's
-  `sessionStorage`, and the audit history card uses the native audit channels. Native requests carry the page's admin
+  `sessionStorage`. Native requests carry the page's admin
   token from `sessionStorage`, read from the web view, and nothing else stores it.
 - `/planned` is native in every mode once `app_settings` has loaded (phase 3c). Add payment and
   Edit open the native planned-payment sheet, which holds navigation and Quit behind the Leave this
@@ -275,30 +274,15 @@ bundles, so a backup made by either app restores in the other, and restores the 
   Electron's `Vision/Backups`), and the backup on quit is on.
 - Restores accept only files chosen in the restore file picker and ask for confirmation first.
   A restore refuses a backup from a newer schema, and one with a numbered schema when this
-  install's schema cannot be determined. It pauses the audit closure and checks the restored audit
-  history before it commits; when that check fails, a second confirmation offers to restore
-  without audit verification, and the audit status then reads unavailable.
+  install's schema cannot be determined.
 - The quit-time backup runs before the services stop, within the 45-second quit limit.
 
 The Swift tests open the Electron Vision 1.0.2 fixture in
 `Tests/VisionNativeCoreTests/Fixtures/`, a byte-for-byte copy of
 `packaging/electron/backup/fixtures/vision-1.0.2-sanitized.visionbak.enc`.
 
-## Audit history
-
-Admin mode's overview page shows the audit history card, backed by the `electronAudit` channels
-(see [the architecture page](../../docs/architecture/native-app.md#audit-anchor-and-keychain-witness-phase-1e)).
-`Sources/VisionNativeCore/Audit/` keeps Electron's receipt (`audit-anchor/checkpoint.json`), HMAC
-and transfer format, and talks to the backend's `/api/internal/audit` routes with a per-launch
-bridge token. The witness is a login Keychain item (`com.vaultvoyager.vision-native[-demo].audit-witness`,
-account `latest-checkpoint`), written through the Security framework. The HMAC key in
-`audit-anchor/key.enc` is protected as `vn1` under a Keychain wrapping key (`...audit-key`),
-instead of Electron's `safeStorage`.
-
-`Tests/VisionNativeCoreTests/Fixtures/audit/` holds a receipt, key, witness value and transfer
-written by `packaging/electron/audit-anchor.ts`; its README says how to regenerate them. CI also
-checks the other direction: the Swift tests write a plain bundle, an encrypted bundle and an audit
-transfer, and the `native-interop` job opens them with the Electron readers.
+The `native-interop` CI job checks the other direction: the Swift tests write a plain bundle and an
+encrypted bundle, and the job opens them with the Electron readers.
 
 ## Manual checks on a Mac
 
@@ -320,21 +304,10 @@ these steps touches Electron Vision or its data.
    folder, save a passphrase, click Back up now. Expected: a toast with the file name and a
    `vision_backup_<device>_<date>.visionbak.enc` in the folder. In Electron Vision Demo,
    Settings > Backup > Choose backup file, pick that file, Restore now, enter the passphrase.
-   Expected: "Restore complete" (Electron may first ask whether to restore without verified audit
-   history, because the two Demos' audit checkpoints differ; accept), and the page reloads with the
-   data of the Vision Native backup.
+   Expected: "Restore complete", and the page reloads with the data of the Vision Native backup.
 5. **Backup from Electron to Vision Native.** Make a backup in Electron Vision Demo and restore it
-   in Vision Native Demo the same way. Expected: the native "Restore this backup?" confirmation. When the
-   restored audit history does not match this app's own audit checkpoint (expected here), a second
-   warning, "Restore without verified audit history?", follows with Cancel as the default; click
-   Restore now. Then "Restore
-   complete" and the reload. What the Audit history card on the Admin overview shows next depends
-   on whether the first Demo launch anchored itself, which is still to be confirmed on the Mac:
-   a new cluster whose `legacyUnverified` counts are all zero signs its first checkpoint at launch
-   (ADR-161), any other first launch waits for enrolment. Without that first checkpoint, the card
-   reports the history as unavailable and offers "Start audit protection" (step 9). With it, the
-   restored history no longer reaches the trusted checkpoint, so the card reports that the history
-   cannot be verified (failed or unavailable) and offers no enrolment. Note which one you see. A wrong passphrase reopens the prompt
+   in Vision Native Demo the same way. Expected: the native "Restore this backup?" confirmation, then
+   "Restore complete" and the reload. A wrong passphrase reopens the prompt
    with "Incorrect passphrase. Try again."
 6. **CSV handoff.** Drag a `.csv` file onto the window, outside the import dropzone. Expected: the
    Import page opens with the file selected. Then run `open -a "Vision Native Demo" file.csv`.
@@ -344,67 +317,21 @@ these steps touches Electron Vision or its data.
 8. **Text context menu.** In any text field, type a misspelled word and right-click it. Expected:
    Cut, Copy and Paste. Note whether spelling guesses, Learn Spelling and Select All appear; this
    settles rows #203 to #205 of the exit checklist.
-9. **Audit enrolment.** Settings > About & maintenance > Admin mode on. Open the Admin overview.
-   If the card offers "Start audit protection" (no first checkpoint, see step 5), click it and
-   confirm. If it does not, the first launch anchored itself and enrolment is not needed. In that
-   case the recovery restore of step 5 leaves the history unverified (the Demo reset does not
-   clear the anchor), and steps 10, 11 and 13 need a verified history: on a first run, do steps 9
-   to 13 right after step 3 and the backup steps after them. Which case applies is to be confirmed
-   on the Mac. Expected either way, before any recovery restore: the card shows "Verified through
-   entry N"; Keychain Access lists `com.vaultvoyager.vision-native-demo.audit-witness` (account
-   `latest-checkpoint`) and `com.vaultvoyager.vision-native-demo.audit-key`;
-   `Vision Native Demo/audit-anchor/` holds `key.enc` and `checkpoint.json`.
-10. **Audit export.** Click "Export snapshot". Expected: a save panel for
-    `vision-audit-snapshot.json`, and the file lists the verified entries.
-11. **Audit transfer export.** Enter a transfer password of at least 16 characters and click
-    "Export protected transfer". Expected: a save panel for `vision-audit-transfer.vat` and a
-    success message. A shorter password is refused before any panel opens.
-12. **Audit device move from Electron (rehearses ADR-205 step 3.5's alternative).** Import works
-    only on the first launch of a new cluster (ADR-161), so use the standard variant, which has its
-    own Demo-only directory. In Electron Vision Demo, enrol the audit history if needed, export a
-    protected transfer, then click Back up now straight away, with no changes in between. Run
-    `VISION_NATIVE_VARIANT=standard ./install-native.sh` and open `/Applications/Vision Native.app`
-    for the first time. Turn on Admin mode, click "Import protected transfer", confirm the
-    replacement warning, choose the `.vat` file and enter its password. Expected: success. Then
-    restore the Electron backup in Settings > Backup. Expected: "Restore complete" without the
-    audit recovery question, and the Audit history card shows "Verified through entry N". A wrong
-    password fails and leaves the anchor unchanged. If the standard variant was opened before,
-    the import is refused with `transfer_target_not_fresh`. Starting it fresh is your call: quit
-    the app, remove `~/Library/Application Support/Vision Native/` (it holds only Demo data), and
-    delete its two Keychain items, or the next launch finds a witness without local files
-    (`anchor_invalid`) and the import is refused again:
-
-    ```bash
-    security delete-generic-password -s com.vaultvoyager.vision-native.audit-witness -a latest-checkpoint
-    security delete-generic-password -s com.vaultvoyager.vision-native.audit-key -a audit-anchor-key
-    ```
-
-    The Demo variant's equivalents, for a fresh Demo directory
-    (`~/Library/Application Support/Vision Native Demo/`):
-
-    ```bash
-    security delete-generic-password -s com.vaultvoyager.vision-native-demo.audit-witness -a latest-checkpoint
-    security delete-generic-password -s com.vaultvoyager.vision-native-demo.audit-key -a audit-anchor-key
-    ```
-
-13. **Rotate key.** Click "Rotate audit key" and confirm. Expected: success, and the card still
-    shows "Verified through entry N".
-14. **Quit backup.** In Settings > Backup, turn on "Back up when quitting" and keep "Keep services
+9. **Quit backup.** In Settings > Backup, turn on "Back up when quitting" and keep "Keep services
     running on quit" off. Quit with `⌘Q`. Expected: the app quits within 45 seconds, a new bundle
     is in the backup folder, and port 54332 is no longer listening.
-15. **Demo reset.** Run `bun run demo:reset-vision-native`, then reopen the app. Expected: the
-    canonical Demo data is back (the audit card may then report that the history changed, as in
-    Electron Vision Demo; see ADR-205 question 7).
-16. **Native sidebar (phase 2).** Expected: the native sidebar lists the web sections with SF
+10. **Demo reset.** Run `bun run demo:reset-vision-native`, then reopen the app. Expected: the
+    canonical Demo data is back.
+11. **Native sidebar (phase 2).** Expected: the native sidebar lists the web sections with SF
     Symbols and the page shows no sidebar of its own. Clicking an entry opens that page; Back in
     the page moves the highlight with it. View > Toggle Sidebar (`⌃⌘S`) hides the sidebar and the
     page's topbar moves clear of the traffic lights. Switch the app language to Nederlands: the
     sidebar labels change at once.
-17. **Exchange rates (phase 2).** Turn on admin mode in Settings, open Admin > Exchange rates.
+12. **Exchange rates (phase 2).** Turn on admin mode in Settings, open Admin > Exchange rates.
     Expected: the native screen with three summary cards, Live/Fallback (the URL keeps `?tab`, and
     the tab survives a reload), the rates table and the Refresh button, which spins and shows a
     toast. `⌘K` opens the command palette over the page. Turn admin mode off: the app goes to Home.
-18. **Planned payments (phase 3c).** With admin mode off, open Planned. Expected: the native screen
+13. **Planned payments (phase 3c).** With admin mode off, open Planned. Expected: the native screen
     with the Next 7 days strip, Estimated monthly and the payments table. View > Include paused adds
     `?show_all=true` to the URL and shows paused rows. Pause a row from its ••• menu: a toast with
     Undo appears for 8 seconds and `⌘Z` undoes it (but not while a text field has focus). Delete
@@ -417,7 +344,7 @@ these steps touches Electron Vision or its data.
     payment. In the recurring detection panel, Track adds a planned payment and Dismiss hides the
     pattern, also after a relaunch.
 
-19. **Transactions (phase 3e part A).** With admin mode off, open Transactions. Expected: the
+14. **Transactions (phase 3e part A).** With admin mode off, open Transactions. Expected: the
     native list with the toolbar chips; scrolling loads more rows. Pick an account and a date
     preset: the URL and the filter banner follow, and Back restores the previous filters. Type in
     search: the suggestions open, and Amount equals applies an amount filter. Click a row: the
@@ -427,7 +354,7 @@ these steps touches Electron Vision or its data.
     Delete a row from its context menu: the alert asks, the row leaves, and Undo (or `⌘Z`) brings
     it back.
 
-20. **Home (phase 3g part A).** Open Home with admin mode off. Expected: the native greeting,
+15. **Home (phase 3g part A).** Open Home with admin mode off. Expected: the native greeting,
     spending hero, Needs attention, net worth, upcoming payments, accounts, monthly bars, category
     donut, forecast, and recent transactions. More actions > Customize shows all eleven widgets;
     enable Summary cards and Account balances, close, and revisit Home to confirm persistence.
@@ -442,7 +369,7 @@ these steps touches Electron Vision or its data.
     save, and confirm Transactions opens the created row. Repeat in Dutch and a narrow window.
     These Mac checks have not been run in the Linux cloud workspace.
 
-21. **Insights (phase 3g part B).** Open Insights and switch Last 24 months/All time and every
+16. **Insights (phase 3g part B).** Open Insights and switch Last 24 months/All time and every
     tab; confirm the URL retains `window` and `tab`. Customize, toggle each chart's exclusions,
     scrub Monthly rhythm, and show the 3-month averages. On Categories choose a year and each
     metric, expand ancestors, page month columns, and drill group/child/Uncategorised/total cells.
@@ -461,7 +388,7 @@ already running, for example `http://localhost:3002`. The host must be `localhos
 `::1`. Other hosts, malformed values and the variable in a Release build are ignored with a logged
 reason, and the app starts its own runtime.
 
-22. **Taxes (phase 3h, pending Mac review).** Open Tax in EN and NL and choose live, saved,
+17. **Taxes (phase 3h, pending Mac review).** Open Tax in EN and NL and choose live, saved,
     frozen, and filed years. Check masthead status, disclosures, chart hover/keyboard readouts,
     partner columns, trend/comparison, all eight widget switches, and no-income/error states.
     Edit each of the six profile steps; verify backend previews and that closing keeps saved
@@ -485,43 +412,43 @@ profile sheet previews unsaved inputs through the backend and persists edits as 
 closing flushes pending writes. CSV is native; the PDF dialog remains web. Full macOS build and
 Demo visual/keyboard checks remain pending.
 
-23. **Portfolio and asset pages (phase 3i, pending Mac review).** Open the overview and all five
+18. **Portfolio and asset pages (phase 3i, pending Mac review).** Open the overview and all five
     asset pages in EN/NL and each number/date format. Inspect every widget, broker filter,
     disclosure, ticker pause/offline behavior, exposure import, and chart hover/range/keyboard
     interaction. Open active and archived details, edit/add a trade, test Cancel versus Escape,
     assign unassigned lots after complete history loads, and check ambiguous retry recovery.
     PDF must open on the current route and preserve its parameters when closed.
-24. **Rebalance and Net Worth (phase 3i, pending Mac review).** Reload custom/preset/saved
+19. **Rebalance and Net Worth (phase 3i, pending Mac review).** Reload custom/preset/saved
     target URLs, verify commitment-aware caps and CAS conflict handling, and inspect Net Worth
     account totals, full daily series, each period and newest-first table pagination. Change
     currency during a read and period during price refresh; old values must not reappear under
     new labels. Verify offline refresh, fallback notices and retained web printing.
 
-25. **Portfolio Import (phase 3j, pending Mac review).** Compare maintained CSV, original IBKR
+20. **Portfolio Import (phase 3j, pending Mac review).** Compare maintained CSV, original IBKR
     funding XLS/XLSX and supported Saxo XLSX detection with the web view on synthetic files.
     Inspect source identity ambiguity, header/sample preview, broker and transfer routing, custom
     parser save/update/delete, session restoration from staged web metadata, and history rollback.
     Review evidence and scope policies, map unresolved groups, create holdings, repair broker
     routing and commit. Cancel during uploads and simulate lost responses: retain receipts, block
     unverified replay and invalidate the other wealth screens. No file bytes may enter storage.
-26. **Portfolio Tax (phase 3j, pending Mac review).** Compare all seven widgets, tax and fee
+21. **Portfolio Tax (phase 3j, pending Mac review).** Compare all seven widgets, tax and fee
     breakdowns, unknown dividend conventions and inactive investments against the web app.
     Open historical and frozen years, change currency during reads, and test invalid/missing year
     URLs. Edit live-year manual costs/classifications from a historical view, exercise CAS conflicts
     and lost acknowledgements, and confirm unknown settings survive. Test profile/year actions,
     filing history and CSV export in EN/NL and each number/date format.
-27. **Analysis (phase 3k, pending Mac review).** Compare visual and SQL queries, templates,
+22. **Analysis (phase 3k, pending Mac review).** Compare visual and SQL queries, templates,
     parameter coercion, joins, ten-entry SQL history, saved versions and proposals in EN/NL.
     Check successful-run focus, cancellation, late replies after editing or leaving, last-result
     retention, table/chart/pivot drill, and exact decimal values and units. Exercise preparation,
     calendar/formulas/assumptions, scenarios, sensitivity and goal seeking. Import synthetic CSV/
     XLSX files and compare captured exports, including paged/truncated result metadata. Leaving
     resets page drafts while SQL history survives a return.
-28. **Analysis Monitors (phase 3k, pending Mac review).** Create and edit each target/condition,
+23. **Analysis Monitors (phase 3k, pending Mac review).** Create and edit each target/condition,
     verify interval and cooldown limits, enable/disable a rule during an unsaved edit, and inspect
     observations and unread notifications. Check manual evaluation, delete confirmation, polling,
     error states and late reads after writes or navigation; no stale reply may undo a newer edit.
-29. **Research (phase 3l, pending Mac review).** Compare all regions/sectors, archived holding
+24. **Research (phase 3l, pending Mac review).** Compare all regions/sectors, archived holding
     markers, search keyboard controls and safe news links in EN/NL. Open Yahoo and held-provider
     instrument URLs; change symbol, range, tab and currency while reads are pending. Inspect
     fundamentals/analyst/news provenance, mapping context changes, the two Add to portfolio steps,
@@ -533,7 +460,7 @@ Demo visual/keyboard checks remain pending.
     draft; the draft and its leave guard must survive coverage. Review chart focus/tooltips and
     VoiceOver on Mac.
 
-30. **Forecast and Chart Builder (phase 3m, pending Mac review).** Exercise every horizon, return
+25. **Forecast and Chart Builder (phase 3m, pending Mac review).** Exercise every horizon, return
     source, method, path count, currency and localized money input. Check stale-input rendering,
     unavailable simulations, independent Life inputs, calendar months, saved scenario CAS conflicts,
     deletion and eight-second Undo. On Charts, compare presets, price/OHLC and macro data, dual axes,
@@ -541,7 +468,7 @@ Demo visual/keyboard checks remain pending.
     storage reads/writes and retries, malformed/oversized shared charts and preserved URL parameters.
     Verify Settings and palette coverage, text-field Cmd-Z, chart keyboard focus, EN/NL and VoiceOver.
 
-31. **Dossiers and AI chat (phase 3n, pending Mac review).** Exercise dossier paging, dirty selection,
+26. **Dossiers and AI chat (phase 3n, pending Mac review).** Exercise dossier paging, dirty selection,
     deleted links, evidence anchors, CAS conflicts, newer writes arriving during reads, restore and
     captured full-history exports. Check both retained AI modes, literal transcripts, model/tool
     states, Enter/Shift-Enter, UTF16 limits, partial Stop/retry, unknown SSE frames, terminal errors

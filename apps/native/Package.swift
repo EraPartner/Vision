@@ -24,9 +24,8 @@ let package = Package(
         .testTarget(
             name: "VisionNativeCoreTests",
             dependencies: ["VisionNativeCore"],
-            // The Vision 1.0.2 backup fixture (packaging/electron/backup/fixtures), byte for byte,
-            // and the Electron audit-anchor fixture (Fixtures/audit/README.md).
-            resources: [.copy("Fixtures/vision-1.0.2-sanitized.visionbak.enc"), .copy("Fixtures/audit")]
+            // The Vision 1.0.2 backup fixture (packaging/electron/backup/fixtures), byte for byte.
+            resources: [.copy("Fixtures/vision-1.0.2-sanitized.visionbak.enc")]
         ),
         .testTarget(
             name: "VisionNativeUITests",

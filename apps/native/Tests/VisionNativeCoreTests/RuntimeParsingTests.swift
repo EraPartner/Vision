@@ -58,7 +58,6 @@ import Testing
         #expect(environment["OPENAI_API_KEY"] == "synthetic-key")
         #expect(environment["DATABASE_URL"]?.hasPrefix("postgresql://vision_native_app") == true)
         #expect(environment["AWS_SECRET_ACCESS_KEY"] == nil)
-        #expect(environment["VISION_AUDIT_BRIDGE_TOKEN"] == nil)
     }
 
     @Test func openAIKeyIsDroppedUnlessExplicitlyEnabled() throws {

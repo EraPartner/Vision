@@ -121,7 +121,7 @@ public enum AdminOverviewPresentation {
 }
 
 /// The state of `/admin` (`AdminOverviewPage`): the three `useAdminOverviewQueries`
-/// queries, the admin token card and the audit history card.
+/// queries and the admin token card.
 @MainActor
 @Observable
 public final class AdminOverviewModel {
@@ -131,7 +131,6 @@ public final class AdminOverviewModel {
     public let providers: ScreenQuery<[OpenAPI.ProviderHealth]>
     /// `adminKeys.requestMetrics`, 15 s.
     public let metrics: ScreenQuery<[OpenAPI.RouteMetric]>
-    public let audit: AuditHistoryModel
     /// The token input's draft.
     public var tokenDraft = ""
     /// `hasAdminToken()`: the "token is set" line and the Clear button.
@@ -142,14 +141,13 @@ public final class AdminOverviewModel {
     @ObservationIgnored private var notices = NoticeCounter()
 
     public init(
-        service: any AdminService, token: AdminTokenAccess, audit: AuditHistoryModel,
+        service: any AdminService, token: AdminTokenAccess,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         dbStats = ScreenQuery(staleAfter: 60, now: now) { try await service.databaseStats() }
         providers = ScreenQuery(staleAfter: 30, now: now) { try await service.providerHealth() }
         metrics = ScreenQuery(staleAfter: 15, now: now) { try await service.requestMetrics() }
         self.token = token
-        self.audit = audit
     }
 
     /// The skeleton tiles show while the database stats load.
@@ -161,24 +159,21 @@ public final class AdminOverviewModel {
             metrics: metrics.data, metricsLoading: metrics.isLoading, settings: settings, strings: strings)
     }
 
-    /// The page went away: the typed token and the audit transfer password do not outlive it.
+    /// The page went away: the typed token does not outlive it.
     public func disappear() {
         tokenDraft = ""
-        audit.disappear()
     }
 
-    /// The page mounted: the queries (unless fresh), the token state and the audit history.
+    /// The page mounted: the queries (unless fresh) and the token state.
     public func appear() async {
         let dbStats = dbStats
         let providers = providers
         let metrics = metrics
-        let audit = audit
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.refreshTokenState() }
             group.addTask { await dbStats.appear() }
             group.addTask { await providers.appear() }
             group.addTask { await metrics.appear() }
-            group.addTask { await audit.load() }
         }
     }
 
@@ -255,10 +250,10 @@ public struct AdminScreens: Sendable {
     @MainActor
     public static func make(
         service: any AdminService, database: any DatabaseAdminService, token: AdminTokenAccess,
-        audit: any AuditHistoryService, now: @escaping @Sendable () -> Date = { Date() }
+        now: @escaping @Sendable () -> Date = { Date() }
     ) -> AdminScreens {
         let overview = AdminOverviewModel(
-            service: service, token: token, audit: AuditHistoryModel(service: audit), now: now)
+            service: service, token: token, now: now)
         let providers = ProviderHealthModel(
             service: service, now: now, onProvidersChanged: { [weak overview] in overview?.providers.invalidate() })
         let databaseScreens = DatabaseScreens(

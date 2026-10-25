@@ -112,52 +112,6 @@ actor FakeTokenStorage {
     }
 }
 
-/// The audit channels with scripted answers.
-@MainActor
-final class FakeAuditHistory: AuditHistoryService {
-    var reads: [JSONValue] = []
-    var enrollResult = JSONValue.object(["success": .bool(true)])
-    var exportResult = JSONValue.object(["success": .bool(true), "file": .string("/tmp/x.json")])
-    var transferResult = JSONValue.object(["success": .bool(true)])
-    var rotateResult = JSONValue.object(["success": .bool(true), "sequence": .int(3)])
-    private(set) var ranges: [AuditViewer.ReadRange] = []
-    private(set) var passwords: [String] = []
-    private(set) var calls: [String] = []
-
-    func read(_ range: AuditViewer.ReadRange) async -> JSONValue {
-        ranges.append(range)
-        guard !reads.isEmpty else { return .object(["success": .bool(false), "status": .string("unavailable")]) }
-        return reads.count > 1 ? reads.removeFirst() : reads[0]
-    }
-
-    func enroll() async -> JSONValue {
-        calls.append("enroll")
-        return enrollResult
-    }
-
-    func exportSnapshot() async -> JSONValue {
-        calls.append("export")
-        return exportResult
-    }
-
-    func exportTransfer(password: String) async -> JSONValue {
-        calls.append("exportTransfer")
-        passwords.append(password)
-        return transferResult
-    }
-
-    func importTransfer(password: String) async -> JSONValue {
-        calls.append("importTransfer")
-        passwords.append(password)
-        return transferResult
-    }
-
-    func rotateKey() async -> JSONValue {
-        calls.append("rotate")
-        return rotateResult
-    }
-}
-
 enum AdminFixture {
     static let stats = OpenAPI.DbStats(
         tables: [
@@ -204,7 +158,7 @@ enum AdminFixture {
         service: FakeAdminService = FakeAdminService(), database: FakeDatabaseService = FakeDatabaseService()
     ) -> AdminScreens {
         AdminScreens.make(
-            service: service, database: database, token: FakeTokenStorage().access, audit: FakeAuditHistory(),
+            service: service, database: database, token: FakeTokenStorage().access,
             now: { PlannedFixture.today })
     }
 
@@ -218,7 +172,7 @@ enum AdminFixture {
     @Test func tilesLoadAndLinkToTheirPages() async {
         let service = FakeAdminService()
         let model = AdminOverviewModel(
-            service: service, token: FakeTokenStorage().access, audit: AuditHistoryModel(service: FakeAuditHistory()))
+            service: service, token: FakeTokenStorage().access)
         #expect(model.showsTileSkeleton)
         await model.appear()
         #expect(!model.showsTileSkeleton)
@@ -275,7 +229,7 @@ enum AdminFixture {
     @Test func savingAndClearingTheTokenWritesThePageStorage() async {
         let storage = FakeTokenStorage()
         let model = AdminOverviewModel(
-            service: FakeAdminService(), token: storage.access, audit: AuditHistoryModel(service: FakeAuditHistory()))
+            service: FakeAdminService(), token: storage.access)
         await model.refreshTokenState()
         #expect(!model.hasToken && !model.canClearToken)
         model.tokenDraft = "   "
@@ -302,7 +256,7 @@ enum AdminFixture {
     @Test func aWriteThePageDidNotTakeToastsAnError() async {
         let storage = FakeTokenStorage("abc", failWrites: true)
         let model = AdminOverviewModel(
-            service: FakeAdminService(), token: storage.access, audit: AuditHistoryModel(service: FakeAuditHistory()))
+            service: FakeAdminService(), token: storage.access)
         await model.refreshTokenState()
         model.tokenDraft = "new-token"
         await model.saveToken()
@@ -319,19 +273,15 @@ enum AdminFixture {
     }
 
     @Test func leavingThePageForgetsTheTypedSecrets() {
-        let audit = AuditHistoryModel(service: FakeAuditHistory())
-        let model = AdminOverviewModel(service: FakeAdminService(), token: FakeTokenStorage().access, audit: audit)
+        let model = AdminOverviewModel(service: FakeAdminService(), token: FakeTokenStorage().access)
         model.tokenDraft = "half-typed-token"
-        audit.setTransferPassword("sixteen chars ok")
         model.disappear()
         #expect(model.tokenDraft.isEmpty)
-        #expect(audit.transferPassword.isEmpty)
     }
 
     @Test func anExistingTokenEnablesClear() async {
         let model = AdminOverviewModel(
-            service: FakeAdminService(), token: FakeTokenStorage("abc").access,
-            audit: AuditHistoryModel(service: FakeAuditHistory()))
+            service: FakeAdminService(), token: FakeTokenStorage("abc").access)
         await model.appear()
         #expect(model.hasToken)
     }
@@ -580,252 +530,6 @@ enum AdminFixture {
         #expect(APIErrorMessage.text(.contract(APIContractError(endpoint: "x", issues: [])), strings: strings) == "apiError.server")
         #expect(!APIErrorMessage.isAuthored("Failed to fetch"))
         #expect(APIErrorMessage.isAuthored("Pick an account"))
-    }
-}
-
-/// Audit pages in the shape `AuditChannels.read` returns.
-enum AuditCardFixture {
-    static func entry(_ sequence: Int, anchored: Bool = true, payload: JSONValue? = nil) -> JSONValue {
-        .object([
-            "sequence": .int(sequence), "previousHash": .string(auditHash("entry \(sequence - 1)")),
-            "hash": .string(auditHash("entry \(sequence)")), "version": .int(1),
-            "payload": payload ?? .object(["stream": .string("transactions"), "event": .string("update")]),
-            "createdAt": .string("2026-01-01T00:00:00.000Z"),
-            "anchorStatus": .string(anchored ? "anchored" : "pending_anchor"),
-        ])
-    }
-
-    static func page(
-        head: Int, anchored: Int? = nil, from first: Int = 1, through last: Int? = nil, hasMore: Bool = false,
-        extra: [String: JSONValue] = [:]
-    ) -> JSONValue {
-        let anchoredThrough = anchored ?? head
-        var verification: [String: JSONValue] = [
-            "status": .string(anchoredThrough == head ? "verified" : "partially_verified"), "sequence": .int(head),
-            "hash": .string(auditHash("head \(head)")), "anchoredThrough": .int(anchoredThrough),
-        ]
-        for (key, value) in extra { verification[key] = value }
-        let end = last ?? head
-        let entries = first <= end ? (first...end).map { entry($0, anchored: $0 <= anchoredThrough) } : []
-        return .object([
-            "success": .bool(true), "verification": .object(verification), "entries": .array(entries),
-            "hasMore": .bool(hasMore),
-        ])
-    }
-}
-
-@MainActor
-@Suite struct AuditHistoryModelTests {
-    @Test func theFirstPageShowsTheVerificationSummary() async {
-        let audit = FakeAuditHistory()
-        audit.reads = [
-            AuditCardFixture.page(
-                head: 4, anchored: 3,
-                extra: [
-                    "enrollmentSequence": .int(1),
-                    "legacyUnverified": .object(["dbEditor": .string("2"), "split": .string("0")]),
-                ])
-        ]
-        let model = AuditHistoryModel(service: audit)
-        await model.load()
-        #expect(audit.ranges == [AuditViewer.ReadRange(afterSequence: 0, limit: 100)])
-        #expect(model.status == nil && !model.busy && !model.showsLoading)
-        #expect(model.page?.entries.count == 4)
-        #expect(model.pendingCount == 1)
-        #expect(
-            model.summaryLines() == [
-                AuditSummaryLine(key: "admin.audit.partial", variables: ["anchored": "3"]),
-                AuditSummaryLine(key: "admin.audit.pending", variables: ["count": "1"]),
-                AuditSummaryLine(key: "admin.audit.enrollmentCaveat", variables: ["sequence": "1"]),
-                AuditSummaryLine(
-                    key: "admin.audit.legacy", variables: ["dbEditor": "2", "split": "0", "portfolioRetag": "0"]),
-            ])
-        let entries = model.page?.entries ?? []
-        #expect(entries.map { model.badge(for: $0) } == [.enrollmentBaseline, .anchored, .anchored, .pending])
-        #expect(entries.first?.label == "transactions · update")
-        #expect(entries.first?.detailsJSON.hasPrefix("{\n  \"hash\": \"") == true)
-        #expect(entries.first?.detailsJSON.contains("\"payload\": {\n    \"event\": \"update\",") == true)
-    }
-
-    @Test func anEntryWithoutStreamOrEventIsLabelledBySequence() throws {
-        let row = try #require(AuditEntryRow(AuditCardFixture.entry(7, payload: .object([:]))))
-        #expect(row.label == "#7")
-    }
-
-    @Test func unavailableAndNoAnchorStatusesShowTheirLines() async {
-        let audit = FakeAuditHistory()
-        let model = AuditHistoryModel(service: audit)
-        await model.load()
-        #expect(model.statusKey == "admin.audit.unavailable")
-        #expect(!model.showsEnroll)
-        audit.reads = [.object(["success": .bool(false), "status": .string("unavailable"), "reason": .string("no_trusted_anchor")])]
-        await model.load()
-        #expect(model.statusKey == "admin.audit.noTrustedAnchor")
-        #expect(model.showsEnroll)
-        audit.reads = [.object(["success": .bool(false), "status": .string("failed"), "error": .string("x")])]
-        await model.load()
-        #expect(model.statusKey == "admin.audit.failed")
-        #expect(model.page == nil)
-    }
-
-    @Test func loadMoreAppendsTheNextPage() async {
-        let audit = FakeAuditHistory()
-        audit.reads = [
-            AuditCardFixture.page(head: 150, through: 100, hasMore: true),
-            AuditCardFixture.page(head: 150, from: 101),
-        ]
-        let model = AuditHistoryModel(service: audit)
-        await model.load()
-        #expect(model.page?.hasMore == true)
-        await model.loadMore()
-        #expect(audit.ranges.last == AuditViewer.ReadRange(afterSequence: 100, limit: 100))
-        #expect(model.page?.entries.count == 150)
-        #expect(model.page?.hasMore == false)
-        #expect(!model.changed)
-    }
-
-    @Test func aMovedHeadDropsThePageAndShowsTheChangeNotice() async {
-        let audit = FakeAuditHistory()
-        audit.reads = [
-            AuditCardFixture.page(head: 150, through: 100, hasMore: true),
-            AuditCardFixture.page(head: 151, from: 101),
-        ]
-        let model = AuditHistoryModel(service: audit)
-        await model.load()
-        await model.loadMore()
-        #expect(model.page == nil)
-        #expect(model.changed)
-        audit.reads = [AuditCardFixture.page(head: 3)]
-        await model.load()
-        #expect(!model.changed)
-    }
-
-    @Test func exportIsLimitedTo500Entries() async {
-        let audit = FakeAuditHistory()
-        audit.reads = [AuditCardFixture.page(head: 501, through: 100, hasMore: true)]
-        let model = AuditHistoryModel(service: audit)
-        await model.load()
-        #expect(model.exportTooLarge && model.isExportDisabled)
-        // A retained 500 entries fit.
-        audit.reads = [AuditCardFixture.page(head: 600, from: 101, through: 200, hasMore: true, extra: ["retentionThrough": .int(100)])]
-        await model.load()
-        #expect(!model.exportTooLarge)
-    }
-
-    @Test func exportReportsSuccessFailureAndIgnoresCancel() async {
-        let audit = FakeAuditHistory()
-        audit.reads = [AuditCardFixture.page(head: 2)]
-        let model = AuditHistoryModel(service: audit)
-        await model.exportSnapshot()
-        #expect(audit.calls.isEmpty)
-        await model.load()
-        await model.exportSnapshot()
-        #expect(model.exportMessage == .success)
-        audit.exportResult = .object(["success": .bool(false), "cancelled": .bool(true)])
-        await model.exportSnapshot()
-        #expect(model.exportMessage == nil)
-        audit.exportResult = .object(["success": .bool(false), "status": .string("failed")])
-        await model.exportSnapshot()
-        #expect(model.exportMessage == .failed)
-        // A reload clears the note.
-        await model.load()
-        #expect(model.exportMessage == nil)
-    }
-
-    @Test func enrollReloadsOnSuccessAndReportsAFailure() async {
-        let audit = FakeAuditHistory()
-        audit.reads = [.object(["success": .bool(false), "status": .string("unavailable"), "reason": .string("no_trusted_anchor")])]
-        let model = AuditHistoryModel(service: audit)
-        await model.load()
-        audit.enrollResult = .object(["success": .bool(false), "cancelled": .bool(true)])
-        await model.enroll()
-        #expect(!model.enrollFailed)
-        audit.enrollResult = .object(["success": .bool(false), "status": .string("failed")])
-        await model.enroll()
-        #expect(model.enrollFailed)
-        audit.enrollResult = .object(["success": .bool(true), "enrollmentSequence": .int(2)])
-        audit.reads = [AuditCardFixture.page(head: 2, extra: ["enrollmentSequence": .int(2)])]
-        await model.enroll()
-        #expect(!model.enrollFailed)
-        #expect(model.status == nil && model.page != nil)
-        #expect(!model.enrollBusy)
-    }
-
-    @Test func transfersNeedSixteenCharactersAndClearThePassword() async {
-        let audit = FakeAuditHistory()
-        let model = AuditHistoryModel(service: audit)
-        model.setTransferPassword("short")
-        #expect(model.isTransferImportDisabled && model.isTransferExportDisabled)
-        await model.transfer(.importTransfer)
-        #expect(audit.calls.isEmpty)
-        model.setTransferPassword("sixteen chars ok")
-        #expect(!model.isTransferImportDisabled)
-        // Export needs a loaded page too.
-        #expect(model.isTransferExportDisabled)
-        audit.reads = [AuditCardFixture.page(head: 1)]
-        audit.transferResult = .object(["success": .bool(true)])
-        await model.transfer(.importTransfer)
-        #expect(audit.passwords == ["sixteen chars ok"])
-        #expect(model.transferMessage == .success)
-        #expect(model.transferPassword.isEmpty)
-        #expect(model.page != nil)
-        model.setTransferPassword("sixteen chars ok")
-        audit.transferResult = .object(["success": .bool(false), "status": .string("failed"), "reason": .string("transfer_invalid")])
-        await model.transfer(.exportTransfer)
-        #expect(model.transferMessage == .failed)
-        #expect(model.transferPassword.isEmpty)
-        model.setTransferPassword("sixteen chars ok")
-        audit.transferResult = .object(["success": .bool(false), "cancelled": .bool(true)])
-        await model.transfer(.exportTransfer)
-        #expect(model.transferMessage == nil)
-        #expect(model.transferPassword.isEmpty)
-    }
-
-    @Test func leavingTheCardClearsThePassword() {
-        let model = AuditHistoryModel(service: FakeAuditHistory())
-        model.setTransferPassword("sixteen chars ok")
-        model.disappear()
-        #expect(model.transferPassword.isEmpty)
-        #expect(model.isTransferImportDisabled)
-    }
-
-    @Test func thePasswordIsCutAt1024UTF16Units() {
-        let model = AuditHistoryModel(service: FakeAuditHistory())
-        model.setTransferPassword(String(repeating: "a", count: 1030))
-        #expect(model.transferPassword.utf16.count == 1024)
-        model.setTransferPassword(String(repeating: "a", count: 1023) + "😀")
-        #expect(model.transferPassword.utf16.count == 1023)
-    }
-
-    @Test func rotationReloadsOnSuccess() async {
-        let audit = FakeAuditHistory()
-        audit.reads = [AuditCardFixture.page(head: 2)]
-        let model = AuditHistoryModel(service: audit)
-        await model.load()
-        await model.rotateKey()
-        #expect(model.rotationMessage == .success)
-        #expect(audit.ranges.count == 2)
-        audit.rotateResult = .object(["success": .bool(false), "cancelled": .bool(true)])
-        await model.rotateKey()
-        #expect(model.rotationMessage == nil)
-        audit.rotateResult = .object(["success": .bool(false), "status": .string("failed")])
-        await model.rotateKey()
-        #expect(model.rotationMessage == .failed)
-        #expect(!model.isRotateDisabled)
-    }
-
-    @Test func theCardReadsTheNativeChannelsDirectly() async {
-        // Without an audit runtime the channels answer `unavailable`.
-        let shell = FakeAuditShell()
-        let channels = AuditChannels(runtimeProvider: { nil }, shell: shell, log: { _ in })
-        let model = AuditHistoryModel(service: channels)
-        await model.load()
-        #expect(model.statusKey == "admin.audit.unavailable")
-        model.setTransferPassword("sixteen chars ok")
-        await model.transfer(.importTransfer)
-        #expect(model.transferMessage == .failed)
-        await model.rotateKey()
-        #expect(model.rotationMessage == .failed)
     }
 }
 

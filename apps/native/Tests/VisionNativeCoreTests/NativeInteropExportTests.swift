@@ -3,16 +3,15 @@ import Testing
 @testable import VisionNativeCore
 
 // The CI interop gate (ADR-204 phase 1): with VISION_NATIVE_INTEROP_DIR set, this writes
-// backup bundles (unencrypted and v2-encrypted) and an audit transfer with Vision Native's
+// backup bundles (unencrypted and v2-encrypted) with Vision Native's
 // own code, from synthetic data only. The Linux job `native-interop` opens them with the
 // Electron readers (packaging/electron/backup/native-interop.test.ts). Without the
 // variable the test is skipped.
 
 enum NativeInterop {
     static let environmentKey = "VISION_NATIVE_INTEROP_DIR"
-    /// Synthetic test secrets, also in native-interop.test.ts.
+    /// Synthetic test secret, also in native-interop.test.ts.
     static let passphrase = "vision-native-interop-passphrase"
-    static let transferPassword = "vision-native-interop-transfer"
     static let deviceId = "native-interop"
     static let schemaHead = "0161_interop_fixture"
     static let appVersion = "0.1.0-interop"
@@ -64,18 +63,6 @@ enum NativeInterop {
         defer { reopened.cleanup() }
         #expect(try String(contentsOfFile: reopened.dbSqlPath, encoding: .utf8) == NativeInterop.dbSql)
 
-        // The audit transfer: an enrolled history with a closed checkpoint and a retention
-        // boundary, exported under the synthetic password.
-        let anchor = try AnchorFixture()
-        defer { anchor.remove() }
-        _ = try await anchor.anchor.initializeFirstCheckpoint(
-            head: auditHead(5), legacyCutover: auditCutover, enrollment: true)
-        _ = try await anchor.anchor.persistCheckpoint(head: auditHead(12))
-        _ = try await anchor.anchor.persistRetentionBoundary(auditRetention(through: 4))
-        let transfer = try await anchor.anchor.exportProtectedTransfer(password: NativeInterop.transferPassword)
-        try transfer.write(to: URL(fileURLWithPath: output + "/swift-audit-transfer.vat"))
-        let trusted = try await anchor.anchor.readTrustedCheckpoint()
-
         var attachments: [String: JSONValue] = [:]
         for (relative, content) in NativeInterop.attachments { attachments[relative] = .string(content) }
         let expected = JSONValue.object([
@@ -85,15 +72,6 @@ enum NativeInterop {
                 "schemaHead": .string(NativeInterop.schemaHead), "appVersion": .string(NativeInterop.appVersion),
                 "createdAt": .string(isoTimestamp(NativeInterop.createdAt)), "dbSql": .string(NativeInterop.dbSql),
                 "attachments": .object(attachments), "frontendState": NativeInterop.frontendState,
-            ]),
-            "audit": .object([
-                "transfer": .string("swift-audit-transfer.vat"), "password": .string(NativeInterop.transferPassword),
-                "sequence": .int(trusted.sequence), "hash": .string(trusted.hash),
-                "legacyCutover": trusted.legacyCutover.jsonValue,
-                "retention": trusted.retention.map(\.jsonValue) ?? .null,
-                "receiptId": .string(trusted.metadata.receiptId),
-                "receiptHash": .string(trusted.metadata.receiptHash),
-                "enrollmentSequence": trusted.metadata.enrollmentSequence.map(JSONValue.int) ?? .null,
             ]),
         ])
         try expected.serialized().write(to: URL(fileURLWithPath: output + "/expected.json"))
