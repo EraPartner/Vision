@@ -18,7 +18,6 @@ private func merged(_ base: InterchangeJSON, _ pairs: [(String, InterchangeJSON)
     return .object(members)
 }
 private func text(_ bytes: [UInt8]) -> String { String(decoding: bytes, as: UTF8.self) }
-private func sha256Hex(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
 /// A one-entry stored ZIP holding `xl/worksheets/sheet1.xml`, as the TypeScript route tests build it.
 private func storedSheet(_ source: String, method: Int = 0) -> [UInt8] {
     let name = Array("xl/worksheets/sheet1.xml".utf8)
@@ -356,7 +355,7 @@ struct AnalysisInterchangeTests {
         let result = try json(routeResult)
         let context = try json(routeContext)
         let first = try AnalysisWorkbook.exportWorkbook(result: result, context: context)
-        #expect(first == (try AnalysisWorkbook.exportWorkbook(result: result, context: context)))
+        #expect(try first == AnalysisWorkbook.exportWorkbook(result: result, context: context))
         let xml = text(first)
         for value in ["financialCoverage", "source missing", "1234567890123456.78", "Formula definitions", "0.25"] {
             #expect(xml.contains(value), Comment(rawValue: value))

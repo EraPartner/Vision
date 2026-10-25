@@ -183,9 +183,9 @@ struct ResearchPresentationTests {
     @Test func emaSeedsWithTheSmaAndIsNullBeforeThePeriod() throws {
         let out = ResearchMath.ema([1, 2, 3, 4, 5], 3)
         #expect(out[0] == nil && out[1] == nil)
-        #expect(abs(try #require(out[2]) - 2) < 1e-6)
-        #expect(abs(try #require(out[3]) - 3) < 1e-6)
-        #expect(abs(try #require(out[4]) - 4) < 1e-6)
+        #expect(try abs(#require(out[2]) - 2) < 1e-6)
+        #expect(try abs(#require(out[3]) - 3) < 1e-6)
+        #expect(try abs(#require(out[4]) - 4) < 1e-6)
     }
     @Test func bollingerBandsStraddleTheMiddleBand() throws {
         let values = (0..<25).map { 100 + sin(Double($0)) }
@@ -196,7 +196,7 @@ struct ResearchPresentationTests {
     }
     @Test func rsiIs100ForAMonotonicallyRisingSeries() throws {
         let out = ResearchMath.rsi((1...16).map(Double.init), 14)
-        #expect(abs(try #require(out[14]) - 100) < 1e-6)
+        #expect(try abs(#require(out[14]) - 100) < 1e-6)
     }
     @Test func rsiStaysWithinZeroToHundred() {
         let values = (0..<50).map { 50 + 10 * sin(Double($0) / 2) }
@@ -210,7 +210,7 @@ struct ResearchPresentationTests {
         #expect(result.macd.count == 60 && result.signal.count == 60)
         let line = try #require(result.macd[59])
         let signal = try #require(result.signal[59])
-        #expect(abs(try #require(result.histogram[59]) - (line - signal)) < 1e-6)
+        #expect(try abs(#require(result.histogram[59]) - (line - signal)) < 1e-6)
     }
     @Test func rebaseStartsTheFirstValidPointAt100() {
         #expect(ResearchMath.rebase([50, 75, 100]) == [100, 150, 200])

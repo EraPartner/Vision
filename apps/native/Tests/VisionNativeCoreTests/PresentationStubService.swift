@@ -70,3 +70,14 @@ struct PresentationStubService: ResearchService {
     }
     func researchPresentation(_ input: TaxValue) async throws -> TaxValue { try await presentation(input) }
 }
+
+extension PresentationStubService: ResearchChartBuilderService {
+    func researchMacroSearch(query: String) async throws -> ResearchSnapshot<ResearchMacroSearchData> {
+        try await base.researchMacroSearch(query: query)
+    }
+    func researchMacroSeries(provider: String, seriesId: String, range: String) async throws -> ResearchSnapshot<
+        ResearchMacroSeriesData
+    > {
+        try await base.researchMacroSeries(provider: provider, seriesId: seriesId, range: range)
+    }
+}
