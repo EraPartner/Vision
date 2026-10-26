@@ -27,11 +27,11 @@ it("bounds the whole operation, rejects excess demand, and removes cancelled que
   await Promise.all([first, second, ...others, replacement]);
   expect(started).toBe(10);
   await expect(
-    withReportSlot(async () => {
-      throw new Error("render failed");
+    withReportSlot(() => {
+      return Promise.reject(new Error("render failed"));
     }),
   ).rejects.toThrow("render failed");
-  await expect(withReportSlot(async () => "recovered")).resolves.toBe(
-    "recovered",
-  );
+  await expect(
+    withReportSlot(() => Promise.resolve("recovered")),
+  ).resolves.toBe("recovered");
 });

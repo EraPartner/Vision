@@ -1,12 +1,4 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  expectTypeOf,
-  it,
-  vi,
-} from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { Mock } from "vitest";
 
 import {
@@ -15,6 +7,8 @@ import {
 } from "../src/integrations/ollama/client.ts";
 import type { OllamaClientOptions } from "../src/integrations/ollama/client.ts";
 import { loose } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
+import { valueAt } from "./helpers/responseBody.ts";
 
 interface StubStatus {
   ok?: boolean;
@@ -50,11 +44,12 @@ function streamResponse(
   );
   let i = 0;
   const reader = {
-    read: vi.fn(async () => {
-      if (i >= encoded.length) return { value: undefined, done: true };
+    read: vi.fn(() => {
+      if (i >= encoded.length)
+        return Promise.resolve({ value: undefined, done: true });
       const value = encoded[i];
       i += 1;
-      return { value, done: false };
+      return Promise.resolve({ value, done: false });
     }),
     releaseLock: vi.fn(),
   };
@@ -69,6 +64,23 @@ function streamResponse(
 
 function ndjson(...objs: unknown[]) {
   return objs.map((o) => `${JSON.stringify(o)}\n`).join("");
+}
+
+/** The `[url, init]` the client passed to its nth `fetch` call. */
+function fetchCall(fetchImpl: Mock, index = 0) {
+  const call: unknown[] = must(
+    fetchImpl.mock.calls[index],
+    `fetch call ${index}`,
+  );
+  return { url: String(call[0]), init: loose<RequestInit>(call[1]) };
+}
+
+/** The JSON body the client sent in its nth `fetch` call. */
+function sentBody(fetchImpl: Mock, index = 0): unknown {
+  const { body } = fetchCall(fetchImpl, index).init;
+  if (typeof body !== "string") throw new Error("Expected a JSON string body");
+  const parsed: unknown = JSON.parse(body);
+  return parsed;
 }
 
 function makeClient(fetchImpl: Mock, overrides: OllamaClientOptions = {}) {
@@ -195,7 +207,7 @@ describe("ollama client", () => {
         model: "nomic-embed-text",
         embeddings: [[0.1, 0.2]],
       });
-      expect(JSON.parse(fetchImpl.mock.calls[0]![1].body)).toEqual({
+      expect(sentBody(fetchImpl)).toEqual({
         model: "nomic-embed-text",
         input: ["passage"],
         truncate: false,
@@ -288,9 +300,9 @@ describe("ollama client", () => {
         evalDurationMs: 700,
       });
 
-      const [, init] = fetchImpl.mock.calls[0]!;
+      const { init } = fetchCall(fetchImpl);
       expect(init.method).toBe("POST");
-      const body = JSON.parse(init.body);
+      const body = sentBody(fetchImpl);
       expect(body).toEqual({
         model: "llama3.1:8b",
         messages: [{ role: "user", content: "hello" }],
@@ -315,9 +327,9 @@ describe("ollama client", () => {
         options: { num_ctx: 8192 },
       });
 
-      const body = JSON.parse(fetchImpl.mock.calls[0]![1].body);
-      expect(body.tools).toEqual(tools);
-      expect(body.options).toEqual({ num_ctx: 8192 });
+      const body = sentBody(fetchImpl);
+      expect(valueAt(body, "tools")).toEqual(tools);
+      expect(valueAt(body, "options")).toEqual({ num_ctx: 8192 });
     });
 
     it("surfaces tool_calls from the model", async () => {
@@ -344,7 +356,12 @@ describe("ollama client", () => {
       });
 
       expect(res.toolCalls).toHaveLength(1);
-      expect(res.toolCalls[0]!.function!.name).toBe("getSpendByCategory");
+      expect(
+        must(
+          must(res.toolCalls[0], "res.toolCalls[0]").function,
+          "res.toolCalls[0].function",
+        ).name,
+      ).toBe("getSpendByCategory");
     });
 
     it("rejects empty messages", async () => {
@@ -360,9 +377,9 @@ describe("ollama client", () => {
     it("propagates abort signal from caller", async () => {
       const controller = new AbortController();
       const fetchImpl = vi.fn(
-        (url, init) =>
+        (url: string, init: RequestInit) =>
           new Promise((_, reject) => {
-            init.signal.addEventListener("abort", () => {
+            must(init.signal, "init.signal").addEventListener("abort", () => {
               const err = new Error("aborted");
               err.name = "AbortError";
               reject(err);
@@ -445,10 +462,11 @@ describe("ollama client", () => {
         evalDurationMs: 1800,
       });
 
-      const [, init] = fetchImpl.mock.calls[0]!;
-      const sent = JSON.parse(init.body);
-      expect(sent.stream).toBe(true);
-      expect(sent.messages).toEqual([{ role: "user", content: "hi" }]);
+      const sent = sentBody(fetchImpl);
+      expect(valueAt(sent, "stream")).toBe(true);
+      expect(valueAt(sent, "messages")).toEqual([
+        { role: "user", content: "hi" },
+      ]);
     });
 
     it("handles chunks that split NDJSON lines across reads", async () => {
@@ -478,7 +496,7 @@ describe("ollama client", () => {
     it("processes a trailing line that lacks a final newline", async () => {
       const body =
         `${JSON.stringify({ message: { content: "a" }, done: false })}\n` +
-        `${JSON.stringify({ message: { content: "b" }, done: true })}`;
+        JSON.stringify({ message: { content: "b" }, done: true });
       const fetchImpl = vi.fn().mockResolvedValue(streamResponse([body]));
       const client = makeClient(fetchImpl);
 
@@ -518,7 +536,12 @@ describe("ollama client", () => {
       });
 
       expect(res.toolCalls).toHaveLength(1);
-      expect(res.toolCalls[0]!.function!.name).toBe("getSpendByCategory");
+      expect(
+        must(
+          must(res.toolCalls[0], "res.toolCalls[0]").function,
+          "res.toolCalls[0].function",
+        ).name,
+      ).toBe("getSpendByCategory");
       expect(res.doneReason).toBe("tool_calls");
     });
 
@@ -659,8 +682,8 @@ describe("ollama client", () => {
         body: { getReader: () => reader },
         text: vi.fn().mockResolvedValue(""),
       };
-      const fetchImpl = vi.fn((url, init) => {
-        composedSignals.push(init.signal);
+      const fetchImpl = vi.fn((url: string, init: RequestInit) => {
+        composedSignals.push(must(init.signal, "init.signal"));
         return Promise.resolve(response);
       });
       const client = makeClient(fetchImpl, { streamIdleTimeoutMs: 500 });
@@ -689,10 +712,10 @@ describe("ollama client", () => {
         options: { num_ctx: 8192 },
       });
 
-      const sent = JSON.parse(fetchImpl.mock.calls[0]![1].body);
-      expect(sent.tools).toEqual(tools);
-      expect(sent.options).toEqual({ num_ctx: 8192 });
-      expect(sent.stream).toBe(true);
+      const sent = sentBody(fetchImpl);
+      expect(valueAt(sent, "tools")).toEqual(tools);
+      expect(valueAt(sent, "options")).toEqual({ num_ctx: 8192 });
+      expect(valueAt(sent, "stream")).toBe(true);
     });
 
     it("rejects empty messages without calling fetch", async () => {
@@ -779,9 +802,9 @@ describe("ollama client", () => {
     it("maps fetch AbortError to ABORTED", async () => {
       const controller = new AbortController();
       const fetchImpl = vi.fn(
-        (url, init) =>
+        (url: string, init: RequestInit) =>
           new Promise((_, reject) => {
-            init.signal.addEventListener("abort", () => {
+            must(init.signal, "init.signal").addEventListener("abort", () => {
               const err = new Error("aborted");
               err.name = "AbortError";
               reject(err);
@@ -854,9 +877,9 @@ describe("ollama client", () => {
     it("aborts when request exceeds timeout", async () => {
       vi.useFakeTimers();
       const fetchImpl = vi.fn(
-        (url, init) =>
+        (url: string, init: RequestInit) =>
           new Promise((_, reject) => {
-            init.signal.addEventListener("abort", () => {
+            must(init.signal, "init.signal").addEventListener("abort", () => {
               const err = new Error("aborted");
               err.name = "AbortError";
               reject(err);

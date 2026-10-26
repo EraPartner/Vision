@@ -15,6 +15,12 @@ import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMo
 import { fetchFinancialData } from "../src/services/reports/dataFetcher.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
+import { must } from "./helpers/must.ts";
+import type {
+  AccountId,
+  RecipientId,
+  TransactionId,
+} from "@vision/types/brands";
 
 const SUFFIX = `IMB${process.pid}`;
 const ids = { account: 0, recipient: 0, excludedRecipient: 0 };
@@ -25,12 +31,14 @@ async function insertTxn(
   amount: string,
   recipientId = ids.recipient,
 ) {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    id: TransactionId;
+  }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, account_id)
      VALUES ($1, $2, 'EUR', $3, $4) RETURNING id`,
     [date, amount, recipientId, ids.account],
   );
-  transactionIds.push(rows[0].id);
+  transactionIds.push(must(rows[0], "rows[0]").id);
 }
 
 const monthKeys = (
@@ -43,23 +51,23 @@ describe.skipIf(!hasTestDatabase())(
     beforeAll(async () => {
       expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
       await acquireDbSuiteLock();
-      const pool = getTestPool()!;
-      const { rows: account } = await pool.query(
+      const pool = must(getTestPool(), "getTestPool()");
+      const { rows: account } = await pool.query<{ id: AccountId }>(
         `INSERT INTO accounts (name, display_name, currency) VALUES ($1, $1, 'EUR') RETURNING id`,
         [`Bounds ${SUFFIX}`],
       );
-      ids.account = account[0].id;
-      const { rows: recipients } = await pool.query(
+      ids.account = must(account[0], "account[0]").id;
+      const { rows: recipients } = await pool.query<{ id: RecipientId }>(
         `INSERT INTO recipients (name, normalized_name)
        VALUES ($1, lower($1)), ($2, lower($2)) RETURNING id`,
         [`Bounds Payee ${SUFFIX}`, `Bounds Excluded ${SUFFIX}`],
       );
-      ids.recipient = recipients[0].id;
-      ids.excludedRecipient = recipients[1].id;
+      ids.recipient = must(recipients[0], "recipients[0]").id;
+      ids.excludedRecipient = must(recipients[1], "recipients[1]").id;
     }, 180_000);
 
     afterEach(async () => {
-      await getTestPool()!.query(
+      await must(getTestPool(), "getTestPool()").query(
         "DELETE FROM transactions WHERE id = ANY($1::int[])",
         [transactionIds.splice(0)],
       );
@@ -68,7 +76,7 @@ describe.skipIf(!hasTestDatabase())(
 
     afterAll(async () => {
       try {
-        const pool = getTestPool()!;
+        const pool = must(getTestPool(), "getTestPool()");
         await pool.query("DELETE FROM recipients WHERE id = ANY($1::int[])", [
           [ids.recipient, ids.excludedRecipient],
         ]);
@@ -114,7 +122,7 @@ describe.skipIf(!hasTestDatabase())(
         period: { kind: "custom", from: "2025-01-15", to: "2025-01-20" },
         sections: ["executiveSummary"],
       });
-      const customMonths = custom.monthly!.months;
+      const customMonths = must(custom.monthly, "custom.monthly").months;
       expect(customMonths.map((m) => [m.year, m.month])).toEqual([[2025, 1]]);
       expect(customMonths[0]).toMatchObject({
         total_spending: -20,
@@ -124,7 +132,7 @@ describe.skipIf(!hasTestDatabase())(
       const allTime = await fetchFinancialData("EUR", {
         sections: ["executiveSummary"],
       });
-      const allTimeMonths = allTime.monthly!.months;
+      const allTimeMonths = must(allTime.monthly, "allTime.monthly").months;
       expect(
         allTimeMonths.find((m) => m.year === 2024 && m.month === 12),
       ).toMatchObject({ total_spending: -5, transaction_count: 1 });

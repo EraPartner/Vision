@@ -35,11 +35,16 @@ import type {
   AccountBalanceQueryRow,
   TransactionRow,
 } from "../src/types/rows.ts";
+import { must } from "./helpers/must.ts";
+import { loose } from "./helpers/partial.ts";
+import type { LoggerMock } from "./helpers/mockLogger.ts";
+
+const loggerMock = loose<LoggerMock>(logger);
 
 const query = rawQuery as unknown as Mock<
   (text: string, params?: readonly unknown[]) => Promise<{ rows: unknown[] }>
 >;
-const warn = logger.warn as Mock;
+const warn = loggerMock.warn;
 
 // Distinctive values that must never surface in an error or log line.
 const SECRET_MEMO = "SALARY ACME BE71096123456769";
@@ -137,7 +142,8 @@ describe("checkRows in log mode (production default)", () => {
     expect(result).toBe(rows);
     expect(result[1]).toBe(rows[1]);
     expect(warn).toHaveBeenCalledTimes(1);
-    const [line, ...extra] = warn.mock.calls[0]!;
+    const call: unknown[] = must(warn.mock.calls[0], "warn.mock.calls[0]");
+    const [line, ...extra] = call;
     expect(extra).toEqual([]);
     expect(line).toContain("(transactions row) at row 2 of 2");
     expect(line).toContain("amount: expected string, received number");
@@ -150,7 +156,7 @@ describe("checkRows in log mode (production default)", () => {
       mode: "log",
     });
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0]![0]).toContain("at row 1 of 3");
+    expect(must(warn.mock.calls[0], "warn.mock.calls[0]")[0]).toContain("at row 1 of 3");
   });
 });
 

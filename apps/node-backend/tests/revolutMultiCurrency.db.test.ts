@@ -52,6 +52,10 @@ import {
 import { accountService } from "../src/services/accountService.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
+import { must } from "./helpers/must.ts";
+
+/** A result row whose columns the test reads without a fixed shape. */
+type DbRow = Record<string, unknown>;
 
 // Neither the MV refresh (this database has no materialized views) nor the
 // planned-payment auto-link is what this suite measures; both are already
@@ -156,8 +160,16 @@ async function importExport(
 }
 
 /** Every active ledger row, in ledger order. */
+interface LedgerRow {
+  date: string;
+  account_name: string;
+  amount: string;
+  currency: string;
+  balance: string | null;
+}
+
 async function ledger() {
-  const { rows } = await pool!.query(
+  const { rows } = await must(pool, "pool").query<LedgerRow>(
     `SELECT to_char(t.date, 'YYYY-MM-DD') AS date, a.name AS account_name,
             t.amount::text AS amount, t.currency, t.balance::text AS balance
        FROM transactions t
@@ -173,17 +185,17 @@ async function hubAccount() {
   const { items: accounts } = await accountService.list({});
   const revolut = accounts.filter((a) => a.name === "REVOLUT CURRENT");
   expect(revolut).toHaveLength(1); // D2: ONE account, not one per currency
-  return revolut[0]!;
+  return must(revolut[0], "revolut[0]");
 }
 
 async function wipe() {
-  await pool!.query(`DELETE FROM transactions`);
-  await pool!.query(`DELETE FROM import_staging_rows`);
-  await pool!.query(`DELETE FROM import_batches`);
-  await pool!.query(`DELETE FROM recipients`);
-  await deleteAllCategoryFixtures(pool!);
-  await pool!.query(`DELETE FROM accounts`);
-  await pool!.query(`DELETE FROM exchange_rates`);
+  await must(pool, "pool").query(`DELETE FROM transactions`);
+  await must(pool, "pool").query(`DELETE FROM import_staging_rows`);
+  await must(pool, "pool").query(`DELETE FROM import_batches`);
+  await must(pool, "pool").query(`DELETE FROM recipients`);
+  await deleteAllCategoryFixtures(must(pool, "pool"));
+  await must(pool, "pool").query(`DELETE FROM accounts`);
+  await must(pool, "pool").query(`DELETE FROM exchange_rates`);
 }
 
 describeDb("Revolut multi-currency import (real DB)", () => {
@@ -236,7 +248,7 @@ describeDb("Revolut multi-currency import (real DB)", () => {
   it("anchors each currency on its own stamps — a USD statement figure never anchors EUR", async () => {
     await importExport(EXPORT_V1);
     // computed_balance converts at the latest stored rate only.
-    await pool!.query(
+    await must(pool, "pool").query<DbRow>(
       `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
        VALUES ('USD', '0.5', CURRENT_DATE, true)`,
     );
@@ -332,7 +344,7 @@ describeDb("Revolut multi-currency import (real DB)", () => {
     // Drop the staged currency (the no-currency-column adapter's state).
     // The versioned fingerprint was computed during validation from EUR, so
     // this isolates the commit-time currency default.
-    await pool!.query(
+    await must(pool, "pool").query<DbRow>(
       `UPDATE import_staging_rows SET currency = NULL WHERE batch_id = $1`,
       [batchId],
     );
@@ -365,7 +377,7 @@ describeDb("Revolut multi-currency import (real DB)", () => {
       });
       // Untrimmed currency from a hypothetical sloppy adapter; validation
       // computed the versioned identity from the normalized source value.
-      await pool!.query(
+      await must(pool, "pool").query<DbRow>(
         `UPDATE import_staging_rows SET currency = 'EUR ' WHERE batch_id = $1`,
         [batchId],
       );

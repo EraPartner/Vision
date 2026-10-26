@@ -3,16 +3,16 @@ import { createQuotaGovernor } from "../src/services/research/quotaGovernor.ts";
 
 describe("createQuotaGovernor — dayMirror eviction", () => {
   it("reserves a persistent daily slot atomically and fails closed without a reservation store", async () => {
-    const tryReserveDay = async (
+    const tryReserveDay = (
       _provider: string,
       _day: string,
       limit: number,
       delta: number,
-    ) => (delta <= limit ? delta : null);
+    ) => Promise.resolve(delta <= limit ? delta : null);
     const governed = createQuotaGovernor({
       limits: { fmp: { perDay: 1 } },
       store: {
-        getDayCount: async () => 0,
+        getDayCount: () => Promise.resolve(0),
         addDayCount: async () => {},
         tryReserveDay,
       },

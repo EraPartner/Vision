@@ -20,8 +20,8 @@ import { closePool } from "../src/database/connection.ts";
 import { createCategoryNode } from "../src/repositories/categoryHierarchyRepository.ts";
 import { getSankeyAggregates } from "../src/repositories/infoRepositorySankey.ts";
 import {
-  asCategoryId,
-} from "@vision/types/brands";
+  asCategoryId, type RecipientId, type TransactionId } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
 
 const MARK = `sankey_${process.pid}`;
 const RANGE = { yearStart: "1903-01-01", yearEnd: "1903-12-31" };
@@ -36,13 +36,13 @@ async function recipient(
   defaultCategoryId: number | null = null,
   primaryId: number | null = null,
 ): Promise<number> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: RecipientId }>(
     `INSERT INTO recipients (name, normalized_name, default_category_id, primary_recipient_id)
      VALUES ($1, $1, $2, $3) RETURNING id`,
     [`${MARK}_${name}`, defaultCategoryId, primaryId],
   );
-  created.recipientIds.push(rows[0].id);
-  return rows[0].id;
+  created.recipientIds.push(must(rows[0], "rows[0]").id);
+  return must(rows[0], "rows[0]").id;
 }
 
 async function txn(
@@ -60,12 +60,12 @@ async function txn(
     date?: string;
   } = {},
 ) {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: TransactionId }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, is_transfer, is_active, memo)
      VALUES ($1, $2, 'EUR', $3, $4, $5, $6, $7) RETURNING id`,
     [date, amount, recipientId, categoryId, isTransfer, isActive, MARK],
   );
-  created.transactionIds.push(rows[0].id);
+  created.transactionIds.push(must(rows[0], "rows[0]").id);
 }
 
 /** Map rows to `${category_id ?? "none"}:${in|out}` → amount for stable compares. */
@@ -85,15 +85,15 @@ describe.skipIf(!hasTestDatabase())("getSankeyAggregates (real DB)", () => {
   beforeAll(async () => {
     expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
     await acquireDbSuiteLock();
-    await getTestPool()!.query(
+    await must(getTestPool(), "getTestPool()").query(
       "DELETE FROM user_settings WHERE key = 'includeTransfers'",
     );
-    cat.food = (await createCategoryNode({ name: `FOOD${MARK}` }))!.id;
-    cat.groceries = (await createCategoryNode({
+    cat.food = must((await createCategoryNode({ name: `FOOD${MARK}` })), "(await createCategoryNode({ name: `FOOD${MARK}` }))").id;
+    cat.groceries = must((await createCategoryNode({
       name: "GROCERIES",
       parentId: asCategoryId(cat.food),
-    }))!.id;
-    cat.salary = (await createCategoryNode({ name: `SALARY${MARK}` }))!.id;
+    })), "(await createCategoryNode({ name: \"GROCERIES\", parentId: asC").id;
+    cat.salary = must((await createCategoryNode({ name: `SALARY${MARK}` })), "(await createCategoryNode({ name: `SALARY${MARK}` }))").id;
     created.categoryIds.push(cat.food, cat.groceries, cat.salary);
     rec.shop = await recipient("shop", cat.groceries);
     rec.shopAlias = await recipient("shop_alias", null, rec.shop);
@@ -111,14 +111,14 @@ describe.skipIf(!hasTestDatabase())("getSankeyAggregates (real DB)", () => {
   }, 180_000);
 
   afterEach(async () => {
-    await getTestPool()!.query(
+    await must(getTestPool(), "getTestPool()").query(
       "DELETE FROM user_settings WHERE key = 'includeTransfers'",
     );
   });
 
   afterAll(async () => {
     try {
-      const db = getTestPool()!;
+      const db = must(getTestPool(), "getTestPool()");
       await db.query("DELETE FROM transactions WHERE id = ANY($1)", [
         created.transactionIds,
       ]);
@@ -170,7 +170,7 @@ describe.skipIf(!hasTestDatabase())("getSankeyAggregates (real DB)", () => {
   });
 
   it("counts transfers only when the includeTransfers setting is on", async () => {
-    await getTestPool()!.query(
+    await must(getTestPool(), "getTestPool()").query(
       `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', 'true'::jsonb)`,
     );
     expect(totals(await getSankeyAggregates(RANGE))["none:out"]).toBe(

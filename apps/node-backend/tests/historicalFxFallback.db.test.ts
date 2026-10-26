@@ -20,6 +20,7 @@ import {
   clearHistoricalCache,
   getRateToEurForDate,
 } from "../src/services/currency/rateFetcher.ts";
+import { must } from "./helpers/must.ts";
 
 describe.skipIf(!hasTestDatabase())("historical FX database fallback", () => {
   beforeAll(async () => {
@@ -36,7 +37,7 @@ describe.skipIf(!hasTestDatabase())("historical FX database fallback", () => {
   afterEach(async () => {
     vi.unstubAllGlobals();
     clearHistoricalCache();
-    await getTestPool()!.query(
+    await must(getTestPool(), "getTestPool()").query(
       "DELETE FROM exchange_rates WHERE currency_code = 'USD' AND rate_date IN ('1950-01-01', '1950-01-10')",
     );
   });
@@ -47,14 +48,14 @@ describe.skipIf(!hasTestDatabase())("historical FX database fallback", () => {
   });
 
   it("does not use a future database quote when providers fail", async () => {
-    await getTestPool()!.query(
+    await must(getTestPool(), "getTestPool()").query(
       "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest) VALUES ('USD', 0.8, '1950-01-10', false)",
     );
     expect(await getRateToEurForDate("USD", "1950-01-09")).toBeUndefined();
   });
 
   it("uses the prior database quote even when the future one is closer", async () => {
-    await getTestPool()!.query(
+    await must(getTestPool(), "getTestPool()").query(
       "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest) VALUES ('USD', 0.9, '1950-01-01', false), ('USD', 0.8, '1950-01-10', false)",
     );
     expect(await getRateToEurForDate("USD", "1950-01-09")).toBeCloseTo(0.9);

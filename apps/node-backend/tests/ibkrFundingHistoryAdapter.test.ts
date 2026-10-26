@@ -8,6 +8,7 @@ import {
   parseIbkrFundingHistory,
 } from "../src/services/portfolioImportPipeline/ibkrFundingHistoryAdapter.ts";
 import { assertPortfolioUploadSupported } from "../src/services/portfolioImportPipeline/uploadSupport.ts";
+import { must } from "./helpers/must.ts";
 
 const DEPOSIT_HEADERS = [
   "Request Date",
@@ -105,10 +106,13 @@ async function writeWorkbook(
       source.name,
     );
   mutate?.(workbook);
-  await fs.writeFile(
-    file,
-    XLSX.write(workbook, { type: "buffer", bookType: format }),
-  );
+  // The xlsx typings declare `write` as returning `any`.
+  const bytes: unknown = XLSX.write(workbook, {
+    type: "buffer",
+    bookType: format,
+  });
+  if (!Buffer.isBuffer(bytes)) throw new Error("Expected a buffer workbook");
+  await fs.writeFile(file, bytes);
 }
 
 describe("IBKR funding history workbook", () => {
@@ -137,8 +141,8 @@ describe("IBKR funding history workbook", () => {
         amount: 25.4,
         currency: "EUR",
       });
-      expect(rows[1]!.date).toEqual(new Date("2025-01-07T00:00:00Z"));
-      const envelope = JSON.parse(rows[0]!.rawData);
+      expect(must(rows[1], "rows[1]").date).toEqual(new Date("2025-01-07T00:00:00Z"));
+      const envelope: unknown = JSON.parse(must(rows[0], "rows[0]").rawData);
       expect(envelope).toMatchObject({
         schema: "ibkr_funding_workbook_row",
         version: 1,
@@ -147,7 +151,7 @@ describe("IBKR funding history workbook", () => {
         source_format: format === "biff8" ? "xls" : "xlsx",
         columns: DEPOSIT_HEADERS,
       });
-      expect(ibkrFundingFactsFromRawData(rows[1]!.rawData)).toMatchObject({
+      expect(ibkrFundingFactsFromRawData(must(rows[1], "rows[1]").rawData)).toMatchObject({
         type: "withdrawal",
         date: "2025-01-07",
         completedDate: "2025-01-08",
@@ -184,7 +188,7 @@ describe("IBKR funding history workbook", () => {
       ]),
     ]);
     const [row] = await parseIbkrFundingHistory(file);
-    expect(ibkrFundingFactsFromRawData(row!.rawData)).toMatchObject({
+    expect(ibkrFundingFactsFromRawData(must(row, "row").rawData)).toMatchObject({
       method: "ACH",
       sourceAccount: "U***0000",
       institution: undefined,
@@ -229,7 +233,7 @@ describe("IBKR funding history workbook", () => {
     await writeWorkbook([sheet("Unrelated", DEPOSIT_HEADERS, [deposit()])]);
     await expect(parseIbkrFundingHistory(file)).rejects.toThrow();
     await writeWorkbook(undefined, "xlsx", (workbook) => {
-      workbook.Sheets.Deposit!.M2 = { t: "s", v: "USD 1,234.56", f: '"USD 1,234.56"' };
+      must(workbook.Sheets.Deposit, "workbook.Sheets.Deposit").M2 = { t: "s", v: "USD 1,234.56", f: '"USD 1,234.56"' };
     });
     await expect(parseIbkrFundingHistory(file)).rejects.toThrow(/formulas/);
     await writeWorkbook(undefined, "xlsx", (workbook) => {

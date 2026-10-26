@@ -17,6 +17,10 @@ import {
   hasIsolatedTestDatabase,
 } from "./setup/migratedDatabase.ts";
 import type { DisposableDatabase } from "./setup/migratedDatabase.ts";
+import { must } from "./helpers/must.ts";
+
+/** A result row whose columns the test reads without a fixed shape. */
+type DbRow = Record<string, unknown>;
 
 type MigrateModule = typeof import("../src/database/migrate.ts");
 
@@ -56,7 +60,7 @@ async function withMigrationTarget<T>(
     return await run();
   } finally {
     for (const [key, value] of Object.entries(saved)) {
-      if (value === undefined) delete process.env[key];
+      if (value === undefined) Reflect.deleteProperty(process.env, key);
       else process.env[key] = value;
     }
   }
@@ -78,7 +82,7 @@ async function loadMigrator(runtimeRoot?: string): Promise<MigrateModule> {
 
 /** Application tables, without the migrator's own bookkeeping. */
 async function publicTables(client: pg.Client) {
-  const result = await client.query(
+  const result = await client.query<DbRow>(
     `SELECT tablename FROM pg_tables
       WHERE schemaname = 'public' AND tablename NOT LIKE 'kysely_migration%'
       ORDER BY tablename`,
@@ -88,15 +92,18 @@ async function publicTables(client: pg.Client) {
 
 async function appliedNames(client: pg.Client) {
   if (!(await regclass(client, "public.kysely_migration"))) return [];
-  const result = await client.query(
+  const result = await client.query<DbRow>(
     "SELECT name FROM public.kysely_migration ORDER BY name",
   );
   return result.rows.map((row) => row.name as string);
 }
 
 async function regclass(client: pg.Client, name: string) {
-  return (await client.query("SELECT to_regclass($1)::text AS name", [name]))
-    .rows[0].name as string | null;
+  return must(
+    (await client.query<DbRow>("SELECT to_regclass($1)::text AS name", [name]))
+      .rows[0],
+    '( await client.query<DbRow>("SELECT to_regclass($1',
+  ).name as string | null;
 }
 
 /** A runtime root whose db/migrations holds only the baseline. */
@@ -119,7 +126,7 @@ function baselineOnlyRoot() {
 async function preBaselineDatabase() {
   const db = await track(createMigratedDatabase("c_prebaseline"));
   await withClient(db.url, (client) =>
-    client.query(
+    client.query<DbRow>(
       "DROP TABLE public.kysely_migration, public.kysely_migration_lock",
     ),
   );
@@ -178,7 +185,7 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
       const migrator = await loadMigrator();
       const db = await track(createEmptyDatabase("c_unversioned"));
       await withClient(db.url, (client) =>
-        client.query("CREATE TABLE public.unversioned_probe (id int)"),
+        client.query<DbRow>("CREATE TABLE public.unversioned_probe (id int)"),
       );
       await expect(
         withMigrationTarget(db.url, () => migrator.runMigrations()),

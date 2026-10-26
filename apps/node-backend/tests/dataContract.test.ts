@@ -10,6 +10,10 @@ import {
   dataContractMode,
   PRODUCTION_DATA_CONTRACT_MODE,
 } from "../src/lib/dataContract.ts";
+import { loose } from "./helpers/partial.ts";
+import type { LoggerMock } from "./helpers/mockLogger.ts";
+
+const loggerMock = loose<LoggerMock>(logger);
 
 const schema = z.object({ rows: z.array(z.object({ amount: z.number() })) });
 
@@ -74,12 +78,10 @@ describe("checkDataContract", () => {
   it("logs paths only and reports a mismatch in log mode", () => {
     const value = { rows: [{ amount: "4242.42" }] };
     expect(checkDataContract(schema, value, "probe", "log")).toBe(false);
-    expect(logger.warn).toHaveBeenCalledWith(
+    expect(loggerMock.warn).toHaveBeenCalledWith(
       "[data-contract] probe does not match its schema",
       { issues: ["rows.0.amount (invalid_type)"], issueCount: 1 },
     );
-    expect(JSON.stringify(vi.mocked(logger.warn).mock.calls)).not.toContain(
-      "4242",
-    );
+    expect(JSON.stringify(loggerMock.warn.mock.calls)).not.toContain("4242");
   });
 });

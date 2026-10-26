@@ -34,9 +34,13 @@ import {
   ensureAppRole,
   __renderGrantStatements as renderGrantStatements,
 } from "../src/database/roleBootstrap.ts";
+import { must } from "./helpers/must.ts";
+
+/** A result row whose columns the test reads without a fixed shape. */
+type DbRow = Record<string, unknown>;
 
 // Read only inside the suite, which is skipped when no test database is set.
-const TEST_URL = process.env.TEST_DATABASE_URL!;
+const testUrl = () => must(process.env.TEST_DATABASE_URL, "TEST_DATABASE_URL");
 
 /** Silent logger stub that records messages for assertions. */
 function makeLog() {
@@ -57,7 +61,7 @@ function makeLog() {
 
 /** Build a connection URL for `user`/`password` on the test database. */
 function urlFor(user: string, password: string) {
-  const u = new URL(TEST_URL);
+  const u = new URL(testUrl());
   u.username = encodeURIComponent(user);
   u.password = encodeURIComponent(password);
   return u.toString();
@@ -71,7 +75,7 @@ async function queryAs(user: string, password: string, sql: string) {
   });
   await client.connect();
   try {
-    const res = await client.query(sql);
+    const res = await client.query<DbRow>(sql);
     return res.rows;
   } finally {
     await client.end();
@@ -85,7 +89,8 @@ const PRE_ROLE = "vb_rb_preexisting";
 const ALL_ROLES = [APP_ROLE, PLAIN_MIG_ROLE, PRE_ROLE];
 
 describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
-  let pool: pg.Pool;
+  let pool: pg.Pool | undefined;
+  const db = () => must(pool, "pool");
   // Whether the server actually verifies passwords. The disposable
   // with-test-db.sh cluster does (SCRAM); a caller-managed cluster may run
   // `trust`, where wrong passwords still connect.
@@ -93,7 +98,7 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
 
   async function dropTestRoles() {
     for (const role of ALL_ROLES) {
-      const { rows } = await pool.query(
+      const { rows } = await db().query<DbRow>(
         "SELECT 1 FROM pg_roles WHERE rolname = $1",
         [role],
       );
@@ -101,19 +106,19 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
       // PostgreSQL 16+ gives a CREATEROLE creator ADMIN but not SET membership
       // in the new role. DROP OWNED requires SET permission, so grant that
       // narrow membership option before removing the throwaway role.
-      await pool.query(`GRANT "${role}" TO CURRENT_USER WITH SET TRUE`);
+      await db().query<DbRow>(`GRANT "${role}" TO CURRENT_USER WITH SET TRUE`);
       // DROP OWNED revokes privileges granted TO the role (incl. default-ACL
       // entries) and drops objects it owns — required before DROP ROLE.
-      await pool.query(`DROP OWNED BY "${role}"`);
-      await pool.query(`DROP ROLE "${role}"`);
+      await db().query<DbRow>(`DROP OWNED BY "${role}"`);
+      await db().query(`DROP ROLE "${role}"`);
     }
   }
 
   beforeAll(async () => {
     await acquireDbSuiteLock();
-    pool = getTestPool()!;
+    pool = must(getTestPool(), "getTestPool()");
     await dropTestRoles();
-    const migUser = new URL(TEST_URL).username || "vision_test";
+    const migUser = new URL(testUrl()).username || "vision_test";
     authEnforced = await queryAs(
       decodeURIComponent(migUser),
       "definitely-wrong-password",
@@ -125,7 +130,7 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
 
   afterAll(async () => {
     if (pool) {
-      await pool.query("DROP TABLE IF EXISTS vb_rb_future_table");
+      await db().query("DROP TABLE IF EXISTS vb_rb_future_table");
       await dropTestRoles();
     }
     await releaseDbSuiteLock();
@@ -151,23 +156,23 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
   it("skips in single-role setups without touching the database", async () => {
     const log = makeLog();
     const noMig = await ensureAppRole({
-      databaseUrl: TEST_URL,
+      databaseUrl: testUrl(),
       migrationsUrl: undefined,
       log,
     });
     expect(noMig).toMatchObject({ status: "skipped", reason: "single-role" });
 
     const sameUrl = await ensureAppRole({
-      databaseUrl: TEST_URL,
-      migrationsUrl: TEST_URL,
+      databaseUrl: testUrl(),
+      migrationsUrl: testUrl(),
       log,
     });
     expect(sameUrl).toMatchObject({ status: "skipped", reason: "single-role" });
 
     const sameRole = await ensureAppRole({
-      databaseUrl: TEST_URL,
+      databaseUrl: testUrl(),
       migrationsUrl:
-        urlFor(decodeURIComponent(new URL(TEST_URL).username), "other") +
+        urlFor(decodeURIComponent(new URL(testUrl()).username), "other") +
         "?x=1",
       log,
     });
@@ -176,7 +181,7 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
 
   it("refuses to bootstrap across different databases", async () => {
     const log = makeLog();
-    const other = new URL(TEST_URL);
+    const other = new URL(testUrl());
     other.pathname = "/some_other_db";
     const res = await ensureAppRole({
       databaseUrl: urlFor(APP_ROLE, APP_PASS),
@@ -193,13 +198,13 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
     const log = makeLog();
     const res = await ensureAppRole({
       databaseUrl: urlFor(APP_ROLE, APP_PASS),
-      migrationsUrl: TEST_URL,
+      migrationsUrl: testUrl(),
       log,
     });
     expect(res).toMatchObject({ status: "created", grantFailures: 0 });
 
     // Role shape: LOGIN, and none of the dangerous attributes.
-    const { rows } = await pool.query(
+    const { rows } = await db().query<DbRow>(
       "SELECT rolcanlogin, rolsuper, rolcreaterole, rolcreatedb, rolreplication FROM pg_roles WHERE rolname = $1",
       [APP_ROLE],
     );
@@ -217,33 +222,33 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
       APP_PASS,
       "INSERT INTO categories (general, detail) VALUES ('vb_rb', 'probe') RETURNING id, detail",
     );
-    expect(inserted[0].detail).toBe("probe");
+    expect(must(inserted[0], "inserted[0]").detail).toBe("probe");
     const read = await queryAs(
       APP_ROLE,
       APP_PASS,
-      `SELECT id FROM categories WHERE id = ${Number(inserted[0].id)}`,
+      `SELECT id FROM categories WHERE id = ${Number(must(inserted[0], "inserted[0]").id)}`,
     );
     expect(read).toHaveLength(1);
     const parent = await queryAs(
       APP_ROLE,
       APP_PASS,
-      `SELECT parent_id FROM categories WHERE id = ${Number(inserted[0].id)}`,
+      `SELECT parent_id FROM categories WHERE id = ${Number(must(inserted[0], "inserted[0]").id)}`,
     );
     await queryAs(
       APP_ROLE,
       APP_PASS,
-      `DELETE FROM categories WHERE id = ${Number(inserted[0].id)}`,
+      `DELETE FROM categories WHERE id = ${Number(must(inserted[0], "inserted[0]").id)}`,
     );
     await queryAs(
       APP_ROLE,
       APP_PASS,
-      `DELETE FROM categories WHERE id = ${Number(parent[0].parent_id)} AND NOT EXISTS (SELECT 1 FROM categories WHERE parent_id = ${Number(parent[0].parent_id)})`,
+      `DELETE FROM categories WHERE id = ${Number(must(parent[0], "parent[0]").parent_id)} AND NOT EXISTS (SELECT 1 FROM categories WHERE parent_id = ${Number(must(parent[0], "parent[0]").parent_id)})`,
     );
   }, 30_000);
 
   it("covers tables created later by the migration role (default privileges)", async () => {
     // Simulates a migration creating a new table AFTER the bootstrap ran.
-    await pool.query(
+    await db().query<DbRow>(
       "CREATE TABLE vb_rb_future_table (id serial PRIMARY KEY, v text)",
     );
     const rows = await queryAs(
@@ -252,20 +257,20 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
       "INSERT INTO vb_rb_future_table (v) VALUES ('later') RETURNING id, v",
     );
     expect(rows[0]).toMatchObject({ id: 1, v: "later" });
-    await pool.query("DROP TABLE vb_rb_future_table");
+    await db().query("DROP TABLE vb_rb_future_table");
   });
 
   it("is idempotent: a second run reports exists and changes nothing", async () => {
     const log = makeLog();
     const res = await ensureAppRole({
       databaseUrl: urlFor(APP_ROLE, APP_PASS),
-      migrationsUrl: TEST_URL,
+      migrationsUrl: testUrl(),
       log,
     });
     expect(res).toMatchObject({ status: "exists", grantFailures: 0 });
     // Original password still valid — nothing was re-created or altered.
     const rows = await queryAs(APP_ROLE, APP_PASS, "SELECT 1 AS ok");
-    expect(rows[0].ok).toBe(1);
+    expect(must(rows[0], "rows[0]").ok).toBe(1);
   }, 30_000);
 
   it("reapplies ordinary-table grants when the app role owns a materialized view", async () => {
@@ -278,7 +283,7 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
       const log = makeLog();
       const res = await ensureAppRole({
         databaseUrl: urlFor(APP_ROLE, APP_PASS),
-        migrationsUrl: TEST_URL,
+        migrationsUrl: testUrl(),
         log,
       });
       expect(res).toMatchObject({ status: "exists", grantFailures: 0 });
@@ -299,21 +304,21 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
   }, 30_000);
 
   it("never alters a pre-existing role (no password reset)", async () => {
-    await pool.query(
+    await db().query(
       `CREATE ROLE "${PRE_ROLE}" LOGIN PASSWORD 'original-pw' NOSUPERUSER`,
     );
     const log = makeLog();
     // URL claims a DIFFERENT password than the role actually has.
     const res = await ensureAppRole({
       databaseUrl: urlFor(PRE_ROLE, "not-the-real-password"),
-      migrationsUrl: TEST_URL,
+      migrationsUrl: testUrl(),
       log,
     });
     expect(res.status).toBe("exists");
     // The real password still works; the URL's wrong one does not (the latter
     // only observable when the server verifies passwords at all).
     const rows = await queryAs(PRE_ROLE, "original-pw", "SELECT 1 AS ok");
-    expect(rows[0].ok).toBe(1);
+    expect(must(rows[0], "rows[0]").ok).toBe(1);
     if (authEnforced) {
       await expect(
         queryAs(PRE_ROLE, "not-the-real-password", "SELECT 1"),
@@ -322,7 +327,7 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
   }, 30_000);
 
   it("degrades gracefully when the migration role lacks CREATEROLE", async () => {
-    await pool.query(
+    await db().query(
       `CREATE ROLE "${PLAIN_MIG_ROLE}" LOGIN PASSWORD 'plain-pw' NOSUPERUSER NOCREATEDB NOCREATEROLE`,
     );
     const log = makeLog();
@@ -333,7 +338,7 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
     });
     expect(res).toMatchObject({ status: "degraded", reason: "no-createrole" });
     expect(log.lines.warn.join("\n")).toContain("lacks CREATEROLE");
-    const { rows } = await pool.query(
+    const { rows } = await db().query<DbRow>(
       "SELECT 1 FROM pg_roles WHERE rolname = 'vb_rb_never_created'",
     );
     expect(rows).toHaveLength(0);

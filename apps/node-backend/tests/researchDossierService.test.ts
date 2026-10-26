@@ -7,13 +7,13 @@ vi.mock("../src/database/connection.ts", () =>
 );
 
 import {
-  createResearchDossier,
   __dossierContentSchema as dossierContentSchema,
   exportResearchDossiers,
   getResearchDossier,
   listResearchDossiers,
   updateResearchDossier,
 } from "../src/services/researchDossierService.ts";
+import { must } from "./helpers/must.ts";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const content = {
@@ -160,20 +160,23 @@ describe("research dossier persistence", () => {
       historical_id: "9",
       label_snapshot: "Sold stock",
     };
-    mockQuery.mockImplementation(async (sql) => {
-      if (typeof sql !== "string") return { rows: [] };
+    mockQuery.mockImplementation((sql) => {
+      if (typeof sql !== "string") return Promise.resolve({ rows: [] });
       if (sql.includes('from "ai_research_documents"'))
-        throw new Error("Unchanged source was queried");
+        return Promise.reject(new Error("Unchanged source was queried"));
       if (
         sql.includes('from "research_dossiers" where "id" =') &&
         sql.includes("for update")
       )
-        return { rows: [{ ...row, content_json: prior }] };
+        return Promise.resolve({ rows: [{ ...row, content_json: prior }] });
       if (sql.includes('update "research_dossiers"'))
-        return { rows: [{ ...row, version: 2, content_json: prior }] };
-      if (sql.includes('"category_id" is null')) return { rows: [tombstone] };
+        return Promise.resolve({
+          rows: [{ ...row, version: 2, content_json: prior }],
+        });
+      if (sql.includes('"category_id" is null'))
+        return Promise.resolve({ rows: [tombstone] });
       if (sql.includes('from "research_dossier_links"'))
-        return {
+        return Promise.resolve({
           rows: [
             {
               ...tombstone,
@@ -182,8 +185,8 @@ describe("research dossier persistence", () => {
               saved_analysis_id: null,
             },
           ],
-        };
-      return { rows: [] };
+        });
+      return Promise.resolve({ rows: [] });
     });
     const updated = await updateResearchDossier(id, {
       ...prior,
@@ -214,15 +217,17 @@ describe("research dossier persistence", () => {
       ...row,
       id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
     }));
-    mockQuery.mockImplementation(async (sql) => {
-      if (typeof sql !== "string") return { rows: [] };
+    mockQuery.mockImplementation((sql) => {
+      if (typeof sql !== "string") return Promise.resolve({ rows: [] });
       if (sql.includes('from "research_dossiers" order by "created_at"'))
-        return { rows: many };
-      if (sql.includes('from "research_dossier_links"')) return { rows: [] };
+        return Promise.resolve({ rows: many });
+      if (sql.includes('from "research_dossier_links"'))
+        return Promise.resolve({ rows: [] });
       if (sql.includes('from "research_dossiers" where "id" ='))
-        return { rows: [row] };
-      if (sql.includes('from "research_dossier_versions"')) return { rows: [] };
-      throw new Error(`Unexpected query: ${sql}`);
+        return Promise.resolve({ rows: [row] });
+      if (sql.includes('from "research_dossier_versions"'))
+        return Promise.resolve({ rows: [] });
+      return Promise.reject(new Error(`Unexpected query: ${sql}`));
     });
     const exported = await exportResearchDossiers();
     expect(exported.dossiers).toHaveLength(501);
@@ -255,6 +260,8 @@ describe("research dossier persistence", () => {
     ]);
     expect(listed.items[0]).not.toHaveProperty("evidence");
     expect(mockQuery).toHaveBeenCalledTimes(2);
-    expect(mockQuery.mock.calls[0]![0]).not.toContain("SELECT *");
+    expect(
+      must(mockQuery.mock.calls[0], "mockQuery.mock.calls[0]")[0],
+    ).not.toContain("SELECT *");
   });
 });

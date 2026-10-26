@@ -26,6 +26,7 @@ import {
 } from "../src/services/openingBalanceService.ts";
 import { loose, partial } from "./helpers/partial.ts";
 import { makeTransactionRow } from "./builders/domainRows.ts";
+import { must } from "./helpers/must.ts";
 
 /** A realistic `RETURNING *` anchor row (pg NUMERIC strings, DATE as Date). */
 function anchorRow(id: number, balance: string) {
@@ -196,17 +197,17 @@ describe("setOpeningBalance (ADR-094 D4)", () => {
     });
 
     expect(result.warning).toBeNull();
-    expect(result.transaction!.id).toBe(42);
+    expect(must(result.transaction, "result.transaction").id).toBe(42);
 
     // Whole upsert runs in a transaction; the first query locks the account row.
     expect(withTransaction).toHaveBeenCalledTimes(1);
-    expect(query.mock.calls[0]![1]).toEqual([5]);
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([5]);
 
     // Fourth query is the upsert (lock, earliest-activity probe, system-recipient
     // upsert, upsert); params carry the server-stamped balance, currency and
     // system recipient. The real-PostgreSQL insert/update paths are covered in
     // systemRecipientRows.db.test.ts.
-    expect(query.mock.calls[3]![1]).toEqual(
+    expect(must(query.mock.calls[3], "query.mock.calls[3]")[1]).toEqual(
       expect.arrayContaining([5, 1000, "EUR", "2024-01-01", "OPENING BALANCE", 900]),
     );
   });

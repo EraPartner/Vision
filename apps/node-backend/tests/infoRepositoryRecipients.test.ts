@@ -16,6 +16,7 @@ import type { PgQueryResult } from "../src/database/connection.ts";
 import { convertRowsToEur as rawConvertRowsToEur } from "../src/services/currency/currencyConversionService.ts";
 import { recipientInsightsRepository } from "../src/repositories/infoRepositoryRecipients.ts";
 import { partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 const query = vi.mocked(rawQuery);
 const convertRowsToEur = mockedConvertRowsToEur(rawConvertRowsToEur);
@@ -169,16 +170,22 @@ describe("recipientInsightsRepository.getRecipientInsights", () => {
     ]);
     // The MoM query (2nd call) must window the previous month to the same
     // day-of-month so a partial current month isn't compared to a full prior one.
-    const momSql = query.mock.calls[1]![0];
+    const momSql = must(query.mock.calls[1], "query.mock.calls[1]")[0];
     expect(momSql).toMatch(
       /\(\$\d+::date - DATE_TRUNC\('month', \$\d+::date\)::date\)/,
     );
     // "Today" is the APP_TIMEZONE day (ADR-009), not CURRENT_DATE: every
     // bound value of the MoM window and the period keys is that one day.
     expect(momSql).not.toContain("CURRENT_DATE");
-    const [today] = query.mock.calls[1]![1] as unknown[];
+    const [today] = must(
+      query.mock.calls[1],
+      "query.mock.calls[1]",
+    )[1] as unknown[];
     expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    for (const call of [query.mock.calls[1]!, query.mock.calls[2]!]) {
+    for (const call of [
+      must(query.mock.calls[1], "query.mock.calls[1]"),
+      must(query.mock.calls[2], "query.mock.calls[2]"),
+    ]) {
       expect(new Set(call[1] as unknown[])).toEqual(new Set([today]));
     }
     // MoM converts at HISTORICAL per-date rates like every other recipient
@@ -224,7 +231,9 @@ describe("recipientInsightsRepository.getRecipientInsights", () => {
 
     const r = await recipientInsightsRepository.getRecipientInsights("EUR");
     expect(r.monthOverMonth).toHaveLength(10);
-    expect(r.monthOverMonth[0]!.currentSpend).toBe(100);
+    expect(must(r.monthOverMonth[0], "r.monthOverMonth[0]").currentSpend).toBe(
+      100,
+    );
   });
 });
 
@@ -263,7 +272,12 @@ describe("recipientInsightsRepository.getRecipientByYear", () => {
       targetCurrency: "EUR",
     });
     expect(r.recipientsByYear["2025"]).toHaveLength(20);
-    expect(r.recipientsByYear["2025"]![0]!.totalSpend).toBe(100);
+    expect(
+      must(
+        must(r.recipientsByYear["2025"], 'r.recipientsByYear["2025"]')[0],
+        'r.recipientsByYear["2025"][0]',
+      ).totalSpend,
+    ).toBe(100);
   });
 
   // Was: asserted to bind as [7, 99] — the excluded recipients silently came
@@ -287,7 +301,7 @@ describe("recipientInsightsRepository.getRecipientByYear", () => {
       targetCurrency: "EUR",
       excludedRecipientIds: [2147483647, 7],
     });
-    const [, params] = query.mock.calls[0]!;
+    const [, params] = must(query.mock.calls[0], "query.mock.calls[0]");
     expect(params).toEqual([2147483647, 7]);
   });
 });
@@ -339,7 +353,9 @@ describe("recipientInsightsRepository.getRecipientPivot", () => {
       recipientIds: [2147483647],
     });
 
-    expect(query.mock.calls[0]![1]).toEqual([[2147483647]]);
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([
+      [2147483647],
+    ]);
   });
 
   it("groups by period+recipient and sorts ascending by total", async () => {

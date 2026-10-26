@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { createDailyJob } from "../src/startup/dailyJobs.ts";
+import { must } from "./helpers/must.ts";
 const DAY = 86400000;
 function fixture(completedAt: unknown) {
   let clock = 10 * DAY;
   const store = {
-    get: vi.fn(async () => completedAt),
-    set: vi.fn(async (_key: string, value: number) => {
+    get: vi.fn(() => Promise.resolve(completedAt)),
+    set: vi.fn((_key: string, value: number) => {
       completedAt = value;
+      return Promise.resolve();
     }),
   };
   return {
@@ -20,7 +22,7 @@ function fixture(completedAt: unknown) {
 describe("single-instance durable daily jobs", () => {
   it("coalesces multiple missed periods, persists completion and honors it after restart", async () => {
     const f = fixture(DAY);
-    const run = vi.fn(async () => true);
+    const run = vi.fn(() => Promise.resolve(true));
     await createDailyJob("example", run, f)();
     await createDailyJob("example", run, f)();
     expect(run).toHaveBeenCalledTimes(1);
@@ -42,7 +44,7 @@ describe("single-instance durable daily jobs", () => {
     const first = tick();
     await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1));
     await tick();
-    release!(true);
+    must(release, "release")(true);
     await first;
     expect(run).toHaveBeenCalledTimes(1);
   });
@@ -50,9 +52,9 @@ describe("single-instance durable daily jobs", () => {
     "retries incomplete work without recording completion (%s)",
     async (result) => {
       const f = fixture(undefined);
-      const run = vi.fn(async () => {
-        if (result === "error") throw new Error("failed");
-        return false;
+      const run = vi.fn(() => {
+        if (result === "error") return Promise.reject(new Error("failed"));
+        return Promise.resolve(false);
       });
       const tick = createDailyJob("example", run, f);
       await tick();
@@ -75,7 +77,7 @@ describe("single-instance durable daily jobs", () => {
     "treats missing or invalid checkpoints as due (%s)",
     async (value) => {
       const f = fixture(value);
-      const run = vi.fn(async () => true);
+      const run = vi.fn(() => Promise.resolve(true));
       await createDailyJob("example", run, f)();
       expect(run).toHaveBeenCalledOnce();
     },

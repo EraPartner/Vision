@@ -17,6 +17,7 @@ import {
   asCurrencyCode,
   asInvestmentId,
 } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
 
 const SUFFIX = `INB${process.pid}`;
 const ids: number[] = [];
@@ -29,7 +30,7 @@ async function create(fields: Record<string, unknown> = {}) {
     current_price: 10,
     ...fields,
   });
-  const id = Number(row!.id);
+  const id = Number(must(row, "row").id);
   ids.push(id);
   return id;
 }
@@ -43,7 +44,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const db = getTestPool()!;
+      const db = must(getTestPool(), "getTestPool()");
       const owned = ids.splice(0);
       await db.query(
         "DELETE FROM investment_ticker_prefs WHERE investment_id = ANY($1::int[])",

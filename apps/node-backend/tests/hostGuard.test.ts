@@ -12,6 +12,7 @@ import type {
   ExpressResponse,
 } from "../src/types/express.ts";
 import { loose, partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 const guard = createHostGuard();
 function run(
@@ -78,10 +79,10 @@ describe("destination Host boundary", () => {
     "-localhost",
     "local_host",
   ])("rejects unsafe authority %s", (host) => {
-    expect(run(host).mock.calls[0]![0]).toBeInstanceOf(ForbiddenError);
+    expect(must(run(host).mock.calls[0], "run(host).mock.calls[0]")[0]).toBeInstanceOf(ForbiddenError);
   });
   it("rejects a repeated Host header value", () => {
-    expect(run(["localhost", "evil.test"]).mock.calls[0]![0]).toBeInstanceOf(
+    expect(must(run(["localhost", "evil.test"]).mock.calls[0], "run([\"localhost\", \"evil.test\"]).mock.calls[0]")[0]).toBeInstanceOf(
       ForbiddenError,
     );
   });
@@ -92,10 +93,10 @@ describe("destination Host boundary", () => {
     ["vision.example.com", "vision.example.com"],
   ])("never widens the allowlist for non-loopback bind %s", (bindHost, host) => {
     const bound = createHostGuard({ bindHost });
-    expect(run("evil.test", {}, bound).mock.calls[0]![0]).toBeInstanceOf(
+    expect(must(run("evil.test", {}, bound).mock.calls[0], "run(\"evil.test\", {}, bound).mock.calls[0]")[0]).toBeInstanceOf(
       ForbiddenError,
     );
-    expect(run(host, {}, bound).mock.calls[0]![0]).toBeInstanceOf(
+    expect(must(run(host, {}, bound).mock.calls[0], "run(host, {}, bound).mock.calls[0]")[0]).toBeInstanceOf(
       ForbiddenError,
     );
   });
@@ -108,15 +109,15 @@ describe("destination Host boundary", () => {
     for (const host of ["localhost:3002", "127.0.0.1:3002", "[::1]:3002"])
       expect(run(host, {}, bound), host).toHaveBeenCalledWith();
     for (const host of ["localhost", "localhost:3003", "127.0.0.1:80"])
-      expect(run(host, {}, bound).mock.calls[0]![0], host).toBeInstanceOf(
+      expect(must(run(host, {}, bound).mock.calls[0], "run(host, {}, bound).mock.calls[0]")[0], host).toBeInstanceOf(
         ForbiddenError,
       );
   });
   it("ignores forwarded host headers", () => {
     expect(
-      run("evil.test", {
+      must(run("evil.test", {
         headers: { host: "evil.test", "x-forwarded-host": "localhost" },
-      }).mock.calls[0]![0],
+      }).mock.calls[0], "run(\"evil.test\", { headers: { host: \"evil.test\", \"x-forwarde")[0],
     ).toBeInstanceOf(ForbiddenError);
   });
   it.each(["GET", "POST", "OPTIONS"])(

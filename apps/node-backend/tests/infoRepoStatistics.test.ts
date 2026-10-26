@@ -31,6 +31,7 @@ import type { PgQueryResult } from "../src/database/connection.ts";
 import { convertRowsToEur as rawConvertRowsToEur } from "../src/services/currency/currencyConversionService.ts";
 import { mvAvailable as rawMvAvailable } from "../src/repositories/infoRepositoryHelpers.ts";
 import { statisticsRepository } from "../src/repositories/infoRepositoryStatistics.ts";
+import { must } from "./helpers/must.ts";
 
 const query = rawQuery as unknown as Mock<
   (text: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
@@ -94,15 +95,19 @@ describe("statisticsRepository.getCategoryPivot", () => {
         },
       ],
     });
-    convertRowsToEur.mockImplementationOnce(async (rows) =>
-      rows.map((row) => ({
-        ...row,
-        // Already numeric: the repository maps `amount` through toNumber.
-        amount_eur: Number(row.amount),
-      })),
+    convertRowsToEur.mockImplementationOnce((rows) =>
+      Promise.resolve(
+        rows.map((row) => ({
+          ...row,
+          // Already numeric: the repository maps `amount` through toNumber.
+          amount_eur: Number(row.amount),
+        })),
+      ),
     );
     const pivot = await statisticsRepository.getCategoryPivot();
-    expect(pivot.categoryPivot["2025-04"]![0]).toMatchObject({
+    expect(
+      must(pivot.categoryPivot["2025-04"], 'pivot.categoryPivot["2025-04"]')[0],
+    ).toMatchObject({
       categoryPathIds: [1, 2, 3],
       categoryPathSegments: ["Home", "Kitchen:Tools", "Apples"],
       total: -10,
@@ -143,11 +148,16 @@ describe("statisticsRepository.getCategoryPivot", () => {
         },
       ],
     });
-    convertRowsToEur.mockImplementationOnce(async (rows) =>
-      rows.map((row) => ({ ...row, amount_eur: Number(row.amount) })),
+    convertRowsToEur.mockImplementationOnce((rows) =>
+      Promise.resolve(
+        rows.map((row) => ({ ...row, amount_eur: Number(row.amount) })),
+      ),
     );
     const pivot = await statisticsRepository.getCategoryPivot();
-    const cells = pivot.categoryPivot["2025-04"]!;
+    const cells = must(
+      pivot.categoryPivot["2025-04"],
+      'pivot.categoryPivot["2025-04"]',
+    );
     const salary = cells.find((c) => c.categoryId === 7);
     const other = cells.find((c) => c.categoryId === 8);
     // Owner legs never change the totals; `me` is the remainder of `income`.
@@ -263,7 +273,9 @@ describe("statisticsRepository.getCategoryPivot", () => {
     const r = await statisticsRepository.getCategoryPivot();
     // Net +200, but income (500) and expense (-300) are reported separately so
     // consumers don't have to misclassify by the sign of the net.
-    expect(r.categoryPivot["2025-04"]![0]).toEqual({
+    expect(
+      must(r.categoryPivot["2025-04"], 'r.categoryPivot["2025-04"]')[0],
+    ).toEqual({
       categoryId: 1,
       categoryName: "Food",
       categoryPathIds: [],
@@ -299,7 +311,9 @@ describe("statisticsRepository.getCategoryPivot", () => {
       targetCurrency: "EUR",
       excludedRecipientIds: [7],
     });
-    expect(query.mock.calls[0]![1]).toEqual([2147483647, 5, 7]);
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([
+      2147483647, 5, 7,
+    ]);
   });
 
   it("treats missing category_id as Uncategorised", async () => {
@@ -323,7 +337,9 @@ describe("statisticsRepository.getCategoryPivot", () => {
       },
     ]);
     const r = await statisticsRepository.getCategoryPivot();
-    expect(r.categoryPivot["2025-04"]![0]).toMatchObject({
+    expect(
+      must(r.categoryPivot["2025-04"], 'r.categoryPivot["2025-04"]')[0],
+    ).toMatchObject({
       categoryId: null,
       categoryName: "Uncategorised",
     });

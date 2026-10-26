@@ -1,18 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const yahoo = vi.hoisted(() => ({ quote: vi.fn(), quoteSummary: vi.fn() }));
+const yahoo = vi.hoisted(() => ({
+  quote: vi.fn<(symbol: string) => Promise<unknown>>(),
+  quoteSummary: vi.fn<(symbol: string) => Promise<unknown>>(),
+}));
 // Keep the real payload schemas/helpers; only the client itself is faked.
 vi.mock("../src/services/prices/yahooClient.ts", async (importOriginal) => ({
   ...(await importOriginal<
     typeof import("../src/services/prices/yahooClient.ts")
   >()),
-  getYahooClient: vi.fn(async () => yahoo),
+  getYahooClient: vi.fn(() => Promise.resolve(yahoo)),
 }));
 
 import {
   __clearQuoteCacheForTests,
   getQuotes,
 } from "../src/services/marketLookupService.ts";
+import { must } from "./helpers/must.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -23,9 +27,10 @@ beforeEach(() => {
 
 describe("market quote concurrency", () => {
   it("does not retry a failed duplicate queued beyond the first worker wave", async () => {
-    yahoo.quote.mockImplementation(async (symbol) => {
-      if (symbol === "FAILED") throw new Error("quote unavailable");
-      return { symbol, regularMarketPrice: 42 };
+    yahoo.quote.mockImplementation((symbol) => {
+      if (symbol === "FAILED")
+        return Promise.reject(new Error("quote unavailable"));
+      return Promise.resolve({ symbol, regularMarketPrice: 42 });
     });
     const symbols = [
       "FAILED",
@@ -71,13 +76,13 @@ describe("market quote concurrency", () => {
       const resultPromise = getQuotes(symbols, basic);
       await vi.waitFor(() => expect(pending).toHaveLength(6));
       expect(yahoo.quote).toHaveBeenCalledTimes(basic ? 6 : 3);
-      let finished = false;
-      resultPromise.then(() => {
-        finished = true;
+      const state = { finished: false };
+      void resultPromise.then(() => {
+        state.finished = true;
       });
-      while (!finished) {
+      while (!state.finished) {
         await vi.waitFor(() =>
-          expect(finished || pending.length > 0).toBe(true),
+          expect(state.finished || pending.length > 0).toBe(true),
         );
         // Complete later symbols first to verify response ordering independently
         // of completion order, including partial quoteSummary failures.
@@ -96,7 +101,10 @@ describe("market quote concurrency", () => {
         symbols.filter((symbol) => symbol !== "TEST13"),
       );
       expect(
-        result.items.find((quote) => quote.symbol === "TEST17")!.price,
+        must(
+          result.items.find((quote) => quote.symbol === "TEST17"),
+          'result.items.find((quote) => quote.symbol === "TEST17")',
+        ).price,
       ).toBe(42);
 
       // Successful symbols retain cache hits; the failed symbol alone is retried.

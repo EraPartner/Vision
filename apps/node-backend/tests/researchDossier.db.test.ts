@@ -18,6 +18,8 @@ import {
   restoreResearchDossier,
   updateResearchDossier,
 } from "../src/services/researchDossierService.ts";
+import { must } from "./helpers/must.ts";
+import type { CategoryId } from "@vision/types/brands";
 
 const base = {
   title: "Research lifecycle fixture",
@@ -54,12 +56,13 @@ describe.skipIf(!hasTestDatabase())("research dossiers (real Postgres)", () => {
 
   afterEach(async () => {
     if (dossierId) {
-      await getTestPool()!.query("DELETE FROM research_dossiers WHERE id=$1", [
-        dossierId,
-      ]);
+      await must(getTestPool(), "getTestPool()").query(
+        "DELETE FROM research_dossiers WHERE id=$1",
+        [dossierId],
+      );
       dossierId = undefined;
     }
-    await deleteAllCategoryFixtures(getTestPool()!);
+    await deleteAllCategoryFixtures(must(getTestPool(), "getTestPool()"));
   });
 
   afterAll(async () => {
@@ -69,11 +72,13 @@ describe.skipIf(!hasTestDatabase())("research dossiers (real Postgres)", () => {
   });
 
   it("versions edits and restores, then retains a deleted link snapshot", async () => {
-    const { rows } = await getTestPool()!.query(
-      "INSERT INTO categories (general, detail) VALUES ($1,$2) RETURNING id",
-      ["DOSSIER_TEST", "LEAF"],
-    );
-    const categoryId = rows[0].id;
+    const { rows } = await must(getTestPool(), "getTestPool()").query<{
+      id: CategoryId;
+    }>("INSERT INTO categories (general, detail) VALUES ($1,$2) RETURNING id", [
+      "DOSSIER_TEST",
+      "LEAF",
+    ]);
+    const categoryId = must(rows[0], "rows[0]").id;
     const created = await createResearchDossier({
       ...base,
       links: {
@@ -84,7 +89,7 @@ describe.skipIf(!hasTestDatabase())("research dossiers (real Postgres)", () => {
     });
     dossierId = created.id;
     expect(created).toMatchObject({ version: 1, conclusion: base.conclusion });
-    expect(created.evidence[0]!.id).toBeTruthy();
+    expect(must(created.evidence[0], "created.evidence[0]").id).toBeTruthy();
     const listed = await listResearchDossiers();
     expect(listed.items.find((item) => item.id === dossierId)).toMatchObject({
       id: dossierId,
@@ -114,12 +119,16 @@ describe.skipIf(!hasTestDatabase())("research dossiers (real Postgres)", () => {
     });
     expect(restored).toMatchObject({ version: 3, conclusion: base.conclusion });
     expect(
-      (await exportResearchDossier(created.id)).dossiers[0]!.versions,
+      must(
+        (await exportResearchDossier(created.id)).dossiers[0],
+        "(await exportResearchDossier(created.id)).dossiers[0]",
+      ).versions,
     ).toHaveLength(3);
 
-    await getTestPool()!.query("DELETE FROM categories WHERE id=$1", [
-      categoryId,
-    ]);
+    await must(getTestPool(), "getTestPool()").query(
+      "DELETE FROM categories WHERE id=$1",
+      [categoryId],
+    );
     const deletedLink = await getResearchDossier(created.id);
     expect(deletedLink.links.categoryIds).toEqual([]);
     expect(deletedLink.linkDetails).toEqual([
@@ -135,7 +144,9 @@ describe.skipIf(!hasTestDatabase())("research dossiers (real Postgres)", () => {
       links: deletedLink.links,
       expectedVersion: 3,
     });
-    expect(afterDeletion.linkDetails[0]!.status).toBe("deleted");
+    expect(
+      must(afterDeletion.linkDetails[0], "afterDeletion.linkDetails[0]").status,
+    ).toBe("deleted");
     await deleteResearchDossier(created.id);
     dossierId = undefined;
     await expect(getResearchDossier(created.id)).rejects.toMatchObject({

@@ -1,3 +1,4 @@
+import { must } from "./helpers/must.ts";
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/services/reports/index.ts', () => ({
@@ -16,7 +17,7 @@ type DirectHandler = (req: unknown, res: unknown) => unknown;
 function routeHandler(path: string): DirectHandler {
   const layer = reportsRouter.stack.find((candidate) => candidate.route?.path === path);
   if (!layer) throw new Error(`Missing report route: ${path}`);
-  return layer.route!.stack.at(-1)!.handle as unknown as DirectHandler;
+  return must(must(layer.route, "layer.route").stack.at(-1), "layer.route.stack.at(-1)").handle as unknown as DirectHandler;
 }
 
 function responseStub() {
@@ -46,7 +47,7 @@ describe('report route response', () => {
       type: 'financial',
       currency: 'EUR',
     }));
-    expect(generateReport.mock.calls[0]![0]).not.toHaveProperty('res');
+    expect(must(generateReport.mock.calls[0], "generateReport.mock.calls[0]")[0]).not.toHaveProperty('res');
     expect(res.ok).toHaveBeenCalledWith(document);
     expect(res.end).not.toHaveBeenCalled();
   });
@@ -55,11 +56,11 @@ describe('report route response', () => {
 
 it('does not send a document or forward an error after the requesting client disconnects', async () => {
   let close!: () => void;
-  const res = { ...responseStub(), once: vi.fn((_event, callback) => { close = callback; }) };
-  generateReport.mockImplementationOnce(async (options) => {
+  const res = { ...responseStub(), once: vi.fn((_event: string, callback: () => void) => { close = callback; }) };
+  generateReport.mockImplementationOnce((options) => {
     close();
     expect(options.signal?.aborted).toBe(true);
-    throw new Error('Cancelled while fetching report data');
+    return Promise.reject(new Error('Cancelled while fetching report data'));
   });
   await expect(routeHandler('/financial')({ body: {} }, res)).resolves.toBeUndefined();
   expect(res.ok).not.toHaveBeenCalled();

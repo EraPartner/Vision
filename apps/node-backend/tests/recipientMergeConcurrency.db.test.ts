@@ -8,6 +8,11 @@ import {
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { mergeRecipients } from "../src/services/recipientMergeService.ts";
+import { must } from "./helpers/must.ts";
+import type { RecipientId } from "@vision/types/brands";
+
+/** A result row whose columns the test reads without a fixed shape. */
+type DbRow = Record<string, unknown>;
 
 describe.skipIf(!hasTestDatabase())(
   "recipient merge concurrency (real DB)",
@@ -18,11 +23,11 @@ describe.skipIf(!hasTestDatabase())(
       await acquireDbSuiteLock();
     }, 180_000);
     afterEach(async () => {
-      await getTestPool()!.query(
+      await must(getTestPool(), "getTestPool()").query(
         "UPDATE recipients SET primary_recipient_id = NULL WHERE id = ANY($1::int[])",
         [ids],
       );
-      await getTestPool()!.query(
+      await must(getTestPool(), "getTestPool()").query(
         "DELETE FROM recipients WHERE id = ANY($1::int[])",
         [ids.splice(0)],
       );
@@ -33,27 +38,36 @@ describe.skipIf(!hasTestDatabase())(
       await closePool();
     });
     async function fixture() {
-      const result = await getTestPool()!.query(
+      const result = await must(getTestPool(), "getTestPool()").query<{
+        id: RecipientId;
+      }>(
         "INSERT INTO recipients (name, normalized_name) VALUES ('Merge A', 'merge a'), ('Merge B', 'merge b'), ('Merge C', 'merge c') RETURNING id",
       );
-      const created = result.rows.map((r) => r.id);
+      const [a, b, c] = result.rows.map((r) => r.id);
+      const created: [RecipientId, RecipientId, RecipientId] = [
+        must(a, "recipient A"),
+        must(b, "recipient B"),
+        must(c, "recipient C"),
+      ];
       ids.push(...created);
       return created;
     }
     async function waitForBlockedMerges(count: number) {
       const deadline = Date.now() + 5000;
       while (Date.now() < deadline) {
-        const result = await getTestPool()!.query(
+        const result = await must(getTestPool(), "getTestPool()").query<{
+          count: number;
+        }>(
           "SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query ILIKE '%recipients%'",
         );
-        if (result.rows[0].count >= count) return;
+        if (must(result.rows[0], "result.rows[0]").count >= count) return;
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
       throw new Error("Merge transactions did not reach the lock gate");
     }
     it("revalidates B after B into A wins the lock ahead of C into B", async () => {
       const [a, b, c] = await fixture();
-      const gate = await getTestPool()!.connect();
+      const gate = await must(getTestPool(), "getTestPool()").connect();
       const outcomes: Promise<{ value?: unknown; error?: unknown }>[] = [];
       try {
         await gate.query("BEGIN");
@@ -64,22 +78,22 @@ describe.skipIf(!hasTestDatabase())(
         outcomes.push(
           mergeRecipients(a, [b]).then(
             (value) => ({ value }),
-            (error) => ({ error }),
+            (error: unknown) => ({ error }),
           ),
         );
         await waitForBlockedMerges(1);
         outcomes.push(
           mergeRecipients(b, [c]).then(
             (value) => ({ value }),
-            (error) => ({ error }),
+            (error: unknown) => ({ error }),
           ),
         );
         await waitForBlockedMerges(2);
         await gate.query("COMMIT");
         const [first, second] = await Promise.all(outcomes);
-        expect(first!.error).toBeUndefined();
-        expect(second!.error).toMatchObject({ status: 409 });
-        const result = await getTestPool()!.query(
+        expect(must(first, "first").error).toBeUndefined();
+        expect(must(second, "second").error).toMatchObject({ status: 409 });
+        const result = await must(getTestPool(), "getTestPool()").query<DbRow>(
           "SELECT id, primary_recipient_id FROM recipients WHERE id = ANY($1::int[]) ORDER BY id",
           [[a, b, c]],
         );
@@ -98,7 +112,7 @@ describe.skipIf(!hasTestDatabase())(
       const [a, b, c] = await fixture();
       await mergeRecipients(b, [c]);
       await mergeRecipients(a, [b]);
-      const result = await getTestPool()!.query(
+      const result = await must(getTestPool(), "getTestPool()").query<DbRow>(
         "SELECT primary_recipient_id FROM recipients WHERE id = ANY($1::int[]) ORDER BY id",
         [[b, c]],
       );

@@ -15,9 +15,13 @@ const {
   portfolioParseWithConfig,
 } = vi.hoisted(() => ({
   clientQuery: vi.fn().mockResolvedValue({ rows: [] }),
-  getAdapter: vi.fn(),
-  genericParseWithConfig: vi.fn().mockResolvedValue([]),
-  portfolioParseWithConfig: vi.fn().mockResolvedValue([]),
+  getAdapter: vi.fn<(name: string) => unknown>(),
+  genericParseWithConfig: vi
+    .fn<(...args: unknown[]) => Promise<unknown>>()
+    .mockResolvedValue([]),
+  portfolioParseWithConfig: vi
+    .fn<(...args: unknown[]) => Promise<unknown>>()
+    .mockResolvedValue([]),
 }));
 
 vi.mock("../src/database/connection.ts", () =>
@@ -32,7 +36,7 @@ vi.mock("../src/config/logger.ts", () => ({
 }));
 
 vi.mock("../src/services/importPipeline/adapters/index.ts", () => ({
-  getAdapter: (...args: unknown[]) => getAdapter(...args),
+  getAdapter: (name: string) => getAdapter(name),
 }));
 
 vi.mock(
@@ -54,6 +58,8 @@ import { query as rawQuery } from "../src/database/connection.ts";
 import type { PgQueryResult } from "../src/database/connection.ts";
 import type { CustomTransactionParserConfig } from "../src/services/importPipeline/adapters/generic.ts";
 import type { PortfolioParserConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
+import { must } from "./helpers/must.ts";
+import { valueAt } from "./helpers/responseBody.ts";
 
 const query = rawQuery as unknown as Mock<
   (
@@ -186,14 +192,20 @@ describe("stageBatch adapter resolution", () => {
 INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR
 2026-03-02,Main Account,Skip Amount,Note,INVALID,EUR
 `);
-    await expect(
-      stageBatch({ batchId: 7, filePath, adapterName: "vision" }),
-    ).rejects.toMatchObject({
+    const rejection = await stageBatch({
+      batchId: 7,
+      filePath,
+      adapterName: "vision",
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toMatchObject({
       status: 400,
       code: "VALIDATION_ERROR",
-      message: expect.stringContaining("2 source row(s)"),
       details: { rejected_rows: 2, parsed_rows: 1 },
     });
+    expect(valueAt(rejection, "message")).toMatch(/2 source row\(s\)/);
     expect(stagingInserts()).toBe(0);
     expect(query.mock.calls.some(([sql]) => sql.includes("rows_total"))).toBe(
       false,
@@ -298,7 +310,7 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR
       query.mock.calls.some(
         ([sql, params]) =>
           /update "?import_batches"? set "?rows_total"?/i.test(sql) &&
-          params![0] === 0,
+          must(params, "params")[0] === 0,
       ),
     ).toBe(true);
 
@@ -323,7 +335,7 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR
       query.mock.calls.some(
         ([sql, params]) =>
           /update "?portfolio_import_batches"? set "?rows_total"?/i.test(sql) &&
-          params![0] === 0,
+          must(params, "params")[0] === 0,
       ),
     ).toBe(true);
   });

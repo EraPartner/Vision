@@ -37,7 +37,7 @@ function request(
         socket.destroy(new Error("HTTP smoke timed out")),
       );
       socket.on("data", (chunk) => {
-        response += chunk;
+        response += chunk.toString();
       });
       socket.on("error", reject);
       socket.on("end", () =>
@@ -45,6 +45,11 @@ function request(
       );
     },
   );
+}
+interface ThrownHttpError {
+  statusCode?: number;
+  status?: number;
+  message: string;
 }
 function backend(port?: number) {
   const app = express();
@@ -57,9 +62,9 @@ function backend(port?: number) {
       .status(200)
       .send(req.path === "/" ? "<html>Vision fixture</html>" : "ok");
   });
-  app.use(((error, _req, res, _next) =>
+  app.use(((error: ThrownHttpError, _req, res, _next) =>
     res
-      .status(error.statusCode || error.status || 500)
+      .status(error.statusCode ?? error.status ?? 500)
       .send(error.message)) satisfies ErrorRequestHandler);
   return { app, effects };
 }

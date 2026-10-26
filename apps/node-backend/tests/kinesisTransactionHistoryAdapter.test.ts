@@ -8,6 +8,7 @@ vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
 import { parseKinesisTransactionHistory } from "../src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.ts";
 import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
+import { must } from "./helpers/must.ts";
 
 const fixture = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -29,11 +30,11 @@ describe("Kinesis Transaction History portfolio adapter", () => {
       units: 32.24654,
       pricePerUnit: 21.66,
       amount: null,
-      fees: expect.closeTo(1.540026, 6),
       currency: "EUR",
       sourceId: "TX-BUY",
       sourceAccountIdentity: "KM00000001",
     });
+    expect(rows[0]?.fees).toBeCloseTo(1.540026, 6);
     expect(rows[1]).toMatchObject({
       symbolRaw: "",
       amount: 700.01,
@@ -44,9 +45,9 @@ describe("Kinesis Transaction History portfolio adapter", () => {
       symbolRaw: "KAU",
       units: 0.24561,
       pricePerUnit: 61.9,
-      fees: expect.closeTo(0.032807, 6),
       currency: "USD",
     });
+    expect(rows[2]?.fees).toBeCloseTo(0.032807, 6);
   });
 
   it("pins distributions, instrument-less fiat rows, and noisy asset codes", async () => {
@@ -99,18 +100,20 @@ describe("Kinesis Transaction History portfolio adapter", () => {
       amount: 0,
       assetTransfer: { direction: "in", basisStatus: "unresolved" },
     });
-    expect(rows.find((row) => row.sourceId === "TX-ASSET-OUT")).toMatchObject({
+    const matched2 = rows.find((row) => row.sourceId === "TX-ASSET-OUT");
+    expect(matched2).toMatchObject({
       typeRaw: "Unsupported Kinesis event: Withdrawal",
       symbolRaw: "BTC",
       units: 0.0008,
-      note: expect.stringContaining("unresolved units or fee currency"),
     });
-    expect(rows.find((row) => row.sourceId === "TX-ADJUST-OUT")).toMatchObject({
+    expect(matched2?.note).toContain("unresolved units or fee currency");
+    const matched1 = rows.find((row) => row.sourceId === "TX-ADJUST-OUT");
+    expect(matched1).toMatchObject({
       typeRaw: "Unsupported Kinesis event: Holder's_Distribution_Adjustment",
       symbolRaw: "KAU",
       units: 0.07652,
-      note: expect.stringContaining("explicit known-zero yield basis policy"),
     });
+    expect(matched1?.note).toContain("explicit known-zero yield basis policy");
     expect(
       rows.every((row) => row.symbolRaw !== "EUR" && row.symbolRaw !== "USD"),
     ).toBe(true);
@@ -122,8 +125,8 @@ describe("Kinesis Transaction History portfolio adapter", () => {
       encoding: "utf-8",
     });
 
-    expect(rows[0]!.rawData).toContain("ORDER-BUY,KAG_EUR");
-    expect(rows[0]!.rawData).not.toContain("|");
+    expect(must(rows[0], "rows[0]").rawData).toContain("ORDER-BUY,KAG_EUR");
+    expect(must(rows[0], "rows[0]").rawData).not.toContain("|");
     expect(rows).toHaveLength(12);
   });
 

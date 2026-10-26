@@ -17,9 +17,10 @@ import { clearMemoryCache } from "../src/services/currency/currencyConversionSer
 import { routeAgent } from "./helpers/routeApp.ts";
 import { bodyAt } from "./helpers/responseBody.ts";
 import netWorthRouter from "../src/routes/info/netWorth.ts";
+import { must } from "./helpers/must.ts";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
-const pool = () => getTestPool()!;
+const pool = () => must(getTestPool(), "getTestPool()");
 let recipientId: number;
 
 async function wipe() {
@@ -44,7 +45,7 @@ async function account(
      VALUES ($1, $1, $2::account_type, $3, $4) RETURNING id`,
     [name, type, currency, inNetWorth],
   );
-  return rows[0]!.id;
+  return must(rows[0], "rows[0]").id;
 }
 
 async function cash(accountId: number, amount: string, currency = "EUR") {
@@ -69,7 +70,7 @@ async function holding(
   await pool().query(
     `INSERT INTO portfolio_transactions (investment_id, type, date, amount, units, currency, account_id)
      VALUES ($1, 'buy', '2026-01-02', $2, $3, 'EUR', $4)`,
-    [rows[0]!.id, cost, units, accountId],
+    [must(rows[0], "rows[0]").id, cost, units, accountId],
   );
 }
 
@@ -87,7 +88,7 @@ describeDb("GET /api/info/net-worth/by-account (real DB)", () => {
     const { rows } = await pool().query<{ id: number }>(
       `INSERT INTO recipients (name, normalized_name) VALUES ('Synthetic payee', 'synthetic payee') RETURNING id`,
     );
-    recipientId = rows[0]!.id;
+    recipientId = must(rows[0], "rows[0]").id;
     await pool().query(
       `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
        VALUES ('USD', 0.9, CURRENT_DATE, true)`,

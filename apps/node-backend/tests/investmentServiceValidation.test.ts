@@ -46,6 +46,19 @@ import {
 import { ValidationError } from "../src/middleware/errorHandler.ts";
 import type { ExpressRequest, ExpressResponse } from "../src/types/express.ts";
 import { partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
+import { loose } from "./helpers/partial.ts";
+import type { Mock } from "vitest";
+
+/** The given methods of `T`, typed as the spies a `vi.mock` factory installed. */
+type Spies<T, K extends keyof T> = Record<
+  K,
+  Mock<Extract<T[K], (...args: never[]) => unknown>>
+>;
+
+const investmentRepositoryMock = loose<
+  Spies<typeof rawInvestmentRepository, "create" | "update">
+>(rawInvestmentRepository);
 
 const investmentRepository = vi.mocked(rawInvestmentRepository);
 
@@ -78,7 +91,7 @@ describe("createInvestment — numeric field guards", () => {
     await expect(
       createInvestment(createReq({ current_price: "banana" }), mockRes()),
     ).rejects.toBeInstanceOf(ValidationError);
-    expect(investmentRepository.create).not.toHaveBeenCalled();
+    expect(investmentRepositoryMock.create).not.toHaveBeenCalled();
   });
 
   it("rejects negative cadastral_income", async () => {
@@ -108,7 +121,7 @@ describe("createInvestment — numeric field guards", () => {
       createReq({ current_price: "12.5", interest_rate: "-0.5" }),
       res,
     );
-    expect(investmentRepository.create).toHaveBeenCalledWith(
+    expect(investmentRepositoryMock.create).toHaveBeenCalledWith(
       expect.objectContaining({ current_price: 12.5, interest_rate: -0.5 }),
     );
     expect(res.status).toHaveBeenCalledWith(201);
@@ -116,7 +129,7 @@ describe("createInvestment — numeric field guards", () => {
 
   it("treats a cleared '' field as no value, not 0", async () => {
     await createInvestment(createReq({ current_price: "" }), mockRes());
-    expect(investmentRepository.create).toHaveBeenCalledWith(
+    expect(investmentRepositoryMock.create).toHaveBeenCalledWith(
       expect.objectContaining({ current_price: null }),
     );
   });
@@ -133,7 +146,7 @@ describe("updateInvestment — numeric field guards", () => {
     await expect(
       updateInvestment(req({ current_price: -1 }), mockRes()),
     ).rejects.toBeInstanceOf(ValidationError);
-    expect(investmentRepository.update).not.toHaveBeenCalled();
+    expect(investmentRepositoryMock.update).not.toHaveBeenCalled();
   });
 
   it("passes valid coerced values and explicit nulls through", async () => {
@@ -142,7 +155,7 @@ describe("updateInvestment — numeric field guards", () => {
       req({ current_price: "99.99", interest_rate: null }),
       res,
     );
-    expect(investmentRepository.update).toHaveBeenCalledWith(
+    expect(investmentRepositoryMock.update).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ current_price: 99.99, interest_rate: null }),
     );
@@ -163,7 +176,7 @@ describe("createInvestment — numeric boundary pins", () => {
       }),
       mockRes(),
     );
-    expect(investmentRepository.create).toHaveBeenCalledWith(
+    expect(investmentRepositoryMock.create).toHaveBeenCalledWith(
       expect.objectContaining({
         current_price: 1e12,
         cadastral_income: 0,
@@ -189,7 +202,7 @@ describe("createInvestment — numeric boundary pins", () => {
     await expect(
       createInvestment(createReq({ cadastral_income: -0.01 }), mockRes()),
     ).rejects.toBeInstanceOf(ValidationError);
-    expect(investmentRepository.create).not.toHaveBeenCalled();
+    expect(investmentRepositoryMock.create).not.toHaveBeenCalled();
   });
 });
 
@@ -223,12 +236,14 @@ describe("createInvestment — string width and currency pins", () => {
         ),
       ).rejects.toBeInstanceOf(ValidationError);
     }
-    expect(investmentRepository.create).toHaveBeenCalledTimes(widths.length);
+    expect(investmentRepositoryMock.create).toHaveBeenCalledTimes(
+      widths.length,
+    );
   });
 
   it("uppercases a valid currency and rejects non-ISO shapes", async () => {
     await createInvestment(createReq({ currency: "usd" }), mockRes());
-    expect(investmentRepository.create).toHaveBeenCalledWith(
+    expect(investmentRepositoryMock.create).toHaveBeenCalledWith(
       expect.objectContaining({ currency: "USD" }),
     );
     await expect(
@@ -247,9 +262,13 @@ describe("createInvestment — string width and currency pins", () => {
       createInvestment(createReq({ currency: null }), mockRes()),
     ).rejects.toBeInstanceOf(ValidationError);
     await createInvestment(createReq({}), mockRes());
-    expect("currency" in investmentRepository.create.mock.calls[0]![0]).toBe(
-      false,
-    );
+    expect(
+      "currency" in
+        must(
+          investmentRepository.create.mock.calls[0],
+          "investmentRepository.create.mock.calls[0]",
+        )[0],
+    ).toBe(false);
   });
 
   it("forwards unvalidated fields untouched (loose body)", async () => {
@@ -262,7 +281,7 @@ describe("createInvestment — string width and currency pins", () => {
       }),
       mockRes(),
     );
-    expect(investmentRepository.create).toHaveBeenCalledWith(
+    expect(investmentRepositoryMock.create).toHaveBeenCalledWith(
       expect.objectContaining({
         notes: "  keep me  ",
         price_provider_id: "AAPL",
@@ -279,7 +298,7 @@ describe("updateInvestment — string field pins", () => {
 
   it("forwards a null string field (explicit clear) and a non-string value within width unchanged", async () => {
     await updateInvestment(req({ symbol: null, location: 12345 }), mockRes());
-    expect(investmentRepository.update).toHaveBeenCalledWith(
+    expect(investmentRepositoryMock.update).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ symbol: null, location: 12345 }),
     );
@@ -287,7 +306,7 @@ describe("updateInvestment — string field pins", () => {
 
   it("maps a cleared '' numeric field to null on update too", async () => {
     await updateInvestment(req({ cadastral_income: "" }), mockRes());
-    expect(investmentRepository.update).toHaveBeenCalledWith(
+    expect(investmentRepositoryMock.update).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ cadastral_income: null }),
     );
@@ -300,7 +319,7 @@ describe("updateInvestment — string field pins", () => {
     await expect(
       updateInvestment(req({ currency: null }), mockRes()),
     ).rejects.toBeInstanceOf(ValidationError);
-    expect(investmentRepository.update).not.toHaveBeenCalled();
+    expect(investmentRepositoryMock.update).not.toHaveBeenCalled();
   });
 });
 

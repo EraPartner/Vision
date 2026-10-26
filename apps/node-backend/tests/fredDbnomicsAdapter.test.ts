@@ -1,3 +1,4 @@
+import { must } from "./helpers/must.ts";
 /**
  * FRED + DBnomics macro adapter tests (ADR-082).
  * Mocks the JSON HTTP client and provider-key gating; asserts normalized
@@ -5,7 +6,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockGetJson } = vi.hoisted(() => ({ mockGetJson: vi.fn() }));
+const { mockGetJson } = vi.hoisted(() => ({ mockGetJson: vi.fn<(url: string) => Promise<unknown>>() }));
 
 vi.mock('../src/services/research/adapters/httpClient.ts', async () => {
   // Keep the real num() coercion; only stub the network call.
@@ -69,26 +70,26 @@ describe('fredAdapter', () => {
   });
 
   it('macroSeries parses observations, drops missing "." values, and reads meta', async () => {
-    mockGetJson.mockImplementation(async (url) => {
+    mockGetJson.mockImplementation((url) => {
       if (url.includes('/series/observations')) {
-        return {
+        return Promise.resolve({
           observations: [
             { date: '2024-01-01', value: '100.0' },
             { date: '2024-02-01', value: '.' }, // missing -> dropped
             { date: 'not-a-date', value: '5' }, // bad time -> dropped
             { date: '2024-03-01', value: '102.5' },
           ],
-        };
+        });
       }
-      return { seriess: [{ title: 'CPI', units_short: 'Idx', frequency: 'Monthly' }] };
+      return Promise.resolve({ seriess: [{ title: 'CPI', units_short: 'Idx', frequency: 'Monthly' }] });
     });
     const res = await fredAdapter.macroSeries('CPIAUCSL', { range: 'max' });
     expect(res.provider).toBe('fred');
     expect(res.title).toBe('CPI');
     expect(res.units).toBe('Idx');
     expect(res.points).toHaveLength(2);
-    expect(res.points[0]!.close).toBe(100);
-    expect(res.points[1]!.close).toBe(102.5);
+    expect(must(res.points[0], "res.points[0]").close).toBe(100);
+    expect(must(res.points[1], "res.points[1]").close).toBe(102.5);
   });
 
   // ── malformed-response pins (ZOD-12): degrade exactly like the old guards ──
@@ -108,26 +109,26 @@ describe('fredAdapter', () => {
   });
 
   it('macroSeries drops non-object observation rows and tolerates junk meta rows', async () => {
-    mockGetJson.mockImplementation(async (url) => {
+    mockGetJson.mockImplementation((url) => {
       if (url.includes('/series/observations')) {
-        return {
+        return Promise.resolve({
           observations: [null, 'junk', { date: '2024-01-01', value: '1' }],
-        };
+        });
       }
-      return { seriess: ['junk'] };
+      return Promise.resolve({ seriess: ['junk'] });
     });
     const res = await fredAdapter.macroSeries('FOO', { range: 'max' });
     expect(res.points).toHaveLength(1);
-    expect(res.points[0]!.close).toBe(1);
+    expect(must(res.points[0], "res.points[0]").close).toBe(1);
     expect(res.title).toBe('FOO'); // junk meta row -> seriesId fallback
   });
 
   it('macroSeries tolerates failed meta fetch and falls back to seriesId title', async () => {
-    mockGetJson.mockImplementation(async (url) => {
+    mockGetJson.mockImplementation((url) => {
       if (url.includes('/series/observations')) {
-        return { observations: [{ date: '2024-01-01', value: '1' }] };
+        return Promise.resolve({ observations: [{ date: '2024-01-01', value: '1' }] });
       }
-      throw new Error('meta down');
+      return Promise.reject(new Error('meta down'));
     });
     const res = await fredAdapter.macroSeries('FOO');
     expect(res.title).toBe('FOO');
@@ -205,6 +206,6 @@ describe('dbnomicsAdapter', () => {
     });
     const res = await dbnomicsAdapter.macroSeries('PROV/DS/SER', { range: 'max' });
     expect(res.points).toHaveLength(2);
-    expect(res.points[0]!.close).toBe(10);
+    expect(must(res.points[0], "res.points[0]").close).toBe(10);
   });
 });

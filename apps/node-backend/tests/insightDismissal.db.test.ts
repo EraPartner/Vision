@@ -9,21 +9,27 @@ import {
 import insightDismissalRepository from "../src/repositories/insightDismissalRepository.ts";
 import insightCashProjectionRepository from "../src/repositories/insightCashProjectionRepository.ts";
 import { closePool } from "../src/database/connection.ts";
+import { must } from "./helpers/must.ts";
+import type { CategoryId, RecipientId } from "@vision/types/brands";
 
-const pool = getTestPool()!;
+/** A result row whose columns the test reads without a fixed shape. */
+type DbRow = Record<string, unknown>;
+
+const maybePool = getTestPool();
+const pool = () => must(maybePool, "test pool");
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
 async function wipe() {
-  await pool.query("DELETE FROM insight_dismissals");
-  await pool.query("DELETE FROM insight_cash_projections");
-  await pool.query("DELETE FROM recipients WHERE name LIKE 'Insight DB %'");
-  await pool.query(
+  await pool().query("DELETE FROM insight_dismissals");
+  await pool().query("DELETE FROM insight_cash_projections");
+  await pool().query("DELETE FROM recipients WHERE name LIKE 'Insight DB %'");
+  await pool().query(
     "DELETE FROM categories WHERE general = 'INSIGHT_DB' AND parent_id IS NOT NULL",
   );
-  await pool.query(
+  await pool().query(
     "DELETE FROM categories WHERE general = 'INSIGHT_DB' AND parent_id IS NULL",
   );
-  await pool.query(
+  await pool().query(
     `UPDATE insight_digest_state
         SET undismissed_count = NULL, dirty_version = 1,
             computed_version = 0, computed_at = NULL, expires_at = NULL
@@ -47,29 +53,29 @@ describeDb("insight dismissal persistence (real Postgres)", () => {
   });
 
   it("upserts subscription dismissals uniquely and cascades recipient deletion", async () => {
-    const recipient = await pool.query(
+    const recipient = await pool().query<{ id: RecipientId }>(
       `INSERT INTO recipients (name, normalized_name)
        VALUES ('Insight DB Subscription', 'insight db subscription') RETURNING id`,
     );
-    const id = Number(recipient.rows[0].id);
+    const id = Number(must(recipient.rows[0], "recipient.rows[0]").id);
     await insightDismissalRepository.upsertSubscription("subscription_new", id);
     await insightDismissalRepository.upsertSubscription("subscription_new", id);
-    const before = await pool.query(
+    const before = await pool().query<DbRow>(
       "SELECT count(*)::int AS count FROM insight_dismissals",
     );
-    expect(before.rows[0].count).toBe(1);
+    expect(must(before.rows[0], "before.rows[0]").count).toBe(1);
 
-    await pool.query("DELETE FROM recipients WHERE id = $1", [id]);
-    const after = await pool.query(
+    await pool().query("DELETE FROM recipients WHERE id = $1", [id]);
+    const after = await pool().query<DbRow>(
       "SELECT count(*)::int AS count FROM insight_dismissals",
     );
-    expect(after.rows[0].count).toBe(0);
+    expect(must(after.rows[0], "after.rows[0]").count).toBe(0);
   });
 
   it("dirties on source mutation and rejects a stale refresh version", async () => {
     const initial = await insightDismissalRepository.getCountState();
-    const captured = Number(initial!.dirty_version);
-    await pool.query(
+    const captured = Number(must(initial, "initial").dirty_version);
+    await pool().query(
       "INSERT INTO categories (general, detail) VALUES ('INSIGHT_DB', 'RACE')",
     );
 
@@ -77,15 +83,17 @@ describeDb("insight dismissal persistence (real Postgres)", () => {
       await insightDismissalRepository.saveCountIfVersion(9, captured),
     ).toBeUndefined();
     const final = await insightDismissalRepository.getCountState();
-    expect(Number(final!.dirty_version)).toBeGreaterThan(captured);
-    expect(final!.undismissed_count).toBeNull();
+    expect(Number(must(final, "final").dirty_version)).toBeGreaterThan(
+      captured,
+    );
+    expect(must(final, "final").undismissed_count).toBeNull();
   });
 
   it("stores one current outlier threshold per category and month", async () => {
-    const category = await pool.query(
+    const category = await pool().query<{ id: CategoryId }>(
       "INSERT INTO categories (general, detail) VALUES ('INSIGHT_DB', 'OUTLIER') RETURNING id",
     );
-    const id = Number(category.rows[0].id);
+    const id = Number(must(category.rows[0], "category.rows[0]").id);
     await insightDismissalRepository.upsertOutlier(id, "2026-09", 4.1);
     await insightDismissalRepository.upsertOutlier(id, "2026-09", 4.8);
     const rows = await insightDismissalRepository.listDismissals();

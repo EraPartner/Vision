@@ -21,20 +21,23 @@ import {
   loadActivePatterns as rawLoadActivePatterns,
   applyPatterns as rawApplyPatterns,
 } from "../src/services/recipientPatternService.ts";
+import { must } from "./helpers/must.ts";
+import { listAt } from "./helpers/responseBody.ts";
 
 // The connection module is replaced by mockTxConnection below; `poolQuery` is
 // the pool-side sink it adds. `query`/`poolQuery` stay untyped spies, like
 // `mockClient.query`, because the tests read raw SQL/params from mock.calls.
+type QueryFn = (sql: string, params?: unknown[]) => Promise<unknown>;
 const { query, poolQuery, withTransaction } = connection as unknown as Omit<
-  TxConnectionMock<{ query: Mock }, Record<never, never>>,
-  "poolQuery"
-> & { poolQuery: Mock };
+  TxConnectionMock<{ query: Mock<QueryFn> }, object>,
+  "poolQuery" | "query"
+> & { poolQuery: Mock<QueryFn>; query: Mock<QueryFn> };
 const getAdapter = vi.mocked(rawGetAdapter);
 const findBestRecipientMatches = vi.mocked(rawFindBestRecipientMatches);
 const loadActivePatterns = vi.mocked(rawLoadActivePatterns);
 const applyPatterns = vi.mocked(rawApplyPatterns);
 
-const baseWithTransaction = withTransaction.getMockImplementation()!;
+const baseWithTransaction = must(withTransaction.getMockImplementation(), "withTransaction.getMockImplementation()");
 
 /**
  * A statement with its bound values inlined, identifier quotes dropped and
@@ -55,7 +58,11 @@ function stmt(sql: unknown, params: unknown[] = []): string {
 // repositories, which issue module-level query() inside withTransaction — the
 // ambient context routes those onto `mockClient`, alongside SAVEPOINTs issued
 // through withSavepointIfInTransaction.
-const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
+const { mockClient } = vi.hoisted(() => ({
+  mockClient: {
+    query: vi.fn<(sql: string, params?: unknown[]) => Promise<unknown>>(),
+  },
+}));
 vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
 vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
@@ -110,15 +117,16 @@ describe("validateBatch", () => {
   });
 
   function getValidationUpdate() {
-    const call = poolQuery.mock.calls.find(([sql]) =>
-      sql.includes("FROM unnest"),
-    )!;
-    expect(call).toBeDefined();
+    const call = must(
+      poolQuery.mock.calls.find(([sql]) => sql.includes("FROM unnest")),
+      "the validation UPDATE",
+    );
+    const params = must(call[1], "the validation UPDATE params");
     return {
-      statuses: call[1][1],
-      hashes: call[1][2],
-      sourceHashes: call[1][3],
-      occurrences: call[1][5],
+      statuses: params[1],
+      hashes: listAt(params, 2),
+      sourceHashes: listAt(params, 3),
+      occurrences: params[5],
     };
   }
 
@@ -166,21 +174,21 @@ describe("validateBatch", () => {
   ])("stores the rejection reason %s", async (reason, overrides) => {
     setupPending({ ...baseRow, ...overrides });
     await validateBatch({ batchId: 8 });
-    const call = poolQuery.mock.calls.find(([sql]) =>
+    const call = must(poolQuery.mock.calls.find(([sql]) =>
       sql.includes("FROM unnest"),
-    )!;
-    expect(call[1][1]).toEqual(["error"]);
-    expect(call[1][6]).toEqual([reason]);
+    ), "unnest statement");
+    expect(must(call[1], "call params")[1]).toEqual(["error"]);
+    expect(must(call[1], "call params")[6]).toEqual([reason]);
   });
 
   it("stores no rejection reason for a usable row", async () => {
     setupPending({ ...baseRow, amount: "12" });
     await validateBatch({ batchId: 9 });
-    const call = poolQuery.mock.calls.find(([sql]) =>
+    const call = must(poolQuery.mock.calls.find(([sql]) =>
       sql.includes("FROM unnest"),
-    )!;
-    expect(call[1][1]).toEqual(["validated"]);
-    expect(call[1][6]).toEqual([null]);
+    ), "unnest statement");
+    expect(must(call[1], "call params")[1]).toEqual(["validated"]);
+    expect(must(call[1], "call params")[6]).toEqual([null]);
   });
 
   it("keeps identical occurrences and assigns distinct fingerprints", async () => {
@@ -365,12 +373,13 @@ describe("matchBatch", () => {
     // visible and fixable in the review UI (prepareImport forces review when
     // unresolved > 0). commitBatch — not a NOT NULL violation — decides a row
     // still unassigned at commit time into 'error'.
-    const updateCall = query.mock.calls.find(([sql]) =>
-      String(sql).includes("UPDATE import_staging_rows"),
-    )!;
+    const updateCall = must(query.mock.calls.find(([sql]) =>
+      sql.includes("UPDATE import_staging_rows"),
+    ), "UPDATE statement");
     expect(updateCall[0]).toContain("'matched'");
-    expect(updateCall[1][0]).toEqual(["2"]); // staging row ids (BIGINT text)
-    expect(updateCall[1][1]).toEqual([null]); // resolved_recipient_id stays NULL
+    const updateParams = must(updateCall[1], "updateCall params");
+    expect(updateParams[0]).toEqual(["2"]); // staging row ids (BIGINT text)
+    expect(updateParams[1]).toEqual([null]); // resolved_recipient_id stays NULL
   });
 });
 
@@ -425,10 +434,10 @@ describe("commitBatch", () => {
     setupCommit(matchedRow);
     // The transactions INSERT now uses ON CONFLICT ... RETURNING id — a
     // returned row means the insert landed (vs. a tx_hash conflict).
-    mockClient.query.mockImplementation(async (sql) => {
+    mockClient.query.mockImplementation((sql) => {
       if (stmt(sql).includes("insert into transactions"))
-        return { rows: [{ id: 100 }] };
-      return { rows: [] };
+        return Promise.resolve({ rows: [{ id: 100 }] });
+      return Promise.resolve({ rows: [] });
     });
     expect(await commitBatch({ batchId: 1 })).toEqual({
       imported: 1,
@@ -447,25 +456,25 @@ describe("commitBatch", () => {
       dedup_fingerprint_version: 1,
       dedup_occurrence: 1,
     });
-    mockClient.query.mockImplementation(async (sql, params) => {
+    mockClient.query.mockImplementation((sql, params) => {
       if (stmt(sql).includes("select id, is_active from accounts"))
-        return { rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] };
+        return Promise.resolve({ rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] });
       if (stmt(sql).includes("insert into accounts"))
-        return { rows: [{ id: BE12_ACCOUNT_ID }] };
-      if (stmt(sql).includes("where dedup_fingerprint_version")) return { rows: [] };
+        return Promise.resolve({ rows: [{ id: BE12_ACCOUNT_ID }] });
+      if (stmt(sql).includes("where dedup_fingerprint_version")) return Promise.resolve({ rows: [] });
       if (sql.includes("dedup_fingerprint IS NULL AND tx_hash"))
-        return { rows: [] };
-      if (stmt(sql).includes("count(*)::int as n")) return { rows: [{ n: 0 }] };
+        return Promise.resolve({ rows: [] });
+      if (stmt(sql).includes("count(*)::int as n")) return Promise.resolve({ rows: [{ n: 0 }] });
       if (stmt(sql).includes("insert into transactions")) {
-        expect(params.slice(11, 14)).toEqual([
+        expect(must(params, "insert params").slice(11, 14)).toEqual([
           "source-hash-1",
           "fingerprint-1",
           1,
         ]);
         expect(sql).toContain("ON CONFLICT DO NOTHING");
-        return { rows: [{ id: 100 }] };
+        return Promise.resolve({ rows: [{ id: 100 }] });
       }
-      return { rows: [] };
+      return Promise.resolve({ rows: [] });
     });
 
     expect(await commitBatch({ batchId: 1 })).toEqual({
@@ -486,14 +495,14 @@ describe("commitBatch", () => {
       dedup_fingerprint_version: 1,
       dedup_occurrence: 1,
     });
-    mockClient.query.mockImplementation(async (sql) => {
+    mockClient.query.mockImplementation((sql) => {
       if (stmt(sql).includes("select id, is_active from accounts"))
-        return { rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] };
+        return Promise.resolve({ rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] });
       if (stmt(sql).includes("insert into accounts"))
-        return { rows: [{ id: BE12_ACCOUNT_ID }] };
-      if (stmt(sql).includes("where dedup_fingerprint_version")) return { rows: [] };
-      if (stmt(sql).includes("count(*)::int as n")) return { rows: [{ n: 1 }] };
-      return { rows: [] };
+        return Promise.resolve({ rows: [{ id: BE12_ACCOUNT_ID }] });
+      if (stmt(sql).includes("where dedup_fingerprint_version")) return Promise.resolve({ rows: [] });
+      if (stmt(sql).includes("count(*)::int as n")) return Promise.resolve({ rows: [{ n: 1 }] });
+      return Promise.resolve({ rows: [] });
     });
 
     expect(await commitBatch({ batchId: 1 })).toEqual({
@@ -530,16 +539,16 @@ describe("commitBatch", () => {
       .mockResolvedValueOnce({ rows: [{ adapter_name: "belfius" }] })
       .mockResolvedValueOnce({ rows: [first, second] })
       .mockResolvedValueOnce({ rows: [] });
-    mockClient.query.mockImplementation(async (sql) => {
+    mockClient.query.mockImplementation((sql) => {
       if (stmt(sql).includes("select id, is_active from accounts"))
-        return { rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] };
+        return Promise.resolve({ rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] });
       if (stmt(sql).includes("insert into accounts"))
-        return { rows: [{ id: BE12_ACCOUNT_ID }] };
-      if (stmt(sql).includes("where dedup_fingerprint_version")) return { rows: [] };
-      if (stmt(sql).includes("count(*)::int as n")) return { rows: [{ n: 1 }] };
+        return Promise.resolve({ rows: [{ id: BE12_ACCOUNT_ID }] });
+      if (stmt(sql).includes("where dedup_fingerprint_version")) return Promise.resolve({ rows: [] });
+      if (stmt(sql).includes("count(*)::int as n")) return Promise.resolve({ rows: [{ n: 1 }] });
       if (stmt(sql).includes("insert into transactions"))
-        return { rows: [{ id: 100 }] };
-      return { rows: [] };
+        return Promise.resolve({ rows: [{ id: 100 }] });
+      return Promise.resolve({ rows: [] });
     });
 
     expect(await commitBatch({ batchId: 1 })).toEqual({
@@ -558,14 +567,14 @@ describe("commitBatch", () => {
       dedup_fingerprint_version: 1,
       dedup_occurrence: 1,
     });
-    mockClient.query.mockImplementation(async (sql) => {
+    mockClient.query.mockImplementation((sql) => {
       if (stmt(sql).includes("select id, is_active from accounts"))
-        return { rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] };
+        return Promise.resolve({ rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] });
       if (stmt(sql).includes("insert into accounts"))
-        return { rows: [{ id: BE12_ACCOUNT_ID }] };
+        return Promise.resolve({ rows: [{ id: BE12_ACCOUNT_ID }] });
       if (stmt(sql).includes("where dedup_fingerprint_version"))
-        return { rows: [{ id: 91 }] };
-      return { rows: [] };
+        return Promise.resolve({ rows: [{ id: 91 }] });
+      return Promise.resolve({ rows: [] });
     });
 
     expect(await commitBatch({ batchId: 1 })).toEqual({
@@ -591,23 +600,23 @@ describe("commitBatch", () => {
       releaseCommit = resolve;
     });
     let countReads = 0;
-    poolQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
+    poolQuery.mockImplementation((sql: string, params?: unknown[]) => {
       if (stmt(sql, params).includes("set status = 'committing'"))
-        return { rows: [{ adapter_name: "belfius" }] };
+        return Promise.resolve({ rows: [{ adapter_name: "belfius" }] });
       if (/SELECT COUNT\(\*\)::int AS total/.test(sql)) {
         countReads += 1;
-        return { rows: [{ total: countReads === 1 ? 5 : 6 }] };
+        return Promise.resolve({ rows: [{ total: countReads === 1 ? 5 : 6 }] });
       }
       if (sql.includes("FROM import_staging_rows isr")) {
-        return { rows: [matchedRow] };
+        return Promise.resolve({ rows: [matchedRow] });
       }
-      return { rows: [] };
+      return Promise.resolve({ rows: [] });
     });
-    mockClient.query.mockImplementation(async (sql) => {
+    mockClient.query.mockImplementation((sql) => {
       if (stmt(sql).includes("insert into transactions")) {
-        return { rows: [{ id: 100, tx_hash: null }] };
+        return Promise.resolve({ rows: [{ id: 100, tx_hash: null }] });
       }
-      return { rows: [] };
+      return Promise.resolve({ rows: [] });
     });
 
     await expect(
@@ -643,17 +652,19 @@ describe("commitBatch", () => {
     // server-local-midnight Date (which toISOString() would roll back a day
     // under a TZ east of UTC) ever reaches the insert.
     setupCommit({ ...matchedRow, tx_date: "2026-06-15" });
-    mockClient.query.mockImplementation(async (sql, params) => {
+    mockClient.query.mockImplementation((sql) => {
       if (/INSERT INTO transactions\s+\(/.test(sql)) {
-        return { rows: [{ id: 100, tx_hash: null }] };
+        return Promise.resolve({ rows: [{ id: 100, tx_hash: null }] });
       }
-      return { rows: [] };
+      return Promise.resolve({ rows: [] });
     });
     await commitBatch({ batchId: 7 });
     const insertCall = mockClient.query.mock.calls.find(([sql]) =>
       /INSERT INTO transactions\s+\(/.test(sql),
     );
-    expect(insertCall![1][0]).toBe("2026-06-15");
+    expect(
+      must(must(insertCall, "insertCall")[1], "insertCall params")[0],
+    ).toBe("2026-06-15");
   });
 
   it("marks a duplicate row and skips aggregation refresh", async () => {
@@ -663,14 +674,14 @@ describe("commitBatch", () => {
       dedup_fingerprint_version: 1,
       dedup_occurrence: 1,
     });
-    mockClient.query.mockImplementation(async (sql) => {
+    mockClient.query.mockImplementation((sql) => {
       if (stmt(sql).includes("select id, is_active from accounts"))
-        return { rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] };
+        return Promise.resolve({ rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] });
       if (stmt(sql).includes("insert into accounts"))
-        return { rows: [{ id: BE12_ACCOUNT_ID }] };
+        return Promise.resolve({ rows: [{ id: BE12_ACCOUNT_ID }] });
       if (stmt(sql).includes("where dedup_fingerprint_version"))
-        return { rows: [{ id: 91 }] };
-      return { rows: [] };
+        return Promise.resolve({ rows: [{ id: 91 }] });
+      return Promise.resolve({ rows: [] });
     });
     expect(await commitBatch({ batchId: 2 })).toEqual({
       imported: 0,
@@ -679,7 +690,7 @@ describe("commitBatch", () => {
       autoLinkedCount: 0,
     });
 
-    const statements = mockClient.query.mock.calls.map(([sql]) => String(sql));
+    const statements = mockClient.query.mock.calls.map(([sql]) => sql);
     const written = mockClient.query.mock.calls.map(([sql, params]) =>
       stmt(sql, params),
     );
@@ -700,10 +711,10 @@ describe("commitBatch", () => {
     // above; this one pins that a throwing insert still ends in errors: 1 with
     // the staging row marked, exactly as the per-row loop always did.
     setupCommit(matchedRow);
-    mockClient.query.mockImplementation(async (sql) => {
+    mockClient.query.mockImplementation((sql) => {
       if (stmt(sql).includes("insert into transactions"))
-        throw new Error("constraint violation");
-      return { rows: [] };
+        return Promise.reject(new Error("constraint violation"));
+      return Promise.resolve({ rows: [] });
     });
     expect(await commitBatch({ batchId: 3 })).toEqual({
       imported: 0,
@@ -712,7 +723,7 @@ describe("commitBatch", () => {
       autoLinkedCount: 0,
     });
 
-    const statements = mockClient.query.mock.calls.map(([sql]) => String(sql));
+    const statements = mockClient.query.mock.calls.map(([sql]) => sql);
     expect(statements).toContain("SAVEPOINT sp_commit_row");
     expect(statements).toContain("ROLLBACK TO SAVEPOINT sp_commit_row");
     expect(
@@ -738,18 +749,18 @@ describe("commitBatch", () => {
     // Decided before any chunk work: no transaction is even opened.
     expect(mockClient.query).not.toHaveBeenCalled();
 
-    const errorUpdate = poolQuery.mock.calls.find(([sql, params]) =>
+    const errorUpdate = must(poolQuery.mock.calls.find(([sql, params]) =>
       stmt(sql, params).includes("status = 'error'"),
-    )!;
+    ), "matching statement");
     expect(errorUpdate[1]).toEqual(
       expect.arrayContaining([
         ["1"],
         expect.stringContaining("unresolved recipient"),
       ]),
     );
-    const counterUpdate = poolQuery.mock.calls.find(([sql]) =>
-      String(sql).includes("rows_error"),
-    )!;
+    const counterUpdate = must(poolQuery.mock.calls.find(([sql]) =>
+      sql.includes("rows_error"),
+    ), "counter update statement");
     expect(stmt(counterUpdate[0], counterUpdate[1])).toMatch(
       /rows_error = coalesce\(rows_error, 0\) \+ 1 where id = '5'/,
     );
@@ -764,10 +775,10 @@ describe("commitBatch", () => {
       resolved_recipient_id: null,
       user_override_recipient_id: 42,
     });
-    mockClient.query.mockImplementation(async (sql) => {
+    mockClient.query.mockImplementation((sql) => {
       if (stmt(sql).includes("insert into transactions"))
-        return { rows: [{ id: 100, tx_hash: null }] };
-      return { rows: [] };
+        return Promise.resolve({ rows: [{ id: 100, tx_hash: null }] });
+      return Promise.resolve({ rows: [] });
     });
     expect(await commitBatch({ batchId: 6 })).toEqual({
       imported: 1,
@@ -775,7 +786,7 @@ describe("commitBatch", () => {
       errors: 0,
       autoLinkedCount: 0,
     });
-    const statements = mockClient.query.mock.calls.map(([sql]) => String(sql));
+    const statements = mockClient.query.mock.calls.map(([sql]) => sql);
     expect(statements.some((s) => s.includes("status = 'error'"))).toBe(false);
   });
 
@@ -794,16 +805,16 @@ describe("commitBatch", () => {
       .mockResolvedValueOnce({ rows: [] }) // staging error UPDATE (unresolved row)
       .mockResolvedValueOnce({ rows: [] }) // rows_error checkpoint
       .mockResolvedValueOnce({ rows: [] }); // UPDATE counters
-    mockClient.query.mockImplementation(async (sql) => {
+    mockClient.query.mockImplementation((sql) => {
       if (stmt(sql).includes("insert into transactions")) {
-        return {
+        return Promise.resolve({
           rows: [
             { id: 100, tx_hash: "h1" },
             { id: 101, tx_hash: "h2" },
           ],
-        };
+        });
       }
-      return { rows: [] };
+      return Promise.resolve({ rows: [] });
     });
     expect(await commitBatch({ batchId: 12 })).toEqual({
       imported: 2,
@@ -812,7 +823,7 @@ describe("commitBatch", () => {
       autoLinkedCount: 0,
     });
 
-    const statements = mockClient.query.mock.calls.map(([sql]) => String(sql));
+    const statements = mockClient.query.mock.calls.map(([sql]) => sql);
     expect(
       statements.filter((s) => s.includes("INSERT INTO transactions")),
     ).toHaveLength(2);
@@ -829,9 +840,9 @@ describe("commitBatch", () => {
     ).toHaveLength(2);
 
     // The unresolved row was written 'error' on the pool, before the chunk.
-    const errorUpdate = poolQuery.mock.calls.find(([sql, params]) =>
+    const errorUpdate = must(poolQuery.mock.calls.find(([sql, params]) =>
       stmt(sql, params).includes("status = 'error'"),
-    )!;
+    ), "matching statement");
     expect(errorUpdate[1]).toContainEqual(["1"]);
   });
 

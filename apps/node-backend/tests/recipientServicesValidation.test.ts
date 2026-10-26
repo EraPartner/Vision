@@ -9,7 +9,11 @@ import {
 // Ambient-aware connection mock: transactional SQL lands on `mockClient` whether
 // the service threads the client through explicitly or a repository issues it
 // via module-level query() inside withTransaction (see repoMocks.js).
-const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
+const { mockClient } = vi.hoisted(() => ({
+  mockClient: {
+    query: vi.fn<(sql: string, params?: unknown[]) => Promise<unknown>>(),
+  },
+}));
 vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
 vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
@@ -25,14 +29,14 @@ import {
   ValidationError,
   NotFoundError,
 } from "../src/middleware/errorHandler.ts";
+import { must } from "./helpers/must.ts";
 
 // The connection module is replaced by mockTxConnection above; `poolQuery` is
 // the pool-side sink it adds.
-const { query, poolQuery, withTransaction } =
-  connection as unknown as TxConnectionMock<
-    typeof mockClient,
-    Record<never, never>
-  >;
+const { query, poolQuery, withTransaction } = connection as unknown as Omit<
+  TxConnectionMock<typeof mockClient, object>,
+  "query" | "poolQuery"
+> & { query: typeof mockClient.query; poolQuery: typeof mockClient.query };
 
 beforeEach(() => {
   query.mockClear();
@@ -81,20 +85,20 @@ describe("updatePattern — validates the row merged with stored values", () => 
 
 describe("mergeRecipients — flattens nested alias chains", () => {
   it("locks the entire participant set in order before any repoint", async () => {
-    mockClient.query.mockImplementation(async (sql) => {
+    mockClient.query.mockImplementation((sql) => {
       if (/for update/i.test(sql))
-        return { rows: [{ id: 4, primary_recipient_id: null }] };
-      if (sql.includes("information_schema")) return { rows: [] };
-      return { rows: [], rowCount: 0 };
+        return Promise.resolve({ rows: [{ id: 4, primary_recipient_id: null }] });
+      if (sql.includes("information_schema")) return Promise.resolve({ rows: [] });
+      return Promise.resolve({ rows: [], rowCount: 0 });
     });
     await mergeRecipients(asRecipientId(4), [asRecipientId(9), asRecipientId(2), asRecipientId(9)]);
     const lock = mockClient.query.mock.calls.find(([sql]) =>
       /for update/i.test(sql),
     );
-    expect(lock![0]).toContain("primary_recipient_id");
-    expect(lock![0]).toMatch(/order by "?id"? for update/i);
-    expect(lock![1]).toEqual([[2, 4, 9]]);
-    const lockIndex = mockClient.query.mock.calls.indexOf(lock!);
+    expect(must(lock, "lock")[0]).toContain("primary_recipient_id");
+    expect(must(lock, "lock")[0]).toMatch(/order by "?id"? for update/i);
+    expect(must(lock, "lock")[1]).toEqual([[2, 4, 9]]);
+    const lockIndex = mockClient.query.mock.calls.indexOf(must(lock, "lock"));
     const writeIndex = mockClient.query.mock.calls.findIndex(([sql]) =>
       /update "?transactions"? set/i.test(sql),
     );
@@ -102,10 +106,10 @@ describe("mergeRecipients — flattens nested alias chains", () => {
   });
 
   it("rejects a target that became an alias while waiting, before any write", async () => {
-    mockClient.query.mockImplementation(async (sql) => {
+    mockClient.query.mockImplementation((sql) => {
       if (/for update/i.test(sql))
-        return { rows: [{ id: 2, primary_recipient_id: 1 }] };
-      return { rows: [] };
+        return Promise.resolve({ rows: [{ id: 2, primary_recipient_id: 1 }] });
+      return Promise.resolve({ rows: [] });
     });
     await expect(mergeRecipients(asRecipientId(2), [asRecipientId(3)])).rejects.toMatchObject({
       status: 409,
@@ -130,13 +134,13 @@ describe("mergeRecipients — flattens nested alias chains", () => {
 
   it("re-points grandchildren aliases onto the new primary", async () => {
     const sqls: string[] = [];
-    mockClient.query.mockImplementation(async (sql) => {
+    mockClient.query.mockImplementation((sql) => {
       sqls.push(sql);
       if (/for update/i.test(sql))
-        return { rows: [{ id: 1, primary_recipient_id: null }] };
-      if (sql.includes("information_schema")) return { rows: [] };
-      if (/returning "?id"?/i.test(sql)) return { rows: [{ id: 3 }] };
-      return { rows: [], rowCount: 0 };
+        return Promise.resolve({ rows: [{ id: 1, primary_recipient_id: null }] });
+      if (sql.includes("information_schema")) return Promise.resolve({ rows: [] });
+      if (/returning "?id"?/i.test(sql)) return Promise.resolve({ rows: [{ id: 3 }] });
+      return Promise.resolve({ rows: [], rowCount: 0 });
     });
 
     await mergeRecipients(asRecipientId(1), [asRecipientId(3)]);
@@ -153,13 +157,13 @@ describe("mergeRecipients — flattens nested alias chains", () => {
 
   it("filters invalid direct-call ids and the primary id without coercing strings", async () => {
     const paramsBySql: [string, unknown][] = [];
-    mockClient.query.mockImplementation(async (sql, params) => {
+    mockClient.query.mockImplementation((sql, params) => {
       paramsBySql.push([sql, params]);
       if (/for update/i.test(sql))
-        return { rows: [{ id: 1, primary_recipient_id: null }] };
-      if (sql.includes("information_schema")) return { rows: [] };
-      if (/returning "?id"?/i.test(sql)) return { rows: [{ id: 3 }] };
-      return { rows: [], rowCount: 0 };
+        return Promise.resolve({ rows: [{ id: 1, primary_recipient_id: null }] });
+      if (sql.includes("information_schema")) return Promise.resolve({ rows: [] });
+      if (/returning "?id"?/i.test(sql)) return Promise.resolve({ rows: [{ id: 3 }] });
+      return Promise.resolve({ rows: [], rowCount: 0 });
     });
 
     await mergeRecipients(
@@ -171,7 +175,7 @@ describe("mergeRecipients — flattens nested alias chains", () => {
     const transactionUpdate = paramsBySql.find(([sql]) =>
       /update "?transactions"? set/i.test(sql),
     );
-    expect(transactionUpdate![1]).toEqual([1, [3, 3]]);
+    expect(must(transactionUpdate, "transactionUpdate")[1]).toEqual([1, [3, 3]]);
   });
 });
 
@@ -182,7 +186,12 @@ describe("createPattern — validates the kind it stores", () => {
     await expect(
       createPattern({ recipientId: 3, pattern: "ACME (BE" }),
     ).resolves.toEqual({ id: 7 });
-    expect(poolQuery.mock.calls[0]![1][2]).toBe("literal_prefix");
+    expect(
+      must(
+        must(poolQuery.mock.calls[0], "poolQuery.mock.calls[0]")[1],
+        "poolQuery params",
+      )[2],
+    ).toBe("literal_prefix");
   });
 
   it("still rejects an invalid explicit regex", async () => {

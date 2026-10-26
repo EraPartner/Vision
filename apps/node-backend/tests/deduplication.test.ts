@@ -10,7 +10,9 @@ import { asTransactionId } from "@vision/types/brands";
 
 vi.mock("../src/database/connection.ts", () =>
   mockConnection({
-    withSavepointIfInTransaction: vi.fn(async (_name, fn) => fn()),
+    withSavepointIfInTransaction: vi.fn((_name: string, fn: () => unknown) =>
+      Promise.resolve(fn()),
+    ),
   }),
 );
 
@@ -286,7 +288,7 @@ describe("DeduplicationService", () => {
       );
     });
 
-    it("uses the same lock identity after a legacy label resolves to its account id", async () => {
+    it("uses the same lock identity after a legacy label resolves to its account id", () => {
       const shared = {
         date: "2026-02-10",
         amount: -50,

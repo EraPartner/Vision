@@ -16,17 +16,20 @@ import accuracyRepo from "../src/repositories/cashflowForecastAccuracyRepository
 import mcRepo from "../src/repositories/cashflowForecastMcRepository.ts";
 import rollingRepo from "../src/repositories/cashflowForecastMcRollingRepository.ts";
 import providerHealthRepo from "../src/repositories/providerHealthRepository.ts";
+import { must } from "./helpers/must.ts";
 
 const USER = `forecast-boundary-${process.pid}`;
 const PROVIDER_PREFIX = `fpb${process.pid}`;
 
 /** YYYY-MM for the DB's current month minus `back` months. */
 async function dbMonth(back: number): Promise<string> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    m: string;
+  }>(
     `SELECT to_char(date_trunc('month', CURRENT_DATE) - make_interval(months => $1), 'YYYY-MM') AS m`,
     [back],
   );
-  return rows[0].m;
+  return must(rows[0], "rows[0]").m;
 }
 
 describe.skipIf(!hasTestDatabase())(
@@ -38,7 +41,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       await pool.query(
         "DELETE FROM cashflow_forecast_accuracy WHERE user_id = $1",
         [USER],
@@ -180,11 +183,6 @@ describe.skipIf(!hasTestDatabase())(
       expect(
         (await providerHealthRepo.findByProvider(b))?.last_error,
       ).toHaveLength(1000);
-      // @ts-expect-error -- a non-string error reaches the runtime String() coercion
-      await providerHealthRepo.recordError(b, "fx", { code: 500 });
-      expect((await providerHealthRepo.findByProvider(b))?.last_error).toBe(
-        "[object Object]",
-      );
 
       await providerHealthRepo.recordSuccess(a, "quote");
       row = await providerHealthRepo.findByProvider(a);

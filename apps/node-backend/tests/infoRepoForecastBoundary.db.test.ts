@@ -19,6 +19,13 @@ import {
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
 import { todayAppDateString } from "../src/lib/timezone.ts";
+import { must } from "./helpers/must.ts";
+import type {
+  AccountId,
+  CategoryId,
+  RecipientId,
+  TransactionId,
+} from "@vision/types/brands";
 
 const SUFFIX = `IFB${process.pid}`;
 const created = {
@@ -29,30 +36,30 @@ const created = {
 };
 
 async function seed() {
-  const db = getTestPool()!;
-  const { rows: account } = await db.query(
+  const db = must(getTestPool(), "getTestPool()");
+  const { rows: account } = await db.query<{ id: AccountId }>(
     `INSERT INTO accounts (name, display_name, currency) VALUES ($1, $1, 'EUR') RETURNING id`,
     [`Forecast ${SUFFIX}`],
   );
-  created.accountIds.push(account[0].id);
-  const { rows: recipients } = await db.query(
+  created.accountIds.push(must(account[0], "account[0]").id);
+  const { rows: recipients } = await db.query<{ id: RecipientId }>(
     `INSERT INTO recipients (name, normalized_name)
      VALUES ($1, lower($1)), ($2, lower($2)) RETURNING id`,
     [`Kept ${SUFFIX}`, `Excluded ${SUFFIX}`],
   );
   created.recipientIds.push(...recipients.map((r) => r.id as number));
-  const { rows: categories } = await db.query(
+  const { rows: categories } = await db.query<{ id: CategoryId }>(
     `INSERT INTO categories (general, detail)
      VALUES ($1, 'KEPT'), ($1, 'EXCLUDED') RETURNING id`,
     [`FORECAST${SUFFIX}`],
   );
   created.categoryIds.push(...categories.map((r) => r.id as number));
   return {
-    accountId: account[0].id as number,
-    keptRecipient: recipients[0].id as number,
-    excludedRecipient: recipients[1].id as number,
-    keptCategory: categories[0].id as number,
-    excludedCategory: categories[1].id as number,
+    accountId: must(account[0], "account[0]").id as number,
+    keptRecipient: must(recipients[0], "recipients[0]").id as number,
+    excludedRecipient: must(recipients[1], "recipients[1]").id as number,
+    keptCategory: must(categories[0], "categories[0]").id as number,
+    excludedCategory: must(categories[1], "categories[1]").id as number,
   };
 }
 
@@ -65,7 +72,9 @@ async function insertTxn(
     isTransfer = false,
   } = {},
 ) {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    id: TransactionId;
+  }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, is_transfer)
      VALUES ($1::date, $2, 'EUR', $3, $4, $5, $6) RETURNING id`,
     [
@@ -77,7 +86,7 @@ async function insertTxn(
       isTransfer,
     ],
   );
-  created.transactionIds.push(rows[0].id);
+  created.transactionIds.push(must(rows[0], "rows[0]").id);
 }
 
 describe.skipIf(!hasTestDatabase())(
@@ -89,7 +98,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const db = getTestPool()!;
+      const db = must(getTestPool(), "getTestPool()");
       await db.query("DELETE FROM transactions WHERE id = ANY($1::int[])", [
         created.transactionIds.splice(0),
       ]);

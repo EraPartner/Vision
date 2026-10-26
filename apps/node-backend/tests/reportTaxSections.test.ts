@@ -12,6 +12,7 @@ import { getTaxTable } from "../src/services/reports/belgianTaxTables.ts";
 import type { TaxReportData } from "../src/services/reports/dataFetcherTax.ts";
 import type { PortfolioReportData } from "../src/services/reports/dataFetcherPortfolio.ts";
 import { partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 // fmtCurrency renders "EUR<nbsp>1,234.56".
 const eur = (s: string) => `EUR ${s}`;
@@ -382,7 +383,7 @@ describe("renderBelgianRulesSummary", () => {
         household: { partners: [{ id: "A" }] },
         precomputedHousehold: {
           assessmentMode: "single",
-          partners: [twoPartners.partners[0]!],
+          partners: [must(twoPartners.partners[0], "twoPartners.partners[0]")],
         },
       },
       ctx,

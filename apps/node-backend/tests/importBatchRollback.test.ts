@@ -4,7 +4,10 @@ const spies = vi.hoisted(() => ({ query: vi.fn() }));
 vi.mock("../src/database/connection.ts", () =>
   mockConnection({
     query: spies.query,
-    withTransaction: vi.fn(async (fn) => fn({ query: spies.query })),
+    withTransaction: vi.fn(
+      (fn: (client: { query: typeof spies.query }) => unknown) =>
+        Promise.resolve(fn({ query: spies.query })),
+    ),
   }),
 );
 import { rollbackBatch } from "../src/repositories/importBatchRepository.ts";

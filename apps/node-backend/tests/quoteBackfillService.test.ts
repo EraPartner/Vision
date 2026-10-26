@@ -3,6 +3,7 @@
  * Tests holding window computation, spike sanitization, and backfill orchestration.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Mock } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
 import type { ConnectionMockSurface } from "./helpers/repoMocks.ts";
 import { mockLogger } from "./helpers/mockLogger.ts";
@@ -22,7 +23,6 @@ import {
   __computeHoldingWindows as computeHoldingWindows,
   __sanitizeIsolatedSpikes as sanitizeIsolatedSpikes,
   backfillHistoricalAssetQuotes,
-  refreshActiveHoldingQuotes,
   refreshQuotesForInvestment,
   cleanupStaleQuotes,
   __holdingWindowsNeedBackfill as holdingWindowsNeedBackfill,
@@ -36,6 +36,8 @@ import {
   fetchHistoricalPrices as rawFetchHistoricalPrices,
   saveHistoricalPointsToDatabase as rawSaveHistoricalPointsToDatabase,
 } from "../src/services/priceProviderService.ts";
+import { must } from "./helpers/must.ts";
+import { listAt } from "./helpers/responseBody.ts";
 
 const fetchHistoricalPrices = vi.mocked(rawFetchHistoricalPrices);
 const saveHistoricalPointsToDatabase = vi.mocked(
@@ -44,7 +46,9 @@ const saveHistoricalPointsToDatabase = vi.mocked(
 
 // The connection module is the mock surface; its spies stay untyped because
 // the tests read raw SQL and params from mock.calls.
-const { query } = connection as unknown as ConnectionMockSurface;
+const query = (connection as unknown as ConnectionMockSurface).query as Mock<
+  (sql: string, params?: unknown[]) => Promise<unknown>
+>;
 
 describe("Quote Backfill Service", () => {
   beforeEach(() => {
@@ -186,12 +190,12 @@ describe("Quote Backfill Service", () => {
       const result = sanitizeIsolatedSpikes(points);
 
       // Geometric mean of 100 and 100 = 100
-      expect(result[2]!.price).toBeCloseTo(100, 5);
+      expect(must(result[2], "result[2]").price).toBeCloseTo(100, 5);
       // Other points unchanged
-      expect(result[0]!.price).toBe(100);
-      expect(result[1]!.price).toBe(100);
-      expect(result[3]!.price).toBe(100);
-      expect(result[4]!.price).toBe(100);
+      expect(must(result[0], "result[0]").price).toBe(100);
+      expect(must(result[1], "result[1]").price).toBe(100);
+      expect(must(result[3], "result[3]").price).toBe(100);
+      expect(must(result[4], "result[4]").price).toBe(100);
     });
 
     it("catches a 3x spike", () => {
@@ -205,7 +209,7 @@ describe("Quote Backfill Service", () => {
 
       const result = sanitizeIsolatedSpikes(points);
 
-      expect(result[2]!.price).toBeCloseTo(100, 5);
+      expect(must(result[2], "result[2]").price).toBeCloseTo(100, 5);
     });
 
     it("does not alter normal price movements below threshold", () => {
@@ -234,7 +238,7 @@ describe("Quote Backfill Service", () => {
       sanitizeIsolatedSpikes(points);
 
       // Original should be untouched
-      expect(points[2]!.price).toBe(1000);
+      expect(must(points[2], "points[2]").price).toBe(1000);
     });
 
     it("handles trough spike (sudden drop and recovery)", () => {
@@ -248,7 +252,7 @@ describe("Quote Backfill Service", () => {
 
       const result = sanitizeIsolatedSpikes(points);
 
-      expect(result[2]!.price).toBeCloseTo(100, 5);
+      expect(must(result[2], "result[2]").price).toBeCloseTo(100, 5);
     });
 
     it("catches known May 2022 Kinesis-style pattern", () => {
@@ -267,10 +271,10 @@ describe("Quote Backfill Service", () => {
       const result = sanitizeIsolatedSpikes(points);
 
       // Spike should be corrected
-      expect(result[4]!.price).toBeLessThan(200);
+      expect(must(result[4], "result[4]").price).toBeLessThan(200);
       // Non-spike prices should be unmodified
-      expect(result[0]!.price).toBe(50);
-      expect(result[5]!.price).toBe(50);
+      expect(must(result[0], "result[0]").price).toBe(50);
+      expect(must(result[5], "result[5]").price).toBe(50);
     });
   });
 
@@ -426,8 +430,13 @@ describe("Quote Backfill Service", () => {
       await backfillHistoricalAssetQuotes();
 
       // Verify saved points have the spike corrected
-      const savedPoints = saveHistoricalPointsToDatabase.mock.calls[0]![1];
-      expect(savedPoints![2]!.price).toBeCloseTo(50, 5);
+      const savedPoints = must(
+        saveHistoricalPointsToDatabase.mock.calls[0],
+        "saveHistoricalPointsToDatabase.mock.calls[0]",
+      )[1];
+      expect(
+        must(must(savedPoints, "savedPoints")[2], "savedPoints[2]").price,
+      ).toBeCloseTo(50, 5);
     });
   });
 
@@ -444,8 +453,11 @@ describe("Quote Backfill Service", () => {
 
       expect(query).toHaveBeenCalledTimes(2);
       // The last statement deletes every stored quote of investment 42.
-      const [deleteSql, deleteParams] = query.mock.calls.at(-1)!;
-      expect(String(deleteSql)).toMatch(/^delete from "asset_price_history"/i);
+      const [deleteSql, deleteParams] = must(
+        query.mock.calls.at(-1),
+        "query.mock.calls.at(-1)",
+      );
+      expect(deleteSql).toMatch(/^delete from "asset_price_history"/i);
       expect(deleteParams).toEqual([42]);
     });
 
@@ -534,10 +546,13 @@ describe("Quote Backfill Service", () => {
 
       await cleanupStaleQuotes(investmentWindows);
 
-      const callArgs = query.mock.calls[0]![1];
+      const callArgs = must(
+        must(query.mock.calls[0], "query.mock.calls[0]")[1],
+        "query params",
+      );
       expect(callArgs[2]).toEqual(["2025-01-01"]);
       // toDate should be today's date string
-      expect(callArgs[3][0]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(listAt(callArgs, 3)[0]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 
     it("uses UTC for the open-window today sentinel (not the server local time)", async () => {
@@ -565,7 +580,10 @@ describe("Quote Backfill Service", () => {
 
         await cleanupStaleQuotes(investmentWindows);
 
-        const callArgs = query.mock.calls[0]![1];
+        const callArgs = must(
+          must(query.mock.calls[0], "query.mock.calls[0]")[1],
+          "query params",
+        );
         expect(callArgs[3]).toEqual(["2025-06-15"]);
       } finally {
         vi.useRealTimers();

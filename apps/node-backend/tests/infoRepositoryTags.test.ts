@@ -12,6 +12,7 @@ import type { PgQueryResult } from "../src/database/connection.ts";
 import { convertRowsToEur as rawConvertRowsToEur } from "../src/services/currency/currencyConversionService.ts";
 import { tagInsightsRepository } from "../src/repositories/infoRepositoryTags.ts";
 import { partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 const query = vi.mocked(rawQuery);
 const convertRowsToEur = vi.mocked(rawConvertRowsToEur);
@@ -33,6 +34,8 @@ describe("tagInsightsRepository.getTagPivot id validation", () => {
 
     await tagInsightsRepository.getTagPivot({ tagIds: [2147483647] });
 
-    expect(query.mock.calls[0]![1]).toEqual([[2147483647]]);
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([
+      [2147483647],
+    ]);
   });
 });

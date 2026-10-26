@@ -13,16 +13,19 @@ import {
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import insightCashProjectionRepository from "../src/repositories/insightCashProjectionRepository.ts";
+import { must } from "./helpers/must.ts";
 
 const METHOD = `retention-${process.pid}`;
 
 /** YYYY-MM for the DB's current month minus `back` months. */
 async function dbMonth(back: number): Promise<string> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    m: string;
+  }>(
     `SELECT to_char(date_trunc('month', CURRENT_DATE) - make_interval(months => $1), 'YYYY-MM') AS m`,
     [back],
   );
-  return rows[0].m;
+  return must(rows[0], "rows[0]").m;
 }
 
 describe.skipIf(!hasTestDatabase())(
@@ -34,7 +37,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      await getTestPool()!.query(
+      await must(getTestPool(), "getTestPool()").query(
         "DELETE FROM insight_cash_projections WHERE method_id = $1",
         [METHOD],
       );
@@ -52,7 +55,7 @@ describe.skipIf(!hasTestDatabase())(
         dbMonth(2),
         dbMonth(3),
       ]);
-      await getTestPool()!.query(
+      await must(getTestPool(), "getTestPool()").query(
         `INSERT INTO insight_cash_projections (month_start, currency, method_id, month_end_net_cashflow)
        VALUES (($1 || '-01')::date, 'EUR', $3, 10), (($2 || '-01')::date, 'EUR', $3, 20)`,
         [threeBack, twoBack, METHOD],

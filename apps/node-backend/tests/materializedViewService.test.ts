@@ -4,7 +4,7 @@ import { mockConnection } from "./helpers/repoMocks.ts";
 async function loadMaterializedViewService() {
   vi.resetModules();
 
-  const query = vi.fn();
+  const query = vi.fn<(sql: string) => Promise<unknown>>();
   const logger = {
     info: vi.fn(),
     warn: vi.fn(),
@@ -18,14 +18,17 @@ async function loadMaterializedViewService() {
   // in-flight/debounce tests keep asserting one call per refresh statement.
   const clientSql: string[] = [];
   const release = vi.fn();
-  const getClient = vi.fn(async () => ({
-    query: (sql: string) => {
-      clientSql.push(sql);
-      if (/statement_timeout/i.test(sql)) return Promise.resolve({ rows: [] });
-      return query(sql);
-    },
-    release,
-  }));
+  const getClient = vi.fn(() =>
+    Promise.resolve({
+      query: (sql: string) => {
+        clientSql.push(sql);
+        if (/statement_timeout/i.test(sql))
+          return Promise.resolve({ rows: [] });
+        return query(sql);
+      },
+      release,
+    }),
+  );
 
   vi.doMock("../src/database/connection.ts", () =>
     mockConnection({ query, getClient }),

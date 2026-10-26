@@ -7,6 +7,7 @@ import {
   __computeSourceRecordHash as computeSourceRecordHash,
   portfolioIdentityBase,
 } from "../src/services/importIdentity.ts";
+import { must } from "./helpers/must.ts";
 
 const budgetRow = (overrides = {}) => ({
   tx_date: "2026-09-09",
@@ -25,12 +26,18 @@ describe("versioned import identity", () => {
   it("keeps source hashes byte-sensitive and dedup identity format-insensitive", () => {
     const a = budgetRow();
     const b = budgetRow({ raw_data: "coffee,-12.5000\r" });
-    const ia = assignImportIdentities([a], (row) =>
-      budgetingIdentityBase(row, "vision"),
-    )[0]!;
-    const ib = assignImportIdentities([b], (row) =>
-      budgetingIdentityBase(row, "vision"),
-    )[0]!;
+    const ia = must(
+      assignImportIdentities([a], (row) =>
+        budgetingIdentityBase(row, "vision"),
+      )[0],
+      "assignImportIdentities([a], (row) => budgetingIdentityBase(r",
+    );
+    const ib = must(
+      assignImportIdentities([b], (row) =>
+        budgetingIdentityBase(row, "vision"),
+      )[0],
+      "assignImportIdentities([b], (row) => budgetingIdentityBase(r",
+    );
     expect(ia.sourceRecordHash).not.toBe(ib.sourceRecordHash);
     expect(ia.fingerprint).toBe(ib.fingerprint);
     expect(ia.version).toBe(IMPORT_FINGERPRINT_VERSION);
@@ -57,7 +64,9 @@ describe("versioned import identity", () => {
     const identities = assignImportIdentities(rows, (row) =>
       budgetingIdentityBase(row, "wise"),
     );
-    expect(identities[0]!.fingerprint).toBe(identities[1]!.fingerprint);
+    expect(must(identities[0], "identities[0]").fingerprint).toBe(
+      must(identities[1], "identities[1]").fingerprint,
+    );
   });
 
   it("isolates portfolio routes, accounts and currencies", () => {
@@ -76,12 +85,15 @@ describe("versioned import identity", () => {
       overrides: Partial<typeof row>,
       accountIdentity = "acct-a",
     ) =>
-      assignImportIdentities([{ ...row, ...overrides }], (candidate) =>
-        portfolioIdentityBase(candidate, {
-          adapterName: "generic",
-          accountIdentity,
-        }),
-      )[0]!.fingerprint;
+      must(
+        assignImportIdentities([{ ...row, ...overrides }], (candidate) =>
+          portfolioIdentityBase(candidate, {
+            adapterName: "generic",
+            accountIdentity,
+          }),
+        )[0],
+        "assignImportIdentities([{ ...row, ...overrides }], (candidat",
+      ).fingerprint;
     expect(fingerprint({ route: "cash" })).not.toBe(fingerprint({}));
     expect(fingerprint({}, "acct-b")).not.toBe(fingerprint({}));
     expect(fingerprint({ currency: "USD" })).not.toBe(fingerprint({}));
@@ -117,7 +129,9 @@ describe("versioned import identity", () => {
       }),
     );
 
-    expect(identities[0]!.fingerprint).not.toBe(identities[1]!.fingerprint);
+    expect(must(identities[0], "identities[0]").fingerprint).not.toBe(
+      must(identities[1], "identities[1]").fingerprint,
+    );
   });
 
   it("hashes an empty literal record but not an absent record", () => {
@@ -126,12 +140,18 @@ describe("versioned import identity", () => {
   });
 
   it("does not make identity depend on the selected adapter path", () => {
-    const builtIn = assignImportIdentities([budgetRow()], (row) =>
-      budgetingIdentityBase(row, "wise"),
-    )[0]!;
-    const generic = assignImportIdentities([budgetRow()], (row) =>
-      budgetingIdentityBase(row, "renamed custom parser"),
-    )[0]!;
+    const builtIn = must(
+      assignImportIdentities([budgetRow()], (row) =>
+        budgetingIdentityBase(row, "wise"),
+      )[0],
+      "assignImportIdentities([budgetRow()], (row) => budgetingIden",
+    );
+    const generic = must(
+      assignImportIdentities([budgetRow()], (row) =>
+        budgetingIdentityBase(row, "renamed custom parser"),
+      )[0],
+      "assignImportIdentities([budgetRow()], (row) => budgetingIden",
+    );
     expect(builtIn.fingerprint).toBe(generic.fingerprint);
   });
 });

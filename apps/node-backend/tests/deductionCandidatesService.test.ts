@@ -22,6 +22,17 @@ import { listCategoryNodes as rawListCategoryNodes } from "../src/services/categ
 import rawAccountRepository from "../src/repositories/accountRepository.ts";
 import { computeDeductionCandidates } from "../src/services/tax/deductionCandidatesService.ts";
 import { partial } from "./helpers/partial.ts";
+import { loose } from "./helpers/partial.ts";
+import type { Mock } from "vitest";
+
+/** The given methods of `T`, typed as the spies a `vi.mock` factory installed. */
+type Spies<T, K extends keyof T> = Record<
+  K,
+  Mock<Extract<T[K], (...args: never[]) => unknown>>
+>;
+
+const transactionRepositoryMock = loose<Spies<typeof rawTransactionRepository, "getAll">>(rawTransactionRepository);
+const accountRepositoryMock = loose<Spies<typeof rawAccountRepository, "listOwners">>(rawAccountRepository);
 
 const transactionRepository = vi.mocked(rawTransactionRepository);
 const listCategoryNodes = vi.mocked(rawListCategoryNodes);
@@ -60,7 +71,7 @@ describe("computeDeductionCandidates", () => {
 
     await computeDeductionCandidates({ year: 2025 });
 
-    expect(transactionRepository.getAll).toHaveBeenCalledWith({
+    expect(transactionRepositoryMock.getAll).toHaveBeenCalledWith({
       startDate: "2025-01-01",
       endDate: "2025-12-31",
       limit: 100_000,
@@ -214,7 +225,7 @@ describe("computeDeductionCandidates", () => {
 
     await computeDeductionCandidates({ year: 2025 });
 
-    expect(accountRepository.listOwners).not.toHaveBeenCalled();
+    expect(accountRepositoryMock.listOwners).not.toHaveBeenCalled();
   });
 
   it("returns an empty byDeductionType when nothing classifies", async () => {

@@ -713,7 +713,7 @@ describe("buildTransactionWhere — tagSlugs", () => {
   });
 
   it("strips blank/whitespace-only slug entries", () => {
-    const { sql, params } = buildTransactionWhere({
+    const { params } = buildTransactionWhere({
       tagSlugs: ["rome-2020", "  ", ""],
       active: false,
     });

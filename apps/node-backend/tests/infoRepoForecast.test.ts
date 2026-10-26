@@ -33,7 +33,7 @@ import {
   getCashflowForecastDataByCategory,
 } from "../src/repositories/infoRepositoryForecast.ts";
 import { ValidationError } from "../src/middleware/errorHandler.ts";
-import { appDateStringToUtc, todayAppDateString } from "../src/lib/timezone.ts";
+import { must } from "./helpers/must.ts";
 
 const query = rawQuery as unknown as Mock<
   (text: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
@@ -64,10 +64,12 @@ const isLedgerStartSql = (sql: string) => /MIN\(t\.date\)/.test(sql);
  */
 function stubQueries(firstDate: string | null = null) {
   const pgFirstDate = firstDate ? new Date(`${firstDate}T00:00:00`) : null;
-  query.mockImplementation(async (sql) =>
-    isLedgerStartSql(sql)
-      ? { rows: [{ first_date: pgFirstDate }] }
-      : { rows: [] },
+  query.mockImplementation((sql) =>
+    Promise.resolve(
+      isLedgerStartSql(sql)
+        ? { rows: [{ first_date: pgFirstDate }] }
+        : { rows: [] },
+    ),
   );
 }
 
@@ -97,9 +99,9 @@ describe("getCashflowComparison", () => {
     setupEmpty();
     const r = await getCashflowComparison([], [], "EUR");
     const day20 = r.without_planned.find((d) => d.day === 20);
-    expect(day20!.current).toBeNull();
+    expect(must(day20, "day20").current).toBeNull();
     const day10 = r.without_planned.find((d) => d.day === 10);
-    expect(day10!.current).toBe(0); // up to current day, value non-null
+    expect(must(day10, "day10").current).toBe(0); // up to current day, value non-null
   });
 
   it("projects scheduled ledger rows without treating them as current", async () => {
@@ -142,14 +144,39 @@ describe("getCashflowComparison", () => {
     // 2025-04-15, so Jan/Feb/Mar are all elapsed and March's silence is a real
     // zero → 3.
     // Day 5: (100 from Jan + 60 from Feb) / 3 = 53.33
-    expect(r.without_planned.find((d) => d.day === 5)!.average).toBe(53.33);
+    expect(
+      must(
+        r.without_planned.find((d) => d.day === 5),
+        "r.without_planned.find((d) => d.day === 5)",
+      ).average,
+    ).toBe(53.33);
     // Day 10: ((100-30) + 60) / 3 = 43.33
-    expect(r.without_planned.find((d) => d.day === 10)!.average).toBe(43.33);
+    expect(
+      must(
+        r.without_planned.find((d) => d.day === 10),
+        "r.without_planned.find((d) => d.day === 10)",
+      ).average,
+    ).toBe(43.33);
     // Current day 1: 50; day 3 cumulative: 40
-    expect(r.without_planned.find((d) => d.day === 1)!.current).toBe(50);
-    expect(r.without_planned.find((d) => d.day === 3)!.current).toBe(40);
+    expect(
+      must(
+        r.without_planned.find((d) => d.day === 1),
+        "r.without_planned.find((d) => d.day === 1)",
+      ).current,
+    ).toBe(50);
+    expect(
+      must(
+        r.without_planned.find((d) => d.day === 3),
+        "r.without_planned.find((d) => d.day === 3)",
+      ).current,
+    ).toBe(40);
     // Future day 20 has no current
-    expect(r.without_planned.find((d) => d.day === 20)!.current).toBeNull();
+    expect(
+      must(
+        r.without_planned.find((d) => d.day === 20),
+        "r.without_planned.find((d) => d.day === 20)",
+      ).current,
+    ).toBeNull();
   });
 });
 
@@ -219,7 +246,7 @@ describe("getCashflowForecastData", () => {
       [],
     ]);
     const r = await getCashflowForecastData(1);
-    expect(r.history[0]!.date).toBe("2025-03-10");
+    expect(must(r.history[0], "r.history[0]").date).toBe("2025-03-10");
   });
 
   it("coerces non-numeric amount_eur to 0", async () => {
@@ -235,7 +262,7 @@ describe("getCashflowForecastData", () => {
       [],
     ]);
     const r = await getCashflowForecastData(1);
-    expect(r.history[0]!.net).toBe(5);
+    expect(must(r.history[0], "r.history[0]").net).toBe(5);
   });
 });
 
@@ -370,7 +397,9 @@ describe("getCashflowForecastDataByCategory", () => {
 
     const r = await getCashflowForecastDataByCategory(3);
     expect(r.currentActualByCategory).toHaveLength(1);
-    expect(r.currentActualByCategory[0]!.date).toBe("2025-04-15");
+    expect(
+      must(r.currentActualByCategory[0], "r.currentActualByCategory[0]").date,
+    ).toBe("2025-04-15");
     expect(r.scheduledActualByCategory).toEqual([
       {
         date: "2025-04-20",

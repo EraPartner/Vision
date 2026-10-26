@@ -45,6 +45,17 @@ import {
   addDaysYmd,
   firstOfMonthYmd,
 } from "../src/lib/timezone.ts";
+import { must } from "./helpers/must.ts";
+import type {
+  AccountId,
+  CategoryId,
+  PlannedTransactionId,
+  RecipientId,
+  TransactionId,
+} from "@vision/types/brands";
+
+/** A result row whose columns the test reads without a fixed shape. */
+type DbRow = Record<string, unknown>;
 
 const cat: Record<string, number> = {};
 const rec: Record<string, number> = {};
@@ -52,21 +63,21 @@ const rec: Record<string, number> = {};
 const TODAY = () => todayAppDateString();
 
 async function seedBase() {
-  const pool = getTestPool()!;
+  const pool = must(getTestPool(), "getTestPool()");
   for (const [key, [general, detail]] of Object.entries({
     Food: ["Food", "Groceries"],
     Rent: ["Home", "Rent"],
   })) {
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<{ id: CategoryId }>(
       "INSERT INTO categories (general, detail) VALUES ($1, $2) RETURNING id",
       [general, detail],
     );
-    cat[key] = rows[0].id;
+    cat[key] = must(rows[0], "rows[0]").id;
   }
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<{ id: RecipientId }>(
     `INSERT INTO recipients (name, normalized_name) VALUES ('Misc Payee', 'misc payee') RETURNING id`,
   );
-  rec.misc = rows[0].id;
+  rec.misc = must(rows[0], "rows[0]").id;
 }
 
 /** Create an accounts row with explicit net-worth attributes. */
@@ -78,12 +89,14 @@ async function addAccount(
     currency = "EUR",
   }: { type?: string; inNetWorth?: boolean; currency?: string } = {},
 ): Promise<number> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    id: AccountId;
+  }>(
     `INSERT INTO accounts (name, display_name, type, in_net_worth, currency)
      VALUES ($1, $1, $2::account_type, $3, $4) RETURNING id`,
     [name, type, inNetWorth, currency],
   );
-  return rows[0].id;
+  return must(rows[0], "rows[0]").id;
 }
 
 interface TxnInput {
@@ -109,18 +122,21 @@ async function insertTxn({
 }: TxnInput): Promise<number> {
   let accountId: number | null = null;
   if (bank) {
-    await getTestPool()!.query(
+    await must(getTestPool(), "getTestPool()").query(
       `INSERT INTO accounts (name, display_name) VALUES ($1, $1)
        ON CONFLICT (lower(btrim(name))) DO NOTHING`,
       [bank],
     );
-    const { rows } = await getTestPool()!.query(
-      `SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
-      [bank],
-    );
-    accountId = rows[0].id;
+    const { rows } = await must(getTestPool(), "getTestPool()").query<{
+      id: AccountId;
+    }>(`SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`, [
+      bank,
+    ]);
+    accountId = must(rows[0], "rows[0]").id;
   }
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    id: TransactionId;
+  }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, balance, is_active, is_transfer)
      VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
     [
@@ -135,7 +151,7 @@ async function insertTxn({
       isTransfer,
     ],
   );
-  return rows[0].id;
+  return must(rows[0], "rows[0]").id;
 }
 
 /**
@@ -145,7 +161,7 @@ async function insertTxn({
  * silently miss a table or a cache clear the way two local subsets once did.
  */
 async function wipeAll() {
-  const pool = getTestPool()!;
+  const pool = must(getTestPool(), "getTestPool()");
   await pool.query("DELETE FROM planned_transactions");
   await pool.query("DELETE FROM transactions");
   await pool.query("DELETE FROM portfolio_performance_snapshots");
@@ -154,13 +170,14 @@ async function wipeAll() {
   await deleteAllCategoryFixtures(pool);
   await pool.query("DELETE FROM exchange_rates");
   await pool.query(`DELETE FROM user_settings WHERE key = 'includeTransfers'`);
-  for (const bag of [cat, rec]) for (const k of Object.keys(bag)) delete bag[k];
+  for (const bag of [cat, rec])
+    for (const k of Object.keys(bag)) Reflect.deleteProperty(bag, k);
   clearMemoryCache();
   clearMvCache();
 }
 
 async function insertSnapshot(date: string, value: string, currency = "EUR") {
-  await getTestPool()!.query(
+  await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO portfolio_performance_snapshots (snapshot_date, value, currency)
      VALUES ($1::date, $2, $3)`,
     [date, value, currency],
@@ -170,7 +187,7 @@ async function insertSnapshot(date: string, value: string, currency = "EUR") {
 async function seedHoldingsOnlyCash(today: string) {
   await addAccount("CRYPTO EXCHANGE", { type: "crypto_exchange" });
   await addAccount("HARDWARE WALLET", { type: "wallet" });
-  await getTestPool()!.query(
+  await must(getTestPool(), "getTestPool()").query(
     `UPDATE accounts SET has_cash_sleeve = true WHERE name = 'CRYPTO EXCHANGE'`,
   );
   for (const [bank, amount, currency, balance] of [
@@ -209,7 +226,9 @@ async function insertPlanned({
   isActive?: boolean;
   isExecuted?: boolean;
 }): Promise<number> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    id: PlannedTransactionId;
+  }>(
     `INSERT INTO planned_transactions
        (planned_date, amount, currency, recipient_id, category_id, is_recurring, recurrence_pattern, is_active, is_executed)
      VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
@@ -225,7 +244,7 @@ async function insertPlanned({
       isExecuted,
     ],
   );
-  return rows[0].id;
+  return must(rows[0], "rows[0]").id;
 }
 
 describe.skipIf(!hasTestDatabase())(
@@ -323,7 +342,7 @@ describe.skipIf(!hasTestDatabase())(
           [firstCashDate, false],
           [today, true],
         ]) {
-          await getTestPool()!.query(
+          await must(getTestPool(), "getTestPool()").query(
             `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
              VALUES ('USD', $1::date, '0.5', $2)`,
             [date, isLatest],
@@ -347,7 +366,9 @@ describe.skipIf(!hasTestDatabase())(
           currency: "EUR",
         });
         expect(result.snapshots).toHaveLength(4);
-        expect(result.snapshots[0]!.date).toBe(firstCashDate);
+        expect(must(result.snapshots[0], "result.snapshots[0]").date).toBe(
+          firstCashDate,
+        );
         expect(
           result.snapshots.every(
             (point) =>
@@ -490,7 +511,12 @@ describe.skipIf(!hasTestDatabase())(
         // i.e. exactly the 150 that actually posted today above the d1 point.
         expect(r.current.liquid).toBe(5350);
         expect(r.current.netWorth).toBe(5350);
-        expect(r.snapshots[r.snapshots.length - 1]!.liquid).toBe(5350);
+        expect(
+          must(
+            r.snapshots[r.snapshots.length - 1],
+            "r.snapshots[r.snapshots.length - 1]",
+          ).liquid,
+        ).toBe(5350);
       });
 
       it("falls back to the cumulative transaction flow when nothing is stamped anywhere", async () => {
@@ -528,8 +554,13 @@ describe.skipIf(!hasTestDatabase())(
         });
         expect(r.current.investments).toBe(5123.45);
         expect(r.current.netWorth).toBe(6123.45);
-        expect(r.snapshots[0]!.investments).toBe(500); // earlier points untouched
-        expect(r.snapshots[r.snapshots.length - 1]!.investments).toBe(5123.45);
+        expect(must(r.snapshots[0], "r.snapshots[0]").investments).toBe(500); // earlier points untouched
+        expect(
+          must(
+            r.snapshots[r.snapshots.length - 1],
+            "r.snapshots[r.snapshots.length - 1]",
+          ).investments,
+        ).toBe(5123.45);
       });
 
       it("measures monthlyChange against the last point before the current month", async () => {
@@ -644,7 +675,9 @@ describe.skipIf(!hasTestDatabase())(
         const old = addDaysYmd(today, -400);
         await addAccount("TRACKING", { inNetWorth: false });
         await insertTxn({ date: old, amount: "-133.25", bank: "TRACKING" });
-        await getTestPool()!.query(`UPDATE transactions SET is_active = false`);
+        await must(getTestPool(), "getTestPool()").query(
+          `UPDATE transactions SET is_active = false`,
+        );
 
         const r = await infoRepository.getNetWorthFromSnapshots();
         expect(r.snapshots).toEqual([]);
@@ -655,7 +688,9 @@ describe.skipIf(!hasTestDatabase())(
         const old = addDaysYmd(TODAY(), -30);
         await addAccount("KBC");
         await insertTxn({ date: old, amount: "100.00", bank: "KBC" });
-        await getTestPool()!.query(`UPDATE transactions SET is_active = false`);
+        await must(getTestPool(), "getTestPool()").query(
+          `UPDATE transactions SET is_active = false`,
+        );
 
         const r = await infoRepository.getNetWorthFromSnapshots();
         expect(r.current).toEqual({
@@ -686,7 +721,7 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await infoRepository.getNetWorthFromSnapshots();
-        expect(r.snapshots[0]!.date).toBe(d3);
+        expect(must(r.snapshots[0], "r.snapshots[0]").date).toBe(d3);
         expect(r.snapshots).toHaveLength(4); // d3..today inclusive
         expect(r.snapshots.every((s) => s.liquid === 1000)).toBe(true);
       });
@@ -737,7 +772,9 @@ describe.skipIf(!hasTestDatabase())(
         expect(withTracking).toEqual(without);
         // Anchored independently of the day of month, so this stays deterministic:
         // the span starts where the in-net-worth account does, not 400 days early.
-        expect(withTracking.snapshots[0]!.date).toBe(monthStart);
+        expect(
+          must(withTracking.snapshots[0], "withTracking.snapshots[0]").date,
+        ).toBe(monthStart);
         expect(withTracking.current.liquid).toBe(1050);
       });
 
@@ -777,10 +814,10 @@ describe.skipIf(!hasTestDatabase())(
             });
             expect(
               (
-                await getTestPool()!.query(
+                await must(getTestPool(), "getTestPool()").query<{ n: number }>(
                   `SELECT count(*)::int AS n FROM transactions WHERE account_id IS NULL`,
                 )
-              ).rows[0].n,
+              ).rows[0]?.n,
             ).toBe(1);
           }
           await addAccount("KBC");
@@ -801,7 +838,10 @@ describe.skipIf(!hasTestDatabase())(
         const without = await build({ withUnattributed: false });
 
         expect(withUnattributed).toEqual(without);
-        expect(withUnattributed.snapshots[0]!.date).toBe(monthStart);
+        expect(
+          must(withUnattributed.snapshots[0], "withUnattributed.snapshots[0]")
+            .date,
+        ).toBe(monthStart);
         expect(withUnattributed.current.liquid).toBe(1050);
         // The 7.00 is nowhere in the answer: the walk cannot value it, and the
         // fallback that would have counted it never runs here.
@@ -834,7 +874,7 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await infoRepository.getNetWorthFromSnapshots();
-        expect(r.snapshots[0]!.date).toBe(d12);
+        expect(must(r.snapshots[0], "r.snapshots[0]").date).toBe(d12);
         expect(r.snapshots).toHaveLength(13); // d12..today inclusive
         // Every historical day is the fallback's running total over the
         // unattributed rows. The unified current-point override is also bounded
@@ -858,7 +898,7 @@ describe.skipIf(!hasTestDatabase())(
         // USD flat at 0.5 EUR across the whole window (and before it), so the
         // conversion cannot mask an accumulation error behind a moving rate.
         for (let n = 32; n >= 0; n--) {
-          await getTestPool()!.query(
+          await must(getTestPool(), "getTestPool()").query(
             `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
            VALUES ('USD', $1::date, 0.5, $2)`,
             [d(n), n === 0],
@@ -887,10 +927,10 @@ describe.skipIf(!hasTestDatabase())(
         });
         expect(
           (
-            await getTestPool()!.query(
+            await must(getTestPool(), "getTestPool()").query<{ n: number }>(
               `SELECT count(*)::int AS n FROM transactions WHERE account_id IS NULL`,
             )
-          ).rows[0].n,
+          ).rows[0]?.n,
         ).toBe(2);
 
         // The in-net-worth half. KBC opens the span at d10.
@@ -971,17 +1011,17 @@ describe.skipIf(!hasTestDatabase())(
         await insertTxn({ date: today, amount: "300.00", bank: null });
         expect(
           (
-            await getTestPool()!.query(
+            await must(getTestPool(), "getTestPool()").query<{ n: number }>(
               `SELECT count(*)::int AS n FROM transactions WHERE account_id IS NULL`,
             )
-          ).rows[0].n,
+          ).rows[0]?.n,
         ).toBe(2);
         expect(
           (
-            await getTestPool()!.query(
+            await must(getTestPool(), "getTestPool()").query<{ n: number }>(
               "SELECT count(*)::int AS n FROM accounts",
             )
-          ).rows[0].n,
+          ).rows[0]?.n,
         ).toBe(0);
 
         const r = await infoRepository.getNetWorthFromSnapshots();
@@ -1017,10 +1057,10 @@ describe.skipIf(!hasTestDatabase())(
         await insertTxn({ date: today, amount: "-5000.00", bank: null });
         expect(
           (
-            await getTestPool()!.query(
+            await must(getTestPool(), "getTestPool()").query<{ n: number }>(
               `SELECT count(*)::int AS n FROM transactions WHERE account_id IS NULL`,
             )
-          ).rows[0].n,
+          ).rows[0]?.n,
         ).toBe(1);
 
         const r = await infoRepository.getNetWorthFromSnapshots();
@@ -1047,10 +1087,10 @@ describe.skipIf(!hasTestDatabase())(
         await insertTxn({ date: today, amount: "-5000.00", bank: "MORTGAGE" });
         expect(
           (
-            await getTestPool()!.query(
+            await must(getTestPool(), "getTestPool()").query<{ n: number }>(
               `SELECT count(*)::int AS n FROM transactions WHERE account_id IS NOT NULL`,
             )
-          ).rows[0].n,
+          ).rows[0]?.n,
         ).toBe(1);
 
         const r = await infoRepository.getNetWorthFromSnapshots();
@@ -1078,7 +1118,7 @@ describe.skipIf(!hasTestDatabase())(
           [d1, false],
           [today, true],
         ]) {
-          await getTestPool()!.query(
+          await must(getTestPool(), "getTestPool()").query(
             `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
            VALUES ('USD', $1::date, 0.5, $2)`,
             [d, latest],
@@ -1153,8 +1193,10 @@ describe.skipIf(!hasTestDatabase())(
         });
         // Same-day rows come back in whatever order `ORDER BY pt.planned_date`
         // leaves them (no tiebreaker in the SQL), so assert set-wise.
-        expect(r.daily_data[0]!.transactions).toHaveLength(2);
-        expect(r.daily_data[0]!.transactions).toEqual(
+        expect(
+          must(r.daily_data[0], "r.daily_data[0]").transactions,
+        ).toHaveLength(2);
+        expect(must(r.daily_data[0], "r.daily_data[0]").transactions).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
               amount: -20,
@@ -1242,10 +1284,13 @@ describe.skipIf(!hasTestDatabase())(
             86_400_000,
         );
         expect(r.summary.transaction_count).toBe(daysInNextMonth);
-        expect(r.daily_data[0]!.date).toBe(start);
-        expect(r.daily_data[r.daily_data.length - 1]!.date).toBe(
-          addDaysYmd(after, -1),
-        );
+        expect(must(r.daily_data[0], "r.daily_data[0]").date).toBe(start);
+        expect(
+          must(
+            r.daily_data[r.daily_data.length - 1],
+            "r.daily_data[r.daily_data.length - 1]",
+          ).date,
+        ).toBe(addDaysYmd(after, -1));
       });
     });
 
@@ -1263,10 +1308,10 @@ describe.skipIf(!hasTestDatabase())(
         amount: string,
         opts: Omit<TxnInput, "date" | "amount"> = {},
       ) {
-        const { rows } = await getTestPool()!.query(
-          `SELECT to_char((${dateExpr})::date, 'YYYY-MM-DD') AS d`,
-        );
-        return insertTxn({ date: rows[0].d, amount, ...opts });
+        const { rows } = await must(getTestPool(), "getTestPool()").query<{
+          d: string;
+        }>(`SELECT to_char((${dateExpr})::date, 'YYYY-MM-DD') AS d`);
+        return insertTxn({ date: must(rows[0], "rows[0]").d, amount, ...opts });
       }
 
       it("divides the 6-month spend by calendar days and projects the current month on elapsed days", async () => {
@@ -1282,11 +1327,12 @@ describe.skipIf(!hasTestDatabase())(
         // month -9 row is outside the 6-month floor), so the denominators are
         // months -2 and -1 — in months for the monthly figure, in calendar days
         // for the daily one.
-        const { rows } = await getTestPool()!.query(`
+        const { rows } = await must(getTestPool(), "getTestPool()")
+          .query<DbRow>(`
         SELECT (date_trunc('month', '${TODAY()}'::date)::date
                 - (date_trunc('month', '${TODAY()}'::date) - interval '2 months')::date) AS n
       `);
-        const calendarDays = Number(rows[0].n);
+        const calendarDays = Number(must(rows[0], "rows[0]").n);
 
         const r = await infoRepository.getAverageVsCurrentSpending("EUR");
         expect(r.past_6_months.months_counted).toBe(2);
@@ -1321,7 +1367,7 @@ describe.skipIf(!hasTestDatabase())(
             .current_month.total_spending,
         ).toBe(100);
 
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', 'true'::jsonb)`,
         );
         expect(
@@ -1356,10 +1402,10 @@ describe.skipIf(!hasTestDatabase())(
         amount: string,
         opts: Omit<TxnInput, "date" | "amount"> = {},
       ) {
-        const { rows } = await getTestPool()!.query(
-          `SELECT to_char((${dateExpr})::date, 'YYYY-MM-DD') AS d`,
-        );
-        return insertTxn({ date: rows[0].d, amount, ...opts });
+        const { rows } = await must(getTestPool(), "getTestPool()").query<{
+          d: string;
+        }>(`SELECT to_char((${dateExpr})::date, 'YYYY-MM-DD') AS d`);
+        return insertTxn({ date: must(rows[0], "rows[0]").d, amount, ...opts });
       }
 
       // Was PIN 1 — "average monthly spending over the past 6 months" divided by
@@ -1413,11 +1459,12 @@ describe.skipIf(!hasTestDatabase())(
         await seedBase();
         await insertTxnAt(monthDay(2, 10), "-240.00");
 
-        const { rows } = await getTestPool()!.query(`
+        const { rows } = await must(getTestPool(), "getTestPool()")
+          .query<DbRow>(`
         SELECT (date_trunc('month', '${TODAY()}'::date)::date
                 - (date_trunc('month', '${TODAY()}'::date) - interval '2 months')::date) AS n
       `);
-        const observedDays = Number(rows[0].n);
+        const observedDays = Number(must(rows[0], "rows[0]").n);
 
         const r = await infoRepository.getAverageVsCurrentSpending("EUR");
         expect(r.past_6_months.months_counted).toBe(2);
@@ -1473,7 +1520,7 @@ describe.skipIf(!hasTestDatabase())(
           [d30, "0.5", false],
           [today, "0.9", true],
         ]) {
-          await getTestPool()!.query(
+          await must(getTestPool(), "getTestPool()").query(
             `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
            VALUES ('USD', $1::date, $2, $3)`,
             [date, rate, isLatest],
@@ -1489,7 +1536,10 @@ describe.skipIf(!hasTestDatabase())(
 
         const r = await infoRepository.getNetWorthFromSnapshots("EUR");
         expect(r.current.liquid).toBe(900); // 1000 USD × today's 0.9
-        const last = r.snapshots[r.snapshots.length - 1]!;
+        const last = must(
+          r.snapshots[r.snapshots.length - 1],
+          "r.snapshots[r.snapshots.length - 1]",
+        );
         expect(last.liquid).toBe(r.current.liquid);
         // The curve moves the series, so the equality above is not a flat-curve
         // coincidence: the statement day itself is still valued at 0.5.
@@ -1514,9 +1564,12 @@ describe.skipIf(!hasTestDatabase())(
           [today, 180],
         ]);
         expect(r.current.liquid).toBe(180);
-        expect(r.snapshots[r.snapshots.length - 1]!.liquid).toBe(
-          r.current.liquid,
-        );
+        expect(
+          must(
+            r.snapshots[r.snapshots.length - 1],
+            "r.snapshots[r.snapshots.length - 1]",
+          ).liquid,
+        ).toBe(r.current.liquid);
       });
     });
   },

@@ -1,11 +1,32 @@
 import { describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
-const { createSettingsWriter } = createRequire(import.meta.url)(
-  "../../../packaging/electron/out/settings-conflicts.js",
+import { must } from "./helpers/must.ts";
+import { loose } from "./helpers/partial.ts";
+
+// Mirrors packaging/electron/settings-conflicts.ts, whose compiled output is
+// loaded below.
+interface SettingsWritePayload {
+  value: unknown;
+  expected: unknown;
+}
+type PutSettings = (
+  key: string,
+  payload: SettingsWritePayload,
+) => Promise<unknown>;
+interface SettingsWriter {
+  loaded(key: string, result: unknown): void;
+  save(key: string, value: unknown): Promise<unknown>;
+}
+const { createSettingsWriter } = loose<{
+  createSettingsWriter: (put: PutSettings) => SettingsWriter;
+}>(
+  createRequire(import.meta.url)(
+    "../../../packaging/electron/out/settings-conflicts.js",
+  ),
 );
 describe("Electron conditional settings writer", () => {
   it("refuses saves based on the offline mirror", async () => {
-    const put = vi.fn();
+    const put = vi.fn<PutSettings>();
     const writer = createSettingsWriter(put);
     await expect(writer.save("backup_settings", {})).rejects.toThrow(
       "not loaded",
@@ -13,25 +34,31 @@ describe("Electron conditional settings writer", () => {
     expect(put).not.toHaveBeenCalled();
   });
   it("uses the loaded baseline and advances it only on acknowledgment", async () => {
-    const put = vi.fn(async (_key, payload) => ({
-      ok: true,
-      data: { value: payload.value },
-    }));
+    const put = vi.fn<PutSettings>((_key, payload) =>
+      Promise.resolve({
+        ok: true,
+        data: { value: payload.value },
+      }),
+    );
     const writer = createSettingsWriter(put);
     writer.loaded("backup_settings", { expected: { exists: false } });
     await writer.save("backup_settings", { backupOnQuit: true });
     await writer.save("backup_settings", { backupOnQuit: false });
-    expect(put.mock.calls[0]![1].expected).toEqual({ exists: false });
-    expect(put.mock.calls[1]![1].expected).toEqual({
+    expect(must(put.mock.calls[0], "put.mock.calls[0]")[1].expected).toEqual({
+      exists: false,
+    });
+    expect(must(put.mock.calls[1], "put.mock.calls[1]")[1].expected).toEqual({
       exists: true,
       value: { backupOnQuit: true },
     });
   });
   it("fails on conflict, does not refresh the baseline, and blocks queued saves", async () => {
-    const put = vi.fn(async () => ({
-      ok: false,
-      error: { message: "Settings changed" },
-    }));
+    const put = vi.fn<PutSettings>(() =>
+      Promise.resolve({
+        ok: false,
+        error: { message: "Settings changed" },
+      }),
+    );
     const writer = createSettingsWriter(put);
     writer.loaded("services_settings", {
       expected: { exists: true, value: {} },

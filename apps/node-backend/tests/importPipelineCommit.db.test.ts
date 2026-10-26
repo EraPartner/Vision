@@ -49,6 +49,8 @@ import {
   budgetingIdentityBase,
 } from "../src/services/importIdentity.ts";
 import type { BudgetingIdentityRow } from "../src/services/importIdentity.ts";
+import { must } from "./helpers/must.ts";
+import type { TransactionId } from "@vision/types/brands";
 
 // The post-commit fan-out (MV refresh, planned-payment auto-link) is not what
 // this suite measures and would need materialized views this database does not
@@ -58,8 +60,9 @@ vi.mock("../src/services/plannedMatchService.ts", () => ({
   autoLinkTransactions: vi.fn().mockResolvedValue({ autoLinkedCount: 0 }),
 }));
 
-// Only dereferenced inside the describeDb-gated suite.
-const pool = getTestPool()!;
+// Only dereferenced inside the describeDb-gated suite, which is skipped
+// without a test database.
+const pool = getTestPool() as NonNullable<ReturnType<typeof getTestPool>>;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 // A row-lock waiter waits on the holder's transaction id; a session queued
 // for a table lock (DDL, TRUNCATE) does not, so it cannot pass for the claim.
@@ -68,6 +71,22 @@ const ROW_LOCK_WAITERS = `SELECT count(*)::int AS n
   WHERE NOT l.granted AND l.locktype = 'transactionid'
     AND l.transactionid = gate.backend_xid`;
 
+interface IdRow {
+  id: number;
+}
+/** BIGINT ids come back from node-postgres as strings. */
+interface Int8IdRow {
+  id: string;
+}
+
+/** Code-unit string order, the order `Array#sort()` applies without a comparator. */
+function compareStrings(a: string | null, b: string | null): number {
+  const left = String(a);
+  const right = String(b);
+  if (left < right) return -1;
+  return left > right ? 1 : 0;
+}
+
 /** Ids seeded by `seedFixtures()`. */
 const fx: Record<string, number> = {};
 /** A staged or inserted fixture row, keyed by column (plus `sourceId`). */
@@ -75,7 +94,7 @@ type FixtureRow = Record<string, unknown>;
 const stagedByBatch = new Map<number, Map<string, FixtureRow[]>>();
 
 function identityFor(row: FixtureRow, priorRows: FixtureRow[] = []) {
-  return assignImportIdentities(
+  const identities = assignImportIdentities(
     [...priorRows, row].map(
       (r): BudgetingIdentityRow & { raw_data?: unknown } => ({
         ...r,
@@ -83,38 +102,39 @@ function identityFor(row: FixtureRow, priorRows: FixtureRow[] = []) {
       }),
     ),
     (r) => budgetingIdentityBase(r, "belfius"),
-  ).at(-1)!;
+  );
+  return must(identities.at(-1), "the staged row's identity");
 }
 
-async function ensureAccount(name: string | null) {
-  if (name == null || name.trim() === "") return null;
+async function ensureAccount(name: unknown): Promise<number | null> {
+  if (typeof name !== "string" || name.trim() === "") return null;
   await pool.query(
     `INSERT INTO accounts (name, display_name) VALUES ($1, $1)
      ON CONFLICT (lower(btrim(name))) DO NOTHING`,
     [name],
   );
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<IdRow>(
     `SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
     [name],
   );
-  return rows[0].id;
+  return must(rows[0], "account").id;
 }
 
 async function seedFixtures() {
-  const { rows: cat } = await pool.query(
+  const { rows: cat } = await pool.query<IdRow>(
     `INSERT INTO categories (general, detail) VALUES ('Food', 'Groceries') RETURNING id`,
   );
-  fx.categoryId = cat[0].id;
-  const { rows: rec } = await pool.query(
+  fx.categoryId = must(cat[0], "category").id;
+  const { rows: rec } = await pool.query<IdRow>(
     `INSERT INTO recipients (name, normalized_name, default_category_id)
      VALUES ('DELHAIZE', 'delhaize', $1) RETURNING id`,
     [fx.categoryId],
   );
-  fx.recipientId = rec[0].id;
-  const { rows: rec2 } = await pool.query(
+  fx.recipientId = must(rec[0], "recipient").id;
+  const { rows: rec2 } = await pool.query<IdRow>(
     `INSERT INTO recipients (name, normalized_name) VALUES ('COLRUYT', 'colruyt') RETURNING id`,
   );
-  fx.otherRecipientId = rec2[0].id;
+  fx.otherRecipientId = must(rec2[0], "second recipient").id;
 }
 
 async function wipe() {
@@ -128,13 +148,13 @@ async function wipe() {
 }
 
 /** Create an import batch and return its id. */
-async function newBatch(adapterName = "belfius") {
-  const { rows } = await pool.query(
+async function newBatch(adapterName = "belfius"): Promise<number> {
+  const { rows } = await pool.query<Int8IdRow>(
     `INSERT INTO import_batches (adapter_name, status, rows_total)
      VALUES ($1, 'awaiting_review', 0) RETURNING id`,
     [adapterName],
   );
-  return rows[0].id;
+  return Number(must(rows[0], "import batch").id);
 }
 
 /**
@@ -145,7 +165,7 @@ async function stageRow(
   batchId: number,
   rowIndex: number,
   over: FixtureRow = {},
-) {
+): Promise<number> {
   const r = {
     tx_date: "2026-03-04",
     bank_account: "BE68 5390 0754 7034",
@@ -162,7 +182,8 @@ async function stageRow(
     override_category_id: null,
     ...over,
   };
-  const byIdentity = stagedByBatch.get(batchId) ?? new Map();
+  const byIdentity =
+    stagedByBatch.get(batchId) ?? new Map<string, FixtureRow[]>();
   const base = budgetingIdentityBase(
     { ...r, source_id: r.sourceId },
     "belfius",
@@ -171,7 +192,7 @@ async function stageRow(
   const identity = identityFor(r, priorRows);
   byIdentity.set(base, [...priorRows, r]);
   stagedByBatch.set(batchId, byIdentity);
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<Int8IdRow>(
     `INSERT INTO import_staging_rows
        (batch_id, row_index, status, tx_date, bank_account, recipient_raw, memo, amount,
         currency, balance, comment, source_transaction_id, source_record_hash,
@@ -203,12 +224,12 @@ async function stageRow(
       r.override_category_id,
     ],
   );
-  return rows[0].id;
+  return Number(must(rows[0], "staged row").id);
 }
 
 /** Insert a canonical transaction directly (never through the pipeline). */
-async function insertTxn(over: FixtureRow = {}) {
-  const t = {
+async function insertTxn(over: FixtureRow = {}): Promise<TransactionId> {
+  const t: FixtureRow = {
     date: "2026-03-04",
     bank_account: "BE68 5390 0754 7034",
     recipient_id: fx.recipientId,
@@ -223,10 +244,11 @@ async function insertTxn(over: FixtureRow = {}) {
     ...over,
   };
   const accountId = await ensureAccount(t.bank_account);
-  const identity = t.sourceId
-    ? identityFor({ ...t, sourceId: t.sourceId })
-    : null;
-  const { rows } = await pool.query(
+  const identity =
+    typeof t.sourceId === "string" && t.sourceId !== ""
+      ? identityFor({ ...t, sourceId: t.sourceId })
+      : null;
+  const { rows } = await pool.query<{ id: TransactionId }>(
     `INSERT INTO transactions
        (date, account_id, recipient_id, category_id, amount, currency, memo, comment,
         import_batch_id, dedup_fingerprint, dedup_fingerprint_version, is_active)
@@ -246,12 +268,18 @@ async function insertTxn(over: FixtureRow = {}) {
       t.is_active,
     ],
   );
-  return rows[0].id;
+  return must(rows[0], "inserted transaction").id;
+}
+
+interface StagingStatusRow {
+  row_index: number;
+  status: string;
+  error_message: string | null;
 }
 
 /** Staging statuses of a batch, ordered by row_index. */
 async function stagingStatuses(batchId: number) {
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<StagingStatusRow>(
     `SELECT row_index, status, error_message FROM import_staging_rows
       WHERE batch_id = $1 ORDER BY row_index`,
     [batchId],
@@ -259,16 +287,37 @@ async function stagingStatuses(batchId: number) {
   return rows;
 }
 
+interface BatchCountersRow {
+  status: string;
+  rows_imported: number;
+  rows_duplicate: number;
+  rows_error: number;
+}
+
 async function batchCounters(batchId: number) {
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<BatchCountersRow>(
     `SELECT status, rows_imported, rows_duplicate, rows_error FROM import_batches WHERE id = $1`,
     [batchId],
   );
-  return rows[0];
+  return must(rows[0], "import batch counters");
+}
+
+interface CommittedTxnRow {
+  id: number;
+  date: string;
+  amount: string;
+  memo: string | null;
+  bank_account: string | null;
+  recipient_id: number | null;
+  category_id: number | null;
+  currency: string;
+  balance: string | null;
+  dedup_fingerprint: string | null;
+  matched_pattern_id: number | null;
 }
 
 async function committedTxns(batchId: number) {
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<CommittedTxnRow>(
     `SELECT t.id, to_char(t.date,'YYYY-MM-DD') AS date,
             t.amount::text AS amount, t.memo,
             a.name AS bank_account, t.recipient_id, t.category_id, t.currency,
@@ -304,12 +353,15 @@ describeDb("importPipeline commit (real Postgres)", () => {
     "serializes an override against commit (overrideFirst=%s)",
     async (overrideFirst) => {
       const batchId = await newBatch();
-      const rowId = Number(await stageRow(batchId, 0));
-      const categoryId = (
-        await pool.query(
-          "INSERT INTO categories (general, detail) VALUES ('Review race', 'Chosen') RETURNING id",
-        )
-      ).rows[0].id;
+      const rowId = await stageRow(batchId, 0);
+      const categoryId = must(
+        (
+          await pool.query<IdRow>(
+            "INSERT INTO categories (general, detail) VALUES ('Review race', 'Chosen') RETURNING id",
+          )
+        ).rows[0],
+        "review-race category",
+      ).id;
       const gate = await pool.connect();
       const work: Promise<unknown>[] = [];
       try {
@@ -318,8 +370,11 @@ describeDb("importPipeline commit (real Postgres)", () => {
         // files share the database, and their table-lock waiters made the
         // first claim look queued before it was, so the second claim could
         // win the row lock.
-        const gatePid = (await gate.query("SELECT pg_backend_pid() AS pid"))
-          .rows[0].pid;
+        const gatePid = must(
+          (await gate.query<{ pid: number }>("SELECT pg_backend_pid() AS pid"))
+            .rows[0],
+          "gate backend pid",
+        ).pid;
         await gate.query(
           "SELECT id FROM import_batches WHERE id = $1 FOR UPDATE",
           [batchId],
@@ -331,8 +386,12 @@ describeDb("importPipeline commit (real Postgres)", () => {
         const deadline = Date.now() + 5000;
         let waiters = 0;
         while (Date.now() < deadline) {
-          waiters = (await pool.query(ROW_LOCK_WAITERS, [gatePid])).rows[0].n;
-          if (waiters) break;
+          waiters = must(
+            (await pool.query<{ n: number }>(ROW_LOCK_WAITERS, [gatePid]))
+              .rows[0],
+            "row-lock waiter count",
+          ).n;
+          if (waiters > 0) break;
           await new Promise((resolve) => setTimeout(resolve, 20));
         }
         expect(waiters).toBeGreaterThan(0);
@@ -356,7 +415,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
           });
         const posted = await committedTxns(batchId);
         expect(posted).toHaveLength(1);
-        expect(posted[0].category_id).toBe(
+        expect(must(posted[0], "posted transaction").category_id).toBe(
           overrideWon ? categoryId : fx.categoryId,
         );
       } finally {
@@ -384,8 +443,11 @@ describeDb("importPipeline commit (real Postgres)", () => {
         // files share the database, and their table-lock waiters made the
         // first claim look queued before it was, so the second claim could
         // win the row lock.
-        const gatePid = (await gate.query("SELECT pg_backend_pid() AS pid"))
-          .rows[0].pid;
+        const gatePid = must(
+          (await gate.query<{ pid: number }>("SELECT pg_backend_pid() AS pid"))
+            .rows[0],
+          "gate backend pid",
+        ).pid;
         await gate.query(
           "SELECT id FROM import_batches WHERE id = $1 FOR UPDATE",
           [batchId],
@@ -397,8 +459,12 @@ describeDb("importPipeline commit (real Postgres)", () => {
         const deadline = Date.now() + 5000;
         let waiters = 0;
         while (Date.now() < deadline) {
-          waiters = (await pool.query(ROW_LOCK_WAITERS, [gatePid])).rows[0].n;
-          if (waiters) break;
+          waiters = must(
+            (await pool.query<{ n: number }>(ROW_LOCK_WAITERS, [gatePid]))
+              .rows[0],
+            "row-lock waiter count",
+          ).n;
+          if (waiters > 0) break;
           await new Promise((resolve) => setTimeout(resolve, 20));
         }
         expect(waiters).toBeGreaterThan(0);
@@ -422,12 +488,15 @@ describeDb("importPipeline commit (real Postgres)", () => {
           expect(commitResult).toMatchObject({ status: "fulfilled" });
         expect(await committedTxns(batchId)).toHaveLength(rollbackWon ? 0 : 1);
         expect(
-          (
-            await pool.query(
-              "SELECT status FROM import_batches WHERE id = $1",
-              [batchId],
-            )
-          ).rows[0].status,
+          must(
+            (
+              await pool.query<{ status: string }>(
+                "SELECT status FROM import_batches WHERE id = $1",
+                [batchId],
+              )
+            ).rows[0],
+            "import batch",
+          ).status,
         ).toBe(rollbackWon ? "aborted" : "committing");
       } finally {
         await gate.query("ROLLBACK");
@@ -466,10 +535,10 @@ describeDb("importPipeline commit (real Postgres)", () => {
     await stageRow(batchId, 0, { bank_account: "REVOLUT CURRENT" });
 
     await commitBatch({ batchId });
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<{ multi_currency_cash: boolean }>(
       `SELECT multi_currency_cash FROM accounts WHERE name = 'REVOLUT CURRENT'`,
     );
-    expect(rows[0].multi_currency_cash).toBe(true);
+    expect(must(rows[0], "account").multi_currency_cash).toBe(true);
 
     const ordinaryBatch = await newBatch("belfius");
     await stageRow(ordinaryBatch, 0, {
@@ -477,10 +546,10 @@ describeDb("importPipeline commit (real Postgres)", () => {
       memo: "SECOND ROW",
     });
     await commitBatch({ batchId: ordinaryBatch });
-    const after = await pool.query(
+    const after = await pool.query<{ multi_currency_cash: boolean }>(
       `SELECT multi_currency_cash FROM accounts WHERE name = 'REVOLUT CURRENT'`,
     );
-    expect(after.rows[0].multi_currency_cash).toBe(true);
+    expect(must(after.rows[0], "account").multi_currency_cash).toBe(true);
   });
 
   it("keeps two legitimate identical occurrences in one chunk", async () => {
@@ -562,14 +631,16 @@ describeDb("importPipeline commit (real Postgres)", () => {
     });
 
     // Two labels resolve to two canonical account IDs.
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<{ account_id: number; name: string }>(
       `SELECT t.account_id, a.name
          FROM transactions t JOIN accounts a ON a.id = t.account_id
         WHERE t.import_batch_id = $1 ORDER BY t.id`,
       [batchId],
     );
     expect(rows).toHaveLength(2);
-    expect(rows[0].account_id).not.toBe(rows[1].account_id);
+    expect(must(rows[0], "first row").account_id).not.toBe(
+      must(rows[1], "second row").account_id,
+    );
     for (const r of rows) {
       expect(r.name).toMatch(/^BE/);
     }
@@ -595,11 +666,11 @@ describeDb("importPipeline commit (real Postgres)", () => {
       "duplicate",
     ]);
     // No twin account minted for the re-cased label.
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM accounts
         WHERE lower(btrim(name)) = lower(btrim('BE68 5390 0754 7034'))`,
     );
-    expect(rows[0].n).toBe(1);
+    expect(must(rows[0], "count row").n).toBe(1);
   });
 
   it("a label-less staging row only dedups against label-less rows", async () => {
@@ -626,11 +697,16 @@ describeDb("importPipeline commit (real Postgres)", () => {
       account_id: newAccountId,
     });
 
-    const { rows: edited } = await pool.query(
+    const { rows: edited } = await pool.query<{
+      account_id: number;
+      name: string;
+    }>(
       `SELECT t.account_id, a.name FROM transactions t JOIN accounts a ON a.id = t.account_id WHERE t.id = $1`,
       [txnId],
     );
-    expect(edited[0].name).toBe("Fresh Edited Account");
+    expect(must(edited[0], "edited transaction").name).toBe(
+      "Fresh Edited Account",
+    );
 
     const batchId = await newBatch();
     await stageRow(batchId, 0, { bank_account: "Fresh Edited Account" });
@@ -642,10 +718,10 @@ describeDb("importPipeline commit (real Postgres)", () => {
       autoLinkedCount: 0,
     });
     // The import resolved onto the account selected by the update.
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM accounts WHERE lower(btrim(name)) = 'fresh edited account'`,
     );
-    expect(rows[0].n).toBe(1);
+    expect(must(rows[0], "count row").n).toBe(1);
   });
 
   it("repointing a label-less row avoids a false duplicate for a later label-less import", async () => {
@@ -655,11 +731,11 @@ describeDb("importPipeline commit (real Postgres)", () => {
       account_id: newAccountId,
     });
 
-    const { rows: edited } = await pool.query(
+    const { rows: edited } = await pool.query<{ account_id: number }>(
       "SELECT account_id FROM transactions WHERE id = $1",
       [txnId],
     );
-    expect(edited[0].account_id).toBe(newAccountId);
+    expect(must(edited[0], "edited transaction").account_id).toBe(newAccountId);
 
     const batchId = await newBatch();
     await stageRow(batchId, 0, { bank_account: null });
@@ -685,17 +761,20 @@ describeDb("importPipeline commit (real Postgres)", () => {
     });
 
     // One account, name keeps the NBSP, and the committed row links to it.
-    const { rows: accounts } = await pool.query(
+    const { rows: accounts } = await pool.query<{ id: number; name: string }>(
       `SELECT id, name FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
       [label],
     );
     expect(accounts).toHaveLength(1);
-    expect(accounts[0].name).toBe(label);
-    const { rows: committed } = await pool.query(
+    const account = must(accounts[0], "account");
+    expect(account.name).toBe(label);
+    const { rows: committed } = await pool.query<{ account_id: number }>(
       `SELECT account_id FROM transactions WHERE import_batch_id = $1`,
       [batchId],
     );
-    expect(committed[0].account_id).toBe(accounts[0].id);
+    expect(must(committed[0], "committed transaction").account_id).toBe(
+      account.id,
+    );
 
     // Re-import of the same file is a no-op.
     const batch2 = await newBatch();
@@ -706,11 +785,11 @@ describeDb("importPipeline commit (real Postgres)", () => {
       errors: 0,
       autoLinkedCount: 0,
     });
-    const { rows: after } = await pool.query(
+    const { rows: after } = await pool.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
       [label],
     );
-    expect(after[0].n).toBe(1);
+    expect(must(after[0], "count row").n).toBe(1);
   });
 
   it("deduplicates a repeated source ID inside the same chunk", async () => {
@@ -770,7 +849,9 @@ describeDb("importPipeline commit (real Postgres)", () => {
     });
     const staging = await stagingStatuses(batchId);
     expect(staging.map((r) => r.status)).toEqual(["error"]);
-    expect(staging[0].error_message).toMatch(/chk_transactions_currency_iso/);
+    expect(must(staging[0], "staging[0]").error_message).toMatch(
+      /chk_transactions_currency_iso/,
+    );
     expect((await batchCounters(batchId)).rows_error).toBe(1);
   });
 
@@ -810,10 +891,9 @@ describeDb("importPipeline commit (real Postgres)", () => {
       errors: 1,
       autoLinkedCount: 0,
     });
-    expect((await committedTxns(batchId)).map((t) => t.memo).sort()).toEqual([
-      "GOOD ONE",
-      "GOOD TWO",
-    ]);
+    expect(
+      (await committedTxns(batchId)).map((t) => t.memo).sort(compareStrings),
+    ).toEqual(["GOOD ONE", "GOOD TWO"]);
     expect((await stagingStatuses(batchId)).map((r) => r.status)).toEqual([
       "committed",
       "error",
@@ -974,7 +1054,10 @@ describeDb("importPipeline commit (real Postgres)", () => {
     });
 
     const txns = await committedTxns(batchId);
-    expect(txns.map((t) => t.memo).sort()).toEqual(["GOOD ONE", "GOOD TWO"]);
+    expect(txns.map((t) => t.memo).sort(compareStrings)).toEqual([
+      "GOOD ONE",
+      "GOOD TWO",
+    ]);
 
     const staging = await stagingStatuses(batchId);
     expect(staging.map((r) => r.status)).toEqual([
@@ -982,7 +1065,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
       "error",
       "committed",
     ]);
-    expect(staging[1].error_message).toBeTruthy();
+    expect(must(staging[1], "staging[1]").error_message).toBeTruthy();
 
     const counters = await batchCounters(batchId);
     expect(counters.rows_imported).toBe(2);
@@ -1072,7 +1155,9 @@ describeDb("importPipeline commit (real Postgres)", () => {
       "committed",
       "committed",
     ]);
-    expect(staging[0].error_message).toMatch(/unresolved recipient/);
+    expect(must(staging[0], "staging[0]").error_message).toMatch(
+      /unresolved recipient/,
+    );
     expect(await committedTxns(batchId)).toHaveLength(2);
     const counters = await batchCounters(batchId);
     expect(counters.rows_imported).toBe(2);
@@ -1096,7 +1181,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
     });
     const txns = await committedTxns(batchId);
     expect(txns).toHaveLength(1);
-    expect(txns[0].recipient_id).toBe(fx.otherRecipientId);
+    expect(must(txns[0], "txns[0]").recipient_id).toBe(fx.otherRecipientId);
     expect((await stagingStatuses(batchId)).map((r) => r.status)).toEqual([
       "committed",
     ]);
@@ -1131,23 +1216,24 @@ describeDb("importPipeline commit (real Postgres)", () => {
       category_id: fx.categoryId,
       currency: "EUR",
       balance: "1234.5600", // transactions.balance NUMERIC(18,4) since migration 0088
-      dedup_fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
     });
+    expect(t?.dedup_fingerprint).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("prefers the row override over the recipient default and clears matched_pattern_id", async () => {
-    const { rows: cat } = await pool.query(
+    const { rows: cat } = await pool.query<IdRow>(
       `INSERT INTO categories (general, detail) VALUES ('Leisure', 'Travel') RETURNING id`,
     );
+    const categoryId = must(cat[0], "category").id;
     const batchId = await newBatch();
     await stageRow(batchId, 0, {
-      override_category_id: cat[0].id,
+      override_category_id: categoryId,
       user_override_recipient_id: fx.otherRecipientId,
     });
 
     expect((await commitBatch({ batchId })).imported).toBe(1);
-    const [t] = await committedTxns(batchId);
-    expect(t.category_id).toBe(cat[0].id);
+    const t = must((await committedTxns(batchId))[0], "committed transaction");
+    expect(t.category_id).toBe(categoryId);
     expect(t.recipient_id).toBe(fx.otherRecipientId);
     expect(t.matched_pattern_id).toBeNull();
   });

@@ -25,10 +25,13 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () =>
 // `query` mocks below. Default null → transfers excluded.
 vi.mock("../src/repositories/settingsRepository.ts", () => ({
   settingsRepository: {
-    get: vi.fn(async () => null),
-    getAll: vi.fn(async () => ({})),
+    get: vi.fn(() => Promise.resolve(null)),
+    getAll: vi.fn(() => Promise.resolve({})),
   },
-  default: { get: vi.fn(async () => null), getAll: vi.fn(async () => ({})) },
+  default: {
+    get: vi.fn(() => Promise.resolve(null)),
+    getAll: vi.fn(() => Promise.resolve({})),
+  },
 }));
 
 import {
@@ -39,7 +42,6 @@ import type { PgQueryResult } from "../src/database/connection.ts";
 import { convertRowsToEur as rawConvertRowsToEur } from "../src/services/currency/currencyConversionService.ts";
 import infoRepository from "../src/repositories/infoRepository.ts";
 import { clearMvCache } from "../src/repositories/infoRepository.ts";
-import { computedBalanceByCurrencyAggLateral } from "../src/repositories/accountBalanceSql.ts";
 import { makePlannedTransactionRow } from "./builders/domainRows.ts";
 
 const query = rawQuery as unknown as Mock<
@@ -63,6 +65,11 @@ import { logger } from "../src/config/logger.ts";
 // App-timezone today (ADR-009) — getNetWorthFromSnapshots anchors its day
 // series on the app timezone, not the server-local/UTC calendar day.
 import { todayAppDateString, addDaysYmd } from "../src/lib/timezone.ts";
+import { must } from "./helpers/must.ts";
+import { loose } from "./helpers/partial.ts";
+import type { LoggerMock } from "./helpers/mockLogger.ts";
+
+const loggerMock = loose<LoggerMock>(logger);
 
 // YYYY-MM period helpers. Derive the previous month from the first-of-month in
 // UTC so end-of-month run dates (the 29th–31st) don't roll `setMonth(-1)` into
@@ -84,34 +91,37 @@ describe("InfoRepository", () => {
     vi.clearAllMocks();
     clearMvCache();
     // Default: mvAvailable returns false (no materialized views)
-    query.mockImplementation(async (sql) => {
+    query.mockImplementation((sql) => {
       if (typeof sql === "string" && sql.includes("SELECT 1 FROM mv_")) {
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       }
-      return { rows: [] };
+      return Promise.resolve({ rows: [] });
     });
   });
 
   describe("getNetWorthFromSnapshots", () => {
     it("should return combined net worth from bank balances and portfolio snapshots", async () => {
       const todayKey = todayAppDateString();
-      query.mockImplementation(async (sql) => {
-        if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
+      query.mockImplementation((sql) => {
+        if (sql.includes("SELECT 1 FROM mv_"))
+          return Promise.resolve({ rows: [] });
         if (sql.includes("first_data_date"))
-          return { rows: [{ first_data_date: pgDay("2026-02-01") }] };
+          return Promise.resolve({
+            rows: [{ first_data_date: pgDay("2026-02-01") }],
+          });
         if (
           sql.includes("portfolio_performance_snapshots") &&
           sql.includes("value AS investments")
         ) {
-          return {
+          return Promise.resolve({
             rows: [
               { day: "2026-02-01", investments: "3235" },
               { day: todayKey, investments: "4470" },
             ],
-          };
+          });
         }
         if (sql.includes("balance_series")) {
-          return {
+          return Promise.resolve({
             rows: [
               {
                 day: "2026-02-01",
@@ -128,9 +138,9 @@ describe("InfoRepository", () => {
                 currency: "EUR",
               },
             ],
-          };
+          });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       });
 
       const result = await infoRepository.getNetWorthFromSnapshots();
@@ -151,23 +161,26 @@ describe("InfoRepository", () => {
 
     it("should overlay the latest point with the live portfolio value when provided", async () => {
       const todayKey = todayAppDateString();
-      query.mockImplementation(async (sql) => {
-        if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
+      query.mockImplementation((sql) => {
+        if (sql.includes("SELECT 1 FROM mv_"))
+          return Promise.resolve({ rows: [] });
         if (sql.includes("first_data_date"))
-          return { rows: [{ first_data_date: pgDay("2026-02-01") }] };
+          return Promise.resolve({
+            rows: [{ first_data_date: pgDay("2026-02-01") }],
+          });
         if (
           sql.includes("portfolio_performance_snapshots") &&
           sql.includes("value AS investments")
         ) {
-          return {
+          return Promise.resolve({
             rows: [
               { day: "2026-02-01", investments: "3235" },
               { day: todayKey, investments: "4470" },
             ],
-          };
+          });
         }
         if (sql.includes("balance_series")) {
-          return {
+          return Promise.resolve({
             rows: [
               {
                 day: "2026-02-01",
@@ -184,9 +197,9 @@ describe("InfoRepository", () => {
                 currency: "EUR",
               },
             ],
-          };
+          });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       });
 
       const result = await infoRepository.getNetWorthFromSnapshots("EUR", {
@@ -199,25 +212,33 @@ describe("InfoRepository", () => {
       expect(result.current.netWorth).toBe(10123.45);
       // The latest chart point / table row reflects the same overlay so the
       // page is internally consistent with its own headline.
-      const lastSnapshot = result.snapshots[result.snapshots.length - 1]!;
+      const lastSnapshot = must(
+        result.snapshots[result.snapshots.length - 1],
+        "result.snapshots[result.snapshots.length - 1]",
+      );
       expect(lastSnapshot.investments).toBe(5123.45);
       expect(lastSnapshot.netWorth).toBe(10123.45);
     });
 
     it("should pass target currency through conversion calls", async () => {
       const todayKey = todayAppDateString();
-      query.mockImplementation(async (sql) => {
-        if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
+      query.mockImplementation((sql) => {
+        if (sql.includes("SELECT 1 FROM mv_"))
+          return Promise.resolve({ rows: [] });
         if (sql.includes("first_data_date"))
-          return { rows: [{ first_data_date: pgDay(todayKey) }] };
+          return Promise.resolve({
+            rows: [{ first_data_date: pgDay(todayKey) }],
+          });
         if (
           sql.includes("portfolio_performance_snapshots") &&
           sql.includes("value AS investments")
         ) {
-          return { rows: [{ day: todayKey, investments: "4470" }] };
+          return Promise.resolve({
+            rows: [{ day: todayKey, investments: "4470" }],
+          });
         }
         if (sql.includes("balance_series")) {
-          return {
+          return Promise.resolve({
             rows: [
               {
                 day: todayKey,
@@ -227,9 +248,9 @@ describe("InfoRepository", () => {
                 currency: "EUR",
               },
             ],
-          };
+          });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       });
 
       await infoRepository.getNetWorthFromSnapshots("HUF");
@@ -241,11 +262,12 @@ describe("InfoRepository", () => {
     });
 
     it("should handle empty portfolio and bank data", async () => {
-      query.mockImplementation(async (sql) => {
-        if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
+      query.mockImplementation((sql) => {
+        if (sql.includes("SELECT 1 FROM mv_"))
+          return Promise.resolve({ rows: [] });
         if (sql.includes("first_data_date"))
-          return { rows: [{ first_data_date: null }] };
-        return { rows: [] };
+          return Promise.resolve({ rows: [{ first_data_date: null }] });
+        return Promise.resolve({ rows: [] });
       });
 
       const result = await infoRepository.getNetWorthFromSnapshots();
@@ -259,12 +281,12 @@ describe("InfoRepository", () => {
 
     it("does not use inactive transactions as a history-span fallback", async () => {
       let probeSql = "";
-      query.mockImplementation(async (sql) => {
+      query.mockImplementation((sql) => {
         if (sql.includes("first_data_date")) {
           probeSql = sql;
-          return { rows: [{ first_data_date: null }] };
+          return Promise.resolve({ rows: [{ first_data_date: null }] });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       });
 
       const result = await infoRepository.getNetWorthFromSnapshots();
@@ -276,18 +298,21 @@ describe("InfoRepository", () => {
 
     it("should return investments: 0 when snapshots table is empty", async () => {
       const todayKey = todayAppDateString();
-      query.mockImplementation(async (sql) => {
-        if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
+      query.mockImplementation((sql) => {
+        if (sql.includes("SELECT 1 FROM mv_"))
+          return Promise.resolve({ rows: [] });
         if (sql.includes("first_data_date"))
-          return { rows: [{ first_data_date: pgDay(todayKey) }] };
+          return Promise.resolve({
+            rows: [{ first_data_date: pgDay(todayKey) }],
+          });
         if (
           sql.includes("portfolio_performance_snapshots") &&
           sql.includes("value AS investments")
         ) {
-          return { rows: [] };
+          return Promise.resolve({ rows: [] });
         }
         if (sql.includes("balance_series")) {
-          return {
+          return Promise.resolve({
             rows: [
               {
                 day: todayKey,
@@ -297,9 +322,9 @@ describe("InfoRepository", () => {
                 currency: "EUR",
               },
             ],
-          };
+          });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       });
 
       const result = await infoRepository.getNetWorthFromSnapshots();
@@ -313,18 +338,21 @@ describe("InfoRepository", () => {
     it("should compute monthly change correctly", async () => {
       const secondDayKey = todayAppDateString();
       const firstDayKey = addDaysYmd(secondDayKey, -1);
-      query.mockImplementation(async (sql) => {
-        if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
+      query.mockImplementation((sql) => {
+        if (sql.includes("SELECT 1 FROM mv_"))
+          return Promise.resolve({ rows: [] });
         if (sql.includes("first_data_date"))
-          return { rows: [{ first_data_date: pgDay(firstDayKey) }] };
+          return Promise.resolve({
+            rows: [{ first_data_date: pgDay(firstDayKey) }],
+          });
         if (
           sql.includes("portfolio_performance_snapshots") &&
           sql.includes("value AS investments")
         ) {
-          return { rows: [] };
+          return Promise.resolve({ rows: [] });
         }
         if (sql.includes("balance_series")) {
-          return {
+          return Promise.resolve({
             rows: [
               {
                 day: firstDayKey,
@@ -341,9 +369,9 @@ describe("InfoRepository", () => {
                 currency: "EUR",
               },
             ],
-          };
+          });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       });
 
       const result = await infoRepository.getNetWorthFromSnapshots();
@@ -354,7 +382,7 @@ describe("InfoRepository", () => {
 
     it("should fall back to cumulative transaction flow when no bank balances are available", async () => {
       const todayKey = todayAppDateString();
-      query.mockImplementation(async (sql) => {
+      query.mockImplementation((sql) => {
         // Discriminated by 'tx_cumulative', the fallback's own CTE:
         // `COALESCE(SUM(t.amount), 0) AS amount` also appears inside the
         // shared balance-series CTEs, so it cross-matches the history walk.
@@ -364,7 +392,7 @@ describe("InfoRepository", () => {
         // guard is now scoped to `SELECT 1 FROM mv_`, so it no longer collides
         // and the ordering is no longer load-bearing for this reason.)
         if (sql.includes("tx_cumulative")) {
-          return {
+          return Promise.resolve({
             rows: [
               {
                 day: "2026-02-01",
@@ -379,21 +407,26 @@ describe("InfoRepository", () => {
                 value: "1500",
               },
             ],
-          };
+          });
         }
-        if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
+        if (sql.includes("SELECT 1 FROM mv_"))
+          return Promise.resolve({ rows: [] });
         if (sql.includes("first_data_date"))
-          return { rows: [{ first_data_date: pgDay("2026-02-01") }] };
+          return Promise.resolve({
+            rows: [{ first_data_date: pgDay("2026-02-01") }],
+          });
         if (
           sql.includes("portfolio_performance_snapshots") &&
           sql.includes("value AS investments")
         ) {
-          return { rows: [{ day: todayKey, investments: "500" }] };
+          return Promise.resolve({
+            rows: [{ day: todayKey, investments: "500" }],
+          });
         }
         if (sql.includes("balance_series")) {
-          return { rows: [] };
+          return Promise.resolve({ rows: [] });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       });
 
       const result = await infoRepository.getNetWorthFromSnapshots();
@@ -414,22 +447,25 @@ describe("InfoRepository", () => {
 
     it("should fall back to the seed date via the combined COALESCE query when there are no active transactions", async () => {
       const todayKey = todayAppDateString();
-      query.mockImplementation(async (sql) => {
-        if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
+      query.mockImplementation((sql) => {
+        if (sql.includes("SELECT 1 FROM mv_"))
+          return Promise.resolve({ rows: [] });
         // The first-data-date query now folds the active-only minimum and the
         // all-transactions fallback into one COALESCE (SIMP-51); the DB resolves
         // the fallback and returns the seed date directly.
         if (sql.includes("first_data_date")) {
-          return { rows: [{ first_data_date: pgDay(todayKey) }] };
+          return Promise.resolve({
+            rows: [{ first_data_date: pgDay(todayKey) }],
+          });
         }
         if (
           sql.includes("portfolio_performance_snapshots") &&
           sql.includes("value AS investments")
         ) {
-          return { rows: [] };
+          return Promise.resolve({ rows: [] });
         }
         if (sql.includes("balance_series")) {
-          return {
+          return Promise.resolve({
             rows: [
               {
                 day: todayKey,
@@ -439,9 +475,9 @@ describe("InfoRepository", () => {
                 currency: "EUR",
               },
             ],
-          };
+          });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       });
 
       const result = await infoRepository.getNetWorthFromSnapshots();
@@ -476,23 +512,29 @@ describe("InfoRepository", () => {
       currentRows?: Record<string, unknown>[];
       fallbackRows?: Record<string, unknown>[];
     }) => {
-      query.mockImplementation(async (sql) => {
+      query.mockImplementation((sql) => {
         if (sql.includes("balance_parts"))
-          return currentRows === undefined ? {} : { rows: currentRows };
-        if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
+          return Promise.resolve(
+            currentRows === undefined ? {} : { rows: currentRows },
+          );
+        if (sql.includes("SELECT 1 FROM mv_"))
+          return Promise.resolve({ rows: [] });
         if (sql.includes("first_data_date"))
-          return { rows: [{ first_data_date: pgDay(firstDataDate) }] };
+          return Promise.resolve({
+            rows: [{ first_data_date: pgDay(firstDataDate) }],
+          });
         if (
           sql.includes("portfolio_performance_snapshots") &&
           sql.includes("value AS investments")
         ) {
-          return { rows: investmentsRows };
+          return Promise.resolve({ rows: investmentsRows });
         }
         if (sql.includes("balance_series")) {
-          return { rows: walkRows };
+          return Promise.resolve({ rows: walkRows });
         }
-        if (sql.includes("flow_rows AS")) return { rows: fallbackRows };
-        return { rows: [] };
+        if (sql.includes("flow_rows AS"))
+          return Promise.resolve({ rows: fallbackRows });
+        return Promise.resolve({ rows: [] });
       });
     };
 
@@ -559,10 +601,17 @@ describe("InfoRepository", () => {
 
       // History stays stamp-based (WP-A1 decision): earlier points are
       // untouched by the override.
-      expect(result.snapshots[0]!.liquid).toBe(4500);
-      expect(result.snapshots[0]!.liabilities).toBe(0);
+      expect(must(result.snapshots[0], "result.snapshots[0]").liquid).toBe(
+        4500,
+      );
+      expect(must(result.snapshots[0], "result.snapshots[0]").liabilities).toBe(
+        0,
+      );
       // Only the latest point was reconciled to the unified definition.
-      const last = result.snapshots[result.snapshots.length - 1]!;
+      const last = must(
+        result.snapshots[result.snapshots.length - 1],
+        "result.snapshots[result.snapshots.length - 1]",
+      );
       expect(last.liquid).toBe(5350);
       expect(last.liabilities).toBe(-300);
       expect(last.netWorth).toBe(6050);
@@ -728,18 +777,21 @@ describe("InfoRepository", () => {
 
     it("should emit debug log with summary metrics", async () => {
       const todayKey = todayAppDateString();
-      query.mockImplementation(async (sql) => {
-        if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
+      query.mockImplementation((sql) => {
+        if (sql.includes("SELECT 1 FROM mv_"))
+          return Promise.resolve({ rows: [] });
         if (sql.includes("first_data_date"))
-          return { rows: [{ first_data_date: pgDay(todayKey) }] };
+          return Promise.resolve({
+            rows: [{ first_data_date: pgDay(todayKey) }],
+          });
         if (
           sql.includes("portfolio_performance_snapshots") &&
           sql.includes("value AS investments")
         ) {
-          return { rows: [] };
+          return Promise.resolve({ rows: [] });
         }
         if (sql.includes("balance_series")) {
-          return {
+          return Promise.resolve({
             rows: [
               {
                 day: todayKey,
@@ -749,14 +801,14 @@ describe("InfoRepository", () => {
                 currency: "EUR",
               },
             ],
-          };
+          });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       });
 
       await infoRepository.getNetWorthFromSnapshots();
 
-      expect(logger.debug).toHaveBeenCalledWith(
+      expect(loggerMock.debug).toHaveBeenCalledWith(
         "Net worth computed from snapshots",
         expect.objectContaining({
           targetCurrency: "EUR",
@@ -770,11 +822,11 @@ describe("InfoRepository", () => {
   describe("getRecipientInsights", () => {
     it("should return top merchants and month-over-month data", async () => {
       let callIdx = 0;
-      query.mockImplementation(async () => {
+      query.mockImplementation(() => {
         callIdx++;
         if (callIdx === 1) {
           // Top merchants query
-          return {
+          return Promise.resolve({
             rows: [
               {
                 recipient_id: 1,
@@ -797,11 +849,11 @@ describe("InfoRepository", () => {
                 date: pgDay("2026-02-28"),
               },
             ],
-          };
+          });
         }
         if (callIdx === 2) {
           // MoM comparison query
-          return {
+          return Promise.resolve({
             rows: [
               {
                 recipient_id: 1,
@@ -828,44 +880,66 @@ describe("InfoRepository", () => {
                 abs_amount: "60.00",
               },
             ],
-          };
+          });
         }
         if (callIdx === 3) {
           // Current/previous month keys derived in-DB.
-          return {
+          return Promise.resolve({
             rows: [
               {
                 current_period: currentPeriod(),
                 prev_period: prevPeriod(),
               },
             ],
-          };
+          });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       });
 
       const result = await infoRepository.getRecipientInsights();
 
       expect(result.topMerchants).toHaveLength(2);
-      expect(result.topMerchants[0]!.name).toBe("Amazon");
-      expect(result.topMerchants[0]!.totalSpend).toBe(750.5);
-      expect(result.topMerchants[0]!.transactionCount).toBe(15);
-      expect(result.topMerchants[0]!.avgAmount).toBe(50.03);
-      expect(result.topMerchants[1]!.name).toBe("Walmart");
+      expect(must(result.topMerchants[0], "result.topMerchants[0]").name).toBe(
+        "Amazon",
+      );
+      expect(
+        must(result.topMerchants[0], "result.topMerchants[0]").totalSpend,
+      ).toBe(750.5);
+      expect(
+        must(result.topMerchants[0], "result.topMerchants[0]").transactionCount,
+      ).toBe(15);
+      expect(
+        must(result.topMerchants[0], "result.topMerchants[0]").avgAmount,
+      ).toBe(50.03);
+      expect(must(result.topMerchants[1], "result.topMerchants[1]").name).toBe(
+        "Walmart",
+      );
 
       // MoM: only entries with non-null change_percent
       expect(result.monthOverMonth).toHaveLength(1);
-      expect(result.monthOverMonth[0]!.name).toBe("Amazon");
-      expect(result.monthOverMonth[0]!.changePercent).toBe(50.0);
-      expect(result.monthOverMonth[0]!.currentSpend).toBe(120);
-      expect(result.monthOverMonth[0]!.previousSpend).toBe(80);
+      expect(
+        must(result.monthOverMonth[0], "result.monthOverMonth[0]").name,
+      ).toBe("Amazon");
+      expect(
+        must(result.monthOverMonth[0], "result.monthOverMonth[0]")
+          .changePercent,
+      ).toBe(50.0);
+      expect(
+        must(result.monthOverMonth[0], "result.monthOverMonth[0]").currentSpend,
+      ).toBe(120);
+      expect(
+        must(result.monthOverMonth[0], "result.monthOverMonth[0]")
+          .previousSpend,
+      ).toBe(80);
     });
 
     it("should return empty arrays when no transactions", async () => {
-      query.mockImplementation(async (sql) =>
-        sql.includes("AS current_period")
-          ? { rows: [{ current_period: "2026-01", prev_period: "2025-12" }] }
-          : { rows: [] },
+      query.mockImplementation((sql) =>
+        Promise.resolve(
+          sql.includes("AS current_period")
+            ? { rows: [{ current_period: "2026-01", prev_period: "2025-12" }] }
+            : { rows: [] },
+        ),
       );
 
       const result = await infoRepository.getRecipientInsights();
@@ -876,10 +950,10 @@ describe("InfoRepository", () => {
 
     it("should filter out entries with null change_percent from monthOverMonth", async () => {
       let callIdx = 0;
-      query.mockImplementation(async () => {
+      query.mockImplementation(() => {
         callIdx++;
         if (callIdx === 1)
-          return {
+          return Promise.resolve({
             rows: [
               {
                 recipient_id: 1,
@@ -892,9 +966,9 @@ describe("InfoRepository", () => {
                 date: pgDay("2026-03-01"),
               },
             ],
-          };
+          });
         if (callIdx === 2)
-          return {
+          return Promise.resolve({
             rows: [
               {
                 recipient_id: 1,
@@ -905,17 +979,17 @@ describe("InfoRepository", () => {
                 abs_amount: "50",
               },
             ],
-          };
+          });
         if (callIdx === 3)
-          return {
+          return Promise.resolve({
             rows: [
               {
                 current_period: currentPeriod(),
                 prev_period: prevPeriod(),
               },
             ],
-          };
-        return { rows: [] };
+          });
+        return Promise.resolve({ rows: [] });
       });
 
       const result = await infoRepository.getRecipientInsights();
@@ -927,7 +1001,7 @@ describe("InfoRepository", () => {
 
   describe("getCashflowComparison", () => {
     it("should return cashflow data with correct structure", async () => {
-      query.mockImplementation(async () => ({ rows: [] }));
+      query.mockImplementation(() => Promise.resolve({ rows: [] }));
 
       const result = await infoRepository.getCashflowComparison();
 
@@ -943,16 +1017,17 @@ describe("InfoRepository", () => {
       expect(result.without_planned[0]).toMatchObject({
         day: 1,
         average: 0,
-        current: expect.anything(),
       });
+      expect(result.without_planned[0]?.current).toBeDefined();
+      expect(result.without_planned[0]?.current).not.toBeNull();
     });
   });
 
   describe("getBankBalances", () => {
     it("should return account balances with history", async () => {
-      query.mockImplementation(async (sql) => {
+      query.mockImplementation((sql) => {
         if (sql.includes("tx.transaction_count > 0")) {
-          return {
+          return Promise.resolve({
             rows: [
               {
                 account_id: 5,
@@ -970,18 +1045,20 @@ describe("InfoRepository", () => {
                 last_transaction: pgDay("2026-03-01"),
               },
             ],
-          };
+          });
         }
         if (sql.includes("ranked AS") && sql.includes("ROW_NUMBER() OVER"))
-          return { rows: [] };
-        return { rows: [] };
+          return Promise.resolve({ rows: [] });
+        return Promise.resolve({ rows: [] });
       });
 
       const result = await infoRepository.getBankBalances();
 
       expect(result.accounts).toHaveLength(1);
-      expect(result.accounts[0]!.bank_account).toBe("Revolut");
-      expect(result.accounts[0]!.balance).toBe(2500);
+      expect(must(result.accounts[0], "result.accounts[0]").bank_account).toBe(
+        "Revolut",
+      );
+      expect(must(result.accounts[0], "result.accounts[0]").balance).toBe(2500);
       expect(result.total_net_position).toBe(2500);
       // Both current-balance and history rows are now batched into a single
       // convertRowsToEur call inside batchConvertGroupsWithHistoricalRateFallback.
@@ -996,20 +1073,20 @@ describe("InfoRepository", () => {
   describe("getMonthlyFinancialSummary", () => {
     it("zero-fills every month from an empty MV when exclusions are empty", async () => {
       const calls: string[] = [];
-      query.mockImplementation(async (sql) => {
-        if (typeof sql !== "string") return { rows: [] };
+      query.mockImplementation((sql) => {
+        if (typeof sql !== "string") return Promise.resolve({ rows: [] });
         calls.push(sql);
 
         // mvAvailable('mv_monthly_summary') check
         if (sql.includes("SELECT 1 FROM mv_monthly_summary LIMIT 1")) {
-          return { rows: [{ "?column?": 1 }] };
+          return Promise.resolve({ rows: [{ "?column?": 1 }] });
         }
 
         if (sql.includes("FROM mv_monthly_summary")) {
-          return { rows: [] };
+          return Promise.resolve({ rows: [] });
         }
 
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       });
 
       const result = await infoRepository.getMonthlyFinancialSummary([]);
@@ -1031,13 +1108,13 @@ describe("InfoRepository", () => {
     it("limits the live path to the given accounts and skips the account-less MV", async () => {
       const calls: { sql: string; params?: readonly unknown[] | undefined }[] =
         [];
-      query.mockImplementation(async (sql, params) => {
-        if (typeof sql !== "string") return { rows: [] };
+      query.mockImplementation((sql, params) => {
+        if (typeof sql !== "string") return Promise.resolve({ rows: [] });
         calls.push({ sql, params });
         if (sql.includes("SELECT 1 FROM mv_monthly_summary LIMIT 1")) {
-          return { rows: [{ "?column?": 1 }] };
+          return Promise.resolve({ rows: [{ "?column?": 1 }] });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       });
 
       await infoRepository.getMonthlyFinancialSummary(
@@ -1058,13 +1135,17 @@ describe("InfoRepository", () => {
       // The account filter binds the requested ids, and with both bounds
       // given no app-date anchor is bound.
       const placeholder = /t\.account_id = ANY\(\$(\d+)::int\[\]\)/.exec(
-        live!.sql,
+        must(live, "live").sql,
       );
       expect(placeholder).toBeTruthy();
-      expect(live!.params?.[Number(placeholder![1]) - 1]).toEqual([3, 7]);
+      expect(
+        must(live, "live").params?.[
+          Number(must(placeholder, "placeholder")[1]) - 1
+        ],
+      ).toEqual([3, 7]);
       const bounds = ["2026-01-01", "2026-06-30"];
       expect(
-        live!.params?.every(
+        must(live, "live").params?.every(
           (p) => Array.isArray(p) || bounds.includes(p as string),
         ),
       ).toBe(true);
@@ -1073,25 +1154,25 @@ describe("InfoRepository", () => {
 
   describe("general infoRepository methods", () => {
     it("should compute category breakdown from fallback queries", async () => {
-      query.mockImplementation(async (sql) => {
+      query.mockImplementation((sql) => {
         if (sql.includes("SELECT 1 FROM mv_category_totals LIMIT 1"))
-          return { rows: [] };
+          return Promise.resolve({ rows: [] });
         if (sql.includes("SELECT count(*) FROM transactions"))
-          return { rows: [{ count: "2" }] };
+          return Promise.resolve({ rows: [{ count: "2" }] });
         if (
           sql.includes("FROM transactions t") &&
           sql.includes("WHERE t.is_active = true") &&
           !sql.includes("COALESCE(c.id")
         ) {
-          return {
+          return Promise.resolve({
             rows: [
               { amount: "-3", currency: "EUR", date: "2026-01-01" },
               { amount: "-2", currency: "USD", date: "2026-01-02" },
             ],
-          };
+          });
         }
         if (sql.includes("COALESCE(c.id, -1) AS category_id")) {
-          return {
+          return Promise.resolve({
             rows: [
               {
                 category_id: 2,
@@ -1110,9 +1191,9 @@ describe("InfoRepository", () => {
                 date: "2026-01-02",
               },
             ],
-          };
+          });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       });
 
       const breakdown = await infoRepository.getCategoryBreakdown("EUR");
@@ -1168,8 +1249,10 @@ describe("InfoRepository", () => {
         expect(result.summary.net_amount).toBe(30);
         expect(result.summary.transaction_count).toBe(2);
         // The SQL must exclude already-executed planned transactions.
-        expect(query.mock.calls[0]![0]).toContain("is_executed = false");
-        expect(query.mock.calls[0]![0]).toContain(
+        expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toContain(
+          "is_executed = false",
+        );
+        expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toContain(
           "COALESCE(pr.name, r.name) AS recipient_name",
         );
       } finally {
@@ -1216,7 +1299,7 @@ describe("InfoRepository", () => {
             year,
           });
           // …and the SQL window must be bound to that same month.
-          expect(query.mock.calls[0]![1]).toEqual([
+          expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([
             periodStart,
             expect.any(String),
           ]);
@@ -1519,8 +1602,12 @@ describe("InfoRepository", () => {
         );
         // ADR-083: both the 6-month and current-month queries must exclude
         // internal transfers when includeTransfers is off (the default).
-        expect(query.mock.calls[0]![0]).toContain("is_transfer = false");
-        expect(query.mock.calls[1]![0]).toContain("is_transfer = false");
+        expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toContain(
+          "is_transfer = false",
+        );
+        expect(must(query.mock.calls[1], "query.mock.calls[1]")[0]).toContain(
+          "is_transfer = false",
+        );
       } finally {
         vi.useRealTimers();
       }

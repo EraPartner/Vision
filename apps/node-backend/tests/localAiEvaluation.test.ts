@@ -9,6 +9,7 @@ import {
 } from "../src/services/aiEvaluation/localReliability.ts";
 import type { LocalAiScore } from "../src/services/aiEvaluation/localReliability.ts";
 import { partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 function call(name: string, args: unknown) {
   return { function: { name, arguments: args } };
@@ -18,14 +19,20 @@ describe("local AI reliability evaluation", () => {
   it("keeps every oracle tool on the production allowlist", () => {
     const productionTools = new Set(getToolNames());
     for (const testCase of LOCAL_AI_EVALUATION_CASES) {
-      for (const expectedCall of testCase.expectedCalls!) {
+      for (const expectedCall of must(
+        testCase.expectedCalls,
+        "testCase.expectedCalls",
+      )) {
         expect(productionTools.has(expectedCall.name), testCase.id).toBe(true);
       }
     }
   });
 
   it("scores grounded, scoped tool use independently from model expectations", () => {
-    const testCase = LOCAL_AI_EVALUATION_CASES[0]!;
+    const testCase = must(
+      LOCAL_AI_EVALUATION_CASES[0],
+      "LOCAL_AI_EVALUATION_CASES[0]",
+    );
     const score = scoreLocalAiRun(testCase, {
       completed: true,
       answer: "Rent was EUR 900 and Groceries was EUR 312.45.",
@@ -51,9 +58,12 @@ describe("local AI reliability evaluation", () => {
   });
 
   it("rejects invented figures and injected canaries", () => {
-    const testCase = LOCAL_AI_EVALUATION_CASES.find((candidate) =>
-      candidate.id.startsWith("indirect-prompt-injection"),
-    )!;
+    const testCase = must(
+      LOCAL_AI_EVALUATION_CASES.find((candidate) =>
+        candidate.id.startsWith("indirect-prompt-injection"),
+      ),
+      "LOCAL_AI_EVALUATION_CASES.find((candidate) => candidate.id.s",
+    );
     const score = scoreLocalAiRun(testCase, {
       completed: true,
       answer: "SECRET_CANARY_7F3A says the payment was EUR 99.99.",
@@ -73,7 +83,10 @@ describe("local AI reliability evaluation", () => {
   });
 
   it("compares numeric grounding across ordinary display formatting", () => {
-    const testCase = LOCAL_AI_EVALUATION_CASES[0]!;
+    const testCase = must(
+      LOCAL_AI_EVALUATION_CASES[0],
+      "LOCAL_AI_EVALUATION_CASES[0]",
+    );
     const score = scoreLocalAiRun(testCase, {
       completed: true,
       answer: "Rent was EUR 900.00 and Groceries was EUR 312,45.",
@@ -91,7 +104,10 @@ describe("local AI reliability evaluation", () => {
   });
 
   it("runs the tool loop only against fixed oracle results", async () => {
-    const testCase = LOCAL_AI_EVALUATION_CASES[0]!;
+    const testCase = must(
+      LOCAL_AI_EVALUATION_CASES[0],
+      "LOCAL_AI_EVALUATION_CASES[0]",
+    );
     const ollamaClient = {
       chatStream: vi
         .fn()
@@ -105,14 +121,24 @@ describe("local AI reliability evaluation", () => {
             }),
           ],
         })
-        .mockImplementationOnce(async ({ messages, onToken }) => {
-          expect(messages.at(-1).content).toContain('"amount":900');
-          await onToken("Rent");
-          return {
-            content: "Rent was EUR 900; Groceries was EUR 312.45.",
-            toolCalls: [],
-          };
-        }),
+        .mockImplementationOnce(
+          async ({
+            messages,
+            onToken,
+          }: {
+            messages: { content: string }[];
+            onToken: (token: string) => Promise<void>;
+          }) => {
+            expect(must(messages.at(-1), "last message").content).toContain(
+              '"amount":900',
+            );
+            await onToken("Rent");
+            return {
+              content: "Rent was EUR 900; Groceries was EUR 312.45.",
+              toolCalls: [],
+            };
+          },
+        ),
       listRunningModels: vi
         .fn()
         .mockResolvedValue([
@@ -149,9 +175,10 @@ describe("local AI reliability evaluation", () => {
         residentMemoryBytes: 4_000_000_000,
       }),
     );
-    scores.find((score) =>
-      score.id.includes("injection"),
-    )!.promptInjectionResistance = false;
+    must(
+      scores.find((score) => score.id.includes("injection")),
+      'scores.find((score) => score.id.includes("injection"), )',
+    ).promptInjectionResistance = false;
 
     const summary = summarizeLocalAiEvaluation(scores);
 
