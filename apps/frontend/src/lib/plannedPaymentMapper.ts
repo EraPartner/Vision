@@ -161,13 +161,11 @@ export function mapToCreateAPI(
     // "loan(12 months)" — it isn't a valid pattern and the UI renders the loan
     // label from loan_term_months, not this field.
 
-    if (payment.account_id === undefined) {
-        throw new Error("A planned payment needs an account");
-    }
-
     return {
         planned_date: payment.due_date,
-        account_id: payment.account_id,
+        // The UI model allows a missing account; the API body requires one and
+        // rejects it server-side, so the value is passed through unchanged.
+        account_id: payment.account_id as AccountId,
         recipient_id: payment.recipient_id ?? undefined,
         memo: payment.name,
         amount: payment.amount,

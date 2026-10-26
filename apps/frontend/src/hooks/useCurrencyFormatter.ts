@@ -49,7 +49,9 @@ export function useCurrencyFormatSettings(
                 defaultCurrency ||
                 currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY),
             locale: numberFormatToLocale(appSettings.numberFormat),
-            decimals: appSettings.showDecimalPlaces,
+            // Persisted setting: an older or hand-edited store can lack the key,
+            // and the formatters must keep degrading to two digits.
+            decimals: (appSettings.showDecimalPlaces as number | undefined) ?? 2,
         }),
         [
             appSettings.defaultCurrency,
