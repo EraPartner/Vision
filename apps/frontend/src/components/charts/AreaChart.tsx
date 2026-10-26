@@ -130,6 +130,7 @@ function AreaSeriesLayerInner<Datum>({
             {stacked ? (
                 <AreaStack<Datum>
                     keys={series.map((s) => s.key)}
+                    // visx takes a mutable array; the prop is a ReadonlyArray that visx never writes to.
                     data={data as Datum[]}
                     curve={curveMonotoneX}
                     value={(d, key) => {
@@ -186,6 +187,7 @@ function AreaSeriesLayerInner<Datum>({
                             >
                                 {s.fillOpacity !== 0 && (
                                     <AreaClosed<Datum>
+                                        // visx takes a mutable array; the prop is a ReadonlyArray that visx never writes to.
                                         data={data as Datum[]}
                                         x={(d) => xScale(xAccessor(d))}
                                         y={(d) =>
@@ -198,6 +200,7 @@ function AreaSeriesLayerInner<Datum>({
                                     />
                                 )}
                                 <LinePath<Datum>
+                                    // visx takes a mutable array; the prop is a ReadonlyArray that visx never writes to.
                                     data={data as Datum[]}
                                     x={(d) => xScale(xAccessor(d))}
                                     y={(d) => yScale(s.accessor(d) ?? 0)}

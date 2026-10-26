@@ -221,6 +221,7 @@ export function useBelgianTaxProfile<T = PublicBelgianTaxProfileState>(
         useShallow((state) =>
             selector
                 ? selector(selectPublicState(state))
+                // Overloaded selector hook: without a selector the whole public state is returned as `T`.
                 : (selectPublicState(state) as T),
         ),
     );

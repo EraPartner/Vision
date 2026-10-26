@@ -24,6 +24,7 @@ export function ResearchRangeSelector({
 }: ResearchRangeSelectorProps) {
     const { t } = useLanguage();
     const periods = options.map((option) => option.range);
+    // Object.fromEntries widens the keys to string; they are the `ResearchRange` values of `options`.
     const labels = Object.fromEntries(
         options.map((option) => [
             option.range,

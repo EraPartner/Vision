@@ -21,7 +21,7 @@ import {
     apiRequest,
 } from "@/lib/api/client";
 import { postMultipartImport } from "@/lib/api/helpers";
-import { readSseStream } from "@/lib/api/sse";
+import { readValidatedSse } from "@/lib/api/sse";
 import type {
     ImportProgress,
     ImportResult,
@@ -68,10 +68,25 @@ const reviewRequiredSchema = z.looseObject({
     batch_id: z.number(),
 });
 
-const IMPORT_STREAM_SCHEMAS: Record<string, z.ZodType> = {
+/**
+ * The `complete` payload doubles as the last progress update (the callback
+ * contract). It has no row counter, so `current` and `total` are absent
+ * although `ImportProgress` declares them; consumers treat them as optional.
+ */
+export function completionProgress(result: object): ImportProgress {
+    return {
+        ...result,
+        phase: "complete",
+        percent: 100,
+    } as unknown as ImportProgress;
+}
+
+const IMPORT_STREAM_SCHEMAS = {
     progress: importProgressSchema,
     complete: importResultSchema,
     review_required: reviewRequiredSchema,
+    // Unvalidated on purpose: `extractErrorDetail` tolerates any shape.
+    error: z.unknown(),
 };
 
 /**
@@ -157,21 +172,17 @@ export function importCSVWithProgress(
 
             let finalResult: ImportResult | null = null;
 
-            for await (const { event, data } of readSseStream<unknown>(
+            for await (const { event, data } of readValidatedSse(
                 response,
-                { schemas: IMPORT_STREAM_SCHEMAS },
+                IMPORT_STREAM_SCHEMAS,
             )) {
                 if (event === "progress") {
-                    onProgress(data as ImportProgress);
+                    onProgress(data);
                     continue;
                 }
                 if (event === "complete") {
-                    finalResult = data as ImportResult;
-                    onProgress({
-                        ...(data as Partial<ImportProgress>),
-                        phase: "complete",
-                        percent: 100,
-                    } as ImportProgress);
+                    finalResult = data;
+                    onProgress(completionProgress(data));
                     continue;
                 }
                 if (event === "review_required") {
@@ -179,7 +190,7 @@ export function importCSVWithProgress(
                     // — no counts (lib/importProgress.js), so total_processed is
                     // omitted rather than synthesized (same as the portfolio
                     // sibling in portfolioImports.ts).
-                    const d = data as { batch_id: number };
+                    const d = data;
                     finalResult = {
                         imported: 0,
                         duplicates: 0,
@@ -199,9 +210,8 @@ export function importCSVWithProgress(
                     });
                     continue;
                 }
-                if (event === "error") {
-                    throw new Error(extractErrorDetail(data));
-                }
+                // The only remaining registered event is "error".
+                throw new Error(extractErrorDetail(data));
             }
 
             return (

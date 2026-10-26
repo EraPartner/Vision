@@ -320,6 +320,7 @@ export default function PortfolioPage() {
     );
     const metrics = performance.data?.metrics ?? null;
     const heatmapData = performance.data?.heatmap ?? {
+        // Widens the empty array literal for the reducer's accumulator type.
         years: [] as number[],
         data: {},
         maxAbsPct: 0,
@@ -1800,6 +1801,7 @@ export default function PortfolioPage() {
                                 <AreaChart
                                     scrubbable
                                     data={brokerChart.data}
+                                    // Rows are Record<string, number | string | Date> because the series keys are dynamic account keys; chartDate is always a Date.
                                     xAccessor={(d) => d.chartDate as Date}
                                     series={brokerChart.series.map((entry) => ({
                                         key: entry.accountKey,

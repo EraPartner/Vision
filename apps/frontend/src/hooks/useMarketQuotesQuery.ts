@@ -20,7 +20,7 @@ export function useMarketQuotesQuery<Q = MarketQuote>(
         queryFn: () =>
             symbols
                 ? apiClient.getMarketQuotes<Q>(symbols, { detail: 'basic' })
-                : Promise.resolve([] as Q[]),
+                : Promise.resolve<Q[]>([]),
         enabled: !!symbols && isOnline,
         // An explicit staleTime always overrode the QueryClient default; 0 is
         // what TanStack applies for the former explicit `undefined`.

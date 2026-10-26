@@ -381,11 +381,11 @@ export const SECTION_CYCLE: ReadonlyArray<{ url: StaticAppPath; titleKey: string
 export const SECTION_ID_BY_URL: ReadonlyMap<string, NavSectionId> = new Map([
     ...NAV_SECTIONS.flatMap((section) =>
         section.items.map(
-            (item) => [item.url, section.id] as [string, NavSectionId],
+            (item): [string, NavSectionId] => [item.url, section.id],
         ),
     ),
     ...ADMIN_SECTION.items.map(
-        (item) => [item.url, ADMIN_SECTION.id] as [string, NavSectionId],
+        (item): [string, NavSectionId] => [item.url, ADMIN_SECTION.id],
     ),
 ]);
 

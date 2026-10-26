@@ -112,6 +112,7 @@ const SidebarProvider = React.forwardRef<
             <TooltipProvider delayDuration={0}>
                 <div
                     style={
+                        // React.CSSProperties does not know custom properties (`--*`).
                         {
                             "--sidebar-width": SIDEBAR_WIDTH,
                             "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
@@ -160,6 +161,7 @@ const Sidebar = React.forwardRef<
                     data-mobile="true"
                     className="glass-chrome w-[var(--sidebar-width)] p-0 text-sidebar-foreground [&>button]:hidden"
                     style={
+                        // React.CSSProperties does not know custom properties (`--*`).
                         {
                             "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
                         } as React.CSSProperties
@@ -550,6 +552,7 @@ const SidebarMenuSkeleton = React.forwardRef<
                 className="h-4 max-w-[var(--skeleton-width)] flex-1"
                 data-sidebar="menu-skeleton-text"
                 style={
+                    // React.CSSProperties does not know custom properties (`--*`).
                     {
                         "--skeleton-width": width,
                     } as React.CSSProperties

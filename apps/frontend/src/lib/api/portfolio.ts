@@ -46,7 +46,8 @@ function verifiedPortfolioTransaction(
         error.name = "PortfolioResponseError";
         throw error;
     }
-    const raw = tx as { date?: string; transaction_date?: string };
+    // Older rows carry the date as `transaction_date`.
+    const raw: { date?: string; transaction_date?: string } = tx;
     return {
         ...tx,
         date: raw.date ?? raw.transaction_date ?? "",
@@ -113,7 +114,7 @@ export function refreshInvestmentPrices(): Promise<{
     prices?: Record<string, number | null>;
     priceSources?: Record<string, PriceSource>;
 }> {
-    return apiRequest("/api/investments/refresh-prices", {
+    return apiRequest<Awaited<ReturnType<typeof refreshInvestmentPrices>>>("/api/investments/refresh-prices", {
         method: "POST",
         schema: RefreshPricesResultSchema,
     });

@@ -18,7 +18,7 @@ export interface BuilderSeries {
     axis: "left" | "right";
     provider: string;
     /** Set when this is a macroeconomic series (ADR-082); provider-pinned, fetched via getMacroSeries. */
-    macro?: { provider: MacroProvider; seriesId: string; title: string };
+    macro?: { provider: MacroProvider; seriesId: string; title: string } | undefined;
 }
 
 export type IndicatorType = "sma" | "ema" | "bollinger";

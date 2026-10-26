@@ -2,7 +2,7 @@
  * Chart primitives — visx + framer-motion, token-only styling.
  */
 export { AreaChart } from "./AreaChart";
-export type { AreaReferenceLine, AreaSeries } from "./AreaChart";
+export type { AreaSeries } from "./AreaChart";
 
 export { BarChart } from "./BarChart";
 export type { BarSeries, BarOverlay } from "./BarChart";

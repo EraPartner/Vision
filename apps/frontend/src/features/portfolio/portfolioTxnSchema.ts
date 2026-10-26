@@ -120,10 +120,8 @@ export function addPortfolioTxnSchema(
         if (isBuySell && !unitMath.isConsistent) {
             return fail(ctx, "addPortTxn.error.twoOfThreeRequired");
         }
-        if (
-            !isGift &&
-            (effectiveAmount === undefined || Number.isNaN(effectiveAmount))
-        ) {
+        // A gift's amount is the constant 0, so this only ever rejects other types.
+        if (effectiveAmount === undefined || Number.isNaN(effectiveAmount)) {
             return fail(ctx, "addPortTxn.error.amountRequired");
         }
         if (isGift && effectiveUnits === undefined) {
@@ -151,7 +149,7 @@ export function addPortfolioTxnSchema(
 
         return {
             date: raw.date,
-            amount: effectiveAmount as number,
+            amount: effectiveAmount,
             units: effectiveUnits,
             pricePerUnit: effectivePrice,
             fees: isGift ? 0 : fees,

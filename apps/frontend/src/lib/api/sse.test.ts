@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { parseSseFrame, readSseStream, type SseEvent } from './sse';
+import { parseSseFrame, readSseStream, readValidatedSse, type SseEvent } from './sse';
 
 function makeResponse(chunks: string[], { abortAfter }: { abortAfter?: number } = {}): Response {
     const encoder = new TextEncoder();
@@ -141,5 +141,34 @@ describe('readSseStream per-event schemas', () => {
         const response = makeResponse(['event: constructor\ndata: {"v":1}\n\n']);
         const events = await collect(readSseStream(response, { schemas }));
         expect(events).toEqual([{ event: 'constructor', data: { v: 1 } }]);
+    });
+});
+
+describe('readValidatedSse', () => {
+    const schemas = {
+        progress: z.object({ percent: z.number() }),
+        error: z.unknown(),
+    };
+
+    it('yields events typed by their schema and drops unregistered event names', async () => {
+        const res = makeResponse([
+            'event: progress\ndata: {"percent":5}\n\nevent: heartbeat\ndata: {}\n\nevent: error\ndata: {"detail":"x"}\n\n',
+        ]);
+        const out: Array<{ event: string; data: unknown }> = [];
+        for await (const ev of readValidatedSse(res, schemas)) out.push(ev);
+        expect(out).toEqual([
+            { event: 'progress', data: { percent: 5 } },
+            { event: 'error', data: { detail: 'x' } },
+        ]);
+    });
+
+    it('rejects a payload that fails its schema', async () => {
+        const res = makeResponse(['event: progress\ndata: {"percent":"no"}\n\n']);
+        const seen: unknown[] = [];
+        await expect(
+            (async () => {
+                for await (const ev of readValidatedSse(res, schemas)) seen.push(ev);
+            })(),
+        ).rejects.toThrow(/Invalid SSE payload for "progress"/);
     });
 });

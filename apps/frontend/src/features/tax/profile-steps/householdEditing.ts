@@ -52,6 +52,7 @@ function pruneExpenseChoices(partner: HouseholdPartner): HouseholdPartner {
     const used = new Set(partner.activities.map((a) => forfaitCategoryOf(a.kind)));
     const professionalExpenses = Object.fromEntries(
         Object.entries(partner.professionalExpenses).filter(([category]) =>
+            // Object.entries yields string keys; professionalExpenses is keyed by ForfaitCategory.
             used.has(category as ForfaitCategory),
         ),
     ) as HouseholdPartner["professionalExpenses"];
@@ -114,6 +115,7 @@ export function updateActivity(
             ...p,
             activities: p.activities.map((a) => {
                 if (a.id !== activityId) return a;
+                // Activities are patched field by field with dynamic keys; the result is re-typed below.
                 const next = { ...a } as Record<string, unknown>;
                 for (const [key, value] of Object.entries(patch)) {
                     if (value === undefined) Reflect.deleteProperty(next, key);
@@ -300,6 +302,7 @@ export function withoutMortgageRegion(household: BelgianTaxHouseholdV2): Belgian
         )
     )
         return household;
+    // Object.fromEntries yields an index-signature record; only the mortgageRegion key was removed.
     const home = Object.fromEntries(
         entries.filter(([key]) => key !== "mortgageRegion"),
     ) as BelgianTaxHouseholdV2["home"];

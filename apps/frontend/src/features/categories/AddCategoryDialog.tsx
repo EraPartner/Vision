@@ -56,6 +56,7 @@ export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
         e.preventDefault();
         setSubmitted(true);
         if (!form.general.trim() || !form.detail.trim()) {
+            // A submit event's currentTarget is the form element; React types it as EventTarget & Element.
             (e.currentTarget as HTMLFormElement)
                 .querySelector<HTMLInputElement>(
                     !form.general.trim() ? "#cat-general" : "#cat-detail",

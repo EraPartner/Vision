@@ -594,6 +594,7 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
     );
 }
 
+// React.memo erases the row component's generic parameter; re-asserted so call sites stay generic.
 const MemoizedVirtualizedTableRow = memo(
     VirtualizedTableRow,
 ) as typeof VirtualizedTableRow;

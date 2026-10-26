@@ -9,7 +9,7 @@ import {
     RecipientPatternUpdatedSchema,
     RecipientSchema,
 } from '@vision/types/contracts';
-import { apiRequest, checkResponseContract } from '@/lib/api/client';
+import { apiRequest, checkWireData } from '@/lib/api/client';
 import { requestWithQuery, createWithStatus } from '@/lib/api/helpers';
 import type { CategoryId, RecipientId } from "@vision/types/brands";
 
@@ -38,9 +38,9 @@ export async function createRecipient(
 ): Promise<{ recipient: Recipient; wasCreated: boolean }> {
     const { data, wasCreated } = await createWithStatus('/api/recipients', recipient);
     // createWithStatus takes no schema; check the body the caller reads.
-    const created = checkResponseContract(
+    const created = checkWireData(
         RecipientCreatedSchema,
-        data as Recipient,
+        data,
         'POST /api/recipients',
     );
     return { recipient: created, wasCreated };

@@ -13,7 +13,7 @@ export async function getSavedCharts(): Promise<SavedChart[]> {
 }
 
 export function createSavedChart(payload: SavedChartCreate): Promise<SavedChart> {
-    return apiRequest('/api/saved-charts', {
+    return apiRequest<Awaited<ReturnType<typeof createSavedChart>>>('/api/saved-charts', {
         method: 'POST',
         body: JSON.stringify(payload),
         schema: SavedChartSchema,
@@ -21,7 +21,7 @@ export function createSavedChart(payload: SavedChartCreate): Promise<SavedChart>
 }
 
 export function updateSavedChart(id: number, payload: Partial<SavedChartCreate>): Promise<SavedChart> {
-    return apiRequest(`/api/saved-charts/${id}`, {
+    return apiRequest<Awaited<ReturnType<typeof updateSavedChart>>>(`/api/saved-charts/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(payload),
         schema: SavedChartSchema,

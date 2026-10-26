@@ -95,6 +95,7 @@ export function BottomAxis<Scale extends AxisScale>({
             {...(top === undefined ? {} : { top })}
             {...optionalAxisProps({ numTicks, hideAxisLine, hideTicks, label })}
             tickValues={readableTicks}
+            // visx's axis props are generic over the scale type and cannot express our scale union; `never` bridges tickFormat/tickValues.
             tickFormat={tickFormat as never}
             stroke={AXIS_COLOR}
             tickStroke={AXIS_COLOR}
@@ -123,7 +124,9 @@ export function LeftAxis<Scale extends AxisScale>({
             scale={scale}
             {...(left === undefined ? {} : { left })}
             {...optionalAxisProps({ numTicks, hideAxisLine, hideTicks, label })}
+            // visx's axis props are generic over the scale type and cannot express our scale union; `never` bridges tickFormat/tickValues.
             tickValues={tickValues as never}
+            // visx's axis props are generic over the scale type and cannot express our scale union; `never` bridges tickFormat/tickValues.
             tickFormat={tickFormat as never}
             stroke={AXIS_COLOR}
             tickStroke={AXIS_COLOR}
@@ -152,7 +155,9 @@ export function RightAxis<Scale extends AxisScale>({
             scale={scale}
             {...(left === undefined ? {} : { left })}
             {...optionalAxisProps({ numTicks, hideAxisLine, hideTicks, label })}
+            // visx's axis props are generic over the scale type and cannot express our scale union; `never` bridges tickFormat/tickValues.
             tickValues={tickValues as never}
+            // visx's axis props are generic over the scale type and cannot express our scale union; `never` bridges tickFormat/tickValues.
             tickFormat={tickFormat as never}
             stroke={AXIS_COLOR}
             tickStroke={AXIS_COLOR}

@@ -91,7 +91,18 @@ import {
 } from "@/features/analysis/AnalysisWorkbenchPanel";
 import type { AnalysisPivotConfig } from "@/lib/api/analysis";
 import { AnalysisInterchangePanel } from "@/features/analysis/AnalysisInterchangePanel";
+import { isAnalysisValue } from "@/lib/analysisValue";
+import { AnalysisProposalPreviewSchema } from "@vision/types/contracts";
 import type { AnalysisScenarioModel } from "@/features/analysis/analysisInterchange";
+import {
+    savedDatasetIds,
+    savedFinancialPlan,
+    savedFormulaModel,
+    savedPivotConfig,
+    savedScenarioModel,
+    savedWorkbench,
+    sourceFromSaved,
+} from "@/features/analysis/savedAnalysisState";
 import {
     ANALYSIS_TEMPLATES,
     cloneAnalysisPlan,
@@ -117,6 +128,15 @@ function chartColumns(result: AnalysisResult | null) {
             .map((column) => column.id),
     };
 }
+
+const FINANCIAL_PLAN_KEYS = [
+    "reportingCurrency",
+    "from",
+    "to",
+    "symbol",
+    "range",
+    "costBasisMethod",
+] as const satisfies readonly (keyof VisualAnalysisPlan)[];
 
 const EMPTY_PLAN: VisualAnalysisPlan = {
     datasetId: "cash-flows",
@@ -170,99 +190,6 @@ interface AnalysisExportContext {
     sourceReferences: string[];
 }
 
-const savedDatasetIds = (saved: SavedAnalysis) =>
-    (
-        saved.definition.datasets as
-            Array<{ id?: string; datasetId?: string }> | undefined
-    )
-        ?.map(({ id, datasetId }) => id ?? datasetId)
-        .filter((datasetId): datasetId is string => Boolean(datasetId)) ?? [];
-
-function visualPlanFromSource(
-    source: Record<string, unknown>,
-): VisualAnalysisPlan {
-    const select =
-        (source.select as
-            | Array<{
-                  id: string;
-                  source: { kind: string };
-              }>
-            | undefined) ?? [];
-    return {
-        datasetId: String(source.datasetId),
-        fields: select
-            .filter((entry) => entry.source.kind === "field")
-            .map((entry) => entry.id),
-        measures: select
-            .filter((entry) => entry.source.kind === "metric")
-            .map((entry) => entry.id),
-        filters: (
-            (source.filters as Array<Record<string, unknown>> | undefined) ?? []
-        ).map(
-            (filter) => {
-                const left = filter.left as Record<string, unknown>;
-                const columnId = String(left.columnId);
-                return {
-                    fieldId:
-                        left.datasetId === "accounts"
-                            ? `account.${columnId}`
-                            : columnId,
-                    operator: String(filter.operator),
-                    value: (
-                        filter.right as
-                            Record<string, AnalysisValue> | undefined
-                    )?.value,
-                };
-            },
-        ),
-        groups: (source.groupBy as string[] | undefined) ?? [],
-        joins: (
-            (source.joins as Array<{ pathId: string }> | undefined) ?? []
-        ).map(
-            (join) => join.pathId,
-        ),
-        orderBy: (
-            (source.orderBy as
-                | Array<{
-                      outputId: string;
-                      direction: "asc" | "desc";
-                  }>
-                | undefined) ?? []
-        ).map(({ outputId, direction }) => ({
-            id: outputId,
-            direction,
-        })),
-        limit: Number(source.limit) > 0 ? Number(source.limit) : 500,
-    };
-}
-
-function sourceFromSaved(saved: SavedAnalysis): {
-    mode: "visual" | "sql";
-    plan?: VisualAnalysisPlan;
-    sql?: string;
-    datasetIds?: string[];
-    visualOrigin?: VisualAnalysisPlan | undefined;
-} {
-    const source = saved.definition.source as
-        Record<string, unknown> | undefined;
-    if (source?.kind === "visual-plan") {
-        return {
-            mode: "visual",
-            plan: visualPlanFromSource(source),
-        };
-    }
-    return {
-        mode: "sql",
-        sql: typeof source?.text === "string" ? source.text : "",
-        datasetIds: (source?.datasetIds as string[] | undefined) ?? [],
-        visualOrigin: source?.visualOrigin
-            ? visualPlanFromSource(
-                  source.visualOrigin as Record<string, unknown>,
-              )
-            : undefined,
-    };
-}
-
 function parseSqlValues(
     value: string,
     invalidMessage: string,
@@ -275,20 +202,17 @@ function parseSqlValues(
     }
     if (
         !Array.isArray(parsed) ||
-        parsed.some(
-            (item) =>
-                item !== null &&
-                !["string", "number", "boolean"].includes(typeof item),
-        )
+        !parsed.every(isAnalysisValue)
     ) {
         throw new Error(invalidMessage);
     }
-    return parsed as AnalysisValue[];
+    return parsed;
 }
 
 /** Editor JSON is forwarded as-is; the server validates its shape. */
 function parseJson(text: string): unknown {
-    return JSON.parse(text) as unknown;
+    const value: unknown = JSON.parse(text);
+    return value;
 }
 
 function requireResult(result: AnalysisResult | null | undefined): AnalysisResult {
@@ -784,7 +708,7 @@ export default function AnalysisWorkspacePage() {
                           requestId: id,
                           mode,
                           plan: planOverride,
-                          workbench: workbench as Record<string, unknown>,
+                          workbench: { ...workbench },
                           scenarioModel,
                           formulaModel: {
                               formulas: JSON.parse(formulasJson),
@@ -799,7 +723,7 @@ export default function AnalysisWorkspacePage() {
                           requestId: id,
                           mode,
                           sql,
-                          workbench: workbench as Record<string, unknown>,
+                          workbench: { ...workbench },
                           scenarioModel,
                           formulaModel: {
                               formulas: JSON.parse(formulasJson),
@@ -940,17 +864,7 @@ export default function AnalysisWorkspacePage() {
                     workbench,
                     pivotConfig,
                     financialPlan: Object.fromEntries(
-                        [
-                            "reportingCurrency",
-                            "from",
-                            "to",
-                            "symbol",
-                            "range",
-                            "costBasisMethod",
-                        ].map((key) => [
-                            key,
-                            plan[key as keyof VisualAnalysisPlan],
-                        ]),
+                        FINANCIAL_PLAN_KEYS.map((key) => [key, plan[key]]),
                     ),
                 },
                 charts: [chartSpec],
@@ -1014,11 +928,7 @@ export default function AnalysisWorkspacePage() {
             if (source.visualOrigin) setVisualOrigin(source.visualOrigin);
             setSqlValues(JSON.stringify(saved.parameters.sqlValues ?? []));
             setScenarioModel(
-                (saved.parameters.scenarioModel as
-                    AnalysisScenarioModel | undefined) ?? {
-                    attachments: [],
-                    joins: [],
-                },
+                savedScenarioModel(saved.parameters.scenarioModel),
             );
             setRunCurrency("");
             setRunBenchmark("");
@@ -1043,15 +953,9 @@ export default function AnalysisWorkspacePage() {
                           )
                         : numericIds.slice(0, 1).filter(Boolean),
             });
-            setWorkbench(
-                (saved.parameters.workbench as
-                    | AnalysisWorkbenchConfig
-                    | undefined) ?? {},
-            );
+            setWorkbench(savedWorkbench(saved.parameters.workbench));
             setPivotConfig(
-                (saved.parameters.pivotConfig as
-                    | AnalysisPivotConfig
-                    | undefined) ?? {
+                savedPivotConfig(saved.parameters.pivotConfig) ?? {
                     rows: source.plan?.groups.slice(0, 1) ?? [],
                     columns: source.plan?.groups.slice(1, 2) ?? [],
                     values: source.plan?.measures ?? [],
@@ -1061,42 +965,23 @@ export default function AnalysisWorkspacePage() {
             if (source.plan)
                 setPlan({
                     ...source.plan,
-                    ...((saved.parameters.financialPlan as
-                        | Partial<VisualAnalysisPlan>
-                        | undefined) ?? {}),
+                    ...savedFinancialPlan(saved.parameters.financialPlan),
                 });
             setOffset(0);
             setExportInputsKnown(false);
+            const formulaModel = savedFormulaModel(
+                saved.parameters.formulaModel,
+            );
             setResultInputs({
-                formulasJson: JSON.stringify(
-                    (
-                        saved.parameters.formulaModel as
-                            { formulas?: unknown[] } | undefined
-                    )?.formulas ?? [],
-                ),
-                assumptionsJson: JSON.stringify(
-                    (
-                        saved.parameters.formulaModel as
-                            { assumptions?: unknown[] } | undefined
-                    )?.assumptions ?? [],
-                ),
+                formulasJson: JSON.stringify(formulaModel.formulas),
+                assumptionsJson: JSON.stringify(formulaModel.assumptions),
                 assumptionValuesJson: JSON.stringify(
-                    (
-                        saved.parameters.formulaModel as
-                            | { assumptionValues?: Record<string, unknown> }
-                            | undefined
-                    )?.assumptionValues ?? {},
+                    formulaModel.assumptionValues,
                 ),
-                workbench:
-                    (saved.parameters.workbench as
-                        | AnalysisWorkbenchConfig
-                        | undefined) ?? {},
-                scenarioModel: (saved.parameters.scenarioModel as
-                    | AnalysisScenarioModel
-                    | undefined) ?? {
-                    attachments: [],
-                    joins: [],
-                },
+                workbench: savedWorkbench(saved.parameters.workbench),
+                scenarioModel: savedScenarioModel(
+                    saved.parameters.scenarioModel,
+                ),
             });
             setResult(saved.lastResult);
             setResultDatasetId(
@@ -1122,21 +1007,10 @@ export default function AnalysisWorkspacePage() {
                     : null,
             );
             setSourceReferences(saved.sourceReferences.map(String).join("\n"));
-            const formulaModel = saved.parameters.formulaModel as
-                | {
-                      formulas?: unknown[];
-                      assumptions?: unknown[];
-                      assumptionValues?: Record<string, unknown>;
-                  }
-                | undefined;
-            setFormulasJson(
-                JSON.stringify(formulaModel?.formulas ?? [], null, 2),
-            );
-            setAssumptionsJson(
-                JSON.stringify(formulaModel?.assumptions ?? [], null, 2),
-            );
+            setFormulasJson(JSON.stringify(formulaModel.formulas, null, 2));
+            setAssumptionsJson(JSON.stringify(formulaModel.assumptions, null, 2));
             setAssumptionValuesJson(
-                JSON.stringify(formulaModel?.assumptionValues ?? {}, null, 2),
+                JSON.stringify(formulaModel.assumptionValues, null, 2),
             );
             setProposalPreview(null);
             setVersions(null);
@@ -3297,9 +3171,11 @@ export default function AnalysisWorkspacePage() {
                                                 onClick={() => {
                                                     try {
                                                         const proposal =
-                                                            JSON.parse(
-                                                                proposalJson,
-                                                            ) as AnalysisEditProposal;
+                                                            AnalysisProposalPreviewSchema.shape.proposal.parse(
+                                                                parseJson(
+                                                                    proposalJson,
+                                                                ),
+                                                            );
                                                         void apiClient
                                                             .previewAnalysisProposal(
                                                                 proposal,
@@ -3318,7 +3194,7 @@ export default function AnalysisWorkspacePage() {
                                                     } catch (cause) {
                                                         setError(
                                                             cause instanceof
-                                                                Error
+                                                                SyntaxError
                                                                 ? cause.message
                                                                 : t(
                                                                       "analysis.proposalInvalid",

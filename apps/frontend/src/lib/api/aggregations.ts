@@ -77,7 +77,7 @@ export function getAggregationMonthlySummary(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/monthly-summary${q ? `?${q}` : ""}`, {
+    return apiRequest<Awaited<ReturnType<typeof getAggregationMonthlySummary>>>(`/api/aggregations/monthly-summary${q ? `?${q}` : ""}`, {
         schema: MonthlySummarySchema,
     });
 }
@@ -112,7 +112,7 @@ export function getAggregationRecipientInsights(params?: {
     }>
 > {
     const q = buildExclusionQuery(params);
-    return apiRequest(
+    return apiRequest<Awaited<ReturnType<typeof getAggregationRecipientInsights>>>(
         `/api/aggregations/recipient-insights${q ? `?${q}` : ""}`,
         { schema: RecipientInsightsSchema },
     );
@@ -247,7 +247,7 @@ export function getAggregationCategoryPivot(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/category-pivot${q ? `?${q}` : ""}`, {
+    return apiRequest<Awaited<ReturnType<typeof getAggregationCategoryPivot>>>(`/api/aggregations/category-pivot${q ? `?${q}` : ""}`, {
         schema: CategoryPivotSchema,
     });
 }
@@ -287,7 +287,7 @@ export function getAggregationRecipientByYear(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest(
+    return apiRequest<Awaited<ReturnType<typeof getAggregationRecipientByYear>>>(
         `/api/aggregations/recipient-by-year${q ? `?${q}` : ""}`,
         {
             schema: RecipientByYearSchema,
@@ -334,7 +334,7 @@ export function getAggregationRecipientPivot(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/recipient-pivot${q ? `?${q}` : ""}`, {
+    return apiRequest<Awaited<ReturnType<typeof getAggregationRecipientPivot>>>(`/api/aggregations/recipient-pivot${q ? `?${q}` : ""}`, {
         schema: RecipientPivotSchema,
     });
 }
@@ -371,7 +371,7 @@ export function getAggregationTagPivot(params?: {
         params.tag_ids.forEach((id) => qp.append("tag_ids", String(id)));
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/tag-pivot${q ? `?${q}` : ""}`, {
+    return apiRequest<Awaited<ReturnType<typeof getAggregationTagPivot>>>(`/api/aggregations/tag-pivot${q ? `?${q}` : ""}`, {
         schema: TagPivotSchema,
     });
 }
@@ -509,7 +509,7 @@ export function getCashflowForecastMethods(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest(
+    return apiRequest<Awaited<ReturnType<typeof getCashflowForecastMethods>>>(
         `/api/aggregations/cashflow-forecast-methods${q ? `?${q}` : ""}`,
         { schema: CashflowForecastMethodsSchema },
     );
@@ -583,7 +583,7 @@ export function getCashflowForecastRolling(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest(
+    return apiRequest<Awaited<ReturnType<typeof getCashflowForecastRolling>>>(
         `/api/aggregations/cashflow-forecast-rolling${q ? `?${q}` : ""}`,
         { schema: CashflowForecastRollingSchema },
     );
@@ -619,7 +619,7 @@ export function getCashflowForecastAccuracy(params?: {
     if (params?.limit_months != null)
         qp.set("limit_months", String(params.limit_months));
     const q = qp.toString();
-    return apiRequest(
+    return apiRequest<Awaited<ReturnType<typeof getCashflowForecastAccuracy>>>(
         `/api/aggregations/cashflow-forecast-accuracy${q ? `?${q}` : ""}`,
         { schema: CashflowForecastAccuracySchema },
     );
@@ -651,7 +651,7 @@ export function getSankeyFlow(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/sankey${q ? `?${q}` : ""}`, {
+    return apiRequest<Awaited<ReturnType<typeof getSankeyFlow>>>(`/api/aggregations/sankey${q ? `?${q}` : ""}`, {
         schema: SankeyFlowSchema,
     });
 }

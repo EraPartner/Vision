@@ -73,7 +73,7 @@ type TableRecipient = {
     id: RecipientId;
     name: string;
     primary_bank_account: string;
-    default_category_name?: string | undefined;
+    default_category_name?: string | null | undefined;
     default_category_id?: CategoryId | null | undefined;
     primary_recipient_id?: RecipientId | null | undefined;
     primary_recipient_name?: string | null | undefined;
@@ -400,7 +400,7 @@ export default function RecipientsPage() {
                     }
 
                     const formatCategoryName = (
-                        categoryName?: string,
+                        categoryName?: string | null,
                     ): string => {
                         if (!categoryName) return t("recipientsPage.none");
                         // Shared GENERAL:DETAIL split (first ':' only, detail may

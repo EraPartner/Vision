@@ -64,8 +64,8 @@ export function diffHousehold(
     after: BelgianTaxHouseholdV2,
 ): Partial<BelgianTaxHouseholdV2> {
     const diff: Record<string, unknown> = {};
-    const a = before as unknown as Record<string, unknown>;
-    const b = after as unknown as Record<string, unknown>;
+    const a: Record<string, unknown> = { ...before };
+    const b: Record<string, unknown> = { ...after };
     for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
         if (key === "taxYear") continue;
         if (JSON.stringify(a[key]) !== JSON.stringify(b[key]))

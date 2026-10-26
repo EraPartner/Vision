@@ -46,12 +46,12 @@ export interface ImportResult {
     imported: number;
     duplicates: number;
     errors: number;
-    status?: string;
-    error_message?: string;
-    batch_id?: number;
-    requires_review?: boolean;
+    status?: string | undefined;
+    error_message?: string | undefined;
+    batch_id?: number | undefined;
+    requires_review?: boolean | undefined;
     /** Planned payments auto-cleared by matching imported transactions. */
-    auto_linked_count?: number;
+    auto_linked_count?: number | undefined;
 }
 
 export type MatchSource = "exact" | "fuzzy" | "pattern" | "new";

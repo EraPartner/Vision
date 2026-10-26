@@ -275,9 +275,10 @@ export function CommandPalette({
                         <CommandItem
                             forceMount
                             value={`result ${query}`}
-                            onSelect={() =>
-                                copyResult((fxResult ?? calcResult) as string)
-                            }
+                            onSelect={() => {
+                                const text = fxResult ?? calcResult;
+                                if (text !== null) copyResult(text);
+                            }}
                         >
                             {fxResult ? (
                                 <ArrowLeftRight className="text-label-secondary" />

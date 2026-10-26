@@ -98,7 +98,7 @@ export async function getRecurringPatterns(): Promise<{
     total: number;
 }> {
     try {
-        return await apiRequest("/api/info/recurring-patterns", {
+        return await apiRequest<Awaited<ReturnType<typeof getRecurringPatterns>>>("/api/info/recurring-patterns", {
             schema: RecurringPatternListSchema,
         });
     } catch (err) {
@@ -174,7 +174,7 @@ export interface InsightsDigestResponse {
 /** Pre-computed detection-layer findings for the Statistics insights panel (no LLM). */
 export async function getInsightsDigest(): Promise<InsightsDigestResponse> {
     try {
-        return await apiRequest("/api/info/insights-digest", {
+        return await apiRequest<Awaited<ReturnType<typeof getInsightsDigest>>>("/api/info/insights-digest", {
             schema: InsightsDigestSchema,
         });
     } catch (err) {

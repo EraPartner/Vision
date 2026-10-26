@@ -135,6 +135,7 @@ const ListRow = React.forwardRef<HTMLLIElement, ListRowProps>(
                             {/* the child supplies the element; the row supplies the content */}
                             {React.isValidElement(children)
                                 ? React.cloneElement(
+                                      // isValidElement narrows to a bare element; cloneElement needs its children prop type.
                                       children as React.ReactElement<{
                                           children?: React.ReactNode;
                                       }>,

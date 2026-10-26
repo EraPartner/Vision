@@ -650,6 +650,7 @@ export const themes: Record<ThemeVariant, ThemePalette> = {
     "high-contrast": { light: highContrastLight, dark: highContrastDark },
 };
 
+// Object.keys yields string[]; the light theme defines exactly the token keys.
 export const TOKEN_KEYS: readonly TokenKey[] = Object.keys(
     defaultLight,
 ) as TokenKey[];

@@ -20,8 +20,8 @@ import {
     appLanguageToLocale,
     formatMonthLabelWithLocale,
 } from "@/lib/dateUtils";
-import type { AssetClass } from "@/types/api";
 import { getAssetClassLabel } from "@/types/portfolio";
+import { isAssetClass } from "@/utils/assetClass";
 import { cn } from "@/lib/utils";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
@@ -78,7 +78,9 @@ function PerformerRow({
                 </p>
                 <p className="type-caption text-label-secondary">
                     {inv.symbol ||
-                        getAssetClassLabel(t, inv.assetClass as AssetClass)}
+                        (isAssetClass(inv.assetClass)
+                            ? getAssetClassLabel(t, inv.assetClass)
+                            : inv.assetClass)}
                 </p>
             </div>
             <div className="text-right shrink-0">
@@ -163,11 +165,11 @@ export default function PerformanceBreakdown({
 
     const assetClassBreakdown = useMemo(() => {
         const grouped = new Map<
-            AssetClass,
+            string,
             { count: number; value: number; invested: number; gain: number }
         >();
         for (const item of breakdownSummary) {
-            const ac = item.assetClass as AssetClass;
+            const ac = item.assetClass;
             const existing = grouped.get(ac) ?? {
                 count: 0,
                 value: 0,
@@ -187,7 +189,10 @@ export default function PerformanceBreakdown({
                 data.invested > 0 ? (data.gain / data.invested) * 100 : 0;
             return {
                 assetClass,
-                label: t(`performance.${assetClass}`) || assetClass,
+                label:
+                    (isAssetClass(assetClass)
+                        ? t(`performance.${assetClass}`)
+                        : "") || assetClass,
                 count: data.count,
                 classValue: data.value,
                 classInvested: data.invested,

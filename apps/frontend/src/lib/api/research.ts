@@ -9,7 +9,7 @@
  * See docs/api/research.md and docs/features/research.md.
  */
 
-import type { z } from 'zod';
+import { z } from 'zod';
 import {
     API_BASE_URL,
     apiRequest,
@@ -43,7 +43,6 @@ import type {
     ResearchAnalyst,
     ResearchAssetClass,
     ResearchChartResponse,
-    ResearchMeta,
     ResearchNewsResponse,
     ResearchRange,
     ResearchResult,
@@ -59,17 +58,47 @@ import type {
 } from '@/types/research';
 import type { InvestmentId } from "@vision/types/brands";
 
-interface RawEnvelope<T> {
-    ok?: boolean;
-    data?: T;
-    meta?: Partial<ResearchMeta> & Record<string, unknown>;
-}
+/**
+ * Envelope shell of a research response. `data` is checked per endpoint; the
+ * provenance `meta` is read leniently (a missing or malformed field falls back
+ * to "unavailable" rather than failing the whole request).
+ */
+const researchEnvelopeSchema = z.looseObject({
+    data: z.unknown(),
+    meta: z
+        .looseObject({
+            provider: z.string().nullish().catch(null),
+            source: z
+                .enum(['cache', 'live', 'unavailable'])
+                .catch('unavailable'),
+            requestId: z.string().optional().catch(undefined),
+        })
+        .optional()
+        .catch(undefined),
+});
 
-function normalizeMeta(meta: RawEnvelope<unknown>['meta']): ResearchMeta {
+async function readResearchEnvelope<T>(
+    response: Response,
+    schema: z.ZodType,
+    label: string,
+): Promise<ResearchResult<T>> {
+    const body: unknown = await response.json();
+    // A non-object body has no `data`, which the endpoint schema then rejects.
+    const envelope = researchEnvelopeSchema.safeParse(body);
+    const raw = envelope.success ? envelope.data.data : undefined;
+    checkResponseContract(schema, raw, label);
+    // `T` is the endpoint's hand-written response type; `schema` just verified
+    // the wire shape (several of those types are stricter than the schemas, so
+    // the schema output is not used directly).
+    const data = raw as T;
+    const meta = envelope.success ? envelope.data.meta : undefined;
     return {
-        provider: (meta?.provider) ?? null,
-        source: meta?.source ?? 'unavailable',
-        requestId: meta?.requestId,
+        data,
+        meta: {
+            provider: meta?.provider ?? null,
+            source: meta?.source ?? 'unavailable',
+            requestId: meta?.requestId,
+        },
     };
 }
 
@@ -90,9 +119,7 @@ async function researchGet<T>(
     if (!response.ok) {
         throw await parseEnvelopeError(response, 'Research request failed');
     }
-    const body = (await response.json()) as RawEnvelope<T>;
-    const data = checkResponseContract(schema, body.data as T, `GET ${endpoint}`);
-    return { data, meta: normalizeMeta(body.meta) };
+    return readResearchEnvelope(response, schema, `GET ${endpoint}`);
 }
 
 async function researchSend<T>(
@@ -110,9 +137,7 @@ async function researchSend<T>(
     if (!response.ok) {
         throw await parseEnvelopeError(response, 'Research request failed');
     }
-    const body = (await response.json()) as RawEnvelope<T>;
-    const data = checkResponseContract(schema, body.data as T, `${method} ${endpoint}`);
-    return { data, meta: normalizeMeta(body.meta) };
+    return readResearchEnvelope(response, schema, `${method} ${endpoint}`);
 }
 
 export const isForecastMethod = enumGuard<ForecastMethod>({
@@ -302,13 +327,13 @@ export function auditResearchMappings(input: {
 // Plain envelopes (no provenance meta); keys are returned masked, never in full.
 
 export function getResearchProviderKeys(): Promise<ProviderKeysResponse> {
-    return apiRequest('/api/research/provider-keys', {
+    return apiRequest<Awaited<ReturnType<typeof getResearchProviderKeys>>>('/api/research/provider-keys', {
         schema: ResearchProviderKeyListSchema,
     });
 }
 
 export function setResearchProviderKey(provider: ResearchProviderKeyId, apiKey: string): Promise<ProviderKeysResponse> {
-    return apiRequest(`/api/research/provider-keys/${encodeURIComponent(provider)}`, {
+    return apiRequest<Awaited<ReturnType<typeof setResearchProviderKey>>>(`/api/research/provider-keys/${encodeURIComponent(provider)}`, {
         method: 'PUT',
         body: JSON.stringify({ api_key: apiKey }),
         schema: ResearchProviderKeyListSchema,

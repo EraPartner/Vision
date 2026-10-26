@@ -34,6 +34,7 @@ if (typeof window !== "undefined") {
         value: localStorage,
     });
 
+    // jsdom lacks PointerEvent; MouseEvent stands in for it in tests.
     window.PointerEvent = MouseEvent as unknown as typeof PointerEvent;
     Element.prototype.hasPointerCapture = () => false;
     Element.prototype.setPointerCapture = () => {};

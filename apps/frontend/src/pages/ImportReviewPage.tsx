@@ -105,7 +105,8 @@ function MatchBadge({
 }
 
 function dominantMatchSource(rows: ImportStagingRow[]): MatchSource {
-    for (const src of ["new", "fuzzy", "pattern", "exact"] as MatchSource[]) {
+    const order: readonly MatchSource[] = ["new", "fuzzy", "pattern", "exact"];
+    for (const src of order) {
         if (rows.some((r) => r.match_source === src)) return src;
     }
     return null;

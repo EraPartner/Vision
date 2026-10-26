@@ -224,7 +224,7 @@ export function loadChartBuilderLibrary(
         const raw = storage.getItem(LOCAL_STORAGE_KEYS.CHART_BUILDER_LAYOUTS);
         if (raw && raw.length <= MAX_LIBRARY_BYTES) {
             const parsed = librarySchema.safeParse(JSON.parse(raw));
-            if (parsed.success) return parsed.data as ChartBuilderLibrary;
+            if (parsed.success) return parsed.data;
         }
     } catch {
         // Invalid or unavailable storage falls through to a clean library.
@@ -316,7 +316,7 @@ export function decodeSharedChart(encoded: string): BuilderState | null {
         const parsed = shareSchema.safeParse(
             JSON.parse(new TextDecoder().decode(bytes)),
         );
-        return parsed.success ? (parsed.data.state as BuilderState) : null;
+        return parsed.success ? parsed.data.state : null;
     } catch {
         return null;
     }

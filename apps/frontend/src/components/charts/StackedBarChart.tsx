@@ -239,6 +239,7 @@ function Inner<Datum>({
     const rows: StackRow<Datum>[] = useMemo(
         () =>
             data.map((d) => {
+                // The per-series keys of the row are filled by the loop below; the literal starts with only the datum fields.
                 const row = {
                     __datum: d,
                     __category: stableCategoryAccessor(d),

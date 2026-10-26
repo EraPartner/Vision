@@ -218,6 +218,7 @@ export function PortfolioTicker({ items }: PortfolioTickerProps) {
             <div
                 className="ticker-track flex w-max items-stretch"
                 style={
+                    // React.CSSProperties does not know custom properties (`--*`).
                     {
                         "--ticker-duration": `${durationS}s`,
                     } as React.CSSProperties

@@ -1,7 +1,7 @@
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import type { MonthlyCostDatum } from "@/hooks/usePortfolioTaxData";
-import { BarChart, type BarSeries } from "@/components/charts";
+import { BarChart } from "@/components/charts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface YearlyCostTrendCardProps {
@@ -27,7 +27,7 @@ export function YearlyCostTrendCard({ data, txYear }: YearlyCostTrendCardProps) 
           series={[
             { key: "taxes", label: t("tax.taxes"), accessor: (d) => d.taxes, color: "hsl(var(--chart-5))" },
             { key: "fees", label: t("tax.fees"), accessor: (d) => d.fees, color: "hsl(var(--chart-4))" },
-          ] as BarSeries<MonthlyCostDatum>[]}
+          ]}
           height={280}
           valueTickFormat={(v) => fmt(v)}
           tooltipValueFormat={(v) => fmt(v)}

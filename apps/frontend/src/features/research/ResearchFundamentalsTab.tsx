@@ -283,6 +283,7 @@ export function ResearchFundamentalsTab({
                                             <span className="text-foreground">
                                                 {fmt(
                                                     m.format,
+                                                    // Fundamentals are a record keyed by metric id; every metric key maps to a number-or-null field.
                                                     f[m.key] as
                                                         | number
                                                         | null

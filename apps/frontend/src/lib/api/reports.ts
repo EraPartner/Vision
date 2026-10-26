@@ -163,6 +163,7 @@ async function postReportDownload(
     throw new Error(printed.error || 'Report printing failed');
   }
   downloadBlob(
+    // Blob rejects Uint8Array<ArrayBufferLike>; Electron's printToPdf result is backed by a plain ArrayBuffer.
     new Blob([printed.pdf as Uint8Array<ArrayBuffer>], { type: 'application/pdf' }),
     report.filename,
   );

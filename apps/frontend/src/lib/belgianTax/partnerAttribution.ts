@@ -35,12 +35,14 @@ export function deductionFieldValue(
 ): number {
     const field = mapping.amountField;
     if (HOME_FIELDS.has(field)) {
-        return Number((household.home as Record<string, unknown>)[field] ?? 0);
+        const home: Record<string, unknown> = { ...household.home };
+        return Number(home[field] ?? 0);
     }
     const partner = household.partners.find((p) => p.id === partnerId);
     if (!partner) return 0;
+    const partnerFields: Record<string, unknown> = { ...partner };
     const source: Record<string, unknown> = PARTNER_FIELDS.has(field)
-        ? (partner as unknown as Record<string, unknown>)
+        ? partnerFields
         : partner.reductions;
     return Number(source[field] ?? 0);
 }

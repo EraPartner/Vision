@@ -2,7 +2,7 @@ import { Info, ListChecks } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import type { YearlyIncomeDatum } from "@/hooks/useTaxOverviewData";
-import { BarChart, type BarSeries } from "@/components/charts";
+import { BarChart } from "@/components/charts";
 import {
     Card,
     CardContent,
@@ -71,7 +71,7 @@ export function YearlyTaxChartCard({
                                         accessor: (d) => d.estimatedTax,
                                         color: "hsl(var(--chart-5))",
                                     },
-                                ] as BarSeries<YearlyIncomeDatum>[]
+                                ]
                             }
                         />
                         {data.some((y) => y.isApproximated) && (

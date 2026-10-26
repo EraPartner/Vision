@@ -26,6 +26,7 @@ export function toAccountPayload(
     _numberFormat: NumberFormat,
 ): AccountCreate | AccountUpdate {
     const empty = mode === "create" ? undefined : null;
+    // AccountCreate and AccountUpdate differ only in null (clear) vs undefined (omit) for empty fields.
     return {
         name: values.name,
         display_name: values.display_name || empty,

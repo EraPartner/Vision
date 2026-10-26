@@ -111,6 +111,7 @@ export function useCreateTransaction(options: UseCreateTransactionOptions = {}) 
             await queryClient.cancelQueries({ queryKey: transactionKeys.all });
             const snapshot = snapshotTransactionLists(queryClient);
             const tempId = -Date.now();
+            // Optimistic placeholder row: server-assigned fields (timestamps, links) are absent until the mutation settles.
             const tempRow = {
                 ...transaction,
                 id: tempId,

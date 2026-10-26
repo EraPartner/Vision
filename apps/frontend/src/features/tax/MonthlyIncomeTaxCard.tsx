@@ -4,7 +4,7 @@ import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { numberFormatToLocale } from "@/utils/currency";
 import type { MonthlyIncomeTaxDatum } from "@/hooks/useTaxOverviewData";
-import { BarChart, type BarSeries } from "@/components/charts";
+import { BarChart } from "@/components/charts";
 import {
     Card,
     CardContent,
@@ -106,7 +106,7 @@ export function MonthlyIncomeTaxCard({
                                     accessor: (d) => d.estimatedTax,
                                     color: "hsl(var(--chart-5))",
                                 },
-                            ] as BarSeries<MonthlyIncomeTaxDatum>[]
+                            ]
                         }
                     />
                 )}

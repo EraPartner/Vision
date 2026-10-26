@@ -75,6 +75,7 @@ function buildSeries<T extends MergedDay | MergedDayDate>(
             key: m.id,
             label: m.label,
             accessor: (d) =>
+                // Chart rows are index-signature records keyed by method id; values are numbers or null by construction.
                 ((d as Record<string, unknown>)[m.id] as number | null) ?? null,
             color,
             strokeWidth: 1.5,
@@ -88,6 +89,7 @@ function buildSeries<T extends MergedDay | MergedDayDate>(
                 key: `${m.id}__pLo`,
                 label: `${m.label} ${loLabel}`,
                 accessor: (d) =>
+                    // Chart rows are index-signature records keyed by method id; values are numbers or null by construction.
                     ((d as Record<string, unknown>)[`${m.id}__pLo`] as
                         number | null) ?? null,
                 color,
@@ -99,6 +101,7 @@ function buildSeries<T extends MergedDay | MergedDayDate>(
                 key: `${m.id}__pHi`,
                 label: `${m.label} ${hiLabel}`,
                 accessor: (d) =>
+                    // Chart rows are index-signature records keyed by method id; values are numbers or null by construction.
                     ((d as Record<string, unknown>)[`${m.id}__pHi`] as
                         number | null) ?? null,
                 color,

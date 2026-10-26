@@ -95,6 +95,7 @@ export function AddPortfolioTxnDialog({
     })();
 
     const initialForm = () => ({
+        // Widens the literal default to the field's union type for useState.
         type: "buy" as PortfolioTxnType,
         date: toYmd(new Date()),
         amount: "",
@@ -105,8 +106,10 @@ export function AddPortfolioTxnDialog({
         dividendAmountConvention: "unknown" as const,
         fxRateToEur: "",
         note: "",
+        // Widens the literal default to the field's union type for useState.
         accountId: undefined as string | undefined,
         isRecurring: false,
+        // Widens the literal default to the field's union type for useState.
         recurrenceInterval: "monthly" as RecurrenceInterval,
         recurrenceEndDate: "",
     });

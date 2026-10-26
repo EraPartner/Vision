@@ -48,5 +48,6 @@ export function setSkinV2(on: boolean | undefined): void {
 }
 
 if (import.meta.env.DEV && typeof window !== 'undefined') {
+    // Dev-only debug hook attached to window for the console.
     (window as unknown as { __setSkinV2?: typeof setSkinV2 }).__setSkinV2 = setSkinV2;
 }

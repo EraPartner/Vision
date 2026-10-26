@@ -250,6 +250,7 @@ export function checkWireData<S extends z.ZodType>(
     label: string,
 ): z.output<S> {
     checkResponseContract(schema, data, label);
+    // The schema just validated `data`; zod cannot express its own output type for an unknown input.
     return data as z.output<S>;
 }
 
@@ -342,6 +343,16 @@ export interface ApiRequestOptions extends RequestInit {
  * Core request with timeout, exponential-backoff retry, and envelope unwrap.
  * Domain modules import this instead of going through ApiClient.
  */
+export function apiRequest<S extends z.ZodType>(
+    endpoint: string,
+    options: ApiRequestOptions & { schema: S },
+    retries?: number,
+): Promise<z.output<S>>;
+export function apiRequest<T>(
+    endpoint: string,
+    options?: ApiRequestOptions,
+    retries?: number,
+): Promise<T>;
 export async function apiRequest<T>(
     endpoint: string,
     options: ApiRequestOptions = {},
@@ -460,15 +471,13 @@ export async function apiRequest<T>(
                     status: 204,
                 });
                 // 204: callers that expect no body type `T` as void/unknown.
-                // 204: callers that expect no body type `T` as void/unknown.
                 return undefined as unknown as T;
             }
 
             const body: unknown = await response.json();
-            // `T` is the caller's claim about the wire shape; `schema` (when given)
-            // checks it below (ADR-193).
-            // `T` is the caller's claim about the wire shape; `schema` (when given)
-            // checks it below (ADR-193).
+            // The single trust point of the transport: `T` is the caller's claim
+            // about the wire shape. With a `schema` the overload above makes `T`
+            // the schema's output and the check below enforces it (ADR-193).
             const result = unwrapEnvelope(body) as T;
             if (schema) {
                 checkResponseContract(schema, result, `${method} ${endpoint}`);

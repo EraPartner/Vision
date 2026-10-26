@@ -155,13 +155,20 @@ function localizeDashboard(
                 : row.assetClass,
         }),
     );
-    const summaries = dashboard.summaries.map(
-        (row): PortfolioTaxInvestmentSummary => ({
-            ...row,
-            id: asInvestmentId(row.id),
-            symbol: row.symbol ?? undefined,
-            assetClass: row.assetClass as AssetClass,
-        }),
+    // The backend only stores known asset classes; a row with any other value
+    // cannot be classified in the dialog, so it is left out instead of mislabelled.
+    const summaries = dashboard.summaries.flatMap(
+        (row): PortfolioTaxInvestmentSummary[] =>
+            isAssetClass(row.assetClass)
+                ? [
+                      {
+                          ...row,
+                          id: asInvestmentId(row.id),
+                          symbol: row.symbol ?? undefined,
+                          assetClass: row.assetClass,
+                      },
+                  ]
+                : [],
     );
     const yearlyCostTrend: MonthlyCostDatum[] = dashboard.yearlyCostTrend;
     return {

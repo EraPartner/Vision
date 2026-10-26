@@ -119,6 +119,7 @@ export function summarizeHouseholdChanges(
         (section) =>
             `${t(`tax.history.household.section.${section}`)}: ${householdSectionValue(changes, section, t, fmt)}`,
     );
+    // Object.fromEntries yields an index-signature record; the filtered keys are a subset of the audited change keys.
     const rest = Object.fromEntries(
         Object.entries(changes).filter(([key]) => !known.has(key)),
     ) as SnapshotAuditEntry["changes"];

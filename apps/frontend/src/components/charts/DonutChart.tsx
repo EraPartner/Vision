@@ -103,6 +103,7 @@ function Inner({
             >
                 <Group top={cy} left={cx}>
                     <Pie
+                        // visx takes a mutable array; the prop is a ReadonlyArray that visx never writes to.
                         data={data as DonutDatum[]}
                         pieValue={(d) => d.value}
                         outerRadius={outer}

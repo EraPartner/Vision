@@ -136,6 +136,8 @@ const PROVIDERS = [
 ];
 const MAX_SERIES = 5;
 
+const INDICATOR_TYPES: readonly IndicatorType[] = ["sma", "ema", "bollinger"];
+
 /** Stable fetch/cache key for a series — distinct (symbol,provider) for tickers, (provider,seriesId) for macro. */
 function seriesKey(
     s: Pick<BuilderSeries, "symbol" | "provider" | "macro">,
@@ -627,7 +629,7 @@ export default function ChartBuilderPage() {
                     strokeWidth: 1.5,
                     dashed: true,
                 },
-            ] as LineSeries<Row>[],
+            ],
             oscRefs: [{ y: 0, dashed: true }],
         };
     }, [oscillator, oscillatorSeriesId, series, pointsByKey]);
@@ -1229,13 +1231,7 @@ export default function ChartBuilderPage() {
                                 </p>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                                {(
-                                    [
-                                        "sma",
-                                        "ema",
-                                        "bollinger",
-                                    ] as IndicatorType[]
-                                ).map((typ) => (
+                                {INDICATOR_TYPES.map((typ) => (
                                     <Button
                                         key={typ}
                                         size="sm"

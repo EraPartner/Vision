@@ -6,6 +6,8 @@ import type {
     AnalysisUnit,
 } from "@/lib/api/analysis";
 import { evaluateAnalysisExtension } from "@/lib/api/analysis";
+import { isAnalysisValue } from "@/lib/analysisValue";
+import { isRecord } from "@/lib/isRecord";
 import type { ScenarioAttachment } from "./analysisInterchange";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { SELECT_NONE, fromSelectValue, toSelectValue } from "@/lib/selectValue";
@@ -57,7 +59,7 @@ const nestedBoxClass =
     "space-y-3 rounded-card corner-continuous border border-border/60 bg-background/40 p-3";
 interface Formula {
     id: string;
-    label: string;
+    label?: string | undefined;
     expression: string;
     scope: "row" | "summary";
     unit?: string;
@@ -132,12 +134,45 @@ interface ExtensionOutput {
     iterations?: number;
     formulaUnits?: Record<string, AnalysisUnit>;
 }
-function parse<T>(json: string, fallback: T): T {
+function parseJsonText(json: string): unknown {
     try {
-        return JSON.parse(json) as T;
+        const value: unknown = JSON.parse(json);
+        return value;
     } catch {
-        return fallback;
+        return undefined;
     }
+}
+const formulaCaption = (formula: Record<string, unknown>): string => {
+    if (typeof formula.label === "string" && formula.label) return formula.label;
+    return typeof formula.id === "string" ? formula.id : "";
+};
+const isFormula = (value: unknown): value is Formula =>
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    (value.label === undefined || typeof value.label === "string") &&
+    typeof value.expression === "string" &&
+    (value.scope === "row" || value.scope === "summary");
+const isAssumption = (value: unknown): value is Assumption =>
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.label === "string" &&
+    isAnalysisValue(value.defaultValue);
+/** Editor JSON as a list of well-formed entries; anything else yields `[]`. */
+function parseList<T>(json: string, guard: (value: unknown) => value is T): T[] {
+    const parsed = parseJsonText(json);
+    return Array.isArray(parsed) ? parsed.filter(guard) : [];
+}
+/** Editor JSON as an id to value map; non-scalar entries are dropped. */
+function parseValues(json: string): Record<string, AnalysisValue> {
+    const parsed = parseJsonText(json);
+    return isRecord(parsed)
+        ? Object.fromEntries(
+              Object.entries(parsed).filter(
+                  (entry): entry is [string, AnalysisValue] =>
+                      isAnalysisValue(entry[1]),
+              ),
+          )
+        : {};
 }
 const functions = [
     "IF",
@@ -177,12 +212,9 @@ export function AnalysisWorkbenchPanel(props: Props) {
     // Ids that come from analysis metadata rather than a fixed list.
     const trDynamic = (key: string) =>
         translateDynamic(t, `analysis.ext.workbench.${key}`);
-    const formulas = parse<Formula[]>(props.formulasJson, []),
-        definitions = parse<Assumption[]>(props.assumptionsJson, []),
-        values = parse<Record<string, AnalysisValue>>(
-            props.assumptionValuesJson,
-            {},
-        );
+    const formulas = parseList(props.formulasJson, isFormula),
+        definitions = parseList(props.assumptionsJson, isAssumption),
+        values = parseValues(props.assumptionValuesJson);
     const assumptions = Object.fromEntries(
         definitions.map((a) => [a.id, values[a.id] ?? a.defaultValue]),
     );
@@ -299,20 +331,18 @@ export function AnalysisWorkbenchPanel(props: Props) {
                         : result.columns,
                 complete,
                 inputComplete: complete,
-                formulas: parse(props.formulasJson, []),
+                formulas: parseList(props.formulasJson, isFormula),
                 workbench: props.config,
                 assumptionUnits: Object.fromEntries(
-                    parse<Assumption[]>(props.assumptionsJson, [])
+                    parseList(props.assumptionsJson, isAssumption)
                         .filter((a) => a.unit)
                         .map((a) => [a.id, a.unit]),
                 ),
                 assumptions: Object.fromEntries(
-                    parse<Assumption[]>(props.assumptionsJson, []).map((a) => [
+                    parseList(props.assumptionsJson, isAssumption).map((a) => [
                         a.id,
-                        parse<Record<string, AnalysisValue>>(
-                            props.assumptionValuesJson,
-                            {},
-                        )[a.id] ?? a.defaultValue,
+                        parseValues(props.assumptionValuesJson)[a.id] ??
+                            a.defaultValue,
                     ]),
                 ),
             })
@@ -371,6 +401,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
         setBusy(true);
         setError("");
         try {
+            // The extension endpoint response is unschematized in the contract; ExtensionOutput is this panel's view of it.
             const response = (await evaluateAnalysisExtension({
                 operation: appliedOperation,
                 ...base(),
@@ -654,11 +685,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
             step.targetType
                 ? trDynamic(`option.${analysisCellText(step.targetType)}`)
                 : "",
-            step.formula
-                ? (step.formula as { label?: string; id?: string }).label ||
-                  (step.formula as { id?: string }).id ||
-                  ""
-                : "",
+            isRecord(step.formula) ? formulaCaption(step.formula) : "",
         ]
             .filter(Boolean)
             .join(" · ");

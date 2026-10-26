@@ -89,13 +89,18 @@ function variantKey(value: unknown): unknown {
 
 export function cva<T>(base?: ClassValue, config?: VariantConfig<T>) {
     return (props?: VariantInput<T>): string => {
+        // cva-compatible dynamic API: props, variants and compound variants are user-supplied records read by key.
         const input = (props ?? {}) as Record<string, unknown>;
+        // cva-compatible dynamic API: props, variants and compound variants are user-supplied records read by key.
         const variants = config?.variants as VariantSchema | undefined;
+        // cva-compatible dynamic API: props, variants and compound variants are user-supplied records read by key.
         if (variants == null) return cx(base, input.class as ClassValue, input.className as ClassValue);
+        // cva-compatible dynamic API: props, variants and compound variants are user-supplied records read by key.
         const defaults = (config?.defaultVariants ?? {}) as Record<string, unknown>;
         const chosen = Object.keys(variants).map((variant) => {
             const value = input[variant];
             if (value === null) return null;
+            // cva-compatible dynamic API: props, variants and compound variants are user-supplied records read by key.
             const key = (variantKey(value) || variantKey(defaults[variant])) as string;
             return variants[variant]?.[key];
         });
@@ -104,18 +109,22 @@ export function cva<T>(base?: ClassValue, config?: VariantConfig<T>) {
         );
         const selected: Record<string, unknown> = { ...defaults, ...given };
         const compound: ClassValue[] = [];
+        // cva-compatible dynamic API: props, variants and compound variants are user-supplied records read by key.
         for (const entry of (config?.compoundVariants ?? []) as Record<string, unknown>[]) {
             const { class: cvClass, className: cvClassName, ...conditions } = entry;
             const matches = Object.entries(conditions).every(([key, value]) =>
                 Array.isArray(value) ? value.includes(selected[key]) : selected[key] === value,
             );
+            // cva-compatible dynamic API: props, variants and compound variants are user-supplied records read by key.
             if (matches) compound.push(cvClass as ClassValue, cvClassName as ClassValue);
         }
         return cx(
             base,
             chosen,
             compound,
+            // cva-compatible dynamic API: props, variants and compound variants are user-supplied records read by key.
             input.class as ClassValue,
+            // cva-compatible dynamic API: props, variants and compound variants are user-supplied records read by key.
             input.className as ClassValue,
         );
     };

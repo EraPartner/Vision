@@ -67,6 +67,7 @@ export function LinkTransactionDialog({
         end_date: "",
         bank_account: "",
         recipient_name: "",
+        // Widens the initial value's type so the state can later hold an id.
         recipient_id: null as RecipientId | null,
         uncategorised: false,
         active: true,

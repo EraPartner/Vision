@@ -389,6 +389,7 @@ export default function PlannedPaymentForm({
             delete payload.recurrence_pattern;
         }
 
+        // Loan payloads delete the recurrence fields above, so the object no longer satisfies the required-field type; the API treats them as absent.
         onSubmit(payload as Omit<PlannedPayment, "id" | "created_at">);
         resetErrors();
     };

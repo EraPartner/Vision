@@ -105,6 +105,7 @@ function Inner({
             >
                 <Group top={centerY} left={centerX}>
                     <Pie
+                        // visx takes a mutable array; the prop is a ReadonlyArray that visx never writes to.
                         data={data as PieDatum[]}
                         pieValue={(d) => d.value}
                         outerRadius={radius}

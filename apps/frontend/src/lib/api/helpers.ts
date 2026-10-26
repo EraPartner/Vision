@@ -126,6 +126,7 @@ export async function postMultipartImport<T>(
     }
 
     const body: unknown = await response.json();
+    // `T` is the caller's claim about the multipart response; there is no schema parameter on this helper.
     return unwrapEnvelope(body) as T;
 }
 

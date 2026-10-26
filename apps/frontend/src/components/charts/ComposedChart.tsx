@@ -151,9 +151,11 @@ function ComposedSeriesLayerInner<Datum>({
                 return (
                     <AreaClosed<Datum>
                         key={s.key}
+                        // visx takes a mutable array; the prop is a ReadonlyArray that visx never writes to.
                         data={data as Datum[]}
                         x={(d) => cx(d)}
                         y={(d) => yS(s.accessor?.(d) ?? 0)}
+                        // visx's scale generics are keyed on the scale's domain type; `never` bridges the mismatch between our scale union and the series' scale.
                         yScale={yS as never}
                         curve={curveMonotoneX}
                         fill={color}
@@ -225,6 +227,7 @@ function ComposedSeriesLayerInner<Datum>({
                 if (s.type !== "line") return null;
                 const yS = scaleFor(s);
                 const color = s.color ?? getChartColor(i);
+                // visx takes a mutable array; the prop is a ReadonlyArray that visx never writes to.
                 const filtered = (data as Datum[]).filter((d) => {
                     const v = s.accessor?.(d);
                     return v != null && Number.isFinite(v);

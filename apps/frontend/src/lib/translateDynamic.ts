@@ -20,5 +20,6 @@ export function translateDynamic(
     key: string,
     vars?: Record<string, string | number>,
 ): string {
+    // The one place dynamic keys are asserted as TranslationKey; callers document why their key set is valid.
     return t(key as TranslationKey, vars);
 }

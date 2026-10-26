@@ -105,6 +105,7 @@ export function AnalysisInterchangePanel({
                             formulas,
                         });
                         downloadBlob(
+                            // Blob's BlobPart type excludes Uint8Array<ArrayBufferLike>; the buffer here is a plain ArrayBuffer.
                             new Blob([bytes as BlobPart], {
                                 type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             }),

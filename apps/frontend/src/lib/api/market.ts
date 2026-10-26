@@ -120,7 +120,7 @@ export function getWatchlist(params?: {
                   .map(([k, v]) => [k, String(v)]),
           ).toString()}`
         : "";
-    return apiRequest(`/api/watchlist${query}`, {
+    return apiRequest<Awaited<ReturnType<typeof getWatchlist>>>(`/api/watchlist${query}`, {
         schema: WatchlistListSchema,
     });
 }
@@ -128,7 +128,7 @@ export function getWatchlist(params?: {
 export function createWatchlistItem(
     data: WatchlistCreate,
 ): Promise<WatchlistItem> {
-    return apiRequest("/api/watchlist", {
+    return apiRequest<Awaited<ReturnType<typeof createWatchlistItem>>>("/api/watchlist", {
         method: "POST",
         body: JSON.stringify(data),
         schema: WatchlistItemSchema,
@@ -139,7 +139,7 @@ export function updateWatchlistItem(
     id: number,
     data: WatchlistUpdate,
 ): Promise<WatchlistItem> {
-    return apiRequest(`/api/watchlist/${id}`, {
+    return apiRequest<Awaited<ReturnType<typeof updateWatchlistItem>>>(`/api/watchlist/${id}`, {
         method: "PATCH",
         body: JSON.stringify(data),
         schema: WatchlistItemSchema,

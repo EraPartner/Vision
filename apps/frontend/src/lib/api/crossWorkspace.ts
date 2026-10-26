@@ -106,7 +106,7 @@ export function computeCommitmentAwareCash(req: {
 export function computeRebalance(
     req: RebalanceRequest,
 ): Promise<RebalanceResponse> {
-    return apiRequest("/api/cross-workspace/rebalance", {
+    return apiRequest<Awaited<ReturnType<typeof computeRebalance>>>("/api/cross-workspace/rebalance", {
         method: "POST",
         body: JSON.stringify(req),
         schema: RebalanceResponseSchema,
