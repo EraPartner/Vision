@@ -103,8 +103,11 @@ struct PortfolioSeriesChart: View {
                     Rectangle().fill(.clear).contentShape(Rectangle())
                         .onContinuousHover { phase in
                             switch phase {
-                            case .active(let location): selected = key(location.x, proxy: proxy, geometry: geometry)
-                            case .ended: if rangeStart == nil { selected = nil }
+                            case .active(let location):
+                                // Scrolling re-reports a parked pointer every frame: write on change only.
+                                let hovered = key(location.x, proxy: proxy, geometry: geometry)
+                                if selected != hovered { selected = hovered }
+                            case .ended: if rangeStart == nil, selected != nil { selected = nil }
                             }
                         }
                         .gesture(
@@ -113,7 +116,8 @@ struct PortfolioSeriesChart: View {
                                 if rangeStart == nil {
                                     rangeStart = key(value.startLocation.x, proxy: proxy, geometry: geometry)
                                 }
-                                selected = key(value.location.x, proxy: proxy, geometry: geometry)
+                                let dragged = key(value.location.x, proxy: proxy, geometry: geometry)
+                                if selected != dragged { selected = dragged }
                             })
                 }
             }
