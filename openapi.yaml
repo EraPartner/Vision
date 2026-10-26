@@ -7317,6 +7317,10 @@ components:
           type: string
         source_size_bytes:
           type: integer
+        account_id:
+          type: integer
+          nullable: true
+          description: Brokerage account the batch imports into (ADR-095); null when unassigned.
         status:
           type: string
           enum:
@@ -7456,8 +7460,7 @@ components:
           type: string
           enum: [stock, etf, crypto, metals, real_estate, savings, bond]
         default_type:
-          type: string
-          enum: [buy, sell, dividend, fee, tax, interest]
+          $ref: "#/components/schemas/PortfolioTxnType"
         type_mapping:
           type: string
           description: JSON object mapping raw CSV type strings to canonical portfolio_txn_type values

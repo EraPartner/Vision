@@ -658,11 +658,9 @@ export type _EnumsInvestmentCreate = Expect<
 export type _EnumsInvestmentUpdate = Expect<
     Matches<InvestmentUpdate, Schemas["InvestmentUpdateRequest"]>
 >;
-// `cash_account_id` is declared on the frontend type (ADR-090) but absent from
-// the contract and the backend; excluded here until that drift is resolved.
 export type _EnumsPortfolioTransactionCreate = Expect<
     Matches<
-        Omit<PortfolioTransactionCreate, "cash_account_id">,
+        PortfolioTransactionCreate,
         JsonRequestBody<operations["createInvestmentTransaction"]>
     >
 >;
@@ -723,24 +721,21 @@ export type _EnumsCsvNumberFormatList = Expect<
         ? true
         : false
 >;
-// Status only: the batch-list parser also reads `account_id`, which the
-// contract's PortfolioImportBatch does not declare (key drift, reported).
 export type _EnumsPortfolioImportBatch = Expect<
     Matches<
-        Pick<PortfolioImportBatchPage["items"][number], "status">,
+        DeclaredKeys<PortfolioImportBatchPage["items"][number]>,
         Schemas["PortfolioImportBatch"]
     >
 >;
 // The upload form fields the parser config flattens into (camelCase in the
-// config, snake_case on the wire). `default_type` is deliberately absent: the
-// contract lists six values, the backend accepts all of PORTFOLIO_TXN_TYPES
-// and the column mapper offers nine (see the report on the import enums).
+// config, snake_case on the wire).
 export type _EnumsPortfolioImportUpload = Expect<
     Matches<
         {
             portfolio_format: PortfolioCustomConfig["format"];
             yield_basis_policy: PortfolioCustomConfig["yieldBasisPolicy"];
             default_asset_class: AssetClass;
+            default_type: PortfolioCustomConfig["defaultType"];
         },
         Schemas["PortfolioImportUpload"]
     >

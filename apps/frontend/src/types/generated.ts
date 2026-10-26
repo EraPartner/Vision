@@ -7742,6 +7742,8 @@ export interface components {
             adapter_name: string;
             source_filename?: string;
             source_size_bytes?: number;
+            /** @description Brokerage account the batch imports into (ADR-095); null when unassigned. */
+            account_id?: number | null;
             /** @enum {string} */
             status: "pending" | "staging" | "validating" | "matching" | "committing" | "complete" | "complete_with_errors" | "failed" | "aborted" | "awaiting_review";
             rows_total: number;
@@ -7811,8 +7813,7 @@ export interface components {
             source_account_column?: string;
             /** @enum {string} */
             default_asset_class: "stock" | "etf" | "crypto" | "metals" | "real_estate" | "savings" | "bond";
-            /** @enum {string} */
-            default_type?: "buy" | "sell" | "dividend" | "fee" | "tax" | "interest";
+            default_type?: components["schemas"]["PortfolioTxnType"];
             /** @description JSON object mapping raw CSV type strings to canonical portfolio_txn_type values */
             type_mapping?: string;
             /** @description Brokerage fan-out (ADR-095) — cash rows land on a ledger account */
@@ -16999,7 +17000,7 @@ export interface operations {
                      * @enum {boolean}
                      */
                     create_new?: true;
-                } & (unknown | unknown);
+                } & (unknown  );
             };
         };
         responses: {

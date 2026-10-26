@@ -634,8 +634,6 @@ export interface PortfolioTransactionCreate {
     currency?: CurrencyCode | undefined;
     fx_rate_to_eur?: number | undefined;
     account_id?: AccountId | undefined;
-    /** Cash account whose sleeve the trade's cash leg posts to (ADR-090); create-only. */
-    cash_account_id?: AccountId | undefined;
     note?: string | undefined;
     is_recurring?: boolean | undefined;
     recurrence_interval?: RecurrenceInterval | undefined;
