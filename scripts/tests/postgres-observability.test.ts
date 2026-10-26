@@ -9,7 +9,7 @@ const nativeHarnesses = [
   ".github/scripts/with-native-stack.sh",
 ];
 
-test("all disposable native PostgreSQL harnesses preload query statistics", () => {
+void test("all disposable native PostgreSQL harnesses preload query statistics", () => {
   for (const relativePath of nativeHarnesses) {
     const source = fs.readFileSync(
       path.join(repositoryRoot, relativePath),
@@ -19,7 +19,7 @@ test("all disposable native PostgreSQL harnesses preload query statistics", () =
   }
 });
 
-test("GitHub CI installs and verifies PostgreSQL 18", () => {
+void test("GitHub CI installs and verifies PostgreSQL 18", () => {
   const source = fs.readFileSync(
     path.join(repositoryRoot, ".github/scripts/install-postgres-18.sh"),
     "utf8",

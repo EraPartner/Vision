@@ -16,7 +16,7 @@ function stderrOf(error: unknown): string {
   return String(error.stderr);
 }
 
-test("accepts a completed authoritative Findings queue", () => {
+void test("accepts a completed authoritative Findings queue", () => {
   const directory = mkdtempSync(join(tmpdir(), "vision-todo-report-"));
   const todo = join(directory, "TODO.md");
   writeFileSync(
@@ -39,7 +39,7 @@ test("accepts a completed authoritative Findings queue", () => {
   assert.match(output, /OK: 0 open findings/);
 });
 
-test("derives state from Tracking metadata rather than title prose", () => {
+void test("derives state from Tracking metadata rather than title prose", () => {
   const directory = mkdtempSync(join(tmpdir(), "vision-todo-report-"));
   const todo = join(directory, "TODO.md");
   writeFileSync(
@@ -64,7 +64,7 @@ test("derives state from Tracking metadata rather than title prose", () => {
   assert.doesNotMatch(output, /\[partial\]/);
 });
 
-test("rejects open findings without explicit Tracking metadata", () => {
+void test("rejects open findings without explicit Tracking metadata", () => {
   const directory = mkdtempSync(join(tmpdir(), "vision-todo-report-"));
   const todo = join(directory, "TODO.md");
   writeFileSync(
@@ -93,7 +93,7 @@ test("rejects open findings without explicit Tracking metadata", () => {
   );
 });
 
-test("rejects duplicate, conflicting, or unrecognized Tracking metadata", () => {
+void test("rejects duplicate, conflicting, or unrecognized Tracking metadata", () => {
   const directory = mkdtempSync(join(tmpdir(), "vision-todo-report-"));
   const duplicateTodo = join(directory, "duplicate.md");
   const conflictingTodo = join(directory, "conflicting.md");

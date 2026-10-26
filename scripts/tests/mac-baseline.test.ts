@@ -32,7 +32,7 @@ import {
 } from "../lib/mac-baseline/report.ts";
 import { findSegments, summarizeTrace } from "../lib/mac-baseline/trace.ts";
 
-test("parses macOS and procps CPU times", () => {
+void test("parses macOS and procps CPU times", () => {
   assert.equal(parseCpuTime("0:01.50"), 1.5);
   assert.equal(parseCpuTime("125:03.25"), 7503.25);
   assert.equal(parseCpuTime("00:01:02"), 62);
@@ -53,7 +53,7 @@ const PS = `
   400     1    1024   0:00.10 /usr/bin/unrelated
 `;
 
-test("classifies Vision, runtime, Ollama and WindowServer processes", () => {
+void test("classifies Vision, runtime, Ollama and WindowServer processes", () => {
   const rows = parsePsOutput(PS);
   assert.equal(rows.length, 11);
   const roles = classifyProcesses(rows, {
@@ -79,7 +79,7 @@ test("classifies Vision, runtime, Ollama and WindowServer processes", () => {
   assert.equal(fallback.get(105), "postgres");
 });
 
-test("computes CPU % from CPU-time deltas and sums app roles", () => {
+void test("computes CPU % from CPU-time deltas and sums app roles", () => {
   const before = parsePsOutput(PS);
   const after = before.map((row) =>
     row.pid === 102
@@ -97,12 +97,12 @@ test("computes CPU % from CPU-time deltas and sums app roles", () => {
   assert.equal(summary.renderer?.cpuPercent, 50);
   assert.equal(summary.gpu?.cpuPercent, 10);
   assert.equal(summary.appTotal?.cpuPercent, 60);
-  assert.equal(summary.appTotal?.processes, 7);
+  assert.equal(summary.appTotal.processes, 7);
   assert.equal(summary.postgres?.rssMb, 50);
   assert.equal(summary.ollama?.processes, 2);
 });
 
-test("reads top's MEM footprint column", () => {
+void test("reads top's MEM footprint column", () => {
   const top = `Processes: 500 total\nPID    MEM\n100    210M+\n101    1024K\n102    1.5G-\n`;
   const mem = parseTopMem(top);
   assert.equal(mem.get(100), 210 * 1024 ** 2);
@@ -142,7 +142,7 @@ const SAMPLE = `<?xml version="1.0" encoding="UTF-8"?>
 </plist>
 `;
 
-test("parses powermetrics plist samples", () => {
+void test("parses powermetrics plist samples", () => {
   const { documents, rest } = splitPlistDocuments(
     `${SAMPLE}\0${SAMPLE}\0<?xml`,
   );
@@ -186,7 +186,7 @@ test("parses powermetrics plist samples", () => {
   });
 });
 
-test("frame stats count missed vsyncs from rAF intervals", () => {
+void test("frame stats count missed vsyncs from rAF intervals", () => {
   // 60 Hz frames with one 50 ms hitch (two missed vsyncs).
   const stamps = [0];
   for (let i = 1; i <= 30; i++)
@@ -204,7 +204,7 @@ test("frame stats count missed vsyncs from rAF intervals", () => {
   assert.deepEqual(fpsBuckets([0, 100, 200, 1100, 1900, 2100], 1000), [3, 2]);
 });
 
-test("trace summaries split at page markers", () => {
+void test("trace summaries split at page markers", () => {
   const events = [
     { ph: "M", name: "process_name", pid: 1, args: { name: "Renderer" } },
     {
@@ -284,7 +284,7 @@ test("trace summaries split at page markers", () => {
   ]);
 });
 
-test("spread and off/on comparison only claim differences beyond noise", () => {
+void test("spread and off/on comparison only claim differences beyond noise", () => {
   assert.equal(spreadOf([null, undefined]), null);
   assert.deepEqual(spreadOf([3, 1, 2, null]), {
     n: 3,
@@ -347,7 +347,7 @@ test("spread and off/on comparison only claim differences beyond noise", () => {
   assert.equal(variantLabel(tier(false, 1, 0)), "standard");
 });
 
-test("footprint output gives per-process and shared-once totals", () => {
+void test("footprint output gives per-process and shared-once totals", () => {
   const text = `
 ======================================================================
 postgres [200]: 64-bit    Footprint: 140 MB (16384 bytes per page)
@@ -389,7 +389,7 @@ function leakSamples(idleMb: (cycle: number) => number): LeakSample[] {
   return samples;
 }
 
-test("leak check flags steady idle growth and ignores flat memory", () => {
+void test("leak check flags steady idle growth and ignores flat memory", () => {
   assert.equal(
     slopePerMinute([
       [0, 10],

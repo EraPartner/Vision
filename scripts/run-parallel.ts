@@ -87,8 +87,8 @@ export async function run(options: Options): Promise<number> {
           if (options.group) output += chunk.toString();
           else out.push(chunk.toString());
         };
-        child.stdout?.on("data", onData);
-        child.stderr?.on("data", onData);
+        child.stdout.on("data", onData);
+        child.stderr.on("data", onData);
         child.on("error", (error) => {
           output += `${error.message}\n`;
         });

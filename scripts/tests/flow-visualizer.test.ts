@@ -156,7 +156,7 @@ function open(hash = "", reducedMotion = false): Dom {
   return dom;
 }
 
-test("flow data references valid nodes, source paths, docs and learning paths", () => {
+void test("flow data references valid nodes, source paths, docs and learning paths", () => {
   const ids = new Set(data.components.map((c) => c.id));
   assert.equal(ids.size, data.components.length);
   const flows = new Set(data.flows.map((f) => f.id));
@@ -182,10 +182,13 @@ test("flow data references valid nodes, source paths, docs and learning paths", 
     }
   }
   for (const flow of data.flows) {
-    for (const key of ["id", "name", "category", "summary"] as const)
-      assert.ok(flow[key]?.trim(), flow.id);
-    assert.ok(flow.steps.length, flow.id);
-    assert.ok(flow.docs.length, flow.id);
+    for (const key of ["id", "name", "category", "summary"] as const) {
+      // The flow data is JSON; do not trust the declared type here.
+      const value: unknown = flow[key];
+      assert.ok(typeof value === "string" && value.trim() !== "", flow.id);
+    }
+    assert.ok(flow.steps.length > 0, flow.id);
+    assert.ok(flow.docs.length > 0, flow.id);
     for (const doc of flow.docs) {
       assert.ok(!doc.path.includes("..") && !doc.path.includes(":"), doc.path);
       assert.ok(existsSync(resolve(root, "docs", doc.path)), doc.path);
@@ -195,10 +198,18 @@ test("flow data references valid nodes, source paths, docs and learning paths", 
         ids.has(step.from) && ids.has(step.to),
         `${flow.id}: ${step.from} / ${step.to}`,
       );
-      assert.ok(step.payload?.trim() && step.annotation?.trim(), flow.id);
+      const payload: unknown = step.payload;
+      const annotation: unknown = step.annotation;
+      assert.ok(
+        typeof payload === "string" &&
+          payload.trim() !== "" &&
+          typeof annotation === "string" &&
+          annotation.trim() !== "",
+        flow.id,
+      );
       for (const path of step.annotation.match(
         /(?:apps|packaging|packages)\/[\w./-]+/g,
-      ) || []) {
+      ) ?? []) {
         assert.ok(
           existsSync(resolve(root, path.replace(/\.$/, ""))),
           `${flow.id}: ${path}`,
@@ -212,7 +223,7 @@ test("flow data references valid nodes, source paths, docs and learning paths", 
   }
 });
 
-test("visual documentation links and index counts match the catalogue", () => {
+void test("visual documentation links and index counts match the catalogue", () => {
   for (const path of [
     "docs/index.md",
     "docs/architecture/index.md",
@@ -256,7 +267,7 @@ test("visual documentation links and index counts match the catalogue", () => {
   );
 });
 
-test("every flow renders in both views and each step can be selected", () => {
+void test("every flow renders in both views and each step can be selected", () => {
   const dom = open();
   const doc = dom.window.document;
   try {
@@ -302,7 +313,7 @@ test("every flow renders in both views and each step can be selected", () => {
   }
 });
 
-test("learning paths keep their order and combine with search", () => {
+void test("learning paths keep their order and combine with search", () => {
   const dom = open();
   const doc = dom.window.document;
   try {
@@ -328,7 +339,7 @@ test("learning paths keep their order and combine with search", () => {
   }
 });
 
-test("deep links, clear, controls and keyboard focus preserve selection", async () => {
+void test("deep links, clear, controls and keyboard focus preserve selection", async () => {
   const dom = open("#backup-restore", true);
   const doc = dom.window.document;
   try {

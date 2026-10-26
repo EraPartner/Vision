@@ -28,7 +28,7 @@ function check(root: string): SpawnSyncReturns<string> {
   });
 }
 
-test("rejects an unmarked named export imported only by a test", () => {
+void test("rejects an unmarked named export imported only by a test", () => {
   const root = fixture();
   write(root, "src/helper.js", "export function seam() {}\n");
   write(
@@ -41,7 +41,7 @@ test("rejects an unmarked named export imported only by a test", () => {
   assert.match(result.stderr, /seam -> __seam/);
 });
 
-test("ignores type-only re-exports used only by typed tests", () => {
+void test("ignores type-only re-exports used only by typed tests", () => {
   const root = fixture();
   write(
     root,
@@ -57,7 +57,7 @@ test("ignores type-only re-exports used only by typed tests", () => {
   assert.equal(result.status, 0, result.stderr);
 });
 
-test("recognizes dynamic test imports and accepts the __ marker", () => {
+void test("recognizes dynamic test imports and accepts the __ marker", () => {
   const root = fixture();
   write(
     root,
@@ -73,7 +73,7 @@ test("recognizes dynamic test imports and accepts the __ marker", () => {
   assert.equal(result.status, 0, result.stderr);
 });
 
-test("treats a production namespace import as a runtime surface", () => {
+void test("treats a production namespace import as a runtime surface", () => {
   const root = fixture();
   write(root, "src/helper.js", "export function seam() {}\n");
   write(
@@ -90,7 +90,7 @@ test("treats a production namespace import as a runtime surface", () => {
   assert.equal(result.status, 0, result.stderr);
 });
 
-test("still marks the named export when its binding is in a default object", () => {
+void test("still marks the named export when its binding is in a default object", () => {
   const root = fixture();
   write(
     root,

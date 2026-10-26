@@ -7,7 +7,7 @@ import test from "node:test";
 
 const wrapper = resolve(import.meta.dirname, "../with-test-db.sh");
 
-test("test:db ignores an inherited database URL unless explicitly opted in", () => {
+void test("test:db ignores an inherited database URL unless explicitly opted in", () => {
   const fakeBin = mkdtempSync(join(tmpdir(), "vision-test-db-bin-"));
   try {
     for (const tool of [

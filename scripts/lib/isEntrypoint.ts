@@ -6,7 +6,8 @@ import path from "node:path";
  * rather than silently skipping the script's checks.
  */
 export function isEntrypoint(meta: ImportMeta): boolean {
-  if (meta.main === true) return true;
+  const main: unknown = meta.main;
+  if (main === true) return true;
   const entry = process.argv[1];
   return entry !== undefined && path.resolve(entry) === meta.filename;
 }

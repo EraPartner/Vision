@@ -160,7 +160,7 @@ function validateLocaleObject(
   obj: LocaleSource,
 ): asserts obj is LocaleStrings {
   const invalid = Object.entries(obj).filter(([, v]) => typeof v !== "string");
-  if (invalid.length) {
+  if (invalid.length > 0) {
     throw new Error(
       `Locale ${lang} has ${invalid.length} non-string values. Fix i18n/source/${lang}.json`,
     );
@@ -169,7 +169,7 @@ function validateLocaleObject(
 
 function run(): void {
   const languages = getLanguages();
-  if (!languages.length) {
+  if (languages.length === 0) {
     console.error("No locale source files found in i18n/source/*.json");
     process.exit(1);
   }
@@ -197,7 +197,7 @@ function run(): void {
           }
         }
       }
-      if (changed) {
+      if (changed > 0) {
         fs.writeFileSync(p, JSON.stringify(obj, null, 2) + "\n", "utf8");
         console.log(` - ${lang}: normalized ${changed} strings`);
       }

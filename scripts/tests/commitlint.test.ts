@@ -10,7 +10,11 @@ import { lintMessage, stripComments } from "../commitlint.ts";
 const rules = (message: string) =>
   lintMessage(message)
     .errors.map((error) => /\[([a-z-]+)\]$/.exec(error)?.[1])
-    .sort();
+    .sort((left, right) => {
+      const [a, b] = [left ?? "", right ?? ""];
+      if (a < b) return -1;
+      return a > b ? 1 : 0;
+    });
 
 const cases: [string, string[]][] = [
   ["feat(frontend): add a chart", []],
@@ -36,18 +40,18 @@ const cases: [string, string[]][] = [
 ];
 
 for (const [message, expected] of cases) {
-  test(`lint ${JSON.stringify(message.slice(0, 40))}`, () => {
+  void test(`lint ${JSON.stringify(message.slice(0, 40))}`, () => {
     assert.deepEqual(rules(message), expected);
   });
 }
 
-test("a body without a leading blank line only warns", () => {
+void test("a body without a leading blank line only warns", () => {
   const result = lintMessage("feat: x\nbody");
   assert.deepEqual(result.errors, []);
   assert.equal(result.warnings.length, 1);
 });
 
-test("hook input drops comments and everything below the scissors", () => {
+void test("hook input drops comments and everything below the scissors", () => {
   const raw =
     "feat: x\n\nbody\n# Please enter the commit message\n" +
     "# ------------------------ >8 ------------------------\ndiff --git a b\n";

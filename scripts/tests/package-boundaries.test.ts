@@ -77,14 +77,14 @@ function errors(state: Fixtures): string {
   ).join("\n");
 }
 
-test("parses Bun trailing commas without corrupting quoted text", () => {
+void test("parses Bun trailing commas without corrupting quoted text", () => {
   assert.deepEqual(parseBunLock('{"a": "x, }", "b": [1,],}'), {
     a: "x, }",
     b: [1],
   });
 });
 
-test("all current internal package names remain private", () => {
+void test("all current internal package names remain private", () => {
   const state = fixtures();
   assert.deepEqual(
     checkBoundaries(state.manifests, state.rootLock, state.electronLock),
@@ -94,7 +94,7 @@ test("all current internal package names remain private", () => {
   assert.match(errors(state), /private: true/);
 });
 
-test("a new internal manifest requires an explicit policy update", () => {
+void test("a new internal manifest requires an explicit policy update", () => {
   const state = fixtures();
   state.manifests.set("packages/new/package.json", {
     name: "@vision/new",
@@ -103,7 +103,7 @@ test("a new internal manifest requires an explicit policy update", () => {
   assert.match(errors(state), /Unreviewed package manifest/);
 });
 
-test("a public-registry shadow of an internal package is rejected", () => {
+void test("a public-registry shadow of an internal package is rejected", () => {
   const state = fixtures();
   state.rootLock.packages["@vision/types"] = [
     "@vision/types@9.9.9",
@@ -114,7 +114,7 @@ test("a public-registry shadow of an internal package is rejected", () => {
   assert.match(errors(state), /resolves outside/);
 });
 
-test("internal dependency names cannot use registry specifiers", () => {
+void test("internal dependency names cannot use registry specifiers", () => {
   const state = fixtures();
   manifest(state, "apps/frontend/package.json").dependencies = {
     "@vision/types": "^1.0.0",
@@ -122,7 +122,7 @@ test("internal dependency names cannot use registry specifiers", () => {
   assert.match(errors(state), /reviewed workspace dependency/);
 });
 
-test("manifest changes without a matching lockfile are rejected", () => {
+void test("manifest changes without a matching lockfile are rejected", () => {
   const state = fixtures();
   manifest(state, "apps/frontend/package.json").dependencies = {
     react: "^99.0.0",
@@ -130,7 +130,7 @@ test("manifest changes without a matching lockfile are rejected", () => {
   assert.match(errors(state), /differs from the committed lockfile/);
 });
 
-test("external dependency sources and records without integrity are rejected", () => {
+void test("external dependency sources and records without integrity are rejected", () => {
   const state = fixtures();
   manifest(state, "package.json").devDependencies = {
     example: "github:owner/repo",
@@ -143,7 +143,7 @@ test("external dependency sources and records without integrity are rejected", (
   assert.match(errors(state), /missing integrity digest/);
 });
 
-test("new executable install hooks require a policy review", () => {
+void test("new executable install hooks require a policy review", () => {
   const state = fixtures();
   manifest(state, "apps/frontend/package.json").scripts = {
     postinstall: "node setup.js",
@@ -151,7 +151,7 @@ test("new executable install hooks require a policy review", () => {
   assert.match(errors(state), /unreviewed executable install hook postinstall/);
 });
 
-test("admits only the reviewed xlsx tarball with its pinned integrity", () => {
+void test("admits only the reviewed xlsx tarball with its pinned integrity", () => {
   const url = "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz";
   const integrity =
     "sha512-oLDq3jw7AcLqKWH2AhCpVTZl8mf6X2YReP+Neh0SJUzV/BdZYjth94tG5toiMB1PPrYtxOCfaoUCkvtuH+3AJA==";

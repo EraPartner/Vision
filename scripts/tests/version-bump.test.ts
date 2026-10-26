@@ -48,7 +48,7 @@ function manifestTexts(root: string): string[] {
   ];
 }
 
-test("updates all enforced version sources and preserves other fields", (t) => {
+void test("updates all enforced version sources and preserves other fields", (t) => {
   const root = fixture();
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
 
@@ -70,7 +70,7 @@ test("updates all enforced version sources and preserves other fields", (t) => {
   });
 });
 
-test("rejects invalid versions without changing any manifest", (t) => {
+void test("rejects invalid versions without changing any manifest", (t) => {
   const root = fixture();
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const before = manifestTexts(root);
@@ -90,7 +90,7 @@ test("rejects invalid versions without changing any manifest", (t) => {
   }
 });
 
-test("rejects a pre-existing mismatch instead of concealing it", (t) => {
+void test("rejects a pre-existing mismatch instead of concealing it", (t) => {
   const root = fixture("1.0.2", "1.0.1", "1.0.2");
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
 
@@ -100,7 +100,7 @@ test("rejects a pre-existing mismatch instead of concealing it", (t) => {
   assert.equal(versionOf(root, "packaging/electron/package.json"), "1.0.2");
 });
 
-test("rolls back all manifests if the third staged replacement fails", (t) => {
+void test("rolls back all manifests if the third staged replacement fails", (t) => {
   const root = fixture();
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const before = manifestTexts(root);

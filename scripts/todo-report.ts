@@ -177,7 +177,7 @@ export function validate(items: readonly TodoItem[]): string[] {
         `${at}: Tracking line needs exactly one recognized state marker`,
       );
     }
-    if ([...item.heading].length > 240)
+    if (Array.from(item.heading).length > 240)
       errors.push(`${at}: open finding heading is longer than 240 characters`);
     const previous = seenTitles.get(item.title);
     if (previous !== undefined) {

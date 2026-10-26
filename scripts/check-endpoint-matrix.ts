@@ -138,11 +138,11 @@ export async function checkMatrix(
   const extra = [...matrixOperations]
     .filter((operation) => !specOperations.has(operation))
     .sort();
-  if (missing.length)
+  if (missing.length > 0)
     errors.push(
       `Missing from matrix:\n${missing.map((operation) => `  ${operation}`).join("\n")}`,
     );
-  if (extra.length)
+  if (extra.length > 0)
     errors.push(
       `Absent from OpenAPI:\n${extra.map((operation) => `  ${operation}`).join("\n")}`,
     );
@@ -155,7 +155,7 @@ async function main(): Promise<void> {
       readFileSync("openapi.yaml", "utf8"),
       readFileSync("docs/reference/api-endpoint-matrix.md", "utf8"),
     );
-    if (errors.length) throw new Error(errors.join("\n"));
+    if (errors.length > 0) throw new Error(errors.join("\n"));
     console.log(`[check-endpoint-matrix] in sync: ${count} method/path pairs.`);
   } catch (error) {
     console.error(

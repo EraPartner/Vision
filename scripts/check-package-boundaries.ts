@@ -62,6 +62,11 @@ function entriesOf(value: unknown): [string, unknown][] {
   return value ? Object.entries(value) : [];
 }
 
+function byEntryName(left: [string, unknown], right: [string, unknown]): number {
+  if (left[0] < right[0]) return -1;
+  return left[0] > right[0] ? 1 : 0;
+}
+
 function isReviewedExternalSpecifier(
   dependency: string,
   specifier: string,
@@ -202,7 +207,10 @@ export function checkBoundaries(
         for (const dependencyField of DEPENDENCY_FIELDS) {
           const actual = entriesOf(field(manifest, dependencyField));
           const recorded = entriesOf(field(locked, dependencyField));
-          if (JSON.stringify(actual.sort()) !== JSON.stringify(recorded.sort()))
+          if (
+            JSON.stringify(actual.sort(byEntryName)) !==
+            JSON.stringify(recorded.sort(byEntryName))
+          )
             errors.push(
               `${lockName}: ${pathname} ${dependencyField} differs from the committed lockfile`,
             );
@@ -218,7 +226,10 @@ export function checkBoundaries(
         if (
           !isReviewedExternalLockRecord(name, entry) &&
           (!/^(@[^/]+\/)?[^@]+@\d/.test(String(entry[0])) ||
-            !/^sha512-[A-Za-z0-9+/]+={0,2}$/.test(String(entry[3] || "")))
+            !(
+              typeof entry[3] === "string" &&
+              /^sha512-[A-Za-z0-9+/]+={0,2}$/.test(entry[3])
+            ))
         )
           errors.push(
             `${lockName}: ${name} has an unreviewed source or missing integrity digest`,
@@ -261,7 +272,7 @@ function main(): void {
       fs.readFileSync(path.join(ROOT, "packaging/electron/bun.lock"), "utf8"),
     ),
   );
-  if (errors.length) {
+  if (errors.length > 0) {
     for (const error of errors) console.error(error);
     process.exitCode = 1;
   } else {
