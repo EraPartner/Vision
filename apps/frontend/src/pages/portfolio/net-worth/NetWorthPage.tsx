@@ -182,6 +182,7 @@ export default function NetWorthPage() {
                 row.accountId == null
                     ? t("networth.byAccount.unassigned")
                     : row.name || `#${row.accountId}`,
+            // The API returns the account type as a plain string column.
             type: (row.type ?? undefined) as AccountType | undefined,
             cash: row.cash ?? 0,
             holdings: row.holdings,

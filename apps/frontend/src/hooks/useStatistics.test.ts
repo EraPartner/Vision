@@ -37,6 +37,11 @@ function categoryPivot(entries: Record<string, Array<{ categoryId: number | null
         items.map((i) => ({
           ...i,
           categoryId: i.categoryId === null ? null : asCategoryId(i.categoryId),
+          categoryPathIds: [],
+          categoryPathSegments: [],
+          // The wire always carries the sign split; default to the net's sign.
+          income: i.income ?? Math.max(i.total, 0),
+          expense: i.expense ?? Math.min(i.total, 0),
           transactionCount: i.transactionCount ?? 1,
         })),
       ]),

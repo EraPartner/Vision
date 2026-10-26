@@ -44,8 +44,8 @@ type RecipientDetailRow = {
     totalSpend: number;
     transactionCount: number;
     avgAmount: number;
-    firstSeen: string;
-    lastSeen: string;
+    firstSeen: string | null;
+    lastSeen: string | null;
 };
 
 interface RecipientInsightsTabProps {
@@ -160,10 +160,12 @@ export function RecipientInsightsTab({
                 className: "text-right",
                 render: (row: RecipientDetailRow) => (
                     <span className="type-footnote text-label-secondary">
-                        {formatDateWithAppSettings(
-                            parseISO(row.firstSeen),
-                            appSettings.dateFormat,
-                        )}
+                        {row.firstSeen === null
+                            ? "—"
+                            : formatDateWithAppSettings(
+                                  parseISO(row.firstSeen),
+                                  appSettings.dateFormat,
+                              )}
                     </span>
                 ),
             },
@@ -173,10 +175,12 @@ export function RecipientInsightsTab({
                 className: "text-right",
                 render: (row: RecipientDetailRow) => (
                     <span className="type-footnote text-label-secondary">
-                        {formatDateWithAppSettings(
-                            parseISO(row.lastSeen),
-                            appSettings.dateFormat,
-                        )}
+                        {row.lastSeen === null
+                            ? "—"
+                            : formatDateWithAppSettings(
+                                  parseISO(row.lastSeen),
+                                  appSettings.dateFormat,
+                              )}
                     </span>
                 ),
             },

@@ -79,6 +79,7 @@ function Inner({
                     }}
                 >
                     <Area<number>
+                        // visx takes a mutable array; the prop is a ReadonlyArray that visx never writes to.
                         data={data as number[]}
                         x={(_, i) => xScale(i)}
                         y0={height}
@@ -98,6 +99,7 @@ function Inner({
                 }}
             >
                 <LinePath<number>
+                    // visx takes a mutable array; the prop is a ReadonlyArray that visx never writes to.
                     data={data as number[]}
                     x={(_, i) => xScale(i)}
                     y={(v) => yScale(v)}

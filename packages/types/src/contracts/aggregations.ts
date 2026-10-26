@@ -175,6 +175,16 @@ export const CategoryPivotSchema = aggregationEnvelopeOf(
           income: z.number(),
           expense: z.number(),
           transactionCount: CountSchema,
+          /**
+           * Part of `income` on partner / joint accounts (ADR-201); present
+           * only when one of them is non-zero.
+           */
+          incomeByOwner: z
+            .looseObject({
+              partner: z.number().optional(),
+              joint: z.number().optional(),
+            })
+            .optional(),
         }),
       ),
     ),
@@ -286,6 +296,8 @@ const ForecastMethodSchema = z.looseObject({
 
 const ForecastDiagnosticsSchema = z.looseObject({
   history_months: z.number().int(),
+  /** Weights the ensemble applied to each point method; absent on older cache entries. */
+  ensemble_weights: z.record(z.string(), z.number()).optional(),
   backtest: z.array(
     z.looseObject({
       method_id: z.string(),

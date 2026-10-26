@@ -9,7 +9,7 @@ import {
 } from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
 import type { operations } from "@/types/generated";
-import type { AccountId, CurrencyCode } from "@vision/types/brands";
+import type { CurrencyCode } from "@vision/types/brands";
 
 export type ModelPortfolio = NonNullable<
     operations["computeRebalance"]["requestBody"]["content"]["application/json"]["model"]
@@ -46,31 +46,16 @@ export interface RebalanceRequest {
     availableCash?: number;
 }
 
-export interface RebalanceResponse {
-    currency: CurrencyCode;
-    targetWeights: Record<string, number>;
-    actualValues: Record<string, number>;
-    availableCash: number;
-    /**
-     * The spendable accounts behind `availableCash`. `balance` is that account's
-     * cash CONVERTED into `balanceCurrency` (== the response's `currency`), so it
-     * is directly summable into `availableCash`; `accountCurrency` is merely the
-     * account's own declared code and must never be used to format `balance`.
-     */
-    cashAccounts: Array<{
-        id: AccountId;
-        name: string;
-        accountCurrency: CurrencyCode;
-        balance: number;
-        balanceCurrency: CurrencyCode;
-        /** Partitions left out of `balance` for want of a stored rate (ADR-216). */
-        unconvertedCurrencies: CurrencyCode[];
-    }>;
-    /** Cash partitions left out of `availableCash` for want of a stored rate. */
-    unconvertedCurrencies: string[];
-    /** Per-sleeve cash to deploy (only underweight sleeves appear). */
-    deployment: Record<string, number>;
-}
+/**
+ * `cashAccounts` are the spendable accounts behind `availableCash`. `balance` is
+ * that account's cash CONVERTED into `balanceCurrency` (== the response's
+ * `currency`), so it is directly summable into `availableCash`;
+ * `accountCurrency` is merely the account's own declared code and must never be
+ * used to format `balance`. `unconvertedCurrencies` are cash partitions left out
+ * for want of a stored rate; `deployment` is the per-sleeve cash to deploy (only
+ * underweight sleeves appear).
+ */
+export type RebalanceResponse = z.output<typeof RebalanceResponseSchema>;
 
 export interface CommitmentAwareCashResponse {
     currency: CurrencyCode;

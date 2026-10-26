@@ -30,12 +30,18 @@ import {
     type AnalysisValue,
     type VisualAnalysisPlan,
 } from "@/lib/api/analysis";
+import { isAnalysisValue } from "@/lib/analysisValue";
 import { Button } from "@/components/ui/button";
+import { isRecord } from "@/lib/isRecord";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import {
     analysisCellText,
     formatAnalysisValue,
 } from "./analysisPresentation";
+
+/** A drill-down group value: scalars pass through, anything else reads as null. */
+const cellGroupValue = (value: unknown): AnalysisValue =>
+    isAnalysisValue(value) ? value : null;
 
 export function AnalysisPivotPanel({
     plan,
@@ -216,20 +222,23 @@ export function AnalysisPivotPanel({
     const displayCell = (
         row: Record<string, unknown> | undefined,
         id: string,
-    ) =>
-        share
-            ? row?.__percentages &&
-              typeof row.__percentages === "object" &&
-              (row.__percentages as Record<string, unknown>)[id] != null
-                ? `${formatAnalysisValue((Number((row.__percentages as Record<string, unknown>)[id]) * 100).toFixed(2), "decimal", id, appSettings.numberFormat)}%`
-                : "—"
-            : formatAnalysisValue(
-                  row?.[id] as AnalysisValue,
-                  dataset.measures.find((field) => field.id === id)?.type ??
-                      "decimal",
-                  id,
-                  appSettings.numberFormat,
-              );
+    ) => {
+        if (share) {
+            const percentages = row?.__percentages;
+            const percentage = isRecord(percentages) ? percentages[id] : undefined;
+            return percentage != null
+                ? `${formatAnalysisValue((Number(percentage) * 100).toFixed(2), "decimal", id, appSettings.numberFormat)}%`
+                : "—";
+        }
+        const value = row?.[id];
+        return formatAnalysisValue(
+            isAnalysisValue(value) ? value : null,
+            dataset.measures.find((field) => field.id === id)?.type ??
+                "decimal",
+            id,
+            appSettings.numberFormat,
+        );
+    };
     return (
         <div className="min-w-0 space-y-4" aria-busy={busy}>
             <div className="grid gap-4 xl:grid-cols-3">
@@ -881,9 +890,11 @@ export function AnalysisPivotPanel({
                                                                                     key,
                                                                                 ) => [
                                                                                     key,
-                                                                                    cell[
-                                                                                        key
-                                                                                    ] as AnalysisValue,
+                                                                                    cellGroupValue(
+                                                                                        cell[
+                                                                                            key
+                                                                                        ],
+                                                                                    ),
                                                                                 ],
                                                                             ),
                                                                         ),

@@ -17,8 +17,8 @@ import { formatMonthYearWithAppSettings } from "@/lib/dateUtils";
 interface MonthlyTrendsRow {
     readonly month: number;
     readonly year: number;
-    readonly period_start: string;
-    readonly period_end: string;
+    readonly period_start: string | null;
+    readonly period_end: string | null;
     readonly total_spending: number;
     readonly total_income: number;
     readonly net_amount: number;

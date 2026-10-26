@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import logger from "@/lib/logger";
 import { ApiContractError, apiRequest } from "@/lib/api/client";
 import { requestWithQuery } from "@/lib/api/helpers";
@@ -40,19 +41,17 @@ export interface SupportedAdapter {
 
 /** Canonical `{items, total}` collection body — callers only need the rows. */
 export async function getSupportedParsers(): Promise<SupportedAdapter[]> {
-    const { items } = await apiRequest<{
-        items: SupportedAdapter[];
-        total: number;
-    }>("/api/info/supported-adapters", { schema: SupportedAdapterListSchema });
+    const { items } = await apiRequest("/api/info/supported-adapters", {
+        schema: SupportedAdapterListSchema,
+    });
     return items;
 }
 
 /** Canonical `{items, total}` collection body — callers only need the rows. */
 export async function getDistinctBankAccounts(): Promise<string[]> {
-    const { items } = await apiRequest<{ items: string[]; total: number }>(
-        "/api/info/banks",
-        { schema: BankNameListSchema },
-    );
+    const { items } = await apiRequest("/api/info/banks", {
+        schema: BankNameListSchema,
+    });
     return items;
 }
 
@@ -65,38 +64,9 @@ export function getTransactionCount(): Promise<{ total_transactions: number }> {
     });
 }
 
-export async function getRecurringPatterns(): Promise<{
-    patterns: Array<{
-        recipientId: RecipientId;
-        recipientName: string;
-        /** Flow direction — a recipient can yield one pattern per direction. */
-        direction: "income" | "expense";
-        detectedPattern: string;
-        intervalDays: number;
-        consistency: number;
-        occurrences: number;
-        averageAmount: number;
-        latestAmount: number;
-        currency: CurrencyCode;
-        categoryId: CategoryId | null;
-        categoryName: string | null;
-        bankAccount: string | null;
-        accountId: AccountId | null;
-        firstSeen: string;
-        lastSeen: string;
-        predictedNext: string;
-        amountChanges: Array<{
-            date: string;
-            previousAmount: number;
-            newAmount: number;
-            percentChange: number;
-            direction: string;
-        }>;
-        isAlreadyPlanned: boolean;
-        confidence: number;
-    }>;
-    total: number;
-}> {
+type RecurringPatternList = z.output<typeof RecurringPatternListSchema>;
+
+export async function getRecurringPatterns(): Promise<RecurringPatternList> {
     try {
         return await apiRequest("/api/info/recurring-patterns", {
             schema: RecurringPatternListSchema,
@@ -110,43 +80,10 @@ export async function getRecurringPatterns(): Promise<{
     }
 }
 
-/** New-subscription finding from the subscription-creep detector. */
-export interface SubscriptionCreepNew {
-    recipientId: RecipientId;
-    recipientName: string;
-    findingType: "new";
-    latestAmount: number;
-    currency: CurrencyCode;
-    detectedPattern: string;
-    intervalDays: number;
-    predictedNext: string;
-    confidence: number;
-}
-
-/** Price-change finding from the subscription-creep detector. */
-export interface SubscriptionCreepPriceChange {
-    recipientId: RecipientId;
-    recipientName: string;
-    findingType: "priceChange";
-    previousAmount: number;
-    newAmount: number;
-    percentChange: number;
-    direction: string;
-    currency: CurrencyCode;
-    confidence: number;
-}
+export type InsightsDigestResponse = z.output<typeof InsightsDigestSchema>;
 
 /** Current-month category overspend outlier vs the trailing baseline median. */
-export interface CategoryOutlier {
-    categoryId: CategoryId;
-    categoryName: string;
-    monthKey: string;
-    comparisonEndDay: number;
-    currentAmount: number;
-    baselineMedian: number;
-    deviation: number;
-    direction: string;
-}
+export type CategoryOutlier = InsightsDigestResponse["categoryOutliers"][number];
 
 export type CashForecastProminence = Schemas["CashForecastInsight"]["prominence"];
 
@@ -160,15 +97,6 @@ export interface CashForecast {
     movedSignificantly: boolean;
     prominence: CashForecastProminence;
     methodId: string;
-}
-
-export interface InsightsDigestResponse {
-    subscriptionCreep: {
-        new: SubscriptionCreepNew[];
-        priceChanges: SubscriptionCreepPriceChange[];
-    };
-    categoryOutliers: CategoryOutlier[];
-    cashForecast: CashForecast | null;
 }
 
 /** Pre-computed detection-layer findings for the Statistics insights panel (no LLM). */

@@ -120,7 +120,7 @@ export const InsightsDigestSchema = z.looseObject({
       monthEndNetCashflowLow: z.number().nullable(),
       monthEndNetCashflowHigh: z.number().nullable(),
       movedSignificantly: z.boolean(),
-      prominence: z.string(),
+      prominence: z.enum(["alert", "standing"]),
       methodId: z.string(),
     })
     .nullable(),

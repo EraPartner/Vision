@@ -236,7 +236,7 @@ export function PortfolioCsvColumnMapper({
                                 </span>
                                 <Select
                                     value={
-                                        config.typeMapping[raw] ?? SELECT_NONE
+                                        config.typeMapping?.[raw] ?? SELECT_NONE
                                     }
                                     onValueChange={(v) => setMapping(raw, v)}
                                 >

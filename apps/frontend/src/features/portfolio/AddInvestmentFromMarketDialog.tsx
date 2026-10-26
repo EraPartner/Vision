@@ -131,6 +131,7 @@ export function AddInvestmentFromMarketDialog({
     });
 
     const makeTransactionForm = () => ({
+        // Widens the literal default to the field's union type for useState.
         type: "buy" as PortfolioTxnType,
         date: today,
         amount: "",
@@ -144,8 +145,10 @@ export function AddInvestmentFromMarketDialog({
         dividendAmountConvention: "unknown" as const,
         fxRateToEur: "",
         note: "",
+        // Widens the literal default to the field's union type for useState.
         accountId: undefined as string | undefined,
         isRecurring: false,
+        // Widens the literal default to the field's union type for useState.
         recurrenceInterval: "monthly" as RecurrenceInterval,
         recurrenceEndDate: "",
     });

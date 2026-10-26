@@ -120,6 +120,7 @@ function LineSeriesLayerInner<Datum>({
                           const v = s.accessor(d);
                           return v != null && Number.isFinite(v);
                       })
+                    // visx takes a mutable array; the prop is a ReadonlyArray that visx never writes to.
                     : (data as Datum[]);
                 return (
                     <m.g

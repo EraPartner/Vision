@@ -293,13 +293,20 @@ export const MappingAuditSchema = z.looseObject({
 });
 
 /**
- * `GET` and `PUT /api/research/provider-keys` — `{items, total}`. `masked`
- * is unset when the provider has no key.
+ * `GET` and `PUT /api/research/provider-keys` — `{items, total}`. The roster
+ * is fixed (providerKeys.ts ENV_VAR_BY_PROVIDER, mirrored by openapi.yaml's
+ * `provider` path parameter). `masked` is unset when the provider has no key.
  */
 export const ResearchProviderKeyListSchema = z.looseObject({
   items: z.array(
     z.looseObject({
-      provider: z.string(),
+      provider: z.enum([
+        "twelve_data",
+        "finnhub",
+        "fmp",
+        "alpha_vantage",
+        "fred",
+      ]),
       label: z.string(),
       envVar: z.string(),
       configured: z.boolean(),

@@ -2,8 +2,8 @@
  * Attachment API client — receipt and document uploads for transactions.
  */
 
-import { AttachmentListSchema } from '@vision/types/contracts';
-import { API_BASE_URL, apiRequest, rawFetch, parseEnvelopeError } from '@/lib/api/client';
+import { AttachmentListSchema, AttachmentSchema } from '@vision/types/contracts';
+import { API_BASE_URL, apiRequest, checkWireData, rawFetch, parseEnvelopeError, unwrapEnvelope } from '@/lib/api/client';
 import { requestBlob } from '@/lib/api/helpers';
 import type { TransactionId } from "@vision/types/brands";
 
@@ -39,8 +39,10 @@ export async function uploadAttachment(transactionId: TransactionId, file: File)
         throw await parseEnvelopeError(response, 'Failed to upload attachment');
     }
 
-    const envelope = await response.json() as { ok: boolean; data: Attachment };
-    return { item: envelope.data };
+    const body: unknown = await response.json();
+    return {
+        item: checkWireData(AttachmentSchema, unwrapEnvelope(body), 'POST /api/attachments'),
+    };
 }
 
 /** Delete an attachment by ID. Responds 204 No Content — nothing to unwrap. */

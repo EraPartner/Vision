@@ -190,6 +190,8 @@ export function useTransactionListData({
 
     useEffect(() => {
         if (initialData && !isEditingRef.current) {
+            // `RawApiTransaction` is the list's deliberately looser row view of a
+            // `Transaction` (extra index signature, nullable memo); no cast-free path.
             setAllItems(initialData.items as unknown as RawApiTransaction[]);
             setHasInitialItems(true);
             setTotalItems(pageTotal(initialData));

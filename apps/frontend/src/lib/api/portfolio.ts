@@ -46,7 +46,8 @@ function verifiedPortfolioTransaction(
         error.name = "PortfolioResponseError";
         throw error;
     }
-    const raw = tx as { date?: string; transaction_date?: string };
+    // Older rows carry the date as `transaction_date`.
+    const raw: { date?: string; transaction_date?: string } = tx;
     return {
         ...tx,
         date: raw.date ?? raw.transaction_date ?? "",
@@ -85,8 +86,6 @@ export function createInvestment(data: InvestmentCreate): Promise<Investment> {
     });
 }
 
-export type PriceSource = "live" | "close" | "cached" | "historical_fallback";
-
 export interface SupportedPriceProvider {
     key: string;
     name: string;
@@ -106,13 +105,9 @@ export async function getSupportedPriceProviders(): Promise<
  * With no live-priced holding the route answers only `{ updated: 0, message }`;
  * otherwise the counts and per-investment maps (a provider may answer null).
  */
-export function refreshInvestmentPrices(): Promise<{
-    updated: number;
-    message?: string;
-    total?: number;
-    prices?: Record<string, number | null>;
-    priceSources?: Record<string, PriceSource>;
-}> {
+export function refreshInvestmentPrices(): Promise<
+    z.output<typeof RefreshPricesResultSchema>
+> {
     return apiRequest("/api/investments/refresh-prices", {
         method: "POST",
         schema: RefreshPricesResultSchema,

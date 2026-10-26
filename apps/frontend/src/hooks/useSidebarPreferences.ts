@@ -14,6 +14,7 @@ type HiddenSections = Partial<Record<NavSectionId, boolean>>;
 const isNavSectionId = listGuard(NAV_SECTIONS.map((section) => section.id));
 
 const DEFAULT_HIDDEN: Readonly<HiddenSections> = Object.freeze(
+    // Object.fromEntries yields an index-signature record; the keys are NavSectionIds.
     Object.fromEntries(
         NAV_SECTIONS.filter((s) => s.defaultHidden).map((s) => [s.id, true]),
     ) as HiddenSections,

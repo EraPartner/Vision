@@ -24,9 +24,10 @@ const API_BASE = "http://localhost:3002";
 function patternFixture(
     direction: "income" | "expense",
     accountId: number | null = 1,
+    recipientId: number | null = direction === "income" ? 7 : 8,
 ) {
     return {
-        recipientId: direction === "income" ? 7 : 8,
+        recipientId,
         recipientName: direction === "income" ? "Employer NV" : "Landlord SA",
         direction,
         detectedPattern: "monthly",
@@ -155,6 +156,54 @@ describe("RecurringDetectionPanel — detected sign carried into the planned pay
 
         await waitFor(() => expect(toastError).toHaveBeenCalled());
         expect(captured.body).toBeNull();
+    });
+
+    it("tracks a pattern without a recipient and offers no dismissal for it", async () => {
+        const user = userEvent.setup();
+        const captured = { body: null as Record<string, unknown> | null };
+        server.use(
+            http.get(`${API_BASE}/api/info/recurring-patterns`, () =>
+                ok({
+                    patterns: [patternFixture("expense", 1, null)],
+                    total: 1,
+                }),
+            ),
+            http.post(
+                `${API_BASE}/api/planned-transactions`,
+                async ({ request }) => {
+                    captured.body = (await request.json()) as Record<
+                        string,
+                        unknown
+                    >;
+                    return ok({ ...PLANNED_TRANSACTION_STUB, id: 99 });
+                },
+            ),
+        );
+
+        renderWithApp(<RecurringDetectionPanel />);
+
+        await user.click(
+            await screen.findByRole("button", {
+                name: /review: recurring payments found/i,
+            }),
+        );
+        expect(await screen.findByText("Landlord SA")).toBeInTheDocument();
+        // With no recipient id there is no key to dismiss it by, so no dismiss
+        // button, and nothing (such as [null]) lands in the dismissed list.
+        expect(
+            screen.queryByRole("button", { name: /dismiss/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            JSON.parse(
+                window.localStorage.getItem("dismissed_recurring_patterns") ??
+                    "[]",
+            ),
+        ).toEqual([]);
+
+        await user.click(screen.getByRole("button", { name: /track/i }));
+        await waitFor(() => expect(captured.body).not.toBeNull());
+        expect(captured.body).not.toHaveProperty("recipient_id");
+        expect(captured.body).toMatchObject({ amount: -2500 });
     });
 
     it("keeps amount changes collapsed until the user opens the disclosure", async () => {

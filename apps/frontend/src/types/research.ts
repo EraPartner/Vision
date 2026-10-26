@@ -306,7 +306,7 @@ export interface ProviderKeyStatus {
     envVar: string;
     configured: boolean;
     source: "settings" | "env" | "none";
-    masked?: string;
+    masked?: string | undefined;
 }
 
 /** Canonical `{items, total}` collection body (GET and PUT /api/research/provider-keys). */

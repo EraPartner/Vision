@@ -194,6 +194,7 @@ export function streamChat(
                 if (!parsed.success) return undefined;
                 return {
                     type: AI_CHAT_STREAM_EVENT.USER_MESSAGE,
+                    // completeEventSchema/chatMessageEventSchema are deliberately loose (sparse events are tolerated), so the full ChatMessage shape is the stream's contract, not the schema's.
                     message: parsed.data.message as unknown as ChatMessage,
                 };
             }
@@ -211,6 +212,7 @@ export function streamChat(
                 if (!parsed.success) return undefined;
                 return {
                     type: AI_CHAT_STREAM_EVENT.TOOL_RESULT,
+                    // chatMessageEventSchema is deliberately loose (sparse events are tolerated), so the full ChatMessage shape is the stream's contract, not the schema's.
                     message: parsed.data.message as unknown as ChatMessage,
                 };
             }
@@ -219,6 +221,7 @@ export function streamChat(
                 if (!parsed.success) return undefined;
                 return {
                     type: AI_CHAT_STREAM_EVENT.COMPLETE,
+                    // completeEventSchema only object-gates the terminal event (sparse payloads are tolerated); ChatCompleteEvent is the stream's contract.
                     payload: parsed.data as unknown as ChatCompleteEvent,
                 };
             }

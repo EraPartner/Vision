@@ -73,6 +73,8 @@ export const NumericSchema = z.union([
 export const WireLinkSchema = z.looseObject({
   rel: z.string(),
   href: z.string(),
+  method: z.string(),
+  title: z.string().optional(),
 });
 
 /**

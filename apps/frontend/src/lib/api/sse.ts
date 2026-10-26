@@ -144,6 +144,33 @@ export async function* readSseStream<T>(
     }
 }
 
+/** Event-name keyed schemas for `readValidatedSse`. */
+export type SseSchemas = Record<string, z.ZodType>;
+
+/** Union of `{ event, data }` pairs, `data` typed by the schema registered for `event`. */
+export type ValidatedSseEvent<S extends SseSchemas> = {
+    [K in keyof S & string]: { event: K; data: z.output<S[K]> };
+}[keyof S & string];
+
+/**
+ * Like `readSseStream`, but the payload type comes from the schemas instead of
+ * a caller-supplied `T`: every yielded event has a registered schema and has
+ * passed it, so `event` narrows `data`. Frames whose event name has no schema
+ * are dropped (callers only ever ignored them). Register `z.unknown()` for an
+ * event the caller wants to see without validating it.
+ */
+export async function* readValidatedSse<S extends SseSchemas>(
+    response: Response,
+    schemas: S,
+): AsyncGenerator<ValidatedSseEvent<S>, void, void> {
+    for await (const { event, data } of readSseStream<unknown>(response, { schemas })) {
+        if (!Object.hasOwn(schemas, event)) continue;
+        // `readSseStream` just validated `data` against `schemas[event]`, and
+        // TypeScript cannot correlate a runtime key with the mapped union.
+        yield { event, data } as ValidatedSseEvent<S>;
+    }
+}
+
 function toEvent<T>(frame: ParsedFrame, schemas?: Record<string, z.ZodType>): SseEvent<T> | undefined {
     if (frame.dataRaw === DONE_SENTINEL) return undefined;
 
@@ -170,5 +197,6 @@ function toEvent<T>(frame: ParsedFrame, schemas?: Record<string, z.ZodType>): Ss
         data = result.data;
     }
 
+    // `T` is the caller's claim about the payload; only `schemas` verify it.
     return { event: frame.eventName, data: data as T };
 }

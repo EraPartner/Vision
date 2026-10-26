@@ -35,7 +35,7 @@ export interface Link {
     rel: string;
     href: string;
     method: string;
-    title?: string;
+    title?: string | undefined;
 }
 
 // ==================== Category Types ====================
@@ -44,9 +44,9 @@ export interface Category {
     id: CategoryId;
     general: string;
     detail: string;
-    description?: string;
+    description?: string | null;
     is_active: boolean;
-    created_at: string;
+    created_at: string | null;
     updated_at?: string;
     links: Link[];
 }
@@ -218,15 +218,15 @@ export interface AccountUpdate extends Partial<
 export interface Recipient {
     id: RecipientId;
     name: string;
-    primary_bank_account?: string;
-    default_category_id?: CategoryId;
-    default_category_name?: string;
+    primary_bank_account?: string | null;
+    default_category_id?: CategoryId | null;
+    default_category_name?: string | null;
     primary_recipient_id?: RecipientId | null;
     primary_recipient_name?: string | null;
     alias_count?: number;
-    notes?: string;
+    notes?: string | null;
     is_active: boolean;
-    created_at: string;
+    created_at: string | null;
     updated_at?: string;
     links: Link[];
 }

@@ -120,7 +120,9 @@ export function getWatchlist(params?: {
                   .map(([k, v]) => [k, String(v)]),
           ).toString()}`
         : "";
-    return apiRequest(`/api/watchlist${query}`, {
+    // The schema accepts every asset_class the PG enum can store, so a legacy
+    // row still loads; the route only writes the four watchlist classes.
+    return apiRequest<WatchlistListResponse>(`/api/watchlist${query}`, {
         schema: WatchlistListSchema,
     });
 }
@@ -128,7 +130,7 @@ export function getWatchlist(params?: {
 export function createWatchlistItem(
     data: WatchlistCreate,
 ): Promise<WatchlistItem> {
-    return apiRequest("/api/watchlist", {
+    return apiRequest<WatchlistItem>("/api/watchlist", {
         method: "POST",
         body: JSON.stringify(data),
         schema: WatchlistItemSchema,
@@ -139,7 +141,7 @@ export function updateWatchlistItem(
     id: number,
     data: WatchlistUpdate,
 ): Promise<WatchlistItem> {
-    return apiRequest(`/api/watchlist/${id}`, {
+    return apiRequest<WatchlistItem>(`/api/watchlist/${id}`, {
         method: "PATCH",
         body: JSON.stringify(data),
         schema: WatchlistItemSchema,

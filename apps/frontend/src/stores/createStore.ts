@@ -42,6 +42,7 @@ export function createStore<T>(creator: StateCreator<T>): StoreApi<T> {
     const setState: SetState<T> = (partial, replace) => {
         const next =
             typeof partial === "function"
+                // Zustand-style generic store: the state/selector/iterable types are erased at runtime and recovered at the boundary.
                 ? (partial as (state: T) => T | Partial<T>)(state)
                 : partial;
         if (Object.is(next, state)) return;
@@ -79,6 +80,7 @@ export function useStore<T, U>(api: StoreApi<T>, selector: (state: T) => U): U {
 
 export function create<T>(creator: StateCreator<T>): UseBoundStore<T> {
     const api = createStore(creator);
+    // Zustand-style generic store: the state/selector/iterable types are erased at runtime and recovered at the boundary.
     const useBoundStore = <U,>(selector: (state: T) => U = identity as (state: T) => U) =>
         useStore(api, selector);
     return Object.assign(useBoundStore, api);
@@ -100,10 +102,13 @@ export function shallow(a: unknown, b: unknown): boolean {
             const toMap = (value: object) =>
                 value instanceof Map
                     ? value
+                    // Zustand-style generic store: the state/selector/iterable types are erased at runtime and recovered at the boundary.
                     : new Map((value as { entries(): Iterable<[unknown, unknown]> }).entries());
             return sameEntries(toMap(a), toMap(b));
         }
+        // Zustand-style generic store: the state/selector/iterable types are erased at runtime and recovered at the boundary.
         const left = (a as Iterable<unknown>)[Symbol.iterator]();
+        // Zustand-style generic store: the state/selector/iterable types are erased at runtime and recovered at the boundary.
         const right = (b as Iterable<unknown>)[Symbol.iterator]();
         let nextLeft = left.next();
         let nextRight = right.next();
@@ -121,6 +126,7 @@ export function useShallow<S, U>(selector: (state: S) => U): (state: S) => U {
     const previous = useRef<U | undefined>(undefined);
     return (state) => {
         const next = selector(state);
+        // Zustand-style generic store: the state/selector/iterable types are erased at runtime and recovered at the boundary.
         if (shallow(previous.current, next)) return previous.current as U;
         previous.current = next;
         return next;

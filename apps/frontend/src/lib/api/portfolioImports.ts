@@ -9,8 +9,12 @@ import {
     checkResponseContract,
 } from "@/lib/api/client";
 import { postMultipartImport } from "@/lib/api/helpers";
-import { importProgressSchema, type CsvNumberFormat } from "@/lib/api/imports";
-import { readSseStream } from "@/lib/api/sse";
+import {
+    completionProgress,
+    importProgressSchema,
+    type CsvNumberFormat,
+} from "@/lib/api/imports";
+import { readValidatedSse } from "@/lib/api/sse";
 import { asAccountId, asInvestmentId } from "@vision/types/brands";
 import type { AccountId, InvestmentId } from "@vision/types/brands";
 import type { ImportProgress } from "@/types/apiClient";
@@ -51,10 +55,12 @@ const portfolioReviewRequiredSchema = z.looseObject({
     skipped: z.number().optional(),
 });
 
-const PORTFOLIO_STREAM_SCHEMAS: Record<string, z.ZodType> = {
+const PORTFOLIO_STREAM_SCHEMAS = {
     progress: importProgressSchema,
     complete: portfolioImportResultSchema,
     review_required: portfolioReviewRequiredSchema,
+    // Unvalidated on purpose: `extractErrorDetail` tolerates any shape.
+    error: z.unknown(),
 };
 
 type PortfolioImportUpload = components["schemas"]["PortfolioImportUpload"];
@@ -100,7 +106,8 @@ export interface PortfolioCustomConfig {
     number_format?: CsvNumberFormat;
     defaultAssetClass: AssetClass;
     defaultType: PortfolioTxnType;
-    typeMapping: Record<string, string>;
+    /** Absent on saved configs that predate the mapping. */
+    typeMapping?: Record<string, string> | undefined;
 }
 
 export interface SavedPortfolioParserConfig {
@@ -210,8 +217,7 @@ function configToParams(
     p.append("default_asset_class", config.defaultAssetClass);
     p.append("default_type", config.defaultType);
     p.append("type_mapping", JSON.stringify(
-            // Saved parser configs predate the mapping, so it can be absent.
-            (config.typeMapping as Record<string, string> | undefined) ?? {},
+            config.typeMapping ?? {},
         ));
     p.append("date_column", config.dateColumn);
     if (config.typeColumn) p.append("type_column", config.typeColumn);
@@ -304,29 +310,21 @@ export function importPortfolioCSVWithProgress(
                 throw await parseEnvelopeError(response, "Import failed");
 
             let finalResult: PortfolioImportResult | null = null;
-            for await (const { event, data } of readSseStream<unknown>(
+            for await (const { event, data } of readValidatedSse(
                 response,
-                { schemas: PORTFOLIO_STREAM_SCHEMAS },
+                PORTFOLIO_STREAM_SCHEMAS,
             )) {
                 if (event === "progress") {
-                    onProgress(data as ImportProgress);
+                    onProgress(data);
                     continue;
                 }
                 if (event === "complete") {
-                    finalResult = data as PortfolioImportResult;
-                    onProgress({
-                        ...(data as Partial<ImportProgress>),
-                        phase: "complete",
-                        percent: 100,
-                    } as ImportProgress);
+                    finalResult = data;
+                    onProgress(completionProgress(data));
                     continue;
                 }
                 if (event === "review_required") {
-                    const d = data as {
-                        batch_id: number;
-                        match_source_counts?: unknown;
-                        skipped?: number;
-                    };
+                    const d = data;
                     finalResult = {
                         batch_id: d.batch_id,
                         imported: 0,
@@ -347,8 +345,8 @@ export function importPortfolioCSVWithProgress(
                     });
                     continue;
                 }
-                if (event === "error")
-                    throw new Error(extractErrorDetail(data));
+                // The only remaining registered event is "error".
+                throw new Error(extractErrorDetail(data));
             }
             return (
                 finalResult ?? {

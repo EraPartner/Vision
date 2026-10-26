@@ -135,6 +135,49 @@ describe("InsightsDigestPanel", () => {
         expect(screen.getByText("4")).toBeInTheDocument();
     });
 
+    it("offers no dismiss for a finding without a recipient and names a nameless category", async () => {
+        stubDigest({
+            ...DIGEST,
+            subscriptionCreep: {
+                new: [
+                    must(DIGEST.subscriptionCreep.new[0]),
+                    {
+                        ...must(DIGEST.subscriptionCreep.new[0]),
+                        recipientId: null,
+                        recipientName: "Orphan Stream",
+                    },
+                ],
+                priceChanges: [
+                    {
+                        ...must(DIGEST.subscriptionCreep.priceChanges[0]),
+                        recipientId: null,
+                        recipientName: "Orphan Music",
+                    },
+                ],
+            },
+            categoryOutliers: [
+                {
+                    ...must(DIGEST.categoryOutliers[0]),
+                    categoryName: null,
+                },
+            ],
+        });
+        renderWithApp(<InsightsDigestPanel />);
+
+        await userEvent.click(
+            await screen.findByRole("button", { name: "Show findings" }),
+        );
+        expect(screen.getByText("Orphan Stream")).toBeInTheDocument();
+        expect(screen.getByText("Orphan Music")).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /Dismiss.*Netflix/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole("button", { name: /Dismiss.*Orphan/i }),
+        ).not.toBeInTheDocument();
+        expect(screen.getByText("Unknown")).toBeInTheDocument();
+    });
+
     it("renders the exact partial-month comparison window in Dutch", async () => {
         server.use(
             http.get(`${API_BASE}/api/settings`, () =>

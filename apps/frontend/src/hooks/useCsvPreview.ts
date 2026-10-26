@@ -49,6 +49,7 @@ export function useCsvPreview(
             if (cancelled) return;
             try {
                 const text = decodePreviewBytes(
+                    // FileReader.readAsArrayBuffer sets `result` to an ArrayBuffer; its type is a union with string.
                     reader.result as ArrayBuffer,
                     encoding,
                     slice.size < file.size,

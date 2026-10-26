@@ -62,10 +62,13 @@ export function InsightsDigestPanel() {
         custom: t("recurring.pattern.custom"),
     };
 
+    // A finding without a recipient has no key to dismiss it by; its dismiss
+    // button is not rendered, so a null id never reaches the API.
     const handleDismissSubscription = (
-        recipientId: RecipientId,
+        recipientId: RecipientId | null,
         findingType: "new" | "priceChange",
     ) => {
+        if (recipientId === null) return;
         dismissMutation.mutate({
             kind:
                 findingType === "new"
@@ -228,23 +231,25 @@ export function InsightsDigestPanel() {
                                                         },
                                                     )}
                                                 </span>
-                                                <DismissButton
-                                                    label={t(
-                                                        "insights.dismissFinding",
-                                                        {
-                                                            kind: t(
-                                                                "insights.panel.newSubscriptions",
-                                                            ),
-                                                            name: finding.recipientName,
-                                                        },
-                                                    )}
-                                                    onClick={() =>
-                                                        handleDismissSubscription(
-                                                            finding.recipientId,
-                                                            "new",
-                                                        )
-                                                    }
-                                                />
+                                                {finding.recipientId !== null && (
+                                                    <DismissButton
+                                                        label={t(
+                                                            "insights.dismissFinding",
+                                                            {
+                                                                kind: t(
+                                                                    "insights.panel.newSubscriptions",
+                                                                ),
+                                                                name: finding.recipientName,
+                                                            },
+                                                        )}
+                                                        onClick={() =>
+                                                            handleDismissSubscription(
+                                                                finding.recipientId,
+                                                                "new",
+                                                            )
+                                                        }
+                                                    />
+                                                )}
                                             </>
                                         }
                                     />
@@ -313,23 +318,25 @@ export function InsightsDigestPanel() {
                                                             },
                                                         )}
                                                     />
-                                                    <DismissButton
-                                                        label={t(
-                                                            "insights.dismissFinding",
-                                                            {
-                                                                kind: t(
-                                                                    "insights.panel.priceChanges",
-                                                                ),
-                                                                name: finding.recipientName,
-                                                            },
-                                                        )}
-                                                        onClick={() =>
-                                                            handleDismissSubscription(
-                                                                finding.recipientId,
-                                                                "priceChange",
-                                                            )
-                                                        }
-                                                    />
+                                                    {finding.recipientId !== null && (
+                                                        <DismissButton
+                                                            label={t(
+                                                                "insights.dismissFinding",
+                                                                {
+                                                                    kind: t(
+                                                                        "insights.panel.priceChanges",
+                                                                    ),
+                                                                    name: finding.recipientName,
+                                                                },
+                                                            )}
+                                                            onClick={() =>
+                                                                handleDismissSubscription(
+                                                                    finding.recipientId,
+                                                                    "priceChange",
+                                                                )
+                                                            }
+                                                        />
+                                                    )}
                                                 </>
                                             }
                                         />
@@ -351,7 +358,7 @@ export function InsightsDigestPanel() {
                                         leading={
                                             <PieChart className="text-loss" />
                                         }
-                                        title={outlier.categoryName}
+                                        title={outlier.categoryName ?? t("txPage.field.unknown")}
                                         subtitle={
                                             <>
                                                 <span className="font-medium text-loss">
@@ -379,7 +386,9 @@ export function InsightsDigestPanel() {
                                                         kind: t(
                                                             "insights.panel.categoryOverspend",
                                                         ),
-                                                        name: outlier.categoryName,
+                                                        name:
+                                                            outlier.categoryName ??
+                                                            t("txPage.field.unknown"),
                                                     },
                                                 )}
                                                 onClick={() =>

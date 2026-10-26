@@ -253,6 +253,7 @@ function EditableCell({
                         if (e.key === "Enter") {
                             e.preventDefault();
                             restoreFocus.current = true;
+                            // The change event of an <input>: target is typed as EventTarget.
                             onChange((e.target as HTMLInputElement).value);
                             setEditing(false);
                         }

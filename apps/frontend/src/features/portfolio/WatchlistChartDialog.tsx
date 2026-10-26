@@ -22,8 +22,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import {
     AreaChart,
-    type AreaSeries,
-    type AreaReferenceLine,
 } from "@/components/charts";
 import { Target, TrendingUp, TrendingDown, Check } from "lucide-react";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
@@ -354,9 +352,7 @@ export function WatchlistChartDialog({
                                             color: "hsl(var(--primary))",
                                             strokeWidth: 2,
                                         },
-                                    ] as AreaSeries<
-                                        (typeof formattedData)[number]
-                                    >[]
+                                    ]
                                 }
                                 yDomain={[minPrice, maxPrice]}
                                 xTickFormat={(v) =>
@@ -396,7 +392,7 @@ export function WatchlistChartDialog({
                                             color: "hsl(var(--primary))",
                                             dashed: true,
                                         },
-                                    ] as AreaReferenceLine[]
+                                    ]
                                 }
                                 margin={{
                                     top: 10,

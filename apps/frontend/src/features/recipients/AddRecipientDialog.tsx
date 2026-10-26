@@ -27,6 +27,7 @@ export function AddRecipientDialog() {
         e.preventDefault();
         setSubmitted(true);
         if (!form.name.trim()) {
+            // A submit event's currentTarget is the form element; React types it as EventTarget & Element.
             (e.currentTarget as HTMLFormElement)
                 .querySelector<HTMLInputElement>("#name")
                 ?.focus();

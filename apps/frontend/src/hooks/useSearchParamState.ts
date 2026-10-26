@@ -47,6 +47,7 @@ export function useSearchParamState<T>(
                     const resolved =
                         typeof nextValue === "function"
                             ? // `T` may itself be a function type, so `typeof` cannot narrow the updater.
+                              // `T` may itself be a function type, so `typeof` cannot narrow the updater.
                               (nextValue as (previous: T) => T)(previousValue)
                             : nextValue;
                     const serialized = codec.format(resolved);

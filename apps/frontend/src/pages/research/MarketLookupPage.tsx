@@ -24,8 +24,6 @@ import { Clock, Link2, Star } from "lucide-react";
 import {
     AreaChart,
     BarChart,
-    type AreaSeries,
-    type BarSeries,
 } from "@/components/charts";
 import { useSymbolSearch } from "@/hooks/useSymbolSearch";
 import { usePortfolio } from "@/hooks/usePortfolio";
@@ -602,9 +600,7 @@ export default function MarketLookupPage() {
                                                         : "hsl(var(--destructive))",
                                                     strokeWidth: 2,
                                                 },
-                                            ] as AreaSeries<
-                                                (typeof displayChart.points)[number]
-                                            >[]
+                                            ]
                                         }
                                     />
 
@@ -646,9 +642,7 @@ export default function MarketLookupPage() {
                                                             d.volume,
                                                         color: "hsl(var(--muted-foreground))",
                                                     },
-                                                ] as BarSeries<
-                                                    (typeof displayChart.points)[number]
-                                                >[]
+                                                ]
                                             }
                                         />
                                     )}

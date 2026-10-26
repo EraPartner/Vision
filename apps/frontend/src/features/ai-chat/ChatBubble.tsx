@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { ChatMessage } from "@/types/aiChat";
 import { ToolResultCard } from "./ToolResultCard";
+import { isToolResultPayload } from "./toolResultPayload";
 
 interface ChatBubbleProps {
     message: ChatMessage;
@@ -71,7 +72,7 @@ function ToolBubble({ message }: { message: ChatMessage }) {
                     <Wrench className="h-3 w-3" aria-hidden="true" />
                     <span>{message.toolName ?? t("aiChat.toolResult")}</span>
                 </div>
-                {message.toolResult ? (
+                {isToolResultPayload(message.toolResult) ? (
                     <ToolResultCard
                         toolName={message.toolName}
                         result={message.toolResult}

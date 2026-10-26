@@ -352,6 +352,7 @@ export default function ResearchDossiersPage() {
         id: number | string,
     ) => {
         if (!draft) return;
+        // The link fields are id lists (numbers for investments, strings for analyses); the union covers both.
         const values = draft.links[field] as Array<number | string>;
         const next = values.includes(id)
             ? values.filter((item) => item !== id)
