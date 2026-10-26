@@ -185,7 +185,6 @@ function profileInputRows(
         ["Mortgage start year", profile.mortgageStartYear ?? ""],
         // Product decision pending: the export keeps the legacy stored value
         // (ADR-202 deprecated the field, it is no longer used in computation).
-        // eslint-disable-next-line @typescript-eslint/no-deprecated
         ["Mortgage region", profile.mortgageRegion ?? ""],
         ["Pension scheme", profile.pensionScheme ?? ""],
         [

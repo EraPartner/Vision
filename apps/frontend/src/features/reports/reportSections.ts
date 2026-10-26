@@ -1,4 +1,5 @@
-import type { TranslationKey } from "@/locales/keys";
+// Relative import: backend tests type-check this file without the frontend `@/` alias.
+import type { TranslationKey } from "../../locales/keys";
 /**
  * Report-section catalog for the PDF export dialog.
  *
