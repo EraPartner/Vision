@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { AccountIdSchema } from "../brands.ts";
 import { WireCurrencySchema, WireDateSchema } from "./common.ts";
 
 const NumberRecordSchema = z.record(z.string(), z.number());
@@ -12,13 +13,13 @@ export const RebalanceResponseSchema = z.looseObject({
   availableCash: z.number(),
   cashAccounts: z.array(
     z.looseObject({
-      id: z.number().int().positive(),
+      id: AccountIdSchema,
       name: z.string(),
-      accountCurrency: z.string(),
+      accountCurrency: WireCurrencySchema,
       balance: z.number(),
-      balanceCurrency: z.string(),
+      balanceCurrency: WireCurrencySchema,
       /** Partitions left out of `balance` for want of a stored rate (ADR-216). */
-      unconvertedCurrencies: z.array(z.string()),
+      unconvertedCurrencies: z.array(WireCurrencySchema),
     }),
   ),
   unconvertedCurrencies: z.array(z.string()),
