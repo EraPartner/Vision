@@ -136,7 +136,7 @@ struct InsightTimelineChart: View {
 
     /// The web chart's value domain: bars keep the baseline in view, stacked areas run from the
     /// lowest total to the highest, everything else is fitted to the data (not zero-based).
-    private var yDomain: ClosedRange<Double> {
+    private func yDomain(rects: [BarRect], stacks: Bool) -> ClosedRange<Double> {
         if sparkline {
             let values = series.flatMap { $0.points.map { coordinate($0.value) } }
             let low = values.min() ?? 0
@@ -144,12 +144,11 @@ struct InsightTimelineChart: View {
             let pad = high != low ? (high - low) * 0.1 : 1
             return (low - pad)...(high + pad)
         }
-        let rects = barRects
         if !rects.isEmpty {
             let overlays = series.filter(\.dashed).flatMap { $0.points.map { coordinate($0.value) } }
             return ChartAxisTicks.zeroBasedDomain(rects.flatMap { [$0.y0, $0.y1] } + overlays)
         }
-        if stacksAreas {
+        if stacks {
             var totals: [String: Double] = [:]
             for line in series where drawsArea(line) {
                 for point in line.points { totals[point.key, default: 0] += coordinate(point.value) }
@@ -196,12 +195,15 @@ struct InsightTimelineChart: View {
 
     var body: some View {
         let index = keyIndex
-        let domain = yDomain
+        // Once per pass: each of these scans every point, and the marks below ask per point.
+        let rects = barRects
+        let stacks = stacksAreas
+        let domain = yDomain(rects: rects, stacks: stacks)
         let placement = legendPlacement
         VStack(alignment: .leading, spacing: 8) {
             if placement == .top { ChartLegendRow(items: legendItems) }
             Chart {
-                ForEach(barRects) { bar in
+                ForEach(rects) { bar in
                     RectangleMark(
                         xStart: .value(title, bar.x0), xEnd: .value(title, bar.x1),
                         yStart: .value(bar.label, bar.y0), yEnd: .value(bar.label, bar.y1)
@@ -210,10 +212,16 @@ struct InsightTimelineChart: View {
                     .cornerRadius(3)
                 }
                 ForEach(plot.drawn) { line in
+                    // Per line, not per point: the fill gradient and the line style are the same
+                    // for every point of a line.
+                    let area = drawsArea(line)
+                    let fill = area && !stacks ? areaStyle(line) : AnyShapeStyle(Color.clear)
+                    let strokeWidth: CGFloat = line.id == "actual" ? 2.5 : (area ? 2 : 1.5)
+                    let stroke = StrokeStyle(lineWidth: strokeWidth, dash: line.dashed ? [5, 4] : [])
                     ForEach(line.points) { point in
                         // Bars are drawn above as BarRects.
                         if !(bars && !line.dashed), let x = index[point.key].map(Double.init) {
-                            if drawsArea(line) && stacksAreas {
+                            if area && stacks {
                                 AreaMark(
                                     x: .value(title, x), y: .value(line.label, coordinate(point.value)),
                                     stacking: .standard
@@ -222,13 +230,13 @@ struct InsightTimelineChart: View {
                                 .opacity(ChartFill.stackedOpacity)
                                 .interpolationMethod(.monotone)
                             } else {
-                                if drawsArea(line) {
+                                if area {
                                     AreaMark(
                                         x: .value(title, x), yStart: .value(line.label, domain.lowerBound),
                                         yEnd: .value(line.label, coordinate(point.value)),
                                         series: .value(title, line.id)
                                     )
-                                    .foregroundStyle(areaStyle(line))
+                                    .foregroundStyle(fill)
                                     .interpolationMethod(.monotone)
                                     .accessibilityHidden(true)
                                 }
@@ -237,10 +245,7 @@ struct InsightTimelineChart: View {
                                     series: .value(title, line.id)
                                 )
                                 .foregroundStyle(by: .value(title, line.label))
-                                .lineStyle(
-                                    StrokeStyle(
-                                        lineWidth: line.id == "actual" ? 2.5 : (drawsArea(line) ? 2 : 1.5),
-                                        dash: line.dashed ? [5, 4] : []))
+                                .lineStyle(stroke)
                                 .interpolationMethod(.monotone)
                             }
                         }
@@ -448,6 +453,10 @@ struct InsightTimelineChart: View {
     private func coordinate(_ value: Decimal) -> Double {
         NSDecimalNumber(decimal: value).doubleValue
     }
+    private static let methodColorIndex: [String: Int] = [
+        "simple_avg": 0, "weighted_avg": 1, "ewma": 2, "holt_winters": 3,
+        "prophet_lite": 4, "monte_carlo_parametric": 5, "monte_carlo_block_bootstrap": 6, "ensemble_imse": 7,
+    ]
     private func seriesColor(at index: Int) -> Color {
         let line = series[index]
         if let color = customColors[line.id] { return color }
@@ -457,11 +466,8 @@ struct InsightTimelineChart: View {
         if id == "spending" { return theme.loss }
         // `NetTrendChart` draws its single series in `--primary` (green), never gain/loss.
         if id == "net" { return theme.primary }
-        let methods = [
-            "simple_avg": 0, "weighted_avg": 1, "ewma": 2, "holt_winters": 3,
-            "prophet_lite": 4, "monte_carlo_parametric": 5, "monte_carlo_block_bootstrap": 6, "ensemble_imse": 7,
-        ]
-        return colors[(methods[id] ?? index) % colors.count]
+        let palette = colors
+        return palette[(Self.methodColorIndex[id] ?? index) % palette.count]
     }
     private func key(at x: CGFloat, proxy: ChartProxy, geometry: GeometryProxy) -> String? {
         guard let plot = proxy.plotFrame else { return nil }
