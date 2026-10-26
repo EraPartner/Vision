@@ -273,7 +273,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
             setPreviewBusy(false);
             return;
         }
-        const { result } = props;
+        const result = props.result;
         setPreview(null);
         setPreviewError("");
         setPreviewBusy(true);
