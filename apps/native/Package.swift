@@ -26,9 +26,13 @@ let package = Package(
         .testTarget(
             name: "VisionNativeCoreTests",
             dependencies: ["VisionNativeCore"],
-            // The Vision 1.0.2 backup fixture (packaging/electron/backup/fixtures), byte for byte,
+            // The Vision 1.0.2 and 2026-10 (in-repo zip writer, #349) backup fixtures
+            // (packaging/electron/backup/fixtures), byte for byte,
             // and the per-schema JSON samples scripts/native-fixtures.ts generates from openapi.yaml.
-            resources: [.copy("Fixtures/vision-1.0.2-sanitized.visionbak.enc"), .copy("Fixtures/api")]
+            resources: [
+                .copy("Fixtures/vision-1.0.2-sanitized.visionbak.enc"),
+                .copy("Fixtures/vision-2026-10-zip-writer.visionbak.enc"), .copy("Fixtures/api"),
+            ]
         ),
         .testTarget(
             name: "VisionNativeUITests",

@@ -17,7 +17,43 @@ enum BackupFixture {
     }
 }
 
+/// A bundle from the current Electron writer (the in-repo zip writer of #349).
+enum CurrentBackupFixture {
+    static let passphrase = "vision-zip-writer-fixture"
+    static let sha256 = "3961705002cdfe92a41b9ba92b17b6030c53c711454ac226080930548d47453d"
+
+    static func path() throws -> String {
+        guard let path = Bundle.module.path(forResource: "vision-2026-10-zip-writer.visionbak", ofType: "enc") else {
+            throw BackupFailure("The current backup fixture is missing from the test resources")
+        }
+        return path
+    }
+}
+
 @Suite struct BackupBundleFixtureTests {
+    @Test func opensABundleFromTheCurrentElectronWriter() throws {
+        let directory = try makeBackupScratchDirectory()
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let path = try CurrentBackupFixture.path()
+        #expect(sha256Hex(try Data(contentsOf: URL(fileURLWithPath: path))) == CurrentBackupFixture.sha256)
+        let opened = try BackupBundle.open(
+            path, passphrase: CurrentBackupFixture.passphrase, temporaryParent: directory)
+        defer { opened.cleanup() }
+
+        #expect(opened.metadata["schemaHead"]?.stringValue == "0001_baseline")
+        #expect(opened.metadata["appVersion"]?.stringValue == "2026.10-fixture")
+        #expect(opened.metadata["deviceId"]?.stringValue == "synthetic-fixture")
+        #expect(opened.metadata["createdAt"]?.stringValue == "2026-10-26T09:21:37.739Z")
+        #expect(opened.metadata["encrypted"] == .bool(false))
+        let dump = try String(contentsOfFile: opened.dbSqlPath, encoding: .utf8)
+        #expect(dump.contains("INSERT INTO fixture_probe VALUES (1, 'zip-writer-349');"))
+        let attachments = try #require(opened.attachmentsDirectory)
+        let receipt = try String(contentsOfFile: attachments + "/tx-002/reçu été.txt", encoding: .utf8)
+        #expect(receipt == "SYNTHETIC-RECEIPT")
+        #expect(opened.frontendState == .object(["keys": .object(["vision.language": .string("fi")])]))
+    }
+
+
     @Test func theFixtureIsTheElectronFileByteForByte() throws {
         let path = try BackupFixture.path()
         let data = try Data(contentsOf: URL(fileURLWithPath: path))
