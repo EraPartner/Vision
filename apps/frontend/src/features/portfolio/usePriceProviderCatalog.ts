@@ -5,8 +5,9 @@ import {
 } from '@/lib/api/portfolio';
 import { portfolioKeys } from '@/lib/queryKeys';
 import type { PriceProvider } from '@/types/api';
+import type { TranslationKey } from "@/locales/keys";
 
-type TranslateFn = (key: string) => string;
+type TranslateFn = (key: TranslationKey) => string;
 
 export interface PriceProviderOption {
   key: PriceProvider;
@@ -25,7 +26,7 @@ const FALLBACK_CATALOG: SupportedPriceProvider[] = [
   { key: 'kinesis', name: 'Kinesis', description: 'Precious metals & commodities' },
 ];
 
-const HINT_KEYS: Record<string, string> = {
+const HINT_KEYS: Record<string, TranslationKey> = {
   manual: 'addInv.provider.hint.manual',
   binance: 'addInv.provider.hint.binance',
   yahoo: 'addInv.provider.hint.yahoo',

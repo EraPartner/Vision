@@ -47,6 +47,8 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import type { TranslationKeySuffix } from "@/types/i18n";
+import { translateDynamic } from "@/lib/translateDynamic";
 
 const fieldLabelClass =
     "block min-w-0 type-callout font-medium [&>input]:mt-1 [&>input]:font-normal";
@@ -161,6 +163,8 @@ const functions = [
     "FV",
     "PMT",
 ];
+type WorkbenchKey = TranslationKeySuffix<"analysis.ext.workbench.">;
+
 export function AnalysisWorkbenchPanel(props: Props) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
@@ -168,7 +172,11 @@ export function AnalysisWorkbenchPanel(props: Props) {
     const [fieldSearch, setFieldSearch] = useState("");
     const [scenarioTask, setScenarioTask] = useState("compare");
     const [addingStep, setAddingStep] = useState(false);
-    const tr = (key: string) => t(`analysis.ext.workbench.${key}`);
+    const tr = (key: WorkbenchKey) =>
+        t(`analysis.ext.workbench.${key}`);
+    // Ids that come from analysis metadata rather than a fixed list.
+    const trDynamic = (key: string) =>
+        translateDynamic(t, `analysis.ext.workbench.${key}`);
     const formulas = parse<Formula[]>(props.formulasJson, []),
         definitions = parse<Assumption[]>(props.assumptionsJson, []),
         values = parse<Record<string, AnalysisValue>>(
@@ -505,9 +513,9 @@ export function AnalysisWorkbenchPanel(props: Props) {
             : id;
     };
     const optionLabel = (v: string) =>
-        fixedOptions.has(v) ? tr(`option.${v}`) : fieldLabel(v);
+        fixedOptions.has(v) ? trDynamic(`option.${v}`) : fieldLabel(v);
     const select = (
-        label: string,
+        label: WorkbenchKey,
         value: string,
         onChange: (value: string) => void,
         options: string[],
@@ -541,7 +549,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
         );
     };
     const segmented = (
-        label: string,
+        label: WorkbenchKey,
         value: string,
         onChange: (value: string) => void,
         options: string[],
@@ -563,7 +571,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
         );
     };
     const checkFields = (
-        label: string,
+        label: WorkbenchKey,
         ids: string[],
         change: (ids: string[]) => void,
     ) => (
@@ -638,10 +646,10 @@ export function AnalysisWorkbenchPanel(props: Props) {
             ? step.columnIds.map(String).map(fieldLabel).join(", ")
             : "";
         return [
-            tr(`option.${analysisCellText(step.type)}`),
+            trDynamic(`option.${analysisCellText(step.type)}`),
             subject ? fieldLabel(analysisCellText(subject)) : fields,
             step.targetType
-                ? tr(`option.${analysisCellText(step.targetType)}`)
+                ? trDynamic(`option.${analysisCellText(step.targetType)}`)
                 : "",
             step.formula
                 ? (step.formula as { label?: string; id?: string }).label ||
@@ -722,7 +730,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
             ? [
                   unit.kind === "money"
                       ? tr("option.money")
-                      : tr(`option.${unit.kind}`),
+                      : trDynamic(`option.${unit.kind}`),
                   unit.currency ||
                       (unit.currencyColumn
                           ? fieldLabel(unit.currencyColumn)
@@ -1007,7 +1015,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                         "pivot",
                                     ])}
                                     <p className={hintClass}>
-                                        {tr(`stepHelp.${stepType}`)}
+                                        {trDynamic(`stepHelp.${stepType}`)}
                                     </p>
                                     {["lookup", "append"].includes(stepType) &&
                                         props.attachments.length === 0 && (
@@ -1995,7 +2003,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                 ["compare", "explore", "seek"],
                             )}
                             <p className={hintClass}>
-                                {tr(`scenarioHelp.${scenarioTask}`)}
+                                {trDynamic(`scenarioHelp.${scenarioTask}`)}
                             </p>
                             {scenarioTask === "compare" && (
                                 <div className="space-y-3">

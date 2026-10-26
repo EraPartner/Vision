@@ -42,9 +42,10 @@ import {
     formatEditableNumber,
     formatNumberPlaceholder,
 } from "@/utils/currency";
+import type { TranslationKey } from "@/locales/keys";
 
 type TranslateFn = (
-    key: string,
+    key: TranslationKey,
     params?: Record<string, string | number>,
 ) => string;
 

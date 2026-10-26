@@ -213,6 +213,13 @@ export interface AnalystConsensus {
   sell: number;
   strongSell: number;
 }
+/** i18n keys the analyst verdict can resolve to (literal so frontends can type-check them). */
+export type AnalystVerdictKey =
+  | "market.strongBuy"
+  | "market.buy"
+  | "market.hold"
+  | "market.sell"
+  | "market.strongSell";
 export function analystPresentation(consensus: AnalystConsensus | null) {
   const total = consensus
     ? consensus.strongBuy +
@@ -224,20 +231,21 @@ export function analystPresentation(consensus: AnalystConsensus | null) {
   if (!consensus || total === 0) return null;
   const bullFraction = (consensus.strongBuy + consensus.buy) / total;
   const bearFraction = (consensus.sell + consensus.strongSell) / total;
+  const verdictKey: AnalystVerdictKey =
+    bullFraction >= 0.6
+      ? "market.strongBuy"
+      : bullFraction >= 0.45
+        ? "market.buy"
+        : bearFraction >= 0.6
+          ? "market.strongSell"
+          : bearFraction >= 0.45
+            ? "market.sell"
+            : "market.hold";
   return {
     total,
     bullFraction,
     bearFraction,
-    verdictKey:
-      bullFraction >= 0.6
-        ? "market.strongBuy"
-        : bullFraction >= 0.45
-          ? "market.buy"
-          : bearFraction >= 0.6
-            ? "market.strongSell"
-            : bearFraction >= 0.45
-              ? "market.sell"
-              : "market.hold",
+    verdictKey,
     tone:
       bullFraction >= 0.45
         ? "success"

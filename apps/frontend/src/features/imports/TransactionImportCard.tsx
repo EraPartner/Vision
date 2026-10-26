@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
@@ -96,7 +96,7 @@ export function TransactionImportCard({
     onImportSuccess,
 }: TransactionImportCardProps) {
     const { t } = useLanguage();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const { adapters, loading: adaptersLoading } = useAdapters();
     const [file, setFile] = useState<File | null>(null);
     const [bankSource, setBankSource] = useState("");

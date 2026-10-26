@@ -18,7 +18,7 @@ import { must } from "@/test/must";
 // Parity guard for the sections sidebar (ADR-180): every page a user could
 // open from the old workspace sidebars must still have a sidebar entry.
 
-const navUrls = new Set(ALL_NAV_ITEMS.map((item) => item.url));
+const navUrls = new Set<string>(ALL_NAV_ITEMS.map((item) => item.url));
 
 describe("navigation registry", () => {
     it("lists every parameterless page route exactly once", () => {

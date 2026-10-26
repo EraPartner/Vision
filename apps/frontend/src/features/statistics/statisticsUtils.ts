@@ -4,10 +4,11 @@
 
 import { CHART_DATE_PATTERNS, formatDate, parseISO } from "@/lib/dateUtils";
 import type { WidgetDefinition } from "@/hooks/useWidgetVisibility";
+import type { TranslationKey } from "@/locales/keys";
 
 export type PivotValueMode = "absolute" | "net" | "income" | "expense";
 
-export const STATISTICS_WIDGETS: Array<WidgetDefinition & { labelKey: string }> = [
+export const STATISTICS_WIDGETS: Array<WidgetDefinition & { labelKey: TranslationKey }> = [
   // id kept as "summaryCards" on purpose: it is the persisted key in the
   // widget_visibility setting, so renaming it would silently un-hide the page
   // opening for anyone who had hidden it. The widget itself is MonthlyRhythm.

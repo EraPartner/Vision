@@ -5,6 +5,7 @@
  */
 
 import type { PortfolioCustomConfig } from "@/lib/api/portfolioImports";
+import type { TranslationKey } from "@/locales/keys";
 
 /** Config keys that name a CSV column (as opposed to options and mappings). */
 export type PortfolioColumnKey =
@@ -22,7 +23,7 @@ export type PortfolioColumnKey =
   | "noteColumn";
 
 // (config key, i18n label key, required)
-export const PORTFOLIO_COLUMN_FIELDS: Array<[PortfolioColumnKey, string, boolean]> = [
+export const PORTFOLIO_COLUMN_FIELDS: Array<[PortfolioColumnKey, TranslationKey, boolean]> = [
   ["dateColumn", "portfolioImport.col.date", true],
   ["typeColumn", "portfolioImport.col.type", false],
   ["symbolColumn", "portfolioImport.col.symbol", false],

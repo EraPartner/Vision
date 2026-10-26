@@ -22,6 +22,7 @@ import type { ReactNode } from "react";
 import { asCurrencyCode } from "@vision/types/brands";
 import type { CurrencyCode } from "@vision/types/brands";
 import type { AssetClass } from "@/types/portfolio";
+import type { TranslationKey } from "@/locales/keys";
 
 export interface InvestmentForm {
     assetClass: AssetClass | "";
@@ -60,7 +61,7 @@ interface InvestmentFormFieldsProps {
     isFixedIncome: boolean;
     isRealEstate: boolean;
     computedPricePerUnit: string;
-    t: (key: string, params?: Record<string, string | number>) => string;
+    t: (key: TranslationKey, params?: Record<string, string | number>) => string;
     initialBrokerField?: ReactNode;
     errors?: Record<string, string>;
 }

@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import { Landmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,7 +49,7 @@ export function AccountsList() {
             <CardHeader className="flex flex-row items-start justify-between gap-3 pb-3">
                 <CardTitle variant="sm">{t("home.accounts.title")}</CardTitle>
                 <Button asChild variant="link" size="sm" className="h-auto p-0">
-                    <Link to="/accounts">{t("home.accounts.showAll")}</Link>
+                    <AppLink to="/accounts">{t("home.accounts.showAll")}</AppLink>
                 </Button>
             </CardHeader>
             <CardContent>
@@ -92,7 +92,7 @@ export function AccountsList() {
                                         ) : undefined
                                     }
                                 >
-                                    <Link to={`/accounts/${account.id}`} />
+                                    <AppLink to={`/accounts/${account.id}`} />
                                 </ListRow>
                             );
                         })

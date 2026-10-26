@@ -17,6 +17,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { CANDIDATE_SEPARATORS } from "./csvSeparator";
 import { isCsvNumberFormat, type CsvNumberFormat } from "@/lib/api/imports";
+import type { TranslationKey } from "@/locales/keys";
 
 interface FormatSelectProps {
     id: string;
@@ -24,7 +25,7 @@ interface FormatSelectProps {
     onChange: (value: string) => void;
 }
 
-const SEPARATOR_LABEL_KEYS: Record<string, string> = {
+const SEPARATOR_LABEL_KEYS: Record<string, TranslationKey> = {
     ",": "importPage.sep.comma",
     ";": "importPage.sep.semicolon",
     "\t": "importPage.sep.tab",
@@ -43,7 +44,7 @@ export function SeparatorSelect({ id, value, onChange }: FormatSelectProps) {
                 <SelectContent>
                     {CANDIDATE_SEPARATORS.map((sep) => (
                         <SelectItem key={sep} value={sep}>
-                            {t(SEPARATOR_LABEL_KEYS[sep] ?? sep)}
+                            {SEPARATOR_LABEL_KEYS[sep] ? t(SEPARATOR_LABEL_KEYS[sep]) : sep}
                         </SelectItem>
                     ))}
                 </SelectContent>
@@ -110,7 +111,7 @@ export function DateFormatSelect({ id, value, onChange }: FormatSelectProps) {
     );
 }
 
-const NUMBER_FORMAT_OPTIONS: Array<[CsvNumberFormat, string]> = [
+const NUMBER_FORMAT_OPTIONS: Array<[CsvNumberFormat, TranslationKey]> = [
     ["auto", "importPage.numberFormat.auto"],
     ["decimal_dot", "importPage.numberFormat.decimal_dot"],
     ["decimal_comma", "importPage.numberFormat.decimal_comma"],

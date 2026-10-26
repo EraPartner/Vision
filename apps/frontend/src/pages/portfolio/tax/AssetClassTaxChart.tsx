@@ -1,4 +1,5 @@
 import { BarChart, ChartCard, type BarSeries } from "@/components/charts";
+import type { TranslationKey } from "@/locales/keys";
 
 interface AssetClassTaxDatum {
   name: string;
@@ -10,7 +11,7 @@ interface AssetClassTaxDatum {
 interface AssetClassTaxChartProps {
   data: AssetClassTaxDatum[];
   fmt: (v: number) => string;
-  t: (key: string) => string;
+  t: (key: TranslationKey) => string;
 }
 
 export function AssetClassTaxChart({ data, fmt, t }: AssetClassTaxChartProps) {

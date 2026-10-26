@@ -1,5 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
+import type { TranslationKey } from "@/locales/keys";
+import type { StaticAppPath } from "@/lib/routes";
 
 /**
  * Single source of truth for the app's navigable pages.
@@ -20,8 +22,9 @@ import { PAGE_ICONS } from "@/lib/pageIcons";
  */
 export interface NavItem {
     /** i18n key for the page label — resolved through the active locale. */
-    titleKey: string;
-    url: string;
+    titleKey: TranslationKey;
+    /** A param-free page route; a removed or renamed route fails to compile. */
+    url: StaticAppPath;
     icon: LucideIcon;
     /** Second key of the `g`-then-key go-to sequence, if the page has one. */
     shortcutKey?: string;
@@ -44,7 +47,7 @@ export type NavSectionId = "top" | "money" | "wealth" | "research" | "admin";
 export interface NavSection {
     id: NavSectionId;
     /** i18n key for the section heading. The top section has none. */
-    labelKey?: string;
+    labelKey?: TranslationKey;
     /** A section with a heading can be hidden ("Hide" / "Show"). */
     collapsible: boolean;
     /** Hidden until the user shows it (persisted per browser). */
@@ -333,7 +336,7 @@ export const ALL_NAV_ITEMS: ReadonlyArray<NavItem> = [
  * assistant at the end of Research so every page has a heading.
  */
 export const PALETTE_SECTIONS: ReadonlyArray<{
-    headingKey: string;
+    headingKey: TranslationKey;
     pages: ReadonlyArray<NavItem>;
 }> = [
     {
@@ -352,8 +355,8 @@ export const PALETTE_SECTIONS: ReadonlyArray<{
  *  help sheet stays truthful. */
 export const GO_TO_ROUTES: ReadonlyArray<{
     key: string;
-    url: string;
-    titleKey: string;
+    url: StaticAppPath;
+    titleKey: TranslationKey;
 }> = ALL_NAV_ITEMS.flatMap((item) =>
     item.shortcutKey
         ? [{ key: item.shortcutKey, url: item.url, titleKey: item.titleKey }]
@@ -367,7 +370,7 @@ export const GO_TO_KEY_BY_URL: ReadonlyMap<string, string> = new Map(
 
 /** `[` / `]` step between the three area roots (Home, Portfolio, Research),
  *  as they did between the workspace roots; shared with ShortcutsOverlay. */
-export const SECTION_CYCLE: ReadonlyArray<{ url: string; titleKey: string }> =
+export const SECTION_CYCLE: ReadonlyArray<{ url: StaticAppPath; titleKey: string }> =
     [
         { url: "/", titleKey: "nav.home" },
         { url: "/portfolio", titleKey: "nav.portfolio" },
@@ -419,7 +422,9 @@ export function matchNavItem(pathname: string): NavItem | undefined {
 }
 
 /** Title key of the most specific nav route for `pathname`, if any. */
-export function matchNavTitleKey(pathname: string): string | undefined {
+export function matchNavTitleKey(
+    pathname: string,
+): TranslationKey | undefined {
     return matchNavItem(pathname)?.titleKey;
 }
 

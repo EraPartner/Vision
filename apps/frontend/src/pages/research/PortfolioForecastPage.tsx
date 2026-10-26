@@ -60,8 +60,9 @@ import { PAGE_ICONS } from "@/lib/pageIcons";
 import { PageShell } from "@/components/shared/PageShell";
 import { usePortfolioForecastQuery } from "@/features/research/useResearchQueries";
 import { parseDecimal } from "@/lib/decimal";
+import type { TranslationKey } from "@/locales/keys";
 
-const HORIZONS = [
+const HORIZONS: Array<{ labelKey: TranslationKey; months: number }> = [
     { labelKey: "research.forecast.h1y", months: 12 },
     { labelKey: "research.forecast.h3y", months: 36 },
     { labelKey: "research.forecast.h5y", months: 60 },

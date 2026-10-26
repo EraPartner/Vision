@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useNavigate } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import {
     Archive,
     Eye,
@@ -99,7 +99,7 @@ export function AssetPageActions({
     onExport,
 }: AssetPageActionsProps) {
     const { t } = useLanguage();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     return (
         <>
             <AddInvestmentDialog

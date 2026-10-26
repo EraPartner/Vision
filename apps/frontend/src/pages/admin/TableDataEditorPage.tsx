@@ -64,6 +64,7 @@ import {
     useTableMutationData,
     useTableRows,
 } from "@/features/admin/useTableDataEditorData";
+import type { TranslationKey } from "@/locales/keys";
 
 const MATVIEW_BASE_TABLES = new Set([
     "transactions",
@@ -143,7 +144,7 @@ function RevertCellButton({
     t,
 }: {
     onRevert: () => void;
-    t: (k: string) => string;
+    t: (k: TranslationKey) => string;
 }) {
     const label = t("dbEditor.revertCell");
     return (
@@ -186,7 +187,7 @@ function EditableCell({
     lockEdit?: boolean;
     onChange: (next: unknown) => void;
     onRevert: () => void;
-    t: (k: string) => string;
+    t: (k: TranslationKey) => string;
 }) {
     const [editing, setEditing] = useState(false);
     const cellRef = useRef<HTMLTableCellElement>(null);

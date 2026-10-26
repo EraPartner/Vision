@@ -58,8 +58,13 @@ import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { CustomChart } from "./CustomChart";
 import { getChartColor } from "@/components/charts/palette";
 import type { CategoryId, RecipientId, TagId } from "@vision/types/brands";
+import type { TranslationKey } from "@/locales/keys";
 
-type ChartCombo = { type: ChartType; variant: ChartVariant; label: string };
+type ChartCombo = {
+    type: ChartType;
+    variant: ChartVariant;
+    label: TranslationKey;
+};
 
 const CHART_COMBOS: ChartCombo[] = [
     { type: "line", variant: "default", label: "customChart.line" },

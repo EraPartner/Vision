@@ -1,7 +1,8 @@
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useMemo } from "react";
-import { Link } from "react-router";
+import type { AppPath } from "@/lib/routes";
+import { AppLink } from "@/lib/appNavigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { List, ListRow } from "@/components/ui/list";
@@ -39,7 +40,7 @@ const BENCHMARKS: ReadonlyArray<{ symbol: string; label: string }> = [
 ];
 const BENCHMARK_SYMBOLS = BENCHMARKS.map((b) => b.symbol).join(",");
 
-const marketHref = (symbol: string) =>
+const marketHref = (symbol: string): AppPath =>
     `/research/market?symbol=${encodeURIComponent(symbol)}`;
 
 export default function ResearchHomePage() {
@@ -164,7 +165,7 @@ export default function ResearchHomePage() {
                         const pct = quote?.changePercent;
                         return (
                             <Card key={b.symbol} variant="interactive" asChild>
-                                <Link to={marketHref(b.symbol)}>
+                                <AppLink to={marketHref(b.symbol)}>
                                     <CardContent variant="compact">
                                         <div className="flex items-center justify-between gap-2">
                                             <span className="truncate type-caption text-label-secondary">
@@ -202,7 +203,7 @@ export default function ResearchHomePage() {
                                             </p>
                                         )}
                                     </CardContent>
-                                </Link>
+                                </AppLink>
                             </Card>
                         );
                     })}
@@ -219,13 +220,13 @@ export default function ResearchHomePage() {
                             </CardTitle>
                             {watchlistPreview.length > 0 && (
                                 <Button asChild variant="ghost" size="sm">
-                                    <Link to="/research/watchlist">
+                                    <AppLink to="/research/watchlist">
                                         {t("research.viewAll")}
                                         <ArrowRight
                                             className="h-4 w-4"
                                             aria-hidden="true"
                                         />
-                                    </Link>
+                                    </AppLink>
                                 </Button>
                             )}
                         </CardHeader>
@@ -277,7 +278,7 @@ export default function ResearchHomePage() {
                                                 subtitle={item.name}
                                                 trailing={trailing}
                                             >
-                                                <Link
+                                                <AppLink
                                                     to={marketHref(item.symbol)}
                                                 />
                                             </ListRow>
@@ -303,7 +304,7 @@ export default function ResearchHomePage() {
                                             size="sm"
                                             variant="outline"
                                         >
-                                            <Link to="/research/watchlist">
+                                            <AppLink to="/research/watchlist">
                                                 <Plus
                                                     className="h-4 w-4"
                                                     aria-hidden="true"
@@ -311,7 +312,7 @@ export default function ResearchHomePage() {
                                                 {t(
                                                     "research.watchlistEmptyCta",
                                                 )}
-                                            </Link>
+                                            </AppLink>
                                         </Button>
                                     }
                                 />

@@ -7,6 +7,7 @@ import {
 } from "@/components/charts";
 import { parseLocalDateFromYmd } from "@/lib/dateUtils";
 import { type NetWorthSnapshot, normalizeYmd } from "./netWorthChartUtils";
+import type { TranslationKey } from "@/locales/keys";
 
 interface NetWorthChartProps {
     snapshots: NetWorthSnapshot[];
@@ -15,7 +16,7 @@ interface NetWorthChartProps {
     fmt: (val: number) => string;
     xTickFormat: (value: Date) => string;
     tooltipLabelFormatter: (v: string) => string;
-    t: (key: string) => string;
+    t: (key: TranslationKey) => string;
 }
 
 type NetWorthChartPoint = NetWorthSnapshot & { chartDate: Date };

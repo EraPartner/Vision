@@ -1,6 +1,8 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
+import { useLocation, useSearchParams } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { Import } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -79,7 +81,7 @@ export default function TransactionsPage() {
     const loadMoreOffset = Math.min(50, Math.max(15, Math.floor(pageSize / 5)));
     const [searchParams, setSearchParams] = useSearchParams();
     const location = useLocation();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const [showAll, setShowAll] = useState(false);
     // The inspector docks beside the list from the lg breakpoint; below it the
     // same content is presented as a sheet.
@@ -742,10 +744,10 @@ export default function TransactionsPage() {
     const headerActions = (
         <>
             <Button asChild variant="outline">
-                <Link to="/import">
+                <AppLink to="/import">
                     <Import className="h-4 w-4" aria-hidden="true" />
                     {t("txPage.importLink")}
-                </Link>
+                </AppLink>
             </Button>
             <AddTransactionButton
                 onCreated={(created) => {

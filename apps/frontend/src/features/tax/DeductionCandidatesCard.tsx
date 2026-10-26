@@ -32,6 +32,7 @@ import {
 } from "@/lib/deductionCandidatesDismiss";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { todayYmd } from "@/lib/timezone";
+import { translateDynamic } from "@/lib/translateDynamic";
 
 /**
  * Transaction-derived complement to SuggestedDeductionsCard: lists deductible
@@ -127,7 +128,10 @@ function DeductionCandidatesCard() {
         setAppliedTypes((prev) => new Set(prev).add(group.deductionType));
         toast.success(
             t("tax.deductionCandidates.toastConfirmed", {
-                type: t(`tax.deductionCandidates.type.${group.deductionType}`),
+                type: translateDynamic(
+                    t,
+                    `tax.deductionCandidates.type.${group.deductionType}`,
+                ),
             }),
         );
     };
@@ -214,7 +218,8 @@ function DeductionCandidatesCard() {
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="min-w-0 flex-1">
                                         <h3 className="type-headline text-foreground">
-                                            {t(
+                                            {translateDynamic(
+                                                t,
                                                 `tax.deductionCandidates.type.${group.deductionType}`,
                                             )}
                                         </h3>

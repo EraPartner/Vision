@@ -11,11 +11,12 @@ import {
 import type { InvestmentSummary } from "@/types/portfolio";
 import { InvestmentDetailDialog } from "./InvestmentDetailDialog";
 import type { InvestmentId } from "@vision/types/brands";
+import type { TranslationKey } from "@/locales/keys";
 
 interface Props {
     investments: readonly InvestmentSummary[];
     onRestore: (id: InvestmentId) => Promise<unknown>;
-    t: (key: string, params?: Record<string, string | number>) => string;
+    t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }
 
 export function ArchivedInvestmentsCard({ investments, onRestore, t }: Props) {

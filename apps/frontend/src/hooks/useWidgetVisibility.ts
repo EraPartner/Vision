@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { apiClient } from "@/lib/api";
 import logger from "@/lib/logger";
 import { useSettingsStore } from "@/stores/settingsStore";
+import type { TranslationKey } from "@/locales/keys";
 const SETTINGS_KEY = "widget_visibility";
 export interface WidgetDefinition {
     id: string;
     label?: string;
-    labelKey?: string;
+    labelKey?: TranslationKey;
     description?: string;
     defaultVisible?: boolean; // defaults to true
 }

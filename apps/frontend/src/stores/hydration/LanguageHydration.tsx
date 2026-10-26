@@ -20,6 +20,7 @@ import { setNativeLanguage } from "@/lib/api/electron";
 import logger from "@/lib/logger";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { useSettingsStore } from "@/stores/settingsStore";
+import type { PluralTranslationKey, TranslationKey } from "@/locales/keys";
 import type { Language } from "@/types/i18n";
 
 export type { Language };
@@ -76,9 +77,9 @@ if (cachedLanguage !== "en") {
     void loaders[cachedLanguage]();
 }
 
-// Type-safe key is derived from the English dictionary at compile time.
-// We keep a static reference only to en for TypeScript — it is not bundled at runtime.
-export type TranslationKey = string;
+// Type-safe keys are generated from i18n/source/en.json (src/locales/keys.ts).
+// The import is type-only, so the English dictionary is not bundled eagerly.
+export type { PluralTranslationKey, TranslationKey };
 
 export interface LanguageState {
     language: Language;
@@ -91,7 +92,7 @@ export interface LanguageState {
      * `count` is always available as a `{count}` interpolation var.
      */
     tc: (
-        key: TranslationKey,
+        key: PluralTranslationKey,
         count: number,
         vars?: Record<string, string | number>,
     ) => string;
@@ -233,7 +234,7 @@ export function useLanguage(): LanguageState {
 
     const tc = useCallback(
         (
-            key: TranslationKey,
+            key: PluralTranslationKey,
             count: number,
             vars?: Record<string, string | number>,
         ): string => {

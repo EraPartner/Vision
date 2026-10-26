@@ -36,6 +36,19 @@ import {
 } from "./analysisChartModel";
 
 const statusClass = "type-callout text-label-secondary";
+const CHART_UNIT_KINDS = [
+    "money",
+    "quantity",
+    "ratio",
+    "number",
+    "dimensionless",
+    "currency",
+] as const;
+function isChartUnitKind(
+    kind: string,
+): kind is (typeof CHART_UNIT_KINDS)[number] {
+    return (CHART_UNIT_KINDS as readonly string[]).includes(kind);
+}
 
 export function AnalysisChartPanel({
     result,
@@ -135,14 +148,7 @@ export function AnalysisChartPanel({
             typeof unit === "string"
                 ? unit
                 : [
-                      [
-                          "money",
-                          "quantity",
-                          "ratio",
-                          "number",
-                          "dimensionless",
-                          "currency",
-                      ].includes(unit.kind)
+                      isChartUnitKind(unit.kind)
                           ? t(`analysis.ext.chart.unit.${unit.kind}`)
                           : unit.kind,
                       unit.currency ??

@@ -1,6 +1,7 @@
 import { useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { Link } from "react-router";
+import type { AppPath } from "@/lib/routes";
+import { AppLink } from "@/lib/appNavigation";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -131,7 +132,7 @@ export default function AccountsPage() {
 
     // Filter by the account entity's id (ADR-088) — reads key on the FK, not
     // the retiring bank_account string.
-    const accountTransactionsHref = (a: Account) => {
+    const accountTransactionsHref = (a: Account): AppPath => {
         const params = new URLSearchParams({
             account_id: String(a.id),
             filter_label: a.display_name || a.name,
@@ -343,17 +344,17 @@ export default function AccountsPage() {
                         })}
                     >
                         <DropdownMenuItem asChild>
-                            <Link to={`/accounts/${a.id}`}>
+                            <AppLink to={`/accounts/${a.id}`}>
                                 <PanelRight className="mr-2 h-4 w-4 text-label-secondary" />
                                 {t("accounts.viewDetails")}
-                            </Link>
+                            </AppLink>
                         </DropdownMenuItem>
                         {canViewTransactions && (
                             <DropdownMenuItem asChild>
-                                <Link to={accountTransactionsHref(a)}>
+                                <AppLink to={accountTransactionsHref(a)}>
                                     <Receipt className="mr-2 h-4 w-4 text-label-secondary" />
                                     {t("accounts.openTransactions")}
-                                </Link>
+                                </AppLink>
                             </DropdownMenuItem>
                         )}
                         {canReconcile && (
@@ -367,7 +368,7 @@ export default function AccountsPage() {
                     </RowMenu>
                 }
             >
-                <Link to={`/accounts/${a.id}`} aria-label={label} />
+                <AppLink to={`/accounts/${a.id}`} aria-label={label} />
             </ListRow>
         );
     };

@@ -1,204 +1,205 @@
 import type { ComponentType } from "react";
+import { LEGACY_ROUTES, ROUTES, type AppPathname, type RoutePattern } from "@/lib/routes";
 
 type RouteLoader = () => Promise<{ default: ComponentType }>;
 
 export interface AppRouteMetadata {
-    path: string;
+    path: RoutePattern;
     loader: RouteLoader;
     admin: boolean;
 }
 
 /** Ordered page-route source of truth for lazy loading, preloading, and admin gating. */
 export const appRouteManifest = [
-    { path: "/", loader: () => import("@/pages/DashboardPage"), admin: false },
+    { path: ROUTES.home, loader: () => import("@/pages/DashboardPage"), admin: false },
     {
-        path: "/transactions",
+        path: ROUTES.transactions,
         loader: () => import("@/pages/TransactionsPage"),
         admin: false,
     },
     {
-        path: "/categories",
+        path: ROUTES.categories,
         loader: () => import("@/pages/CategoriesPage"),
         admin: false,
     },
     {
-        path: "/accounts",
+        path: ROUTES.accounts,
         loader: () => import("@/pages/AccountsPage"),
         admin: false,
     },
     {
-        path: "/accounts/:id",
+        path: ROUTES.account,
         loader: () => import("@/pages/AccountDetailPage"),
         admin: false,
     },
     {
-        path: "/analysis",
+        path: ROUTES.analysis,
         loader: () => import("@/pages/AnalysisWorkspacePage"),
         admin: false,
     },
     {
-        path: "/analysis/monitors",
+        path: ROUTES.analysisMonitors,
         loader: () => import("@/pages/AnalysisMonitorsPage"),
         admin: false,
     },
     {
-        path: "/recipients",
+        path: ROUTES.recipients,
         loader: () => import("@/pages/RecipientsPage"),
         admin: false,
     },
     {
-        path: "/planned",
+        path: ROUTES.planned,
         loader: () => import("@/pages/PlannedPaymentsPage"),
         admin: false,
     },
     {
-        path: "/statistics",
+        path: ROUTES.statistics,
         loader: () => import("@/pages/StatisticsPage"),
         admin: false,
     },
     {
-        path: "/import",
+        path: ROUTES.import,
         loader: () => import("@/pages/ImportPage"),
         admin: false,
     },
     {
-        path: "/import/:batchId/review",
+        path: ROUTES.importReview,
         loader: () => import("@/pages/ImportReviewPage"),
         admin: false,
     },
-    { path: "/owes", loader: () => import("@/pages/OwesPage"), admin: false },
+    { path: ROUTES.owes, loader: () => import("@/pages/OwesPage"), admin: false },
     {
-        path: "/tax",
+        path: ROUTES.tax,
         loader: () => import("@/pages/TaxOverviewPage"),
         admin: false,
     },
     {
-        path: "/admin",
+        path: ROUTES.admin,
         loader: () => import("@/pages/admin/AdminOverviewPage"),
         admin: true,
     },
     {
-        path: "/admin/db",
+        path: ROUTES.adminDb,
         loader: () => import("@/pages/DbMaintenancePage"),
         admin: true,
     },
     {
-        path: "/admin/db/:table",
+        path: ROUTES.adminDbTable,
         loader: () => import("@/pages/admin/TableDataEditorPage"),
         admin: true,
     },
     {
-        path: "/admin/providers",
+        path: ROUTES.adminProviders,
         loader: () => import("@/pages/admin/ProviderHealthPage"),
         admin: true,
     },
     {
-        path: "/admin/endpoints",
+        path: ROUTES.adminEndpoints,
         loader: () => import("@/pages/admin/EndpointLivenessPage"),
         admin: true,
     },
     {
-        path: "/admin/exchange-rates",
+        path: ROUTES.adminExchangeRates,
         loader: () => import("@/pages/admin/ExchangeRatesPage"),
         admin: true,
     },
     {
-        path: "/portfolio",
+        path: ROUTES.portfolio,
         loader: () => import("@/pages/portfolio/PortfolioPage"),
         admin: false,
     },
     {
-        path: "/portfolio/stocks",
+        path: ROUTES.portfolioStocks,
         loader: () => import("@/pages/portfolio/StocksPage"),
         admin: false,
     },
     {
-        path: "/portfolio/crypto",
+        path: ROUTES.portfolioCrypto,
         loader: () => import("@/pages/portfolio/CryptoPage"),
         admin: false,
     },
     {
-        path: "/portfolio/metals",
+        path: ROUTES.portfolioMetals,
         loader: () => import("@/pages/portfolio/MetalsPage"),
         admin: false,
     },
     {
-        path: "/portfolio/real-estate",
+        path: ROUTES.portfolioRealEstate,
         loader: () => import("@/pages/portfolio/RealEstatePage"),
         admin: false,
     },
     {
-        path: "/portfolio/savings",
+        path: ROUTES.portfolioSavings,
         loader: () => import("@/pages/portfolio/SavingsPage"),
         admin: false,
     },
     {
-        path: "/portfolio/net-worth",
+        path: ROUTES.portfolioNetWorth,
         loader: () => import("@/pages/portfolio/net-worth/NetWorthPage"),
         admin: false,
     },
     {
-        path: "/portfolio/import",
+        path: ROUTES.portfolioImport,
         loader: () => import("@/pages/portfolio/PortfolioImportPage"),
         admin: false,
     },
     {
-        path: "/portfolio/import/:batchId/review",
+        path: ROUTES.portfolioImportReview,
         loader: () => import("@/pages/portfolio/PortfolioImportReviewPage"),
         admin: false,
     },
     {
-        path: "/portfolio/tax",
+        path: ROUTES.portfolioTax,
         loader: () => import("@/pages/portfolio/tax/PortfolioTaxPage"),
         admin: false,
     },
     {
-        path: "/portfolio/rebalance",
+        path: ROUTES.portfolioRebalance,
         loader: () => import("@/pages/portfolio/RebalancePage"),
         admin: false,
     },
     {
-        path: "/research",
+        path: ROUTES.research,
         loader: () => import("@/pages/research/ResearchHomePage"),
         admin: false,
     },
     {
-        path: "/research/markets",
+        path: ROUTES.researchMarkets,
         loader: () => import("@/pages/research/MarketOverviewPage"),
         admin: false,
     },
     {
-        path: "/research/market",
+        path: ROUTES.researchMarket,
         loader: () => import("@/pages/research/MarketLookupPage"),
         admin: false,
     },
     {
-        path: "/research/watchlist",
+        path: ROUTES.researchWatchlist,
         loader: () => import("@/pages/research/WatchlistPage"),
         admin: false,
     },
     {
-        path: "/research/compare",
+        path: ROUTES.researchCompare,
         loader: () => import("@/pages/research/ResearchComparePage"),
         admin: false,
     },
     {
-        path: "/research/forecast",
+        path: ROUTES.researchForecast,
         loader: () => import("@/pages/research/PortfolioForecastPage"),
         admin: false,
     },
     {
-        path: "/research/charts",
+        path: ROUTES.researchCharts,
         loader: () => import("@/pages/research/ChartBuilderPage"),
         admin: false,
     },
     {
-        path: "/research/dossiers",
+        path: ROUTES.researchDossiers,
         loader: () => import("@/pages/research/ResearchDossiersPage"),
         admin: false,
     },
     {
-        path: "/ai-chat",
+        path: ROUTES.aiChat,
         loader: () => import("@/pages/AIChatPage"),
         admin: false,
     },
@@ -209,8 +210,9 @@ export const appRouteManifest = [
  * redirect that keeps the query string, so saved deep links keep working
  * (`/portfolio/performance?period=1y` → `/portfolio?period=1y`).
  */
-export const legacyRouteRedirects: ReadonlyArray<{ from: string; to: string }> =
-    [{ from: "/portfolio/performance", to: "/portfolio" }];
+export const legacyRouteRedirects: ReadonlyArray<{ from: string; to: AppPathname }> = [
+    { from: LEGACY_ROUTES.portfolioPerformance, to: ROUTES.portfolio },
+];
 
 /** Path lookup derived from the manifest for sidebar hover preloading. */
 export const routeLoaders: Record<string, RouteLoader> = Object.fromEntries(

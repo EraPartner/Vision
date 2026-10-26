@@ -141,6 +141,14 @@ function seriesLabel(s: BuilderSeries): string {
 
 type Row = { time: number } & Record<string, number | null>;
 
+type ChartPreset =
+    | "priceVolume"
+    | "sma"
+    | "bollinger"
+    | "rsi"
+    | "macd"
+    | "rebased";
+
 export default function ChartBuilderPage() {
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
@@ -614,7 +622,7 @@ export default function ChartBuilderPage() {
     }, [oscillator, oscillatorSeriesId, series, pointsByKey]);
 
     // ── Presets ──
-    const applyPreset = (preset: string) => {
+    const applyPreset = (preset: ChartPreset) => {
         const primary = series.find((s) => s.field === "price");
         if (!primary) return;
         const priceOnly = series.filter((s) => s.field === "price");
@@ -683,7 +691,7 @@ export default function ChartBuilderPage() {
             patch({ oscillator: "rsi", oscillatorSeriesId: primary.id });
         } else if (preset === "macd") {
             patch({ oscillator: "macd", oscillatorSeriesId: primary.id });
-        } else if (preset === "rebased") {
+        } else {
             patch({
                 rebase: true,
                 series: priceOnly.map((s) => ({
@@ -868,14 +876,14 @@ export default function ChartBuilderPage() {
                                     {t("research.builder.presets")}
                                 </p>
                                 <div className="flex flex-wrap gap-2">
-                                    {[
+                                    {([
                                         "priceVolume",
                                         "sma",
                                         "bollinger",
                                         "rsi",
                                         "macd",
                                         "rebased",
-                                    ].map((p) => (
+                                    ] as const).map((p) => (
                                         <Button
                                             key={p}
                                             size="sm"

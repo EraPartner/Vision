@@ -1,6 +1,7 @@
 import { Activity, Database } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
-import { Link } from "react-router";
+import type { AppPath } from "@/lib/routes";
+import { AppLink } from "@/lib/appNavigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
@@ -23,7 +24,7 @@ function OverviewCard({
     value: string;
     sub?: string;
     icon: React.ElementType;
-    to: string;
+    to: AppPath;
     status?: "ok" | "warn" | "error";
 }) {
     const statusRing =
@@ -34,7 +35,7 @@ function OverviewCard({
               : "";
 
     return (
-        <Link to={to} className="group block rounded-card focus-ring">
+        <AppLink to={to} className="group block rounded-card focus-ring">
             <Card variant="interactive" className={cn("h-full", statusRing)}>
                 <CardContent variant="headerless">
                     <div className="flex items-center gap-4">
@@ -57,7 +58,7 @@ function OverviewCard({
                     </div>
                 </CardContent>
             </Card>
-        </Link>
+        </AppLink>
     );
 }
 

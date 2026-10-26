@@ -1,7 +1,7 @@
 import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import { InvestigationPrivacySummary } from "./InvestigationPrivacySummary";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import { FileText, Paperclip, Trash2 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import type {
@@ -109,11 +109,11 @@ function EvidenceAnswer({ answer }: { answer: AiAnswer }) {
                 )}
                 {answer.analysisReference && (
                     <Button asChild size="sm" variant="outline">
-                        <Link
+                        <AppLink
                             to={`/analysis?savedAnalysis=${encodeURIComponent(answer.analysisReference.id)}`}
                         >
                             {t("aiResearch.openAnalysis")}
-                        </Link>
+                        </AppLink>
                     </Button>
                 )}
                 {selectedEvidence && (
@@ -314,7 +314,7 @@ export function AIInvestigationPanel() {
                         className="flex flex-wrap gap-2"
                         aria-label={t("aiResearch.questionIdeas")}
                     >
-                        {["spending", "portfolio"].map((topic) => (
+                        {(["spending", "portfolio"] as const).map((topic) => (
                             <Button
                                 key={topic}
                                 type="button"

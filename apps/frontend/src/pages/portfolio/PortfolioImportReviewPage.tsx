@@ -6,7 +6,8 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { useParams, useNavigate } from "react-router";
+import { useParams } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -186,7 +187,7 @@ function PreviewRowList({ rows }: { rows: PortfolioPreviewRow[] }) {
 
 export function PortfolioImportReviewPage() {
     const { t } = useLanguage();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const queryClient = useQueryClient();
     const { batchId: batchIdParam } = useParams<{ batchId: string }>();
     const batchId = Number(batchIdParam);

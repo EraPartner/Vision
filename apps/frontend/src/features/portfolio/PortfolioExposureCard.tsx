@@ -54,25 +54,25 @@ export function PortfolioExposureCard({ currency }: { currency: CurrencyCode }) 
         selected && query.data
             ? [
                   {
-                      key: "classified",
+                      key: "classified" as const,
                       amount: selected.classifiedValue,
                       percent: selected.classifiedWeightPercent,
                       color: "bg-primary",
                   },
                   {
-                      key: "unclassified",
+                      key: "unclassified" as const,
                       amount: selected.unclassifiedValue,
                       percent: selected.unclassifiedWeightPercent,
                       color: "bg-label-tertiary",
                   },
                   {
-                      key: "uncovered",
+                      key: "uncovered" as const,
                       amount: query.data.uncoveredValue,
                       percent: query.data.uncoveredWeightPercent,
                       color: "bg-warning",
                   },
                   {
-                      key: "cash",
+                      key: "cash" as const,
                       amount: query.data.coveredCashValue,
                       percent: query.data.coveredCashWeightPercent,
                       color: "bg-info",

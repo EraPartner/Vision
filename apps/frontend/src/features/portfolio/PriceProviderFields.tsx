@@ -27,9 +27,10 @@ import { isPriceProvider, type PriceProvider } from "@/types/api";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatNumberPlaceholder } from "@/utils/currency";
 import { usePriceProviderCatalog } from "./usePriceProviderCatalog";
+import type { TranslationKey } from "@/locales/keys";
 
 type TranslateFn = (
-    key: string,
+    key: TranslationKey,
     params?: Record<string, string | number>,
 ) => string;
 

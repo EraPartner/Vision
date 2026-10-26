@@ -20,6 +20,7 @@ import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { appLanguageToLocale } from "@/lib/dateUtils";
 import { cn } from "@/lib/utils";
+import type { AppPath } from "@/lib/routes";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
 import { TextLink } from "@/components/shared/TextLink";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
@@ -77,7 +78,7 @@ function DrillCellLink({
     exactValue,
 }: {
     ariaLabel: string;
-    to: string;
+    to: AppPath;
     children: React.ReactNode;
     exactValue?: string | undefined;
 }) {

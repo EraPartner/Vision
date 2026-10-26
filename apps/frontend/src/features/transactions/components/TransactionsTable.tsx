@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -700,9 +700,9 @@ export function TransactionsTable({
                         action={
                             !search ? (
                                 <Button asChild size="sm" variant="outline">
-                                    <Link to="/import">
+                                    <AppLink to="/import">
                                         {t("txPage.importLink")}
-                                    </Link>
+                                    </AppLink>
                                 </Button>
                             ) : undefined
                         }

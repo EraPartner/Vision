@@ -149,7 +149,7 @@ const OPERATORS = [
     "starts-with",
     "is-null",
     "is-not-null",
-];
+] as const;
 const requestId = () => `analysis-${crypto.randomUUID()}`;
 const DEFAULT_PREFERENCE = "__default__";
 const codeBlockClass =
@@ -1199,7 +1199,7 @@ export default function AnalysisWorkspacePage() {
                 aria-label={t("analysis.workflow.title")}
                 className="mb-4 flex flex-wrap gap-2"
             >
-                {["data", "prepare", "calculate", "present"].map((step) => (
+                {(["data", "prepare", "calculate", "present"] as const).map((step) => (
                     <Button key={step} asChild variant="outline" size="sm">
                         <a
                             href={`#analysis-${step}`}

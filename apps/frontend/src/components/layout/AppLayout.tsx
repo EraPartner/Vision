@@ -6,7 +6,8 @@ import {
     lazy,
     Suspense,
 } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router";
+import { useLocation, useSearchParams } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,7 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
     const location = useLocation();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const rawSettingsSection = searchParams.get("settings") ?? undefined;
     const settingsSection = resolveSettingsSection(rawSettingsSection);

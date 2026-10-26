@@ -1,3 +1,4 @@
+import type { TranslationKey } from "@/locales/keys";
 // The overview crosses two orthogonal axes: a Region (Worldwide / USA / Europe /
 // Asia / Japan / Latin America) and a Sector (Overview + themed baskets). Region
 // is the global axis — when the Sector is "Overview" we show that region's
@@ -21,13 +22,13 @@ export interface SymbolEntry {
 }
 
 export interface ViewGroup {
-  titleKey?: string;
+  titleKey?: TranslationKey;
   entries: ReadonlyArray<SymbolEntry>;
 }
 
 interface MarketView {
   key: string;
-  labelKey: string;
+  labelKey: TranslationKey;
   groups: ReadonlyArray<ViewGroup>;
 }
 
@@ -878,7 +879,7 @@ export const SECTOR_VIEWS: ReadonlyArray<MarketView> = [
   },
 ];
 
-export const REGION_OPTIONS: ReadonlyArray<{ key: Region; labelKey: string }> = [
+export const REGION_OPTIONS: ReadonlyArray<{ key: Region; labelKey: TranslationKey }> = [
   { key: "worldwide", labelKey: "research.markets.region.worldwide" },
   { key: "usa", labelKey: "research.markets.region.usa" },
   { key: "europe", labelKey: "research.markets.region.europe" },
@@ -889,7 +890,7 @@ export const REGION_OPTIONS: ReadonlyArray<{ key: Region; labelKey: string }> = 
 
 // Sector switcher: "Overview" (the region's Indices + Top stocks) plus each
 // themed basket.
-export const SECTOR_OPTIONS: ReadonlyArray<{ key: string; labelKey: string }> = [
+export const SECTOR_OPTIONS: ReadonlyArray<{ key: string; labelKey: TranslationKey }> = [
   { key: "overview", labelKey: "research.markets.sector.overview" },
   ...SECTOR_VIEWS.map((v) => ({ key: v.key, labelKey: v.labelKey })),
 ];

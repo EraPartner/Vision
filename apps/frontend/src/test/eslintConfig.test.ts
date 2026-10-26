@@ -1,13 +1,14 @@
 import { ESLint } from "eslint";
 import { fileURLToPath } from "node:url";
+import tseslint from "typescript-eslint";
 import { describe, expect, it } from "vitest";
 const frontendRoot = fileURLToPath(new URL("../../", import.meta.url));
 const typeAwareConfigUrl = new URL(
     "../../../../config/eslint-type-aware.mjs",
     import.meta.url,
 ).href;
-const { typeAwareRules } = (await import(typeAwareConfigUrl)) as {
-    typeAwareRules: Record<string, unknown>;
+const { strictTypeAwareRules } = (await import(typeAwareConfigUrl)) as {
+    strictTypeAwareRules: (module: typeof tseslint) => Record<string, unknown>;
 };
 // The fixtures below are virtual files the TypeScript project service cannot
 // see, so lint them without type information; the guards under test are
@@ -20,7 +21,10 @@ const eslint = new ESLint({
             parserOptions: { projectService: false, project: null },
         },
         rules: Object.fromEntries(
-            Object.keys(typeAwareRules).map((rule) => [rule, "off"]),
+            Object.keys(strictTypeAwareRules(tseslint)).map((rule) => [
+                rule,
+                "off",
+            ]),
         ),
     },
 });

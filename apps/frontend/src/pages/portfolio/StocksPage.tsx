@@ -43,6 +43,7 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import type { AppPath } from "@/lib/routes";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import type { AssetClass } from "@/types/portfolio";
@@ -61,23 +62,24 @@ import { PageShell } from "@/components/shared/PageShell";
 import { ExportDialog } from "@/features/reports/ExportDialog";
 import { TextLink } from "@/components/shared/TextLink";
 import { PortfolioOversoldBadge } from "@/features/portfolio/PortfolioOversoldBadge";
+import type { TranslationKey } from "@/locales/keys";
 
 interface StocksPageProps {
     assetClasses?: AssetClass[];
-    titleKey?: string;
+    titleKey?: TranslationKey;
     /** i18n key for the PageError heading shown when the portfolio fails to load. */
-    errorTitleKey?: string;
-    emptyTitleKey?: string;
-    emptyDescriptionKey?: string;
+    errorTitleKey?: TranslationKey;
+    emptyTitleKey?: TranslationKey;
+    emptyDescriptionKey?: TranslationKey;
     allowedAddAssetClasses?: AssetClass[];
     enableFxAwarePnl?: boolean;
     /** Page icon shown in the header, empty state, and (combined variant) asset cell. */
     icon?: LucideIcon;
     /** i18n key for the "how it works" note under the holdings. */
-    howItWorksKey?: string;
+    howItWorksKey?: TranslationKey;
     /** i18n keys for the delete-confirmation dialog (description key receives {name}). */
-    deleteTitleKey?: string;
-    deleteDescriptionKey?: string;
+    deleteTitleKey?: TranslationKey;
+    deleteDescriptionKey?: TranslationKey;
     /** Whether the header ••• menu offers the portfolio PDF export (Stocks/Metals: yes, Crypto: no). */
     showEmptyStateExport?: boolean;
     /**
@@ -553,7 +555,7 @@ export default function StocksPage({
                                     const realized = h.realizedGain;
                                     const unrealizedPercent =
                                         unrealizedPercentOf(h);
-                                    const researchHref = h.symbol
+                                    const researchHref: AppPath | undefined = h.symbol
                                         ? `/research/market?symbol=${encodeURIComponent(h.symbol)}&investmentId=${h.id}`
                                         : undefined;
                                     return (

@@ -19,10 +19,13 @@ import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { numberFormatToLocale } from "@/utils/currency";
 import type { ToolRenderAs, ToolResultPayload } from "@/types/aiChat";
+import type { TranslationKey } from "@/locales/keys";
 
 const ToolResultChart = lazy(() => import("./ToolResultChart"));
 
-function toolErrorTranslationKey(error: ToolResultPayload["error"]): string {
+function toolErrorTranslationKey(
+    error: ToolResultPayload["error"],
+): TranslationKey {
     if (error == null || typeof error === "string") return "aiChat.toolFailed";
     const detail = error;
     if (detail.code === "VALIDATION_ERROR") {

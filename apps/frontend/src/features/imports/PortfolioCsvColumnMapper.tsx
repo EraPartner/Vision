@@ -33,6 +33,7 @@ import { ASSET_CLASSES } from "@/utils/assetClass";
 import type { PortfolioCustomConfig } from "@/lib/api/portfolioImports";
 import type { AssetClass } from "@vision/types/assetClasses";
 import type { PortfolioTxnType } from "@vision/types/portfolioTxnTypes";
+import type { PortfolioTxnType as UiPortfolioTxnType } from "@/types/portfolio";
 
 const ADDITIONAL_COLUMNS = new Set([
     "feesColumn",
@@ -46,7 +47,7 @@ const ASSET_CLASS_OPTIONS: readonly AssetClass[] = ASSET_CLASSES;
 // The types with existing UI labels (portfolio.txnType.*). Corporate actions
 // (split/merger/...) are still importable when the CSV value is canonical, but
 // are not offered in the dropdowns.
-const TXN_TYPE_OPTIONS: PortfolioTxnType[] = [
+const TXN_TYPE_OPTIONS: UiPortfolioTxnType[] = [
     "buy",
     "sell",
     "dividend",

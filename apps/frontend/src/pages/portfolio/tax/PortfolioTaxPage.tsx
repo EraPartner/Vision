@@ -1,6 +1,6 @@
 import { PageError } from "@/components/shared/PageError";
 import { useState } from "react";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import { LayoutGrid, SlidersHorizontal } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -32,9 +32,10 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { AssetClassTaxChart } from "./AssetClassTaxChart";
 import { InvestmentTaxBreakdownTable } from "./InvestmentTaxBreakdownTable";
 import { PageShell } from "@/components/shared/PageShell";
+import type { TranslationKey } from "@/locales/keys";
 
 function getPortfolioTaxWidgets(
-    t: (key: string, vars?: Record<string, string>) => string,
+    t: (key: TranslationKey, vars?: Record<string, string>) => string,
 ): WidgetDefinition[] {
     return [
         {
@@ -265,7 +266,7 @@ export default function PortfolioTaxPage() {
                     description={t("tax.noDataDesc")}
                     action={
                         <Button variant="outline" asChild>
-                            <Link to="/portfolio">{t("tax.noDataCta")}</Link>
+                            <AppLink to="/portfolio">{t("tax.noDataCta")}</AppLink>
                         </Button>
                     }
                 />

@@ -1,13 +1,15 @@
 import { useEffect, useRef } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { useLocation } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
+import { isAppPath, type AppPath } from "@/lib/routes";
 import type { StartupSection } from "@/stores/settingsStore";
 
 // Each fixed startup section's main page. Budgeting is the app root, so it
 // needs no redirect — landing at "/" already lands on it. 'last' is dynamic
 // (the previous session's page) and resolved separately.
-const SECTION_HOME: Record<Exclude<StartupSection, "last">, string> = {
+const SECTION_HOME: Record<Exclude<StartupSection, "last">, AppPath> = {
     budgeting: "/",
     portfolio: "/portfolio",
     research: "/research",
@@ -16,11 +18,11 @@ const SECTION_HOME: Record<Exclude<StartupSection, "last">, string> = {
 
 // Canonical last-route key (lib/localStorage-keys). Persists across launches so
 // the "last opened page" startup option can restore it on the next launch.
-function readLastPage(): string | undefined {
+function readLastPage(): AppPath | undefined {
     try {
         const v = localStorage.getItem(LOCAL_STORAGE_KEYS.LAST_ROUTE);
-        // Only accept in-app absolute paths; ignore anything else.
-        return v && v.startsWith("/") ? v : undefined;
+        // Only accept paths of routes that still exist; ignore anything else.
+        return isAppPath(v) ? v : undefined;
     } catch {
         // localStorage unavailable (private mode, SSR) — restore disabled.
         return undefined;
@@ -60,13 +62,13 @@ function readMirroredSection(): StartupSection | undefined {
  * something to restore.
  */
 export function StartupRedirect() {
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const location = useLocation();
     const { appSettings, isLoading } = useAppSettings();
     const didRedirect = useRef(false);
     // Captured during render, before the tracking effect below overwrites the
     // stored value with this session's "/" landing.
-    const lastPageAtLaunch = useRef<string | undefined>(readLastPage());
+    const lastPageAtLaunch = useRef<AppPath | undefined>(readLastPage());
     // Captured synchronously at launch so we can redirect without waiting on the
     // settings round trip when a mirror from a prior session exists.
     const mirroredSectionAtLaunch = useRef<StartupSection | undefined>(readMirroredSection());
@@ -90,7 +92,7 @@ export function StartupRedirect() {
                 ? lastPageAtLaunch.current ?? "/"
                 : SECTION_HOME[section];
 
-        if (target && target !== "/") void navigate(target, { replace: true });
+        if (target !== "/") void navigate(target, { replace: true });
     }, [isLoading, appSettings.startupSection, location.pathname, navigate]);
 
     // Mirror the (hydrated) startup section to localStorage for the next launch.

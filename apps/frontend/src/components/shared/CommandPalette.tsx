@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import type { AppPath } from "@/lib/routes";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import {
     CommandDialog,
     CommandEmpty,
@@ -73,7 +74,7 @@ export function CommandPalette({
 }: CommandPaletteProps) {
     const formatPercent = usePercentFormatter();
     const formatCurrency = useCurrencyFormatter();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const { t } = useLanguage();
     const { setMode } = useTheme();
     const { appSettings } = useAppSettings();
@@ -170,7 +171,7 @@ export function CommandPalette({
         return () => document.removeEventListener("keydown", onKeyDown);
     }, [open, onOpenChange]);
 
-    const goTo = (url: string) => {
+    const goTo = (url: AppPath) => {
         onOpenChange(false);
         pushPaletteRecent(url);
         void navigate(url);

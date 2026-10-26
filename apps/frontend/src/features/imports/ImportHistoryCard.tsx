@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { importKeys } from "@/lib/queryKeys";
@@ -28,6 +28,7 @@ import type { ImportBatch } from "@/types/apiClient";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useImportBatches } from "./useImportHistoryData";
+import type { TranslationKey } from "@/locales/keys";
 
 const PAGE_SIZE = 10;
 
@@ -46,7 +47,7 @@ const STATUS_VARIANT: Record<
     aborted: "outline",
 };
 
-const STATUS_LABEL_KEY: Record<ImportBatch["status"], string> = {
+const STATUS_LABEL_KEY: Record<ImportBatch["status"], TranslationKey> = {
     pending: "importHistory.status.pending",
     staging: "importHistory.status.staging",
     validating: "importHistory.status.validating",
@@ -193,10 +194,10 @@ function BatchRow({
                 <>
                     {batch.status === "awaiting_review" && (
                         <Button variant="ghost" size="sm" asChild>
-                            <Link to={`/import/${batch.id}/review`}>
+                            <AppLink to={`/import/${batch.id}/review`}>
                                 <FileSearch />
                                 {t("importHistory.resumeReview")}
-                            </Link>
+                            </AppLink>
                         </Button>
                     )}
                     <RollbackButton batch={batch} onRolledBack={onRolledBack} />

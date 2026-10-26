@@ -9,7 +9,7 @@ describe("page icon identity", () => {
         );
         for (const item of ALL_NAV_ITEMS) {
             expect(item.icon, item.url).toBe(
-                PAGE_ICONS[item.url as keyof typeof PAGE_ICONS],
+                PAGE_ICONS[item.url],
             );
             expect(item).not.toHaveProperty("paletteIcon");
         }

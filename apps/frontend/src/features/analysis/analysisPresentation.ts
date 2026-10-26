@@ -4,8 +4,9 @@ import type {
     AnalysisValue,
 } from "@/lib/api/analysis";
 import { numberFormatToLocale } from "@/utils/currency";
+import type { TranslationKey } from "@/locales/keys";
 
-const catalogKeys: Record<string, string> = {
+const catalogKeys: Record<string, TranslationKey> = {
     Transactions: "analysis.catalog.Transactions",
     Accounts: "analysis.catalog.Accounts",
     "Holding events": "analysis.catalog.Holding_events",
@@ -57,7 +58,7 @@ const catalogKeys: Record<string, string> = {
 
 export function analysisCatalogLabel(
     label: string,
-    t: (key: string) => string,
+    t: (key: TranslationKey) => string,
 ): string {
     return catalogKeys[label] ? t(catalogKeys[label]) : label;
 }
@@ -66,7 +67,7 @@ export function analysisColumnLabel(
     result: AnalysisResult,
     id: string,
     datasets: AnalysisDataset[],
-    t: (key: string) => string,
+    t: (key: TranslationKey) => string,
 ): string {
     const declared = result.declaredColumns?.find(
         (column) => column.id === id,

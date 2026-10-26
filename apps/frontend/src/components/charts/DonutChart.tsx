@@ -13,8 +13,9 @@ import { durations, easings } from "@/lib/motion";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { PieDatum } from "./PieChart";
 import { useChartKeyboardNav } from "./keyboardNav";
+import type { AppPath } from "@/lib/routes";
 
-type DonutDatum = PieDatum & { readonly to?: string };
+type DonutDatum = PieDatum & { readonly to?: AppPath };
 
 export interface DonutChartProps {
     readonly data: ReadonlyArray<DonutDatum>;
@@ -24,7 +25,7 @@ export interface DonutChartProps {
     readonly center?: ReactNode | undefined;
     readonly tooltipValueFormat?: ((value: number) => string) | undefined;
     readonly ariaLabel?: string | undefined;
-    readonly onNavigate?: ((to: string) => void) | undefined;
+    readonly onNavigate?: ((to: AppPath) => void) | undefined;
 }
 
 export function DonutChart(props: DonutChartProps) {

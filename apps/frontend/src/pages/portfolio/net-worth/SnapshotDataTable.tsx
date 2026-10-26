@@ -3,12 +3,13 @@ import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { cn } from "@/lib/utils";
 import { type NetWorthSnapshot, fmtDay } from "./netWorthChartUtils";
 import { Money } from "@/components/shared/Money";
+import type { TranslationKey } from "@/locales/keys";
 
 interface SnapshotDataTableProps {
   snapshots: NetWorthSnapshot[];
   currency: string;
   dateFormat: string;
-  t: (key: string) => string;
+  t: (key: TranslationKey) => string;
   totalItems?: number;
   isFetchingMore?: boolean;
   hasMore?: boolean;

@@ -33,13 +33,14 @@ import {
 import { useRecurringPatterns } from "@/hooks/usePlannedMatchSuggestions";
 import { useCategoryTree } from "@/hooks/useCategories";
 import type { RecipientId } from "@vision/types/brands";
+import type { TranslationKey } from "@/locales/keys";
 
 const DISMISSED_PATTERNS_STORAGE_KEY = "dismissed_recurring_patterns";
 
 function safeDateLabel(
     value: string,
     appDateFormat: string,
-    t: (key: string) => string,
+    t: (key: TranslationKey) => string,
 ): string {
     if (!value || typeof value !== "string") return t("common.unknownDate");
     return formatDateStringWithAppSettings(value, appDateFormat);
@@ -598,7 +599,7 @@ function ConfidenceBadge({
     t,
 }: {
     confidence: number;
-    t: (key: string) => string;
+    t: (key: TranslationKey) => string;
 }) {
     let variant: "outline" | "success" | "warning" = "outline";
     let label = t("recurring.confidence.low");

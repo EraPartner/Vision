@@ -10,13 +10,14 @@
 import { cn } from "@/lib/utils";
 import { Money } from "@/components/shared/Money";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
+import type { TranslationKey } from "@/locales/keys";
 
 interface FxPnlCellProps {
     holding: { originalCurrency?: string; currency?: string };
     /** Backend per-investment summary entry (has the historical-rate FX split). */
     fxInfo?: { fxGain?: number; usedFallbackRate?: boolean } | undefined;
     targetCurrency: string;
-    t: (key: string) => string;
+    t: (key: TranslationKey) => string;
 }
 
 export function FxPnlCell({

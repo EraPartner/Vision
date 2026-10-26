@@ -4,6 +4,7 @@ import {
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { translateDynamic } from "@/lib/translateDynamic";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { List, ListRow } from "@/components/ui/list";
 import { cn } from "@/lib/utils";
@@ -95,7 +96,10 @@ export function ScorecardPanel({
         );
     }
 
-    const concerns = scorecard.flags.filter((f) => f.severity !== "ok");
+    const concerns = scorecard.flags.filter(
+        (f): f is typeof f & { severity: Exclude<ScorecardSeverity, "ok"> } =>
+            f.severity !== "ok",
+    );
 
     return (
         <div className="space-y-3">
@@ -135,7 +139,10 @@ export function ScorecardPanel({
                         // Prefer the localized message; fall back to the backend's English
                         // `reason` if a reasonKey has no i18n entry yet (t() returns the key on a miss).
                         const reasonI18nKey = `research.scorecard.reason.${flag.reasonKey}`;
-                        const localizedReason = t(reasonI18nKey);
+                        const localizedReason = translateDynamic(
+                            t,
+                            reasonI18nKey,
+                        );
                         const reasonText =
                             localizedReason === reasonI18nKey
                                 ? flag.reason
@@ -153,7 +160,7 @@ export function ScorecardPanel({
                                         )}
                                     />
                                 }
-                                title={t(`research.metric.${flag.metric}`)}
+                                title={translateDynamic(t, `research.metric.${flag.metric}`)}
                                 subtitle={reasonText}
                                 trailing={
                                     <span className="flex flex-col items-end gap-1 type-footnote">

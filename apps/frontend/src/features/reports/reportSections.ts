@@ -1,3 +1,4 @@
+import type { TranslationKey } from "@/locales/keys";
 /**
  * Report-section catalog for the PDF export dialog.
  *
@@ -16,7 +17,7 @@ export type ReportType = 'financial' | 'portfolio' | 'tax';
 
 export interface SectionDef {
   id: string;
-  labelKey: string;
+  labelKey: TranslationKey;
 }
 
 export const FINANCIAL_SECTIONS: SectionDef[] = [

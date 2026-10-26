@@ -77,6 +77,7 @@ import {
     DEFAULT_CURRENCY,
     currencyOr,
 } from "@/utils/currency";
+import { translateDynamic } from "@/lib/translateDynamic";
 
 // Allocation sleeves offered in the custom editor. Mirrors the rolled-up sleeve
 // vocabulary the server reports actuals in (crossWorkspaceDataService SLEEVE_ROLLUP)
@@ -90,7 +91,7 @@ const SLEEVES = [
     "crypto",
     "real_estate",
     "savings",
-];
+] as const;
 
 // Preset weights for seeding the editor from a preset ("load from preset"). Mirrors
 // CLASSIC_PORTFOLIOS in services/portfolio/allocationAnalytics.js — keep in sync.
@@ -257,7 +258,7 @@ export default function RebalancePage() {
     // raw sleeve key for asset classes outside the labelled set (e.g. `other`).
     const sleeveLabel = (sleeve: string) => {
         const key = `rebalance.sleeve.${sleeve}`;
-        const label = t(key);
+        const label = translateDynamic(t, key);
         return label === key ? sleeve : label;
     };
 
@@ -728,7 +729,7 @@ export default function RebalancePage() {
                                     >
                                         <SelectTrigger
                                             className="w-44"
-                                            aria-label={`${t("rebalance.sleeve")} ${i + 1}: ${row.sleeve ? t(`rebalance.sleeve.${row.sleeve}`) : t("rebalance.editor.sleevePlaceholder")}`}
+                                            aria-label={`${t("rebalance.sleeve")} ${i + 1}: ${row.sleeve ? sleeveLabel(row.sleeve) : t("rebalance.editor.sleevePlaceholder")}`}
                                         >
                                             <SelectValue
                                                 placeholder={t(
@@ -755,7 +756,7 @@ export default function RebalancePage() {
                                                 })
                                             }
                                             className="pr-6 text-right tabular-nums"
-                                            aria-label={`${t("rebalance.target")} ${i + 1}: ${row.sleeve ? t(`rebalance.sleeve.${row.sleeve}`) : t("rebalance.editor.sleevePlaceholder")} (%)`}
+                                            aria-label={`${t("rebalance.target")} ${i + 1}: ${row.sleeve ? sleeveLabel(row.sleeve) : t("rebalance.editor.sleevePlaceholder")} (%)`}
                                         />
                                         <span className="absolute right-2 top-1/2 -translate-y-1/2 type-footnote text-label-secondary">
                                             %
@@ -767,13 +768,13 @@ export default function RebalancePage() {
                                                 variant="ghost"
                                                 size="icon"
                                                 onClick={() => removeRow(i)}
-                                                aria-label={`${t("rebalance.editor.removeSleeve")} ${i + 1}: ${row.sleeve ? t(`rebalance.sleeve.${row.sleeve}`) : t("rebalance.editor.sleevePlaceholder")}`}
+                                                aria-label={`${t("rebalance.editor.removeSleeve")} ${i + 1}: ${row.sleeve ? sleeveLabel(row.sleeve) : t("rebalance.editor.sleevePlaceholder")}`}
                                             >
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                            {`${t("rebalance.editor.removeSleeve")} ${i + 1}: ${row.sleeve ? t(`rebalance.sleeve.${row.sleeve}`) : t("rebalance.editor.sleevePlaceholder")}`}
+                                            {`${t("rebalance.editor.removeSleeve")} ${i + 1}: ${row.sleeve ? sleeveLabel(row.sleeve) : t("rebalance.editor.sleevePlaceholder")}`}
                                         </TooltipContent>
                                     </Tooltip>
                                 </div>

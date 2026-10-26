@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import {
     Card,
     CardContent,
@@ -101,12 +101,12 @@ export function NetWorthByAccountList({
                                 trailing={
                                     <>
                                         {unassigned && (
-                                            <Link
+                                            <AppLink
                                                 to={ASSIGN_HOLDINGS_ROUTE}
                                                 className="rounded-control type-footnote text-primary focus-ring"
                                             >
                                                 {t("networth.byAccount.assign")}
-                                            </Link>
+                                            </AppLink>
                                         )}
                                         <Money
                                             amount={row.total}

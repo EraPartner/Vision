@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useParams } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { ImportStagingRow, ImportPreviewGroup } from "@/lib/api";
@@ -133,7 +134,7 @@ interface AccountDisclosureEntry {
 export default function ImportReviewPage() {
     const { batchId: batchIdParam } = useParams<{ batchId: string }>();
     const batchId = Number(batchIdParam);
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);

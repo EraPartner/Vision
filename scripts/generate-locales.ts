@@ -6,6 +6,7 @@ import path from "node:path";
 // Canonical inputs: i18n/source/*.json only.
 // Generated outputs:
 //   - apps/frontend/src/locales/<lang>.ts
+//   - apps/frontend/src/locales/keys.ts (type-only key unions derived from en)
 //   - packaging/electron/i18n/<lang>.json
 
 type LocaleSource = Record<string, unknown>;
@@ -87,6 +88,35 @@ function writeFrontendTs(lang: string, obj: LocaleStrings): void {
     lines.push(`  '${k}': '${v}',`);
   }
   lines.push("};", `export default ${lang};`, "");
+  fs.writeFileSync(p, lines.join("\n"), "utf8");
+}
+
+// Type-only module: the union of English keys, so `t("typo")` fails to compile
+// without the app importing the (lazily loaded) en dictionary at runtime.
+// PluralTranslationKey holds the bases accepted by `tc`: every key base with a
+// `.other` variant (the CLDR fallback tc resolves).
+function writeKeysTs(obj: LocaleStrings): void {
+  const p = path.join(frontendLocales, "keys.ts");
+  ensureDir(frontendLocales);
+  const keys = Object.keys(obj).sort();
+  const quote = (k: string) => JSON.stringify(k);
+  const bases = new Set<string>();
+  for (const k of keys) {
+    if (k.endsWith(".other")) bases.add(k.slice(0, -".other".length));
+  }
+  const lines = [
+    `// Auto-generated - do not edit manually. Edit i18n/source/en.json instead.\n`,
+    `/** Every translation key present in the English source. */`,
+    `export type TranslationKey =`,
+    ...keys.map((k) => `  | ${quote(k)}`),
+    `  ;`,
+    ``,
+    `/** Bases accepted by \`tc\`: keys with a \`.other\` plural variant. */`,
+    `export type PluralTranslationKey =`,
+    ...[...bases].sort().map((k) => `  | ${quote(k)}`),
+    `  ;`,
+    ``,
+  ];
   fs.writeFileSync(p, lines.join("\n"), "utf8");
 }
 
@@ -191,6 +221,7 @@ function run(): void {
     writeMasterJson(lang, finalMaster);
     writeFrontendTs(lang, finalMaster);
     writePackagingJson(lang, finalMaster);
+    if (lang === "en") writeKeysTs(finalMaster);
 
     console.log(` - ${lang}: keys=${Object.keys(finalMaster).length}`);
   }

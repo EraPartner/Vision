@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import {
     Check,
     Copy,
@@ -748,9 +748,9 @@ function InspectorContent({
                                     size="sm"
                                     className="h-auto p-0"
                                 >
-                                    <Link to="/recipients">
+                                    <AppLink to="/recipients">
                                         {t("txPage.inspector.editRule")}
-                                    </Link>
+                                    </AppLink>
                                 </Button>
                             </p>
                         )}

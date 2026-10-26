@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import {
     ExternalLink,
     Pause,
@@ -26,10 +26,11 @@ import { PlannedDueBadge } from "@/features/planned/PlannedDueBadge";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/utils/safeHref";
+import type { TranslationKey } from "@/locales/keys";
 
 const FREQUENCY_LABEL_KEYS: Record<
     NonNullable<PlannedPayment["frequency"]>,
-    string
+    TranslationKey
 > = {
     daily: "plannedPage.freq.daily",
     weekly: "plannedPage.freq.weekly",
@@ -262,7 +263,7 @@ export function PlannedPaymentsTable({
                     row.is_executed ? (
                         <Badge variant="success">
                             {row.executed_transaction_id != null ? (
-                                <Link
+                                <AppLink
                                     to={`/transactions?transaction_id=${row.executed_transaction_id}`}
                                     onClick={(event) => event.stopPropagation()}
                                     className="rounded-chip focus-ring"
@@ -270,7 +271,7 @@ export function PlannedPaymentsTable({
                                     {t("plannedPage.execute.linked", {
                                         n: row.executed_transaction_id,
                                     })}
-                                </Link>
+                                </AppLink>
                             ) : (
                                 t("plannedPage.execute.linked", {
                                     n: 0,

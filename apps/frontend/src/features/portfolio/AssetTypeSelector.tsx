@@ -11,6 +11,7 @@ import { getAssetClassLabel } from "@/types/portfolio";
 import type { AssetClass } from "@/types/portfolio";
 import type { PriceProvider } from "@/types/api";
 import { defaultProviderFor } from "./defaultProviderFor";
+import type { TranslationKey } from "@/locales/keys";
 
 const ASSET_ICONS: Record<AssetClass, typeof TrendingUp> = {
     stock: TrendingUp,
@@ -26,7 +27,7 @@ interface AssetTypeSelectorProps {
     visibleAssetClasses: AssetClass[];
     assetDescriptions: Record<AssetClass, string>;
     onSelect: (key: AssetClass, defaultProvider: PriceProvider) => void;
-    t: (key: string) => string;
+    t: (key: TranslationKey) => string;
 }
 
 export function AssetTypeSelector({

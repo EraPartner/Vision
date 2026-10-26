@@ -1,6 +1,6 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { cn } from "@/lib/utils";
 import { StatCard } from "@/components/shared/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
@@ -74,7 +74,7 @@ type GraphExclusions = Record<string, boolean>;
 
 export default function DashboardPage() {
     const { t, language } = useLanguage();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const [customizeOpen, setCustomizeOpen] = useState(false);
     const { appSettings } = useAppSettings();

@@ -61,10 +61,11 @@ import {
     type SettingsSectionId,
 } from "@/lib/settingsSections";
 import { SectionLoader } from "@/components/shared/SectionLoader";
+import type { TranslationKey } from "@/locales/keys";
 
 interface SectionDef {
     id: SettingsSectionId;
-    labelKey: string;
+    labelKey: TranslationKey;
     icon: LucideIcon;
 }
 

@@ -25,10 +25,11 @@
 import { ApiErrorCode } from "@vision/types";
 
 import { ApiClientError, ApiContractError } from "@/lib/api/client";
+import type { TranslationKey } from "@/locales/keys";
 
 /** The `t` from `useLanguage()`. Kept structural so this module stays React-free. */
 export type TranslateFn = (
-    key: string,
+    key: TranslationKey,
     vars?: Record<string, string | number>,
 ) => string;
 
@@ -74,7 +75,7 @@ const NETWORK_PATTERN =
     /^Failed to fetch$|^Load failed$|^NetworkError|^Network request failed$/i;
 const RETRY_EXHAUSTED_PATTERN = /^Server returned (\d{3})$/i;
 
-const CODE_TO_KEY: Partial<Record<string, string>> = {
+const CODE_TO_KEY: Partial<Record<string, TranslationKey>> = {
     [ApiErrorCode.RATE_LIMITED]: API_ERROR_KEYS.rateLimited,
     [ApiErrorCode.INTERNAL_SERVER_ERROR]: API_ERROR_KEYS.server,
     [ApiErrorCode.BAD_GATEWAY]: API_ERROR_KEYS.server,
@@ -136,7 +137,7 @@ function transportKey(
     err: unknown,
     name: string,
     message: string,
-): string | null {
+): TranslationKey | null {
     if (TIMEOUT_PATTERN.test(message)) return API_ERROR_KEYS.timeout;
     if (name === "AbortError" || ABORT_PATTERN.test(message))
         return API_ERROR_KEYS.cancelled;

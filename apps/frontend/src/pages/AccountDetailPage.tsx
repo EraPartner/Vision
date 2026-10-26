@@ -20,7 +20,8 @@
  * transactions — otherwise a disabled row routes the user to Close.
  */
 import { useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageError } from "@/components/shared/PageError";
@@ -121,7 +122,7 @@ export default function AccountDetailPage() {
     const { id } = useParams<{ id: string }>();
     const accountId = Number(id);
     const validId = Number.isInteger(accountId) && accountId > 0;
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const balanceProvenance = useBalanceProvenance();
     // Shared drift chip content + tone (§3 F1) — identical to the hub card.

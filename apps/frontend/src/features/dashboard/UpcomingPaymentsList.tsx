@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import { CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,7 +42,7 @@ export function UpcomingPaymentsList() {
             <CardHeader className="flex flex-row items-start justify-between gap-3 pb-3">
                 <CardTitle variant="sm">{t("home.upcoming.title")}</CardTitle>
                 <Button asChild variant="link" size="sm" className="h-auto p-0">
-                    <Link to="/planned">{t("home.upcoming.all")}</Link>
+                    <AppLink to="/planned">{t("home.upcoming.all")}</AppLink>
                 </Button>
             </CardHeader>
             <CardContent>
@@ -62,7 +62,7 @@ export function UpcomingPaymentsList() {
                                     </span>
                                 }
                             >
-                                <Link to="/planned" />
+                                <AppLink to="/planned" />
                             </ListRow>
                         ))
                     )}

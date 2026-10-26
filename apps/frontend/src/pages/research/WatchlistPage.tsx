@@ -2,7 +2,7 @@ import { watchlistListPresentation } from "@vision/shared-utils/research/present
 import { PageError } from "@/components/shared/PageError";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import type { LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,7 @@ import {
     useWatchlist,
 } from "@/features/research/useWatchlistData";
 import { PageShell } from "@/components/shared/PageShell";
+import type { TranslationKey } from "@/locales/keys";
 
 const ASSET_CLASS_ICON: Record<WatchlistItem["asset_class"], LucideIcon> = {
     stock: PAGE_ICONS["/portfolio/stocks"],
@@ -50,7 +51,7 @@ const ASSET_CLASS_ICON: Record<WatchlistItem["asset_class"], LucideIcon> = {
     metals: PAGE_ICONS["/portfolio/metals"],
 };
 
-const ASSET_CLASS_LABEL_KEY: Record<WatchlistItem["asset_class"], string> = {
+const ASSET_CLASS_LABEL_KEY: Record<WatchlistItem["asset_class"], TranslationKey> = {
     stock: "addWatchlist.stock",
     etf: "addWatchlist.etf",
     crypto: "addWatchlist.crypto",
@@ -65,7 +66,7 @@ const ASSET_CLASS_LABEL_KEY: Record<WatchlistItem["asset_class"], string> = {
 export default function WatchlistPage() {
     const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
     const isOnline = useOnlineStatus();

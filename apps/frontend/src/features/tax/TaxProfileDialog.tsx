@@ -69,6 +69,7 @@ import {
     RegionStep,
 } from "./profile-steps";
 import { resolvePartnerId } from "./profile-steps/householdEditing";
+import { translateDynamic } from "@/lib/translateDynamic";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const STEPS = [
@@ -221,7 +222,7 @@ export function TaxProfileDialog({
                 const issue = result.success
                     ? undefined
                     : result.error.issues[0];
-                if (issue) return t(issue.message);
+                if (issue) return translateDynamic(t, issue.message);
             }
             return null;
         },

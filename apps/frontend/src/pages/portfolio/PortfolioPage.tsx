@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import type { LucideIcon } from "lucide-react";
 import {
     Archive,
@@ -118,6 +119,7 @@ import { UnassignedLotsNudge } from "@/features/portfolio/UnassignedLotsNudge";
 import { usePerformanceQueries } from "@/features/portfolio/usePortfolioQueries";
 import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 import type { AccountId } from "@vision/types/brands";
+import type { TranslationKey } from "@/locales/keys";
 
 /** `?period=` keeps deep links from the former Performance page working. */
 const PERIOD_CODEC = enumSearchParamCodec<ChartPeriod>(CHART_PERIODS, "all");
@@ -154,7 +156,7 @@ const SERIES_COLOR = {
 /* Persisted widget ids: `ticker`, `investments`, `allocation`, `performance`
    and `news` predate this page and keep their meaning, so saved preferences
    carry over. */
-function getPortfolioWidgets(t: (key: string) => string): WidgetDefinition[] {
+function getPortfolioWidgets(t: (key: TranslationKey) => string): WidgetDefinition[] {
     return [
         { id: "ticker", label: t("portfolio.widget.ticker") },
         { id: "investments", label: t("portfolio.widget.holdings") },
@@ -220,7 +222,7 @@ function Figure({ label, value, detail, hint, tone }: FigureProps) {
 export default function PortfolioPage() {
     const { t, tc, language } = useLanguage();
     const { appSettings } = useAppSettings();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const targetCurrency = currencyOr(
         appSettings.defaultCurrency,
         DEFAULT_CURRENCY,
@@ -1505,9 +1507,9 @@ export default function PortfolioPage() {
                                         size="sm"
                                         className="h-auto p-0"
                                     >
-                                        <Link to="/portfolio/rebalance">
+                                        <AppLink to="/portfolio/rebalance">
                                             {t("nav.rebalance")}
-                                        </Link>
+                                        </AppLink>
                                     </Button>
                                 </CardHeader>
                                 <CardContent className="space-y-4">

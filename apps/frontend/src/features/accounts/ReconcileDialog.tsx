@@ -42,7 +42,7 @@
  */
 
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     Dialog,
@@ -123,7 +123,7 @@ export function ReconcileDialog({
     const { t } = useLanguage();
     const fmtCur = useCurrencyFormatter();
     const { appSettings } = useAppSettings();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const queryClient = useQueryClient();
 
     const computed = account.computed_balance ?? 0;

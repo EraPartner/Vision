@@ -3249,6 +3249,7 @@ const nl: Record<string, string> = {
   'research.range.1d': '1 d',
   'research.range.1mo': '1 mnd',
   'research.range.1y': '1 j',
+  'research.range.2y': '2 j',
   'research.range.3mo': '3 mnd',
   'research.range.5d': '5 d',
   'research.range.5y': '5 j',

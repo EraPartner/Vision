@@ -68,6 +68,7 @@ import {
 } from "./researchCompareUrlState";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { useResearchCompareQueries } from "@/features/research/useResearchQueries";
+import type { TranslationKey } from "@/locales/keys";
 
 const COMPARE_TABS = ["performance", "fundamentals"] as const;
 
@@ -98,7 +99,7 @@ type FundamentalsMetricKey =
 
 interface FundamentalsMetric {
     key: FundamentalsMetricKey;
-    labelKey: string;
+    labelKey: TranslationKey;
     format: "ratio" | "largeNum" | "pct";
     /** Sort direction when this column is chosen — most "favourable" first. */
     betterWhenHigher: boolean;

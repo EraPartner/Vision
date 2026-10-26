@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2 } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { toast } from "sonner";
 
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -38,7 +38,7 @@ export function useImportReviewMutations(
     newAccountCount: number,
 ) {
     const queryClient = useQueryClient();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const { t } = useLanguage();
     const committing = useRef(false);
     const queue = useRef<Promise<void>>(Promise.resolve());

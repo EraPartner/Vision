@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router";
+import { useLocation } from "react-router";
+import { ROUTES, type AppPath } from "@/lib/routes";
+import { AppLink } from "@/lib/appNavigation";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { ArrowRight, CheckCircle2, ChevronDown, X } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
@@ -75,7 +78,7 @@ function readCommitReceipt(state: unknown): ImportCommitReceipt | null {
 function importedTransactionsHref(
     receipt: ImportCommitReceipt,
     label: string,
-): string {
+): AppPath {
     const params = new URLSearchParams();
     if (receipt.dateFrom) params.set("start_date", receipt.dateFrom);
     if (receipt.dateTo) params.set("end_date", receipt.dateTo);
@@ -87,7 +90,7 @@ function importedTransactionsHref(
 export default function ImportPage() {
     const { t, tc } = useLanguage();
     const location = useLocation();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const [historyKey, setHistoryKey] = useState(0);
     const [setupOpen, setSetupOpen] = useState(false);
     const [commitReceipt, setCommitReceipt] =
@@ -97,7 +100,7 @@ export default function ImportPage() {
 
     useEffect(() => {
         if (!readCommitReceipt(location.state)) return;
-        void navigate(location.pathname, { replace: true, state: null });
+        void navigate(ROUTES.import, { replace: true, state: null });
     }, [location.pathname, location.state, navigate]);
 
     return (
@@ -150,7 +153,7 @@ export default function ImportPage() {
                                     size="sm"
                                     className="mt-3"
                                 >
-                                    <Link
+                                    <AppLink
                                         to={importedTransactionsHref(
                                             commitReceipt,
                                             t("importPage.importedFilterLabel"),
@@ -164,7 +167,7 @@ export default function ImportPage() {
                                             className="h-4 w-4"
                                             aria-hidden
                                         />
-                                    </Link>
+                                    </AppLink>
                                 </Button>
                             )}
                         </div>

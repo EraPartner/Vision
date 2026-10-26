@@ -1,6 +1,7 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useCallback, useMemo, useState, lazy, Suspense } from "react";
-import { Link, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import { useStatistics, type StatisticsWindow } from "@/hooks/useStatistics";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -168,9 +169,7 @@ export default function StatisticsPage() {
         () =>
             widgetDefs.map((w) => ({
                 ...w,
-                label: (w as typeof w & { labelKey?: string }).labelKey
-                    ? t((w as typeof w & { labelKey: string }).labelKey)
-                    : (w.label ?? w.id),
+                label: w.labelKey ? t(w.labelKey) : (w.label ?? w.id),
             })),
         [widgetDefs, t],
     );
@@ -299,13 +298,13 @@ export default function StatisticsPage() {
                             {t("statsPage.noDataDesc")}
                         </p>
                         <Button asChild>
-                            <Link to="/import">
+                            <AppLink to="/import">
                                 <Import
                                     aria-hidden="true"
                                     className="mr-2 h-4 w-4"
                                 />
                                 {t("statsPage.importBtn")}
-                            </Link>
+                            </AppLink>
                         </Button>
                     </CardContent>
                 </Card>

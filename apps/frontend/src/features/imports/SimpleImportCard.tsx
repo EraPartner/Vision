@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { CsvDropzone } from "@/features/imports/CsvDropzone";
 import { SeparatorSelect, EncodingSelect } from "@/features/imports/CsvFormatSelects";
+import type { TranslationKey } from "@/locales/keys";
 
 export interface SimpleImportResult {
   imported: number;
@@ -32,11 +33,11 @@ interface SimpleImportCardProps<R extends SimpleImportResult> {
   icon: ComponentType<{ className?: string }>;
   /** Prefix for the select element ids (e.g. "recipient" -> "recipient-separator"). */
   idPrefix: string;
-  titleKey: string;
-  descKey: string;
-  importingLabelKey: string;
-  importLabelKey: string;
-  importFailedKey: string;
+  titleKey: TranslationKey;
+  descKey: TranslationKey;
+  importingLabelKey: TranslationKey;
+  importLabelKey: TranslationKey;
+  importFailedKey: TranslationKey;
   /** Show the encoding select alongside the separator (recipients need it). */
   showEncoding?: boolean;
   onImport: (file: File, separator: string, encoding: string) => Promise<R>;

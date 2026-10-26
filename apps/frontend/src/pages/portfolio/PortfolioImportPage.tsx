@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
@@ -84,7 +84,7 @@ import { asAccountId } from "@vision/types/brands";
 
 export function PortfolioImportPage() {
     const { t } = useLanguage();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const [file, setFile] = useState<File | null>(null);
     const [source, setSource] = useState("auto");
     const [detecting, setDetecting] = useState(false);

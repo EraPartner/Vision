@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { Navigate } from "react-router";
+import { AppNavigate } from "@/lib/appNavigation";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 
 /**
@@ -12,6 +12,6 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
     const { appSettings, isLoading } = useAppSettings();
 
     if (isLoading) return null;
-    if (!appSettings.adminMode) return <Navigate to="/" replace />;
+    if (!appSettings.adminMode) return <AppNavigate to="/" replace />;
     return <>{children}</>;
 }

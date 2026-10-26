@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { ArrowLeft, type LucideIcon } from "lucide-react";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
+import type { AppPath } from "@/lib/routes";
 import { Button } from "@/components/ui/button";
 import { usePageTitle } from "@/contexts/PageTitleContext";
 import { cn } from "@/lib/utils";
@@ -9,7 +10,7 @@ export interface PageHeaderBack {
     /** Accessible and visible label, for example "Back to accounts". */
     label: string;
     /** Route to go back to; rendered as a link. */
-    to?: string | undefined;
+    to?: AppPath | undefined;
     /** Handler used instead of `to`, for in-page back navigation. */
     onClick?: (() => void) | undefined;
 }
@@ -47,10 +48,10 @@ export function PageHeader({
                 size="sm"
                 className="-ml-2 w-fit text-label-secondary"
             >
-                <Link to={back.to}>
+                <AppLink to={back.to}>
                     <ArrowLeft aria-hidden="true" />
                     {back.label}
-                </Link>
+                </AppLink>
             </Button>
         ) : (
             <Button

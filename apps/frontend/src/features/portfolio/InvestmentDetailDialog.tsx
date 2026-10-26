@@ -58,6 +58,7 @@ import {
     getTxnTypeLabel,
     isPortfolioTxnType,
 } from "@/types/portfolio";
+import type { AppPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useControlledOpen } from "@/hooks/useDialogFormState";
@@ -599,7 +600,7 @@ export function InvestmentDetailDialog({
         setOpen(false);
     }, [confirm, investment.id, investment.name, t, updateInvestment, setOpen]);
 
-    const researchHref = investment.symbol
+    const researchHref: AppPath | undefined = investment.symbol
         ? `/research/market?symbol=${encodeURIComponent(investment.symbol)}&investmentId=${investment.id}`
         : undefined;
     const hasRealEstateFacts =

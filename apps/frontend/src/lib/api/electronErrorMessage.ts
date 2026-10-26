@@ -1,3 +1,4 @@
+import type { TranslationKey } from "@/locales/keys";
 /**
  * Humanizer for errors surfaced by the Electron IPC bridges.
  *
@@ -22,7 +23,7 @@
 
 /** The `t` from `useLanguage()`. Structural so this module stays React-free. */
 export type TranslateFn = (
-    key: string,
+    key: TranslationKey,
     vars?: Record<string, string | number>,
 ) => string;
 
@@ -44,7 +45,7 @@ const ERROR_PREFIX = /^(?:Error:\s*)+/;
  * Machine shapes that must never reach a toast. Node errno strings carry
  * absolute paths; the rest are internal sentinels from packaging/electron.
  */
-const MACHINE_PATTERNS: { pattern: RegExp; key: string }[] = [
+const MACHINE_PATTERNS: { pattern: RegExp; key: TranslationKey }[] = [
     { pattern: /\bENOENT\b/, key: ELECTRON_ERROR_KEYS.notFound },
     { pattern: /\b(EACCES|EPERM)\b/, key: ELECTRON_ERROR_KEYS.permission },
     { pattern: /\b(ENOSPC|EDQUOT)\b/, key: ELECTRON_ERROR_KEYS.diskFull },

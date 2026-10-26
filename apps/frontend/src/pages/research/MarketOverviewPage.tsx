@@ -1,7 +1,7 @@
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useMemo, useState } from "react";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import { Star } from "lucide-react";
 import {
     SegmentedControl,
@@ -123,7 +123,7 @@ export default function MarketOverviewPage() {
                 const up = (pct ?? 0) >= 0;
                 const held = isHeld(entry.symbol);
                 return (
-                    <Link
+                    <AppLink
                         key={entry.symbol}
                         to={`/research/market?symbol=${encodeURIComponent(entry.symbol)}`}
                         style={marketChangeHeatStyle(pct)}
@@ -170,7 +170,7 @@ export default function MarketOverviewPage() {
                         <span className="truncate font-mono type-caption text-foreground/50">
                             {entry.symbol}
                         </span>
-                    </Link>
+                    </AppLink>
                 );
             })}
         </div>

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useTheme } from "@/stores/hydration/ThemeHydration";
 import type { ThemeMode } from "@/stores/settingsStore";
@@ -10,16 +10,8 @@ import {
     setNativeVibrancy,
     type ElectronMenuAction,
 } from "@/lib/api/electron";
+import { isAppPath } from "@/lib/routes";
 import { registerPendingImportFile } from "@/lib/importHandoff";
-
-/** An app-relative route; `//host` is protocol-relative, not one. */
-function isAppRoute(payload: unknown): payload is string {
-    return (
-        typeof payload === "string" &&
-        payload.startsWith("/") &&
-        !payload.startsWith("//")
-    );
-}
 
 const THEME_MODES: ReadonlyArray<ThemeMode> = [
     "light",
@@ -56,7 +48,7 @@ export function ElectronBridge({
     onOpenSettings,
     onOpenShortcuts,
 }: ElectronBridgeProps) {
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const { toggleSidebar } = useSidebar();
     const { setMode: setThemeMode } = useTheme();
     const { tier: effectsTier } = useVisualEffectsTier();
@@ -98,7 +90,7 @@ export function ElectronBridge({
                 const h = handlersRef.current;
                 switch (action) {
                     case "navigate":
-                        if (isAppRoute(payload)) void h.navigate(payload);
+                        if (isAppPath(payload)) void h.navigate(payload);
                         break;
                     case "open-settings":
                         h.onOpenSettings("general");

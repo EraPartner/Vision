@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import type { Account } from "@/types/api";
 import { accountLabel } from "@/features/accounts/groupAccounts";
+import type { TranslationKey } from "@/locales/keys";
 
 const UNASSIGNED = "__unassigned__";
 
@@ -20,7 +21,7 @@ interface Props {
     value?: string | undefined;
     onChange: (value: string) => void;
     compactDefault?: boolean;
-    t: (key: string) => string;
+    t: (key: TranslationKey) => string;
 }
 
 export function PortfolioBrokerField({

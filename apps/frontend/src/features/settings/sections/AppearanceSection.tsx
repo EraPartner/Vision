@@ -13,11 +13,12 @@ import { useLargeDisplay } from '@/hooks/useVisualEffectsTier';
 import { SettingsSection, SettingsGroup, SettingRow, SelectSettingRow } from '../SettingsPrimitives';
 import { cn } from '@/lib/utils';
 import { gainLossPreviewStyle } from './gainLossPreview';
+import type { TranslationKey } from "@/locales/keys";
 
 interface VariantMeta {
     value: ThemeVariant;
-    labelKey: string;
-    descKey: string;
+    labelKey: TranslationKey;
+    descKey: TranslationKey;
 }
 
 const VARIANT_META: VariantMeta[] = [

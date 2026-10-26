@@ -10,6 +10,8 @@ import { getAssetClassLabel, type AssetClass } from "@/types/portfolio";
 import { asInvestmentId } from "@vision/types/brands";
 import type { InvestmentId } from "@vision/types/brands";
 import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
+import type { TranslationKey } from "@/locales/keys";
+import { translateDynamic } from "@/lib/translateDynamic";
 
 /** One row of the per-tax-type / per-fee-type breakdown lists. */
 export interface CostBreakdownEntry {
@@ -122,12 +124,12 @@ export function usePortfolioTaxData() {
 
 function localizeDashboard(
     dashboard: BelgianPortfolioTaxDashboard,
-    t: (key: string) => string,
+    t: (key: TranslationKey) => string,
 ) {
     const entries = (rows: BelgianPortfolioTaxDashboard["taxBreakdown"]) =>
         rows.map(
             (row): CostBreakdownEntry => ({
-                name: t(row.nameKey),
+                name: translateDynamic(t, row.nameKey),
                 value: row.value,
             }),
         );
