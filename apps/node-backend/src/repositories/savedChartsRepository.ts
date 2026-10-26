@@ -132,9 +132,9 @@ function mapRow(r: SavedChartRow): SavedChartRow {
       ? r.recipient_ids.map(Number)
       : [],
     tag_ids: Array.isArray(r.tag_ids) ? r.tag_ids.map(Number) : [],
-    all_categories: !!r.all_categories,
-    all_recipients: !!r.all_recipients,
-    all_tags: !!r.all_tags,
+    all_categories: r.all_categories,
+    all_recipients: r.all_recipients,
+    all_tags: r.all_tags,
   };
 }
 

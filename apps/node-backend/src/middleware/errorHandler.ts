@@ -277,11 +277,12 @@ export function createErrorHandler(
     const code = isApp ? err.code : (forwarded ? forwarded.code : ApiErrorCode.INTERNAL_SERVER_ERROR);
 
     // Typed 4xx errors are expected business outcomes — log at warn, not error.
-    const logFn = status >= 500 ? logger.error : logger.warn;
+    const logFn =
+      status >= 500 ? logger.error.bind(logger) : logger.warn.bind(logger);
     const logLabel = isApp
       ? 'Handled application error'
       : (forwarded ? 'Rejected request' : 'Unhandled exception');
-    logFn.call(logger, logLabel, {
+    logFn(logLabel, {
       error: err.message,
       code,
       status,

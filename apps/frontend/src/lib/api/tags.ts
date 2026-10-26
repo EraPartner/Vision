@@ -1,5 +1,9 @@
 import type { Tag, TagCreate, TagListResponse, TagUpdate, BulkTagRequest, BulkTagResult } from '@/types/api';
-import { TagListSchema } from '@vision/types/contracts';
+import {
+    BulkTagResultSchema,
+    TagListSchema,
+    TagSchema,
+} from '@vision/types/contracts';
 import { apiRequest } from '@/lib/api/client';
 import { requestWithQuery } from '@/lib/api/helpers';
 import type { TagId } from "@vision/types/brands";
@@ -21,6 +25,7 @@ export function createTag(tag: TagCreate): Promise<Tag> {
     return apiRequest<Tag>('/api/tags', {
         method: 'POST',
         body: JSON.stringify(tag),
+        schema: TagSchema,
     });
 }
 
@@ -28,16 +33,18 @@ export function updateTag(id: TagId, data: TagUpdate): Promise<Tag> {
     return apiRequest<Tag>(`/api/tags/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
+        schema: TagSchema,
     });
 }
 
 export async function deleteTag(id: TagId): Promise<void> {
-    await apiRequest<void>(`/api/tags/${id}`, { method: 'DELETE' });
+    await apiRequest(`/api/tags/${id}`, { method: 'DELETE' });
 }
 
 export function bulkTagTransactions(request: BulkTagRequest): Promise<BulkTagResult> {
     return apiRequest<BulkTagResult>('/api/transactions/bulk-tag', {
         method: 'POST',
         body: JSON.stringify(request),
+        schema: BulkTagResultSchema,
     });
 }

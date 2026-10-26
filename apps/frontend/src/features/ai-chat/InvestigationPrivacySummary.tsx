@@ -36,7 +36,7 @@ export function InvestigationPrivacySummary({
             <section aria-label={t("aiResearch.summary.title")}>
                 <CardContent variant="compact">
                     <div className="grid gap-4 sm:grid-cols-3">
-                        {[
+                        {([
                             {
                                 Icon: ShieldCheck,
                                 title: "aiResearch.summary.localTitle",
@@ -52,7 +52,7 @@ export function InvestigationPrivacySummary({
                                 title: "aiResearch.summary.savedTitle",
                                 body: "aiResearch.summary.savedLocal",
                             },
-                        ].map(({ Icon, title, body }) => (
+                        ] as const).map(({ Icon, title, body }) => (
                             <div
                                 key={title}
                                 className="flex items-start gap-2.5"

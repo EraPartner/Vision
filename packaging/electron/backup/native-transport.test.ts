@@ -29,10 +29,10 @@ function fakeRuntime({
   const calls: string[] = [];
   const step =
     <T>(name: string, value: T) =>
-    async (): Promise<T> => {
+    (): Promise<T> => {
       calls.push(name);
-      if (failAt === name) throw new Error(`${name} failed`);
-      return value;
+      if (failAt === name) return Promise.reject(new Error(`${name} failed`));
+      return Promise.resolve(value);
     };
   return {
     calls,
@@ -43,9 +43,11 @@ function fakeRuntime({
     start: step("start", undefined),
     waitUntilReady: step("waitUntilReady", undefined),
     finalizeDatabaseSwitch: step("finalizeDatabase", undefined),
-    finalizeAttachmentSwitch: async () => {
+    finalizeAttachmentSwitch: () => {
       calls.push("finalizeAttachments");
-      if (cleanupFails) throw new Error("attachment cleanup failed");
+      return cleanupFails
+        ? Promise.reject(new Error("attachment cleanup failed"))
+        : Promise.resolve();
     },
     rollbackAttachmentSwitch: step("rollbackAttachments", undefined),
     rollbackDatabaseSwitch: step("rollbackDatabase", undefined),
@@ -54,17 +56,19 @@ function fakeRuntime({
 
 function fakeActivationRecoveryFailureRuntime(): FakeRuntime {
   const runtime = fakeRuntime();
-  runtime.activateRestoredDatabase = async () => {
+  runtime.activateRestoredDatabase = () => {
     runtime.calls.push("activateDatabase");
-    throw codedError(
-      "database switch recovery failed",
-      "DATABASE_SWITCH_RECOVERY_FAILED",
+    return Promise.reject(
+      codedError(
+        "database switch recovery failed",
+        "DATABASE_SWITCH_RECOVERY_FAILED",
+      ),
     );
   };
   return runtime;
 }
 
-test("native bundle restore commits only after detailed readiness", async () => {
+void test("native bundle restore commits only after detailed readiness", async () => {
   const runtime = fakeRuntime();
   const result = await restoreNativeBundle(runtime, {
     dbSqlPath: "/tmp/db.sql",
@@ -82,7 +86,7 @@ test("native bundle restore commits only after detailed readiness", async () => 
   assert.equal(result.cleanupWarning, undefined);
 });
 
-test("native bundle restore rolls attachments and database back before restarting", async () => {
+void test("native bundle restore rolls attachments and database back before restarting", async () => {
   const runtime = fakeRuntime({ failAt: "waitUntilReady" });
   await assert.rejects(
     restoreNativeBundle(runtime, {
@@ -102,7 +106,7 @@ test("native bundle restore rolls attachments and database back before restartin
   ]);
 });
 
-test("post-commit attachment cleanup failure is retained as a warning", async () => {
+void test("post-commit attachment cleanup failure is retained as a warning", async () => {
   const runtime = fakeRuntime({ cleanupFails: true });
   const result = await restoreNativeBundle(runtime, {
     dbSqlPath: "/tmp/db.sql",
@@ -116,7 +120,7 @@ test("post-commit attachment cleanup failure is retained as a warning", async ()
   assert.equal(runtime.calls.includes("rollbackAttachments"), false);
 });
 
-test("native plain SQL restore rolls the database back on readiness failure", async () => {
+void test("native plain SQL restore rolls the database back on readiness failure", async () => {
   const runtime = fakeRuntime({ failAt: "waitUntilReady" });
   await assert.rejects(
     restoreNativeDatabase(runtime, "/tmp/db.sql"),
@@ -131,11 +135,11 @@ test("native plain SQL restore rolls the database back on readiness failure", as
   ]);
 });
 
-test("a failed rollback is attached to the restore error", async () => {
+void test("a failed rollback is attached to the restore error", async () => {
   const runtime = fakeRuntime({ failAt: "rollbackDatabase" });
-  runtime.waitUntilReady = async () => {
+  runtime.waitUntilReady = () => {
     runtime.calls.push("waitUntilReady");
-    throw codedError("backend not ready", "BACKEND_NOT_READY");
+    return Promise.reject(codedError("backend not ready", "BACKEND_NOT_READY"));
   };
   await assert.rejects(
     restoreNativeDatabase(runtime, "/tmp/db.sql"),
@@ -151,7 +155,7 @@ test("a failed rollback is attached to the restore error", async () => {
   assert.equal(runtime.calls.includes("finalizeDatabase"), false);
 });
 
-test("an uncertain database switch remains stopped", async () => {
+void test("an uncertain database switch remains stopped", async () => {
   const runtime = fakeActivationRecoveryFailureRuntime();
   await assert.rejects(
     restoreNativeDatabase(runtime, "/tmp/db.sql"),

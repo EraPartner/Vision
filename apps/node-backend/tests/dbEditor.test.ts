@@ -24,6 +24,7 @@ import {
   readRows,
   applyMutations,
 } from "../src/services/dbEditor.ts";
+import { must } from "./helpers/must.ts";
 
 // The fakes return plain (non-promise) result objects and partial clients.
 const query = rawQuery as unknown as Mock<(sql: string) => unknown>;
@@ -168,15 +169,19 @@ const PRIMARY_KEYS = {
 
 /** Route a top-level query() call to the right catalog fixture. */
 function catalogRouter(table: string) {
+  // The table name is a runtime string: tables outside the fixtures are empty.
+  const columnsByTable: Record<string, unknown[] | undefined> = COLUMNS;
+  const primaryKeysByTable: Record<string, unknown[] | undefined> =
+    PRIMARY_KEYS;
   return (sql: string) => {
     if (sql.includes("pg_stat_user_tables")) {
       return { rows: ALLOWED_TABLES.map((relname) => ({ relname })) };
     }
     if (sql.includes("information_schema.columns")) {
-      return { rows: COLUMNS[table as keyof typeof COLUMNS] ?? [] };
+      return { rows: columnsByTable[table] ?? [] };
     }
     if (sql.includes("pg_index")) {
-      return { rows: PRIMARY_KEYS[table as keyof typeof PRIMARY_KEYS] ?? [] };
+      return { rows: primaryKeysByTable[table] ?? [] };
     }
     return { rows: [] };
   };
@@ -185,13 +190,15 @@ function catalogRouter(table: string) {
 function makeClient(handlers: ClientHandler[]) {
   const calls: { sql: string; params: unknown[] }[] = [];
   const client = {
-    query: vi.fn(async (sql: string, params: unknown[]) => {
+    query: vi.fn((sql: string, params: unknown[]) => {
       calls.push({ sql, params });
       for (const [needle, value] of handlers) {
         if (sql.includes(needle))
-          return typeof value === "function" ? value(sql, params) : value;
+          return Promise.resolve(
+            typeof value === "function" ? value(sql, params) : value,
+          );
       }
-      return { rows: [], rowCount: 0 };
+      return Promise.resolve({ rows: [], rowCount: 0 });
     }),
     release: vi.fn(),
   };
@@ -252,7 +259,7 @@ describe("readRows", () => {
     expect(result.total).toBe(1);
     expect(result.hasMore).toBe(false);
     expect(result.nextCursor).toBeNull();
-    expect(result.rows[0]!.__xmin).toBe("500");
+    expect(must(result.rows[0], "result.rows[0]").__xmin).toBe("500");
     const issued = client.query.mock.calls.map((c) => c[0]);
     expect(issued).toContain("SET TRANSACTION READ ONLY");
     expect(issued.some((s) => s.includes("xmin::text AS __xmin"))).toBe(true);
@@ -326,9 +333,10 @@ describe("readRows", () => {
         sql.includes("::bigint AS total"),
       ),
     ).toBe(false);
-    const dataCall = client.query.mock.calls.find(([sql]) =>
-      sql.includes("SELECT *"),
-    )!;
+    const dataCall = must(
+      client.query.mock.calls.find(([sql]) => sql.includes("SELECT *")),
+      "SELECT * call",
+    );
     expect(dataCall[1]).toEqual(["EUR"]);
   });
 
@@ -378,9 +386,10 @@ describe("readRows", () => {
     await readRows("transactions", {
       filters: [{ column: "currency", op: "eq", value: "EUR" }],
     });
-    const dataCall = client.query.mock.calls.find((c) =>
-      c[0].includes("SELECT *"),
-    )!;
+    const dataCall = must(
+      client.query.mock.calls.find((c) => c[0].includes("SELECT *")),
+      'client.query.mock.calls.find((c) => c[0].includes("SELECT *"',
+    );
     expect(dataCall[0]).toContain('"currency" = $1');
     expect(dataCall[1]).toEqual(["EUR"]);
   });
@@ -397,7 +406,12 @@ describe("applyMutations (dryRun)", () => {
       { dryRun: true },
     );
     expect(getClient).not.toHaveBeenCalled();
-    expect(result.statements![0]!.preview).toBe(
+    expect(
+      must(
+        must(result.statements, "result.statements")[0],
+        "result.statements[0]",
+      ).preview,
+    ).toBe(
       'UPDATE "transactions" SET "amount" = \'20\' WHERE "id" = 5 RETURNING *',
     );
   });
@@ -462,7 +476,9 @@ describe("applyMutations (execute)", () => {
       calls.findIndex((call) => call.sql.includes("statement_timeout")),
     );
     expect(rowLockIndex).toBeGreaterThan(graphLockIndex);
-    expect(calls[graphLockIndex]!.params).toEqual([0x56495349, 1]);
+    expect(must(calls[graphLockIndex], "calls[graphLockIndex]").params).toEqual(
+      [0x56495349, 1],
+    );
   });
 
   it("locks, checks version, updates, and schedules a view refresh", async () => {

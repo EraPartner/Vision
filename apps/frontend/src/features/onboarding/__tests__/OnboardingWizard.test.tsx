@@ -10,6 +10,7 @@ import { OnboardingWizard } from "@/features/onboarding/OnboardingWizard";
 import { DASHBOARD_ARRIVAL_EVENT } from "@/utils/dashboardArrival";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { toast } from "sonner";
+import { must } from "@/test/must";
 
 vi.mock("sonner", () => ({
     toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -24,7 +25,7 @@ function installMemoryLocalStorage() {
         value: {
             getItem: (key: string) => backing.get(key) ?? null,
             setItem: (key: string, value: string) =>
-                void backing.set(key, String(value)),
+                void backing.set(key, value),
             removeItem: (key: string) => void backing.delete(key),
             clear: () => backing.clear(),
         },
@@ -147,7 +148,8 @@ describe("OnboardingWizard", () => {
         Object.defineProperty(window, "localStorage", {
             configurable: true,
             value: {
-                ...original,
+                // test-setup clears storage after each test.
+                clear: original.clear.bind(original),
                 getItem: original.getItem.bind(original),
                 removeItem: original.removeItem.bind(original),
                 setItem: () => {
@@ -305,7 +307,7 @@ describe("OnboardingWizard", () => {
         const header = visionBrand.closest("div")?.parentElement as HTMLElement;
         const buttons = within(header).getAllByRole("button");
         // Header has just one button — the close (X) icon-only button
-        await user.click(buttons.at(-1)!);
+        await user.click(must(buttons.at(-1)));
         expect(onComplete).toHaveBeenCalled();
     });
 

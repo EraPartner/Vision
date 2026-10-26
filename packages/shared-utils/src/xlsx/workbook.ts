@@ -16,6 +16,7 @@
  * A differential test compared this reader with read-excel-file on
  * generated and synthetic Saxo workbooks before the package was removed.
  */
+import { isNonZeroNumber } from "../numeric.ts";
 import { parseXml } from "./xml.ts";
 import { readZipXmlParts } from "./zip.ts";
 
@@ -197,8 +198,8 @@ function parseStyles(xml: string): CellStyle[] {
         },
     });
     return styles.map((style) => {
-        if (!style.xfId) return style;
         const { xfId, ...own } = style;
+        if (xfId === undefined || !isNonZeroNumber(xfId)) return style;
         return { ...baseStyles[xfId], ...own };
     });
 }
@@ -382,14 +383,15 @@ function parseSheet<N>(xml: string, context: SheetContext, parseNumber: (raw: st
         onCloseTag(name) {
             if (!data) return;
             if (name === "row") {
-                if (data.rowNumber) {
+                const rowNumber = data.rowNumber;
+                if (rowNumber !== undefined && isNonZeroNumber(rowNumber)) {
                     const previous = data.rows.length;
-                    if (data.rowNumber <= previous) {
+                    if (rowNumber <= previous) {
                         throw new Error(
-                            `Out-of-place <row/> number ${data.rowNumber} follows <row/> number ${previous}`,
+                            `Out-of-place <row/> number ${rowNumber} follows <row/> number ${previous}`,
                         );
                     }
-                    while (data.rowNumber > data.rows.length + 1) data.rows.push([]);
+                    while (rowNumber > data.rows.length + 1) data.rows.push([]);
                 }
                 data.rows.push(data.row as XlsxCell<N>[]);
                 if ((data.row as XlsxCell<N>[]).length > 0) data.dataRowCount = data.rowNumber as number;
@@ -410,7 +412,7 @@ function parseSheet<N>(xml: string, context: SheetContext, parseNumber: (raw: st
                     throw new Error(`Out-of-place <c/> at row ${row} col ${column}`);
                 }
                 data.cursor = [row, column];
-                if (!data.rowNumber) data.rowNumber = row;
+                if (!isNonZeroNumber(data.rowNumber)) data.rowNumber = row;
                 if ("error" in result) {
                     throw new Error(`<c/> at row ${row}, col ${column}: ${result.error}`);
                 }

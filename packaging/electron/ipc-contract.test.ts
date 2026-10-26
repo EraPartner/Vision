@@ -30,7 +30,7 @@ function interfaceBody(name: string, followingType: string): string {
   return contract.slice(start, end);
 }
 
-test("main, preload, and the shared invoke contract expose the same channels", () => {
+void test("main, preload, and the shared invoke contract expose the same channels", () => {
   const declared = matches(
     interfaceBody("ElectronInvokeContract", "ElectronInvokeChannel"),
     /^\s+"([^"]+)":/gm,
@@ -43,7 +43,7 @@ test("main, preload, and the shared invoke contract expose the same channels", (
   assert.deepEqual(invoked, declared);
 });
 
-test("preload subscriptions and main sends match the shared event contract", () => {
+void test("preload subscriptions and main sends match the shared event contract", () => {
   const declared = matches(
     interfaceBody("ElectronEventContract", "ElectronEventChannel"),
     /^\s+"([^"]+)":/gm,
@@ -59,7 +59,7 @@ test("preload subscriptions and main sends match the shared event contract", () 
   assert.deepEqual(sent, declared);
 });
 
-test("every invoke channel declares an argument contract", () => {
+void test("every invoke channel declares an argument contract", () => {
   const declared = matches(
     interfaceBody("ElectronInvokeContract", "ElectronInvokeChannel"),
     /^\s+"([^"]+)":/gm,
@@ -90,7 +90,7 @@ test("every invoke channel declares an argument contract", () => {
   }
 });
 
-test("registerHandler is the only ipcMain.handle call and enforces contracts", () => {
+void test("registerHandler is the only ipcMain.handle call and enforces contracts", () => {
   assert.equal([...main.matchAll(/ipcMain\.handle\(channel,/g)].length, 1);
   assert.equal([...main.matchAll(/^\s*ipcMain\.handle\(/gm)].length, 1);
   const start = main.indexOf("function registerHandler<");

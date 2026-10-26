@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { fundamentalsScorecard } from '../../src/services/research/fundamentalsScorecard.ts';
+import { must } from "../helpers/must.ts";
 
 describe('fundamentalsScorecard', () => {
   it('returns an unknown grade with no flags for empty input', () => {
@@ -26,7 +27,7 @@ describe('fundamentalsScorecard', () => {
     expect(r.grade).toBe('poor');
     expect(r.counts.risk).toBeGreaterThanOrEqual(4);
     // Worst-first ordering.
-    expect(r.flags[0]!.severity).toBe('risk');
+    expect(must(r.flags[0], "r.flags[0]").severity).toBe('risk');
   });
 
   it('scores a healthy company highly', () => {
@@ -50,9 +51,9 @@ describe('fundamentalsScorecard', () => {
   });
 
   it('grades the current-ratio thresholds', () => {
-    expect(fundamentalsScorecard({ currentRatio: 0.8 }).flags[0]!.severity).toBe('risk');
-    expect(fundamentalsScorecard({ currentRatio: 1.2 }).flags[0]!.severity).toBe('caution');
-    expect(fundamentalsScorecard({ currentRatio: 2 }).flags[0]!.severity).toBe('ok');
+    expect(must(fundamentalsScorecard({ currentRatio: 0.8 }).flags[0], "fundamentalsScorecard({ currentRatio: 0.8 }).flags[0]").severity).toBe('risk');
+    expect(must(fundamentalsScorecard({ currentRatio: 1.2 }).flags[0], "fundamentalsScorecard({ currentRatio: 1.2 }).flags[0]").severity).toBe('caution');
+    expect(must(fundamentalsScorecard({ currentRatio: 2 }).flags[0], "fundamentalsScorecard({ currentRatio: 2 }).flags[0]").severity).toBe('ok');
   });
 
   it('flags a dividend that exceeds earnings', () => {

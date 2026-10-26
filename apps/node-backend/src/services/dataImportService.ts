@@ -45,6 +45,7 @@ import {
   normalizeCsvEncoding,
 } from "./importPipeline/adapters/_shared.ts";
 import type { CategoryId, RecipientId } from "@vision/types/brands";
+import { errorMessage } from "../lib/errors.ts";
 const SAFE_BASENAME_RE = /^[A-Za-z0-9._-]+$/;
 
 /** One `columns: true` csv-parse record; `relax_column_count` leaves short rows' cells absent. */
@@ -395,7 +396,7 @@ async function flushRecipientUpdates<
     return;
   } catch (err) {
     logger.warn(
-      `Recipient import: batched ${label} update failed, applying per row: ${(err as Error).message}`,
+      `Recipient import: batched ${label} update failed, applying per row: ${errorMessage(err)}`,
     );
   }
   for (const update of updates) {
@@ -403,7 +404,7 @@ async function flushRecipientUpdates<
       await single(update);
     } catch (err) {
       logger.warn(
-        `Recipient import: error processing "${update.name}": ${(err as Error).message}`,
+        `Recipient import: error processing "${update.name}": ${errorMessage(err)}`,
       );
       outcomes[update.rowIndex] = "error";
     }
@@ -451,7 +452,7 @@ async function importRecipientRowsBatched(
     categories: await resolveCategories([...distinctPairs.values()]),
   }));
 
-  const outcomes: RowOutcome[] = new Array(rows.length);
+  const outcomes: RowOutcome[] = new Array<RowOutcome>(rows.length);
   const notesUpdates: {
     rowIndex: number;
     name: string;
@@ -566,7 +567,7 @@ async function importRecipientRowsBatched(
       })
       .catch((err: unknown) => {
         logger.warn(
-          `Recipient import: could not add bank account for "${account.name}": ${(err as Error).message}`,
+          `Recipient import: could not add bank account for "${account.name}": ${errorMessage(err)}`,
         );
         results.bank_account_errors++;
       });
@@ -625,7 +626,7 @@ async function importRecipientRowsPerRow(
           })
           .catch((err: unknown) => {
             logger.warn(
-              `Recipient import: could not add bank account for "${row.name}": ${(err as Error).message}`,
+              `Recipient import: could not add bank account for "${row.name}": ${errorMessage(err)}`,
             );
             results.bank_account_errors++;
           });
@@ -654,7 +655,7 @@ async function importRecipientRowsPerRow(
       }
     } catch (err) {
       logger.warn(
-        `Recipient import: error processing "${row.name}": ${(err as Error).message}`,
+        `Recipient import: error processing "${row.name}": ${errorMessage(err)}`,
       );
       results.errors++;
     }
@@ -685,7 +686,7 @@ export async function importRecipientsCSV(
       relax_column_count: true,
     });
   } catch (parseErr) {
-    throw new Error(`CSV parse error: ${(parseErr as Error).message}`, {
+    throw new Error(`CSV parse error: ${errorMessage(parseErr)}`, {
       cause: parseErr,
     });
   }
@@ -715,7 +716,7 @@ export async function importRecipientsCSV(
       await importRecipientRowsBatched(rows, results);
     } catch (err) {
       logger.warn(
-        `Recipient import: batched resolve unavailable, falling back to per-row: ${(err as Error).message}`,
+        `Recipient import: batched resolve unavailable, falling back to per-row: ${errorMessage(err)}`,
       );
       await importRecipientRowsPerRow(rows, results);
     }
@@ -786,7 +787,7 @@ async function importCategoryRowsPerRow(
       }
     } catch (err) {
       logger.warn(
-        `Category import: error processing "${row.raw}": ${(err as Error).message}`,
+        `Category import: error processing "${row.raw}": ${errorMessage(err)}`,
       );
       results.errors++;
     }
@@ -814,7 +815,7 @@ export async function importCategoriesCSV(
       relax_column_count: true,
     });
   } catch (parseErr) {
-    throw new Error(`CSV parse error: ${(parseErr as Error).message}`, {
+    throw new Error(`CSV parse error: ${errorMessage(parseErr)}`, {
       cause: parseErr,
     });
   }
@@ -857,7 +858,7 @@ export async function importCategoriesCSV(
       await importCategoryRowsBatched(rows, results);
     } catch (err) {
       logger.warn(
-        `Category import: batched resolve unavailable, falling back to per-row: ${(err as Error).message}`,
+        `Category import: batched resolve unavailable, falling back to per-row: ${errorMessage(err)}`,
       );
       await importCategoryRowsPerRow(rows, results);
     }

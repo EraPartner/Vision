@@ -25,7 +25,10 @@ void startSettingsPreload();
 // one occasionally unused request is the smaller and more reliable cost.
 void startCategoriesPreload();
 
-createRoot(document.getElementById("root")!).render(
+const rootElement = document.getElementById("root");
+if (!rootElement) throw new Error("Root element #root not found");
+
+createRoot(rootElement).render(
     <StrictMode>
         <App />
     </StrictMode>,

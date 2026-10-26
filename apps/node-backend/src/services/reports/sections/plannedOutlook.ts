@@ -29,17 +29,17 @@ export function renderPlannedOutlook(
     return emptySection({ title: 'Planned Outlook', subtitle: "Next month's expected transactions", message: 'No planned transaction data available.', pageBreak: true });
   }
 
-  const { summary, daily_data = [], period_start, period_end } = planned;
+  const { summary, daily_data, period_start, period_end } = planned;
   const periodLabel = period_start && period_end
     ? `${fmtDate(period_start)} – ${fmtDate(period_end)}`
     : 'Next month';
 
   // Summary KPIs
-  const netSc = signClass(summary?.net_amount ?? 0);
+  const netSc = signClass(summary.net_amount);
   const kpiHtml = kpiGrid([
-    { label: 'Expected Income', value: fmtCurrency(summary?.total_income ?? 0, currency), cls: 'pos' },
-    { label: 'Expected Expenses', value: fmtCurrency(Math.abs(summary?.total_expenses ?? 0), currency), cls: 'neg' },
-    { label: 'Net', value: fmtCurrency(summary?.net_amount ?? 0, currency), cls: netSc, sub: `${summary?.transaction_count ?? 0} planned txns` },
+    { label: 'Expected Income', value: fmtCurrency(summary.total_income, currency), cls: 'pos' },
+    { label: 'Expected Expenses', value: fmtCurrency(Math.abs(summary.total_expenses), currency), cls: 'neg' },
+    { label: 'Net', value: fmtCurrency(summary.net_amount, currency), cls: netSc, sub: `${summary.transaction_count} planned txns` },
   ], { cols: 3, style: 'margin-bottom:24px' });
 
   // Daily groups
@@ -57,7 +57,7 @@ export function renderPlannedOutlook(
   }
 
   const dayGroups = days.map(day => {
-    const txRows = (day.transactions ?? []).map(tx => {
+    const txRows = (day.transactions).map(tx => {
       const amtSc = signClass(tx.amount);
       const catLabel = tx.category_name ? tx.category_name.replace(':', ' › ') : '';
       const recurBadge = tx.is_recurring

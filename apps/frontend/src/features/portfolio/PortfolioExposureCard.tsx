@@ -1,3 +1,4 @@
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -28,6 +29,11 @@ import {
 import type { CurrencyCode } from "@vision/types/brands";
 
 type Dimension = "issuer" | "sector" | "issuerCountry";
+const isDimension = enumGuard<Dimension>({
+    issuer: true,
+    sector: true,
+    issuerCountry: true,
+});
 
 export function PortfolioExposureCard({ currency }: { currency: CurrencyCode }) {
     const { t } = useLanguage();
@@ -54,25 +60,25 @@ export function PortfolioExposureCard({ currency }: { currency: CurrencyCode }) 
         selected && query.data
             ? [
                   {
-                      key: "classified",
+                      key: "classified" as const,
                       amount: selected.classifiedValue,
                       percent: selected.classifiedWeightPercent,
                       color: "bg-primary",
                   },
                   {
-                      key: "unclassified",
+                      key: "unclassified" as const,
                       amount: selected.unclassifiedValue,
                       percent: selected.unclassifiedWeightPercent,
                       color: "bg-label-tertiary",
                   },
                   {
-                      key: "uncovered",
+                      key: "uncovered" as const,
                       amount: query.data.uncoveredValue,
                       percent: query.data.uncoveredWeightPercent,
                       color: "bg-warning",
                   },
                   {
-                      key: "cash",
+                      key: "cash" as const,
                       amount: query.data.coveredCashValue,
                       percent: query.data.coveredCashWeightPercent,
                       color: "bg-info",
@@ -83,12 +89,12 @@ export function PortfolioExposureCard({ currency }: { currency: CurrencyCode }) 
         Number(query.data?.totalValue) > 0 &&
         coverage.every(
             ({ percent }) =>
-                Number.isFinite(Number(percent)) &&
-                Number(percent) >= 0 &&
-                Number(percent) <= 100,
+                Number.isFinite(percent) &&
+                percent >= 0 &&
+                percent <= 100,
         ) &&
         Math.abs(
-            coverage.reduce((sum, { percent }) => sum + Number(percent), 0) -
+            coverage.reduce((sum, { percent }) => sum + percent, 0) -
                 100,
         ) <= 0.05;
 
@@ -104,7 +110,7 @@ export function PortfolioExposureCard({ currency }: { currency: CurrencyCode }) 
                 <SegmentedControl
                     size="sm"
                     value={dimension}
-                    onValueChange={(value) => setDimension(value as Dimension)}
+                    onValueChange={onGuarded(isDimension, setDimension)}
                     aria-label={t("portfolio.exposure.dimensionLabel")}
                 >
                     {(["issuer", "sector", "issuerCountry"] as const).map(
@@ -150,8 +156,8 @@ export function PortfolioExposureCard({ currency }: { currency: CurrencyCode }) 
                                 <h3 className="type-headline">
                                     {t("portfolio.exposure.coverage")}
                                 </h3>
-                                {(Number(selected.unclassifiedValue) > 0 ||
-                                    Number(query.data.uncoveredValue) > 0) && (
+                                {(selected.unclassifiedValue > 0 ||
+                                    query.data.uncoveredValue > 0) && (
                                     <p className="max-w-prose type-footnote text-label-secondary">
                                         {t(
                                             "portfolio.exposure.partialCoverageHint",
@@ -169,7 +175,7 @@ export function PortfolioExposureCard({ currency }: { currency: CurrencyCode }) 
                                             key={key}
                                             className={`h-full shrink-0 ${color}`}
                                             style={{
-                                                width: `${Number(percent)}%`,
+                                                width: `${percent}%`,
                                             }}
                                         />
                                     ))}
@@ -195,7 +201,7 @@ export function PortfolioExposureCard({ currency }: { currency: CurrencyCode }) 
                                                 </span>
                                                 <span className="type-footnote tabular-nums text-label-secondary">
                                                     {formatPercent(
-                                                        Number(percent),
+                                                        percent,
                                                         {
                                                             digits: 2,
                                                             minDigits: 0,
@@ -251,9 +257,7 @@ export function PortfolioExposureCard({ currency }: { currency: CurrencyCode }) 
                                                 />
                                                 <span className="text-label-secondary">
                                                     {formatPercent(
-                                                        Number(
-                                                            row.weightPercent,
-                                                        ),
+                                                        row.weightPercent,
                                                         {
                                                             digits: 2,
                                                             minDigits: 0,
@@ -378,7 +382,7 @@ export function PortfolioExposureCard({ currency }: { currency: CurrencyCode }) 
                                     .then((text) =>
                                         upsert.mutate(JSON.parse(text)),
                                     )
-                                    .catch((cause) =>
+                                    .catch((cause: unknown) =>
                                         setError(
                                             cause instanceof Error
                                                 ? cause.message

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { MockInstance } from "vitest";
+import { must } from "./helpers/must.ts";
 
 const originalEnv = process.env;
 
@@ -112,7 +113,10 @@ describe("logger", () => {
     logger.info("hello world", { requestId: "abc123", status: 200 });
 
     expect(logSpy).toHaveBeenCalledTimes(1);
-    const [formattedMessage] = logSpy.mock.calls[0]!;
+    const formattedMessage: unknown = must(
+      logSpy.mock.calls[0],
+      "logSpy.mock.calls[0]",
+    )[0];
     expect(formattedMessage).toMatch(
       /^\d{4}-\d{2}-\d{2}T.* \[INFO\] hello world \{"requestId":"abc123","status":200\}$/,
     );
@@ -125,7 +129,10 @@ describe("logger", () => {
     logger.error("plain error");
 
     expect(errorSpy).toHaveBeenCalledTimes(1);
-    const [formattedMessage] = errorSpy.mock.calls[0]!;
+    const formattedMessage: unknown = must(
+      errorSpy.mock.calls[0],
+      "errorSpy.mock.calls[0]",
+    )[0];
     expect(formattedMessage).toMatch(
       /^\d{4}-\d{2}-\d{2}T.* \[ERROR\] plain error$/,
     );
@@ -142,7 +149,7 @@ describe("logger", () => {
       logger.info("service message", { operation: "load" });
     });
 
-    expect(logSpy.mock.calls[0]![0]).toMatch(
+    expect(must(logSpy.mock.calls[0], "logSpy.mock.calls[0]")[0]).toMatch(
       /\[INFO\] service message \{"requestId":"request-context-123","operation":"load"\}$/,
     );
   });
@@ -161,13 +168,14 @@ describe("logger", () => {
       await firstGate;
       logger.info("first operation");
     });
-    const second = runWithRequestContext("request-second", async () => {
+    const second = runWithRequestContext("request-second", () => {
       logger.info("second operation");
       releaseFirst();
+      return Promise.resolve();
     });
     await Promise.all([first, second]);
 
-    const messages = logSpy.mock.calls.map(([message]) => message);
+    const messages = logSpy.mock.calls.map(([message]) => String(message));
     expect(
       messages.find((message) => message.includes("first operation")),
     ).toContain('"requestId":"request-first"');
@@ -186,10 +194,12 @@ describe("logger", () => {
       logger.info("explicit request", { requestId: "explicit-request" });
     });
 
-    expect(logSpy.mock.calls[0]![0]).toContain(
+    expect(must(logSpy.mock.calls[0], "logSpy.mock.calls[0]")[0]).toContain(
       '"requestId":"explicit-request"',
     );
-    expect(logSpy.mock.calls[0]![0]).not.toContain("ambient-request");
+    expect(must(logSpy.mock.calls[0], "logSpy.mock.calls[0]")[0]).not.toContain(
+      "ambient-request",
+    );
   });
 
   it("uses ambient context when metadata carries requestId: undefined", async () => {
@@ -205,9 +215,11 @@ describe("logger", () => {
       });
     });
 
-    expect(errorSpy.mock.calls[0]![0]).toContain(
+    expect(must(errorSpy.mock.calls[0], "errorSpy.mock.calls[0]")[0]).toContain(
       '"requestId":"ambient-fatal-request"',
     );
-    expect(errorSpy.mock.calls[0]![0]).toContain('"error":"boom"');
+    expect(must(errorSpy.mock.calls[0], "errorSpy.mock.calls[0]")[0]).toContain(
+      '"error":"boom"',
+    );
   });
 });

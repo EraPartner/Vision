@@ -17,6 +17,7 @@ import { accountService } from "../src/services/accountService.ts";
 import {
   asAccountId,
 } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
 
 const SUFFIX = `ARB${process.pid}`;
 const createdIds: number[] = [];
@@ -42,7 +43,7 @@ describe.skipIf(!hasTestDatabase())("account repository (real DB)", () => {
   }, 180_000);
 
   afterEach(async () => {
-    const pool = getTestPool()!;
+    const pool = must(getTestPool(), "getTestPool()");
     const ids = createdIds.splice(0);
     await pool.query(
       "DELETE FROM account_statement_balances WHERE account_id = ANY($1::int[])",
@@ -155,7 +156,7 @@ describe.skipIf(!hasTestDatabase())("account repository (real DB)", () => {
 
   it("resolves a trimmed name to one identity and keeps multi-currency sticky", async () => {
     const name = `Resolve ${SUFFIX}`;
-    const id = (await accountRepository.resolveOrCreateByName(`  ${name}  `))!;
+    const id = must((await accountRepository.resolveOrCreateByName(`  ${name}  `)), "(await accountRepository.resolveOrCreateByName(` ${name} `))");
     createdIds.push(id);
     expect((await accountRepository.getById(id))?.name).toBe(name);
     expect(
@@ -166,7 +167,7 @@ describe.skipIf(!hasTestDatabase())("account repository (real DB)", () => {
       multiCurrencyCash: true,
     });
     await accountRepository.resolveOrCreateByName(name);
-    const pool = getTestPool()!;
+    const pool = must(getTestPool(), "getTestPool()");
     const { rows } = await pool.query(
       "SELECT name, multi_currency_cash FROM accounts WHERE id = $1",
       [id],
@@ -205,7 +206,7 @@ describe.skipIf(!hasTestDatabase())("account repository (real DB)", () => {
       funding_account_id: null,
     });
     // An empty PATCH body changes nothing.
-    expect((await accountService.update(created.id, {}))?.name).toBe(
+    expect((await accountService.update(created.id, {})).name).toBe(
       `New ${SUFFIX}`,
     );
 
@@ -213,7 +214,7 @@ describe.skipIf(!hasTestDatabase())("account repository (real DB)", () => {
       balance: "12.34",
       date: "2026-09-04",
     });
-    const { rows } = await getTestPool()!.query(
+    const { rows } = await must(getTestPool(), "getTestPool()").query(
       `SELECT currency, balance::float8 AS balance,
               to_char(balance_date, 'YYYY-MM-DD') AS balance_date
          FROM account_statement_balances WHERE account_id = $1`,

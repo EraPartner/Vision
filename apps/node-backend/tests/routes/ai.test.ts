@@ -41,7 +41,7 @@ vi.mock("../../src/services/aiChatService.ts", async () => {
     ) {
       super(message, {
         code: code || "AI_CHAT_ERROR",
-        status: status || 500,
+        status: status ?? 500,
         cause,
       });
       this.name = "AiChatServiceError";
@@ -116,21 +116,15 @@ import type { ChatTurnResult } from "../../src/services/aiChatService.ts";
 import settings from "../../src/config/config.ts";
 import { OllamaError } from "../../src/integrations/ollama/client.ts";
 import { APPLE_FOUNDATION_MODEL } from "../../src/integrations/ollama/appleFoundation.ts";
+import { must } from "../helpers/must.ts";
 
+import { loose } from "../helpers/partial.ts";
+import { valueAt } from "../helpers/responseBody.ts";
 const createEmptyConversation = vi.mocked(rawCreateEmptyConversation);
 const getConversationWithMessages = vi.mocked(rawGetConversationWithMessages);
 const listConversations = vi.mocked(rawListConversations);
 const renameConversation = vi.mocked(rawRenameConversation);
 const runChatTurn = vi.mocked(rawRunChatTurn);
-
-/**
- * The route forwards service results and stream events verbatim, so fixtures
- * carry only the fields a test asserts on. `loose` casts one to the type the
- * mocked service resolves with.
- */
-function loose<T>(value: object): T {
-  return value as T;
-}
 
 /** The `runChatTurn` arguments the stream fixtures use. */
 interface StreamTurnArgs {
@@ -163,8 +157,10 @@ function parseSseFrames(rawText: string) {
     .map((frame) => {
       const [eventLine, dataLine] = frame.split("\n");
       return {
-        name: eventLine!.replace(/^event: /, ""),
-        data: JSON.parse(dataLine!.replace(/^data: /, "")),
+        name: must(eventLine, "eventLine").replace(/^event: /, ""),
+        data: JSON.parse(
+            must(dataLine, "dataLine").replace(/^data: /, ""),
+          ) as unknown,
       };
     });
 }
@@ -221,7 +217,7 @@ describe("POST /api/ai/chat/stream", () => {
     };
     const conversation = { id: UUID, title: "hi", model: "llama3.2:3b" };
 
-    mockTurn(async ({ onEvent }) => {
+    mockTurn(({ onEvent }) => {
       onEvent({ type: "user_message", data: { message: userMsg } });
       onEvent({ type: "token", data: "Your " });
       onEvent({ type: "token", data: "top " });
@@ -234,14 +230,14 @@ describe("POST /api/ai/chat/stream", () => {
         },
       });
       onEvent({ type: "tool_result", data: { message: toolMsg } });
-      return {
+      return Promise.resolve({
         conversation,
         userMessage: userMsg,
         toolMessages: [toolMsg],
         assistantMessage: assistantMsg,
         usage: { evalCount: 10, promptEvalCount: 5, totalDurationMs: 120 },
         iterations: 2,
-      };
+      });
     });
 
     const res = await api
@@ -266,19 +262,23 @@ describe("POST /api/ai/chat/stream", () => {
       "complete",
     ]);
 
-    expect(frames[0]!.data).toEqual({ message: userMsg });
-    expect(frames[1]!.data).toBe("Your ");
+    expect(must(frames[0], "frames[0]").data).toEqual({ message: userMsg });
+    expect(must(frames[1], "frames[1]").data).toBe("Your ");
 
-    expect(frames[4]!.data.name).toBe("getSpendByCategory");
-    expect(frames[4]!.data.args.from).toBe("2025-01-01");
+    expect(valueAt(must(frames[4], "frames[4]").data, "name")).toBe(
+      "getSpendByCategory",
+    );
+    expect(
+      valueAt(must(frames[4], "frames[4]").data, "args", "from"),
+    ).toBe("2025-01-01");
 
-    expect(frames[5]!.data).toEqual({ message: toolMsg });
+    expect(must(frames[5], "frames[5]").data).toEqual({ message: toolMsg });
 
-    const completePayload = frames[6]!.data;
-    expect(completePayload.conversation).toEqual(conversation);
-    expect(completePayload.assistantMessage).toEqual(assistantMsg);
-    expect(completePayload.usage.evalCount).toBe(10);
-    expect(completePayload.iterations).toBe(2);
+    const completePayload = must(frames[6], "frames[6]").data;
+    expect(valueAt(completePayload, "conversation")).toEqual(conversation);
+    expect(valueAt(completePayload, "assistantMessage")).toEqual(assistantMsg);
+    expect(valueAt(completePayload, "usage", "evalCount")).toBe(10);
+    expect(valueAt(completePayload, "iterations")).toBe(2);
   });
 
   it("passes AbortSignal to runChatTurn and streams with streaming:true", async () => {
@@ -296,7 +296,7 @@ describe("POST /api/ai/chat/stream", () => {
     await api.post(`${BASE}/chat/stream`).send({ message: "hi" }).expect(200);
 
     expect(runChatTurn).toHaveBeenCalledTimes(1);
-    const callArgs = runChatTurn.mock.calls[0]![0]!;
+    const callArgs = must(must(runChatTurn.mock.calls[0], "runChatTurn.mock.calls[0]")[0], "runChatTurn.mock.calls[0]![0]");
     expect(callArgs.streaming).toBe(true);
     expect(callArgs.signal).toBeInstanceOf(AbortSignal);
     expect(typeof callArgs.onEvent).toBe("function");
@@ -318,7 +318,7 @@ describe("POST /api/ai/chat/stream", () => {
 
     const frames = parseSseFrames(res.text);
     const errFrame = frames.find((f) => f.name === "error");
-    expect(errFrame!.data).toEqual({
+    expect(must(errFrame, "errFrame").data).toEqual({
       detail: "Model unavailable",
       code: "OLLAMA_UNREACHABLE",
     });
@@ -336,11 +336,11 @@ describe("POST /api/ai/chat/stream", () => {
     const frames = parseSseFrames(res.text);
     const errFrame = frames.find((f) => f.name === "error");
     expect(errFrame).toBeDefined();
-    expect(errFrame!.data).toEqual({
+    expect(must(errFrame, "errFrame").data).toEqual({
       detail: "Failed to stream AI chat message",
       code: "INTERNAL_SERVER_ERROR",
     });
-    expect(JSON.stringify(errFrame!.data)).not.toContain("db exploded");
+    expect(JSON.stringify(must(errFrame, "errFrame").data)).not.toContain("db exploded");
   });
 
   it("aborts runChatTurn and stops writing on client disconnect", async () => {
@@ -382,19 +382,19 @@ describe("POST /api/ai/chat/stream", () => {
   });
 
   it("passes the service's public event name through without a rename layer", async () => {
-    mockTurn(async ({ onEvent }) => {
+    mockTurn(({ onEvent }) => {
       onEvent({
         type: "tool_result",
         data: { message: { id: "t1", role: "tool", content: "" } },
       });
-      return {
+      return Promise.resolve({
         conversation: { id: UUID },
         userMessage: { id: "u1" },
         toolMessages: [],
         assistantMessage: { id: "a1", content: "ok" },
         usage: {},
         iterations: 1,
-      };
+      });
     });
 
     const res = await api
@@ -446,7 +446,7 @@ describe("POST /api/ai/chat", () => {
       .expect(200);
 
     expect(runChatTurn).toHaveBeenCalledTimes(1);
-    const callArgs = runChatTurn.mock.calls[0]![0]!;
+    const callArgs = must(must(runChatTurn.mock.calls[0], "runChatTurn.mock.calls[0]")[0], "runChatTurn.mock.calls[0]![0]");
     expect(callArgs.streaming).toBeUndefined();
     expect(callArgs.message).toBe("hi");
     expect(res.body).toEqual(

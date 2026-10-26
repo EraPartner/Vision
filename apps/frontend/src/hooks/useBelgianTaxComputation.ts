@@ -1,3 +1,4 @@
+import { isRecord } from "@/lib/isRecord";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { taxKeys } from "@/lib/queryKeys";
@@ -40,8 +41,10 @@ function useSettledHousehold(
     return immediate ? household : settled;
 }
 
-const yearOfKey = (queryKey: readonly unknown[] | undefined) =>
-    (queryKey?.[2] as BelgianTaxHouseholdV2 | undefined)?.taxYear;
+const yearOfKey = (queryKey: readonly unknown[] | undefined) => {
+    const household = queryKey?.[2];
+    return isRecord(household) ? household.taxYear : undefined;
+};
 
 /**
  * Server computation of a household (POST /api/belgian-tax/compute), debounced while it is
@@ -59,7 +62,9 @@ export function useHouseholdComputation(
     const query = useQuery({
         queryKey: taxKeys.compute(settled),
         queryFn: ({ signal }) =>
-            computeBelgianTax(settled as BelgianTaxHouseholdV2, signal),
+            settled
+                ? computeBelgianTax(settled, signal)
+                : Promise.reject(new Error("No household to compute")),
         enabled: settled != null,
         staleTime: Infinity,
         retry: 1,
@@ -115,7 +120,7 @@ export function useTaxYearFigures(year: number): TaxYearFiguresView {
     if (frozenCalculation)
         return {
             calculation: frozenCalculation,
-            householdResult: meta?.frozenHouseholdResult ?? null,
+            householdResult: meta.frozenHouseholdResult ?? null,
             isPending: false,
             isComputing: false,
             error: null,

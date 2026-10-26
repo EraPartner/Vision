@@ -1,4 +1,5 @@
 import { getDaysInMonth } from "date-fns";
+import type { AppPath } from "@/lib/routes";
 import type { CategoryId } from "@vision/types/brands";
 
 export type TransactionDrillValueMode =
@@ -30,7 +31,7 @@ export function buildTransactionDrillUrl({
     valueMode = "absolute",
     label,
     uncategorised,
-}: TransactionDrillParams): string {
+}: TransactionDrillParams): AppPath {
     const params = new URLSearchParams();
 
     if (categoryId != null) params.set("category_id", String(categoryId));

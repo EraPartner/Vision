@@ -17,16 +17,22 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     ACTIVITY_KINDS,
     PENSION_KINDS,
-    type ActivityKind,
     type ForfaitCategory,
     type HouseholdPartner,
     type IncomeActivity,
-    type PensionKind,
 } from "@/lib/belgianTax/householdTypes";
 import type { ProfessionalExpenseMethod } from "@/lib/belgianTax";
+import { enumGuard, listGuard, onGuarded } from "@/lib/enumGuard";
 import type { PartnerStepProps } from "./types";
 import { ProfileNumberField } from "./ProfileNumberField";
 import { PartnerSwitcher } from "./PartnerSwitcher";
+
+const isActivityKind = listGuard(ACTIVITY_KINDS);
+const isPensionKind = listGuard(PENSION_KINDS);
+const isExpenseMethod = enumGuard<ProfessionalExpenseMethod>({
+    lump_sum: true,
+    actual: true,
+});
 import {
     type ActivityPatch,
     addActivity,
@@ -95,9 +101,9 @@ function ActivityEditor({
                     </Label>
                     <Select
                         value={activity.kind}
-                        onValueChange={(kind) =>
-                            onChange({ kind: kind as ActivityKind })
-                        }
+                        onValueChange={onGuarded(isActivityKind, (kind) =>
+                            onChange({ kind }),
+                        )}
                     >
                         <SelectTrigger id={`${id}-kind`} className="w-full">
                             <SelectValue />
@@ -137,7 +143,7 @@ function ActivityEditor({
                         onValueChange={(value) => {
                             const pensionKind = fromSelectValue(value);
                             onChange({
-                                pensionKind: pensionKind ? (pensionKind as PensionKind) : undefined,
+                                pensionKind: isPensionKind(pensionKind) ? pensionKind : undefined,
                             });
                         }}
                     >
@@ -265,9 +271,9 @@ function ExpenseChoiceEditor({
                         : t("tax.profile.section.professionalExpenses.title")
                 }
                 value={method}
-                onValueChange={(v) =>
-                    onChange(v as ProfessionalExpenseMethod, actualAmount)
-                }
+                onValueChange={onGuarded(isExpenseMethod, (next) =>
+                    onChange(next, actualAmount),
+                )}
             >
                 <ChoiceRow
                     id={`${prefix}-lump`}

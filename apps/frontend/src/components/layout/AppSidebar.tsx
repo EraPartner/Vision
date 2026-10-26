@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef } from "react";
-import { NavLink, useLocation } from "react-router";
+import { useLocation } from "react-router";
+import { AppNavLink } from "@/lib/appNavigation";
 import { PanelLeftClose, Search, Settings } from "lucide-react";
 import {
     Sidebar,
@@ -319,7 +320,13 @@ function NavMenuItem({ item, collapsed, pathname, onHover }: NavMenuItemProps) {
 
     // A long sidebar scrolls; the page the user is on must be in view.
     useEffect(() => {
-        if (isActive) linkRef.current?.scrollIntoView?.({ block: "nearest" });
+        // jsdom does not implement scrollIntoView.
+        if (isActive)
+            (
+                linkRef.current as Partial<
+                    Pick<HTMLAnchorElement, "scrollIntoView">
+                > | null
+            )?.scrollIntoView?.({ block: "nearest" });
     }, [isActive]);
 
     return (
@@ -329,7 +336,7 @@ function NavMenuItem({ item, collapsed, pathname, onHover }: NavMenuItemProps) {
                 isActive={isActive}
                 tooltip={withGoToHint(title, item.url)}
             >
-                <NavLink
+                <AppNavLink
                     ref={linkRef}
                     to={item.url}
                     onMouseEnter={() => onHover(item.url)}
@@ -358,7 +365,7 @@ function NavMenuItem({ item, collapsed, pathname, onHover }: NavMenuItemProps) {
                             </span>
                         )
                     )}
-                </NavLink>
+                </AppNavLink>
             </SidebarMenuButton>
         </SidebarMenuItem>
     );

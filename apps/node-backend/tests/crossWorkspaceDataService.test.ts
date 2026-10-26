@@ -11,7 +11,7 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion({
     // Identity conversion keeps the arithmetic checkable; per-currency behaviour is
     // exercised by asserting it is only called for non-target currencies.
-    convertToCurrency: vi.fn(async (amount) => amount),
+    convertToCurrency: vi.fn((amount) => Promise.resolve(amount)),
   }),
 );
 

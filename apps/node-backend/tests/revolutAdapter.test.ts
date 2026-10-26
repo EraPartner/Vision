@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import { createAdapter } from "../src/services/importPipeline/adapters/index.ts";
 
 import { useTempCSV } from "./helpers/tempFile.ts";
+import { must } from "./helpers/must.ts";
 
 const writeTempCSV = useTempCSV("revolut");
 
@@ -33,21 +34,21 @@ describe("RevolutAdapter", () => {
   it("detects Current account type", async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[0]!.bankAccount).toBe("REVOLUT CURRENT");
-    expect(txns[1]!.bankAccount).toBe("REVOLUT CURRENT");
-    expect(txns[2]!.bankAccount).toBe("REVOLUT CURRENT");
+    expect(must(txns[0], "txns[0]").bankAccount).toBe("REVOLUT CURRENT");
+    expect(must(txns[1], "txns[1]").bankAccount).toBe("REVOLUT CURRENT");
+    expect(must(txns[2], "txns[2]").bankAccount).toBe("REVOLUT CURRENT");
   });
 
   it("detects Savings account type", async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[3]!.bankAccount).toBe("REVOLUT SAVINGS");
+    expect(must(txns[3], "txns[3]").bankAccount).toBe("REVOLUT SAVINGS");
   });
 
   it("parses transaction fields correctly", async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
     const txns = await parse(tmpPath);
-    const txn1 = txns[0]!;
+    const txn1 = must(txns[0], "txns[0]");
     expect(txn1.recipient).toContain("SARDINHA RABINA");
     expect(txn1.amount).toBe(-39.5);
     expect(txn1.currency).toBe("EUR");
@@ -58,17 +59,17 @@ describe("RevolutAdapter", () => {
   it("extracts transaction types in comment", async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[0]!.comment).toContain("Type: Card Payment");
-    expect(txns[1]!.comment).toContain("Type: Transfer");
-    expect(txns[2]!.comment).toContain("Type: ATM");
-    expect(txns[3]!.comment).toContain("Type: Exchange");
+    expect(must(txns[0], "txns[0]").comment).toContain("Type: Card Payment");
+    expect(must(txns[1], "txns[1]").comment).toContain("Type: Transfer");
+    expect(must(txns[2], "txns[2]").comment).toContain("Type: ATM");
+    expect(must(txns[3], "txns[3]").comment).toContain("Type: Exchange");
   });
 
   it("includes fee in comment when non-zero", async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[0]!.comment).not.toContain("Fee:");
-    expect(txns[2]!.comment).toContain("Fee: 2.50 EUR");
+    expect(must(txns[0], "txns[0]").comment).not.toContain("Fee:");
+    expect(must(txns[2], "txns[2]").comment).toContain("Fee: 2.50 EUR");
   });
 
   it("preserves sub-cent fee precision in the provenance comment", async () => {
@@ -78,35 +79,35 @@ describe("RevolutAdapter", () => {
     );
     tmpPath = writeTempCSV(csv);
     const txns = await parse(tmpPath);
-    expect(txns[2]!.comment).toContain("Fee: 2.1234 EUR");
+    expect(must(txns[2], "txns[2]").comment).toContain("Fee: 2.1234 EUR");
   });
 
   it("builds memo as Type - Product", async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[0]!.memo).toBe("CARD PAYMENT - CURRENT");
-    expect(txns[1]!.memo).toBe("TRANSFER - CURRENT");
-    expect(txns[3]!.memo).toBe("EXCHANGE - SAVINGS");
+    expect(must(txns[0], "txns[0]").memo).toBe("CARD PAYMENT - CURRENT");
+    expect(must(txns[1], "txns[1]").memo).toBe("TRANSFER - CURRENT");
+    expect(must(txns[3], "txns[3]").memo).toBe("EXCHANGE - SAVINGS");
   });
 
   it("parses amounts correctly, netting the fee", async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[0]!.amount).toBe(-39.5);
-    expect(txns[1]!.amount).toBe(50.0);
+    expect(must(txns[0], "txns[0]").amount).toBe(-39.5);
+    expect(must(txns[1], "txns[1]").amount).toBe(50.0);
     // Revolut's Amount excludes Fee — the €100 ATM withdrawal with a €2.50
     // fee moves −102.50, which is what reconciles with the Balance column.
-    expect(txns[2]!.amount).toBe(-102.5);
-    expect(txns[3]!.amount).toBe(500.0);
+    expect(must(txns[2], "txns[2]").amount).toBe(-102.5);
+    expect(must(txns[3], "txns[3]").amount).toBe(500.0);
   });
 
   it("parses balances correctly", async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[0]!.balance).toBe(113.74);
-    expect(txns[1]!.balance).toBe(153.24);
-    expect(txns[2]!.balance).toBe(103.24);
-    expect(txns[3]!.balance).toBe(600.0);
+    expect(must(txns[0], "txns[0]").balance).toBe(113.74);
+    expect(must(txns[1], "txns[1]").balance).toBe(153.24);
+    expect(must(txns[2], "txns[2]").balance).toBe(103.24);
+    expect(must(txns[3], "txns[3]").balance).toBe(600.0);
   });
 
   it("normalizes text to uppercase", async () => {
@@ -132,8 +133,8 @@ describe("RevolutAdapter", () => {
   it("extracts currency correctly", async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[0]!.currency).toBe("EUR");
-    expect(txns[3]!.currency).toBe("USD");
+    expect(must(txns[0], "txns[0]").currency).toBe("EUR");
+    expect(must(txns[3], "txns[3]").currency).toBe("USD");
   });
 
   it("normalizes ISO currency cells, nulls free text, and preserves fee provenance", async () => {
@@ -143,9 +144,9 @@ describe("RevolutAdapter", () => {
     ).replace("2.50,EUR,COMPLETED,103.24", "2.50,euro,COMPLETED,103.24");
     tmpPath = writeTempCSV(csv);
     const txns = await parse(tmpPath);
-    expect(txns[0]!.currency).toBe("USD");
-    expect(txns[2]!.currency).toBeNull();
-    expect(txns[2]!.comment).toContain("Fee: 2.50 euro");
+    expect(must(txns[0], "txns[0]").currency).toBe("USD");
+    expect(must(txns[2], "txns[2]").currency).toBeNull();
+    expect(must(txns[2], "txns[2]").comment).toContain("Fee: 2.50 euro");
   });
 
   it("has no recipient account or address", async () => {
@@ -197,6 +198,6 @@ Transfer,Current,2026-02-01 10:00:00,2026-02-01 10:05:30,Test,-50.00,0.00,EUR,CO
     tmpPath = writeTempCSV(csv);
     const txns = await parse(tmpPath);
     expect(txns).toHaveLength(1);
-    expect(txns[0]!.balance).toBe(0.0);
+    expect(must(txns[0], "txns[0]").balance).toBe(0.0);
   });
 });

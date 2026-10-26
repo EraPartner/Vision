@@ -15,6 +15,7 @@ import type {
   AnalysisVisualPlanSource,
 } from "@vision/types/analysis";
 import { partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 /** The visual branch of runtimeRequest's result (the only one with `limit`). */
 type VisualRuntimeRequest = Extract<
@@ -106,7 +107,7 @@ describe("saved analysis definitions", () => {
     const source = definition.source as AnalysisCustomSqlSource;
     expect(source.text).toBe(sql);
     expect(source.visualConversion.status).toBe("unsupported");
-    expect(source.visualOrigin!.datasetId).toBe("accounts");
+    expect(must(source.visualOrigin, "source.visualOrigin").datasetId).toBe("accounts");
   });
 
   it("records joined account fields against the accounts dataset", () => {
@@ -139,12 +140,12 @@ describe("saved analysis definitions", () => {
     });
 
     const source = definition.source as AnalysisVisualPlanSource;
-    expect(source.select[0]!.source).toEqual({
+    expect(must(source.select[0], "source.select[0]").source).toEqual({
       kind: "field",
       datasetId: "accounts",
       columnId: "display_name",
     });
-    expect(source.filters[0]!.left).toEqual({
+    expect(must(source.filters[0], "source.filters[0]").left).toEqual({
       kind: "field",
       datasetId: "accounts",
       columnId: "display_name",
@@ -193,7 +194,7 @@ describe("saved analysis definitions", () => {
         },
       ],
     });
-    expect(definition.assumptions[0]!.id).toBe("growth");
+    expect(must(definition.assumptions[0], "definition.assumptions[0]").id).toBe("growth");
     expect(definition.calculations.at(-1)).toMatchObject({
       id: "adjusted",
       kind: "formula",

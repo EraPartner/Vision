@@ -101,7 +101,10 @@ export function SymbolSearchBox({
         const nextOption = resultOptions[nextIndex];
         if (!nextOption) return;
         setActiveOptionId(nextOption.id);
-        nextOption.scrollIntoView?.({ block: "nearest" });
+        // jsdom does not implement scrollIntoView.
+        (
+            nextOption as Partial<Pick<HTMLElement, "scrollIntoView">>
+        ).scrollIntoView?.({ block: "nearest" });
     };
 
     return (

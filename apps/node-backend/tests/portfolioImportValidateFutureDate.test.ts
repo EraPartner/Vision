@@ -15,6 +15,7 @@ vi.mock("../src/database/connection.ts", () => mockConnection());
 
 import { query as rawQuery } from "../src/database/connection.ts";
 import { validateBatch } from "../src/services/portfolioImportPipeline/validate.ts";
+import { must } from "./helpers/must.ts";
 
 /** The structural slice of pg's query surface these fakes implement. */
 type FakeQuery = (
@@ -58,10 +59,10 @@ function pendingWireRow(fixture: Record<string, unknown>) {
 
 /** Wire query() to respond by SQL shape, returning the given pending rows. */
 function wireQuery(pending: Record<string, unknown>[]) {
-  query.mockImplementation(async (sql) => {
-    if (/^update "portfolio_import_batches"/.test(sql)) return { rows: [] };
+  query.mockImplementation((sql) => {
+    if (/^update "portfolio_import_batches"/.test(sql)) return Promise.resolve({ rows: [] });
     if (sql.includes('from "portfolio_import_batches"')) {
-      return {
+      return Promise.resolve({
         rows: [
           {
             default_asset_class: null,
@@ -72,11 +73,11 @@ function wireQuery(pending: Record<string, unknown>[]) {
             account_import_identity: null,
           },
         ],
-      };
+      });
     }
     if (sql.includes('from "portfolio_import_staging_rows"'))
-      return { rows: pending.map(pendingWireRow) };
-    return { rows: [] }; // UNNEST update + counter updates
+      return Promise.resolve({ rows: pending.map(pendingWireRow) });
+    return Promise.resolve({ rows: [] }); // UNNEST update + counter updates
   });
 }
 
@@ -140,7 +141,7 @@ describe("validateBatch — future-dated rows", () => {
 
     const update = findUnnestUpdate();
     expect(update).toBeTruthy();
-    const [, [ids, statuses, , , , , , , errorMessages]] = update!;
+    const [, [ids, statuses, , , , , , , errorMessages]] = must(update, "update");
     const idx1 = ids.indexOf("1");
     const idx2 = ids.indexOf("2");
     expect(statuses[idx1]).toBe("error");
@@ -168,7 +169,7 @@ describe("validateBatch — future-dated rows", () => {
 
     expect(result).toEqual({ validated: 2, errors: 0, duplicates: 0 });
     const [, [, statuses, , , hashes, sourceHashes, , occurrences]] =
-      findUnnestUpdate()!;
+      must(findUnnestUpdate(), "findUnnestUpdate result");
     expect(statuses).toEqual(["validated", "validated"]);
     expect(sourceHashes[0]).toBe(sourceHashes[1]);
     expect(hashes[0]).not.toBe(hashes[1]);
@@ -195,7 +196,7 @@ describe("validateBatch — future-dated rows", () => {
       errors: 0,
       duplicates: 0,
     });
-    const [, [, , , , , , , occurrences]] = findUnnestUpdate()!;
+    const [, [, , , , , , , occurrences]] = must(findUnnestUpdate(), "findUnnestUpdate result");
     expect(occurrences).toEqual([2]);
   });
 });

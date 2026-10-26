@@ -24,7 +24,7 @@ export function useOnboarding(): UseOnboardingResult {
         apiClient
             .getSetting(ONBOARDING_KEY)
             .then((result) => {
-                if (!cancelled) setIsComplete(result?.value === true);
+                if (!cancelled) setIsComplete(result.value === true);
             })
             .catch(() => {
                 if (!cancelled) setIsComplete(false);
@@ -42,7 +42,7 @@ export function useOnboarding(): UseOnboardingResult {
         apiClient
             .saveSetting(ONBOARDING_KEY, true)
             .then(() => clearOnboardingDraft())
-            .catch((err) => {
+            .catch((err: unknown) => {
                 logger.error("Failed to persist onboarding completion", err);
                 toast.error(t("onboarding.persist.failed"));
             });
@@ -51,7 +51,7 @@ export function useOnboarding(): UseOnboardingResult {
     const reset = useCallback(() => {
         clearOnboardingDraft();
         setIsComplete(false);
-        apiClient.saveSetting(ONBOARDING_KEY, false).catch((err) => {
+        apiClient.saveSetting(ONBOARDING_KEY, false).catch((err: unknown) => {
             logger.error("Failed to persist onboarding reset", err);
             toast.error(t("onboarding.persist.failed"));
         });

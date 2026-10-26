@@ -1,10 +1,12 @@
 import { z } from "zod";
+import { stringifyCell } from "../cellText.ts";
 import { ValidationError } from "../../middleware/errorHandler.ts";
 import {
   CLASSIC_PORTFOLIOS,
   foldTargetSleeves,
   normalizeWeights,
 } from "./allocationAnalytics.ts";
+import { isRecord } from "../../lib/typeGuards.ts";
 
 const MODEL_PORTFOLIOS: Readonly<
   Record<string, Readonly<Record<string, number>>>
@@ -16,9 +18,7 @@ const MODEL_PORTFOLIOS: Readonly<
 const targetWeightsSchema = z.unknown().transform((value, ctx) => {
   const weights: Record<string, number> = {};
   // Callers only parse values already checked to be objects.
-  for (const [sleeve, weight] of Object.entries(
-    value as Record<string, unknown>,
-  )) {
+  for (const [sleeve, weight] of Object.entries(isRecord(value) ? value : {})) {
     const number = Number(weight);
     if (!Number.isFinite(number) || number < 0) {
       ctx.addIssue({
@@ -57,7 +57,7 @@ export function resolveRebalanceTargetWeights(
     }
     rawTarget = result.data;
   } else if (body.model) {
-    const model = String(body.model);
+    const model = stringifyCell(body.model);
     // Own keys only: "toString" or "constructor" would otherwise resolve to
     // Object.prototype members and slip past the unknown-model check.
     rawTarget = Object.hasOwn(MODEL_PORTFOLIOS, model)
@@ -65,7 +65,7 @@ export function resolveRebalanceTargetWeights(
       : undefined;
     if (!rawTarget) {
       throw new ValidationError(
-        `Unknown model '${body.model}' (expected one of: ${Object.keys(CLASSIC_PORTFOLIOS).join(", ")})`,
+        `Unknown model '${model}' (expected one of: ${Object.keys(CLASSIC_PORTFOLIOS).join(", ")})`,
       );
     }
   } else {

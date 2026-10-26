@@ -22,18 +22,18 @@ import splitsRouter from "../src/routes/splits.ts";
 import { routeAgent } from "./helpers/routeApp.ts";
 import { bodyAt } from "./helpers/responseBody.ts";
 import {
-  asRecipientId,
-} from "@vision/types/brands";
+  asRecipientId, type RecipientId, type TransactionId } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const MARK = `owed_totals_${process.pid}`;
 
 async function insertRecipient(name: string): Promise<number> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: RecipientId }>(
     `INSERT INTO recipients (name, normalized_name) VALUES ($1, $1) RETURNING id`,
     [`${MARK}_${name}`],
   );
-  return rows[0].id;
+  return must(rows[0], "rows[0]").id;
 }
 
 /** A transaction of `amount` in `currency` with one split owed by `owedBy`. */
@@ -43,13 +43,13 @@ async function insertSplit(
   amount: number,
   paid = 0,
 ) {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: TransactionId }>(
     `INSERT INTO transactions (date, amount, memo, currency, recipient_id)
      VALUES (CURRENT_DATE, $1, $2, $3, $4) RETURNING id`,
     [-amount, MARK, currency, owedBy],
   );
   const split = await splitService.createSplitAtomic({
-    transaction_id: rows[0].id,
+    transaction_id: must(rows[0], "rows[0]").id,
     recipient_id: asRecipientId(owedBy),
     amount,
     note: null,
@@ -68,7 +68,7 @@ describeDb("owed totals in one currency (real DB)", () => {
   });
 
   beforeEach(async () => {
-    const pool = getTestPool()!;
+    const pool = must(getTestPool(), "getTestPool()");
     await pool.query("DELETE FROM transaction_splits");
     await pool.query("DELETE FROM transactions WHERE memo = $1", [MARK]);
     await pool.query("DELETE FROM recipients WHERE normalized_name LIKE $1", [

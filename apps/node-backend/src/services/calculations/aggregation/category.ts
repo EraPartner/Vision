@@ -17,7 +17,7 @@ import {
 
 export async function computeCategoryBreakdown({
   targetCurrency = "EUR",
-  ancestorCategoryId = undefined,
+  ancestorCategoryId,
   ...filters
 }: CategoryPivotOptions & {
   targetCurrency?: string | undefined;

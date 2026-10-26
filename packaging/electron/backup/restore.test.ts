@@ -15,7 +15,7 @@ import {
   runRestore,
 } from "./restore";
 
-test("encrypted bundle authentication failures retain the UI sentinel", async (t) => {
+void test("encrypted bundle authentication failures retain the UI sentinel", async (t) => {
   const workDir = fs.mkdtempSync(
     path.join(os.tmpdir(), "vision-restore-pass-"),
   );
@@ -35,7 +35,7 @@ test("encrypted bundle authentication failures retain the UI sentinel", async (t
   );
 });
 
-test("restore environment resolves the active native runtime", async () => {
+void test("restore environment resolves the active native runtime", async () => {
   const nativeRuntime = { mode: "native" };
   init({
     workDir: () => "/path/that/must/not/be/read",
@@ -47,7 +47,7 @@ test("restore environment resolves the active native runtime", async () => {
   assert.equal(resolved.nativeRuntime, nativeRuntime);
 });
 
-test("restore fails closed without a native runtime", async () => {
+void test("restore fails closed without a native runtime", async () => {
   init({ runtimeProvider: () => null });
 
   await assert.rejects(resolveDatabaseEnvironment(), (error) => {
@@ -60,7 +60,7 @@ test("restore fails closed without a native runtime", async () => {
   });
 });
 
-test("restore rejects a backup created on a newer Vision schema", () => {
+void test("restore rejects a backup created on a newer Vision schema", () => {
   assert.throws(
     () =>
       assertBackupSchemaCompatible(
@@ -75,7 +75,7 @@ test("restore rejects a backup created on a newer Vision schema", () => {
   );
 });
 
-test("restore accepts equal and older Vision schema revisions", () => {
+void test("restore accepts equal and older Vision schema revisions", () => {
   assert.doesNotThrow(() =>
     assertBackupSchemaCompatible(
       "0071_current_revision",
@@ -90,13 +90,13 @@ test("restore accepts equal and older Vision schema revisions", () => {
   );
 });
 
-test("restore does not reject schema identifiers that cannot be ordered", () => {
+void test("restore does not reject schema identifiers that cannot be ordered", () => {
   assert.doesNotThrow(() =>
     assertBackupSchemaCompatible("hash_revision", "0071_current_revision"),
   );
 });
 
-test("a bundle whose metadata.json is not an object is rejected as corrupt", async (t) => {
+void test("a bundle whose metadata.json is not an object is rejected as corrupt", async (t) => {
   const workDir = fs.mkdtempSync(
     path.join(os.tmpdir(), "vision-restore-meta-"),
   );
@@ -130,10 +130,10 @@ function initRuntime(currentHead: string, restored: string[]): void {
   init({
     runtimeProvider: () => ({
       mode: "native",
-      getSchemaHead: async () => currentHead,
-      activateRestoredDatabase: async () => {
+      getSchemaHead: () => Promise.resolve(currentHead),
+      activateRestoredDatabase: () => {
         restored.push("activateRestoredDatabase");
-        throw new Error("restore must not be reached");
+        return Promise.reject(new Error("restore must not be reached"));
       },
     }),
   });
@@ -173,7 +173,7 @@ async function writeBundle(
   return bundlePath;
 }
 
-test("restore refuses a plain dump without a migration ledger", async (t) => {
+void test("restore refuses a plain dump without a migration ledger", async (t) => {
   const restored: string[] = [];
   initRuntime("0001_baseline", restored);
   const dumpPath = await writeDump(t, PRE_BASELINE_DUMP);
@@ -182,7 +182,7 @@ test("restore refuses a plain dump without a migration ledger", async (t) => {
   assert.deepEqual(restored, []);
 });
 
-test("restore refuses a bundle whose dump predates the baseline", async (t) => {
+void test("restore refuses a bundle whose dump predates the baseline", async (t) => {
   const restored: string[] = [];
   initRuntime("0001_baseline", restored);
   const bundlePath = await writeBundle(
@@ -198,7 +198,7 @@ test("restore refuses a bundle whose dump predates the baseline", async (t) => {
   assert.deepEqual(restored, []);
 });
 
-test("restore rejects a dump whose highest migration is newer than this install", async (t) => {
+void test("restore rejects a dump whose highest migration is newer than this install", async (t) => {
   const restored: string[] = [];
   initRuntime("0001_baseline", restored);
   const dumpPath = await writeDump(
@@ -217,7 +217,7 @@ test("restore rejects a dump whose highest migration is newer than this install"
   assert.deepEqual(restored, []);
 });
 
-test("restore rejects a bundle whose metadata disagrees with its dump", async (t) => {
+void test("restore rejects a bundle whose metadata disagrees with its dump", async (t) => {
   const restored: string[] = [];
   initRuntime("0002_next", restored);
   const bundlePath = await writeBundle(

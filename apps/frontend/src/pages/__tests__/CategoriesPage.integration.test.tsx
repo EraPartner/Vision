@@ -145,7 +145,7 @@ describe("CategoriesPage hierarchy", () => {
             expect(success).toHaveBeenCalledWith(
                 "FOOD marked inactive",
                 expect.objectContaining({
-                    action: expect.objectContaining({ label: "Undo" }),
+                    action: expect.objectContaining({ label: "Undo" }) as unknown,
                 }),
             ),
         );

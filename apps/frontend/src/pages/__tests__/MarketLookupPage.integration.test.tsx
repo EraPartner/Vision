@@ -550,14 +550,14 @@ describe("MarketLookupPage (integration)", () => {
             await user.click(screen.getByRole("radio", { name: /^5y$/i }));
             await waitFor(() => expect(requests).toContain("5y"));
             let params = new URLSearchParams(
-                screen.getByTestId("location").textContent ?? "",
+                screen.getByTestId("location").textContent,
             );
             expect(params.get("range")).toBe("5y");
             expect(params.get("symbol")).toBe("AAPL");
             expect(params.get("context")).toBe("retained");
             await user.click(screen.getByRole("radio", { name: /^1m$/i }));
             params = new URLSearchParams(
-                screen.getByTestId("location").textContent ?? "",
+                screen.getByTestId("location").textContent,
             );
             expect(params.has("range")).toBe(false);
             expect(params.get("symbol")).toBe("AAPL");

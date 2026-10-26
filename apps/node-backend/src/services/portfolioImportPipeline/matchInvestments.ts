@@ -154,7 +154,7 @@ export async function matchBatch({
     symbolRaw: string | null,
     nameRaw: string | null,
   ): InstrumentMatch => {
-    const symbol = String(symbolRaw || "").trim();
+    const symbol = (symbolRaw || "").trim();
     if (symbol) {
       const entry =
         symbolMatches.get(symbol.toLowerCase()) ??
@@ -168,7 +168,7 @@ export async function matchBatch({
       }
       // Zero symbol and alias matches → fall through to the name path.
     }
-    const name = String(nameRaw || "").trim();
+    const name = (nameRaw || "").trim();
     if (name) {
       const entry = nameMatches.get(name.toLowerCase());
       if (entry && entry.count === 1)
@@ -251,7 +251,7 @@ async function resolveBySymbolBatch(
 ): Promise<Map<string, MatchCandidate>> {
   const symbols = new Set<string>();
   for (const row of rows) {
-    const symbol = String(row.symbol_raw || "").trim();
+    const symbol = (row.symbol_raw || "").trim();
     if (symbol) symbols.add(symbol.toLowerCase());
   }
   const map = new Map<string, MatchCandidate>();
@@ -261,7 +261,7 @@ async function resolveBySymbolBatch(
     activeInvestmentsByKey(sql<string>`LOWER(symbol)`, [...symbols]),
   );
   for (const { match_key, id, count } of keyRows) {
-    map.set(String(match_key), { id, count: Number(count) });
+    map.set(match_key, { id, count });
   }
   return map;
 }
@@ -276,13 +276,13 @@ export function providerAssetAlias(
     "symbol" | "name" | "asset_class" | "price_provider" | "price_provider_id"
   >,
 ): string | undefined {
-  const providerSymbol = String(investment.price_provider_id || "").trim();
+  const providerSymbol = (investment.price_provider_id || "").trim();
   if (
     investment.price_provider === "yahoo" &&
     investment.asset_class === "crypto"
   ) {
     const quoteSymbol =
-      providerSymbol || String(investment.symbol || "").trim();
+      providerSymbol || (investment.symbol || "").trim();
     const pair = /^([A-Z0-9]{2,10})-([A-Z]{3})$/.exec(
       quoteSymbol.toUpperCase(),
     );
@@ -297,7 +297,7 @@ export function providerAssetAlias(
       return base.toLowerCase();
   }
   if (investment.price_provider === "kinesis") {
-    const assetName = String(investment.name || investment.symbol || "")
+    const assetName = (investment.name || investment.symbol || "")
       .toLowerCase()
       .trim();
     const quoteSymbol =
@@ -322,7 +322,7 @@ async function resolveByProviderAliasBatch(
 ): Promise<Map<string, MatchCandidate>> {
   const symbols = new Set<string>();
   for (const row of rows) {
-    const symbol = String(row.symbol_raw || "")
+    const symbol = (row.symbol_raw || "")
       .trim()
       .toLowerCase();
     if (symbol && !symbolMatches.has(symbol)) symbols.add(symbol);
@@ -386,7 +386,7 @@ async function resolveByNameBatch(
 ): Promise<Map<string, MatchCandidate>> {
   const names = new Set<string>();
   for (const row of rows) {
-    const symbol = String(row.symbol_raw || "").trim();
+    const symbol = (row.symbol_raw || "").trim();
     // Skip rows resolved or blocked by an exact symbol or provider alias.
     if (
       symbol &&
@@ -394,7 +394,7 @@ async function resolveByNameBatch(
         aliasMatches.has(symbol.toLowerCase()))
     )
       continue;
-    const name = String(row.name_raw || "").trim();
+    const name = (row.name_raw || "").trim();
     if (name) names.add(name.toLowerCase());
   }
   const map = new Map<string, MatchCandidate>();
@@ -404,7 +404,7 @@ async function resolveByNameBatch(
     activeInvestmentsByKey(sql<string>`LOWER(TRIM(name))`, [...names]),
   );
   for (const { match_key, id, count } of keyRows) {
-    map.set(String(match_key), { id, count: Number(count) });
+    map.set(match_key, { id, count });
   }
   return map;
 }

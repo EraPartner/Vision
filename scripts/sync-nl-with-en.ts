@@ -83,7 +83,7 @@ const pruned = Object.keys(nl).filter(
 fs.writeFileSync(nlPath, JSON.stringify(synced, null, 2) + "\n", "utf8");
 console.log(
   `Synced nl.json with en.json — added ${added} key(s) (fallback to English), ` +
-    `pruned ${pruned.length} orphan(s)${pruned.length ? `: ${pruned.join(", ")}` : ""}, ` +
+    `pruned ${pruned.length} orphan(s)${pruned.length > 0 ? `: ${pruned.join(", ")}` : ""}, ` +
     "keys ordered to match en.json.",
 );
 process.exit(0);

@@ -28,6 +28,7 @@ import {
   computeMetrics,
   computeHeatmap,
 } from "../src/services/portfolioPerformanceSnapshotService.ts";
+import { must } from "./helpers/must.ts";
 
 /** `query` as these tests drive it: SQL text in, a bare `{ rows }` result out. */
 const query = vi.mocked(rawQuery) as unknown as Mock<
@@ -80,70 +81,70 @@ function mockSnapshotQueries({
   fxHistory = [],
   fxNeutralColumn = true,
 }: SnapshotQueryFixtures = {}) {
-  query.mockImplementation(async (rawSql) => {
+  query.mockImplementation((rawSql) => {
     // Lower-cased without identifier quotes: matches hand-written and
     // query-builder SQL alike.
-    const sql = String(rawSql).toLowerCase().replace(/"/g, "");
+    const sql = rawSql.toLowerCase().replace(/"/g, "");
     if (sql.includes("information_schema.columns")) {
-      return { rows: fxNeutralColumn ? [{ "?column?": 1 }] : [] };
+      return Promise.resolve({ rows: fxNeutralColumn ? [{ "?column?": 1 }] : [] });
     }
     if (sql.includes("select min(first_date)::date as first_data_date")) {
-      return { rows: [pgFirstDate(firstDate)] };
+      return Promise.resolve({ rows: [pgFirstDate(firstDate)] });
     }
     if (sql.includes("from investments") && sql.includes("asset_class in")) {
-      return {
+      return Promise.resolve({
         rows: investments.map((row) => pgNumeric(row, ["current_price"])),
-      };
+      });
     }
     if (
       sql.includes("from investments") &&
       sql.includes("asset_class::text = any")
     ) {
-      return {
+      return Promise.resolve({
         rows: nonUnitInvestments.map((row) =>
           pgNumeric(row, ["current_price", "interest_rate"]),
         ),
-      };
+      });
     }
     if (
       sql.includes("from portfolio_transactions pt") &&
       sql.includes("order by events.date")
     ) {
-      return { rows: transactions.map(toPgMathTxRow) };
+      return Promise.resolve({ rows: transactions.map(toPgMathTxRow) });
     }
     if (sql.includes("from asset_price_history")) {
-      return { rows: prices.map((row) => pgNumeric(row, ["close_price"])) };
+      return Promise.resolve({ rows: prices.map((row) => pgNumeric(row, ["close_price"])) });
     }
     if (sql.includes("from belgian_inflation_rates")) {
-      return {
+      return Promise.resolve({
         rows: inflation.map((row) => pgNumeric(row, ["monthly_rate"])),
-      };
+      });
     }
     if (sql.includes("from exchange_rates")) {
       if (sql.includes("rate_date >=")) {
-        return {
+        return Promise.resolve({
           rows: fxHistory.map((row) => pgNumeric(row, ["rate_to_eur"])),
-        };
+        });
       }
-      if (fxRates instanceof Error) throw fxRates;
-      return {
+      if (fxRates instanceof Error) return Promise.reject(fxRates);
+      return Promise.resolve({
         rows: fxRates.map((row) => pgNumeric(row, ["rate_to_eur"])),
-      };
+      });
     }
     if (sql.includes("delete from portfolio_performance_snapshots")) {
-      return { rows: [] };
+      return Promise.resolve({ rows: [] });
     }
     if (sql.includes("insert into portfolio_performance_snapshots")) {
-      return { rows: [] };
+      return Promise.resolve({ rows: [] });
     }
     if (sql.includes("select * from portfolio_performance_snapshots")) {
-      return { rows: [] };
+      return Promise.resolve({ rows: [] });
     }
     if (
       sql.includes("from portfolio_performance_snapshots") &&
       sql.includes("snapshot_date >=")
     ) {
-      return {
+      return Promise.resolve({
         rows: [
           pgSnapshot({
             snapshot_date: "2026-01-01",
@@ -152,9 +153,9 @@ function mockSnapshotQueries({
             currency: "EUR",
           }),
         ],
-      };
+      });
     }
-    return { rows: [] };
+    return Promise.resolve({ rows: [] });
   });
 }
 
@@ -196,7 +197,7 @@ describe("portfolioPerformanceSnapshotService", () => {
     expect(
       query.mock.calls.some(([sql]) =>
         /(?:DELETE FROM|INSERT INTO) "?portfolio_performance_snapshots/i.test(
-          String(sql),
+          sql,
         ),
       ),
     ).toBe(false);
@@ -351,7 +352,7 @@ describe("portfolioPerformanceSnapshotService", () => {
       });
       if (units === "2") {
         const snapshots = await computeAndStoreSnapshots("EUR");
-        expect(snapshots[1]!.value).toBe(70);
+        expect(must(snapshots[1], "snapshots[1]").value).toBe(70);
       } else {
         await expect(computeAndStoreSnapshots("EUR")).rejects.toThrow(
           "Asset transfer exceeds source holdings",
@@ -423,8 +424,8 @@ describe("portfolioPerformanceSnapshotService", () => {
     const snapshots = await computeAndStoreSnapshots("EUR");
     expect(snapshots.map((row) => row.invested)).toEqual([150, 150, 50]);
     expect(snapshots.map((row) => row.value)).toEqual([200, 190, 90]);
-    expect(snapshots[1]!.value_fx_neutral).toBe(145);
-    expect(snapshots[2]!.value_fx_neutral).toBeCloseTo(59.29, 2);
+    expect(must(snapshots[1], "snapshots[1]").value_fx_neutral).toBe(145);
+    expect(must(snapshots[2], "snapshots[2]").value_fx_neutral).toBeCloseTo(59.29, 2);
   });
 
   it("returns empty snapshot list when no first data date exists", async () => {
@@ -443,7 +444,7 @@ describe("portfolioPerformanceSnapshotService", () => {
 
     expect(latest).toBeNull();
     expect(query).toHaveBeenCalledTimes(1);
-    expect(query.mock.calls[0]![1]?.[0]).toBe("EUR"); // the currency filter
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]?.[0]).toBe("EUR"); // the currency filter
   });
 
   it("stores snapshots with sell transactions and fx-rate based conversion", async () => {
@@ -482,11 +483,11 @@ describe("portfolioPerformanceSnapshotService", () => {
     const snapshots = await computeAndStoreSnapshots("EUR");
 
     expect(snapshots).toHaveLength(3);
-    expect(snapshots[0]!.invested).toBe(10);
-    expect(snapshots[1]!.invested).toBe(7.5);
-    expect(snapshots[1]!.value).toBe(10);
-    expect(snapshots[1]!.gain_loss).toBe(2.5);
-    expect(snapshots[1]!.return_pct).toBeCloseTo(33.333, 2);
+    expect(must(snapshots[0], "snapshots[0]").invested).toBe(10);
+    expect(must(snapshots[1], "snapshots[1]").invested).toBe(7.5);
+    expect(must(snapshots[1], "snapshots[1]").value).toBe(10);
+    expect(must(snapshots[1], "snapshots[1]").gain_loss).toBe(2.5);
+    expect(must(snapshots[1], "snapshots[1]").return_pct).toBeCloseTo(33.333, 2);
   });
 
   it("applies stock splits to historical units so value tracks the live summary", async () => {
@@ -526,11 +527,11 @@ describe("portfolioPerformanceSnapshotService", () => {
     const snapshots = await computeAndStoreSnapshots("EUR");
 
     expect(snapshots).toHaveLength(3);
-    expect(snapshots[0]!.value).toBe(100); // 10 × 10
-    expect(snapshots[1]!.value).toBe(100); // 20 × 5 (split applied)
-    expect(snapshots[2]!.value).toBe(100); // 20 × 5
-    expect(snapshots[0]!.invested).toBe(100);
-    expect(snapshots[2]!.invested).toBe(100); // split leaves invested unchanged
+    expect(must(snapshots[0], "snapshots[0]").value).toBe(100); // 10 × 10
+    expect(must(snapshots[1], "snapshots[1]").value).toBe(100); // 20 × 5 (split applied)
+    expect(must(snapshots[2], "snapshots[2]").value).toBe(100); // 20 × 5
+    expect(must(snapshots[0], "snapshots[0]").invested).toBe(100);
+    expect(must(snapshots[2], "snapshots[2]").invested).toBe(100); // split leaves invested unchanged
   });
 
   it("orders same-day buys before sells so an oversell cannot mint phantom units", async () => {
@@ -570,16 +571,16 @@ describe("portfolioPerformanceSnapshotService", () => {
     const snapshots = await computeAndStoreSnapshots("EUR");
 
     // Buy(5) applied before sell(8) → held clamps to 0, not 5 phantom units.
-    expect(snapshots[0]!.value).toBe(0);
-    expect(snapshots[2]!.value).toBe(0);
+    expect(must(snapshots[0], "snapshots[0]").value).toBe(0);
+    expect(must(snapshots[2], "snapshots[2]").value).toBe(0);
 
     // The source query also carries the sell-last ordering key.
     const txCall = query.mock.calls.find(
       ([sql]) =>
-        String(sql).includes("FROM portfolio_transactions pt") &&
-        String(sql).includes("ORDER BY"),
+        sql.includes("FROM portfolio_transactions pt") &&
+        sql.includes("ORDER BY"),
     );
-    expect(String(txCall![0])).toContain(
+    expect(must(txCall, "txCall")[0]).toContain(
       "CASE WHEN events.type = 'sell' THEN 1 ELSE 0 END",
     );
   });
@@ -635,13 +636,13 @@ describe("portfolioPerformanceSnapshotService", () => {
 
     // Account 1 clamps to zero after its oversell; account 2 keeps all five
     // units. A flat replay would incorrectly report only three units / EUR 30.
-    expect(snapshots[1]!.value).toBe(50);
-    expect(snapshots[2]!.value).toBe(50);
-    expect(snapshots[2]!.value_fx_neutral).toBe(50);
+    expect(must(snapshots[1], "snapshots[1]").value).toBe(50);
+    expect(must(snapshots[2], "snapshots[2]").value).toBe(50);
+    expect(must(snapshots[2], "snapshots[2]").value_fx_neutral).toBe(50);
     // The live cost-basis engine scales proceeds by consumed/requested units
     // when clamping an invalid oversell. Snapshot cash flow uses the same ratio.
-    expect(snapshots[2]!.invested).toBe(50);
-    expect(snapshots[2]!.gain_loss).toBe(0);
+    expect(must(snapshots[2], "snapshots[2]").invested).toBe(50);
+    expect(must(snapshots[2], "snapshots[2]").gain_loss).toBe(0);
   });
 
   it("reduces invested on return_of_capital without changing units/value", async () => {
@@ -678,9 +679,9 @@ describe("portfolioPerformanceSnapshotService", () => {
 
     const snapshots = await computeAndStoreSnapshots("EUR");
 
-    expect(snapshots[0]!.invested).toBe(100);
-    expect(snapshots[1]!.invested).toBe(70); // 100 − 30 returned
-    expect(snapshots[1]!.value).toBe(100); // units unchanged → value unchanged
+    expect(must(snapshots[0], "snapshots[0]").invested).toBe(100);
+    expect(must(snapshots[1], "snapshots[1]").invested).toBe(70); // 100 − 30 returned
+    expect(must(snapshots[1], "snapshots[1]").value).toBe(100); // units unchanged → value unchanged
   });
 
   it("keeps every sleeve and aggregate stable across mixed portfolio events", async () => {
@@ -830,12 +831,12 @@ describe("portfolioPerformanceSnapshotService", () => {
 
     const snapshots = await computeAndStoreSnapshots("EUR");
 
-    expect(snapshots[0]!.invested).toBeCloseTo(10000, 2);
-    expect(snapshots[0]!.value).toBeCloseTo(10000, 2);
+    expect(must(snapshots[0], "snapshots[0]").invested).toBeCloseTo(10000, 2);
+    expect(must(snapshots[0], "snapshots[0]").value).toBeCloseTo(10000, 2);
     // Day 2 onward: 2 000 of capital returned → both drop to 8 000.
-    expect(snapshots[1]!.invested).toBeCloseTo(8000, 2);
-    expect(snapshots[1]!.value).toBeCloseTo(8000, 2);
-    expect(snapshots[2]!.value).toBeCloseTo(8000, 2);
+    expect(must(snapshots[1], "snapshots[1]").invested).toBeCloseTo(8000, 2);
+    expect(must(snapshots[1], "snapshots[1]").value).toBeCloseTo(8000, 2);
+    expect(must(snapshots[2], "snapshots[2]").value).toBeCloseTo(8000, 2);
   });
 
   it("converts a foreign-currency holding with no stored fx rate at each day's historical rate", async () => {
@@ -875,13 +876,13 @@ describe("portfolioPerformanceSnapshotService", () => {
 
     expect(snapshots).toHaveLength(3);
     // Value uses the rate that applied on each day — NOT today's 0.90 everywhere.
-    expect(snapshots[0]!.value).toBe(80); // 100 USD × 0.80 (2026-01-01)
-    expect(snapshots[1]!.value).toBe(85); // 100 USD × 0.85 (2026-01-02)
+    expect(must(snapshots[0], "snapshots[0]").value).toBe(80); // 100 USD × 0.80 (2026-01-01)
+    expect(must(snapshots[1], "snapshots[1]").value).toBe(85); // 100 USD × 0.85 (2026-01-02)
     // Latest day uses the latest (is_latest) rate so it reconciles with /portfolio-summary.
-    expect(snapshots[2]!.value).toBe(90); // 100 USD × 0.90 (latest)
+    expect(must(snapshots[2], "snapshots[2]").value).toBe(90); // 100 USD × 0.90 (latest)
     // Invested reflects the buy-day rate (true cost), not today's — would be 90 if buggy.
-    expect(snapshots[0]!.invested).toBe(80);
-    expect(snapshots[2]!.invested).toBe(80);
+    expect(must(snapshots[0], "snapshots[0]").invested).toBe(80);
+    expect(must(snapshots[2], "snapshots[2]").invested).toBe(80);
   });
 
   it("computes the FX-neutral series locked at the cost-weighted purchase rate", async () => {
@@ -925,9 +926,9 @@ describe("portfolioPerformanceSnapshotService", () => {
 
     // The persisted INSERT carries the column when the migration is applied.
     const insertCall = query.mock.calls.find(([sql]) =>
-      String(sql).includes("INSERT INTO portfolio_performance_snapshots"),
+      sql.includes("INSERT INTO portfolio_performance_snapshots"),
     );
-    expect(String(insertCall![0])).toContain("value_fx_neutral");
+    expect(must(insertCall, "insertCall")[0]).toContain("value_fx_neutral");
   });
 
   it("keeps the average purchase rate unchanged across sells (FX-neutral)", async () => {
@@ -974,8 +975,8 @@ describe("portfolioPerformanceSnapshotService", () => {
 
     // Day 3: 5 units × 10 USD at today's 0.9 = 45 actual; at the remaining
     // position's purchase rate 0.8 = 40 neutral.
-    expect(snapshots[2]!.value).toBe(45);
-    expect(snapshots[2]!.value_fx_neutral).toBe(40);
+    expect(must(snapshots[2], "snapshots[2]").value).toBe(45);
+    expect(must(snapshots[2], "snapshots[2]").value_fx_neutral).toBe(40);
   });
 
   it("falls back from historical price to last known transaction price and current price", async () => {
@@ -1013,9 +1014,9 @@ describe("portfolioPerformanceSnapshotService", () => {
     const snapshots = await computeAndStoreSnapshots("EUR");
 
     // day 2: investment 1 uses historical price 12 (forward-filled), investment 2 uses last tx price 9.
-    expect(snapshots[1]!.value).toBe(54);
-    expect(snapshots[1]!.stocks_etfs_value).toBe(36);
-    expect(snapshots[1]!.crypto_value).toBe(18);
+    expect(must(snapshots[1], "snapshots[1]").value).toBe(54);
+    expect(must(snapshots[1], "snapshots[1]").stocks_etfs_value).toBe(36);
+    expect(must(snapshots[1], "snapshots[1]").crypto_value).toBe(18);
   });
 
   it("handles missing fx-rates query and still computes in target currency", async () => {
@@ -1039,8 +1040,8 @@ describe("portfolioPerformanceSnapshotService", () => {
     });
 
     const snapshots = await computeAndStoreSnapshots("EUR");
-    expect(snapshots[0]!.value).toBe(10);
-    expect(snapshots[0]!.invested).toBe(10);
+    expect(must(snapshots[0], "snapshots[0]").value).toBe(10);
+    expect(must(snapshots[0], "snapshots[0]").invested).toBe(10);
   });
 
   it("sanitizes isolated one-day spikes in computed values", async () => {
@@ -1070,8 +1071,8 @@ describe("portfolioPerformanceSnapshotService", () => {
     });
 
     const snapshots = await computeAndStoreSnapshots("EUR");
-    expect(snapshots[1]!.value).toBeGreaterThan(100);
-    expect(snapshots[1]!.value).toBeLessThan(101);
+    expect(must(snapshots[1], "snapshots[1]").value).toBeGreaterThan(100);
+    expect(must(snapshots[1], "snapshots[1]").value).toBeLessThan(101);
   });
 
   it("returns latest snapshot row when present", async () => {
@@ -1106,7 +1107,7 @@ describe("portfolioPerformanceSnapshotService", () => {
     const rows = await getSnapshots("2026-01-01", "2026-01-31", "EUR");
 
     expect(rows).toHaveLength(1);
-    expect(query.mock.calls[0]![1]).toEqual([
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([
       "EUR",
       "2026-01-01",
       "2026-01-31",
@@ -1131,7 +1132,7 @@ describe("portfolioPerformanceSnapshotService", () => {
       ],
     });
 
-    const row = (await getSnapshots("2026-01-01", "2026-01-31", "EUR"))[0]!;
+    const row = must((await getSnapshots("2026-01-01", "2026-01-31", "EUR"))[0], "getSnapshots result");
 
     expect(row.stocks_etfs_invested).toBe("0.000000");
     expect(row.crypto_invested).toBe("0.000000");
@@ -1175,10 +1176,10 @@ describe("portfolioPerformanceSnapshotService", () => {
 
     const expectedAccrued = 1000 * (5 / 100 / 365) * 2;
     const expectedValue = 1000 + expectedAccrued;
-    expect(snapshots[2]!.value).toBeCloseTo(expectedValue, 2);
-    expect(snapshots[2]!.cash_value).toBeCloseTo(expectedValue, 2);
+    expect(must(snapshots[2], "snapshots[2]").value).toBeCloseTo(expectedValue, 2);
+    expect(must(snapshots[2], "snapshots[2]").cash_value).toBeCloseTo(expectedValue, 2);
     // Critically: NOT the inv.current_price (9999) — that would be the pre-fix bug.
-    expect(snapshots[2]!.value).toBeLessThan(9999);
+    expect(must(snapshots[2], "snapshots[2]").value).toBeLessThan(9999);
   });
 
   it("values real-estate as runningInvested + cumulative appreciation, matching live summary", async () => {
@@ -1219,12 +1220,12 @@ describe("portfolioPerformanceSnapshotService", () => {
     const snapshots = await computeAndStoreSnapshots("EUR");
 
     // Day 1: buy only → 200000
-    expect(snapshots[0]!.value).toBeCloseTo(200000, 2);
+    expect(must(snapshots[0], "snapshots[0]").value).toBeCloseTo(200000, 2);
     // Day 2-3: buy + appreciation → 205000
-    expect(snapshots[1]!.value).toBeCloseTo(205000, 2);
-    expect(snapshots[2]!.value).toBeCloseTo(205000, 2);
+    expect(must(snapshots[1], "snapshots[1]").value).toBeCloseTo(205000, 2);
+    expect(must(snapshots[2], "snapshots[2]").value).toBeCloseTo(205000, 2);
     // Critically: NOT inv.current_price.
-    expect(snapshots[2]!.value).not.toBe(9999);
+    expect(must(snapshots[2], "snapshots[2]").value).not.toBe(9999);
   });
 
   it("resets fixed-income accrual clock when an interest payment is recorded", async () => {
@@ -1268,7 +1269,7 @@ describe("portfolioPerformanceSnapshotService", () => {
 
     // Day 3 accrues from day 2 (1 day), not from day 1 (2 days).
     const expectedAccrued = 1000 * (5 / 100 / 365) * 1;
-    expect(snapshots[2]!.value).toBeCloseTo(1000 + expectedAccrued, 2);
+    expect(must(snapshots[2], "snapshots[2]").value).toBeCloseTo(1000 + expectedAccrued, 2);
   });
 
   it("uses live current_price for the latest day so snapshot reconciles with /portfolio-summary", async () => {
@@ -1299,15 +1300,14 @@ describe("portfolioPerformanceSnapshotService", () => {
 
     const snapshots = await computeAndStoreSnapshots("EUR");
 
-    expect(snapshots[0]!.value).toBe(10); // historical: close_price = 10
-    expect(snapshots[1]!.value).toBe(12); // historical: close_price = 12
-    expect(snapshots[2]!.value).toBe(25); // latest day: uses inv.current_price
+    expect(must(snapshots[0], "snapshots[0]").value).toBe(10); // historical: close_price = 10
+    expect(must(snapshots[1], "snapshots[1]").value).toBe(12); // historical: close_price = 12
+    expect(must(snapshots[2], "snapshots[2]").value).toBe(25); // latest day: uses inv.current_price
   });
 });
 
 describe("computeMetrics", () => {
   it("returns null for empty or missing snapshots", () => {
-    // @ts-expect-error -- null input exercises the runtime guard
     expect(computeMetrics(null)).toBeNull();
     expect(computeMetrics([])).toBeNull();
   });
@@ -1330,7 +1330,7 @@ describe("computeMetrics", () => {
       },
     ];
 
-    const metrics = computeMetrics(snapshots)!;
+    const metrics = must(computeMetrics(snapshots), "computeMetrics result");
 
     expect(metrics.currentValue).toBe(1100);
     expect(metrics.totalInvested).toBe(1000);
@@ -1356,7 +1356,7 @@ describe("computeMetrics", () => {
       },
     ];
 
-    const metrics = computeMetrics(snapshots)!;
+    const metrics = must(computeMetrics(snapshots), "computeMetrics result");
 
     // ~10% over ~1 year => annualized ≈ 10%
     expect(metrics.annualizedReturn).toBeCloseTo(10, 0);
@@ -1380,7 +1380,7 @@ describe("computeMetrics", () => {
       },
     ];
 
-    const metrics = computeMetrics(snapshots)!;
+    const metrics = must(computeMetrics(snapshots), "computeMetrics result");
 
     // realReturn = (1080 - 1000) / 1000 * 100 = 8%
     expect(metrics.realReturnPct).toBe(8);
@@ -1406,7 +1406,7 @@ describe("computeMetrics", () => {
       },
     ];
 
-    const metrics = computeMetrics(snapshots)!;
+    const metrics = must(computeMetrics(snapshots), "computeMetrics result");
 
     expect(metrics.totalReturnPct).toBe(0);
     expect(metrics.annualizedReturn).toBe(0);
@@ -1424,7 +1424,7 @@ describe("computeMetrics", () => {
       },
     ];
 
-    const metrics = computeMetrics(snapshots)!;
+    const metrics = must(computeMetrics(snapshots), "computeMetrics result");
 
     expect(metrics.currentValue).toBe(520);
     expect(metrics.totalInvested).toBe(500);
@@ -1435,7 +1435,6 @@ describe("computeMetrics", () => {
 
 describe("computeHeatmap", () => {
   it("returns empty structure for insufficient data", () => {
-    // @ts-expect-error -- null input exercises the runtime guard
     expect(computeHeatmap(null)).toEqual({ years: [], data: {}, maxAbsPct: 0 });
     expect(computeHeatmap([])).toEqual({ years: [], data: {}, maxAbsPct: 0 });
     expect(
@@ -1456,9 +1455,9 @@ describe("computeHeatmap", () => {
 
     expect(result.years).toEqual([2025]);
     // February (index 1) should show +10%
-    expect(result.data[2025]![1]).toBe(10);
+    expect(must(result.data[2025], "result.data[2025]")[1]).toBe(10);
     // January (index 0) should be null (first month, no prior)
-    expect(result.data[2025]![0]).toBeNull();
+    expect(must(result.data[2025], "result.data[2025]")[0]).toBeNull();
   });
 
   it("returns 0% when flat market with deposit (contribution-adjusted)", () => {
@@ -1473,7 +1472,7 @@ describe("computeHeatmap", () => {
 
     const result = computeHeatmap(snapshots);
 
-    expect(result.data[2025]![1]).toBe(0);
+    expect(must(result.data[2025], "result.data[2025]")[1]).toBe(0);
   });
 
   it("detects market loss even with withdrawal", () => {
@@ -1488,7 +1487,7 @@ describe("computeHeatmap", () => {
 
     const result = computeHeatmap(snapshots);
 
-    expect(result.data[2025]![1]).toBe(-10);
+    expect(must(result.data[2025], "result.data[2025]")[1]).toBe(-10);
   });
 
   it("returns null when invested is zero (edge case)", () => {
@@ -1499,7 +1498,7 @@ describe("computeHeatmap", () => {
 
     const result = computeHeatmap(snapshots);
 
-    expect(result.data[2025]![1]).toBeNull();
+    expect(must(result.data[2025], "result.data[2025]")[1]).toBeNull();
   });
 
   it("computes YTD via geometric compounding of monthly returns", () => {
@@ -1514,9 +1513,9 @@ describe("computeHeatmap", () => {
 
     const result = computeHeatmap(snapshots);
 
-    expect(result.data[2025]![1]).toBe(10); // Feb
-    expect(result.data[2025]![2]).toBe(-5); // Mar
-    expect(result.data[2025]![3]).toBe(8); // Apr
+    expect(must(result.data[2025], "result.data[2025]")[1]).toBe(10); // Feb
+    expect(must(result.data[2025], "result.data[2025]")[2]).toBe(-5); // Mar
+    expect(must(result.data[2025], "result.data[2025]")[3]).toBe(8); // Apr
     // YTD = (1.1 * 0.95 * 1.08 - 1) * 100 ≈ 12.86%
     // (verified in PerformanceBreakdown's ytd calculation)
   });
@@ -1532,9 +1531,9 @@ describe("computeHeatmap", () => {
 
     expect(result.years).toEqual([2024, 2025]);
     // Dec 2024 (index 11) = +5%
-    expect(result.data[2024]![11]).toBe(5);
+    expect(must(result.data[2024], "result.data[2024]")[11]).toBe(5);
     // Jan 2025 (index 0) ≈ (1100/1000)/(1050/1000) - 1 ≈ 4.76%
-    expect(result.data[2025]![0]).toBeCloseTo(4.76, 1);
+    expect(must(result.data[2025], "result.data[2025]")[0]).toBeCloseTo(4.76, 1);
   });
 
   it("tracks maxAbsPct across all months", () => {

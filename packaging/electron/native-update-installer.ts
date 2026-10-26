@@ -51,7 +51,7 @@ export function parseInstallerArgs(
 }
 
 export function validateVisionAppPath(value: unknown, label: string): string {
-  const resolved = path.resolve(String(value || ""));
+  const resolved = path.resolve(typeof value === "string" ? value : "");
   if (
     path.basename(resolved) !== "Vision.app" ||
     path.dirname(resolved) === path.parse(resolved).root
@@ -130,7 +130,7 @@ export function installNativeUpdate({
     });
     if (launched.error || launched.status !== 0) {
       throw (
-        launched.error || new Error("Updated Vision application did not open")
+        launched.error ?? new Error("Updated Vision application did not open")
       );
     }
   } catch (error) {
@@ -183,7 +183,7 @@ if (require.main === module) {
       process.stderr.write(`${result.cleanupWarning}\n`);
   } catch (error) {
     const message = errorMessage(error);
-    process.stderr.write(`${message ? message : String(error)}\n`);
+    process.stderr.write(`${typeof message === "string" && message !== "" ? message : String(error)}\n`);
     process.exitCode = 1;
   }
 }

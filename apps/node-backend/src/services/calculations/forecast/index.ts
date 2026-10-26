@@ -622,7 +622,7 @@ export async function computeCashflowForecast({
       // Don't serve a diagnostics-free cache entry when backtest is needed.
       const diagnosticsOk =
         !includeBacktest ||
-        cached?.payload?.diagnostics?.ensemble_weights != null;
+        cached?.payload.diagnostics?.ensemble_weights != null;
       if (cached && mcCacheRepo.isFresh(cached.computed_at) && diagnosticsOk) {
         if (includeBreakdown) {
           // Reconstruct effective values from the cached payload's actual array.
@@ -661,7 +661,7 @@ export async function computeCashflowForecast({
   const {
     history,
     currentActual,
-    scheduledActual = [],
+    scheduledActual,
     plannedCurrent,
     unconverted,
   } = await infoRepository.getCashflowForecastData(
@@ -902,7 +902,7 @@ export async function computeCashflowForecastRolling({
   const {
     history,
     currentActual,
-    scheduledActual = [],
+    scheduledActual,
     plannedCurrent,
     unconverted,
   } = await infoRepository.getCashflowForecastDataRolling(
@@ -1056,7 +1056,7 @@ async function augmentPayloadWithBreakdown(
   const {
     historyByCategory,
     currentActualByCategory,
-    scheduledActualByCategory = [],
+    scheduledActualByCategory,
   } = await infoRepository.getCashflowForecastDataByCategory(
     historyMonths,
     excludedCategoryIds,

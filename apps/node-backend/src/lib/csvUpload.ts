@@ -65,9 +65,13 @@ export function cleanup(filePath: string | null | undefined) {
   const basename = path.basename(filePath);
   if (!SAFE_BASENAME_RE.test(basename)) return;
   const target = path.join(os.tmpdir(), basename);
-  void fs.promises.unlink(target).catch((err) => {
-    if (err && err.code !== 'ENOENT') {
-      logger.warn('Failed to clean up uploaded CSV temp file', { path: target, error: err.message });
+  void fs.promises.unlink(target).catch((err: unknown) => {
+    const code = err instanceof Error && 'code' in err ? err.code : undefined;
+    if (err && code !== 'ENOENT') {
+      logger.warn('Failed to clean up uploaded CSV temp file', {
+        path: target,
+        error: err instanceof Error ? err.message : undefined,
+      });
     }
   });
 }

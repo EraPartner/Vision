@@ -117,7 +117,9 @@ import {
 import { commitReviewedPortfolioImports as rawCommitReviewedPortfolioImports } from "../../src/services/portfolioImportCommitService.ts";
 import { previewPortfolioImportReconciliation as rawPreviewPortfolioImportReconciliation } from "../../src/services/portfolioImportReconciliationService.ts";
 import { ConflictError } from "../../src/middleware/errorHandler.ts";
+import { must } from "../helpers/must.ts";
 
+import { loose } from "../helpers/partial.ts";
 const getBatch = vi.mocked(rawGetBatch);
 const listBatches = vi.mocked(rawListBatches);
 const createInvestmentForRow = vi.mocked(rawCreateInvestmentForRow);
@@ -129,15 +131,6 @@ const commitReviewedPortfolioImports = vi.mocked(
 const previewPortfolioImportReconciliation = vi.mocked(
   rawPreviewPortfolioImportReconciliation,
 );
-
-/**
- * The routes forward service results without reading most of their fields,
- * so fixtures carry only the fields a test asserts on. `loose` casts one to
- * the type the mocked service resolves with.
- */
-function loose<T>(value: unknown): T {
-  return value as T;
-}
 
 const { default: portfolioImportRouter } =
   await import("../../src/routes/portfolioImportRoutes.ts");
@@ -294,7 +287,7 @@ function routeHandler(method: string, path: string): DirectHandler {
       (candidate.route as RouteWithMethods).methods[method],
   );
   if (!layer) throw new Error(`Missing ${method.toUpperCase()} ${path}`);
-  return layer.route!.stack.at(-1)!.handle as unknown as DirectHandler;
+  return must(must(layer.route, "layer.route").stack.at(-1), "layer.route!.stack.at(-1)").handle as unknown as DirectHandler;
 }
 
 describe("Portfolio Import Routes — batch/row id guards", () => {

@@ -17,40 +17,44 @@ import { clearMemoryCache } from "../src/services/currency/currencyConversionSer
 import { routeAgent } from "./helpers/routeApp.ts";
 import { bodyAt } from "./helpers/responseBody.ts";
 import aggregationsRouter from "../src/routes/aggregations.ts";
+import { must } from "./helpers/must.ts";
+interface IdRow {
+  id: number;
+}
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const ACCOUNT = "Synthetic FX statistics";
 const RECIPIENT = "Synthetic FX payee";
 
 async function accountId(): Promise<number> {
-  const pool = getTestPool()!;
+  const pool = must(getTestPool(), "test pool");
   await pool.query(
     `INSERT INTO accounts (name, display_name) VALUES ($1, $1)
      ON CONFLICT (lower(btrim(name))) DO NOTHING`,
     [ACCOUNT],
   );
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<IdRow>(
     "SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))",
     [ACCOUNT],
   );
-  return rows[0].id;
+  return must(rows[0], "rows[0]").id;
 }
 
 async function recipientId(): Promise<number> {
-  const pool = getTestPool()!;
-  const found = await pool.query("SELECT id FROM recipients WHERE name = $1", [
+  const pool = must(getTestPool(), "test pool");
+  const found = await pool.query<IdRow>("SELECT id FROM recipients WHERE name = $1", [
     RECIPIENT,
   ]);
   if (found.rows[0]) return found.rows[0].id;
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<IdRow>(
     "INSERT INTO recipients (name, normalized_name) VALUES ($1, $2) RETURNING id",
     [RECIPIENT, RECIPIENT.toLowerCase()],
   );
-  return rows[0].id;
+  return must(rows[0], "rows[0]").id;
 }
 
 async function insertTxn(date: string, amount: string, currency: string) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "test pool").query(
     `INSERT INTO transactions (date, amount, currency, account_id, recipient_id, is_active, is_transfer)
      VALUES ($1::date, $2, $3, $4, $5, true, false)`,
     [date, amount, currency, await accountId(), await recipientId()],
@@ -58,7 +62,7 @@ async function insertTxn(date: string, amount: string, currency: string) {
 }
 
 async function setRate(code: string, rateToEur: string, rateDate: string) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "test pool").query(
     `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
      VALUES ($1, $2, $3, true)`,
     [code, rateToEur, rateDate],
@@ -73,7 +77,7 @@ describeDb("statistics with a currency without a stored rate (real DB)", () => {
   const [year, month] = today.split("-").map(Number) as [number, number];
 
   async function reset() {
-    const pool = getTestPool()!;
+    const pool = must(getTestPool(), "test pool");
     await pool.query("DELETE FROM transactions");
     await pool.query("DELETE FROM accounts WHERE name = $1", [ACCOUNT]);
     await pool.query("DELETE FROM recipients WHERE name = $1", [RECIPIENT]);
@@ -145,7 +149,7 @@ describeDb("statistics with a currency without a stored rate (real DB)", () => {
   });
 
   it("reports no unconverted amounts when every currency has a rate", async () => {
-    await getTestPool()!.query(
+    await must(getTestPool(), "test pool").query(
       "DELETE FROM transactions WHERE currency = 'XYZ'",
     );
 

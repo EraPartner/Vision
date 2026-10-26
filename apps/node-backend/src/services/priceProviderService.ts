@@ -6,7 +6,10 @@
  *   - prices/priceProviderRegistry.js — provider strategies (Binance, Yahoo, custom, Kinesis)
  */
 
+import { z } from "zod";
 import { logger } from "../config/logger.ts";
+import { parseOr } from "../lib/looseJson.ts";
+import { isRecord } from "../lib/typeGuards.ts";
 import { RowContractError } from "../database/rowContracts.ts";
 import { UpstreamError } from "../middleware/errorHandler.ts";
 import { assertPublicHttpUrl } from "../lib/urlSafety.ts";
@@ -40,10 +43,15 @@ import {
   sanitizeKinesisIsolatedSpikes,
   parseCustomHistoryPoints,
 } from "./prices/priceProviderRegistry.ts";
-import { getYahooClient } from "./prices/yahooClient.ts";
+import {
+  getYahooClient,
+  parseYahooPayload,
+  yahooChartResultSchema,
+} from "./prices/yahooClient.ts";
 
 import type { InvestmentRow, PricePoint } from "../types/rows.ts";
 import type { LivePriceQuote } from "./prices/priceProviderRegistry.ts";
+import { errorMessage } from "../lib/errors.ts";
 
 export type { InvestmentRow, PricePoint };
 
@@ -170,7 +178,7 @@ export async function fetchLivePricesDetailed(
       await task();
       void recordProviderSuccess(key);
     } catch (err) {
-      logger.error(`${label} failed`, { error: (err as Error).message });
+      logger.error(`${label} failed`, { error: errorMessage(err) });
       void recordProviderError(key, err);
     }
   };
@@ -185,13 +193,13 @@ export async function fetchLivePricesDetailed(
     {
       key: "binance",
       resolveId: (inv) => (inv.price_provider_id || "").toUpperCase(),
-      batchFn: PROVIDERS.binance,
+      batchFn: (ids) => PROVIDERS.binance(ids),
       label: "Binance batch fetch",
     },
     {
       key: "yahoo",
       resolveId: resolveYahooSymbol,
-      batchFn: PROVIDERS.yahoo,
+      batchFn: (ids) => PROVIDERS.yahoo(ids),
       label: "Yahoo Finance batch fetch",
     },
   ];
@@ -203,10 +211,14 @@ export async function fetchLivePricesDetailed(
     ) => Promise<Record<string, LivePriceQuote>>;
     label: string;
   }[] = [
-    { key: "custom", batchFn: PROVIDERS.custom, label: "Custom price fetch" },
+    {
+      key: "custom",
+      batchFn: (investments) => PROVIDERS.custom(investments),
+      label: "Custom price fetch",
+    },
     {
       key: "kinesis",
-      batchFn: PROVIDERS.kinesis,
+      batchFn: (investments) => PROVIDERS.kinesis(investments),
       label: "Kinesis price fetch",
     },
   ];
@@ -301,7 +313,7 @@ export async function fetchLivePricesDetailed(
       // A contract violation is a data fault, not a transient failure: surface it.
       if (err instanceof RowContractError) throw err;
       logger.warn("Historical price fallback failed", {
-        error: (err as Error).message,
+        error: errorMessage(err),
       });
     }
   }
@@ -316,21 +328,25 @@ const BINANCE_PAGE_LIMIT = 1000;
 const BINANCE_MAX_PAGES = 30; // 30 × 1000 daily candles ≈ 82 years — a runaway guard, not a real bound
 
 function _dayKey(ms: number): number {
-  return Math.floor(Number(ms) / BINANCE_DAY_MS);
+  return Math.floor(ms / BINANCE_DAY_MS);
 }
 
 /**
  * Fetch daily Binance klines across an arbitrary window, paginating past the 1000-row
  * per-request limit via startTime/endTime. Returns the raw kline rows (caller maps/normalizes).
  */
+const binanceKlinesSchema = z.array(
+  z.array(z.unknown()).nullable().catch(null),
+);
+
 async function _fetchBinanceKlines(
   binanceSymbol: string,
   startMs: number,
   endMs: number,
-): Promise<(number | string)[][]> {
-  const collected: (number | string)[][] = [];
-  let cursor = Number(startMs);
-  const end = Number(endMs);
+): Promise<unknown[][]> {
+  const collected: unknown[][] = [];
+  let cursor = startMs;
+  const end = endMs;
 
   for (let page = 0; page < BINANCE_MAX_PAGES; page += 1) {
     const url =
@@ -342,13 +358,15 @@ async function _fetchBinanceKlines(
       signal: AbortSignal.timeout(8_000),
     });
     if (!res.ok) throw new UpstreamError(`Binance API error: ${res.status}`);
-    const data = await res.json();
-    if (!Array.isArray(data) || data.length === 0) return collected;
+    // A payload that is not an array, or a row that is not an array, carries
+    // no candle: the former ends the walk, the latter is skipped.
+    const data = parseOr(binanceKlinesSchema, await res.json(), null);
+    if (!data || data.length === 0) return collected;
 
-    collected.push(...data);
+    collected.push(...data.filter((row) => row !== null));
     if (data.length < BINANCE_PAGE_LIMIT) return collected;
 
-    const lastOpen = Number(data[data.length - 1][0]);
+    const lastOpen = Number(data[data.length - 1]?.[0]);
     if (!Number.isFinite(lastOpen)) return collected;
     const next = lastOpen + BINANCE_DAY_MS;
     if (next > end) return collected;
@@ -394,8 +412,8 @@ async function _persistAndResolve(
     persisted.length > 0
       ? persisted
       : normalizeHistoryPoints([
-          ...(cachedDbPoints ?? []),
-          ...(pointsInRange ?? []),
+          ...cachedDbPoints,
+          ...pointsInRange,
         ]);
   return _filterHistoricalPoints(resolved, fromMs, toMs);
 }
@@ -480,19 +498,20 @@ export async function fetchHistoricalPrices(
     if (!points) {
       try {
         const yahooFinance = await getYahooClient();
-        const chart = await yahooFinance.chart(symbol, {
+        const payload: unknown = await yahooFinance.chart(symbol, {
           period1: new Date(startDay * BINANCE_DAY_MS),
           // Yahoo's end is exclusive; include the requested final calendar day.
           period2: new Date((endDay + 1) * BINANCE_DAY_MS),
           interval: "1d",
           includePrePost: false,
         });
+        const chart = parseYahooPayload(yahooChartResultSchema, payload);
 
         points = normalizeHistoryPoints(
           (chart?.quotes ?? [])
             .map((q) => ({
-              timestampMs: q?.date != null ? new Date(q.date).getTime() : Number.NaN,
-              price: toNumber(q?.close),
+              timestampMs: q.date != null ? new Date(q.date).getTime() : Number.NaN,
+              price: toNumber(q.close),
             }))
             .filter(
               (p) => Number.isFinite(p.timestampMs) && isValidPrice(p.price),
@@ -502,7 +521,7 @@ export async function fetchHistoricalPrices(
         cacheSet(cacheKey, { points, source: "live" });
       } catch (err) {
         logger.warn(
-          `Yahoo history fetch error for ${symbol}: ${(err as Error).message}`,
+          `Yahoo history fetch error for ${symbol}: ${errorMessage(err)}`,
         );
         return _filterHistoricalPoints(cachedDbPoints, from, to);
       }
@@ -553,7 +572,7 @@ export async function fetchHistoricalPrices(
         cacheSet(cacheKey, { points, source: "live" });
       } catch (err) {
         logger.warn(
-          `Binance history fetch error for ${symbol}: ${(err as Error).message}`,
+          `Binance history fetch error for ${symbol}: ${errorMessage(err)}`,
         );
         return _filterHistoricalPoints(cachedDbPoints, from, to);
       }
@@ -598,8 +617,8 @@ export async function fetchHistoricalPrices(
           return _filterHistoricalPoints(cachedDbPoints, from, to);
         }
 
-        const data = (await res.json()) as Record<string, unknown> | null;
-        const rawPoints = data?.[symbol];
+        const data: unknown = await res.json();
+        const rawPoints = isRecord(data) ? data[symbol] : undefined;
         if (!Array.isArray(rawPoints)) {
           logger.warn(`Kinesis history: invalid data for ${symbol}`);
           return _filterHistoricalPoints(cachedDbPoints, from, to);
@@ -611,7 +630,7 @@ export async function fetchHistoricalPrices(
         cacheSet(cacheKey, { points, source: "live" });
       } catch (err) {
         logger.warn(
-          `Kinesis history fetch error for ${symbol}: ${(err as Error).message}`,
+          `Kinesis history fetch error for ${symbol}: ${errorMessage(err)}`,
         );
         return _filterHistoricalPoints(cachedDbPoints, from, to);
       }
@@ -685,7 +704,7 @@ export async function fetchHistoricalPrices(
       // redirects manually, re-checking every hop — mirrors the guarded "latest"
       // path in priceProviderRegistry._fetchJson so a public host cannot 302 the
       // request onto an internal address.
-      let url = String(config.historyUrl);
+      let url = config.historyUrl;
       let res: Response;
       for (let hop = 0; ; hop += 1) {
         await assertPublicHttpUrl(url);
@@ -708,7 +727,7 @@ export async function fetchHistoricalPrices(
       cacheSet(cacheKey, { points, source: "live" });
     } catch (err) {
       logger.warn(
-        `Custom history fetch error for investment ${investment.id}: ${(err as Error).message}`,
+        `Custom history fetch error for investment ${investment.id}: ${errorMessage(err)}`,
       );
       return _filterHistoricalPoints(cachedDbPoints, from, to);
     }
@@ -760,7 +779,7 @@ export async function sanitizePersistedKinesisHistory() {
       failed += 1;
       logger.warn("Kinesis history sanitization failed for investment", {
         investmentId: investment.id,
-        error: (error as Error | null | undefined)?.message,
+        error: errorMessage(error),
       });
     }
   }

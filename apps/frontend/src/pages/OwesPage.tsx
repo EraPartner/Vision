@@ -44,7 +44,7 @@ export default function OwesPage() {
     const { t, tc } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const locale = numberFormatToLocale(appSettings.numberFormat);
-    const decimals = appSettings.showDecimalPlaces ?? 2;
+    const decimals = appSettings.showDecimalPlaces;
 
     if (isLoading) {
         return (
@@ -60,7 +60,7 @@ export default function OwesPage() {
                         className="h-28 rounded-card corner-continuous"
                     />
                     <div className="space-y-2">
-                        {[...Array(3)].map((_, index) => (
+                        {Array.from({ length: 3 }).map((_, index) => (
                             <Skeleton
                                 key={index}
                                 data-testid="owes-recipient-skeleton"

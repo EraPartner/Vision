@@ -114,7 +114,7 @@ export function parseDatabaseStats(output: string | undefined): DatabaseStats {
   const stableImportantRowCounts: ImportantRowCounts = {};
   let schema: string | undefined;
   let postgresVersionNum: number | undefined;
-  for (const line of String(output || "").split("\n")) {
+  for (const line of (output ?? "").split("\n")) {
     const separator = line.indexOf("\t");
     if (separator <= 0) continue;
     const key = line.slice(0, separator).trim();
@@ -177,8 +177,8 @@ export function assertDatabaseStatsEqual(
   actual: ComparableDatabaseStats,
 ): void {
   assertDatabaseStructureEqual(expected, actual);
-  const expectedNames = Object.keys(expected.tableCounts || {}).sort();
-  const actualNames = Object.keys(actual.tableCounts || {}).sort();
+  const expectedNames = Object.keys(expected.tableCounts ?? {}).sort();
+  const actualNames = Object.keys(actual.tableCounts ?? {}).sort();
   if (expectedNames.length > 0 || actualNames.length > 0) {
     for (const table of expectedNames) {
       // Both count maps exist here: the structure check matched their names.
@@ -206,8 +206,8 @@ function assertDatabaseStructureEqual(
     error.code = "DATABASE_SCHEMA_MISMATCH";
     throw error;
   }
-  const expectedNames = Object.keys(expected.tableCounts || {}).sort();
-  const actualNames = Object.keys(actual.tableCounts || {}).sort();
+  const expectedNames = Object.keys(expected.tableCounts ?? {}).sort();
+  const actualNames = Object.keys(actual.tableCounts ?? {}).sort();
   if (
     expectedNames.length > 0 ||
     actualNames.length > 0 ||

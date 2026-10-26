@@ -86,25 +86,25 @@ function check({ root, inventoryPath }: Fixture): SpawnSyncReturns<string> {
   );
 }
 
-test("accepts a complete inventory with existing evidence paths", () => {
+void test("accepts a complete inventory with existing evidence paths", () => {
   const result = check(fixture());
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /OK: 1 records/);
 });
 
-test("rejects a missing evidence path", () => {
+void test("rejects a missing evidence path", () => {
   const result = check(fixture({ record: { paths: ["missing.js"] } }));
   assert.equal(result.status, 1);
   assert.match(result.stderr, /missing or invalid repository path/);
 });
 
-test("requires actionable records to map to a bounded TODO", () => {
+void test("requires actionable records to map to a bounded TODO", () => {
   const result = check(fixture({ record: { todoTitle: null } }));
   assert.equal(result.status, 1);
   assert.match(result.stderr, /actionable classifications require todoTitle/);
 });
 
-test("rejects an actionable title that is absent from TODO.md", () => {
+void test("rejects an actionable title that is absent from TODO.md", () => {
   const result = check(
     fixture({ record: { todoTitle: "Remove an untracked surface" } }),
   );

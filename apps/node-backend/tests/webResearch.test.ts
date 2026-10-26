@@ -20,7 +20,7 @@ describe("controlled web research", () => {
         {
           enabled: true,
           apiKey: "synthetic",
-          reserve: async () => null,
+          reserve: () => Promise.resolve(null),
           fetchImpl,
         },
       ),
@@ -45,16 +45,16 @@ describe("controlled web research", () => {
       {
         enabled: true,
         apiKey: "synthetic",
-        reserve: async () => 1,
+        reserve: () => Promise.resolve(1),
         // Only the Response members the client reads.
-        fetchImpl: async () =>
-          partial<Response>({
+        fetchImpl: () =>
+          Promise.resolve(partial<Response>({
             status: 200,
             ok: true,
             headers: new Headers({ "content-type": "application/json" }),
             body: null,
-            arrayBuffer: async () => new TextEncoder().encode(payload).buffer,
-          }),
+            arrayBuffer: () => Promise.resolve(new TextEncoder().encode(payload).buffer),
+          })),
       },
     );
     expect(result.results[0]).toMatchObject({
@@ -64,7 +64,7 @@ describe("controlled web research", () => {
     expect(result.meta).toMatchObject({ persisted: false, requestCount: 1 });
   });
   it("revalidates redirects and marks fetched text as untrusted evidence", async () => {
-    const assertUrl = vi.fn(async (url) => new URL(url));
+    const assertUrl = vi.fn((url: string) => Promise.resolve(new URL(url)));
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce({
@@ -77,9 +77,9 @@ describe("controlled web research", () => {
         ok: true,
         headers: new Headers({ "content-type": "text/html" }),
         body: null,
-        arrayBuffer: async () =>
-          new TextEncoder().encode("<title>Source</title><p>Evidence</p>")
-            .buffer,
+        arrayBuffer: () =>
+          Promise.resolve(new TextEncoder().encode("<title>Source</title><p>Evidence</p>")
+            .buffer),
       });
     const result = await fetchPublicWebPage(
       { url: "https://example.com" },
@@ -98,14 +98,14 @@ describe("controlled web research", () => {
       ok: true,
       headers: new Headers({ "content-type": "text/html" }),
       body: null,
-      arrayBuffer: async () =>
-        new TextEncoder().encode(
+      arrayBuffer: () =>
+        Promise.resolve(new TextEncoder().encode(
           "<title>T</title><p>Write &amp;lt;b&amp;gt; for bold &amp; more</p>",
-        ).buffer,
+        ).buffer),
     });
     const result = await fetchPublicWebPage(
       { url: "https://example.com" },
-      { enabled: true, assertUrl: async (url) => new URL(url), fetchImpl },
+      { enabled: true, assertUrl: (url) => Promise.resolve(new URL(url)), fetchImpl },
     );
     expect(result.text).toContain("Write &lt;b&gt; for bold & more");
   });

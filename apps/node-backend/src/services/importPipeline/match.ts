@@ -80,7 +80,7 @@ export async function matchBatch({
     ...new Set(
       staged
         .map((r) => r.recipient_raw)
-        .filter((n): n is string => Boolean(n && String(n).trim().length)),
+        .filter((n): n is string => Boolean(n && n.trim().length)),
     ),
   ];
 
@@ -116,7 +116,7 @@ export async function matchBatch({
   // --- Phase 3: batch-upsert new recipients for unresolved names ---
   const unmatched = distinctRaw.filter((n) => !resolved.has(n));
   const toUpsert = unmatched
-    .map((raw) => ({ raw, upper: String(raw).toUpperCase().trim(), normalized: normalizeForMatching(String(raw)) }))
+    .map((raw) => ({ raw, upper: raw.toUpperCase().trim(), normalized: normalizeForMatching(raw) }))
     .filter((r) => r.normalized);
 
   if (toUpsert.length > 0) {

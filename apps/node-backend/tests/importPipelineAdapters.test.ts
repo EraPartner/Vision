@@ -22,6 +22,7 @@ import { parse as parseIng } from "../src/services/importPipeline/adapters/ing.t
 import { parse as parseGeneric } from "../src/services/importPipeline/adapters/generic.ts";
 import { parse as parseWise } from "../src/services/importPipeline/adapters/wise.ts";
 import { parsedBankTransactionsSchema } from "../src/services/importPipeline/adapters/_shared.ts";
+import { must } from "./helpers/must.ts";
 
 const tmpFiles: string[] = [];
 function writeTempCSV(prefix: string, content: string) {
@@ -35,8 +36,8 @@ function writeTempCSV(prefix: string, content: string) {
 }
 
 afterEach(() => {
-  while (tmpFiles.length) {
-    const p = tmpFiles.pop()!;
+  while (tmpFiles.length > 0) {
+    const p = must(tmpFiles.pop(), "tmpFiles.pop()");
     try {
       fs.unlinkSync(p);
     } catch {
@@ -63,7 +64,7 @@ describe("BNP adapter — parseAmountField edge cases", () => {
     expect(txns.map((t) => t.amount)).toEqual([
       -67.9, 2500, 1234.56, -150, 1000.5,
     ]);
-    expect(txns[0]!.currency).toBe("EUR");
+    expect(must(txns[0], "txns[0]").currency).toBe("EUR");
     expect(txns).toHaveLength(5);
     expect(txns.every((txn) => txn.sourceId == null)).toBe(true);
   });
@@ -95,9 +96,11 @@ describe("BNP adapter — parseAmountField edge cases", () => {
     ].join("\n");
     const txns = await parseBnp(writeTempCSV("bnp", csv));
     expect(txns).toHaveLength(1);
-    expect(txns[0]!.amount).toBe(-25);
-    expect(txns[0]!.recipient).toBe("ENERGIE NV");
-    expect(txns[0]!.comment).toContain("Message: Factuur 123; klant 456");
+    expect(must(txns[0], "txns[0]").amount).toBe(-25);
+    expect(must(txns[0], "txns[0]").recipient).toBe("ENERGIE NV");
+    expect(must(txns[0], "txns[0]").comment).toContain(
+      "Message: Factuur 123; klant 456",
+    );
   });
 
   it("skips rejected / non-executed rows (money never moved)", async () => {
@@ -140,9 +143,11 @@ describe("ING adapter — parseCommaDecimal", () => {
     ].join("\n");
     const txns = await parseIng(writeTempCSV("ing", csv));
     expect(txns).toHaveLength(1);
-    expect(txns[0]!.amount).toBe(-67.9);
-    expect(txns[0]!.recipient).toBe("SHOP");
-    expect(txns[0]!.comment).toContain("Message: ref 12; loc 34");
+    expect(must(txns[0], "txns[0]").amount).toBe(-67.9);
+    expect(must(txns[0], "txns[0]").recipient).toBe("SHOP");
+    expect(must(txns[0], "txns[0]").comment).toContain(
+      "Message: ref 12; loc 34",
+    );
   });
 
   it("normalizes ISO currency cells and nulls malformed free text", async () => {
@@ -182,9 +187,9 @@ describe("generic adapter — configurable mapping", () => {
     const txns = await parseGeneric(writeTempCSV("generic", csv), config);
 
     expect(txns.map((t) => t.amount)).toEqual([-1234.56, 2500, 10.5]);
-    expect(txns[0]!.recipient).toBe("SHOP");
-    expect(txns[0]!.currency).toBe("EUR");
-    expect(txns[0]!.bankAccount).toBe("MYBANK CHECKING");
+    expect(must(txns[0], "txns[0]").recipient).toBe("SHOP");
+    expect(must(txns[0], "txns[0]").currency).toBe("EUR");
+    expect(must(txns[0], "txns[0]").bankAccount).toBe("MYBANK CHECKING");
     expect(txns).toHaveLength(3);
   });
 
@@ -204,8 +209,12 @@ describe("generic adapter — configurable mapping", () => {
     const txns = await parseGeneric(writeTempCSV("generic", csv), cfg);
 
     expect(txns).toHaveLength(2);
-    expect(txns[0]!.date.toISOString().slice(0, 10)).toBe("2024-12-31");
-    expect(txns[1]!.date.toISOString().slice(0, 10)).toBe("2025-01-01");
+    expect(must(txns[0], "txns[0]").date.toISOString().slice(0, 10)).toBe(
+      "2024-12-31",
+    );
+    expect(must(txns[1], "txns[1]").date.toISOString().slice(0, 10)).toBe(
+      "2025-01-01",
+    );
   });
 
   it("parses %Y-%m-%d %H:%M:%S as a UTC calendar day (no early-morning day-shift)", async () => {
@@ -217,7 +226,9 @@ describe("generic adapter — configurable mapping", () => {
     const txns = await parseGeneric(writeTempCSV("generic", csv), cfg);
 
     expect(txns).toHaveLength(1);
-    expect(txns[0]!.date.toISOString().slice(0, 10)).toBe("2024-12-31");
+    expect(must(txns[0], "txns[0]").date.toISOString().slice(0, 10)).toBe(
+      "2024-12-31",
+    );
   });
 
   it("reports a skipped count for unparseable rows instead of dropping them silently", async () => {
@@ -271,9 +282,9 @@ describe("wise adapter — cross-currency direction", () => {
     const txns = await parseWise(writeTempCSV("wise", csv));
 
     expect(txns).toHaveLength(1);
-    expect(txns[0]!.amount).toBe(-100);
-    expect(txns[0]!.currency).toBe("EUR");
-    expect(txns[0]!.bankAccount).toBe("WISE EUR");
+    expect(must(txns[0], "txns[0]").amount).toBe(-100);
+    expect(must(txns[0], "txns[0]").currency).toBe("EUR");
+    expect(must(txns[0], "txns[0]").bankAccount).toBe("WISE EUR");
   });
 
   it("books a cross-currency IN transfer on the target (your) side", async () => {
@@ -284,9 +295,9 @@ describe("wise adapter — cross-currency direction", () => {
     const txns = await parseWise(writeTempCSV("wise", csv));
 
     expect(txns).toHaveLength(1);
-    expect(txns[0]!.amount).toBe(90);
-    expect(txns[0]!.currency).toBe("EUR");
-    expect(txns[0]!.bankAccount).toBe("WISE EUR");
+    expect(must(txns[0], "txns[0]").amount).toBe(90);
+    expect(must(txns[0], "txns[0]").currency).toBe("EUR");
+    expect(must(txns[0], "txns[0]").bankAccount).toBe("WISE EUR");
   });
 
   it("parses an early-morning timestamp as a UTC calendar day (no day-shift)", async () => {
@@ -297,7 +308,9 @@ describe("wise adapter — cross-currency direction", () => {
     const txns = await parseWise(writeTempCSV("wise", csv));
 
     expect(txns).toHaveLength(1);
-    expect(txns[0]!.date.toISOString().slice(0, 10)).toBe("2024-12-31");
+    expect(must(txns[0], "txns[0]").date.toISOString().slice(0, 10)).toBe(
+      "2024-12-31",
+    );
   });
 
   it("skips a row whose booked currency is not an ISO code instead of failing the import", async () => {
@@ -310,7 +323,7 @@ describe("wise adapter — cross-currency direction", () => {
     const txns = await parseWise(writeTempCSV("wise", csv));
 
     expect(txns).toHaveLength(1);
-    expect(txns[0]!.currency).toBe("EUR");
+    expect(must(txns[0], "txns[0]").currency).toBe("EUR");
     expect(txns.skipped).toBe(2);
     expect(
       parsedBankTransactionsSchema.safeParse({

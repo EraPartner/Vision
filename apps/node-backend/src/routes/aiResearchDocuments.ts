@@ -15,9 +15,7 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 1 },
 });
-const documentIdSchema = z
-  .string({ error: "Invalid research document id" })
-  .uuid({ error: "Invalid research document id" });
+const documentIdSchema = z.uuid({ error: "Invalid research document id" });
 
 // Multipart text fields; a repeated field arrives as an array and is rejected.
 // An empty value falls back to the uploaded file's name.

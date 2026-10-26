@@ -1,5 +1,8 @@
+import { axisDate } from "@/components/charts/axisValue";
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { useMemo, useState, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import type { LucideIcon } from "lucide-react";
 import {
     Archive,
@@ -118,12 +121,14 @@ import { UnassignedLotsNudge } from "@/features/portfolio/UnassignedLotsNudge";
 import { usePerformanceQueries } from "@/features/portfolio/usePortfolioQueries";
 import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 import type { AccountId } from "@vision/types/brands";
+import type { TranslationKey } from "@/locales/keys";
 
 /** `?period=` keeps deep links from the former Performance page working. */
 const PERIOD_CODEC = enumSearchParamCodec<ChartPeriod>(CHART_PERIODS, "all");
 const PERIODS: ReadonlyArray<ChartPeriod> = CHART_PERIODS;
 
 type HoldingsSort = "value" | "return";
+const isHoldingsSort = enumGuard<HoldingsSort>({ value: true, return: true });
 
 const ImportIcon = PAGE_ICONS["/portfolio/import"];
 
@@ -154,7 +159,7 @@ const SERIES_COLOR = {
 /* Persisted widget ids: `ticker`, `investments`, `allocation`, `performance`
    and `news` predate this page and keep their meaning, so saved preferences
    carry over. */
-function getPortfolioWidgets(t: (key: string) => string): WidgetDefinition[] {
+function getPortfolioWidgets(t: (key: TranslationKey) => string): WidgetDefinition[] {
     return [
         { id: "ticker", label: t("portfolio.widget.ticker") },
         { id: "investments", label: t("portfolio.widget.holdings") },
@@ -220,7 +225,7 @@ function Figure({ label, value, detail, hint, tone }: FigureProps) {
 export default function PortfolioPage() {
     const { t, tc, language } = useLanguage();
     const { appSettings } = useAppSettings();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const targetCurrency = currencyOr(
         appSettings.defaultCurrency,
         DEFAULT_CURRENCY,
@@ -291,7 +296,7 @@ export default function PortfolioPage() {
             ? CHART_DATE_PATTERNS.dayTick
             : CHART_DATE_PATTERNS.monthTick;
     const formatTickDate = (value: Date | number) =>
-        formatDate(value as Date, xTickPattern, monthLabelLocale);
+        formatDate(axisDate(value), xTickPattern, monthLabelLocale);
     const formatPointDate = (day: string) =>
         formatDate(parseISO(day), CHART_DATE_PATTERNS.detail, monthLabelLocale);
 
@@ -469,12 +474,13 @@ export default function PortfolioPage() {
         );
         return {
             accounts: [...accountIds]
-                .map((id) => ({
-                    id,
-                    label: accounts.has(id)
-                        ? accountLabel(accounts.get(id)!)
-                        : `#${id}`,
-                }))
+                .map((id) => {
+                    const account = accounts.get(id);
+                    return {
+                        id,
+                        label: account ? accountLabel(account) : `#${id}`,
+                    };
+                })
                 .sort((a, b) =>
                     a.label.localeCompare(b.label, undefined, {
                         sensitivity: "base",
@@ -497,7 +503,7 @@ export default function PortfolioPage() {
         if (selectedAccountId === undefined) return undefined;
         const byInvestment = new Map<number, PortfolioSummaryAccountTotals>();
         for (const summary of portfolioSummary?.summaries ?? []) {
-            const row = summary.accountTotals?.find(
+            const row = summary.accountTotals.find(
                 (entry) => entry.account_id === selectedAccountId,
             );
             if (row) byInvestment.set(summary.id, row);
@@ -552,7 +558,7 @@ export default function PortfolioPage() {
         if (selectedAccountId === undefined) {
             return { currentValue: totalValue, gainLoss: totalGainLoss };
         }
-        const row = portfolioSummary?.accountTotals?.find(
+        const row = portfolioSummary?.accountTotals.find(
             (entry) => entry.account_id === selectedAccountId,
         );
         return {
@@ -1165,9 +1171,10 @@ export default function PortfolioPage() {
                                         <SegmentedControl
                                             size="sm"
                                             value={sortBy}
-                                            onValueChange={(next) =>
-                                                setSortBy(next as HoldingsSort)
-                                            }
+                                            onValueChange={onGuarded(
+                                                isHoldingsSort,
+                                                setSortBy,
+                                            )}
                                             aria-label={t(
                                                 "portfolio.sort.label",
                                             )}
@@ -1259,10 +1266,7 @@ export default function PortfolioPage() {
                                                             key={inv.id}
                                                             asChild
                                                             leading={
-                                                                Icon !==
-                                                                undefined ? (
-                                                                    <Icon />
-                                                                ) : undefined
+                                                                <Icon />
                                                             }
                                                             title={
                                                                 <span className="inline-flex max-w-full items-center gap-2">
@@ -1507,9 +1511,9 @@ export default function PortfolioPage() {
                                         size="sm"
                                         className="h-auto p-0"
                                     >
-                                        <Link to="/portfolio/rebalance">
+                                        <AppLink to="/portfolio/rebalance">
                                             {t("nav.rebalance")}
-                                        </Link>
+                                        </AppLink>
                                     </Button>
                                 </CardHeader>
                                 <CardContent className="space-y-4">

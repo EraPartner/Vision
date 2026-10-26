@@ -107,9 +107,12 @@ function pickBestThumbnail(thumbnail: unknown): string | null {
     thumbnail && typeof thumbnail === 'object' && 'resolutions' in thumbnail
       ? thumbnail.resolutions
       : undefined;
-  const resolutions: Array<{ url?: unknown } | null | undefined> = Array.isArray(raw) ? raw : [];
+  const resolutions: unknown[] = Array.isArray(raw) ? raw : [];
   for (let i = resolutions.length - 1; i >= 0; i -= 1) {
-    const candidate = normalizeThumbnailUrl(resolutions[i]?.url);
+    const entry = resolutions[i];
+    const candidate = normalizeThumbnailUrl(
+      typeof entry === 'object' && entry !== null ? Reflect.get(entry, 'url') : undefined,
+    );
     if (candidate) return candidate;
   }
   return null;
@@ -269,7 +272,7 @@ async function getCachedQuote(sym: string, basic?: boolean): Promise<MarketQuote
   const promise = (async () => {
     try {
       const result = await buildQuote(sym, basic);
-      if (result !== null && result !== undefined) quoteCache.set(key, result, QUOTE_CACHE_TTL_MS);
+      if (result !== null) quoteCache.set(key, result, QUOTE_CACHE_TTL_MS);
       return result;
     } catch {
       return null;
@@ -301,7 +304,7 @@ export async function searchSymbols(q: string) {
   }
   const results = requireYahooPayload(yahooSearchResultSchema, payload, 'search');
 
-  const items = (results.quotes ?? [])
+  const items = results.quotes
     .filter((r) => r.symbol)
     .map((r) => ({
       symbol: r.symbol,
@@ -376,7 +379,7 @@ export async function getChart(
   const result = parseYahooPayload(yahooChartResultSchema, payload);
   if (!result) return { items: [], total: 0 };
 
-  const points = (result.quotes ?? [])
+  const points = result.quotes
     .filter((p) => p.close != null)
     .map((p) => ({
       time: yahooDateMs(p.date),
@@ -415,7 +418,7 @@ export async function getNews(symbols: string, count: string) {
           await yahooFinance.search(sym.trim(), { quotesCount: 0, newsCount }, NO_VALIDATE),
           'search',
         );
-        return (results.news ?? []).map((n) => ({
+        return results.news.map((n) => ({
           title: n.title,
           link: n.link,
           publisher: n.publisher,

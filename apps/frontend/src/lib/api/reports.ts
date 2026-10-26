@@ -11,8 +11,8 @@
 
 import { resolveActiveThemeTokens, type ReportThemeTokens } from '@/lib/themeTokens';
 import { downloadBlob } from '@/lib/downloadBlob';
-import { checkResponseContract, unwrapEnvelope } from '@/lib/api/client';
-import { ReportDocumentSchema, type ReportDocument } from '@vision/types/contracts';
+import { checkWireData, unwrapEnvelope } from '@/lib/api/client';
+import { ReportDocumentSchema } from '@vision/types/contracts';
 import type { BelgianTaxHouseholdV2, PartnerId } from '@/lib/belgianTax/householdTypes';
 import type {
     CategoryId,
@@ -144,9 +144,9 @@ async function postReportDownload(
     throw new Error(`Report download failed: ${response.status} ${response.statusText}`);
   }
 
-  const report = checkResponseContract<ReportDocument>(
+  const report = checkWireData(
     ReportDocumentSchema,
-    unwrapEnvelope<ReportDocument>(await response.json()),
+    unwrapEnvelope(await response.json()),
     `POST ${path}`,
   );
 

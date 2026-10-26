@@ -8,12 +8,12 @@ import { downloadBlob } from "./downloadBlob";
 describe("downloadBlob", () => {
     let createObjectURL: ReturnType<typeof vi.fn>;
     let revokeObjectURL: ReturnType<typeof vi.fn>;
-    let originalCreate: typeof URL.createObjectURL;
-    let originalRevoke: typeof URL.revokeObjectURL;
+    let originalCreate: unknown;
+    let originalRevoke: unknown;
 
     beforeEach(() => {
-        originalCreate = URL.createObjectURL;
-        originalRevoke = URL.revokeObjectURL;
+        originalCreate = Reflect.get(URL, "createObjectURL");
+        originalRevoke = Reflect.get(URL, "revokeObjectURL");
         createObjectURL = vi.fn(() => "blob:mock-url");
         revokeObjectURL = vi.fn();
         URL.createObjectURL = createObjectURL as unknown as typeof URL.createObjectURL;
@@ -21,8 +21,8 @@ describe("downloadBlob", () => {
     });
 
     afterEach(() => {
-        URL.createObjectURL = originalCreate;
-        URL.revokeObjectURL = originalRevoke;
+        Reflect.set(URL, "createObjectURL", originalCreate);
+        Reflect.set(URL, "revokeObjectURL", originalRevoke);
     });
 
     test("creates an object URL, sets anchor download attribute, then revokes URL", () => {

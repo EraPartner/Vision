@@ -124,43 +124,43 @@ function computeHoldingWindows(
   if (!Array.isArray(transactions) || transactions.length === 0) return [];
 
   const sorted = [...transactions].sort((a, b) => {
-    const dateCompare = String(a.date).localeCompare(String(b.date));
+    const dateCompare = a.date.localeCompare(b.date);
     if (dateCompare !== 0) return dateCompare;
-    return Number(a.id) - Number(b.id);
+    return a.id - b.id;
   });
 
   const windows: HoldingWindow[] = [];
-  let balance = 0;
+  let heldUnits = 0;
   let windowStart: string | null = null;
 
   for (const tx of sorted) {
-    const units = nanToZero(Number(tx.units));
-    const prevBalance = balance;
+    const units = nanToZero(tx.units);
+    const prevHeldUnits = heldUnits;
 
     if (tx.type === "buy" || tx.type === "gift") {
-      balance += units;
+      heldUnits += units;
     } else if (tx.type === "sell") {
-      balance -= units;
+      heldUnits -= units;
     }
 
     // Clamp to zero to handle floating point drift
-    if (balance < 0) balance = 0;
+    if (heldUnits < 0) heldUnits = 0;
 
-    if (prevBalance <= 0 && balance > 0) {
-      windowStart = String(tx.date).slice(0, 10);
+    if (prevHeldUnits <= 0 && heldUnits > 0) {
+      windowStart = tx.date.slice(0, 10);
     }
 
-    if (prevBalance > 0 && balance <= 0 && windowStart !== null) {
+    if (prevHeldUnits > 0 && heldUnits <= 0 && windowStart !== null) {
       windows.push({
         fromDate: windowStart,
-        toDate: String(tx.date).slice(0, 10),
+        toDate: tx.date.slice(0, 10),
       });
       windowStart = null;
     }
   }
 
   // Still holding — open window
-  if (balance > 0 && windowStart !== null) {
+  if (heldUnits > 0 && windowStart !== null) {
     windows.push({ fromDate: windowStart, toDate: null });
   }
 
@@ -338,7 +338,10 @@ async function getInvestmentsWithHoldingWindows(): Promise<
 > {
   const rows = await checkedRows(
     holdingWindowRowSchema,
-    selectHoldingWindowRows().orderBy(["i.id", "pt.date", "pt.id"]),
+    selectHoldingWindowRows()
+      .orderBy("i.id")
+      .orderBy("pt.date")
+      .orderBy("pt.id"),
   );
   const investmentMap = new Map<
     number,
@@ -381,8 +384,9 @@ async function getInvestmentWithHoldingWindows(
   const rows = await checkedRows(
     holdingWindowRowSchema,
     selectHoldingWindowRows()
-      .where("i.id", "=", asInvestmentId(Number(investmentId)))
-      .orderBy(["pt.date", "pt.id"]),
+      .where("i.id", "=", asInvestmentId(investmentId))
+      .orderBy("pt.date")
+      .orderBy("pt.id"),
   );
 
   const [first] = rows;
@@ -406,7 +410,7 @@ async function getStoredPriceDates(investmentId: number): Promise<string[]> {
     db
       .selectFrom("asset_price_history")
       .select(sql<string>`to_char(price_date, 'YYYY-MM-DD')`.as("d"))
-      .where("investment_id", "=", asInvestmentId(Number(investmentId)))
+      .where("investment_id", "=", asInvestmentId(investmentId))
       .orderBy("price_date"),
   );
   return rows.map((row) => row.d);
@@ -702,7 +706,7 @@ export async function refreshQuotesForInvestment(
     // No holding windows — clean up any existing quotes for this investment
     await db
       .deleteFrom("asset_price_history")
-      .where("investment_id", "=", asInvestmentId(Number(investmentId)))
+      .where("investment_id", "=", asInvestmentId(investmentId))
       .execute();
     return;
   }

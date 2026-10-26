@@ -10,6 +10,7 @@ vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
 import { parseIbkrTransactionHistory } from "../src/services/portfolioImportPipeline/ibkrTransactionHistoryAdapter.ts";
 import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
+import { must } from "./helpers/must.ts";
 
 const fixture = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -57,12 +58,12 @@ describe("IBKR Transaction History portfolio adapter", () => {
     });
     expect(rows[3]).toMatchObject({ amount: 4.25, currency: "EUR" });
     expect(rows[4]).toMatchObject({ amount: 1.25, currency: "EUR" });
-    expect(rows[0]!.rawData).toBe(
+    expect(must(rows[0], "rows[0]").rawData).toBe(
       "Transaction History,Data,2026-01-02,U0000000,Example Corp purchase,Buy,EXM,2.0,10.0,USD,-17.0,-0.85,-17.85,0.85,-0.17,-,1",
     );
-    expect(rows[0]!.rawData).toBe(rows[1]!.rawData);
-    expect(rows[3]!.rawData).toContain('\"4,25\"');
-    expect(rows[3]!.rawData).not.toContain("|");
+    expect(must(rows[0], "rows[0]").rawData).toBe(must(rows[1], "rows[1]").rawData);
+    expect(must(rows[3], "rows[3]").rawData).toContain('\"4,25\"');
+    expect(must(rows[3], "rows[3]").rawData).not.toContain("|");
   });
 
   it("treats dash symbols as instrument-less and keeps descriptions only as notes", async () => {
@@ -95,7 +96,7 @@ describe("IBKR Transaction History portfolio adapter", () => {
       currency: "EUR",
       fxRateToEur: null,
     });
-    expect(rows.at(-1)!.rawData).toContain("Forex Trade Component,EUR.USD,300");
+    expect(must(rows.at(-1), "rows.at(-1)").rawData).toContain("Forex Trade Component,EUR.USD,300");
     const repeated = await parseModifiedFixture(chargedStatement);
     expect(repeated.map((row) => row.rawData)).toEqual(
       rows.map((row) => row.rawData),
@@ -124,7 +125,7 @@ describe("IBKR Transaction History portfolio adapter", () => {
       );
 
       expect(rows).toHaveLength(baseline.length);
-      expect(rows.skipped).toBe(baseline.skipped! + 1);
+      expect(rows.skipped).toBe(must(baseline.skipped, "baseline.skipped") + 1);
       expect(rows.map((row) => row.rawData)).toEqual(
         baseline.map((row) => row.rawData),
       );
@@ -232,8 +233,8 @@ describe("IBKR Transaction History portfolio adapter", () => {
       pricePerUnit: 10,
       currency: "USD",
     });
-    expect(rows.sourceColumns!.slice(0, 2)).toEqual(["Account", "Date"]);
-    expect(rows[0]!.rawData).toContain(
+    expect(must(rows.sourceColumns, "rows.sourceColumns").slice(0, 2)).toEqual(["Account", "Date"]);
+    expect(must(rows[0], "rows[0]").rawData).toContain(
       "Transaction History,Data,U0000000,2026-01-02,",
     );
   });
@@ -283,6 +284,6 @@ describe("IBKR Transaction History number conventions", () => {
       amount: 12750,
       currency: "EUR",
     });
-    expect(rows[0]!.note).toMatch(/does not agree with its Gross Amount/);
+    expect(must(rows[0], "rows[0]").note).toMatch(/does not agree with its Gross Amount/);
   });
 });

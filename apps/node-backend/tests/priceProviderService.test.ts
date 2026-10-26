@@ -36,7 +36,7 @@ vi.mock("../src/database/connection.ts", () => mockConnection());
 // Stub DNS to a public address so these hermetic tests don't hit the network;
 // the guard's private-IP/scheme logic is unit-tested in tests/urlSafety.test.ts.
 vi.mock("node:dns/promises", () => {
-  const lookup = vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]);
+  const lookup = vi.fn(() => Promise.resolve([{ address: "93.184.216.34", family: 4 }]));
   return { default: { lookup }, lookup };
 });
 
@@ -56,6 +56,12 @@ import { logger } from "../src/config/logger.ts";
 import { RowContractError } from "../src/database/rowContracts.ts";
 import { __clearHistoricalIndexCache as clearHistoricalIndexCache } from "../src/services/currency/currencyConversionService.ts";
 import { pgLocalDate } from "./helpers/portfolioPgRows.ts";
+import { must } from "./helpers/must.ts";
+
+/** The spy behind `obj[key]`, read without taking an unbound method reference. */
+function methodMock<T extends object, K extends keyof T>(obj: T, key: K) {
+  return vi.mocked(obj)[key];
+}
 
 /** A latest stored USD row as `exchange_rates` returns it. */
 const latestUsdRate = (rateToEur: string) => ({
@@ -702,10 +708,10 @@ describe("Price Provider Service", () => {
         new Error("Network error"),
       );
       // The fallback's latest-point read returns a row breaking its contract.
-      query.mockImplementation(async (sql: string) =>
-        sql.includes("asset_price_history")
+      query.mockImplementation((sql: string) =>
+        Promise.resolve(sql.includes("asset_price_history")
           ? { rows: [{ investment_id: "not-an-id" }] }
-          : { rows: [] },
+          : { rows: [] }),
       );
 
       await expect(
@@ -892,7 +898,7 @@ describe("Price Provider Service", () => {
         { timestampMs: Date.UTC(2026, 0, 3, 12, 0, 0, 0), price: 104.5 },
       ]);
       // Same warn wording as before the UpstreamError conversion.
-      expect(logger.warn).toHaveBeenCalledWith(
+      expect(methodMock(logger, "warn")).toHaveBeenCalledWith(
         "Custom history fetch error for investment 12: HTTP 503",
       );
     });
@@ -945,12 +951,12 @@ describe("Price Provider Service", () => {
       // KAU_EUR is fetched from Kinesis as KAU_USD, then converted USD→EUR at
       // each point's historical rate. A 1:1 USD rate keeps the converted
       // values identical so the spike-sanitisation assertions stay meaningful.
-      query.mockImplementation(async (sql) => {
+      query.mockImplementation((sql) => {
         if (typeof sql === "string" && /"?is_latest"? =/.test(sql)) {
-          return { rows: [latestUsdRate("1")] };
+          return Promise.resolve({ rows: [latestUsdRate("1")] });
         }
         if (typeof sql === "string" && /from "?exchange_rates/i.test(sql)) {
-          return {
+          return Promise.resolve({
             rows: [
               "2023-05-19",
               "2023-05-20",
@@ -962,9 +968,9 @@ describe("Price Provider Service", () => {
               rate_date,
               rate_to_eur: "1",
             })),
-          };
+          });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       });
 
       vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -1007,12 +1013,12 @@ describe("Price Provider Service", () => {
 
     it("converts a Kinesis EUR symbol history series from USD at historical rates", async () => {
       // USD rate 2.0 → every converted EUR price is double the USD source.
-      query.mockImplementation(async (sql) => {
+      query.mockImplementation((sql) => {
         if (typeof sql === "string" && /"?is_latest"? =/.test(sql)) {
-          return { rows: [latestUsdRate("2")] };
+          return Promise.resolve({ rows: [latestUsdRate("2")] });
         }
         if (typeof sql === "string" && /from "?exchange_rates/i.test(sql)) {
-          return {
+          return Promise.resolve({
             rows: ["2023-05-19", "2023-05-20", "2023-05-21"].map(
               (rate_date) => ({
                 currency_code: "USD",
@@ -1020,9 +1026,9 @@ describe("Price Provider Service", () => {
                 rate_to_eur: "2",
               }),
             ),
-          };
+          });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       });
 
       vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -1089,7 +1095,7 @@ describe("Price Provider Service", () => {
       );
 
       expect(points).toHaveLength(1);
-      expect(points[0]!.price).toBe(100);
+      expect(must(points[0], "points[0]").price).toBe(100);
     });
 
     it("paginates binance history beyond a single 1000-row page", async () => {
@@ -1133,7 +1139,10 @@ describe("Price Provider Service", () => {
 
       // Two pages fetched; the second request advances startTime past the first page.
       expect(fetchSpy).toHaveBeenCalledTimes(2);
-      expect(String(fetchSpy.mock.calls[1]![0])).toContain(
+      const secondRequest = must(fetchSpy.mock.calls[1], "second fetch call")[0];
+      expect(
+        secondRequest instanceof Request ? secondRequest.url : String(secondRequest),
+      ).toContain(
         `startTime=${base + 1000 * DAY}`,
       );
       // All 1001 daily points survive into the merged series (old 365-day cap would drop most).
@@ -1181,7 +1190,7 @@ describe("Price Provider Service", () => {
       );
 
       expect(points).toHaveLength(2);
-      expect(points[0]!.price).toBe(99);
+      expect(must(points[0], "points[0]").price).toBe(99);
     });
 
     it("returns db fallback for unsupported providers", async () => {

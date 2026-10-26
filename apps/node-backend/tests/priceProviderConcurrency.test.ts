@@ -15,22 +15,27 @@ vi.mock('../src/config/kinesisConfig.ts', () => ({
   getKinesisAssetConfig: vi.fn(() => null),
 }));
 vi.mock('../src/services/currency/currencyConversionService.ts', () => ({
-  convertToCurrency: vi.fn(async (v) => v),
+  convertToCurrency: vi.fn((v) => Promise.resolve(v)),
 }));
 vi.mock('../src/lib/urlSafety.ts', () => ({ assertPublicHttpUrl: vi.fn() }));
 
 const yahoo = vi.hoisted(() => ({ quote: vi.fn(), chart: vi.fn() }));
-vi.mock("../src/services/prices/yahooClient.ts", () => ({
-  getYahooClient: vi.fn(async () => yahoo),
+// Keep the real payload schemas/helpers; only the client itself is faked.
+vi.mock("../src/services/prices/yahooClient.ts", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("../src/services/prices/yahooClient.ts")
+  >()),
+  getYahooClient: vi.fn(() => Promise.resolve(yahoo)),
 }));
 
 import { PROVIDERS } from '../src/services/prices/priceProviderRegistry.ts';
 import type { InvestmentRow } from '../src/services/prices/priceProviderRegistry.ts';
+import { must } from "./helpers/must.ts";
 
 const kinesisPayload = (symbol: string, price: number) => ({
   ok: true,
   headers: { get: () => null },
-  json: async () => ({ [symbol]: [{ createdAt: '2026-07-01T00:00:00Z', price }] }),
+  json: () => Promise.resolve({ [symbol]: [{ createdAt: '2026-07-01T00:00:00Z', price }] }),
 });
 
 function kinesisInv(id: number, symbol: string) {
@@ -61,13 +66,13 @@ function bodyGate() {
       }
     },
     async drain<T>(resultPromise: Promise<T>) {
-      let finished = false;
-      resultPromise.then(() => {
-        finished = true;
+      const state = { finished: false };
+      void resultPromise.then(() => {
+        state.finished = true;
       });
-      while (!finished) {
+      while (!state.finished) {
         await vi.waitFor(() =>
-          expect(finished || pending.length > 0).toBe(true),
+          expect(state.finished || pending.length > 0).toBe(true),
         );
         pending
           .splice(0)
@@ -93,9 +98,9 @@ afterEach(() => {
 describe('kinesis provider concurrency', () => {
   it("caps 40 holdings at six active bodies and continues after a failure", async () => {
     const gate = bodyGate();
-    fetchMock.mockImplementation(async (url) => {
-      const symbol = new URL(url).searchParams.get("symbolIds")!;
-      return {
+    fetchMock.mockImplementation((url) => {
+      const symbol = must(new URL(url).searchParams.get("symbolIds"), "value");
+      return Promise.resolve({
         ok: true,
         headers: { get: () => null },
         json: () =>
@@ -105,7 +110,7 @@ describe('kinesis provider concurrency', () => {
               [symbol]: [{ createdAt: "2026-07-01T00:00:00Z", price: 42 }],
             };
           }),
-      };
+      });
     });
     const investments = Array.from({ length: 40 }, (_, i) =>
       kinesisInv(i + 1, `TEST${i + 1}_USD`),
@@ -125,7 +130,7 @@ describe('kinesis provider concurrency', () => {
     const resolvers: (() => void)[] = [];
     fetchMock.mockImplementation((url) => new Promise((resolve) => {
       resolvers.push(() => {
-        const symbol = new URL(url).searchParams.get('symbolIds')!;
+        const symbol = must(new URL(url).searchParams.get('symbolIds'), "value");
         resolve(kinesisPayload(symbol, 42));
       });
     }));
@@ -141,14 +146,14 @@ describe('kinesis provider concurrency', () => {
     resolvers.forEach((r) => r());
     const prices = await resultPromise;
     expect(Object.keys(prices)).toHaveLength(3);
-    expect(prices[1]!.price).toBe(42);
+    expect(must(prices[1], "prices[1]").price).toBe(42);
   });
 
   it('one failing holding does not drop the others', async () => {
-    fetchMock.mockImplementation(async (url) => {
-      const symbol = new URL(url).searchParams.get('symbolIds')!;
-      if (symbol === 'KAG_USD') throw new Error('boom');
-      return kinesisPayload(symbol, 10);
+    fetchMock.mockImplementation((url) => {
+      const symbol = must(new URL(url).searchParams.get('symbolIds'), "value");
+      if (symbol === 'KAG_USD') return Promise.reject(new Error('boom'));
+      return Promise.resolve(kinesisPayload(symbol, 10));
     });
 
     const prices = await PROVIDERS.kinesis([kinesisInv(1, 'KAU_USD'), kinesisInv(2, 'KAG_USD')]);
@@ -164,10 +169,10 @@ describe('custom provider concurrency', () => {
 
   it("caps 40 holdings including history fallbacks and isolates failed holdings", async () => {
     const gate = bodyGate();
-    fetchMock.mockImplementation(async (url) => {
+    fetchMock.mockImplementation((url) => {
       const [, kind, rawId] = new URL(url).pathname.split("/");
       const id = Number(rawId);
-      return {
+      return Promise.resolve({
         ok: true,
         headers: { get: () => null },
         json: () =>
@@ -180,7 +185,7 @@ describe('custom provider concurrency', () => {
               };
             return { p: id };
           }),
-      };
+      });
     });
     const investments = Array.from({ length: 40 }, (_, i) => ({
       ...customInv(i + 1, `https://provider.example/latest/${i + 1}`),
@@ -203,7 +208,7 @@ describe('custom provider concurrency', () => {
       resolvers.push(() => resolve({
         ok: true,
         headers: { get: () => null },
-        json: async () => ({ p: 7 }),
+        json: () => Promise.resolve({ p: 7 }),
       }));
     }));
 

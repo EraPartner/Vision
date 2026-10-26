@@ -3,10 +3,10 @@ import {
     useMemo,
     useRef,
     useState,
-    type FormEvent,
+    type SyntheticEvent,
     type ReactNode,
 } from "react";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import {
     Activity,
     Bell,
@@ -76,10 +76,15 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import type { TranslationKey } from "@/locales/keys";
+import type { TranslationKeySuffix } from "@/types/i18n";
+import { translateDynamic } from "@/lib/translateDynamic";
 
 const decimal = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
 const numericType = /^(?:decimal|number|integer|currency)$/;
-const knownReasonCodes = new Set([
+const knownReasonCodes: ReadonlySet<string> = new Set<
+    TranslationKeySuffix<"monitors.reason.">
+>([
     "baseline",
     "threshold-not-met",
     "threshold-crossed",
@@ -107,10 +112,10 @@ const knownReasonCodes = new Set([
 function reasonLabel(
     reasonCode: string | null | undefined,
     reason: string | null,
-    t: (key: string) => string,
+    t: (key: TranslationKey) => string,
 ) {
     return reasonCode && knownReasonCodes.has(reasonCode)
-        ? t(`monitors.reason.${reasonCode}`)
+        ? translateDynamic(t, `monitors.reason.${reasonCode}`)
         : reason;
 }
 
@@ -129,7 +134,7 @@ function numericColumns(analysis: SavedAnalysis) {
     });
 }
 
-function revealInvalidSchedule(event: FormEvent<HTMLDetailsElement>) {
+function revealInvalidSchedule(event: SyntheticEvent<HTMLDetailsElement>) {
     // Reveal before the browser tries to focus a hidden invalid input.
     event.currentTarget.open = true;
     const input = event.target;
@@ -450,6 +455,7 @@ export default function AnalysisMonitorsPage() {
     const observations = useMonitorObservations(selectedId, observationOffset);
     const notifications = useMonitorNotifications(notificationOffset);
     const targets = useMonitorTargets(targetDossierOffset);
+    const targetDossierTotal = targets.dossiers.data?.total ?? 0;
     const actions = useMonitorActions();
     const { confirm, ConfirmDialog } = useConfirmDialog();
     const selected =
@@ -784,11 +790,11 @@ export default function AnalysisMonitorsPage() {
                                                                 variant="outline"
                                                                 size="sm"
                                                             >
-                                                                <Link to="/analysis">
+                                                                <AppLink to="/analysis">
                                                                     {t(
                                                                         "monitors.openAnalysis",
                                                                     )}
-                                                                </Link>
+                                                                </AppLink>
                                                             </Button>
                                                         </AlertDescription>
                                                     </Alert>
@@ -977,21 +983,21 @@ export default function AnalysisMonitorsPage() {
                                                             variant="outline"
                                                             size="sm"
                                                         >
-                                                            <Link to="/research/dossiers">
+                                                            <AppLink to="/research/dossiers">
                                                                 {t(
                                                                     "monitors.openDossiers",
                                                                 )}
-                                                            </Link>
+                                                            </AppLink>
                                                         </Button>
                                                     </AlertDescription>
                                                 </Alert>
                                             )}
-                                        {(targets.dossiers.data?.total ?? 0) >
+                                        {targetDossierTotal >
                                             TARGET_PAGE_SIZE && (
                                             <Pager
                                                 offset={targetDossierOffset}
                                                 total={
-                                                    targets.dossiers.data!.total
+                                                    targetDossierTotal
                                                 }
                                                 pageSize={TARGET_PAGE_SIZE}
                                                 onChange={(offset) => {

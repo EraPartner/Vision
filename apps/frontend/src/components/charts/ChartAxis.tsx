@@ -18,6 +18,9 @@ export interface ChartAxisProps<Scale extends AxisScale> {
     readonly label?: string | undefined;
 }
 
+// visx's axis generics tie `tickValues`/`tickFormat` to the scale's domain type, which
+// these wrappers deliberately erase (`unknown` formatter, plain tick values), hence the
+// `as never` hand-offs below.
 const TICK_COLOR = "hsl(var(--muted-foreground))";
 const AXIS_COLOR = "hsl(var(--border))";
 

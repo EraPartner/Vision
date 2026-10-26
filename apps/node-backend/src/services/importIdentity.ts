@@ -2,6 +2,7 @@
 
 import crypto from "node:crypto";
 import { parsedDateToYmd } from "../lib/importDates.ts";
+import { cellText, stringifyCell } from "./cellText.ts";
 
 const IMPORT_FINGERPRINT_VERSION = 1;
 
@@ -48,7 +49,7 @@ export interface PortfolioIdentityRow {
 }
 
 export function normalizeIdentityText(value: unknown): string {
-  return String(value ?? "")
+  return cellText(value)
     .normalize("NFKC")
     .trim()
     .replace(/\s+/gu, " ")
@@ -56,7 +57,7 @@ export function normalizeIdentityText(value: unknown): string {
 }
 
 export function normalizeIdentityDecimal(value: unknown): string {
-  const source = String(value ?? "").trim();
+  const source = cellText(value).trim();
   if (!source) return "";
   const match = /^([+-]?)(\d*)(?:\.(\d*))?$/.exec(source);
   if (!match) return source;
@@ -71,7 +72,7 @@ function computeSourceRecordHash(rawData: unknown): string | null {
   if (rawData === null || rawData === undefined) return null;
   return crypto
     .createHash("sha256")
-    .update(String(rawData), "utf8")
+    .update(stringifyCell(rawData), "utf8")
     .digest("hex");
 }
 

@@ -394,7 +394,7 @@ function onOrBefore<R extends { date?: string | null }>(
   rows: R[],
   date: string | undefined,
 ): R[] {
-  return rows.filter((row) => !row.date || String(row.date) <= String(date));
+  return rows.filter((row) => !row.date || row.date <= String(date));
 }
 
 /** Display label for a broker account, for user-facing validation errors. */
@@ -534,7 +534,8 @@ export async function validatePortfolioUnitMutation({
 
 /** Parameters of {@link validatePortfolioUnitMutation}. */
 export interface UnitMutationParams {
-  investmentId: InvestmentId;
+  /** Omitted by calls that the earlier guards turn into a no-op. */
+  investmentId?: InvestmentId | undefined;
   assetClass: string | undefined;
   type?: string | undefined;
   /** 'YYYY-MM-DD' */

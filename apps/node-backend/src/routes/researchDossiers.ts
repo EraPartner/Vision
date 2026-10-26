@@ -24,7 +24,7 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(100),
   offset: z.coerce.number().int().min(0).default(0),
 });
-const dossierIdSchema = z.string().uuid();
+const dossierIdSchema = z.uuid();
 
 // Dossier bodies are validated by the service's own content schemas, which
 // answer 400 INVALID_DOSSIER with field paths.

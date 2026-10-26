@@ -84,7 +84,7 @@ function rowToTransaction(
   rowNumber: number,
 ): ParsedBankTransaction | null {
   const colMap = config.column_mapping;
-  const dateStr = String(row[colMap.date] || "").trim();
+  const dateStr = (row[colMap.date] || "").trim();
   if (!dateStr) return null;
 
   const date = parseDateWithFormat(dateStr, config.date_format || "");
@@ -96,8 +96,8 @@ function rowToTransaction(
   });
   if (isNaN(amount)) return null;
 
-  const recipient = String(row[colMap.recipient] || "").trim();
-  const memo = colMap.memo ? String(row[colMap.memo] || "").trim() : "";
+  const recipient = (row[colMap.recipient] || "").trim();
+  const memo = colMap.memo ? (row[colMap.memo] || "").trim() : "";
 
   // ISO-shape normalize (uppercase) or null → commit's EUR default; a raw
   // free-text cell failed the whole commit at the 0046 currency CHECK (500).
@@ -127,7 +127,7 @@ function rowToTransaction(
     comment: null,
     rawData: rawDataForCsvRecord(row),
     sourceId: colMap.source_id
-      ? String(row[colMap.source_id] || "").trim() || null
+      ? (row[colMap.source_id] || "").trim() || null
       : null,
   };
 }

@@ -16,7 +16,7 @@ function errorAt(errors: string[], index: number): string {
   return error;
 }
 
-test("rejects a replaced endpoint even when both counts remain the same", async () => {
+void test("rejects a replaced endpoint even when both counts remain the same", async () => {
   const result = await checkMatrix(
     spec(
       "  /api/current: { get: { responses: { '200': { description: OK } } } }\n",
@@ -29,7 +29,7 @@ test("rejects a replaced endpoint even when both counts remain the same", async 
   ]);
 });
 
-test("expands grouped methods and normalizes Express path parameters", async () => {
+void test("expands grouped methods and normalizes Express path parameters", async () => {
   const result = await checkMatrix(
     spec(
       "  /api/items/{id}:\n    get: { responses: { '200': { description: OK } } }\n    delete: { responses: { '204': { description: Deleted } } }\n",
@@ -40,7 +40,7 @@ test("expands grouped methods and normalizes Express path parameters", async () 
   assert.equal(result.count, 2);
 });
 
-test("rejects duplicate operations after normalization", async () => {
+void test("rejects duplicate operations after normalization", async () => {
   const result = await checkMatrix(
     spec(
       "  /api/items/{id}: { get: { responses: { '200': { description: OK } } } }\n",
@@ -56,7 +56,7 @@ test("rejects duplicate operations after normalization", async () => {
   );
 });
 
-test("rejects wildcard rows instead of letting them stand for unknown operations", async () => {
+void test("rejects wildcard rows instead of letting them stand for unknown operations", async () => {
   const result = await checkMatrix(
     spec(
       "  /api/items: { get: { responses: { '200': { description: OK } } } }\n",
@@ -67,7 +67,7 @@ test("rejects wildcard rows instead of letting them stand for unknown operations
   assert.match(errorAt(result.errors, 1), /Missing from matrix/);
 });
 
-test("rejects malformed paths on HTTP operation rows instead of skipping them", async () => {
+void test("rejects malformed paths on HTTP operation rows instead of skipping them", async () => {
   for (const row of [
     "| POST | /api/undocumented | No backticks |",
     "| GET, POST | /api/undocumented | Group without backticks |",
@@ -85,7 +85,7 @@ test("rejects malformed paths on HTTP operation rows instead of skipping them", 
   }
 });
 
-test("ignores non-operation rows in summary and historical tables", async () => {
+void test("ignores non-operation rows in summary and historical tables", async () => {
   const result = await checkMatrix(
     spec(
       "  /api/items: { get: { responses: { '200': { description: OK } } } }\n",
@@ -98,7 +98,7 @@ test("ignores non-operation rows in summary and historical tables", async () => 
   assert.deepEqual(result.errors, []);
 });
 
-test("excludes only the two documented GET health routes", async () => {
+void test("excludes only the two documented GET health routes", async () => {
   const result = await checkMatrix(
     spec(
       "  /api/items: { get: { responses: { '200': { description: OK } } } }\n",
@@ -111,7 +111,7 @@ test("excludes only the two documented GET health routes", async () => {
   assert.deepEqual(result.errors, ["Absent from OpenAPI:\n  POST /health"]);
 });
 
-test("counts all OpenAPI methods and ignores nested response keys", async () => {
+void test("counts all OpenAPI methods and ignores nested response keys", async () => {
   const operations = await readSpecOperations(
     spec(
       "  '/api/probe':\n    head: { responses: { '200': { description: OK } } }\n    options: { responses: { '200': { description: OK } } }\n    trace: { responses: { '200': { description: OK, content: { 'application/json': { schema: { type: object, properties: { get: { type: string } } } } } } } }\n",
@@ -124,7 +124,7 @@ test("counts all OpenAPI methods and ignores nested response keys", async () => 
   ]);
 });
 
-test("reports a stale declared count as well as missing operations", async () => {
+void test("reports a stale declared count as well as missing operations", async () => {
   const result = await checkMatrix(
     spec(
       "  /api/items: { get: { responses: { '200': { description: OK } } } }\n",
@@ -135,7 +135,7 @@ test("reports a stale declared count as well as missing operations", async () =>
   assert.match(errorAt(result.errors, 1), /GET \/api\/items/);
 });
 
-test("rejects malformed YAML and duplicate YAML keys", async () => {
+void test("rejects malformed YAML and duplicate YAML keys", async () => {
   await assert.rejects(readSpecOperations(spec("  /api/items: [\n")));
   await assert.rejects(
     readSpecOperations(spec("  /api/items: {}\n  /api/items: {}\n")),

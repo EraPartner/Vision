@@ -34,7 +34,7 @@ export function buildArchivedPortfolioPresentation(
         .filter((t) => Number(t.investment_id) === Number(inv.id))
         .sort((a, b) =>
           firstNonZero(
-            String(b.date).localeCompare(String(a.date)),
+            b.date.localeCompare(a.date),
             Number(b.id) - Number(a.id),
           ),
         )
@@ -44,7 +44,10 @@ export function buildArchivedPortfolioPresentation(
         asPartitionedTxns(txns),
         { costBasisMethod, todayYmd },
       );
-      const current = canonicalById.get(Number(inv.id))!;
+      const current = canonicalById.get(Number(inv.id));
+      if (!current) {
+        throw new Error(`No canonical summary for investment ${inv.id}`);
+      }
       const invCurrency = storedCurrencyCode(inv.currency);
       const conv = (value: DecimalInput) =>
         toNumber(multiply(value, multipliers.get(invCurrency) ?? 1));

@@ -49,6 +49,13 @@ import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
 import { todayAppDateString, appDateStringToUtc } from "../src/lib/timezone.ts";
+import { must } from "./helpers/must.ts";
+import type {
+  AccountId,
+  CategoryId,
+  RecipientId,
+  TransactionId,
+} from "@vision/types/brands";
 
 const MANAGED_VIEWS = ["mv_monthly_summary", "mv_category_totals"];
 
@@ -71,20 +78,22 @@ const anchored = (dateExpr: string) =>
 
 /** 'YYYY-MM' key for the month `monthsBack` months before the current one (app-clock anchored). */
 async function monthKey(monthsBack: number): Promise<string> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    k: string;
+  }>(
     anchored(
       `SELECT to_char(date_trunc('month', CURRENT_DATE) - interval '${monthsBack} months', 'YYYY-MM') AS k`,
     ),
   );
-  return rows[0].k;
+  return must(rows[0], "rows[0]").k;
 }
 
 /** 'YYYY-MM-DD' for an arbitrary date expression (app-clock anchored). */
 async function ymd(dateExpr: string): Promise<string> {
-  const { rows } = await getTestPool()!.query(
-    `SELECT to_char((${anchored(dateExpr)})::date, 'YYYY-MM-DD') AS d`,
-  );
-  return rows[0].d;
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    d: string;
+  }>(`SELECT to_char((${anchored(dateExpr)})::date, 'YYYY-MM-DD') AS d`);
+  return must(rows[0], "rows[0]").d;
 }
 
 /** A month row keyed 'YYYY-MM', for readable assertions. */
@@ -99,16 +108,16 @@ const byMonth = (
   );
 
 async function seedBase() {
-  const pool = getTestPool()!;
+  const pool = must(getTestPool(), "getTestPool()");
   for (const [key, [general, detail]] of Object.entries({
     Food: ["Food", "Groceries"],
     Bills: ["Bills", "Utilities"],
   })) {
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<{ id: CategoryId }>(
       "INSERT INTO categories (general, detail) VALUES ($1, $2) RETURNING id",
       [general, detail],
     );
-    cat[key as keyof typeof cat] = rows[0].id;
+    cat[key as keyof typeof cat] = must(rows[0], "rows[0]").id;
   }
   const addRecipient = async (
     name: string,
@@ -117,12 +126,12 @@ async function seedBase() {
       primaryId = null,
     }: { defaultCategoryId?: number | null; primaryId?: number | null } = {},
   ) => {
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<{ id: RecipientId }>(
       `INSERT INTO recipients (name, normalized_name, default_category_id, primary_recipient_id)
        VALUES ($1, $2, $3, $4) RETURNING id`,
       [name, name.toLowerCase(), defaultCategoryId, primaryId],
     );
-    return rows[0].id;
+    return must(rows[0], "rows[0]").id;
   };
   rec.electrabel = await addRecipient("Electrabel", {
     defaultCategoryId: cat.Bills,
@@ -134,16 +143,17 @@ async function seedBase() {
 }
 
 async function ensureAccount(name: string): Promise<number> {
-  await getTestPool()!.query(
+  await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO accounts (name, display_name) VALUES ($1, $1)
      ON CONFLICT (lower(btrim(name))) DO NOTHING`,
     [name],
   );
-  const { rows } = await getTestPool()!.query(
-    `SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
-    [name],
-  );
-  return rows[0].id;
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    id: AccountId;
+  }>(`SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`, [
+    name,
+  ]);
+  return must(rows[0], "rows[0]").id;
 }
 
 interface TxnInput {
@@ -168,7 +178,9 @@ async function insertTxn({
   isTransfer = false,
 }: TxnInput): Promise<number> {
   const accountId = bank ? await ensureAccount(bank) : null;
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    id: TransactionId;
+  }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, is_active, is_transfer)
      VALUES ((${anchored(dateExpr)})::date, $1, $2, $3, $4, $5, $6, $7) RETURNING id`,
     [
@@ -181,11 +193,11 @@ async function insertTxn({
       isTransfer,
     ],
   );
-  return rows[0].id;
+  return must(rows[0], "rows[0]").id;
 }
 
 async function dropManagedViews() {
-  const pool = getTestPool()!;
+  const pool = must(getTestPool(), "getTestPool()");
   for (const view of MANAGED_VIEWS) {
     await pool.query(`DROP MATERIALIZED VIEW IF EXISTS ${view} CASCADE`);
   }
@@ -205,7 +217,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       // MVs first: they are the only artefact of this suite that outlives a row
       // wipe, and every other DB suite assumes a migrated DB with no MVs.
       await dropManagedViews();
@@ -218,7 +230,7 @@ describe.skipIf(!hasTestDatabase())(
         `DELETE FROM user_settings WHERE key = 'includeTransfers'`,
       );
       for (const bag of [cat, rec] as Record<string, number>[])
-        for (const k of Object.keys(bag)) delete bag[k];
+        for (const k of Object.keys(bag)) Reflect.deleteProperty(bag, k);
       clearMemoryCache();
     });
 
@@ -262,7 +274,10 @@ describe.skipIf(!hasTestDatabase())(
       it("emits period_start/period_end as calendar-day strings covering the whole month", async () => {
         await seedBase();
         const r = await getMonthlyFinancialSummary([], "EUR", [], false);
-        const current = byMonth(r)[await monthKey(0)]!;
+        const current = must(
+          byMonth(r)[await monthKey(0)],
+          "byMonth(r)[await monthKey(0)]",
+        );
         expect(current.period_start).toBe(
           await ymd(`date_trunc('month', CURRENT_DATE)`),
         );
@@ -328,7 +343,7 @@ describe.skipIf(!hasTestDatabase())(
           transaction_count: 1,
         });
 
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', 'true'::jsonb)`,
         );
         const on = await getMonthlyFinancialSummary([], "EUR", [], false);
@@ -361,7 +376,12 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const all = await getMonthlyFinancialSummary([], "EUR", [], false);
-        expect(byMonth(all)[await monthKey(1)]!.total_spending).toBe(-307);
+        expect(
+          must(
+            byMonth(all)[await monthKey(1)],
+            "byMonth(all)[await monthKey(1)]",
+          ).total_spending,
+        ).toBe(-307);
 
         const exclBills = await getMonthlyFinancialSummary(
           [cat.Bills],
@@ -404,7 +424,7 @@ describe.skipIf(!hasTestDatabase())(
 
       it("converts each day at its own stored rate", async () => {
         await seedBase();
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
          VALUES ('USD', (${anchored(monthDay(1, 5))})::date, 0.5, false),
                 ('USD', (${anchored(monthDay(2, 5))})::date, 0.25, false)`,
@@ -421,13 +441,19 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await getMonthlyFinancialSummary([], "EUR", [], false);
-        expect(byMonth(r)[await monthKey(1)]!.total_spending).toBe(-50);
-        expect(byMonth(r)[await monthKey(2)]!.total_spending).toBe(-25);
+        expect(
+          must(byMonth(r)[await monthKey(1)], "byMonth(r)[await monthKey(1)]")
+            .total_spending,
+        ).toBe(-50);
+        expect(
+          must(byMonth(r)[await monthKey(2)], "byMonth(r)[await monthKey(2)]")
+            .total_spending,
+        ).toBe(-25);
       });
 
       it("reports a net that equals the rounded income plus the rounded spending", async () => {
         await seedBase();
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
          VALUES ('USD', (${anchored(monthDay(1, 5))})::date, 0.9, false)`,
         );
@@ -526,7 +552,7 @@ describe.skipIf(!hasTestDatabase())(
         const after = await getMonthlyFinancialSummary([], "EUR", [], false);
         expect(after.months).toEqual(before.months); // stale MV — the new row is unseen
 
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           "REFRESH MATERIALIZED VIEW mv_monthly_summary",
         );
         const refreshed = await getMonthlyFinancialSummary(
@@ -535,14 +561,22 @@ describe.skipIf(!hasTestDatabase())(
           [],
           false,
         );
-        expect(byMonth(refreshed)[await monthKey(0)]!.total_spending).toBe(
-          byMonth(before)[await monthKey(0)]!.total_spending - 77,
+        expect(
+          must(
+            byMonth(refreshed)[await monthKey(0)],
+            "byMonth(refreshed)[await monthKey(0)]",
+          ).total_spending,
+        ).toBe(
+          must(
+            byMonth(before)[await monthKey(0)],
+            "byMonth(before)[await monthKey(0)]",
+          ).total_spending - 77,
         );
       });
 
       it("falls back to the live path when the MV holds a non-target currency", async () => {
         await seedBase();
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
          VALUES ('USD', (${anchored(monthDay(1, 5))})::date, 0.5, true)`,
         );
@@ -565,7 +599,12 @@ describe.skipIf(!hasTestDatabase())(
         // Mixed currencies ⇒ the homogeneity probe rejects the MV, so the
         // per-(date,currency) live conversion is used and the answer is unchanged.
         expect(withMv.months).toEqual(live.months);
-        expect(byMonth(withMv)[await monthKey(1)]!.total_spending).toBe(-60);
+        expect(
+          must(
+            byMonth(withMv)[await monthKey(1)],
+            "byMonth(withMv)[await monthKey(1)]",
+          ).total_spending,
+        ).toBe(-60);
       });
 
       it("never takes the MV path when an exclusion or allTime is requested", async () => {
@@ -582,7 +621,12 @@ describe.skipIf(!hasTestDatabase())(
         });
         const allTime = await getMonthlyFinancialSummary([], "EUR", [], true);
         expect(allTime.months.length).toBeGreaterThan(6);
-        expect(byMonth(allTime)[await monthKey(8)]!.total_spending).toBe(-11);
+        expect(
+          must(
+            byMonth(allTime)[await monthKey(8)],
+            "byMonth(allTime)[await monthKey(8)]",
+          ).total_spending,
+        ).toBe(-11);
 
         // An exclusion likewise forces the live path — and is honoured.
         const excluded = await getMonthlyFinancialSummary(
@@ -591,7 +635,12 @@ describe.skipIf(!hasTestDatabase())(
           [],
           false,
         );
-        expect(byMonth(excluded)[await monthKey(1)]!.total_spending).toBe(-200);
+        expect(
+          must(
+            byMonth(excluded)[await monthKey(1)],
+            "byMonth(excluded)[await monthKey(1)]",
+          ).total_spending,
+        ).toBe(-200);
       });
     });
 
@@ -627,14 +676,20 @@ describe.skipIf(!hasTestDatabase())(
        * or the pool stalls.
        */
       async function pinClockToRollover() {
-        const { rows } = await getTestPool()!.query(`
+        const { rows } = await must(getTestPool(), "getTestPool()").query<{
+          app_today: string;
+          app_month: string;
+          db_month: string;
+          app_window_start: string;
+          db_window_start: string;
+        }>(`
         SELECT to_char(date_trunc('month', CURRENT_DATE) + interval '1 month', 'YYYY-MM-DD') AS app_today,
                to_char(date_trunc('month', CURRENT_DATE) + interval '1 month', 'YYYY-MM')     AS app_month,
                to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM')                          AS db_month,
                to_char(date_trunc('month', CURRENT_DATE) - interval '4 months', 'YYYY-MM')    AS app_window_start,
                to_char(date_trunc('month', CURRENT_DATE) - interval '5 months', 'YYYY-MM')    AS db_window_start
       `);
-        const facts = rows[0];
+        const facts = must(rows[0], "rollover facts");
         // 00:30 of that app-timezone day == 22:30/23:30 UTC on the day before.
         const instant = new Date(
           appDateStringToUtc(facts.app_today).getTime() + 30 * 60_000,

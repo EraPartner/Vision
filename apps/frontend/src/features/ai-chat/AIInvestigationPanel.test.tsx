@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { renderWithApp } from "@/test/renderWithApp";
 import { AIInvestigationPanel } from "./AIInvestigationPanel";
+import { must } from "@/test/must";
 
 vi.mock("@/lib/api", async (importOriginal) => {
     const actual = await importOriginal<typeof import("@/lib/api")>();
@@ -28,9 +29,10 @@ describe("AIInvestigationPanel progressive controls", () => {
             screen.getByRole("button", { name: "Start investigation" }),
         ).toBeDisabled();
         expect(screen.getByText("Your local model")).toBeVisible();
-        const settings = screen
-            .getByText("Research settings")
-            .closest("details")!;
+        const settings = must(
+            screen.getByText("Research settings").closest("details"),
+            "research settings details",
+        );
         expect(settings).not.toHaveAttribute("open");
         expect(
             within(settings).getByRole("radio", { name: "Quick" }),

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
+import { must } from "@/test/must";
 
 vi.mock("@/stores/hydration/LanguageHydration", () => ({
     useLanguage: () => ({
@@ -118,9 +119,9 @@ describe("YearComparisonCard", () => {
         expect(grossRow).not.toBeNull();
         expect(taxRow).not.toBeNull();
 
-        const grossPill = within(grossRow!).getAllByRole("cell")[3]
+        const grossPill = within(must(grossRow)).getAllByRole("cell")[3]
             ?.firstElementChild;
-        const taxPill = within(taxRow!).getAllByRole("cell")[3]
+        const taxPill = within(must(taxRow)).getAllByRole("cell")[3]
             ?.firstElementChild;
         expect(grossPill).toHaveClass("text-gain", "bg-gain/12");
         expect(taxPill).toHaveClass("text-loss", "bg-loss/12");
@@ -143,7 +144,7 @@ describe("YearComparisonCard", () => {
             />,
         );
         const grossRow = screen.getByText("Gross income").closest("tr");
-        expect(within(grossRow!).getAllByRole("cell")[3]).toHaveTextContent(
+        expect(within(must(grossRow)).getAllByRole("cell")[3]).toHaveTextContent(
             "-€5000",
         );
     });
@@ -152,14 +153,14 @@ describe("YearComparisonCard", () => {
         render(
             <YearComparisonCard
                 years={dashboardYears(calculationForYear).slice(1).concat({
-                    ...dashboardYears(calculationForYear)[1]!,
+                    ...must(dashboardYears(calculationForYear)[1]),
                     year: 2024,
                 })}
                 viewedCalculation={calculationForYear(2026)}
             />,
         );
         const grossRow = screen.getByText("Gross income").closest("tr");
-        expect(within(grossRow!).getAllByRole("cell")[1]).toHaveTextContent(
+        expect(within(must(grossRow)).getAllByRole("cell")[1]).toHaveTextContent(
             "€60000",
         );
     });

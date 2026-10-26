@@ -32,9 +32,9 @@ type CategoryColorIdentity = string | readonly string[];
 function categoryRoot(category: CategoryColorIdentity): string {
     // Ordered segments are authoritative. A display name alone cannot
     // distinguish a literal colon in a name from the legacy separator.
-    if (Array.isArray(category))
+    if (typeof category !== "string")
         return (category[0] ?? "").trim().toUpperCase();
-    return (String(category).split(":")[0] ?? "").trim().toUpperCase();
+    return (category.split(":")[0] ?? "").trim().toUpperCase();
 }
 
 /** Stable 0-based chart-token index. Pass ordered segments when available. */

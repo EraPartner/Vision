@@ -2,8 +2,22 @@
 
 import pg from "pg";
 import { logger } from "../config/logger.ts";
+import { errorMessage } from "../lib/errors.ts";
 
 const ANALYSIS_ROLE = "vision_analysis_executor";
+
+const UNSAFE_ROLE_FLAGS = [
+  "rolsuper",
+  "rolcreatedb",
+  "rolcreaterole",
+  "rolinherit",
+  "rolreplication",
+  "rolbypassrls",
+] as const;
+
+type ExecutorRoleRow = Record<(typeof UNSAFE_ROLE_FLAGS)[number], boolean | null> & {
+  rolcanlogin: boolean;
+};
 
 interface ParsedDbUrl {
   user: string;
@@ -75,10 +89,10 @@ export async function ensureAnalysisRole({
   });
   try {
     await client.connect();
-    const privileges = await client.query(
+    const privileges = await client.query<{ can_create: boolean | null }>(
       "SELECT rolsuper OR rolcreaterole AS can_create FROM pg_roles WHERE rolname = current_user",
     );
-    const exists = await client.query(
+    const exists = await client.query<ExecutorRoleRow>(
       "SELECT rolsuper, rolcreatedb, rolcreaterole, rolinherit, rolreplication, rolbypassrls, rolcanlogin FROM pg_roles WHERE rolname = $1",
       [ANALYSIS_ROLE],
     );
@@ -102,14 +116,7 @@ export async function ensureAnalysisRole({
       const role = exists.rows[0];
       if (
         !role?.rolcanlogin ||
-        [
-          "rolsuper",
-          "rolcreatedb",
-          "rolcreaterole",
-          "rolinherit",
-          "rolreplication",
-          "rolbypassrls",
-        ].some((flag) => role[flag] !== false)
+        UNSAFE_ROLE_FLAGS.some((flag) => role[flag] !== false)
       ) {
         log.warn(
           "[analysis-role] preprovisioned executor has unsafe attributes; executor disabled.",
@@ -171,7 +178,7 @@ export async function ensureAnalysisRole({
     return { status: exists.rows.length > 0 ? "exists" : "created" };
   } catch (error) {
     log.warn(
-      `[analysis-role] bootstrap failed (${(error as Error).message}); executor disabled.`,
+      `[analysis-role] bootstrap failed (${errorMessage(error)}); executor disabled.`,
     );
     return { status: "degraded", reason: "bootstrap-failed" };
   } finally {

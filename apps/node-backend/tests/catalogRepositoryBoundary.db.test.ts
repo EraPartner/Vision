@@ -26,6 +26,7 @@ import {
   asRecipientId,
   asTagId,
 } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
 
 const SUFFIX = `CRB${process.pid}`;
 const created = {
@@ -41,26 +42,26 @@ async function insertRecipient(
   name: string,
   defaultCategoryId: number | null = null,
 ): Promise<number> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: number }>(
     `INSERT INTO recipients (name, normalized_name, default_category_id)
      VALUES ($1, lower($1), $2) RETURNING id`,
     [name, defaultCategoryId],
   );
-  created.recipientIds.push(rows[0].id);
-  return rows[0].id;
+  created.recipientIds.push(must(rows[0], "row").id);
+  return must(rows[0], "row").id;
 }
 
 async function insertTransaction(
   recipientId: number,
   { isActive = true, isTransfer = false } = {},
 ): Promise<number> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: number }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, memo, is_active, is_transfer)
      VALUES ('2026-02-01', '-10.0000', 'EUR', $1, $2, $3, $4) RETURNING id`,
     [recipientId, SUFFIX, isActive, isTransfer],
   );
-  created.transactionIds.push(rows[0].id);
-  return rows[0].id;
+  created.transactionIds.push(must(rows[0], "row").id);
+  return must(rows[0], "row").id;
 }
 
 describe.skipIf(!hasTestDatabase())(
@@ -73,7 +74,7 @@ describe.skipIf(!hasTestDatabase())(
 
     afterAll(async () => {
       try {
-        const db = getTestPool()!;
+        const db = must(getTestPool(), "getTestPool()");
         await db.query("DELETE FROM transactions WHERE id = ANY($1)", [
           created.transactionIds,
         ]);
@@ -118,8 +119,8 @@ describe.skipIf(!hasTestDatabase())(
           const { tag } = await tagRepository.findOrCreateBySlug(slug);
           created.tagIds.push(tag.id);
         }
-        const inactive = await tagRepository.getBySlug(slugs[2]!);
-        await tagRepository.softDelete(inactive!.id);
+        const inactive = await tagRepository.getBySlug(must(slugs[2], "slugs[2]"));
+        await tagRepository.softDelete(must(inactive, "inactive").id);
 
         const ours = (rows: { id: number; slug: string }[]) =>
           rows.filter((row) => created.tagIds.includes(row.id));
@@ -207,9 +208,9 @@ describe.skipIf(!hasTestDatabase())(
     describe("saved charts", () => {
       it("stores deduplicated sorted memberships and patches only the sets given", async () => {
         const root = await createCategoryNode({ name: `CHART${SUFFIX}` });
-        const a = await createCategoryNode({ name: "A", parentId: root!.id });
-        const b = await createCategoryNode({ name: "B", parentId: root!.id });
-        created.categoryIds.push(root!.id, a!.id, b!.id);
+        const a = await createCategoryNode({ name: "A", parentId: must(root, "root").id });
+        const b = await createCategoryNode({ name: "B", parentId: must(root, "root").id });
+        created.categoryIds.push(must(root, "root").id, must(a, "a").id, must(b, "b").id);
         const { tag } = await tagRepository.findOrCreateBySlug(
           `chart-${SUFFIX}`.toLowerCase(),
         );
@@ -218,28 +219,28 @@ describe.skipIf(!hasTestDatabase())(
         const chart = await savedChartsRepository.create({
           name: `Spending ${SUFFIX}`,
           chartType: "bar",
-          categoryIds: [b!.id, a!.id, b!.id],
+          categoryIds: [must(b, "b").id, must(a, "a").id, must(b, "b").id],
           recipientIds: [],
           tagIds: [tag.id],
           chartVariant: "default",
           timeBucket: "monthly",
         });
-        created.chartIds.push(chart!.id);
+        created.chartIds.push(must(chart, "chart").id);
         expect(chart).toMatchObject({
-          category_ids: [a!.id, b!.id].sort((x, y) => x - y),
+          category_ids: [must(a, "a").id, must(b, "b").id].sort((x, y) => x - y),
           recipient_ids: [],
           tag_ids: [tag.id],
         });
 
-        const patched = await savedChartsRepository.update(chart!.id, {
-          categoryIds: [b!.id, b!.id],
+        const patched = await savedChartsRepository.update(must(chart, "chart").id, {
+          categoryIds: [must(b, "b").id, must(b, "b").id],
         });
         expect(patched).toMatchObject({
           name: `Spending ${SUFFIX}`,
-          category_ids: [b!.id],
+          category_ids: [must(b, "b").id],
           tag_ids: [tag.id],
         });
-        expect(await savedChartsRepository.getById(chart!.id)).toEqual(patched);
+        expect(await savedChartsRepository.getById(must(chart, "chart").id)).toEqual(patched);
         expect(
           await savedChartsRepository.update(2_000_000_000, { name: "X" }),
         ).toBeNull();
@@ -256,7 +257,7 @@ describe.skipIf(!hasTestDatabase())(
             timeBucket: "monthly",
           }),
         ).rejects.toMatchObject({ code: "23503" });
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(getTestPool(), "getTestPool()").query(
           "SELECT id FROM saved_charts WHERE name = $1",
           [name],
         );
@@ -269,20 +270,20 @@ describe.skipIf(!hasTestDatabase())(
         const first = await recipientRepository.createOrGet({
           name: `  shop ${SUFFIX} `,
         });
-        created.recipientIds.push(first.recipient!.id);
+        created.recipientIds.push(must(first.recipient, "first.recipient").id);
         expect(first.created).toBe(true);
-        expect(first.recipient!.name).toBe(`SHOP ${SUFFIX}`);
+        expect(must(first.recipient, "first.recipient").name).toBe(`SHOP ${SUFFIX}`);
 
         const again = await recipientRepository.createOrGet({
           name: `Shop ${SUFFIX}`,
         });
         expect(again).toMatchObject({
           created: false,
-          recipient: { id: first.recipient!.id },
+          recipient: { id: must(first.recipient, "first.recipient").id },
         });
         expect(
           (await recipientRepository.getByName(`  SHOP ${SUFFIX}`))?.id,
-        ).toBe(first.recipient!.id);
+        ).toBe(must(first.recipient, "first.recipient").id);
       });
 
       it("update writes the upper-cased name and keeps lookups by name working", async () => {
@@ -308,14 +309,14 @@ describe.skipIf(!hasTestDatabase())(
         const root = await createCategoryNode({ name: `RCP${SUFFIX}` });
         const child = await createCategoryNode({
           name: "CHILD",
-          parentId: root!.id,
+          parentId: must(root, "root").id,
         });
         const other = await createCategoryNode({ name: `OTHER${SUFFIX}` });
-        created.categoryIds.push(root!.id, child!.id, other!.id);
+        created.categoryIds.push(must(root, "root").id, must(child, "child").id, must(other, "other").id);
 
-        const underRoot = await insertRecipient(`Root ${SUFFIX}`, root!.id);
-        const underChild = await insertRecipient(`Child ${SUFFIX}`, child!.id);
-        const elsewhere = await insertRecipient(`Other ${SUFFIX}`, other!.id);
+        const underRoot = await insertRecipient(`Root ${SUFFIX}`, must(root, "root").id);
+        const underChild = await insertRecipient(`Child ${SUFFIX}`, must(child, "child").id);
+        const elsewhere = await insertRecipient(`Other ${SUFFIX}`, must(other, "other").id);
         const uncategorisedActive = await insertRecipient(`Busy ${SUFFIX}`);
         const uncategorisedIdle = await insertRecipient(`Idle ${SUFFIX}`);
         const uncategorisedTransfer = await insertRecipient(
@@ -323,7 +324,7 @@ describe.skipIf(!hasTestDatabase())(
         );
         const categorisedActive = await insertRecipient(
           `Categorised ${SUFFIX}`,
-          other!.id,
+          must(other, "other").id,
         );
         await insertTransaction(uncategorisedActive);
         await insertTransaction(uncategorisedIdle, { isActive: false });
@@ -339,22 +340,22 @@ describe.skipIf(!hasTestDatabase())(
             })
           ).map((row) => row.id);
 
-        expect(new Set(await ids({ defaultCategoryId: root!.id }))).toEqual(
+        expect(new Set(await ids({ defaultCategoryId: must(root, "root").id }))).toEqual(
           new Set([underRoot, underChild]),
         );
         expect(
           await recipientRepository.getCount({
-            defaultCategoryId: root!.id,
+            defaultCategoryId: must(root, "root").id,
             search: SUFFIX,
           }),
         ).toBe(2);
         expect(
-          await ids({ uncategorized: true, defaultCategoryId: other!.id }),
+          await ids({ uncategorized: true, defaultCategoryId: must(other, "other").id }),
         ).toEqual([uncategorisedActive]);
-        expect(await ids({ defaultCategoryId: other!.id })).not.toContain(
+        expect(await ids({ defaultCategoryId: must(other, "other").id })).not.toContain(
           underRoot,
         );
-        expect(await ids({ defaultCategoryId: other!.id })).toContain(
+        expect(await ids({ defaultCategoryId: must(other, "other").id })).toContain(
           elsewhere,
         );
       });

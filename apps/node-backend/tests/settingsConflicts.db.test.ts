@@ -9,6 +9,8 @@ import {
 import { closePool } from "../src/database/connection.ts";
 import { createDailyJob } from "../src/startup/dailyJobs.ts";
 import repo from "../src/repositories/settingsRepository.ts";
+import { must } from "./helpers/must.ts";
+import { valueAt } from "./helpers/responseBody.ts";
 const pool = getTestPool();
 const keys = ["vision_test_conflict_a", "vision_test_conflict_b"] as const;
 describe.skipIf(!hasTestDatabase())(
@@ -20,7 +22,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180000);
     afterAll(async () => {
       try {
-        await pool!.query("DELETE FROM user_settings WHERE key=ANY($1)", [
+        await must(pool, "pool").query("DELETE FROM user_settings WHERE key=ANY($1)", [
           [...keys, "daily_job_vision_test"],
         ]);
       } finally {
@@ -36,14 +38,14 @@ describe.skipIf(!hasTestDatabase())(
       }
     });
     it("persists daily completion across scheduler recreation", async () => {
-      await pool!.query("DELETE FROM user_settings WHERE key=$1", [
+      await must(pool, "pool").query("DELETE FROM user_settings WHERE key=$1", [
         "daily_job_vision_test",
       ]);
       let runs = 0;
       const now = () => 10 * 86400000;
-      const run = async () => {
+      const run = () => {
         runs++;
-        return true;
+        return Promise.resolve(true);
       };
       await createDailyJob("vision_test", run, { store: repo, now })();
       await createDailyJob("vision_test", run, { store: repo, now })();
@@ -51,7 +53,7 @@ describe.skipIf(!hasTestDatabase())(
       expect(await repo.get("daily_job_vision_test")).toBe(now());
     });
     it("permits one concurrent creator, then rejects stale replacement and deletion", async () => {
-      await pool!.query("DELETE FROM user_settings WHERE key=ANY($1)", [
+      await must(pool, "pool").query("DELETE FROM user_settings WHERE key=ANY($1)", [
         [...keys, "daily_job_vision_test"],
       ]);
       const created = await Promise.allSettled([
@@ -60,7 +62,10 @@ describe.skipIf(!hasTestDatabase())(
       ]);
       expect(created.filter((r) => r.status === "fulfilled")).toHaveLength(1);
       expect(
-        created.filter((r) => r.status === "rejected")[0]!.reason.status,
+        valueAt(
+          must(created.filter((r) => r.status === "rejected")[0], "created.filter result").reason,
+          "status",
+        ),
       ).toBe(409);
       const old = (await repo.getRecord(keys[0])).expected;
       await repo.replace(keys[0], { nested: { only: true } }, old);

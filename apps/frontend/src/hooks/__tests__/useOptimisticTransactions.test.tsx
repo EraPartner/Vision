@@ -128,7 +128,7 @@ describe("useDeleteTransaction (optimistic)", () => {
         act(() => { result.current.mutate(asTransactionId(1)); });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-        const invalidatedKeys = invalidateSpy.mock.calls.map((c) => (c[0] as { queryKey: unknown[] })?.queryKey?.[0]);
+        const invalidatedKeys = invalidateSpy.mock.calls.map((c) => (c[0] as { queryKey?: unknown[] } | undefined)?.queryKey?.[0]);
         for (const key of ["transactions", "transactions-virtual", "monthlySummary", "filteredDashboardStats", "aggregations", "dashboardRecentTransactions"]) {
             expect(invalidatedKeys).toContain(key);
         }

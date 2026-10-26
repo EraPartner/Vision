@@ -33,7 +33,10 @@ import {
   buildChatMessages,
   serializeToolResultForPrompt,
 } from "../integrations/ollama/prompts.ts";
-import type { OllamaToolCall } from "../integrations/ollama/prompts.ts";
+import type {
+  OllamaToolCall,
+  ProviderToolCall,
+} from "../integrations/ollama/prompts.ts";
 import { AI_CHAT_STREAM_EVENT } from "@vision/types/aiChat";
 import type { AiChatServiceEvent } from "@vision/types/aiChat";
 import type { ToolCache } from "./aiChat/toolCache.ts";
@@ -63,7 +66,7 @@ export type { AiConversationRow, AiMessageRow };
 export type OllamaMessage = {
   role: string;
   content: string;
-  tool_calls?: OllamaToolCall[] | undefined;
+  tool_calls?: ProviderToolCall[] | undefined;
   name?: string | undefined;
 };
 
@@ -234,7 +237,7 @@ function normalizeToolCall(
     | null
     | undefined,
 ): { name: string | undefined; rawArgs: unknown } {
-  const fn: { name?: string; arguments?: unknown } =
+  const fn: { name?: string | undefined; arguments?: unknown } =
     toolCall?.function ?? toolCall ?? {};
   const name = fn.name || toolCall?.name || undefined;
   const rawArgs = fn.arguments ?? toolCall?.arguments;
@@ -637,8 +640,8 @@ async function runChatTurnLocked({
         conversationId: conversation.id,
         iteration: iterations,
         ms: Date.now() - iterStart,
-        toolCalls: response.toolCalls?.length ?? 0,
-        contentLen: response.content?.length ?? 0,
+        toolCalls: response.toolCalls.length,
+        contentLen: response.content.length,
         promptEvalCount: response.promptEvalCount,
         evalCount: response.evalCount,
         loadDurationMs: response.loadDurationMs,
@@ -673,7 +676,7 @@ async function runChatTurnLocked({
       totalDurationMs: response.totalDurationMs,
     };
 
-    if (response.toolCalls == null || response.toolCalls.length === 0) {
+    if (response.toolCalls.length === 0) {
       const assistantMessage = await aiChatRepository.appendMessage({
         conversationId: conversation.id,
         role: "assistant",

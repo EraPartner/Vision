@@ -17,6 +17,7 @@ vi.mock("../../src/services/currency/currencyConversionService.ts", () =>
 import { getSankeyAggregates as rawGetSankeyAggregates } from "../../src/repositories/infoRepositorySankey.ts";
 import { convertRowsToEur as rawConvertRowsToEur } from "../../src/services/currency/currencyConversionService.ts";
 import { computeSankeyFlow } from "../../src/services/calculations/aggregation/sankey.ts";
+import { must } from "../helpers/must.ts";
 
 const getSankeyAggregates = vi.mocked(rawGetSankeyAggregates);
 const convertRowsToEur = mockedConvertRowsToEur(rawConvertRowsToEur);
@@ -95,12 +96,12 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
 
     // Income = 1000 + 100*0.9 = 1090; spending = 300 + 400 = 700; savings = 390.
     const income = nodes.find((n) => n.id === "__income__");
-    expect(income!.value).toBe(1090);
+    expect(must(income, "income").value).toBe(1090);
     const savings = nodes.find((n) => n.id === "__savings__");
-    expect(savings!.value).toBe(390);
+    expect(must(savings, "savings").value).toBe(390);
 
     const rentLink = links.find((l) => l.target === "cat:3");
-    expect(rentLink!.value).toBe(400);
+    expect(must(rentLink, "rentLink").value).toBe(400);
     expect(links).toEqual(
       expect.arrayContaining([
         { source: "__income__", target: "__spending__", value: 700 },

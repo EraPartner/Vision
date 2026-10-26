@@ -1,4 +1,5 @@
 /** Read and restore duplicate repairs applied before ADR-236. */
+import { requireRow } from "../database/rowContracts.ts";
 import { sql } from "kysely";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
 import type { Json } from "../database/schema.generated.ts";
@@ -133,7 +134,7 @@ export async function insertDuplicateRepairReceipt({
   policy,
   before,
   after,
-  previousEntryId = undefined,
+  previousEntryId,
 }: {
   batchId: Id;
   stagingRowId: Id;
@@ -165,7 +166,7 @@ export async function insertDuplicateRepairReceipt({
       .returning("id"),
   );
   // INSERT ... RETURNING without ON CONFLICT yields exactly one row.
-  return Number(inserted!.id);
+  return Number(requireRow(inserted, "duplicate repair receipt insert").id);
 }
 
 export async function getActiveDuplicateRepairReceipts(
@@ -178,10 +179,11 @@ export async function getActiveDuplicateRepairReceipts(
       .selectAll("a")
       .where("a.batch_id", "=", String(batchId))
       .where("a.action", "=", "repair")
-      .where(({ not, exists, selectFrom }) =>
-        not(
-          exists(
-            selectFrom("portfolio_import_duplicate_repair_journal as r")
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom("portfolio_import_duplicate_repair_journal as r")
               .select(sql`1`.as("one"))
               .whereRef("r.previous_entry_id", "=", "a.id"),
           ),

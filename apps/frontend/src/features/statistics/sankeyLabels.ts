@@ -1,4 +1,5 @@
-export const SANKEY_RESERVED_LABEL_KEYS: Readonly<Record<string, string>> = {
+import type { TranslationKey } from "@/locales/keys";
+export const SANKEY_RESERVED_LABEL_KEYS: Readonly<Record<string, TranslationKey>> = {
     __income__: "statsPage.sankey.income",
     __spending__: "statsPage.sankey.spending",
     __funding_gap__: "statsPage.sankey.fundingGap",
@@ -10,7 +11,7 @@ export const SANKEY_RESERVED_LABEL_KEYS: Readonly<Record<string, string>> = {
 export function localizeSankeyLabel(
     id: string,
     label: string,
-    translate: (key: string) => string,
+    translate: (key: TranslationKey) => string,
 ): string {
     const key = SANKEY_RESERVED_LABEL_KEYS[id];
     return key ? translate(key) : label;

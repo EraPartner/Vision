@@ -7,6 +7,7 @@
  * transfers so closing a balance does not appear as income or spending.
  */
 
+import { looseText } from "../lib/looseText.ts";
 import { sql } from "kysely";
 import { withTransaction } from "../database/connection.ts";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
@@ -82,10 +83,12 @@ function isBalanceHandling(value: string): value is BalanceHandling {
   return VALID_BALANCE_HANDLING.has(value);
 }
 
-function normalizeCloseAccount(
-  body: { balance_handling?: unknown } | null | undefined,
-): BalanceHandling {
-  const balanceHandling = String(body?.balance_handling ?? "");
+function normalizeCloseAccount(body: unknown): BalanceHandling {
+  const raw =
+    typeof body === "object" && body !== null && "balance_handling" in body
+      ? body.balance_handling
+      : undefined;
+  const balanceHandling = looseText(raw ?? "");
   if (!isBalanceHandling(balanceHandling)) {
     throw new ValidationError(
       "balance_handling is required and must be 'preserve' or 'adjustment'",
@@ -96,7 +99,7 @@ function normalizeCloseAccount(
 
 export async function closeAccount(
   accountId: AccountId,
-  body: { balance_handling?: unknown } | null | undefined,
+  body: unknown,
 ) {
   const balanceHandling = normalizeCloseAccount(body);
   const today = todayAppDateString();

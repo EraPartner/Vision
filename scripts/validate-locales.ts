@@ -101,7 +101,7 @@ function placeholderTokens(str: unknown): Set<string> {
   // Non-string values are reported by the type check below; they have no tokens.
   if (typeof str !== "string") return new Set();
   const tokens = str.match(/\{[a-zA-Z0-9_]+\}/g);
-  return new Set(tokens || []);
+  return new Set(tokens ?? []);
 }
 
 function sameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
@@ -118,7 +118,7 @@ const files = fs
   .readdirSync(src)
   .filter((f) => f.endsWith(".json"))
   .sort();
-if (!files.length) {
+if (files.length === 0) {
   fail("No locale source JSON files found in i18n/source.");
 }
 
@@ -143,7 +143,7 @@ for (const [lang, dict] of Object.entries(masters)) {
   const suspicious = Object.entries(dict).filter(
     ([, v]) => typeof v === "string" && /\\",\\n$/.test(v),
   );
-  if (suspicious.length) {
+  if (suspicious.length > 0) {
     console.error(
       `Language ${lang} has ${suspicious.length} suspicious escaped-tail strings (sample 20 keys):`,
     );
@@ -159,7 +159,7 @@ for (const [lang, dict] of Object.entries(masters)) {
   const stubbed = Object.entries(dict).filter(
     ([, v]) => typeof v === "string" && STUB_PREFIX_RE.test(v),
   );
-  if (stubbed.length) {
+  if (stubbed.length > 0) {
     console.error(
       `Language ${lang} has ${stubbed.length} untranslated stub value(s) still prefixed with a "[XX] " placeholder (sample 20 keys):`,
     );
@@ -176,7 +176,7 @@ for (const [lang, dict] of Object.entries(masters)) {
 
   if (lang !== "en") {
     const missing = [...enKeys].filter((k) => !keys.has(k));
-    if (missing.length) {
+    if (missing.length > 0) {
       console.error(
         `Language ${lang} is missing ${missing.length} keys (sample 20):`,
       );
@@ -185,7 +185,7 @@ for (const [lang, dict] of Object.entries(masters)) {
     }
 
     const extra = [...keys].filter((k) => !enKeys.has(k));
-    if (extra.length) {
+    if (extra.length > 0) {
       console.error(
         `Language ${lang} has ${extra.length} extra keys not in en.json (sample 20):`,
       );
@@ -197,7 +197,7 @@ for (const [lang, dict] of Object.entries(masters)) {
   const nonString = Object.entries(dict).filter(
     ([, v]) => typeof v !== "string",
   );
-  if (nonString.length) {
+  if (nonString.length > 0) {
     console.error(
       `Language ${lang} has ${nonString.length} non-string values (sample 20 keys):`,
     );
@@ -218,7 +218,7 @@ for (const [lang, dict] of Object.entries(masters)) {
       const locTokens = placeholderTokens(dict[key]);
       if (!sameSet(enTokens, locTokens)) mismatchPlaceholders.push(key);
     }
-    if (mismatchPlaceholders.length) {
+    if (mismatchPlaceholders.length > 0) {
       console.error(
         `Language ${lang} has ${mismatchPlaceholders.length} placeholder mismatches vs en (sample 20):`,
       );
@@ -356,20 +356,22 @@ if (fs.existsSync(frontendSrc)) {
       const allowed = new Set([...tokens].map((t) => t.slice(1, -1)));
       if (fn === "tc") allowed.add("count");
       const dropped = variableNames.filter((name) => !allowed.has(name));
-      if (dropped.length)
+      const enValue = en[key] ?? en[key + ".other"];
+      const sample = typeof enValue === "string" ? enValue : "";
+      if (dropped.length > 0)
         droppedVars.push(
-          `${rel}:${line}  ${fn}('${key}') drops {${dropped.join("}, {")}} (string: "${String(en[key] ?? en[key + ".other"] ?? "")}")`,
+          `${rel}:${line}  ${fn}('${key}') drops {${dropped.join("}, {")}} (string: "${sample}")`,
         );
     }
   }
-  if (missingKeys.length) {
+  if (missingKeys.length > 0) {
     console.error(
       `Found ${missingKeys.length} t()/tc() call(s) referencing keys absent from en.json (the raw key would render):`,
     );
     console.error(missingKeys.join("\n"));
     failed = true;
   }
-  if (droppedVars.length) {
+  if (droppedVars.length > 0) {
     console.error(
       `Found ${droppedVars.length} t()/tc() call(s) passing a var with no matching {placeholder} (value is silently dropped):`,
     );
@@ -382,7 +384,7 @@ if (fs.existsSync(frontendSrc)) {
     const keyish = Object.entries(dict).filter(
       ([, v]) => typeof v === "string" && KEY_SHAPE.test(v.trim()),
     );
-    if (keyish.length) {
+    if (keyish.length > 0) {
       console.error(
         `Language ${lang} has ${keyish.length} value(s) shaped like an i18n key (likely an untranslated key pasted as a value):`,
       );
@@ -499,12 +501,12 @@ const unusedKeys = [...enKeys].filter((k) => !keyIsUsed(k));
 
 if (process.argv.includes("--list-unused")) {
   process.stdout.write(
-    unusedKeys.sort().join("\n") + (unusedKeys.length ? "\n" : ""),
+    unusedKeys.sort().join("\n") + (unusedKeys.length > 0 ? "\n" : ""),
   );
   process.exit(0);
 }
 
-if (unusedKeys.length) {
+if (unusedKeys.length > 0) {
   console.error(
     `Found ${unusedKeys.length} i18n key(s) defined in en.json but referenced nowhere in ${USAGE_SCAN_DIRS.join("/")}:`,
   );

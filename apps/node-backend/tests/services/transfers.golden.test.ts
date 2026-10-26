@@ -14,7 +14,7 @@ type MatchArgs = Parameters<typeof findTransferMatches>;
 
 describe('transfer matching golden', () => {
   it('classifies auto-pairs vs ambiguous suggestions', async () => {
-    await runGolden<{ transactions: MatchArgs[0]; options: MatchArgs[1] }>('transfers/match-cases', (input) =>
+    await runGolden('transfers/match-cases', (input: { transactions: MatchArgs[0]; options: MatchArgs[1] }) =>
       findTransferMatches(input.transactions, input.options),
     );
   });

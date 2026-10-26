@@ -7,6 +7,7 @@ import type { PortfolioTxnType as CanonicalPortfolioTxnType } from "@vision/type
 import type { RecurrenceInterval } from "@vision/types/recurrence";
 import type { CurrencyCode, InvestmentId } from "@vision/types/brands";
 import { enumGuard } from "@/lib/enumGuard";
+import type { TranslationKey } from "@/locales/keys";
 
 // Derived from the canonical runtime array in @vision/types/assetClasses, so
 // this union can no longer drift from the shared ASSET_CLASSES list.
@@ -14,7 +15,7 @@ export type { AssetClass };
 
 /** Returns a translated label for an asset class. */
 export function getAssetClassLabel(
-    t: (key: string) => string,
+    t: (key: TranslationKey) => string,
     assetClass: AssetClass,
 ): string {
     return t(`portfolio.assetClass.${assetClass}`);
@@ -22,7 +23,7 @@ export function getAssetClassLabel(
 
 /** Returns translated asset class groups for UI display. */
 export function getAssetClassGroups(
-    t: (key: string) => string,
+    t: (key: TranslationKey) => string,
 ): Record<string, AssetClass[]> {
     return {
         [t("portfolio.assetGroup.stocksEtfs")]: ["stock", "etf"],
@@ -63,15 +64,31 @@ export const isPortfolioTxnType = enumGuard<PortfolioTxnType>({
 type _TxnTypeSubsetParity = PortfolioTxnType extends CanonicalPortfolioTxnType
     ? true
     : never;
-const _txnTypeSubsetParity: _TxnTypeSubsetParity = true;
-void _txnTypeSubsetParity;
+// Compile-time assertion only: fails to type-check if the subset drifts.
+true satisfies _TxnTypeSubsetParity;
 
-/** Returns a translated label for a portfolio transaction type. */
+const TXN_TYPE_LABEL_KEYS: Record<PortfolioTxnType, TranslationKey> = {
+    buy: "portfolio.txnType.buy",
+    sell: "portfolio.txnType.sell",
+    dividend: "portfolio.txnType.dividend",
+    fee: "portfolio.txnType.fee",
+    tax: "portfolio.txnType.tax",
+    interest: "portfolio.txnType.interest",
+    rent_income: "portfolio.txnType.rent_income",
+    appreciation: "portfolio.txnType.appreciation",
+    gift: "portfolio.txnType.gift",
+};
+
+/**
+ * Returns a translated label for a portfolio transaction type. Types without a
+ * label (corporate actions such as `split`, which arrive from the API) fall
+ * back to the raw type string.
+ */
 export function getTxnTypeLabel(
-    t: (key: string) => string,
-    type: PortfolioTxnType | string,
+    t: (key: TranslationKey) => string,
+    type: string,
 ): string {
-    return t(`portfolio.txnType.${type}`) || type;
+    return isPortfolioTxnType(type) ? t(TXN_TYPE_LABEL_KEYS[type]) : type;
 }
 
 // Was declared here verbatim a second time (the identical union also lived in
@@ -108,8 +125,8 @@ export interface InvestmentSummary {
     maturity_date?: string | undefined;
     location?: string;
     municipality?: string;
-    cadastral_income?: number | undefined;
-    municipality_tax_rate?: number | undefined;
+    cadastral_income?: number | null | undefined;
+    municipality_tax_rate?: number | null | undefined;
     notes?: string;
     price_provider?: PriceProvider;
     price_provider_id?: string | undefined;

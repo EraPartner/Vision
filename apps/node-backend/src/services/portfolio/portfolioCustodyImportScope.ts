@@ -72,7 +72,7 @@ const signature = (event: CustodyEventLike) =>
         : undefined,
     sourceRecordHash: event.source_record_hash,
     fingerprint: event.dedup_fingerprint,
-    fingerprintVersion: Number(event.dedup_fingerprint_version),
+    fingerprintVersion: event.dedup_fingerprint_version,
   });
 
 /**
@@ -97,15 +97,14 @@ export async function withPortfolioCustodyImportScope<T>(
     const approved = new Map<string, string>();
     for (const event of events) {
       if (
-        event == null ||
         !Number.isSafeInteger(Number(event.investment_id)) ||
         Number(event.investment_id) <= 0 ||
         !/^\d{4}-\d{2}-\d{2}$/.test(event.date || "") ||
         !toDecimal(event.units).gt(0) ||
         !/^[a-f0-9]{64}$/.test(event.source_record_hash || "") ||
         !/^[a-f0-9]{64}$/.test(event.dedup_fingerprint || "") ||
-        !Number.isSafeInteger(Number(event.dedup_fingerprint_version)) ||
-        Number(event.dedup_fingerprint_version) <= 0 ||
+        !Number.isSafeInteger(event.dedup_fingerprint_version) ||
+        event.dedup_fingerprint_version <= 0 ||
         (event.type === "asset_adjustment" &&
           (!Array.isArray(event.eligible_source_record_hashes) ||
             event.eligible_source_record_hashes.some(

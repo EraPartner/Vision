@@ -22,6 +22,7 @@ import type {
   ParsedPortfolioRow,
   ParsedPortfolioRows,
 } from "./portfolioGenericAdapter.ts";
+import { cellText } from "../cellText.ts";
 
 /** One statement line: its csv-parse tuple and literal source record. */
 type SourceRecord = { values: string[]; rawData: string };
@@ -43,7 +44,7 @@ const REQUIRED_COLUMNS = new Set([
 ]);
 
 function cleanCell(value: unknown): string {
-  const text = String(value ?? "").trim();
+  const text = cellText(value).trim();
   return text === "-" ? "" : text;
 }
 
@@ -112,7 +113,7 @@ function recordFrom(
   values: string[],
 ): Record<string, string> {
   return Object.fromEntries(
-    columns.map((column, index) => [column, String(values[index] ?? "")]),
+    columns.map((column, index) => [column, values[index] ?? ""]),
   );
 }
 
@@ -293,7 +294,7 @@ export async function parseIbkrTransactionHistory(
   }
   const headerIndex = sourceRecords.indexOf(header);
 
-  const columns = header.values.slice(2).map((column) => String(column).trim());
+  const columns = header.values.slice(2).map((column) => column.trim());
   if (columns.some((column) => !column)) {
     throw new Error("IBKR Transaction History has blank column names");
   }

@@ -13,7 +13,7 @@ import {
   materializeSymlinks,
 } from "./prepare-postgres-runtime";
 
-test("packaged PostgreSQL paths retain their build-time relative layout", () => {
+void test("packaged PostgreSQL paths retain their build-time relative layout", () => {
   assert.equal(
     commonDirectory([
       "/opt/homebrew/Cellar/postgresql@18/18.6/bin",
@@ -24,7 +24,7 @@ test("packaged PostgreSQL paths retain their build-time relative layout", () => 
   );
 });
 
-test("packaged PostgreSQL replacement is restricted to a postgres directory", () => {
+void test("packaged PostgreSQL replacement is restricted to a postgres directory", () => {
   assert.equal(
     assertSafeDestination("/private/tmp/vision-runtime/postgres"),
     "/private/tmp/vision-runtime/postgres",
@@ -36,7 +36,7 @@ test("packaged PostgreSQL replacement is restricted to a postgres directory", ()
   );
 });
 
-test("PostgreSQL build symlinks are materialized inside the runtime", async () => {
+void test("PostgreSQL build symlinks are materialized inside the runtime", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-postgres-links-"),
   );
@@ -55,7 +55,7 @@ test("PostgreSQL build symlinks are materialized inside the runtime", async () =
   }
 });
 
-test("distribution inspection requires the pinned PostgreSQL minor and tools", async () => {
+void test("distribution inspection requires the pinned PostgreSQL minor and tools", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-postgres-inspect-"),
   );

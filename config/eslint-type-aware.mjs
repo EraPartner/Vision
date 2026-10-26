@@ -45,3 +45,28 @@ export const typeAwareRules = {
     { ignorePrimitives: { string: true, boolean: true } },
   ],
 };
+
+/**
+ * typescript-eslint's strict-type-checked rules, minus the purely stylistic
+ * ones (ADR-253), with the tuned `typeAwareRules` options on top. Takes the
+ * caller's `typescript-eslint` module because this shared file sits outside
+ * both workspaces' node_modules.
+ */
+export function strictTypeAwareRules(tseslint) {
+  return {
+    ...Object.fromEntries(
+      tseslint.configs.strictTypeChecked
+        .flatMap((config) => Object.entries(config.rules ?? {}))
+        // Each project keeps its own unused-variable severity and pattern.
+        .filter(([rule]) => rule !== "@typescript-eslint/no-unused-vars"),
+    ),
+    // Style only: `() => setX(1)` returning void is not a type hole.
+    "@typescript-eslint/no-confusing-void-expression": "off",
+    // Numbers interpolate predictably; objects, null and undefined do not.
+    "@typescript-eslint/restrict-template-expressions": [
+      "error",
+      { allowNumber: true },
+    ],
+    ...typeAwareRules,
+  };
+}

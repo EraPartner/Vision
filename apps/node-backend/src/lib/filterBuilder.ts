@@ -207,7 +207,7 @@ export function buildTransactionWhere(
   } else if (Array.isArray(bankAccounts) && bankAccounts.length > 0) {
     const safe = bankAccounts
       .slice(0, MAX_LIST_SIZE)
-      .map((s) => String(s).trim())
+      .map((s) => s.trim())
       .filter(Boolean);
     if (safe.length > 0) {
       clauses.push(
@@ -246,11 +246,11 @@ export function buildTransactionWhere(
     clauses.push(sql`t.amount < 0`);
   }
   const amountCol = amountSigned ? sql`t.amount` : sql`ABS(t.amount)`;
-  if (amountMin != null && Number.isFinite(Number(amountMin))) {
-    clauses.push(sql`${amountCol} >= ${Number(amountMin)}`);
+  if (amountMin != null && Number.isFinite(amountMin)) {
+    clauses.push(sql`${amountCol} >= ${amountMin}`);
   }
-  if (amountMax != null && Number.isFinite(Number(amountMax))) {
-    clauses.push(sql`${amountCol} <= ${Number(amountMax)}`);
+  if (amountMax != null && Number.isFinite(amountMax)) {
+    clauses.push(sql`${amountCol} <= ${amountMax}`);
   }
   if (recipientId != null) {
     // Semi-join so the planner can use the t.recipient_id index instead of an
@@ -287,7 +287,7 @@ export function buildTransactionWhere(
   if (recipientName) {
     clauses.push(sql`r.name ILIKE ${`%${recipientName}%`}`);
   }
-  const searchText = search == null ? "" : String(search);
+  const searchText = search ?? "";
   if (searchText.trim().length >= MIN_SEARCH_LENGTH) {
     // Free-text search spans every user-visible facet of a transaction: notes,
     // bank/currency, amount, recipients, categories, the date (as ISO text so
@@ -350,7 +350,7 @@ export function buildTransactionWhere(
   if (Array.isArray(tagSlugs) && tagSlugs.length > 0) {
     const safe = tagSlugs
       .slice(0, MAX_LIST_SIZE)
-      .map((s) => String(s).trim())
+      .map((s) => s.trim())
       .filter(Boolean);
     if (safe.length > 0) {
       clauses.push(sql`EXISTS (

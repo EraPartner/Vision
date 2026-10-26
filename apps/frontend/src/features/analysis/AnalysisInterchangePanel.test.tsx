@@ -6,6 +6,7 @@ import { afterEach } from "vitest";
 import { AnalysisInterchangePanel } from "./AnalysisInterchangePanel";
 import type { AnalysisResult } from "@/lib/api/analysis";
 import type { AnalysisScenarioModel } from "./analysisInterchange";
+import { must } from "@/test/must";
 vi.mock("@/stores/hydration/LanguageHydration", () => ({
     useLanguage: () => ({ t: (key: string) => key }),
 }));
@@ -36,7 +37,7 @@ const result = {
     rows: [],
 } as unknown as AnalysisResult;
 function setup(current: AnalysisScenarioModel = model) {
-    const onChange = vi.fn();
+    const onChange = vi.fn<(value: AnalysisScenarioModel) => void>();
     render(
         <AnalysisInterchangePanel
             result={result}
@@ -75,9 +76,9 @@ describe("Analysis import matching", () => {
         fireEvent.click(
             screen.getByRole("button", { name: "analysis.updateScenarioJoin" }),
         );
-        expect(onChange.mock.calls[0]?.[0].joins[0].resultColumn).toBe(
-            "amount",
-        );
+        expect(
+            must(onChange.mock.calls[0]?.[0].joins[0]).resultColumn,
+        ).toBe("amount");
         fireEvent.click(
             screen.getByRole("button", { name: "analysis.removeScenario" }),
         );

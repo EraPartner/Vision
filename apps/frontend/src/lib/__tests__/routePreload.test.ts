@@ -7,6 +7,7 @@ import {
     routeLoaders,
     preloadRoute,
 } from "@/lib/routePreload";
+import { must } from "@/test/must";
 
 const EXPECTED_PATHS = [
     "/",
@@ -131,7 +132,7 @@ describe("preloadRoute", () => {
         const importSpy = vi.fn(() => Promise.resolve({}));
         // Replace one loader with a spy to observe the warm-once behaviour without
         // pulling a real page chunk into the test bundle.
-        const original = routeLoaders["/owes"]!;
+        const original = must(routeLoaders["/owes"]);
         (routeLoaders as Record<string, () => Promise<unknown>>)["/owes"] =
             importSpy;
         try {
@@ -150,7 +151,7 @@ describe("preloadRoute", () => {
             .fn<(typeof routeLoaders)[string]>()
             .mockRejectedValueOnce(new Error("network"))
             .mockResolvedValueOnce({ default: () => null });
-        const original = routeLoaders["/tax"]!;
+        const original = must(routeLoaders["/tax"]);
         routeLoaders["/tax"] = importSpy;
         try {
             preloadRoute("/tax");

@@ -14,6 +14,7 @@ import {
 import { closePool } from "../src/database/connection.ts";
 import { computeCashflowForecast } from "../src/services/calculations/forecast/index.ts";
 import { todayAppDateString } from "../src/lib/timezone.ts";
+import { firstRow, must } from "./helpers/must.ts";
 
 const USER = `forecast-memo-${process.pid}`;
 const DASHBOARD = {
@@ -33,7 +34,7 @@ describe.skipIf(!hasTestDatabase())(
       await acquireDbSuiteLock();
     }, 180_000);
     afterEach(async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       await pool.query(
         "DELETE FROM transactions WHERE account_id = ANY($1::int[])",
         [accounts],
@@ -56,27 +57,28 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     it("recomputes after a ledger change and matches a fresh compute", async () => {
-      const pool = getTestPool()!;
-      const accountId = (
-        await pool.query("INSERT INTO accounts (name) VALUES ($1) RETURNING id", [
-          `forecast-memo-${crypto.randomUUID()}`,
-        ])
-      ).rows[0].id as number;
+      const pool = must(getTestPool(), "getTestPool()");
+      const accountId = firstRow(
+        await pool.query<{ id: number }>(
+          "INSERT INTO accounts (name) VALUES ($1) RETURNING id",
+          [`forecast-memo-${crypto.randomUUID()}`],
+        ),
+      ).id;
       accounts.push(accountId);
       const recipientName = `forecast-memo-${crypto.randomUUID()}`;
-      const recipientId = (
-        await pool.query(
+      const recipientId = firstRow(
+        await pool.query<{ id: number }>(
           "INSERT INTO recipients (name, normalized_name) VALUES ($1, $1) RETURNING id",
           [recipientName],
-        )
-      ).rows[0].id as number;
+        ),
+      ).id;
       recipients.push(recipientId);
-      const transactionId = (
-        await pool.query(
+      const transactionId = firstRow(
+        await pool.query<{ id: number }>(
           "INSERT INTO transactions (date, amount, currency, account_id, recipient_id) VALUES ($1, -40, 'EUR', $2, $3) RETURNING id",
           [todayAppDateString(), accountId, recipientId],
-        )
-      ).rows[0].id as number;
+        ),
+      ).id;
 
       // The first backtest of the month records accuracy rows that feed the
       // next compute's ensemble weights; settle them before comparing.

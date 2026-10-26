@@ -21,6 +21,8 @@ import type {
   EnrichedRecipientRow,
   RecipientRow,
 } from "../src/repositories/recipientRepository.ts";
+import { must } from "./helpers/must.ts";
+import { valueAt } from "./helpers/responseBody.ts";
 
 const STAMP = new Date("2026-01-01T00:00:00Z");
 
@@ -70,7 +72,7 @@ describe("recipientRepository", () => {
         sortBy: "evil; DROP",
         sortDir: "asc",
       });
-      expect(query.mock.calls[0]![0]).toContain("ORDER BY r.name ASC");
+      expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toContain("ORDER BY r.name ASC");
     });
   });
 
@@ -105,12 +107,14 @@ describe("recipientRepository", () => {
     });
 
     it("reserves SYSTEM for server-generated transactions", async () => {
-      await expect(
-        recipientRepository.createOrGet({ name: " system " }),
-      ).rejects.toMatchObject({
-        code: "VALIDATION_ERROR",
-        message: expect.stringContaining("reserved"),
-      });
+      const rejection = await recipientRepository
+        .createOrGet({ name: " system " })
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(rejection).toMatchObject({ code: "VALIDATION_ERROR" });
+      expect(valueAt(rejection, "message")).toMatch(/reserved/);
       expect(query).not.toHaveBeenCalled();
     });
   });
@@ -168,7 +172,7 @@ describe("recipientRepository", () => {
       const map = await recipientRepository.getClusterRootMap([asRecipientId(1), asRecipientId(2), asRecipientId(2), null]);
       expect(map.get(asRecipientId(1))).toBe(1);
       expect(map.get(asRecipientId(2))).toBe(1);
-      expect(query.mock.calls[0]![1]).toEqual([[1, 2]]);
+      expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([[1, 2]]);
     });
   });
 });

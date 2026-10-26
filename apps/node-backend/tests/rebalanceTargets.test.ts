@@ -3,8 +3,8 @@ import { ValidationError } from '../src/middleware/errorHandler.ts';
 import { resolveRebalanceTargetWeights } from '../src/services/portfolio/rebalanceTargets.ts';
 
 function expectValidationError(body: Record<string, unknown>, message: string | RegExp) {
-  expect(() => resolveRebalanceTargetWeights(body)).toThrowError(ValidationError);
-  expect(() => resolveRebalanceTargetWeights(body)).toThrowError(message);
+  expect(() => resolveRebalanceTargetWeights(body)).toThrow(ValidationError);
+  expect(() => resolveRebalanceTargetWeights(body)).toThrow(message);
 }
 
 describe('resolveRebalanceTargetWeights', () => {

@@ -15,7 +15,7 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { apiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 import type { TransactionId } from "@vision/types/brands";
 
@@ -291,7 +291,7 @@ export function ExecutionHistoryDialog({
                                                 size="icon"
                                                 className="icon-touch-target"
                                             >
-                                                <Link
+                                                <AppLink
                                                     to={`/transactions?transaction_id=${item.transactionId}`}
                                                     aria-label={t(
                                                         "plannedPage.history.openTransaction",
@@ -313,7 +313,7 @@ export function ExecutionHistoryDialog({
                                                         className="h-4 w-4"
                                                         aria-hidden
                                                     />
-                                                </Link>
+                                                </AppLink>
                                             </Button>
                                         </div>
                                     </div>

@@ -32,6 +32,7 @@ export function partial<T>(value: NoInfer<DeepPartial<T>>): T {
   return value as T;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- T is the caller-chosen result type of a deliberate cast helper
 export function loose<T>(value: unknown): T {
   return value as T;
 }

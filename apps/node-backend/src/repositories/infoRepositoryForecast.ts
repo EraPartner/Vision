@@ -74,8 +74,16 @@ import { nanToZero } from "../lib/math.ts";
 
 /** Transactions behind one aggregated (date, currency) row. */
 function countOf(row: ConvertibleRow): number {
-  const cnt: unknown = (row as { cnt?: unknown }).cnt;
-  return nanToZero(parseInt(String(cnt ?? 1), 10));
+  const cnt: unknown = "cnt" in row ? row.cnt : undefined;
+  const text =
+    cnt == null
+      ? "1"
+      : typeof cnt === "string"
+        ? cnt
+        : typeof cnt === "number" || typeof cnt === "bigint"
+          ? String(cnt)
+          : "";
+  return nanToZero(parseInt(text, 10));
 }
 
 function safeMoneyInput(value: DecimalInput): DecimalInput {
@@ -429,7 +437,7 @@ export async function getCashflowComparison(
       day,
       average: roundToCents(addMoney(avg, avgPlanned)),
       current:
-        currentWithPlanned !== null ? roundToCents(currentWithPlanned) : null,
+        roundToCents(currentWithPlanned),
     });
   }
 
@@ -769,8 +777,19 @@ export async function getCashflowForecastDataByCategory(
       countOf,
     );
 
+  // The SQL COALESCEs these labels, but the fallbacks stay for a row that
+  // reaches here without them (the row contract is only warn-level in some
+  // modes), so the label columns are read as nullable.
+  type LabelledRow = Omit<
+    (typeof histConv)[number],
+    "general" | "detail" | "path_name"
+  > & {
+    general: string | null;
+    detail: string | null;
+    path_name: string | null;
+  };
   const aggregateByDateAndCategory = (
-    rows: typeof histConv,
+    rows: readonly LabelledRow[],
   ): CategoryDayNet[] => {
     const map = new Map<string, CategoryDayNet>();
     for (const r of rows) {

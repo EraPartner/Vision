@@ -8,9 +8,18 @@ import {
   verifyRuntimeManifest,
   verifyRuntimeManifestOnLaunch,
 } from "./runtime-manifest";
+import { isRecord, parseJsonAs } from "../test-support";
+
+async function readMarker(markerPath: string): Promise<Record<string, unknown>> {
+  return parseJsonAs(
+    await fs.readFile(markerPath, "utf8"),
+    isRecord,
+    "runtime verification marker",
+  );
+}
 
 for (const fault of ["none", "missing", "extra", "size", "hash", "symlink"] as const) {
-  test(`worker runtime verification fails closed for ${fault}`, async (t) => {
+  void test(`worker runtime verification fails closed for ${fault}`, async (t) => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "vision-manifest-"));
     t.after(() => fs.rm(root, { recursive: true, force: true }));
     const contents = Buffer.alloc(128 * 1024, 7);
@@ -55,7 +64,7 @@ async function writeManifest(root: string, appVersion: string) {
   );
 }
 
-test("the first launch hashes the payload and records it; later launches only check sizes", async (t) => {
+void test("the first launch hashes the payload and records it; later launches only check sizes", async (t) => {
   const { root, markerPath } = await payload(t);
   const options = { required: true, markerPath };
 
@@ -64,7 +73,7 @@ test("the first launch hashes the payload and records it; later launches only ch
     entries: 2,
     mode: "full",
   });
-  const marker = JSON.parse(await fs.readFile(markerPath, "utf8"));
+  const marker = await readMarker(markerPath);
   const manifestSha256 = crypto
     .createHash("sha256")
     .update(await fs.readFile(path.join(root, "manifest.json")))
@@ -85,7 +94,7 @@ test("the first launch hashes the payload and records it; later launches only ch
 });
 
 for (const fault of ["size", "missing", "extra", "symlink"] as const) {
-  test(`a recorded payload with a ${fault} fault falls back to the full check and fails closed`, async (t) => {
+  void test(`a recorded payload with a ${fault} fault falls back to the full check and fails closed`, async (t) => {
     const { root, markerPath } = await payload(t);
     const options = { required: true, markerPath };
     await verifyRuntimeManifestOnLaunch(root, options);
@@ -104,7 +113,7 @@ for (const fault of ["size", "missing", "extra", "symlink"] as const) {
   });
 }
 
-test("a new installed version, moved payload or unusable marker re-hashes the payload", async (t) => {
+void test("a new installed version, moved payload or unusable marker re-hashes the payload", async (t) => {
   const { root, markerPath } = await payload(t);
   const options = { required: true, markerPath };
   await verifyRuntimeManifestOnLaunch(root, options);
@@ -112,11 +121,11 @@ test("a new installed version, moved payload or unusable marker re-hashes the pa
   await writeManifest(root, "1.0.3");
   assert.equal((await verifyRuntimeManifestOnLaunch(root, options)).status, "verified");
   assert.equal(
-    JSON.parse(await fs.readFile(markerPath, "utf8")).appVersion,
+    (await readMarker(markerPath)).appVersion,
     "1.0.3",
   );
 
-  const marker = JSON.parse(await fs.readFile(markerPath, "utf8"));
+  const marker = await readMarker(markerPath);
   await fs.writeFile(markerPath, JSON.stringify({ ...marker, runtimeRoot: "/elsewhere" }));
   assert.deepEqual(await verifyRuntimeManifestOnLaunch(root, options), {
     status: "verified",
@@ -132,7 +141,7 @@ test("a new installed version, moved payload or unusable marker re-hashes the pa
   });
 });
 
-test("a marker that cannot be written never blocks a verified launch", async (t) => {
+void test("a marker that cannot be written never blocks a verified launch", async (t) => {
   const { root, markerPath } = await payload(t);
   // The marker's parent is a regular file, so the write fails.
   await fs.mkdir(path.dirname(path.dirname(markerPath)), { recursive: true });
@@ -147,7 +156,7 @@ test("a marker that cannot be written never blocks a verified launch", async (t)
   }
 });
 
-test("launch verification keeps the missing-manifest rules", async (t) => {
+void test("launch verification keeps the missing-manifest rules", async (t) => {
   const { root, markerPath } = await payload(t);
   await fs.unlink(path.join(root, "manifest.json"));
   assert.deepEqual(

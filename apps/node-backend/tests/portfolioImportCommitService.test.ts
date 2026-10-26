@@ -5,7 +5,7 @@ import {
 } from "@vision/types/brands";
 
 const mocks = vi.hoisted(() => ({
-  withTransaction: vi.fn(async (fn) => fn()),
+  withTransaction: vi.fn(<T>(fn: () => T) => Promise.resolve(fn())),
   lockBatchForUpdate: vi.fn(),
   setBatchAccount: vi.fn(),
   getAccount: vi.fn(),
@@ -34,6 +34,7 @@ vi.mock("../src/services/portfolioImportReadinessService.ts", () => ({
 }));
 
 import { commitReviewedPortfolioImport } from "../src/services/portfolioImportCommitService.ts";
+import { must } from "./helpers/must.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -68,14 +69,14 @@ describe("commitReviewedPortfolioImport", () => {
       accountId: 77,
     });
     expect(mocks.lockBatchForUpdate.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.setBatchAccount.mock.invocationCallOrder[0]!,
+      must(mocks.setBatchAccount.mock.invocationCallOrder[0], "mocks.setBatchAccount.mock.invocationCallOrder[0]"),
     );
     expect(mocks.setBatchAccount.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.assertPortfolioImportReadiness.mock.invocationCallOrder[0]!,
+      must(mocks.assertPortfolioImportReadiness.mock.invocationCallOrder[0], "mocks.assertPortfolioImportReadiness.mock.invoc..."),
     );
     expect(
       mocks.assertPortfolioImportReadiness.mock.invocationCallOrder[0],
-    ).toBeLessThan(mocks.commitPortfolioImport.mock.invocationCallOrder[0]!);
+    ).toBeLessThan(must(mocks.commitPortfolioImport.mock.invocationCallOrder[0], "mocks.commitPortfolioImport.mock.invocationCall..."));
   });
 
   it("stops before canonical commit when readiness fails", async () => {

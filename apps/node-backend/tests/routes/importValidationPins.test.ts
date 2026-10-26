@@ -123,7 +123,10 @@ import {
 import { query as rawQuery } from "../../src/database/connection.ts";
 import type { PgQueryResult } from "../../src/database/connection.ts";
 import rawCustomParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
+import { must } from "../helpers/must.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
+import { objectContaining, stringContaining } from "../helpers/matchers.ts";
 const runImportPipeline = vi.mocked(rawRunImportPipeline);
 const commitImport = vi.mocked(rawCommitImport);
 const importCategoriesCSV = vi.mocked(rawImportCategoriesCSV);
@@ -182,7 +185,7 @@ describe("multipart body parameters", () => {
     ).toThrow(
       expect.objectContaining({
         status: 400,
-        message: expect.stringContaining("Unsupported CSV encoding"),
+        message: stringContaining("Unsupported CSV encoding"),
       }),
     );
   });
@@ -687,11 +690,11 @@ describe("POST /csv/custom config-build pins", () => {
     await run(requiredBody).expect(201);
     expect(runImportPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
-        customConfig: expect.objectContaining({
+        customConfig: objectContaining({
           encoding: "utf-8",
           separator: ",",
           skip_rows: 0,
-          column_mapping: expect.objectContaining({ memo: "" }),
+          column_mapping: objectContaining({ memo: "" }),
         }),
       }),
     );
@@ -701,7 +704,7 @@ describe("POST /csv/custom config-build pins", () => {
     await run({ ...requiredBody, skip_rows: "abc", separator: "" }).expect(201);
     expect(runImportPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
-        customConfig: expect.objectContaining({ skip_rows: 0, separator: "," }),
+        customConfig: objectContaining({ skip_rows: 0, separator: "," }),
       }),
     );
   });
@@ -710,8 +713,8 @@ describe("POST /csv/custom config-build pins", () => {
     await run({ ...requiredBody, amount_column: "BodyAmt" }).expect(201);
     expect(runImportPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
-        customConfig: expect.objectContaining({
-          column_mapping: expect.objectContaining({ amount: "BodyAmt" }),
+        customConfig: objectContaining({
+          column_mapping: objectContaining({ amount: "BodyAmt" }),
         }),
       }),
     );
@@ -736,9 +739,9 @@ describe("normalizeParserConfig pins (POST /parsers)", () => {
       ["abc", 0],
     ]) {
       await create({ ...base, skipRows: input }).expect(201);
-      expect(customParserConfigRepository.create).toHaveBeenLastCalledWith(
+      expect(mockOf(customParserConfigRepository, "create")).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          config: expect.objectContaining({ skipRows: expected }),
+          config: objectContaining({ skipRows: expected }),
         }),
       );
     }
@@ -746,18 +749,18 @@ describe("normalizeParserConfig pins (POST /parsers)", () => {
 
   it("does NOT enforce a single-char separator here — any non-empty string sticks", async () => {
     await create({ ...base, separator: ";;" }).expect(201);
-    expect(customParserConfigRepository.create).toHaveBeenLastCalledWith(
+    expect(mockOf(customParserConfigRepository, "create")).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        config: expect.objectContaining({ separator: ";;" }),
+        config: objectContaining({ separator: ";;" }),
       }),
     );
   });
 
   it("strips unknown keys and blanks a non-string memoColumn", async () => {
     await create({ ...base, foo: "bar", memoColumn: 123 }).expect(201);
-    const { config } = customParserConfigRepository.create.mock.calls.at(
+    const { config } = must(customParserConfigRepository.create.mock.calls.at(
       -1,
-    )![0] as {
+    ), "customParserConfigRepository.create.mock.calls.at( -1, )")[0] as {
       config: Record<string, unknown>;
     };
     expect("foo" in config).toBe(false);
@@ -826,7 +829,7 @@ describe("normalizeParserConfig pins (POST /parsers)", () => {
       .patch(`${BASE}/parsers/3`)
       .send({ name: " Renamed " })
       .expect(200);
-    expect(customParserConfigRepository.update).toHaveBeenLastCalledWith(3, {
+    expect(mockOf(customParserConfigRepository, "update")).toHaveBeenLastCalledWith(3, {
       name: "Renamed",
       config: undefined,
     });

@@ -11,6 +11,7 @@
  * read-back check (lib/parserConfigSchema.ts).
  */
 
+import { looseText } from "./_inputBridges.ts";
 import { Router } from "express";
 import { z } from "zod";
 import { logger } from "../config/logger.ts";
@@ -77,7 +78,7 @@ function parseTypeMapping(raw: unknown): Record<string, string> {
   if (!raw) return {};
   if (typeof raw === "object") return raw as Record<string, string>;
   try {
-    const parsed: unknown = JSON.parse(String(raw));
+    const parsed: unknown = JSON.parse(looseText(raw));
     return parsed && typeof parsed === "object"
       ? (parsed as Record<string, string>)
       : {};
@@ -175,7 +176,7 @@ const defaultedTextField = (fallback: string) =>
   z
     .unknown()
     .optional()
-    .transform((value) => (value ? String(value).trim() : "") || fallback);
+    .transform((value) => (value ? looseText(value).trim() : "") || fallback);
 
 async function assertTransferDestination(
   config: {
@@ -245,7 +246,7 @@ const portfolioImportConfigSchema = z
       z
         .enum([...VALID_PORTFOLIO_TXN_TYPES], {
           error: (issue) =>
-            `default_type "${issue.input}" is not a valid transaction type`,
+            `default_type "${looseText(issue.input)}" is not a valid transaction type`,
         })
         .optional(),
     ),
@@ -253,7 +254,7 @@ const portfolioImportConfigSchema = z
       .unknown()
       .optional()
       .transform((value, ctx) => {
-        const separator = value != null ? String(value) : ",";
+        const separator = value != null ? looseText(value) : ",";
         if (separator && separator.length !== 1) {
           ctx.addIssue({
             code: "custom",

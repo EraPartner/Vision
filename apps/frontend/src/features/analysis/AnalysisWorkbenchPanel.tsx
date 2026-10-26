@@ -13,6 +13,7 @@ import { isAnalysisResultComplete } from "./analysisChartModel";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import {
     analysisCatalogLabel,
+    analysisCellText,
     formatAnalysisValue,
 } from "./analysisPresentation";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -46,6 +47,8 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import type { TranslationKeySuffix } from "@/types/i18n";
+import { translateDynamic } from "@/lib/translateDynamic";
 
 const fieldLabelClass =
     "block min-w-0 type-callout font-medium [&>input]:mt-1 [&>input]:font-normal";
@@ -98,14 +101,15 @@ interface Props {
     attachments: ScenarioAttachment[];
     onResultChange: (result: AnalysisResult) => void;
 }
+interface OutputColumn {
+    id: string;
+    type: string;
+    label?: string;
+    unit?: AnalysisUnit;
+}
 interface ExtensionOutput {
     rows?: Array<Record<string, AnalysisValue>>;
-    columns?: Array<{
-        id: string;
-        type: string;
-        label?: string;
-        unit?: AnalysisUnit;
-    }>;
+    columns?: OutputColumn[];
     summaries?: Record<string, AnalysisValue>;
     errors?: Array<{ message?: string; formulaId?: string; rowIndex?: number }>;
     lineage?: Array<Record<string, unknown>>;
@@ -159,6 +163,8 @@ const functions = [
     "FV",
     "PMT",
 ];
+type WorkbenchKey = TranslationKeySuffix<"analysis.ext.workbench.">;
+
 export function AnalysisWorkbenchPanel(props: Props) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
@@ -166,7 +172,11 @@ export function AnalysisWorkbenchPanel(props: Props) {
     const [fieldSearch, setFieldSearch] = useState("");
     const [scenarioTask, setScenarioTask] = useState("compare");
     const [addingStep, setAddingStep] = useState(false);
-    const tr = (key: string) => t(`analysis.ext.workbench.${key}`);
+    const tr = (key: WorkbenchKey) =>
+        t(`analysis.ext.workbench.${key}`);
+    // Ids that come from analysis metadata rather than a fixed list.
+    const trDynamic = (key: string) =>
+        translateDynamic(t, `analysis.ext.workbench.${key}`);
     const formulas = parse<Formula[]>(props.formulasJson, []),
         definitions = parse<Assumption[]>(props.assumptionsJson, []),
         values = parse<Record<string, AnalysisValue>>(
@@ -250,8 +260,8 @@ export function AnalysisWorkbenchPanel(props: Props) {
         columns,
         window: props.result?.window,
         coverage: props.result?.coverage,
-        complete: Boolean(complete),
-        inputComplete: Boolean(complete),
+        complete,
+        inputComplete: complete,
         formulas,
         workbench: props.config,
         assumptions,
@@ -271,6 +281,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
             setPreviewBusy(false);
             return;
         }
+        const result = props.result;
         setPreview(null);
         setPreviewError("");
         setPreviewBusy(true);
@@ -278,16 +289,16 @@ export function AnalysisWorkbenchPanel(props: Props) {
         const timer = setTimeout(() => {
             void evaluateAnalysisExtension({
                 operation: "formulas",
-                rows: props.result!.rows,
-                window: props.result!.window,
-                coverage: props.result!.coverage,
+                rows: result.rows,
+                window: result.window,
+                coverage: result.coverage,
                 columns:
-                    props.result!.declaredColumns != null &&
-                    props.result!.declaredColumns.length > 0
-                        ? props.result!.declaredColumns
-                        : props.result!.columns,
-                complete: Boolean(complete),
-                inputComplete: Boolean(complete),
+                    result.declaredColumns != null &&
+                    result.declaredColumns.length > 0
+                        ? result.declaredColumns
+                        : result.columns,
+                complete,
+                inputComplete: complete,
                 formulas: parse(props.formulasJson, []),
                 workbench: props.config,
                 assumptionUnits: Object.fromEntries(
@@ -311,7 +322,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                         setPreviewError("");
                     }
                 })
-                .catch((cause) => {
+                .catch((cause: unknown) => {
                     if (!cancelled)
                         setPreviewError(
                             cause instanceof Error
@@ -429,14 +440,18 @@ export function AnalysisWorkbenchPanel(props: Props) {
                         ...props.result.window,
                         returnedRows: response.rows.length,
                     },
-                    formulaErrors: response.errors
-                        ?.filter((e) => e.formulaId)
-                        .map((e) => ({
-                            formulaId: e.formulaId!,
-                            rowIndex: e.rowIndex,
-                            code: "FORMULA_ERROR",
-                            message: e.message ?? "",
-                        })),
+                    formulaErrors: response.errors?.flatMap((e) =>
+                        e.formulaId
+                            ? [
+                                  {
+                                      formulaId: e.formulaId,
+                                      rowIndex: e.rowIndex,
+                                      code: "FORMULA_ERROR",
+                                      message: e.message ?? "",
+                                  },
+                              ]
+                            : [],
+                    ),
                     formulaSummaries: response.summaries,
                 });
             }
@@ -498,9 +513,9 @@ export function AnalysisWorkbenchPanel(props: Props) {
             : id;
     };
     const optionLabel = (v: string) =>
-        fixedOptions.has(v) ? tr(`option.${v}`) : fieldLabel(v);
+        fixedOptions.has(v) ? trDynamic(`option.${v}`) : fieldLabel(v);
     const select = (
-        label: string,
+        label: WorkbenchKey,
         value: string,
         onChange: (value: string) => void,
         options: string[],
@@ -533,18 +548,21 @@ export function AnalysisWorkbenchPanel(props: Props) {
             </div>
         );
     };
-    const segmented = (
-        label: string,
-        value: string,
-        onChange: (value: string) => void,
-        options: string[],
+    const segmented = <T extends string>(
+        label: WorkbenchKey,
+        value: T,
+        onChange: (value: T) => void,
+        options: readonly T[],
     ) => {
         return (
             <SegmentedControl
                 label={<span className="type-callout">{tr(label)}</span>}
                 wrapperClassName="min-w-0 space-y-1"
                 value={value}
-                onValueChange={onChange}
+                onValueChange={(next) => {
+                    const picked = options.find((option) => option === next);
+                    if (picked !== undefined) onChange(picked);
+                }}
                 className="w-full"
             >
                 {options.map((v) => (
@@ -556,7 +574,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
         );
     };
     const checkFields = (
-        label: string,
+        label: WorkbenchKey,
         ids: string[],
         change: (ids: string[]) => void,
     ) => (
@@ -631,15 +649,15 @@ export function AnalysisWorkbenchPanel(props: Props) {
             ? step.columnIds.map(String).map(fieldLabel).join(", ")
             : "";
         return [
-            tr(`option.${String(step.type)}`),
-            subject ? fieldLabel(String(subject)) : fields,
-            step.targetType ? tr(`option.${String(step.targetType)}`) : "",
+            trDynamic(`option.${analysisCellText(step.type)}`),
+            subject ? fieldLabel(analysisCellText(subject)) : fields,
+            step.targetType
+                ? trDynamic(`option.${analysisCellText(step.targetType)}`)
+                : "",
             step.formula
-                ? String(
-                      (step.formula as { label?: string; id?: string }).label ||
-                          (step.formula as { id?: string }).id ||
-                          "",
-                  )
+                ? (step.formula as { label?: string; id?: string }).label ||
+                  (step.formula as { id?: string }).id ||
+                  ""
                 : "",
         ]
             .filter(Boolean)
@@ -715,7 +733,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
             ? [
                   unit.kind === "money"
                       ? tr("option.money")
-                      : tr(`option.${unit.kind}`),
+                      : trDynamic(`option.${unit.kind}`),
                   unit.currency ||
                       (unit.currencyColumn
                           ? fieldLabel(unit.currencyColumn)
@@ -790,7 +808,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                                             "decimal",
                                                     })),
                                             ]
-                                        ).map((c) => (
+                                        ).map((c: OutputColumn) => (
                                             <TableHead
                                                 key={c.id}
                                                 className="whitespace-nowrap"
@@ -798,14 +816,10 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                                 {fieldLabel(c.id) !== c.id
                                                     ? fieldLabel(c.id)
                                                     : analysisCatalogLabel(
-                                                          "label" in c
-                                                              ? (c.label ??
-                                                                    c.id)
-                                                              : c.id,
+                                                          c.label ?? c.id,
                                                           t,
                                                       )}
-                                                {"unit" in c &&
-                                                    c.unit != null && (
+                                                {c.unit != null && (
                                                         <span className="block type-caption font-normal text-label-tertiary">
                                                             {unitLabel(c.unit)}
                                                         </span>
@@ -959,9 +973,9 @@ export function AnalysisWorkbenchPanel(props: Props) {
                 )}
                 {value.lineage?.map((l, i) => (
                     <p key={i} className="type-footnote text-label-secondary">
-                        {String(l.type)}: {String(l.inputRows ?? "")} /{" "}
-                        {String(l.outputRows ?? "")} {tr("unmatched")}:{" "}
-                        {String(l.unmatchedRows ?? 0)}
+                        {analysisCellText(l.type)}: {analysisCellText(l.inputRows)} /{" "}
+                        {analysisCellText(l.outputRows)} {tr("unmatched")}:{" "}
+                        {analysisCellText(l.unmatchedRows, "0")}
                     </p>
                 ))}
             </div>
@@ -1004,7 +1018,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                         "pivot",
                                     ])}
                                     <p className={hintClass}>
-                                        {tr(`stepHelp.${stepType}`)}
+                                        {trDynamic(`stepHelp.${stepType}`)}
                                     </p>
                                     {["lookup", "append"].includes(stepType) &&
                                         props.attachments.length === 0 && (
@@ -1154,7 +1168,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                             {props.config.steps != null &&
                                 props.config.steps.length > 0 && (
                                     <List>
-                                        {props.config.steps?.map((s, i) => (
+                                        {props.config.steps.map((s, i) => (
                                             <li
                                                 key={i}
                                                 className="flex min-h-11 items-center justify-between gap-2 px-4 py-2 type-body"
@@ -1188,7 +1202,6 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                             busy ||
                                             props.sourceStale ||
                                             !props.result ||
-                                            props.config.steps == null ||
                                             props.config.steps.length === 0
                                         }
                                         onClick={() =>
@@ -1242,8 +1255,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                         ...props.config,
                                         time: {
                                             ...time,
-                                            aggregation: v as
-                                                "sum" | "last" | "average",
+                                            aggregation: v,
                                         },
                                     }),
                                 ["sum", "last", "average"],
@@ -1993,7 +2005,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                 ["compare", "explore", "seek"],
                             )}
                             <p className={hintClass}>
-                                {tr(`scenarioHelp.${scenarioTask}`)}
+                                {trDynamic(`scenarioHelp.${scenarioTask}`)}
                             </p>
                             {scenarioTask === "compare" && (
                                 <div className="space-y-3">

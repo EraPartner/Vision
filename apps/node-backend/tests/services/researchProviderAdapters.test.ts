@@ -10,6 +10,7 @@ import twelveData from '../../src/services/research/adapters/twelveDataAdapter.t
 import finnhub from '../../src/services/research/adapters/finnhubAdapter.ts';
 import fmp from '../../src/services/research/adapters/fmpAdapter.ts';
 import alphaVantage from '../../src/services/research/adapters/alphaVantageAdapter.ts';
+import { must } from "../helpers/must.ts";
 
 const ENV = {
   TWELVE_DATA_API_KEY: 'td',
@@ -21,10 +22,11 @@ const ENV = {
 // Resolve a mocked HTTP response by matching a route substring against the URL.
 function mockFetch(routes: Array<[string, unknown]>) {
   // Only `ok` and `text()` of a Response are read by the adapters.
-  globalThis.fetch = vi.fn(async (url: string | URL | Request) => {
-    const match = routes.find(([needle]) => String(url).includes(needle));
-    if (!match) throw new Error(`unmocked URL: ${url}`);
-    return { ok: true, text: async () => JSON.stringify(match[1]) };
+  globalThis.fetch = vi.fn((url: string | URL | Request) => {
+    const href = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
+    const match = routes.find(([needle]) => href.includes(needle));
+    if (!match) return Promise.reject(new Error(`unmocked URL: ${href}`));
+    return Promise.resolve({ ok: true, text: () => Promise.resolve(JSON.stringify(match[1])) });
   }) as unknown as typeof fetch;
 }
 
@@ -42,7 +44,7 @@ it.each([
   ['FMP', fmp, 'FMP_API_KEY'],
   ['Alpha Vantage', alphaVantage, 'ALPHA_VANTAGE_API_KEY'],
 ])('%s adapter requires its own configured key', async (_name, adapter, variable) => {
-  delete process.env[variable];
+  Reflect.deleteProperty(process.env, variable);
   await expect(adapter.quote('AAPL')).rejects.toThrow(`${variable} not configured`);
 });
 
@@ -125,7 +127,7 @@ describe('twelveDataAdapter', () => {
     }]]);
     const { points } = await twelveData.chart('AAPL');
     expect(points).toHaveLength(1);
-    expect(points[0]!.close).toBe(1.5);
+    expect(must(points[0], "points[0]").close).toBe(1.5);
   });
 });
 
@@ -209,7 +211,7 @@ describe('finnhubAdapter', () => {
     mockFetch([['/company-news', [null, 'junk', { headline: 'H1', url: 'http://x' }]]]);
     const { articles } = await finnhub.news('AAPL');
     expect(articles).toHaveLength(1);
-    expect(articles[0]!.title).toBe('H1');
+    expect(must(articles[0], "articles[0]").title).toBe('H1');
   });
 });
 
@@ -257,7 +259,7 @@ describe('fmpAdapter', () => {
     ]);
     const { items } = await fmp.search('apple');
     expect(items.map((i) => i.symbol)).toEqual(['AAPL', 'APC.DE']);
-    expect(items[1]!.exchange).toBe('XETRA');
+    expect(must(items[1], "items[1]").exchange).toBe('XETRA');
   });
 
   it('search degrades to no items when both endpoints return non-arrays', async () => {
@@ -346,7 +348,7 @@ describe('alphaVantageAdapter', () => {
     }]]);
     const { points } = await alphaVantage.chart('AAPL', { range: '1mo' });
     expect(points).toHaveLength(1);
-    expect(points[0]!.close).toBe(2.5);
+    expect(must(points[0], "points[0]").close).toBe(2.5);
   });
 
   // ── malformed-response pins (ZOD-12): degrade exactly like the old guards ──

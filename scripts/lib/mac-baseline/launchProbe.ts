@@ -133,9 +133,10 @@ export function summarizeRequests(
     else group.maxMs = Math.max(group.maxMs, record.endMs - record.startMs);
     groups.set(key, group);
   }
-  return [...groups.values()].sort(
-    (a, b) => b.count - a.count || b.maxMs - a.maxMs,
-  );
+  return [...groups.values()].sort((a, b) => {
+    const byCount = b.count - a.count;
+    return byCount !== 0 ? byCount : b.maxMs - a.maxMs;
+  });
 }
 
 /** How many samples each animation (name + target) was running in. */

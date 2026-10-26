@@ -17,10 +17,8 @@ import {
   MACRO_CATALOG,
 } from "../../src/services/research/adapters/macroCatalog.ts";
 import { __parseJsonStat as parseJsonStat } from "../../src/services/research/adapters/eurostatAdapter.ts";
+import { must } from "../helpers/must.ts";
 
-type AggregatorDeps = NonNullable<
-  Parameters<typeof createResearchAggregator>[0]
->;
 /** Macro search items and series payloads are provider-defined (`unknown`). */
 type MacroItem = { provider: string };
 
@@ -48,8 +46,8 @@ describe("macroRange", () => {
     const out = trimToRange(pts, "6mo");
     // 6 months back from 2021-12 is 2021-06 → keeps Jun..Dec = 7 points.
     expect(out.length).toBe(7);
-    expect(out[0]!.time).toBe(Date.UTC(2021, 5, 1));
-    expect(out.at(-1)!.time).toBe(Date.UTC(2021, 11, 1));
+    expect(must(out[0], "out[0]").time).toBe(Date.UTC(2021, 5, 1));
+    expect(must(out.at(-1), "out.at(-1)").time).toBe(Date.UTC(2021, 11, 1));
   });
 
   it("trimToRange keeps everything for max / empty", () => {
@@ -102,8 +100,8 @@ describe("eurostat parseJsonStat", () => {
     };
     const out = parseJsonStat(payload);
     expect(out.map((p) => p.period)).toEqual(["2020-01", "2020-02"]);
-    expect(out[1]!.value).toBe(101.5);
-    expect(out[0]!.time).toBeLessThan(out[1]!.time);
+    expect(must(out[1], "out[1]").value).toBe(101.5);
+    expect(must(out[0], "out[0]").time).toBeLessThan(must(out[1], "out[1]").time);
   });
 
   it("parses a time index given as a dense array of ids", () => {
@@ -154,7 +152,7 @@ describe("eurostat parseJsonStat", () => {
 const makeGovernor = (
   canSpend: (provider: string) => boolean = () => true,
 ) => ({
-  canSpend: vi.fn(async (p: string) => canSpend(p)),
+  canSpend: vi.fn((p: string) => Promise.resolve(canSpend(p))),
   spend: vi.fn(async () => {}),
 });
 
@@ -166,36 +164,36 @@ const build = (deps: Record<string, unknown>) =>
     recordSuccess: vi.fn(),
     recordError: vi.fn(),
     ...deps,
-  } as AggregatorDeps);
+  });
 
 const macroAdapters = (over = {}) => ({
   fred: {
-    macroSearch: vi.fn(async () => ({
+    macroSearch: vi.fn(() => Promise.resolve(({
       items: [{ provider: "fred", seriesId: "CPIAUCSL", title: "US CPI" }],
-    })),
-    macroSeries: vi.fn(async () => ({
+    }))),
+    macroSeries: vi.fn(() => Promise.resolve(({
       provider: "fred",
       seriesId: "CPIAUCSL",
       points: [{ time: 1, close: 1 }],
-    })),
+    }))),
   },
   eurostat: {
-    macroSearch: vi.fn(async () => ({
+    macroSearch: vi.fn(() => Promise.resolve(({
       items: [{ provider: "eurostat", seriesId: "x?geo=BE", title: "BE HICP" }],
-    })),
-    macroSeries: vi.fn(async () => ({
+    }))),
+    macroSeries: vi.fn(() => Promise.resolve(({
       provider: "eurostat",
       seriesId: "x?geo=BE",
       points: [{ time: 2, close: 2 }],
-    })),
+    }))),
   },
   dbnomics: {
-    macroSearch: vi.fn(async () => ({ items: [] })),
-    macroSeries: vi.fn(async () => ({
+    macroSearch: vi.fn(() => Promise.resolve(({ items: [] }))),
+    macroSeries: vi.fn(() => Promise.resolve(({
       provider: "dbnomics",
       seriesId: "A/B/C",
       points: [],
-    })),
+    }))),
   },
   ...over,
 });
@@ -273,7 +271,7 @@ describe("researchAggregator.fetchMacroSeries", () => {
       range: "1y",
     });
     expect(out.source).toBe("unavailable");
-    expect(out.attempted![0]).toMatchObject({
+    expect(must(out.attempted, "out.attempted")[0]).toMatchObject({
       provider: "fred",
       skipped: "no_key",
     });
@@ -290,7 +288,7 @@ describe("researchAggregator.fetchMacroSeries", () => {
       range: "1y",
     });
     expect(out.source).toBe("unavailable");
-    expect(out.attempted![0]).toMatchObject({
+    expect(must(out.attempted, "out.attempted")[0]).toMatchObject({
       provider: "fred",
       skipped: "quota",
     });
@@ -299,8 +297,8 @@ describe("researchAggregator.fetchMacroSeries", () => {
   it("reports unavailable with the error message when the adapter throws", async () => {
     const adapters = macroAdapters({
       eurostat: {
-        macroSeries: vi.fn(async () => {
-          throw new Error("boom");
+        macroSeries: vi.fn(() => {
+          return Promise.reject(new Error("boom"));
         }),
       },
     });
@@ -311,7 +309,7 @@ describe("researchAggregator.fetchMacroSeries", () => {
       range: "1y",
     });
     expect(out.source).toBe("unavailable");
-    expect(out.attempted![0]).toMatchObject({
+    expect(must(out.attempted, "out.attempted")[0]).toMatchObject({
       provider: "eurostat",
       error: "boom",
     });

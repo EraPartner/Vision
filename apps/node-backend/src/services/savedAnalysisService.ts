@@ -53,6 +53,7 @@ import type {
   FormulaUnitInput,
 } from "./analysisFormulaEngine.ts";
 import { nonZeroOr } from "../lib/math.ts";
+import { errorCode, errorMessage } from "../lib/errors.ts";
 
 interface StandardParameterValues {
   currency?: string;
@@ -151,6 +152,23 @@ const WORKSPACES = new Set([
   "cross-workspace",
 ]);
 
+/** An execution failure re-thrown by `runSavedAnalysis`, tagged with its run id. */
+type MonitorRunError = Error & { monitorRunId?: string };
+
+/** Run id that `runSavedAnalysis` attached to a failure it re-threw, if any. */
+export function monitorRunIdOf(caught: unknown): string | undefined {
+  if (typeof caught !== "object" || caught === null) return undefined;
+  if (!("monitorRunId" in caught)) return undefined;
+  return typeof caught.monitorRunId === "string" ? caught.monitorRunId : undefined;
+}
+
+function tagWithMonitorRun(caught: unknown, runId: string): MonitorRunError {
+  const failure: MonitorRunError =
+    caught instanceof Error ? caught : new Error(errorMessage(caught));
+  failure.monitorRunId = runId;
+  return failure;
+}
+
 function standardParameters(values: StandardParameterValues = {}) {
   return [
     {
@@ -215,7 +233,7 @@ function visualFieldReference(baseDatasetId: string, fieldId: string) {
 function definitionColumns(
   compiled: CompiledVisualAnalysis,
 ): DefinitionColumn[] {
-  const measureIds = new Set(compiled.visualPlan?.measures ?? []);
+  const measureIds = new Set(compiled.visualPlan.measures);
   return compiled.columns.map((column) => ({
     id: column.id,
     label: column.label,
@@ -244,6 +262,10 @@ function buildDefinition({
   let columns: DefinitionColumn[];
   let calculations: object[] = [];
   let datasetIds: string[];
+  // Specs are stored JSON; reject a mode neither branch below handles.
+  const queryMode: string = querySpec.mode;
+  if (queryMode !== "visual" && queryMode !== "sql")
+    throw new Error("Unsupported analysis query mode");
   if (querySpec.mode === "visual") {
     const compiled = compileVisualAnalysis(querySpec.plan);
     datasetIds = compiled.datasetIds;
@@ -296,12 +318,12 @@ function buildDefinition({
         direction,
       })),
       limit: Math.min(
-        Math.max(nonZeroOr(Number(compiled.visualPlan.limit), 500), 1),
+        Math.max(nonZeroOr(compiled.visualPlan.limit, 500), 1),
         1000,
       ),
       generatedSql: compiled.sql,
     };
-  } else if (querySpec.mode === "sql") {
+  } else {
     datasetIds = querySpec.datasetIds;
     if (!Array.isArray(datasetIds) || datasetIds.length === 0)
       throw new Error("Custom SQL must declare datasets");
@@ -335,8 +357,6 @@ function buildDefinition({
       },
       ...(visualOrigin ? { visualOrigin } : {}),
     };
-  } else {
-    throw new Error("Unsupported analysis query mode");
   }
 
   const formulaCalculations = formulas.map((formula) => ({
@@ -394,7 +414,7 @@ function mapSaved(row: SavedAnalysisRow) {
     definitionId: row.definition_id,
     name: row.name,
     workspace: row.workspace,
-    version: Number(row.current_version),
+    version: row.current_version,
     refreshMode: row.refresh_mode,
     parameters: row.parameters_json,
     charts: row.charts_json,
@@ -581,15 +601,14 @@ export async function updateSavedAnalysis(
       });
     if (
       input.expectedVersion != null &&
-      Number(input.expectedVersion) !== Number(current.current_version)
+      Number(input.expectedVersion) !== current.current_version
     )
       throw Object.assign(
         new Error("Saved analysis changed since this edit was prepared"),
         { status: 409, code: "ANALYSIS_VERSION_CONFLICT" },
       );
-    const version = Number(current.current_version) + 1;
-    const currentFormulaModel: AnalysisFormulaModel = current.parameters_json
-      ?.formulaModel ?? {
+    const version = current.current_version + 1;
+    const currentFormulaModel: AnalysisFormulaModel = current.parameters_json.formulaModel ?? {
       formulas: [],
       assumptions: [],
       assumptionValues: {},
@@ -597,7 +616,7 @@ export async function updateSavedAnalysis(
     const formulaModel = resolveFormulaModel(input, currentFormulaModel);
     const scenarioModel = analysisScenarioModelSchema.parse(
       input.parameters?.scenarioModel ??
-        current.parameters_json?.scenarioModel ?? {
+        current.parameters_json.scenarioModel ?? {
           attachments: [],
           joins: [],
         },
@@ -665,7 +684,7 @@ function runtimeRequest(saved: SavedAnalysis) {
   if (source.kind === "custom-sql") {
     return {
       financialPlan: undefined,
-      declaredColumns: saved.definition.expectedResult?.columns.filter(
+      declaredColumns: saved.definition.expectedResult.columns.filter(
         (column) =>
           !saved.definition.calculations.some(
             (calculation) =>
@@ -770,8 +789,8 @@ function finalizeSavedAnalysisResult(
       nullable: true,
       calculationId: formula.id,
       calculationVersion: formulaResult.languageVersion,
-      ...(formulaResult.formulaUnits?.[formula.id] || formula.unit
-        ? { unit: formulaResult.formulaUnits?.[formula.id] ?? formula.unit }
+      ...(formulaResult.formulaUnits[formula.id] || formula.unit
+        ? { unit: formulaResult.formulaUnits[formula.id] ?? formula.unit }
         : {}),
     }));
   const formulaIds = new Set(formulaColumns.map((column) => column.id));
@@ -893,11 +912,10 @@ export async function runSavedAnalysis(
     return options.includeRunId ? { saved: updated, runId } : updated;
   } catch (caught) {
     // Execution failures are pg or service Errors, optionally with a SQLSTATE.
-    const error = caught as Error & { code?: string; monitorRunId?: string };
-    const cancelled = error.code === "57014";
+    const cancelled = errorCode(caught) === "57014";
     const errorJson = {
       code: cancelled ? "cancelled" : "execution-failed",
-      message: error.message,
+      message: errorMessage(caught),
     };
     const failedStatus = cancelled ? "cancelled" : "failed";
     await withTransaction(async () => {
@@ -920,8 +938,7 @@ export async function runSavedAnalysis(
         .where("id", "=", id)
         .execute();
     });
-    error.monitorRunId = runId;
-    throw error;
+    throw tagWithMonitorRun(caught, runId);
   }
 }
 
@@ -952,7 +969,7 @@ export async function restoreSavedAnalysisVersion(
       throw Object.assign(new Error("Saved analysis not found"), {
         status: 404,
       });
-    if (Number(locked.current_version) !== Number(expectedVersion))
+    if (locked.current_version !== Number(expectedVersion))
       throw Object.assign(
         new Error("Saved analysis changed since this restore was prepared"),
         { status: 409, code: "ANALYSIS_VERSION_CONFLICT" },
@@ -976,7 +993,7 @@ export async function restoreSavedAnalysisVersion(
         ),
         { status: 409, code: "ANALYSIS_LEGACY_VERSION_STATE_UNAVAILABLE" },
       );
-    const next = Number(locked.current_version) + 1;
+    const next = locked.current_version + 1;
     const restored = { ...source.definition_json, definitionVersion: next };
     const state = source.state_json;
     await db

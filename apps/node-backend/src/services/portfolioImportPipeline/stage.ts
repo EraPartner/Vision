@@ -29,6 +29,7 @@ import type {
   PortfolioImportBatchId,
   PortfolioImportProgressCallback,
 } from "./index.ts";
+import { requiredValue } from "../requiredValue.ts";
 
 /**
  * Create a new portfolio import batch row.
@@ -71,12 +72,16 @@ export async function createBatch({
        (adapter_name, source_filename, source_size_bytes, custom_config, default_asset_class, default_type, is_brokerage, account_id, status, started_at)
      VALUES (${adapterName}, ${filename || null}, ${sizeBytes ?? null},
        ${customConfig ? JSON.stringify(customConfig) : null}, ${defaultAssetClass || null},
-       ${defaultType || null}, ${!!isBrokerage}, ${accountId != null ? Number(accountId) : null},
+       ${defaultType || null}, ${isBrokerage}, ${accountId != null ? Number(accountId) : null},
        'pending', NOW())
      RETURNING id`,
   );
-  // INSERT ... RETURNING without ON CONFLICT yields exactly one row.
-  return normalizeCreatedBatchId(inserted!.id);
+  return normalizeCreatedBatchId(
+    requiredValue(
+      inserted,
+      "INSERT ... RETURNING without ON CONFLICT yields exactly one row",
+    ).id,
+  );
 }
 
 /**
@@ -171,19 +176,19 @@ function applyPortfolioAssetScope(
   if ((symbols?.length ?? 0) === 0) return rows;
   const selected = new Set(symbols);
   const found = new Set(
-    rows.map((row) => row.symbolRaw?.toUpperCase()).filter(Boolean),
+    rows.map((row) => row.symbolRaw.toUpperCase()).filter(Boolean),
   );
   for (const symbol of selected)
     if (!found.has(symbol))
       throw new Error(`Selected asset ${symbol} is absent from the statement`);
   const scoped = rows.filter((row) =>
-    selected.has(row.symbolRaw?.toUpperCase()),
+    selected.has(row.symbolRaw.toUpperCase()),
   );
   // Cash legs belong to the same literal record as a selected asset leg.
   const records = new Set(scoped.map((row) => row.rawData));
   const result: ParsedPortfolioRows = rows.filter(
     (row) =>
-      selected.has(row.symbolRaw?.toUpperCase()) ||
+      selected.has(row.symbolRaw.toUpperCase()) ||
       (!row.symbolRaw && records.has(row.rawData)),
   );
   result.skipped = rows.skipped;

@@ -7,14 +7,19 @@
  * Research presentation service — no extra provider quota.
  */
 
+/** Indexed read of a series; an out-of-range index yields NaN like the arithmetic it feeds. */
+function at(values: number[], index: number): number {
+  return values[index] ?? Number.NaN;
+}
+
 /** Simple moving average. */
 export function sma(values: number[], period: number): (number | null)[] {
-  const out: (number | null)[] = new Array(values.length).fill(null);
+  const out: (number | null)[] = new Array<number | null>(values.length).fill(null);
   if (period <= 0) return out;
   let sum = 0;
   for (const [i, value] of values.entries()) {
     sum += value;
-    if (i >= period) sum -= values[i - period]!;
+    if (i >= period) sum -= at(values, i - period);
     if (i >= period - 1) out[i] = sum / period;
   }
   return out;
@@ -22,7 +27,7 @@ export function sma(values: number[], period: number): (number | null)[] {
 
 /** Exponential moving average, seeded with the SMA of the first `period` points. */
 export function ema(values: number[], period: number): (number | null)[] {
-  const out: (number | null)[] = new Array(values.length).fill(null);
+  const out: (number | null)[] = new Array<number | null>(values.length).fill(null);
   if (period <= 0 || values.length < period) return out;
   const k = 2 / (period + 1);
   let seed = 0;
@@ -30,7 +35,7 @@ export function ema(values: number[], period: number): (number | null)[] {
   let prev = seed / period;
   out[period - 1] = prev;
   for (let i = period; i < values.length; i++) {
-    prev = values[i]! * k + prev * (1 - k);
+    prev = at(values, i) * k + prev * (1 - k);
     out[i] = prev;
   }
   return out;
@@ -49,13 +54,13 @@ export function bollinger(
   mult = 2,
 ): BollingerBands {
   const middle = sma(values, period);
-  const upper: (number | null)[] = new Array(values.length).fill(null);
-  const lower: (number | null)[] = new Array(values.length).fill(null);
+  const upper: (number | null)[] = new Array<number | null>(values.length).fill(null);
+  const lower: (number | null)[] = new Array<number | null>(values.length).fill(null);
   for (let i = period - 1; i < values.length; i++) {
     const mid = middle[i];
     if (mid == null) continue;
     let sq = 0;
-    for (let j = i - period + 1; j <= i; j++) sq += (values[j]! - mid) ** 2;
+    for (let j = i - period + 1; j <= i; j++) sq += (at(values, j) - mid) ** 2;
     const sd = Math.sqrt(sq / period);
     upper[i] = mid + mult * sd;
     lower[i] = mid - mult * sd;
@@ -65,12 +70,12 @@ export function bollinger(
 
 /** Wilder's Relative Strength Index (0–100). */
 export function rsi(values: number[], period = 14): (number | null)[] {
-  const out: (number | null)[] = new Array(values.length).fill(null);
+  const out: (number | null)[] = new Array<number | null>(values.length).fill(null);
   if (values.length <= period) return out;
   let gain = 0;
   let loss = 0;
   for (let i = 1; i <= period; i++) {
-    const ch = values[i]! - values[i - 1]!;
+    const ch = at(values, i) - at(values, i - 1);
     if (ch >= 0) gain += ch;
     else loss -= ch;
   }
@@ -78,7 +83,7 @@ export function rsi(values: number[], period = 14): (number | null)[] {
   let avgLoss = loss / period;
   out[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
   for (let i = period + 1; i < values.length; i++) {
-    const ch = values[i]! - values[i - 1]!;
+    const ch = at(values, i) - at(values, i - 1);
     avgGain = (avgGain * (period - 1) + (ch > 0 ? ch : 0)) / period;
     avgLoss = (avgLoss * (period - 1) + (ch < 0 ? -ch : 0)) / period;
     out[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
@@ -103,11 +108,11 @@ export function macd(
   const emaSlow = ema(values, slow);
   const macdLine: (number | null)[] = values.map((_, i) =>
     emaFast[i] != null && emaSlow[i] != null
-      ? (emaFast[i] as number) - (emaSlow[i] as number)
+      ? emaFast[i] - emaSlow[i]
       : null,
   );
 
-  const signal: (number | null)[] = new Array(values.length).fill(null);
+  const signal: (number | null)[] = new Array<number | null>(values.length).fill(null);
   const firstValid = macdLine.findIndex((v) => v != null);
   if (firstValid >= 0 && values.length - firstValid >= signalPeriod) {
     const k = 2 / (signalPeriod + 1);
@@ -124,7 +129,7 @@ export function macd(
 
   const histogram: (number | null)[] = values.map((_, i) =>
     macdLine[i] != null && signal[i] != null
-      ? (macdLine[i] as number) - (signal[i] as number)
+      ? (macdLine[i]) - (signal[i])
       : null,
   );
   return { macd: macdLine, signal, histogram };

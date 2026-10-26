@@ -54,7 +54,7 @@ export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
     const [saving, setSaving] = useState(false);
     const [saveFailed, setSaveFailed] = useState(false);
 
-    async function handleConfirm(e: React.FormEvent) {
+    async function handleConfirm(e: React.SubmitEvent) {
         e.preventDefault();
         if (!ready || saving) return;
         const trimmed = reference.trim();

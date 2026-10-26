@@ -60,6 +60,24 @@ import {
   importCategoriesCSV,
 } from "../src/services/dataImportService.ts";
 import { loose, partial } from "./helpers/partial.ts";
+import type { LoggerMock } from "./helpers/mockLogger.ts";
+
+/** The given methods of `T`, typed as the spies a `vi.mock` factory installed. */
+type Spies<T, K extends keyof T> = Record<
+  K,
+  Mock<Extract<T[K], (...args: never[]) => unknown>>
+>;
+
+const recipientRepositoryMock = loose<
+  Spies<typeof rawRecipientRepository, "createOrGet">
+>(rawRecipientRepository);
+const loggerMock = loose<LoggerMock>(logger);
+const categoryRepositoryMock = loose<
+  Spies<typeof rawCategoryRepository, "createOrGet">
+>(rawCategoryRepository);
+const recipientBankAccountRepositoryMock = loose<
+  Spies<typeof rawRecipientBankAccountRepository, "createOrGet">
+>(rawRecipientBankAccountRepository);
 
 const readFile = vi.mocked(fs.promises.readFile);
 // csv-parse's overloaded generic signature does not survive vi.mocked; the
@@ -143,7 +161,7 @@ describe("Data Import Service", () => {
 
       expect(result.errors).toBe(1);
       expect(result.imported).toBe(0);
-      expect(recipientRepository.createOrGet).not.toHaveBeenCalled();
+      expect(recipientRepositoryMock.createOrGet).not.toHaveBeenCalled();
     });
 
     it("should increment imported when recipient is newly created", async () => {
@@ -194,7 +212,7 @@ describe("Data Import Service", () => {
 
       expect(result.imported).toBe(1);
       expect(result.errors).toBe(0);
-      expect(logger.warn).toHaveBeenCalledWith(
+      expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.stringContaining("could not add bank account"),
       );
     });
@@ -217,7 +235,7 @@ describe("Data Import Service", () => {
 
       await importRecipientsCSV("/tmp/recipients.csv");
 
-      expect(categoryRepository.createOrGet).toHaveBeenCalledWith({
+      expect(categoryRepositoryMock.createOrGet).toHaveBeenCalledWith({
         general: "FOOD",
         detail: "GROCERIES",
       });
@@ -239,8 +257,8 @@ describe("Data Import Service", () => {
       const result = await importRecipientsCSV("/tmp/recipients.csv");
 
       expect(result.imported).toBe(1);
-      expect(categoryRepository.createOrGet).not.toHaveBeenCalled();
-      expect(logger.warn).toHaveBeenCalledWith(
+      expect(categoryRepositoryMock.createOrGet).not.toHaveBeenCalled();
+      expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.stringContaining("invalid category format"),
       );
     });
@@ -263,10 +281,10 @@ describe("Data Import Service", () => {
 
       const result = await importRecipientsCSV("/tmp/recipients.csv");
 
-      expect(logger.warn).toHaveBeenCalledWith(
+      expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.stringContaining("falling back to per-row"),
       );
-      expect(recipientRepository.createOrGet).toHaveBeenCalledTimes(2);
+      expect(recipientRepositoryMock.createOrGet).toHaveBeenCalledTimes(2);
       expect(result).toEqual({
         total_processed: 2,
         imported: 1,
@@ -299,7 +317,7 @@ describe("Data Import Service", () => {
 
       const result = await importCategoriesCSV("/tmp/categories.csv");
 
-      expect(categoryRepository.createOrGet).toHaveBeenCalledWith({
+      expect(categoryRepositoryMock.createOrGet).toHaveBeenCalledWith({
         general: "FOOD",
         detail: "GROCERIES",
       });
@@ -317,7 +335,7 @@ describe("Data Import Service", () => {
 
       await importCategoriesCSV("/tmp/categories.csv");
 
-      expect(categoryRepository.createOrGet).toHaveBeenCalledWith({
+      expect(categoryRepositoryMock.createOrGet).toHaveBeenCalledWith({
         general: "UTILITIES",
         detail: "ELECTRICITY",
       });
@@ -341,7 +359,7 @@ describe("Data Import Service", () => {
       const result = await importCategoriesCSV("/tmp/categories.csv");
 
       expect(result.errors).toBe(2);
-      expect(categoryRepository.createOrGet).not.toHaveBeenCalled();
+      expect(categoryRepositoryMock.createOrGet).not.toHaveBeenCalled();
     });
 
     it("should map createOrGet outcomes to imported and skipped", async () => {
@@ -392,13 +410,15 @@ describe("Data Import Service", () => {
       const result = await importRecipientsCSV("/tmp/recipients.csv");
 
       expect(result).toMatchObject({ imported: 1, errors: 1 });
-      expect(recipientRepository.createOrGet).toHaveBeenCalledWith({
+      expect(recipientRepositoryMock.createOrGet).toHaveBeenCalledWith({
         name: "Alice",
       });
-      expect(recipientBankAccountRepository.createOrGet).toHaveBeenCalledWith(
+      expect(
+        recipientBankAccountRepositoryMock.createOrGet,
+      ).toHaveBeenCalledWith(
         expect.objectContaining({ recipientId: 1, accountNumber: "BE11" }),
       );
-      expect(logger.warn).toHaveBeenCalledWith(
+      expect(loggerMock.warn).toHaveBeenCalledWith(
         "Recipient import: skipping row with missing name",
       );
     });
@@ -414,11 +434,11 @@ describe("Data Import Service", () => {
       const result = await importCategoriesCSV("/tmp/categories.csv");
 
       expect(result).toMatchObject({ total_processed: 4, errors: 4 });
-      expect(vi.mocked(logger.warn).mock.calls).toEqual([
+      expect(loggerMock.warn.mock.calls).toEqual([
         ['Category import: invalid format "NOCOLON" — expected GENERAL:DETAIL'],
         ['Category import: empty general or detail in "FOOD:"'],
       ]);
-      expect(categoryRepository.createOrGet).not.toHaveBeenCalled();
+      expect(categoryRepositoryMock.createOrGet).not.toHaveBeenCalled();
     });
   });
 });

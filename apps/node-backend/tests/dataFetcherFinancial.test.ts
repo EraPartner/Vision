@@ -36,6 +36,16 @@ import { computeAverageVsCurrent } from '../src/services/calculations/aggregatio
 import infoRepository from '../src/repositories/infoRepository.ts';
 import { fetchFinancialData } from '../src/services/reports/dataFetcher.ts';
 import { RowContractError } from '../src/database/rowContracts.ts';
+import { loose } from "./helpers/partial.ts";
+import type { Mock } from "vitest";
+
+/** The given methods of `T`, typed as the spies a `vi.mock` factory installed. */
+type Spies<T, K extends keyof T> = Record<
+  K,
+  Mock<Extract<T[K], (...args: never[]) => unknown>>
+>;
+
+const infoRepositoryMock = loose<Spies<typeof infoRepository, "getPlannedExpensesNextMonth">>(infoRepository);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -52,7 +62,7 @@ describe('fetchFinancialData only fetches sources for requested sections', () =>
     expect(computeCategoryBreakdown).not.toHaveBeenCalled();
     expect(computeRecipientInsights).not.toHaveBeenCalled();
     expect(computeAverageVsCurrent).not.toHaveBeenCalled();
-    expect(infoRepository.getPlannedExpensesNextMonth).not.toHaveBeenCalled();
+    expect(infoRepositoryMock.getPlannedExpensesNextMonth).not.toHaveBeenCalled();
 
     // Skipped sources resolve to null (renderers handle null).
     expect(data.categories).toBeNull();
@@ -67,7 +77,7 @@ describe('fetchFinancialData only fetches sources for requested sections', () =>
     expect(computeRecipientInsights).toHaveBeenCalledTimes(1);
     expect(computeBankBalances).toHaveBeenCalledTimes(1);
     expect(computeAverageVsCurrent).toHaveBeenCalledTimes(1);
-    expect(infoRepository.getPlannedExpensesNextMonth).toHaveBeenCalledTimes(1);
+    expect(infoRepositoryMock.getPlannedExpensesNextMonth).toHaveBeenCalledTimes(1);
   });
 });
 

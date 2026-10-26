@@ -16,7 +16,7 @@ import {
   resumeInvestigation,
 } from "../services/aiInvestigationService.ts";
 const router = Router();
-const uuid = z.string().uuid();
+const uuid = z.uuid();
 const resumeInvestigationSchema = z.strictObject({
   clarification: z.string().min(1).max(1000).optional(),
   scope: aiInvestigationScopeSchema.optional(),

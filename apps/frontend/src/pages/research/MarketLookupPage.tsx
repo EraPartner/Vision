@@ -1,3 +1,4 @@
+import { axisDate } from "@/components/charts/axisValue";
 import { providerQuotePresentation } from "@vision/shared-utils/research/presentation";
 import { useState, useCallback, useMemo } from "react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -44,15 +45,18 @@ import { PAGE_ICONS } from "@/lib/pageIcons";
 
 import { apiClient } from "@/lib/api";
 
-import { LOOKUP_RANGES as RANGES } from "@/lib/research/ranges";
+import {
+    LOOKUP_DEFAULT_RANGE,
+    LOOKUP_RANGES as RANGES,
+} from "@/lib/research/ranges";
 import { PageShell } from "@/components/shared/PageShell";
 import { formatMarketChartTick } from "@/features/research/marketChartTicks";
 import { useMarketLookupData } from "@/features/research/useMarketLookupData";
 import { asInvestmentId } from "@vision/types/brands";
 
 const MARKET_TABS = ["fundamentals", "analyst", "news"] as const;
-// 1M default: index 2 of the static LOOKUP_RANGES ladder (1D, 5D, 1M, ...).
-const DEFAULT_RANGE = RANGES[2]!;
+// 1M default, which is also part of the LOOKUP_RANGES ladder (1D, 5D, 1M, ...).
+const DEFAULT_RANGE = LOOKUP_DEFAULT_RANGE;
 
 interface AnalystConsensus {
     strongBuy: number;
@@ -76,7 +80,8 @@ interface Quote {
     name: string;
     price: number;
     change: number;
-    changePercent: number;
+    /** Provider-sourced: some instruments have no percent change. */
+    changePercent?: number | null | undefined;
     currency: string;
     exchange: string;
     type: string;
@@ -345,7 +350,10 @@ export default function MarketLookupPage() {
                                 </DropdownMenuItem>
                             </RowMenu>
                             <AddInvestmentFromMarketDialog
-                                quote={quote}
+                                quote={{
+                                    ...quote,
+                                    changePercent: quote.changePercent ?? 0,
+                                }}
                                 existingInvestment={
                                     existingInvestment ?? undefined
                                 }
@@ -365,7 +373,7 @@ export default function MarketLookupPage() {
                 open={isOpen}
                 onDismiss={() => setSearchText("")}
             >
-                {!isSearching && (searchResults?.items?.length ?? 0) === 0 && (
+                {!isSearching && (searchResults?.items.length ?? 0) === 0 && (
                     <p
                         role="status"
                         className="px-3 py-3 type-callout text-label-secondary"
@@ -377,7 +385,7 @@ export default function MarketLookupPage() {
                         )}
                     </p>
                 )}
-                {searchResults?.items?.map((item) => (
+                {searchResults?.items.map((item) => (
                     <SymbolSearchResultItem
                         key={item.symbol}
                         item={item}
@@ -558,7 +566,7 @@ export default function MarketLookupPage() {
                                         height={320}
                                         xTickFormat={(v) =>
                                             formatMarketChartTick(
-                                                (v as Date).getTime(),
+                                                axisDate(v).getTime(),
                                                 selectedRange.range,
                                                 language,
                                             )

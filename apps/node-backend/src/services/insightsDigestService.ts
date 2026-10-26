@@ -50,7 +50,7 @@ function isOutlierDismissal(row: DismissalRow): row is OutlierDismissalRow {
   return row.kind === "category_outlier";
 }
 
-let refreshInFlight: Promise<InsightsDigest | void> | undefined;
+let refreshInFlight: Promise<InsightsDigest | undefined> | undefined;
 let refreshStartedAt = 0;
 let refreshRetryAfter = 0;
 
@@ -113,10 +113,16 @@ export async function getInsightsDigest(): Promise<InsightsDigest> {
     ],
   );
 
+  // The detector contract is a populated digest; a service that resolves
+  // nothing still normalizes to empty lists.
+  const creep = subscriptionCreep as
+    | Partial<Awaited<ReturnType<typeof detectSubscriptionCreep>>>
+    | null
+    | undefined;
   const digest: InsightsDigest = {
     subscriptionCreep: {
-      new: subscriptionCreep?.new ?? [],
-      priceChanges: subscriptionCreep?.priceChanges ?? [],
+      new: creep?.new ?? [],
+      priceChanges: creep?.priceChanges ?? [],
     },
     categoryOutliers: Array.isArray(categoryOutliers) ? categoryOutliers : [],
     cashForecast: cashForecast ?? null,
@@ -160,11 +166,12 @@ export async function getInsightsCount() {
     const startedAt = Date.now();
     refreshStartedAt = startedAt;
     refreshInFlight = getInsightsDigest()
-      .catch((error) => {
+      .catch((error: unknown) => {
         refreshRetryAfter = Date.now() + 60_000;
         logger.error("Background insight count refresh failed", {
-          error: error.message,
+          error: error instanceof Error ? error.message : undefined,
         });
+        return undefined;
       })
       .finally(() => {
         const durationMs = Date.now() - startedAt;

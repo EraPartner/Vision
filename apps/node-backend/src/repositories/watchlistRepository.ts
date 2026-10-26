@@ -2,6 +2,7 @@
  * Watchlist Repository - data access for watchlist (prospective investments) table.
  */
 
+import { requireRow } from "../database/rowContracts.ts";
 import { sql } from 'kysely';
 import type { SelectQueryBuilder } from 'kysely';
 import { checkedRow, checkedRows, db } from '../database/db.ts';
@@ -18,16 +19,13 @@ import type { CurrencyCode } from '@vision/types/brands';
 // target_price is NUMERIC (node-postgres returns it as a string); coerce on
 // emit so it matches the `number` API/TS type. current_price/price_change are
 // added later by the route from the price provider, not read from this table.
-const WATCHLIST_NUMERIC_FIELDS = ['target_price', 'added_price'];
+const WATCHLIST_NUMERIC_FIELDS = ['target_price', 'added_price'] as const;
 
 export type { FormattedWatchlistRow };
 
 /** @param row A raw {@link WatchlistRow}. */
 const mapWatchlistRow = (row: WatchlistRow): FormattedWatchlistRow =>
-  coerceNumericFields<Record<string, unknown>>(
-    row,
-    WATCHLIST_NUMERIC_FIELDS,
-  ) as FormattedWatchlistRow;
+  coerceNumericFields(row, WATCHLIST_NUMERIC_FIELDS);
 
 /** Filter a `watchlist as w` query by asset class. */
 function whereAssetClass<O>(
@@ -99,7 +97,7 @@ export const watchlistRepository = {
         assetClass,
       ),
     );
-    return parseInt(row!.count, 10);
+    return parseInt(requireRow(row, "watchlist count").count, 10);
   },
 
   async getById(id: number): Promise<FormattedWatchlistRow | null> {

@@ -41,7 +41,7 @@ export async function lockAccountsForLedgerMutation(
   }
   const after = await checkedRows(ownershipSchema, ownership.forUpdate(), client);
   if (after.length !== before.length || after.some((row, index) =>
-    row.id !== before[index]?.id || row.account_id !== before[index]?.account_id)) {
+    row.id !== before[index]?.id || row.account_id !== before[index].account_id)) {
     throw new ConflictError("Transaction ownership changed; reload and retry the edit");
   }
 }

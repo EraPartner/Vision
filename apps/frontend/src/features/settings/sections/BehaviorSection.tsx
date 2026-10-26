@@ -8,7 +8,7 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { portfolioKeys } from "@/lib/queryKeys";
 import { apiClient } from "@/lib/api";
-import type { CostBasisMethod, StartupSection } from "@/stores/settingsStore";
+import type { CostBasisMethod } from "@/stores/settingsStore";
 import {
     SettingsSection,
     SettingsGroup,
@@ -65,8 +65,8 @@ export const BehaviorSection = memo(function BehaviorSection() {
         });
     };
 
-    const handleCostBasisMethodChange = async (v: string) => {
-        updateAppSettings({ costBasisMethod: v as CostBasisMethod });
+    const handleCostBasisMethodChange = async (v: CostBasisMethod) => {
+        updateAppSettings({ costBasisMethod: v });
         try {
             // Server-computed summaries (portfolioSummaryService) read the
             // top-level cost_basis_method setting, not the app_settings blob.
@@ -113,11 +113,9 @@ export const BehaviorSection = memo(function BehaviorSection() {
                 <SelectSettingRow
                     title={t("settings.general.startupSection")}
                     description={t("settings.general.startupSectionHint")}
-                    value={appSettings.startupSection ?? "budgeting"}
-                    onValueChange={(v) =>
-                        updateAppSettings({
-                            startupSection: v as StartupSection,
-                        })
+                    value={appSettings.startupSection}
+                    onValueChange={(startupSection) =>
+                        updateAppSettings({ startupSection })
                     }
                     options={[
                         { value: "budgeting", label: t("nav.home") },
@@ -134,7 +132,7 @@ export const BehaviorSection = memo(function BehaviorSection() {
                 <SelectSettingRow
                     title={t("settings.general.costBasisMethod")}
                     description={t("settings.general.costBasisMethodHint")}
-                    value={appSettings.costBasisMethod ?? "weighted_avg"}
+                    value={appSettings.costBasisMethod}
                     onValueChange={(v) => {
                         void handleCostBasisMethodChange(v);
                     }}
@@ -164,7 +162,7 @@ export const BehaviorSection = memo(function BehaviorSection() {
                 >
                     <Switch
                         id="auto-clear-planned"
-                        checked={appSettings.autoClearPlannedOnMatch ?? true}
+                        checked={appSettings.autoClearPlannedOnMatch}
                         onCheckedChange={(v) =>
                             updateAppSettings({ autoClearPlannedOnMatch: v })
                         }

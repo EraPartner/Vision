@@ -1,3 +1,4 @@
+import { must } from "./helpers/must.ts";
 /**
  * errorHandler middleware tests.
  *
@@ -7,7 +8,7 @@
  * (body-parser's http-errors) — see THE RULE in src/middleware/errorHandler.ts.
  */
 
-import { bodyAt } from './helpers/responseBody.ts';
+import { bodyAt, valueAt } from './helpers/responseBody.ts';
 import express from 'express';
 import { httpAgent as supertest } from './helpers/httpAgent.ts';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -207,7 +208,9 @@ describe('forwarded 4xx from non-AppError errors', () => {
   const run = (err: unknown, production = false) => {
     const res = mockRes();
     createErrorHandler(() => production)(err, req, res, () => {});
-    return { status: res.status.mock.calls[0]![0], body: res.json.mock.calls[0]![0] };
+    const statusCall: unknown[] = must(res.status.mock.calls[0], 'res.status.mock.calls[0]');
+    const bodyCall: unknown[] = must(res.json.mock.calls[0], 'res.json.mock.calls[0]');
+    return { status: statusCall[0], body: bodyCall[0] };
   };
 
   it('forwards a trusted body-parser 400 with its own message, even in production', () => {
@@ -215,7 +218,7 @@ describe('forwarded 4xx from non-AppError errors', () => {
     for (const production of [false, true]) {
       const { status, body } = run(err, production);
       expect(status).toBe(400);
-      expect(body.error).toEqual({ code: 'VALIDATION_ERROR', message: 'Unexpected end of JSON input' });
+      expect(valueAt(body, 'error')).toEqual({ code: 'VALIDATION_ERROR', message: 'Unexpected end of JSON input' });
     }
   });
 
@@ -224,7 +227,7 @@ describe('forwarded 4xx from non-AppError errors', () => {
     for (const production of [false, true]) {
       const { status, body } = run(err, production);
       expect(status).toBe(413);
-      expect(body.error).toEqual({ code: 'VALIDATION_ERROR', message: 'request entity too large' });
+      expect(valueAt(body, 'error')).toEqual({ code: 'VALIDATION_ERROR', message: 'request entity too large' });
     }
   });
 
@@ -233,14 +236,14 @@ describe('forwarded 4xx from non-AppError errors', () => {
     // the status is truthful enough to forward, the wording is not vetted.
     const { status, body } = run(httpish('token abc123 rejected by ldap://internal', { status: 403 }));
     expect(status).toBe(403);
-    expect(body.error).toEqual({ code: 'FORBIDDEN', message: 'Forbidden' });
+    expect(valueAt(body, 'error')).toEqual({ code: 'FORBIDDEN', message: 'Forbidden' });
     expect(JSON.stringify(body)).not.toContain('ldap');
   });
 
   it('honours statusCode as well as status (loanSchedule.js:70 style throws)', () => {
     const { status, body } = run(httpish('Invalid loan configuration: term missing', { statusCode: 400 }));
     expect(status).toBe(400);
-    expect(body.error).toEqual({ code: 'VALIDATION_ERROR', message: 'Bad Request' });
+    expect(valueAt(body, 'error')).toEqual({ code: 'VALIDATION_ERROR', message: 'Bad Request' });
   });
 
   it('maps forwarded statuses onto the existing ADR-026 code vocabulary', () => {
@@ -251,17 +254,17 @@ describe('forwarded 4xx from non-AppError errors', () => {
       [451, 'VALIDATION_ERROR'],
     ];
     for (const [code, expected] of cases) {
-      expect(run(httpish('x', { status: code })).body.error.code).toBe(expected);
+      expect(valueAt(run(httpish('x', { status: code })).body, 'error', 'code')).toBe(expected);
     }
     // A 4xx with no reason phrase in the table still gets a generic message.
-    expect(run(httpish('x', { status: 451 })).body.error.message).toBe('Request rejected');
+    expect(valueAt(run(httpish('x', { status: 451 })).body, 'error', 'message')).toBe('Request rejected');
   });
 
   it('ignores 5xx and nonsense statuses — those keep the sanitized 500 path', () => {
     for (const bad of [500, 502, 399, 700, 0, -1, NaN, 400.5]) {
       const { status, body } = run(httpish('DB password wrong', { status: bad }), true);
       expect(status).toBe(500);
-      expect(body.error).toEqual({
+      expect(valueAt(body, 'error')).toEqual({
         code: 'INTERNAL_SERVER_ERROR',
         message: 'An internal server error occurred. Please try again later.',
       });
@@ -273,10 +276,10 @@ describe('forwarded 4xx from non-AppError errors', () => {
   });
 
   it('a non-AppError with no status is unchanged: 500, sanitized in production only', () => {
-    expect(run(new Error('DB password wrong'), false).body.error).toEqual({
+    expect(valueAt(run(new Error('DB password wrong'), false).body, 'error')).toEqual({
       code: 'INTERNAL_SERVER_ERROR', message: 'DB password wrong',
     });
-    expect(run(new Error('DB password wrong'), true).body.error).toEqual({
+    expect(valueAt(run(new Error('DB password wrong'), true).body, 'error')).toEqual({
       code: 'INTERNAL_SERVER_ERROR',
       message: 'An internal server error occurred. Please try again later.',
     });
@@ -287,7 +290,7 @@ describe('forwarded 4xx from non-AppError errors', () => {
     // be able to pull a 5xx into the exposed-message branch.
     const { status, body } = run(httpish('stream encoding should not be set', { status: 500, type: 'entity.too.large' }), true);
     expect(status).toBe(500);
-    expect(body.error.message).toBe('An internal server error occurred. Please try again later.');
+    expect(valueAt(body, 'error', 'message')).toBe('An internal server error occurred. Please try again later.');
   });
 });
 
@@ -300,7 +303,10 @@ describe('forwarded 4xx over real Express (supertest)', () => {
   /** Router that throws whatever the test asks for, so non-parser paths are covered too. */
   function fixtureRouter() {
     const router = express.Router();
-    router.post('/echo', (req, res) => res.ok({ got: req.body }));
+    router.post('/echo', (req, res) => {
+      const got: unknown = req.body;
+      return res.ok({ got });
+    });
     router.get('/boom', () => { throw new Error('DB password wrong'); });
     router.get('/fake403', () => {
       const e: Error & { status?: number } = new Error('token abc123 rejected by ldap://internal');

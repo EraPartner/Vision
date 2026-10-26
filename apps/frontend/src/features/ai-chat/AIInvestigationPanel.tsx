@@ -1,7 +1,8 @@
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import { InvestigationPrivacySummary } from "./InvestigationPrivacySummary";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import { FileText, Paperclip, Trash2 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import type {
@@ -31,6 +32,15 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { resolveAnalysisPreferences } from "@/lib/analysisPreferences";
+
+type AnswerDepth = "quick" | "detailed";
+type ResearchMode = "local-only" | "public-providers" | "public-web";
+const isDepth = enumGuard<AnswerDepth>({ quick: true, detailed: true });
+const isResearchMode = enumGuard<ResearchMode>({
+    "local-only": true,
+    "public-providers": true,
+    "public-web": true,
+});
 
 function EvidenceAnswer({ answer }: { answer: AiAnswer }) {
     const { t } = useLanguage();
@@ -109,11 +119,11 @@ function EvidenceAnswer({ answer }: { answer: AiAnswer }) {
                 )}
                 {answer.analysisReference && (
                     <Button asChild size="sm" variant="outline">
-                        <Link
+                        <AppLink
                             to={`/analysis?savedAnalysis=${encodeURIComponent(answer.analysisReference.id)}`}
                         >
                             {t("aiResearch.openAnalysis")}
-                        </Link>
+                        </AppLink>
                     </Button>
                 )}
                 {selectedEvidence && (
@@ -130,9 +140,7 @@ function EvidenceAnswer({ answer }: { answer: AiAnswer }) {
                                     {selectedEvidence.excerpt}
                                 </p>
                                 {selectedEvidence.kind === "web" &&
-                                /^https:\/\//.test(
-                                    selectedEvidence.locator ?? "",
-                                ) ? (
+                                /^https:\/\//.test(selectedEvidence.locator) ? (
                                     <a
                                         className="inline-block break-all text-primary underline underline-offset-4 decoration-primary/50 focus-ring rounded-chip"
                                         href={selectedEvidence.locator}
@@ -253,7 +261,7 @@ export function AIInvestigationPanel() {
         void apiClient
             .uploadResearchDocument(file)
             .then((document) => setDocuments((items) => [document, ...items]))
-            .catch((cause) => setError(failureMessage(cause)))
+            .catch((cause: unknown) => setError(failureMessage(cause)))
             .finally(() => setBusy(false));
     };
     const deleteDocument = async (document: ResearchDocument) => {
@@ -274,7 +282,7 @@ export function AIInvestigationPanel() {
                     items.filter((item) => item.id !== document.id),
                 ),
             )
-            .catch((cause) => setError(failureMessage(cause)));
+            .catch((cause: unknown) => setError(failureMessage(cause)));
     };
     const runDisabled =
         busy ||
@@ -316,7 +324,7 @@ export function AIInvestigationPanel() {
                         className="flex flex-wrap gap-2"
                         aria-label={t("aiResearch.questionIdeas")}
                     >
-                        {["spending", "portfolio"].map((topic) => (
+                        {(["spending", "portfolio"] as const).map((topic) => (
                             <Button
                                 key={topic}
                                 type="button"
@@ -354,11 +362,7 @@ export function AIInvestigationPanel() {
                                 wrapperClassName="space-y-1.5"
                                 className="w-full"
                                 value={depth}
-                                onValueChange={(value) =>
-                                    setDepthOverride(
-                                        value as "quick" | "detailed",
-                                    )
-                                }
+                                onValueChange={onGuarded(isDepth, setDepthOverride)}
                             >
                                 <SegmentedControlItem value="quick">
                                     {t("aiResearch.quick")}
@@ -372,11 +376,7 @@ export function AIInvestigationPanel() {
                                 wrapperClassName="space-y-1.5 sm:col-span-2"
                                 className="w-full"
                                 value={researchMode}
-                                onValueChange={(value) =>
-                                    setResearchMode(
-                                        value as typeof researchMode,
-                                    )
-                                }
+                                onValueChange={onGuarded(isResearchMode, setResearchMode)}
                             >
                                 <SegmentedControlItem value="local-only">
                                     {t("aiResearch.localOnly")}
@@ -584,7 +584,7 @@ export function AIInvestigationPanel() {
                                     input().scope,
                                 )
                                 .then(setJob)
-                                .catch((cause) =>
+                                .catch((cause: unknown) =>
                                     setError(failureMessage(cause)),
                                 )
                         }
@@ -602,7 +602,7 @@ export function AIInvestigationPanel() {
                             void apiClient
                                 .deleteInvestigation(job.id)
                                 .then(() => setJob(null))
-                                .catch((cause) =>
+                                .catch((cause: unknown) =>
                                     setError(failureMessage(cause)),
                                 )
                                 .finally(() => setBusy(false));

@@ -6,6 +6,7 @@
  */
 
 import { ASSET_CLASSES } from "@vision/types/assetClasses";
+import type { Decimal } from "decimal.js";
 import settings from "../../../config/config.ts";
 import { toDecimal, roundToCents } from "../../../lib/money.ts";
 import { loadCanonicalPortfolioSummary } from "./_financialMetrics.ts";
@@ -93,7 +94,7 @@ export const getPortfolioHoldings = {
     args: Record<string, unknown>,
     {
       maxRows = settings.aiChat.maxToolRows,
-      cache = undefined,
+      cache,
       scope = {},
     }: ToolContext = {},
   ) {
@@ -106,8 +107,7 @@ export const getPortfolioHoldings = {
     const holdings = summary.summaries
       .filter(
         (item) =>
-          allowedInvestmentIds.size === 0 ||
-          allowedInvestmentIds.has(Number(item.id)),
+          allowedInvestmentIds.size === 0 || allowedInvestmentIds.has(item.id),
       )
       .filter((item) => !assetClass || item.asset_class === assetClass)
       .filter((item) => toDecimal(item.currentValue).gt(0))
@@ -166,7 +166,7 @@ export const getReturnsForRange = {
     args: Record<string, unknown>,
     {
       maxRows = settings.aiChat.maxToolRows,
-      cache = undefined,
+      cache,
       scope = {},
     }: ToolContext = {},
   ) {
@@ -183,7 +183,7 @@ export const getReturnsForRange = {
       .filter(
         ({ current }) =>
           allowedInvestmentIds.size === 0 ||
-          allowedInvestmentIds.has(Number(current.id)),
+          allowedInvestmentIds.has(current.id),
       )
       .filter(
         ({ current }) => !assetClass || current.asset_class === assetClass,
@@ -243,10 +243,7 @@ export const getDividendIncome = {
   },
   async run(
     args: Record<string, unknown>,
-    {
-      maxRows = settings.aiChat.maxToolRows,
-      cache = undefined,
-    }: ToolContext = {},
+    { maxRows = settings.aiChat.maxToolRows, cache }: ToolContext = {},
   ) {
     const from = requireDate(args.from, "from");
     const to = requireDate(args.to, "to");
@@ -301,18 +298,18 @@ export const getAssetAllocation = {
   },
   async run(
     _args: Record<string, unknown>,
-    {
-      maxRows = settings.aiChat.maxToolRows,
-      cache = undefined,
-    }: ToolContext = {},
+    { maxRows = settings.aiChat.maxToolRows, cache }: ToolContext = {},
   ) {
     const summary = await loadCanonicalPortfolioSummary(cache);
-    const byClass = new Map();
+    const byClass = new Map<
+      string,
+      { assetClass: string; marketValue: Decimal; positions: number }
+    >();
     for (const item of summary.summaries) {
       const marketValue = toDecimal(item.currentValue);
       if (marketValue.lte(0)) continue;
       const cls = item.asset_class || "unknown";
-      const entry = byClass.get(cls) || {
+      const entry = byClass.get(cls) ?? {
         assetClass: cls,
         marketValue: toDecimal(0),
         positions: 0,
@@ -370,10 +367,7 @@ export const getUnrealizedGains = {
   },
   async run(
     args: Record<string, unknown>,
-    {
-      maxRows = settings.aiChat.maxToolRows,
-      cache = undefined,
-    }: ToolContext = {},
+    { maxRows = settings.aiChat.maxToolRows, cache }: ToolContext = {},
   ) {
     const assetClass = parseEnum(args.assetClass, "assetClass", ASSET_CLASSES, {
       defaultValue: null,
@@ -453,10 +447,7 @@ export const getBestWorstPerformers = {
   },
   async run(
     args: Record<string, unknown>,
-    {
-      maxRows = settings.aiChat.maxToolRows,
-      cache = undefined,
-    }: ToolContext = {},
+    { maxRows = settings.aiChat.maxToolRows, cache }: ToolContext = {},
   ) {
     const from = requireDate(args.from, "from");
     const to = requireDate(args.to, "to");

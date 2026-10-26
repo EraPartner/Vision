@@ -32,6 +32,13 @@ import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
 import { todayAppDateString } from "../src/lib/timezone.ts";
+import { must } from "./helpers/must.ts";
+import type {
+  AccountId,
+  CategoryId,
+  RecipientId,
+  TransactionId,
+} from "@vision/types/brands";
 
 // The MoM window's "today": the APP_TIMEZONE day the repository binds (ADR-009).
 const TODAY_SQL = `'${todayAppDateString()}'::date`;
@@ -50,16 +57,16 @@ const rec = {} as Record<
  *   Electrabel      — plain recipient, default category Bills
  */
 async function seedBase() {
-  const pool = getTestPool()!;
+  const pool = must(getTestPool(), "getTestPool()");
   for (const [key, [general, detail]] of Object.entries({
     Food: ["Food", "Groceries"],
     Bills: ["Bills", "Utilities"],
   })) {
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<{ id: CategoryId }>(
       "INSERT INTO categories (general, detail) VALUES ($1, $2) RETURNING id",
       [general, detail],
     );
-    cat[key as keyof typeof cat] = rows[0].id;
+    cat[key as keyof typeof cat] = must(rows[0], "rows[0]").id;
   }
   const addRecipient = async (
     name: string,
@@ -68,12 +75,12 @@ async function seedBase() {
       primaryId = null,
     }: { defaultCategoryId?: number | null; primaryId?: number | null } = {},
   ) => {
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<{ id: RecipientId }>(
       `INSERT INTO recipients (name, normalized_name, default_category_id, primary_recipient_id)
        VALUES ($1, $2, $3, $4) RETURNING id`,
       [name, name.toLowerCase(), defaultCategoryId, primaryId],
     );
-    return rows[0].id;
+    return must(rows[0], "rows[0]").id;
   };
   rec.delhaize = await addRecipient("Delhaize");
   rec.delhaizeAlias = await addRecipient("Delhaize Wilrijk", {
@@ -86,16 +93,17 @@ async function seedBase() {
 }
 
 async function ensureAccount(name: string): Promise<number> {
-  await getTestPool()!.query(
+  await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO accounts (name, display_name) VALUES ($1, $1)
      ON CONFLICT (lower(btrim(name))) DO NOTHING`,
     [name],
   );
-  const { rows } = await getTestPool()!.query(
-    `SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
-    [name],
-  );
-  return rows[0].id;
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    id: AccountId;
+  }>(`SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`, [
+    name,
+  ]);
+  return must(rows[0], "rows[0]").id;
 }
 
 /**
@@ -139,12 +147,14 @@ async function insertTxn({
     isTransfer,
   ];
   const n = dateExpr ? 6 : 7;
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    id: TransactionId;
+  }>(
     `INSERT INTO transactions (amount, currency, recipient_id, category_id, account_id, date, is_active, is_transfer)
      VALUES ($1, $2, $3, $4, $5, ${dateSql}, $${n}, $${n + 1}) RETURNING id`,
     params,
   );
-  return rows[0].id;
+  return must(rows[0], "rows[0]").id;
 }
 
 /** Seed one exchange_rates row so conversion resolves from the DB, never the network. */
@@ -154,7 +164,7 @@ async function insertRate(
   rate: string,
   isLatest = false,
 ) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
      VALUES ($1, $2::date, $3, $4)`,
     [code, date, rate, isLatest],
@@ -183,7 +193,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       await pool.query("DELETE FROM transactions");
       await pool.query("DELETE FROM accounts");
       await pool.query("DELETE FROM recipients");
@@ -193,7 +203,7 @@ describe.skipIf(!hasTestDatabase())(
         `DELETE FROM user_settings WHERE key = 'includeTransfers'`,
       );
       for (const bag of [cat, rec] as Record<string, number>[])
-        for (const k of Object.keys(bag)) delete bag[k];
+        for (const k of Object.keys(bag)) Reflect.deleteProperty(bag, k);
       clearMemoryCache();
       clearMvCache();
     });
@@ -239,7 +249,10 @@ describe.skipIf(!hasTestDatabase())(
           firstSeen: "2024-01-15",
           lastSeen: "2024-03-20", // widened by the alias row
         });
-        expect(typeof merchant(r, "Delhaize")!.firstSeen).toBe("string"); // wire dates, not pg Dates
+        expect(
+          typeof must(merchant(r, "Delhaize"), 'merchant(r, "Delhaize")')
+            .firstSeen,
+        ).toBe("string"); // wire dates, not pg Dates
       });
 
       it("counts only active negative-amount rows and never internal transfers", async () => {
@@ -268,7 +281,7 @@ describe.skipIf(!hasTestDatabase())(
         });
         // ADR-083's includeTransfers toggle governs cash-flow aggregates, NOT this
         // merchant lens — turning it on must not pull the transfer leg in.
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', 'true'::jsonb)`,
         );
 
@@ -372,9 +385,28 @@ describe.skipIf(!hasTestDatabase())(
           targetCurrency: "EUR",
         });
 
-        expect(merchant(insights, "Colruyt")!.totalSpend).toBe(25); // 2024-06-01 rate, not the latest 0.90
-        expect(byYear.recipientsByYear["2024"]![0]!.totalSpend).toBe(25);
-        expect(pivot.recipientPivot["2024-06"]![0]!.total).toBe(25);
+        expect(
+          must(merchant(insights, "Colruyt"), 'merchant(insights, "Colruyt")')
+            .totalSpend,
+        ).toBe(25); // 2024-06-01 rate, not the latest 0.90
+        expect(
+          must(
+            must(
+              byYear.recipientsByYear["2024"],
+              'byYear.recipientsByYear["2024"]',
+            )[0],
+            'byYear.recipientsByYear["2024"][0]',
+          ).totalSpend,
+        ).toBe(25);
+        expect(
+          must(
+            must(
+              pivot.recipientPivot["2024-06"],
+              'pivot.recipientPivot["2024-06"]',
+            )[0],
+            'pivot.recipientPivot["2024-06"][0]',
+          ).total,
+        ).toBe(25);
       });
 
       // Per-date conversion must not disturb the per-recipient reduction: two
@@ -453,8 +485,11 @@ describe.skipIf(!hasTestDatabase())(
 
       it("caps the previous month at the same day-of-month as today (like-for-like)", async () => {
         await seedBase();
-        const pool = getTestPool()!;
-        const { rows } = await pool.query(`
+        const pool = must(getTestPool(), "getTestPool()");
+        const { rows } = await pool.query<{
+          cap: string;
+          beyond_cap_still_prev_month: boolean;
+        }>(`
         SELECT to_char(
                  (date_trunc('month', ${TODAY_SQL}) - INTERVAL '1 month')::date
                  + (${TODAY_SQL} - DATE_TRUNC('month', ${TODAY_SQL})::date), 'YYYY-MM-DD') AS cap,
@@ -462,7 +497,10 @@ describe.skipIf(!hasTestDatabase())(
                  + (${TODAY_SQL} - DATE_TRUNC('month', ${TODAY_SQL})::date) + 1)
                  < date_trunc('month', ${TODAY_SQL})::date AS beyond_cap_still_prev_month
       `);
-        const { cap, beyond_cap_still_prev_month: beyondIsTestable } = rows[0];
+        const { cap, beyond_cap_still_prev_month: beyondIsTestable } = must(
+          rows[0],
+          "rows[0]",
+        );
 
         await insertTxn({
           dateExpr: `date_trunc('month', ${TODAY_SQL})`,
@@ -528,11 +566,14 @@ describe.skipIf(!hasTestDatabase())(
       // carries `t.date` in its GROUP BY so it can be converted per date too.
       it("converts each month at ITS OWN date rate, agreeing with top merchants", async () => {
         await seedBase();
-        const { rows } = await getTestPool()!.query(`
+        const { rows } = await must(getTestPool(), "getTestPool()").query<{
+          cur_day: string;
+          prev_day: string;
+        }>(`
         SELECT to_char(date_trunc('month', ${TODAY_SQL}), 'YYYY-MM-DD') AS cur_day,
                to_char(date_trunc('month', ${TODAY_SQL}) - INTERVAL '1 month', 'YYYY-MM-DD') AS prev_day
       `);
-        const { cur_day: curDay, prev_day: prevDay } = rows[0];
+        const { cur_day: curDay, prev_day: prevDay } = must(rows[0], "rows[0]");
 
         await insertRate("USD", prevDay, "0.25");
         await insertRate("USD", curDay, "0.50");
@@ -560,7 +601,9 @@ describe.skipIf(!hasTestDatabase())(
         });
         // Cross-surface: MoM's two months must add up to what top merchants
         // reports for the same recipient over the same two transactions.
-        expect(merchant(r, "Colruyt")!.totalSpend).toBe(75);
+        expect(
+          must(merchant(r, "Colruyt"), 'merchant(r, "Colruyt")').totalSpend,
+        ).toBe(75);
       });
     });
 
@@ -637,7 +680,12 @@ describe.skipIf(!hasTestDatabase())(
         const r = await recipientInsightsRepository.getRecipientByYear({
           targetCurrency: "EUR",
         });
-        expect(r.recipientsByYear["2024"]![0]!.totalSpend).toBe(25);
+        expect(
+          must(
+            must(r.recipientsByYear["2024"], 'r.recipientsByYear["2024"]')[0],
+            'r.recipientsByYear["2024"][0]',
+          ).totalSpend,
+        ).toBe(25);
       });
 
       it("applies category and recipient exclusions together", async () => {

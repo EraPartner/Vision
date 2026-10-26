@@ -119,7 +119,7 @@ export async function __storeCurrentBrokerSnapshot(
         accountName:
           row.account_id == null
             ? "Unassigned"
-            : (names.get(Number(row.account_id)) ??
+            : (names.get(row.account_id) ??
               `Account ${row.account_id}`),
         value: toDecimal(0),
         invested: toDecimal(0),
@@ -222,10 +222,10 @@ export async function getSnapshots(
     cash_value: row.cash_value,
     gain_loss: row.gain_loss,
     return_pct: row.return_pct,
-    inflation_adjusted_value: row.inflation_adjusted_value ?? row.value,
-    stocks_etfs_invested: row.stocks_etfs_invested ?? "0",
-    crypto_invested: row.crypto_invested ?? "0",
-    metals_invested: row.metals_invested ?? "0",
+    inflation_adjusted_value: row.inflation_adjusted_value,
+    stocks_etfs_invested: row.stocks_etfs_invested,
+    crypto_invested: row.crypto_invested,
+    metals_invested: row.metals_invested,
     currency: row.currency,
     // undefined (omitted from JSON) when the column is absent or unpopulated —
     // the frontend hides the FX-neutral series in that case.

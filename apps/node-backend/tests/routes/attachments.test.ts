@@ -59,6 +59,7 @@ import {
 import type { FormattedAttachment } from '../../src/repositories/attachmentRepository.ts';
 import { logger } from '../../src/config/logger.ts';
 
+import { mockOf } from "../helpers/mockOf.ts";
 const attachmentRepository = vi.mocked(rawAttachmentRepository);
 const storeAttachment = vi.mocked(rawStoreAttachment);
 const removeAttachmentFile = vi.mocked(rawRemoveAttachmentFile);
@@ -93,7 +94,7 @@ describe('Attachment routes', () => {
       const res = await api.post(`${BASE}/transaction/1`).expect(201);
 
       expect(res.body).toEqual(okEnvelope({ id: 7, transaction_id: 1 }));
-      expect(attachmentRepository.create).toHaveBeenCalledWith(
+      expect(mockOf(attachmentRepository, "create")).toHaveBeenCalledWith(
         expect.objectContaining({ stored_path: 'attachments/1/receipt.png' }),
       );
       expect(removeAttachmentFile).not.toHaveBeenCalled();
@@ -117,7 +118,7 @@ describe('Attachment routes', () => {
       const res = await api.post(`${BASE}/transaction/1`).expect(500);
 
       expect(bodyAt(res, 'error', 'message')).toBe('FK violation');
-      expect(logger.warn).toHaveBeenCalled();
+      expect(mockOf(logger, "warn")).toHaveBeenCalled();
     });
 
     it('rejects a missing file with a 400 VALIDATION_ERROR envelope', async () => {
@@ -128,13 +129,13 @@ describe('Attachment routes', () => {
       const res = await api.post(`${BASE}/transaction/1`).expect(400);
 
       expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
-      expect(attachmentRepository.transactionExists).not.toHaveBeenCalled();
+      expect(mockOf(attachmentRepository, "transactionExists")).not.toHaveBeenCalled();
     });
 
     it('rejects a non-integer :id via the real validateIdParam guard', async () => {
       const res = await api.post(`${BASE}/transaction/abc`).expect(400);
       expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
-      expect(attachmentRepository.transactionExists).not.toHaveBeenCalled();
+      expect(mockOf(attachmentRepository, "transactionExists")).not.toHaveBeenCalled();
     });
   });
 
@@ -146,7 +147,7 @@ describe('Attachment routes', () => {
 
       const res = await api.delete(`${BASE}/7`).expect(204);
 
-      expect(attachmentRepository.deleteById).toHaveBeenCalledWith(7);
+      expect(mockOf(attachmentRepository, "deleteById")).toHaveBeenCalledWith(7);
       expect(removeAttachmentFile).toHaveBeenCalledWith('attachments/1/receipt.png');
       expect(res.text).toBe('');
     });
@@ -159,7 +160,7 @@ describe('Attachment routes', () => {
 
       const res = await api.delete(`${BASE}/7`).expect(204);
 
-      expect(logger.warn).toHaveBeenCalled();
+      expect(mockOf(logger, "warn")).toHaveBeenCalled();
       expect(res.text).toBe('');
     });
 
@@ -169,7 +170,7 @@ describe('Attachment routes', () => {
       const res = await api.delete(`${BASE}/99`).expect(404);
 
       expect(bodyAt(res, 'error', 'code')).toBe('NOT_FOUND');
-      expect(attachmentRepository.deleteById).not.toHaveBeenCalled();
+      expect(mockOf(attachmentRepository, "deleteById")).not.toHaveBeenCalled();
     });
   });
 
@@ -181,8 +182,8 @@ describe('Attachment routes', () => {
 
       const res = await api.get(`${BASE}/transaction/5`).expect(200);
 
-      expect(attachmentRepository.listByTransaction).toHaveBeenCalledWith(5, {});
-      expect(attachmentRepository.countByTransaction).not.toHaveBeenCalled();
+      expect(mockOf(attachmentRepository, "listByTransaction")).toHaveBeenCalledWith(5, {});
+      expect(mockOf(attachmentRepository, "countByTransaction")).not.toHaveBeenCalled();
       expect(res.body).toEqual(okEnvelope({ items: [{ id: 1 }, { id: 2 }], total: 2 }));
     });
 
@@ -192,7 +193,7 @@ describe('Attachment routes', () => {
 
       const res = await api.get(`${BASE}/transaction/5?limit=1&offset=1`).expect(200);
 
-      expect(attachmentRepository.listByTransaction).toHaveBeenCalledWith(5, { limit: 1, offset: 1 });
+      expect(mockOf(attachmentRepository, "listByTransaction")).toHaveBeenCalledWith(5, { limit: 1, offset: 1 });
       expect(res.body).toEqual(okEnvelope({ items: [{ id: 2 }], total: 4, limit: 1, offset: 1 }));
     });
   });
@@ -208,14 +209,14 @@ describe('Attachment routes — :id params (zod)', () => {
   ] as const)('%s %s rejects a malformed id before touching the store', async (method, path) => {
     const res = await api[method](path).expect(400);
     expect(bodyAt(res, 'error', 'code')).toBe('VALIDATION_ERROR');
-    expect(attachmentRepository.listByTransaction).not.toHaveBeenCalled();
-    expect(attachmentRepository.findById).not.toHaveBeenCalled();
+    expect(mockOf(attachmentRepository, "listByTransaction")).not.toHaveBeenCalled();
+    expect(mockOf(attachmentRepository, "findById")).not.toHaveBeenCalled();
   });
 
   it('keeps unparseable pagination falling back instead of rejecting', async () => {
     attachmentRepository.listByTransaction.mockResolvedValue([]);
     attachmentRepository.countByTransaction.mockResolvedValue(0);
     await api.get(`${BASE}/transaction/4?limit=abc`).expect(200);
-    expect(attachmentRepository.listByTransaction).toHaveBeenCalledWith(4, { limit: 1000, offset: 0 });
+    expect(mockOf(attachmentRepository, "listByTransaction")).toHaveBeenCalledWith(4, { limit: 1000, offset: 0 });
   });
 });

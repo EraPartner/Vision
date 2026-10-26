@@ -18,6 +18,18 @@ import type {
 
 type SortDir = "asc" | "desc" | null;
 
+/**
+ * A page can arrive without `total`; the page length then stands in for it.
+ * The parameter is typed optional on purpose: the wire type promises `total`,
+ * the runtime does not always deliver it.
+ */
+function pageTotal(page: {
+    total?: number | undefined;
+    items: readonly unknown[];
+}): number {
+    return page.total ?? page.items.length;
+}
+
 export interface UseTransactionListDataOptions {
     showAll: boolean;
     search: string;
@@ -47,13 +59,13 @@ export interface UseTransactionListDataResult {
     isLoading: boolean;
     error: Error | null;
     isFetchingMore: boolean;
-    hasMoreRef: React.MutableRefObject<boolean>;
+    hasMoreRef: React.RefObject<boolean>;
     sortKey: string | null;
     sortDir: SortDir;
     handleSortChange: (key: string | null, dir: SortDir) => void;
     loadMore: () => Promise<void>;
     setEditing: (editing: boolean) => void;
-    cancelTableEditingRef: React.MutableRefObject<(() => void) | null>;
+    cancelTableEditingRef: React.RefObject<(() => void) | null>;
 }
 
 export function useTransactionListData({
@@ -180,11 +192,11 @@ export function useTransactionListData({
         if (initialData && !isEditingRef.current) {
             setAllItems(initialData.items as unknown as RawApiTransaction[]);
             setHasInitialItems(true);
-            setTotalItems(initialData.total ?? initialData.items.length);
+            setTotalItems(pageTotal(initialData));
             offsetRef.current = initialData.items.length;
             hasMoreRef.current =
                 initialData.items.length <
-                (initialData.total ?? initialData.items.length);
+                pageTotal(initialData);
         }
     }, [initialData]);
 
@@ -261,8 +273,8 @@ export function useTransactionListData({
             });
             offsetRef.current += result.items.length;
             hasMoreRef.current =
-                offsetRef.current < (result.total ?? result.items.length);
-            setTotalItems(result.total ?? result.items.length);
+                offsetRef.current < pageTotal(result);
+            setTotalItems(pageTotal(result));
         } catch (err) {
             if (myRequestId !== requestIdRef.current) return;
             logger.error("Failed to load more transactions:", err);

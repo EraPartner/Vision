@@ -15,8 +15,10 @@ import {
     mergeAccounts,
     setOpeningBalance,
     reconcileAccount,
+    closeAccount,
+    setStatementBalance,
 } from "@/lib/api/accounts";
-import { asAccountId } from "@vision/types/brands";
+import { asAccountId, asCurrencyCode } from "@vision/types/brands";
 
 afterEach(() => server.resetHandlers());
 
@@ -268,6 +270,7 @@ describe("accounts API client", () => {
                     return ok({
                         mode: "adjustment",
                         drift: 0,
+                        currency: "EUR",
                         statement_balance: 120,
                         computed_balance: 120,
                         transaction: {
@@ -285,5 +288,92 @@ describe("accounts API client", () => {
         expect(body).toMatchObject({ mode: "adjustment" });
         expect(result.drift).toBe(0);
         expect(result.transaction?.transfer_source).toBe("adjustment");
+    });
+
+    it("reconcileAccount rejects money sent as a string", async () => {
+        server.use(
+            http.post(`${API_BASE}/api/accounts/4/reconcile`, () =>
+                ok({
+                    mode: "accept",
+                    drift: 0,
+                    currency: "EUR",
+                    statement_balance: "120.00",
+                    computed_balance: 120,
+                    transaction: null,
+                }),
+            ),
+        );
+
+        const error = await reconcileAccount(asAccountId(4), "accept").catch(
+            (e: unknown) => e,
+        );
+
+        expect(error).toBeInstanceOf(ApiContractError);
+        expect((error as ApiContractError).issues[0]).toMatch(
+            /^statement_balance:/,
+        );
+    });
+
+    it("closeAccount rejects an adjustment without a numeric amount", async () => {
+        server.use(
+            http.post(`${API_BASE}/api/accounts/4/close`, () =>
+                ok({
+                    account_id: 4,
+                    balance_handling: "adjustment",
+                    already_closed: false,
+                    adjustments: [
+                        {
+                            id: 9,
+                            amount: "-5.00",
+                            currency: "EUR",
+                            transfer_source: "adjustment",
+                        },
+                    ],
+                }),
+            ),
+        );
+
+        const error = await closeAccount(asAccountId(4), "adjustment").catch(
+            (e: unknown) => e,
+        );
+
+        expect(error).toBeInstanceOf(ApiContractError);
+        expect((error as ApiContractError).issues[0]).toMatch(
+            /^adjustments\[0\]\.amount:/,
+        );
+    });
+
+    it("closeAccount returns a valid close result unchanged", async () => {
+        const body = {
+            account_id: 4,
+            balance_handling: "preserve",
+            already_closed: false,
+            adjustments: [],
+        };
+        server.use(
+            http.post(`${API_BASE}/api/accounts/4/close`, () => ok(body)),
+        );
+
+        expect(await closeAccount(asAccountId(4), "preserve")).toEqual(body);
+    });
+
+    it("setStatementBalance rejects a string balance", async () => {
+        server.use(
+            http.put(`${API_BASE}/api/accounts/4/statement-balances/EUR`, () =>
+                ok({
+                    account_id: 4,
+                    currency: "EUR",
+                    balance: "10.00",
+                    balance_date: "2026-10-01",
+                }),
+            ),
+        );
+
+        await expect(
+            setStatementBalance(asAccountId(4), asCurrencyCode("EUR"), {
+                balance: 10,
+                date: "2026-10-01",
+            }),
+        ).rejects.toBeInstanceOf(ApiContractError);
     });
 });

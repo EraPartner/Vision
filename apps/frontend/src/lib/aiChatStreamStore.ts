@@ -75,11 +75,14 @@ function mergeCompleteIntoConversationCache(
                     seen.add(toolMsg.id);
                 }
             }
-            if (
-                complete.assistantMessage != null &&
-                !seen.has(complete.assistantMessage.id)
-            ) {
-                additions.push(complete.assistantMessage);
+            // The terminal event is only object-gated at the stream boundary
+            // (see completeEventSchema), so the message can be absent at runtime.
+            const assistantMessage = complete.assistantMessage as
+                | ChatMessage
+                | null
+                | undefined;
+            if (assistantMessage != null && !seen.has(assistantMessage.id)) {
+                additions.push(assistantMessage);
             }
 
             return {

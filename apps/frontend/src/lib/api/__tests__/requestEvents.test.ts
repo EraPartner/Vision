@@ -21,10 +21,10 @@ describe("apiRequest devtools events", () => {
     const events: ApiRequestEvent[] = [];
     const unsubscribe = apiEventBus.subscribe((event) => events.push(event));
     const controller = new AbortController();
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => {
       // Cancel during the back-off before the retry.
       queueMicrotask(() => controller.abort());
-      return new Response("busy", { status: 503 });
+      return Promise.resolve(new Response("busy", { status: 503 }));
     });
     try {
       await expect(

@@ -11,6 +11,7 @@ import {
 } from "../src/repositories/infoRepositoryHelpers.ts";
 import { sanitizeIsolatedValueSpikes } from "../src/services/calculations/portfolioMath.ts";
 import { sanitizeIsolatedDailyInvestmentSpikes } from "../src/lib/calculations/netWorthSanitizer.ts";
+import { must } from "./helpers/must.ts";
 
 const query = vi.mocked(rawQuery);
 
@@ -18,15 +19,15 @@ describe("sanitizeIsolatedValueSpikes", () => {
   it("smooths an isolated one-day needle to the geometric mean of its neighbors", () => {
     const rows = [{ value: 1000 }, { value: 2000 }, { value: 1010 }];
     const out = sanitizeIsolatedValueSpikes(rows, "value");
-    expect(out[1]!.value).toBeCloseTo(Math.sqrt(1000 * 1010), 0); // ~1005, not 2000
-    expect(out[0]!.value).toBe(1000);
-    expect(out[2]!.value).toBe(1010);
+    expect(must(out[1], "out[1]").value).toBeCloseTo(Math.sqrt(1000 * 1010), 0); // ~1005, not 2000
+    expect(must(out[0], "out[0]").value).toBe(1000);
+    expect(must(out[2], "out[2]").value).toBe(1010);
   });
 
   it("leaves a genuine sustained move untouched", () => {
     const rows = [{ value: 1000 }, { value: 2000 }, { value: 2010 }];
     const out = sanitizeIsolatedValueSpikes(rows, "value");
-    expect(out[1]!.value).toBe(2000); // next does not revert → not a needle
+    expect(must(out[1], "out[1]").value).toBe(2000); // next does not revert → not a needle
   });
 });
 
@@ -61,12 +62,12 @@ describe("sanitizeIsolatedDailyInvestmentSpikes", () => {
     const out = sanitizeIsolatedDailyInvestmentSpikes(snapshots);
 
     // Corrected investments: geometric mean sqrt(1000 * 1010) ≈ 1004.99.
-    expect(out[1]!.investments).toBe(1004.99);
-    expect(typeof out[1]!.investments).toBe("number");
+    expect(must(out[1], "out[1]").investments).toBe(1004.99);
+    expect(typeof must(out[1], "out[1]").investments).toBe("number");
     // Regression pin: netWorth must include the -200 liabilities term.
     // The pre-fix recomputation (liquid + investments only) produced 1504.99.
-    expect(out[1]!.netWorth).toBe(1304.99);
-    expect(typeof out[1]!.netWorth).toBe("number");
+    expect(must(out[1], "out[1]").netWorth).toBe(1304.99);
+    expect(typeof must(out[1], "out[1]").netWorth).toBe("number");
 
     // Control: non-spike neighbor days are untouched, liabilities included.
     expect(out[0]).toEqual({
@@ -85,8 +86,8 @@ describe("sanitizeIsolatedDailyInvestmentSpikes", () => {
     });
 
     // Input is not mutated.
-    expect(snapshots[1]!.investments).toBe(2000);
-    expect(snapshots[1]!.netWorth).toBe(2300);
+    expect(must(snapshots[1], "snapshots[1]").investments).toBe(2000);
+    expect(must(snapshots[1], "snapshots[1]").netWorth).toBe(2300);
   });
 
   it("leaves a sustained investments move untouched", () => {

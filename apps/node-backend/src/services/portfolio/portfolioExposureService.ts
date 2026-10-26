@@ -6,6 +6,7 @@ import { getPortfolioSummary } from "./portfolioSummaryService.ts";
 import type { PortfolioSummary } from "./portfolioSummaryService.ts";
 import * as repository from "../../repositories/portfolioExposureRepository.ts";
 import type { ExposureClassificationRow } from "../../repositories/portfolioExposureRepository.ts";
+import { requiredValue } from "../requiredValue.ts";
 
 const identifier = z
   .strictObject({
@@ -115,7 +116,12 @@ export async function upsertPortfolioExposureBundle(input: unknown) {
     // The schema requires exactly one of investmentId / identifier.
     const key = item.investmentId !== undefined
       ? `investment:${item.investmentId}`
-      : `identifier:${identifierKey(item.identifier!)}`;
+      : `identifier:${identifierKey(
+          requiredValue(
+            item.identifier,
+            "an exposure classification without an investmentId has an identifier",
+          ),
+        )}`;
     if ((item.investmentId !== undefined ? investments : identifiers).has(key))
       throw invalidSource("Exposure classification targets must be unique");
     (item.investmentId !== undefined ? investments : identifiers).add(key);
@@ -152,7 +158,7 @@ export async function upsertPortfolioExposureBundle(input: unknown) {
     ]),
   ];
   const targets = await repository.listExposureTargets(targetIds);
-  const byId = new Map(targets.map((item) => [Number(item.id), item]));
+  const byId = new Map(targets.map((item) => [item.id, item]));
   const missingId = targetIds.find((id) => !byId.has(id));
   if (missingId !== undefined)
     throw invalidSource("Exposure sources must target existing investments");
@@ -198,14 +204,17 @@ function aggregateDimension(
       unclassified = unclassified.plus(contribution.amount);
       continue;
     }
-    const id = property === "issuerId" ? key : String(key);
+    const id = key;
     const current = rows.get(id) ?? {
       id,
       label:
         property === "issuerId"
           ? // A truthy key implies the classification is present.
-            contribution.classification!.issuerName
-          : String(key),
+            requiredValue(
+              contribution.classification,
+              "a classified contribution carries its classification",
+            ).issuerName
+          : key,
       amount: new Decimal(0),
       contributions: [],
     };
@@ -228,7 +237,7 @@ function aggregateDimension(
         amount: emit(row.amount),
         weightPercent: weight(row.amount, totalValue),
       }))
-      .sort((a, b) => b.amount - a.amount),
+      .sort((a, b) => new Decimal(b.amount).comparedTo(a.amount)),
     classifiedValue: emit(
       [...rows.values()].reduce(
         (total, row) => total.plus(row.amount),
@@ -251,7 +260,7 @@ function aggregatePortfolioExposure(
   summary: PortfolioSummary,
   sources: ExposureSources,
 ) {
-  const evaluationDate = String(summary.computed_at).slice(0, 10);
+  const evaluationDate = summary.computed_at.slice(0, 10);
   const evaluationTime = Date.parse(`${evaluationDate}T00:00:00Z`);
   const direct = new Map(
     sources.classifications
@@ -303,17 +312,17 @@ function aggregatePortfolioExposure(
   }[] = [];
   for (const holding of summary.summaries) {
     const value = money(holding.currentValue);
-    const source = documents.get(Number(holding.id));
+    const source = documents.get(holding.id);
     if (!source) {
-      if (["etf", "fund"].includes(String(holding.asset_class).toLowerCase()))
+      if (["etf", "fund"].includes(holding.asset_class.toLowerCase()))
         uncovered = uncovered.plus(value);
       else
         contributions.push({
           amount: value,
           sourceType: "direct",
-          investmentId: Number(holding.id),
+          investmentId: holding.id,
           investmentName: holding.name,
-          classification: direct.get(Number(holding.id)),
+          classification: direct.get(holding.id),
         });
       continue;
     }
@@ -327,7 +336,7 @@ function aggregatePortfolioExposure(
     const sourceIsStale =
       sourceAgeDays > source.document.staleness.maximumAgeDays;
     fundSources.push({
-      investmentId: Number(holding.id),
+      investmentId: holding.id,
       investmentName: holding.name,
       asOfDate: source.document.source.asOfDate,
       evaluatedAt: evaluationDate,
@@ -339,7 +348,7 @@ function aggregatePortfolioExposure(
     if (sourceIsStale)
       warnings.push({
         code: "STALE_FUND_SOURCE",
-        investmentId: Number(holding.id),
+        investmentId: holding.id,
         asOfDate: source.document.source.asOfDate,
         evaluatedAt: evaluationDate,
         ageDays: sourceAgeDays,
@@ -363,7 +372,7 @@ function aggregatePortfolioExposure(
         uncovered = uncovered.plus(amount);
         warnings.push({
           code: "AMBIGUOUS_CONSTITUENT_MAPPING",
-          investmentId: Number(holding.id),
+          investmentId: holding.id,
           rowNumber: row.provenance.rowNumber,
         });
         continue;
@@ -371,7 +380,7 @@ function aggregatePortfolioExposure(
       contributions.push({
         amount,
         sourceType: "fund",
-        investmentId: Number(holding.id),
+        investmentId: holding.id,
         investmentName: row.name,
         sourceFundName: holding.name,
         sourceAsOfDate: source.document.source.asOfDate,

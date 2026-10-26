@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { screen, within } from "@testing-library/react";
 import { renderWithApp } from "@/test/renderWithApp";
 import { ShortcutsOverlay } from "@/components/shared/ShortcutsOverlay";
+import { must } from "@/test/must";
 
 describe("ShortcutsOverlay", () => {
     it("documents keyboard access to toast and row actions", async () => {
@@ -12,8 +13,8 @@ describe("ShortcutsOverlay", () => {
         const toastRow = toastLabel.closest("div");
         expect(toastRow).not.toBeNull();
         expect(screen.getByText(/Shift\+F10/)).toBeInTheDocument();
-        expect(within(toastRow!).getByText("Alt")).toBeInTheDocument();
-        expect(within(toastRow!).getByText("T")).toBeInTheDocument();
+        expect(within(must(toastRow)).getByText("Alt")).toBeInTheDocument();
+        expect(within(must(toastRow)).getByText("T")).toBeInTheDocument();
     });
     it("shows current destination names with their updated keys", async () => {
         renderWithApp(<ShortcutsOverlay open onOpenChange={() => {}} />);
@@ -24,7 +25,7 @@ describe("ShortcutsOverlay", () => {
         ];
         for (const [label, key] of destinations) {
             const name = await screen.findByText(label);
-            const row = name.closest("div")!;
+            const row = must(name.closest("div"));
             expect(within(row).getByText("G")).toBeInTheDocument();
             expect(within(row).getByText(key)).toBeInTheDocument();
         }

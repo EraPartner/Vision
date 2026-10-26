@@ -22,6 +22,8 @@ vi.mock("../../src/config/config.ts", () => ({
   default: {
     admin: { enableResetDb: true },
     isDevelopment: () => true,
+    security: { devBypass: false },
+    rateLimit: { globalMax: 1000, globalWindowMs: 60_000 },
   },
 }));
 
@@ -72,7 +74,7 @@ describe("Admin route request validation", () => {
     vi.mocked(query).mockResolvedValue({
       rows: [{ relname: "transactions" }],
     } as never);
-    vi.mocked(getClient).mockResolvedValue(client as never);
+    vi.mocked(getClient).mockResolvedValue(client);
     client.query.mockResolvedValue({ rows: [] });
     vi.mocked(readRows).mockResolvedValue({} as never);
     vi.mocked(applyMutations).mockResolvedValue({ dryRun: true } as never);

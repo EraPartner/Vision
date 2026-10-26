@@ -13,6 +13,9 @@ import { getJson, num } from "./httpClient.ts";
 import { requireProviderKey } from "../providerKeys.ts";
 import { parseOr } from "./schemas.ts";
 import { makeChartRangeMap } from "@vision/types/chartRanges";
+import { lookup } from "../tableLookup.ts";
+import { valueText } from "../../valueText.ts";
+import { isRecord } from "../../../lib/typeGuards.ts";
 
 const BASE = "https://www.alphavantage.co/query";
 
@@ -21,11 +24,13 @@ const BASE = "https://www.alphavantage.co/query";
 // the shape check, so a leaf schema adds nothing — only the envelope guards
 // are declarative.
 const globalQuoteEnvelopeSchema = z.looseObject({
-  "Global Quote": z.record(z.string(), z.any()).catch({}),
+  "Global Quote": z.record(z.string(), z.unknown()).catch({}),
 });
 
 const dailySeriesEnvelopeSchema = z.looseObject({
-  "Time Series (Daily)": z.record(z.string(), z.any()).catch({}),
+  "Time Series (Daily)": z
+    .record(z.string(), z.record(z.string(), z.unknown()).catch({}))
+    .catch({}),
 });
 
 const RANGE_TO_DAYS = makeChartRangeMap([
@@ -41,10 +46,10 @@ const key = () => requireProviderKey("alpha_vantage");
  *   the happy path, so it is checked defensively rather than typed.
  */
 function assertData(payload: unknown): unknown {
-  if (payload && typeof payload === "object") {
-    const p = payload as Record<string, unknown>;
+  if (isRecord(payload)) {
+    const p = payload;
     const message = p.Note || p.Information || p["Error Message"];
-    if (message) throw new Error(String(message));
+    if (message) throw new Error(valueText(message));
   }
   return payload;
 }
@@ -60,12 +65,13 @@ const alphaVantageAdapter = {
       { "Global Quote": {} },
     )["Global Quote"];
     if (!q["05. price"]) throw new Error("alpha_vantage: no quote");
+    const quotedSymbol = q["01. symbol"];
     return {
-      symbol: q["01. symbol"] || symbol,
+      symbol: typeof quotedSymbol === "string" && quotedSymbol ? quotedSymbol : symbol,
       name: symbol,
       price: num(q["05. price"]),
       change: num(q["09. change"]),
-      changePercent: num((q["10. change percent"] || "").replace("%", "")),
+      changePercent: num(valueText(q["10. change percent"] || "").replace("%", "")),
       open: num(q["02. open"]),
       dayHigh: num(q["03. high"]),
       dayLow: num(q["04. low"]),
@@ -75,9 +81,7 @@ const alphaVantageAdapter = {
   },
 
   async chart(symbol: string, { range = "1mo" }: { range?: string } = {}) {
-    const days =
-      RANGE_TO_DAYS[range as keyof typeof RANGE_TO_DAYS] ??
-      RANGE_TO_DAYS["1mo"];
+    const days = lookup(RANGE_TO_DAYS, range) ?? RANGE_TO_DAYS["1mo"];
     const outputsize = days > 100 ? "full" : "compact";
     const url = `${BASE}?function=TIME_SERIES_DAILY&symbol=${encodeURIComponent(symbol)}&outputsize=${outputsize}&apikey=${key()}`;
     const series = parseOr(
@@ -101,7 +105,7 @@ const alphaVantageAdapter = {
       .sort((a, b) => a.time - b.time);
     return {
       symbol,
-      currency: undefined as string | undefined,
+      currency: undefined,
       points,
     };
   },

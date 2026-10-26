@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { formatZodIssues, parseInput } from "../src/lib/zodInput.ts";
 import { ValidationError } from "../src/middleware/errorHandler.ts";
+import { must } from "./helpers/must.ts";
 
 const schema = z.strictObject({
   name: z.string().min(1),
@@ -49,7 +50,7 @@ describe("parseInput", () => {
     const result = z.string().safeParse(1);
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(formatZodIssues(result.error)).toBe(result.error.issues[0]!.message);
+      expect(formatZodIssues(result.error)).toBe(must(result.error.issues[0], "result.error.issues[0]").message);
     }
   });
 });

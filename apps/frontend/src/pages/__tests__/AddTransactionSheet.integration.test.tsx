@@ -17,6 +17,7 @@ import {
     recipientRow,
     transactionCreated,
 } from "@/test/msw/rowFixtures";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -396,9 +397,9 @@ describe("AddTransactionSheet (integration)", () => {
     function describedError(control: HTMLElement): HTMLElement {
         const describedBy = control.getAttribute("aria-describedby");
         expect(describedBy).toBeTruthy();
-        const message = document.getElementById(describedBy!);
+        const message = document.getElementById(must(describedBy));
         expect(message).toBeInTheDocument();
-        return message!;
+        return must(message);
     }
 
     it("renders an inline error associated to the amount field for a non-numeric amount", async () => {
@@ -430,7 +431,7 @@ describe("AddTransactionSheet (integration)", () => {
         await pickRecipient(user, "Test Supermarket");
 
         // fireEvent.submit bypasses JSDOM pattern constraint checking so handleSubmit runs
-        const formEl = screen.getByRole("dialog").querySelector("form")!;
+        const formEl = must(screen.getByRole("dialog").querySelector("form"));
         fireEvent.submit(formEl);
 
         await waitFor(() =>
@@ -533,7 +534,7 @@ describe("AddTransactionSheet (integration)", () => {
         // visual order, so it is the one that must receive focus.
         await pickBankAccount(user, "Main");
 
-        const formEl = screen.getByRole("dialog").querySelector("form")!;
+        const formEl = must(screen.getByRole("dialog").querySelector("form"));
         fireEvent.submit(formEl);
 
         const amount = screen.getByLabelText(/amount/i);

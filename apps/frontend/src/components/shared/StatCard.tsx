@@ -7,7 +7,8 @@ import { DeltaPill } from "@/components/shared/DeltaPill";
 import { CompactValueDisclosure } from "@/components/shared/TouchDisclosure";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
+import type { AppPath } from "@/lib/routes";
 
 /** Shared supporting metric tile. Primary emphasis is reserved for a page's
  * selected total; only linked tiles advertise full-card activation. */
@@ -60,7 +61,7 @@ type StatCardSize = NonNullable<VariantProps<typeof statValueVariants>["size"]>;
 interface StatCardProps {
     title: string;
     /** Optional drill-down destination exposed as a full-surface native link. */
-    to?: string | undefined;
+    to?: AppPath | undefined;
     /** Formatted display value. Strings get the odometer treatment; nodes (e.g. <Money/>) render as-is. */
     value?: ReactNode | undefined;
     /** Raw numeric value for the count-up animation. If omitted, value is shown statically. */
@@ -128,7 +129,7 @@ export function StatCard({
             )}
         >
             {to && (
-                <Link
+                <AppLink
                     to={to}
                     aria-label={title}
                     className="absolute inset-0 z-10 rounded-[inherit] focus-ring"

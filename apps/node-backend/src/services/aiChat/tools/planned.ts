@@ -74,13 +74,13 @@ export const getUpcomingPlanned = {
     const rows = items.map((row) => ({
       id: row.id,
       date: normalizeDateLikeToYmd(row.planned_date) ?? null,
-      amount: roundToCents(toDecimal(row.amount ?? 0)).toNumber(),
+      amount: roundToCents(toDecimal(row.amount)).toNumber(),
       recipient: row.recipient_name || null,
       category: row.category_name || null,
       memo: row.memo || "",
-      isRecurring: Boolean(row.is_recurring),
+      isRecurring: row.is_recurring,
       recurrencePattern: row.recurrence_pattern || null,
-      isLoan: Boolean(row.is_loan),
+      isLoan: row.is_loan,
     }));
 
     rows.sort((a, b) => {
@@ -144,7 +144,7 @@ export const getSubscriptionTotal = {
     let total = toDecimal(0);
 
     for (const row of items) {
-      const amount = toDecimal(row.amount ?? 0);
+      const amount = toDecimal(row.amount);
       if (amount.gte(0)) continue;
 
       // A null pattern finds no multiplier, as the "null" key never did.
@@ -237,11 +237,11 @@ export const getLoanSchedule = {
     const shaped = schedule.map((s) => ({
       installment: s.installment_number,
       dueDate: normalizeDateLikeToYmd(s.due_date) ?? null,
-      payment: roundToCents(toDecimal(s.payment_amount ?? 0)).toNumber(),
-      principal: roundToCents(toDecimal(s.principal_amount ?? 0)).toNumber(),
-      interest: roundToCents(toDecimal(s.interest_amount ?? 0)).toNumber(),
+      payment: roundToCents(toDecimal(s.payment_amount)).toNumber(),
+      principal: roundToCents(toDecimal(s.principal_amount)).toNumber(),
+      interest: roundToCents(toDecimal(s.interest_amount)).toNumber(),
       remainingPrincipal: roundToCents(
-        toDecimal(s.remaining_principal ?? 0),
+        toDecimal(s.remaining_principal),
       ).toNumber(),
     }));
 
@@ -268,6 +268,13 @@ export const getLoanSchedule = {
 /**
  * Projected bank balance after accounting for upcoming planned transactions.
  */
+/** The net position may arrive as a numeric string or be missing. */
+function netPositionNumber(value: number | string | null | undefined): number {
+  return typeof value === "number"
+    ? value
+    : roundToCents(toDecimal(value ?? 0)).toNumber();
+}
+
 export const getProjectedBalance = {
   name: "getProjectedBalance",
   description:
@@ -306,16 +313,11 @@ export const getProjectedBalance = {
       }),
     ]);
 
-    const currentBalance =
-      typeof bankResult.total_net_position === "number"
-        ? bankResult.total_net_position
-        : roundToCents(
-            toDecimal(bankResult.total_net_position ?? 0),
-          ).toNumber();
+    const currentBalance = netPositionNumber(bankResult.total_net_position);
 
     let plannedNet = toDecimal(0);
     const plannedRows = items.map((row) => {
-      const amount = toDecimal(row.amount ?? 0);
+      const amount = toDecimal(row.amount);
       plannedNet = plannedNet.plus(amount);
       return {
         date: normalizeDateLikeToYmd(row.planned_date) ?? null,
@@ -323,7 +325,7 @@ export const getProjectedBalance = {
         recipient: row.recipient_name || null,
         category: row.category_name || null,
         memo: row.memo || "",
-        isRecurring: Boolean(row.is_recurring),
+        isRecurring: row.is_recurring,
       };
     });
 
@@ -336,7 +338,7 @@ export const getProjectedBalance = {
       if (!row.is_recurring || !row.recurrence_pattern) continue;
       const occurrences = expandOccurrences(row, endStr);
       for (const ymd of occurrences.slice(1)) {
-        const amount = toDecimal(row.amount ?? 0);
+        const amount = toDecimal(row.amount);
         plannedNet = plannedNet.plus(amount);
         plannedRows.push({
           date: ymd,

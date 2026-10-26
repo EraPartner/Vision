@@ -20,7 +20,7 @@
 import js from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
-import { typeAwareRules } from "../../config/eslint-type-aware.mjs";
+import { strictTypeAwareRules } from "../../config/eslint-type-aware.mjs";
 
 // ── custom local rule ─────────────────────────────────────────────────────────
 
@@ -368,18 +368,19 @@ export default [
   // with the same unused-variable convention as the JavaScript files.
   ...tseslint.configs.recommended.map((config) => ({
     ...config,
-    files: ["src/**/*.ts"],
+    files: ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts"],
   })),
   {
-    files: ["src/**/*.ts"],
+    files: ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts"],
     languageOptions: {
       parserOptions: {
-        projectService: true,
+        // tsconfig.tests.json covers src/ and tests/ in one program.
+        project: ["./tsconfig.tests.json", "./tsconfig.scripts.json"],
         tsconfigRootDir: import.meta.dirname,
       },
     },
     rules: {
-      ...typeAwareRules,
+      ...strictTypeAwareRules(tseslint),
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": [
         "warn",

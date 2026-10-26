@@ -1,5 +1,5 @@
 import { forwardRef } from "react";
-import { Link, type LinkProps } from "react-router";
+import { AppLink, type AppLinkProps } from "@/lib/appNavigation";
 import { cva, type VariantProps } from "@/lib/classNames";
 import { cn } from "@/lib/utils";
 
@@ -18,11 +18,11 @@ const textLinkVariants = cva(
 );
 
 export interface TextLinkProps
-    extends LinkProps, VariantProps<typeof textLinkVariants> {}
+    extends AppLinkProps, VariantProps<typeof textLinkVariants> {}
 
 export const TextLink = forwardRef<HTMLAnchorElement, TextLinkProps>(
     ({ className, tone, ...props }, ref) => (
-        <Link
+        <AppLink
             ref={ref}
             className={cn(textLinkVariants({ tone }), className)}
             {...props}

@@ -324,10 +324,9 @@ const stalenessSchema = z
   });
 
 function asScaledInteger(value: string, scale = 12): bigint {
-  const [integer, fraction = ""] = value.split(".");
-  // String.prototype.split always yields at least one element.
+  const [integer = "", fraction = ""] = value.split(".");
   return (
-    BigInt(integer!) * 10n ** BigInt(scale) +
+    BigInt(integer) * 10n ** BigInt(scale) +
     BigInt(fraction.padEnd(scale, "0"))
   );
 }
@@ -498,7 +497,7 @@ export const fundHoldingsImportResultSchema: z.ZodType<FundHoldingsImportResult>
   z
     .object({
       contractVersion: z.literal(FUND_HOLDINGS_CONTRACT_VERSION),
-      importId: z.string().uuid(),
+      importId: z.uuid(),
       status: z.enum(["imported", "partial", "rejected"]),
       fileName: z.string().trim().min(1).max(512),
       parsedAt: dateTimeSchema,

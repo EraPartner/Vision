@@ -35,7 +35,7 @@ const PROVIDER_ENV = ['TWELVE_DATA_API_KEY', 'FINNHUB_API_KEY', 'FMP_API_KEY', '
 beforeEach(() => {
   vi.clearAllMocks();
   loadKeyOverrides([]); // reset in-memory overrides
-  for (const v of PROVIDER_ENV) delete process.env[v]; // deterministic env
+  for (const v of PROVIDER_ENV) Reflect.deleteProperty(process.env, v); // deterministic env
 });
 
 describe('listKeyStatuses', () => {

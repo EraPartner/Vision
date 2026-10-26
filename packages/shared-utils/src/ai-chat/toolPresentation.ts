@@ -1,3 +1,5 @@
+import { stringifyUnknown } from "../stringify.ts";
+
 /** Existing ToolResultCard inference. Arrays inside result arrays are intentionally rows. */
 export type ToolRow = Record<string, unknown>;
 export function toolResultRows(data: unknown): ToolRow[] {
@@ -79,8 +81,8 @@ export function toolResultPresentation(
   const key = yk[0];
   const pieData = key
     ? rows.map((row) => ({
-        name: String(row[xk] ?? ""),
-        value: typeof row[key] === "number" ? (row[key] as number) : 0,
+        name: stringifyUnknown(row[xk]),
+        value: typeof row[key] === "number" ? (row[key]) : 0,
       }))
     : [];
   // Recharts Pie's defaults: start=0, end=360, minAngle=0, paddingAngle=0.

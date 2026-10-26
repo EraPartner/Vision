@@ -90,7 +90,7 @@ export function createLiveContractSkipBannerReporter(
     const color =
         options.color ??
         (!env.NO_COLOR &&
-            (Boolean(env.FORCE_COLOR) || Boolean(process.stdout.isTTY)));
+            (Boolean(env.FORCE_COLOR) || process.stdout.isTTY));
 
     return {
         isLiveContractSkipBanner: true,

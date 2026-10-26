@@ -49,7 +49,12 @@ export function useCurrencyFormatSettings(
                 defaultCurrency ||
                 currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY),
             locale: numberFormatToLocale(appSettings.numberFormat),
-            decimals: appSettings.showDecimalPlaces ?? 2,
+            // Persisted setting: an older or hand-edited store can lack the key,
+            // and the formatters must keep degrading to two digits.
+            decimals:
+                typeof appSettings.showDecimalPlaces === "number"
+                    ? appSettings.showDecimalPlaces
+                    : 2,
         }),
         [
             appSettings.defaultCurrency,
@@ -83,7 +88,7 @@ export function useCurrencyFormatter(
     return useCallback(
         (val: number, options: CurrencyFormatterOptions = {}) => {
             const currency = options.currency ?? fallbackCurrency;
-            const resolvedDecimals = options.decimals ?? decimalsSetting ?? 2;
+            const resolvedDecimals = options.decimals ?? decimalsSetting;
             const signed = options.signed ?? false;
             // Same guard as the parts sibling below: degrade to the byte-identical
             // bare-number text instead of throwing RangeError into the error
@@ -137,7 +142,7 @@ export function useCurrencyPartsFormatter(
             } = {},
         ) => {
             const currency = opts.currency ?? fallbackCurrency;
-            const decimals = opts.decimals ?? decimalsSetting ?? 2;
+            const decimals = opts.decimals ?? decimalsSetting;
             const signed = opts.signed ?? false;
             // Mirrors Money.tsx's guard, and like Money's it is deliberately wide:
             // it catches any RangeError the Intl.NumberFormat constructor throws —

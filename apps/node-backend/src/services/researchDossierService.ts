@@ -44,8 +44,8 @@ const sourceSchema = z
     title: nonempty(500),
     reference: nonempty(2000),
     sourceDate: date.nullable().default(null),
-    accessedAt: z.string().datetime({ offset: true }).nullable().default(null),
-    documentId: z.string().uuid().optional(),
+    accessedAt: z.iso.datetime({ offset: true }).nullable().default(null),
+    documentId: z.uuid().optional(),
     documentVersion: z.number().int().positive().optional(),
     passageOrdinal: z.number().int().nonnegative().optional(),
     contentSha256: z
@@ -69,7 +69,7 @@ const sourceSchema = z
   });
 const evidenceSchema = z
   .object({
-    id: z.string().uuid().optional(),
+    id: z.uuid().optional(),
     stance: z.enum(["support", "oppose", "context"]),
     origin: z.enum(["user", "ai-draft"]),
     claim: nonempty(8000),
@@ -106,7 +106,7 @@ const dossierContentSchema = z
       .default({ categoryIds: [], investmentIds: [], savedAnalysisIds: [] }),
   })
   .strict();
-const uuid = z.string().uuid();
+const uuid = z.uuid();
 const versionNumber = z.number().int().positive();
 
 export type DossierContent = z.output<typeof dossierContentSchema>;
@@ -167,7 +167,8 @@ function normalizeContent(input: unknown): DossierContent {
 
 async function validateDocuments(
   content: DossierContent,
-  previousContent?: DossierContent,
+  // Stored content predates some fields, so `evidence` may be absent.
+  previousContent?: Partial<DossierContent>,
 ) {
   for (const evidence of content.evidence) {
     const source = evidence.source;
@@ -448,6 +449,8 @@ export async function listResearchDossiers({
         .select(sql<number>`count(*)::int`.as("total")),
     ),
   ]);
+  // An aggregate without GROUP BY always returns exactly one row.
+  if (!count) throw new Error("count(*) returned no row");
   return {
     items: rows.map((row) => ({
       id: row.id,
@@ -459,8 +462,7 @@ export async function listResearchDossiers({
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     })),
-    // An aggregate without GROUP BY always returns exactly one row.
-    total: count!.total,
+    total: count.total,
     limit: paging.limit,
     offset: paging.offset,
   };

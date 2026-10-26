@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { apiRequest } from "@/lib/api/client";
 import { saveSetting, getSetting } from "@/lib/api/settings";
 import type {
@@ -8,6 +9,14 @@ import type {
     SplashThemeColors,
     UpdateCheckStatus,
 } from "@vision/types/electron";
+
+const backupSettingsRowSchema = z.looseObject({
+    backupDir: z.string().optional().catch(undefined),
+    backupOnQuit: z.boolean().optional().catch(undefined),
+});
+const servicesSettingsRowSchema = z.looseObject({
+    keepServicesOnQuit: z.boolean().optional().catch(undefined),
+});
 export type {
     ElectronMenuAction,
     SplashThemeColors,
@@ -196,14 +205,12 @@ export async function loadBackupSettings(): Promise<{
     }
     try {
         const result = await getSetting("backup_settings");
-        if (result?.value) {
-            const v = result.value as {
-                backupDir?: string;
-                backupOnQuit?: boolean;
-            };
+        if (result.value) {
+            // Stored settings are untrusted: keep only well-typed fields.
+            const v = backupSettingsRowSchema.safeParse(result.value);
             return {
-                backupDir: v.backupDir ?? "",
-                backupOnQuit: v.backupOnQuit ?? false,
+                backupDir: (v.success && v.data.backupDir) || "",
+                backupOnQuit: (v.success && v.data.backupOnQuit) || false,
             };
         }
     } catch {
@@ -243,9 +250,11 @@ export async function loadServicesSettings(): Promise<{
     }
     try {
         const result = await getSetting("services_settings");
-        if (result?.value) {
-            const v = result.value as { keepServicesOnQuit?: boolean };
-            return { keepServicesOnQuit: v.keepServicesOnQuit ?? false };
+        if (result.value) {
+            const v = servicesSettingsRowSchema.safeParse(result.value);
+            return {
+                keepServicesOnQuit: (v.success && v.data.keepServicesOnQuit) || false,
+            };
         }
     } catch {
         // fall through

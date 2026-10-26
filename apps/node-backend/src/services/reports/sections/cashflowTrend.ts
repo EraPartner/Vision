@@ -29,7 +29,7 @@ export function renderCashflowTrend(
       message: "Monthly totals could not be loaded. Retry the report.",
       pageBreak: true,
     });
-  const months = filterMonthsByPeriod(data.monthly?.months ?? [], period);
+  const months = filterMonthsByPeriod(data.monthly.months, period);
 
   if (months.length === 0) {
     return emptySection({

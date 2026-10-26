@@ -6,11 +6,12 @@ import type { InvestmentSummary } from "@/types/portfolio";
 import { AddPortfolioTxnDialog } from "./AddPortfolioTxnDialog";
 import { HoldingActionsMenu } from "./assetPageParts";
 import { InvestmentDetailDialog } from "./InvestmentDetailDialog";
+import type { TranslationKey } from "@/locales/keys";
 
 interface UseHoldingActionsOptions {
-    deleteTitleKey: string;
+    deleteTitleKey: TranslationKey;
     /** Receives {name}. */
-    deleteDescriptionKey: string;
+    deleteDescriptionKey: TranslationKey;
 }
 
 /**

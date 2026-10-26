@@ -27,6 +27,7 @@ vi.mock("../../src/config/logger.ts", () => ({
 
 import { watchlistRepository as rawWatchlistRepository } from "../../src/repositories/watchlistRepository.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const watchlistRepository = vi.mocked(rawWatchlistRepository);
 
 type DeepPartial<T> = T extends readonly (infer U)[]
@@ -64,7 +65,7 @@ describe("Watchlist Routes", () => {
         .get(`${BASE}?limit=10000&offset=-15&asset_class=stocks`)
         .expect(200);
 
-      expect(watchlistRepository.getAllWithCount).toHaveBeenCalledWith({
+      expect(mockOf(watchlistRepository, "getAllWithCount")).toHaveBeenCalledWith({
         limit: 5000,
         offset: 0,
         assetClass: "stocks",
@@ -101,7 +102,7 @@ describe("Watchlist Routes", () => {
       // never actually tested.
       const res = await api.get(`${BASE}/abc`).expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(watchlistRepository.getById).not.toHaveBeenCalled();
+      expect(mockOf(watchlistRepository, "getById")).not.toHaveBeenCalled();
     });
   });
 
@@ -109,7 +110,7 @@ describe("Watchlist Routes", () => {
     it("returns a 400 VALIDATION_ERROR envelope when required fields are missing", async () => {
       const res = await api.post(BASE).send({ name: "ETF" }).expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(watchlistRepository.create).not.toHaveBeenCalled();
+      expect(mockOf(watchlistRepository, "create")).not.toHaveBeenCalled();
     });
 
     it("creates watchlist item", async () => {
@@ -129,7 +130,7 @@ describe("Watchlist Routes", () => {
 
       const res = await api.post(BASE).send(body).expect(201);
 
-      expect(watchlistRepository.create).toHaveBeenCalledWith({
+      expect(mockOf(watchlistRepository, "create")).toHaveBeenCalledWith({
         name: "ETF Idea",
         symbol: "VUSA.AS",
         asset_class: "etf",
@@ -158,7 +159,7 @@ describe("Watchlist Routes", () => {
         .send({ ...validBody, target_price: "abc" })
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(watchlistRepository.create).not.toHaveBeenCalled();
+      expect(mockOf(watchlistRepository, "create")).not.toHaveBeenCalled();
     });
 
     it("rejects negative target_price", async () => {
@@ -173,7 +174,7 @@ describe("Watchlist Routes", () => {
         .post(BASE)
         .send({ ...validBody, target_price: 0 })
         .expect(400);
-      expect(watchlistRepository.create).not.toHaveBeenCalled();
+      expect(mockOf(watchlistRepository, "create")).not.toHaveBeenCalled();
     });
 
     it("rejects target_price beyond the NUMERIC(18,6) cap (was a DB overflow 500)", async () => {
@@ -181,7 +182,7 @@ describe("Watchlist Routes", () => {
         .post(BASE)
         .send({ ...validBody, target_price: 1e15 })
         .expect(400);
-      expect(watchlistRepository.create).not.toHaveBeenCalled();
+      expect(mockOf(watchlistRepository, "create")).not.toHaveBeenCalled();
     });
 
     it("rejects Infinity target_price", async () => {
@@ -208,7 +209,7 @@ describe("Watchlist Routes", () => {
         .post(BASE)
         .send({ ...validBody, name: "x".repeat(201) })
         .expect(400);
-      expect(watchlistRepository.create).not.toHaveBeenCalled();
+      expect(mockOf(watchlistRepository, "create")).not.toHaveBeenCalled();
     });
 
     it("rejects an over-length symbol (VARCHAR(20))", async () => {
@@ -216,7 +217,7 @@ describe("Watchlist Routes", () => {
         .post(BASE)
         .send({ ...validBody, symbol: "A".repeat(21) })
         .expect(400);
-      expect(watchlistRepository.create).not.toHaveBeenCalled();
+      expect(mockOf(watchlistRepository, "create")).not.toHaveBeenCalled();
     });
 
     it("rejects unknown asset_class", async () => {
@@ -238,7 +239,7 @@ describe("Watchlist Routes", () => {
         .post(BASE)
         .send({ ...validBody, currency: null })
         .expect(400);
-      expect(watchlistRepository.create).not.toHaveBeenCalled();
+      expect(mockOf(watchlistRepository, "create")).not.toHaveBeenCalled();
     });
 
     it("normalises a lower-case currency to uppercase before the repository", async () => {
@@ -247,7 +248,7 @@ describe("Watchlist Routes", () => {
         .post(BASE)
         .send({ ...validBody, currency: "usd" })
         .expect(201);
-      expect(watchlistRepository.create).toHaveBeenCalledWith(
+      expect(mockOf(watchlistRepository, "create")).toHaveBeenCalledWith(
         expect.objectContaining({ currency: "USD" }),
       );
     });
@@ -257,7 +258,7 @@ describe("Watchlist Routes", () => {
         .post(BASE)
         .send({ ...validBody, name: "   " })
         .expect(400);
-      expect(watchlistRepository.create).not.toHaveBeenCalled();
+      expect(mockOf(watchlistRepository, "create")).not.toHaveBeenCalled();
     });
 
     it("coerces numeric-string target_price before reaching the repository", async () => {
@@ -266,7 +267,7 @@ describe("Watchlist Routes", () => {
         .post(BASE)
         .send({ ...validBody, target_price: "123.45" })
         .expect(201);
-      expect(watchlistRepository.create).toHaveBeenCalledWith(
+      expect(mockOf(watchlistRepository, "create")).toHaveBeenCalledWith(
         expect.objectContaining({ target_price: 123.45 }),
       );
     });
@@ -279,7 +280,7 @@ describe("Watchlist Routes", () => {
         .post(BASE)
         .send({ ...validBody, name, symbol })
         .expect(201);
-      expect(watchlistRepository.create).toHaveBeenCalledWith(
+      expect(mockOf(watchlistRepository, "create")).toHaveBeenCalledWith(
         expect.objectContaining({ name, symbol }),
       );
     });
@@ -292,7 +293,7 @@ describe("Watchlist Routes", () => {
         .post(BASE)
         .send({ ...validBody, target_price: MAX_PRICE })
         .expect(201);
-      expect(watchlistRepository.create).toHaveBeenCalledWith(
+      expect(mockOf(watchlistRepository, "create")).toHaveBeenCalledWith(
         expect.objectContaining({ target_price: MAX_PRICE }),
       );
 
@@ -315,7 +316,7 @@ describe("Watchlist Routes", () => {
         .post(BASE)
         .send({ ...validBody, currency: " usd " })
         .expect(201);
-      expect(watchlistRepository.create).toHaveBeenCalledWith(
+      expect(mockOf(watchlistRepository, "create")).toHaveBeenCalledWith(
         expect.objectContaining({ currency: "USD" }),
       );
     });
@@ -333,7 +334,7 @@ describe("Watchlist Routes", () => {
         .post(BASE)
         .send({ ...validBody, asset_class: "metals" })
         .expect(201);
-      expect(watchlistRepository.create).toHaveBeenCalledWith(
+      expect(mockOf(watchlistRepository, "create")).toHaveBeenCalledWith(
         expect.objectContaining({ asset_class: "metals" }),
       );
     });
@@ -345,7 +346,7 @@ describe("Watchlist Routes", () => {
         .post(BASE)
         .send({ ...validBody, added_price: 0 })
         .expect(201);
-      expect(watchlistRepository.create).toHaveBeenCalledWith(
+      expect(mockOf(watchlistRepository, "create")).toHaveBeenCalledWith(
         expect.objectContaining({ added_price: 0 }),
       );
 
@@ -353,7 +354,7 @@ describe("Watchlist Routes", () => {
         .post(BASE)
         .send({ ...validBody, added_price: "12.5" })
         .expect(201);
-      expect(watchlistRepository.create).toHaveBeenCalledWith(
+      expect(mockOf(watchlistRepository, "create")).toHaveBeenCalledWith(
         expect.objectContaining({ added_price: 12.5 }),
       );
     });
@@ -373,7 +374,7 @@ describe("Watchlist Routes", () => {
         .send({ target_price: "abc" })
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(watchlistRepository.update).not.toHaveBeenCalled();
+      expect(mockOf(watchlistRepository, "update")).not.toHaveBeenCalled();
     });
 
     it("rejects unknown asset_class on partial update", async () => {
@@ -391,19 +392,19 @@ describe("Watchlist Routes", () => {
         .patch(`${BASE}/1`)
         .send({ notes: "watch earnings" })
         .expect(200);
-      expect(watchlistRepository.update).toHaveBeenCalledWith(1, {
+      expect(mockOf(watchlistRepository, "update")).toHaveBeenCalledWith(1, {
         notes: "watch earnings",
       });
     });
 
     it("rejects an empty name on PATCH (400, not a persisted blank label)", async () => {
       await api.patch(`${BASE}/1`).send({ name: "" }).expect(400);
-      expect(watchlistRepository.update).not.toHaveBeenCalled();
+      expect(mockOf(watchlistRepository, "update")).not.toHaveBeenCalled();
     });
 
     it("rejects a whitespace-only name on PATCH", async () => {
       await api.patch(`${BASE}/1`).send({ name: "   " }).expect(400);
-      expect(watchlistRepository.update).not.toHaveBeenCalled();
+      expect(mockOf(watchlistRepository, "update")).not.toHaveBeenCalled();
     });
 
     it("rejects a null name on PATCH", async () => {
@@ -413,7 +414,7 @@ describe("Watchlist Routes", () => {
     it("coerces a numeric-string target_price on PATCH", async () => {
       watchlistRepository.update.mockResolvedValue(partial({ id: 1 }));
       await api.patch(`${BASE}/1`).send({ target_price: "50.5" }).expect(200);
-      expect(watchlistRepository.update).toHaveBeenCalledWith(
+      expect(mockOf(watchlistRepository, "update")).toHaveBeenCalledWith(
         1,
         expect.objectContaining({ target_price: 50.5 }),
       );
@@ -426,7 +427,7 @@ describe("Watchlist Routes", () => {
     it("uppercases currency on PATCH", async () => {
       watchlistRepository.update.mockResolvedValue(partial({ id: 1 }));
       await api.patch(`${BASE}/1`).send({ currency: "gbp" }).expect(200);
-      expect(watchlistRepository.update).toHaveBeenCalledWith(
+      expect(mockOf(watchlistRepository, "update")).toHaveBeenCalledWith(
         1,
         expect.objectContaining({ currency: "GBP" }),
       );
@@ -434,7 +435,7 @@ describe("Watchlist Routes", () => {
 
     it("rejects a null currency on PATCH before the NOT NULL column", async () => {
       await api.patch(`${BASE}/1`).send({ currency: null }).expect(400);
-      expect(watchlistRepository.update).not.toHaveBeenCalled();
+      expect(mockOf(watchlistRepository, "update")).not.toHaveBeenCalled();
     });
 
     it("rejects an over-length symbol on PATCH", async () => {
@@ -452,7 +453,7 @@ describe("Watchlist Routes", () => {
         .patch(`${BASE}/1`)
         .send({ notes: "hold", unknown_field: "kept" })
         .expect(200);
-      expect(watchlistRepository.update).toHaveBeenCalledWith(1, {
+      expect(mockOf(watchlistRepository, "update")).toHaveBeenCalledWith(1, {
         notes: "hold",
         unknown_field: "kept",
       });
@@ -461,7 +462,7 @@ describe("Watchlist Routes", () => {
     it("allows an explicit null added_price on PATCH (only non-null values are frozen)", async () => {
       watchlistRepository.update.mockResolvedValue(partial({ id: 1 }));
       await api.patch(`${BASE}/1`).send({ added_price: null }).expect(200);
-      expect(watchlistRepository.update).toHaveBeenCalledWith(
+      expect(mockOf(watchlistRepository, "update")).toHaveBeenCalledWith(
         1,
         expect.objectContaining({ added_price: null }),
       );
@@ -472,7 +473,7 @@ describe("Watchlist Routes", () => {
       // it, so before the fix a valid value validated fine yet never persisted (a
       // no-op). It must now surface a 400 rather than the silent no-op.
       await api.patch(`${BASE}/1`).send({ added_price: 123.45 }).expect(400);
-      expect(watchlistRepository.update).not.toHaveBeenCalled();
+      expect(mockOf(watchlistRepository, "update")).not.toHaveBeenCalled();
     });
   });
 
@@ -514,7 +515,7 @@ describe("Watchlist Routes", () => {
       expect(res.body).toEqual(
         validationError("asset_class must be a single value"),
       );
-      expect(watchlistRepository.getAllWithCount).not.toHaveBeenCalled();
+      expect(mockOf(watchlistRepository, "getAllWithCount")).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -535,7 +536,7 @@ describe("Watchlist Routes", () => {
       expect(res.body).toEqual(
         validationError("name, asset_class, and target_price are required"),
       );
-      expect(watchlistRepository.create).not.toHaveBeenCalled();
+      expect(mockOf(watchlistRepository, "create")).not.toHaveBeenCalled();
     });
 
     it("checks presence before the field rules", async () => {

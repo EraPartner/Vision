@@ -4,6 +4,7 @@ import { fireEvent, screen } from "@testing-library/react";
 import { renderWithApp } from "@/test/renderWithApp";
 import { MonthlyRhythm } from "../MonthlyRhythm";
 import type { StatisticsData } from "@/hooks/useStatistics";
+import { must } from "@/test/must";
 
 function month(period: string, net: number) {
     return {
@@ -45,10 +46,10 @@ describe("MonthlyRhythm", () => {
         expect(
             await screen.findByText(/net in mar 2026 so far/i),
         ).toBeInTheDocument();
-        const best = screen.getByText("Best month").parentElement!;
+        const best = must(screen.getByText("Best month").parentElement);
         expect(best).toHaveTextContent(/200,00/);
         expect(best).toHaveTextContent(/jan 2026/i);
-        const worst = screen.getByText("Worst month").parentElement!;
+        const worst = must(screen.getByText("Worst month").parentElement);
         expect(worst).toHaveTextContent(/150,00/);
         expect(worst).toHaveTextContent(/feb 2026/i);
     });
@@ -79,7 +80,7 @@ describe("MonthlyRhythm", () => {
         const strip = await screen.findByRole("group");
         const bars = strip.querySelectorAll(".flex-1");
         expect(bars).toHaveLength(3);
-        fireEvent.pointerEnter(bars[2]!);
+        fireEvent.pointerEnter(must(bars[2]));
         expect(screen.getByText(/net in mar 2026/i)).toBeInTheDocument();
 
         // A refetch returns fewer months while the pointer still rests on the strip.

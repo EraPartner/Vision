@@ -26,7 +26,7 @@ describe("analysis CSV interchange", () => {
                     size: new TextEncoder().encode(text).length,
                     importedAt: browser.importedAt,
                     parse: (input, options) => parseNodeCsv(input, options),
-                    sha256: async () => "01".repeat(32),
+                    sha256: () => Promise.resolve("01".repeat(32)),
                 });
                 expect(server).toEqual(browser);
             }

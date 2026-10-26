@@ -490,8 +490,9 @@ export interface Investment {
     maturity_date?: string;
     location?: string;
     municipality?: string;
-    cadastral_income?: number;
-    municipality_tax_rate?: number;
+    // The wire carries NUMERIC columns as `null` when unset.
+    cadastral_income?: number | null;
+    municipality_tax_rate?: number | null;
     notes?: string;
     price_provider: PriceProvider;
     price_provider_id?: string;
@@ -634,8 +635,6 @@ export interface PortfolioTransactionCreate {
     currency?: CurrencyCode | undefined;
     fx_rate_to_eur?: number | undefined;
     account_id?: AccountId | undefined;
-    /** Cash account whose sleeve the trade's cash leg posts to (ADR-090); create-only. */
-    cash_account_id?: AccountId | undefined;
     note?: string | undefined;
     is_recurring?: boolean | undefined;
     recurrence_interval?: RecurrenceInterval | undefined;

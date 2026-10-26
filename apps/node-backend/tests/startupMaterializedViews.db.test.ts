@@ -29,6 +29,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { hasTestDatabase } from "./setup/db.ts";
+import { must } from "./helpers/must.ts";
+
+/** A row from an ad-hoc SQL read: column values are narrowed where used. */
+type DbRow = Record<string, unknown>;
+interface IdRow {
+  id: number;
+}
 
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -49,7 +56,7 @@ const MANAGED_VIEW_INDEXES = [
 /** The `/health/detailed` fields these tests read. */
 interface HealthDetailed {
   status: string;
-  caches: { materializedViews: boolean };
+  caches: { materializedViews: unknown };
   warmup: { materializedViews: string };
 }
 
@@ -111,14 +118,13 @@ function runToCompletion(file: string, env: NodeJS.ProcessEnv) {
 }
 
 /** Poll `fn` until it resolves truthy or the budget runs out. */
-async function waitFor<T>(
-  fn: () => Promise<T>,
+async function waitFor(
+  fn: () => Promise<boolean>,
   budgetMs: number,
-): Promise<T | undefined> {
+): Promise<true | undefined> {
   const deadline = Date.now() + budgetMs;
   for (;;) {
-    const result = await fn();
-    if (result) return result;
+    if (await fn()) return true;
     if (Date.now() > deadline) return undefined;
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -128,7 +134,7 @@ describe.skipIf(!hasTestDatabase())(
   "startup: materialized views are built after listen",
   () => {
     let admin: pg.Client;
-    let scratch: pg.Pool;
+    let scratch: pg.Pool | undefined;
     let locker: pg.Client | null = null;
     let backend: ChildProcess | null = null;
     let backendLog = "";
@@ -170,22 +176,22 @@ describe.skipIf(!hasTestDatabase())(
       // about the scan that made this finding.
       const {
         rows: [cat],
-      } = await scratch.query(
+      } = await scratch.query<IdRow>(
         `INSERT INTO categories (general, detail) VALUES ('Food', 'Groceries') RETURNING id`,
       );
       const {
         rows: [rec],
-      } = await scratch.query(
+      } = await scratch.query<IdRow>(
         `INSERT INTO recipients (name, normalized_name, default_category_id)
        VALUES ('Aldi', 'aldi', $1) RETURNING id`,
-        [cat.id],
+        [must(cat, "cat").id],
       );
       await scratch.query(
         `INSERT INTO transactions (date, amount, currency, recipient_id, is_active, is_transfer)
        SELECT (date_trunc('month', CURRENT_DATE) + (g % 20) * interval '1 day')::date,
               -10.00, 'EUR', $1, true, false
          FROM generate_series(1, 200) g`,
-        [rec.id],
+        [must(rec, "rec").id],
       );
 
       baseUrl = `http://127.0.0.1:${await freePort()}`;
@@ -200,7 +206,7 @@ describe.skipIf(!hasTestDatabase())(
         cwd: REPO_ROOT,
         env: {
           ...childEnv,
-          PORT: String(new URL(baseUrl).port),
+          PORT: new URL(baseUrl).port,
           SERVER_HOST: "127.0.0.1",
         },
       });
@@ -244,7 +250,7 @@ describe.skipIf(!hasTestDatabase())(
 
       // The discriminator. Under the old pre-listen ordering the process is still
       // inside createMaterializedViews() here and /health has not been served yet.
-      const { rows } = await scratch.query(
+      const { rows } = await must(scratch, "scratch").query<DbRow>(
         `SELECT matviewname FROM pg_matviews WHERE matviewname = ANY($1)`,
         [MANAGED_VIEWS],
       );
@@ -276,8 +282,8 @@ describe.skipIf(!hasTestDatabase())(
       const food = body.data.data.categories.find(
         (c) => c.name === "Food:Groceries",
       );
-      expect(Number(food!.total)).toBe(-2000); // 200 rows × −10.00
-      expect(Number(food!.count)).toBe(200);
+      expect(Number(must(food, "food").total)).toBe(-2000); // 200 rows × −10.00
+      expect(Number(must(food, "food").count)).toBe(200);
     }, 60_000);
 
     it("completes creation, indexing and refresh post-listen, then flips the health flag", async () => {
@@ -293,7 +299,7 @@ describe.skipIf(!hasTestDatabase())(
         true,
       );
 
-      const { rows: views } = await scratch.query(
+      const { rows: views } = await must(scratch, "scratch").query<DbRow>(
         `SELECT matviewname, ispopulated FROM pg_matviews WHERE matviewname = ANY($1) ORDER BY 1`,
         [MANAGED_VIEWS],
       );
@@ -303,18 +309,18 @@ describe.skipIf(!hasTestDatabase())(
       expect(views.every((v) => v.ispopulated)).toBe(true);
 
       // The unique indexes REFRESH ... CONCURRENTLY depends on.
-      const { rows: idx } = await scratch.query(
+      const { rows: idx } = await must(scratch, "scratch").query<DbRow>(
         `SELECT indexname FROM pg_indexes WHERE indexname = ANY($1) ORDER BY 1`,
         [MANAGED_VIEW_INDEXES],
       );
       expect(idx).toHaveLength(MANAGED_VIEWS.length);
 
       // And the aggregation the MV now serves agrees with the live answer above.
-      const { rows: totals } = await scratch.query(
+      const { rows: totals } = await must(scratch, "scratch").query<DbRow>(
         `SELECT name, count, total FROM mv_category_totals WHERE name = 'Food:Groceries'`,
       );
-      expect(Number(totals[0].total)).toBe(-2000);
-      expect(Number(totals[0].count)).toBe(200);
+      expect(Number(must(totals[0], "totals[0]").total)).toBe(-2000);
+      expect(Number(must(totals[0], "totals[0]").count)).toBe(200);
     }, 90_000);
   },
 );

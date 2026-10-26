@@ -4,6 +4,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
 import PortfolioForecastPage from "./PortfolioForecastPage";
+import { must } from "@/test/must";
 
 const { inputs, enabledStates } = vi.hoisted(() => ({
     inputs: [] as unknown[],
@@ -67,8 +68,8 @@ describe("PortfolioForecastPage locale inputs", () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioForecastPage />);
         const heading = await screen.findByText("Forecast assumptions");
-        const disclosure = heading.closest("details")!;
-        const summary = heading.closest("summary")!;
+        const disclosure = must(heading.closest("details"));
+        const summary = must(heading.closest("summary"));
         expect(disclosure).not.toHaveAttribute("open");
         expect(screen.getByLabelText(/monthly contribution/i)).toBeVisible();
         expect(screen.getByLabelText(/target value/i)).toBeVisible();

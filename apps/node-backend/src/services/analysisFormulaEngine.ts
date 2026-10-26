@@ -1,13 +1,15 @@
 /** Safe spreadsheet-style formulas over an already bounded analysis result. */
 
 import Decimal from "decimal.js";
+import { valueText } from "./valueText.ts";
+import { errorCode, errorMessage } from "../lib/errors.ts";
 
 /** One analysis result row; cells are untyped query or caller data. */
 export type FormulaRow = Record<string, unknown>;
 
 export interface FormulaUnit {
   kind: string;
-  currency?: unknown | undefined;
+  currency?: unknown;
   currencyParameterId?: string | undefined;
   currencyColumn?: string | undefined;
   instrumentColumn?: string | undefined;
@@ -302,7 +304,7 @@ function decimal(value: unknown): Decimal | null {
   } catch {
     throw new AnalysisFormulaError(
       "TYPE_ERROR",
-      `Expected a decimal, received ${String(value)}`,
+      `Expected a decimal, received ${valueText(value)}`,
     );
   }
 }
@@ -412,10 +414,13 @@ function resolveReference(name: string, context: FormulaContext): unknown {
       "BROKEN_REFERENCE",
       `Unknown column: ${key}`,
     );
-  const declared = context.columns?.find((column) => column.id === key)?.unit;
+  const declared = context.columns.find((column) => column.id === key)?.unit;
+  const currencyCell = declared?.currencyColumn
+    ? context.row[declared.currencyColumn]
+    : undefined;
   if (
     declared?.currencyColumn &&
-    !/^[A-Z]{3}$/.test(String(context.row[declared.currencyColumn] || ""))
+    !(typeof currencyCell === "string" && /^[A-Z]{3}$/.test(currencyCell))
   )
     throw new AnalysisFormulaError(
       "CURRENCY_PROVENANCE_REQUIRED",
@@ -779,7 +784,7 @@ export function evaluateAnalysisFormulas({
     );
   const ids = new Set<string>();
   for (const formula of formulas) {
-    if (formula == null || !/^[A-Za-z][A-Za-z0-9._:-]{0,127}$/.test(formula.id || ""))
+    if (!/^[A-Za-z][A-Za-z0-9._:-]{0,127}$/.test(formula.id || ""))
       throw new AnalysisFormulaError(
         "INVALID_FORMULA",
         "Every formula needs a stable identifier",
@@ -813,12 +818,12 @@ export function evaluateAnalysisFormulas({
     rowIndex?: number,
   ) => {
     // Caught values are thrown Errors (AnalysisFormulaError or Decimal errors).
-    const failure = error as { code?: string; message: string };
+    const code = errorCode(error);
     errors.push({
       formulaId: formula.id,
       ...(rowIndex === undefined ? {} : { rowIndex }),
-      code: failure.code || "EVALUATION_ERROR",
-      message: failure.message,
+      code: typeof code === "string" && code ? code : "EVALUATION_ERROR",
+      message: errorMessage(error),
     });
   };
   for (const formula of sequence) {
@@ -1089,10 +1094,10 @@ function assertAggregateUnits(
   context: FormulaContext,
 ): void {
   const unit = inferFormulaUnit(ast, {
-    columns: context.columns ?? [],
+    columns: context.columns,
     assumptions: context.assumptions,
-    assumptionUnits: context.assumptionUnits ?? {},
-    formulaUnits: context.formulaUnits ?? {},
+    assumptionUnits: context.assumptionUnits,
+    formulaUnits: context.formulaUnits,
     rows: context.rows,
   });
   if (!unit) {
@@ -1147,9 +1152,11 @@ function assertAggregateUnits(
         "MISSING_CONTRIBUTOR",
         "Quantity aggregate withheld because a contributing value is missing",
       );
+    const { instrumentId, instrumentColumn } = unit;
     const values = entries.map(
       // The guard above ensures instrumentColumn is set when instrumentId is absent.
-      ({ row }) => unit.instrumentId ?? row[unit.instrumentColumn!],
+      ({ row }) =>
+        instrumentId ?? (instrumentColumn ? row[instrumentColumn] : undefined),
     );
     if (values.some((value) => value == null) || new Set(values).size > 1)
       throw new AnalysisFormulaError(

@@ -32,7 +32,7 @@ function installMemoryLocalStorage() {
         value: {
             getItem: (key: string) => backing.get(key) ?? null,
             setItem: (key: string, value: string) =>
-                void backing.set(key, String(value)),
+                void backing.set(key, value),
             removeItem: (key: string) => void backing.delete(key),
             clear: () => backing.clear(),
         },

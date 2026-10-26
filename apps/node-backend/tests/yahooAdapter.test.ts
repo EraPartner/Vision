@@ -23,6 +23,7 @@ vi.mock('yahoo-finance2', () => ({
 }));
 
 import yahooAdapter from '../src/services/research/adapters/yahooAdapter.ts';
+import { must } from "./helpers/must.ts";
 
 describe('yahooAdapter', () => {
   beforeEach(() => {
@@ -182,16 +183,16 @@ describe('yahooAdapter', () => {
       });
       const { articles } = await yahooAdapter.news('AAPL', { count: 100 });
       expect(mockSearch).toHaveBeenCalledWith('AAPL', { quotesCount: 0, newsCount: 50 }, expect.anything());
-      expect(articles[0]!.thumbnail).toBe('https://cdn.example.com/big.jpg');
-      expect(articles[0]!.relatedSymbols).toEqual(['AAPL']);
-      expect(typeof articles[0]!.publishedAt).toBe('number');
+      expect(must(articles[0], "articles[0]").thumbnail).toBe('https://cdn.example.com/big.jpg');
+      expect(must(articles[0], "articles[0]").relatedSymbols).toEqual(['AAPL']);
+      expect(typeof must(articles[0], "articles[0]").publishedAt).toBe('number');
     });
 
     it('handles no news and missing thumbnail', async () => {
       mockSearch.mockResolvedValue({ news: [{ title: 'T', link: 'l', publisher: 'p' }] });
       const { articles } = await yahooAdapter.news('X');
-      expect(articles[0]!.thumbnail).toBeUndefined();
-      expect(articles[0]!.publishedAt).toBeUndefined();
+      expect(must(articles[0], "articles[0]").thumbnail).toBeUndefined();
+      expect(must(articles[0], "articles[0]").publishedAt).toBeUndefined();
     });
   });
 });

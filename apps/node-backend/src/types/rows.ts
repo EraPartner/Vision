@@ -353,7 +353,7 @@ export type InvestmentRow = {
   price_provider_history_price_path?: string | null;
   price_updated_at: Date | null;
   /** `COALESCE(tp.show_in_ticker, true)` — present on the joined reads (migration 0061), absent on a bare `RETURNING *`. */
-  show_in_ticker?: boolean;
+  show_in_ticker?: boolean | undefined;
   created_at: Date;
   updated_at: Date;
 };
@@ -398,7 +398,7 @@ export type PortfolioTransactionRow = {
    *           before 0086 applied. BIGINT remains a node-postgres string on the wire;
    *           rollback bulk-deletes on it.
    */
-  import_batch_id?: string | null;
+  import_batch_id?: string | null | undefined;
   created_at?: Date;
   updated_at?: Date;
   /** Not a column — only present when a caller merged the investment's class in. */
@@ -421,9 +421,10 @@ export type PortfolioTransactionSummaryRow = {
   income_recognition_role?: "standard" | "included_in_units";
   type: string;
   total_amount: number;
-  total_units: number;
-  total_fees: number;
-  total_taxes: number;
+  /** SUM over a nullable column: null when every row's value is NULL. */
+  total_units: number | null;
+  total_fees: number | null;
+  total_taxes: number | null;
   count: number;
 };
 

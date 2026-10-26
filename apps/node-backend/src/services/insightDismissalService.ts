@@ -26,7 +26,7 @@ export async function dismissInsight(value: InsightDismissalInput) {
   const findings = await detectCategoryOutliers();
   const finding = findings.find(
     (item) =>
-      Number(item.categoryId) === value.category_id &&
+      item.categoryId === value.category_id &&
       item.monthKey === value.month_key,
   );
   if (!finding) {

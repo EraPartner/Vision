@@ -54,6 +54,13 @@ import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { appDateStringToUtc, todayAppDateString } from "../src/lib/timezone.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
+import { must } from "./helpers/must.ts";
+import type {
+  AccountId,
+  CategoryId,
+  RecipientId,
+  TransactionId,
+} from "@vision/types/brands";
 
 const cat = {} as Record<"Food" | "Bills", number>;
 const rec = {} as Record<"electrabel" | "electrabelAlias" | "misc", number>;
@@ -74,10 +81,10 @@ const anchored = (dateExpr: string) =>
 
 /** 'YYYY-MM-DD' for an arbitrary date expression (app-clock anchored). */
 async function ymd(dateExpr: string): Promise<string> {
-  const { rows } = await getTestPool()!.query(
-    `SELECT to_char((${anchored(dateExpr)})::date, 'YYYY-MM-DD') AS d`,
-  );
-  return rows[0].d;
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    d: string;
+  }>(`SELECT to_char((${anchored(dateExpr)})::date, 'YYYY-MM-DD') AS d`);
+  return must(rows[0], "rows[0]").d;
 }
 
 /**
@@ -86,16 +93,16 @@ async function ymd(dateExpr: string): Promise<string> {
  * the 3-level effective-category case the by-category forecast must resolve.
  */
 async function seedBase() {
-  const pool = getTestPool()!;
+  const pool = must(getTestPool(), "getTestPool()");
   for (const [key, [general, detail]] of Object.entries({
     Food: ["Food", "Groceries"],
     Bills: ["Bills", "Utilities"],
   })) {
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<{ id: CategoryId }>(
       "INSERT INTO categories (general, detail) VALUES ($1, $2) RETURNING id",
       [general, detail],
     );
-    cat[key as keyof typeof cat] = rows[0].id;
+    cat[key as keyof typeof cat] = must(rows[0], "rows[0]").id;
   }
   const addRecipient = async (
     name: string,
@@ -104,12 +111,12 @@ async function seedBase() {
       primaryId = null,
     }: { defaultCategoryId?: number | null; primaryId?: number | null } = {},
   ) => {
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<{ id: RecipientId }>(
       `INSERT INTO recipients (name, normalized_name, default_category_id, primary_recipient_id)
        VALUES ($1, $2, $3, $4) RETURNING id`,
       [name, name.toLowerCase(), defaultCategoryId, primaryId],
     );
-    return rows[0].id;
+    return must(rows[0], "rows[0]").id;
   };
   rec.electrabel = await addRecipient("Electrabel", {
     defaultCategoryId: cat.Bills,
@@ -124,16 +131,17 @@ async function seedBase() {
  * Ensure an accounts row exists for a label and return its canonical ID.
  */
 async function ensureAccount(name: string): Promise<number> {
-  await getTestPool()!.query(
+  await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO accounts (name, display_name) VALUES ($1, $1)
      ON CONFLICT (lower(btrim(name))) DO NOTHING`,
     [name],
   );
-  const { rows } = await getTestPool()!.query(
-    `SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
-    [name],
-  );
-  return rows[0].id;
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    id: AccountId;
+  }>(`SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`, [
+    name,
+  ]);
+  return must(rows[0], "rows[0]").id;
 }
 
 interface TxnInput {
@@ -158,7 +166,9 @@ async function insertTxn({
   isTransfer = false,
 }: TxnInput): Promise<number> {
   const accountId = bank ? await ensureAccount(bank) : null;
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    id: TransactionId;
+  }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, is_active, is_transfer)
      VALUES ((${anchored(dateExpr)})::date, $1, $2, $3, $4, $5, $6, $7) RETURNING id`,
     [
@@ -171,7 +181,7 @@ async function insertTxn({
       isTransfer,
     ],
   );
-  return rows[0].id;
+  return must(rows[0], "rows[0]").id;
 }
 
 async function insertPlanned({
@@ -187,7 +197,7 @@ async function insertPlanned({
   isActive?: boolean;
   isExecuted?: boolean;
 }) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO planned_transactions (planned_date, amount, currency, is_active, is_executed)
      VALUES ((${anchored(dateExpr)})::date, $1, $2, $3, $4)`,
     [amount, currency, isActive, isExecuted],
@@ -201,7 +211,7 @@ async function insertRate(
   rate: string,
   isLatest = true,
 ) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
      VALUES ($1, (${anchored(dateExpr)})::date, $2, $3)`,
     [code, rate, isLatest],
@@ -221,7 +231,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       await pool.query("DELETE FROM planned_transactions");
       await pool.query("DELETE FROM transactions");
       await pool.query("DELETE FROM accounts");
@@ -232,7 +242,7 @@ describe.skipIf(!hasTestDatabase())(
         `DELETE FROM user_settings WHERE key = 'includeTransfers'`,
       );
       for (const bag of [cat, rec] as Record<string, number>[])
-        for (const k of Object.keys(bag)) delete bag[k];
+        for (const k of Object.keys(bag)) Reflect.deleteProperty(bag, k);
       clearMemoryCache();
       clearMvCache();
     });
@@ -271,11 +281,13 @@ describe.skipIf(!hasTestDatabase())(
         // Divisor is the elapsed months since this ledger's earliest in-window
         // month (2 months back → 2), not the full 24-month span. The 25-months-back
         // row is outside the window, so it does not stretch the span either.
-        expect(byDay[4]!.average).toBe(0);
-        expect(byDay[5]!.average).toBe(80); // (100 + 60) / 2
-        expect(byDay[9]!.average).toBe(80); // cumulative carries forward
-        expect(byDay[10]!.average).toBe(65); // ((100 − 30) + 60) / 2
-        expect(byDay[r.days_in_month]!.average).toBe(65);
+        expect(must(byDay[4], "byDay[4]").average).toBe(0);
+        expect(must(byDay[5], "byDay[5]").average).toBe(80); // (100 + 60) / 2
+        expect(must(byDay[9], "byDay[9]").average).toBe(80); // cumulative carries forward
+        expect(must(byDay[10], "byDay[10]").average).toBe(65); // ((100 − 30) + 60) / 2
+        expect(
+          must(byDay[r.days_in_month], "byDay[r.days_in_month]").average,
+        ).toBe(65);
       });
 
       it("keeps future ledger rows out of current and includes them in the projection", async () => {
@@ -295,14 +307,25 @@ describe.skipIf(!hasTestDatabase())(
           r.without_planned.map((d) => [d.day, d]),
         );
 
-        expect(byDay[1]!.current).not.toBeNull();
+        expect(must(byDay[1], "byDay[1]").current).not.toBeNull();
         // Cumulative through today covers both current-month rows (they collapse
         // onto one day when the suite runs on the 1st).
-        expect(byDay[r.current_day]!.current).toBe(40);
+        expect(must(byDay[r.current_day], "byDay[r.current_day]").current).toBe(
+          40,
+        );
         if (r.current_day < r.days_in_month) {
-          expect(byDay[r.current_day + 1]!.current).toBeNull();
-          expect(byDay[r.days_in_month]!.current).toBeNull();
-          expect(r.with_planned[r.days_in_month - 1]!.current).toBe(-460);
+          expect(
+            must(byDay[r.current_day + 1], "byDay[r.current_day + 1]").current,
+          ).toBeNull();
+          expect(
+            must(byDay[r.days_in_month], "byDay[r.days_in_month]").current,
+          ).toBeNull();
+          expect(
+            must(
+              r.with_planned[r.days_in_month - 1],
+              "r.with_planned[r.days_in_month - 1]",
+            ).current,
+          ).toBe(-460);
         }
         expect(r.without_planned).toHaveLength(r.days_in_month);
         expect(r.with_planned).toHaveLength(r.days_in_month);
@@ -336,11 +359,20 @@ describe.skipIf(!hasTestDatabase())(
           r.with_planned.map((d) => [d.day, d]),
         );
 
-        expect(planned[r.current_day]!.current).toBe(
-          plain[r.current_day]!.current! - 20,
+        expect(
+          must(planned[r.current_day], "planned[r.current_day]").current,
+        ).toBe(
+          must(
+            must(plain[r.current_day], "plain[r.current_day]").current,
+            "plain[r.current_day].current",
+          ) - 20,
         );
-        expect(planned[4]!.average).toBe(plain[4]!.average);
-        expect(planned[5]!.average).toBe(plain[5]!.average - 40);
+        expect(must(planned[4], "planned[4]").average).toBe(
+          must(plain[4], "plain[4]").average,
+        );
+        expect(must(planned[5], "planned[5]").average).toBe(
+          must(plain[5], "plain[5]").average - 40,
+        );
       });
 
       it("applies alias-aware category and recipient exclusions to the live rows", async () => {
@@ -359,13 +391,21 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const all = await getCashflowComparison([], [], "EUR");
-        expect(all.without_planned.find((d) => d.day === 5)!.average).toBe(300);
+        expect(
+          must(
+            all.without_planned.find((d) => d.day === 5),
+            "all.without_planned.find((d) => d.day === 5)",
+          ).average,
+        ).toBe(300);
 
         // Excluding Bills drops the alias row even though it carries no category_id.
         const exclCat = await getCashflowComparison([cat.Bills], [], "EUR");
-        expect(exclCat.without_planned.find((d) => d.day === 5)!.average).toBe(
-          100,
-        );
+        expect(
+          must(
+            exclCat.without_planned.find((d) => d.day === 5),
+            "exclCat.without_planned.find((d) => d.day === 5)",
+          ).average,
+        ).toBe(100);
 
         // Excluding the PRIMARY recipient also drops rows recorded under its alias.
         const exclRec = await getCashflowComparison(
@@ -373,9 +413,12 @@ describe.skipIf(!hasTestDatabase())(
           [rec.electrabel],
           "EUR",
         );
-        expect(exclRec.without_planned.find((d) => d.day === 5)!.average).toBe(
-          100,
-        );
+        expect(
+          must(
+            exclRec.without_planned.find((d) => d.day === 5),
+            "exclRec.without_planned.find((d) => d.day === 5)",
+          ).average,
+        ).toBe(100);
       });
 
       it("converts each day at its own stored rate", async () => {
@@ -395,7 +438,12 @@ describe.skipIf(!hasTestDatabase())(
 
         const r = await getCashflowComparison([], [], "EUR");
         // Same nominal amount, different months, different rates: (50 + 25) / 2.
-        expect(r.without_planned.find((d) => d.day === 5)!.average).toBe(37.5);
+        expect(
+          must(
+            r.without_planned.find((d) => d.day === 5),
+            "r.without_planned.find((d) => d.day === 5)",
+          ).average,
+        ).toBe(37.5);
       });
     });
 
@@ -656,7 +704,7 @@ describe.skipIf(!hasTestDatabase())(
         const current = comparison.without_planned.find(
           (d) => d.day === comparison.current_day,
         );
-        expect(current!.current).toBe(-100); // transfer leg excluded
+        expect(must(current, "current").current).toBe(-100); // transfer leg excluded
 
         const avg = await getAverageVsCurrentSpending("EUR");
         expect(avg.current_month.total_spending).toBe(100); // same fixture, same answer
@@ -738,7 +786,7 @@ describe.skipIf(!hasTestDatabase())(
       // legs back, on every surface.
       it("counts transfer legs again when includeTransfers is switched on", async () => {
         await seedBase();
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', 'true'::jsonb)
          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
         );
@@ -753,7 +801,7 @@ describe.skipIf(!hasTestDatabase())(
         const current = comparison.without_planned.find(
           (d) => d.day === comparison.current_day,
         );
-        expect(current!.current).toBe(-1000);
+        expect(must(current, "current").current).toBe(-1000);
 
         const forecast = await getCashflowForecastData(3, [], [], "EUR");
         expect(forecast.currentActual).toEqual([
@@ -801,7 +849,12 @@ describe.skipIf(!hasTestDatabase())(
         await insertTxn({ dateExpr: monthDay(24, 5), amount: "240.00" });
 
         const r = await getCashflowComparison([], [], "EUR");
-        expect(r.without_planned.find((d) => d.day === 5)!.average).toBe(10); // 240 / 24
+        expect(
+          must(
+            r.without_planned.find((d) => d.day === 5),
+            "r.without_planned.find((d) => d.day === 5)",
+          ).average,
+        ).toBe(10); // 240 / 24
       });
 
       // …and the counterweight: dividing by the whole window unconditionally
@@ -817,7 +870,12 @@ describe.skipIf(!hasTestDatabase())(
         const r = await getCashflowComparison([], [], "EUR");
         // 60 / 3 elapsed months. Old behaviour (populated months only) gave 30;
         // dividing by the 24-month window would give 2.5.
-        expect(r.without_planned.find((d) => d.day === 5)!.average).toBe(20);
+        expect(
+          must(
+            r.without_planned.find((d) => d.day === 5),
+            "r.without_planned.find((d) => d.day === 5)",
+          ).average,
+        ).toBe(20);
       });
 
       it("counts every elapsed month once history is contiguous", async () => {
@@ -827,7 +885,12 @@ describe.skipIf(!hasTestDatabase())(
         }
 
         const r = await getCashflowComparison([], [], "EUR");
-        expect(r.without_planned.find((d) => d.day === 5)!.average).toBe(30); // 90 / 3
+        expect(
+          must(
+            r.without_planned.find((d) => d.day === 5),
+            "r.without_planned.find((d) => d.day === 5)",
+          ).average,
+        ).toBe(30); // 90 / 3
       });
 
       // One divisor for both historical series: a month with transactions but no
@@ -843,9 +906,9 @@ describe.skipIf(!hasTestDatabase())(
         const plain = r.without_planned.find((d) => d.day === 5);
         const planned = r.with_planned.find((d) => d.day === 5);
 
-        expect(plain!.average).toBe(10); // 30 / 3
+        expect(must(plain, "plain").average).toBe(10); // 30 / 3
         // −60 / 3, not −60 / 1: the planned series rides the same 3-month span.
-        expect(planned!.average).toBe(-10);
+        expect(must(planned, "planned").average).toBe(-10);
       });
 
       // Orientation B — plan OLDER than the ledger, the orientation where a
@@ -862,10 +925,20 @@ describe.skipIf(!hasTestDatabase())(
         const r = await getCashflowComparison([], [], "EUR");
         // Ledger is one complete month old → divisor 1, so the transactions
         // average is untouched by the plan's age.
-        expect(r.without_planned.find((d) => d.day === 5)!.average).toBe(30);
+        expect(
+          must(
+            r.without_planned.find((d) => d.day === 5),
+            "r.without_planned.find((d) => d.day === 5)",
+          ).average,
+        ).toBe(30);
         // The stale plan still contributes its numerator on the with-planned
         // line (it is inside the window); it just cannot move the denominator.
-        expect(r.with_planned.find((d) => d.day === 5)!.average).toBe(-30);
+        expect(
+          must(
+            r.with_planned.find((d) => d.day === 5),
+            "r.with_planned.find((d) => d.day === 5)",
+          ).average,
+        ).toBe(-30);
       });
 
       // The divisor answers "when did this ledger start", which is a property of
@@ -889,14 +962,22 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const all = await getCashflowComparison([], [], "EUR");
-        expect(all.without_planned.find((d) => d.day === 5)!.average).toBe(20); // 60 / 3
+        expect(
+          must(
+            all.without_planned.find((d) => d.day === 5),
+            "all.without_planned.find((d) => d.day === 5)",
+          ).average,
+        ).toBe(20); // 60 / 3
 
         const exclFood = await getCashflowComparison([cat.Food], [], "EUR");
         // Numerator drops to 30, denominator stays 3 → 10. If the divisor came
         // from the filtered rows it would re-base to 1 and report 30.
-        expect(exclFood.without_planned.find((d) => d.day === 5)!.average).toBe(
-          10,
-        );
+        expect(
+          must(
+            exclFood.without_planned.find((d) => d.day === 5),
+            "exclFood.without_planned.find((d) => d.day === 5)",
+          ).average,
+        ).toBe(10);
       });
 
       // Same argument for the ADR-083 filter itself: excluding transfer legs must
@@ -911,7 +992,12 @@ describe.skipIf(!hasTestDatabase())(
         await insertTxn({ dateExpr: monthDay(1, 5), amount: "30.00" });
 
         const r = await getCashflowComparison([], [], "EUR");
-        expect(r.without_planned.find((d) => d.day === 5)!.average).toBe(10); // 30 / 3, not 30 / 1
+        expect(
+          must(
+            r.without_planned.find((d) => d.day === 5),
+            "r.without_planned.find((d) => d.day === 5)",
+          ).average,
+        ).toBe(10); // 30 / 3, not 30 / 1
       });
 
       // Soft-deleted rows are not history, so they do not establish the start.
@@ -925,7 +1011,12 @@ describe.skipIf(!hasTestDatabase())(
         await insertTxn({ dateExpr: monthDay(2, 5), amount: "30.00" });
 
         const r = await getCashflowComparison([], [], "EUR");
-        expect(r.without_planned.find((d) => d.day === 5)!.average).toBe(15); // 30 / 2
+        expect(
+          must(
+            r.without_planned.find((d) => d.day === 5),
+            "r.without_planned.find((d) => d.day === 5)",
+          ).average,
+        ).toBe(15); // 30 / 2
       });
     });
 
@@ -977,12 +1068,16 @@ describe.skipIf(!hasTestDatabase())(
        * or the pool stalls.
        */
       async function pinClockToRollover() {
-        const { rows } = await getTestPool()!.query(`
+        const { rows } = await must(getTestPool(), "getTestPool()").query<{
+          db_month: string;
+          next_month_first: string;
+          previous_month_last: string;
+        }>(`
         SELECT to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM') AS db_month,
                to_char(date_trunc('month', CURRENT_DATE) + interval '1 month', 'YYYY-MM-DD') AS next_month_first,
                to_char(date_trunc('month', CURRENT_DATE) - interval '1 day', 'YYYY-MM-DD') AS previous_month_last
       `);
-        const dbFacts = rows[0];
+        const dbFacts = must(rows[0], "rollover facts");
         const candidates = [
           {
             appToday: dbFacts.next_month_first,
@@ -1008,11 +1103,14 @@ describe.skipIf(!hasTestDatabase())(
           "configured APP_TIMEZONE must expose an adjacent-month UTC rollover",
         ).toBeDefined();
 
-        const [appYear, appMonth, appDay] = selected!.appToday
-          .split("-")
+        const appDateParts = must(selected, "selected")
+          .appToday.split("-")
           .map(Number);
+        const appYear = must(appDateParts[0], "app year");
+        const appMonth = must(appDateParts[1], "app month");
+        const appDay = must(appDateParts[2], "app day");
         const facts = {
-          app_today: selected!.appToday,
+          app_today: must(selected, "selected").appToday,
           app_year: appYear,
           app_month: appMonth,
           app_day: appDay,
@@ -1021,7 +1119,7 @@ describe.skipIf(!hasTestDatabase())(
           ).getUTCDate(),
           db_month: dbFacts.db_month,
         };
-        const { instant } = selected!;
+        const { instant } = must(selected, "selected");
         vi.useFakeTimers({ toFake: ["Date"] });
         vi.setSystemTime(instant);
 
@@ -1052,15 +1150,26 @@ describe.skipIf(!hasTestDatabase())(
         // Two elapsed months of history, both inside the window: (100 + 60) / 2.
         // With the window still anchored on CURRENT_DATE the 100 would be outside
         // it while its month stayed in the divisor — 60 / 2 = 30.
-        expect(r.without_planned.find((d) => d.day === 5)!.average).toBe(80);
+        expect(
+          must(
+            r.without_planned.find((d) => d.day === 5),
+            "r.without_planned.find((d) => d.day === 5)",
+          ).average,
+        ).toBe(80);
 
         // The current-month series and the planned overlay are on the app month
         // too; anchored on CURRENT_DATE both rows would be out of window (0).
         expect(
-          r.without_planned.find((d) => d.day === facts.app_day)!.current,
+          must(
+            r.without_planned.find((d) => d.day === facts.app_day),
+            "r.without_planned.find((d) => d.day === facts.app_day)",
+          ).current,
         ).toBe(-10);
         expect(
-          r.with_planned.find((d) => d.day === facts.app_day)!.current,
+          must(
+            r.with_planned.find((d) => d.day === facts.app_day),
+            "r.with_planned.find((d) => d.day === facts.app_day)",
+          ).current,
         ).toBe(-30);
       });
 

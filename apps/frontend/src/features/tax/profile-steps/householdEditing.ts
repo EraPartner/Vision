@@ -116,7 +116,7 @@ export function updateActivity(
                 if (a.id !== activityId) return a;
                 const next = { ...a } as Record<string, unknown>;
                 for (const [key, value] of Object.entries(patch)) {
-                    if (value === undefined) delete next[key];
+                    if (value === undefined) Reflect.deleteProperty(next, key);
                     else next[key] = value;
                 }
                 if (patch.kind !== undefined && patch.kind !== a.kind) {
@@ -292,7 +292,16 @@ export function resolvePartnerId(
 
 /** The household without the deprecated `home.mortgageRegion` (ADR-202). */
 export function withoutMortgageRegion(household: BelgianTaxHouseholdV2): BelgianTaxHouseholdV2 {
-    if (household.home.mortgageRegion === undefined) return household;
-    const { mortgageRegion: _dropped, ...home } = household.home;
+    // The field is deprecated, so it is matched by key rather than read.
+    const entries = Object.entries(household.home);
+    if (
+        !entries.some(
+            ([key, value]) => key === "mortgageRegion" && value !== undefined,
+        )
+    )
+        return household;
+    const home = Object.fromEntries(
+        entries.filter(([key]) => key !== "mortgageRegion"),
+    ) as BelgianTaxHouseholdV2["home"];
     return { ...household, home };
 }

@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it } from "vitest";
 import { http } from "msw";
+import { ApiContractError } from "@/lib/api/client";
 import { server } from "@/test/msw/server";
 import { API_BASE, ok } from "./clientTestHarness";
 
@@ -87,7 +88,7 @@ describe("tags API client", () => {
     server.use(
       http.post(`${API_BASE}/api/tags`, async ({ request }) => {
         body = await request.json();
-        return ok({ id: 7, slug: "rent" });
+        return ok({ ...TAG_ROW, id: 7, slug: "rent" });
       }),
     );
 
@@ -99,7 +100,7 @@ describe("tags API client", () => {
 
   it("updateTag PATCHes by id", async () => {
     server.use(
-      http.patch(`${API_BASE}/api/tags/7`, () => ok({ id: 7, slug: "rent", color: "#fff" })),
+      http.patch(`${API_BASE}/api/tags/7`, () => ok({ ...TAG_ROW, id: 7, slug: "rent", color: "#fff" })),
     );
     const tag = await updateTag(asTagId(7), { color: "#fff" });
     expect(tag.color).toBe("#fff");
@@ -132,5 +133,17 @@ describe("tags API client", () => {
 
     expect(body).toMatchObject({ transaction_ids: [1, 2, 3], add_slugs: ["rent"] });
     expect(result.added).toBe(3);
+  });
+
+  it("bulkTagTransactions rejects a count sent as a string", async () => {
+    server.use(
+      http.post(`${API_BASE}/api/transactions/bulk-tag`, () =>
+        ok({ added: "3", removed: 0, transactions_affected: 3 }),
+      ),
+    );
+
+    await expect(
+      bulkTagTransactions({ transaction_ids: [asTransactionId(1)], add_slugs: ["rent"] }),
+    ).rejects.toBeInstanceOf(ApiContractError);
   });
 });

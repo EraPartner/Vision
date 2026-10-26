@@ -1,3 +1,5 @@
+import { isRecord } from "@/lib/isRecord";
+import type { TranslationKey } from "@/locales/keys";
 /**
  * Humanizer for errors surfaced by the Electron IPC bridges.
  *
@@ -22,7 +24,7 @@
 
 /** The `t` from `useLanguage()`. Structural so this module stays React-free. */
 export type TranslateFn = (
-    key: string,
+    key: TranslationKey,
     vars?: Record<string, string | number>,
 ) => string;
 
@@ -44,7 +46,7 @@ const ERROR_PREFIX = /^(?:Error:\s*)+/;
  * Machine shapes that must never reach a toast. Node errno strings carry
  * absolute paths; the rest are internal sentinels from packaging/electron.
  */
-const MACHINE_PATTERNS: { pattern: RegExp; key: string }[] = [
+const MACHINE_PATTERNS: { pattern: RegExp; key: TranslationKey }[] = [
     { pattern: /\bENOENT\b/, key: ELECTRON_ERROR_KEYS.notFound },
     { pattern: /\b(EACCES|EPERM)\b/, key: ELECTRON_ERROR_KEYS.permission },
     { pattern: /\b(ENOSPC|EDQUOT)\b/, key: ELECTRON_ERROR_KEYS.diskFull },
@@ -55,8 +57,8 @@ const MACHINE_PATTERNS: { pattern: RegExp; key: string }[] = [
 /** Pull a string message out of an unknown throwable or an IPC result field. */
 function readRaw(err: unknown): string {
     if (typeof err === "string") return err;
-    if (err && typeof err === "object") {
-        const message = (err as Record<string, unknown>).message;
+    if (isRecord(err)) {
+        const message = err.message;
         if (typeof message === "string") return message;
     }
     return "";

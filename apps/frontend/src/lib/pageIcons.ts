@@ -36,6 +36,8 @@ import {
     type LucideIcon,
 } from "lucide-react";
 
+import type { StaticAppPath } from "@/lib/routes";
+
 /** Canonical identity icon for every navigable destination. */
 export const PAGE_ICONS = {
     "/": LayoutDashboard,
@@ -74,4 +76,4 @@ export const PAGE_ICONS = {
     "/admin/providers": ServerCog,
     "/admin/endpoints": Activity,
     "/admin/exchange-rates": ArrowLeftRight,
-} as const satisfies Record<string, LucideIcon>;
+} as const satisfies Partial<Record<StaticAppPath, LucideIcon>>;

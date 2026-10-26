@@ -29,12 +29,16 @@ import {
 import {
   asCurrencyCode,
 } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
+
+/** A result row whose columns the test reads without a fixed shape. */
+type DbRow = Record<string, unknown>;
 
 const CODES = ["XTS", "XXX"];
 let investmentId: number | undefined;
 
 async function rateRows(code: string) {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<DbRow>(
     `SELECT to_char(rate_date, 'YYYY-MM-DD') AS day, rate_to_eur::text AS rate, is_latest
        FROM exchange_rates WHERE currency_code = $1 ORDER BY rate_date`,
     [code],
@@ -48,7 +52,7 @@ describe.skipIf(!hasTestDatabase())(
     beforeAll(async () => {
       expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
       await acquireDbSuiteLock();
-      await getTestPool()!.query(
+      await must(getTestPool(), "getTestPool()").query(
         "DELETE FROM exchange_rates WHERE currency_code = ANY($1)",
         [CODES],
       );
@@ -56,7 +60,7 @@ describe.skipIf(!hasTestDatabase())(
 
     afterAll(async () => {
       try {
-        const db = getTestPool()!;
+        const db = must(getTestPool(), "getTestPool()");
         await db.query(
           "DELETE FROM exchange_rates WHERE currency_code = ANY($1)",
           [CODES],
@@ -82,7 +86,7 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     it("moves the latest marker to today's rate and loads only latest rows", async () => {
-      await getTestPool()!.query(
+      await must(getTestPool(), "getTestPool()").query(
         `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
          VALUES ('XTS', 0.4, '2001-01-02', true)`,
       );
@@ -112,7 +116,7 @@ describe.skipIf(!hasTestDatabase())(
         (row) => row.day === "1999-01-04",
       );
       expect(historical).toMatchObject({ is_latest: false });
-      expect(Number(historical!.rate)).toBe(0.8);
+      expect(Number(must(historical, "historical").rate)).toBe(0.8);
 
       // A historical write landing on today's latest row keeps it latest.
       await saveHistoricalRate("XXX", todayAppDateString(), 3);
@@ -128,7 +132,7 @@ describe.skipIf(!hasTestDatabase())(
         currency: asCurrencyCode("EUR"),
         current_price: 1,
       });
-      investmentId = Number(created!.id);
+      investmentId = Number(must(created, "created").id);
       const day = (d: number) => Date.UTC(2025, 3, d, 12);
 
       await saveHistoricalPointsToDatabase(
@@ -159,7 +163,7 @@ describe.skipIf(!hasTestDatabase())(
         ).map((p) => p.price),
       ).toEqual([110, 125]);
 
-      const { rows } = await getTestPool()!.query(
+      const { rows } = await must(getTestPool(), "getTestPool()").query<DbRow>(
         `SELECT source FROM asset_price_history
           WHERE investment_id = $1 ORDER BY price_date`,
         [investmentId],
@@ -175,7 +179,10 @@ describe.skipIf(!hasTestDatabase())(
       expect(investmentId).toBeDefined();
       const day = (d: number) => Date.UTC(2025, 3, d, 12);
       const stamps = async () => {
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(getTestPool(), "getTestPool()").query<{
+          day: string;
+          updated_at: string;
+        }>(
           `SELECT to_char(price_date, 'YYYY-MM-DD') AS day, updated_at::text AS updated_at
              FROM asset_price_history WHERE investment_id = $1 ORDER BY price_date`,
           [investmentId],
@@ -185,7 +192,7 @@ describe.skipIf(!hasTestDatabase())(
       const before = await stamps();
 
       await saveHistoricalPointsToDatabase(
-        investmentId!,
+        must(investmentId, "investmentId"),
         [
           { timestampMs: day(1), price: 100 },
           { timestampMs: day(2), price: 111 },
@@ -197,7 +204,7 @@ describe.skipIf(!hasTestDatabase())(
       expect(after["2025-04-01"]).toBe(before["2025-04-01"]);
       expect(after["2025-04-02"]).not.toBe(before["2025-04-02"]);
       expect(
-        (await loadHistoricalPointsFromDatabase(investmentId!)).map((p) => p.price),
+        (await loadHistoricalPointsFromDatabase(must(investmentId, "investmentId"))).map((p) => p.price),
       ).toEqual([100, 111, 125]);
     });
   },

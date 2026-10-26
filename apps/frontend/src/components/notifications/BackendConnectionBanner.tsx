@@ -1,3 +1,4 @@
+import { isRecord } from "@/lib/isRecord";
 import { useQueryClient } from "@tanstack/react-query";
 import { WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -20,7 +21,12 @@ export function BackendConnectionBanner() {
         const recovery = window.electronRecovery;
         if (!recovery) return;
         const stopLost = recovery.onBackendLost((payload) =>
-            setLostMessage(payload?.message || t("app.backendLost")),
+            setLostMessage(
+                // The IPC payload is not guaranteed to be present or well-formed.
+                (isRecord(payload) && typeof payload.message === "string"
+                    ? payload.message
+                    : "") || t("app.backendLost"),
+            ),
         );
         const stopRestored = recovery.onBackendRestored(() => {
             setLostMessage(undefined);

@@ -107,7 +107,7 @@ export function mountRouter(
   ...fns: MountableHandler[]
 ) {
   for (const fn of fns) {
-    if (fn?.stack) fn._mountPath = path;
+    if (fn.stack) fn._mountPath = path;
   }
   app.use(path, ...fns);
 }

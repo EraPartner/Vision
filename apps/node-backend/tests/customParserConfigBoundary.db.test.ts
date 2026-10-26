@@ -13,6 +13,7 @@ import {
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import customParserConfigRepository from "../src/repositories/customParserConfigRepository.ts";
+import { must } from "./helpers/must.ts";
 
 const SUFFIX = `CPB${process.pid}`;
 const ids: number[] = [];
@@ -43,7 +44,7 @@ describe.skipIf(!hasTestDatabase())("custom parser configs (real DB)", () => {
   }, 180_000);
 
   afterEach(async () => {
-    await getTestPool()!.query(
+    await must(getTestPool(), "getTestPool()").query(
       "DELETE FROM custom_parser_configs WHERE id = ANY($1::int[])",
       [ids.splice(0)],
     );

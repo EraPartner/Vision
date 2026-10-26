@@ -53,6 +53,7 @@ import {
   applyMutations,
 } from "../services/dbEditor.ts";
 import { parseInput } from "../lib/zodInput.ts";
+import { parseOr } from "../lib/looseJson.ts";
 
 const GITHUB_OWNER = "EraPartner";
 const GITHUB_REPO = "Vision";
@@ -69,13 +70,14 @@ const GITHUB_FETCH_TIMEOUT_MS = 5000;
  * arbitrary upstream JSON shape read defensively
  * (hasValidReleaseTag/buildUpdateCheckPayload below).
  */
-interface GitHubRelease {
-  message?: unknown;
-  tag_name?: string;
-  published_at?: string;
-  body?: string;
-  html_url?: string;
-}
+const gitHubReleaseSchema = z.looseObject({
+  message: z.unknown().optional(),
+  tag_name: z.string().optional().catch(undefined),
+  published_at: z.string().optional().catch(undefined),
+  body: z.string().optional().catch(undefined),
+  html_url: z.string().optional().catch(undefined),
+});
+type GitHubRelease = z.output<typeof gitHubReleaseSchema>;
 
 /**
  * Fetch the latest GitHub Release metadata.
@@ -102,7 +104,7 @@ function fetchLatestRelease(): Promise<GitHubRelease | null> {
       });
       res.on("end", () => {
         try {
-          resolve(JSON.parse(body) as GitHubRelease | null);
+          resolve(parseOr(gitHubReleaseSchema, JSON.parse(body), null));
         } catch (e) {
           reject(
             new Error(
@@ -168,12 +170,13 @@ function buildUpdateCheckPayload(
 }
 
 function formatAdminStatusPayload(isConnected: boolean, tableCount: number) {
+  const links: unknown[] = [];
   return {
     is_initialised: isConnected && tableCount > 0,
     table_count: tableCount,
     accuracy_table_healthy: isAccuracyTableHealthy(),
     timestamp: new Date().toISOString(),
-    links: [] as unknown[],
+    links,
   };
 }
 
@@ -262,7 +265,7 @@ router.post("/database/init", async (req, res) => {
   });
 });
 
-router.post("/database/reset", adminMutateLimiter, async (req, res) => {
+router.post("/database/reset", adminMutateLimiter, (req, res) => {
   if (!settings.admin.enableResetDb) {
     throw new NotFoundError("Database reset endpoint disabled");
   }
@@ -317,14 +320,14 @@ router.get("/update/check", async (req, res) => {
   res.ok(payload);
 });
 
-router.post("/update/apply", async (req, res) => {
+router.post("/update/apply", (req, res) => {
   res.ok({
     success: true,
     note: "Updates are applied automatically by the desktop app. If an update is available, use the notification in the Vision app window to download and install it.",
   });
 });
 
-router.post("/update/apply-and-restart", async (req, res) => {
+router.post("/update/apply-and-restart", (req, res) => {
   res.ok({
     success: true,
     note: "Updates are managed by the Vision desktop app for the active runtime provider. No manual action is required.",

@@ -10,10 +10,11 @@ import {
 } from "../partnerAttribution";
 import { DEDUCTION_TYPE_PROFILE_FIELDS } from "../deductionCandidateFields";
 import { activity, household, partner } from "./testHousehold";
+import { must } from "@/test/must";
 
-const pension = DEDUCTION_TYPE_PROFILE_FIELDS.pensionSavings!;
-const alimony = DEDUCTION_TYPE_PROFILE_FIELDS.alimony!;
-const mortgage = DEDUCTION_TYPE_PROFILE_FIELDS.mortgageInterest!;
+const pension = must(DEDUCTION_TYPE_PROFILE_FIELDS.pensionSavings);
+const alimony = must(DEDUCTION_TYPE_PROFILE_FIELDS.alimony);
+const mortgage = must(DEDUCTION_TYPE_PROFILE_FIELDS.mortgageInterest);
 
 describe("attributeToPartners", () => {
     it("gives everything to partner A without partner B", () => {
@@ -53,11 +54,11 @@ describe("householdWithRecordedIncome", () => {
             partner("A", [activity("employee", 50_000)]),
             partner("B", [activity("self_employed_fees", 20_000)]),
         ]);
-        const next = householdWithRecordedIncome(h, 70_000, 30_000)!;
-        expect(next.partners[0]!.activities[0]!.grossIncome).toBe(40_000);
-        expect(next.partners[1]!.activities[0]!.grossIncome).toBe(30_000);
+        const next = must(householdWithRecordedIncome(h, 70_000, 30_000));
+        expect(must(must(next.partners[0]).activities[0]).grossIncome).toBe(40_000);
+        expect(must(must(next.partners[1]).activities[0]).grossIncome).toBe(30_000);
         // The input household is not mutated.
-        expect(h.partners[1]!.activities[0]!.grossIncome).toBe(20_000);
+        expect(must(must(h.partners[1]).activities[0]).grossIncome).toBe(20_000);
     });
 
     it("declines when partner B has no activity with a gross figure", () => {
@@ -91,15 +92,15 @@ describe("householdForRecordedIncome", () => {
 
     it("taxes partner B on a recorded share of exactly 0 once joint income exists", () => {
         // Half of 0.004 rounds to a share of 0 cents for B.
-        const next = householdForRecordedIncome(two(), 60_000, { joint: 0.004 })!;
-        expect(next.partners[0]!.activities[0]!.grossIncome).toBe(60_000);
-        expect(next.partners[1]!.activities[0]!.grossIncome).toBe(0);
+        const next = must(householdForRecordedIncome(two(), 60_000, { joint: 0.004 }));
+        expect(must(must(next.partners[0]).activities[0]).grossIncome).toBe(60_000);
+        expect(must(must(next.partners[1]).activities[0]).grossIncome).toBe(0);
     });
 
     it("splits the recorded income when partner income exists", () => {
-        const next = householdForRecordedIncome(two(), 60_000, { partner: 10_000, joint: 2 })!;
-        expect(next.partners[0]!.activities[0]!.grossIncome).toBe(49_999);
-        expect(next.partners[1]!.activities[0]!.grossIncome).toBe(10_001);
+        const next = must(householdForRecordedIncome(two(), 60_000, { partner: 10_000, joint: 2 }));
+        expect(must(must(next.partners[0]).activities[0]).grossIncome).toBe(49_999);
+        expect(must(must(next.partners[1]).activities[0]).grossIncome).toBe(10_001);
     });
 });
 
@@ -120,28 +121,28 @@ describe("applyDeductionCandidate", () => {
 
     it("sets each partner's reduction and eligibility from their share", () => {
         const next = applyDeductionCandidate(two(), pension, { A: 600, B: 420 }, 1020);
-        expect(next.partners[0]!.reductions.personalPensionContributions).toBe(600);
-        expect(next.partners[0]!.reductions.pensionEligible).toBe(true);
-        expect(next.partners[1]!.reductions.personalPensionContributions).toBe(420);
+        expect(must(next.partners[0]).reductions.personalPensionContributions).toBe(600);
+        expect(must(next.partners[0]).reductions.pensionEligible).toBe(true);
+        expect(must(next.partners[1]).reductions.personalPensionContributions).toBe(420);
         expect(deductionFieldValue(next, "B", pension)).toBe(420);
     });
 
     it("writes a zero share so a moved amount is not counted twice", () => {
         const next = applyDeductionCandidate(two(), pension, { A: 900, B: 0 }, 900);
-        expect(next.partners[1]!.reductions.personalPensionContributions).toBe(0);
+        expect(must(next.partners[1]).reductions.personalPensionContributions).toBe(0);
         // The eligibility flag is only set for a positive share.
-        expect(next.partners[1]!.reductions.pensionEligible).toBeUndefined();
+        expect(must(next.partners[1]).reductions.pensionEligible).toBeUndefined();
         // Confirmed for A first, then recorded on B's account: A is reset to 0.
         const moved = applyDeductionCandidate(next, pension, { A: 0, B: 1000 }, 1000);
-        expect(moved.partners[0]!.reductions.personalPensionContributions).toBe(0);
-        expect(moved.partners[1]!.reductions.personalPensionContributions).toBe(1000);
-        expect(moved.partners[1]!.reductions.pensionEligible).toBe(true);
+        expect(must(moved.partners[0]).reductions.personalPensionContributions).toBe(0);
+        expect(must(moved.partners[1]).reductions.personalPensionContributions).toBe(1000);
+        expect(must(moved.partners[1]).reductions.pensionEligible).toBe(true);
     });
 
     it("writes partner-level fields on the partner and home fields once", () => {
         const withAlimony = applyDeductionCandidate(two(), alimony, { A: 0, B: 300 }, 300);
-        expect(withAlimony.partners[1]!.alimonyPaid).toBe(300);
-        expect(withAlimony.partners[0]!.alimonyPaid).toBe(0);
+        expect(must(withAlimony.partners[1]).alimonyPaid).toBe(300);
+        expect(must(withAlimony.partners[0]).alimonyPaid).toBe(0);
         const withMortgage = applyDeductionCandidate(two(), mortgage, { A: 700, B: 300 }, 1000);
         expect(withMortgage.home.mortgageInterestPaid).toBe(1000);
         expect(deductionFieldValue(withMortgage, "B", mortgage)).toBe(1000);

@@ -15,7 +15,7 @@ describe("composeRefs", () => {
   });
 
   it("assigns object refs' .current", () => {
-    const objRef = { current: null } as React.MutableRefObject<HTMLElement | null>;
+    const objRef = { current: null } as React.RefObject<HTMLElement | null>;
     const node = {} as HTMLElement;
     composeRefs<HTMLElement>(objRef)(node);
     expect(objRef.current).toBe(node);
@@ -30,7 +30,7 @@ describe("composeRefs", () => {
 
   it("propagates a null node to all refs (unmount)", () => {
     const fn = vi.fn();
-    const objRef = { current: {} } as React.MutableRefObject<HTMLElement | null>;
+    const objRef = { current: {} } as React.RefObject<HTMLElement | null>;
     composeRefs<HTMLElement>(fn, objRef)(null);
     expect(fn).toHaveBeenCalledWith(null);
     expect(objRef.current).toBeNull();

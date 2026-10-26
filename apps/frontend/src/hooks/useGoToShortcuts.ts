@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { useNavigate, useLocation } from "react-router";
+import { useLocation } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { isShortcutSafeTarget } from "@/lib/keyboard";
 import { GO_TO_ROUTES, SECTION_CYCLE } from "@/lib/navigation";
 
@@ -14,7 +15,7 @@ function currentSectionIndex(pathname: string): number {
 const SEQUENCE_WINDOW_MS = 900;
 
 export function useGoToShortcuts(): void {
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
 
     useEffect(() => {
         let armed = false;
@@ -57,7 +58,7 @@ export function useGoToShortcuts(): void {
  *  landing on each section's root. Inert while typing or with modifiers held
  *  (so bracketed text input and AltGr-composed brackets are never hijacked). */
 export function useSectionCycleShortcuts(): void {
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const location = useLocation();
 
     useEffect(() => {

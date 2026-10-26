@@ -17,6 +17,7 @@ import {
 import { assertPortfolioUploadSupported } from "../src/services/portfolioImportPipeline/uploadSupport.ts";
 import { parseSaxoTransactionHistory } from "../src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.ts";
 import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
+import { must } from "./helpers/must.ts";
 
 let directory: string;
 let file: string;
@@ -65,9 +66,9 @@ describe("portfolio XLSX upload and reader", () => {
       "_Transacties",
       "Bookings",
     ]);
-    expect(sheets[0]!.data[1]![1]).toEqual(new Date("2025-01-10T00:00:00Z"));
-    expect(sheets[0]!.data[1]![7]).toEqual({ type: "number", raw: "101" });
-    expect(sheets[0]!.sourceFileHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(must(must(sheets[0], "sheets[0]").data[1], "must result")[1]).toEqual(new Date("2025-01-10T00:00:00Z"));
+    expect(must(must(sheets[0], "sheets[0]").data[1], "must result")[7]).toEqual({ type: "number", raw: "101" });
+    expect(must(sheets[0], "sheets[0]").sourceFileHash).toMatch(/^[a-f0-9]{64}$/);
     await assertPortfolioUploadSupported(file, {
       format: "saxo_transaction_history",
     });
@@ -145,8 +146,9 @@ describe("Saxo detailed workbook economics", () => {
       nameRaw: "",
     });
     expect(rows[3]).toMatchObject({ typeRaw: "Withdrawal", amount: 50 });
-    const provenance: { records: { sheet: string; cells: unknown[] }[] } =
-      JSON.parse(rows[0]!.rawData);
+    const provenance = JSON.parse(must(rows[0], "rows[0]").rawData) as {
+      records: { sheet: string; cells: unknown[] }[];
+    };
     expect(provenance.records.map((record) => record.sheet)).toEqual([
       "Transacties",
       "_Transacties",
@@ -154,25 +156,25 @@ describe("Saxo detailed workbook economics", () => {
       "Bookings",
       "Bookings",
     ]);
-    expect(rows[0]!.rawData).toContain("Koop 10 @ 20.00 USD");
-    expect(rows[0]!.rawData).toContain('"raw":"200"');
-    expect(provenance.records[0]!.cells[1]).toEqual({
+    expect(must(rows[0], "rows[0]").rawData).toContain("Koop 10 @ 20.00 USD");
+    expect(must(rows[0], "rows[0]").rawData).toContain('"raw":"200"');
+    expect(must(provenance.records[0], "provenance.records[0]").cells[1]).toEqual({
       type: "date",
       value: "2025-01-10T00:00:00.000Z",
     });
-    expect(rows[0]!.amount! + rows[0]!.fees! + rows[0]!.taxes!).toBeCloseTo(
+    expect(must(must(rows[0], "rows[0]").amount, "must result") + must(must(rows[0], "rows[0]").fees, "must result") + must(must(rows[0], "rows[0]").taxes, "must result")).toBeCloseTo(
       181.63,
       8,
     );
-    expect(rows[1]!.amount! - rows[1]!.taxes!).toBeCloseTo(5.95, 8);
+    expect(must(must(rows[1], "rows[1]").amount, "must result") - must(must(rows[1], "rows[1]").taxes, "must result")).toBeCloseTo(5.95, 8);
   });
   it("uses booked gross and derives effective price when the export quote is rounded", async () => {
     const sheets = syntheticSaxoWorkbook();
-    sheets[1]!.records[0]!["Verhandelde waarde"] = 200.08;
-    sheets[2]!.records[0]!.Boekingsbedrag = -180.072;
-    sheets[0]!.records[0]!.Boekingsbedrag = -181.702;
+    must(must(sheets[1], "sheets[1]").records[0], "must result")["Verhandelde waarde"] = 200.08;
+    must(must(sheets[2], "sheets[2]").records[0], "must result").Boekingsbedrag = -180.072;
+    must(must(sheets[0], "sheets[0]").records[0], "must result").Boekingsbedrag = -181.702;
     await writeSyntheticWorkbook(file, sheets);
-    const trade = (await parseSaxoTransactionHistory(file))[0]!;
+    const trade = must((await parseSaxoTransactionHistory(file))[0], "parseSaxoTransactionHistory result");
     expect(trade.amount).toBe(180.072);
     expect(trade.pricePerUnit).toBeCloseTo(18.0072, 8);
     expect(trade.rawData).toContain("Koop 10 @ 20.00 USD");
@@ -180,19 +182,19 @@ describe("Saxo detailed workbook economics", () => {
   it("reads a thousands-separated action quantity as the typed execution says", async () => {
     const sheets = syntheticSaxoWorkbook();
     const action = "Koop 1,500 @ 20.00 USD";
-    sheets[0]!.records[0]!.Acties = action;
-    sheets[0]!.records[0]!.Boekingsbedrag = -27001.63;
-    Object.assign(sheets[1]!.records[0]!, {
+    must(must(sheets[0], "sheets[0]").records[0], "must result").Acties = action;
+    must(must(sheets[0], "sheets[0]").records[0], "must result").Boekingsbedrag = -27001.63;
+    Object.assign(must(must(sheets[1], "sheets[1]").records[0], "must result"), {
       Acties: action,
       "Traded Quantity": 1500,
       "Verhandelde waarde": 30000,
     });
-    for (const booking of sheets[2]!.records.slice(0, 3))
+    for (const booking of must(sheets[2], "sheets[2]").records.slice(0, 3))
       booking.Acties = action;
-    sheets[2]!.records[0]!.Boekingsbedrag = -27000;
+    must(must(sheets[2], "sheets[2]").records[0], "must result").Boekingsbedrag = -27000;
     await writeSyntheticWorkbook(file, sheets);
 
-    const trade = (await parseSaxoTransactionHistory(file))[0]!;
+    const trade = must((await parseSaxoTransactionHistory(file))[0], "parseSaxoTransactionHistory result");
 
     expect(trade).toMatchObject({
       typeRaw: "Buy",
@@ -204,47 +206,47 @@ describe("Saxo detailed workbook economics", () => {
   it.each([
     [
       "missing booking",
-      (sheets: SyntheticSheet[]) => sheets[2]!.records.shift(),
+      (sheets: SyntheticSheet[]) => must(sheets[2], "sheets[2]").records.shift(),
       /do not reconcile/,
     ],
     [
       "orphan booking",
       (sheets: SyntheticSheet[]) => {
-        sheets[2]!.records[0]!["Bk Record Id"] = 999;
+        must(must(sheets[2], "sheets[2]").records[0], "must result")["Bk Record Id"] = 999;
       },
       /orphaned/,
     ],
     [
       "duplicate main",
       (sheets: SyntheticSheet[]) =>
-        sheets[0]!.records.push({ ...sheets[0]!.records[0] }),
+        must(sheets[0], "sheets[0]").records.push({ ...must(sheets[0], "sheets[0]").records[0] }),
       /duplicate transaction/,
     ],
     [
       "duplicate booking ID",
       (sheets: SyntheticSheet[]) => {
-        sheets[2]!.records[1]!["Booking Id"] = "B-1";
+        must(must(sheets[2], "sheets[2]").records[1], "must result")["Booking Id"] = "B-1";
       },
       /duplicate.*booking detail/,
     ],
     [
       "missing execution",
       (sheets: SyntheticSheet[]) => {
-        sheets[1]!.records = [];
+        must(sheets[1], "sheets[1]").records = [];
       },
       /trade details are missing/,
     ],
     [
       "conflicting instrument",
       (sheets: SyntheticSheet[]) => {
-        sheets[2]!.records[0]!.Instrumentsymbool = "OTHER:xnas";
+        must(must(sheets[2], "sheets[2]").records[0], "must result").Instrumentsymbool = "OTHER:xnas";
       },
       /conflict/,
     ],
     [
       "unsafe numeric identifier",
       (sheets: SyntheticSheet[]) => {
-        sheets[0]!.records[0]!["Bk Record Id"] = {
+        must(must(sheets[0], "sheets[0]").records[0], "must result")["Bk Record Id"] = {
           type: "number",
           raw: "9007199254740993",
         };
@@ -254,7 +256,7 @@ describe("Saxo detailed workbook economics", () => {
     [
       "bad date",
       (sheets: SyntheticSheet[]) => {
-        sheets[0]!.records[0]!.Transactiedatum = "invalid";
+        must(must(sheets[0], "sheets[0]").records[0], "must result").Transactiedatum = "invalid";
       },
       /invalid transaction date/,
     ],
@@ -266,7 +268,7 @@ describe("Saxo detailed workbook economics", () => {
   });
   it("keeps unsupported booking types visible for review", async () => {
     const sheets = syntheticSaxoWorkbook();
-    sheets[2]!.records[0]!["Amount Type"] = "Future corporate action";
+    must(must(sheets[2], "sheets[2]").records[0], "must result")["Amount Type"] = "Future corporate action";
     await writeSyntheticWorkbook(file, sheets);
     const rows = await parseSaxoTransactionHistory(file);
     expect(rows[0]).toMatchObject({

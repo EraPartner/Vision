@@ -11,6 +11,7 @@ import {
   commitFingerprintRows,
   type BulkImportRow,
 } from "../src/repositories/importCommitRepository.ts";
+import { must } from "./helpers/must.ts";
 const queryMock = vi.mocked(query);
 const row = (stagingId: string, fingerprint = stagingId): BulkImportRow => ({
   stagingId,
@@ -56,10 +57,12 @@ describe("chunk import outcome mapping", () => {
       { stagingId: "2", transactionId: undefined },
     ]);
     expect(queryMock).toHaveBeenCalledTimes(3);
-    expect(queryMock.mock.calls[2]![1]).toEqual([
-      ["1", "2"],
-      ["committed", "duplicate"],
-    ]);
+    expect(must(queryMock.mock.calls[2], "queryMock.mock.calls[2]")[1]).toEqual(
+      [
+        ["1", "2"],
+        ["committed", "duplicate"],
+      ],
+    );
   });
   it("treats a concurrent unique-index loser as duplicate", async () => {
     queryMock.mockResolvedValueOnce({

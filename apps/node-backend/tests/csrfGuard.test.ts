@@ -4,12 +4,13 @@ import { ForbiddenError } from '../src/middleware/errorHandler.ts';
 import type { ExpressRequest, ExpressResponse } from '../src/types/express.ts';
 import { partial } from './helpers/partial.ts';
 import type { DeepPartial } from './helpers/partial.ts';
+import { must } from "./helpers/must.ts";
 
 const ALLOWED = ['http://localhost:3002', 'http://localhost:5173'];
 const guard = createCsrfGuard(() => ALLOWED);
 
 function run(req: DeepPartial<ExpressRequest>) {
-  const next = vi.fn();
+  const next = vi.fn<(error?: unknown) => void>();
   guard(partial<ExpressRequest>({ headers: {}, ...req }), partial<ExpressResponse>({}), next);
   return next;
 }
@@ -19,7 +20,7 @@ describe('csrfGuard', () => {
     for (const method of ['GET', 'HEAD', 'OPTIONS', 'POST']) {
       for (const site of ['cross-site', 'same-site']) {
         const next = run({ method, headers: { 'sec-fetch-site': site, origin: 'https://evil.com' } });
-        expect(next.mock.calls[0]![0], `${method} ${site}`).toBeInstanceOf(ForbiddenError);
+        expect(must(next.mock.calls[0], "next.mock.calls[0]")[0], `${method} ${site}`).toBeInstanceOf(ForbiddenError);
       }
     }
   });
@@ -32,7 +33,7 @@ describe('csrfGuard', () => {
   });
 
   it('blocks a GET with a foreign Origin and no Sec-Fetch-Site, allows one without Origin', () => {
-    expect(run({ method: 'GET', headers: { origin: 'https://evil.com' } }).mock.calls[0]![0]).toBeInstanceOf(ForbiddenError);
+    expect(must(run({ method: 'GET', headers: { origin: 'https://evil.com' } }).mock.calls[0], "run({ method: 'GET', headers: { origin: 'https://evil.com...")[0]).toBeInstanceOf(ForbiddenError);
     expect(run({ method: 'GET', headers: {} })).toHaveBeenCalledWith();
   });
 
@@ -46,7 +47,7 @@ describe('csrfGuard', () => {
   it('blocks cross-site and same-site state-changing requests via Sec-Fetch-Site', () => {
     for (const site of ['cross-site', 'same-site']) {
       const next = run({ method: 'POST', headers: { 'sec-fetch-site': site, origin: 'https://evil.com' } });
-      const err = next.mock.calls[0]![0];
+      const err = must(next.mock.calls[0], "next.mock.calls[0]")[0];
       expect(err, site).toBeInstanceOf(ForbiddenError);
     }
   });
@@ -57,7 +58,7 @@ describe('csrfGuard', () => {
       url: '/api/admin/database/reset',
       headers: { 'sec-fetch-site': 'cross-site', origin: 'https://evil.example' },
     });
-    expect(next.mock.calls[0]![0]).toBeInstanceOf(ForbiddenError);
+    expect(must(next.mock.calls[0], "next.mock.calls[0]")[0]).toBeInstanceOf(ForbiddenError);
   });
 
   describe('Sec-Fetch-Site absent (older browsers / non-browser clients)', () => {
@@ -73,13 +74,13 @@ describe('csrfGuard', () => {
 
     it('blocks a non-allowlisted Origin', () => {
       const next = run({ method: 'POST', headers: { origin: 'https://evil.com' } });
-      expect(next.mock.calls[0]![0]).toBeInstanceOf(ForbiddenError);
+      expect(must(next.mock.calls[0], "next.mock.calls[0]")[0]).toBeInstanceOf(ForbiddenError);
     });
   });
 
   it('does not accept a repeated Origin header', () => {
     const next = run({ method: 'POST', headers: { origin: ['http://localhost:5173', 'http://localhost:5173'] } });
-    expect(next.mock.calls[0]![0]).toBeInstanceOf(ForbiddenError);
+    expect(must(next.mock.calls[0], "next.mock.calls[0]")[0]).toBeInstanceOf(ForbiddenError);
   });
 });
 
@@ -108,7 +109,7 @@ describe('loopbackOrigins', () => {
         partial<ExpressResponse>({}),
         next,
       );
-      expect(next.mock.calls[0]![0], origin).toBeInstanceOf(ForbiddenError);
+      expect(must(next.mock.calls[0], "next.mock.calls[0]")[0], origin).toBeInstanceOf(ForbiddenError);
     }
   });
 });

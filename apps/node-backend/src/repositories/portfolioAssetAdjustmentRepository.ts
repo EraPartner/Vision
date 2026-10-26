@@ -149,7 +149,7 @@ export async function getAssetAdjustmentsForBatch(
     portfolioAssetAdjustmentRowSchema,
     selectAdjustments()
       .where("a.import_batch_id", "=", String(batchId))
-      .orderBy(["a.investment_id", "a.date", "a.id"]),
+      .orderBy("a.investment_id").orderBy("a.date").orderBy("a.id"),
   );
 }
 

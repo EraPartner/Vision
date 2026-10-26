@@ -7,6 +7,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { NeedsAttentionList } from "../NeedsAttentionList";
 import { asCurrencyCode } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 const state = vi.hoisted(() => ({
     accounts: [] as Array<{
@@ -83,7 +84,7 @@ describe("Home inactivity alerts", () => {
             screen.getByRole("link", { name: /1 planned payment looks paid/ }),
         ).toBeInTheDocument();
         expect(screen.getByTestId("location")).toHaveTextContent("/");
-        expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({
+        expect(JSON.parse(must(localStorage.getItem(KEY)))).toEqual({
             "1": "2020-01-01",
         });
         first.unmount();

@@ -19,9 +19,8 @@ const MAX_CHART_ITEMS = 10;
 const MAX_TABLE_ROWS = 20;
 
 export function renderCategoryBreakdown(
-  data: Pick<
-    FinancialReportData,
-    "categories" | "filteredCategories" | "exclusions"
+  data: Partial<
+    Pick<FinancialReportData, "categories" | "filteredCategories" | "exclusions">
   >,
   { currency }: { currency: string; period: Period },
 ): string {
@@ -29,7 +28,7 @@ export function renderCategoryBreakdown(
   const excludedCategoryIds = data.exclusions?.categoryIds ?? [];
   const hasExclusions =
     excludedCategoryIds.length > 0 ||
-    (data.exclusions?.recipientIds?.length ?? 0) > 0;
+    (data.exclusions?.recipientIds.length ?? 0) > 0;
 
   if (cats.length === 0) {
     return emptySection({
@@ -56,12 +55,12 @@ export function renderCategoryBreakdown(
   let chartHtml;
   if (hasExclusions && filteredSorted) {
     const allItems = sorted.slice(0, MAX_CHART_ITEMS).map((c) => ({
-      label: c.name ?? "Uncategorised",
+      label: c.name,
       value: Math.abs(c.total),
       fmtValue: fmtCurrency(Math.abs(c.total), currency),
     }));
     const filteredItems = filteredSorted.slice(0, MAX_CHART_ITEMS).map((c) => ({
-      label: c.name ?? "Uncategorised",
+      label: c.name,
       value: Math.abs(c.total),
       fmtValue: fmtCurrency(Math.abs(c.total), currency),
     }));
@@ -73,7 +72,7 @@ export function renderCategoryBreakdown(
     });
   } else {
     const chartItems = sorted.slice(0, MAX_CHART_ITEMS).map((c) => ({
-      label: c.name ?? "Uncategorised",
+      label: c.name,
       value: Math.abs(c.total),
       fmtValue: fmtCurrency(Math.abs(c.total), currency),
     }));
@@ -92,7 +91,7 @@ export function renderCategoryBreakdown(
       return `
       <tr>
         <td style="color:hsl(var(--muted));font-size:10px">${rank}</td>
-        <td>${escapeHtml(c.name ?? "Uncategorised")}</td>
+        <td>${escapeHtml(c.name)}</td>
         <td class="num neg">${escapeHtml(fmtCurrency(total, currency))}</td>
         <td class="num">${c.count}</td>
         <td class="num">${escapeHtml(fmtCurrency(avg, currency))}</td>

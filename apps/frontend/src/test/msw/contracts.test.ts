@@ -207,7 +207,7 @@ const MarketNewsSchema = z.object({
 
 // Canonical collection body: { items, total, limit, offset }.
 const ImportBatchesSchema = z.object({
-    items: z.array(z.object({}).passthrough()),
+    items: z.array(z.object({}).loose()),
     total: z.number().int().nonnegative(),
     limit: z.number().int().positive(),
     offset: z.number().int().nonnegative(),
@@ -230,15 +230,15 @@ const PortfolioSummarySchema = z.object({
     currency: z.string(),
     computed_at: z.string(),
     totals: PortfolioTotalsSchema,
-    summaries: z.array(z.object({}).passthrough()),
-    byAccount: z.array(z.object({}).passthrough()),
-    accountTotals: z.array(z.object({}).passthrough()),
+    summaries: z.array(z.object({}).loose()),
+    byAccount: z.array(z.object({}).loose()),
+    accountTotals: z.array(z.object({}).loose()),
 });
 
 // ── Tests: static GET endpoints ───────────────────────────────────────────────
 
 describe("MSW handler contracts", () => {
-    it.each<[string, z.ZodTypeAny, string, string]>([
+    it.each<[string, z.ZodType, string, string]>([
         [
             "GET /api/settings conforms to settings schema",
             SettingsSchema,
@@ -307,7 +307,7 @@ describe("MSW handler contracts", () => {
 // ── E1: Strict list item schemas ──────────────────────────────────────────────
 
 describe("GET list endpoints — strict item schemas (E1)", () => {
-    describe.each<[string, z.ZodTypeAny, Record<string, unknown>, number]>([
+    describe.each<[string, z.ZodType, Record<string, unknown>, number]>([
         ["/api/categories", CategoryItemSchema, CATEGORY_STUB, 200],
         ["/api/recipients", RecipientItemSchema, RECIPIENT_STUB, 200],
         ["/api/transactions", TransactionItemSchema, TRANSACTION_STUB, 50],
@@ -366,13 +366,13 @@ describe("Mutation handler contracts (E2)", () => {
     // Every PATCH in this table is a bare `res.ok(...)` → 200.
     // POST bodies that add fields to the row: transactions add `auto_linked`
     // (routes/transactions.ts), recipients add `created` (withCreateOutcome).
-    const createSchemaFor: Record<string, z.ZodTypeAny> = {
+    const createSchemaFor: Record<string, z.ZodType> = {
         transactions: TransactionItemSchema.extend({
             auto_linked: z.number().int().positive().nullable(),
         }),
         recipients: RecipientItemSchema.extend({ created: z.boolean() }),
     };
-    describe.each<[string, string, z.ZodTypeAny, number]>([
+    describe.each<[string, string, z.ZodType, number]>([
         ["transactions", "/api/transactions", TransactionItemSchema, 201],
         ["categories", "/api/categories", CategoryItemSchema, 200],
         ["recipients", "/api/recipients", RecipientItemSchema, 200],
@@ -433,7 +433,7 @@ describe("ADR-026 error envelope (E3)", () => {
                 ),
             ),
         );
-        const json = await fetch(`${BASE}/api/categories`).then((r) =>
+        const json = await fetch(`${BASE}/api/categories`).then((r): Promise<unknown> =>
             r.json(),
         );
         validate(ErrorEnvelopeSchema, json, "500 error envelope");
@@ -451,7 +451,7 @@ describe("ADR-026 error envelope (E3)", () => {
                 ),
             ),
         );
-        const json = await fetch(`${BASE}/api/transactions`).then((r) =>
+        const json = await fetch(`${BASE}/api/transactions`).then((r): Promise<unknown> =>
             r.json(),
         );
         validate(ErrorEnvelopeSchema, json, "404 error envelope with code");
@@ -474,7 +474,7 @@ describe("ADR-026 error envelope (E3)", () => {
         );
         const json = await fetch(`${BASE}/api/transactions`, {
             method: "POST",
-        }).then((r) => r.json());
+        }).then((r): Promise<unknown> => r.json());
         validate(ErrorEnvelopeSchema, json, "422 mutation error envelope");
     });
 
@@ -490,14 +490,14 @@ describe("ADR-026 error envelope (E3)", () => {
                 ),
             ),
         );
-        const json = await fetch(`${BASE}/api/recipients`).then((r) =>
+        const json = await fetch(`${BASE}/api/recipients`).then((r): Promise<unknown> =>
             r.json(),
         );
         validate(ErrorEnvelopeSchema, json, "503 error envelope without code");
     });
 });
 
-const aggregationsEnvelope = (dataSchema: z.ZodTypeAny) =>
+const aggregationsEnvelope = (dataSchema: z.ZodType) =>
     z.object({
         data: dataSchema,
         meta: z.object({
@@ -512,7 +512,7 @@ describe("Missing GET endpoint contracts (E4)", () => {
     // live-contracts suite so the two contract suites can no longer assert
     // contradictory shapes.
     // (transaction-summary case removed — Phase 9 deleted that route.)
-    it.each<[string, string, string, z.ZodTypeAny]>([
+    it.each<[string, string, string, z.ZodType]>([
         [
             "GET /api/aggregations/monthly-summary returns expected shape",
             "/api/aggregations/monthly-summary",
@@ -716,7 +716,7 @@ describe("Missing GET endpoint contracts (E4)", () => {
 // ── E5: Phase F1 — full contract surface coverage ────────────────────────────
 
 describe("Phase F1: extended GET endpoint contracts", () => {
-    it.each<[string, string, string, z.ZodTypeAny]>([
+    it.each<[string, string, string, z.ZodType]>([
         [
             "GET /api/admin/update/check returns update status",
             "/api/admin/update/check",
@@ -1162,7 +1162,7 @@ describe("Phase F1: extended mutation contracts", () => {
             string,
             Record<string, unknown> | undefined,
             string,
-            z.ZodTypeAny,
+            z.ZodType,
             number,
         ]
     >([

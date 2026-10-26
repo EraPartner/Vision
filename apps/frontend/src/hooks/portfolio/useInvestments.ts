@@ -114,8 +114,11 @@ export function usePortfolioTransactionsQuery(
             }
             const result: PortfolioTransaction[][] = [];
             let next = 0;
-            let failed = false;
-            let failure: unknown;
+            // Object holder: the workers write it, which control-flow narrowing
+            // cannot see for plain `let` variables.
+            const outcome: { failed: boolean; failure?: unknown } = {
+                failed: false,
+            };
             // Do not reject until every in-flight worker settles: a query retry
             // must not start another pool while the previous requests still run.
             await Promise.all(
@@ -123,28 +126,32 @@ export function usePortfolioTransactionsQuery(
                     { length: Math.min(4, investmentIds.length) },
                     async () => {
                         try {
-                            while (!failed && next < investmentIds.length) {
+                            while (!outcome.failed && next < investmentIds.length) {
                                 signal.throwIfAborted();
                                 const index = next++;
+                                const investmentId = investmentIds[index];
+                                if (investmentId === undefined) {
+                                    throw new Error("Missing investment id");
+                                }
                                 result[index] = await collectPages((offset) => {
-                                    if (failed) throw failure;
+                                    if (outcome.failed) throw outcome.failure;
                                     return apiClient.getPortfolioTransactions(
-                                        investmentIds[index]!,
+                                        investmentId,
                                         { limit: 1000, offset },
                                         signal,
                                     );
                                 }, signal);
                             }
                         } catch (error) {
-                            if (!failed) {
-                                failed = true;
-                                failure = error;
+                            if (!outcome.failed) {
+                                outcome.failed = true;
+                                outcome.failure = error;
                             }
                         }
                     },
                 ),
             );
-            if (failed) throw failure;
+            if (outcome.failed) throw outcome.failure;
             return result.flat();
         },
         enabled: investmentIds.length > 0,
@@ -297,7 +304,7 @@ export function useInvestmentMutations() {
         },
         onError: (err: Error) => {
             const isOffline =
-                typeof navigator !== "undefined" && navigator.onLine === false;
+                typeof navigator !== "undefined" && !navigator.onLine;
             toast.error(t("portfolio.refreshPricesFailedTitle"), {
                 id: "portfolio-refresh-prices",
                 description: isOffline

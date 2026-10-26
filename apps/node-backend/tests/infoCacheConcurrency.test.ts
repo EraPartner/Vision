@@ -31,7 +31,7 @@ describe.each([
     invalidate();
     old.resolve(100);
     expect(await pending).toBe(100);
-    const fresh = vi.fn(async () => 200);
+    const fresh = vi.fn(() => Promise.resolve(200));
     expect(await resolveCacheWithInflight(cache, "EUR", {
       ttlMs: 60_000, loader: fresh,
     })).toBe(200);
@@ -47,17 +47,17 @@ describe.each([
     const observed = pending.catch(() => undefined);
     invalidate();
     await resolveCacheWithInflight(cache, "EUR", {
-      ttlMs: 60_000, loader: async () => 200,
+      ttlMs: 60_000, loader: () => Promise.resolve(200),
     });
     if (reject) old.reject(new Error("expired request failed"));
     else old.resolve(100);
     await observed;
-    const unexpected = vi.fn(async () => 300);
+    const unexpected = vi.fn(() => Promise.resolve(300));
     expect(await resolveCacheWithInflight(cache, "EUR", {
       ttlMs: 60_000, loader: unexpected,
     })).toBe(200);
     expect(unexpected).not.toHaveBeenCalled();
-  });
+});
 
   it("joins current work and retries a failed current load", async () => {
     invalidate();
@@ -71,7 +71,7 @@ describe.each([
     expect((await observed).every((result) => result.status === "rejected")).toBe(true);
     expect(loader).toHaveBeenCalledOnce();
     expect(await resolveCacheWithInflight(cache, "EUR", {
-      ttlMs: 60_000, loader: async () => 200,
+      ttlMs: 60_000, loader: () => Promise.resolve(200),
     })).toBe(200);
-  });
+});
 });

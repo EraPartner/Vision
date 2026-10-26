@@ -23,6 +23,7 @@ import {
     household,
     partner,
 } from "@/lib/belgianTax/__tests__/testHousehold";
+import { must } from "@/test/must";
 
 // jsdom does not implement these blob URL APIs
 beforeEach(() => {
@@ -255,7 +256,7 @@ describe("ExportDialog", () => {
             expect(
                 screen.getByRole("button", { name: /download pdf/i }),
             ).toBeDisabled();
-            fireEvent.submit(input.closest("form")!);
+            fireEvent.submit(must(input.closest("form")));
             expect(reportsApi.downloadFinancialReport).not.toHaveBeenCalled();
             fireEvent.change(input, { target: { value: "2000" } });
             expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -362,7 +363,7 @@ describe("ExportDialog", () => {
             }
             await user.click(await screen.findByRole("button", { name: /download pdf/i }));
             await waitFor(() => expect(reportsApi.downloadTaxReport).toHaveBeenCalled());
-            return vi.mocked(reportsApi.downloadTaxReport).mock.calls[0]![0]!;
+            return must(must(vi.mocked(reportsApi.downloadTaxReport).mock.calls[0])[0]);
         }
 
         it("sends the household and a row per partner", async () => {

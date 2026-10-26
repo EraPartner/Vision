@@ -81,11 +81,11 @@ export function renderPortfolioExecutiveSummary(
 
   const rows = summary.topHoldings
     .map((inv) => {
-      const val = Number(inv.currentValue ?? 0);
-      const gl = Number(inv.gainLoss ?? 0);
+      const val = inv.currentValue;
+      const gl = inv.gainLoss;
       const cls = signClass(gl);
       return `<tr>
-      <td>${escapeHtml(inv.name ?? "—")}</td>
+      <td>${escapeHtml(inv.name)}</td>
       <td>${escapeHtml(inv.symbol ?? "—")}</td>
       <td class="num">${fmtCurrency(val, currency)}</td>
       <td class="num ${cls}">${fmtCurrency(gl, currency)}</td>

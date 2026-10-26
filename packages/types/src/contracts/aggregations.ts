@@ -34,7 +34,7 @@ export const AggregationMetaSchema = z.looseObject({
 });
 
 /** `{ data, meta }` around an aggregation payload. */
-export const aggregationEnvelopeOf = <T extends z.ZodTypeAny>(data: T) =>
+export const aggregationEnvelopeOf = <T extends z.ZodType>(data: T) =>
   z.looseObject({ data, meta: AggregationMetaSchema });
 
 const MonthlySummaryMonthSchema = z.looseObject({

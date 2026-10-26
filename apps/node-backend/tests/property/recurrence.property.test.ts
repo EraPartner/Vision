@@ -11,6 +11,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { calculateNextDate, __getSupportedPatterns as getSupportedPatterns } from '../../src/lib/calculations/recurrence.ts';
+import { must } from "../helpers/must.ts";
 
 function seeded(seed: number) {
   let t = seed >>> 0;
@@ -34,7 +35,7 @@ function iterate(pattern: string, startDate: Date, n: number) {
   let current = new Date(startDate.getTime());
   for (let i = 0; i < n; i++) {
     // Every pattern under test is supported, so a step never yields null.
-    current = calculateNextDate(current, pattern)!;
+    current = must(calculateNextDate(current, pattern), "calculateNextDate(current, pattern)");
   }
   return current;
 }
@@ -50,7 +51,7 @@ describe('property: recurrence nth == iterate_n_times', () => {
         const steps = 1 + Math.floor(rng() * 24);
         let prev = start;
         for (let i = 0; i < steps; i++) {
-          const next = calculateNextDate(prev, pattern)!;
+          const next = must(calculateNextDate(prev, pattern), "calculateNextDate(prev, pattern)");
           expect(next instanceof Date).toBe(true);
           expect(next.getTime()).toBeGreaterThan(prev.getTime());
           prev = next;
@@ -65,7 +66,7 @@ describe('property: recurrence nth == iterate_n_times', () => {
         const n = 1 + Math.floor(rng() * 12);
         const stepN = iterate(pattern, start, n);
         const stepNMinus1 = iterate(pattern, start, n - 1);
-        const oneMore = calculateNextDate(stepNMinus1, pattern)!;
+        const oneMore = must(calculateNextDate(stepNMinus1, pattern), "calculateNextDate(stepNMinus1, pattern)");
         expect(oneMore.getTime()).toBe(stepN.getTime());
       }
     });
@@ -76,7 +77,7 @@ describe('property: recurrence nth == iterate_n_times', () => {
     for (let seed = 0; seed < 50; seed++) {
       const start = randomUtcDate(rng);
       const n = 1 + Math.floor(rng() * 90);
-      const next = calculateNextDate(start, `every ${n} days`)!;
+      const next = must(calculateNextDate(start, `every ${n} days`), "calculateNextDate(start, `every ${n} days`)");
       const diffDays = Math.round((next.getTime() - start.getTime()) / (24 * 3600 * 1000));
       expect(diffDays).toBe(n);
     }
@@ -84,9 +85,9 @@ describe('property: recurrence nth == iterate_n_times', () => {
 
   it('monthly from Jan 31 clamps to Feb 28/29 and back to Mar 31 (idempotent path)', () => {
     const start = new Date(Date.UTC(2024, 0, 31)); // 2024 leap year
-    const feb = calculateNextDate(start, 'monthly')!;
+    const feb = must(calculateNextDate(start, 'monthly'), "calculateNextDate(start, 'monthly')");
     expect(feb.toISOString().split('T')[0]).toBe('2024-02-29');
-    const mar = calculateNextDate(feb, 'monthly')!;
+    const mar = must(calculateNextDate(feb, 'monthly'), "calculateNextDate(feb, 'monthly')");
     // Clamp stays at feb day (29) rather than restoring 31. Documented behaviour.
     expect(mar.toISOString().split('T')[0]).toBe('2024-03-29');
   });

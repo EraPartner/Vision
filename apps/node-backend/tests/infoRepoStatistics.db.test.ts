@@ -35,21 +35,26 @@ import { exclusionClauses } from "../src/lib/filterBuilder.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
+import { must } from "./helpers/must.ts";
+import type { AccountId, CategoryId, RecipientId, TransactionId } from "@vision/types/brands";
+
+/** A result row whose columns the test reads without a fixed shape. */
+type DbRow = Record<string, unknown>;
 
 const cat = {} as Record<"Food" | "Bills", number>;
 const rec = {} as Record<"aldi" | "aldiAlias" | "misc", number>;
 
 async function seedBase() {
-  const pool = getTestPool()!;
+  const pool = must(getTestPool(), "getTestPool()");
   for (const [key, [general, detail]] of Object.entries({
     Food: ["Food", "Groceries"],
     Bills: ["Bills", "Utilities"],
   })) {
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<{ id: CategoryId }>(
       "INSERT INTO categories (general, detail) VALUES ($1, $2) RETURNING id",
       [general, detail],
     );
-    cat[key as keyof typeof cat] = rows[0].id;
+    cat[key as keyof typeof cat] = must(rows[0], "rows[0]").id;
   }
   const addRecipient = async (
     name: string,
@@ -58,12 +63,12 @@ async function seedBase() {
       primaryId = null,
     }: { defaultCategoryId?: number | null; primaryId?: number | null } = {},
   ) => {
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<{ id: RecipientId }>(
       `INSERT INTO recipients (name, normalized_name, default_category_id, primary_recipient_id)
        VALUES ($1, $2, $3, $4) RETURNING id`,
       [name, name.toLowerCase(), defaultCategoryId, primaryId],
     );
-    return rows[0].id;
+    return must(rows[0], "rows[0]").id;
   };
   rec.aldi = await addRecipient("Aldi", { defaultCategoryId: cat.Food });
   rec.aldiAlias = await addRecipient("Aldi Anderlecht", {
@@ -76,16 +81,16 @@ async function seedBase() {
  * Ensure an accounts row exists for a label and return its canonical ID.
  */
 async function ensureAccount(name: string): Promise<number> {
-  await getTestPool()!.query(
+  await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO accounts (name, display_name) VALUES ($1, $1)
      ON CONFLICT (lower(btrim(name))) DO NOTHING`,
     [name],
   );
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: AccountId }>(
     `SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
     [name],
   );
-  return rows[0].id;
+  return must(rows[0], "rows[0]").id;
 }
 
 interface TxnInput {
@@ -110,7 +115,7 @@ async function insertTxn({
   isTransfer = false,
 }: TxnInput): Promise<number> {
   const accountId = bank ? await ensureAccount(bank) : null;
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: TransactionId }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, is_active, is_transfer)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
     [
@@ -124,7 +129,7 @@ async function insertTxn({
       isTransfer,
     ],
   );
-  return rows[0].id;
+  return must(rows[0], "rows[0]").id;
 }
 
 /** Seed one exchange_rates row; conversion then resolves from the DB. */
@@ -134,7 +139,7 @@ async function insertRate(
   rate: string,
   isLatest = false,
 ) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
      VALUES ($1, $2, $3, $4)`,
     [code, date, rate, isLatest],
@@ -154,7 +159,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       await pool.query("DELETE FROM transactions");
       await pool.query("DELETE FROM accounts");
       await pool.query("DELETE FROM recipients");
@@ -164,7 +169,7 @@ describe.skipIf(!hasTestDatabase())(
         `DELETE FROM user_settings WHERE key = 'includeTransfers'`,
       );
       for (const bag of [cat, rec] as Record<string, number>[])
-        for (const k of Object.keys(bag)) delete bag[k];
+        for (const k of Object.keys(bag)) Reflect.deleteProperty(bag, k);
       // Process-level caches: rates loaded from this test's exchange_rates rows
       // (and the negative MV probe) must not leak into the next test.
       clearMemoryCache();
@@ -247,7 +252,7 @@ describe.skipIf(!hasTestDatabase())(
 
       it("includes transfers when the includeTransfers setting is on", async () => {
         await seedBase();
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', 'true'::jsonb)`,
         );
         await insertTxn({
@@ -272,25 +277,25 @@ describe.skipIf(!hasTestDatabase())(
 
       it("rolls direct and mixed-depth assignments into each requested ancestor exactly once", async () => {
         await seedBase();
-        const pool = getTestPool()!;
-        const root = await pool.query(
+        const pool = must(getTestPool(), "getTestPool()");
+        const root = await pool.query<{ parent_id: number }>(
           "SELECT parent_id FROM categories WHERE id = $1",
           [cat.Food],
         );
-        const rootId = root.rows[0].parent_id;
-        const legacy = await pool.query(
+        const rootId = must(root.rows[0], "root.rows[0]").parent_id;
+        const legacy = await pool.query<{ id: CategoryId }>(
           "SELECT id FROM categories WHERE general = 'Food' AND detail = 'Groceries'",
         );
-        expect(legacy.rows[0].id).toBe(cat.Food);
-        const depth3 = await pool.query(
+        expect(must(legacy.rows[0], "legacy.rows[0]").id).toBe(cat.Food);
+        const depth3 = await pool.query<{ id: CategoryId }>(
           `INSERT INTO categories (general, detail, name, parent_id, legacy_compatible)
          VALUES ('__HIERARCHY_TEST_3', 'Fruit', 'Fruit', $1, false) RETURNING id`,
           [cat.Food],
         );
-        const depth4 = await pool.query(
+        const depth4 = await pool.query<{ id: CategoryId }>(
           `INSERT INTO categories (general, detail, name, parent_id, legacy_compatible)
          VALUES ('__HIERARCHY_TEST_4', 'Apples', 'Apples', $1, false) RETURNING id`,
-          [depth3.rows[0].id],
+          [must(depth3.rows[0], "depth3.rows[0]").id],
         );
         await insertTxn({
           date: "2024-03-01",
@@ -302,13 +307,13 @@ describe.skipIf(!hasTestDatabase())(
           date: "2024-03-02",
           amount: "-20.00",
           recipientId: rec.misc,
-          categoryId: depth3.rows[0].id,
+          categoryId: must(depth3.rows[0], "depth3.rows[0]").id,
         });
         await insertTxn({
           date: "2024-03-03",
           amount: "-30.00",
           recipientId: rec.misc,
-          categoryId: depth4.rows[0].id,
+          categoryId: must(depth4.rows[0], "depth4.rows[0]").id,
         });
         await insertTxn({
           date: "2024-03-04",
@@ -324,9 +329,9 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         await expect(
-          pool.query("UPDATE categories SET parent_id = $1 WHERE id = $2", [
-            depth4.rows[0].id,
-            depth3.rows[0].id,
+          pool.query<DbRow>("UPDATE categories SET parent_id = $1 WHERE id = $2", [
+            must(depth4.rows[0], "depth4.rows[0]").id,
+            must(depth3.rows[0], "depth3.rows[0]").id,
           ]),
         ).rejects.toThrow("Category hierarchy cycle is not allowed");
 
@@ -353,7 +358,7 @@ describe.skipIf(!hasTestDatabase())(
         ]);
 
         const pivot = await statisticsRepository.getCategoryPivot();
-        const rows = pivot.categoryPivot["2024-03"]!;
+        const rows = must(pivot.categoryPivot["2024-03"], "pivot.categoryPivot[\"2024-03\"]");
         expect(
           rows.map((row) => row.total).reduce((sum, total) => sum + total, 0),
         ).toBe(-105);
@@ -368,20 +373,20 @@ describe.skipIf(!hasTestDatabase())(
           total: -10,
         });
         expect(
-          rows.find((row) => row.categoryId === depth3.rows[0].id),
+          rows.find((row) => row.categoryId === must(depth3.rows[0], "depth3.rows[0]").id),
         ).toMatchObject({
-          categoryPathIds: [rootId, cat.Food, depth3.rows[0].id],
+          categoryPathIds: [rootId, cat.Food, must(depth3.rows[0], "depth3.rows[0]").id],
           categoryPathSegments: ["Food", "Groceries", "Fruit"],
           total: -20,
         });
         expect(
-          rows.find((row) => row.categoryId === depth4.rows[0].id),
+          rows.find((row) => row.categoryId === must(depth4.rows[0], "depth4.rows[0]").id),
         ).toMatchObject({
           categoryPathIds: [
             rootId,
             cat.Food,
-            depth3.rows[0].id,
-            depth4.rows[0].id,
+            must(depth3.rows[0], "depth3.rows[0]").id,
+            must(depth4.rows[0], "depth4.rows[0]").id,
           ],
           categoryPathSegments: ["Food", "Groceries", "Fruit", "Apples"],
           total: -30,
@@ -459,14 +464,14 @@ describe.skipIf(!hasTestDatabase())(
           bank: "MAIN BANK",
           isActive: false,
         });
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: AccountId }>(
           `SELECT id FROM accounts WHERE name = 'MAIN BANK'`,
         );
 
         expect(await statisticsRepository.getTransactionCount()).toBe(3);
         expect(
           await statisticsRepository.getTransactionCount({
-            accountId: rows[0].id,
+            accountId: must(rows[0], "rows[0]").id,
           }),
         ).toBe(2);
       });
@@ -568,7 +573,7 @@ describe.skipIf(!hasTestDatabase())(
 
         const all = await statisticsRepository.getCategoryPivot();
         expect(
-          all.categoryPivot["2024-02"]!.map((c) => [c.categoryId, c.total]),
+          must(all.categoryPivot["2024-02"], "all.categoryPivot[\"2024-02\"]").map((c) => [c.categoryId, c.total]),
         ).toEqual([
           [cat.Bills, -20], // ascending by total
           [cat.Food, -10],
@@ -580,14 +585,14 @@ describe.skipIf(!hasTestDatabase())(
           excludedRecipientIds: [rec.aldi],
         });
         expect(
-          exclRecipient.categoryPivot["2024-02"]!.map((c) => c.categoryId),
+          must(exclRecipient.categoryPivot["2024-02"], "exclRecipient.categoryPivot[\"2024-02\"]").map((c) => c.categoryId),
         ).toEqual([cat.Bills]);
 
         const exclCategory = await statisticsRepository.getCategoryPivot({
           excludedCategoryIds: [cat.Bills],
         });
         expect(
-          exclCategory.categoryPivot["2024-02"]!.map((c) => c.categoryId),
+          must(exclCategory.categoryPivot["2024-02"], "exclCategory.categoryPivot[\"2024-02\"]").map((c) => c.categoryId),
         ).toEqual([cat.Food]);
       });
 
@@ -605,30 +610,30 @@ describe.skipIf(!hasTestDatabase())(
       // mock suite's "missing category_id → Uncategorised" JS branch remains a
       // defensive path never fed by the real query.)
       it("alias row categorised only via its primary: Bills in breakdown and pivot, agreeing with the transactions list", async () => {
-        const pool = getTestPool()!;
+        const pool = must(getTestPool(), "getTestPool()");
         await seedBase();
-        const { rows } = await pool.query(
+        const { rows } = await pool.query<{ id: RecipientId }>(
           `INSERT INTO recipients (name, normalized_name, default_category_id, primary_recipient_id)
          VALUES ('Electrabel', 'electrabel', $1, NULL) RETURNING id`,
           [cat.Bills],
         );
-        const aliasRes = await pool.query(
+        const aliasRes = await pool.query<{ id: RecipientId }>(
           `INSERT INTO recipients (name, normalized_name, primary_recipient_id)
          VALUES ('Electrabel Invoicing', 'electrabel invoicing', $1) RETURNING id`,
-          [rows[0].id],
+          [must(rows[0], "rows[0]").id],
         );
         const txnId = await insertTxn({
           date: "2024-02-10",
           amount: "-120.00",
-          recipientId: aliasRes.rows[0].id,
+          recipientId: must(aliasRes.rows[0], "aliasRes.rows[0]").id,
         });
 
         // The transactions list categorises the row via the primary's default…
         const listed = (await transactionRepository.getAll({})).find(
           (t) => t.id === txnId,
         );
-        expect(listed!.effective_category_id).toBe(cat.Bills);
-        expect(listed!.category_name).toBe("Bills:Utilities");
+        expect(must(listed, "listed").effective_category_id).toBe(cat.Bills);
+        expect(must(listed, "listed").category_name).toBe("Bills:Utilities");
 
         // …and the breakdown now agrees (formerly UNCATEGORISED here).
         const breakdown = await statisticsRepository.getCategoryBreakdown();

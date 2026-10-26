@@ -70,6 +70,8 @@ export function partitionConvertedRows<R extends MaybeConvertedRow>(
       noteUnconverted(tally, row.currency, countOf(row));
       continue;
     }
+    // The `amount_eur === undefined` check above narrows the property, but
+    // TypeScript cannot narrow a property of the generic `R` itself.
     converted.push(row as WithConvertedAmount<R>);
   }
   return { converted, unconverted: tally };

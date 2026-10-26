@@ -34,8 +34,8 @@ import type { ExpressResponse } from "../src/types/express.ts";
 import {
   asAccountId,
   asRecipientId,
-  asTransactionId,
-} from "@vision/types/brands";
+  asTransactionId, type AccountId, type RecipientId, type TransactionId } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
 
 const MEMO = "LEDGER ROW CONTRACT FIXTURE";
 
@@ -45,20 +45,20 @@ let accountId: number;
 const txIds: number[] = [];
 
 async function seed() {
-  const pool = getTestPool()!;
-  const rec = await pool.query(
+  const pool = must(getTestPool(), "getTestPool()");
+  const rec = await pool.query<{ id: RecipientId }>(
     `INSERT INTO recipients (name, normalized_name)
      VALUES ('Ledger Contract A', 'ledger contract a'), ('Ledger Contract B', 'ledger contract b')
      RETURNING id`,
   );
-  recipientId = rec.rows[0].id;
-  otherRecipientId = rec.rows[1].id;
-  const acct = await pool.query(
+  recipientId = must(rec.rows[0], "rec.rows[0]").id;
+  otherRecipientId = must(rec.rows[1], "rec.rows[1]").id;
+  const acct = await pool.query<{ id: AccountId }>(
     `INSERT INTO accounts (name, display_name) VALUES ('Ledger Contract', 'Ledger Contract')
      RETURNING id`,
   );
-  accountId = acct.rows[0].id;
-  const tx = await pool.query(
+  accountId = must(acct.rows[0], "acct.rows[0]").id;
+  const tx = await pool.query<{ id: TransactionId }>(
     `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, is_active)
      VALUES ('2024-03-01', -40.25, 'EUR', $1, $2, $3, true),
             ('2024-03-02', 12.5, 'EUR', $1, $2, $3, true)
@@ -72,7 +72,7 @@ async function seed() {
 }
 
 async function wipe() {
-  const pool = getTestPool()!;
+  const pool = must(getTestPool(), "getTestPool()");
   await pool.query(`DELETE FROM planned_transactions WHERE memo = $1`, [MEMO]);
   await pool.query(
     `DELETE FROM transactions WHERE account_id IN (SELECT id FROM accounts WHERE name = 'Ledger Contract')`,
@@ -162,7 +162,7 @@ describe.skipIf(!hasTestDatabase())("ledger row contracts (real DB)", () => {
     await streamBulkTransactionExport(res, { ids: txIds, format: "json" });
 
     expect(res.headers["X-Exported-Count"]).toBe("2");
-    const lines = res.chunks.map((line) => JSON.parse(line));
+    const lines = res.chunks.map((line): unknown => JSON.parse(line));
     expect(lines).toHaveLength(2);
     expect(lines[0]).toMatchObject({
       date: "2024-03-01",
@@ -188,7 +188,7 @@ describe.skipIf(!hasTestDatabase())("ledger row contracts (real DB)", () => {
   it("creates a split batch through the checked totals and insert rows", async () => {
     await seed();
     const splits = await splitService.createSplitsBatchAtomic({
-      transaction_id: asTransactionId(txIds[0]!),
+      transaction_id: asTransactionId(must(txIds[0], "txIds[0]")),
       splits: [
         { recipient_id: asRecipientId(otherRecipientId), amount: 20 },
         { recipient_id: asRecipientId(recipientId), amount: "10.25", note: "half" },

@@ -20,6 +20,8 @@ import { z } from "zod";
 import { parseLocaleNumber, type NumberFormat } from "@/utils/currency";
 import { isCurrencyCode } from "@vision/types/brands";
 import type { CurrencyCode } from "@vision/types/brands";
+import type { TranslationKey } from "@/locales/keys";
+import { translateDynamic } from "@/lib/translateDynamic";
 
 /** Non-empty string field (mirrors a plain `!value` required check). */
 export function requiredString(requiredKey: string) {
@@ -56,7 +58,7 @@ export function moneyAmount(
     return z.string().transform((value, ctx) => {
         if (!value) {
             ctx.addIssue({
-                code: z.ZodIssueCode.custom,
+                code: "custom",
                 message: keys.required,
             });
             return z.NEVER;
@@ -64,13 +66,13 @@ export function moneyAmount(
         const parsed = parseLocaleNumber(value, numberFormat);
         if (!Number.isFinite(parsed)) {
             ctx.addIssue({
-                code: z.ZodIssueCode.custom,
+                code: "custom",
                 message: keys.invalid,
             });
             return z.NEVER;
         }
         if (keys.zero !== undefined && parsed === 0) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, message: keys.zero });
+            ctx.addIssue({ code: "custom", message: keys.zero });
             return z.NEVER;
         }
         return parsed;
@@ -117,14 +119,14 @@ export function optionalCurrencyCode(message: string) {
 export function fieldErrorsFromZod(
     error: z.ZodError | undefined,
     pathToFieldId: Record<string, string>,
-    translate: (key: string) => string,
+    translate: (key: TranslationKey) => string,
 ): Record<string, string | undefined> {
     const map: Record<string, string | undefined> = {};
     if (!error) return map;
     for (const issue of error.issues) {
         const fieldId = pathToFieldId[String(issue.path[0] ?? "")];
         if (!fieldId || map[fieldId] !== undefined) continue;
-        map[fieldId] = translate(issue.message);
+        map[fieldId] = translateDynamic(translate, issue.message);
     }
     return map;
 }

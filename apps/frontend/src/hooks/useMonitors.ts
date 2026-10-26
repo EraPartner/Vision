@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+    skipToken,
+    useMutation,
+    useQuery,
+    useQueryClient,
+} from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import type { MonitorCreate, MonitorUpdate } from "@/lib/api/monitors";
 
@@ -15,7 +20,7 @@ export function useMonitors(offset = 0) {
 export function useMonitorObservations(id: string | null, offset = 0) {
     return useQuery({
         queryKey: [...key, "observations", id, offset],
-        queryFn: () => apiClient.listMonitorObservations(id!, offset),
+        queryFn: id ? () => apiClient.listMonitorObservations(id, offset) : skipToken,
         enabled: Boolean(id),
     });
 }

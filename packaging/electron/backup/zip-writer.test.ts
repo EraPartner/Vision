@@ -5,10 +5,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type * as Yauzl from "yauzl";
+import * as yauzl from "yauzl";
 import { crc32, createZipWriter } from "./zip-writer";
-
-const yauzl: typeof Yauzl = require("yauzl");
 
 interface ReadEntry {
   name: string;
@@ -26,7 +24,7 @@ function readZip(zipPath: string): Promise<ReadEntry[]> {
       const entries: ReadEntry[] = [];
       zipfile.on("error", reject);
       zipfile.on("end", () => resolve(entries));
-      zipfile.on("entry", (entry: Yauzl.Entry) => {
+      zipfile.on("entry", (entry: yauzl.Entry) => {
         zipfile.openReadStream(entry, (streamErr, stream) => {
           if (streamErr) return reject(streamErr);
           const chunks: Buffer[] = [];
@@ -68,7 +66,7 @@ function attachmentTree(root: string) {
 }
 
 for (const forceZip64 of [false, true]) {
-  test(`round-trips a bundle-shaped archive through yauzl (zip64: ${forceZip64})`, async (t) => {
+  void test(`round-trips a bundle-shaped archive through yauzl (zip64: ${forceZip64})`, async (t) => {
     const dir = tempDir(t);
     const attachments = path.join(dir, "att");
     const random = attachmentTree(attachments);
@@ -122,12 +120,12 @@ for (const forceZip64 of [false, true]) {
   });
 }
 
-test("computes the standard CRC-32", () => {
+void test("computes the standard CRC-32", () => {
   assert.equal(crc32(Buffer.from("123456789")), 0xcbf43926);
   assert.equal(crc32(Buffer.from("6789"), crc32(Buffer.from("12345"))), 0xcbf43926);
 });
 
-test("rejects unsafe entry names and missing sources", async (t) => {
+void test("rejects unsafe entry names and missing sources", async (t) => {
   const dir = tempDir(t);
   const zip = await createZipWriter(path.join(dir, "bad.zip"));
   await assert.rejects(zip.append("/etc/passwd", "x"), /Invalid zip entry name/);

@@ -19,6 +19,7 @@ import { closePool } from "../src/database/connection.ts";
 import accountsRouter from "../src/routes/accounts.ts";
 import { routeAgent } from "./helpers/routeApp.ts";
 import { bodyAt } from "./helpers/responseBody.ts";
+import { must } from "./helpers/must.ts";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const MARK = `account_money_wire_${process.pid}`;
@@ -29,21 +30,21 @@ describeDb("account statement and reconcile money are numbers (real DB)", () => 
 
   beforeAll(async () => {
     await acquireDbSuiteLock();
-    const pool = getTestPool()!;
-    const { rows: accounts } = await pool.query(
+    const pool = must(getTestPool(), "getTestPool()");
+    const { rows: accounts } = await pool.query<{ id: number }>(
       `INSERT INTO accounts (name, display_name, currency)
        VALUES ($1, $1, 'EUR') RETURNING id`,
       [MARK],
     );
-    accountId = accounts[0].id;
-    const { rows: recipients } = await pool.query(
+    accountId = must(accounts[0], "row").id;
+    const { rows: recipients } = await pool.query<{ id: number }>(
       `INSERT INTO recipients (name, normalized_name) VALUES ($1, $1) RETURNING id`,
       [MARK],
     );
     await pool.query(
       `INSERT INTO transactions (date, amount, memo, currency, account_id, recipient_id)
        VALUES ('2026-09-01', 100, $1, 'EUR', $2, $3)`,
-      [MARK, accountId, recipients[0].id],
+      [MARK, accountId, must(recipients[0], "row").id],
     );
   });
 

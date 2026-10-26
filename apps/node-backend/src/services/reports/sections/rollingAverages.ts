@@ -25,11 +25,9 @@ export function renderRollingAverages(
     return emptySection({ title: 'Rolling Averages', subtitle: 'Current month vs. 6-month average', message: 'No rolling average data available.', pageBreak: true });
   }
 
-  // `?? {}` is defensive-only — `avg` (once truthy) always carries all three
-  // sub-objects in practice (computeAverageVsCurrent always populates them).
-  const past: Partial<AveragesData['past_6_months']> = avg.past_6_months ?? {};
-  const current: Partial<AveragesData['current_month']> = avg.current_month ?? {};
-  const comparison: Partial<AveragesData['comparison']> = avg.comparison ?? {};
+  const past: Partial<AveragesData['past_6_months']> = avg.past_6_months;
+  const current: Partial<AveragesData['current_month']> = avg.current_month;
+  const comparison: Partial<AveragesData['comparison']> = avg.comparison;
 
   const pace = comparison.pace ?? null; // ratio: 1.0 = on track, >1 = over
   const variance = comparison.variance ?? 0;

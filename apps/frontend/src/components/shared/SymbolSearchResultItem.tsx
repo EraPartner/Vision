@@ -7,7 +7,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { SymbolSearchListContext } from "@/components/shared/symbolSearchContext";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
+import type { AppPath } from "@/lib/routes";
 
 /** Shape shared by the research (`searchResearch`) and market (`searchMarket`) search results. */
 export interface SymbolSearchResult {
@@ -21,7 +22,7 @@ interface SymbolSearchResultItemProps {
     item: SymbolSearchResult;
     onSelect?: (item: SymbolSearchResult) => void;
     /** Real destination for navigation-style results. */
-    to?: string;
+    to?: AppPath;
     onClick?: MouseEventHandler<HTMLAnchorElement>;
     /** Optional leading affordance (e.g. a Plus icon) for add-to-list pickers. */
     leadingIcon?: ReactNode;
@@ -84,9 +85,9 @@ export function SymbolSearchResultItem({
     };
 
     return to ? (
-        <Link to={to} onClick={onClick} {...optionProps}>
+        <AppLink to={to} onClick={onClick} {...optionProps}>
             {content}
-        </Link>
+        </AppLink>
     ) : (
         <button type="button" onClick={() => onSelect?.(item)} {...optionProps}>
             {content}

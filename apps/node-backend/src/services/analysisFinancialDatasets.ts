@@ -4,8 +4,7 @@ import { sql } from "kysely";
 import type { RawBuilder } from "kysely";
 import { query } from "../database/connection.ts";
 import { compileQuery } from "../database/db.ts";
-import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
-import type { CostBasisMethod } from "@vision/shared-utils/portfolio";
+import { buildInvestmentSummaryCorePartitioned, isCostBasisMethod } from "@vision/shared-utils/portfolio";
 import { UNIT_BASED_ASSET_CLASSES } from "@vision/types/assetClasses";
 import type { AnalysisUnit } from "@vision/types/analysis";
 import { toDecimal } from "../lib/money.ts";
@@ -14,6 +13,14 @@ import { findRateOnOrBeforeInIndex } from "./currency/rateFetcher.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
 import type { HistoricalRateIndex } from "../types/rows.ts";
 import { nanToZero, nonZeroOr } from "../lib/math.ts";
+import { valueText } from "./valueText.ts";
+
+/** A value an invariant of the caller guarantees; breaking it is a Vision bug. */
+function present<T>(value: T | undefined, what: string): T {
+  if (value === undefined)
+    throw new Error(`Financial analysis invariant broken: ${what} is missing`);
+  return value;
+}
 
 /** One financial source or output row; cells are pg values or provider data. */
 export type FinancialRow = Record<string, unknown>;
@@ -70,10 +77,10 @@ export interface FinancialAnalysisPlan {
 }
 
 /** Query seam; defaults to the shared pg `query`. */
-export type FinancialQuery = <R = FinancialRow>(
+export type FinancialQuery = (
   text: string,
   params?: readonly unknown[],
-) => Promise<{ rows: R[] }>;
+) => Promise<{ rows: FinancialRow[] }>;
 
 interface BenchmarkPoint {
   time: number;
@@ -141,9 +148,6 @@ interface FinancialEventRow {
   fx_rate_to_eur: string | null;
 }
 
-const COST_BASIS_METHODS: readonly string[] = ["weighted_avg", "fifo", "lifo"];
-const isCostBasisMethod = (value: unknown): value is CostBasisMethod =>
-  COST_BASIS_METHODS.includes(value as string);
 
 /** Numeric source cells are pg NUMERIC strings or numbers. */
 const compareNumericCells = (value: unknown, target: unknown) =>
@@ -349,12 +353,17 @@ async function localRows(
   deps: FinancialAnalysisDeps,
 ): Promise<FinancialRow[]> {
   const runner: FinancialQuery = deps.query ?? query;
-  const run = <R>(statement: RawBuilder<unknown>) => {
+  // The row type travels on the builder (`sql<Row>`); it is the caller's claim
+  // about the statement's columns, not checked here.
+  const run = async <R>(statement: RawBuilder<R>) => {
     const compiled = compileQuery(statement);
-    return runner<R>(compiled.sql, [...compiled.parameters]);
+    const result = await runner(compiled.sql, [...compiled.parameters]);
+    return { rows: result.rows as R[] };
   };
-  const bounded = async <R = FinancialRow>(statement: RawBuilder<unknown>) => {
-    const rows = (await run<R>(sql`${statement} LIMIT ${sql.lit(MAX_ROWS + 1)}`)).rows;
+  const bounded = async <R>(statement: RawBuilder<R>) => {
+    const rows = (
+      await run(sql<R>`${statement} LIMIT ${sql.lit(MAX_ROWS + 1)}`)
+    ).rows;
     if (rows.length > MAX_ROWS)
       throw new Error("Financial dataset exceeds source row limit");
     return rows;
@@ -376,15 +385,17 @@ async function localRows(
     throw new Error("Invalid financial date range");
   if (plan.datasetId === "fx-history")
     return bounded(
-      sql`SELECT to_char(rate_date,'YYYY-MM-DD') AS date, currency_code AS currency, rate_to_eur FROM exchange_rates WHERE rate_date BETWEEN ${from} AND ${to} ORDER BY rate_date,currency_code`,
+      sql<FinancialRow>`SELECT to_char(rate_date,'YYYY-MM-DD') AS date, currency_code AS currency, rate_to_eur FROM exchange_rates WHERE rate_date BETWEEN ${from} AND ${to} ORDER BY rate_date,currency_code`,
     );
   if (plan.datasetId.endsWith("history")) {
     const broker = plan.datasetId === "broker-history";
     if (
       broker &&
       !(
-        await run<{ relation: string | null }>(
-          sql`SELECT to_regclass('public.portfolio_broker_snapshots') AS relation`,
+        await run(
+          sql<{
+            relation: string | null;
+          }>`SELECT to_regclass('public.portfolio_broker_snapshots') AS relation`,
         )
       ).rows[0]?.relation
     )
@@ -396,7 +407,7 @@ async function localRows(
       ? sql`portfolio_broker_snapshots`
       : sql`portfolio_performance_snapshots`;
     return bounded(
-      sql`SELECT to_char(snapshot_date,'YYYY-MM-DD') AS date, currency, value, invested, gain_loss, ${columns} FROM ${table} WHERE currency=${currency} AND snapshot_date BETWEEN ${from} AND ${to} ORDER BY snapshot_date${broker ? sql`,account_key` : sql``}`,
+      sql<FinancialRow>`SELECT to_char(snapshot_date,'YYYY-MM-DD') AS date, currency, value, invested, gain_loss, ${columns} FROM ${table} WHERE currency=${currency} AND snapshot_date BETWEEN ${from} AND ${to} ORDER BY snapshot_date${broker ? sql`,account_key` : sql``}`,
     );
   }
   if (plan.from || plan.to)
@@ -404,8 +415,10 @@ async function localRows(
   const storedMethod = plan.costBasisMethod
     ? undefined
     : (
-        await run<{ value: string | null }>(
-          sql`SELECT value FROM user_settings WHERE key=${"cost_basis_method"}`,
+        await run(
+          sql<{
+            value: string | null;
+          }>`SELECT value FROM user_settings WHERE key=${"cost_basis_method"}`,
         )
       ).rows[0]?.value;
   const costBasisMethod =
@@ -414,14 +427,14 @@ async function localRows(
   if (!isCostBasisMethod(costBasisMethod))
     throw new Error("Unsupported cost basis method");
   const [investments, events, rates] = await Promise.all([
-    bounded<FinancialInvestmentRow>(
-      sql`SELECT id,name,symbol,asset_class,currency,current_price,interest_rate FROM investments WHERE is_active=true ORDER BY id`,
+    bounded(
+      sql<FinancialInvestmentRow>`SELECT id,name,symbol,asset_class,currency,current_price,interest_rate FROM investments WHERE is_active=true ORDER BY id`,
     ),
-    bounded<FinancialEventRow>(
-      sql`SELECT p.id,p.investment_id,p.account_id,p.type,to_char(p.date,'YYYY-MM-DD') AS date,p.amount,p.units,p.fees,p.taxes,p.currency,p.fx_rate_to_eur FROM portfolio_transactions p JOIN investments i ON i.id=p.investment_id WHERE i.is_active=true ORDER BY p.date,p.id`,
+    bounded(
+      sql<FinancialEventRow>`SELECT p.id,p.investment_id,p.account_id,p.type,to_char(p.date,'YYYY-MM-DD') AS date,p.amount,p.units,p.fees,p.taxes,p.currency,p.fx_rate_to_eur FROM portfolio_transactions p JOIN investments i ON i.id=p.investment_id WHERE i.is_active=true ORDER BY p.date,p.id`,
     ),
-    bounded<RateRow>(
-      sql`SELECT currency_code,to_char(rate_date,'YYYY-MM-DD') AS rate_date,rate_to_eur FROM exchange_rates ORDER BY rate_date,currency_code`,
+    bounded(
+      sql<RateRow>`SELECT currency_code,to_char(rate_date,'YYYY-MM-DD') AS rate_date,rate_to_eur FROM exchange_rates ORDER BY rate_date,currency_code`,
     ),
   ]);
   const eventsByInvestment = new Map<number, FinancialEventRow[]>();
@@ -447,13 +460,7 @@ async function localRows(
                 row.date,
                 rates,
               )
-            : strictDatedConversion(
-                1,
-                row.currency ?? native,
-                currency,
-                row.date,
-                rates,
-              );
+            : strictDatedConversion(1, row.currency, currency, row.date, rates);
       missing ||= converted.value === null;
       return { ...row, fxMultiplier: converted.value ?? "1" };
     });
@@ -510,7 +517,7 @@ export async function executeFinancialAnalysis(
     (!Number.isSafeInteger(options.offset) || options.offset < 0)
   )
     throw new Error("Financial offset must be a nonnegative integer");
-  for (const date of [plan?.from, plan?.to].filter(
+  for (const date of [plan.from, plan.to].filter(
     (date) => date !== undefined,
   )) {
     if (
@@ -520,10 +527,10 @@ export async function executeFinancialAnalysis(
     )
       throw new Error("Invalid financial date range");
   }
-  if (plan?.from && plan?.to && plan.from > plan.to)
+  if (plan.from && plan.to && plan.from > plan.to)
     throw new Error("Invalid financial date range");
   const descriptor = FINANCIAL_ANALYSIS_DATASETS.find(
-    (d) => d.id === plan?.datasetId,
+    (d) => d.id === plan.datasetId,
   );
   if (!descriptor) throw new Error("Unsupported financial analysis dataset");
   const deps = options.deps ?? {};
@@ -677,19 +684,19 @@ export async function executeFinancialAnalysis(
       if (f.operator === "is-not-null") return value != null;
       if (value == null || target == null) return false;
       if (f.operator === "contains")
-        return String(value)
+        return valueText(value)
           .toLowerCase()
-          .includes(String(target).toLowerCase());
+          .includes(valueText(target).toLowerCase());
       if (f.operator === "starts-with")
-        return String(value)
+        return valueText(value)
           .toLowerCase()
-          .startsWith(String(target).toLowerCase());
+          .startsWith(valueText(target).toLowerCase());
       const compare = ["decimal", "integer"].includes(
         // Every filter field was validated against fieldMap above.
-        fieldMap.get(f.fieldId)!.type,
+        present(fieldMap.get(f.fieldId), `field ${f.fieldId}`).type,
       )
         ? compareNumericCells(value, target)
-        : String(value).localeCompare(String(target));
+        : valueText(value).localeCompare(valueText(target));
       const outcomes: Record<string, boolean> = {
         eq: compare === 0,
         neq: compare !== 0,
@@ -741,7 +748,8 @@ export async function executeFinancialAnalysis(
             contributors = [...closing.values()];
           }
           const values = contributors.map((r) => r[field]);
-          if (values.length === 0 || values.some((v) => v == null)) return [m, null];
+          if (values.length === 0 || values.some((v) => v == null))
+            return [m, null];
           const decimals = values.map((v) => toDecimal(v as DecimalInput));
           const [firstDecimal] = decimals;
           // `values` is non-empty here (checked above).
@@ -764,8 +772,8 @@ export async function executeFinancialAnalysis(
     );
   // Fields and measures were validated against these maps above.
   const columns = [
-    ...fields.map((f) => fieldMap.get(f)!),
-    ...measures.map((m) => measureMap.get(m)!),
+    ...fields.map((f) => present(fieldMap.get(f), `field ${f}`)),
+    ...measures.map((m) => present(measureMap.get(m), `measure ${m}`)),
   ].map((f) => ({ ...f, nullable: true }));
   for (const sort of plan.orderBy ?? [])
     if (
@@ -776,7 +784,10 @@ export async function executeFinancialAnalysis(
   rows.sort((a, b) => {
     for (const sort of plan.orderBy ?? []) {
       // Sort ids were validated against the columns above.
-      const type = columns.find((c) => c.id === sort.id)!.type;
+      const type = present(
+        columns.find((c) => c.id === sort.id),
+        `column ${sort.id}`,
+      ).type;
       const x = a[sort.id];
       const y = b[sort.id];
       const cmp =
@@ -788,7 +799,7 @@ export async function executeFinancialAnalysis(
             ? -1
             : ["decimal", "integer"].includes(type)
               ? compareNumericCells(x, y)
-              : String(x).localeCompare(String(y));
+              : valueText(x).localeCompare(valueText(y));
       if (cmp !== 0) return sort.direction === "desc" ? -cmp : cmp;
     }
     return 0;
@@ -821,6 +832,9 @@ export async function executeFinancialAnalysis(
     (plan.datasetId.endsWith("history") && source.length === 0) ||
     (plan.datasetId === "benchmark-history" &&
       (source.length === 0 || !benchmarkCurrency));
+  const instrumentFilter = filters.find(
+    (f) => f.fieldId === "investment_id" && f.operator === "eq",
+  );
   const declaredColumns = columns.map((c) => ({
     ...c,
     ...(c.type === "decimal"
@@ -828,19 +842,8 @@ export async function executeFinancialAnalysis(
           unit: (c.id.includes("units")
             ? {
                 kind: "quantity",
-                ...(filters.some(
-                  (f) => f.fieldId === "investment_id" && f.operator === "eq",
-                )
-                  ? {
-                      // Guarded by the matching `filters.some` above.
-                      instrumentId: String(
-                        filters.find(
-                          (f) =>
-                            f.fieldId === "investment_id" &&
-                            f.operator === "eq",
-                        )!.value,
-                      ),
-                    }
+                ...(instrumentFilter
+                  ? { instrumentId: valueText(instrumentFilter.value) }
                   : { instrumentColumn: "investment_id" }),
               }
             : c.id.includes("return_pct")

@@ -6,7 +6,8 @@ import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
 
 const mocks = vi.hoisted(() => ({
-    bulkRetagTransactions: vi.fn(),
+    bulkRetagTransactions:
+        vi.fn<(payload: { idempotency_key: string }) => Promise<unknown>>(),
     completeHistory: [] as unknown[],
 }));
 

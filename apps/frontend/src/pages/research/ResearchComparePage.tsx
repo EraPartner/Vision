@@ -1,3 +1,4 @@
+import { axisDate } from "@/components/charts/axisValue";
 import {
     computeStats,
     dailyReturnsByTime,
@@ -53,7 +54,10 @@ import type {
     ResearchScorecard,
     ScorecardSeverity,
 } from "@/types/research";
-import { RESEARCH_RANGES as RANGES } from "@/lib/research/ranges";
+import {
+    COMPARE_DEFAULT_RANGE,
+    RESEARCH_RANGES as RANGES,
+} from "@/lib/research/ranges";
 import { useTabParam } from "@/hooks/useTabParam";
 import { DeltaPill } from "@/components/shared/DeltaPill";
 import { PageShell } from "@/components/shared/PageShell";
@@ -65,10 +69,11 @@ import {
 } from "./researchCompareUrlState";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { useResearchCompareQueries } from "@/features/research/useResearchQueries";
+import type { TranslationKey } from "@/locales/keys";
 
 const COMPARE_TABS = ["performance", "fundamentals"] as const;
 
-const DEFAULT_RANGE = "1y";
+const DEFAULT_RANGE = COMPARE_DEFAULT_RANGE.range;
 
 /** A symbol's daily log returns keyed by the closing timestamp, for correlation alignment. */
 interface ReturnSeries {
@@ -95,7 +100,7 @@ type FundamentalsMetricKey =
 
 interface FundamentalsMetric {
     key: FundamentalsMetricKey;
-    labelKey: string;
+    labelKey: TranslationKey;
     format: "ratio" | "largeNum" | "pct";
     /** Sort direction when this column is chosen — most "favourable" first. */
     betterWhenHigher: boolean;
@@ -217,16 +222,13 @@ export default function ResearchComparePage() {
     const [activeTab, setActiveTab] = useTabParam(COMPARE_TABS, "performance");
     const selectedRange =
         RANGES.find((option) => option.range === searchParams.get("range")) ??
-        RANGES.find((option) => option.range === DEFAULT_RANGE)!;
-    const metricKeys = useMemo(
-        () => new Set(FUNDAMENTALS_METRICS.map((metric) => metric.key)),
-        [],
-    );
+        COMPARE_DEFAULT_RANGE;
     const rawSortMetric = searchParams.get("sort");
-    const sortMetric =
-        rawSortMetric && metricKeys.has(rawSortMetric as FundamentalsMetricKey)
-            ? (rawSortMetric as FundamentalsMetricKey)
-            : null;
+    const sortMetric: FundamentalsMetricKey | null =
+        (rawSortMetric
+            ? FUNDAMENTALS_METRICS.find((metric) => metric.key === rawSortMetric)
+            : undefined
+        )?.key ?? null;
     const {
         searchText,
         setSearchText,
@@ -331,7 +333,7 @@ export default function ResearchComparePage() {
             (s, i) => ({
                 key: s.symbol,
                 label: s.symbol,
-                accessor: (d) => d[s.symbol] as number | null,
+                accessor: (d) => d[s.symbol] ?? null,
                 color: getChartColor(i),
                 connectNulls: true,
                 strokeWidth: 2,
@@ -379,7 +381,7 @@ export default function ResearchComparePage() {
                 data,
                 scorecard,
                 unavailable: meta?.source === "unavailable",
-                loading: !!q?.isFetching && !q?.data,
+                loading: !!q?.isFetching && !q.data,
             };
         });
         if (!sortMetric) return rows;
@@ -573,7 +575,7 @@ export default function ResearchComparePage() {
                                         ]}
                                         xTickFormat={(v) =>
                                             formatDateWithAppSettings(
-                                                v as Date,
+                                                axisDate(v),
                                                 appSettings.dateFormat,
                                             )
                                         }
@@ -644,9 +646,13 @@ export default function ResearchComparePage() {
                                                             {row.symbol}
                                                         </span>
                                                     </span>
-                                                    {Number.isFinite(
-                                                        row.firstTime,
-                                                    ) &&
+                                                    {row.firstTime !==
+                                                        undefined &&
+                                                        row.lastTime !==
+                                                            undefined &&
+                                                        Number.isFinite(
+                                                            row.firstTime,
+                                                        ) &&
                                                         Number.isFinite(
                                                             row.lastTime,
                                                         ) && (
@@ -656,13 +662,13 @@ export default function ResearchComparePage() {
                                                                     {
                                                                         from: formatDateWithAppSettings(
                                                                             new Date(
-                                                                                row.firstTime!,
+                                                                                row.firstTime,
                                                                             ),
                                                                             appSettings.dateFormat,
                                                                         ),
                                                                         to: formatDateWithAppSettings(
                                                                             new Date(
-                                                                                row.lastTime!,
+                                                                                row.lastTime,
                                                                             ),
                                                                             appSettings.dateFormat,
                                                                         ),

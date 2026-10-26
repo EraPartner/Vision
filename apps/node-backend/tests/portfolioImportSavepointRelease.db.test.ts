@@ -10,13 +10,28 @@ import {
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { commitBatch } from "../src/services/portfolioImportPipeline/commit.ts";
-const pool = getTestPool()!;
+import { must } from "./helpers/must.ts";
+import type { Pool } from "pg";
+
+/** A row from an ad-hoc SQL read: column values are narrowed where used. */
+type DbRow = Record<string, unknown>;
+interface IdRow {
+  id: number;
+}
+/** BIGINT ids arrive from node-postgres as strings. */
+interface BigIdRow {
+  id: string;
+}
+let pool: Pool;
 /** pg's overloads collapse to the text form; QueryConfig objects arrive too. */
 type ClientQuery = (
   statement: string | { text: string },
   params?: unknown[],
 ) => unknown;
 describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
+  beforeAll(() => {
+    pool = must(getTestPool(), "test pool");
+  });
   beforeAll(async () => {
     expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
     await acquireDbSuiteLock();
@@ -33,7 +48,9 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
     }
   });
   it("releases failed trade and cash savepoints before staging errors, then commits siblings", async () => {
-    let accountId, investmentId, batchId;
+    let accountId: number | undefined;
+    let investmentId: number | undefined;
+    let batchId: number | undefined;
     let querySpy: MockInstance<ClientQuery> | undefined;
     const broker = "VISION SAVEPOINT RELEASE TEST";
     try {
@@ -41,24 +58,24 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
         CHECK (note IS DISTINCT FROM 'VISION_TEST_FAIL_TRADE') NOT VALID`);
       await pool.query(`ALTER TABLE transactions ADD CONSTRAINT vision_test_cash_savepoint_failure
         CHECK (memo IS DISTINCT FROM 'VISION_TEST_FAIL_CASH') NOT VALID`);
-      accountId = (
-        await pool.query(
+      accountId = must((
+        await pool.query<IdRow>(
           `INSERT INTO accounts(name,display_name,institution) VALUES($1,$1,$1) RETURNING id`,
           [broker],
         )
-      ).rows[0].id;
-      investmentId = (
-        await pool.query(`INSERT INTO investments(name,symbol,asset_class,currency)
+      ).rows[0], "query row").id;
+      investmentId = must((
+        await pool.query<IdRow>(`INSERT INTO investments(name,symbol,asset_class,currency)
         VALUES('Savepoint Test Stock','SVPT','stock','EUR') RETURNING id`)
-      ).rows[0].id;
+      ).rows[0], "query row").id;
       batchId = Number(
-        (
-          await pool.query(
+        must((
+          await pool.query<BigIdRow>(
             `INSERT INTO portfolio_import_batches(adapter_name,status,rows_total,account_id,is_brokerage,default_asset_class)
         VALUES('generic','awaiting_review',4,$1,true,'stock') RETURNING id`,
             [accountId],
           )
-        ).rows[0].id,
+        ).rows[0], "query row").id,
       );
       const stagedIds = [];
       const notes = [
@@ -71,8 +88,8 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
         const trade = i < 2;
         stagedIds.push(
           Number(
-            (
-              await pool.query(
+            must((
+              await pool.query<BigIdRow>(
                 `INSERT INTO portfolio_import_staging_rows
           (batch_id,row_index,status,tx_date,type_raw,type,route,units,price_per_unit,amount,currency,note,resolved_investment_id)
           VALUES($1,$2,'matched',$3,$4::text,CASE WHEN $5 = 'portfolio' THEN $4::text::portfolio_txn_type ELSE NULL END,$5,$6,$7,$8,'EUR',$9,$10) RETURNING id`,
@@ -89,7 +106,7 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
                   trade ? investmentId : null,
                 ],
               )
-            ).rows[0].id,
+            ).rows[0], "query row").id,
           ),
         );
       }
@@ -111,7 +128,7 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
           ({ sql }) => sql === `ROLLBACK TO SAVEPOINT sp_prow_${id}`,
         );
         expect(rollback).toBeGreaterThanOrEqual(0);
-        expect(calls[rollback + 1]!.sql).toBe(`RELEASE SAVEPOINT sp_prow_${id}`);
+        expect(must(calls[rollback + 1], "calls[rollback + 1]").sql).toBe(`RELEASE SAVEPOINT sp_prow_${id}`);
         expect(
           calls.findIndex(
             ({ sql, params }) =>
@@ -122,7 +139,7 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
         ).toBeGreaterThan(rollback + 1);
       }
       const staged = (
-        await pool.query(
+        await pool.query<DbRow>(
           "SELECT status,error_message,committed_txn_id FROM portfolio_import_staging_rows WHERE batch_id=$1 ORDER BY row_index",
           [batchId],
         )
@@ -133,17 +150,17 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
         "error",
         "committed",
       ]);
-      expect(staged[0].error_message).toContain(
+      expect(must(staged[0], "staged[0]").error_message).toContain(
         "vision_test_trade_savepoint_failure",
       );
-      expect(staged[2].error_message).toContain(
+      expect(must(staged[2], "staged[2]").error_message).toContain(
         "vision_test_cash_savepoint_failure",
       );
-      expect(staged[0].committed_txn_id).toBeNull();
-      expect(staged[2].committed_txn_id).toBeNull();
+      expect(must(staged[0], "staged[0]").committed_txn_id).toBeNull();
+      expect(must(staged[2], "staged[2]").committed_txn_id).toBeNull();
       expect(
         (
-          await pool.query(
+          await pool.query<DbRow>(
             "SELECT note FROM portfolio_transactions WHERE import_batch_id=$1",
             [batchId],
           )
@@ -151,7 +168,7 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
       ).toEqual([{ note: "SAVEPOINT GOOD TRADE" }]);
       expect(
         (
-          await pool.query(
+          await pool.query<DbRow>(
             "SELECT memo,amount::float8 AS amount FROM transactions WHERE account_id=$1",
             [accountId],
           )
@@ -159,7 +176,7 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
       ).toEqual([{ memo: "SAVEPOINT GOOD CASH", amount: 20 }]);
       expect(
         (
-          await pool.query(
+          await pool.query<DbRow>(
             "SELECT rows_imported,rows_error,rows_duplicate FROM portfolio_import_batches WHERE id=$1",
             [batchId],
           )
@@ -173,7 +190,7 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
       await pool.query(
         "ALTER TABLE transactions DROP CONSTRAINT IF EXISTS vision_test_cash_savepoint_failure",
       );
-      if (batchId) {
+      if (batchId !== undefined) {
         await pool.query(
           "DELETE FROM portfolio_transactions WHERE import_batch_id=$1",
           [batchId],
@@ -189,9 +206,9 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
           batchId,
         ]);
       }
-      if (investmentId)
+      if (investmentId !== undefined)
         await pool.query("DELETE FROM investments WHERE id=$1", [investmentId]);
-      if (accountId)
+      if (accountId !== undefined)
         await pool.query("DELETE FROM accounts WHERE id=$1", [accountId]);
       await pool.query("DELETE FROM recipients WHERE name=$1", [broker]);
     }

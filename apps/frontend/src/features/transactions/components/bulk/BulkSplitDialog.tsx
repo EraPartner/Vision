@@ -42,7 +42,7 @@ export function BulkSplitDialog({
     const [recipientId, setRecipientId] = useState<RecipientId | null>(null);
     const [mode, setMode] = useState<BulkSplitMode>("equal");
 
-    function handleApply(e: React.FormEvent) {
+    function handleApply(e: React.SubmitEvent) {
         e.preventDefault();
         if (recipientId == null) return;
         onApply(recipientId, mode);

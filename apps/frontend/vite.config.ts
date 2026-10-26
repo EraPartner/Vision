@@ -96,7 +96,7 @@ export default defineConfig(({ mode }) => ({
   build: {
     outDir: "../../dist",
     emptyOutDir: true,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         /**
          * Manual chunk splitting — keeps frequently unchanged vendor code in

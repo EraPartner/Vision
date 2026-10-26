@@ -8,6 +8,7 @@ import {
     usePortfolioTransactionsQuery,
 } from "../useInvestments";
 import { asInvestmentId } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 // Real query and domain/client layers; only the HTTP transport is gated.
 afterEach(() => vi.restoreAllMocks());
@@ -44,7 +45,7 @@ describe("portfolio transport cancellation", () => {
                     try {
                         if (hold) {
                             await new Promise<void>((_resolve, reject) => {
-                                options!.signal!.addEventListener(
+                                must(must(options).signal).addEventListener(
                                     "abort",
                                     () => {
                                         cancelled++;

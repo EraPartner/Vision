@@ -26,6 +26,10 @@ import { toAppDateString } from "../../lib/timezone.ts";
 import { logger } from "../../config/logger.ts";
 import { findRateOnOrBeforeInIndex } from "../currency/rateFetcher.ts";
 import { addAll, toNumber, toDecimal } from "../../lib/money.ts";
+import type {
+  HistoricalRateIndex,
+  HistoricalRatePoint,
+} from "../../types/rows.ts";
 
 export type Period =
   | { kind: "ytd" }
@@ -113,15 +117,28 @@ export type PortfolioReportData = {
 /** Requested source failures abort export; only deliberately skipped sources are null. */
 function unwrap<T>(result: PromiseSettledResult<T>, label: string): T {
   if (result.status === "fulfilled") return result.value;
+  const reason: unknown = result.reason;
   logger.warn(
     `[dataFetcherPortfolio] ${label} failed — report generation stopped`,
-    { reason: result.reason?.message },
+    { reason: reason instanceof Error ? reason.message : undefined },
   );
-  throw result.reason;
+  throw reason;
 }
 
+/** Breakdown row as the boundary may still receive it: defaulted fields can be absent. */
+type BreakdownRowInput = Omit<
+  BreakdownRow,
+  "assetClass" | "currentValue" | "totalInvested" | "gainLoss" | "gainLossPercent"
+> & {
+  assetClass?: BreakdownRow["assetClass"] | null | undefined;
+  currentValue?: BreakdownRow["currentValue"] | null | undefined;
+  totalInvested?: BreakdownRow["totalInvested"] | null | undefined;
+  gainLoss?: BreakdownRow["gainLoss"] | null | undefined;
+  gainLossPercent?: BreakdownRow["gainLossPercent"] | null | undefined;
+};
+
 /** Normalize a portfolio breakdown row at the report boundary. */
-function normalizeBreakdownRow(row: BreakdownRow): BreakdownRow {
+function normalizeBreakdownRow(row: BreakdownRowInput): BreakdownRow {
   return {
     ...row,
     assetClass: row.assetClass ?? "other",
@@ -149,18 +166,18 @@ function buildPerformanceTrendData(
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([, snapshot]) => {
       const date = new Date(snapshot.snapshot_date);
-      const value = Number(snapshot.value ?? 0);
-      const invested = Number(snapshot.invested ?? 0);
+      const value = Number(snapshot.value);
+      const invested = Number(snapshot.invested);
       return {
         year: date.getFullYear(),
         month: date.getMonth() + 1,
         value,
         invested,
         inflationAdjustedValue: Number(
-          snapshot.inflation_adjusted_value ?? value,
+          snapshot.inflation_adjusted_value,
         ),
         gainLoss: value - invested,
-        returnPct: Number(snapshot.return_pct ?? 0),
+        returnPct: Number(snapshot.return_pct),
       };
     });
 
@@ -180,24 +197,24 @@ function buildPortfolioExecutiveSummaryData(
     ? Number(latest.value)
     : toNumber(
         addAll(
-          (breakdown ?? []).map((investment) => investment.currentValue ?? 0),
+          (breakdown ?? []).map((investment) => investment.currentValue),
         ),
       );
   const totalInvested = latest
     ? Number(latest.invested)
     : toNumber(
         addAll(
-          (breakdown ?? []).map((investment) => investment.totalInvested ?? 0),
+          (breakdown ?? []).map((investment) => investment.totalInvested),
         ),
       );
   const totalGainLoss = latest
     ? toDecimal(totalValue).minus(totalInvested).toNumber()
     : toNumber(
-        addAll((breakdown ?? []).map((investment) => investment.gainLoss ?? 0)),
+        addAll((breakdown ?? []).map((investment) => investment.gainLoss)),
       );
 
   const returnPct = latest
-    ? Number(latest.return_pct ?? 0)
+    ? Number(latest.return_pct)
     : totalInvested > 0
       ? (totalGainLoss / totalInvested) * 100
       : 0;
@@ -208,13 +225,13 @@ function buildPortfolioExecutiveSummaryData(
     totalGainLoss,
     returnPct,
     inflationAdjustedValue: latest
-      ? Number(latest.inflation_adjusted_value ?? totalValue)
+      ? Number(latest.inflation_adjusted_value)
       : null,
     valuationDate: latest
       ? toAppDateString(new Date(latest.snapshot_date))
       : null,
     totalDividends: toNumber(
-      addAll((dividends?.byMonth ?? []).map((month) => month.amount ?? 0)),
+      addAll((dividends?.byMonth ?? []).map((month) => month.amount)),
     ),
     totalInKindIncome: dividends?.totalInKindIncome ?? 0,
     inKindIncomeCount: dividends?.inKindIncomeCount ?? 0,
@@ -222,7 +239,7 @@ function buildPortfolioExecutiveSummaryData(
     topHoldings: [...(breakdown ?? [])]
       .sort(
         (left, right) =>
-          Number(right.currentValue ?? 0) - Number(left.currentValue ?? 0),
+          toDecimal(right.currentValue).comparedTo(left.currentValue),
       )
       .slice(0, 5),
   };
@@ -270,10 +287,10 @@ async function fetchDividends(
   const currencies = [
     ...new Set([...inKind.map((row) => row.currency), targetCurrency]),
   ].filter((code) => code !== "EUR");
-  const historicalIndex =
+  const historicalIndex: HistoricalRateIndex =
     inKind.length > 0 && currencies.length > 0
       ? await getHistoricalRateIndex(currencies)
-      : new Map();
+      : new Map<string, HistoricalRatePoint[]>();
   let totalInKindIncome = addAll([]);
   // A dividend with no stored rate is left out and counted, never added 1:1.
   const unconverted = createUnconvertedTally();
@@ -326,7 +343,7 @@ async function fetchDividends(
       };
       byInvestmentMap.set(invKey, invEntry);
     }
-    invEntry.total += converted;
+    invEntry.total = toNumber(addAll([invEntry.total, converted]));
   }
 
   const byMonth = [...byMonthMap.entries()]
@@ -337,7 +354,7 @@ async function fetchDividends(
     });
 
   const byInvestment = [...byInvestmentMap.values()].sort(
-    (a, b) => b.total - a.total,
+    (a, b) => toDecimal(b.total).comparedTo(a.total),
   );
 
   return {

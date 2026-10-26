@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { evaluateAnalysisFormulas } from "../src/services/analysisFormulaEngine.ts";
+import { must } from "./helpers/must.ts";
 
 describe("analysisFormulaEngine", () => {
   it("rejects mixed-currency numeric aggregates, including derived columns", () => {
@@ -236,7 +237,7 @@ describe("analysisFormulaEngine", () => {
       excluded: "0",
       next_date: "2026-02-01",
     });
-    expect(result.rows[1]!.inflated).toBe("20.806");
+    expect(must(result.rows[1], "result.rows[1]").inflated).toBe("20.806");
     expect(result.summaries).toEqual({ total: "20.806", food_count: 1 });
   });
 
@@ -259,7 +260,7 @@ describe("analysisFormulaEngine", () => {
       formulaId: "bad",
       code: "BROKEN_REFERENCE",
     });
-    expect(result.rows[0]!.bad).toBeNull();
+    expect(must(result.rows[0], "result.rows[0]").bad).toBeNull();
   });
 
   it("rejects JavaScript, macros, and network-shaped syntax", () => {
@@ -311,7 +312,7 @@ describe("analysisFormulaEngine", () => {
       ],
     });
     expect(result.complete).toBe(true);
-    expect(result.rows[0]!.exact).toBe(false);
+    expect(must(result.rows[0], "result.rows[0]").exact).toBe(false);
   });
 
   it("rejects calendar dates that JavaScript would silently normalize", () => {
@@ -384,7 +385,7 @@ describe("analysis formula statistical, financial and dimensional semantics", ()
       kind: "percentage",
       percentageBasis: "ratio",
     });
-    expect(result.rows[0]!.rate).toBe("0.5");
+    expect(must(result.rows[0], "result.rows[0]").rate).toBe("0.5");
     expect(result.summaries.total).toBe("10");
   });
   it("rejects incompatible currencies and money with unresolved provenance", () => {
@@ -407,7 +408,7 @@ describe("analysis formula statistical, financial and dimensional semantics", ()
       "UNIT_MISMATCH",
       "CURRENCY_PROVENANCE_REQUIRED",
     ]);
-    expect(result.rows[0]!.invalid).toBeNull();
+    expect(must(result.rows[0], "result.rows[0]").invalid).toBeNull();
     expect(result.summaries.missing).toBeNull();
   });
 });
@@ -423,7 +424,7 @@ describe("aggregate currency and instrument coverage", () => {
       ],
     });
     expect(result.summaries).toEqual({ total: null, count: 1 });
-    expect(result.errors[0]!.code).toBe("MISSING_CONTRIBUTOR");
+    expect(must(result.errors[0], "result.errors[0]").code).toBe("MISSING_CONTRIBUTOR");
   });
   it("propagates dynamic currency metadata and permits dimensionless ratios across currencies", () => {
     const columns = [
@@ -444,13 +445,13 @@ describe("aggregate currency and instrument coverage", () => {
     });
     expect(result.summaries.mean).toBe("0.5");
     expect(result.summaries.total).toBeNull();
-    expect(result.errors[0]!.code).toBe("MIXED_CURRENCIES");
+    expect(must(result.errors[0], "result.errors[0]").code).toBe("MIXED_CURRENCIES");
     const missing = evaluateAnalysisFormulas({
       rows: [{ value: "10" }],
       columns,
       formulas: [{ id: "valueCopy", scope: "row", expression: "value" }],
     });
-    expect(missing.errors[0]!.code).toBe("CURRENCY_PROVENANCE_REQUIRED");
+    expect(must(missing.errors[0], "missing.errors[0]").code).toBe("CURRENCY_PROVENANCE_REQUIRED");
   });
   it("rejects quantity totals across investment identities even without explicit column binding", () => {
     const result = evaluateAnalysisFormulas({
@@ -462,7 +463,7 @@ describe("aggregate currency and instrument coverage", () => {
       formulas: [{ id: "total", scope: "summary", expression: "SUM(units)" }],
     });
     expect(result.summaries.total).toBeNull();
-    expect(result.errors[0]!.code).toBe("MIXED_INSTRUMENTS");
+    expect(must(result.errors[0], "result.errors[0]").code).toBe("MIXED_INSTRUMENTS");
   });
 
   it("rejects a zero-argument aggregate with an ARITY error, with or without rows", () => {

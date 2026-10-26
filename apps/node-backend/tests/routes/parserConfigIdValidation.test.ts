@@ -37,6 +37,7 @@ vi.mock('../../src/repositories/customParserConfigRepository.ts', () => ({
 
 import rawCustomParserConfigRepository from '../../src/repositories/customParserConfigRepository.ts';
 import type { FormattedCustomParserConfig } from '../../src/repositories/customParserConfigRepository.ts';
+import { mockOf } from "../helpers/mockOf.ts";
 const customParserConfigRepository = vi.mocked(rawCustomParserConfigRepository);
 const { registerParserRoutes } = await import('../../src/routes/parserConfigRoutes.ts');
 
@@ -72,7 +73,7 @@ describe.each(MOUNTS)('$label parsers — :id shape', ({ mountPath, kind }) => {
       expect(res.status, `expected DELETE ${base}/${id} to be rejected`).toBe(400);
       expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     }
-    expect(customParserConfigRepository.delete).not.toHaveBeenCalled();
+    expect(mockOf(customParserConfigRepository, "delete")).not.toHaveBeenCalled();
   });
 
   it('rejects every malformed id on PATCH without touching the repository', async () => {
@@ -82,7 +83,7 @@ describe.each(MOUNTS)('$label parsers — :id shape', ({ mountPath, kind }) => {
       expect(res.status, `expected PATCH ${base}/${id} to be rejected`).toBe(400);
       expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     }
-    expect(customParserConfigRepository.update).not.toHaveBeenCalled();
+    expect(mockOf(customParserConfigRepository, "update")).not.toHaveBeenCalled();
   });
 
   it('still deletes and updates on a real id, including one with leading zeros', async () => {
@@ -95,7 +96,7 @@ describe.each(MOUNTS)('$label parsers — :id shape', ({ mountPath, kind }) => {
     await api.patch(`${base}/12`).send({ name: 'Renamed' }).expect(200);
 
     expect(customParserConfigRepository.delete.mock.calls).toEqual([[12], [12]]);
-    expect(customParserConfigRepository.update).toHaveBeenCalledWith(12, { name: 'Renamed', config: undefined });
+    expect(mockOf(customParserConfigRepository, "update")).toHaveBeenCalledWith(12, { name: 'Renamed', config: undefined });
   });
 
   it('answers 400, not 500, to a create or update with no JSON body', async () => {
@@ -105,11 +106,11 @@ describe.each(MOUNTS)('$label parsers — :id shape', ({ mountPath, kind }) => {
     const res = await api.post(base);
     expect(res.status).toBe(400);
     expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
-    expect(customParserConfigRepository.create).not.toHaveBeenCalled();
+    expect(mockOf(customParserConfigRepository, "create")).not.toHaveBeenCalled();
 
     // An empty PATCH changes nothing and is passed through, as `{}` already is.
     await api.patch(`${base}/12`).expect(200);
-    expect(customParserConfigRepository.update).toHaveBeenCalledWith(12, { name: undefined, config: undefined });
+    expect(mockOf(customParserConfigRepository, "update")).toHaveBeenCalledWith(12, { name: undefined, config: undefined });
   });
 
   it('still 404s on a well-formed id that matches no row', async () => {

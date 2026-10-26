@@ -23,7 +23,9 @@ import {
   warmInflationCache,
 } from "../src/services/belgianInflationService.ts";
 import { loose, partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
+import { mockOf } from "./helpers/mockOf.ts";
 const query = vi.mocked(rawQuery);
 const getClient = vi.mocked(rawGetClient);
 
@@ -107,12 +109,12 @@ describe("belgianInflationService", () => {
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
+      json: () => Promise.resolve(({
         data: [
           { year: 2024, month: 1, value: "0.30" },
           { year: 2024, month: 2, value: "0.20" },
         ],
-      }),
+      })),
     });
 
     vi.stubGlobal("fetch", fetchMock);
@@ -141,13 +143,13 @@ describe("belgianInflationService", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({
+        json: () => Promise.resolve(({
           facts: [
             fact("January 2024", "100"),
             fact("February 2024", "101"),
             fact("constructor 2024", "102"),
           ],
-        }),
+        })),
       }),
     );
 
@@ -196,9 +198,9 @@ describe("belgianInflationService", () => {
       .mockRejectedValueOnce(new Error("timeout"))
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
+        json: () => Promise.resolve(({
           data: [{ year: 2024, month: 1, value: "0.30" }],
-        }),
+        })),
       });
 
     vi.stubGlobal("fetch", fetchMock);
@@ -238,8 +240,8 @@ describe("belgianInflationService", () => {
     await vi.runAllTimersAsync();
     await second;
 
-    expect(logger.warn).toHaveBeenCalledTimes(1);
-    expect(logger.debug).toHaveBeenCalled();
+    expect(mockOf(logger, "warn")).toHaveBeenCalledTimes(1);
+    expect(mockOf(logger, "debug")).toHaveBeenCalled();
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
@@ -252,17 +254,17 @@ describe("belgianInflationService", () => {
       .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
       .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
 
-    const fetchMock = vi.fn(async (url) => {
+    const fetchMock = vi.fn((url) => {
       if (
         String(url).includes("bestat.statbel") ||
         String(url).includes("bestat.economie.fgov")
       ) {
-        throw new Error("statbel unreachable");
+        return Promise.reject(new Error("statbel unreachable"));
       }
 
-      return {
+      return Promise.resolve({
         ok: true,
-        json: async () => ({
+        json: () => Promise.resolve(({
           dimension: {
             time: {
               category: {
@@ -279,8 +281,8 @@ describe("belgianInflationService", () => {
             1: 100.5,
             2: 101,
           },
-        }),
-      };
+        })),
+      });
     });
 
     vi.stubGlobal("fetch", fetchMock);
@@ -318,12 +320,12 @@ describe("belgianInflationService", () => {
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
+      json: () => Promise.resolve(({
         data: [
           { year: 2024, month: 1, value: "0.30" },
           { year: 2024, month: 2, value: "0.20" },
         ],
-      }),
+      })),
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -386,13 +388,13 @@ describe("belgianInflationService", () => {
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
+      json: () => Promise.resolve(({
         data: [
           { year: 2024, month: 1, value: "0.30" },
           { year: 2024, month: 2, value: "0.20" },
           { year: 2024, month: 3, value: "0.10" },
         ],
-      }),
+      })),
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -405,7 +407,7 @@ describe("belgianInflationService", () => {
     );
     expect(insertCalls).toHaveLength(1);
 
-    const [sql, params] = insertCalls[0]!;
+    const [sql, params] = must(insertCalls[0], "insertCalls[0]");
     // Three rows × three params per row = 9 params bound to the single query.
     expect(params).toHaveLength(9);
     // VALUES list contains three placeholder groups.
@@ -445,9 +447,9 @@ describe("belgianInflationService", () => {
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
+      json: () => Promise.resolve(({
         data: [{ year: 2024, month: 1, value: "0.30" }],
-      }),
+      })),
     });
     vi.stubGlobal("fetch", fetchMock);
 

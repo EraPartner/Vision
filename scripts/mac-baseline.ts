@@ -434,8 +434,8 @@ async function launchApp(
       180_000,
     );
     let pending = "";
-    child.stderr?.setEncoding("utf8");
-    child.stderr?.on("data", (chunk: string) => {
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
       logFile.write(chunk);
       pending += chunk;
       const lines = pending.split("\n");
@@ -461,7 +461,7 @@ async function launchApp(
         }
       }
     });
-    child.stdout?.on("data", (chunk: Buffer) => logFile.write(chunk));
+    child.stdout.on("data", (chunk: Buffer) => logFile.write(chunk));
     child.once("exit", (code) => {
       clearTimeout(timer);
       reject(
@@ -1278,7 +1278,7 @@ async function measureApp(ctx: Context, appPath: string): Promise<AppResult> {
   } finally {
     if (dirty && original) {
       try {
-        if (!running) running = await launchApp(info, logPath);
+        running ??= await launchApp(info, logPath);
         await restoreSettings(running.origin, original);
         dirty = false;
         log(`${info.name}: tier setting restored`);
@@ -1610,7 +1610,7 @@ async function main(): Promise<number> {
     caffeinate.kill();
   }
   log(`Done. Summary: ${path.join(outDir, "summary.md")}`);
-  return results.apps.some((app) => app.error || !app.restored) ? 1 : 0;
+  return results.apps.some((app) => app.error !== null || !app.restored) ? 1 : 0;
 }
 
 if (isEntrypoint(import.meta)) {

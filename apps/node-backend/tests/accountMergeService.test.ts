@@ -10,7 +10,12 @@ import {
 } from "@vision/types/brands";
 import { loose } from "./helpers/partial.ts";
 
-const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
+/** The transaction client `query`: SQL text plus optional params. */
+type ClientQuery = (sql: string, params?: readonly unknown[]) => unknown;
+
+const { mockClient } = vi.hoisted(() => ({
+  mockClient: { query: vi.fn<ClientQuery>() },
+}));
 
 vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
 // Real conversion arithmetic, fixed latest stored rates: 1 USD = 0.5 EUR (the
@@ -19,7 +24,7 @@ vi.mock(
   "../src/services/currency/currencyConversionService.ts",
   async (importOriginal) => ({
     ...(await importOriginal<object>()),
-    listLatestStoredRates: vi.fn(async () => ({
+    listLatestStoredRates: vi.fn(() => Promise.resolve(({
       rows: [
         {
           currency_code: "USD",
@@ -28,7 +33,7 @@ vi.mock(
           fetched_at: "2026-06-01T10:00:00Z",
         },
       ],
-    })),
+    }))),
   }),
 );
 
@@ -44,12 +49,13 @@ import {
   ValidationError,
   NotFoundError,
 } from "../src/middleware/errorHandler.ts";
+import { must } from "./helpers/must.ts";
 
 type SqlSpy = Mock<
   (
     sql: string,
     params?: readonly unknown[],
-  ) => Promise<Partial<PgQueryResult<unknown>>>
+  ) => Promise<Partial<PgQueryResult>>
 >;
 // mockTxConnection adds the `poolQuery` sink, which the real module lacks.
 const { query, poolQuery } = connection as unknown as {
@@ -96,26 +102,28 @@ function happyPath({
     { id: number; funding_account_id: number | null }
   >;
 } = {}) {
-  mockClient.query.mockImplementation(async (sql, params = []) => {
+  mockClient.query.mockImplementation((sql, params = []) => {
     if (isOpeningAnchorRead(sql, params))
-      return { rows: openingAnchors };
+      return Promise.resolve({ rows: openingAnchors });
     if (norm(sql).includes("for update") && norm(sql).includes("where id = $1"))
-      return { rows: [{ id: 2, name: "TARGET" }] };
+      return Promise.resolve({ rows: [{ id: 2, name: "TARGET" }] });
     if (norm(sql).includes("for update") && norm(sql).includes("any"))
-      return { rows: [{ id: 1 }] };
+      return Promise.resolve({ rows: [{ id: 1 }] });
     if (norm(sql).includes("from accounts where id = $1"))
-      return {
-        rows: fundingAccounts[params[0]] ? [fundingAccounts[params[0]]] : [],
-      };
-    if (norm(sql).includes("group by account_id")) return { rows: stampRanges };
-    if (norm(sql).includes("update transactions")) return { rowCount: 3 };
-    if (norm(sql).includes("update planned_transactions")) return { rowCount: 1 };
-    if (norm(sql).includes("update portfolio_transactions")) return { rowCount: 2 };
-    if (norm(sql).includes("update portfolio_import_batches")) return { rowCount: 1 };
+      return Promise.resolve({
+        rows: fundingAccounts[params[0] as number]
+            ? [fundingAccounts[params[0] as number]]
+            : [],
+      });
+    if (norm(sql).includes("group by account_id")) return Promise.resolve({ rows: stampRanges });
+    if (norm(sql).includes("update transactions")) return Promise.resolve({ rowCount: 3 });
+    if (norm(sql).includes("update planned_transactions")) return Promise.resolve({ rowCount: 1 });
+    if (norm(sql).includes("update portfolio_transactions")) return Promise.resolve({ rowCount: 2 });
+    if (norm(sql).includes("update portfolio_import_batches")) return Promise.resolve({ rowCount: 1 });
     if (norm(sql).includes("update accounts set funding_account_id"))
-      return { rowCount: 0 };
-    if (norm(sql).includes("delete from accounts")) return { rowCount: 1 };
-    return { rows: [], rowCount: 0 };
+      return Promise.resolve({ rowCount: 0 });
+    if (norm(sql).includes("delete from accounts")) return Promise.resolve({ rowCount: 1 });
+    return Promise.resolve({ rows: [], rowCount: 0 });
   });
 }
 
@@ -151,18 +159,18 @@ describe("mergeAccounts (ADR-088)", () => {
   });
 
   it("throws NotFound when the survivor is missing", async () => {
-    mockClient.query.mockImplementation(async (sql) =>
-      norm(sql).includes("where id = $1") ? { rows: [] } : { rows: [], rowCount: 0 },
+    mockClient.query.mockImplementation((sql) =>
+      Promise.resolve(norm(sql).includes("where id = $1") ? { rows: [] } : { rows: [], rowCount: 0 }),
     );
     await expect(mergeAccounts(asAccountId(2), [asAccountId(1)])).rejects.toThrow(NotFoundError);
   });
 
   it("throws NotFound when a source is missing", async () => {
-    mockClient.query.mockImplementation(async (sql) => {
+    mockClient.query.mockImplementation((sql) => {
       if (norm(sql).includes("where id = $1"))
-        return { rows: [{ id: 2, name: "TARGET" }] };
-      if (norm(sql).includes("any")) return { rows: [] }; // no sources found
-      return { rows: [], rowCount: 0 };
+        return Promise.resolve({ rows: [{ id: 2, name: "TARGET" }] });
+      if (norm(sql).includes("any")) return Promise.resolve({ rows: [] }); // no sources found
+      return Promise.resolve({ rows: [], rowCount: 0 });
     });
     await expect(mergeAccounts(asAccountId(2), [asAccountId(1)])).rejects.toThrow(NotFoundError);
   });
@@ -211,7 +219,7 @@ describe("mergeAccounts (ADR-088)", () => {
     );
     expect(batchRepointIndex).toBeGreaterThan(-1);
     expect(batchRepointIndex).toBeLessThan(deleteSourcesIndex);
-    const batchCall = mockClient.query.mock.calls[batchRepointIndex]!;
+    const batchCall = must(mockClient.query.mock.calls[batchRepointIndex], "mockClient.query.mock.calls[batchRepointIndex]");
     expect(batchCall[1]).toEqual([2, [1]]);
     expect(
       calls.some((s) => norm(s).includes("update accounts set funding_account_id")),
@@ -222,7 +230,7 @@ describe("mergeAccounts (ADR-088)", () => {
     const txCall = mockClient.query.mock.calls.find(([sql]) =>
       norm(sql).includes("update transactions"),
     );
-    expect(txCall![1]).toEqual([2, [1]]);
+    expect(must(txCall, "txCall")[1]).toEqual([2, [1]]);
   });
 
   it("rejects a merge that would turn the survivor's source reference into a self-cycle", async () => {
@@ -285,7 +293,7 @@ describe("mergeAccounts (ADR-088)", () => {
     const txCall = mockClient.query.mock.calls.find(([sql]) =>
       norm(sql).includes("update transactions"),
     );
-    expect(txCall![1]).toEqual([2, [1]]);
+    expect(must(txCall, "txCall")[1]).toEqual([2, [1]]);
   });
 
   // §1 F2 regression: two concurrently-imported accounts (survivor KBC stamped
@@ -305,8 +313,8 @@ describe("mergeAccounts (ADR-088)", () => {
     expect(result.stampsInterleaved).toBe(true);
     const clear = clearAnchorCall();
     expect(clear).toBeDefined();
-    expect(norm(clear![0])).toContain("where account_id = $1");
-    expect(clear![1]).toEqual([2]); // clears the SURVIVOR's anchor only
+    expect(norm(must(clear, "clear")[0])).toContain("where account_id = $1");
+    expect(must(clear, "clear")[1]).toEqual([2]); // clears the SURVIVOR's anchor only
 
     // Historical per-row stamps are never rewritten — no UPDATE touches
     // transactions.balance.
@@ -505,23 +513,23 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
     stampRanges?: StampRange[];
     openingAnchors?: OpeningAnchor[];
   } = {}) {
-    poolQuery.mockImplementation(async (sql, params = []) => {
+    poolQuery.mockImplementation((sql, params = []) => {
       if (isOpeningAnchorRead(sql, params))
-        return { rows: openingAnchors };
-      if (norm(sql).includes("group by account_id")) return { rows: stampRanges };
+        return Promise.resolve({ rows: openingAnchors });
+      if (norm(sql).includes("group by account_id")) return Promise.resolve({ rows: stampRanges });
       if (norm(sql).includes("select id, currency from accounts"))
-        return { rows: accounts };
+        return Promise.resolve({ rows: accounts });
       if (norm(sql).includes("balance_parts"))
-        return { rows: [{ balance_parts: parts }] };
+        return Promise.resolve({ rows: [{ balance_parts: parts }] });
       if (norm(sql).includes("from transactions where account_id"))
-        return { rows: [{ n: counts.transactions }] };
+        return Promise.resolve({ rows: [{ n: counts.transactions }] });
       if (norm(sql).includes("from planned_transactions"))
-        return { rows: [{ n: counts.planned }] };
+        return Promise.resolve({ rows: [{ n: counts.planned }] });
       if (norm(sql).includes("portfolio_transactions"))
-        return { rows: [{ n: counts.portfolio }] };
+        return Promise.resolve({ rows: [{ n: counts.portfolio }] });
       if (norm(sql).includes("funding_account_id"))
-        return { rows: [{ n: counts.funding }] };
-      return { rows: [], rowCount: 0 };
+        return Promise.resolve({ rows: [{ n: counts.funding }] });
+      return Promise.resolve({ rows: [], rowCount: 0 });
     });
   }
 
@@ -593,7 +601,7 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
       norm(sql).includes("balance_parts"),
     );
     expect(projectedCall).toBeDefined();
-    const [projectedSql] = projectedCall!;
+    const [projectedSql] = must(projectedCall, "projectedCall");
     // The shared hub builder (jsonb partitions), with the union substituted
     // for a single account — so preview and hub cannot compute the merged
     // balance differently.
@@ -608,7 +616,7 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
     );
     // Every bound id list is survivor + source; every other value is the
     // app-timezone as-of day.
-    const params = projectedCall![1] ?? [];
+    const params = must(projectedCall, "projectedCall")[1] ?? [];
     expect(params.length).toBeGreaterThan(0);
     for (const param of params) {
       if (Array.isArray(param)) expect(param).toEqual([2, 1]);
@@ -689,7 +697,7 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
     const portfolioSql = query.mock.calls
       .map(([sql]) => sql)
       .find((s) => norm(s).includes("portfolio_transactions") && norm(s).includes("count"));
-    expect(norm(portfolioSql!)).toContain(
+    expect(norm(must(portfolioSql, "portfolioSql"))).toContain(
       "from portfolio_transactions where account_id = $1",
     );
   });

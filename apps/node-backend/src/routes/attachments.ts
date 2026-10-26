@@ -50,7 +50,7 @@ router.post(
   (req, res, next) => {
     attachmentUpload.single("file")(req, res, (err: unknown) => {
       if (!err) return next();
-      const message = err instanceof Error ? err.message : String(err);
+      const message = err instanceof Error ? err.message : "Upload failed";
       if (err instanceof multer.MulterError) {
         return next(new ValidationError(`Upload error: ${message}`));
       }

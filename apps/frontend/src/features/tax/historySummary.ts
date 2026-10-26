@@ -19,7 +19,8 @@ export function summarizePatch(
 ): string {
     if (!changes) return "";
     const parts: string[] = [];
-    for (const [k, v] of Object.entries(changes)) {
+    const entries: Array<[string, unknown]> = Object.entries(changes);
+    for (const [k, v] of entries) {
         if (Array.isArray(v)) {
             parts.push(`${k}: [${v.length} items]`);
         } else if (v !== null && typeof v === "object") {

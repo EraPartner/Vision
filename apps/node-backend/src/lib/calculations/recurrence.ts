@@ -75,12 +75,8 @@ export interface RecurrenceStep {
  * passes). Matching is case/whitespace-insensitive; anything else — including
  * `undefined` and non-strings — is undefined (never advanced, never valid).
  */
-function parseRecurrenceStep(
-  pattern: string | null | undefined,
-): RecurrenceStep | undefined {
-  const p = String(pattern || "")
-    .toLowerCase()
-    .trim();
+function parseRecurrenceStep(pattern: unknown): RecurrenceStep | undefined {
+  const p = (typeof pattern === "string" ? pattern : "").toLowerCase().trim();
   if (p === "daily") return { unit: "day", amount: 1 };
   if (p === "weekly") return { unit: "day", amount: 7 };
   if (p === "biweekly") return { unit: "day", amount: 14 };
@@ -273,10 +269,11 @@ export function fastForwardYmd(
   const step = parseRecurrenceStep(pattern);
   if (!step || step.unit !== "day") return ymd;
   const deficitDays = differenceInCalendarDaysYmd(ymd, targetYmd);
-  if (deficitDays <= step.amount) return ymd;
-  const hops = Math.floor(deficitDays / step.amount) - 1;
+  const stepDays = step.amount;
+  if (deficitDays <= stepDays) return ymd;
+  const hops = Math.floor(deficitDays / stepDays) - 1;
   if (hops <= 0) return ymd;
-  return addDaysYmd(ymd, hops * step.amount);
+  return addDaysYmd(ymd, hops * stepDays);
 }
 
 function getSupportedPatterns(): string[] {
@@ -296,7 +293,7 @@ function parsePlannedDate(value: string | Date): Date {
   if (value instanceof Date) {
     return appDateStringToUtc(formatDateToYmd(value));
   }
-  return appDateStringToUtc(String(value).slice(0, 10));
+  return appDateStringToUtc(value.slice(0, 10));
 }
 
 /**

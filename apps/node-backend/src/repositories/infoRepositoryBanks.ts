@@ -305,7 +305,7 @@ export const banksRepository = {
           },
           balance: toDecimal(0),
           parts: [],
-          statementBalances: row.statement_balances ?? [],
+          statementBalances: row.statement_balances,
           accountCurrency: row.account_currency,
         };
         accountsByName.set(row.bank_account, entry);

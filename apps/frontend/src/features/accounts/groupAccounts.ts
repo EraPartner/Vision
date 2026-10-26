@@ -30,7 +30,7 @@ export const PORTFOLIO_ACCOUNT_TYPES: readonly AccountType[] = [
 ] as const;
 
 export function isPortfolioType(type: AccountType): boolean {
-    return (PORTFOLIO_ACCOUNT_TYPES as readonly string[]).includes(type);
+    return PORTFOLIO_ACCOUNT_TYPES.includes(type);
 }
 
 /** Portfolio accounts whose value and activity live only in holdings. */
@@ -48,7 +48,7 @@ export function accountLabel(
 export function accountGroupId(
     a: Pick<Account, "type" | "is_active">,
 ): AccountGroupId {
-    if (a.is_active === false) return "archived";
+    if (!a.is_active) return "archived";
     if (a.type === "liability") return "liabilities";
     if (isPortfolioType(a.type)) return "portfolio";
     return "cash";
@@ -72,7 +72,7 @@ export function groupAccounts(
         ACCOUNT_GROUP_ORDER.map((id) => [id, []]),
     );
     for (const a of accounts) {
-        buckets.get(accountGroupId(a))!.push(a);
+        buckets.get(accountGroupId(a))?.push(a);
     }
     const collator = new Intl.Collator(locale, {
         sensitivity: "base",
@@ -80,7 +80,7 @@ export function groupAccounts(
     });
     return ACCOUNT_GROUP_ORDER.map((id) => ({
         id,
-        accounts: [...buckets.get(id)!].sort((a, b) => {
+        accounts: [...(buckets.get(id) ?? [])].sort((a, b) => {
             const byLabel = collator.compare(accountLabel(a), accountLabel(b));
             return byLabel !== 0 ? byLabel : a.id - b.id;
         }),

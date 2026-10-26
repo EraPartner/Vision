@@ -6,6 +6,7 @@ import { describe, it, expect } from "vitest";
 import { createAdapter } from "../src/services/importPipeline/adapters/index.ts";
 
 import { useTempCSV } from "./helpers/tempFile.ts";
+import { must } from "./helpers/must.ts";
 
 const writeTempCSV = useTempCSV("wise");
 
@@ -25,7 +26,7 @@ PENDING,2026-03-02 10:00:00,,OUT,20.00,20.00,EUR,EUR,Pending Shop,My Account,Ref
     expect(txns).toHaveLength(1);
     expect(txns.skipped).toBe(1);
     expect(txns.excluded).toBe(1);
-    expect(txns[0]!.recipient).toBe("COFFEE SHOP");
+    expect(must(txns[0], "txns[0]").recipient).toBe("COFFEE SHOP");
   });
 
   it("applies direction sign logic and recipient source-target switch", async () => {
@@ -39,11 +40,11 @@ COMPLETED,2026-03-03 10:00:00,,NEUTRAL,-7.25,-7.25,EUR,EUR,Neutral Target,Neutra
     const txns = await parse(tmpPath);
 
     expect(txns).toHaveLength(3);
-    expect(txns[0]!.amount).toBe(-25.0);
-    expect(txns[0]!.recipient).toBe("TARGET PERSON");
-    expect(txns[1]!.amount).toBe(50.0);
-    expect(txns[1]!.recipient).toBe("SOURCE IN");
-    expect(txns[2]!.amount).toBe(-7.25);
+    expect(must(txns[0], "txns[0]").amount).toBe(-25.0);
+    expect(must(txns[0], "txns[0]").recipient).toBe("TARGET PERSON");
+    expect(must(txns[1], "txns[1]").amount).toBe(50.0);
+    expect(must(txns[1], "txns[1]").recipient).toBe("SOURCE IN");
+    expect(must(txns[2], "txns[2]").amount).toBe(-7.25);
   });
 
   it("uses currency fallback and formats bankAccount as WISE <CUR>", async () => {
@@ -56,10 +57,10 @@ COMPLETED,2026-03-05 10:00:00,,OUT,5.00,5.00,,,No Currency Name,Source Empty,,,,
     const txns = await parse(tmpPath);
 
     expect(txns).toHaveLength(2);
-    expect(txns[0]!.currency).toBe("GBP");
-    expect(txns[0]!.bankAccount).toBe("WISE GBP");
-    expect(txns[1]!.currency).toBe("USD");
-    expect(txns[1]!.bankAccount).toBe("WISE USD");
+    expect(must(txns[0], "txns[0]").currency).toBe("GBP");
+    expect(must(txns[0], "txns[0]").bankAccount).toBe("WISE GBP");
+    expect(must(txns[1], "txns[1]").currency).toBe("USD");
+    expect(must(txns[1], "txns[1]").bankAccount).toBe("WISE USD");
   });
 
   it("builds comment branches and applies default memo fallback", async () => {
@@ -72,20 +73,20 @@ COMPLETED,2026-03-07 10:00:00,,OUT,15.00,15.00,EUR,EUR,Simple Target,Simple Sour
     const txns = await parse(tmpPath);
 
     expect(txns).toHaveLength(2);
-    expect(txns[0]!.comment).toContain("ID: wise-8");
-    expect(txns[0]!.comment).toContain("Direction: OUT");
-    expect(txns[0]!.comment).toContain("Fee: 2.50 USD");
-    expect(txns[0]!.comment).toContain("Rate: 1.12");
-    expect(txns[0]!.comment).toContain("100.00 USD → 90.00 EUR");
-    expect(txns[0]!.comment).toContain("Batch: batch-8");
-    expect(txns[0]!.memo).toBe("WISE TRANSFER");
+    expect(must(txns[0], "txns[0]").comment).toContain("ID: wise-8");
+    expect(must(txns[0], "txns[0]").comment).toContain("Direction: OUT");
+    expect(must(txns[0], "txns[0]").comment).toContain("Fee: 2.50 USD");
+    expect(must(txns[0], "txns[0]").comment).toContain("Rate: 1.12");
+    expect(must(txns[0], "txns[0]").comment).toContain("100.00 USD → 90.00 EUR");
+    expect(must(txns[0], "txns[0]").comment).toContain("Batch: batch-8");
+    expect(must(txns[0], "txns[0]").memo).toBe("WISE TRANSFER");
 
-    expect(txns[1]!.comment).toContain("ID: wise-9");
-    expect(txns[1]!.comment).toContain("Direction: OUT");
-    expect(txns[1]!.comment).not.toContain("Fee:");
-    expect(txns[1]!.comment).not.toContain("Rate:");
-    expect(txns[1]!.comment).not.toContain("→");
-    expect(txns[1]!.comment).not.toContain("Batch:");
-    expect(txns[1]!.memo).toBe("WISE TRANSFER");
+    expect(must(txns[1], "txns[1]").comment).toContain("ID: wise-9");
+    expect(must(txns[1], "txns[1]").comment).toContain("Direction: OUT");
+    expect(must(txns[1], "txns[1]").comment).not.toContain("Fee:");
+    expect(must(txns[1], "txns[1]").comment).not.toContain("Rate:");
+    expect(must(txns[1], "txns[1]").comment).not.toContain("→");
+    expect(must(txns[1], "txns[1]").comment).not.toContain("Batch:");
+    expect(must(txns[1], "txns[1]").memo).toBe("WISE TRANSFER");
   });
 });

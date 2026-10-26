@@ -17,6 +17,7 @@ import {
     asInvestmentId,
     asPortfolioTransactionId,
 } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
     const actual =
@@ -112,16 +113,17 @@ describe("useInvestmentsQuery", () => {
             is_active: index % 2 === 0,
         }));
         vi.spyOn(apiClient, "getInvestments").mockImplementation(
-            async (params) => ({
-                items: rows.slice(
-                    params?.offset ?? 0,
-                    (params?.offset ?? 0) + 500,
-                ) as never,
-                total: rows.length,
-                limit: 500,
-                offset: params?.offset ?? 0,
-                links: [],
-            }),
+            (params) =>
+                Promise.resolve({
+                    items: rows.slice(
+                        params?.offset ?? 0,
+                        (params?.offset ?? 0) + 500,
+                    ) as never,
+                    total: rows.length,
+                    limit: 500,
+                    offset: params?.offset ?? 0,
+                    links: [],
+                }),
         );
         const { result } = renderHook(() => useInvestmentsQuery(), {
             wrapper: makeWrapper(),
@@ -339,17 +341,18 @@ describe("usePortfolioTransactionsQuery", () => {
             { wrapper: makeWrapper() },
         );
         await waitFor(() => expect(requests).toHaveBeenCalledTimes(4));
-        await act(async () => rejectFirst(failure));
+        await act(() => Promise.resolve(rejectFirst(failure)));
         expect(active).toBe(3);
         expect(result.current.isFetching).toBe(true);
         expect(result.current.isError).toBe(false);
-        await act(async () => releases[0]!());
+        await act(() => Promise.resolve(must(releases[0])()));
         expect(active).toBe(2);
         expect(requests).toHaveBeenCalledTimes(4);
         expect(result.current.isFetching).toBe(true);
-        await act(async () => {
-            releases[1]!();
-            releases[2]!();
+        await act(() => {
+            must(releases[1])();
+            must(releases[2])();
+            return Promise.resolve();
         });
         await waitFor(() => expect(result.current.isError).toBe(true));
         expect(result.current.error).toBe(failure);

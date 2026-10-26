@@ -174,6 +174,8 @@ function mockAccountApi({ reconcileFails = false } = {}) {
                 return ok({
                     account_id: Number(params.id),
                     currency: params.currency,
+                    balance: 1000,
+                    balance_date: "2026-10-01",
                 });
             },
         ),
@@ -198,6 +200,7 @@ function mockAccountApi({ reconcileFails = false } = {}) {
                 return ok({
                     mode: "accept",
                     drift: 0,
+                    currency: "EUR",
                     statement_balance: 1000,
                     computed_balance: 1000,
                     transaction: null,
@@ -261,7 +264,7 @@ async function setReadingDate(
 
 /** The live difference figure (stored drift, or the preview once typed into). */
 function deltaText() {
-    return screen.getByTestId("reconcile-delta").textContent ?? "";
+    return screen.getByTestId("reconcile-delta").textContent;
 }
 
 /** The reconciliation-base row, rendered only when it differs from computed. */
@@ -773,9 +776,9 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         expect(calls.patch).toHaveLength(1);
         expect(invalidate).toHaveBeenCalled();
         const keys = invalidate.mock.calls.map((c) =>
-            JSON.stringify(c[0]?.queryKey),
+            JSON.stringify(c[0]?.queryKey ?? null),
         );
-        expect(keys.some((k) => k?.includes("accounts"))).toBe(true);
+        expect(keys.some((k) => k.includes("accounts"))).toBe(true);
     });
 
     // ── Multi-currency: preview against the base the SERVER resolves against ──

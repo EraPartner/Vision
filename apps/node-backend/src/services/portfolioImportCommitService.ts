@@ -18,6 +18,7 @@ import {
 import {
   applyPortfolioImportReconciliation,
   getPortfolioImportPlanAccountIds,
+  matchedSourceDate,
 } from "./portfolioImportReconciliationService.ts";
 import {
   lockReconciliationAccountsAndHistory,
@@ -43,6 +44,7 @@ import { asAccountId } from "@vision/types/brands";
 import type { AccountId } from "@vision/types/brands";
 import { scheduleRefresh } from "./materializedViewService.ts";
 import { scheduleReconcile } from "./transferReconciliationService.ts";
+import { requiredValue } from "./requiredValue.ts";
 
 /** A batch row locked for the commit, with its id. */
 type LockedBatch = PortfolioImportBatchLockRow & { id: number };
@@ -77,7 +79,7 @@ async function commitLockedScope(
   batchPolicies: BatchPolicy[] = [],
   rowChoices: RowChoice[] = [],
 ) {
-  const ids = batches.map((batch) => Number(batch.id));
+  const ids = batches.map((batch) => batch.id);
   const sourceRows = await readReconciliationSources(ids);
   const planAccountIds = await getPortfolioImportPlanAccountIds({
     batchIds: ids,
@@ -116,7 +118,7 @@ async function commitLockedScope(
   const assertReady = async () => {
     for (const batch of batches)
       await assertPortfolioImportReadiness({
-        batchId: Number(batch.id),
+        batchId: batch.id,
         batch,
         accountId: batch.account_id,
         reconciliationPlanned: true,
@@ -146,9 +148,8 @@ async function commitLockedScope(
   const scheduledRows = (await readReconciliationSources(ids))
     .filter((row) => row.status === "matched")
     .sort((left, right) =>
-      // Matched rows carry their source date.
       firstNonZero(
-        left.tx_date!.localeCompare(right.tx_date!),
+        matchedSourceDate(left).localeCompare(matchedSourceDate(right)),
         Number(left.batch_id) - Number(right.batch_id),
         left.row_index - right.row_index,
       ),
@@ -156,14 +157,18 @@ async function commitLockedScope(
   const runs: Array<{ batchId: number; rowIds: number[] }> = [];
   for (const row of scheduledRows) {
     const batchId = Number(row.batch_id);
-    if (runs.at(-1)?.batchId !== batchId) runs.push({ batchId, rowIds: [] });
-    runs.at(-1)!.rowIds.push(Number(row.id));
+    let run = runs.at(-1);
+    if (run?.batchId !== batchId) {
+      run = { batchId, rowIds: [] };
+      runs.push(run);
+    }
+    run.rowIds.push(Number(row.id));
   }
   const results = batches.map((batch) => ({
-    batch_id: Number(batch.id),
+    batch_id: batch.id,
     imported: 0,
-    duplicates: settledByBatch.get(Number(batch.id)) ?? 0,
-    adopted: adoptedByBatch.get(Number(batch.id)) ?? 0,
+    duplicates: settledByBatch.get(batch.id) ?? 0,
+    adopted: adoptedByBatch.get(batch.id) ?? 0,
     errors: 0,
   }));
   const custodyEvents: Array<AssetTransferEvent | AssetAdjustmentEvent> = [];
@@ -178,7 +183,7 @@ async function commitLockedScope(
         : previewPortfolioAssetAdjustment(row, undefined, {
             sourceRows: scheduledRows,
           });
-    if (prepared.error || prepared.event == null)
+    if (prepared.error)
       throw new ConflictError(
         "Reviewed custody source changed during commit preparation",
       );
@@ -203,7 +208,10 @@ async function commitLockedScope(
         const result = await commitPortfolioImport({ batchId, rowIds });
         if (result.errors > 0) throw atomicFailure(batchId, result.errors);
         // Every run belongs to one of the selected batches.
-        const total = results.find((entry) => entry.batch_id === batchId)!;
+        const total = requiredValue(
+          results.find((entry) => entry.batch_id === batchId),
+          "every run belongs to one of the selected batches",
+        );
         total.imported += result.imported;
         total.duplicates += result.duplicates;
       }
@@ -211,10 +219,10 @@ async function commitLockedScope(
       // find no matched rows and preserve the counters already persisted by runs.
       for (const batch of batches) {
         const result = await commitPortfolioImport({
-          batchId: Number(batch.id),
+          batchId: batch.id,
         });
         if (result.errors > 0)
-          throw atomicFailure(Number(batch.id), result.errors);
+          throw atomicFailure(batch.id, result.errors);
       }
       return {
         batches: results,
@@ -301,7 +309,10 @@ export async function commitReviewedPortfolioImport({
       // commitLockedScope reports one result per locked batch; one was passed.
       // This response has no adoption count: an adopted row settles a source
       // row, so it is reported among the duplicates here.
-      const { imported, duplicates, adopted, errors } = result.batches[0]!;
+      const { imported, duplicates, adopted, errors } = requiredValue(
+        result.batches[0],
+        "commitLockedScope reports one result per locked batch",
+      );
       return { imported, duplicates: duplicates + adopted, errors };
     }
 

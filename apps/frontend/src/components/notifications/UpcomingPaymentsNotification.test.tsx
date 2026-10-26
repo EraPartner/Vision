@@ -14,7 +14,7 @@ let requested = false;
 describe("UpcomingPaymentsNotification route density", () => {
     beforeEach(() => {
         __resetDismissedCacheForTests();
-        window.localStorage?.clear();
+        window.localStorage.clear();
         requested = false;
         server.use(http.get(`${API_BASE}/api/planned-transactions`, () => {
             requested = true;

@@ -15,7 +15,8 @@ function app() {
     res.set('X-Thing', 'yes').json({ query: req.query, accept: req.headers.accept ?? null });
   });
   server.post('/echo', (req, res) => {
-    res.status(201).json({ body: req.body, type: req.headers['content-type'] });
+    const body: unknown = req.body;
+    res.status(201).json({ body, type: req.headers['content-type'] });
   });
   server.get('/text', (_req, res) => {
     res.type('text/plain').send('hello');
@@ -30,8 +31,9 @@ function app() {
     res.redirect(302, '/json');
   });
   server.post('/upload', multer({ storage: multer.memoryStorage() }).single('file'), (req, res) => {
+    const fields: unknown = req.body;
     res.json({
-      fields: req.body,
+      fields,
       file: req.file && {
         name: req.file.originalname,
         type: req.file.mimetype,

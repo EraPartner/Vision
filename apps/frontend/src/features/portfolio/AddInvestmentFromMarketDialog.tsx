@@ -185,7 +185,7 @@ export function AddInvestmentFromMarketDialog({
         setOpen(v);
     };
 
-    const handleCreateInvestment = async (e: React.FormEvent) => {
+    const handleCreateInvestment = async (e: React.SubmitEvent) => {
         e.preventDefault();
         if (!newInvestmentForm.name.trim()) return;
 
@@ -241,7 +241,7 @@ export function AddInvestmentFromMarketDialog({
 
     const buySellIsValid = !deriveUnits || unitMath.isConsistent;
 
-    const handleAddTransaction = async (e: React.FormEvent) => {
+    const handleAddTransaction = async (e: React.SubmitEvent) => {
         e.preventDefault();
         if (!existingInvestment) return;
 

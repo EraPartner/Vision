@@ -32,8 +32,8 @@ const config: PivotConfig<
             tag_ids: all ? undefined : ids,
         });
         return {
-            pivot: res.data?.tagPivot ?? {},
-            metadata: res.data?.conversion,
+            pivot: res.data.tagPivot,
+            metadata: res.data.conversion,
         };
     },
     getItemId: (item) => item.tagId,

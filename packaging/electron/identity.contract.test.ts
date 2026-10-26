@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { appRoot } from "./paths";
+import { isRecord, parseJson, parseJsonAs } from "./test-support";
 
 // Compiled into out/: sources and packaging files are read from the package root.
 const root = path.resolve(appRoot, "..", "..");
@@ -14,23 +15,40 @@ interface ExtraResource {
   to: string;
 }
 
+function isExtraResource(value: unknown): value is ExtraResource {
+  return (
+    isRecord(value) &&
+    typeof value.from === "string" &&
+    typeof value.to === "string"
+  );
+}
+
+function versionOf(text: string): unknown {
+  const parsed = parseJson(text);
+  return isRecord(parsed) ? parsed.version : undefined;
+}
+
 // The external-link policy is covered behaviourally by
 // runtime/renderer-security.test.ts (externalBrowserUrl).
-test("package versions align", () => {
+void test("package versions align", () => {
   const versions: unknown[] = [
-    JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"))
-      .version,
-    JSON.parse(
+    versionOf(fs.readFileSync(path.join(root, "package.json"), "utf8")),
+    versionOf(
       fs.readFileSync(path.join(root, "apps/frontend/package.json"), "utf8"),
-    ).version,
-    JSON.parse(read("package.json")).version,
+    ),
+    versionOf(read("package.json")),
   ];
   assert.equal(new Set(versions).size, 1);
 });
 
-test("Vision Demo uses a valid, distinct badged macOS icon", () => {
-  const config: { mac: { icon: string } } = JSON.parse(
+void test("Vision Demo uses a valid, distinct badged macOS icon", () => {
+  const config = parseJsonAs(
     read("electron-builder-demo.json"),
+    (value): value is { mac: { icon: string } } =>
+      isRecord(value) &&
+      isRecord(value.mac) &&
+      typeof value.mac.icon === "string",
+    "electron-builder-demo.json",
   );
   assert.equal(config.mac.icon, "resources-demo/icon-demo.icns");
   assert.notEqual(config.mac.icon, "build/icon.icns");
@@ -63,10 +81,19 @@ test("Vision Demo uses a valid, distinct badged macOS icon", () => {
   ]);
 });
 
-test("Vision Demo packages its native runtime without an external service dependency", () => {
+void test("Vision Demo packages its native runtime without an external service dependency", () => {
   const installer = fs.readFileSync(path.join(root, "install-demo.sh"), "utf8");
-  const config: { extraResources: ExtraResource[]; afterPack: string } =
-    JSON.parse(read("electron-builder-demo.json"));
+  const config = parseJsonAs(
+    read("electron-builder-demo.json"),
+    (
+      value,
+    ): value is { extraResources: ExtraResource[]; afterPack: string } =>
+      isRecord(value) &&
+      Array.isArray(value.extraResources) &&
+      value.extraResources.every(isExtraResource) &&
+      typeof value.afterPack === "string",
+    "electron-builder-demo.json",
+  );
   assert.doesNotMatch(installer, /command -v (?:podman|colima)\b/im);
   assert.match(installer, /build-native-package\.js --demo/);
   assert.deepEqual(
@@ -80,7 +107,7 @@ test("Vision Demo packages its native runtime without an external service depend
   assert.equal(config.afterPack, "./out/scripts/finalize-native-package.js");
 });
 
-test("native macOS installers stage frontend output outside the shared dist directory", () => {
+void test("native macOS installers stage frontend output outside the shared dist directory", () => {
   const helper = fs.readFileSync(
     path.join(root, "scripts/lib/native-mac-build.sh"),
     "utf8",

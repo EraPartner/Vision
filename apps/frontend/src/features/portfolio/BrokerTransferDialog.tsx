@@ -205,7 +205,7 @@ export function BrokerTransferDialog({ account, open, onOpenChange }: Props) {
                         {overLimit && (
                             <p className="type-caption text-warning">
                                 {t("portfolio.brokerTransfer.overLimit", {
-                                    limit: String(preview.data?.limit ?? 500),
+                                    limit: String(preview.data.limit),
                                 })}
                             </p>
                         )}

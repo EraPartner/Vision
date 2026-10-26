@@ -9,6 +9,7 @@ import { ok } from "@/test/msw/handlers";
 import type { SavedPortfolioParserConfig } from "@/lib/api/portfolioImports";
 import PortfolioImportPage from "../PortfolioImportPage";
 import { DEFAULT_PORTFOLIO_IMPORT_CONFIG } from "../portfolioImportPresets";
+import { must } from "@/test/must";
 
 it("saves, reloads, and submits the selected portfolio number format", async () => {
     const { number_format: _oldMissingField, ...oldConfig } =
@@ -90,10 +91,10 @@ it("saves, reloads, and submits the selected portfolio number format", async () 
     expect(
         screen.getByRole("combobox", { name: "Number format" }),
     ).toHaveTextContent("Decimal point");
-    const input = screen
+    const input = must(must(screen
         .getByText("Advanced single-file import")
-        .closest("details")!
-        .querySelector<HTMLInputElement>('input[type="file"]')!;
+        .closest("details"))
+        .querySelector<HTMLInputElement>('input[type="file"]'));
     await user.upload(
         input,
         new File(

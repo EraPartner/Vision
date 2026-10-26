@@ -36,8 +36,10 @@ import {
 
 import { closePool } from "../src/database/connection.ts";
 import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.ts";
+import { must } from "./helpers/must.ts";
+import type { Pool } from "pg";
 
-const pool = getTestPool()!;
+let pool: Pool;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
 /** Fixture ids populated by seed(). */
@@ -67,7 +69,7 @@ async function seedAccount(name: string, displayName: string) {
     `INSERT INTO accounts (name, display_name) VALUES ($1, $2) RETURNING id`,
     [name, displayName],
   );
-  return rows[0]!.id;
+  return must(rows[0], "rows[0]").id;
 }
 
 async function seedInvestment(name: string, currentPrice: number) {
@@ -76,7 +78,7 @@ async function seedInvestment(name: string, currentPrice: number) {
      VALUES ($1, $1, 'stock', 'EUR', $2) RETURNING id`,
     [name, currentPrice],
   );
-  return rows[0]!.id;
+  return must(rows[0], "rows[0]").id;
 }
 
 async function seedTxn(
@@ -94,7 +96,7 @@ async function seedTxn(
      VALUES ($1, $2, $3::date, $4, $5, 'EUR', $6) RETURNING id`,
     [investmentId, type, date, amount, units, accountId],
   );
-  return rows[0]!.id;
+  return must(rows[0], "rows[0]").id;
 }
 
 async function wipe() {
@@ -253,6 +255,9 @@ const EXPECTED = {
 describeDb(
   "WP-C4 parity invariant — Σ per-account ≡ global engine (real Postgres)",
   () => {
+    beforeAll(() => {
+      pool = must(getTestPool(), "test pool");
+    });
     beforeAll(acquireDbSuiteLock, 180_000);
     afterAll(async () => {
       await wipe();
@@ -352,9 +357,9 @@ describeDb(
         expect(flagByName.get("WPC4P UNASSIGNED")).toBe(false);
 
         // ── the unassigned instrument's GLOBAL figures stay flat-replay exact ─
-        const unassigned = result.summaries.find(
+        const unassigned = must(result.summaries.find(
           (s) => s.name === "WPC4P UNASSIGNED",
-        )!;
+        ), "matching result.summaries");
         expect(unassigned.totalUnits).toBe(90);
         expect(unassigned.currentValue).toBe(900);
         expect(unassigned.totalBuyCost).toBe(1000);
@@ -362,7 +367,7 @@ describeDb(
         expect(unassigned.unrealizedGain).toBe(0);
 
         // ── re-tag actually re-partitioned history ───────────────────────────
-        const retag = result.summaries.find((s) => s.name === "WPC4P RETAG")!;
+        const retag = must(result.summaries.find((s) => s.name === "WPC4P RETAG"), "matching result.summaries");
         expect(retag.realizedGain).toBe(150); // 400 − 10×25 from the moved lot's basis
       },
     );
@@ -384,7 +389,7 @@ describeDb(
       const after = await getPortfolioSummary("EUR");
 
       const row = (r: PortfolioSummary, id: number) =>
-        r.byAccount.find((a) => a.account_id === id)!;
+        must(r.byAccount.find((a) => a.account_id === id), "matching r.byAccount");
       // IBKR gains the whole lot: 20u @ price 20 = +400 value vs before's +200
       // (10u were already counted at Degiro before... the lot moves WHOLE).
       expect(

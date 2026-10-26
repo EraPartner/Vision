@@ -20,11 +20,7 @@ import type {
   MenuItemConstructorOptions,
   MessageBoxOptions,
   MessageBoxReturnValue,
-  OpenDialogOptions,
-  OpenDialogReturnValue,
   Rectangle,
-  SaveDialogOptions,
-  SaveDialogReturnValue,
   EditFlags,
   WebContentsWillFrameNavigateEventParams,
   WebContentsWillRedirectEventParams,
@@ -119,9 +115,8 @@ function readSettingsResponse(body: unknown): {
 
 // `error?.message` / `error?.code` for a caught value of unknown type.
 function errorField(error: unknown, key: "message" | "code"): unknown {
-  if (typeof error !== "object" || error === null || !(key in error))
-    return undefined;
-  return (error as Record<string, unknown>)[key];
+  if (!isObjectLike(error) || !(key in error)) return undefined;
+  return error[key];
 }
 
 // `err && err.message ? err.message : err`, the shape every log line uses.
@@ -140,11 +135,7 @@ let nativeLanguageRequest = 0;
 function resolveNativeLanguage(requestedLanguage: unknown): NativeLanguage {
   if (requestedLanguage === "en" || requestedLanguage === "nl")
     return requestedLanguage;
-  const locale =
-    app && app.getLocale && typeof app.getLocale === "function"
-      ? app.getLocale()
-      : "en";
-  return locale && locale.startsWith("nl") ? "nl" : "en";
+  return app.getLocale().startsWith("nl") ? "nl" : "en";
 }
 
 async function loadI18nAsync(
@@ -172,7 +163,7 @@ async function loadI18nAsync(
 
   const localeFile = `${lang}.json`;
   const byResources =
-    resourceI18nDir && (await tryLoad(resourceI18nDir, localeFile));
+    resourceI18nDir === "" ? null : await tryLoad(resourceI18nDir, localeFile);
   if (byResources) return byResources;
 
   const byFallback = await tryLoad(fallbackI18nDir, localeFile);
@@ -341,21 +332,31 @@ function openTrustedExternalUrl(url: string): boolean {
 // once per app and persisted (settings.appPort) — see resolveAppPort(). Random
 // per-app ports mean the demo and the real app never fight over a fixed port.
 const DEFAULT_APP_PORT = 3002;
-const HEALTH_POLL_ATTEMPTS =
-  Number(process.env.VISION_HEALTH_POLL_ATTEMPTS) || 200; // 200 × 300ms = 60s max
-const HEALTH_POLL_INTERVAL_MS =
-  Number(process.env.VISION_HEALTH_POLL_INTERVAL_MS) || 300;
+// A zero, empty or non-numeric override falls back to the default.
+function numberFromEnv(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return value !== 0 && !Number.isNaN(value) ? value : fallback;
+}
+const HEALTH_POLL_ATTEMPTS = numberFromEnv("VISION_HEALTH_POLL_ATTEMPTS", 200); // 200 × 300ms = 60s max
+const HEALTH_POLL_INTERVAL_MS = numberFromEnv(
+  "VISION_HEALTH_POLL_INTERVAL_MS",
+  300,
+);
 // A cold native start may initialize PostgreSQL and run migrations. Give that
 // path a larger budget than a warm restart. 600 × 300ms ≈ 3 min.
-const HEALTH_POLL_BUILD_ATTEMPTS =
-  Number(process.env.VISION_HEALTH_POLL_BUILD_ATTEMPTS) || 600;
+const HEALTH_POLL_BUILD_ATTEMPTS = numberFromEnv(
+  "VISION_HEALTH_POLL_BUILD_ATTEMPTS",
+  600,
+);
 // Probe every 30 s while healthy; after a failed probe, every 10 s until the
 // backend answers again, so a lost backend is still reported within about 50 s.
 const HEALTH_WATCHDOG_INTERVAL_MS = 30_000;
 const HEALTH_WATCHDOG_RETRY_INTERVAL_MS = 10_000;
 const HEALTH_WATCHDOG_FAILURE_THRESHOLD = 3;
-const RENDERER_READY_TIMEOUT_MS =
-  Number(process.env.VISION_RENDERER_READY_TIMEOUT_MS) || 12_000;
+const RENDERER_READY_TIMEOUT_MS = numberFromEnv(
+  "VISION_RENDERER_READY_TIMEOUT_MS",
+  12_000,
+);
 
 // ── Startup instrumentation ───────────────────────────────────────────────────
 // Phase 1 of startup-speedup plan. Emits structured JSON marks to stderr so
@@ -488,28 +489,21 @@ async function writeSettingsAtomic(data: Settings): Promise<void> {
   }
 }
 
-// Overwrite settings.json with `data`. Serialized + atomic. Prefer
-// updateSettings() when the new value depends on the current one.
-function saveSettings(data: Settings): Promise<void> {
-  const run = settingsWriteChain.then(() => writeSettingsAtomic(data));
-  // Keep the chain alive even if this write rejects, so later writes still run.
-  settingsWriteChain = run.catch(() => {});
-  return run;
-}
-
 // Atomic read-modify-write: load current settings, apply `mutate` to a copy,
 // then persist — all inside the shared write chain, so two concurrent updaters
 // can't clobber each other's keys. `mutate` may mutate the passed copy in place
 // (return nothing) or return a replacement object. Replaces the racy
 // `saveSettings({ ...(await loadSettings()), ... })` pattern.
 function updateSettings(
-  mutate: (draft: Settings) => Settings | void | Promise<Settings | void>,
+  mutate: (
+    draft: Settings,
+  ) => Settings | undefined | Promise<Settings | undefined>,
 ): Promise<Settings> {
   const run = settingsWriteChain.then(async () => {
     const current = await loadSettings();
     const draft: Settings = { ...current };
     const result = await mutate(draft);
-    const next = result !== undefined ? result : draft;
+    const next = result ?? draft;
     await writeSettingsAtomic(next);
     return next;
   });
@@ -546,7 +540,7 @@ function endNativeMaintenance() {
 }
 backupRestore.init({
   withBackupSnapshot: async (capture) => {
-    if (!activeRuntime || activeRuntime.mode !== "native")
+    if (!activeRuntime)
       throw new Error("Native runtime is unavailable");
     beginNativeMaintenance();
     stopHealthWatchdog();
@@ -712,9 +706,9 @@ function pollHealth(maxAttempts = HEALTH_POLL_ATTEMPTS): Promise<void> {
         tries < HEALTH_POLL_FAST_ATTEMPTS
           ? HEALTH_POLL_FAST_INTERVAL_MS
           : HEALTH_POLL_INTERVAL_MS;
-      setTimeout(attempt, interval);
+      setTimeout(() => void attempt(), interval);
     };
-    attempt();
+    void attempt();
   });
 }
 
@@ -793,9 +787,9 @@ function pollReady(maxAttempts = HEALTH_POLL_ATTEMPTS): Promise<void> {
         tries < HEALTH_POLL_FAST_ATTEMPTS
           ? HEALTH_POLL_FAST_INTERVAL_MS
           : HEALTH_POLL_INTERVAL_MS;
-      setTimeout(attempt, interval);
+      setTimeout(() => void attempt(), interval);
     };
-    attempt();
+    void attempt();
   });
 }
 
@@ -819,13 +813,13 @@ function loadErrorPage({ messageKey = "app.errorPageMessage" } = {}): void {
     paletteForeground: palette.foreground,
   });
   const pageUrl = `file://${path.join(appRoot, "assets", "error.html")}?${params.toString()}`;
-  mainWindow.loadURL(pageUrl);
+  void mainWindow.loadURL(pageUrl);
 }
 
 // Capture a small, redacted backend-log snapshot when readiness polling fails
 // so startup errors can be diagnosed from userData/logs/main.log.
 function redactStartupDiagnostics(value: unknown): string {
-  return String(value || "")
+  return (typeof value === "string" ? value : "")
     .replace(/(postgres(?:ql)?:\/\/[^:\s/@]+:)[^@\s/]+(@)/gi, "$1***$2")
     .replace(/\x1b\[[0-9;]*m/g, "");
 }
@@ -879,9 +873,10 @@ function startHealthWatchdog() {
       watchdogFailureCount > 0
         ? HEALTH_WATCHDOG_RETRY_INTERVAL_MS
         : HEALTH_WATCHDOG_INTERVAL_MS;
-    healthWatchdogTimer = setTimeout(async () => {
-      await probeHealthForWatchdog();
-      if (generation === healthWatchdogGeneration) schedule();
+    healthWatchdogTimer = setTimeout(() => {
+      void probeHealthForWatchdog().then(() => {
+        if (generation === healthWatchdogGeneration) schedule();
+      });
     }, delay);
   };
   schedule();
@@ -950,9 +945,9 @@ function renavigateWhenReady(maxAttempts = HEALTH_POLL_BUILD_ATTEMPTS) {
     }
     tries += 1;
     if (tries >= maxAttempts) return;
-    renavTimer = setTimeout(tick, HEALTH_POLL_INTERVAL_MS);
+    renavTimer = setTimeout(() => void tick(), HEALTH_POLL_INTERVAL_MS);
   };
-  renavTimer = setTimeout(tick, HEALTH_POLL_INTERVAL_MS);
+  renavTimer = setTimeout(() => void tick(), HEALTH_POLL_INTERVAL_MS);
 }
 
 let rendererBootTimer: NodeJS.Timeout | null = null;
@@ -1061,7 +1056,7 @@ function pollAndLoad({ building = false } = {}): void {
       // "taking longer than expected" modal — that warning is meant for warm boots
       // where a slow start is genuinely unexpected, not a first/dev rebuild.
       if (building) return;
-      dialog.showMessageBox({
+      void dialog.showMessageBox({
         type: "warning",
         buttons: [t("common.ok")],
         title: APP_NAME,
@@ -1082,22 +1077,6 @@ function showMessageBoxOverMainWindow(
   return mainWindow
     ? dialog.showMessageBox(mainWindow, options)
     : dialog.showMessageBox(options);
-}
-
-function showSaveDialogOverMainWindow(
-  options: SaveDialogOptions,
-): Promise<SaveDialogReturnValue> {
-  return mainWindow
-    ? dialog.showSaveDialog(mainWindow, options)
-    : dialog.showSaveDialog(options);
-}
-
-function showOpenDialogOverMainWindow(
-  options: OpenDialogOptions,
-): Promise<OpenDialogReturnValue> {
-  return mainWindow
-    ? dialog.showOpenDialog(mainWindow, options)
-    : dialog.showOpenDialog(options);
 }
 
 // ── Boot splash ───────────────────────────────────────────────────────────────
@@ -1293,8 +1272,7 @@ function readSavedWindowBounds(): Rectangle | undefined {
 }
 
 function clampBoundsToWorkArea(bounds: Rectangle): Rectangle {
-  const wa = (screen.getDisplayMatching(bounds) || screen.getPrimaryDisplay())
-    .workArea;
+  const wa = screen.getDisplayMatching(bounds).workArea;
   const width = Math.max(WINDOW_MIN_WIDTH, Math.min(bounds.width, wa.width));
   const height = Math.max(
     WINDOW_MIN_HEIGHT,
@@ -1353,22 +1331,24 @@ function splashBackgroundColor(): string {
 let windowBoundsSaveTimer: NodeJS.Timeout | null = null;
 function scheduleWindowBoundsSave(win: BrowserWindow): void {
   if (windowBoundsSaveTimer) clearTimeout(windowBoundsSaveTimer);
-  windowBoundsSaveTimer = setTimeout(async () => {
+  windowBoundsSaveTimer = setTimeout(() => {
     windowBoundsSaveTimer = null;
-    if (!win || win.isDestroyed()) return;
-    try {
-      // getNormalBounds: a maximized/fullscreen window records its restored
-      // frame, not the screen size.
-      const bounds = win.getNormalBounds();
-      await updateSettings((cur) => {
-        cur[WINDOW_BOUNDS_KEY] = bounds;
-      });
-    } catch (err) {
-      console.warn(
-        "window-bounds save failed (non-fatal):",
-        errorField(err, "message") || err,
-      );
-    }
+    if (win.isDestroyed()) return;
+    void (async () => {
+      try {
+        // getNormalBounds: a maximized/fullscreen window records its restored
+        // frame, not the screen size.
+        const bounds = win.getNormalBounds();
+        await updateSettings((cur) => {
+          cur[WINDOW_BOUNDS_KEY] = bounds;
+        });
+      } catch (err) {
+        console.warn(
+          "window-bounds save failed (non-fatal):",
+          errorField(err, "message") || err,
+        );
+      }
+    })();
   }, WINDOW_BOUNDS_SAVE_DEBOUNCE_MS);
 }
 
@@ -1440,14 +1420,14 @@ function createWindow(): BrowserWindow {
       });
     }
     if (params.misspelledWord) {
-      if (items.length) items.push({ type: "separator" });
+      if (items.length > 0) items.push({ type: "separator" });
       items.push({
         label: t("menu.addToDictionary", null, "Add to Dictionary"),
         click: () =>
           wc.session.addWordToSpellCheckerDictionary(params.misspelledWord),
       });
     }
-    const flags: Partial<EditFlags> = params.editFlags || {};
+    const flags: Partial<EditFlags> = params.editFlags;
     const roleItems: MenuItemConstructorOptions[] = [];
     if (params.isEditable)
       roleItems.push({ role: "cut", enabled: !!flags.canCut });
@@ -1456,11 +1436,11 @@ function createWindow(): BrowserWindow {
     if (params.isEditable)
       roleItems.push({ role: "paste", enabled: !!flags.canPaste });
     if (params.isEditable) roleItems.push({ role: "selectAll" });
-    if (roleItems.length) {
-      if (items.length) items.push({ type: "separator" });
+    if (roleItems.length > 0) {
+      if (items.length > 0) items.push({ type: "separator" });
       items.push(...roleItems);
     }
-    if (!items.length) return;
+    if (items.length === 0) return;
     Menu.buildFromTemplate(items).popup({ window: win });
   });
 
@@ -1508,7 +1488,7 @@ function createWindow(): BrowserWindow {
   );
   win.webContents.on("render-process-gone", (_event, details) => {
     console.error(
-      `[renderer] process exited (${details?.reason || "unknown"}, ${Number.isInteger(details?.exitCode) ? details.exitCode : "unknown"})`,
+      `[renderer] process exited (${details.reason}, ${Number.isInteger(details.exitCode) ? details.exitCode : "unknown"})`,
     );
   });
 
@@ -1573,7 +1553,7 @@ function httpGet(url: string): Promise<unknown> {
           try {
             resolve(JSON.parse(body));
           } catch (e) {
-            reject(e);
+            reject(e instanceof Error ? e : new Error(String(e)));
           }
         });
       })
@@ -1980,7 +1960,7 @@ registerHandler(
         const v = resolveBackupSettingsWithDefaults(stored);
         return {
           backupDir: v.backupDir || "",
-          backupOnQuit: v.backupOnQuit === true,
+          backupOnQuit: v.backupOnQuit,
         };
       }
     } catch (err) {
@@ -1992,7 +1972,7 @@ registerHandler(
     const s = resolveBackupSettingsWithDefaults(await loadSettings());
     return {
       backupDir: s.backupDir || "",
-      backupOnQuit: s.backupOnQuit === true,
+      backupOnQuit: s.backupOnQuit,
     };
   },
   { senderFailure: REJECT_SENDER },
@@ -2097,7 +2077,7 @@ function sendToApp<C extends ElectronEventChannel>(
     // readiness rather than a bare loadURL(appUrl()), so a backend that died while
     // the window was closed surfaces the error page instead of a blank/broken
     // window. The queued message flushes once the renderer signals ready.
-    mainWindow.loadURL(splashDataUrl());
+    void mainWindow.loadURL(splashDataUrl());
     pollAndLoad();
     return;
   }
@@ -2216,7 +2196,7 @@ function setupApplicationMenu(): void {
   try {
     app.setAboutPanelOptions({
       applicationName: APP_NAME,
-      applicationVersion: app.getVersion ? app.getVersion() : "",
+      applicationVersion: app.getVersion(),
       copyright: `© ${new Date().getFullYear()} Vision · AGPL-3.0`,
     });
   } catch {
@@ -2539,9 +2519,9 @@ async function forwardCsvOpen(filePath: string): Promise<void> {
 app.on("open-file", (event, filePath) => {
   event.preventDefault();
   if (app.isReady()) {
-    forwardCsvOpen(filePath);
+    void forwardCsvOpen(filePath);
   } else {
-    app.whenReady().then(() => forwardCsvOpen(filePath));
+    void app.whenReady().then(() => forwardCsvOpen(filePath));
   }
 });
 
@@ -2631,7 +2611,7 @@ async function launch(): Promise<void> {
   //    backend is ready.
   const endWindow = bootMark("create_window");
   mainWindow = createWindow();
-  mainWindow.loadURL(splashDataUrl());
+  void mainWindow.loadURL(splashDataUrl());
   endWindow();
 
   // 0b-bis. Complete native platform integration after splash loading has
@@ -2818,20 +2798,20 @@ app.on("will-quit", (e) => {
     }
   }
 
-  resolveBackupSettings().then((s) => {
+  void resolveBackupSettings().then((s) => {
     const effective = resolveBackupSettingsWithDefaults(s);
     const backupOnQuit =
-      effective.backupOnQuit === true && !systemShuttingDown;
+      effective.backupOnQuit && !systemShuttingDown;
     const backupDir = effective.backupDir || "";
 
     const doBackup =
       backupOnQuit && backupDir
         ? runBundleBackup(backupDir, null) // frontendState unavailable at quit time
             .then((result) => {
-              if (result && result.warning) console.warn(result.warning);
+              if (result.warning) console.warn(result.warning);
               notify(t("backup.done"));
             })
-            .catch((err) => {
+            .catch((err: unknown) => {
               console.error("Backup on quit failed:", err);
               notify(t("backup.failed"));
             })
@@ -2852,7 +2832,7 @@ app.on("will-quit", (e) => {
         if (keepServices) return;
         return activeRuntime?.stop();
       })
-      .catch((err) => console.error("runtime shutdown failed:", err))
+      .catch((err: unknown) => console.error("runtime shutdown failed:", err))
       .finally(() => {
         clearTimeout(forceQuitTimer);
         notify(t("app.stopped"));
@@ -2872,7 +2852,7 @@ if (gotSingleInstanceLock) {
     mainWindow.focus();
   });
 
-  app.whenReady().then(launch);
+  void app.whenReady().then(launch);
 
   app.on("activate", () => {
     // Hide-on-close keeps the window alive but hidden on darwin: just re-show it,
@@ -2890,7 +2870,7 @@ if (gotSingleInstanceLock) {
     // the backend isn't answering yet.
     if (mainWindow === null) {
       mainWindow = createWindow();
-      mainWindow.loadURL(splashDataUrl());
+      void mainWindow.loadURL(splashDataUrl());
       pollAndLoad();
     }
   });

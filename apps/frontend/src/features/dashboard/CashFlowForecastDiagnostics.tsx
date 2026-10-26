@@ -236,7 +236,7 @@ export function CashFlowForecastDiagnostics({
                                         currency={currency}
                                         locale={locale}
                                         fractionDigits={
-                                            appSettings.showDecimalPlaces ?? 2
+                                            appSettings.showDecimalPlaces
                                         }
                                         persistedHistory={persistedByMethod.get(
                                             entry.method_id,

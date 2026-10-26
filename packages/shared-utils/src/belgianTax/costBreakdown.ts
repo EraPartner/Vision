@@ -1,3 +1,4 @@
+import { numberOrZero } from "../numeric.ts";
 interface CostTransaction {
   type: string;
   date?: string | undefined;
@@ -97,7 +98,7 @@ export function buildPortfolioCostBreakdowns<S extends CostSummary>({
       if (yearOf(transaction.date) !== year) continue;
 
       const convertedTaxes = convert(
-        Number(transaction.taxes) || 0,
+        numberOrZero(transaction.taxes),
         transaction.currency,
       );
       if (transaction.type === "sell" && convertedTaxes > 0) {
@@ -119,14 +120,14 @@ export function buildPortfolioCostBreakdowns<S extends CostSummary>({
         addTo(
           taxes,
           labels.otherTaxes,
-          convert(Number(transaction.amount) || 0, transaction.currency),
+          convert(numberOrZero(transaction.amount), transaction.currency),
         );
       } else if (convertedTaxes > 0) {
         addTo(taxes, labels.otherTaxes, convertedTaxes);
       }
 
       const convertedFees = convert(
-        Number(transaction.fees) || 0,
+        numberOrZero(transaction.fees),
         transaction.currency,
       );
       if (["buy", "sell"].includes(transaction.type) && convertedFees > 0) {
@@ -135,7 +136,7 @@ export function buildPortfolioCostBreakdowns<S extends CostSummary>({
         addTo(
           fees,
           labels.managementFees,
-          convert(Number(transaction.amount) || 0, transaction.currency),
+          convert(numberOrZero(transaction.amount), transaction.currency),
         );
       } else if (convertedFees > 0) {
         addTo(fees, labels.otherFees, convertedFees);

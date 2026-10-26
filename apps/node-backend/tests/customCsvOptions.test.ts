@@ -10,6 +10,8 @@ import { parse as parseTransactions } from "../src/services/importPipeline/adapt
 import { parseWithConfig as parsePortfolio } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
 import type { PortfolioParserConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
 import { loose } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
+import { stringContaining, stringMatching } from "./helpers/matchers.ts";
 
 /** The fields these tests read from either adapter's parsed rows. */
 interface ParsedCsvRow {
@@ -66,7 +68,7 @@ for (const [name, parse] of adapters) {
       expect(rows).toHaveLength(2);
       expect(rows.map((row) => row.amount)).toEqual([12.5, 2.5]);
       expect(rows.skipped).toBe(0);
-      expect(rows[0]!.rawData).toBe(
+      expect(must(rows[0], "rows[0]").rawData).toBe(
         '2026-09-01,Shop,12.50,"line one\nline two"',
       );
     });
@@ -80,8 +82,8 @@ for (const [name, parse] of adapters) {
         );
         const rows = await parse(fixture(csv), { ...config, encoding });
         expect(rows).toHaveLength(1);
-        expect(rows[0]!.recipient ?? rows[0]!.nameRaw).toBe("Café");
-        expect(rows[0]!.memo ?? rows[0]!.note).toBe("référence");
+        expect(must(rows[0], "rows[0]").recipient ?? must(rows[0], "rows[0]").nameRaw).toBe("Café");
+        expect(must(rows[0], "rows[0]").memo ?? must(rows[0], "rows[0]").note).toBe("référence");
       },
     );
 
@@ -95,7 +97,7 @@ for (const [name, parse] of adapters) {
         encoding: "windows-1252",
       });
       expect(rows).toHaveLength(1);
-      expect(rows[0]!.memo ?? rows[0]!.note).toBe("€ “é”");
+      expect(must(rows[0], "rows[0]").memo ?? must(rows[0], "rows[0]").note).toBe("€ “é”");
     });
 
     it("rejects unsupported encoding with a validation error", async () => {
@@ -106,7 +108,7 @@ for (const [name, parse] of adapters) {
         }),
       ).rejects.toMatchObject({
         status: 400,
-        message: expect.stringMatching(/Unsupported.*encoding/),
+        message: stringMatching(/Unsupported.*encoding/),
       });
     });
   });
@@ -184,10 +186,10 @@ describe("generic number formats", () => {
         });
         await expect(result).rejects.toMatchObject({
           status: 400,
-          message: expect.stringMatching(new RegExp(`row 2.*${column}`)),
+          message: stringMatching(new RegExp(`row 2.*${column}`)),
         });
-        await result.catch((error) =>
-          expect(error.message).not.toContain("1,234"),
+        await result.catch((error: unknown) =>
+          expect((error as Error).message).not.toContain("1,234"),
         );
       },
     );
@@ -215,7 +217,7 @@ describe("generic number formats", () => {
         },
       );
       expect(rows).toHaveLength(1);
-      expect(rows[0]!.amount).toBe(
+      expect(must(rows[0], "rows[0]").amount).toBe(
         name === "portfolio" ? Math.abs(expected) : expected,
       );
     });
@@ -228,7 +230,7 @@ describe("generic number formats", () => {
         }),
       ).rejects.toMatchObject({
         status: 400,
-        message: expect.stringContaining("Ambiguous number"),
+        message: stringContaining("Ambiguous number"),
       });
     });
   }

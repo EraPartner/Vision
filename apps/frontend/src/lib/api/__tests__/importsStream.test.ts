@@ -9,12 +9,18 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { importCSVWithProgress } from "@/lib/api/imports";
+
+function requestUrl(input: RequestInfo | URL): string {
+    if (typeof input === "string") return input;
+    return input instanceof URL ? input.href : input.url;
+}
 import {
     importPortfolioCSVWithProgress,
     type PortfolioCustomConfig,
 } from "@/lib/api/portfolioImports";
 import type { ImportProgress } from "@/types/apiClient";
 import { asAccountId } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 /** Build a Response whose body streams `text` as a single chunk. */
 function sseResponse(text: string): Response {
@@ -96,8 +102,8 @@ describe("importCSVWithProgress SSE handling", () => {
             progressPayload,
             { ...completePayload, phase: "complete", percent: 100 },
         ]);
-        const [url, init] = vi.mocked(fetch).mock.calls[0]!;
-        expect(String(url)).not.toContain("?");
+        const [url, init] = must(vi.mocked(fetch).mock.calls[0]);
+        expect(requestUrl(url)).not.toContain("?");
         expect((init?.body as FormData).get("bank_name")).toBe("test-bank");
     });
 
@@ -113,8 +119,8 @@ describe("importCSVWithProgress SSE handling", () => {
         );
         await result;
 
-        const [url, init] = vi.mocked(fetch).mock.calls[0]!;
-        expect(String(url)).not.toContain("?");
+        const [url, init] = must(vi.mocked(fetch).mock.calls[0]);
+        expect(requestUrl(url)).not.toContain("?");
         const body = init?.body as FormData;
         expect(body.get("adapter_name")).toBe("saved-parser");
         expect(body.get("is_brokerage")).toBe("true");

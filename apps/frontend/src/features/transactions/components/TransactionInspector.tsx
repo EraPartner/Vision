@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import {
     Check,
     Copy,
@@ -294,7 +294,8 @@ function InspectorContent({
                 localAccountId = account.id;
                 localValue = account.name;
             }
-        } else if (editingField === "comment") {
+        } else {
+            // "comment" is the only editable field left.
             payload.comment = trimmed || null;
             localValue = trimmed || "";
         }
@@ -350,7 +351,7 @@ function InspectorContent({
             value: txn.currency,
             editable: true,
             editField: "currency",
-            editValue: txn.currency ?? "",
+            editValue: txn.currency,
             editType: "text",
         },
         {
@@ -539,12 +540,13 @@ function InspectorContent({
                                             variant="ghost"
                                             size="icon-xs"
                                             className="text-label-secondary hover:text-foreground"
-                                            onClick={() =>
-                                                startEdit(
-                                                    field.editField!,
-                                                    field.editValue ?? "",
-                                                )
-                                            }
+                                            onClick={() => {
+                                                if (field.editField)
+                                                    startEdit(
+                                                        field.editField,
+                                                        field.editValue ?? "",
+                                                    );
+                                            }}
                                             aria-label={t("common.editField", {
                                                 field: field.label,
                                             })}
@@ -746,9 +748,9 @@ function InspectorContent({
                                     size="sm"
                                     className="h-auto p-0"
                                 >
-                                    <Link to="/recipients">
+                                    <AppLink to="/recipients">
                                         {t("txPage.inspector.editRule")}
-                                    </Link>
+                                    </AppLink>
                                 </Button>
                             </p>
                         )}

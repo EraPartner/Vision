@@ -7,6 +7,7 @@ import {
 import type { FinancialAnalysisPlan } from "./analysisFinancialDatasets.ts";
 import type { FormulaUnit } from "./analysisFormulaEngine.ts";
 import { nonZeroOr } from "../lib/math.ts";
+import { valueText } from "./valueText.ts";
 
 /** [label, value type, SQL expression, optional "currency" money marker] */
 type CatalogEntry = [string, string, string, string?];
@@ -328,11 +329,13 @@ function fieldExpression(dataset: CatalogDataset, id: string, joined: boolean) {
 export function compileVisualAnalysis(
   plan: VisualAnalysisPlan,
 ): CompiledVisualAnalysis {
-  if (isFinancialAnalysisDataset(plan?.datasetId)) {
-    // Every financial dataset id has a descriptor.
+  if (isFinancialAnalysisDataset(plan.datasetId)) {
     const descriptor = FINANCIAL_ANALYSIS_DATASETS.find(
       (d) => d.id === plan.datasetId,
-    )!;
+    );
+    // Every financial dataset id has a descriptor.
+    if (!descriptor)
+      throw new Error(`Unsupported analysis dataset: ${plan.datasetId}`);
     const fields = [...new Set(plan.fields ?? [])],
       measures = [...new Set(plan.measures ?? [])];
     const available = [...descriptor.fields, ...descriptor.measures];
@@ -363,9 +366,9 @@ export function compileVisualAnalysis(
       },
     };
   }
-  const dataset = own(DATASETS, plan?.datasetId);
+  const dataset = own(DATASETS, plan.datasetId);
   if (!dataset)
-    throw new Error(`Unsupported analysis dataset: ${plan?.datasetId}`);
+    throw new Error(`Unsupported analysis dataset: ${plan.datasetId}`);
   const fields = [...new Set(plan.fields ?? [])];
   const groups = [...new Set(plan.groups ?? [])];
   const measures = [...new Set(plan.measures ?? [])];
@@ -408,7 +411,7 @@ export function compileVisualAnalysis(
         ? {
             kind: "quantity",
             ...(investment
-              ? { instrumentId: String(investment) }
+              ? { instrumentId: valueText(investment) }
               : { instrumentColumn: "investment_id" }),
           }
         : undefined;
@@ -424,6 +427,9 @@ export function compileVisualAnalysis(
     const measure = own(dataset.measures, id);
     if (!measure) throw new Error(`Unsupported analysis measure: ${id}`);
     selected.push(`${measure[2]} AS ${quoteIdent(id)}`);
+    const measureInstrument = (plan.filters ?? []).find(
+      (f) => f.fieldId === "investment_id" && f.operator === "eq",
+    )?.value;
     const currency = (plan.filters ?? []).find(
       (f) => f.fieldId === "currency" && f.operator === "eq",
     )?.value;
@@ -445,19 +451,8 @@ export function compileVisualAnalysis(
             ? {
                 unit: {
                   kind: "quantity",
-                  ...((plan.filters ?? []).find(
-                    (f) => f.fieldId === "investment_id" && f.operator === "eq",
-                  )?.value
-                    ? {
-                        // Guarded by the identical find above.
-                        instrumentId: String(
-                          (plan.filters ?? []).find(
-                            (f) =>
-                              f.fieldId === "investment_id" &&
-                              f.operator === "eq",
-                          )!.value,
-                        ),
-                      }
+                  ...(measureInstrument
+                    ? { instrumentId: valueText(measureInstrument) }
                     : { instrumentColumn: "investment_id" }),
                 },
               }
@@ -495,9 +490,9 @@ export function compileVisualAnalysis(
     }
     values.push(
       filter.operator === "contains"
-        ? `%${filter.value}%`
+        ? `%${valueText(filter.value)}%`
         : filter.operator === "starts-with"
-          ? `${filter.value}%`
+          ? `${valueText(filter.value)}%`
           : filter.value,
     );
     where.push(

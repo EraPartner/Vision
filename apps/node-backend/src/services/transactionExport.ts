@@ -30,6 +30,7 @@ import type { BulkFilterInput } from "./bulkSelection.ts";
 import { EXPORT_JOINS_SQL } from "./transactionJoins.ts";
 import type { ExpressResponse } from "../types/express.ts";
 import type Decimal from "decimal.js";
+import { errorMessage } from "../lib/errors.ts";
 
 /**
  * Query runner for the export pipeline; the default is the pooled `query`,
@@ -85,9 +86,11 @@ function writeWithBackpressure(
 ): Promise<void> {
   // `res.once` is missing on minimal/mocked response objects — in that case
   // there's no drain event to await, so just resolve.
-  const once = res.once;
-  if (res.write(chunk) || typeof once !== "function") return Promise.resolve();
-  return new Promise((resolve) => once.call(res, "drain", () => resolve()));
+  if (res.write(chunk) || typeof res.once !== "function")
+    return Promise.resolve();
+  return new Promise((resolve) => {
+    res.once?.("drain", () => resolve());
+  });
 }
 
 function buildExportChunkSql(
@@ -219,7 +222,7 @@ async function streamExport(
   let cursorId: number | null = null;
   let rowCount = 0;
   try {
-    while (true) {
+    for (;;) {
       const chunk: { rows: unknown[] } = await run(
         buildExportChunkSql(
           where,
@@ -246,9 +249,9 @@ async function streamExport(
   } catch (err) {
     if (res.headersSent) {
       logger.error(`${label} export failed mid-stream`, {
-        error: (err as Error).message,
+        error: errorMessage(err),
       });
-      if (res.destroy) res.destroy(err as Error);
+      if (res.destroy) res.destroy(err instanceof Error ? err : new Error(errorMessage(err)));
       else res.end();
       throw err;
     }
@@ -300,7 +303,7 @@ export async function streamCsvExport(
       if (includeBalance) {
         const key = row.account_id ?? null;
         const next = (runningBalances.get(key) ?? toDecimal(0)).plus(
-          toDecimal(row.amount ?? 0),
+          toDecimal(row.amount),
         );
         runningBalances.set(key, next);
         return `${buildCsvRow({ ...row, running_balance: next.toString() }, { includeBalance })}\n`;

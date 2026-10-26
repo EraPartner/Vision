@@ -31,3 +31,4 @@ export * from "./researchDossiers.ts";
 export * from "./charts.ts";
 export * from "./belgianTax.ts";
 export * from "./reports.ts";
+export * from "./mutations.ts";

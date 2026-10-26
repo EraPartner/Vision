@@ -1,5 +1,6 @@
+import { listGuard } from "@/lib/enumGuard";
 import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useTheme } from "@/stores/hydration/ThemeHydration";
 import type { ThemeMode } from "@/stores/settingsStore";
@@ -10,16 +11,8 @@ import {
     setNativeVibrancy,
     type ElectronMenuAction,
 } from "@/lib/api/electron";
+import { isAppPath } from "@/lib/routes";
 import { registerPendingImportFile } from "@/lib/importHandoff";
-
-/** An app-relative route; `//host` is protocol-relative, not one. */
-function isAppRoute(payload: unknown): payload is string {
-    return (
-        typeof payload === "string" &&
-        payload.startsWith("/") &&
-        !payload.startsWith("//")
-    );
-}
 
 const THEME_MODES: ReadonlyArray<ThemeMode> = [
     "light",
@@ -28,11 +21,7 @@ const THEME_MODES: ReadonlyArray<ThemeMode> = [
     "schedule",
 ];
 
-function isThemeMode(value: unknown): value is ThemeMode {
-    return (
-        typeof value === "string" && (THEME_MODES as string[]).includes(value)
-    );
-}
+const isThemeMode = listGuard(THEME_MODES);
 
 interface ElectronBridgeProps {
     onOpenSettings: (tab: string) => void;
@@ -56,7 +45,7 @@ export function ElectronBridge({
     onOpenSettings,
     onOpenShortcuts,
 }: ElectronBridgeProps) {
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const { toggleSidebar } = useSidebar();
     const { setMode: setThemeMode } = useTheme();
     const { tier: effectsTier } = useVisualEffectsTier();
@@ -98,7 +87,7 @@ export function ElectronBridge({
                 const h = handlersRef.current;
                 switch (action) {
                     case "navigate":
-                        if (isAppRoute(payload)) void h.navigate(payload);
+                        if (isAppPath(payload)) void h.navigate(payload);
                         break;
                     case "open-settings":
                         h.onOpenSettings("general");
@@ -145,7 +134,7 @@ export function ElectronBridge({
                 e.target.closest("[data-dropzone]") !== null;
             e.preventDefault();
             if (handledByDropzone) return;
-            const file = e.dataTransfer?.files?.[0];
+            const file = e.dataTransfer?.files[0];
             if (file && /\.csv$/i.test(file.name)) {
                 registerPendingImportFile(file);
                 void handlersRef.current.navigate("/import");

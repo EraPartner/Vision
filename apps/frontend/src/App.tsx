@@ -4,7 +4,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LazyMotion } from "framer-motion";
 import {
-    Navigate,
     Route,
     RouterProvider,
     Routes,
@@ -36,6 +35,8 @@ import { useSettingsStore } from "@/stores/settingsStore";
 
 // Lazy-loaded pages for code splitting. Loaders live in lib/routePreload so
 // sidebar hover can warm the same chunks the router requests on click.
+import { AppNavigate } from "@/lib/appNavigation";
+import type { AppPathname } from "@/lib/routes";
 import { appRouteManifest, legacyRouteRedirects } from "@/lib/routePreload";
 import { loadMotionFeatures } from "@/lib/motionFeatures";
 import { UnsavedChangesProvider } from "@/contexts/UnsavedChangesContext";
@@ -48,9 +49,9 @@ const lazyAppRoutes = appRouteManifest.map(({ path, loader, admin }) => ({
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 /** Redirects a retired page path to its new home, keeping `?period=` and co. */
-function LegacyRedirect({ to }: { to: string }) {
+function LegacyRedirect({ to }: { to: AppPathname }) {
     const { search } = useLocation();
-    return <Navigate to={{ pathname: to, search }} replace />;
+    return <AppNavigate to={{ pathname: to, search }} replace />;
 }
 
 // Devtools (API Inspector). Lazily loaded as a separate chunk that is only

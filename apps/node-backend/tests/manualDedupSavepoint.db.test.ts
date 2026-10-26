@@ -32,6 +32,11 @@ import {
   asTransactionId,
 } from "@vision/types/brands";
 import type { RecipientId } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
+import { valueAt } from "./helpers/responseBody.ts";
+
+/** A result row whose columns the test reads without a fixed shape. */
+type DbRow = Record<string, unknown>;
 
 vi.mock("../src/services/plannedMatchService.ts", () => ({
   autoLinkTransactions: vi.fn().mockResolvedValue({
@@ -55,17 +60,17 @@ const hiddenTable = "manual_transaction_dedup_claims_savepoint_test";
 
 /** The synthetic recipient every persisted fixture row needs (NOT NULL). */
 async function fixtureRecipientId(): Promise<RecipientId> {
-  const pool = getTestPool()!;
-  const existing = await pool.query(
+  const pool = must(getTestPool(), "getTestPool()");
+  const existing = await pool.query<{ id: RecipientId }>(
     "SELECT id FROM recipients WHERE normalized_name = 'mixed representation recipient'",
   );
   if (existing.rows[0]) return asRecipientId(existing.rows[0].id);
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<{ id: RecipientId }>(
     `INSERT INTO recipients (name, normalized_name)
      VALUES ('Mixed Representation Recipient', 'mixed representation recipient')
      RETURNING id`,
   );
-  return asRecipientId(rows[0].id);
+  return asRecipientId(must(rows[0], "rows[0]").id);
 }
 
 describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
@@ -84,7 +89,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
   });
 
   afterEach(async () => {
-    const pool = getTestPool()!;
+    const pool = must(getTestPool(), "getTestPool()");
     await pool.query(
       `DELETE FROM manual_transaction_dedup_claims m
         USING transactions t
@@ -148,8 +153,8 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
   });
 
   it("serializes concurrent canonical-account creates", async () => {
-    const pool = getTestPool()!;
-    const { rows: recipientRows } = await pool.query(
+    const pool = must(getTestPool(), "getTestPool()");
+    const { rows: recipientRows } = await pool.query<{ id: RecipientId }>(
       `INSERT INTO recipients (name, normalized_name)
        VALUES ('Mixed Representation Recipient', 'mixed representation recipient')
        RETURNING id`,
@@ -159,7 +164,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
     );
     const common = {
       transaction_date: "1901-01-02",
-      recipient_id: asRecipientId(recipientRows[0].id),
+      recipient_id: asRecipientId(must(recipientRows[0], "recipientRows[0]").id),
       amount: -987653.21,
       memo: "mixed representation lock probe",
       currency: asCurrencyCode("EUR"),
@@ -180,16 +185,14 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
       1,
     );
     const rejected = results.find(({ status }) => status === "rejected");
-    expect(rejected).toMatchObject({
-      status: "rejected",
-      reason: expect.objectContaining({ code: "CONFLICT" }),
-    });
-    const { rows } = await pool.query(
+    expect(rejected).toMatchObject({ status: "rejected" });
+    expect(valueAt(rejected, "reason", "code")).toBe("CONFLICT");
+    const { rows } = await pool.query<DbRow>(
       `SELECT count(*)::integer AS count
          FROM transactions
         WHERE memo = 'MIXED REPRESENTATION LOCK PROBE'`,
     );
-    expect(rows[0].count).toBe(1);
+    expect(must(rows[0], "rows[0]").count).toBe(1);
   });
 
   it("validates claim fields after edits and separates currency identities", async () => {
@@ -234,7 +237,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
       currency: asCurrencyCode("USD"),
     };
     const first = await transactionService.createManualTransaction(input);
-    await getTestPool()!.query(
+    await must(getTestPool(), "getTestPool()").query(
       "UPDATE manual_transaction_dedup_claims SET deduplication_hash = $1 WHERE transaction_id = $2",
       // A well-formed hash from an older identity version, not the current one.
       ["0".repeat(64), first.transaction.id],
@@ -293,7 +296,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
       await expect(
         transactionService.createManualTransaction(input),
       ).rejects.toMatchObject({ code: "CONFLICT" });
-      await getTestPool()!.query(
+      await must(getTestPool(), "getTestPool()").query(
         "DELETE FROM manual_transaction_dedup_claims WHERE transaction_id = $1",
         [first.transaction.id],
       );
@@ -303,11 +306,11 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
           memo: "MIXED REPRESENTATION LOCK PROBE",
         }),
       ).rejects.toMatchObject({ code: "CONFLICT" });
-      const { rows } = await getTestPool()!.query(
+      const { rows } = await must(getTestPool(), "getTestPool()").query<DbRow>(
         "SELECT count(*)::integer AS count FROM transactions WHERE account_id = $1",
         [accountId],
       );
-      expect(rows[0].count).toBe(1);
+      expect(must(rows[0], "rows[0]").count).toBe(1);
     },
   );
 
@@ -343,7 +346,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
       expect(
         results.filter(({ status }) => status === "rejected"),
       ).toMatchObject([{ reason: { code: "CONFLICT" } }]);
-      const { rows } = await getTestPool()!.query(
+      const { rows } = await must(getTestPool(), "getTestPool()").query<DbRow>(
         "SELECT amount::text AS amount FROM transactions WHERE account_id = $1",
         [accountId],
       );
@@ -352,7 +355,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
   );
 
   it("ignores dangling and inactive claims, re-claims on re-add, and matches legacy labels", async () => {
-    const pool = getTestPool()!;
+    const pool = must(getTestPool(), "getTestPool()");
     const accountId = await accountRepository.resolveOrCreateByName(
       "Mixed Representation Account",
     );
@@ -376,19 +379,22 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
     const first = await transactionService.createManualTransaction(input);
     const claimFor = async () =>
       (
-        await pool.query(
+        await pool.query<DbRow>(
           `SELECT transaction_id FROM manual_transaction_dedup_claims
             WHERE deduplication_hash = (SELECT deduplication_hash
               FROM manual_transaction_dedup_claims WHERE transaction_id = $1)`,
           [first.transaction.id],
         )
       ).rows;
-    const [{ deduplication_hash: hash }] = (
-      await pool.query(
-        "SELECT deduplication_hash FROM manual_transaction_dedup_claims WHERE transaction_id = $1",
-        [first.transaction.id],
-      )
-    ).rows;
+    const { deduplication_hash: hash } = must(
+      (
+        await pool.query<DbRow>(
+          "SELECT deduplication_hash FROM manual_transaction_dedup_claims WHERE transaction_id = $1",
+          [first.transaction.id],
+        )
+      ).rows[0],
+      "dedup claim row",
+    );
     expect(await claimFor()).toEqual([{ transaction_id: first.transaction.id }]);
 
     // The live claim blocks; a legacy label without an account id matches too.
@@ -405,7 +411,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
     ).resolves.toMatchObject({ isDuplicate: true });
 
     // An inactive transaction does not block.
-    await pool.query("UPDATE transactions SET is_active = false WHERE id = $1", [
+    await pool.query<DbRow>("UPDATE transactions SET is_active = false WHERE id = $1", [
       first.transaction.id,
     ]);
     await expect(isManualDuplicate(identity)).resolves.toEqual({
@@ -415,7 +421,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
 
     // A deleted transaction leaves a dangling claim (ON DELETE SET NULL) that
     // does not block; re-adding re-claims the same hash row.
-    await pool.query("DELETE FROM transactions WHERE id = $1", [
+    await pool.query<DbRow>("DELETE FROM transactions WHERE id = $1", [
       first.transaction.id,
     ]);
     await expect(isManualDuplicate(identity)).resolves.toEqual({
@@ -423,7 +429,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
       existingTransactionId: null,
     });
     const second = await transactionService.createManualTransaction(input);
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<DbRow>(
       "SELECT transaction_id FROM manual_transaction_dedup_claims WHERE deduplication_hash = $1",
       [hash],
     );

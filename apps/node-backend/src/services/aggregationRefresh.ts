@@ -49,14 +49,14 @@ export async function refreshAggregations() {
  */
 export function clearForecastMcCaches() {
   return Promise.all([
-    mcCacheRepo.clearAll().catch((err) =>
+    mcCacheRepo.clearAll().catch((err: unknown) =>
       logger.warn("Forecast MC cache invalidation failed", {
-        error: err.message,
+        error: err instanceof Error ? err.message : undefined,
       }),
     ),
-    mcRollingCacheRepo.clearAll().catch((err) =>
+    mcRollingCacheRepo.clearAll().catch((err: unknown) =>
       logger.warn("Rolling forecast MC cache invalidation failed", {
-        error: err.message,
+        error: err instanceof Error ? err.message : undefined,
       }),
     ),
   ]);

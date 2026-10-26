@@ -47,6 +47,7 @@ import {
 } from "./rateFetcher.ts";
 import { settingsRepository } from "../../repositories/settingsRepository.ts";
 import type { HistoricalRateIndex, RateTable } from "../../types/rows.ts";
+import { stringifyCell } from "../cellText.ts";
 
 /** Every stored rate of the given currencies, with calendar-day dates. */
 function selectHistoricalRates(currencies: readonly string[]) {
@@ -344,7 +345,12 @@ function toDateColumn(value: unknown): DateColumn {
   if (value === null || value === undefined || value instanceof Date) {
     return value;
   }
-  return typeof value === "string" ? value : String(value);
+  if (typeof value === "string") return value;
+  // Other primitives stringify as normalizeDateInput would; an object's default
+  // stringification ("[object Object]") never matches a date, so it maps to null.
+  return typeof value === "object" || typeof value === "function"
+    ? null
+    : stringifyCell(value);
 }
 
 /**
@@ -358,7 +364,7 @@ function toDateColumn(value: unknown): DateColumn {
  * `dateField`); each result row keeps the caller's own row type.
  */
 export async function convertRowsToEur<T extends ConvertibleRow>(
-  rows: readonly T[],
+  rows: readonly T[] | null | undefined,
   targetCurrency = "EUR",
   options: ConvertRowsOptions | null = {},
 ): Promise<ConvertedRow<T>[]> {
@@ -452,9 +458,9 @@ export async function convertRowsToEur<T extends ConvertibleRow>(
               undefined
           )
             continue;
-          if (!datesByUnindexedCurrency.has(currency))
-            datesByUnindexedCurrency.set(currency, []);
-          datesByUnindexedCurrency.get(currency)!.push(rowDate);
+          const pending = datesByUnindexedCurrency.get(currency);
+          if (pending) pending.push(rowDate);
+          else datesByUnindexedCurrency.set(currency, [rowDate]);
         }
       }
 
@@ -611,7 +617,7 @@ async function repairHistoricalRatesFromFullHistory(
   const currencies = [
     ...new Set(
       pairs.map((p) =>
-        String(p.currency_code || "")
+        (p.currency_code || "")
           .toUpperCase()
           .trim(),
       ),
@@ -630,7 +636,7 @@ async function repairHistoricalRatesFromFullHistory(
 
   let repaired = 0;
   for (const pair of pairs) {
-    const code = String(pair.currency_code || "")
+    const code = (pair.currency_code || "")
       .toUpperCase()
       .trim();
     const dateStr = normalizeDateInput(pair.rate_date);
@@ -733,7 +739,7 @@ export async function backfillPortfolioHistoricalRates() {
 
   const resolvedPairs: Array<{ currencyCode: string; rateDate: string }> = [];
   for (const row of missingRows) {
-    const currencyCode = String(row.currency_code || "")
+    const currencyCode = (row.currency_code || "")
       .toUpperCase()
       .trim();
     const rateDate = normalizeDateInput(row.rate_date);
@@ -764,7 +770,7 @@ export async function backfillPortfolioHistoricalRates() {
     );
     const present = new Set(
       existsRows.map(
-        (r) => `${r.currency_code}|${String(r.rate_date).slice(0, 10)}`,
+        (r) => `${r.currency_code}|${r.rate_date.slice(0, 10)}`,
       ),
     );
     for (const p of resolvedPairs) {

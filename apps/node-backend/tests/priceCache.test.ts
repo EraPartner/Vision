@@ -31,6 +31,7 @@ import {
 } from "../src/services/prices/priceCache.ts";
 import { ValidationError } from "../src/middleware/errorHandler.ts";
 import { pgLocalDate } from "./helpers/portfolioPgRows.ts";
+import { must } from "./helpers/must.ts";
 
 /** `query` as these tests drive it: SQL text in, a bare `{ rows }` result out. */
 const query = vi.mocked(rawQuery) as unknown as Mock<
@@ -146,7 +147,7 @@ describe("normalizeHistoryPoints", () => {
       { timestampMs: Date.UTC(2025, 3, 1, 18), price: 110 }, // same date
     ]);
     expect(r).toHaveLength(1);
-    expect(r[0]!.price).toBe(110);
+    expect(must(r[0], "r[0]").price).toBe(110);
   });
 
   it("sorts result by date ascending", () => {
@@ -373,7 +374,7 @@ describe("saveHistoricalPointsToDatabase", () => {
       ),
     ).rejects.toMatchObject({
       code: "23503",
-      context: expect.stringContaining("orphan"),
+      context: expect.stringContaining("orphan") as unknown,
     });
   });
 
@@ -403,7 +404,7 @@ describe("loadLatestHistoricalPointByInvestmentIds", () => {
 
     const byId = await loadLatestHistoricalPointByInvestmentIds([7, 7, 9]);
 
-    expect(query.mock.calls[0]![1]).toEqual([[7, 9]]);
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([[7, 9]]);
     expect(byId.get(7)).toMatchObject({ price: 12.5 });
   });
 

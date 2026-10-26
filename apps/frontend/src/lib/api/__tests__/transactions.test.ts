@@ -146,9 +146,24 @@ describe("transactions API client", () => {
 
     it("updateTransaction PATCHes", async () => {
         server.use(
-            http.patch(`${API_BASE}/api/transactions/10`, () => ok({ id: 10 })),
+            http.patch(`${API_BASE}/api/transactions/10`, () =>
+                ok({ ...TRANSACTION_STUB, id: 10 }),
+            ),
         );
         expect((await updateTransaction(asTransactionId(10), {})).id).toBe(10);
+    });
+
+    it("updateTransaction rejects a row whose amount is a string", async () => {
+        server.use(
+            http.patch(`${API_BASE}/api/transactions/10`, () =>
+                ok({ ...TRANSACTION_STUB, id: 10, amount: "12.50" }),
+            ),
+        );
+        const error = await updateTransaction(asTransactionId(10), {}).catch(
+            (e: unknown) => e,
+        );
+        expect(error).toBeInstanceOf(ApiContractError);
+        expect((error as ApiContractError).issues[0]).toMatch(/^amount:/);
     });
 
     it("deleteTransaction resolves on void", async () => {

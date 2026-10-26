@@ -23,7 +23,7 @@ import path from 'path';
 export function useTempCSV(prefix: string): (content: string) => string {
   const files: string[] = [];
   afterEach(() => {
-    while (files.length) {
+    while (files.length > 0) {
       const p = files.pop() as string;
       try {
         if (fs.existsSync(p)) fs.unlinkSync(p);

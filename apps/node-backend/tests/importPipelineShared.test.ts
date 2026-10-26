@@ -12,6 +12,7 @@ import {
   rawDataForCsvRecord,
   parseCustomAmount,
 } from "../src/services/importPipeline/adapters/_shared.ts";
+import { must } from "./helpers/must.ts";
 
 describe("custom numeric grammar", () => {
   it.each([
@@ -51,7 +52,7 @@ describe("literal CSV records", () => {
       skip_empty_lines: true,
     });
     expect(records[0]).toEqual({ A: "1", B: 'hello; "friend"\nnext' });
-    expect(rawDataForCsvRecord(records[0]!)).toBe(
+    expect(rawDataForCsvRecord(must(records[0], "records[0]"))).toBe(
       '1;"hello; ""friend""\nnext"',
     );
   });
@@ -85,8 +86,8 @@ describe("splitDelimitedRecord", () => {
   it("tolerates a stray quote mid-field (relax_quotes)", () => {
     const parts = splitDelimitedRecord('a;5" screw;c');
     expect(parts).toHaveLength(3);
-    expect(parts![0]).toBe("a");
-    expect(parts![2]).toBe("c");
+    expect(must(parts, "parts")[0]).toBe("a");
+    expect(must(parts, "parts")[2]).toBe("c");
   });
 });
 
@@ -166,8 +167,8 @@ describe("splitCsvLines", () => {
 describe("readTextWithEncodingFallback", () => {
   const files: string[] = [];
   afterEach(() => {
-    while (files.length) {
-      const p = files.pop()!;
+    while (files.length > 0) {
+      const p = must(files.pop(), "files.pop()");
       try {
         if (fs.existsSync(p)) fs.unlinkSync(p);
       } catch {

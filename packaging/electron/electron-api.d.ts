@@ -232,15 +232,13 @@ export interface ElectronRecoveryBridge {
   onBackendRestored: (callback: () => void) => () => void;
 }
 
-export interface ElectronBridges {
-  electronUpdater?: ElectronUpdaterBridge;
-  electronBackup?: ElectronBackupBridge;
-  electronServices?: ElectronServicesBridge;
-  electronAPI?: ElectronApiBridge;
-  electronRecovery?: ElectronRecoveryBridge;
-  electronReports?: ElectronReportsBridge;
-}
-
 declare global {
-  interface Window extends ElectronBridges {}
+  interface Window {
+    electronUpdater?: ElectronUpdaterBridge;
+    electronBackup?: ElectronBackupBridge;
+    electronServices?: ElectronServicesBridge;
+    electronAPI?: ElectronApiBridge;
+    electronRecovery?: ElectronRecoveryBridge;
+    electronReports?: ElectronReportsBridge;
+  }
 }

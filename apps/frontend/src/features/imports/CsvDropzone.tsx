@@ -90,7 +90,7 @@ export function CsvDropzone({
                 onDrop={(e) => {
                     e.preventDefault();
                     setDragOver(false);
-                    accept(e.dataTransfer.files?.[0] ?? null);
+                    accept(e.dataTransfer.files[0] ?? null);
                 }}
                 onDragOver={(e) => {
                     e.preventDefault();

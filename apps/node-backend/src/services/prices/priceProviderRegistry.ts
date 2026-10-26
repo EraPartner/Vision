@@ -5,7 +5,10 @@
  * and the Kinesis-specific MAD spike detector.
  */
 
+import { z } from 'zod';
 import { logger } from '../../config/logger.ts';
+import { parseOr } from '../../lib/looseJson.ts';
+import { isRecord } from '../../lib/typeGuards.ts';
 import { UpstreamError } from '../../middleware/errorHandler.ts';
 import {
   KINESIS_BASE_URL,
@@ -13,14 +16,20 @@ import {
   KINESIS_DEFAULT_FROM_DATE,
   getKinesisAssetConfig,
 } from '../../config/kinesisConfig.ts';
-import { toNumber, isValidPrice } from './priceCache.ts';
+import { toNumber, isValidPrice, readonlyArrayOrEmpty } from './priceCache.ts';
 import { madReturnStats, isRobustNeedle } from '../../lib/math.ts';
 import {
     convertCodeAtLatestRates,
     loadLatestRatesToEur,
 } from '../currency/latestRateConversion.ts';
 import { assertPublicHttpUrl } from '../../lib/urlSafety.ts';
-import { getYahooClient } from './yahooClient.ts';
+import {
+  getYahooClient,
+  parseYahooPayload,
+  yahooChartResultSchema,
+  yahooQuoteSchema,
+} from './yahooClient.ts';
+import { stringifyCell } from '../cellText.ts';
 import { forEachConcurrent } from '../../lib/concurrency.ts';
 import type { InvestmentRow, PricePoint } from '../../types/rows.ts';
 import { storedCurrencyCode } from '../../lib/currencyCode.ts';
@@ -65,15 +74,31 @@ export interface KinesisConfig {
   needsUsdToEur: boolean;
 }
 
-/** One entry of Binance's `/ticker/price` array. */
-interface BinanceTickerPrice {
-  symbol?: string;
-  price?: string;
-}
+/**
+ * Binance's `/ticker/price` array, parsed once per response: a row that is not
+ * an object is skipped, a symbol or price of the wrong type reads as absent.
+ */
+const binanceTickerSchema = z.array(
+  z
+    .looseObject({
+      symbol: z.string().optional().catch(undefined),
+      price: z
+        .union([z.string(), z.number().transform(String)])
+        .optional()
+        .catch(undefined),
+    })
+    .nullable()
+    .catch(null),
+);
 
 /** The `message` of a thrown value, when it has one (as `err?.message` read). */
 function _errorMessage(err: unknown): unknown {
   return typeof err === 'object' && err !== null && 'message' in err ? err.message : undefined;
+}
+
+/** {@link _errorMessage} as log text ("undefined" when the value has none). */
+function _errorText(err: unknown): string {
+  return stringifyCell(_errorMessage(err));
 }
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
@@ -194,7 +219,10 @@ const CUSTOM_FETCH_MAX_BYTES = 5 * 1024 * 1024; // 5 MB — provider JSON is tin
  *
  * @param provider - label for the error message
  */
-function _assertResponseWithinCap(res: Response, provider: string): void {
+function _assertResponseWithinCap(
+  res: { headers?: { get?: (name: string) => string | null } | undefined },
+  provider: string,
+): void {
   const declaredLength = Number(res.headers?.get?.('content-length') || 0);
   if (declaredLength > CUSTOM_FETCH_MAX_BYTES) {
     throw new UpstreamError(`${provider} response too large: ${declaredLength} bytes`);
@@ -213,7 +241,7 @@ function _assertResponseWithinCap(res: Response, provider: string): void {
  * @returns parsed provider JSON — shape is user-configured
  */
 async function _fetchJson(url: string): Promise<unknown> {
-  let current = String(url);
+  let current = url;
   for (let hop = 0; hop <= CUSTOM_FETCH_MAX_REDIRECTS; hop += 1) {
     await assertPublicHttpUrl(current); // throws BlockedUrlError on private/loopback/non-http
     const res = await fetch(current, {
@@ -422,12 +450,12 @@ function _parseKinesisTrendlinePoints(rawPoints: unknown): PricePoint[] {
  */
 async function _fetchYahooLatestClose(symbol: string): Promise<number | undefined> {
   const yahooFinance = await getYahooClient();
-  const chart = await yahooFinance.chart(symbol, {
+  const payload: unknown = await yahooFinance.chart(symbol, {
     period1: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
     interval: '1d',
     includePrePost: false,
   });
-  const quotes = chart?.quotes ?? [];
+  const quotes = parseYahooPayload(yahooChartResultSchema, payload)?.quotes ?? [];
 
   for (let i = quotes.length - 1; i >= 0; i -= 1) {
     const close = toNumber(quotes[i]?.close);
@@ -449,15 +477,16 @@ export function getHistoricalPriceAt(
   points: readonly PricePoint[] | null | undefined,
   timestampMs: number,
 ): number | undefined {
-  if (!Array.isArray(points) || points.length === 0) return undefined;
+  const series = readonlyArrayOrEmpty(points);
+  if (series.length === 0) return undefined;
 
   let left = 0;
-  let right = points.length - 1;
+  let right = series.length - 1;
   let best: PricePoint | undefined;
 
   while (left <= right) {
     const mid = Math.floor((left + right) / 2);
-    const p = points[mid];
+    const p = series[mid];
     if (!p) break;
     if (p.timestampMs <= timestampMs) {
       best = p;
@@ -494,11 +523,12 @@ export const PROVIDERS = {
       });
       if (!res.ok) throw new UpstreamError(`Binance API error: ${res.status}`);
       _assertResponseWithinCap(res, 'Binance');
-      const data = (await res.json()) as BinanceTickerPrice[];
+      const data = parseOr(binanceTickerSchema, await res.json(), null);
+      if (!data) throw new UpstreamError('Binance returned an unexpected payload');
 
       const priceMap: Record<string, number> = {};
       for (const item of data) {
-        if (!item.symbol || !item.price) continue;
+        if (!item?.symbol || !item.price) continue;
         const parsed = parseFloat(item.price);
         if (Number.isFinite(parsed) && parsed > 0) priceMap[item.symbol] = parsed;
       }
@@ -513,7 +543,7 @@ export const PROVIDERS = {
         }
       }
     } catch (err) {
-      logger.warn(`Binance fetch failed: ${_errorMessage(err)}`);
+      logger.warn(`Binance fetch failed: ${_errorText(err)}`);
     }
     return prices;
   },
@@ -536,10 +566,11 @@ export const PROVIDERS = {
       // separate `quote()` round-trips into one call (a 30-holding portfolio
       // went from ~30 outbound requests to 1). Normalise to an array so a
       // single-symbol response (object) is handled the same way.
-      const raw = await yahooFinance.quote(symbols);
-      const quotes = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+      const raw: unknown = await yahooFinance.quote(symbols);
+      const entries: unknown[] = Array.isArray(raw) ? raw : (raw ? [raw] : []);
 
-      for (const quote of quotes) {
+      for (const entry of entries) {
+        const quote = parseYahooPayload(yahooQuoteSchema, entry);
         const symbol = (quote?.symbol || '').toUpperCase();
         if (!symbol) continue;
         const livePrice = toNumber(quote?.regularMarketPrice);
@@ -614,10 +645,10 @@ export const PROVIDERS = {
             const historyData = await _fetchJson(historyConfig.historyUrl);
             price = _deriveLatestPriceFromHistoryPayload(historyData, historyConfig);
           } catch (historyErr) {
-            logger.warn(`Custom price fetch error for investment ${inv.id}: ${_errorMessage(historyErr)}`);
+            logger.warn(`Custom price fetch error for investment ${inv.id}: ${_errorText(historyErr)}`);
           }
         } else {
-          logger.warn(`Custom price fetch error for investment ${inv.id}: ${_errorMessage(err)}`);
+          logger.warn(`Custom price fetch error for investment ${inv.id}: ${_errorText(err)}`);
         }
       }
 
@@ -654,8 +685,8 @@ export const PROVIDERS = {
         }
 
         _assertResponseWithinCap(res, 'Kinesis');
-        const data = (await res.json()) as Record<string, unknown> | null;
-        const rawPoints = data?.[symbol];
+        const data: unknown = await res.json();
+        const rawPoints = isRecord(data) ? data[symbol] : undefined;
 
         if (!Array.isArray(rawPoints) || rawPoints.length === 0) {
           logger.warn(`Kinesis: no data returned for ${symbol}`);
@@ -695,7 +726,7 @@ export const PROVIDERS = {
           }
         }
       } catch (err) {
-        logger.warn(`Kinesis fetch failed for ${symbol}: ${_errorMessage(err)}`);
+        logger.warn(`Kinesis fetch failed for ${symbol}: ${_errorText(err)}`);
       }
     });
     return prices;

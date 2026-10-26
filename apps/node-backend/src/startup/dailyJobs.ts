@@ -1,5 +1,6 @@
 import settingsRepository from "../repositories/settingsRepository.ts";
 import { logger } from "../config/logger.ts";
+import { errorMessage } from "../lib/errors.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RETRY_MS = 60 * 60 * 1000;
@@ -51,7 +52,7 @@ export function createDailyJob(
     } catch (err) {
       retryAfter = now() + RETRY_MS;
       logger.error(`Daily job ${name} failed`, {
-        error: (err as Error).message,
+        error: errorMessage(err),
       });
     } finally {
       running = false;

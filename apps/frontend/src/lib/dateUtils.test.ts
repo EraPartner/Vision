@@ -12,6 +12,7 @@ import {
     toYmd,
     weekStartsOnFromSetting,
 } from "./dateUtils";
+import { must } from "@/test/must";
 
 describe("dateUtils app settings helpers", () => {
     test("maps supported app date formats", () => {
@@ -34,7 +35,7 @@ describe("dateUtils app settings helpers", () => {
         expect(parsed).toBeDefined();
         expect(parsed?.getHours()).toBe(0);
         expect(parsed?.getMinutes()).toBe(0);
-        expect(toYmd(parsed!)).toBe("2024-02-29");
+        expect(toYmd(must(parsed))).toBe("2024-02-29");
     });
 
     test("rejects rollover, mismatched formats, missing padding, and extra text", () => {

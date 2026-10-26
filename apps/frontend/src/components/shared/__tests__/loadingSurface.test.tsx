@@ -8,6 +8,7 @@ import { PageLoader } from "@/components/shared/PageLoader";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { ResearchAnalystTab } from "@/features/research/ResearchAnalystTab";
 import { renderWithApp } from "@/test/renderWithApp";
+import { must } from "@/test/must";
 
 /**
  * The loading-surface contract (WP: skeleton a11y):
@@ -22,7 +23,7 @@ describe("loading surface a11y", () => {
         const { container, rerender } = render(
             <Skeleton className="h-4 w-full" />,
         );
-        const skeleton = container.firstElementChild!;
+        const skeleton = must(container.firstElementChild);
         expect(skeleton).toHaveClass("overflow-hidden");
         expect(skeleton).not.toHaveClass("animate-shimmer");
         const skeletonSweep = skeleton.querySelector(".animate-shimmer");
@@ -30,7 +31,7 @@ describe("loading surface a11y", () => {
         expect(skeletonSweep).toHaveAttribute("aria-hidden", "true");
 
         rerender(<ChartSkeleton />);
-        const chart = container.firstElementChild!;
+        const chart = must(container.firstElementChild);
         expect(chart).toHaveClass("overflow-hidden");
         expect(chart.querySelector(".animate-shimmer")).toHaveClass(
             "absolute",
@@ -38,7 +39,7 @@ describe("loading surface a11y", () => {
         );
 
         rerender(<PageLoader />);
-        const routeLoader = container.firstElementChild!;
+        const routeLoader = must(container.firstElementChild);
         expect(routeLoader).toHaveClass("overflow-hidden");
         expect(routeLoader.querySelector(".animate-shimmer")).toHaveClass(
             "motion-reduce:hidden",
@@ -50,7 +51,7 @@ describe("loading surface a11y", () => {
         const { container } = render(<Skeleton className="h-4 w-full" />);
 
         // Assert — the bone itself never reaches a screen reader
-        const bone = container.firstElementChild!;
+        const bone = must(container.firstElementChild);
         expect(bone).toHaveAttribute("aria-hidden", "true");
         expect(bone).not.toHaveAttribute("role");
     });

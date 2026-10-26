@@ -18,6 +18,7 @@ import {
     transactionRow,
     accountListItem,
 } from "@/test/msw/rowFixtures";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -217,7 +218,7 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
             accounts: [usdAccount],
             rows: [
                 {
-                    ...LEDGER_ROWS[0]!,
+                    ...must(LEDGER_ROWS[0]),
                     id: 41,
                     recipient_name: "Legacy null row",
                     currency: null as never,
@@ -225,7 +226,7 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
                     running_balance: 25,
                 },
                 {
-                    ...LEDGER_ROWS[1]!,
+                    ...must(LEDGER_ROWS[1]),
                     id: 42,
                     recipient_name: "Dollar row",
                     currency: "USD",
@@ -288,8 +289,8 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
             (p) => p.get("include_balance") === "true",
         );
         expect(ledgerCall).toBeDefined();
-        expect(ledgerCall!.get("account_id")).toBe("1");
-        expect(ledgerCall!.get("sort_dir")).toBe("desc");
+        expect(must(ledgerCall).get("account_id")).toBe("1");
+        expect(must(ledgerCall).get("sort_dir")).toBe("desc");
     });
 
     it("shows the Edit / Merge / Close actions in the header menu", async () => {

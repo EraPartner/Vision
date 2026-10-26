@@ -8,7 +8,7 @@
  * ADR-026 envelope middleware and the centralized error handler are all on the
  * tested path. Repositories/services are still mocked.
  */
-import { bodyAt } from "../helpers/responseBody.ts";
+import { bodyAt, valueAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockTxConnection } from "../helpers/repoMocks.ts";
 import {
@@ -37,7 +37,7 @@ vi.mock("../../src/config/logger.ts", () => ({
 
 vi.mock("../../src/services/deduplication.ts", () => ({
   ...mockDeduplication(),
-  lockManualTransactionIdentity: vi.fn(async () => undefined),
+  lockManualTransactionIdentity: vi.fn(() => Promise.resolve(undefined)),
 }));
 
 vi.mock("../../src/services/materializedViewService.ts", () =>
@@ -51,7 +51,7 @@ vi.mock("../../src/services/currency/currencyConversionService.ts", () =>
 vi.mock("../../src/database/connection.ts", () => mockTxConnection());
 
 vi.mock("../../src/repositories/accountRepository.ts", () => {
-  const accountRepository = { findActiveId: vi.fn(async () => 1) };
+  const accountRepository = { findActiveId: vi.fn(() => Promise.resolve(1)) };
   return { accountRepository, default: accountRepository };
 });
 
@@ -65,7 +65,7 @@ vi.mock("../../src/services/attachmentService.ts", () =>
 
 vi.mock("../../src/services/transferReconciliationService.ts", () => ({
   scheduleReconcile: vi.fn(),
-  getTransferSuggestions: vi.fn(async () => []),
+  getTransferSuggestions: vi.fn(() => Promise.resolve([])),
   markTransfer: vi.fn(),
   unmarkTransfer: vi.fn(),
 }));
@@ -86,7 +86,10 @@ import type {
 } from "../../src/services/currency/currencyConversionService.ts";
 import { attachmentRepository as rawAttachmentRepository } from "../../src/services/attachmentRecordService.ts";
 import { removeAttachmentFile } from "../../src/services/attachmentService.ts";
+import { must } from "../helpers/must.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
+import { anyInstance } from "../helpers/matchers.ts";
 const transactionRepository = vi.mocked(rawTransactionRepository);
 const dbQuery = vi.mocked(rawDbQuery);
 const isManualDuplicate = vi.mocked(rawIsManualDuplicate);
@@ -129,7 +132,7 @@ describe("Transaction Routes", () => {
       isDuplicate: false,
     } as ManualDuplicateResult);
     convertRowsToEur.mockImplementation(
-      async (rows) => rows as ConvertedRow[],
+      (rows) => Promise.resolve(rows as ConvertedRow[]),
     );
     attachmentRepository.listPathsByTransactionIds.mockResolvedValue([]);
   });
@@ -147,7 +150,7 @@ describe("Transaction Routes", () => {
         okEnvelope({
           items: [],
           total: 0,
-          limit: expect.any(Number),
+          limit: anyInstance(Number),
           offset: 0,
           links: [],
         }),
@@ -198,7 +201,7 @@ describe("Transaction Routes", () => {
       await api.get("/api/transactions/?uncategorised=true").expect(200);
 
       expect(
-        transactionRepository.getUncategorisedWithCount,
+        mockOf(transactionRepository, "getUncategorisedWithCount"),
       ).toHaveBeenCalled();
     });
 
@@ -220,7 +223,7 @@ describe("Transaction Routes", () => {
         .get("/api/transactions/?transaction_id=42")
         .expect(200);
 
-      expect(transactionRepository.getAllWithCount).toHaveBeenCalledWith(
+      expect(mockOf(transactionRepository, "getAllWithCount")).toHaveBeenCalledWith(
         expect.objectContaining({ transactionId: 42 }),
       );
       expect(bodyAt(res, "data", "items")).toHaveLength(1);
@@ -272,7 +275,7 @@ describe("Transaction Routes", () => {
         .get("/api/transactions/?include_balance=true&account_id=3")
         .expect(200);
 
-      expect(transactionRepository.getAllWithCount).toHaveBeenCalledWith(
+      expect(mockOf(transactionRepository, "getAllWithCount")).toHaveBeenCalledWith(
         expect.objectContaining({ includeBalance: true, accountId: 3 }),
       );
       expect(bodyAt(res, "data", "items", 0, "running_balance")).toBe(974.5);
@@ -294,7 +297,7 @@ describe("Transaction Routes", () => {
 
       const res = await api.get("/api/transactions/").expect(200);
 
-      expect(transactionRepository.getAllWithCount).toHaveBeenCalledWith(
+      expect(mockOf(transactionRepository, "getAllWithCount")).toHaveBeenCalledWith(
         expect.objectContaining({ includeBalance: false }),
       );
       const firstItem = bodyAt(res, "data", "items", 0);
@@ -315,7 +318,7 @@ describe("Transaction Routes", () => {
           message: "account_id must be a positive integer",
         }),
       );
-      expect(transactionRepository.getAllWithCount).not.toHaveBeenCalled();
+      expect(mockOf(transactionRepository, "getAllWithCount")).not.toHaveBeenCalled();
     });
   });
 
@@ -356,7 +359,7 @@ describe("Transaction Routes", () => {
       const res = await api.get("/api/transactions/abc").expect(400);
 
       expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
-      expect(transactionRepository.getById).not.toHaveBeenCalled();
+      expect(mockOf(transactionRepository, "getById")).not.toHaveBeenCalled();
     });
   });
 
@@ -419,7 +422,7 @@ describe("Transaction Routes", () => {
         .get("/api/transactions/export/csv?transaction_type=expense")
         .expect(200);
 
-      const probeSql = dbQuery.mock.calls[0]![0];
+      const probeSql = must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]")[0];
       expect(probeSql).toContain("t.amount < 0");
     });
 
@@ -432,7 +435,7 @@ describe("Transaction Routes", () => {
         .get("/api/transactions/export/csv?transaction_type=income")
         .expect(200);
 
-      const probeSql = dbQuery.mock.calls[0]![0];
+      const probeSql = must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]")[0];
       expect(probeSql).toContain("t.amount > 0");
     });
 
@@ -443,7 +446,7 @@ describe("Transaction Routes", () => {
 
       await api.get("/api/transactions/export/csv?recipient_id=42").expect(200);
 
-      const probeParams = dbQuery.mock.calls[0]![1];
+      const probeParams = must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]")[1];
       expect(probeParams).toContain(42);
     });
 
@@ -454,7 +457,7 @@ describe("Transaction Routes", () => {
 
       await api.get("/api/transactions/export/csv?search=netflix").expect(200);
 
-      const [probeSql, probeParams] = dbQuery.mock.calls[0]!;
+      const [probeSql, probeParams] = must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]");
       expect(probeSql).toMatch(/t\.memo ILIKE/);
       expect(probeParams).toContain("%netflix%");
     });
@@ -468,7 +471,7 @@ describe("Transaction Routes", () => {
         .get("/api/transactions/export/csv?transaction_id=7")
         .expect(200);
 
-      const [probeSql, probeParams] = dbQuery.mock.calls[0]!;
+      const [probeSql, probeParams] = must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]");
       expect(probeSql).toMatch(/t\.id = \$/);
       expect(probeParams).toContain(7);
     });
@@ -480,7 +483,7 @@ describe("Transaction Routes", () => {
 
       await api.get("/api/transactions/export/csv?search=foo").expect(200);
 
-      const probeSql = dbQuery.mock.calls[0]![0];
+      const probeSql = must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]")[0];
       expect(probeSql).toContain("LEFT JOIN recipients r");
       expect(probeSql).toContain("LEFT JOIN categories c");
     });
@@ -542,7 +545,7 @@ describe("Transaction Routes", () => {
 
       const lines = res.text.trim().split("\n").filter(Boolean);
       expect(lines).toHaveLength(2);
-      const parsed = lines.map((l) => JSON.parse(l));
+      const parsed = lines.map((l): unknown => JSON.parse(l));
       expect(parsed[0]).toMatchObject({
         id: 1,
         date: "2026-01-15",
@@ -550,7 +553,7 @@ describe("Transaction Routes", () => {
         amount: "-12.99",
         category: "ENTERTAINMENT:STREAMING",
       });
-      expect(parsed[1].id).toBe(2);
+      expect(valueAt(parsed[1], "id")).toBe(2);
     });
 
     it("should return 404 when no transactions match filters", async () => {
@@ -579,7 +582,9 @@ describe("Transaction Routes", () => {
 
       const res = await api.get("/api/transactions/export/json").expect(200);
 
-      const obj = JSON.parse(res.text.trim().split("\n")[0]!);
+      const obj = JSON.parse(
+          must(res.text.trim().split("\n")[0], "res.text.trim().split(\"\\n\")[0]"),
+        ) as Record<string, unknown>;
       expect(Object.keys(obj).sort()).toEqual(
         [
           "amount",
@@ -643,7 +648,7 @@ describe("Transaction Routes", () => {
         })
         .expect(400);
 
-      expect(transactionRepository.create).not.toHaveBeenCalled();
+      expect(mockOf(transactionRepository, "create")).not.toHaveBeenCalled();
     });
 
     it("should return 400 for a non-numeric amount", async () => {
@@ -657,7 +662,7 @@ describe("Transaction Routes", () => {
         })
         .expect(400);
 
-      expect(transactionRepository.create).not.toHaveBeenCalled();
+      expect(mockOf(transactionRepository, "create")).not.toHaveBeenCalled();
     });
 
     it("should return 409 when manual duplicate is detected", async () => {
@@ -683,7 +688,7 @@ describe("Transaction Routes", () => {
           details: { existing_transaction_id: 99 },
         }),
       );
-      expect(transactionRepository.create).not.toHaveBeenCalled();
+      expect(mockOf(transactionRepository, "create")).not.toHaveBeenCalled();
     });
 
     it("a malformed JSON body yields a 400 with the parser reason, in both modes", async () => {
@@ -710,7 +715,7 @@ describe("Transaction Routes", () => {
       expect(bodyAt(prod, "error", "message")).toBe(bodyAt(res, "error", "message"));
       expect(bodyAt(prod, "error", "message")).not.toBe(PROD_5XX_MESSAGE);
 
-      expect(transactionRepository.create).not.toHaveBeenCalled();
+      expect(mockOf(transactionRepository, "create")).not.toHaveBeenCalled();
     });
 
     it("an over-limit body yields a 413 whose reason survives production", async () => {
@@ -742,13 +747,13 @@ describe("Transaction Routes", () => {
       expect(blocked.body).toEqual(
         errEnvelope({ code: "FORBIDDEN", message: "Cross-site request blocked" }),
       );
-      expect(transactionRepository.getAllWithCount).not.toHaveBeenCalled();
+      expect(mockOf(transactionRepository, "getAllWithCount")).not.toHaveBeenCalled();
 
       await api
         .get("/api/transactions/")
         .set("Sec-Fetch-Site", "same-origin")
         .expect(200);
-      expect(transactionRepository.getAllWithCount).toHaveBeenCalledTimes(1);
+      expect(mockOf(transactionRepository, "getAllWithCount")).toHaveBeenCalledTimes(1);
     });
 
     it("the CSRF guard blocks a cross-site POST before the router runs", async () => {
@@ -769,7 +774,7 @@ describe("Transaction Routes", () => {
           message: "Cross-site request blocked",
         }),
       );
-      expect(transactionRepository.create).not.toHaveBeenCalled();
+      expect(mockOf(transactionRepository, "create")).not.toHaveBeenCalled();
     });
   });
 
@@ -827,7 +832,7 @@ describe("Transaction Routes", () => {
         .send({ recipient_name: "Missing Name" })
         .expect(400);
 
-      expect(transactionRepository.update).not.toHaveBeenCalled();
+      expect(mockOf(transactionRepository, "update")).not.toHaveBeenCalled();
     });
 
     it("should return 400 for invalid category_name format", async () => {
@@ -837,7 +842,7 @@ describe("Transaction Routes", () => {
         .send({ category_name: "INVALID" })
         .expect(400);
 
-      expect(transactionRepository.update).not.toHaveBeenCalled();
+      expect(mockOf(transactionRepository, "update")).not.toHaveBeenCalled();
     });
 
     it("should return 400 when category_name does not exist", async () => {
@@ -853,7 +858,7 @@ describe("Transaction Routes", () => {
         })
         .expect(400);
 
-      expect(transactionRepository.update).not.toHaveBeenCalled();
+      expect(mockOf(transactionRepository, "update")).not.toHaveBeenCalled();
     });
 
     it("rejects a non-integer :id via validateIdParam before the rate limiter and handler", async () => {
@@ -862,7 +867,7 @@ describe("Transaction Routes", () => {
         .send({ amount: -75 })
         .expect(400);
 
-      expect(transactionRepository.update).not.toHaveBeenCalled();
+      expect(mockOf(transactionRepository, "update")).not.toHaveBeenCalled();
     });
   });
 
@@ -893,7 +898,7 @@ describe("Transaction Routes", () => {
       await api.delete("/api/transactions/1").expect(204);
 
       expect(
-        attachmentRepository.listPathsByTransactionIds,
+        mockOf(attachmentRepository, "listPathsByTransactionIds"),
       ).toHaveBeenCalledWith([1]);
       expect(removeAttachmentFile).toHaveBeenCalledWith(
         "attachments/1/receipt-a.png",
@@ -948,7 +953,7 @@ describe("Transaction Routes", () => {
         .send({ amount: -1 })
         .expect(400);
       expect(res.body).toEqual(validationError("id must be a positive integer"));
-      expect(transactionRepository.update).not.toHaveBeenCalled();
+      expect(mockOf(transactionRepository, "update")).not.toHaveBeenCalled();
     });
 
     // normalizeTransactionPatchFields destructured req.body before any parse,
@@ -956,7 +961,7 @@ describe("Transaction Routes", () => {
     it("answers 400, not 500, for a PATCH without a JSON body", async () => {
       const res = await api.patch("/api/transactions/1").expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(transactionRepository.update).not.toHaveBeenCalled();
+      expect(mockOf(transactionRepository, "update")).not.toHaveBeenCalled();
     });
 
     it.each(["target_currency", "search", "sort_by", "bank_account"])(
@@ -968,7 +973,7 @@ describe("Transaction Routes", () => {
         expect(res.body).toEqual(
           validationError(`${name} must be a single value`),
         );
-        expect(transactionRepository.getAllWithCount).not.toHaveBeenCalled();
+        expect(mockOf(transactionRepository, "getAllWithCount")).not.toHaveBeenCalled();
       },
     );
 

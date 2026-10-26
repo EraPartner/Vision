@@ -971,7 +971,7 @@ describe("ImportReviewPage (integration)", () => {
                 expect.objectContaining({
                     action: expect.objectContaining({
                         label: "Review accounts",
-                    }),
+                    }) as unknown,
                 }),
             ),
         );
@@ -1294,7 +1294,7 @@ describe("ImportReviewPage (integration)", () => {
         renderReviewPage();
         // Page renders heading or fallback even when preview 404s
         await new Promise((r) => setTimeout(r, 200));
-        expect(document.body.textContent?.length ?? 0).toBeGreaterThan(0);
+        expect(document.body.textContent.length).toBeGreaterThan(0);
         errSpy.mockRestore();
     });
 });

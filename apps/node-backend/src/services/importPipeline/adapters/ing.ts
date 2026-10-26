@@ -48,7 +48,7 @@ function isHeaderLine(line: string): boolean {
  * @returns null when too short or unparseable
  */
 function parseLine(parts: string[]): ParsedBankTransaction | null {
-  if (parts == null || parts.length < MIN_FIELDS) return null;
+  if (parts.length < MIN_FIELDS) return null;
 
   const accountNumber = cellAt(parts, 0).trim();
   const counterpartyAccount = cellAt(parts, 2).trim();

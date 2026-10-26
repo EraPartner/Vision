@@ -80,21 +80,23 @@ function errorCode(error: unknown): unknown {
 }
 
 // Property reads on a parsed JSON value: non-objects carry no fields.
+function isObjectValue(value: unknown): value is UnknownRecord {
+  return typeof value === "object" && value !== null;
+}
+
 function fieldsOf(value: unknown): UnknownRecord | undefined {
-  return typeof value === "object" && value !== null
-    ? (value as UnknownRecord)
-    : undefined;
+  return isObjectValue(value) ? value : undefined;
 }
 
 function isSha256(value: unknown): boolean {
-  return /^[a-f0-9]{64}$/.test(String(value || ""));
+  return /^[a-f0-9]{64}$/.test(typeof value === "string" ? value : "");
 }
 
 function hasDemoSeedManifestShape(value: unknown): value is DemoSeedManifest {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isObjectValue(value) || Array.isArray(value)) {
     return false;
   }
-  const manifest = value as UnknownRecord;
+  const manifest = value;
   if (
     manifest.version !== 1 ||
     !isSha256(manifest.logicalSha256) ||
@@ -131,7 +133,7 @@ export function validateDemoSeedManifest(value: unknown): DemoSeedManifest {
 export function comparableManifestStats(
   database: DemoSeedDatabase,
 ): ComparableDatabaseStats {
-  return { ...database, ...(database.importantRowCounts || {}) };
+  return { ...database, ...(database.importantRowCounts ?? {}) };
 }
 
 export function assertDemoRuntimeIsolation(
@@ -217,7 +219,7 @@ export async function requestNativeDemoReset(
 
 export async function sha256File(filePath: string): Promise<string> {
   const hash = crypto.createHash("sha256");
-  const stream = fs.createReadStream(filePath);
+  const stream: AsyncIterable<Buffer> = fs.createReadStream(filePath);
   for await (const chunk of stream) hash.update(chunk);
   return hash.digest("hex");
 }
@@ -250,7 +252,7 @@ export async function loadDemoSeed(seedRoot: string): Promise<DemoSeed> {
 async function readRuntimeState(
   runtime: NativeDemoRuntime,
 ): Promise<UnknownRecord> {
-  return fieldsOf(await runtime.readState()) || {};
+  return fieldsOf(await runtime.readState()) ?? {};
 }
 
 export async function prepareNativeDemo(
@@ -271,7 +273,7 @@ export async function prepareNativeDemo(
   if (
     !resetRequested &&
     currentSeed?.logicalSha256 === seed.manifest.logicalSha256 &&
-    currentSeed?.schemaRevision === seed.manifest.schemaRevision
+    currentSeed.schemaRevision === seed.manifest.schemaRevision
   ) {
     await runtime.writeState({
       activeRuntime: "native",
@@ -322,7 +324,7 @@ export async function finalizeNativeDemo(
   seed: string;
   resetCleanupWarning?: string | undefined;
 }> {
-  if (!prepared || !prepared.manifest) {
+  if (!prepared) {
     throw new Error("Native Demo preparation result is missing");
   }
   if (prepared.switchToken) {

@@ -6,6 +6,7 @@
 
 import { emptySection, fmtCurrency, fmtMonthLabel, sectionPage, svgGenericGroupedBarChart } from '../sectionHelpers.ts';
 import type { TaxMonthBucket, TaxReportData } from '../dataFetcherTax.ts';
+import { addAll, toNumber } from "../../../lib/money.ts";
 
 export function renderTaxMonthlyTrend(
   data: TaxReportData | null,
@@ -22,12 +23,12 @@ export function renderTaxMonthlyTrend(
     return a.month - b.month;
   });
 
-  const monthTaxes = (m: TaxMonthBucket) => (m.tob ?? 0) + (m.wht ?? 0) + (m.sell ?? 0) + (m.other ?? 0);
+  const monthTaxes = (m: TaxMonthBucket) => toNumber(addAll([m.tob, m.wht, m.sell, m.other]));
 
   const groups = sorted.map(m => ({
     label: fmtMonthLabel(m.year, m.month),
     taxes: monthTaxes(m),
-    fees:  m.fees ?? 0,
+    fees:  m.fees,
   }));
 
   const seriesDefs = [
@@ -38,11 +39,11 @@ export function renderTaxMonthlyTrend(
 
   const tableRows = sorted.map(m => {
     const taxes = monthTaxes(m);
-    const total = taxes + (m.fees ?? 0);
+    const total = toNumber(addAll([taxes, m.fees]));
     return `<tr>
       <td>${fmtMonthLabel(m.year, m.month)}</td>
       <td class="num neg">${fmtCurrency(taxes, currency)}</td>
-      <td class="num neg">${fmtCurrency(m.fees ?? 0, currency)}</td>
+      <td class="num neg">${fmtCurrency(m.fees, currency)}</td>
       <td class="num neg">${fmtCurrency(total, currency)}</td>
     </tr>`;
   }).join('');

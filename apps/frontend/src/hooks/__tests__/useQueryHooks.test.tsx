@@ -69,7 +69,7 @@ describe("useCreateSavedChart", () => {
         const spy = vi.spyOn(apiClient, "createSavedChart").mockResolvedValue(CHART_STUB);
         vi.spyOn(apiClient, "getSavedCharts").mockResolvedValue([]);
         const { result } = renderHook(() => useCreateSavedChart(), { wrapper: makeFullWrapper() });
-        await act(async () => {
+        await act(() => {
             result.current.mutate({
                 name: "Monthly Income",
                 chartType: "bar",
@@ -78,6 +78,7 @@ describe("useCreateSavedChart", () => {
                 categoryIds: [],
                 recipientIds: [],
             });
+            return Promise.resolve();
         });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(spy).toHaveBeenCalledOnce();
@@ -89,8 +90,9 @@ describe("useUpdateSavedChart", () => {
         const spy = vi.spyOn(apiClient, "updateSavedChart").mockResolvedValue(CHART_STUB);
         vi.spyOn(apiClient, "getSavedCharts").mockResolvedValue([]);
         const { result } = renderHook(() => useUpdateSavedChart(), { wrapper: makeFullWrapper() });
-        await act(async () => {
+        await act(() => {
             result.current.mutate({ id: 1, name: "Updated Chart" });
+            return Promise.resolve();
         });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(spy).toHaveBeenCalledWith(1, { name: "Updated Chart" });
@@ -102,8 +104,9 @@ describe("useDeleteSavedChart", () => {
         const spy = vi.spyOn(apiClient, "deleteSavedChart").mockResolvedValue(undefined);
         vi.spyOn(apiClient, "getSavedCharts").mockResolvedValue([]);
         const { result } = renderHook(() => useDeleteSavedChart(), { wrapper: makeFullWrapper() });
-        await act(async () => {
+        await act(() => {
             result.current.mutate(1);
+            return Promise.resolve();
         });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(spy).toHaveBeenCalledWith(1);

@@ -80,7 +80,7 @@ export function MergeAccountDialog({
         !preview.isFetching &&
         !preview.isError &&
         preview.data?.source === source.id &&
-        preview.data?.into === target?.id;
+        preview.data.into === target?.id;
 
     // Counts use the SAME locale the money formatter derives from the
     // number-format setting, so "1.002 transactions" and "€ 1.002,00" agree.

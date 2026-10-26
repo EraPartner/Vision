@@ -78,6 +78,7 @@ import {
     type PartnerId,
     type PartnerTaxResult,
 } from "./householdTypes.ts";
+import { isNonZeroNumber, orZero } from "../numeric.ts";
 
 export { forfaitCategoryOf };
 
@@ -163,7 +164,7 @@ function computePartnerIncome(
             });
             continue;
         }
-        const gross = Math.max(activity.grossIncome || 0, 0);
+        const gross = Math.max(orZero(activity.grossIncome), 0);
         const ss = computeActivitySocialSecurity(activity.kind, gross, table);
         const contributions = SELF_EMPLOYED_CONTRIBUTION_KINDS.has(activity.kind)
             ? Math.max(activity.socialContributionsPaid ?? 0, 0)
@@ -212,7 +213,7 @@ function computePartnerIncome(
         const method = choice?.method ?? "lump_sum";
         const unionDues =
             category === "remuneration" && method === "actual"
-                ? Math.max(partner.unionDues || 0, 0)
+                ? Math.max(orZero(partner.unionDues), 0)
                 : 0;
         const expenses = computeProfessionalExpenseClaim(
             {
@@ -267,7 +268,7 @@ function computePartnerIncome(
         });
     }
     if (
-        (partner.unionDues || 0) > 0 &&
+        (orZero(partner.unionDues)) > 0 &&
         !categories.some((c) => c.category === "remuneration" && c.method === "actual") &&
         categories.some((c) => c.method === "actual")
     ) {
@@ -290,7 +291,7 @@ function computePartnerIncome(
 
     const netProfessionalIncome =
         netAmountIncome > 0 ? categoryNetTotal + netAmountIncome : categoryNetTotal;
-    const otherTaxableIncome = Math.max(partner.otherTaxableIncome || 0, 0);
+    const otherTaxableIncome = Math.max(orZero(partner.otherTaxableIncome), 0);
     const pensionIncome = sum(
         activities.filter((a) => a.kind === "pension"),
         (a) => a.netProfessionalIncome,
@@ -301,17 +302,17 @@ function computePartnerIncome(
     const pensionActivities = partner.activities.filter((a) => a.kind === "pension");
     const grossStatutoryPension = sum(
         pensionActivities.filter((a) => a.pensionKind === "statutory_from_legal_age"),
-        (a) => Math.max(a.grossIncome || 0, 0),
+        (a) => Math.max(orZero(a.grossIncome), 0),
     );
     const hasSurvivorPension = pensionActivities.some(
-        (a) => a.pensionKind === "survivor_or_transition" && (a.grossIncome || 0) > 0,
+        (a) => a.pensionKind === "survivor_or_transition" && (orZero(a.grossIncome)) > 0,
     );
     // A survivor's pension excludes the activity income in full whatever the other pensions
     // (AAFisc 40/2011 no. 18), so an untyped pension next to it changes nothing. Without one, an
     // untyped pension leaves the outcome open: the plain proportion applies (fraction 0).
     const pensionKindMissing =
         !hasSurvivorPension &&
-        pensionActivities.some((a) => a.pensionKind === undefined && (a.grossIncome || 0) > 0);
+        pensionActivities.some((a) => a.pensionKind === undefined && (orZero(a.grossIncome)) > 0);
     // Activity income (art. 147 al. 2; AAFisc 40/2011 no. 20): professional income less pensions
     // and other replacement income, which the model records under `pension` (art. 34).
     const activityIncome = clampAtZero(netProfessionalIncome - pensionIncome);
@@ -346,7 +347,7 @@ function computePartnerIncome(
         });
     }
     const alimonyDeduction =
-        Math.max(partner.alimonyPaid || 0, 0) * table.alimonyDeductibleFraction;
+        Math.max(orZero(partner.alimonyPaid), 0) * table.alimonyDeductibleFraction;
     return {
         partner,
         activities,
@@ -644,7 +645,8 @@ export function computeHouseholdTax(
     issues.push(...ownHomeBase.issues);
     const ownHomeCreditRegime = ownHomeBase.regime;
 
-    const autonomyFactor = table.regionalAutonomyFactor?.[household.region] ?? 1;
+    const autonomyFactors: Partial<Record<string, number>> = table.regionalAutonomyFactor;
+    const autonomyFactor = autonomyFactors[household.region] ?? 1;
     const surchargePct = household.communalSurchargePercent;
 
     // Reductions other than gifts and the own-home credit depend on the pre-quotient income
@@ -702,18 +704,21 @@ export function computeHouseholdTax(
     };
     if (mode === "joint" && incomes.length === 2) {
         const [i0, i1] = incomes as [PartnerIncome, PartnerIncome];
-        const quotientPartners = [i0, i1].map((inc) => {
+        const toQuotientPartner = (inc: PartnerIncome) => {
             const q: { id: PartnerId; netProfessionalIncome: number; birthYear?: number } = {
                 id: inc.partner.id,
                 netProfessionalIncome: inc.netProfessionalIncome,
             };
             if (inc.partner.birthYear !== undefined) q.birthYear = inc.partner.birthYear;
             return q;
-        });
+        };
+        const quotientPartner0 = toQuotientPartner(i0);
+        const quotientPartner1 = toQuotientPartner(i1);
+        const quotientPartners = [quotientPartner0, quotientPartner1];
         const cap = resolveMaritalQuotientCap(quotientPartners, incomeYear, table);
         issues.push(...cap.issues);
         quotient = computeMaritalQuotient({
-            partners: [quotientPartners[0]!, quotientPartners[1]!],
+            partners: [quotientPartner0, quotientPartner1],
             rate: table.maritalQuotientRate,
             cap: cap.cap,
             evaluate: (transfer) =>
@@ -1057,7 +1062,7 @@ export function toBelgianTaxCalculation(
         employeeSocialSecurity: employeeSS,
         netIncomeAfterSS: netAfterSS,
         professionalExpenses: profExpenses,
-        showAlimonyRow: household.partners.some((p) => !!p.alimonyPaid),
+        showAlimonyRow: household.partners.some((p) => isNonZeroNumber(p.alimonyPaid)),
         alimonyDeduction: otherDeductions,
         unionDuesApplied: appliedUnionDues,
         taxableIncome,
@@ -1099,7 +1104,7 @@ export function toBelgianTaxCalculation(
             alimonyPaid: otherDeductions,
             personalPensionContributions: 0,
             lifeInsurancePremiums: 0,
-            mortgageInterestPaid: Math.max(household.home.mortgageInterestPaid || 0, 0),
+            mortgageInterestPaid: Math.max(orZero(household.home.mortgageInterestPaid), 0),
             charitableDonations: 0,
             childcareCosts: 0,
             unionDues: appliedUnionDues,

@@ -1,5 +1,6 @@
+import { asImportBatchId } from "@/lib/routes";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
@@ -96,7 +97,7 @@ export function TransactionImportCard({
     onImportSuccess,
 }: TransactionImportCardProps) {
     const { t } = useLanguage();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const { adapters, loading: adaptersLoading } = useAdapters();
     const [file, setFile] = useState<File | null>(null);
     const [bankSource, setBankSource] = useState("");
@@ -285,7 +286,7 @@ export function TransactionImportCard({
                     // there is no completed-progress panel and no "imported N" toast to
                     // show — the review page is the entire outcome.
                     bypassNextNavigation();
-                    void navigate(`/import/${custom.batch_id}/review`);
+                    void navigate(`/import/${asImportBatchId(custom.batch_id)}/review`);
                     return;
                 }
                 // 201: the row count on this route is `total`. It was read as
@@ -318,7 +319,7 @@ export function TransactionImportCard({
                 data.batch_id != null
             ) {
                 bypassNextNavigation();
-                void navigate(`/import/${data.batch_id}/review`);
+                void navigate(`/import/${asImportBatchId(data.batch_id)}/review`);
                 return;
             }
 

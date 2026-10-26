@@ -26,6 +26,7 @@ import type {
   ParsedPortfolioRow,
   ParsedPortfolioRows,
 } from "./portfolioGenericAdapter.ts";
+import { cellText } from "../cellText.ts";
 
 /** A `columns: true` csv-parse record of the Kinesis statement. */
 type KinesisRecord = Record<string, string>;
@@ -70,7 +71,7 @@ const DISTRIBUTION_TYPES = new Set([
 ]);
 
 function cleanCell(value: unknown): string {
-  return String(value ?? "").trim();
+  return cellText(value).trim();
 }
 
 function number(value: unknown): number | null {

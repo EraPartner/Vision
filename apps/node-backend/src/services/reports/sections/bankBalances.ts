@@ -31,10 +31,10 @@ export function renderBankBalances(
   const accountCards = sorted.map(acc => {
     const sc = signClass(acc.balance);
     const lastTxn = acc.last_transaction ? fmtDate(acc.last_transaction) : '—';
-    const txCount = acc.transaction_count ?? 0;
+    const txCount = acc.transaction_count;
     return `
       <div class="account-card">
-        <div class="account-name">${escapeHtml(acc.bank_account ?? 'Unknown')}</div>
+        <div class="account-name">${escapeHtml(acc.bank_account)}</div>
         <div class="account-balance ${sc}">${escapeHtml(fmtCurrency(acc.balance, currency))}</div>
         <div class="account-meta">${txCount.toLocaleString()} txns · last ${escapeHtml(lastTxn)}</div>
       </div>`;

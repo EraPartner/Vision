@@ -76,7 +76,7 @@ describe("recipients API client", () => {
   });
 
   it("updateRecipient PATCHes", async () => {
-    server.use(http.patch(`${API_BASE}/api/recipients/9`, () => ok({ id: 9, name: "E" })));
+    server.use(http.patch(`${API_BASE}/api/recipients/9`, () => ok({ ...RECIPIENT_STUB, id: 9, name: "E" })));
     expect((await updateRecipient(asRecipientId(9), {})).name).toBe("E");
   });
 
@@ -108,7 +108,7 @@ describe("recipients API client", () => {
   });
 
   it("unmergeRecipient POSTs to the unmerge route", async () => {
-    server.use(http.post(`${API_BASE}/api/recipients/5/unmerge`, () => ok({ id: 5 })));
+    server.use(http.post(`${API_BASE}/api/recipients/5/unmerge`, () => ok({ ...RECIPIENT_STUB, id: 5 })));
     expect((await unmergeRecipient(asRecipientId(5))).id).toBe(5);
   });
 

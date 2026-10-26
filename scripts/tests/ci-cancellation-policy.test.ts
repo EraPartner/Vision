@@ -17,7 +17,7 @@ function workflowJob(workflow: string, name: string): string {
   return block;
 }
 
-test("passes without consulting GitHub when no dependency was cancelled", () => {
+void test("passes without consulting GitHub when no dependency was cancelled", () => {
   let called = false;
   const verdict = evaluateCancellation({
     eventName: "pull_request",
@@ -32,7 +32,7 @@ test("passes without consulting GitHub when no dependency was cancelled", () => 
   assert.equal(called, false);
 });
 
-test("fails before cancellation tolerance when any dependency failed", () => {
+void test("fails before cancellation tolerance when any dependency failed", () => {
   assert.throws(
     () =>
       evaluateCancellation({
@@ -45,7 +45,7 @@ test("fails before cancellation tolerance when any dependency failed", () => {
   );
 });
 
-test("rejects cancellation on push runs", () => {
+void test("rejects cancellation on push runs", () => {
   assert.throws(
     () =>
       evaluateCancellation({
@@ -58,7 +58,7 @@ test("rejects cancellation on push runs", () => {
   );
 });
 
-test("tolerates a cancelled PR run only after its live head changed", () => {
+void test("tolerates a cancelled PR run only after its live head changed", () => {
   const verdict = evaluateCancellation({
     eventName: "pull_request",
     results: '["success","cancelled"]',
@@ -69,7 +69,7 @@ test("tolerates a cancelled PR run only after its live head changed", () => {
   assert.match(verdict.reason, /superseded/);
 });
 
-test("rejects cancellation on the current live PR head", () => {
+void test("rejects cancellation on the current live PR head", () => {
   assert.throws(
     () =>
       evaluateCancellation({
@@ -82,7 +82,7 @@ test("rejects cancellation on the current live PR head", () => {
   );
 });
 
-test("fails closed when the live-head API lookup fails", () => {
+void test("fails closed when the live-head API lookup fails", () => {
   assert.throws(
     () =>
       evaluateCancellation({
@@ -97,7 +97,7 @@ test("fails closed when the live-head API lookup fails", () => {
   );
 });
 
-test("fails closed when cancellation event identity is incomplete", () => {
+void test("fails closed when cancellation event identity is incomplete", () => {
   assert.throws(
     () =>
       evaluateCancellation({
@@ -117,7 +117,7 @@ function readCiWorkflow(): string {
   );
 }
 
-test("CI Complete calls the shared policy with read-only PR access", () => {
+void test("CI Complete calls the shared policy with read-only PR access", () => {
   const ciComplete = workflowJob(readCiWorkflow(), "ci-complete");
   assert.match(ciComplete, /pull-requests: read/);
   assert.match(ciComplete, /bun scripts\/ci-cancellation-policy\.ts/);
@@ -125,7 +125,7 @@ test("CI Complete calls the shared policy with read-only PR access", () => {
   assert.match(ciComplete, /PR_NUMBER:/);
 });
 
-test("CI Complete requires the fail-closed branch-protection verifier", () => {
+void test("CI Complete requires the fail-closed branch-protection verifier", () => {
   const workflow = readCiWorkflow();
   const repoChecks = workflowJob(workflow, "repo-checks");
   const ciComplete = workflowJob(workflow, "ci-complete");
@@ -142,7 +142,7 @@ test("CI Complete requires the fail-closed branch-protection verifier", () => {
   assert.match(ciComplete, /require repo-checks "\$REPO_CHECKS_RESULT"/);
 });
 
-test("CI Complete requires every code tier, native production checks included", () => {
+void test("CI Complete requires every code tier, native production checks included", () => {
   const workflow = readCiWorkflow();
   const ciComplete = workflowJob(workflow, "ci-complete");
   for (const [job, variable] of [
@@ -162,7 +162,7 @@ test("CI Complete requires every code tier, native production checks included", 
   assert.match(backend, /with-native-stack\.sh bun run vitest run src\/test\/live-contracts/);
 });
 
-test("PR-only checks never stop jobs from running on pushes", () => {
+void test("PR-only checks never stop jobs from running on pushes", () => {
   const workflow = readCiWorkflow();
   // A job-level condition on the event (or a needs edge to such a job) would
   // skip on a push to main, and CI Complete then fails on its required result.

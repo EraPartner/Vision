@@ -1,6 +1,8 @@
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useCallback, useMemo, useState, lazy, Suspense } from "react";
-import { Link, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import { useStatistics, type StatisticsWindow } from "@/hooks/useStatistics";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,6 +27,8 @@ import { MonthlyRhythm } from "@/features/statistics/MonthlyRhythm";
 import { STATISTICS_WIDGETS } from "@/features/statistics/statisticsUtils";
 import { useTabParam } from "@/hooks/useTabParam";
 import { PageShell } from "@/components/shared/PageShell";
+
+const isStatisticsWindow = enumGuard<StatisticsWindow>({ "24m": true, all: true });
 
 const STATISTICS_TABS = [
     "overview",
@@ -113,7 +117,7 @@ function InsightsWindowControl({
     return (
         <SegmentedControl
             value={value}
-            onValueChange={(next) => onChange(next as StatisticsWindow)}
+            onValueChange={onGuarded(isStatisticsWindow, onChange)}
             aria-label={label}
             className="w-fit"
         >
@@ -168,9 +172,7 @@ export default function StatisticsPage() {
         () =>
             widgetDefs.map((w) => ({
                 ...w,
-                label: (w as typeof w & { labelKey?: string }).labelKey
-                    ? t((w as typeof w & { labelKey?: string }).labelKey!)
-                    : (w.label ?? w.id),
+                label: w.labelKey ? t(w.labelKey) : (w.label ?? w.id),
             })),
         [widgetDefs, t],
     );
@@ -254,7 +256,7 @@ export default function StatisticsPage() {
                                 <Skeleton className="h-32 w-full" />
                             </div>
                             <div className="grid gap-4 sm:grid-cols-3">
-                                {[...Array(3)].map((_, i) => (
+                                {Array.from({ length: 3 }).map((_, i) => (
                                     <Skeleton key={i} className="h-14 w-full" />
                                 ))}
                             </div>
@@ -299,13 +301,13 @@ export default function StatisticsPage() {
                             {t("statsPage.noDataDesc")}
                         </p>
                         <Button asChild>
-                            <Link to="/import">
+                            <AppLink to="/import">
                                 <Import
                                     aria-hidden="true"
                                     className="mr-2 h-4 w-4"
                                 />
                                 {t("statsPage.importBtn")}
-                            </Link>
+                            </AppLink>
                         </Button>
                     </CardContent>
                 </Card>
@@ -483,7 +485,7 @@ export default function StatisticsPage() {
                             graphExclusions={graphExclusions}
                             onToggleExclusion={toggleGraphExclusion}
                             exclusionsApply={exclusionsApply}
-                            availableYears={data?.allYears}
+                            availableYears={data.allYears}
                         />
                     </Suspense>
                 </TabsContent>

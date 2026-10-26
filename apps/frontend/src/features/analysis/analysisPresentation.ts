@@ -4,8 +4,9 @@ import type {
     AnalysisValue,
 } from "@/lib/api/analysis";
 import { numberFormatToLocale } from "@/utils/currency";
+import type { TranslationKey } from "@/locales/keys";
 
-const catalogKeys: Record<string, string> = {
+const catalogKeys: Record<string, TranslationKey> = {
     Transactions: "analysis.catalog.Transactions",
     Accounts: "analysis.catalog.Accounts",
     "Holding events": "analysis.catalog.Holding_events",
@@ -57,7 +58,7 @@ const catalogKeys: Record<string, string> = {
 
 export function analysisCatalogLabel(
     label: string,
-    t: (key: string) => string,
+    t: (key: TranslationKey) => string,
 ): string {
     return catalogKeys[label] ? t(catalogKeys[label]) : label;
 }
@@ -66,7 +67,7 @@ export function analysisColumnLabel(
     result: AnalysisResult,
     id: string,
     datasets: AnalysisDataset[],
-    t: (key: string) => string,
+    t: (key: TranslationKey) => string,
 ): string {
     const declared = result.declaredColumns?.find(
         (column) => column.id === id,
@@ -88,6 +89,23 @@ export function analysisColumnLabel(
         : id;
 }
 
+/**
+ * Plain-text form of an untyped analysis cell. Rows and workbench steps come
+ * from JSON, so a cell can be any value; objects are serialised rather than
+ * rendered as "[object Object]".
+ */
+export function analysisCellText(value: unknown, fallback = ""): string {
+    if (value == null) return fallback;
+    if (typeof value === "string") return value;
+    if (
+        typeof value === "number" ||
+        typeof value === "boolean" ||
+        typeof value === "bigint"
+    )
+        return String(value);
+    return JSON.stringify(value);
+}
+
 export function formatAnalysisValue(
     value: AnalysisValue | undefined,
     type: string,
@@ -106,7 +124,7 @@ export function formatAnalysisValue(
     // Group the integer separately to preserve database decimals and large integers exactly.
     if (decimal) {
         const integer = new Intl.NumberFormat(locale).format(
-            BigInt(decimal[2]!),
+            BigInt(decimal[2] ?? "0"),
         );
         const separator =
             new Intl.NumberFormat(locale)

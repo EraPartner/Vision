@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { must } from "../helpers/must.ts";
 
 type PivotSpy = (...args: unknown[]) => Promise<{ data: object; meta: object }>;
 
-const recipientPivotSpy = vi.fn<PivotSpy>(async () => ({ data: {}, meta: {} }));
-const tagPivotSpy = vi.fn<PivotSpy>(async () => ({ data: {}, meta: {} }));
+const recipientPivotSpy = vi.fn<PivotSpy>(() => Promise.resolve(({ data: {}, meta: {} })));
+const tagPivotSpy = vi.fn<PivotSpy>(() => Promise.resolve(({ data: {}, meta: {} })));
 
 vi.mock(
   "../../src/services/calculations/aggregation/recipientPivot.ts",
@@ -26,7 +27,7 @@ function getHandler(path: string) {
       (candidate.route as unknown as { methods: Record<string, boolean> })
         .methods.get,
   );
-  return layer!.route!.stack.at(-1)!.handle as unknown as (
+  return must(must(must(layer, "layer").route, "layer!.route").stack.at(-1), "layer!.route!.stack.at(-1)").handle as unknown as (
     req: unknown,
     res: unknown,
   ) => Promise<void>;
@@ -52,7 +53,7 @@ describe.each(routes)("GET %s date-range query params", (path, computeSpy) => {
 
   it("accepts and forwards the canonical start_date/end_date pair", async () => {
     await invoke({ start_date: "2025-01-01", end_date: "2025-12-31" });
-    expect(computeSpy.mock.calls[0]![0]).toMatchObject({
+    expect(must(computeSpy.mock.calls[0], "computeSpy.mock.calls[0]")[0]).toMatchObject({
       startDate: "2025-01-01",
       endDate: "2025-12-31",
     });
@@ -82,7 +83,7 @@ describe("GET /tag-pivot all query parameter", () => {
   it("forwards the canonical all=true parameter", async () => {
     const response = { ok: vi.fn() };
     await handler({ query: { all: "true" } }, response);
-    expect(tagPivotSpy.mock.calls[0]![0]).toMatchObject({ allTags: true });
+    expect(must(tagPivotSpy.mock.calls[0], "tagPivotSpy.mock.calls[0]")[0]).toMatchObject({ allTags: true });
   });
 
   it("rejects the retired all_tags alias before computing", async () => {

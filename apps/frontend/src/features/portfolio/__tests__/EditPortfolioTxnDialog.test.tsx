@@ -22,6 +22,7 @@ import {
     asInvestmentId,
     asPortfolioTransactionId,
 } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -448,7 +449,7 @@ describe("EditPortfolioTxnDialog", () => {
         );
         const describedBy = fxInput.getAttribute("aria-describedby");
         expect(describedBy).toBeTruthy();
-        expect(document.getElementById(describedBy!)).toHaveTextContent(
+        expect(document.getElementById(must(describedBy))).toHaveTextContent(
             /exchange rate must be above 0/i,
         );
         await waitFor(() => expect(fxInput).toHaveFocus());
@@ -496,7 +497,7 @@ describe("EditPortfolioTxnDialog", () => {
         );
         const describedBy = amountInput.getAttribute("aria-describedby");
         expect(describedBy).toBeTruthy();
-        expect(document.getElementById(describedBy!)).toHaveTextContent(
+        expect(document.getElementById(must(describedBy))).toHaveTextContent(
             /amount is required/i,
         );
         await waitFor(() => expect(amountInput).toHaveFocus());
@@ -750,7 +751,7 @@ describe("EditPortfolioTxnDialog", () => {
 
     /** The Radix overlay — clicking it is the "stray click next to the dialog". */
     const overlay = () =>
-        document.querySelector<HTMLElement>(".fixed.inset-0.modal-overlay")!;
+        must(document.querySelector<HTMLElement>(".fixed.inset-0.modal-overlay"));
 
     it("keeps unsaved edits when dismissed by an outside click", async () => {
         // Arrange

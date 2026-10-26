@@ -34,8 +34,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function errorMessage(error: unknown): unknown {
-  return isRecord(error) ? error.message : undefined;
+function errorMessage(error: unknown): string | undefined {
+  return isRecord(error) && typeof error.message === "string"
+    ? error.message
+    : undefined;
 }
 
 function bundledPostgresBin(): string {
@@ -73,8 +75,11 @@ export function runFile(
       executable,
       args,
       {
-        env: options.env || process.env,
-        timeout: options.timeout || 60_000,
+        env: options.env ?? process.env,
+        timeout:
+          options.timeout === undefined || options.timeout === 0
+            ? 60_000
+            : options.timeout,
         maxBuffer: 4 * 1024 * 1024,
         encoding: "utf8",
       },
@@ -172,7 +177,7 @@ export async function runIsolatedSmoke({
       lastError = error;
       if (
         attempt === 4 ||
-        !PORT_COLLISION.test(String(errorMessage(error) || ""))
+        !PORT_COLLISION.test(errorMessage(error) ?? "")
       )
         throw error;
     }
@@ -190,7 +195,7 @@ export async function main(): Promise<void> {
 if (require.main === module) {
   main().catch((error: unknown) => {
     const message = errorMessage(error);
-    console.error(error && message ? String(message) : String(error));
+    console.error(message !== undefined && message !== "" ? message : String(error));
     process.exitCode = 1;
   });
 }

@@ -1,6 +1,7 @@
 /**
  * LineChart — visx + framer-motion multi-series line chart.
  */
+import { axisDateOrNumber, axisNumber } from "./axisValue";
 import { curveMonotoneX } from "@visx/curve";
 import { summarizeSeriesChart } from "./chartAria";
 import { Group } from "@visx/group";
@@ -133,8 +134,8 @@ function LineSeriesLayerInner<Datum>({
                     >
                         <LinePath<Datum>
                             data={filtered}
-                            x={(d) => xScale(xAccessor(d)) ?? 0}
-                            y={(d) => yScale(s.accessor(d) ?? 0) ?? 0}
+                            x={(d) => xScale(xAccessor(d))}
+                            y={(d) => yScale(s.accessor(d) ?? 0)}
                             curve={curveMonotoneX}
                             stroke={color}
                             strokeWidth={s.strokeWidth ?? 2}
@@ -224,8 +225,8 @@ function Inner<Datum>({
         }
         // values is finite-filtered above, so d3 min/max match Math.min/max(...)
         // exactly while avoiding the spread stack-size hazard on large series.
-        const lo = values.length > 0 ? (min(values) as number) : 0;
-        const hi = values.length > 0 ? (max(values) as number) : 1;
+        const lo = values.length > 0 ? (min(values) ?? 0) : 0;
+        const hi = values.length > 0 ? (max(values) ?? 1) : 1;
         const pad = hi !== lo ? (hi - lo) * 0.08 : 1;
         return scaleLinear({
             range: [innerHeight, 0],
@@ -234,10 +235,13 @@ function Inner<Datum>({
         });
     }, [data, innerHeight, referenceLines, series, yDomain]);
 
-    const bisect = useMemo(
-        () => bisector<Datum, Date | number>((d) => stableXAccessor(d)).center,
-        [stableXAccessor],
-    );
+    const bisect = useMemo(() => {
+        const bisectX = bisector<Datum, Date | number>((d) =>
+            stableXAccessor(d),
+        );
+        return (array: ArrayLike<Datum>, x: Date | number) =>
+            bisectX.center(array, x);
+    }, [stableXAccessor]);
 
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
     const { syncedX, publishHover } = useChartSync(syncId);
@@ -361,7 +365,7 @@ function Inner<Datum>({
 
     const tooltipLeft =
         hoverDatum != null
-            ? margin.left + (xScale(xAccessor(hoverDatum)) ?? 0)
+            ? margin.left + (xScale(xAccessor(hoverDatum)))
             : 0;
 
     return (
@@ -411,7 +415,7 @@ function Inner<Datum>({
                         const color = r.color ?? CHART_NEUTRAL.label;
                         const dashAttr = r.dashed === false ? undefined : "4 4";
                         if (r.x != null) {
-                            const x = xScale(r.x) ?? 0;
+                            const x = xScale(r.x);
                             return (
                                 <g key={`ref-${i}`}>
                                     <Line
@@ -465,11 +469,11 @@ function Inner<Datum>({
                         <>
                             <Line
                                 from={{
-                                    x: xScale(xAccessor(hoverDatum)) ?? 0,
+                                    x: xScale(xAccessor(hoverDatum)),
                                     y: 0,
                                 }}
                                 to={{
-                                    x: xScale(xAccessor(hoverDatum)) ?? 0,
+                                    x: xScale(xAccessor(hoverDatum)),
                                     y: innerHeight,
                                 }}
                                 stroke={CHART_NEUTRAL.label}
@@ -485,8 +489,8 @@ function Inner<Datum>({
                                 return (
                                     <circle
                                         key={`dot-${s.key}`}
-                                        cx={xScale(xAccessor(hoverDatum)) ?? 0}
-                                        cy={yScale(v) ?? 0}
+                                        cx={xScale(xAccessor(hoverDatum))}
+                                        cy={yScale(v)}
                                         r={4}
                                         fill={CHART_NEUTRAL.background}
                                         stroke={color}
@@ -503,7 +507,7 @@ function Inner<Datum>({
                         numTicks={Math.max(2, Math.floor(innerWidth / 90))}
                         tickFormat={
                             xTickFormat
-                                ? (v) => xTickFormat(v as Date | number)
+                                ? (v) => xTickFormat(axisDateOrNumber(v))
                                 : undefined
                         }
                     />
@@ -513,7 +517,7 @@ function Inner<Datum>({
                             numTicks={numYTicks}
                             tickFormat={
                                 yTickFormat
-                                    ? (v) => yTickFormat(v as number)
+                                    ? (v) => yTickFormat(axisNumber(v))
                                     : undefined
                             }
                         />
@@ -524,7 +528,7 @@ function Inner<Datum>({
                             numTicks={numYTicks}
                             tickFormat={
                                 yTickFormat
-                                    ? (v) => yTickFormat(v as number)
+                                    ? (v) => yTickFormat(axisNumber(v))
                                     : undefined
                             }
                         />
@@ -539,8 +543,8 @@ function Inner<Datum>({
                                   endDatum === undefined
                               )
                                   return null;
-                              const xA = xScale(xAccessor(startDatum)) ?? 0;
-                              const xB = xScale(xAccessor(endDatum)) ?? 0;
+                              const xA = xScale(xAccessor(startDatum));
+                              const xB = xScale(xAccessor(endDatum));
                               return (
                                   <rect
                                       x={Math.min(xA, xB)}
@@ -602,9 +606,9 @@ function Inner<Datum>({
                               ? tooltipValueFormat(v, first.key)
                               : String(Math.round(v * 100) / 100);
                       const xA =
-                          margin.left + (xScale(xAccessor(startDatum)) ?? 0);
+                          margin.left + (xScale(xAccessor(startDatum)));
                       const xB =
-                          margin.left + (xScale(xAccessor(endDatum)) ?? 0);
+                          margin.left + (xScale(xAccessor(endDatum)));
                       const mid = (xA + xB) / 2;
                       const rising = b - a > 0;
                       return (

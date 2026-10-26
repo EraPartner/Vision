@@ -5,10 +5,7 @@ import type {
   RetagCustodyEventRow,
   RetagTransactionEventRow,
 } from "../../repositories/portfolioBrokerRetagRepository.ts";
-import {
-  buildInvestmentSummaryCorePartitioned,
-  partitionOversellDeficits,
-} from "@vision/shared-utils/portfolio";
+import { buildInvestmentSummaryCorePartitioned, isCostBasisMethod, partitionOversellDeficits } from "@vision/shared-utils/portfolio";
 import type { CostBasisMethod } from "@vision/shared-utils/portfolio";
 import { asPartitionedTxns } from "./portfolioTransactionRules.ts";
 import { settingsRepository } from "../../repositories/settingsRepository.ts";
@@ -24,7 +21,6 @@ import type {
 } from "@vision/types/brands";
 
 const EPSILON = 1e-8;
-const COST_BASIS_METHODS = new Set(["weighted_avg", "fifo", "lifo"]);
 
 /** One investment-history row the re-tag guards replay. */
 type RetagHistoryRow = RetagTransactionEventRow | RetagCustodyEventRow;
@@ -72,7 +68,7 @@ export interface RetagRequest {
 function buildRateIndex(rows: readonly HistoricalRateRow[]): RateIndex {
   const index: RateIndex = new Map();
   for (const row of rows) {
-    const currency = String(row.currency_code).toUpperCase();
+    const currency = row.currency_code.toUpperCase();
     const entries = index.get(currency) ?? [];
     entries.push({ date: row.rate_date, rate: Number(row.rate_to_eur) });
     index.set(currency, entries);
@@ -236,9 +232,7 @@ function assertRetagPreservesPortfolioEconomics(
 async function resolveCostBasisMethod(): Promise<CostBasisMethod> {
   try {
     const value = await settingsRepository.get("cost_basis_method");
-    return typeof value === "string" && COST_BASIS_METHODS.has(value)
-      ? (value as CostBasisMethod)
-      : "weighted_avg";
+    return isCostBasisMethod(value) ? value : "weighted_avg";
   } catch {
     return "weighted_avg";
   }

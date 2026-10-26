@@ -35,6 +35,7 @@ vi.mock("../../src/config/logger.ts", () => ({
 import rawBankAccountRepo from "../../src/repositories/recipientBankAccountRepository.ts";
 import type { RecipientBankAccountRow } from "../../src/repositories/recipientBankAccountRepository.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const bankAccountRepo = vi.mocked(rawBankAccountRepo);
 
 /** Bank-account fixture carrying only the columns a test sets. */
@@ -126,7 +127,7 @@ describe("Recipient Bank Account Routes", () => {
         .send({ account_number: "X".repeat(35) })
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(bankAccountRepo.createOrGet).not.toHaveBeenCalled();
+      expect(mockOf(bankAccountRepo, "createOrGet")).not.toHaveBeenCalled();
     });
 
     it("accepts an account_number at the 34-char boundary (IBAN max)", async () => {
@@ -141,7 +142,7 @@ describe("Recipient Bank Account Routes", () => {
         .send({ account_number: acct })
         .expect(201);
 
-      expect(bankAccountRepo.createOrGet).toHaveBeenCalledWith(
+      expect(mockOf(bankAccountRepo, "createOrGet")).toHaveBeenCalledWith(
         expect.objectContaining({ accountNumber: acct }),
       );
     });
@@ -154,7 +155,7 @@ describe("Recipient Bank Account Routes", () => {
         .send({ account_number: "BE61734041478017" })
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(bankAccountRepo.createOrGet).not.toHaveBeenCalled();
+      expect(mockOf(bankAccountRepo, "createOrGet")).not.toHaveBeenCalled();
     });
   });
 
@@ -165,7 +166,7 @@ describe("Recipient Bank Account Routes", () => {
         .send({})
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(bankAccountRepo.update).not.toHaveBeenCalled();
+      expect(mockOf(bankAccountRepo, "update")).not.toHaveBeenCalled();
     });
 
     it("should return a 404 NOT_FOUND envelope when account does not exist", async () => {
@@ -177,7 +178,7 @@ describe("Recipient Bank Account Routes", () => {
         .expect(404);
       expect(res.body).toEqual(errEnvelope({ code: "NOT_FOUND" }));
 
-      expect(bankAccountRepo.update).toHaveBeenCalledWith(99, {
+      expect(mockOf(bankAccountRepo, "update")).toHaveBeenCalledWith(99, {
         bankName: "Belfius",
         address: undefined,
         accountLabel: undefined,
@@ -201,7 +202,7 @@ describe("Recipient Bank Account Routes", () => {
         })
         .expect(200);
 
-      expect(bankAccountRepo.update).toHaveBeenCalledWith(5, {
+      expect(mockOf(bankAccountRepo, "update")).toHaveBeenCalledWith(5, {
         bankName: "Updated Bank",
         address: "Main Street 1",
         accountLabel: "Primary",
@@ -228,7 +229,7 @@ describe("Recipient Bank Account Routes", () => {
     it("should return a 400 VALIDATION_ERROR envelope for invalid account ID", async () => {
       const res = await api.delete(`${BASE}/1/bank-accounts/0`).expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(bankAccountRepo.softDelete).not.toHaveBeenCalled();
+      expect(mockOf(bankAccountRepo, "softDelete")).not.toHaveBeenCalled();
     });
 
     it("should return a 404 NOT_FOUND envelope when delete target does not exist", async () => {
@@ -276,7 +277,7 @@ describe("Recipient Bank Account Routes", () => {
         .post(`${BASE}/1/bank-accounts/99/set-primary`)
         .expect(404);
       expect(res.body).toEqual(errEnvelope({ code: "NOT_FOUND" }));
-      expect(bankAccountRepo.setPrimary).toHaveBeenCalledWith(99, 1);
+      expect(mockOf(bankAccountRepo, "setPrimary")).toHaveBeenCalledWith(99, 1);
     });
 
     it("should return a 400 VALIDATION_ERROR envelope when account ID is invalid", async () => {
@@ -284,7 +285,7 @@ describe("Recipient Bank Account Routes", () => {
         .post(`${BASE}/1/bank-accounts/invalid/set-primary`)
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(bankAccountRepo.setPrimary).not.toHaveBeenCalled();
+      expect(mockOf(bankAccountRepo, "setPrimary")).not.toHaveBeenCalled();
     });
 
     it("should return account payload when setting primary succeeds", async () => {
@@ -301,8 +302,8 @@ describe("Recipient Bank Account Routes", () => {
         .post(`${BASE}/1/bank-accounts/2/set-primary`)
         .expect(200);
 
-      expect(bankAccountRepo.setPrimary).toHaveBeenCalledWith(2, 1);
-      expect(bankAccountRepo.getById).toHaveBeenCalledWith(2);
+      expect(mockOf(bankAccountRepo, "setPrimary")).toHaveBeenCalledWith(2, 1);
+      expect(mockOf(bankAccountRepo, "getById")).toHaveBeenCalledWith(2);
       expect(bodyAt(res, "data")).toEqual({
         id: 2,
         recipient_id: 1,
@@ -342,7 +343,7 @@ describe("Recipient Bank Account Routes — request schemas (zod)", () => {
       .expect(400);
     expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
     expect(bodyAt(res, "error", "message")).toContain(message);
-    expect(bankAccountRepo.createOrGet).not.toHaveBeenCalled();
+    expect(mockOf(bankAccountRepo, "createOrGet")).not.toHaveBeenCalled();
   });
 
   it("POST keeps empty optional strings mapping to null", async () => {
@@ -354,7 +355,7 @@ describe("Recipient Bank Account Routes — request schemas (zod)", () => {
       .post(`${BASE}/1/bank-accounts`)
       .send({ account_number: "BE1", bank_name: "", set_as_primary: true })
       .expect(201);
-    expect(bankAccountRepo.createOrGet).toHaveBeenCalledWith({
+    expect(mockOf(bankAccountRepo, "createOrGet")).toHaveBeenCalledWith({
       recipientId: 1,
       accountNumber: "BE1",
       bankName: null,
@@ -368,17 +369,17 @@ describe("Recipient Bank Account Routes — request schemas (zod)", () => {
     "PATCH rejects %j",
     async (body) => {
       await api.patch(`${BASE}/1/bank-accounts/2`).send(body).expect(400);
-      expect(bankAccountRepo.update).not.toHaveBeenCalled();
+      expect(mockOf(bankAccountRepo, "update")).not.toHaveBeenCalled();
     },
   );
 
   it("rejects a malformed :id on GET before reading", async () => {
     await api.get(`${BASE}/1e3/bank-accounts`).expect(400);
-    expect(bankAccountRepo.getByRecipientId).not.toHaveBeenCalled();
+    expect(mockOf(bankAccountRepo, "getByRecipientId")).not.toHaveBeenCalled();
   });
 
   it("rejects a malformed :id on set-primary before writing", async () => {
     await api.post(`${BASE}/0x10/bank-accounts/2/set-primary`).expect(400);
-    expect(bankAccountRepo.setPrimary).not.toHaveBeenCalled();
+    expect(mockOf(bankAccountRepo, "setPrimary")).not.toHaveBeenCalled();
   });
 });

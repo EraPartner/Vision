@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const ANALYSIS_CONTRACT_VERSION: 1 = 1;
+export const ANALYSIS_CONTRACT_VERSION = 1;
 export const ANALYSIS_WORKSPACES: readonly [
   "budgeting",
   "portfolio",
@@ -345,14 +345,6 @@ interface TypedValueWithDefault extends TypedValueDeclaration {
   defaultValue?: AnalysisScalar | undefined;
 }
 type IssueContext = Pick<z.RefinementCtx, "addIssue">;
-// The backend's checkJs program compiles this file with `strict: false`, where
-// zod infers union-valued keys as optional and the inferred output no longer
-// matches the contract interfaces. In that mode the refined schema is asserted
-// to its contract type; under strictNullChecks this resolves to the schema's
-// own type, so the declared `z.ZodType<Contract>` annotation is fully checked.
-type ContractSchema<Schema, Contract> = undefined extends null
-  ? z.ZodType<Contract>
-  : Schema;
 
 const identifierSchema = z
   .string()
@@ -383,7 +375,7 @@ const timezoneSchema = z
   }, "Timezone must be an IANA timezone");
 const scalarSchema = z.union([
   z.string(),
-  z.number().finite(),
+  z.number(),
   z.boolean(),
   z.null(),
 ]);
@@ -1315,7 +1307,7 @@ export const analysisDefinitionSchema: z.ZodType<AnalysisDefinition> =
           });
       }
     }
-  }) as ContractSchema<typeof definitionBaseSchema, AnalysisDefinition>;
+  });
 
 const sourceIdentitySchema = z
   .object({
@@ -1324,7 +1316,7 @@ const sourceIdentitySchema = z
     sourceVersion: z.string().min(1).max(256),
     asOf: dateTimeSchema,
     contentHash: hashSchema.optional(),
-    uri: z.string().url().max(2_048).optional(),
+    uri: z.url().max(2_048).optional(),
     passageId: z.string().min(1).max(256).optional(),
   })
   .strict();
@@ -1654,8 +1646,7 @@ export const analysisExecutionResultSchema: z.ZodType<AnalysisExecutionResult> =
     const columns = new Map(
       result.data.columns.map((value) => [value.id, value]),
     );
-    const rowIds = addDuplicateIssues(result.data.rows, context, "data.rows");
-    void rowIds;
+    addDuplicateIssues(result.data.rows, context, "data.rows");
     for (const key of result.data.rowGrain.keys) {
       if (!columnIds.has(key))
         context.addIssue({
@@ -1745,7 +1736,7 @@ export const analysisExecutionResultSchema: z.ZodType<AnalysisExecutionResult> =
         });
       if (
         window.totalRows === undefined &&
-        window.hasMore === false &&
+        !window.hasMore &&
         count === window.limit
       )
         context.addIssue({
@@ -1765,7 +1756,7 @@ export const analysisExecutionResultSchema: z.ZodType<AnalysisExecutionResult> =
         path: ["data", "window"],
         message: "Truncated row counts are inconsistent",
       });
-  }) as ContractSchema<typeof resultBaseSchema, AnalysisExecutionResult>;
+  });
 
 function reason(
   code: string,
@@ -1808,11 +1799,10 @@ export function checkAnalysisResultCompatibility(
         reason("invalid-result", entry.path.join("."), entry.message),
       ),
     );
-  if (reasons.length > 0) return { compatible: false, reasons };
-  // Both parses succeeded here: any failure contributes at least one issue to
-  // `reasons`, which returns early above.
-  const definition = definitionParse.data!;
-  const result = resultParse.data!;
+  if (!definitionParse.success || !resultParse.success)
+    return { compatible: false, reasons };
+  const definition = definitionParse.data;
+  const result = resultParse.data;
   if (result.definitionRef.definitionId !== definition.definitionId)
     reasons.push(
       reason(

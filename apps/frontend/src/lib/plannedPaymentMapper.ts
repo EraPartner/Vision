@@ -132,7 +132,7 @@ export function mapFromAPI(
         is_executed: pt.is_executed,
         last_executed_date: pt.last_executed_date,
         executed_transaction_id: pt.executed_transaction_id,
-        execution_count: pt.execution_count ?? 0,
+        execution_count: pt.execution_count,
         executions: pt.executions ?? [],
         created_at: pt.created_at,
     };
@@ -163,7 +163,9 @@ export function mapToCreateAPI(
 
     return {
         planned_date: payment.due_date,
-        account_id: payment.account_id!,
+        // The UI model allows a missing account; the API body requires one and
+        // rejects it server-side, so the value is passed through unchanged.
+        account_id: payment.account_id as AccountId,
         recipient_id: payment.recipient_id ?? undefined,
         memo: payment.name,
         amount: payment.amount,

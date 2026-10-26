@@ -26,8 +26,11 @@ function forecast({
     const d = dayOfMonth(r.date);
     const rank = monthRank.get(monthKey(r.date)) ?? 0;
     const w = rank + 1;
-    if (!buckets.has(d)) buckets.set(d, { sumW: 0, sumWX: 0 });
-    const b = buckets.get(d)!;
+    let b = buckets.get(d);
+    if (!b) {
+      b = { sumW: 0, sumWX: 0 };
+      buckets.set(d, b);
+    }
     b.sumW += w;
     b.sumWX += w * r.net;
   }

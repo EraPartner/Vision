@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,7 +49,7 @@ export function CategoryMergeDialog({
             !node.pathIds.includes(source.id),
     );
     const target = targets.find((node) => node.id === targetId);
-    const submit = (event: FormEvent) => {
+    const submit = (event: SubmitEvent) => {
         event.preventDefault();
         if (targetId == null) return;
         merge.mutate(

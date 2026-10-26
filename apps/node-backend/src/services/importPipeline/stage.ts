@@ -169,7 +169,7 @@ async function insertStagingChunk(
           bank_account: r.bankAccount || null,
           recipient_raw: r.recipient || null,
           memo: r.memo || null,
-          amount: r.amount ?? null,
+          amount: r.amount,
           currency: r.currency || null,
           balance: r.balance ?? null,
           recipient_account: r.recipientAccount || null,

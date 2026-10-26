@@ -69,6 +69,7 @@ import {
 } from "../../src/services/recipientPatternService.ts";
 import { findRecipientClusters } from "../../src/services/recipientClusterService.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const recipientRepository = vi.mocked(rawRecipientRepository);
 const mergeRecipientsAtomic = vi.mocked(rawMergeRecipientsAtomic);
 
@@ -137,7 +138,7 @@ describe("Recipient Routes", () => {
           .expect(400);
         expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
       }
-      expect(recipientRepository.getAll).not.toHaveBeenCalled();
+      expect(mockOf(recipientRepository, "getAll")).not.toHaveBeenCalled();
     });
 
     it('keeps absent and empty default_category_id meaning "no filter"', async () => {
@@ -155,7 +156,7 @@ describe("Recipient Routes", () => {
       recipientRepository.getAll.mockResolvedValue([]);
       recipientRepository.getCount.mockResolvedValue(0);
       await api.get(`${BASE}?default_category_id=7`).expect(200);
-      expect(recipientRepository.getAll).toHaveBeenCalledWith(
+      expect(mockOf(recipientRepository, "getAll")).toHaveBeenCalledWith(
         expect.objectContaining({ defaultCategoryId: 7 }),
       );
     });
@@ -213,7 +214,7 @@ describe("Recipient Routes", () => {
       // validateIdParam with a pass-through, so this guard was never tested.
       const res = await api.get(`${BASE}/abc`).expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(recipientRepository.getById).not.toHaveBeenCalled();
+      expect(mockOf(recipientRepository, "getById")).not.toHaveBeenCalled();
     });
   });
 
@@ -377,8 +378,8 @@ describe("Recipient Routes", () => {
 
       const res = await api.post(`${BASE}/44/unmerge`).expect(200);
 
-      expect(recipientRepository.unmergeRecipient).toHaveBeenCalledWith(44);
-      expect(recipientRepository.getById).toHaveBeenCalledWith(44);
+      expect(mockOf(recipientRepository, "unmergeRecipient")).toHaveBeenCalledWith(44);
+      expect(mockOf(recipientRepository, "getById")).toHaveBeenCalledWith(44);
       expect(bodyAt(res, "data")).toEqual({
         id: 44,
         name: "UNMERGED",
@@ -397,7 +398,7 @@ describe("Recipient Routes", () => {
 
       const res = await api.get(`${BASE}/1/aliases`).expect(200);
 
-      expect(recipientRepository.getAliases).toHaveBeenCalledWith(1);
+      expect(mockOf(recipientRepository, "getAliases")).toHaveBeenCalledWith(1);
       expect(bodyAt(res, "data")).toEqual({
         items: [
           { id: 10, name: "Alias One", primary_recipient_id: 1, links: [] },
@@ -446,7 +447,7 @@ describe("Recipient Routes", () => {
         const res = await api.get(`${BASE}${path}${query}`).expect(400);
         expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
         expect(findRecipientClusters).not.toHaveBeenCalled();
-        expect(recipientRepository.getAll).not.toHaveBeenCalled();
+        expect(mockOf(recipientRepository, "getAll")).not.toHaveBeenCalled();
       },
     );
 
@@ -454,7 +455,7 @@ describe("Recipient Routes", () => {
       recipientRepository.getAll.mockResolvedValue([]);
       recipientRepository.getCount.mockResolvedValue(0);
       await api.get(`${BASE}?sort_dir=sideways&limit=abc`).expect(200);
-      expect(recipientRepository.getAll).toHaveBeenCalledWith(
+      expect(mockOf(recipientRepository, "getAll")).toHaveBeenCalledWith(
         expect.objectContaining({ sortDir: undefined, limit: 50, offset: 0 }),
       );
     });
@@ -468,8 +469,8 @@ describe("Recipient Routes", () => {
       const res = await api.post(BASE).send(body).expect(400);
       expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
       expect(bodyAt(res, "error", "message")).toContain(message);
-      expect(recipientRepository.createOrGet).not.toHaveBeenCalled();
-      expect(recipientRepository.update).not.toHaveBeenCalled();
+      expect(mockOf(recipientRepository, "createOrGet")).not.toHaveBeenCalled();
+      expect(mockOf(recipientRepository, "update")).not.toHaveBeenCalled();
     });
 
     it("POST / still coerces a digit-string default_category_id", async () => {
@@ -482,7 +483,7 @@ describe("Recipient Routes", () => {
         .post(BASE)
         .send({ name: "A", default_category_id: "7" })
         .expect(201);
-      expect(recipientRepository.update).toHaveBeenCalledWith(4, {
+      expect(mockOf(recipientRepository, "update")).toHaveBeenCalledWith(4, {
         default_category_id: 7,
         notes: undefined,
       });
@@ -497,7 +498,7 @@ describe("Recipient Routes", () => {
     ])("PATCH /:id rejects %j", async (body) => {
       const res = await api.patch(`${BASE}/1`).send(body).expect(400);
       expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
-      expect(recipientRepository.update).not.toHaveBeenCalled();
+      expect(mockOf(recipientRepository, "update")).not.toHaveBeenCalled();
     });
 
     it("PATCH /:id forwards only the known fields, keeping null clears", async () => {
@@ -510,7 +511,7 @@ describe("Recipient Routes", () => {
           primary_recipient_id: 9,
         })
         .expect(200);
-      expect(recipientRepository.update).toHaveBeenCalledWith(1, {
+      expect(mockOf(recipientRepository, "update")).toHaveBeenCalledWith(1, {
         default_category_id: null,
         notes: "n",
       });

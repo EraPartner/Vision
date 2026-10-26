@@ -169,7 +169,8 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
         const buildResources = (): boolean => {
             const vs = compile(gl.VERTEX_SHADER, VERT);
             const fs = compile(gl.FRAGMENT_SHADER, FRAG);
-            const program = gl.createProgram();
+            // createProgram returns null on a lost context; the DOM typings omit that.
+            const program = gl.createProgram() as WebGLProgram | null;
             if (!vs || !fs || program == null) return false;
             gl.attachShader(program, vs);
             gl.attachShader(program, fs);
@@ -344,7 +345,7 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
                 onContextRestored,
             );
             themeObserver.disconnect();
-            gl?.getExtension("WEBGL_lose_context")?.loseContext();
+            gl.getExtension("WEBGL_lose_context")?.loseContext();
         };
     }, []);
 

@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import type { InvestmentId } from "@vision/types/brands";
+import type { TranslationKey } from "@/locales/keys";
 
 interface BreakdownItem {
     id: InvestmentId;
@@ -53,7 +54,7 @@ interface Props {
 }
 
 type TranslateFn = (
-    key: string,
+    key: TranslationKey,
     params?: Record<string, string | number>,
 ) => string;
 
@@ -267,7 +268,7 @@ export default function PerformanceBreakdown({
                                             classInvested,
                                             defaultCurrency,
                                             locale,
-                                            appSettings.showDecimalPlaces ?? 2,
+                                            appSettings.showDecimalPlaces,
                                         ),
                                     })}
                                 </div>

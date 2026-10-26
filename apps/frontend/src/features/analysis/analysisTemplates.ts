@@ -1,10 +1,11 @@
 import type { AnalysisWorkspace, VisualAnalysisPlan } from "@/lib/api/analysis";
+import type { TranslationKey } from "@/locales/keys";
 
 export interface AnalysisTemplate {
     id: string;
     workspace: AnalysisWorkspace;
-    titleKey: string;
-    descriptionKey: string;
+    titleKey: TranslationKey;
+    descriptionKey: TranslationKey;
     plan: VisualAnalysisPlan;
 }
 

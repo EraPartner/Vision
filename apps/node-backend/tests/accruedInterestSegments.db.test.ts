@@ -20,20 +20,21 @@ import { computeAndStoreSnapshots } from "../src/services/portfolio/snapshotBuil
 import { routeAgent } from "./helpers/routeApp.ts";
 import { bodyAt } from "./helpers/responseBody.ts";
 import portfolioSummaryRouter from "../src/routes/info/portfolioSummary.ts";
+import { must } from "./helpers/must.ts";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
 async function savings(rate: number) {
-  const { rows } = await getTestPool()!.query<{ id: number }>(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: number }>(
     `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, is_active)
      VALUES ('Synthetic term deposit', 'SYNTD', 'savings', 'EUR', 0, $1, true) RETURNING id`,
     [rate],
   );
-  return rows[0]!.id;
+  return must(rows[0], "rows[0]").id;
 }
 
 async function txn(id: number, type: string, date: string, amount: number) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO portfolio_transactions (investment_id, type, date, amount, currency)
      VALUES ($1, $2, $3::date, $4, 'EUR')`,
     [id, type, date, amount],
@@ -41,7 +42,7 @@ async function txn(id: number, type: string, date: string, amount: number) {
 }
 
 async function reset() {
-  const pool = getTestPool()!;
+  const pool = must(getTestPool(), "getTestPool()");
   await pool.query("DELETE FROM portfolio_performance_snapshots");
   await pool.query("DELETE FROM portfolio_transactions");
   await pool.query("DELETE FROM investments");
@@ -71,7 +72,7 @@ describeDb("accrued interest per principal segment (real DB)", () => {
     const rows = bodyAt(res, "data", "summaries") as Array<
       Record<string, unknown>
     >;
-    return rows[0]!;
+    return must(rows[0], "rows[0]");
   }
 
   it("accrues a top-up only from its own date, in the summary and the history", async () => {
@@ -88,7 +89,7 @@ describeDb("accrued interest per principal segment (real DB)", () => {
     expect(summary.currentValue).toBe(15267.12);
 
     const history = await computeAndStoreSnapshots("EUR");
-    const latest = history.at(-1)!;
+    const latest = must(history.at(-1), "history.at(-1)");
     expect(latest.snapshot_date).toBe(today);
     expect(latest.cash_value).toBeCloseTo(15267.12, 2);
   });
@@ -104,7 +105,7 @@ describeDb("accrued interest per principal segment (real DB)", () => {
     const summary = await accrued();
     expect(summary.accruedInterest).toBe(64.11);
 
-    const latest = (await computeAndStoreSnapshots("EUR")).at(-1)!;
+    const latest = must((await computeAndStoreSnapshots("EUR")).at(-1), "(await computeAndStoreSnapshots(\"EUR\")).at(-1)");
     expect(latest.cash_value).toBeCloseTo(6064.11, 2);
   });
 });

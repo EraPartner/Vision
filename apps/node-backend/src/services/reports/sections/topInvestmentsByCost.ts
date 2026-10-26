@@ -11,6 +11,7 @@ import {
   sectionPage,
 } from "../sectionHelpers.ts";
 import type { TaxReportData } from '../dataFetcherTax.ts';
+import { toDecimal } from "../../../lib/money.ts";
 
 export function renderTopInvestmentsByCost(
   data: TaxReportData | null,
@@ -28,20 +29,20 @@ export function renderTopInvestmentsByCost(
   }
 
   const sorted = [...byInvestment]
-    .sort((a, b) => (b.total ?? 0) - (a.total ?? 0))
+    .sort((a, b) => toDecimal(b.total).comparedTo(a.total))
     .slice(0, 15);
 
   const tableRows = sorted
     .map((inv, idx) => {
-      const fees = inv.fees ?? 0;
-      const tob = inv.tob ?? 0;
-      const wht = inv.wht ?? 0;
-      const sell = inv.sell ?? 0;
-      const other = inv.other ?? 0;
-      const total = inv.total ?? 0;
+      const fees = inv.fees;
+      const tob = inv.tob;
+      const wht = inv.wht;
+      const sell = inv.sell;
+      const other = inv.other;
+      const total = inv.total;
       return `<tr>
       <td style="color:hsl(var(--muted));font-size:10px;">${idx + 1}</td>
-      <td>${escapeHtml(inv.name ?? "—")}</td>
+      <td>${escapeHtml(inv.name)}</td>
       <td>${escapeHtml(inv.symbol ?? "—")}</td>
       <td class="num neg">${fmtCurrency(tob, currency)}</td>
       <td class="num neg">${fmtCurrency(wht, currency)}</td>

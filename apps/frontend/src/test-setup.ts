@@ -27,7 +27,7 @@ if (typeof window !== "undefined") {
         getItem: (key) => values.get(key) ?? null,
         key: (index) => Array.from(values.keys())[index] ?? null,
         removeItem: (key) => values.delete(key),
-        setItem: (key, value) => values.set(key, String(value)),
+        setItem: (key, value) => values.set(key, value),
     };
     Object.defineProperty(globalThis, "localStorage", {
         configurable: true,

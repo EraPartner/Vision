@@ -8,6 +8,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { runInThisContext } from "node:vm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const CWD = process.cwd();
@@ -40,7 +41,7 @@ function runBoot(storage: Record<string, string>, osDark: boolean): void {
             }) as MediaQueryList,
     );
     // Runs the shipped file as a classic script, as the browser does.
-    new Function(BOOT_SCRIPT)();
+    runInThisContext(BOOT_SCRIPT);
 }
 
 const root = () => document.documentElement;

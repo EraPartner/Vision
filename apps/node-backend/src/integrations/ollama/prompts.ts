@@ -16,14 +16,18 @@
  */
 
 import type { AiMessageRow } from "../../types/rows.ts";
+import { isRecord } from "../../lib/typeGuards.ts";
 
 export type { AiMessageRow };
 
 /** One entry of an Ollama `tool_calls[]` array; model-emitted, untrusted. */
 export interface OllamaToolCall {
-  id?: string;
-  function?: { name?: string; arguments?: unknown };
+  id?: string | undefined;
+  function?: { name?: string | undefined; arguments?: unknown } | undefined;
 }
+
+/** `tool_calls[]` as parsed from provider JSON: an entry can be null. */
+export type ProviderToolCall = OllamaToolCall | null;
 
 /**
  * The shape sent to Ollama's /api/chat `messages` field. Mirrors
@@ -34,7 +38,7 @@ export interface OllamaToolCall {
 export type OllamaMessage = {
   role: string;
   content: string;
-  tool_calls?: OllamaToolCall[] | undefined;
+  tool_calls?: ProviderToolCall[] | undefined;
   name?: string | undefined;
 };
 
@@ -292,11 +296,8 @@ export function serializeToolResultForPrompt(
   const serialized = jsonText(payload);
   if (serialized.length <= limit) return serialized;
 
-  if (typeof payload === "object" && payload !== null) {
-    const bounded = boundedToolEnvelope(
-      payload as Record<string, unknown>,
-      limit,
-    );
+  if (isRecord(payload)) {
+    const bounded = boundedToolEnvelope(payload, limit);
     if (bounded !== null) return bounded;
   }
 
@@ -313,7 +314,7 @@ export function serializeToolResultForPrompt(
 
 function approximateMessageChars(message: OllamaMessage) {
   return (
-    (message.content?.length ?? 0) +
+    message.content.length +
     (message.name?.length ?? 0) +
     (message.tool_calls ? jsonText(message.tool_calls).length : 0)
   );
@@ -331,7 +332,7 @@ function truncateMessageToBudget(
     (message.name?.length ?? 0) +
     (message.tool_calls ? jsonText(message.tool_calls).length : 0);
   const contentChars = Math.max(0, remainingChars - fixedChars);
-  const content = message.content ?? "";
+  const content = message.content;
   if (content.length <= contentChars) return message;
   if (contentChars === 0) return { ...message, content: "" };
   const suffix = content.slice(-Math.max(0, contentChars - 1));
@@ -369,14 +370,20 @@ function buildSystemPrompt(toolNames: string[]): string {
  * future provider needs a history adapter or persisted assistant tool calls.
  */
 function toOllamaMessage(
-  row: AiMessageRow | null | undefined,
+  // Synthetic rows (tests, evaluation fixtures) may omit the role.
+  row:
+    | (Omit<AiMessageRow, "role"> & { role?: AiMessageRow["role"] | undefined })
+    | null
+    | undefined,
   {
     maxToolResultChars = DEFAULT_TOOL_RESULT_CHARS,
   }: { maxToolResultChars?: number } = {},
 ): OllamaMessage | null {
-  if (!row || !row.role) return null;
+  if (!row) return null;
+  const { role } = row;
+  if (!role) return null;
 
-  if (row.role === "tool") {
+  if (role === "tool") {
     // Only the camelCase fields: aiChatRepository's MESSAGE_COLUMNS aliases
     // these in SQL and the sole caller passes AiMessageRow[], so the snake_case
     // fallback that used to sit here could never fire.
@@ -392,7 +399,7 @@ function toOllamaMessage(
   }
 
   return {
-    role: row.role,
+    role,
     content: row.content || "",
   };
 }

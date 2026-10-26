@@ -47,7 +47,7 @@ const tagService = {
     const slug = slugify(rawSlug);
     if (!slug) throw new ValidationError("slug is empty after normalization");
 
-    if (color !== null && color !== undefined && typeof color !== "string") {
+    if (color !== null && typeof color !== "string") {
       throw new ValidationError("color must be a string");
     }
 

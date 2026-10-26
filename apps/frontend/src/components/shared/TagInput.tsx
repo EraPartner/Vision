@@ -10,6 +10,7 @@ import { useLanguage } from '@/stores/hydration/LanguageHydration';
 import { slugify } from '@/lib/slugify';
 import type { Tag } from '@/types/api';
 import { asTagId } from "@vision/types/brands";
+import type { TranslationKey } from "@/locales/keys";
 
 // Jewel-tone palette spanning the hue wheel (matches the app's jewel accent).
 const PALETTE = [
@@ -29,7 +30,7 @@ const PALETTE = [
 
 // Translation keys for each palette swatch's name, keyed by its hsl() string,
 // so swatch buttons get a meaningful aria-label instead of raw CSS colour syntax.
-const PALETTE_NAME_KEYS: Record<string, string> = {
+const PALETTE_NAME_KEYS: Record<string, TranslationKey> = {
     'hsl(355, 60%, 52%)': 'tags.color.crimson',
     'hsl(20, 68%, 52%)': 'tags.color.coral',
     'hsl(40, 64%, 50%)': 'tags.color.amber',

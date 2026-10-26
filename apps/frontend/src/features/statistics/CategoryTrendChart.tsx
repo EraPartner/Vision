@@ -1,3 +1,4 @@
+import { axisDate } from "@/components/charts/axisValue";
 import { memo, useMemo } from "react";
 import { LineChart, type LineSeries } from "@/components/charts";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
@@ -62,7 +63,7 @@ export const CategoryTrendChart = memo(function CategoryTrendChart({ data }: Cat
       xAccessor={(d) => d.date}
       series={series}
       height={350}
-      xTickFormat={(v) => formatDate(v as Date, CHART_DATE_PATTERNS.monthTick, monthLabelLocale)}
+      xTickFormat={(v) => formatDate(axisDate(v), CHART_DATE_PATTERNS.monthTick, monthLabelLocale)}
       yTickFormat={formatAxisCompact}
       tooltipTitle={(d) => formatPeriodShort(d.period, monthLabelLocale)}
       tooltipValueFormat={(v) => formatCurrency(v)}

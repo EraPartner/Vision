@@ -17,10 +17,14 @@ describe("requestId middleware context", () => {
     const res = createResponse();
     let seenAfterAwait: string | undefined;
 
-    await requestId(req, res, async () => {
-      await Promise.resolve();
-      seenAfterAwait = getRequestContext()?.requestId;
+    let downstream: Promise<void> | undefined;
+    requestId(req, res, () => {
+      downstream = (async () => {
+        await Promise.resolve();
+        seenAfterAwait = getRequestContext()?.requestId;
+      })();
     });
+    await downstream;
 
     expect(req.id).toBe("incoming-request-123");
     expect(res.setHeader).toHaveBeenCalledWith(

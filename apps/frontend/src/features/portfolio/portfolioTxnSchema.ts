@@ -82,13 +82,13 @@ const rawFields = z.object({
 
 type IssueCtx = {
     addIssue: (issue: {
-        code: typeof z.ZodIssueCode.custom;
+        code: "custom";
         message: string;
     }) => void;
 };
 
 function fail(ctx: IssueCtx, message: string): typeof z.NEVER {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+    ctx.addIssue({ code: "custom", message });
     return z.NEVER;
 }
 

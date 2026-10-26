@@ -51,7 +51,7 @@ export const DEDUCTION_TYPES = Object.freeze([
  * Diacritics are stripped first so CRÈCHE tokenizes as CRECHE.
  */
 function tokenize(value: string | null | undefined): string[] {
-  return String(value ?? "")
+  return (value ?? "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") // strip combining diacritics
     .toUpperCase()

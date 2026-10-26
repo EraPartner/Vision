@@ -52,7 +52,7 @@ export function rateLimiter({
     // Dev bypass: skip throttling entirely so hot-reload doesn't trip limits.
     // Gated on an explicit VISION_DEV opt-in (not merely ENVIRONMENT) so an
     // unset/misconfigured env never silently disables rate limiting.
-    if (settings.security?.devBypass) {
+    if (settings.security.devBypass) {
       return next();
     }
 
@@ -102,8 +102,8 @@ export function rateLimiter({
  * below sit on top of it for expensive endpoints.
  */
 export const globalRateLimiter = rateLimiter({
-  windowMs: settings.rateLimit?.globalWindowMs ?? 60_000,
-  maxRequests: settings.rateLimit?.globalMax ?? 1000,
+  windowMs: settings.rateLimit.globalWindowMs,
+  maxRequests: settings.rateLimit.globalMax,
   keyPrefix: "global",
 });
 

@@ -14,40 +14,40 @@ import {
 
 const sha = "a".repeat(40);
 
-test("a checkout without the credential policy fails", () => {
+void test("a checkout without the credential policy fails", () => {
   const workflow = `steps:\n  - uses: actions/checkout@${sha}\n`;
   assert.match(checkWorkflow(workflow, "x").join(" "), /persisted credentials/);
 });
 
-test("a mutable action ref fails", () => {
+void test("a mutable action ref fails", () => {
   assert.match(
     checkWorkflow("- uses: actions/checkout@v4", "x").join(" "),
     /full SHA/,
   );
 });
 
-test("a dynamic tool download fails", () => {
+void test("a dynamic tool download fails", () => {
   assert.match(checkWorkflow("run: bunx tsc", "x").join(" "), /bunx/);
 });
 
-test("an external checkout requires an immutable ref", () => {
+void test("an external checkout requires an immutable ref", () => {
   const workflow =
     `steps:\n  - uses: actions/checkout@${sha}\n    with:\n      repository: example/shared-tooling\n` +
     "      ref: main\n      persist-credentials: false\n";
   assert.match(checkWorkflow(workflow, "x").join(" "), /full SHA ref/);
 });
 
-test("a pinned checkout without credentials passes", () => {
+void test("a pinned checkout without credentials passes", () => {
   const workflow = `steps:\n  - uses: actions/checkout@${sha}\n    with:\n      persist-credentials: false\n`;
   assert.deepEqual(checkWorkflow(workflow, "x"), []);
 });
 
-test("checkout env cannot pose as a with input", () => {
+void test("checkout env cannot pose as a with input", () => {
   const workflow = `steps:\n  - uses: actions/checkout@${sha}\n    env:\n      persist-credentials: false\n`;
   assert.match(checkWorkflow(workflow, "x").join(" "), /persisted credentials/);
 });
 
-test("discovers .yaml alternates", () => {
+void test("discovers .yaml alternates", () => {
   const root = fs.mkdtempSync(
     path.join(os.tmpdir(), "vision-workflow-policy-"),
   );
@@ -67,7 +67,7 @@ test("discovers .yaml alternates", () => {
   );
 });
 
-test("the repository's own workflows satisfy the policy", () => {
+void test("the repository's own workflows satisfy the policy", () => {
   assert.deepEqual(
     checkRepository(path.join(import.meta.dirname, "..", "..")),
     [],
@@ -78,7 +78,7 @@ const integrity = `sha512-${"A".repeat(86)}==`;
 const lock = (packages: string) =>
   `{\n  "lockfileVersion": 1,\n  "packages": {\n${packages}\n  },\n}\n`;
 
-test("registry, workspace and allowlisted tarball entries pass", () => {
+void test("registry, workspace and allowlisted tarball entries pass", () => {
   const text = lock(
     `    "zod": ["zod@4.6.7", "", {}, "${integrity}"],\n` +
       `    "@vision/types": ["@vision/types@workspace:packages/types"],\n` +
@@ -87,7 +87,7 @@ test("registry, workspace and allowlisted tarball entries pass", () => {
   assert.deepEqual(checkLockfile(text, "bun.lock"), []);
 });
 
-test("git, other tarball and custom-registry entries fail", () => {
+void test("git, other tarball and custom-registry entries fail", () => {
   const text = lock(
     `    "a": ["a@github:evil/a#abc", {}, "${integrity}"],\n` +
       `    "b": ["b@https://example.com/b.tgz", {}, "${integrity}"],\n` +
@@ -98,12 +98,12 @@ test("git, other tarball and custom-registry entries fail", () => {
   assert.match(errors.join(" "), /outside the npm registry/);
 });
 
-test("a registry entry without sha512 integrity fails", () => {
+void test("a registry entry without sha512 integrity fails", () => {
   const text = lock(`    "zod": ["zod@4.6.7", "", {}, "sha1-abc"],`);
   assert.match(checkLockfile(text, "bun.lock").join(" "), /sha512/);
 });
 
-test("install policy needs empty trustedDependencies and a 7-day release age", () => {
+void test("install policy needs empty trustedDependencies and a 7-day release age", () => {
   const bunfig = "[install]\nminimumReleaseAge = 604800\n";
   assert.deepEqual(
     checkInstallPolicy('{"trustedDependencies": []}', bunfig, "."),

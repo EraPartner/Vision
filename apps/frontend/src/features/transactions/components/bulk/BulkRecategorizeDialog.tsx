@@ -31,7 +31,7 @@ export function BulkRecategorizeDialog({
     const { t } = useLanguage();
     const [categoryId, setCategoryId] = useState<CategoryId | null>(null);
 
-    function handleApply(e: React.FormEvent) {
+    function handleApply(e: React.SubmitEvent) {
         e.preventDefault();
         onApply(categoryId);
     }

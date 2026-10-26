@@ -11,6 +11,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { generateLoanRepaymentSchedule } from '../../src/services/calculations/loanSchedule.ts';
+import { must } from "../helpers/must.ts";
 
 const CENT = 0.01;
 
@@ -67,7 +68,7 @@ describe('property: loan schedule principal sum', () => {
       for (let i = 0; i < 100; i++) {
         const cfg = randomCase(rng, loanType);
         const { schedule } = generateLoanRepaymentSchedule(cfg);
-        const last = schedule[schedule.length - 1]!;
+        const last = must(schedule[schedule.length - 1], "schedule[schedule.length - 1]");
         expect(last.remaining_principal).toBe(0);
       }
     });
@@ -85,8 +86,8 @@ describe('property: loan schedule principal sum', () => {
       };
       const { schedule } = generateLoanRepaymentSchedule(cfg);
       expect(schedule).toHaveLength(1);
-      expect(schedule[0]!.remaining_principal).toBe(0);
-      expect(Math.abs(schedule[0]!.principal_amount - cfg.loan_principal)).toBeLessThanOrEqual(CENT);
+      expect(must(schedule[0], "schedule[0]").remaining_principal).toBe(0);
+      expect(Math.abs(must(schedule[0], "schedule[0]").principal_amount - cfg.loan_principal)).toBeLessThanOrEqual(CENT);
     }
   });
 

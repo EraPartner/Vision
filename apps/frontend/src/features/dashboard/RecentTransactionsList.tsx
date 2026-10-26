@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import { Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,7 +58,7 @@ export function RecentTransactionsList({
                         exclusionsApply={exclusionsApply}
                     />
                     <Button asChild variant="link" size="sm" className="h-auto p-0">
-                        <Link to="/transactions">{t("home.recent.seeAll")}</Link>
+                        <AppLink to="/transactions">{t("home.recent.seeAll")}</AppLink>
                     </Button>
                 </div>
             </CardHeader>
@@ -98,7 +98,7 @@ export function RecentTransactionsList({
                                     </span>
                                 }
                             >
-                                <Link to="/transactions" state={{ selectTransactionId: row.id }} />
+                                <AppLink to="/transactions" state={{ selectTransactionId: row.id }} />
                             </ListRow>
                         ))
                     )}

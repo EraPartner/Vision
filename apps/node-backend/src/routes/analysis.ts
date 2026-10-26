@@ -280,7 +280,7 @@ interface AnalysisFailure {
   message: string;
   status?: number | undefined;
   code?: string | undefined;
-  position?: unknown;
+  position?: string | undefined;
 }
 
 function analysisFailure(error: unknown): AnalysisFailure {
@@ -290,7 +290,10 @@ function analysisFailure(error: unknown): AnalysisFailure {
     message: error instanceof Error ? error.message : String(error),
     status: typeof fields.status === "number" ? fields.status : undefined,
     code: typeof fields.code === "string" ? fields.code : undefined,
-    position: fields.position,
+    position:
+      typeof fields.position === "string" || typeof fields.position === "number"
+        ? String(fields.position)
+        : undefined,
   };
 }
 
@@ -407,7 +410,10 @@ router.post("/execute", async (req, res) => {
     const error = analysisFailure(caught);
     if (isServerFault(error)) throw caught;
     const status = error.code === "57014" ? 408 : 400;
-    const location = error.position ? ` (SQL character ${error.position})` : "";
+    const location =
+      error.position !== undefined && error.position !== ""
+        ? ` (SQL character ${error.position})`
+        : "";
     throw new AppError(`${error.message}${location}`, {
       status,
       code:

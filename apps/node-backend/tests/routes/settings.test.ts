@@ -29,7 +29,9 @@ vi.mock("../../src/config/logger.ts", () => ({
 import type { IRoute } from "express";
 import { ConflictError } from "../../src/middleware/errorHandler.ts";
 import rawSettingsRepository from "../../src/repositories/settingsRepository.ts";
+import { must } from "../helpers/must.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const settingsRepository = vi.mocked(rawSettingsRepository);
 
 /** Express's Route keeps its verb map at runtime; @types/express omits it. */
@@ -58,7 +60,7 @@ function registeredHandler(path: string, method: string): DirectHandler {
       (entry.route as RouteWithMethods).methods[method],
   );
   if (!layer) throw new Error(`Missing ${method.toUpperCase()} ${path} route`);
-  return layer.route!.stack.at(-1)!.handle as unknown as DirectHandler;
+  return must(must(layer.route, "layer.route").stack.at(-1), "layer.route!.stack.at(-1)").handle as unknown as DirectHandler;
 }
 
 const putSingleSetting = registeredHandler("/:key", "put");
@@ -207,7 +209,7 @@ describe("Settings Routes", () => {
         res,
       );
 
-      expect(settingsRepository.replace).toHaveBeenCalledWith(
+      expect(mockOf(settingsRepository, "replace")).toHaveBeenCalledWith(
         "brokerage_cash_category_ids",
         value,
         { exists: false },
@@ -233,7 +235,7 @@ describe("Settings Routes", () => {
             { ok: vi.fn() },
           ),
         ).rejects.toThrow();
-        expect(settingsRepository.replace).not.toHaveBeenCalled();
+        expect(mockOf(settingsRepository, "replace")).not.toHaveBeenCalled();
       },
     );
 
@@ -260,7 +262,7 @@ describe("Settings Routes", () => {
         res,
       );
 
-      expect(settingsRepository.replace).toHaveBeenCalledWith(
+      expect(mockOf(settingsRepository, "replace")).toHaveBeenCalledWith(
         "dashboard_settings",
         stored,
         { exists: false },
@@ -288,7 +290,7 @@ describe("Settings Routes", () => {
           ),
         ).rejects.toThrow();
 
-        expect(settingsRepository.replace).not.toHaveBeenCalled();
+        expect(mockOf(settingsRepository, "replace")).not.toHaveBeenCalled();
       },
     );
 
@@ -357,7 +359,7 @@ describe("Settings Routes", () => {
         .send(singleBody({ value: { theme: "dark" } }))
         .expect(200);
 
-      expect(settingsRepository.replace).toHaveBeenCalledWith(
+      expect(mockOf(settingsRepository, "replace")).toHaveBeenCalledWith(
         "theme_settings",
         {
           theme: "dark",
@@ -423,7 +425,7 @@ describe("Settings Routes", () => {
         )
         .expect(200);
 
-      expect(settingsRepository.replace).toHaveBeenCalledWith(
+      expect(mockOf(settingsRepository, "replace")).toHaveBeenCalledWith(
         "theme_settings",
         {
           mode: "schedule",
@@ -443,7 +445,7 @@ describe("Settings Routes", () => {
       expect(bodyAt(res, "error", "message")).toMatch(
         /Unknown setting key 'totally_unknown_key'.*Known keys:/,
       );
-      expect(settingsRepository.replace).not.toHaveBeenCalled();
+      expect(mockOf(settingsRepository, "replace")).not.toHaveBeenCalled();
     });
 
     it("accepts a belgian_tax_household_v2 value and rejects a v1-shaped one", async () => {
@@ -489,7 +491,7 @@ describe("Settings Routes", () => {
         .send(singleBody({ value: { taxYear: 2025, grossAnnualIncome: 1 } }))
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(settingsRepository.replace).not.toHaveBeenCalled();
+      expect(mockOf(settingsRepository, "replace")).not.toHaveBeenCalled();
     });
 
     it("still rejects an unknown household-like key", async () => {
@@ -497,7 +499,7 @@ describe("Settings Routes", () => {
         .put(`${BASE}/belgian_tax_household_v3`)
         .send(singleBody({ value: {} }))
         .expect(400);
-      expect(settingsRepository.replace).not.toHaveBeenCalled();
+      expect(mockOf(settingsRepository, "replace")).not.toHaveBeenCalled();
     });
 
     it("accepts dismissed_recurring_patterns as an array (RecurringDetectionPanel payload)", async () => {
@@ -513,7 +515,7 @@ describe("Settings Routes", () => {
         .send(singleBody({ value: [3, 7] }))
         .expect(200);
 
-      expect(settingsRepository.replace).toHaveBeenCalledWith(
+      expect(mockOf(settingsRepository, "replace")).toHaveBeenCalledWith(
         "dismissed_recurring_patterns",
         [3, 7],
         { exists: false },
@@ -542,7 +544,7 @@ describe("Settings Routes", () => {
         .send(singleBody({ value }))
         .expect(200);
 
-      expect(settingsRepository.replace).toHaveBeenCalledWith(
+      expect(mockOf(settingsRepository, "replace")).toHaveBeenCalledWith(
         "portfolio_tax_adjustments_v1",
         value,
         { exists: false },
@@ -577,7 +579,7 @@ describe("Settings Routes", () => {
           { ok: vi.fn() },
         ),
       ).rejects.toThrow();
-      expect(settingsRepository.replaceMany).not.toHaveBeenCalled();
+      expect(mockOf(settingsRepository, "replaceMany")).not.toHaveBeenCalled();
     });
 
     it("passes coerced exclusion ids from the registered route handler to the bulk writer", async () => {
@@ -596,7 +598,7 @@ describe("Settings Routes", () => {
         res,
       );
 
-      expect(settingsRepository.replaceMany).toHaveBeenCalledWith(
+      expect(mockOf(settingsRepository, "replaceMany")).toHaveBeenCalledWith(
         {
           dashboard_settings: {
             excludedCategoryIds: [7],
@@ -625,7 +627,7 @@ describe("Settings Routes", () => {
         ),
       ).rejects.toThrow();
 
-      expect(settingsRepository.replaceMany).not.toHaveBeenCalled();
+      expect(mockOf(settingsRepository, "replaceMany")).not.toHaveBeenCalled();
     });
 
     it("returns a 400 VALIDATION_ERROR envelope when body is an array", async () => {
@@ -672,7 +674,7 @@ describe("Settings Routes", () => {
         )
         .expect(200);
 
-      expect(settingsRepository.replaceMany).toHaveBeenCalledWith(
+      expect(mockOf(settingsRepository, "replaceMany")).toHaveBeenCalledWith(
         {
           onboarding_complete: true,
           dashboard_settings: { excludedCategoryIds: [1, 2] },
@@ -703,7 +705,7 @@ describe("Settings Routes", () => {
         )
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(settingsRepository.replaceMany).not.toHaveBeenCalled();
+      expect(mockOf(settingsRepository, "replaceMany")).not.toHaveBeenCalled();
     });
 
     it("rejects an invalid cost_basis_method via bulk (no validation bypass)", async () => {
@@ -712,7 +714,7 @@ describe("Settings Routes", () => {
         .send(bulkBody({ cost_basis_method: "bogus" }))
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(settingsRepository.replaceMany).not.toHaveBeenCalled();
+      expect(mockOf(settingsRepository, "replaceMany")).not.toHaveBeenCalled();
     });
 
     it("accepts a valid cost_basis_method via bulk", async () => {
@@ -721,7 +723,7 @@ describe("Settings Routes", () => {
         .put(BASE)
         .send(bulkBody({ cost_basis_method: "fifo" }))
         .expect(200);
-      expect(settingsRepository.replaceMany).toHaveBeenCalledWith(
+      expect(mockOf(settingsRepository, "replaceMany")).toHaveBeenCalledWith(
         {
           cost_basis_method: "fifo",
         },
@@ -772,7 +774,7 @@ describe("Settings Routes", () => {
     it("serves the plain map for withBaselines=false", async () => {
       settingsRepository.getAll.mockResolvedValue({});
       await api.get(`${BASE}?withBaselines=false`).expect(200);
-      expect(settingsRepository.getAll).toHaveBeenCalled();
+      expect(mockOf(settingsRepository, "getAll")).toHaveBeenCalled();
     });
 
     it.each(["yes", "TRUE"])(
@@ -785,7 +787,7 @@ describe("Settings Routes", () => {
         expect(res.body).toEqual(
           validationError("withBaselines must be true or false"),
         );
-        expect(settingsRepository.getAll).not.toHaveBeenCalled();
+        expect(mockOf(settingsRepository, "getAll")).not.toHaveBeenCalled();
       },
     );
 
@@ -817,7 +819,7 @@ describe("Settings Routes", () => {
       expect(res.body).toEqual(
         validationError("Missing or invalid expected setting baseline"),
       );
-      expect(settingsRepository.replace).not.toHaveBeenCalled();
+      expect(mockOf(settingsRepository, "replace")).not.toHaveBeenCalled();
     });
 
     it("rejects a bulk write whose baseline map lacks a key", async () => {
@@ -831,7 +833,7 @@ describe("Settings Routes", () => {
       expect(res.body).toEqual(
         validationError("Missing or invalid expected setting baseline"),
       );
-      expect(settingsRepository.replaceMany).not.toHaveBeenCalled();
+      expect(mockOf(settingsRepository, "replaceMany")).not.toHaveBeenCalled();
     });
 
     it("rejects a bulk write without a baseline map", async () => {
@@ -857,7 +859,7 @@ describe("Settings Routes", () => {
       expect(res.body).toEqual(
         validationError("Setting key '__proto__' is not allowed"),
       );
-      expect(settingsRepository.replaceMany).not.toHaveBeenCalled();
+      expect(mockOf(settingsRepository, "replaceMany")).not.toHaveBeenCalled();
     });
 
     it("rejects a delete without its baseline", async () => {
@@ -865,7 +867,7 @@ describe("Settings Routes", () => {
       expect(res.body).toEqual(
         validationError("Missing or invalid expected setting baseline"),
       );
-      expect(settingsRepository.deleteExpected).not.toHaveBeenCalled();
+      expect(mockOf(settingsRepository, "deleteExpected")).not.toHaveBeenCalled();
     });
 
     it("rejects an over-long key on delete", async () => {

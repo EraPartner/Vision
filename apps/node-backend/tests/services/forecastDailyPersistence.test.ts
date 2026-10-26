@@ -2,15 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ upsert: vi.fn() }));
 vi.mock("../../src/repositories/infoRepository.ts", () => ({
   infoRepository: {
-    getIncludeTransfers: vi.fn(async () => false),
-    getCashflowForecastData: vi.fn(async () => ({
+    getIncludeTransfers: vi.fn(() => Promise.resolve(false)),
+    getCashflowForecastData: vi.fn(() => Promise.resolve(({
       history: [],
       currentActual: [],
       plannedCurrent: [],
       plannedHist: [],
       historyMonths: 36,
       unconverted: { count: 0, currencies: new Set<string>() },
-    })),
+    }))),
   },
 }));
 vi.mock("../../src/repositories/cashflowForecastMcRepository.ts", () => ({
@@ -18,7 +18,7 @@ vi.mock("../../src/repositories/cashflowForecastMcRepository.ts", () => ({
 }));
 vi.mock("../../src/services/calculations/forecast/accuracyStore.ts", () => ({
   recordAccuracy: vi.fn(),
-  getLatestAccuracyByMethod: vi.fn(async () => []),
+  getLatestAccuracyByMethod: vi.fn(() => Promise.resolve([])),
 }));
 import { computeCashflowForecast } from "../../src/services/calculations/forecast/index.ts";
 beforeEach(() => vi.clearAllMocks());

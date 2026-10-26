@@ -76,7 +76,7 @@ function solveRidge(X: number[][], y: number[], lambda: number): number[] {
   const XtX: number[][] = Array.from({ length: p }, () =>
     new Array<number>(p).fill(0),
   );
-  const Xty: number[] = new Array(p).fill(0);
+  const Xty: number[] = new Array<number>(p).fill(0);
   for (let i = 0; i < n; i++) {
     const xi = at(X, i);
     const yi = at(y, i);
@@ -115,7 +115,7 @@ function gaussianElimination(A: number[][], b: number[]): number[] {
       for (let j = i; j <= n; j++) Mk[j] = at(Mk, j) - f * at(Mi, j);
     }
   }
-  const x: number[] = new Array(n).fill(0);
+  const x: number[] = new Array<number>(n).fill(0);
   for (let i = n - 1; i >= 0; i--) {
     const Mi = at(M, i);
     let s = at(Mi, n);

@@ -17,7 +17,9 @@ import type {
     BelgianTaxYearTable,
     ExemptionBracket,
     PensionReductionParams,
+    ServiceVoucherRegionalParams,
 } from "./constants.ts";
+import { isNonZeroNumber, orZero } from "../numeric.ts";
 
 /**
  * Professional-expense forfait category of WIB 92 art. 51 al. 2. The cap of art. 51 al. 3
@@ -184,8 +186,8 @@ export function computeProfessionalExpenseClaim(
 ): number {
     if (claim.method === "actual") {
         return (
-            Math.max(claim.actualAmount || 0, 0) +
-            Math.max(claim.unionDues || 0, 0)
+            Math.max(orZero(claim.actualAmount), 0) +
+            Math.max(orZero(claim.unionDues), 0)
         );
     }
     return computeLumpSumForfait(
@@ -236,12 +238,14 @@ export function computeServiceVoucherCredit(
     table: BelgianTaxYearTable,
 ): number {
     if (!inputs.serviceVoucherEligible) return 0;
-    const params = table.serviceVoucherRegional[region];
-    if (!params || params.rate <= 0 || params.spendCap <= 0) return 0;
+    const regionalParams: Partial<Record<string, ServiceVoucherRegionalParams>> =
+        table.serviceVoucherRegional;
+    const params = regionalParams[region];
+    if (params === undefined || params.rate <= 0 || params.spendCap <= 0) return 0;
     const spend =
         typeof inputs.serviceVoucherSpend === "number"
             ? Math.max(inputs.serviceVoucherSpend, 0)
-            : Math.max(inputs.serviceVoucherCount || 0, 0) * params.voucherPrice;
+            : Math.max(orZero(inputs.serviceVoucherCount), 0) * params.voucherPrice;
     if (spend <= 0) return 0;
     return Math.min(spend, params.spendCap) * params.rate;
 }
@@ -266,7 +270,7 @@ export function qualifyingDonations(
     inputs: Pick<ReductionInputs, "charitableDonations" | "charitableDonationsEligible">,
     table: BelgianTaxYearTable,
 ): number {
-    const amount = Math.max(inputs.charitableDonations || 0, 0);
+    const amount = Math.max(orZero(inputs.charitableDonations), 0);
     return inputs.charitableDonationsEligible && amount >= table.charitableDonationMin ? amount : 0;
 }
 
@@ -309,17 +313,17 @@ export function computeTaxReductions(
             ? table.pensionSavingsRateAlternative
             : table.pensionSavingsRateStandard;
     const pension = inputs.pensionEligible
-        ? Math.min(inputs.personalPensionContributions || 0, pensionCap) *
+        ? Math.min(orZero(inputs.personalPensionContributions), pensionCap) *
           pensionRate
         : 0;
 
     const lifeInsurance = inputs.lifeInsuranceEligible
-        ? Math.min(inputs.lifeInsurancePremiums || 0, table.lifeInsuranceCap) *
+        ? Math.min(orZero(inputs.lifeInsurancePremiums), table.lifeInsuranceCap) *
           table.lifeInsuranceRate
         : 0;
 
     const groupInsurance = inputs.employeeGroupInsuranceEligible
-        ? Math.max(inputs.employeeGroupInsuranceContributions || 0, 0) *
+        ? Math.max(orZero(inputs.employeeGroupInsuranceContributions), 0) *
           table.groupInsuranceRate
         : 0;
 
@@ -330,15 +334,15 @@ export function computeTaxReductions(
     );
 
     const childcareDayCap =
-        Math.max(inputs.childcareEligibleDays || 0, 0) *
+        Math.max(orZero(inputs.childcareEligibleDays), 0) *
         table.childcareDailyCap;
     const childcare = inputs.childcareEligible
-        ? Math.min(inputs.childcareCosts || 0, childcareDayCap) *
+        ? Math.min(orZero(inputs.childcareCosts), childcareDayCap) *
           table.childcareRate
         : 0;
 
     const domesticHelp = inputs.domesticHelpEligible
-        ? Math.min(inputs.domesticHelpCosts || 0, table.domesticHelpCap) *
+        ? Math.min(orZero(inputs.domesticHelpCosts), table.domesticHelpCap) *
           table.domesticHelpRate
         : 0;
 
@@ -371,8 +375,8 @@ export function isChildcareDeducted(
 ): boolean {
     return (
         !!inputs.childcareEligible &&
-        (inputs.childcareCosts || 0) > 0 &&
-        (inputs.childcareEligibleDays || 0) > 0
+        (orZero(inputs.childcareCosts)) > 0 &&
+        (orZero(inputs.childcareEligibleDays)) > 0
     );
 }
 
@@ -543,8 +547,8 @@ export function woonbonusChildCount(
 ): number {
     if (inputs.woonbonusChildrenAtLoanStart !== undefined)
         return Math.max(inputs.woonbonusChildrenAtLoanStart, 0);
-    const children = Math.max(inputs.dependentChildren || 0, 0);
-    const disabled = Math.min(Math.max(inputs.dependentChildrenDisabled || 0, 0), children);
+    const children = Math.max(orZero(inputs.dependentChildren), 0);
+    const disabled = Math.min(Math.max(orZero(inputs.dependentChildrenDisabled), 0), children);
     return children + disabled;
 }
 
@@ -578,7 +582,10 @@ export function resolveMortgageRegime(
     inputs: Omit<OwnHomeCreditInputs, "mortgageRegion">,
 ): MortgageCreditRegime {
     if (!inputs.mortgageIsPrimaryResidence) return "none";
-    if (!inputs.mortgageInterestPaid && !inputs.mortgageCapitalRepaid)
+    if (
+        !isNonZeroNumber(inputs.mortgageInterestPaid) &&
+        !isNonZeroNumber(inputs.mortgageCapitalRepaid)
+    )
         return "none";
     const region = inputs.region;
     const startYear = inputs.mortgageStartYear ?? 0;
@@ -646,8 +653,8 @@ export function mortgagePayments(
     inputs: Pick<OwnHomeCreditInputs, "mortgageInterestPaid" | "mortgageCapitalRepaid">,
 ): number {
     return (
-        Math.max(inputs.mortgageInterestPaid || 0, 0) +
-        Math.max(inputs.mortgageCapitalRepaid || 0, 0)
+        Math.max(orZero(inputs.mortgageInterestPaid), 0) +
+        Math.max(orZero(inputs.mortgageCapitalRepaid), 0)
     );
 }
 
@@ -713,8 +720,8 @@ export function chequeHabitatParts(
             ? table.walloonChequeHabitatBase
             : table.walloonChequeHabitatBase -
               (income - lower) * table.walloonChequeHabitatPhaseOutRate;
-    const children = Math.max(inputs.dependentChildren || 0, 0);
-    const disabled = Math.min(Math.max(inputs.dependentChildrenDisabled || 0, 0), children);
+    const children = Math.max(orZero(inputs.dependentChildren), 0);
+    const disabled = Math.min(Math.max(orZero(inputs.dependentChildrenDisabled), 0), children);
     const childSupplement = (children + disabled) * table.walloonChequeHabitatChildSupplement;
     // Periods since the first claimed one: 0 is the first, 10 the eleventh, 20 the 21st.
     // Before the first qualifying year the conditions are not met yet.
@@ -740,12 +747,12 @@ export function computeInvestmentSideCalc(
     annualSavingsInterest: number | undefined,
     table: BelgianTaxYearTable,
 ): InvestmentSideCalc {
-    const dividendIncome = Math.max(annualDividendIncome || 0, 0);
+    const dividendIncome = Math.max(orZero(annualDividendIncome), 0);
     const dividendWhtReclaim =
         Math.min(dividendIncome, table.dividendExemption) *
         table.dividendWHTRate;
 
-    const savingsInterest = Math.max(annualSavingsInterest || 0, 0);
+    const savingsInterest = Math.max(orZero(annualSavingsInterest), 0);
     const savingsInterestTax =
         Math.max(savingsInterest - table.savingsInterestExemption, 0) *
         table.savingsInterestExcessRate;

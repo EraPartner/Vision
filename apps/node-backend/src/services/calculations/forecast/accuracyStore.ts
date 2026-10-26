@@ -15,6 +15,7 @@ import type {
   AccuracyRow,
   AccuracyUpsert,
 } from "../../../repositories/cashflowForecastAccuracyRepository.ts";
+import { errorCode, errorMessage } from "../../../lib/errors.ts";
 
 /**
  * Uniform store output shape. `accuracyRepo`'s Postgres rows come back
@@ -93,12 +94,9 @@ const FALLBACK_PG_CODES = new Set([
 ]);
 
 function isTableMissingError(err: unknown) {
-  const e = err as { code?: string; message?: string } | null | undefined;
-  if (e?.code !== undefined && FALLBACK_PG_CODES.has(e.code)) return true;
-  return (
-    typeof e?.message === "string" &&
-    e.message.includes("cashflow_forecast_accuracy")
-  );
+  const code = errorCode(err);
+  if (typeof code === "string" && FALLBACK_PG_CODES.has(code)) return true;
+  return errorMessage(err).includes("cashflow_forecast_accuracy");
 }
 
 export async function recordAccuracy({

@@ -27,8 +27,11 @@ function forecast({
   for (const r of history) {
     const d = dayOfMonth(r.date);
     const mk = monthKey(r.date);
-    if (!series.has(d)) series.set(d, new Map());
-    const byMonth = series.get(d)!;
+    let byMonth = series.get(d);
+    if (!byMonth) {
+      byMonth = new Map();
+      series.set(d, byMonth);
+    }
     byMonth.set(mk, (byMonth.get(mk) ?? 0) + r.net);
   }
 

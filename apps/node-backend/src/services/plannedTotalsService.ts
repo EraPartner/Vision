@@ -1,4 +1,5 @@
 import plannedTransactionRepository from "../repositories/plannedTransactionRepository.ts";
+import { requireRow } from "../database/rowContracts.ts";
 import type { PlannedCommitmentRow } from "../repositories/plannedTransactionRepository.ts";
 import {
   expandOccurrences,
@@ -144,10 +145,13 @@ function nextDaysTotals(
     addDaysYmd(today, offset),
   );
   const lastDate = addDaysYmd(today, NEXT_DAYS_WINDOW - 1);
-  const days = new Map(
+  const days = new Map<
+    string,
+    { incoming: Money[]; outgoing: Money[]; unconverted: number }
+  >(
     dates.map((date) => [
       date,
-      { incoming: [] as Money[], outgoing: [] as Money[], unconverted: 0 },
+      { incoming: [], outgoing: [], unconverted: 0 },
     ]),
   );
   const unconvertedRows = new Set<number>();
@@ -177,7 +181,7 @@ function nextDaysTotals(
   ).amount;
   return {
     days: dates.map((date) => {
-      const day = days.get(date)!;
+      const day = requireRow(days.get(date), `planned totals day ${date}`);
       return {
         date,
         incoming: roundedSum(day.incoming, currency),

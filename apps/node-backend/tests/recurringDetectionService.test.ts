@@ -16,6 +16,7 @@ import {
   detectRecurringPatterns,
   __clearRecurringCacheForTests,
 } from "../src/services/recurringDetectionService.ts";
+import { must } from "./helpers/must.ts";
 
 const gymRow = (id: number, date: string, amount: string) => ({
   id,
@@ -99,9 +100,15 @@ describe("detectRecurringPatterns", () => {
     const result = await detectRecurringPatterns();
 
     expect(result.total).toBe(1);
-    expect(result.patterns[0]!.recipientId).toBe(42);
-    expect(result.patterns[0]!.direction).toBe("expense");
-    expect(Array.isArray(result.patterns[0]!.amountChanges)).toBe(true);
+    expect(must(result.patterns[0], "result.patterns[0]").recipientId).toBe(42);
+    expect(must(result.patterns[0], "result.patterns[0]").direction).toBe(
+      "expense",
+    );
+    expect(
+      Array.isArray(
+        must(result.patterns[0], "result.patterns[0]").amountChanges,
+      ),
+    ).toBe(true);
   });
 
   it("compares a price change with the immediately preceding charge", async () => {
@@ -118,7 +125,9 @@ describe("detectRecurringPatterns", () => {
 
     const result = await detectRecurringPatterns();
 
-    expect(result.patterns[0]!.amountChanges.at(-1)).toMatchObject({
+    expect(
+      must(result.patterns[0], "result.patterns[0]").amountChanges.at(-1),
+    ).toMatchObject({
       previousAmount: 30,
       newAmount: 20,
       percentChange: -33.33,
@@ -206,7 +215,9 @@ describe("detectRecurringPatterns", () => {
 
     const result = await detectRecurringPatterns();
 
-    expect(result.patterns[0]!.isAlreadyPlanned).toBe(true);
+    expect(
+      must(result.patterns[0], "result.patterns[0]").isAlreadyPlanned,
+    ).toBe(true);
   });
 
   // Pins the categoryId fix directly: a row whose own category_id is null but
@@ -242,7 +253,9 @@ describe("detectRecurringPatterns", () => {
 
     const result = await detectRecurringPatterns();
 
-    expect(result.patterns[0]!.categoryId).toBe(7);
-    expect(result.patterns[0]!.categoryName).toBe("Bills:Utilities");
+    expect(must(result.patterns[0], "result.patterns[0]").categoryId).toBe(7);
+    expect(must(result.patterns[0], "result.patterns[0]").categoryName).toBe(
+      "Bills:Utilities",
+    );
   });
 });

@@ -75,7 +75,7 @@ describe("categories API client", () => {
   });
 
   it("updateCategory PATCHes", async () => {
-    server.use(http.patch(`${API_BASE}/api/categories/9`, () => ok({ id: 9 })));
+    server.use(http.patch(`${API_BASE}/api/categories/9`, () => ok({ ...CATEGORY_STUB, id: 9 })));
     expect((await updateCategory(asCategoryId(9), {})).id).toBe(9);
   });
 

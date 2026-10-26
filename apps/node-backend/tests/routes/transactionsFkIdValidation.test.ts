@@ -34,24 +34,26 @@ import { routeAgent } from '../helpers/routeApp.ts';
 vi.mock('../../src/repositories/transactionRepository.ts', () => mockTransactionRepository());
 vi.mock('../../src/services/deduplication.ts', () => ({
   ...mockDeduplication(),
-  lockManualTransactionIdentity: vi.fn(async () => undefined),
+  lockManualTransactionIdentity: vi.fn(() => Promise.resolve(undefined)),
 }));
 vi.mock('../../src/config/logger.ts', () => ({ logger: mockLogger() }));
 vi.mock('../../src/services/transferReconciliationService.ts', () => mockTransferReconciliation());
 vi.mock('../../src/services/currency/currencyConversionService.ts', () => mockCurrencyConversion());
 vi.mock('../../src/database/connection.ts', () => mockTxConnection());
 vi.mock('../../src/repositories/accountRepository.ts', () => {
-  const accountRepository = { findActiveId: vi.fn(async () => 1) };
+  const accountRepository = { findActiveId: vi.fn(() => Promise.resolve(1)) };
   return { accountRepository, default: accountRepository };
 });
 vi.mock('../../src/services/plannedMatchService.ts', () => ({
-  autoLinkTransactions: vi.fn(async () => ({ autoLinkedCount: 0, links: [] })),
+  autoLinkTransactions: vi.fn(() => Promise.resolve(({ autoLinkedCount: 0, links: [] }))),
 }));
 
 import rawTransactionRepository from '../../src/repositories/transactionRepository.ts';
 import type { EnrichedTransactionRow } from '../../src/repositories/transactionRepository.ts';
 import { isManualDuplicate as rawIsManualDuplicate } from '../../src/services/deduplication.ts';
+import { must } from "../helpers/must.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const transactionRepository = vi.mocked(rawTransactionRepository);
 const isManualDuplicate = vi.mocked(rawIsManualDuplicate);
 type ManualDuplicateResult = Awaited<ReturnType<typeof rawIsManualDuplicate>>;
@@ -86,7 +88,7 @@ describe('PATCH /:id — FK ids reject instead of retargeting', () => {
       expect(res.status, `expected ${JSON.stringify(recipient_id)} to be rejected`).toBe(400);
       expect(bodyAt(res, 'error', 'code')).toBe('VALIDATION_ERROR');
     }
-    expect(transactionRepository.update).not.toHaveBeenCalled();
+    expect(mockOf(transactionRepository, "update")).not.toHaveBeenCalled();
   });
 
   it('rejects every category_id that used to resolve to a different category', async () => {
@@ -95,26 +97,26 @@ describe('PATCH /:id — FK ids reject instead of retargeting', () => {
       expect(res.status, `expected ${JSON.stringify(category_id)} to be rejected`).toBe(400);
       expect(bodyAt(res, 'error', 'code')).toBe('VALIDATION_ERROR');
     }
-    expect(transactionRepository.update).not.toHaveBeenCalled();
+    expect(mockOf(transactionRepository, "update")).not.toHaveBeenCalled();
   });
 
   it('keeps null clearing the FK and an absent field absent', async () => {
     await patch({ recipient_id: null, category_id: null }).expect(200);
-    expect(transactionRepository.update).toHaveBeenCalledWith(
+    expect(mockOf(transactionRepository, "update")).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ recipient_id: null, category_id: null }),
     );
 
     transactionRepository.update.mockClear();
     await patch({ memo: 'only-this' }).expect(200);
-    const patchArg = transactionRepository.update.mock.calls[0]![1];
+    const patchArg = must(transactionRepository.update.mock.calls[0], "transactionRepository.update.mock.calls[0]")[1];
     expect('recipient_id' in patchArg).toBe(false);
     expect('category_id' in patchArg).toBe(false);
   });
 
   it('still accepts a digit string or an integer, coerced', async () => {
     await patch({ recipient_id: '007', category_id: 3 }).expect(200);
-    expect(transactionRepository.update).toHaveBeenCalledWith(
+    expect(mockOf(transactionRepository, "update")).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ recipient_id: 7, category_id: 3 }),
     );
@@ -136,7 +138,7 @@ describe('POST / — FK ids reject instead of retargeting', () => {
       expect(res.status, `expected ${JSON.stringify(category_id)} to be rejected`).toBe(400);
       expect(bodyAt(res, 'error', 'code')).toBe('VALIDATION_ERROR');
     }
-    expect(transactionRepository.create).not.toHaveBeenCalled();
+    expect(mockOf(transactionRepository, "create")).not.toHaveBeenCalled();
   });
 
   // Absent and null both mean "uncategorized" on create and always have — the
@@ -146,11 +148,11 @@ describe('POST / — FK ids reject instead of retargeting', () => {
     await post({}).expect(201);
     await post({ category_id: null }).expect(201);
     await post({ category_id: '4' }).expect(201);
-    expect(transactionRepository.create).toHaveBeenCalledTimes(3);
+    expect(mockOf(transactionRepository, "create")).toHaveBeenCalledTimes(3);
     // The service always names category_id in the row it builds, so "absent"
     // reaches the repository as undefined, not as a missing key.
-    expect(transactionRepository.create.mock.calls[0]![0].category_id).toBeUndefined();
-    expect(transactionRepository.create.mock.calls[1]![0].category_id).toBeNull();
-    expect(transactionRepository.create.mock.calls[2]![0].category_id).toBe(4);
+    expect(must(transactionRepository.create.mock.calls[0], "transactionRepository.create.mock.calls[0]")[0].category_id).toBeUndefined();
+    expect(must(transactionRepository.create.mock.calls[1], "transactionRepository.create.mock.calls[1]")[0].category_id).toBeNull();
+    expect(must(transactionRepository.create.mock.calls[2], "transactionRepository.create.mock.calls[2]")[0].category_id).toBe(4);
   });
 });

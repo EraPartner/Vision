@@ -12,6 +12,18 @@ import type { RecipientId } from "@vision/types/brands";
 
 const RECIPIENT_TRANSACTION_PAGE_SIZE = 10;
 
+/**
+ * A page can arrive without `total`; the page length then stands in for it.
+ * The parameter is typed optional on purpose: the wire type promises `total`,
+ * the runtime does not always deliver it.
+ */
+function pageTotal(page: {
+    total?: number | undefined;
+    items: readonly unknown[];
+}): number {
+    return page.total ?? page.items.length;
+}
+
 export function useRecentRecipientTransactions(recipientId: RecipientId) {
     const { t } = useLanguage();
     const [items, setItems] = useState<Transaction[]>([]);
@@ -46,10 +58,10 @@ export function useRecentRecipientTransactions(recipientId: RecipientId) {
     useEffect(() => {
         if (!data) return;
         setItems(data.items);
-        setTotalItems(data.total ?? data.items.length);
+        setTotalItems(pageTotal(data));
         offsetRef.current = data.items.length;
         hasMoreRef.current =
-            data.items.length < (data.total ?? data.items.length);
+            data.items.length < pageTotal(data);
     }, [data]);
 
     const loadMore = useCallback(async () => {
@@ -76,8 +88,8 @@ export function useRecentRecipientTransactions(recipientId: RecipientId) {
             });
             offsetRef.current += result.items.length;
             hasMoreRef.current =
-                offsetRef.current < (result.total ?? result.items.length);
-            setTotalItems(result.total ?? result.items.length);
+                offsetRef.current < pageTotal(result);
+            setTotalItems(pageTotal(result));
         } catch (err) {
             // `hasMoreRef` is untouched, so scrolling again retries the page.
             logger.error("Failed to load more recipient transactions:", err);

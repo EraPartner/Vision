@@ -1,3 +1,4 @@
+import { isRecord } from "@/lib/isRecord";
 /**
  * Client-side dismissal store for the transaction-derived deduction candidates
  * card on the Tax Overview page.
@@ -21,16 +22,18 @@ export interface DeductionCandidateDismissal {
 function getStorage(): Storage | null {
     try {
         // globalThis: works in the browser and degrades to null in node-env tests.
-        return globalThis.localStorage ?? null;
+        return "localStorage" in globalThis ? globalThis.localStorage : null;
     } catch {
         return null;
     }
 }
 
 function isDismissal(value: unknown): value is DeductionCandidateDismissal {
-    if (typeof value !== "object" || value === null) return false;
-    const v = value as Record<string, unknown>;
-    return typeof v.year === "number" && typeof v.deductionType === "string";
+    return (
+        isRecord(value) &&
+        typeof value.year === "number" &&
+        typeof value.deductionType === "string"
+    );
 }
 
 /** Read the dismiss list from localStorage; malformed/absent storage → empty list. */

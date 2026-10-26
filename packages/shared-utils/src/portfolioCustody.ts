@@ -13,11 +13,16 @@ type PartitionKey = number | null;
 const ZERO = toDecimal(0);
 const keyOf = (row: PartitionedTxnLike): PartitionKey =>
   row.account_id == null ? null : Number(row.account_id);
-const chronological = (a: PartitionedTxnLike, b: PartitionedTxnLike): number =>
-  a.date.localeCompare(b.date) || Number(a.id ?? 0) - Number(b.id ?? 0);
-const acquisitionOrder = (a: CustodyLot, b: CustodyLot): number =>
-  a.acquiredDate.localeCompare(b.acquiredDate) ||
-  Number(a.acquisitionId) - Number(b.acquisitionId);
+const chronological = (a: PartitionedTxnLike, b: PartitionedTxnLike): number => {
+  const byDate = a.date.localeCompare(b.date);
+  return byDate !== 0 ? byDate : Number(a.id ?? 0) - Number(b.id ?? 0);
+};
+const acquisitionOrder = (a: CustodyLot, b: CustodyLot): number => {
+  const byDate = a.acquiredDate.localeCompare(b.acquiredDate);
+  return byDate !== 0
+    ? byDate
+    : Number(a.acquisitionId) - Number(b.acquisitionId);
+};
 
 /**
  * Project one investment's canonical events into account streams. Temporary
@@ -32,13 +37,20 @@ export function projectAssetTransferPartitions(
   const partitions = new Map<PartitionKey, ProjectedCustodyTxn[]>();
   const custody = new Map<PartitionKey, CustodyLot[]>();
   const lotsAt = (key: PartitionKey): CustodyLot[] => {
-    if (!custody.has(key)) custody.set(key, []);
-    // Set just above when missing.
-    return custody.get(key)!;
+    let lots = custody.get(key);
+    if (lots === undefined) {
+      lots = [];
+      custody.set(key, lots);
+    }
+    return lots;
   };
   const push = (key: PartitionKey, row: ProjectedCustodyTxn): void => {
-    if (!partitions.has(key)) partitions.set(key, []);
-    partitions.get(key)!.push(row);
+    let rows = partitions.get(key);
+    if (rows === undefined) {
+      rows = [];
+      partitions.set(key, rows);
+    }
+    rows.push(row);
   };
   const held = (lots: readonly CustodyLot[]): Decimal =>
     lots.reduce((sum, lot) => sum.plus(lot.units), ZERO);
@@ -103,11 +115,11 @@ export function projectAssetTransferPartitions(
 
   for (const row of [...txns].sort(chronological)) {
     const key = keyOf(row);
-    const units = toDecimal(row.units || 0);
+    const units = toDecimal(row.units);
     if (row.type === "buy" || row.type === "gift") {
-      const cost = toDecimal(row.amount || 0)
-        .plus(row.fees || 0)
-        .plus(row.taxes || 0);
+      const cost = toDecimal(row.amount)
+        .plus(toDecimal(row.fees))
+        .plus(toDecimal(row.taxes));
       lotsAt(key).push({
         units,
         costBasis: cost.times(row.nativeFxMultiplier ?? 1),
@@ -143,7 +155,7 @@ export function projectAssetTransferPartitions(
       )
         throw new Error("Asset adjustment basis policy is unresolved");
       const eligibleHashes = new Set<string | undefined>(
-        row.eligible_source_record_hashes || [],
+        row.eligible_source_record_hashes ?? [],
       );
       const eligible = (lot: CustodyLot): boolean =>
         !reversal ||
@@ -190,7 +202,7 @@ export function projectAssetTransferPartitions(
           "Asset transfer requires distinct accounts and positive units",
         );
       }
-      const feeUnits = toDecimal(row.fee_units || 0);
+      const feeUnits = toDecimal(row.fee_units);
       if (feeUnits.lt(0) || feeUnits.gte(units))
         throw new Error("Asset transfer fee units are invalid");
       if (units.gt(held(lotsAt(source))))
@@ -266,7 +278,7 @@ export function projectAssetTransferPartitions(
           });
         }
       }
-      if (!toDecimal(row.fees || 0).eq(0) || !toDecimal(row.taxes || 0).eq(0))
+      if (!toDecimal(row.fees).eq(0) || !toDecimal(row.taxes).eq(0))
         push(key, { ...row, units: 0 });
     } else if (row.type === "return_of_capital") {
       const total = [...custody.values()].reduce(
@@ -274,7 +286,7 @@ export function projectAssetTransferPartitions(
         ZERO,
       );
       const perUnit = total.gt(0)
-        ? toDecimal(row.amount || 0).div(total)
+        ? toDecimal(row.amount).div(total)
         : ZERO;
       const perUnitNative = perUnit.times(row.nativeFxMultiplier ?? 1);
       for (const [account, lots] of custody) {
@@ -306,7 +318,7 @@ export function projectAssetTransferPartitions(
           taxes: 0,
         });
       }
-      if (!toDecimal(row.fees || 0).eq(0) || !toDecimal(row.taxes || 0).eq(0))
+      if (!toDecimal(row.fees).eq(0) || !toDecimal(row.taxes).eq(0))
         push(key, { ...row, amount: 0 });
     } else push(key, row);
   }

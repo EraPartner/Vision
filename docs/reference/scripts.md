@@ -1,7 +1,7 @@
 ---
 title: Scripts Reference
 type: reference
-date: 2026-10-20
+date: 2026-10-26
 tags:
   [
     reference,
@@ -69,10 +69,11 @@ and `test:electron` scripts run `bun packaging/electron/build.ts` first and then
 
 | Script                       | Purpose                                            |
 | ---------------------------- | -------------------------------------------------- |
-| `lint`                       | Run frontend ESLint, `lint:deps` and `lint:dead` in parallel |
+| `lint`                       | Run frontend, backend and project ESLint, `lint:deps` and `lint:dead` in parallel |
 | `lint:deps`                  | Check cross-workspace import boundaries (dependency-cruiser, `config/dependency-cruiser.cjs`) |
 | `lint:dead`                  | Report unused files, exports and dependencies (knip, `config/knip.json`) |
-| `lint:backend`               | Lint the backend                                   |
+| `lint:backend`               | Lint the backend (`src/`, `tests/`, `scripts/`)    |
+| `lint:projects`              | Lint `packages/*`, `packaging/electron` and `scripts/` (`eslint.projects.config.mjs`) |
 | `typecheck`                  | Type-check the frontend                            |
 | `typecheck:backend`          | Type-check backend source, tests and scripts       |
 | `typecheck:scripts`          | Type-check repository scripts and their tests      |

@@ -164,7 +164,7 @@ describe('calculateCostBasis', () => {
     fc.assert(
       fc.property(fc.array(arbBuy, { minLength: 1, maxLength: 10 }), (buys) => {
         const expectedCost = buys.reduce(
-          (acc, t) => acc + (t.amount ?? 0) + (t.fees ?? 0) + (t.taxes ?? 0),
+          (acc, t) => acc + t.amount + (t.fees ?? 0) + (t.taxes ?? 0),
           0
         );
         const result = calculateCostBasis(buys);

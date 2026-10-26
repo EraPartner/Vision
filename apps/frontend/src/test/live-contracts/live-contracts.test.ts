@@ -55,24 +55,24 @@ const CategoryItemSchema = StrictCategoryItemSchema.pick({
     general: true,
     detail: true,
     is_active: true,
-}).passthrough();
+}).loose();
 const RecipientItemSchema = StrictRecipientItemSchema.pick({
     id: true,
     name: true,
     is_active: true,
-}).passthrough();
+}).loose();
 const TransactionItemSchema = StrictTransactionItemSchema.pick({
     id: true,
     transaction_date: true,
     amount: true,
     currency: true,
     is_active: true,
-}).passthrough();
+}).loose();
 const InvestmentItemSchema = StrictInvestmentItemSchema.pick({
     id: true,
     name: true,
     is_active: true,
-}).passthrough();
+}).loose();
 
 // meta.source includes "mv" for materialized-view-backed aggregation endpoints
 const MetaSourceSchema = z.enum(["live", "cache", "mv"]);
@@ -212,7 +212,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
                     rates: z.array(z.unknown()),
                     total_rates: z.number(),
                 })
-                .passthrough(),
+                .loose(),
             data,
             "GET /api/info/exchange-rates",
         );
@@ -284,7 +284,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         validate(
             z.object({
                 data: z.object({ categories: z.array(z.unknown()) }),
-                meta: z.object({ source: MetaSourceSchema }).passthrough(),
+                meta: z.object({ source: MetaSourceSchema }).loose(),
             }),
             data,
             "GET /api/aggregations/category-breakdown",
@@ -299,7 +299,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
                     topMerchants: z.array(z.unknown()),
                     monthOverMonth: z.array(z.unknown()),
                 }),
-                meta: z.object({ source: MetaSourceSchema }).passthrough(),
+                meta: z.object({ source: MetaSourceSchema }).loose(),
             }),
             data,
             "GET /api/aggregations/recipient-insights",
@@ -318,7 +318,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
                     without_planned: z.array(z.unknown()),
                     with_planned: z.array(z.unknown()),
                 }),
-                meta: z.object({ source: MetaSourceSchema }).passthrough(),
+                meta: z.object({ source: MetaSourceSchema }).loose(),
             }),
             data,
             "GET /api/aggregations/cashflow-comparison",
@@ -335,7 +335,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
                     history: z.record(z.string(), z.array(z.unknown())),
                     total_history: z.array(z.unknown()),
                 }),
-                meta: z.object({ source: MetaSourceSchema }).passthrough(),
+                meta: z.object({ source: MetaSourceSchema }).loose(),
             }),
             data,
             "GET /api/aggregations/bank-balances",
@@ -351,7 +351,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
                     links: z.array(z.unknown()),
                     year: z.number(),
                 }),
-                meta: z.object({ source: MetaSourceSchema }).passthrough(),
+                meta: z.object({ source: MetaSourceSchema }).loose(),
             }),
             data,
             "GET /api/aggregations/sankey",
@@ -418,7 +418,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         validate(
             z
                 .object({ rates: z.array(z.unknown()), source: z.string() })
-                .passthrough(),
+                .loose(),
             data,
             "GET /api/info/inflation-rates",
         );

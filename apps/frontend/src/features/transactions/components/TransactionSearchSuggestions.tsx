@@ -122,7 +122,8 @@ export function TransactionSearchSuggestions({ query, onApply, close }: Props) {
                 });
             } else {
                 // "equals" is a zero-width range (min === max).
-                const v = conv(pa) as number;
+                const v = conv(pa);
+                if (v === undefined) return;
                 apply({
                     amount_min: String(v),
                     amount_max: String(v),

@@ -20,6 +20,10 @@ import { closePool } from "../src/database/connection.ts";
 import adminRouter from "../src/routes/admin.ts";
 import { routeAgent } from "./helpers/routeApp.ts";
 import { bodyAt } from "./helpers/responseBody.ts";
+import { must } from "./helpers/must.ts";
+
+/** A result row whose columns the test reads without a fixed shape. */
+type DbRow = Record<string, unknown>;
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const SOURCE = `dbeditor_dates_${process.pid}`;
@@ -43,7 +47,7 @@ describeDb("DB editor DATE cells are calendar days (real DB, Europe/Brussels)", 
   beforeAll(async () => {
     await acquireDbSuiteLock();
     process.env.TZ = "Europe/Brussels";
-    await getTestPool()!.query(
+    await must(getTestPool(), "getTestPool()").query(
       `INSERT INTO ${TABLE} (month_date, monthly_rate, source)
        VALUES ('2024-05-29', 0.5, $1)`,
       [SOURCE],
@@ -89,10 +93,10 @@ describeDb("DB editor DATE cells are calendar days (real DB, Europe/Brussels)", 
     expect(bodyAt(res, "data", "results", 0, "after", "month_date")).toBe(
       "2024-05-29",
     );
-    const { rows } = await getTestPool()!.query(
+    const { rows } = await must(getTestPool(), "getTestPool()").query<DbRow>(
       `SELECT month_date::text AS month_date FROM ${TABLE} WHERE source = $1`,
       [SOURCE],
     );
-    expect(rows[0].month_date).toBe("2024-05-29");
+    expect(must(rows[0], "rows[0]").month_date).toBe("2024-05-29");
   });
 });

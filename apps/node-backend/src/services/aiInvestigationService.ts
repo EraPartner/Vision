@@ -22,6 +22,8 @@ import type {
 import type { ResearchDocumentCitation } from "./aiResearchDocuments.ts";
 import type { PublicWebSearchResult } from "./webResearch.ts";
 import { nanToZero } from "../lib/math.ts";
+import { valueText } from "./valueText.ts";
+import { isUnknownArray } from "../lib/typeGuards.ts";
 
 type InvestigationOutcome = AiInvestigationJobRow | null | undefined;
 
@@ -46,6 +48,19 @@ function errorProperty(error: unknown, key: "code" | "message"): unknown {
   return typeof error === "object" && error !== null
     ? Reflect.get(error, key)
     : undefined;
+}
+
+/**
+ * The `stepIds` array of the JSON object embedded in a model reply, or null
+ * when absent. Throws when the embedded text is not valid JSON.
+ */
+function parseStepIds(text: string): unknown[] | null {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  const parsed: unknown = JSON.parse(text.slice(start, end + 1));
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const stepIds: unknown = Reflect.get(parsed, "stepIds");
+  return isUnknownArray(stepIds) ? stepIds : null;
 }
 
 function planInvestigation(
@@ -216,14 +231,12 @@ function applyPlannerOrdering(
   provider: string,
 ): AiInvestigationPlan {
   try {
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    const parsed = JSON.parse(text.slice(start, end + 1));
-    if (!Array.isArray(parsed.stepIds)) return baseline;
+    const stepIds = parseStepIds(text);
+    if (!stepIds) return baseline;
     const byId = new Map(baseline.steps.map((step) => [step.id, step]));
     const selected: AiPlanStep[] = [];
     const seen = new Set<string>();
-    for (const id of parsed.stepIds) {
+    for (const id of stepIds) {
       if (typeof id !== "string" || seen.has(id)) continue;
       const step = byId.get(id);
       if (!step) continue;
@@ -272,7 +285,7 @@ function shouldReuseStep(
   return (
     existing?.state === "completed" ||
     (skipAttemptedExternal &&
-      Number(existing?.attempt ?? 0) > 0 &&
+      (existing?.attempt ?? 0) > 0 &&
       NON_REPLAYABLE_EXTERNAL_TOOLS.has(step.tool))
   );
 }
@@ -313,7 +326,8 @@ function buildRetryPlan(
       canRunInParallel: false,
     });
   }
-  if (retries.length === 0 || plan.steps.length + retries.length > 24) return plan;
+  if (retries.length === 0 || plan.steps.length + retries.length > 24)
+    return plan;
   return aiInvestigationPlanSchema.parse({
     ...plan,
     assumptions: [
@@ -326,11 +340,9 @@ function buildRetryPlan(
 
 function selectedStepIds(text: string): string[] {
   try {
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    const parsed = JSON.parse(text.slice(start, end + 1));
-    return Array.isArray(parsed.stepIds)
-      ? parsed.stepIds.filter((id: unknown) => typeof id === "string")
+    const stepIds = parseStepIds(text);
+    return stepIds
+      ? stepIds.filter((id): id is string => typeof id === "string")
       : [];
   } catch {
     return [];
@@ -393,7 +405,7 @@ async function executeSteps({
         id,
         step.id,
         dispatched.result,
-        dispatched.result.ok === false ? dispatched.result.error : null,
+        !dispatched.result.ok ? dispatched.result.error : null,
       );
     } catch (error) {
       await jobs.finishStep(id, step.id, null, {
@@ -424,7 +436,9 @@ function evidenceFromSteps(
         sourceDate: null,
         locator: [
           passage.sourceName,
-          passage.pageNumber != null && passage.pageNumber !== 0 ? `page ${passage.pageNumber}` : null,
+          passage.pageNumber != null && passage.pageNumber !== 0
+            ? `page ${passage.pageNumber}`
+            : null,
           passage.section ? `section ${passage.section}` : null,
           `passage ${passage.passageOrdinal}`,
         ]
@@ -438,36 +452,36 @@ function evidenceFromSteps(
       return (data as PublicWebSearchResult[]).map((item, index) => ({
         id: `web:${index}:${item.url}`.slice(0, 160),
         kind: "web",
-        label: String(item.title).slice(0, 300),
+        label: valueText(item.title).slice(0, 300),
         sourceDate:
-          String(
+          valueText(
             item.publishedAt || field(field(result, "meta"), "fetchedAt") || "",
           ).slice(0, 40) || null,
-        locator: String(item.url).slice(0, 1000),
+        locator: valueText(item.url).slice(0, 1000),
         excerpt: item.snippet,
         available: true,
       }));
     if (step.stepId.startsWith("web-page-") && data)
       return [
         {
-          id: `page:${field(data, "url")}`.slice(0, 160),
+          id: `page:${valueText(field(data, "url"))}`.slice(0, 160),
           kind: "web",
-          label: String(field(data, "title")).slice(0, 300),
+          label: valueText(field(data, "title")).slice(0, 300),
           sourceDate:
-            String(field(data, "fetchedAt") || "").slice(0, 40) || null,
-          locator: String(field(data, "url")).slice(0, 1000),
-          excerpt: String(field(data, "text") || "").slice(0, 2000),
+            valueText(field(data, "fetchedAt") || "").slice(0, 40) || null,
+          locator: valueText(field(data, "url")).slice(0, 1000),
+          excerpt: valueText(field(data, "text") || "").slice(0, 2000),
           available: true,
         },
       ];
     if (step.stepId === "saved-analysis" && data)
       return [
         {
-          id: `analysis:${field(data, "id")}:v${field(data, "version")}`,
+          id: `analysis:${valueText(field(data, "id"))}:v${valueText(field(data, "version"))}`,
           kind: "analysis",
-          label: `${field(data, "name")} (version ${field(data, "version")})`,
+          label: `${valueText(field(data, "name"))} (version ${valueText(field(data, "version"))})`,
           sourceDate: null,
-          locator: `/analysis?savedAnalysis=${field(data, "id")}`,
+          locator: `/analysis?savedAnalysis=${valueText(field(data, "id"))}`,
           excerpt: JSON.stringify(field(data, "definition")).slice(0, 2000),
           available: true,
         },
@@ -478,7 +492,7 @@ function evidenceFromSteps(
         id: `tool:${step.stepId}`,
         kind: "research-service",
         label: step.stepId,
-        sourceDate: fetchedAt ? String(fetchedAt).slice(0, 40) : null,
+        sourceDate: fetchedAt ? valueText(fetchedAt).slice(0, 40) : null,
         locator: `investigation-step:${step.stepId}`,
         excerpt: JSON.stringify(result).slice(0, 2000),
         available: true,
@@ -518,13 +532,14 @@ function fallbackAnswer(
     status: evidence.length > 0 ? "partial" : "abstained",
     depth: request.depth,
     language: request.language,
-    summary: evidence.length > 0
-      ? dutch
-        ? "Er is bewijs verzameld, maar het gekozen model gaf geen geldige gestructureerde synthese terug."
-        : "Evidence was collected, but the selected model did not return a valid structured synthesis."
-      : dutch
-        ? "Er is onvoldoende geverifieerd bewijs om deze vraag te beantwoorden."
-        : "There is not enough verified evidence to answer this question.",
+    summary:
+      evidence.length > 0
+        ? dutch
+          ? "Er is bewijs verzameld, maar het gekozen model gaf geen geldige gestructureerde synthese terug."
+          : "Evidence was collected, but the selected model did not return a valid structured synthesis."
+        : dutch
+          ? "Er is onvoldoende geverifieerd bewijs om deze vraag te beantwoorden."
+          : "There is not enough verified evidence to answer this question.",
     facts: [],
     calculations: [],
     interpretations: [],
@@ -549,9 +564,13 @@ function parseModelAnswer(
   try {
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
-    const value = JSON.parse(text.slice(start, end + 1));
-    value.evidence = evidenceFromSteps(steps);
-    value.analysisReference = analysisReferenceFromSteps(steps);
+    const value: unknown = JSON.parse(text.slice(start, end + 1));
+    if (typeof value === "object" && value !== null) {
+      Object.assign(value, {
+        evidence: evidenceFromSteps(steps),
+        analysisReference: analysisReferenceFromSteps(steps),
+      });
+    }
     return aiAnswerSchema.parse(value);
   } catch (error) {
     return fallbackAnswer(request, steps, error);
@@ -573,7 +592,7 @@ async function resolveProviderAnswer({
   generate?: typeof generateLocal;
   store?: (id: string, result: unknown) => Promise<unknown>;
 }): Promise<AiAnswer> {
-  if (job?.checkpoint?.providerResult)
+  if (job?.checkpoint.providerResult)
     return aiAnswerSchema.parse(job.checkpoint.providerResult);
   const response = await generate(synthesisInput);
   if (synthesisInput.signal?.aborted)
@@ -676,7 +695,7 @@ export async function runInvestigationJob(
               ...baseline,
               assumptions: [
                 ...baseline.assumptions,
-                `Model planning was unavailable (${errorProperty(error, "code") || "PLANNER_FAILED"}); Vision used the inspectable bounded plan.`,
+                `Model planning was unavailable (${valueText(errorProperty(error, "code") || "PLANNER_FAILED")}); Vision used the inspectable bounded plan.`,
               ],
             });
           }
@@ -688,10 +707,10 @@ export async function runInvestigationJob(
       const researchBudget = {
         searches: priorSteps
           .filter((step) => step.stepId === "web")
-          .reduce((count, step) => count + nanToZero(Number(step.attempt)), 0),
+          .reduce((count, step) => count + nanToZero(step.attempt), 0),
         pages: priorSteps
           .filter((step) => step.stepId.startsWith("web-page-"))
-          .reduce((count, step) => count + nanToZero(Number(step.attempt)), 0),
+          .reduce((count, step) => count + nanToZero(step.attempt), 0),
       };
       const cancelled = await executeSteps({
         id,
@@ -798,7 +817,7 @@ export async function runInvestigationJob(
           stepRows,
           synthesisInput,
         });
-        return jobs.finishJob(
+        return await jobs.finishJob(
           id,
           stepRows.some((step) => step.state === "failed") ||
             answer.status === "partial"
@@ -809,7 +828,7 @@ export async function runInvestigationJob(
       } catch (error) {
         if ((await jobs.getJob(id))?.cancelRequestedAt)
           return jobs.finishJob(id, "cancelled", null, { code: "CANCELLED" });
-        return jobs.finishJob(
+        return await jobs.finishJob(
           id,
           stepRows.some((step) => step.state === "completed")
             ? "partial"

@@ -4,8 +4,8 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
 description: Portfolio CSV, Saxo XLSX and IBKR funding XLS/XLSX staging, cross-export deduplication, one full-history reviewed reconciliation, reversible adoption receipts, and dated custody/unit adjustments with original basis
-date: 2026-10-21
-updated: 2026-10-21
+date: 2026-10-26
+updated: 2026-10-26
 last_modified: 2026-10-21
 tags:
   [
@@ -165,7 +165,7 @@ field. Query fields are ignored. This is a breaking request-contract change unde
 | `source_id_column`                | string  | No       | CSV header for the literal provider event ID; trimmed, maximum 200 characters; blank or omitted leaves the mapping absent                                                                   |
 | `source_account_column`           | string  | No       | CSV header for the literal provider account identity; trimmed, maximum 200 characters; blank or omitted leaves the mapping absent                                                           |
 | `default_asset_class`             | string  | Yes      | Fallback asset class: `stock` `etf` `crypto` `metals` `real_estate` `savings` `bond`                                                                                                        |
-| `default_type`                    | string  | No       | Fallback transaction type when no `type_column` is mapped (default `buy`): `buy` `sell` `dividend` `fee` `tax` `interest`                                                                   |
+| `default_type`                    | string  | No       | Fallback transaction type when no `type_column` is mapped (default `buy`): any `PortfolioTxnType` value                                                                                     |
 | `type_mapping`                    | string  | No       | JSON object mapping raw CSV type strings → canonical portfolio_txn_type values (e.g. `{"Koop":"buy","Verkoop":"sell"}`)                                                                     |
 | `is_brokerage`                    | boolean | Format*  | Must be `true` for every maintained transaction-history format so portfolio and cash effects use brokerage routing                                                                          |
 | `transfer_destination_account_id` | integer | No       | Distinct active portfolio account receiving outgoing Nexo/Kinesis custody transfers; required to commit those rows                                                                          |

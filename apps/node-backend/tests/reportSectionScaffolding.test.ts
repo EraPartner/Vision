@@ -40,6 +40,7 @@ import type {
 import type { TaxReportData } from "../src/services/reports/dataFetcherTax.ts";
 import type { Period } from "../src/services/reports/dataFetcher.ts";
 import { loose, partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 /** The data argument of a section renderer or view-model builder. */
 type ArgOf<
@@ -223,7 +224,7 @@ const POPULATED_RENDERERS = [
           categories: {
             categories: [{ id: 1, name: "Food", total: -40, count: 2 }],
           },
-          exclusions: { categoryIds: [] },
+          exclusions: { categoryIds: [], recipientIds: [] },
         }),
         { currency, period },
       ),
@@ -248,7 +249,7 @@ const POPULATED_RENDERERS = [
             ],
             monthOverMonth: [],
           },
-          exclusions: { recipientIds: [] },
+          exclusions: { categoryIds: [], recipientIds: [] },
         }),
         { currency },
       ),
@@ -505,7 +506,7 @@ describe("report section scaffolding", () => {
   it("gives every empty renderer exactly one canonical title, subtitle, and divider", () => {
     expect(EMPTY_RENDERERS).toHaveLength(20);
     for (const [index, render] of EMPTY_RENDERERS.entries()) {
-      const name = EMPTY_RENDERER_NAMES[index]!;
+      const name = must(EMPTY_RENDERER_NAMES[index], "EMPTY_RENDERER_NAMES[index]");
       const html = render();
       expect(html.match(/class="section-title"/g), name).toHaveLength(1);
       expect(html.match(/class="section-subtitle"/g), name).toHaveLength(1);
@@ -650,7 +651,7 @@ describe("portfolio report view models", () => {
     });
 
     // Numeric values and string dates where the row type has pg strings/Date.
-    const trend = buildPerformanceTrendData(loose<SnapshotRow[]>(snapshots))!;
+    const trend = must(buildPerformanceTrendData(loose<SnapshotRow[]>(snapshots)), "buildPerformanceTrendData(loose<SnapshotRow[]>(snapshots))");
 
     expect(trend.points).toHaveLength(14);
     expect(
@@ -682,7 +683,7 @@ describe("portfolio report view models", () => {
       returnPct: 98,
     });
     expect(trend.tablePoints).toHaveLength(12);
-    expect(trend.tablePoints[0]!.month).toBe(3);
+    expect(must(trend.tablePoints[0], "trend.tablePoints[0]").month).toBe(3);
   });
 
   it("builds portfolio KPIs and top holdings at the data boundary", () => {
@@ -693,7 +694,7 @@ describe("portfolio report view models", () => {
       gainLoss: 1,
     }));
 
-    const summary = buildPortfolioExecutiveSummaryData(
+    const summary = must(buildPortfolioExecutiveSummaryData(
       partial<BreakdownRow[]>(investments),
       // Numeric values where the row type has pg numeric strings.
       loose<SnapshotRow[]>([{ snapshot_date: new Date("2025-12-31T12:00:00Z"), value: "112", invested: "100", return_pct: 12, inflation_adjusted_value: 107 }]),
@@ -701,7 +702,7 @@ describe("portfolio report view models", () => {
         byMonth: [{ amount: 2 }, { amount: 3 }],
         byInvestment: [],
       }),
-    )!;
+    ), "executive summary data");
 
     expect(summary).toMatchObject({
       totalValue: 112,

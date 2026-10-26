@@ -62,7 +62,7 @@ const fredAdapter = {
         title: s.title || s.id,
         units: s.units_short || s.units || undefined,
         frequency: s.frequency || s.frequency_short || undefined,
-        region: undefined as string | undefined,
+        region: undefined,
         source: 'FRED',
       }));
     return { items };
@@ -88,9 +88,9 @@ const fredAdapter = {
       .map((p) => ({
         time: p.time,
         close: p.close,
-        high: undefined as number | undefined,
-        low: undefined as number | undefined,
-        volume: undefined as number | undefined,
+        high: undefined,
+        low: undefined,
+        volume: undefined,
       }));
     const m = parseOr(metaResponseSchema, meta, { seriess: [] }).seriess[0];
     return {

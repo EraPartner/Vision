@@ -5,8 +5,9 @@
  * to PortfolioImportReviewPage.
  */
 
+import { asPortfolioImportBatchId } from "@/lib/routes";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
@@ -84,7 +85,7 @@ import { asAccountId } from "@vision/types/brands";
 
 export function PortfolioImportPage() {
     const { t } = useLanguage();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const [file, setFile] = useState<File | null>(null);
     const [source, setSource] = useState("auto");
     const [detecting, setDetecting] = useState(false);
@@ -152,16 +153,19 @@ export function PortfolioImportPage() {
             .then((result) => {
                 if (!isCurrent()) return;
                 setDetected(result ? { file, result } : undefined);
-                if (result)
-                    setConfig((previous) => ({
-                        ...portfolioImportPresetConfig(
-                            result.presetKey ?? result.source,
-                        )!,
-                        ...(accountChosenManually.current
-                            ? { accountId: previous.accountId }
-                            : {}),
-                    }));
-                else if (/\.xlsx?$/i.test(file.name)) setDetectionFailed(true);
+                if (result) {
+                    const preset = portfolioImportPresetConfig(
+                        result.presetKey ?? result.source,
+                    );
+                    if (preset)
+                        setConfig((previous) => ({
+                            ...preset,
+                            ...(accountChosenManually.current
+                                ? { accountId: previous.accountId }
+                                : {}),
+                        }));
+                } else if (/\.xlsx?$/i.test(file.name))
+                    setDetectionFailed(true);
             })
             .catch(() => {
                 if (isCurrent()) setDetectionFailed(true);
@@ -305,8 +309,8 @@ export function PortfolioImportPage() {
             errors: 0,
             percent: 0,
         });
-        const adapterName = isSpecializedFormat
-            ? config.format!
+        const adapterName = isSpecializedFormat && config.format
+            ? config.format
             : isSaved && selectedParser
               ? selectedParser.name
               : parserName.trim() || "portfolio_generic";
@@ -325,17 +329,16 @@ export function PortfolioImportPage() {
             const data = await result;
             abortRef.current = null;
 
-            if ((data.skipped ?? 0) > 0) {
+            const skipped = data.skipped ?? 0;
+            if (skipped > 0) {
                 toast.warning(
-                    t("portfolioImport.toast.rowsSkipped", {
-                        n: data.skipped as number,
-                    }),
+                    t("portfolioImport.toast.rowsSkipped", { n: skipped }),
                 );
             }
 
             if (data.requires_review && data.batch_id !== 0) {
                 bypassNextNavigation();
-                void navigate(`/portfolio/import/${data.batch_id}/review`);
+                void navigate(`/portfolio/import/${asPortfolioImportBatchId(data.batch_id)}/review`);
                 return;
             }
 

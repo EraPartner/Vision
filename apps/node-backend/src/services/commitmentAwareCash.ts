@@ -4,6 +4,7 @@
  * that scheduled income arrives or that unplanned expenses do not occur.
  */
 import { toDecimal, roundToCents, toNumber } from "../lib/money.ts";
+import type { Decimal } from "../lib/money.ts";
 
 export interface CommitmentAwareCashInput {
   currentCash: number;
@@ -28,7 +29,7 @@ export function projectCommitmentAwareCash({
     );
   }
 
-  const byDay = new Map();
+  const byDay = new Map<string, Decimal>();
   for (const occurrence of occurrences) {
     if (occurrence.date > horizonEnd) continue;
     const day = occurrence.date < today ? today : occurrence.date;

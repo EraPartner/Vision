@@ -1,6 +1,11 @@
 // @refresh reset
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router";
+import {
+    asImportBatchId,
+    ROUTES,
+    type AppPath,
+} from "@/lib/routes";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Button } from "@/components/ui/button";
@@ -87,13 +92,13 @@ const WELCOME_HEADING = `font-display type-title-1 text-foreground ${HEADING_FOC
  * with no letters at all falls back to the adapter key.
  */
 function bankMonogram(adapter: { key: string; name: string }): string {
-    const words = (adapter.name ?? "").split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+    const words = adapter.name.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
     const [first = "", second = ""] = words;
     const fromName =
         first.length >= 2 ? first.slice(0, 2) : first + second.slice(0, 1);
     const mono =
         fromName ||
-        (adapter.key ?? "").replace(/[^\p{L}\p{N}]/gu, "").slice(0, 2);
+        adapter.key.replace(/[^\p{L}\p{N}]/gu, "").slice(0, 2);
     return mono ? mono.charAt(0).toUpperCase() + mono.slice(1) : "?";
 }
 
@@ -284,7 +289,7 @@ export function OnboardingWizard({
     onOpenSettings,
 }: OnboardingWizardProps) {
     const { t } = useLanguage();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const [step, setStep] = useState<StepKey>("welcome");
     const stepIdx = STEP_KEYS.indexOf(step);
 
@@ -328,37 +333,37 @@ export function OnboardingWizard({
             icon: Receipt,
             title: t("onboarding.feature.transactions.title"),
             desc: t("onboarding.feature.transactions.desc"),
-            path: "/transactions",
+            path: ROUTES.transactions,
         },
         {
             icon: Tags,
             title: t("onboarding.feature.categories.title"),
             desc: t("onboarding.feature.categories.desc"),
-            path: "/categories",
+            path: ROUTES.categories,
         },
         {
             icon: CalendarClock,
             title: t("onboarding.feature.planned.title"),
             desc: t("onboarding.feature.planned.desc"),
-            path: "/planned",
+            path: ROUTES.planned,
         },
         {
             icon: BarChart3,
             title: t("onboarding.feature.statistics.title"),
             desc: t("onboarding.feature.statistics.desc"),
-            path: "/statistics",
+            path: ROUTES.statistics,
         },
         {
             icon: TrendingUp,
             title: t("onboarding.feature.portfolio.title"),
             desc: t("onboarding.feature.portfolio.desc"),
-            path: "/portfolio",
+            path: ROUTES.portfolio,
         },
         {
             icon: LineChart,
             title: t("onboarding.feature.market.title"),
             desc: t("onboarding.feature.market.desc"),
-            path: "/research/market",
+            path: ROUTES.researchMarket,
         },
     ];
 
@@ -567,9 +572,10 @@ export function OnboardingWizard({
             // happened. The batch is real and staged — it just needs the review page,
             // so this arm offers that instead of claiming a result.
             if (isReviewRequired(result)) {
-                const rows = Object.values(
-                    result.match_source_counts ?? {},
-                ).reduce((sum, n) => sum + (n ?? 0), 0);
+                const rows = Object.values(result.match_source_counts).reduce(
+                    (sum, n) => sum + n,
+                    0,
+                );
                 setReviewBatch({ batchId: result.batch_id, rows });
                 toast.info(
                     t("onboarding.toast.reviewRequired", { n: String(rows) }),
@@ -637,7 +643,7 @@ export function OnboardingWizard({
         }
     };
 
-    const handleNavigate = (path: string) => {
+    const handleNavigate = (path: AppPath) => {
         onComplete();
         void navigate(path);
     };
@@ -673,7 +679,7 @@ export function OnboardingWizard({
      * the review page — a step-machine change this fix has no mandate for.
      */
     const goToReview = (batchId: number) =>
-        handleNavigate(`/import/${batchId}/review`);
+        handleNavigate(`/import/${asImportBatchId(batchId)}/review`);
 
     return (
         <>
@@ -1307,7 +1313,7 @@ export function OnboardingWizard({
 
                                 {/* Why backup matters */}
                                 <div className="flex flex-col gap-2.5">
-                                    {[
+                                    {([
                                         {
                                             icon: ShieldCheck,
                                             labelKey:
@@ -1323,7 +1329,7 @@ export function OnboardingWizard({
                                             labelKey:
                                                 "onboarding.backup.reason.restore",
                                         },
-                                    ].map(({ icon: Icon, labelKey }) => (
+                                    ] as const).map(({ icon: Icon, labelKey }) => (
                                         <div
                                             key={labelKey}
                                             className="flex items-start gap-3 rounded-card corner-continuous glass-thin p-3"

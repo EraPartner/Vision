@@ -42,7 +42,7 @@ async function createUnlocked(
   } else if (
     payload.recurrence_end_date &&
     payload.date &&
-    String(payload.recurrence_end_date) < String(payload.date)
+    payload.recurrence_end_date < payload.date
   ) {
     throw makeValidationError(
       "recurrence_end_date must be on or after the transaction date",
@@ -149,7 +149,7 @@ async function updateUnlocked(
       merged.is_recurring &&
       merged.recurrence_end_date &&
       merged.date &&
-      String(merged.recurrence_end_date) < String(merged.date)
+      merged.recurrence_end_date < merged.date
     ) {
       throw makeValidationError(
         "recurrence_end_date must be on or after the transaction date",

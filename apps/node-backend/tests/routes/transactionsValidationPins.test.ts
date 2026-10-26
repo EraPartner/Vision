@@ -30,7 +30,7 @@ vi.mock("../../src/repositories/transactionRepository.ts", () =>
 
 vi.mock("../../src/services/deduplication.ts", () => ({
   ...mockDeduplication(),
-  lockManualTransactionIdentity: vi.fn(async () => undefined),
+  lockManualTransactionIdentity: vi.fn(() => Promise.resolve(undefined)),
 }));
 
 vi.mock("../../src/config/logger.ts", () => ({
@@ -48,12 +48,12 @@ vi.mock("../../src/services/currency/currencyConversionService.ts", () =>
 vi.mock("../../src/database/connection.ts", () => mockTxConnection());
 
 vi.mock("../../src/repositories/accountRepository.ts", () => {
-  const accountRepository = { findActiveId: vi.fn(async () => 1) };
+  const accountRepository = { findActiveId: vi.fn(() => Promise.resolve(1)) };
   return { accountRepository, default: accountRepository };
 });
 
 vi.mock("../../src/services/plannedMatchService.ts", () => ({
-  autoLinkTransactions: vi.fn(async () => ({ autoLinkedCount: 0, links: [] })),
+  autoLinkTransactions: vi.fn(() => Promise.resolve(({ autoLinkedCount: 0, links: [] }))),
 }));
 
 import rawTransactionRepository from "../../src/repositories/transactionRepository.ts";
@@ -62,7 +62,9 @@ import {
   recordManualTransactionDedupClaim,
   isManualDuplicate as rawIsManualDuplicate,
 } from "../../src/services/deduplication.ts";
+import { must } from "../helpers/must.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const transactionRepository = vi.mocked(rawTransactionRepository);
 const isManualDuplicate = vi.mocked(rawIsManualDuplicate);
 type ManualDuplicateResult = Awaited<ReturnType<typeof rawIsManualDuplicate>>;
@@ -131,17 +133,17 @@ describe("POST / — validation pins", () => {
       "amount",
     ]) {
       const body = validPostBody();
-      delete body[missing];
+      Reflect.deleteProperty(body, missing);
       await expectValidationError(post(body));
     }
-    expect(transactionRepository.create).not.toHaveBeenCalled();
+    expect(mockOf(transactionRepository, "create")).not.toHaveBeenCalled();
   });
 
   it("falls back from transaction_date to date", async () => {
     const body = validPostBody();
     delete body.transaction_date;
     await post({ ...body, date: "2026-02-03" }).expect(201);
-    expect(transactionRepository.create).toHaveBeenCalledWith(
+    expect(mockOf(transactionRepository, "create")).toHaveBeenCalledWith(
       expect.objectContaining({ transaction_date: "2026-02-03" }),
     );
   });
@@ -160,12 +162,12 @@ describe("POST / — validation pins", () => {
     ]) {
       await expectValidationError(post({ ...validPostBody(), amount }));
     }
-    expect(transactionRepository.create).not.toHaveBeenCalled();
+    expect(mockOf(transactionRepository, "create")).not.toHaveBeenCalled();
   });
 
   it("passes an accepted numeric-string amount through RAW (no coercion)", async () => {
     await post({ ...validPostBody(), amount: "-12.5" }).expect(201);
-    expect(transactionRepository.create).toHaveBeenCalledWith(
+    expect(mockOf(transactionRepository, "create")).toHaveBeenCalledWith(
       expect.objectContaining({ amount: "-12.5" }),
     );
   });
@@ -195,12 +197,12 @@ describe("POST / — validation pins", () => {
     ]) {
       await expectValidationError(post({ ...validPostBody(), recipient_id }));
     }
-    expect(transactionRepository.create).not.toHaveBeenCalled();
+    expect(mockOf(transactionRepository, "create")).not.toHaveBeenCalled();
   });
 
   it("passes an accepted numeric-string recipient_id through RAW", async () => {
     await post({ ...validPostBody(), recipient_id: "5" }).expect(201);
-    expect(transactionRepository.create).toHaveBeenCalledWith(
+    expect(mockOf(transactionRepository, "create")).toHaveBeenCalledWith(
       expect.objectContaining({ recipient_id: "5" }),
     );
   });
@@ -210,12 +212,12 @@ describe("POST / — validation pins", () => {
     await expectValidationError(post({ ...validPostBody(), tags: null }));
 
     await post(validPostBody()).expect(201);
-    expect(transactionRepository.create).toHaveBeenCalledWith(
+    expect(mockOf(transactionRepository, "create")).toHaveBeenCalledWith(
       expect.objectContaining({ tags: null }),
     );
 
     await post({ ...validPostBody(), tags: ["a", "b"] }).expect(201);
-    expect(transactionRepository.create).toHaveBeenLastCalledWith(
+    expect(mockOf(transactionRepository, "create")).toHaveBeenLastCalledWith(
       expect.objectContaining({ tags: ["a", "b"] }),
     );
   });
@@ -224,12 +226,12 @@ describe("POST / — validation pins", () => {
     await expectValidationError(post({ ...validPostBody(), currency: "euro" }));
 
     await post({ ...validPostBody(), currency: "usd" }).expect(201);
-    expect(transactionRepository.create).toHaveBeenCalledWith(
+    expect(mockOf(transactionRepository, "create")).toHaveBeenCalledWith(
       expect.objectContaining({ currency: "USD" }),
     );
 
     await post(validPostBody()).expect(201);
-    expect(transactionRepository.create).toHaveBeenLastCalledWith(
+    expect(mockOf(transactionRepository, "create")).toHaveBeenLastCalledWith(
       expect.objectContaining({ currency: undefined }),
     );
   });
@@ -261,7 +263,7 @@ describe("PATCH /:id — validation pins", () => {
     await expectValidationError(patch({ currency: "euro" }));
 
     await patch({ currency: "usd" }).expect(200);
-    expect(transactionRepository.update).toHaveBeenCalledWith(
+    expect(mockOf(transactionRepository, "update")).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ currency: "USD" }),
     );
@@ -269,7 +271,7 @@ describe("PATCH /:id — validation pins", () => {
 
   it("allows a zero amount on PATCH (unlike POST) and coerces it to a number", async () => {
     await patch({ amount: "0" }).expect(200);
-    expect(transactionRepository.update).toHaveBeenCalledWith(
+    expect(mockOf(transactionRepository, "update")).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ amount: 0 }),
     );
@@ -283,14 +285,14 @@ describe("PATCH /:id — validation pins", () => {
   it("rejects the removed bank_account write field", async () => {
     await expectValidationError(patch({ bank_account: "Chase" }));
     await expectValidationError(patch({ bank_account: null }));
-    expect(transactionRepository.update).not.toHaveBeenCalled();
+    expect(mockOf(transactionRepository, "update")).not.toHaveBeenCalled();
   });
 
   it("rejects non-array tags and passes arrays through", async () => {
     await expectValidationError(patch({ tags: "x" }));
 
     await patch({ tags: ["a"] }).expect(200);
-    expect(transactionRepository.update).toHaveBeenCalledWith(
+    expect(mockOf(transactionRepository, "update")).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ tags: ["a"] }),
     );
@@ -298,7 +300,7 @@ describe("PATCH /:id — validation pins", () => {
 
   it("keeps the boundary loose: unvalidated fields pass through untouched", async () => {
     await patch({ memo: "hi", is_active: "yes", comment: 7 }).expect(200);
-    expect(transactionRepository.update).toHaveBeenCalledWith(
+    expect(mockOf(transactionRepository, "update")).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ memo: "hi", is_active: "yes", comment: 7 }),
     );
@@ -306,7 +308,7 @@ describe("PATCH /:id — validation pins", () => {
 
   it("absent fields stay absent in the patch handed to the repository", async () => {
     await patch({ memo: "only-this" }).expect(200);
-    const patchArg = transactionRepository.update.mock.calls[0]![1];
+    const patchArg = must(transactionRepository.update.mock.calls[0], "transactionRepository.update.mock.calls[0]")[1];
     expect("amount" in patchArg).toBe(false);
     expect("transaction_date" in patchArg).toBe(false);
     expect("currency" in patchArg).toBe(false);
@@ -316,7 +318,7 @@ describe("PATCH /:id — validation pins", () => {
 
   it("coerces numeric-string FK ids to numbers", async () => {
     await patch({ recipient_id: "7", category_id: "3" }).expect(200);
-    expect(transactionRepository.update).toHaveBeenCalledWith(
+    expect(mockOf(transactionRepository, "update")).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ recipient_id: 7, category_id: 3 }),
     );
@@ -330,7 +332,7 @@ describe("PATCH /:id — validation pins", () => {
     await patch({ id: 99, created_at: "x", links: ["a"], memo: "ok" }).expect(
       200,
     );
-    const patchArg = transactionRepository.update.mock.calls[0]![1];
+    const patchArg = must(transactionRepository.update.mock.calls[0], "transactionRepository.update.mock.calls[0]")[1];
     expect("id" in patchArg).toBe(false);
     expect("created_at" in patchArg).toBe(false);
     expect("links" in patchArg).toBe(false);

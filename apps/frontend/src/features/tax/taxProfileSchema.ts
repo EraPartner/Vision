@@ -11,7 +11,10 @@
  */
 import { z } from 'zod';
 import { forfaitCategoryOf } from '@/lib/belgianTax/forfaitCategory';
-import type { ActivityKind } from '@/lib/belgianTax/householdTypes';
+import { ACTIVITY_KINDS } from '@/lib/belgianTax/householdTypes';
+import { listGuard } from '@/lib/enumGuard';
+
+const isActivityKind = listGuard(ACTIVITY_KINDS);
 
 // The household stores plain numbers (parseDecimal output). `.catch(undefined)` makes any
 // malformed value degrade to "missing", which the rules below then report.
@@ -51,7 +54,7 @@ export const householdIncomeStepSchema = z
         );
         if (!(incomeA > 0)) {
             ctx.addIssue({
-                code: z.ZodIssueCode.custom,
+                code: 'custom',
                 path: ['partners', 'A', 'activities'],
                 message: 'tax.profile.validation.grossIncomeRequired',
             });
@@ -59,15 +62,17 @@ export const householdIncomeStepSchema = z
         }
         for (const partner of household.partners) {
             const categories = new Set(
-                partner.activities
-                    .filter((a) => a.kind !== 'net_professional_amount')
-                    .map((a) => forfaitCategoryOf(a.kind as ActivityKind)),
+                partner.activities.flatMap((a) =>
+                    isActivityKind(a.kind) && a.kind !== 'net_professional_amount'
+                        ? [forfaitCategoryOf(a.kind)]
+                        : [],
+                ),
             );
             for (const category of categories) {
                 const choice = partner.professionalExpenses[category];
                 if (choice?.method === 'actual' && !((choice.actualAmount ?? 0) > 0)) {
                     ctx.addIssue({
-                        code: z.ZodIssueCode.custom,
+                        code: 'custom',
                         path: ['partners', partner.id ?? '', 'professionalExpenses', category],
                         message: 'tax.profile.validation.actualExpensesRequired',
                     });
@@ -83,7 +88,7 @@ export const householdIncomeStepSchema = z
                     activity.endDate < activity.startDate
                 ) {
                     ctx.addIssue({
-                        code: z.ZodIssueCode.custom,
+                        code: 'custom',
                         path: ['partners', partner.id ?? '', 'activities'],
                         message: 'tax.profile.validation.activityDatesOrder',
                     });

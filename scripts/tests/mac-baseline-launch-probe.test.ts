@@ -7,7 +7,7 @@ import {
   summarizeRequests,
 } from "../lib/mac-baseline/launchProbe.ts";
 
-test("groups repeated polls by method and path, counting open and failed", () => {
+void test("groups repeated polls by method and path, counting open and failed", () => {
   assert.equal(
     requestPath("http://127.0.0.1:3001/api/info/insights-count?x=1"),
     "/api/info/insights-count",
@@ -37,7 +37,7 @@ test("groups repeated polls by method and path, counting open and failed", () =>
   assert.equal(summary[1]?.path, "GET /api/settings");
 });
 
-test("counts in how many samples each animation ran", () => {
+void test("counts in how many samples each animation ran", () => {
   const shimmer = { name: "shimmer", target: "div.animate-shimmer" };
   const result = summarizeAnimations([
     { atS: 0, running: [shimmer, shimmer] },

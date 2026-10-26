@@ -29,34 +29,38 @@ import {
   writeSyntheticWorkbook,
 } from "./helpers/saxoWorkbook.ts";
 import type { SyntheticSheet } from "./helpers/saxoWorkbook.ts";
+import { must } from "./helpers/must.ts";
+import type { Pool } from "pg";
 
-const pool = getTestPool()!;
+/** A row from an ad-hoc SQL read: column values are narrowed where used. */
+type DbRow = Record<string, unknown>;
+interface IdRow {
+  id: number;
+}
+
+let pool: Pool;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const owned = { accounts: [] as number[], investments: [] as number[] };
 let directory: string;
 
 async function account(institution: string): Promise<number> {
-  const id = Number(
-    (
-      await pool.query(
+  const id = must((
+      await pool.query<IdRow>(
         "INSERT INTO accounts(name,institution,type,currency) VALUES($1,$2,'brokerage','EUR') RETURNING id",
         [`${institution.toUpperCase()} SYNTHETIC ${owned.accounts.length + 1}`, institution],
       )
-    ).rows[0].id,
-  );
+    ).rows[0], "query row").id;
   owned.accounts.push(id);
   return id;
 }
 
 async function investment(symbol: string, currency = "USD"): Promise<number> {
-  const id = Number(
-    (
-      await pool.query(
+  const id = must((
+      await pool.query<IdRow>(
         "INSERT INTO investments(name,symbol,asset_class,currency) VALUES($1,$1,'stock',$2) RETURNING id",
         [symbol, currency],
       )
-    ).rows[0].id,
-  );
+    ).rows[0], "query row").id;
   owned.investments.push(id);
   return id;
 }
@@ -104,7 +108,7 @@ async function answers(
   const { blockers } = await previewPortfolioImportReconciliation({ batchIds });
   return blockers
     .filter((blocker) => blocker.reason === reason)
-    .map((blocker) => ({ batchId: blocker.batchId, rowId: blocker.rowId!, choice }));
+    .map((blocker) => ({ batchId: blocker.batchId, rowId: blocker.rowId, choice }));
 }
 
 /** The owner's per-row answer for each row blocked without a booking record id. */
@@ -126,6 +130,15 @@ async function blockerReasons(...batchIds: number[]) {
 // ── Saxo ─────────────────────────────────────────────────────────────────
 
 /** The synthetic Saxo history restricted to these booking record ids. */
+/** A workbook cell as text (the sheets hold strings, numbers and dates). */
+function cellText(cell: unknown): string {
+  if (cell === null || cell === undefined) return "";
+  if (typeof cell === "string") return cell;
+  if (typeof cell === "number" || typeof cell === "boolean" || typeof cell === "bigint")
+    return String(cell);
+  return JSON.stringify(cell);
+}
+
 function saxoSheets(records: number[]): SyntheticSheet[] {
   return syntheticSaxoWorkbook().map((sheet) => ({
     ...sheet,
@@ -150,9 +163,11 @@ function saxoSeventeen(): SyntheticSheet[] {
           ...record,
           "Bk Record Id": 1000 + index,
           "Transactie-ID": templateOf(index) === 101 ? `TX-${index}` : "0",
-          ...(record["Booking Id"] ? { "Booking Id": `${String(record["Booking Id"])}-${index}` } : {}),
-          ...(record["Corporate action-Id"]
-            ? { "Corporate action-Id": `${String(record["Corporate action-Id"])}-${index}` }
+          ...(cellText(record["Booking Id"]) !== ""
+            ? { "Booking Id": `${cellText(record["Booking Id"])}-${index}` }
+            : {}),
+          ...(cellText(record["Corporate action-Id"]) !== ""
+            ? { "Corporate action-Id": `${cellText(record["Corporate action-Id"])}-${index}` }
             : {}),
         })),
     ).flat(),
@@ -172,12 +187,12 @@ async function saxoCsv(name: string, records: number[], sheets = saxoSheets(reco
   const value = (cell: unknown) =>
     cell instanceof Date
       ? cell.toISOString().slice(0, 10).replaceAll("-", "/")
-      : String(cell ?? "");
+      : cellText(cell);
   const quote = (cell: string) => `"${cell.replaceAll('"', '""')}"`;
   const lines = [
-    main!.headers.map((header) => quote(normalize(header))).join(","),
-    ...main!.records.map((record) =>
-      main!.headers
+    must(main, "main").headers.map((header) => quote(normalize(header))).join(","),
+    ...must(main, "main").records.map((record) =>
+      must(main, "main").headers
         .map((header) => quote(value(record[normalize(header)])))
         .join(","),
     ),
@@ -330,7 +345,7 @@ async function fundingWorkbook(
 
 async function cash(accountId: number) {
   return (
-    await pool.query(
+    await pool.query<DbRow>(
       `SELECT to_char(date,'YYYY-MM-DD') AS date, amount::text AS amount, currency
          FROM transactions WHERE account_id=$1 ORDER BY date, id`,
       [accountId],
@@ -341,7 +356,7 @@ async function cash(accountId: number) {
 async function cashTotals(accountId: number) {
   return Object.fromEntries(
     (
-      await pool.query(
+      await pool.query<{ currency: string; total: string }>(
         `SELECT currency, SUM(amount)::text AS total FROM transactions
           WHERE account_id=$1 GROUP BY currency ORDER BY currency`,
         [accountId],
@@ -352,7 +367,7 @@ async function cashTotals(accountId: number) {
 
 async function portfolio(investmentId: number) {
   return (
-    await pool.query(
+    await pool.query<DbRow>(
       `SELECT type, to_char(date,'YYYY-MM-DD') AS date, units::text AS units,
           amount::text AS amount, fees::text AS fees, taxes::text AS taxes, currency
          FROM portfolio_transactions WHERE investment_id=$1 ORDER BY date, id`,
@@ -363,7 +378,7 @@ async function portfolio(investmentId: number) {
 
 async function batchState(batchId: number) {
   return (
-    await pool.query(
+    await pool.query<DbRow>(
       "SELECT status, rows_imported, rows_duplicate, rows_error FROM portfolio_import_batches WHERE id=$1",
       [batchId],
     )
@@ -371,12 +386,12 @@ async function batchState(batchId: number) {
 }
 
 async function cleanup() {
-  if (owned.investments.length)
+  if (owned.investments.length > 0)
     await pool.query(
       "DELETE FROM portfolio_transactions WHERE investment_id=ANY($1::integer[])",
       [owned.investments],
     );
-  if (owned.accounts.length) {
+  if (owned.accounts.length > 0) {
     const batches = `SELECT id FROM portfolio_import_batches WHERE account_id=ANY($1::integer[])`;
     await pool.query(
       `DELETE FROM portfolio_import_reconciliation_journal WHERE previous_entry_id IS NOT NULL AND batch_id IN (${batches})`,
@@ -395,11 +410,11 @@ async function cleanup() {
       [owned.accounts],
     );
   }
-  if (owned.investments.length)
+  if (owned.investments.length > 0)
     await pool.query("DELETE FROM investments WHERE id=ANY($1::integer[])", [
       owned.investments,
     ]);
-  if (owned.accounts.length)
+  if (owned.accounts.length > 0)
     await pool.query("DELETE FROM accounts WHERE id=ANY($1::integer[])", [
       owned.accounts,
     ]);
@@ -439,6 +454,9 @@ const SAXO_CASH = [
 ];
 
 describeDb("one broker history through more than one export", () => {
+  beforeAll(() => {
+    pool = must(getTestPool(), "test pool");
+  });
   beforeAll(async () => {
     await acquireDbSuiteLock();
     directory = await fs.mkdtemp(path.join(os.tmpdir(), "vision-cross-format-"));
@@ -506,7 +524,7 @@ describeDb("one broker history through more than one export", () => {
 
     describe("a CSV batch recorded before batches kept their source columns", () => {
       const forgetColumns = (batchId: number) =>
-        pool.query(
+        pool.query<DbRow>(
           "UPDATE portfolio_import_batches SET custom_config = custom_config - 'source_columns' WHERE id=$1",
           [batchId],
         );
@@ -657,7 +675,7 @@ describeDb("one broker history through more than one export", () => {
       });
       expect(
         (
-          await pool.query(
+          await pool.query<DbRow>(
             "SELECT status,committed_txn_id,error_message FROM portfolio_import_staging_rows WHERE batch_id=$1",
             [csvBatch],
           )
@@ -693,7 +711,7 @@ describeDb("one broker history through more than one export", () => {
       const bookBatch = await stage(await saxoXlsx("saxo-17", [], sheets), "saxo_transaction_history", sleeve);
       const rows = async () =>
         (
-          await pool.query(
+          await pool.query<DbRow>(
             "SELECT to_jsonb(s) AS data FROM portfolio_import_staging_rows s WHERE batch_id=$1 ORDER BY row_index",
             [csvBatch],
           )
@@ -723,28 +741,26 @@ describeDb("one broker history through more than one export", () => {
     it("adopts a manual deposit instead of duplicating it and restores it on rollback", async () => {
       const sleeve = await account("Saxo");
       await investment("EXM");
-      const manual = Number(
-        (
-          await pool.query(
+      const manual = must((
+          await pool.query<IdRow>(
             `INSERT INTO transactions(date,amount,currency,memo,account_id,recipient_id,is_active)
              VALUES('2025-01-10',500,'EUR','Manual deposit',$1,(SELECT id FROM recipients ORDER BY id LIMIT 1),true) RETURNING id`,
             [sleeve],
           )
-        ).rows[0].id,
-      );
+        ).rows[0], "query row").id;
       const file = await saxoXlsx("saxo-all", ALL);
       const workbook = await stage(file, "saxo_transaction_history", sleeve);
       expect(await commit(workbook)).toMatchObject({ imported: 3, adopted: 1 });
       expect(await cash(sleeve)).toEqual(SAXO_CASH);
       expect(
-        (await pool.query("SELECT memo, dedup_fingerprint IS NOT NULL AS owned FROM transactions WHERE id=$1", [manual]))
+        (await pool.query<DbRow>("SELECT memo, dedup_fingerprint IS NOT NULL AS owned FROM transactions WHERE id=$1", [manual]))
           .rows[0],
       ).toEqual({ memo: "Manual deposit", owned: true });
       await commit(await stage(file, "saxo_transaction_history", sleeve));
       expect(await cashTotals(sleeve)).toEqual({ EUR: "450.0000" });
       await rollbackBatch(workbook);
       expect(
-        (await pool.query("SELECT amount::text AS amount, dedup_fingerprint FROM transactions WHERE account_id=$1", [sleeve]))
+        (await pool.query<DbRow>("SELECT amount::text AS amount, dedup_fingerprint FROM transactions WHERE account_id=$1", [sleeve]))
           .rows,
       ).toEqual([{ amount: "500.0000", dedup_fingerprint: null }]);
     });
@@ -813,7 +829,7 @@ describeDb("one broker history through more than one export", () => {
       const sleeve = await account("IBKR");
       const csv = await stage(await ibkrCsv("ibkr80", ["deposit80"]), "ibkr_transaction_history", sleeve);
       await commit(csv);
-      const [{ id }] = (await pool.query("SELECT id FROM transactions WHERE account_id=$1", [sleeve])).rows;
+      const { id } = must((await pool.query<IdRow>("SELECT id FROM transactions WHERE account_id=$1", [sleeve])).rows[0], "transaction row");
       await pool.query("UPDATE transactions SET comment='Keep user comment' WHERE id=$1", [id]);
       const fundingFile = await fundingWorkbook("funding80", "xls", ["usd"], []);
       const funding = await stage(fundingFile, "ibkr_funding_history", sleeve);
@@ -831,7 +847,7 @@ describeDb("one broker history through more than one export", () => {
       });
       const image = async () =>
         (
-          await pool.query(
+          await pool.query<DbRow>(
             "SELECT amount::text AS amount, currency, comment FROM transactions WHERE id=$1",
             [id],
           )
@@ -902,15 +918,15 @@ describeDb("one broker history through more than one export", () => {
         expect(await cash(sleeve)).toEqual([{ date: "2026-01-05", amount: "80.0000", currency: "EUR" }]);
         expect(
           Number(
-            (
-              await pool.query(
+            must((
+              await pool.query<DbRow>(
                 "SELECT count(*) AS count FROM portfolio_import_reconciliation_journal WHERE batch_id=$1",
                 [fundings[index]],
               )
-            ).rows[0].count,
+            ).rows[0], "query row").count,
           ),
         ).toBe(0);
-        expect(await batchState(fundings[index]!)).toMatchObject({ rows_duplicate: 0 });
+        expect(await batchState(must(fundings[index], "fundings[index]"))).toMatchObject({ rows_duplicate: 0 });
       }
     });
 
@@ -1017,7 +1033,7 @@ describeDb("one broker history through more than one export", () => {
         await commitReviewedPortfolioImports({
           batchIds: [csv, funding],
           batchPolicies: [csv, funding].map((batchId) => ({ batchId, adoptPolicy: "preserve_existing" })),
-          rowChoices: [answer!],
+          rowChoices: [must(answer, "answer")],
         }),
       ).toMatchObject({ imported: 2, duplicates: 0 });
       expect(await cash(sleeve)).toEqual([USD, LATE_EUR]);
@@ -1035,14 +1051,14 @@ describeDb("one broker history through more than one export", () => {
       const [answer] = await answers("funding_date_mismatch", "same_transaction", csv, funding);
       const preview = await previewPortfolioImportReconciliation({
         batchIds: [csv, funding],
-        rowChoices: [answer!],
+        rowChoices: [must(answer, "answer")],
       });
       expect(preview).toMatchObject({ ready: true, summary: { duplicate_source: 1 } });
       expect(
         preview.actions.find((action) => action.action === "duplicate_source"),
       ).not.toHaveProperty("policy");
       expect(
-        await commitReviewedPortfolioImports({ batchIds: [csv, funding], rowChoices: [answer!] }),
+        await commitReviewedPortfolioImports({ batchIds: [csv, funding], rowChoices: [must(answer, "answer")] }),
       ).toMatchObject({ imported: 1, duplicates: 1 });
       expect(await cash(sleeve)).toEqual([USD]);
       expect(
@@ -1063,7 +1079,7 @@ describeDb("one broker history through more than one export", () => {
       const { csv, funding } = await stageBoth(sleeve);
       const { blockers } = await previewPortfolioImportReconciliation({ batchIds: [csv, funding] });
       const rowOf = (batchId: number) =>
-        blockers.find((blocker) => blocker.batchId === batchId)!.rowId!;
+        must(must(blockers.find((blocker) => blocker.batchId === batchId), "matching blockers").rowId, "must(blockers.find((blocker) => blocker.batchId...");
       await expect(
         commitReviewedPortfolioImports({
           batchIds: [csv, funding],
@@ -1321,7 +1337,7 @@ describeDb("one broker history through more than one export", () => {
         await commitReviewedPortfolioImports({
           batchIds: [csv, workbook],
           batchPolicies: [csv, workbook].map((batchId) => ({ batchId, adoptPolicy: "preserve_existing" })),
-          rowChoices: [answer!],
+          rowChoices: [must(answer, "answer")],
         }),
       ).toMatchObject({ imported: 2 });
       const trades = await portfolio(exm);
@@ -1335,7 +1351,7 @@ describeDb("one broker history through more than one export", () => {
       const { csv, workbook } = await stageBoth(sleeve);
       const [answer] = await identityAnswers("same_transaction", csv, workbook);
       expect(
-        await commitReviewedPortfolioImports({ batchIds: [csv, workbook], rowChoices: [answer!] }),
+        await commitReviewedPortfolioImports({ batchIds: [csv, workbook], rowChoices: [must(answer, "answer")] }),
       ).toMatchObject({ imported: 1, duplicates: 1 });
       expect(await portfolio(exm)).toHaveLength(1);
     });
@@ -1384,7 +1400,9 @@ describeDb("one broker history through more than one export", () => {
           "Bk Record Id": 201,
           "Transactie-ID": "TX-201",
           Transactiedatum: new Date("2025-01-13T00:00:00Z"),
-          ...(record["Booking Id"] ? { "Booking Id": `${String(record["Booking Id"])}-201` } : {}),
+          ...(cellText(record["Booking Id"]) !== ""
+            ? { "Booking Id": `${cellText(record["Booking Id"])}-201` }
+            : {}),
         })),
       }));
     const SECOND_BUY = { ...XLSX_BUY, date: "2025-01-13" };
@@ -1424,9 +1442,10 @@ describeDb("one broker history through more than one export", () => {
          VALUES($1,$2,'buy','2025-01-12',10,18,180,1,0.63,'EUR')`,
         [exm, sleeve],
       );
-      const [{ id: manual }] = (
-        await pool.query("SELECT id FROM portfolio_transactions WHERE investment_id=$1", [exm])
-      ).rows;
+      const { id: manual } = must(
+        (await pool.query<IdRow>("SELECT id FROM portfolio_transactions WHERE investment_id=$1", [exm])).rows[0],
+        "manual row",
+      );
       const second = await stage(await saxoXlsx("second", [], secondBuy()), "saxo_transaction_history", sleeve);
       const preview = await previewPortfolioImportReconciliation({ batchIds: [second] });
       expect(preview.blockers).toEqual([
@@ -1436,7 +1455,7 @@ describeDb("one broker history through more than one export", () => {
         }),
       ]);
       await expect(commit(second)).rejects.toMatchObject({ status: 409 });
-      const rowId = preview.blockers[0]!.rowId;
+      const rowId = must(preview.blockers[0], "preview.blockers[0]").rowId;
       expect(
         await commitReviewedPortfolioImports({
           batchIds: [second],
@@ -1450,7 +1469,7 @@ describeDb("one broker history through more than one export", () => {
       expect(
         await commitReviewedPortfolioImports({
           batchIds: [again],
-          rowChoices: [{ batchId: again, rowId: blocker!.rowId, choice: "keep_both" }],
+          rowChoices: [{ batchId: again, rowId: must(blocker, "blocker").rowId, choice: "keep_both" }],
         }),
       ).toMatchObject({ imported: 1, duplicates: 0 });
       expect(await portfolio(exm)).toHaveLength(2);
@@ -1460,9 +1479,10 @@ describeDb("one broker history through more than one export", () => {
       const sleeve = await account("Saxo");
       const exm = await investment("EXM");
       await commit(await stage(await saxoXlsx("first", [101]), "saxo_transaction_history", sleeve));
-      const [{ id: recorded }] = (
-        await pool.query("SELECT id FROM portfolio_transactions WHERE investment_id=$1", [exm])
-      ).rows;
+      const { id: recorded } = must(
+        (await pool.query<IdRow>("SELECT id FROM portfolio_transactions WHERE investment_id=$1", [exm])).rows[0],
+        "recorded row",
+      );
       const file = path.join(directory, "tracker.csv");
       await fs.writeFile(
         file,
@@ -1497,7 +1517,7 @@ describeDb("one broker history through more than one export", () => {
       expect(preview.blockers).toEqual([
         expect.objectContaining({
           reason: "existing_assigned_or_imported_history",
-          candidateTransactionIds: [Number(recorded)],
+          candidateTransactionIds: [recorded],
         }),
       ]);
       await expect(commit(generic)).rejects.toMatchObject({ status: 409 });

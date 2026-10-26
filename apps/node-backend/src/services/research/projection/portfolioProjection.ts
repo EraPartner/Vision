@@ -66,6 +66,20 @@ interface ForwardHolding {
 const round2 = (v: number) => Math.round(v * 100) / 100;
 const round4 = (v: number) => Math.round(v * 10000) / 10000;
 
+/** Coerce a boundary value (request input, provider field) to a number. */
+const asNumber = (value: unknown): number => Number(value);
+
+/**
+ * Widened views of values that can arrive incomplete (injected dependencies,
+ * stored rows); the declared types claim every field is present.
+ */
+interface LooseSummary {
+  totals?: { totalPortfolioValue?: unknown; totalInvested?: unknown } | undefined;
+  summaries?: PortfolioHolding[] | undefined;
+}
+const looseSummary = (summary: LooseSummary): LooseSummary => summary;
+const looseList = <T>(list: T[] | null | undefined): T[] => list ?? [];
+
 function clampInt(value: unknown, min: number, max: number, fallback: number) {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
@@ -108,7 +122,7 @@ async function forwardExpectedReturn(
   holding: PortfolioHolding,
   aggregator: ForecastAggregator,
 ): Promise<ForwardHolding | undefined> {
-  const assetClass = String(holding.asset_class || holding.assetClass || '').toLowerCase();
+  const assetClass = (holding.asset_class || holding.assetClass || '').toLowerCase();
   if (!FORWARD_ELIGIBLE.has(assetClass) || !holding.symbol) return undefined;
 
   const [quoteR, analystR, fundR] = await Promise.allSettled([
@@ -121,7 +135,7 @@ async function forwardExpectedReturn(
   // fundamentals) and is provider-defined; see the adapters. Only optional
   // fields are read, each through Number().
   const data = (r: PromiseSettledResult<ResearchFetchResult>) =>
-    (r.status === 'fulfilled' && r.value?.source !== 'unavailable' ? r.value.data : undefined) as
+    (r.status === 'fulfilled' && r.value.source !== 'unavailable' ? r.value.data : undefined) as
       | Record<string, unknown>
       | undefined;
   const quote = data(quoteR);
@@ -208,18 +222,18 @@ export async function runPortfolioForecast(
   const seed = input.seed
     || `pf:${currency}:${horizonMonths}:${paths}:${method}:${forwardBlend}:${monthlyContribution}${hasScheduleOverride ? `:${contributions.join(',')}` : ''}`;
 
-  const summary = await d.getPortfolioSummary(currency);
-  const startValue = nanToZero(Number(summary?.totals?.totalPortfolioValue));
+  const summary = looseSummary(await d.getPortfolioSummary(currency));
+  const startValue = nanToZero(Number(summary.totals?.totalPortfolioValue));
   if (!(startValue > 0)) return { available: false, reason: 'no_holdings' };
 
   // "Net invested" is the capital actually contributed (cost basis), NOT current
   // market value — using startValue here would fold today's unrealized gains into
   // the break-even line and make probBelowInvested too pessimistic. Fall back to
   // market value only when cost basis is unavailable.
-  const investedBasis = Number(summary?.totals?.totalInvested);
+  const investedBasis = Number(summary.totals?.totalInvested);
   const startInvested = investedBasis > 0 ? investedBasis : startValue;
 
-  const snapshots = (await d.getSnapshots('2000-01-01', d.today(), currency)) ?? [];
+  const snapshots = looseList(await d.getSnapshots('2000-01-01', d.today(), currency));
   // Drift/vol come from FLOW-ADJUSTED returns: raw portfolio value rises on
   // deposits as well as market moves, so feeding raw value here would read every
   // contribution as investment return and inflate the projection (see stats.js).
@@ -238,9 +252,9 @@ export async function runPortfolioForecast(
   let blendedDailyDrift = histDailyDrift;
   let forwardHoldings: ForwardHolding[] = [];
   if (forwardBlend > 0) {
-    const holdings = (summary.summaries ?? []).filter((h) => Number(h.currentValue) > 0);
+    const holdings = looseList(summary.summaries).filter((h) => asNumber(h.currentValue) > 0);
     const ranked = [...holdings]
-      .sort((a, b) => Number(b.currentValue) - Number(a.currentValue))
+      .sort((a, b) => asNumber(b.currentValue) - asNumber(a.currentValue))
       .slice(0, MAX_FORWARD_HOLDINGS);
     const resolved = await Promise.all(ranked.map((h) => forwardExpectedReturn(h, d.aggregator)));
     const byId = new Map<PortfolioHolding['id'], ForwardHolding>();
@@ -254,7 +268,7 @@ export async function runPortfolioForecast(
     // forward signal contribute the historical drift, keeping Σweights = 1.
     let forwardDailyDrift = 0;
     for (const h of holdings) {
-      const weight = Number(h.currentValue) / startValue;
+      const weight = asNumber(h.currentValue) / startValue;
       const fwd = byId.get(h.id);
       const holdingDailyDrift = fwd
         ? Math.log(1 + fwd.expectedAnnual) / TRADING_DAYS_PER_YEAR
@@ -279,9 +293,9 @@ export async function runPortfolioForecast(
   for (let p = 0; p < paths; p++) {
     let v = startValue;
     for (const month of months) {
-      const logRet = method === 'block_bootstrap'
-        // residuals is always set on the block_bootstrap path (see above).
-        ? monthlyDrift + sumBootstrapResiduals(residuals!, TRADING_DAYS_PER_MONTH, MEAN_BLOCK_LENGTH, rng)
+      const logRet = residuals
+        // residuals is set exactly on the block_bootstrap path (see above).
+        ? monthlyDrift + sumBootstrapResiduals(residuals, TRADING_DAYS_PER_MONTH, MEAN_BLOCK_LENGTH, rng)
         : monthlyDrift + monthlyVol * gaussian(rng);
       v = v * Math.exp(logRet) + month.contribution;
       month.values[p] = v;

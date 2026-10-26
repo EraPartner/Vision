@@ -50,6 +50,8 @@ import {
   NotFoundError,
 } from "../../src/middleware/errorHandler.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
+import { loose } from "../helpers/partial.ts";
 const splitService = vi.mocked(rawSplitService);
 
 type DeepPartial<T> = T extends readonly (infer U)[]
@@ -62,12 +64,6 @@ type DeepPartial<T> = T extends readonly (infer U)[]
 
 /** Stand-in for a full result: the route reads only the fields given. */
 const partial = <T>(value: NoInfer<DeepPartial<T>>) => value as unknown as T;
-/**
- * Stand-in whose fields do not match the declared result type (extra fields,
- * or numbers where pg returns NUMERIC strings); the route only forwards it.
- */
-const loose = <T>(value: unknown) => value as T;
-
 const { default: splitsRouter } = await import("../../src/routes/splits.ts");
 
 const BASE = "/api/splits";
@@ -587,7 +583,7 @@ describe("Splits Routes", () => {
 
       const res = await api.get(`${BASE}/owed/7/export/csv`).expect(200);
 
-      expect(splitService.getOwedExportRowsByRecipient).toHaveBeenCalledWith(7);
+      expect(mockOf(splitService, "getOwedExportRowsByRecipient")).toHaveBeenCalledWith(7);
       expect(res.headers["content-type"]).toMatch(/text\/csv/);
       expect(res.text).toContain(
         "Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment",
@@ -615,7 +611,7 @@ describe("Splits Routes", () => {
 
       // No limit/offset on the request → the repository is left unbounded and
       // the response carries no limit/offset (the body IS the whole list).
-      expect(splitService.getSplitsByTransaction).toHaveBeenCalledWith(2, {});
+      expect(mockOf(splitService, "getSplitsByTransaction")).toHaveBeenCalledWith(2, {});
       expect(res.body).toEqual(
         okEnvelope({ items: [{ id: 8, transaction_id: 2 }], total: 1 }),
       );
@@ -632,7 +628,7 @@ describe("Splits Routes", () => {
         .query({ limit: "1", offset: "3" })
         .expect(200);
 
-      expect(splitService.getSplitsByTransaction).toHaveBeenCalledWith(2, {
+      expect(mockOf(splitService, "getSplitsByTransaction")).toHaveBeenCalledWith(2, {
         limit: 1,
         offset: 3,
       });
@@ -764,7 +760,7 @@ describe("Splits Routes", () => {
 
       const res = await api.get(`${BASE}/7/payments`).expect(200);
 
-      expect(splitService.getPayments).toHaveBeenCalledWith(7, {});
+      expect(mockOf(splitService, "getPayments")).toHaveBeenCalledWith(7, {});
       expect(res.body).toEqual(
         okEnvelope({ items: [{ id: 3, split_id: 7, amount: 6 }], total: 1 }),
       );
@@ -781,7 +777,7 @@ describe("Splits Routes", () => {
         .query({ limit: "1", offset: "1" })
         .expect(200);
 
-      expect(splitService.getPayments).toHaveBeenCalledWith(7, {
+      expect(mockOf(splitService, "getPayments")).toHaveBeenCalledWith(7, {
         limit: 1,
         offset: 1,
       });

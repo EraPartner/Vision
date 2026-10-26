@@ -15,7 +15,7 @@ function scriptedGit(outputs: string[]): { git: Git; calls: string[][] } {
   return { git, calls };
 }
 
-test("documentation and instruction Markdown may skip the application pipeline", () => {
+void test("documentation and instruction Markdown may skip the application pipeline", () => {
   assert.equal(
     classify([
       "docs/guide.md",
@@ -27,7 +27,7 @@ test("documentation and instruction Markdown may skip the application pipeline",
   );
 });
 
-test("executable, configuration and nested Markdown changes run the full pipeline", () => {
+void test("executable, configuration and nested Markdown changes run the full pipeline", () => {
   for (const changed of [
     ".agents/skills/example/run.sh",
     ".codex/agents/reviewer.toml",
@@ -43,7 +43,7 @@ test("executable, configuration and nested Markdown changes run the full pipelin
   }
 });
 
-test("empty, unresolvable and special-mode diffs fail closed", () => {
+void test("empty, unresolvable and special-mode diffs fail closed", () => {
   assert.equal(classify([]), true);
   assert.equal(
     classify([".agents/role.md"], new Set([".agents/role.md"])),
@@ -56,7 +56,7 @@ test("empty, unresolvable and special-mode diffs fail closed", () => {
   assert.equal(classifyRange("base", "head", failing), true);
 });
 
-test("the agent check cannot be silently skipped", () => {
+void test("the agent check cannot be silently skipped", () => {
   const workflow = fs.readFileSync(
     path.join(import.meta.dirname, "..", "..", ".github/workflows/ci.yml"),
     "utf8",
@@ -76,7 +76,7 @@ test("the agent check cannot be silently skipped", () => {
   assert.ok(complete.includes("bun scripts/ci-cancellation-policy.ts"));
 });
 
-test("NUL delimiters, file modes and disabled rename detection are honoured", () => {
+void test("NUL delimiters, file modes and disabled rename detection are honoured", () => {
   // A renamed executable must still be included through its old path.
   const renamed = scriptedGit([
     "",

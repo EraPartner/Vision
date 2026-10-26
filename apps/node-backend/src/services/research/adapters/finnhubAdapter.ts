@@ -14,6 +14,7 @@ import { requireProviderKey } from "../providerKeys.ts";
 import { epochMsToUtcYmd } from "../../../lib/dateFormat.ts";
 import { looseArray, looseString, numish, parseOr } from "./schemas.ts";
 import { makeChartRangeMap } from "@vision/types/chartRanges";
+import { lookup } from "../tableLookup.ts";
 
 const BASE = "https://finnhub.io/api/v1";
 
@@ -125,9 +126,7 @@ const finnhubAdapter = {
   },
 
   async chart(symbol: string, { range = "1mo" }: { range?: string } = {}) {
-    const days =
-      RANGE_TO_DAYS[range as keyof typeof RANGE_TO_DAYS] ??
-      RANGE_TO_DAYS["1mo"];
+    const days = lookup(RANGE_TO_DAYS, range) ?? RANGE_TO_DAYS["1mo"];
     const to = nowSec();
     const from = to - days * 86_400;
     const c = parseOr(
@@ -140,7 +139,7 @@ const finnhubAdapter = {
     if (c?.s !== "ok") {
       return {
         symbol,
-        currency: undefined as string | undefined,
+        currency: undefined,
         points: [],
       };
     }
@@ -153,7 +152,7 @@ const finnhubAdapter = {
     }));
     return {
       symbol,
-      currency: undefined as string | undefined,
+      currency: undefined,
       points,
     };
   },
@@ -172,10 +171,10 @@ const finnhubAdapter = {
     return {
       symbol,
       name: symbol,
-      currency: undefined as string | undefined,
+      currency: undefined,
       marketCap: num(m.marketCapitalization), // reported in millions by Finnhub
       pe: num(m.peTTM ?? m.peBasicExclExtraTTM),
-      forwardPE: undefined as number | undefined,
+      forwardPE: undefined,
       pegRatio: num(m.pegTTM),
       dividendYield: pct(m.dividendYieldIndicatedAnnual),
       payoutRatio: pct(m.payoutRatioTTM ?? m.payoutRatioAnnual),
@@ -204,7 +203,7 @@ const finnhubAdapter = {
     const recs = await getJson(
       `${BASE}/stock/recommendation?symbol=${encodeURIComponent(symbol)}&token=${key()}`,
     );
-    const latestRaw = parseOr(z.array(z.any()), recs, [])[0];
+    const latestRaw = parseOr(z.array(z.unknown()), recs, [])[0];
     // Truthiness on the RAW row so a malformed-but-present bucket still yields
     // zeroed counts, exactly as the old `?? 0` fallbacks did.
     const latest = latestRaw
@@ -243,7 +242,7 @@ const finnhubAdapter = {
       targetHigh: targets.targetHigh,
       targetLow: targets.targetLow,
       numberOfAnalysts,
-      recentActions: [] as unknown[],
+      recentActions: new Array<unknown>(),
     };
   },
 

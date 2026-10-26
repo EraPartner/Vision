@@ -11,10 +11,24 @@ import { closePool } from "../src/database/connection.ts";
 import { commitBatch } from "../src/services/portfolioImportPipeline/commit.ts";
 import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.ts";
 import {
+  asAccountId,
   asCurrencyCode,
+  asInvestmentId,
 } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
+import type { Pool } from "pg";
 
-const pool = getTestPool()!;
+/** A row from an ad-hoc SQL read: column values are narrowed where used. */
+type DbRow = Record<string, unknown>;
+interface IdRow {
+  id: number;
+}
+/** BIGINT ids arrive from node-postgres as strings. */
+interface BigIdRow {
+  id: string;
+}
+
+let pool: Pool;
 const fixtures: {
   accountIds: number[];
   investmentIds: number[];
@@ -24,21 +38,24 @@ const fixtures: {
 type SourceTrade = { date: string; type: string; units: number; price: number };
 
 async function seedPosition() {
-  const accountId = (
-    await pool.query(
+  const accountId = must((
+    await pool.query<IdRow>(
       `INSERT INTO accounts (name, display_name)
        VALUES ('IMPORT CHRONOLOGY TEST', 'IMPORT CHRONOLOGY TEST') RETURNING id`,
     )
-  ).rows[0].id;
+  ).rows[0], "account row").id;
   fixtures.accountIds.push(accountId);
-  const investmentId = (
-    await pool.query(
+  const investmentId = must((
+    await pool.query<IdRow>(
       `INSERT INTO investments (name, symbol, asset_class, currency)
        VALUES ('Import chronology test stock', 'CHRONOTEST', 'stock', 'EUR') RETURNING id`,
     )
-  ).rows[0].id;
+  ).rows[0], "investment row").id;
   fixtures.investmentIds.push(investmentId);
-  return { accountId, investmentId };
+  return {
+    accountId: asAccountId(accountId),
+    investmentId: asInvestmentId(investmentId),
+  };
 }
 
 async function stageSource(
@@ -46,17 +63,17 @@ async function stageSource(
   source: SourceTrade[],
 ) {
   const batchId = Number(
-    (
-      await pool.query(
+    must((
+      await pool.query<BigIdRow>(
         `INSERT INTO portfolio_import_batches
            (adapter_name, status, rows_total, account_id, is_brokerage)
          VALUES ('generic', 'awaiting_review', $1, $2, false) RETURNING id`,
         [source.length, accountId],
       )
-    ).rows[0].id,
+    ).rows[0], "query row").id,
   );
   fixtures.batchIds.push(batchId);
-  const occurrences = new Map();
+  const occurrences = new Map<string, number>();
   for (const [rowIndex, row] of source.entries()) {
     const rawData = `${row.date},${row.type},${row.units},${row.price}`;
     const occurrence = (occurrences.get(rawData) ?? 0) + 1;
@@ -94,7 +111,7 @@ async function stageSource(
 
 async function stagingProvenance(batchId: number) {
   return (
-    await pool.query(
+    await pool.query<DbRow>(
       `SELECT row_index, raw_data, source_record_hash, dedup_fingerprint,
               dedup_fingerprint_version, dedup_occurrence
          FROM portfolio_import_staging_rows WHERE batch_id = $1 ORDER BY row_index`,
@@ -105,7 +122,14 @@ async function stagingProvenance(batchId: number) {
 
 async function committedTrades(investmentId: number) {
   return (
-    await pool.query(
+    await pool.query<{
+      type: string;
+      date: string;
+      units: number;
+      source_record_hash: string | null;
+      dedup_fingerprint: string | null;
+      dedup_fingerprint_version: number | null;
+    }>(
       `SELECT type, to_char(date, 'YYYY-MM-DD') AS date, units::float8 AS units,
               source_record_hash, dedup_fingerprint, dedup_fingerprint_version
          FROM portfolio_transactions WHERE investment_id = $1 ORDER BY id`,
@@ -117,6 +141,9 @@ async function committedTrades(investmentId: number) {
 describe.skipIf(!hasTestDatabase())(
   "portfolio import commit chronology (real Postgres)",
   () => {
+    beforeAll(() => {
+      pool = must(getTestPool(), "test pool");
+    });
     beforeAll(async () => {
       expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
       await acquireDbSuiteLock();
@@ -200,10 +227,10 @@ describe.skipIf(!hasTestDatabase())(
         1, 1, 1, 2,
       ]);
       expect(trades.map((row) => row.dedup_fingerprint)).toEqual(
-        [2, 3, 1, 0].map((index) => provenance[index].dedup_fingerprint),
+        [2, 3, 1, 0].map((index) => must(provenance[index], "provenance[index]").dedup_fingerprint),
       );
       expect(trades.map((row) => row.source_record_hash)).toEqual(
-        [2, 3, 1, 0].map((index) => provenance[index].source_record_hash),
+        [2, 3, 1, 0].map((index) => must(provenance[index], "provenance[index]").source_record_hash),
       );
       expect(trades.every((row) => row.dedup_fingerprint_version === 1)).toBe(
         true,
@@ -218,7 +245,7 @@ describe.skipIf(!hasTestDatabase())(
       expect(await committedTrades(position.investmentId)).toEqual(trades);
       expect(
         (
-          await pool.query(
+          await pool.query<DbRow>(
             "SELECT status FROM portfolio_import_staging_rows WHERE batch_id = $1 ORDER BY row_index",
             [reimportId],
           )
@@ -228,7 +255,7 @@ describe.skipIf(!hasTestDatabase())(
 
     it("keeps an existing historical buy and imports only missing occurrences before the later sale", async () => {
       const position = await seedPosition();
-      const existing = (await portfolioTransactionService.create({
+      const existing = must(await portfolioTransactionService.create({
         investment_id: position.investmentId,
         account_id: position.accountId,
         type: "buy",
@@ -236,7 +263,7 @@ describe.skipIf(!hasTestDatabase())(
         units: 5,
         price_per_unit: 100,
         currency: asCurrencyCode("EUR"),
-      }))!;
+      }), "portfolioTransactionService.create result");
       const source = [
         { date: "2026-02-01", type: "sell", units: 8, price: 110 },
         { date: "2026-01-01", type: "buy", units: 5, price: 100 },
@@ -257,7 +284,7 @@ describe.skipIf(!hasTestDatabase())(
       ]);
       expect(
         (
-          await pool.query(
+          await pool.query<DbRow>(
             "SELECT id, import_batch_id, dedup_fingerprint FROM portfolio_transactions WHERE id = $1",
             [existing.id],
           )
@@ -306,13 +333,13 @@ describe.skipIf(!hasTestDatabase())(
         errors: 1,
       });
       const staged = (
-        await pool.query(
+        await pool.query<DbRow>(
           "SELECT status, error_message FROM portfolio_import_staging_rows WHERE batch_id = $1 ORDER BY row_index",
           [batchId],
         )
       ).rows;
       expect(staged.map((row) => row.status)).toEqual(["error", "committed"]);
-      expect(staged[0].error_message).toMatch(/exceed.*holdings/i);
+      expect(must(staged[0], "staged[0]").error_message).toMatch(/exceed.*holdings/i);
     });
   },
 );

@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,7 +28,7 @@ export function NetWorthCard({ currency }: NetWorthCardProps) {
             <CardHeader className="flex flex-row items-start justify-between gap-3 pb-3">
                 <CardTitle variant="sm">{t("home.netWorth.title")}</CardTitle>
                 <Button asChild variant="link" size="sm" className="h-auto p-0">
-                    <Link to="/portfolio/net-worth">{t("home.netWorth.details")}</Link>
+                    <AppLink to="/portfolio/net-worth">{t("home.netWorth.details")}</AppLink>
                 </Button>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -37,9 +37,9 @@ export function NetWorthCard({ currency }: NetWorthCardProps) {
                 ) : !hasData ? (
                     <p className="type-callout text-label-secondary">
                         {t("home.netWorth.empty")}{" "}
-                        <Link to="/accounts" className="text-primary underline-offset-4 hover:underline">
+                        <AppLink to="/accounts" className="text-primary underline-offset-4 hover:underline">
                             {t("home.accounts.title")}
-                        </Link>
+                        </AppLink>
                     </p>
                 ) : (
                     <>
@@ -55,9 +55,9 @@ export function NetWorthCard({ currency }: NetWorthCardProps) {
                             >
                                 <Money amount={change} currency={currency} signed />{" "}
                                 {t("home.netWorth.change")}
-                                {data != null && data.monthlyChangePercent !== 0 ? ` (${change > 0 ? "+" : ""}${data.monthlyChangePercent.toFixed(1)}%)` : ""}
+                                {data.monthlyChangePercent !== 0 ? ` (${change > 0 ? "+" : ""}${data.monthlyChangePercent.toFixed(1)}%)` : ""}
                             </p>
-                            {(data?.unconvertedCurrencies?.length ?? 0) > 0 && (
+                            {data.unconvertedCurrencies.length > 0 && (
                                 <p className="type-footnote text-warning">
                                     {t("accounts.totalIncomplete")}
                                 </p>

@@ -29,12 +29,12 @@ export function summarizeSimulationPaths(
   percentiles: number[],
 ): SimulationSummary {
   const pathCount = samples[0]?.length ?? 0;
-  const cumulativeByPath: number[] = new Array(pathCount).fill(0);
+  const cumulativeByPath: number[] = new Array<number>(pathCount).fill(0);
   const bands = percentiles.map((q) => ({
     key: `p${q}`,
     q,
-    daily: [] as Array<{ date: string; value: number }>,
-    cumulative: [] as Array<{ date: string; value: number }>,
+    daily: new Array<{ date: string; value: number }>(),
+    cumulative: new Array<{ date: string; value: number }>(),
   }));
   const series: Array<{ date: string; value: number }> = [];
 

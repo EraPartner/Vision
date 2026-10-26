@@ -54,7 +54,7 @@ export function useCreateConversation() {
     const { t } = useLanguage();
 
     return useMutation({
-        mutationFn: (body: CreateConversationBody = {}) =>
+        mutationFn: (body: CreateConversationBody) =>
             apiClient.createConversation(body),
         onSuccess: (data) => {
             void queryClient.invalidateQueries({

@@ -1,4 +1,5 @@
-import { Link, useLocation } from "react-router";
+import { useLocation } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import { useEffect } from "react";
 import logger from "@/lib/logger";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -32,10 +33,10 @@ const NotFound = () => {
                 </div>
                 <p className="type-body text-label-secondary">{t('notFound.description')}</p>
                 <Button asChild>
-                    <Link to="/">
+                    <AppLink to="/">
                         <ArrowLeft aria-hidden="true" />
                         {t('notFound.backHome')}
-                    </Link>
+                    </AppLink>
                 </Button>
                 <div className="flex items-center justify-center gap-3 type-callout text-label-secondary">
                     <TextLink tone="muted" to="/transactions">

@@ -1,5 +1,6 @@
 import { bodyAt } from "./helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Mock } from "vitest";
 import { mockLogger } from "./helpers/mockLogger.ts";
 import { mockConnection } from "./helpers/repoMocks.ts";
 import type { ConnectionMockSurface } from "./helpers/repoMocks.ts";
@@ -14,10 +15,13 @@ vi.mock("../src/config/logger.ts", () => ({
 
 import * as connection from "../src/database/connection.ts";
 import settingsRepository from "../src/repositories/settingsRepository.ts";
+import { must } from "./helpers/must.ts";
 
 // The connection module is the mock surface; its spies stay untyped because
 // the tests read raw SQL and params from mock.calls.
-const { query } = connection as unknown as ConnectionMockSurface;
+const { query } = connection as unknown as Omit<ConnectionMockSurface, "query"> & {
+  query: Mock<(sql: unknown, params: unknown[]) => Promise<unknown>>;
+};
 const { default: settingsRouter } = await import("../src/routes/settings.ts");
 
 const api = routeAgent(settingsRouter, { mountPath: "/api/settings" });
@@ -42,8 +46,8 @@ describe("Settings storage and retrieval", () => {
         typeof sql === "string" && /insert into "?user_settings"?/i.test(sql),
     );
     expect(upsertCall).toBeTruthy();
-    expect(upsertCall![1][0]).toBe(key);
-    expect(upsertCall![1][1]).toBe("[373]");
+    expect(must(upsertCall, "upsertCall")[1][0]).toBe(key);
+    expect(must(upsertCall, "upsertCall")[1][1]).toBe("[373]");
   });
 
   it("settings API routes should upsert and return settings", async () => {
@@ -125,8 +129,8 @@ describe("Settings storage and retrieval", () => {
         typeof sql === "string" && /insert into "?user_settings"?/i.test(sql),
     );
     expect(upsertCall).toBeTruthy();
-    expect(upsertCall![1][0]).toEqual(["dashboard_settings"]);
-    expect(upsertCall![1][1]).toEqual([
+    expect(must(upsertCall, "upsertCall")[1][0]).toEqual(["dashboard_settings"]);
+    expect(must(upsertCall, "upsertCall")[1][1]).toEqual([
       JSON.stringify({
         excludedCategoryIds: [1, 2],
         excludedRecipientIds: [10],

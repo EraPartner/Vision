@@ -9,6 +9,7 @@ import {
 import { List } from "@/components/ui/list";
 import { Money } from "@/components/shared/Money";
 import { cn } from "@/lib/utils";
+import type { TranslationKey } from "@/locales/keys";
 
 export interface InvestmentTaxRow {
     id: string | number;
@@ -29,7 +30,7 @@ export interface InvestmentTaxRow {
 interface InvestmentTaxBreakdownTableProps {
     investments: InvestmentTaxRow[];
     convertToTarget: (amount: number, currency?: string) => number;
-    t: (key: string) => string;
+    t: (key: TranslationKey) => string;
 }
 
 /** Per-investment taxes and fees of the portfolio-tax page ("investmentBreakdown" widget). */

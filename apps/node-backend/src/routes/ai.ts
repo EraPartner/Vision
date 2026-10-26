@@ -268,7 +268,7 @@ router.get("/status", async (req, res) => {
   const client = getOllamaClient();
   const health = await client.healthCheck();
   res.ok({
-    ok: Boolean(health.reachable),
+    ok: health.reachable,
     baseUrl: health.baseUrl,
     displayUrl: health.baseUrl,
     modelCount: health.modelCount ?? 0,

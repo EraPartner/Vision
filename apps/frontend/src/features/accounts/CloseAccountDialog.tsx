@@ -84,7 +84,7 @@ export function CloseAccountDialog({
         ? []
         : account.balance_parts !== undefined
           ? account.balance_parts.filter(
-                (part) => Math.abs(Number(part.balance)) >= 0.005,
+                (part) => Math.abs(part.balance) >= 0.005,
             )
           : Math.abs(account.computed_balance ?? 0) >= 0.005
             ? [
@@ -97,7 +97,7 @@ export function CloseAccountDialog({
     const hasResidual = residualParts.length > 0;
     const residualLabel = residualParts
         .map((part) =>
-            fmtCur(Number(part.balance), { currency: part.currency }),
+            fmtCur(part.balance, { currency: part.currency }),
         )
         .join(", ");
     const shouldRetag =

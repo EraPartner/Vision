@@ -96,7 +96,7 @@ export function parseLocaleNumber(
 ): number {
     if (typeof input === "number") return Number.isFinite(input) ? input : NaN;
     if (input == null) return NaN;
-    let s = String(input).trim();
+    let s = input.trim();
     if (!s) return NaN;
 
     let negative = false;

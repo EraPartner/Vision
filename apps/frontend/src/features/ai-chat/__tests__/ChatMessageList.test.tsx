@@ -5,7 +5,9 @@ import { LanguageProvider } from "@/stores/hydration/LanguageHydration";
 import { ChatMessageList } from "@/features/ai-chat/ChatMessageList";
 import type { ChatMessage } from "@/types/aiChat";
 
-const chatBubbleRenderSpy = vi.hoisted(() => vi.fn());
+const chatBubbleRenderSpy = vi.hoisted(() =>
+    vi.fn<(props: { message: ChatMessage; streaming?: boolean | undefined }) => void>(),
+);
 
 vi.mock("@/features/ai-chat/ChatBubble", async () => {
     const { memo } = await import("react");

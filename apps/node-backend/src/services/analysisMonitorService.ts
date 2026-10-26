@@ -31,7 +31,10 @@ import type {
   MonitorObservationRow,
   MonitorRunRow,
 } from "../database/rows/analysis.ts";
-import { runSavedAnalysis } from "./savedAnalysisService.ts";
+import { monitorRunIdOf, runSavedAnalysis } from "./savedAnalysisService.ts";
+import { valueText } from "./valueText.ts";
+import { errorMessage } from "../lib/errors.ts";
+import { isRecord } from "../lib/typeGuards.ts";
 
 /** A stored observation, or the latest one as `MONITOR_SELECT` embeds it. */
 type ObservationRow = MonitorObservationRow | MonitorObservationJson;
@@ -63,7 +66,7 @@ interface MonitorFinding {
 type PageInput = { limit?: unknown; offset?: unknown };
 
 const DECIMAL = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
-const uuid = z.string().uuid();
+const uuid = z.uuid();
 const decimalString = z
   .string()
   .max(100)
@@ -165,7 +168,7 @@ function mapMonitor(row: MonitorRow) {
         : row.dossier_id !== null,
     fieldId: row.field_id,
     operator: row.operator,
-    threshold: row.threshold === null ? null : String(row.threshold),
+    threshold: row.threshold,
     intervalMinutes: row.interval_minutes,
     cooldownMinutes: row.cooldown_minutes,
     nextDueAt: row.next_due_at,
@@ -251,7 +254,11 @@ function selectMonitors() {
       (join) => join.onTrue(),
     )
     .selectAll("m")
-    .select(sql<MonitorObservationJson | null>`row_to_json(o.*)`.as("last_observation"));
+    .select(
+      sql<MonitorObservationJson | null>`row_to_json(o.*)`.as(
+        "last_observation",
+      ),
+    );
 }
 
 function lockMonitor(id: string) {
@@ -348,15 +355,12 @@ export async function createAnalysisMonitor(input: unknown) {
     fail("Frozen saved analyses cannot be monitored");
   if (value.kind === "analysis-threshold") {
     const definition = (
-      await checkedRow(savedAnalysisDefinitionRowSchema, savedDefinition(target.id))
-    )?.definition_json;
-    if (
-      !definition?.expectedResult?.columns?.some(
-        (column) =>
-          column.id === value.fieldId &&
-          ["decimal", "number", "integer", "currency"].includes(column.type),
+      await checkedRow(
+        savedAnalysisDefinitionRowSchema,
+        savedDefinition(target.id),
       )
-    )
+    )?.definition_json;
+    if (!declaresNumericColumn(definition, value.fieldId))
       fail("Field must be a declared numeric result column");
   }
   const id = randomUUID();
@@ -368,7 +372,7 @@ export async function createAnalysisMonitor(input: unknown) {
       title: value.title,
       saved_analysis_id: value.kind === "analysis-threshold" ? target.id : null,
       dossier_id: value.kind === "dossier-evidence" ? target.id : null,
-      historical_target_id: String(target.id),
+      historical_target_id: target.id,
       target_label: sql<string>`${target.name ?? target.title}`,
       field_id: value.kind === "analysis-threshold" ? value.fieldId : null,
       operator: value.kind === "analysis-threshold" ? value.operator : null,
@@ -411,13 +415,7 @@ export async function patchAnalysisMonitor(id: string, input: unknown) {
           savedDefinition(current.saved_analysis_id),
         )
       )?.definition_json;
-      if (
-        !definition?.expectedResult?.columns?.some(
-          (column) =>
-            column.id === value.fieldId &&
-            ["decimal", "number", "integer", "currency"].includes(column.type),
-        )
-      )
+      if (!declaresNumericColumn(definition, value.fieldId))
         fail("Field must be a declared numeric result column");
     }
     const conditionChanged =
@@ -433,12 +431,18 @@ export async function patchAnalysisMonitor(id: string, input: unknown) {
         enabled: value.enabled ?? current.enabled,
         field_id: value.fieldId ?? current.field_id,
         operator: value.operator ?? current.operator,
-        threshold: sql<string | null>`${value.threshold ?? current.threshold}::numeric`,
+        threshold: sql<
+          string | null
+        >`${value.threshold ?? current.threshold}::numeric`,
         interval_minutes: value.intervalMinutes ?? current.interval_minutes,
         cooldown_minutes: value.cooldownMinutes ?? current.cooldown_minutes,
         next_due_at: sql<Date>`CASE WHEN ${changed} OR (${enabling} AND NOT enabled) THEN now() ELSE next_due_at END`,
-        active_episode_key: sql<string | null>`CASE WHEN ${changed} THEN NULL ELSE active_episode_key END`,
-        pending_signature: sql<string | null>`CASE WHEN ${changed} THEN NULL ELSE pending_signature END`,
+        active_episode_key: sql<
+          string | null
+        >`CASE WHEN ${changed} THEN NULL ELSE active_episode_key END`,
+        pending_signature: sql<
+          string | null
+        >`CASE WHEN ${changed} THEN NULL ELSE pending_signature END`,
         pending_since: sql<Date | null>`CASE WHEN ${changed} THEN NULL ELSE pending_since END`,
         condition_revision: sql<number>`condition_revision+CASE WHEN ${changed} THEN 1 ELSE 0 END`,
         updated_at: sql<Date>`now()`,
@@ -562,11 +566,40 @@ function evaluateThreshold({
   return { met, crossed: previousMet === false && met };
 }
 
-function evidenceHash(evidence: Array<{ id?: unknown } | null | undefined>) {
+/** Stored definitions are JSON; one may not declare its result columns. */
+interface StoredResultColumns {
+  expectedResult?:
+    | { columns?: ReadonlyArray<{ id: string; type: string }> | undefined }
+    | undefined;
+}
+
+function declaresNumericColumn(
+  definition: StoredResultColumns | null | undefined,
+  fieldId: string | null,
+): boolean {
+  return (
+    definition?.expectedResult?.columns?.some(
+      (column) =>
+        column.id === fieldId &&
+        ["decimal", "number", "integer", "currency"].includes(column.type),
+    ) ?? false
+  );
+}
+
+/** `String(evidence?.id)` for an untyped evidence entry. */
+function evidenceId(entry: unknown): string {
+  return valueText(
+    typeof entry === "object" && entry !== null
+      ? Reflect.get(entry, "id")
+      : undefined,
+  );
+}
+
+function evidenceHash(evidence: unknown[]) {
   const canonical = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(canonical);
-    if (value && typeof value === "object") {
-      const record = value as Record<string, unknown>;
+    if (isRecord(value)) {
+      const record = value;
       return Object.fromEntries(
         Object.keys(record)
           .sort()
@@ -576,7 +609,7 @@ function evidenceHash(evidence: Array<{ id?: unknown } | null | undefined>) {
     return value;
   };
   const sorted = [...evidence].sort((a, b) =>
-    String(a?.id).localeCompare(String(b?.id)),
+    evidenceId(a).localeCompare(evidenceId(b)),
   );
   return createHash("sha256")
     .update(JSON.stringify(canonical(sorted)))
@@ -659,21 +692,21 @@ async function inspectAnalysis(row: MonitorRow): Promise<MonitorFinding> {
     runId = response.runId;
   } catch (caught) {
     // runSavedAnalysis rethrows the execution Error tagged with its run id.
-    const error = caught as Error & { monitorRunId?: string };
-    const failedRun = error.monitorRunId
+    const monitorRunId = monitorRunIdOf(caught);
+    const failedRun = monitorRunId
       ? await checkedRow(
           runStatusRowSchema,
           db
             .selectFrom("saved_analysis_runs")
             .select("status")
-            .where("id", "=", error.monitorRunId),
+            .where("id", "=", monitorRunId),
         )
       : null;
     return {
       status: "failed",
       reasonCode: "analysis-execution-failed",
-      reason: `Analysis failed: ${error.message}`.slice(0, 1000),
-      runId: error.monitorRunId ?? null,
+      reason: `Analysis failed: ${errorMessage(caught)}`.slice(0, 1000),
+      runId: monitorRunId ?? null,
       runStatus: failedRun?.status ?? null,
     };
   }
@@ -716,13 +749,7 @@ async function inspectAnalysis(row: MonitorRow): Promise<MonitorFinding> {
       reason: "The saved analysis definition changed during this check.",
       ...runMetadata,
     };
-  if (
-    !run.definition_json?.expectedResult?.columns?.some(
-      (column) =>
-        column.id === row.field_id &&
-        ["decimal", "number", "integer", "currency"].includes(column.type),
-    )
-  )
+  if (!declaresNumericColumn(run.definition_json, row.field_id))
     return {
       status: "stale",
       reasonCode: "analysis-field-changed",
@@ -801,7 +828,7 @@ async function inspectDossier(row: MonitorRow): Promise<MonitorFinding> {
       reasonCode: "dossier-unavailable",
       reason: "The research dossier is unavailable.",
     };
-  const evidence = dossier.content_json?.evidence;
+  const evidence = dossier.content_json.evidence;
   if (!Array.isArray(evidence))
     return {
       status: "partial",
@@ -886,10 +913,13 @@ async function finalizeObservation(
         pendingSignature = null;
         pendingSince = null;
       } else if (row.kind === "analysis-threshold") {
+        // Valid analysis findings always carry a finite value.
+        const validValue = currentValue;
+        if (validValue === null)
+          throw new Error("A valid analysis finding is missing its value");
         const evaluation = evaluateThreshold({
           previousValue,
-          // Valid analysis findings always carry a finite value.
-          currentValue: currentValue!,
+          currentValue: validValue,
           operator: row.operator,
           threshold: String(row.threshold),
         });
@@ -945,6 +975,9 @@ async function finalizeObservation(
         lastNotifiedAt = now;
       }
     }
+    // Every valid branch above sets a reason; other findings carry one.
+    if (reason === undefined)
+      throw new Error("A monitor finding is missing its reason");
     const id = randomUUID();
     const observation = await checkedRow(
       monitorObservationRowSchema,
@@ -969,8 +1002,7 @@ async function finalizeObservation(
             : null,
           coverage_json: sql<Json>`${JSON.stringify(COVERAGE)}::jsonb`,
           reason_code: reasonCode,
-          // Every valid branch above sets a reason; other findings carry one.
-          reason: reason!.slice(0, 1000),
+          reason: reason.slice(0, 1000),
         })
         .returningAll(),
     );
@@ -990,7 +1022,9 @@ async function finalizeObservation(
           current_value: currentValue,
           episode_key: sql<string>`${episodeKey}`,
         })
-        .onConflict((oc) => oc.columns(["monitor_id", "episode_key"]).doNothing())
+        .onConflict((oc) =>
+          oc.columns(["monitor_id", "episode_key"]).doNothing(),
+        )
         .execute();
     }
     await db
@@ -1029,7 +1063,7 @@ export async function checkAnalysisMonitor(
     finding = {
       status: "failed",
       // Inspection failures are thrown Errors.
-      reason: `Monitor check failed: ${(error as Error).message}`.slice(
+      reason: `Monitor check failed: ${errorMessage(error)}`.slice(
         0,
         1000,
       ),

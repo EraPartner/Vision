@@ -18,8 +18,9 @@ export async function getAiDisplayCurrency(
   const settings = await memoizeAsync(cache, "settings:app_settings", () =>
     settingsRepository.get("app_settings"),
   );
-  const currency = String(
-    settingField(settings, "defaultCurrency") || "EUR",
+  const configured = settingField(settings, "defaultCurrency");
+  const currency = (
+    typeof configured === "string" && configured ? configured : "EUR"
   ).toUpperCase();
   return ISO_CURRENCY.test(currency) ? currency : "EUR";
 }

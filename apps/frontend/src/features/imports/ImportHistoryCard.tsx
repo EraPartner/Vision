@@ -2,8 +2,9 @@
  * ImportHistoryCard — paginated list of import batches with rollback support.
  */
 
+import { asImportBatchId } from "@/lib/routes";
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { importKeys } from "@/lib/queryKeys";
@@ -28,6 +29,7 @@ import type { ImportBatch } from "@/types/apiClient";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useImportBatches } from "./useImportHistoryData";
+import type { TranslationKey } from "@/locales/keys";
 
 const PAGE_SIZE = 10;
 
@@ -46,7 +48,7 @@ const STATUS_VARIANT: Record<
     aborted: "outline",
 };
 
-const STATUS_LABEL_KEY: Record<ImportBatch["status"], string> = {
+const STATUS_LABEL_KEY: Record<ImportBatch["status"], TranslationKey> = {
     pending: "importHistory.status.pending",
     staging: "importHistory.status.staging",
     validating: "importHistory.status.validating",
@@ -155,28 +157,24 @@ function BatchRow({
                     <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
                         <span>{batch.adapter_name}</span>
                         <span>{started}</span>
-                        {batch.rows_imported != null && (
-                            <>
-                                <span className="text-success">
-                                    {t("importPage.imported", {
-                                        n: batch.rows_imported,
-                                    })}
-                                </span>
-                                {(batch.rows_duplicate ?? 0) > 0 && (
-                                    <span className="text-warning">
-                                        {t("importPage.duplicates", {
-                                            n: batch.rows_duplicate,
-                                        })}
-                                    </span>
-                                )}
-                                {(batch.rows_error ?? 0) > 0 && (
-                                    <span className="text-destructive">
-                                        {t("importPage.errors", {
-                                            n: batch.rows_error,
-                                        })}
-                                    </span>
-                                )}
-                            </>
+                        <span className="text-success">
+                            {t("importPage.imported", {
+                                n: batch.rows_imported,
+                            })}
+                        </span>
+                        {batch.rows_duplicate > 0 && (
+                            <span className="text-warning">
+                                {t("importPage.duplicates", {
+                                    n: batch.rows_duplicate,
+                                })}
+                            </span>
+                        )}
+                        {batch.rows_error > 0 && (
+                            <span className="text-destructive">
+                                {t("importPage.errors", {
+                                    n: batch.rows_error,
+                                })}
+                            </span>
                         )}
                         {batch.transactions_remaining > 0 && (
                             <span>
@@ -197,10 +195,10 @@ function BatchRow({
                 <>
                     {batch.status === "awaiting_review" && (
                         <Button variant="ghost" size="sm" asChild>
-                            <Link to={`/import/${batch.id}/review`}>
+                            <AppLink to={`/import/${asImportBatchId(Number(batch.id))}/review`}>
                                 <FileSearch />
                                 {t("importHistory.resumeReview")}
-                            </Link>
+                            </AppLink>
                         </Button>
                     )}
                     <RollbackButton batch={batch} onRolledBack={onRolledBack} />

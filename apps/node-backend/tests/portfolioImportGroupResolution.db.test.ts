@@ -19,8 +19,20 @@ import { resolveInvestmentRows } from '../src/services/portfolioImportBatchServi
 import {
   asInvestmentId,
 } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
+import type { Pool } from "pg";
 
-const pool = getTestPool()!;
+/** A row from an ad-hoc SQL read: column values are narrowed where used. */
+type DbRow = Record<string, unknown>;
+interface IdRow {
+  id: number;
+}
+/** BIGINT ids arrive from node-postgres as strings. */
+interface BigIdRow {
+  id: string;
+}
+
+let pool: Pool;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
 async function wipe() {
@@ -30,17 +42,17 @@ async function wipe() {
 }
 
 async function newBatch() {
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<BigIdRow>(
     `INSERT INTO portfolio_import_batches
        (adapter_name, status, rows_total, default_asset_class)
      VALUES ('group-resolution-test', 'awaiting_review', 0, 'stock')
      RETURNING id`,
   );
-  return Number(rows[0].id);
+  return Number(must(rows[0], "rows[0]").id);
 }
 
 async function stageRows(batchId: number, count: number, startIndex = 0) {
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<BigIdRow>(
     `INSERT INTO portfolio_import_staging_rows
        (batch_id, row_index, status, symbol_raw, name_raw, currency)
      SELECT $1, $2 + n, 'matched', 'GRP', 'GROUP-RESOLUTION-HOLDING', 'EUR'
@@ -52,12 +64,14 @@ async function stageRows(batchId: number, count: number, startIndex = 0) {
 }
 
 describeDb('portfolio import group resolution (real Postgres)', () => {
+  beforeAll(() => {
+    pool = must(getTestPool(), "test pool");
+  });
   beforeAll(acquireDbSuiteLock, 180_000);
 
   beforeEach(wipe);
 
   afterAll(async () => {
-    if (!pool) return;
     await wipe();
     await releaseDbSuiteLock();
     await closeTestPool();
@@ -67,23 +81,23 @@ describeDb('portfolio import group resolution (real Postgres)', () => {
   it('resolves a 2,000-row group to one existing holding', async () => {
     const batchId = await newBatch();
     const rowIds = await stageRows(batchId, 2_000);
-    const { rows: investments } = await pool.query(
+    const { rows: investments } = await pool.query<IdRow>(
       `INSERT INTO investments (name, symbol, asset_class, currency)
        VALUES ('GROUP-RESOLUTION-EXISTING', 'GRE', 'stock', 'EUR')
        RETURNING id`,
     );
-    const investmentId = Number(investments[0].id);
+    const investmentId = must(investments[0], "investments[0]").id;
 
     await expect(resolveInvestmentRows({ batchId, rowIds, investmentId: asInvestmentId(investmentId) }))
       .resolves.toMatchObject({ investmentId, created: false, resolved: 2_000 });
 
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<DbRow>(
       `SELECT COUNT(*)::int AS resolved
          FROM portfolio_import_staging_rows
         WHERE batch_id = $1 AND user_override_investment_id = $2`,
       [batchId, investmentId],
     );
-    expect(rows[0].resolved).toBe(2_000);
+    expect(must(rows[0], "rows[0]").resolved).toBe(2_000);
   });
 
   it('creates exactly one holding and rejects a cross-batch set without partial writes', async () => {
@@ -95,12 +109,12 @@ describeDb('portfolio import group resolution (real Postgres)', () => {
     const created = await resolveInvestmentRows({ batchId, rowIds, createNew: true });
     expect(created).toMatchObject({ created: true, resolved: 2 });
 
-    const { rows: holdingCount } = await pool.query(
+    const { rows: holdingCount } = await pool.query<DbRow>(
       `SELECT COUNT(*)::int AS count FROM investments WHERE name = 'GROUP-RESOLUTION-HOLDING'`,
     );
-    expect(holdingCount[0].count).toBe(1);
+    expect(must(holdingCount[0], "holdingCount[0]").count).toBe(1);
 
-    const before = await pool.query(
+    const before = await pool.query<DbRow>(
       `SELECT id, user_override_investment_id
          FROM portfolio_import_staging_rows
         WHERE id = ANY($1::bigint[])
@@ -110,11 +124,11 @@ describeDb('portfolio import group resolution (real Postgres)', () => {
 
     await expect(resolveInvestmentRows({
       batchId,
-      rowIds: [rowIds[0]!, foreignRowId!],
+      rowIds: [must(rowIds[0], "rowIds[0]"), must(foreignRowId, "foreignRowId")],
       investmentId: created.investmentId,
     })).rejects.toMatchObject({ code: 'NOT_FOUND' });
 
-    const after = await pool.query(
+    const after = await pool.query<DbRow>(
       `SELECT id, user_override_investment_id
          FROM portfolio_import_staging_rows
         WHERE id = ANY($1::bigint[])

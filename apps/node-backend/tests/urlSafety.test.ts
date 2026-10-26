@@ -89,7 +89,7 @@ describe("isBlockedAddress", () => {
 });
 
 describe("assertPublicHttpUrl", () => {
-  const publicLookup = async () => [{ address: "93.184.216.34", family: 4 }];
+  const publicLookup = () => Promise.resolve([{ address: "93.184.216.34", family: 4 }]);
 
   it("rejects non-http(s) schemes", async () => {
     for (const u of [
@@ -137,17 +137,17 @@ describe("assertPublicHttpUrl", () => {
   });
 
   it("blocks a DNS name that resolves to a private address (rebinding)", async () => {
-    const evilLookup = async () => [{ address: "127.0.0.1", family: 4 }];
+    const evilLookup = () => Promise.resolve([{ address: "127.0.0.1", family: 4 }]);
     await expect(
       assertPublicHttpUrl("https://evil.example.com/x", { lookup: evilLookup }),
     ).rejects.toBeInstanceOf(BlockedUrlError);
   });
 
   it("blocks when ANY resolved address is private (mixed result set)", async () => {
-    const mixedLookup = async () => [
+    const mixedLookup = () => Promise.resolve([
       { address: "93.184.216.34", family: 4 },
       { address: "10.1.2.3", family: 4 },
-    ];
+    ]);
     await expect(
       assertPublicHttpUrl("https://mixed.example.com/x", {
         lookup: mixedLookup,
@@ -165,14 +165,14 @@ describe("assertPublicHttpUrl", () => {
   it("rejects when DNS resolution fails or returns nothing", async () => {
     await expect(
       assertPublicHttpUrl("https://nxdomain.example/x", {
-        lookup: async () => {
-          throw new Error("ENOTFOUND");
+        lookup: () => {
+          return Promise.reject(new Error("ENOTFOUND"));
         },
       }),
     ).rejects.toBeInstanceOf(BlockedUrlError);
     await expect(
       assertPublicHttpUrl("https://empty.example/x", {
-        lookup: async () => [],
+        lookup: () => Promise.resolve([]),
       }),
     ).rejects.toBeInstanceOf(BlockedUrlError);
   });

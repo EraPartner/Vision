@@ -15,6 +15,8 @@ import { statisticsRepository } from "../src/repositories/infoRepositoryStatisti
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
+import { must } from "./helpers/must.ts";
+import type { AccountId, CategoryId, RecipientId } from "@vision/types/brands";
 
 const SUFFIX = `ISB${process.pid}`;
 const created = {
@@ -25,30 +27,30 @@ const created = {
 };
 
 async function seed() {
-  const db = getTestPool()!;
-  const { rows: account } = await db.query(
+  const db = must(getTestPool(), "getTestPool()");
+  const { rows: account } = await db.query<{ id: AccountId }>(
     `INSERT INTO accounts (name, display_name, currency) VALUES ($1, $1, 'EUR') RETURNING id`,
     [`Statistics ${SUFFIX}`],
   );
-  created.accountIds.push(account[0].id);
-  const { rows: recipients } = await db.query(
+  created.accountIds.push(must(account[0], "account[0]").id);
+  const { rows: recipients } = await db.query<{ id: RecipientId }>(
     `INSERT INTO recipients (name, normalized_name)
      VALUES ($1, lower($1)), ($2, lower($2)) RETURNING id`,
     [`Kept ${SUFFIX}`, `Excluded ${SUFFIX}`],
   );
   created.recipientIds.push(...recipients.map((r) => r.id as number));
-  const { rows: categories } = await db.query(
+  const { rows: categories } = await db.query<{ id: CategoryId }>(
     `INSERT INTO categories (general, detail)
      VALUES ($1, 'KEPT'), ($1, 'EXCLUDED') RETURNING id`,
     [`STATS${SUFFIX}`],
   );
   created.categoryIds.push(...categories.map((r) => r.id as number));
   return {
-    accountId: account[0].id as number,
-    kept: recipients[0].id as number,
-    excludedRecipient: recipients[1].id as number,
-    keptCategory: categories[0].id as number,
-    excludedCategory: categories[1].id as number,
+    accountId: must(account[0], "account[0]").id as number,
+    kept: must(recipients[0], "recipients[0]").id as number,
+    excludedRecipient: must(recipients[1], "recipients[1]").id as number,
+    keptCategory: must(categories[0], "categories[0]").id as number,
+    excludedCategory: must(categories[1], "categories[1]").id as number,
   };
 }
 
@@ -59,7 +61,7 @@ describe.skipIf(!hasTestDatabase())("statistics date bounds (real DB)", () => {
   }, 180_000);
 
   afterEach(async () => {
-    const db = getTestPool()!;
+    const db = must(getTestPool(), "getTestPool()");
     await db.query("DELETE FROM transactions WHERE id = ANY($1::int[])", [
       created.transactionIds.splice(0),
     ]);
@@ -93,12 +95,15 @@ describe.skipIf(!hasTestDatabase())("statistics date bounds (real DB)", () => {
       ["2025-03-20", "-50.00", fx.kept, fx.keptCategory], // after the window
     ];
     for (const [date, amount, recipientId, categoryId] of rows) {
-      const { rows: inserted } = await getTestPool()!.query(
+      const { rows: inserted } = await must(
+        getTestPool(),
+        "getTestPool()",
+      ).query<{ id: number }>(
         `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id)
          VALUES ($1, $2, 'EUR', $3, $4, $5) RETURNING id`,
         [date, amount, recipientId, categoryId, fx.accountId],
       );
-      created.transactionIds.push(inserted[0].id);
+      created.transactionIds.push(must(inserted[0], "inserted[0]").id);
     }
     const filters = {
       startDate: "2025-02-12",
@@ -122,7 +127,9 @@ describe.skipIf(!hasTestDatabase())("statistics date bounds (real DB)", () => {
     const ours = (month: string) =>
       (categoryPivot[month] ?? [])
         .filter((cell) =>
-          [fx.keptCategory, fx.excludedCategory].includes(cell.categoryId!),
+          [fx.keptCategory, fx.excludedCategory].includes(
+            must(cell.categoryId, "cell.categoryId"),
+          ),
         )
         .map((cell) => [cell.categoryId, cell.total]);
     expect(ours("2025-02")).toEqual([[fx.keptCategory, -10]]);

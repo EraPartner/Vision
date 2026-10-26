@@ -14,6 +14,7 @@ import type {
   DailyNetPoint,
   MethodResult,
 } from "../../src/services/calculations/forecast/index.ts";
+import { must } from "../helpers/must.ts";
 
 const isoOffsetFromToday = (offsetDays: number) =>
   addDaysYmd(todayAppDateString(), offsetDays);
@@ -32,8 +33,8 @@ const buildHistory = (days: number) => {
 
 vi.mock("../../src/repositories/infoRepository.ts", () => ({
   infoRepository: {
-    getIncludeTransfers: vi.fn(async () => false),
-    getCashflowForecastDataRolling: vi.fn(async (historyMonths: number) => ({
+    getIncludeTransfers: vi.fn(() => Promise.resolve(false)),
+    getCashflowForecastDataRolling: vi.fn((historyMonths: number) => Promise.resolve(({
       history: buildHistory(400),
       currentActual: Array.from({ length: 31 }, (_, i) => ({
         date: isoOffsetFromToday(-30 + i),
@@ -43,7 +44,7 @@ vi.mock("../../src/repositories/infoRepository.ts", () => ({
       plannedCurrent: [],
       historyMonths,
       unconverted: { count: 0, currencies: new Set<string>() },
-    })),
+    }))),
     getCashflowForecastData: vi.fn(),
     getCashflowForecastDataByCategory: vi.fn(),
   },
@@ -92,8 +93,8 @@ describe("forecast ensemble accuracy read", () => {
     const env = await run();
     const ensemble = env.data.methods.find((m) => m.id === "ensemble_imse");
     expect(ensemble).toBeDefined();
-    expect(ensemble!.error).toBeNull();
-    expect(ensemble!.daily).toHaveLength(30);
+    expect(must(ensemble, "ensemble").error).toBeNull();
+    expect(must(ensemble, "ensemble").daily).toHaveLength(30);
     expect(getLatestAccuracyByMethod).toHaveBeenCalledWith({ userId: "u1" });
   });
 });

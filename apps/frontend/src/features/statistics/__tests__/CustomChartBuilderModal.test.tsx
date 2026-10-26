@@ -332,7 +332,7 @@ describe("CustomChartBuilderModal", () => {
         let patchCalled = false;
 
         server.use(
-            http.patch(`${API_BASE}/api/saved-charts/:id`, async () => {
+            http.patch(`${API_BASE}/api/saved-charts/:id`, () => {
                 patchCalled = true;
                 return ok(SAVED_CHART_STUB);
             }),

@@ -30,12 +30,12 @@ function allocationDrift(
   target: Record<string, number>,
 ): Record<string, number> {
   const keys = new Set([
-    ...Object.keys(actual ?? {}),
-    ...Object.keys(target ?? {}),
+    ...Object.keys(actual),
+    ...Object.keys(target),
   ]);
   const out: Record<string, number> = {};
   for (const k of keys)
-    out[k] = nanToZero(Number(actual?.[k])) - nanToZero(Number(target?.[k]));
+    out[k] = nanToZero(Number(actual[k])) - nanToZero(Number(target[k]));
   return out;
 }
 
@@ -46,11 +46,11 @@ function allocationDrift(
 export function normalizeWeights(
   weights: Record<string, number>,
 ): Record<string, number> {
-  const entries = Object.entries(weights ?? {});
-  const total = entries.reduce((s, [, v]) => s + nanToZero(Number(v)), 0);
-  if (total <= 0) return { ...weights };
+  const entries = Object.entries(weights);
+  const weightSum = entries.reduce((s, [, v]) => s + nanToZero(v), 0);
+  if (weightSum <= 0) return { ...weights };
   return Object.fromEntries(
-    entries.map(([k, v]) => [k, nanToZero(Number(v)) / total]),
+    entries.map(([k, v]) => [k, nanToZero(v) / weightSum]),
   );
 }
 
@@ -95,9 +95,9 @@ export function foldTargetSleeves(
   weights: Readonly<Record<string, number>>,
 ): Record<string, number> {
   const out: Record<string, number> = {};
-  for (const [k, v] of Object.entries(weights ?? {})) {
+  for (const [k, v] of Object.entries(weights)) {
     const key = REBALANCE_TARGET_ALIASES[k] ?? k;
-    out[key] = nanToZero(Number(out[key])) + nanToZero(Number(v));
+    out[key] = nanToZero(Number(out[key])) + nanToZero(v);
   }
   return out;
 }

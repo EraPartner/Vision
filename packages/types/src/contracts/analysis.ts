@@ -261,7 +261,7 @@ export const MonitorNotificationSchema = z.looseObject({
 });
 
 /** The monitor list bodies: always `{items, total, limit, offset}`. */
-const monitorPageOf = <T extends z.ZodTypeAny>(item: T) =>
+const monitorPageOf = <T extends z.ZodType>(item: T) =>
   z.looseObject({
     items: z.array(item),
     total: z.number().int().nonnegative(),

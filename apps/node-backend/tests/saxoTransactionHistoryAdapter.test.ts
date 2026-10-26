@@ -11,6 +11,7 @@ vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
 import { parseSaxoTransactionHistory } from "../src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.ts";
 import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
+import { must } from "./helpers/must.ts";
 
 const fixture = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -31,7 +32,7 @@ describe("Saxo transaction history portfolio adapter", () => {
       units: 10,
       pricePerUnit: 20,
       amount: null,
-      fees: expect.closeTo(1.111111, 6),
+      fees: expect.closeTo(1.111111, 6) as unknown,
       currency: "USD",
       fxRateToEur: 0.9,
       sourceAccountIdentity: "ACC-1",
@@ -77,8 +78,8 @@ describe("Saxo transaction history portfolio adapter", () => {
       encoding: "utf-8",
     });
 
-    expect(rows[0]!.rawData).toContain("Koop 10 @ 20.00 USD");
-    expect(rows[3]!.rawData).toContain('"1.234,56"');
+    expect(must(rows[0], "rows[0]").rawData).toContain("Koop 10 @ 20.00 USD");
+    expect(must(rows[3], "rows[3]").rawData).toContain('"1.234,56"');
   });
 
   it("rejects a different CSV schema", async () => {
@@ -94,7 +95,7 @@ describe("Saxo transaction history portfolio adapter", () => {
   it("normalizes exporter whitespace in column names", async () => {
     const rows = await parseSaxoTransactionHistory(fixture);
 
-    expect(rows[0]!.sourceId).toBe("101");
+    expect(must(rows[0], "rows[0]").sourceId).toBe("101");
   });
 });
 
@@ -107,7 +108,7 @@ describe("Saxo CSV number conventions", () => {
     await fs.rm(directory, { recursive: true, force: true });
   });
 
-  const header = readFileSync(fixture, "utf8").split("\n", 1)[0]!;
+  const header = must(readFileSync(fixture, "utf8").split("\n", 1)[0], "readFileSync result");
   const trade = (action: string, booked: string, rate: string, costs: string) =>
     `synthetic,2026/01/02,2026/01/04,ACC-1,TX-1,POS-1,,101,BK-1,Transactie,${action},${booked},EUR,${rate},0,${costs},,, ,,,Example Inc,EXM:xnas,XX0000000001,USD,Stock,Synthetic exchange,false,`;
   const deposit = (booked: string) =>
@@ -141,9 +142,9 @@ describe("Saxo CSV number conventions", () => {
   it("surfaces a number the file never shows how to read", async () => {
     const rows = await write(deposit('"1,500"'));
 
-    expect(rows[0]!.typeRaw).toBe("Unsupported Saxo event: Storting");
-    expect(rows[0]!.note).toMatch(/reads differently/);
-    expect(rows[0]!.amount).toBeNull();
+    expect(must(rows[0], "rows[0]").typeRaw).toBe("Unsupported Saxo event: Storting");
+    expect(must(rows[0], "rows[0]").note).toMatch(/reads differently/);
+    expect(must(rows[0], "rows[0]").amount).toBeNull();
   });
 
   it("holds back a trade whose quantity and price do not explain its booked amount", async () => {
@@ -151,10 +152,10 @@ describe("Saxo CSV number conventions", () => {
       trade('"Koop 1,500 @ 20.00 USD"', "-28.08", "0.9", "-1.08"),
     );
 
-    expect(rows[0]!.typeRaw).toBe(
+    expect(must(rows[0], "rows[0]").typeRaw).toBe(
       "Unsupported Saxo event: Koop 1,500 @ 20.00 USD",
     );
-    expect(rows[0]!.note).toMatch(/does not agree with its booked amount/);
-    expect(rows[0]!.units).toBeNull();
+    expect(must(rows[0], "rows[0]").note).toMatch(/does not agree with its booked amount/);
+    expect(must(rows[0], "rows[0]").units).toBeNull();
   });
 });

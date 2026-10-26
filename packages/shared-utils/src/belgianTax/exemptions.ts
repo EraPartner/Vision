@@ -12,6 +12,7 @@ import type {
     HouseholdTaxIssue,
     PartnerId,
 } from "./householdTypes.ts";
+import { orZero } from "../numeric.ts";
 
 export interface DependentSupplements {
     /** Effective child count on the art. 132 scale (disabled children count twice). */
@@ -39,9 +40,9 @@ export function computeDependentSupplements(
     childcareDeducted: boolean,
     table: BelgianTaxYearTable,
 ): DependentSupplements {
-    const rawChildren = Math.max(dependents.children || 0, 0);
+    const rawChildren = Math.max(orZero(dependents.children), 0);
     const disabledChildren = Math.min(
-        Math.max(dependents.childrenDisabled || 0, 0),
+        Math.max(orZero(dependents.childrenDisabled), 0),
         rawChildren,
     );
     const childCount = rawChildren + disabledChildren;
@@ -54,12 +55,12 @@ export function computeDependentSupplements(
 
     const childUnder3 = childcareDeducted
         ? 0
-        : Math.max(dependents.childrenUnder3 || 0, 0) *
+        : Math.max(orZero(dependents.childrenUnder3), 0) *
           table.childUnder3Supplement;
 
-    const rawOtherDep = Math.max(dependents.otherPersons || 0, 0);
+    const rawOtherDep = Math.max(orZero(dependents.otherPersons), 0);
     const disabledOther = Math.min(
-        Math.max(dependents.otherPersonsDisabled || 0, 0),
+        Math.max(orZero(dependents.otherPersonsDisabled), 0),
         rawOtherDep,
     );
     const otherDependents =

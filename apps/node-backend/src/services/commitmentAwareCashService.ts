@@ -63,10 +63,7 @@ export async function computeCommitmentAwareCash({
     const remaining =
       row.max_occurrences == null
         ? Number.POSITIVE_INFINITY
-        : Math.max(
-            0,
-            Number(row.max_occurrences) - Number(row.execution_count),
-          );
+        : Math.max(0, row.max_occurrences - row.execution_count);
     if (remaining === 0) continue;
     const lastDate = toWireDate(row.recurrence_end_date);
     const dates = expandOccurrences(row, horizonEnd, {

@@ -20,9 +20,12 @@ import { commitBatch } from "../src/services/importPipeline/commit.ts";
 import { isManualDuplicate } from "../src/services/deduplication.ts";
 import {
   asCurrencyCode,
+  asRecipientId,
   type CurrencyCode,
 } from "@vision/types/brands";
 import { loose } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
+import { anyInstance } from "./helpers/matchers.ts";
 
 vi.mock("../src/services/plannedMatchService.ts", () => ({
   autoLinkTransactions: vi.fn().mockResolvedValue({ autoLinkedCount: 0 }),
@@ -32,7 +35,7 @@ const describeDb =
   hasTestDatabase()
     ? describe
     : describe.skip;
-const pool = getTestPool()!;
+const pool = must(getTestPool(), "getTestPool()");
 
 const CONTRACT_ACCOUNTS = [
   "Contract Cash",
@@ -95,12 +98,12 @@ describeDb("ADR-088 contract schema", () => {
   });
 
   it("creates, updates, imports, renames, and repoints through account_id only", async () => {
-    const { rows: recipientRows } = await pool.query(
+    const { rows: recipientRows } = await pool.query<{ id: number }>(
       `INSERT INTO recipients (name, normalized_name)
        VALUES ('ADR088 CONTRACT RECIPIENT', 'adr088 contract recipient')
        RETURNING id`,
     );
-    const recipientId = recipientRows[0].id;
+    const recipientId = asRecipientId(must(recipientRows[0], "row").id);
     const cashId =
       await accountRepository.resolveOrCreateByName("Contract Cash");
     const movedId =
@@ -113,14 +116,14 @@ describeDb("ADR-088 contract schema", () => {
       "Contract Planned Moved",
     );
 
-    const transaction = (await transactionRepository.create({
+    const transaction = must((await transactionRepository.create({
       transaction_date: "2026-09-08",
       account_id: cashId,
       recipient_id: recipientId,
       amount: -12.34,
       memo: "contract create",
       currency: loose<CurrencyCode>("eur"),
-    }))!;
+    })), "(await transactionRepository.create({ transaction_date: \"...");
     expect(transaction.bank_account).toBe("Contract Cash");
     expect(transaction.account_id).toEqual(expect.any(Number));
     await expect(
@@ -138,43 +141,43 @@ describeDb("ADR-088 contract schema", () => {
       existingTransactionId: transaction.id,
     });
 
-    const moved = (await transactionRepository.update(transaction.id, {
+    const moved = must((await transactionRepository.update(transaction.id, {
       account_id: movedId,
-    }))!;
+    })), "(await transactionRepository.update(transaction.id, { acc...");
     expect(moved.bank_account).toBe("Contract Moved");
     expect(moved.account_id).not.toBe(transaction.account_id);
 
-    const detached = (await transactionRepository.create({
+    const detached = must((await transactionRepository.create({
       transaction_date: "2026-09-08",
       account_id: detachId,
       recipient_id: recipientId,
       amount: -1,
       currency: asCurrencyCode("EUR"),
-    }))!;
+    })), "(await transactionRepository.create({ transaction_date: \"...");
     expect(
       await transactionRepository.update(detached.id, { account_id: null }),
     ).toMatchObject({ account_id: null, bank_account: null });
 
-    const planned = (await plannedTransactionService.create({
+    const planned = must((await plannedTransactionService.create({
       planned_date: "2026-10-01",
       account_id: plannedAccountId,
       recipient_id: recipientId,
       amount: -25,
       memo: "contract planned",
       currency: "eur",
-    }))!;
+    })), "(await plannedTransactionService.create({ planned_date: \"...");
     expect(planned.bank_account).toBe("Contract Planned");
-    const plannedMoved = (await plannedTransactionService.update(planned.id, {
+    const plannedMoved = must((await plannedTransactionService.update(planned.id, {
       account_id: plannedMovedId,
-    }))!;
+    })), "(await plannedTransactionService.update(planned.id, { acc...");
     expect(plannedMoved.bank_account).toBe("Contract Planned Moved");
 
-    const { rows: batchRows } = await pool.query(
+    const { rows: batchRows } = await pool.query<{ id: number }>(
       `INSERT INTO import_batches (adapter_name, status, rows_total)
        VALUES ('belfius', 'awaiting_review', 1)
        RETURNING id`,
     );
-    const batchId = batchRows[0].id;
+    const batchId = must(batchRows[0], "row").id;
     await pool.query(
       `INSERT INTO import_staging_rows
          (batch_id, row_index, status, tx_date, bank_account, recipient_raw,
@@ -197,24 +200,24 @@ describeDb("ADR-088 contract schema", () => {
     );
     expect(importedRows).toEqual([
       expect.objectContaining({
-        account_id: expect.any(Number),
+        account_id: anyInstance(Number),
         name: "Contract Imported",
       }),
     ]);
 
     const targetId =
-      (await accountRepository.resolveOrCreateByName("Contract Survivor"))!;
-    await transactionRepository.repointAccount(targetId, [moved.account_id!]);
+      must((await accountRepository.resolveOrCreateByName("Contract Survivor")), "(await accountRepository.resolveOrCreateByName(\"Contract ...");
+    await transactionRepository.repointAccount(targetId, [must(moved.account_id, "moved.account_id")]);
     await plannedTransactionRepository.repointAccount(targetId, [
-      plannedMoved.account_id!,
+      must(plannedMoved.account_id, "plannedMoved.account_id"),
     ]);
     await accountRepository.update(targetId, { name: "Contract Renamed" });
 
     expect(
-      (await transactionRepository.getById(transaction.id))!.bank_account,
+      must((await transactionRepository.getById(transaction.id)), "(await transactionRepository.getById(transaction.id))").bank_account,
     ).toBe("Contract Renamed");
     expect(
-      (await plannedTransactionRepository.getById(planned.id))!.bank_account,
+      must((await plannedTransactionRepository.getById(planned.id)), "(await plannedTransactionRepository.getById(planned.id))").bank_account,
     ).toBe("Contract Renamed");
   });
 });

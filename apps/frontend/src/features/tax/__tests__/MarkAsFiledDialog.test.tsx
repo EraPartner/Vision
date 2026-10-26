@@ -83,16 +83,19 @@ describe("recording a filing", () => {
         ).toBeDisabled();
         // The save follows the server computation of the figures being frozen.
         await waitFor(() => expect(apiClient.saveSettings).toHaveBeenCalled());
-        await act(async () => resolveSave());
+        await act(() => {
+            resolveSave();
+            return Promise.resolve();
+        });
         expect(apiClient.saveSettings).toHaveBeenCalledWith(
             expect.objectContaining({
-                belgian_tax_household_v2: expect.any(Object),
+                belgian_tax_household_v2: expect.any(Object) as unknown,
                 belgian_tax_household_snapshots_v2: expect.objectContaining({
-                    [year]: expect.any(Object),
-                }),
+                    [year]: expect.any(Object) as unknown,
+                }) as unknown,
                 belgian_tax_profile_snapshot_meta_v1: expect.objectContaining({
-                    [year]: expect.any(Object),
-                }),
+                    [year]: expect.any(Object) as unknown,
+                }) as unknown,
             }),
         );
         const state = useSettingsStore.getState();

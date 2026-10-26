@@ -77,9 +77,9 @@ async function exists(file: string): Promise<boolean> {
   );
 }
 
-const retired = async () => true;
+const retired = () => Promise.resolve(true);
 
-test("leaves everything in place until the database has retired audit history", async (t) => {
+void test("leaves everything in place until the database has retired audit history", async (t) => {
   const userData = await tempUserData(t);
   const folder = await seedReceiptFolder(userData);
   const calls: SecurityCall[] = [];
@@ -95,16 +95,15 @@ test("leaves everything in place until the database has retired audit history", 
   assert.equal(
     await cleanupLegacyAuditArtifacts({
       ...options,
-      retirementApplied: async () => false,
+      retirementApplied: () => Promise.resolve(false),
     }),
     "deferred",
   );
   assert.equal(
     await cleanupLegacyAuditArtifacts({
       ...options,
-      retirementApplied: async () => {
-        throw new Error("Native backend readiness timed out");
-      },
+      retirementApplied: () =>
+        Promise.reject(new Error("Native backend readiness timed out")),
     }),
     "incomplete",
   );
@@ -121,7 +120,7 @@ test("leaves everything in place until the database has retired audit history", 
   assert.equal(calls.length, 1);
 });
 
-test("removes the receipt folder and deletes the Keychain item with exact arguments", async (t) => {
+void test("removes the receipt folder and deletes the Keychain item with exact arguments", async (t) => {
   const userData = await tempUserData(t);
   const folder = await seedReceiptFolder(userData);
   await fs.writeFile(path.join(userData, "settings.json"), "{}");
@@ -158,7 +157,7 @@ test("removes the receipt folder and deletes the Keychain item with exact argume
   assert.equal(await exists(path.join(userData, MARKER)), true);
 });
 
-test("uses the demo Keychain service for the demo runtime", async (t) => {
+void test("uses the demo Keychain service for the demo runtime", async (t) => {
   const userData = await tempUserData(t);
   const calls: SecurityCall[] = [];
   const { log } = captureLog();
@@ -175,7 +174,7 @@ test("uses the demo Keychain service for the demo runtime", async (t) => {
   assert.equal(calls[0]?.args[2], "com.vaultvoyager.vision-demo.audit-witness");
 });
 
-test("treats a missing Keychain item (exit 44) as success and writes the marker", async (t) => {
+void test("treats a missing Keychain item (exit 44) as success and writes the marker", async (t) => {
   const userData = await tempUserData(t);
   const calls: SecurityCall[] = [];
   const { log, info, warn } = captureLog();
@@ -196,7 +195,7 @@ test("treats a missing Keychain item (exit 44) as success and writes the marker"
   assert.equal(await exists(path.join(userData, MARKER)), true);
 });
 
-test("logs a warning and still writes the marker when security fails otherwise", async (t) => {
+void test("logs a warning and still writes the marker when security fails otherwise", async (t) => {
   const userData = await tempUserData(t);
   const folder = await seedReceiptFolder(userData);
   const calls: SecurityCall[] = [];
@@ -218,7 +217,7 @@ test("logs a warning and still writes the marker when security fails otherwise",
   assert.equal(await exists(path.join(userData, MARKER)), true);
 });
 
-test("never throws when execFile itself throws", async (t) => {
+void test("never throws when execFile itself throws", async (t) => {
   const userData = await tempUserData(t);
   const { log, warn } = captureLog();
 
@@ -238,7 +237,7 @@ test("never throws when execFile itself throws", async (t) => {
   assert.equal(await exists(path.join(userData, MARKER)), true);
 });
 
-test("removes only the link when the receipt folder is a symlink", async (t) => {
+void test("removes only the link when the receipt folder is a symlink", async (t) => {
   const userData = await tempUserData(t);
   const outside = path.join(path.dirname(userData), "elsewhere");
   await fs.mkdir(outside);
@@ -265,7 +264,7 @@ test("removes only the link when the receipt folder is a symlink", async (t) => 
   assert.equal(info.length, 1);
 });
 
-test("a second run is skipped by the marker", async (t) => {
+void test("a second run is skipped by the marker", async (t) => {
   const userData = await tempUserData(t);
   const calls: SecurityCall[] = [];
   const { log } = captureLog();
@@ -285,7 +284,7 @@ test("a second run is skipped by the marker", async (t) => {
   assert.equal(await exists(folder), true);
 });
 
-test("skips the Keychain step off macOS and for runtimes without a witness", async (t) => {
+void test("skips the Keychain step off macOS and for runtimes without a witness", async (t) => {
   for (const [platform, runtimeName] of [
     ["linux", "vision"],
     ["win32", "vision_demo"],

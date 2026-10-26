@@ -11,6 +11,7 @@
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCsvPreview } from "@/hooks/useCsvPreview";
 import { MappedColumnField } from "./ColumnSelect";
+import type { TranslationKey } from "@/locales/keys";
 
 export interface CsvColumnConfig {
     dateColumn: string;
@@ -34,8 +35,8 @@ interface Props {
 const COLUMN_FIELDS: [
     keyof CsvColumnConfig,
     string,
-    string,
-    string,
+    TranslationKey,
+    TranslationKey,
     boolean,
 ][] = [
     [

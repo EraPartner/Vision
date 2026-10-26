@@ -33,6 +33,7 @@ import { scheduleAggregationRefresh } from "../src/services/aggregationRefresh.t
 import { invalidatePortfolioCaches } from "../src/services/info/cache.ts";
 import { partial } from "./helpers/partial.ts";
 import { asAccountId } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
 
 const { default: accountsRouter } = await import("../src/routes/accounts.ts");
 
@@ -54,7 +55,7 @@ function closeRouteHandler() {
   const layer = routerLayers.find(
     (entry) => entry.route?.path === "/:id/close" && entry.route.methods.post,
   );
-  return layer!.route!.stack.at(-1)!.handle;
+  return must(must(must(layer, "layer").route, "layer!.route").stack.at(-1), "layer!.route!.stack.at(-1)").handle;
 }
 
 function closePortfolioPreviewRouteHandler() {
@@ -63,7 +64,7 @@ function closePortfolioPreviewRouteHandler() {
       entry.route?.path === "/:id/portfolio-lot-retag-preview" &&
       entry.route.methods.get,
   );
-  return layer!.route!.stack.at(-1)!.handle;
+  return must(must(must(layer, "layer").route, "layer!.route").stack.at(-1), "layer!.route!.stack.at(-1)").handle;
 }
 
 describe("POST /:id/close listener-free route contract", () => {

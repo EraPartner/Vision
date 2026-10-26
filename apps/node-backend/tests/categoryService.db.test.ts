@@ -13,6 +13,7 @@ import {
 import { closePool } from "../src/database/connection.ts";
 import categoryRepository from "../src/repositories/categoryRepository.ts";
 import { resolveCategoryIdByName } from "../src/services/categoryService.ts";
+import { must } from "./helpers/must.ts";
 
 const pool = getTestPool();
 const GENERAL = `CATSVC${process.pid}`;
@@ -28,7 +29,7 @@ describe.skipIf(!hasTestDatabase())(
 
     afterAll(async () => {
       try {
-        await pool!.query("DELETE FROM categories WHERE id = ANY($1)", [
+        await must(pool, "pool").query("DELETE FROM categories WHERE id = ANY($1)", [
           createdIds,
         ]);
       } finally {
@@ -49,13 +50,13 @@ describe.skipIf(!hasTestDatabase())(
         general: GENERAL,
         detail: "ACTIVE",
       });
-      createdIds.push(category!.id);
+      createdIds.push(must(category, "category").id);
 
       expect(await resolveCategoryIdByName(`${GENERAL}:ACTIVE`)).toBe(
-        category!.id,
+        must(category, "category").id,
       );
 
-      await categoryRepository.update(category!.id, { is_active: false });
+      await categoryRepository.update(must(category, "category").id, { is_active: false });
 
       await expect(
         resolveCategoryIdByName(`${GENERAL}:ACTIVE`),

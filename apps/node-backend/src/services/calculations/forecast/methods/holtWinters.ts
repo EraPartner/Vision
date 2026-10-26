@@ -13,6 +13,7 @@
  */
 
 import { densifyDailyHistory } from "../_densify.ts";
+import { addAll, divide, toNumber } from "../../../../lib/money.ts";
 
 const M1 = 7;
 const M2 = 30;
@@ -50,19 +51,17 @@ function fitRecurrence(
   const n = y.length;
   if (n < M2 * 2) return null;
 
-  const s1: number[] = new Array(n).fill(0);
-  const s2: number[] = new Array(n).fill(0);
+  const s1: number[] = new Array<number>(n).fill(0);
+  const s2: number[] = new Array<number>(n).fill(0);
   // Initial seasonals: average deviation from mean within each season index.
   const initMean = y.slice(0, M2).reduce((s, v) => s + v, 0) / M2;
   for (let i = 0; i < M1; i++) {
-    let cnt = 0;
-    let sum = 0;
+    const deviations: number[] = [];
     for (let k = i; k < M2; k += M1) {
-      sum += at(y, k) - initMean;
-      cnt++;
+      deviations.push(at(y, k) - initMean);
     }
-    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-    s1[i] = cnt > 0 ? sum / cnt : 0;
+    const cnt = deviations.length;
+    s1[i] = cnt > 0 ? toNumber(divide(addAll(deviations), cnt)) : 0;
   }
   for (let i = 0; i < M2; i++) {
     s2[i] = at(y, i) - initMean - at(s1, i % M1);
@@ -71,7 +70,7 @@ function fitRecurrence(
   let level = initMean;
   let trend = (at(y, M2 - 1) - at(y, 0)) / M2;
   let sse = 0;
-  const fitted: number[] = new Array(n).fill(0);
+  const fitted: number[] = new Array<number>(n).fill(0);
 
   for (let t = 0; t < n; t++) {
     const s1Lag = at(s1, t >= M1 ? t - M1 : t);

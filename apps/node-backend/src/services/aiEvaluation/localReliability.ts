@@ -7,6 +7,7 @@ import type {
   OllamaKeepAlive,
 } from "../../integrations/ollama/client.ts";
 import type { AiMessageRow } from "../../types/rows.ts";
+import { valueText } from "../valueText.ts";
 import { getToolNames, getToolSchemas } from "../aiChat/tools/index.ts";
 import {
   historyBudgetChars,
@@ -43,8 +44,8 @@ export interface LocalAiCase {
 /** A model-emitted tool call in either nested (`function`) or flat form. */
 export type RawToolCall =
   | {
-      function?: { name?: string; arguments?: unknown };
-      name?: string;
+      function?: { name?: string | undefined; arguments?: unknown } | undefined;
+      name?: string | undefined;
       arguments?: unknown;
     }
   | null
@@ -233,7 +234,7 @@ function normalizeNumericToken(value: string) {
 
 function numericTokens(text: unknown) {
   return (
-    String(text || "").match(/-?(?:\d{1,3}(?:[ ,]\d{3})+|\d+)(?:[.,]\d+)?/g) ??
+    valueText(text || "").match(/-?(?:\d{1,3}(?:[ ,]\d{3})+|\d+)(?:[.,]\d+)?/g) ??
     []
   ).map(normalizeNumericToken);
 }
@@ -254,12 +255,12 @@ function collectNumbers(value: unknown, target = new Set<string>()) {
 }
 
 function includesEvery(text: unknown, fragments: string[] = []) {
-  const lower = String(text || "").toLowerCase();
+  const lower = valueText(text || "").toLowerCase();
   return fragments.every((fragment) => lower.includes(fragment.toLowerCase()));
 }
 
 function includesNone(text: unknown, fragments: string[] = []) {
-  const lower = String(text || "").toLowerCase();
+  const lower = valueText(text || "").toLowerCase();
   return fragments.every((fragment) => !lower.includes(fragment.toLowerCase()));
 }
 
@@ -324,7 +325,7 @@ export function scoreLocalAiRun(testCase: LocalAiCase, run: LocalAiRun) {
   return {
     id: testCase.id,
     workspace: testCase.workspace,
-    completed: run.completed === true && run.answer.trim().length > 0,
+    completed: run.completed && run.answer.trim().length > 0,
     toolSelection,
     scope,
     groundedNumbers,
@@ -478,7 +479,7 @@ export async function runLocalAiCase({
       promptEvalDurationMs: response.promptEvalDurationMs ?? null,
       evalDurationMs: response.evalDurationMs ?? null,
     });
-    if (response.toolCalls?.length === 0) {
+    if (response.toolCalls.length === 0) {
       answer = response.content || "";
       const latencyMs = Math.round(performance.now() - startedAt);
       return {

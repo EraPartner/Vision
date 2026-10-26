@@ -71,8 +71,9 @@ describe("handoff to React", () => {
         expect(container.querySelector("#boot-splash")).not.toBeNull();
 
         const root = createRoot(container);
-        await act(async () => {
+        await act(() => {
             root.render(<main data-testid="shell">shell</main>);
+            return Promise.resolve();
         });
 
         expect(container.querySelector("#boot-splash")).toBeNull();

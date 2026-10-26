@@ -111,7 +111,7 @@ export function periodPivotConversion(
       ...new Set(
         fellBack
           .map((row) =>
-            String(row.currency || "")
+            (row.currency || "")
               .trim()
               .toUpperCase(),
           )
@@ -213,16 +213,17 @@ export const recipientInsightsRepository = {
       unconverted,
     );
 
-    const recipientAgg: Record<
-      string,
-      RecipientTotal & { firstSeen: string | null; lastSeen: string | null }
-    > = {};
+    type RecipientAggRow = RecipientTotal & {
+      firstSeen: string | null;
+      lastSeen: string | null;
+    };
+    const recipientAgg: Record<string, RecipientAggRow | undefined> = {};
     for (const row of topConverted) {
       const rid = row.recipient_id;
       const eur = row.amount_eur;
       const count = parseInt(row.tx_count, 10);
 
-      recipientAgg[rid] ??= {
+      const seen = (recipientAgg[rid] ??= {
         recipientId: rid,
         name: row.recipient_name,
         totalSpend: 0,
@@ -231,16 +232,15 @@ export const recipientInsightsRepository = {
         // lexicographically, so the min/max below still works).
         firstSeen: toWireDate(row.first_seen),
         lastSeen: toWireDate(row.last_seen),
-      };
+      });
       // Decimal accumulation (money-hygiene): native `+=` over per-currency
       // converted spend drifts sub-cent before the final round.
-      recipientAgg[rid].totalSpend = toNumber(
-        toDecimal(recipientAgg[rid].totalSpend).plus(toDecimal(eur)),
+      seen.totalSpend = toNumber(
+        toDecimal(seen.totalSpend).plus(toDecimal(eur)),
       );
-      recipientAgg[rid].transactionCount += count;
+      seen.transactionCount += count;
       const firstSeen = toWireDate(row.first_seen);
       const lastSeen = toWireDate(row.last_seen);
-      const seen = recipientAgg[rid];
       // Comparing null with a 'YYYY-MM-DD' string is always false in JS (NaN),
       // so the null checks only make that explicit; MIN/MAX of a non-empty
       // group is never NULL anyway.
@@ -259,6 +259,7 @@ export const recipientInsightsRepository = {
     }
 
     const topMerchants = Object.values(recipientAgg)
+      .filter((r): r is RecipientAggRow => r !== undefined)
       .sort((a, b) => b.totalSpend - a.totalSpend)
       .map((r) => ({
         ...r,
@@ -337,30 +338,31 @@ export const recipientInsightsRepository = {
     const currentPeriod = periodRow.current_period;
     const prevPeriod = periodRow.prev_period;
 
-    const momAgg: Record<
-      string,
-      { name: string; current: number; previous: number }
-    > = {};
+    type MomAggRow = { name: string; current: number; previous: number };
+    const momAgg: Record<string, MomAggRow | undefined> = {};
     for (const row of momConverted) {
       const rid = row.recipient_id;
       const eur = row.amount_eur;
-      momAgg[rid] ??= { name: row.recipient_name, current: 0, previous: 0 };
+      const agg = (momAgg[rid] ??= {
+        name: row.recipient_name,
+        current: 0,
+        previous: 0,
+      });
       // Decimal accumulation (money-hygiene), as in the top-merchants reduction
       // above: per-date conversion means a month is now many converted rows,
       // and native `+=` over them drifts sub-cent before the final round.
       if (row.period === currentPeriod) {
-        momAgg[rid].current = toNumber(
-          toDecimal(momAgg[rid].current).plus(toDecimal(eur)),
-        );
+        agg.current = toNumber(toDecimal(agg.current).plus(toDecimal(eur)));
       } else if (row.period === prevPeriod) {
-        momAgg[rid].previous = toNumber(
-          toDecimal(momAgg[rid].previous).plus(toDecimal(eur)),
-        );
+        agg.previous = toNumber(toDecimal(agg.previous).plus(toDecimal(eur)));
       }
     }
 
     const monthOverMonth = Object.entries(momAgg)
-      .filter(([, v]) => v.previous > 0 && v.current > 0)
+      .filter(
+        (entry): entry is [string, MomAggRow] =>
+          entry[1] !== undefined && entry[1].previous > 0 && entry[1].current > 0,
+      )
       .map(([rid, v]) => ({
         recipientId: parseInt(rid, 10),
         name: v.name,

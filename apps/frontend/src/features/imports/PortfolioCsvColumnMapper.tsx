@@ -7,6 +7,7 @@
  * as the transaction import card), not here.
  */
 
+import { listGuard, onGuarded } from "@/lib/enumGuard";
 import { useMemo } from "react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCsvPreview } from "@/hooks/useCsvPreview";
@@ -25,11 +26,14 @@ import {
 } from "@/components/ui/disclosure";
 import { MappedColumnField } from "./ColumnSelect";
 import { SELECT_NONE } from "@/lib/selectValue";
-import { PORTFOLIO_COLUMN_FIELDS } from "./portfolioColumnFields";
+import {
+    PORTFOLIO_COLUMN_FIELDS,
+    portfolioColumnValue,
+} from "./portfolioColumnFields";
 import { ASSET_CLASSES } from "@/utils/assetClass";
 import type { PortfolioCustomConfig } from "@/lib/api/portfolioImports";
 import type { AssetClass } from "@vision/types/assetClasses";
-import type { PortfolioTxnType } from "@vision/types/portfolioTxnTypes";
+import type { PortfolioTxnType as UiPortfolioTxnType } from "@/types/portfolio";
 
 const ADDITIONAL_COLUMNS = new Set([
     "feesColumn",
@@ -39,11 +43,12 @@ const ADDITIONAL_COLUMNS = new Set([
 ]);
 
 const ASSET_CLASS_OPTIONS: readonly AssetClass[] = ASSET_CLASSES;
+const isAssetClassOption = listGuard(ASSET_CLASS_OPTIONS);
 
 // The types with existing UI labels (portfolio.txnType.*). Corporate actions
 // (split/merger/...) are still importable when the CSV value is canonical, but
 // are not offered in the dropdowns.
-const TXN_TYPE_OPTIONS: PortfolioTxnType[] = [
+const TXN_TYPE_OPTIONS: UiPortfolioTxnType[] = [
     "buy",
     "sell",
     "dividend",
@@ -54,6 +59,7 @@ const TXN_TYPE_OPTIONS: PortfolioTxnType[] = [
     "rent_income",
     "appreciation",
 ];
+const isTxnTypeOption = listGuard(TXN_TYPE_OPTIONS);
 
 interface Props {
     file: File | null;
@@ -99,9 +105,11 @@ export function PortfolioCsvColumnMapper({
     }, [config.typeColumn, preview]);
 
     const setMapping = (raw: string, canonical: string) => {
-        const next = { ...config.typeMapping };
-        if (canonical === SELECT_NONE) delete next[raw];
-        else next[raw] = canonical;
+        const { [raw]: _previous, ...others } = { ...config.typeMapping };
+        const next =
+            canonical === SELECT_NONE
+                ? others
+                : { ...config.typeMapping, [raw]: canonical };
         onChange({ ...config, typeMapping: next });
     };
 
@@ -111,7 +119,7 @@ export function PortfolioCsvColumnMapper({
     const duplicateColumns = useMemo(() => {
         const counts = new Map<string, number>();
         for (const [key] of PORTFOLIO_COLUMN_FIELDS) {
-            const v = String(config[key] ?? "").trim();
+            const v = portfolioColumnValue(config, key).trim();
             if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
         }
         return [...counts.entries()]
@@ -128,7 +136,7 @@ export function PortfolioCsvColumnMapper({
             key={key}
             id={`pf-${key}`}
             label={t(labelKey)}
-            value={String(config[key] ?? "")}
+            value={portfolioColumnValue(config, key)}
             headers={headers}
             hasHeaders={hasHeaders}
             required={required}
@@ -147,9 +155,10 @@ export function PortfolioCsvColumnMapper({
                     </Label>
                     <Select
                         value={config.defaultAssetClass}
-                        onValueChange={(v) =>
-                            set("defaultAssetClass")(v as AssetClass)
-                        }
+                        onValueChange={onGuarded(
+                            isAssetClassOption,
+                            set("defaultAssetClass"),
+                        )}
                     >
                         <SelectTrigger id="pf-asset-class">
                             <SelectValue />
@@ -169,9 +178,10 @@ export function PortfolioCsvColumnMapper({
                     </Label>
                     <Select
                         value={config.defaultType}
-                        onValueChange={(v) =>
-                            set("defaultType")(v as PortfolioTxnType)
-                        }
+                        onValueChange={onGuarded(
+                            isTxnTypeOption,
+                            set("defaultType"),
+                        )}
                     >
                         <SelectTrigger id="pf-default-type">
                             <SelectValue />
@@ -226,7 +236,7 @@ export function PortfolioCsvColumnMapper({
                                 </span>
                                 <Select
                                     value={
-                                        config.typeMapping?.[raw] ?? SELECT_NONE
+                                        config.typeMapping[raw] ?? SELECT_NONE
                                     }
                                     onValueChange={(v) => setMapping(raw, v)}
                                 >

@@ -14,8 +14,8 @@ import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.ts";
 
 vi.mock("../src/database/connection.ts", () =>
   mockConnection({
-    checkConnection: vi.fn(async () => true),
-    closePool: vi.fn(async () => undefined),
+    checkConnection: vi.fn(() => Promise.resolve(true)),
+    closePool: vi.fn(() => Promise.resolve(undefined)),
   }),
 );
 
@@ -45,7 +45,6 @@ vi.mock("../src/middleware/rateLimiter.ts", () => ({
 
 import settings from "../src/config/config.ts";
 import { checkConnection as rawCheckConnection } from "../src/database/connection.ts";
-import { logger } from "../src/config/logger.ts";
 
 const checkConnection = vi.mocked(rawCheckConnection);
 

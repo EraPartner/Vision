@@ -27,7 +27,7 @@ import {
   buildHistoricalRateIndex,
   findRateOnOrBeforeInIndex,
 } from "../currency/rateFetcher.ts";
-import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
+import { buildInvestmentSummaryCorePartitioned, isCostBasisMethod } from "@vision/shared-utils/portfolio";
 import { asPartitionedTxns } from "./portfolioTransactionRules.ts";
 import { settingsRepository } from "../../repositories/settingsRepository.ts";
 import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.ts";
@@ -67,8 +67,6 @@ export type Decimal = import("decimal.js").default;
 
 const round2 = (value: DecimalInput) => roundMoney(value, 2);
 const round8 = (value: DecimalInput) => roundMoney(value, 8);
-
-const COST_BASIS_METHODS = new Set(["weighted_avg", "fifo", "lifo"]);
 
 export type CostBasisMethod =
   import("@vision/shared-utils/portfolio").CostBasisMethod;
@@ -126,9 +124,7 @@ export interface PortfolioSummaryOptions {
 async function resolveCostBasisMethod(): Promise<CostBasisMethod> {
   try {
     const value = await settingsRepository.get("cost_basis_method");
-    return typeof value === "string" && COST_BASIS_METHODS.has(value)
-      ? (value as CostBasisMethod)
-      : "weighted_avg";
+    return isCostBasisMethod(value) ? value : "weighted_avg";
   } catch {
     return "weighted_avg";
   }
@@ -141,7 +137,7 @@ async function resolveCostBasisMethod(): Promise<CostBasisMethod> {
 export async function getPortfolioSummary(
   targetCurrency: string = "EUR",
   {
-    throughDate = undefined,
+    throughDate,
     activeInvestmentsOnly = true,
     includeBrokerSnapshotParity = false,
     includeArchivedPresentation = false,
@@ -300,7 +296,9 @@ export async function getPortfolioSummary(
         .$if(Boolean(throughDate), (qb) =>
           qb.where("pt.date", "<=", sql<Date>`${throughDate}::date`),
         )
-        .orderBy(["pt.investment_id", "pt.date", "pt.id"]),
+        .orderBy("pt.investment_id")
+        .orderBy("pt.date")
+        .orderBy("pt.id"),
     );
     const archiveCurrencies = [
       ...new Set(archivedRows.map((row) => currencyOrEur(row.currency))),
@@ -323,7 +321,7 @@ export async function getPortfolioSummary(
         id,
         addAll([
           archiveTotals.get(id) ?? 0,
-          multiply(row.amount ?? 0, row.fxMultiplier ?? 1),
+          multiply(row.amount, row.fxMultiplier ?? 1),
         ]),
       );
     }
@@ -338,9 +336,9 @@ export async function getPortfolioSummary(
         .map((row) => Number(row.id)),
     );
     archivedInKindIncome = summaries
-      .filter((row) => archivedIds.has(Number(row.id)))
+      .filter((row) => archivedIds.has(row.id))
       .map((row) => ({
-        id: Number(row.id),
+        id: row.id,
         totalInKindIncome: row.totalInKindIncome,
       }));
   }
@@ -871,10 +869,10 @@ function buildInvestmentSummary(
   const monthlyRent = !latestRent
     ? toDecimal(0)
     : rentCurrency === target
-      ? toDecimal(latestRent.amount ?? 0)
+      ? toDecimal(latestRent.amount)
       : isCurrencyCode(rentCurrency) && isCurrencyCode(target)
       ? convertAtLatestRates(
-          money(latestRent.amount ?? 0, rentCurrency),
+          money(latestRent.amount, rentCurrency),
           target,
           latestRates,
         )?.amount
@@ -1068,7 +1066,7 @@ function aggregateTotals(summaries: InvestmentSummary[]) {
     totalAssetGain: round2(acc.totalAssetGain),
     totalFxGain: round2(acc.totalFxGain),
     totalReturnPct: round2(totalReturnPct),
-    usedFallbackRate: summaries.some((s) => s.usedFallbackRate === true),
+    usedFallbackRate: summaries.some((s) => s.usedFallbackRate),
   };
 }
 

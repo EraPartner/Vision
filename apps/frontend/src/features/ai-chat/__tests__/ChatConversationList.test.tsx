@@ -8,6 +8,7 @@ import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import { ChatConversationList } from "@/features/ai-chat/ChatConversationList";
 import type { ConversationSummary } from "@/types/aiChat";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -189,7 +190,7 @@ describe("ChatConversationList", () => {
         const actionBtns = screen.getAllByRole("button", {
             name: /conversation actions/i,
         });
-        await user.click(actionBtns[0]!);
+        await user.click(must(actionBtns[0], "conversation actions button"));
 
         const renameItem = await screen.findByRole("menuitem", {
             name: /rename/i,
@@ -220,9 +221,12 @@ describe("ChatConversationList", () => {
 
         await screen.findByText("Spending review");
 
-        const actionBtn = screen.getAllByRole("button", {
-            name: /conversation actions/i,
-        })[0]!;
+        const actionBtn = must(
+            screen.getAllByRole("button", {
+                name: /conversation actions/i,
+            })[0],
+            "conversation actions button",
+        );
         await user.click(actionBtn);
         const renameItem = await screen.findByRole("menuitem", {
             name: /rename/i,
@@ -259,9 +263,12 @@ describe("ChatConversationList", () => {
 
         await screen.findByText("Spending review");
 
-        const actionBtn = screen.getAllByRole("button", {
-            name: /conversation actions/i,
-        })[0]!;
+        const actionBtn = must(
+            screen.getAllByRole("button", {
+                name: /conversation actions/i,
+            })[0],
+            "conversation actions button",
+        );
         await user.click(actionBtn);
 
         const deleteItem = await screen.findByRole("menuitem", {
@@ -304,9 +311,12 @@ describe("ChatConversationList", () => {
 
         await screen.findByText("Spending review");
 
-        const actionBtn = screen.getAllByRole("button", {
-            name: /conversation actions/i,
-        })[0]!;
+        const actionBtn = must(
+            screen.getAllByRole("button", {
+                name: /conversation actions/i,
+            })[0],
+            "conversation actions button",
+        );
         await user.click(actionBtn);
         const deleteItem = await screen.findByRole("menuitem", {
             name: /delete/i,
@@ -343,9 +353,12 @@ describe("ChatConversationList", () => {
 
         await screen.findByText("Spending review");
 
-        const actionBtn = screen.getAllByRole("button", {
-            name: /conversation actions/i,
-        })[0]!;
+        const actionBtn = must(
+            screen.getAllByRole("button", {
+                name: /conversation actions/i,
+            })[0],
+            "conversation actions button",
+        );
         await user.click(actionBtn);
         const deleteItem = await screen.findByRole("menuitem", {
             name: /delete/i,

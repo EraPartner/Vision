@@ -7,6 +7,7 @@ import type { Migration, MigrationResult } from "kysely/migration";
 import pg from "pg";
 import { logger } from "../config/logger.ts";
 import { readSchemaInventory, schemaFingerprint } from "./schemaInventory.ts";
+import { errorMessage } from "../lib/errors.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -193,7 +194,7 @@ export function loadMigrations(
 function createMigrator(db: Db): Migrator {
   return new Migrator({
     db,
-    provider: { getMigrations: async () => loadMigrations() },
+    provider: { getMigrations: () => Promise.resolve().then(() => loadMigrations()) },
   });
 }
 
@@ -210,7 +211,9 @@ function assertSucceeded(
     }
   }
   if (error) {
-    throw error instanceof Error ? error : new Error(String(error));
+    throw error instanceof Error
+      ? error
+      : new Error(typeof error === "string" ? error : JSON.stringify(error));
   }
   return (results ?? [])
     .filter((result) => result.status === "Success")
@@ -232,7 +235,7 @@ async function analyzeAfterMigrations(db: Db) {
       await sql.raw(`ANALYZE ${table}`).execute(db);
     } catch (err) {
       logger.warn(
-        { err: (err as Error).message, table },
+        { err: errorMessage(err), table },
         "post-migration ANALYZE failed; non-fatal",
       );
     }

@@ -1,7 +1,8 @@
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useMemo, useState } from "react";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import { Star } from "lucide-react";
 import {
     SegmentedControl,
@@ -33,6 +34,15 @@ import { marketChangeHeatStyle } from "./marketHeat";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageShell } from "@/components/shared/PageShell";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
+
+const isRegion = enumGuard<Region>({
+    worldwide: true,
+    usa: true,
+    europe: true,
+    asia: true,
+    japan: true,
+    latam: true,
+});
 
 interface OverviewQuote {
     symbol: string;
@@ -123,7 +133,7 @@ export default function MarketOverviewPage() {
                 const up = (pct ?? 0) >= 0;
                 const held = isHeld(entry.symbol);
                 return (
-                    <Link
+                    <AppLink
                         key={entry.symbol}
                         to={`/research/market?symbol=${encodeURIComponent(entry.symbol)}`}
                         style={marketChangeHeatStyle(pct)}
@@ -170,7 +180,7 @@ export default function MarketOverviewPage() {
                         <span className="truncate font-mono type-caption text-foreground/50">
                             {entry.symbol}
                         </span>
-                    </Link>
+                    </AppLink>
                 );
             })}
         </div>
@@ -188,7 +198,7 @@ export default function MarketOverviewPage() {
                 <SegmentedControl
                     size="sm"
                     value={region}
-                    onValueChange={(v) => setRegion(v as Region)}
+                    onValueChange={onGuarded(isRegion, setRegion)}
                     aria-label={t("research.markets.regions")}
                     className="max-w-full overflow-x-auto"
                 >

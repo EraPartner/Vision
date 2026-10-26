@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { extractTranslationCalls } from "../lib/localeCallParser.ts";
 
-test("extracts direct t and tc calls from TypeScript and TSX", () => {
+void test("extracts direct t and tc calls from TypeScript and TSX", () => {
   const calls = extractTranslationCalls(
     `
 const first = t('common.save');
@@ -29,7 +29,7 @@ const view = <span>{t('common.done', { value: nested(call()) })}</span>;
   ]);
 });
 
-test("ignores comments, property calls, and computed translation keys", () => {
+void test("ignores comments, property calls, and computed translation keys", () => {
   const calls = extractTranslationCalls(
     `
 // t('comment.line')
@@ -47,7 +47,7 @@ t('real.key');
   ]);
 });
 
-test("skips dropped-variable analysis for non-static objects", () => {
+void test("skips dropped-variable analysis for non-static objects", () => {
   const calls = extractTranslationCalls(
     `
 t('spread.vars', { count, ...extra });
@@ -71,7 +71,7 @@ t('static.vars', { count, method() {}, get label() { return ''; } });
   ]);
 });
 
-test("uses the third tc argument for interpolation variables", () => {
+void test("uses the third tc argument for interpolation variables", () => {
   const calls = extractTranslationCalls(
     "tc('items.count', amount, { count: amount, 'unit-name': unit })",
     "fixture.ts",

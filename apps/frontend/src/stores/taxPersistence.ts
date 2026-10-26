@@ -11,6 +11,11 @@ import { useSettingsStore } from "./settingsStore";
 
 let timer: ReturnType<typeof setTimeout> | undefined;
 let pending: Record<string, unknown> | undefined;
+// Read through a function: control-flow analysis cannot see writes made while
+// an async save is awaited.
+function hasPendingTaxPersistence(): boolean {
+    return pending !== undefined;
+}
 let filingInFlight = false;
 // The household (v2) keys are the stored source of truth (ADR-200); v1 keys are read only.
 function payload(
@@ -105,7 +110,7 @@ export async function persistTaxFiling(year: number, reference?: string) {
         filingInFlight = false;
         // Edits the filing payload would have carried are saved on their own when it never left.
         // `pending` may have been set by edits made while this function awaited.
-        if (pending !== undefined || (hadPending && !saveSent))
+        if (hasPendingTaxPersistence() || (hadPending && !saveSent))
             scheduleTaxPersistence(useSettingsStore.getState());
     }
 }

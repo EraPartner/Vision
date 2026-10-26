@@ -1,3 +1,5 @@
+import { isAbortError } from "@/lib/api/abortError";
+import { isRecord } from "@/lib/isRecord";
 import { z } from "zod";
 import {
     ImportBatchListSchema,
@@ -5,7 +7,10 @@ import {
     ImportCsvResultSchema,
     ImportPreviewSchema,
     ImportRollbackResultSchema,
+    ImportRowCategoryOverrideSchema,
+    ImportRowRecipientOverrideSchema,
     SavedParserConfigListSchema,
+    SavedParserConfigSchema,
     SimpleImportResultSchema,
 } from "@vision/types/contracts";
 import {
@@ -130,8 +135,8 @@ export function importCSVWithProgress(
     const url = `${API_BASE_URL}/api/import/csv/stream`;
 
     const extractErrorDetail = (payload: unknown): string => {
-        if (payload && typeof payload === "object" && "detail" in payload) {
-            const detail = (payload as { detail?: unknown }).detail;
+        if (isRecord(payload)) {
+            const detail = payload.detail;
             if (typeof detail === "string" && detail.trim()) return detail;
         }
         return "Import failed";
@@ -209,7 +214,7 @@ export function importCSVWithProgress(
                 }
             );
         } catch (err) {
-            if ((err as Error).name === "AbortError") {
+            if (isAbortError(err)) {
                 throw new ImportCancelledError({ cause: err });
             }
             throw err;
@@ -307,6 +312,7 @@ export function createCustomParserConfig(
     return apiRequest<SavedParserConfig>("/api/import/parsers", {
         method: "POST",
         body: JSON.stringify({ name, config }),
+        schema: SavedParserConfigSchema,
     });
 }
 
@@ -317,11 +323,12 @@ export function updateCustomParserConfig(
     return apiRequest<SavedParserConfig>(`/api/import/parsers/${id}`, {
         method: "PATCH",
         body: JSON.stringify(patch),
+        schema: SavedParserConfigSchema,
     });
 }
 
 export function deleteCustomParserConfig(id: number): Promise<void> {
-    return apiRequest<void>(`/api/import/parsers/${id}`, { method: "DELETE" });
+    return apiRequest(`/api/import/parsers/${id}`, { method: "DELETE" });
 }
 
 /** `POST /api/import/recipients` and `/categories` result. */
@@ -403,6 +410,7 @@ export function overrideImportRow(
     return apiRequest(`/api/import/batches/${batchId}/rows/${rowId}/override`, {
         method: "POST",
         body: JSON.stringify({ recipient_id: recipientId }),
+        schema: ImportRowRecipientOverrideSchema,
     });
 }
 
@@ -416,6 +424,7 @@ export function overrideImportRowCategory(
         {
             method: "POST",
             body: JSON.stringify({ category_id: categoryId }),
+            schema: ImportRowCategoryOverrideSchema,
         },
     );
 }

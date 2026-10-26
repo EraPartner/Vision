@@ -9,7 +9,7 @@ import { mockTxConnection } from "./helpers/repoMocks.ts";
 async function loadService() {
   vi.resetModules();
 
-  const query = vi.fn(async (_sql: string, _params?: unknown[]) => ({
+  const query = vi.fn((_sql: string, _params?: unknown[]) => Promise.resolve({
     rows: [],
     rowCount: 0,
   }));

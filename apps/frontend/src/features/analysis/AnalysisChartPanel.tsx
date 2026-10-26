@@ -1,3 +1,4 @@
+import { listGuard, onGuarded } from "@/lib/enumGuard";
 import { useId } from "react";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { getChartColor } from "@/components/charts";
@@ -27,7 +28,7 @@ import {
 import { formatAnalysisValue } from "./analysisPresentation";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { numberFormatToLocale } from "@/utils/currency";
-import type { AnalysisResult } from "@/lib/api/analysis";
+import type { AnalysisResult, AnalysisValue } from "@/lib/api/analysis";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { SELECT_NONE, fromSelectValue, toSelectValue } from "@/lib/selectValue";
 import {
@@ -36,6 +37,23 @@ import {
 } from "./analysisChartModel";
 
 const statusClass = "type-callout text-label-secondary";
+const CHART_UNIT_KINDS = [
+    "money",
+    "quantity",
+    "ratio",
+    "number",
+    "dimensionless",
+    "currency",
+] as const;
+const isChartUnitKind = listGuard(CHART_UNIT_KINDS);
+const CHART_KINDS = [
+    "bar",
+    "line",
+    "stacked-bar",
+    "scatter",
+    "waterfall",
+] as const satisfies readonly AnalysisChartSpec["kind"][];
+const isChartKind = listGuard(CHART_KINDS);
 
 export function AnalysisChartPanel({
     result,
@@ -53,7 +71,7 @@ export function AnalysisChartPanel({
         numberFormatToLocale(appSettings.numberFormat),
         { maximumSignificantDigits: 5 },
     );
-    const displayValue = (value: unknown, id: string) => {
+    const displayValue = (value: AnalysisValue | undefined, id: string) => {
         const column = (
             result.declaredColumns != null && result.declaredColumns.length > 0
                 ? result.declaredColumns
@@ -69,7 +87,7 @@ export function AnalysisChartPanel({
                 appSettings.dateFormat,
             );
         return formatAnalysisValue(
-            value as string | number | null,
+            value,
             column?.type ?? "string",
             id,
             appSettings.numberFormat,
@@ -135,14 +153,7 @@ export function AnalysisChartPanel({
             typeof unit === "string"
                 ? unit
                 : [
-                      [
-                          "money",
-                          "quantity",
-                          "ratio",
-                          "number",
-                          "dimensionless",
-                          "currency",
-                      ].includes(unit.kind)
+                      isChartUnitKind(unit.kind)
                           ? t(`analysis.ext.chart.unit.${unit.kind}`)
                           : unit.kind,
                       unit.currency ??
@@ -166,23 +177,12 @@ export function AnalysisChartPanel({
                     label={t("analysis.ext.chart.type")}
                     wrapperClassName="min-w-0 space-y-1.5 sm:col-span-2"
                     value={spec.kind}
-                    onValueChange={(kind) =>
-                        onChange({
-                            ...spec,
-                            kind: kind as AnalysisChartSpec["kind"],
-                        })
-                    }
+                    onValueChange={onGuarded(isChartKind, (kind) =>
+                        onChange({ ...spec, kind }),
+                    )}
                     className="w-full"
                 >
-                    {(
-                        [
-                            "bar",
-                            "line",
-                            "stacked-bar",
-                            "scatter",
-                            "waterfall",
-                        ] as const
-                    ).map((k) => (
+                    {CHART_KINDS.map((k) => (
                         <SegmentedControlItem key={k} value={k}>
                             {t(`analysis.ext.chart.${k}`)}
                         </SegmentedControlItem>

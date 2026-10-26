@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { listBody, parseOptionalPagination } from '../src/lib/pagination.ts';
+import { must } from "./helpers/must.ts";
 
 describe('parseOptionalPagination', () => {
   it('returns null when neither limit nor offset is present', () => {
@@ -45,9 +46,9 @@ describe('parseOptionalPagination', () => {
   });
 
   it('clamps to maxLimit and floors garbage/negative input', () => {
-    expect(parseOptionalPagination({ limit: '999999' }, { maxLimit: 1000 })!.limit).toBe(1000);
-    expect(parseOptionalPagination({ limit: 'abc' }, { maxLimit: 1000 })!.limit).toBe(1000);
-    expect(parseOptionalPagination({ limit: '10', offset: '-4' }, { maxLimit: 1000 })!.offset).toBe(0);
+    expect(must(parseOptionalPagination({ limit: '999999' }, { maxLimit: 1000 }), "parseOptionalPagination result").limit).toBe(1000);
+    expect(must(parseOptionalPagination({ limit: 'abc' }, { maxLimit: 1000 }), "parseOptionalPagination result").limit).toBe(1000);
+    expect(must(parseOptionalPagination({ limit: '10', offset: '-4' }, { maxLimit: 1000 }), "parseOptionalPagination result").offset).toBe(0);
   });
 });
 

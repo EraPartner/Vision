@@ -9,6 +9,8 @@
  */
 
 import { makeChartRangeMap } from "@vision/types/chartRanges";
+import { lookup } from "../tableLookup.ts";
+import { valueText } from "../../valueText.ts";
 
 const RANGE_MONTHS = makeChartRangeMap([1, 1, 1, 3, 6, 12, 24, 60, 0]);
 
@@ -23,7 +25,7 @@ export function trimToRange<P extends { time: number }>(
 ): P[] {
   if (range === "max" || !Array.isArray(points) || points.length === 0)
     return points;
-  const months: number | undefined = RANGE_MONTHS[range as keyof typeof RANGE_MONTHS];
+  const months = lookup(RANGE_MONTHS, range);
   if (months === undefined || months === 0) return points;
   const last = points.at(-1);
   if (!last) return points;
@@ -38,9 +40,9 @@ export function trimToRange<P extends { time: number }>(
  * `YYYY`, `YYYY-MM`, `YYYY-Qn`, `YYYY-Sn`, `YYYY-MM-DD`, falling back to
  * `Date.parse`. Returns undefined when unparseable.
  */
-export function periodToMs(period: string): number | undefined {
+export function periodToMs(period: unknown): number | undefined {
   if (!period) return undefined;
-  const s = String(period).trim();
+  const s = valueText(period).trim();
   let m;
   // Capture group `i` as a number; every group below is mandatory.
   const n = (match: RegExpMatchArray, i: number) => Number(match[i]);

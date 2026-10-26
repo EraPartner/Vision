@@ -46,8 +46,10 @@ export function createStore<T>(creator: StateCreator<T>): StoreApi<T> {
                 : partial;
         if (Object.is(next, state)) return;
         const previous = state;
+        // `T` is unconstrained, so it may legitimately be a primitive or null.
+        const nextValue: unknown = next;
         state =
-            (replace ?? (typeof next !== "object" || next === null))
+            (replace ?? (typeof nextValue !== "object" || nextValue === null))
                 ? (next as T)
                 : Object.assign({}, state, next);
         listeners.forEach((listener) => listener(state, previous));

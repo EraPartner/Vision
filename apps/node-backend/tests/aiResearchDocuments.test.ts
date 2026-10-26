@@ -18,7 +18,8 @@ import {
   searchResearchDocuments,
 } from "../src/services/aiResearchDocuments.ts";
 import type { getOllamaClient } from "../src/integrations/ollama/client.ts";
-import { partial } from "./helpers/partial.ts";
+import { loose, partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 type OllamaClient = ReturnType<typeof getOllamaClient>;
 
@@ -44,14 +45,14 @@ describe("local research documents", () => {
     ).toBe("AT&amp;T writes &lt;b&gt; for <b>");
   });
   it("batches optional local embeddings and stores only derived passages", async () => {
-    repository.createDocument.mockImplementation(async (doc, passages) => ({
+    repository.createDocument.mockImplementation((doc: object, passages: unknown[]) => Promise.resolve(({
       ...doc,
       passages,
-    }));
-    const embed = vi.fn(async ({ input }) => ({
+    })));
+    const embed = vi.fn(({ input }: { input: unknown[] }) => Promise.resolve(({
       model: "synthetic-embed",
       embeddings: input.map(() => [1, 0]),
-    }));
+    })));
     const text = Array.from(
       { length: 70 },
       (_, index) => `# S${index}\n${"x".repeat(1000)}`,
@@ -63,7 +64,7 @@ describe("local research documents", () => {
         mediaType: "text/markdown",
         buffer: Buffer.from(text),
       },
-      { ollamaClient: partial<OllamaClient>({ embed }) },
+      { ollamaClient: loose<OllamaClient>({ embed }) },
     );
     expect(embed.mock.calls.length).toBeGreaterThan(1);
     expect(embed).toHaveBeenCalledWith(
@@ -73,7 +74,7 @@ describe("local research documents", () => {
     const stored = result as unknown as {
       passages: Array<{ embedding: { model: string } }>;
     };
-    expect(stored.passages[0]!.embedding.model).toBe("synthetic-embed");
+    expect(must(stored.passages[0], "stored.passages[0]").embedding.model).toBe("synthetic-embed");
   });
   it("falls back visibly to keyword retrieval when semantic search is unavailable", async () => {
     repository.keywordSearch.mockResolvedValue([
@@ -95,8 +96,8 @@ describe("local research documents", () => {
       { query: "evidence", mode: "hybrid" },
       {
         ollamaClient: partial<OllamaClient>({
-          embed: async () => {
-            throw new Error("offline");
+          embed: () => {
+            return Promise.reject(new Error("offline"));
           },
         }),
       },

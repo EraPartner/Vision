@@ -10,6 +10,7 @@ import {
     ProbeResultSchema,
     ProviderHealthListSchema,
     RouteMetricListSchema,
+    VacuumResultSchema,
 } from '@vision/types/contracts';
 import { apiRequest } from '@/lib/api/client';
 
@@ -77,6 +78,7 @@ export function vacuumTable(table: string | null): Promise<{ vacuumed: string }>
     return apiRequest<{ vacuumed: string }>('/api/admin/database/vacuum', {
         method: 'POST',
         body: JSON.stringify({ table }),
+        schema: VacuumResultSchema,
     });
 }
 

@@ -10,8 +10,8 @@ import ResearchHomePage from "@/pages/research/ResearchHomePage";
 
 const API_BASE = "http://localhost:3002";
 
-function research<T>(
-    data: T,
+function research(
+    data: unknown,
     meta: { provider: string | null; source: string },
 ) {
     return HttpResponse.json({ ok: true, data, meta });

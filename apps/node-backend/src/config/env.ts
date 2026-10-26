@@ -37,7 +37,7 @@ const intEnv = (defaultValue: number) =>
       const parsed = parseInt(value, 10);
       if (!Number.isFinite(parsed)) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           message: `Expected integer, got: ${value}`,
         });
         return z.NEVER;
@@ -153,7 +153,7 @@ const envSchema = z
     VISION_NATIVE_ENV_FILE: optionalStringEnv, // packaged private runtime environment
     VISION_DIST_DIR: optionalStringEnv, // packaged production frontend
   })
-  .passthrough();
+  .loose();
 
 function parseEnv() {
   const result = envSchema.safeParse(process.env);

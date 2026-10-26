@@ -123,12 +123,9 @@ describe("createWithStatus", () => {
                 ),
             ),
         );
-        const res = await createWithStatus<{ x: number }, { id: number }>(
-            "/api/cw-test",
-            { x: 1 },
-        );
+        const res = await createWithStatus("/api/cw-test", { x: 1 });
         expect(res.wasCreated).toBe(true);
-        expect(res.data.id).toBe(1);
+        expect(res.data).toEqual({ id: 1 });
     });
 
     it("reports wasCreated=false on 200", async () => {
@@ -140,10 +137,7 @@ describe("createWithStatus", () => {
                 ),
             ),
         );
-        const res = await createWithStatus<{ x: number }, { id: number }>(
-            "/api/cw-test",
-            { x: 1 },
-        );
+        const res = await createWithStatus("/api/cw-test", { x: 1 });
         expect(res.wasCreated).toBe(false);
     });
 

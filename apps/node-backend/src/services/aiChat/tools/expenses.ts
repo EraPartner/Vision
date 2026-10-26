@@ -22,6 +22,7 @@ import {
   parseEnum,
   assertDateOrder,
   ToolValidationError,
+  argText,
 } from "./_validate.ts";
 import type { ToolContext } from "./_validate.ts";
 import { asCategoryId, asRecipientId } from "@vision/types/brands";
@@ -33,6 +34,15 @@ export type EnrichedTransactionRow =
 const UNCATEGORISED_LABEL = "Uncategorised";
 const UNKNOWN_RECIPIENT_LABEL = "Unknown";
 const MAX_ROWS = 50_000;
+
+interface MonthSummaryRow {
+  year: number;
+  month: number;
+  total_income?: number | null;
+  total_spending?: number | null;
+  net_amount?: number | null;
+  transaction_count?: number | null;
+}
 
 interface CashflowBucket {
   bucket: string;
@@ -126,7 +136,8 @@ async function loadCanonicalCashflow(
         accountIds,
       ),
   );
-  const monthRows = Array.isArray(result) ? result : result.months;
+  // Totals may be null in a partial summary; they count as zero.
+  const monthRows: MonthSummaryRow[] = result.months;
   const buckets = new Map<string, CashflowBucket>();
   for (const month of monthRows) {
     const monthKey = `${month.year}-${String(month.month).padStart(2, "0")}`;
@@ -142,7 +153,7 @@ async function loadCanonicalCashflow(
     entry.income = entry.income.plus(month.total_income ?? 0);
     entry.spend = entry.spend.plus(toDecimal(month.total_spending ?? 0).abs());
     entry.net = entry.net.plus(month.net_amount ?? 0);
-    entry.count += Number(month.transaction_count ?? 0);
+    entry.count += month.transaction_count ?? 0;
     buckets.set(key, entry);
   }
   return {
@@ -199,10 +210,7 @@ export const getSpendByCategory = {
   },
   async run(
     args: Record<string, unknown>,
-    {
-      maxRows = settings.aiChat.maxToolRows,
-      cache = undefined,
-    }: ToolContext = {},
+    { maxRows = settings.aiChat.maxToolRows, cache }: ToolContext = {},
   ) {
     const from = requireDate(args.from, "from");
     const to = requireDate(args.to, "to");
@@ -215,13 +223,16 @@ export const getSpendByCategory = {
 
     const rows = await fetchTransactionsInRange(cache, { from, to });
 
-    const byCategory = new Map();
+    const byCategory = new Map<
+      string,
+      { category: string; total: Decimal; count: number }
+    >();
     for (const row of rows) {
       const amount = toDecimal(row.amount);
       if (amount.gte(0)) continue; // income row, skip
 
       const label = categoryLabel(row);
-      const entry = byCategory.get(label) || {
+      const entry = byCategory.get(label) ?? {
         category: label,
         total: toDecimal(0),
         count: 0,
@@ -281,7 +292,7 @@ export const getMonthlySpend = {
     args: Record<string, unknown>,
     {
       maxRows = settings.aiChat.maxToolRows,
-      cache = undefined,
+      cache,
       scope = {},
     }: ToolContext = {},
   ) {
@@ -340,10 +351,7 @@ export const getTopRecipients = {
   },
   async run(
     args: Record<string, unknown>,
-    {
-      maxRows = settings.aiChat.maxToolRows,
-      cache = undefined,
-    }: ToolContext = {},
+    { maxRows = settings.aiChat.maxToolRows, cache }: ToolContext = {},
   ) {
     const from = requireDate(args.from, "from");
     const to = requireDate(args.to, "to");
@@ -356,13 +364,16 @@ export const getTopRecipients = {
 
     const rows = await fetchTransactionsInRange(cache, { from, to });
 
-    const byRecipient = new Map();
+    const byRecipient = new Map<
+      string,
+      { recipient: string; total: Decimal; count: number }
+    >();
     for (const row of rows) {
       const amount = toDecimal(row.amount);
       if (amount.gte(0)) continue;
 
       const label = row.recipient_name || UNKNOWN_RECIPIENT_LABEL;
-      const entry = byRecipient.get(label) || {
+      const entry = byRecipient.get(label) ?? {
         recipient: label,
         total: toDecimal(0),
         count: 0,
@@ -428,10 +439,7 @@ export const getTransactionsInRange = {
   },
   async run(
     args: Record<string, unknown>,
-    {
-      maxRows = settings.aiChat.maxToolRows,
-      cache = undefined,
-    }: ToolContext = {},
+    { maxRows = settings.aiChat.maxToolRows, cache }: ToolContext = {},
   ) {
     const from = requireDate(args.from, "from");
     const to = requireDate(args.to, "to");
@@ -448,7 +456,8 @@ export const getTransactionsInRange = {
             max: Number.MAX_SAFE_INTEGER,
           })
         : null;
-    const categoryId = categoryIdArg == null ? null : asCategoryId(categoryIdArg);
+    const categoryId =
+      categoryIdArg == null ? null : asCategoryId(categoryIdArg);
     const recipientIdArg =
       args.recipientId != null
         ? parsePositiveInt(args.recipientId, "recipientId", {
@@ -456,7 +465,8 @@ export const getTransactionsInRange = {
             max: Number.MAX_SAFE_INTEGER,
           })
         : null;
-    const recipientId = recipientIdArg == null ? null : asRecipientId(recipientIdArg);
+    const recipientId =
+      recipientIdArg == null ? null : asRecipientId(recipientIdArg);
 
     const rows = await fetchTransactionsInRange(cache, {
       from,
@@ -510,8 +520,10 @@ function aggregateByMonthCategory(
     const month = bucketKey(toYmd(row.date));
     const category = categoryLabel(row);
 
-    const monthMap = byMonth.get(month) ?? new Map();
-    const entry = monthMap.get(category) || { total: toDecimal(0), count: 0 };
+    const monthMap =
+      byMonth.get(month) ??
+      new Map<string, { total: Decimal; count: number }>();
+    const entry = monthMap.get(category) ?? { total: toDecimal(0), count: 0 };
     entry.total = entry.total.plus(amount.abs());
     entry.count += 1;
     monthMap.set(category, entry);
@@ -565,10 +577,7 @@ export const getMonthlyCategoryBreakdown = {
   },
   async run(
     args: Record<string, unknown>,
-    {
-      maxRows = settings.aiChat.maxToolRows,
-      cache = undefined,
-    }: ToolContext = {},
+    { maxRows = settings.aiChat.maxToolRows, cache }: ToolContext = {},
   ) {
     const from = requireDate(args.from, "from");
     const to = requireDate(args.to, "to");
@@ -626,13 +635,14 @@ export const searchTransactions = {
     args: Record<string, unknown>,
     { maxRows = settings.aiChat.maxToolRows }: ToolContext = {},
   ) {
-    if (!args.query || !String(args.query).trim()) {
+    const rawQuery = argText(args.query);
+    if (!rawQuery.trim()) {
       throw new ToolValidationError(
         "query is required and must be non-empty",
         "query",
       );
     }
-    const searchQuery = String(args.query).trim();
+    const searchQuery = rawQuery.trim();
     const limit = parsePositiveInt(args.limit, "limit", {
       min: 1,
       max: 200,
@@ -697,10 +707,7 @@ export const getLargestTransactions = {
   },
   async run(
     args: Record<string, unknown>,
-    {
-      maxRows = settings.aiChat.maxToolRows,
-      cache = undefined,
-    }: ToolContext = {},
+    { maxRows = settings.aiChat.maxToolRows, cache }: ToolContext = {},
   ) {
     const from = requireDate(args.from, "from");
     const to = requireDate(args.to, "to");
@@ -774,10 +781,7 @@ export const getSpendTrendForCategory = {
   },
   async run(
     args: Record<string, unknown>,
-    {
-      maxRows = settings.aiChat.maxToolRows,
-      cache = undefined,
-    }: ToolContext = {},
+    { maxRows = settings.aiChat.maxToolRows, cache }: ToolContext = {},
   ) {
     const categoryId = asCategoryId(
       requirePositiveInt(args.categoryId, "categoryId", {
@@ -802,7 +806,10 @@ export const getSpendTrendForCategory = {
       categoryId,
     });
 
-    const byMonth = new Map();
+    const byMonth = new Map<
+      string,
+      { bucket: string; total: Decimal; count: number }
+    >();
     for (const row of rows) {
       const amount = toDecimal(row.amount);
       if (amount.gte(0)) continue;
@@ -810,7 +817,7 @@ export const getSpendTrendForCategory = {
       // toYmd uses local getters for pg's local-midnight Date (getUTC* shifted
       // a UTC+ zone's 1st-of-month into the previous month) and slices strings.
       const key = bucketKey(toYmd(row.date));
-      const entry = byMonth.get(key) || {
+      const entry = byMonth.get(key) ?? {
         bucket: key,
         total: toDecimal(0),
         count: 0,
@@ -872,12 +879,12 @@ export const getYearOverYearComparison = {
   },
   async run(
     args: Record<string, unknown>,
-    {
-      maxRows = settings.aiChat.maxToolRows,
-      cache = undefined,
-    }: ToolContext = {},
+    { maxRows = settings.aiChat.maxToolRows, cache }: ToolContext = {},
   ) {
-    const year = requirePositiveInt(args.year, "year", { min: 2000, max: 2100 });
+    const year = requirePositiveInt(args.year, "year", {
+      min: 2000,
+      max: 2100,
+    });
     const prevYear =
       args.prevYear != null
         ? parsePositiveInt(args.prevYear, "prevYear", { min: 2000, max: 2100 })
@@ -1023,7 +1030,7 @@ export const getNetCashflow = {
     args: Record<string, unknown>,
     {
       maxRows = settings.aiChat.maxToolRows,
-      cache = undefined,
+      cache,
       scope = {},
     }: ToolContext = {},
   ) {

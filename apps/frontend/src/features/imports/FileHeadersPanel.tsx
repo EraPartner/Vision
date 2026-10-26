@@ -51,7 +51,7 @@ function useAutoSeparator(file: File | null, enabled: boolean): string {
         const reader = new FileReader();
         reader.onload = () => {
             if (cancelled) return;
-            const text = String(reader.result ?? "");
+            const text = typeof reader.result === "string" ? reader.result : "";
             const firstLine =
                 text.split(/\r\n|\r|\n/).find((l) => l.trim().length > 0) ?? "";
             setSep(detectSeparator(firstLine));
@@ -116,9 +116,7 @@ export function FileHeadersPanel({
         );
     }
 
-    const hasHeaders = Boolean(preview && preview.headers.length > 0);
-
-    if (error || !hasHeaders) {
+    if (error || !preview || preview.headers.length === 0) {
         return (
             <div className="flex items-center gap-2 rounded-card corner-continuous border border-dashed border-border/60 p-3 type-footnote text-label-secondary">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />
@@ -127,8 +125,8 @@ export function FileHeadersPanel({
         );
     }
 
-    const headers = preview!.headers;
-    const rows = preview!.rows.slice(0, maxRows);
+    const headers = preview.headers;
+    const rows = preview.rows.slice(0, maxRows);
     const highlighted = new Set(highlightedHeaders.filter(Boolean));
     const highlightedColumns = headers.map((h) => highlighted.has(h));
     const sepLabel = SEPARATOR_LABELS[effectiveSep] ?? effectiveSep;

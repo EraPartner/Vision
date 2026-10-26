@@ -96,6 +96,12 @@ import {
   resolveInvestmentRows,
   rollbackBatch,
 } from "../src/services/portfolioImportBatchService.ts";
+import { must } from "./helpers/must.ts";
+
+/** The spy behind `obj[key]`, read without taking an unbound method reference. */
+function methodMock<T extends object, K extends keyof T>(obj: T, key: K) {
+  return vi.mocked(obj)[key];
+}
 
 // Fixtures return only the result fields the service reads.
 const query = rawQuery as unknown as Mock<
@@ -132,10 +138,10 @@ const {
  * @param {boolean} isBrokerage
  */
 function mockQueries(isBrokerage: boolean) {
-  query.mockImplementation(async (/** @type {string} */ sql) =>
-    /is_brokerage/.test(String(sql))
+  query.mockImplementation((/** @type {string} */ sql) =>
+    Promise.resolve(/is_brokerage/.test(sql)
       ? { rows: [{ is_brokerage: isBrokerage }], rowCount: 1 }
-      : { rows: [], rowCount: 1 },
+      : { rows: [], rowCount: 1 }),
   );
 }
 
@@ -245,15 +251,15 @@ describe("getPortfolioImportBatchPreview", () => {
     expect(result.groups[0]).toEqual(
       expect.objectContaining({ investment_id: 9, row_count: 1 }),
     );
-    expect(result.groups[0]!.rows[0]).toEqual(
+    expect(must(result.groups[0], "result.groups[0]").rows[0]).toEqual(
       expect.objectContaining({
         id: 1,
         amount: "100.50",
         units: "2.5",
       }),
     );
-    expect(result.groups[1]!.row_count).toBe(2);
-    expect(result.groups[1]!.rows.map((row) => row.id)).toEqual([2, 3]);
+    expect(must(result.groups[1], "result.groups[1]").row_count).toBe(2);
+    expect(must(result.groups[1], "result.groups[1]").rows.map((row) => row.id)).toEqual([2, 3]);
     expect(result.groups[2]).toEqual(
       expect.objectContaining({
         is_cash: true,
@@ -261,7 +267,7 @@ describe("getPortfolioImportBatchPreview", () => {
         raw_name: null,
       }),
     );
-    expect(result.groups[3]!.rows[0]!.error_message).toBe("bad row");
+    expect(must(must(result.groups[3], "result.groups[3]").rows[0], "query row").error_message).toBe("bad row");
   });
 
   it("returns the complete zeroed totals shape for an empty preview", async () => {
@@ -357,12 +363,12 @@ describe("rollbackBatch — route-aware deletion (ADR-095)", () => {
       portfolioRemovalMocks.validateImportBatchRemoval.mock
         .invocationCallOrder[0],
     ).toBeLessThan(
-      portfolioTransactionRepository.hardDeleteByImportBatch.mock
-        .invocationCallOrder[0]!,
+      must(portfolioTransactionRepository.hardDeleteByImportBatch.mock
+        .invocationCallOrder[0], "value"),
     );
     expect(
       resetCommittedRowsToMatched.mock.invocationCallOrder[0],
-    ).toBeLessThan(markBatchAborted.mock.invocationCallOrder[0]!);
+    ).toBeLessThan(must(markBatchAborted.mock.invocationCallOrder[0], "markBatchAborted.mock.invocationCallOrder[0]"));
   });
 
   it("locks and rejects a pending batch before reading or deleting committed rows", async () => {
@@ -458,7 +464,7 @@ describe("resolveInvestmentRows — atomic group resolution", () => {
     });
 
     expect(withTransaction).toHaveBeenCalledTimes(1);
-    expect(investmentRepository.getById).toHaveBeenCalledWith(88);
+    expect(methodMock(investmentRepository, "getById")).toHaveBeenCalledWith(88);
     expect(overrideInvestments).toHaveBeenCalledTimes(1);
     expect(overrideInvestments).toHaveBeenCalledWith({
       batchId: 5,
@@ -512,7 +518,7 @@ describe("resolveInvestmentRows — atomic group resolution", () => {
       createNew: true,
     });
 
-    expect(investmentRepository.create).toHaveBeenCalledTimes(1);
+    expect(methodMock(investmentRepository, "create")).toHaveBeenCalledTimes(1);
     expect(overrideInvestments).toHaveBeenCalledWith({
       batchId: 5,
       rowIds: [10, 11],
@@ -562,7 +568,7 @@ describe("resolveInvestmentRows — atomic group resolution", () => {
       createNew: true,
     });
 
-    expect(investmentRepository.create).toHaveBeenCalledWith(
+    expect(methodMock(investmentRepository, "create")).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "kau",
         symbol: "KAU",
@@ -609,7 +615,7 @@ describe("resolveInvestmentRows — atomic group resolution", () => {
       createNew: true,
     });
 
-    expect(investmentRepository.create).toHaveBeenCalledWith(
+    expect(methodMock(investmentRepository, "create")).toHaveBeenCalledWith(
       expect.objectContaining({
         symbol: "BTC",
         asset_class: "crypto",
@@ -639,7 +645,7 @@ describe("resolveInvestmentRows — atomic group resolution", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
     expect(withTransaction).toHaveBeenCalledTimes(1);
-    expect(investmentRepository.getById).not.toHaveBeenCalled();
+    expect(methodMock(investmentRepository, "getById")).not.toHaveBeenCalled();
     expect(overrideInvestments).not.toHaveBeenCalled();
   });
 
@@ -662,7 +668,7 @@ describe("resolveInvestmentRows — atomic group resolution", () => {
       createInvestmentForRow({ batchId: 5, rowId: 10 }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
-    expect(investmentRepository.create).not.toHaveBeenCalled();
+    expect(methodMock(investmentRepository, "create")).not.toHaveBeenCalled();
     expect(overrideInvestment).not.toHaveBeenCalled();
   });
 
@@ -691,7 +697,7 @@ describe("resolveInvestmentRows — atomic group resolution", () => {
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
-    expect(investmentRepository.getById).not.toHaveBeenCalled();
+    expect(methodMock(investmentRepository, "getById")).not.toHaveBeenCalled();
     expect(overrideInvestments).not.toHaveBeenCalled();
   });
 
@@ -709,8 +715,8 @@ describe("resolveInvestmentRows — atomic group resolution", () => {
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
 
-    expect(investmentRepository.create).not.toHaveBeenCalled();
-    expect(investmentRepository.getById).not.toHaveBeenCalled();
+    expect(methodMock(investmentRepository, "create")).not.toHaveBeenCalled();
+    expect(methodMock(investmentRepository, "getById")).not.toHaveBeenCalled();
     expect(overrideInvestments).not.toHaveBeenCalled();
   });
 
@@ -728,7 +734,7 @@ describe("resolveInvestmentRows — atomic group resolution", () => {
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
 
-    expect(investmentRepository.getById).not.toHaveBeenCalled();
+    expect(methodMock(investmentRepository, "getById")).not.toHaveBeenCalled();
     expect(overrideInvestments).not.toHaveBeenCalled();
   });
 
@@ -751,7 +757,7 @@ describe("resolveInvestmentRows — atomic group resolution", () => {
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
 
-    expect(investmentRepository.create).not.toHaveBeenCalled();
+    expect(methodMock(investmentRepository, "create")).not.toHaveBeenCalled();
     expect(overrideInvestments).not.toHaveBeenCalled();
   });
 });

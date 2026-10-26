@@ -26,7 +26,12 @@ export function PartnerSwitcher({
     return (
         <SegmentedControl
             value={value}
-            onValueChange={(next) => onValueChange(next as PartnerId)}
+            onValueChange={(next) => {
+                const partner = household.partners.find(
+                    (candidate) => candidate.id === next,
+                );
+                if (partner) onValueChange(partner.id);
+            }}
             aria-label={t("tax.household.partnerPicker")}
             className="w-full"
         >

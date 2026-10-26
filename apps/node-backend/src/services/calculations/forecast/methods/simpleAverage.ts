@@ -20,8 +20,9 @@ export function forecast({
   const byDom = new Map<number, number[]>();
   for (const r of history) {
     const d = dayOfMonth(r.date);
-    if (!byDom.has(d)) byDom.set(d, []);
-    byDom.get(d)!.push(r.net);
+    const bucket = byDom.get(d);
+    if (bucket) bucket.push(r.net);
+    else byDom.set(d, [r.net]);
   }
   const means = new Map<number, number>();
   for (const [d, arr] of byDom) {

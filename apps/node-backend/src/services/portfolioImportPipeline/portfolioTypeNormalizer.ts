@@ -10,6 +10,7 @@
  */
 
 import { VALID_PORTFOLIO_TXN_TYPES } from '../../lib/portfolioTxnTypes.ts';
+import { cellText } from "../cellText.ts";
 
 // Lowercased raw → canonical. Covers common English/Dutch/German brokerage labels.
 const BUILTIN_TYPE_ALIASES: Record<string, string> = {
@@ -33,7 +34,7 @@ export function normalizeType(
     defaultType?: string | undefined;
   } = {},
 ): { type?: string; error?: string } {
-  const trimmed = String(raw ?? '').trim();
+  const trimmed = cellText(raw).trim();
 
   if (!trimmed) {
     if (defaultType && VALID_PORTFOLIO_TXN_TYPES.has(defaultType)) return { type: defaultType };

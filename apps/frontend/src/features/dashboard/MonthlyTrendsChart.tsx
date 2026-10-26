@@ -122,7 +122,7 @@ export function MonthlyTrendsChart({
                             v,
                             defaultCurrency,
                             locale,
-                            appSettings.showDecimalPlaces ?? 2,
+                            appSettings.showDecimalPlaces,
                         )
                     }
                 />

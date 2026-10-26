@@ -16,8 +16,8 @@ export async function computeRecipientInsights({
   targetCurrency = "EUR",
   excludedCategoryIds = [],
   excludedRecipientIds = [],
-  startDate = undefined,
-  endDate = undefined,
+  startDate,
+  endDate,
 }: RecipientByYearOptions = {}) {
   const data = await infoRepository.getRecipientInsights(targetCurrency, {
     excludedCategoryIds,

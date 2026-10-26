@@ -96,7 +96,9 @@ export function clearMvCache(): void {
 // repository layer is sanctioned to use.
 
 /** The columns `convertRowsToEur` reads; every other column passes through. */
-export type ConvertibleRow = Parameters<typeof convertRowsToEur>[0][number];
+export type ConvertibleRow = NonNullable<
+  Parameters<typeof convertRowsToEur>[0]
+>[number];
 
 /**
  * A converted row whose `amount_eur` is known: the caller's row plus
@@ -215,6 +217,8 @@ export function mapRowsForAmountConversion<T extends Record<string, unknown>>(
   amountField = "amount",
   fallbackToZero = true,
 ): Array<Omit<T, "amount"> & { amount: number }> {
+  // `amountField` names a NUMERIC column, which node-postgres returns as a
+  // string; a generic row cannot say which of its fields that is.
   return rows.map((row) => ({
     ...row,
     amount: fallbackToZero

@@ -44,16 +44,28 @@ import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
 import { todayAppDateString } from "../src/lib/timezone.ts";
+import { must } from "./helpers/must.ts";
+import { valueAt } from "./helpers/responseBody.ts";
+import type {
+  AccountId,
+  RecipientId,
+  TransactionId,
+} from "@vision/types/brands";
+
+/** A result row whose columns the test reads without a fixed shape. */
+type DbRow = Record<string, unknown>;
 
 // Rates come only from the rows each test seeds: a date with no seeded rate must
 // not reach the live ECB feed, whose 8 s fetch timeout outlasts the test timeout
 // whenever the feed is slow from CI.
-vi.mock("../src/services/currency/rateFetcher.ts", async (original) => ({
-  ...(await original<
-    typeof import("../src/services/currency/rateFetcher.ts")
-  >()),
-  getUnindexedRatesToEurForDates: async () => new Map(),
-}));
+vi.mock("../src/services/currency/rateFetcher.ts", async (original) =>
+  Promise.resolve({
+    ...(await original<
+      typeof import("../src/services/currency/rateFetcher.ts")
+    >()),
+    getUnindexedRatesToEurForDates: () => Promise.resolve(new Map()),
+  }),
+);
 
 const rec: Record<string, unknown> = {};
 
@@ -65,17 +77,19 @@ function appDated(sql: string) {
 /** 'YYYY-MM-DD' for `CURRENT_DATE + <sqlInterval>` (empty string = today). */
 async function ymdFromToday(sqlInterval = "") {
   const expr = sqlInterval ? `CURRENT_DATE ${sqlInterval}` : "CURRENT_DATE";
-  const { rows } = await getTestPool()!.query(
-    `SELECT to_char((${appDated(expr)})::date, 'YYYY-MM-DD') AS d`,
-  );
-  return rows[0].d;
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    d: string;
+  }>(`SELECT to_char((${appDated(expr)})::date, 'YYYY-MM-DD') AS d`);
+  return must(rows[0], "rows[0]").d;
 }
 
 async function seedRecipient() {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    id: RecipientId;
+  }>(
     `INSERT INTO recipients (name, normalized_name) VALUES ('Misc Payee', 'misc payee') RETURNING id`,
   );
-  rec.misc = rows[0].id;
+  rec.misc = must(rows[0], "rows[0]").id;
 }
 
 /**
@@ -103,14 +117,16 @@ async function addAccount(
     statementCurrency?: string;
   } = {},
 ) {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    id: AccountId;
+  }>(
     `INSERT INTO accounts (name, display_name, type, in_net_worth, currency)
      VALUES ($1, $2, $3::account_type, $4, $5) RETURNING id`,
     [name, displayName, type, inNetWorth, currency],
   );
-  const id = rows[0].id;
+  const id = must(rows[0], "rows[0]").id;
   if (statementBalance != null) {
-    await getTestPool()!.query(
+    await must(getTestPool(), "getTestPool()").query(
       `INSERT INTO account_statement_balances (account_id, currency, balance, balance_date)
        VALUES ($1, $2, $3, $4)`,
       [id, statementCurrency, statementBalance, statementBalanceDate],
@@ -140,14 +156,16 @@ async function insertTxn({
   balance?: string | null;
   isActive?: boolean;
 }) {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    id: TransactionId;
+  }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, account_id, balance, is_active)
      VALUES ((${appDated(dateExpr)})::date, $1, $2, $3,
              (SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($4))),
              $5, $6) RETURNING id`,
     [amount, currency, rec.misc, bank, balance, isActive],
   );
-  return rows[0].id;
+  return must(rows[0], "rows[0]").id;
 }
 
 /** Seed one exchange_rates row so conversion resolves from the DB, never the network. */
@@ -157,7 +175,7 @@ async function insertRate(
   rate: string,
   isLatest = true,
 ) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
      VALUES ($1, (${appDated(dateExpr)})::date, $2, $3)`,
     [code, rate, isLatest],
@@ -177,12 +195,12 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       await pool.query("DELETE FROM transactions");
       await pool.query("DELETE FROM accounts");
       await pool.query("DELETE FROM recipients");
       await pool.query("DELETE FROM exchange_rates");
-      for (const k of Object.keys(rec)) delete rec[k];
+      for (const k of Object.keys(rec)) Reflect.deleteProperty(rec, k);
       clearMemoryCache();
       clearMvCache();
     });
@@ -214,7 +232,7 @@ describe.skipIf(!hasTestDatabase())(
         await addAccount("BROKER", { type: "brokerage" });
         await addAccount("EXCHANGE", { type: "crypto_exchange" });
         await addAccount("HARDWARE WALLET", { type: "wallet" });
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           `UPDATE accounts SET has_cash_sleeve = true WHERE name = 'EXCHANGE'`,
         );
         const yesterday = "CURRENT_DATE - interval '1 day'";
@@ -303,8 +321,10 @@ describe.skipIf(!hasTestDatabase())(
           transaction_count: 3,
           post_anchor_count: 3, // no anchor → "sum of 3 entries"
         });
-        expect(r.accounts[0]!.anchor_date).toBeUndefined();
-        expect(r.accounts[0]!.drift).toBeUndefined(); // no statement balance stored
+        expect(
+          must(r.accounts[0], "r.accounts[0]").anchor_date,
+        ).toBeUndefined();
+        expect(must(r.accounts[0], "r.accounts[0]").drift).toBeUndefined(); // no statement balance stored
         expect(r.accounts[1]).toMatchObject({
           account_id: stampedAccountId,
           bank_account: "BBB STAMPED",
@@ -368,7 +388,7 @@ describe.skipIf(!hasTestDatabase())(
         });
         // The inactive row is also invisible to the activity lateral's MIN/MAX.
         // DATE columns cross the boundary as calendar-day strings (toWireDate).
-        expect(r.accounts[0]!.last_transaction).toBe(
+        expect(must(r.accounts[0], "r.accounts[0]").last_transaction).toBe(
           await ymdFromToday("- interval '3 days'"),
         );
       });
@@ -440,9 +460,12 @@ describe.skipIf(!hasTestDatabase())(
         expect(r.total_history).toEqual(r.history["HIST BANK"]);
         // The invariant both history findings demand: the headline IS the last
         // chart point, never a step above it.
-        expect(r.total_history[r.total_history.length - 1]!.balance).toBe(
-          r.total_net_position,
-        );
+        expect(
+          must(
+            r.total_history[r.total_history.length - 1],
+            "r.total_history[r.total_history.length - 1]",
+          ).balance,
+        ).toBe(r.total_net_position);
       });
 
       it("fills the whole 12-month window from a stamp that predates it", async () => {
@@ -456,18 +479,23 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await banksRepository.getBankBalances();
-        const points = r.history["OLD STAMP"]!;
+        const points = must(r.history["OLD STAMP"], 'r.history["OLD STAMP"]');
         // generate_series(CURRENT_DATE - 12 months, CURRENT_DATE, 1 day) inclusive.
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(
+          getTestPool(),
+          "getTestPool()",
+        ).query<DbRow>(
           appDated(
             `SELECT (CURRENT_DATE - (CURRENT_DATE - interval '12 months')::date + 1) AS n`,
           ),
         );
-        expect(points).toHaveLength(Number(rows[0].n));
-        expect(points[0]!.date).toBe(
+        expect(points).toHaveLength(Number(must(rows[0], "rows[0]").n));
+        expect(must(points[0], "points[0]").date).toBe(
           await ymdFromToday("- interval '12 months'"),
         );
-        expect(points[points.length - 1]!.date).toBe(await ymdFromToday());
+        expect(
+          must(points[points.length - 1], "points[points.length - 1]").date,
+        ).toBe(await ymdFromToday());
         expect(points.every((p) => p.balance === 500)).toBe(true);
       });
 
@@ -490,8 +518,11 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await banksRepository.getBankBalances();
-        const points = r.history["OLD ACTIVITY"]!;
-        expect(points[0]!.date).toBe(
+        const points = must(
+          r.history["OLD ACTIVITY"],
+          'r.history["OLD ACTIVITY"]',
+        );
+        expect(must(points[0], "points[0]").date).toBe(
           await ymdFromToday("- interval '12 months'"),
         );
         expect(points.every((p) => p.balance === 400)).toBe(true);
@@ -539,9 +570,11 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await banksRepository.getBankBalances();
-        expect(r.history["HIST ACTIVE"]!.every((p) => p.balance === 100)).toBe(
-          true,
-        );
+        expect(
+          must(r.history["HIST ACTIVE"], 'r.history["HIST ACTIVE"]').every(
+            (p) => p.balance === 100,
+          ),
+        ).toBe(true);
         expect(r.total_net_position).toBe(100);
       });
 
@@ -608,7 +641,10 @@ describe.skipIf(!hasTestDatabase())(
           bank: "DATE SHAPE",
         });
 
-        const account = (await banksRepository.getBankBalances()).accounts[0]!;
+        const account = must(
+          (await banksRepository.getBankBalances()).accounts[0],
+          "(await banksRepository.getBankBalances()).accounts[0]",
+        );
         expect(account.first_transaction).toBe(
           await ymdFromToday("- interval '3 days'"),
         );
@@ -617,9 +653,13 @@ describe.skipIf(!hasTestDatabase())(
         );
         // The whole object survives JSON round-tripping as calendar days — the
         // actual failure mode was an ISO timestamp landing a day early.
-        const wire = JSON.parse(JSON.stringify(account));
-        expect(wire.first_transaction).toBe(account.first_transaction);
-        expect(wire.last_transaction).toBe(account.last_transaction);
+        const wire: unknown = JSON.parse(JSON.stringify(account));
+        expect(valueAt(wire, "first_transaction")).toBe(
+          account.first_transaction,
+        );
+        expect(valueAt(wire, "last_transaction")).toBe(
+          account.last_transaction,
+        );
         // …matching the provenance field on the SAME object, already a string.
         expect(
           typeof account.anchor_date === "undefined" ||
@@ -651,10 +691,15 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await banksRepository.getBankBalances();
-        expect(r.accounts[0]!.balance).toBe(150); // 100 EUR + (100 USD × 0.5) — NOT (100+100) × 0.5
+        expect(must(r.accounts[0], "r.accounts[0]").balance).toBe(150); // 100 EUR + (100 USD × 0.5) — NOT (100+100) × 0.5
         expect(r.total_net_position).toBe(150);
         // …and the chart agrees with the headline it sits under.
-        expect(r.total_history[r.total_history.length - 1]!.balance).toBe(150);
+        expect(
+          must(
+            r.total_history[r.total_history.length - 1],
+            "r.total_history[r.total_history.length - 1]",
+          ).balance,
+        ).toBe(150);
       });
 
       it("anchors each currency on ITS OWN latest stamp — a EUR statement never absorbs USD activity", async () => {
@@ -687,9 +732,14 @@ describe.skipIf(!hasTestDatabase())(
 
         const r = await banksRepository.getBankBalances();
         // The old cross-currency form gave 1000 + (100 − 25) = 1075 at one rate.
-        expect(r.accounts[0]!.balance).toBe(1025);
+        expect(must(r.accounts[0], "r.accounts[0]").balance).toBe(1025);
         expect(r.total_net_position).toBe(1025);
-        expect(r.total_history[r.total_history.length - 1]!.balance).toBe(1025);
+        expect(
+          must(
+            r.total_history[r.total_history.length - 1],
+            "r.total_history[r.total_history.length - 1]",
+          ).balance,
+        ).toBe(1025);
       });
 
       it("revalues the headline at TODAY rate, not at the last statement date, over a moving curve", async () => {
@@ -718,10 +768,10 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await banksRepository.getBankBalances();
-        expect(r.accounts[0]!.balance).toBe(900); // 1000 USD × today's 0.9
+        expect(must(r.accounts[0], "r.accounts[0]").balance).toBe(900); // 1000 USD × today's 0.9
         expect(r.total_net_position).toBe(900);
 
-        const points = r.history["WISE USD"]!;
+        const points = must(r.history["WISE USD"], 'r.history["WISE USD"]');
         expect(points[points.length - 1]).toEqual({
           date: await ymdFromToday(),
           balance: 900,
@@ -760,17 +810,25 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await banksRepository.getBankBalances();
-        expect(r.accounts[0]!.balance).toBe(260); // 100 EUR + 200 USD × 0.8
-        const points = r.history["MULTI MOVING"]!;
-        expect(points[points.length - 1]!.balance).toBe(260);
+        expect(must(r.accounts[0], "r.accounts[0]").balance).toBe(260); // 100 EUR + 200 USD × 0.8
+        const points = must(
+          r.history["MULTI MOVING"],
+          'r.history["MULTI MOVING"]',
+        );
+        expect(
+          must(points[points.length - 1], "points[points.length - 1]").balance,
+        ).toBe(260);
         expect(points[0]).toEqual({
           // 20 days ago, at that day's 0.5
           date: await ymdFromToday("- interval '20 days'"),
           balance: 200,
         });
-        expect(r.total_history[r.total_history.length - 1]!.balance).toBe(
-          r.total_net_position,
-        );
+        expect(
+          must(
+            r.total_history[r.total_history.length - 1],
+            "r.total_history[r.total_history.length - 1]",
+          ).balance,
+        ).toBe(r.total_net_position);
       });
 
       // Was the drift-badge finding: `balance` was per-currency (converted) while
@@ -800,9 +858,9 @@ describe.skipIf(!hasTestDatabase())(
 
         const r = await banksRepository.getBankBalances();
 
-        expect(r.accounts[0]!.balance).toBe(150); // 100 EUR + 100 USD × 0.5
+        expect(must(r.accounts[0], "r.accounts[0]").balance).toBe(150); // 100 EUR + 100 USD × 0.5
         // 120 − the EUR partition's 100. The cross-currency Σ gave 120 − 200 = −80.
-        expect(r.accounts[0]!.drift).toBe(20);
+        expect(must(r.accounts[0], "r.accounts[0]").drift).toBe(20);
       });
 
       it("reports no drift when the statement matches its own currency partition", async () => {
@@ -831,7 +889,7 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await banksRepository.getBankBalances();
-        expect(r.accounts[0]!.drift).toBe(0);
+        expect(must(r.accounts[0], "r.accounts[0]").drift).toBe(0);
       });
 
       it("reconciles a lone partition even when its currency differs from the account", async () => {
@@ -854,8 +912,8 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await banksRepository.getBankBalances();
-        expect(r.accounts[0]!.balance).toBe(50); // 100 USD × 0.5, in the EUR target
-        expect(r.accounts[0]!.drift).toBe(-10); // native: 90 − the sole partition's 100
+        expect(must(r.accounts[0], "r.accounts[0]").balance).toBe(50); // 100 USD × 0.5, in the EUR target
+        expect(must(r.accounts[0], "r.accounts[0]").drift).toBe(-10); // native: 90 − the sole partition's 100
       });
 
       it("leaves a single-currency account byte-identical to the unpartitioned computation", async () => {
@@ -920,9 +978,12 @@ describe.skipIf(!hasTestDatabase())(
           { date: await ymdFromToday("- interval '1 day'"), balance: 70 },
           { date: await ymdFromToday(), balance: 70 },
         ]);
-        expect(r.total_history[r.total_history.length - 1]!.balance).toBe(
-          r.total_net_position,
-        );
+        expect(
+          must(
+            r.total_history[r.total_history.length - 1],
+            "r.total_history[r.total_history.length - 1]",
+          ).balance,
+        ).toBe(r.total_net_position);
       });
 
       it("keeps a future-dated row out of the headline and chart until effective", async () => {
@@ -978,9 +1039,12 @@ describe.skipIf(!hasTestDatabase())(
           { date: await ymdFromToday("- interval '1 day'"), balance: 180 },
           { date: await ymdFromToday(), balance: 180 },
         ]);
-        expect(r.total_history[r.total_history.length - 1]!.balance).toBe(
-          r.total_net_position,
-        );
+        expect(
+          must(
+            r.total_history[r.total_history.length - 1],
+            "r.total_history[r.total_history.length - 1]",
+          ).balance,
+        ).toBe(r.total_net_position);
       });
     });
   },

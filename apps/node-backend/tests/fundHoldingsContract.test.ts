@@ -5,13 +5,16 @@ import {
   fundHoldingsImportResultSchema,
 } from "@vision/types/fund-holdings";
 import type { FundHoldingsDocument } from "@vision/types/fund-holdings";
+import { must } from "./helpers/must.ts";
 
 function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
 function messages(parsed: { error?: { issues: { message: string }[] } }) {
-  return parsed.error!.issues.map(({ message }) => message);
+  return must(parsed.error, "parsed.error").issues.map(
+    ({ message }) => message,
+  );
 }
 
 const completeDocument: FundHoldingsDocument = {
@@ -117,7 +120,7 @@ describe("fund holdings source and import contract", () => {
 
   it("accepts stale and partial coverage only when both remain explicit", () => {
     const partial = clone(completeDocument);
-    partial.holdings[0]!.weightPercent = "50";
+    must(partial.holdings[0], "partial.holdings[0]").weightPercent = "50";
     partial.coverage = {
       status: "partial",
       reportedWeightPercent: "90",
@@ -148,7 +151,7 @@ describe("fund holdings source and import contract", () => {
     for (const exposureKind of ["derivative", "synthetic"] as const) {
       const partial = clone(completeDocument);
       partial.holdings[1] = {
-        ...partial.holdings[1]!,
+        ...must(partial.holdings[1], "partial.holdings[1]"),
         name: `${exposureKind} position`,
         instrumentType: "derivative",
         exposureKind,
@@ -167,8 +170,9 @@ describe("fund holdings source and import contract", () => {
         "partial",
       );
 
-      partial.holdings[1]!.exposureStatus = "supported";
-      delete partial.holdings[1]!.unsupportedReason;
+      must(partial.holdings[1], "partial.holdings[1]").exposureStatus =
+        "supported";
+      delete must(partial.holdings[1], "partial.holdings[1]").unsupportedReason;
       expect(messages(fundHoldingsDocumentSchema.safeParse(partial))).toContain(
         `${exposureKind} exposure must be unsupported`,
       );
@@ -177,15 +181,16 @@ describe("fund holdings source and import contract", () => {
 
   it("rejects duplicate identifiers, malformed weights, and inconsistent totals", () => {
     const duplicate = clone(completeDocument);
-    duplicate.holdings[1]!.identifiers = clone(
-      duplicate.holdings[0]!.identifiers,
+    must(duplicate.holdings[1], "duplicate.holdings[1]").identifiers = clone(
+      must(duplicate.holdings[0], "duplicate.holdings[0]").identifiers,
     );
     expect(messages(fundHoldingsDocumentSchema.safeParse(duplicate))).toContain(
       "Constituent identifiers must be unique across rows",
     );
 
     const invalidWeight = clone(completeDocument);
-    invalidWeight.holdings[0]!.weightPercent = "60.000";
+    must(invalidWeight.holdings[0], "invalidWeight.holdings[0]").weightPercent =
+      "60.000";
     expect(fundHoldingsDocumentSchema.safeParse(invalidWeight).success).toBe(
       false,
     );

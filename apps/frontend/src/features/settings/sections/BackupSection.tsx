@@ -60,7 +60,7 @@ export const BackupSection = memo(function BackupSection() {
             .then((bs) => {
                 if (cancelled || !bs) return;
                 setBackupDir(bs.backupDir || "");
-                setBackupOnQuit(bs.backupOnQuit ?? false);
+                setBackupOnQuit(bs.backupOnQuit);
                 setLoaded(true);
             })
             .catch(() => {

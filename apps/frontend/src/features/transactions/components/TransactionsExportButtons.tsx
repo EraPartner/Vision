@@ -13,6 +13,7 @@ import type {
     RecipientId,
     TransactionId,
 } from "@vision/types/brands";
+import type { TranslationKey } from "@/locales/keys";
 
 type ExportFormat = 'csv' | 'json';
 
@@ -89,7 +90,7 @@ export function TransactionsExportButtons(props: TransactionsExportButtonsProps)
         }
     };
 
-    const renderButton = (format: ExportFormat, labelKey: string) => {
+    const renderButton = (format: ExportFormat, labelKey: TranslationKey) => {
         const isThisLoading = exportingFormat === format;
         return (
             <Button

@@ -23,6 +23,7 @@
  * inert — the service returns a `warning` in that case.
  */
 
+import { looseText } from "../lib/looseText.ts";
 import { z } from "zod";
 import { sql } from "kysely";
 import { withTransaction } from "../database/connection.ts";
@@ -56,7 +57,7 @@ const openingBalanceBodySchema = z.looseObject({
     return balance;
   }),
   date: z.unknown().transform((value, ctx) => {
-    const date = String(value ?? "");
+    const date = looseText(value ?? "");
     if (!date) {
       ctx.addIssue({
         code: "custom",

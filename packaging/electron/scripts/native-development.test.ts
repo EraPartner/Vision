@@ -4,7 +4,7 @@ import test from "node:test";
 
 import { parsePort, terminateChild, waitForExit } from "./native-development";
 
-test("native development accepts only unprivileged TCP ports", () => {
+void test("native development accepts only unprivileged TCP ports", () => {
   assert.equal(parsePort(undefined, 3002), 3002);
   assert.equal(parsePort("54329", 3002), 54329);
   for (const value of ["1023", "65536", "1.5", "invalid"]) {
@@ -12,7 +12,7 @@ test("native development accepts only unprivileged TCP ports", () => {
   }
 });
 
-test("native development shutdown signals a child and waits for its exit", async () => {
+void test("native development shutdown signals a child and waits for its exit", async () => {
   const signals: NodeJS.Signals[] = [];
   const child = Object.assign(new EventEmitter(), {
     exitCode: null as number | null,

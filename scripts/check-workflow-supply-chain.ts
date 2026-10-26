@@ -119,7 +119,7 @@ export function checkLockfile(text: string, name: string): string[] {
   }
   const packages =
     typeof lock === "object" && lock !== null && "packages" in lock
-      ? (lock as { packages: unknown }).packages
+      ? lock.packages
       : undefined;
   if (typeof packages !== "object" || packages === null)
     return [`${name}: lockfile has no packages table`];

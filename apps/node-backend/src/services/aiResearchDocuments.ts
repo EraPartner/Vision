@@ -219,8 +219,8 @@ function cosine(a: number[] | undefined, b: number[] | undefined) {
   let bb = 0;
   for (let index = 0; index < a.length; index += 1) {
     // Both vectors have the same length (checked above).
-    const x = a[index]!;
-    const y = b[index]!;
+    const x = a[index] ?? 0;
+    const y = b[index] ?? 0;
     dot += x * y;
     aa += x * x;
     bb += y * y;
@@ -239,10 +239,10 @@ function cite(
     title: row.title,
     sourceName: row.sourceName,
     documentId: row.documentId,
-    documentVersion: Number(row.version),
+    documentVersion: row.version,
     documentHash: row.documentHash,
     passageId: row.id,
-    passageOrdinal: Number(row.ordinal),
+    passageOrdinal: row.ordinal,
     pageNumber: row.pageNumber,
     section: row.section,
     text: row.content,
@@ -270,9 +270,9 @@ export async function searchResearchDocuments(
     signal?: AbortSignal | undefined;
   } = {},
 ) {
-  const normalized = String(search || "").trim();
+  const normalized = (search ?? "").trim();
   if (!normalized) throw new Error("Search query is required");
-  const boundedLimit = Math.min(Math.max(nonZeroOr(Number(limit), 8), 1), 20);
+  const boundedLimit = Math.min(Math.max(nonZeroOr(limit, 8), 1), 20);
   const keyword =
     mode === "semantic"
       ? []
@@ -304,7 +304,7 @@ export async function searchResearchDocuments(
   }
   const merged = new Map<string, ResearchDocumentCitation>();
   keyword.forEach((row) =>
-    merged.set(row.id, cite(row, Number(row.score), "keyword")),
+    merged.set(row.id, cite(row, row.score, "keyword")),
   );
   semantic.forEach(({ row, score }) => {
     const existing = merged.get(row.id);

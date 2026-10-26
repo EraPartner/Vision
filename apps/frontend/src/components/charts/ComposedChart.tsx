@@ -4,6 +4,7 @@
  * candlestick. Backs the Research chart builder (ADR-081). Reuses the shared
  * axis/tooltip/palette infrastructure so it matches the other chart primitives.
  */
+import { axisDateOrNumber, axisNumber } from "./axisValue";
 import { curveMonotoneX } from "@visx/curve";
 import { Group } from "@visx/group";
 import { scaleLinear, scaleLog } from "@visx/scale";
@@ -25,6 +26,9 @@ import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { useChartKeyboardNav } from "./keyboardNav";
 import { summarizeSeriesChart } from "./chartAria";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+
+const isFiniteNumber = (value: number | null | undefined): value is number =>
+    value != null && Number.isFinite(value);
 
 export type ComposedSeriesType = "line" | "area" | "bar" | "candlestick";
 
@@ -103,12 +107,11 @@ function ComposedSeriesLayerInner<Datum>({
     xScale,
     leftScale,
     rightScale,
-    innerHeight,
     barWidth,
 }: ComposedSeriesLayerProps<Datum>) {
     const scaleFor = (s: ComposedSeries<Datum>) =>
         s.axis === "right" && rightScale ? rightScale : leftScale;
-    const cx = (d: Datum) => xScale(xAccessor(d)) ?? 0;
+    const cx = (d: Datum) => xScale(xAccessor(d));
 
     return (
         <>
@@ -118,13 +121,13 @@ function ComposedSeriesLayerInner<Datum>({
                 const yS = scaleFor(s);
                 const color = s.color ?? getChartColor(i);
                 const base =
-                    yS(Math.max(0, yS.domain()[0] ?? 0)) ?? innerHeight;
+                    yS(Math.max(0, yS.domain()[0] ?? 0));
                 return (
                     <g key={s.key} opacity={s.fillOpacity ?? 0.5}>
                         {data.map((d, j) => {
                             const v = s.accessor?.(d);
                             if (v == null || !Number.isFinite(v)) return null;
-                            const y = yS(v) ?? 0;
+                            const y = yS(v);
                             return (
                                 <rect
                                     key={j}
@@ -150,7 +153,7 @@ function ComposedSeriesLayerInner<Datum>({
                         key={s.key}
                         data={data as Datum[]}
                         x={(d) => cx(d)}
-                        y={(d) => yS(s.accessor?.(d) ?? 0) ?? 0}
+                        y={(d) => yS(s.accessor?.(d) ?? 0)}
                         yScale={yS as never}
                         curve={curveMonotoneX}
                         fill={color}
@@ -177,18 +180,19 @@ function ComposedSeriesLayerInner<Datum>({
                             const l = s.low?.(d);
                             const c = s.close?.(d);
                             if (
-                                [o, h, l, c].some(
-                                    (v) => v == null || !Number.isFinite(v),
-                                )
+                                !isFiniteNumber(o) ||
+                                !isFiniteNumber(h) ||
+                                !isFiniteNumber(l) ||
+                                !isFiniteNumber(c)
                             )
                                 return null;
-                            const up = (c as number) >= (o as number);
+                            const up = c >= o;
                             const color = up ? UP : DOWN;
                             const x = cx(d);
-                            const yHigh = yS(h as number) ?? 0;
-                            const yLow = yS(l as number) ?? 0;
-                            const yOpen = yS(o as number) ?? 0;
-                            const yClose = yS(c as number) ?? 0;
+                            const yHigh = yS(h);
+                            const yLow = yS(l);
+                            const yOpen = yS(o);
+                            const yClose = yS(c);
                             const bodyTop = Math.min(yOpen, yClose);
                             const bodyH = Math.max(1, Math.abs(yClose - yOpen));
                             const bw = Math.max(1, barWidth);
@@ -230,7 +234,7 @@ function ComposedSeriesLayerInner<Datum>({
                         key={s.key}
                         data={filtered}
                         x={(d) => cx(d)}
-                        y={(d) => yS(s.accessor?.(d) ?? 0) ?? 0}
+                        y={(d) => yS(s.accessor?.(d) ?? 0)}
                         curve={curveMonotoneX}
                         stroke={color}
                         strokeWidth={s.strokeWidth ?? 2}
@@ -305,8 +309,8 @@ function Inner<Datum>({
             }
             // values is finite-filtered above, so d3 min/max match Math.min/max(...)
             // exactly while avoiding the spread stack-size hazard on large series.
-            const lo = values.length > 0 ? (min(values) as number) : 0;
-            const hi = values.length > 0 ? (max(values) as number) : 1;
+            const lo = values.length > 0 ? (min(values) ?? 0) : 0;
+            const hi = values.length > 0 ? (max(values) ?? 1) : 1;
             if (axis === "left" && logLeft && lo > 0) {
                 return scaleLog({
                     range: [innerHeight, 0],
@@ -332,10 +336,13 @@ function Inner<Datum>({
     const step = innerWidth / Math.max(1, data.length);
     const barWidth = Math.max(1, step * 0.6);
 
-    const bisect = useMemo(
-        () => bisector<Datum, Date | number>((d) => stableXAccessor(d)).center,
-        [stableXAccessor],
-    );
+    const bisect = useMemo(() => {
+        const bisectX = bisector<Datum, Date | number>((d) =>
+            stableXAccessor(d),
+        );
+        return (array: ArrayLike<Datum>, x: Date | number) =>
+            bisectX.center(array, x);
+    }, [stableXAccessor]);
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
     // Cache the overlay rect for the duration of a hover session instead of
@@ -388,7 +395,7 @@ function Inner<Datum>({
             .filter((x): x is NonNullable<typeof x> => x !== null);
     }, [hoverDatum, series, tooltipValueFormat]);
 
-    const cx = (d: Datum) => xScale(stableXAccessor(d)) ?? 0;
+    const cx = (d: Datum) => xScale(stableXAccessor(d));
 
     return (
         <div style={{ position: "relative", width, height }}>
@@ -452,7 +459,7 @@ function Inner<Datum>({
                         numTicks={Math.max(2, Math.floor(innerWidth / 90))}
                         tickFormat={
                             xTickFormat
-                                ? (v) => xTickFormat(v as Date | number)
+                                ? (v) => xTickFormat(axisDateOrNumber(v))
                                 : undefined
                         }
                     />
@@ -461,7 +468,7 @@ function Inner<Datum>({
                         numTicks={5}
                         tickFormat={
                             leftTickFormat
-                                ? (v) => leftTickFormat(v as number)
+                                ? (v) => leftTickFormat(axisNumber(v))
                                 : undefined
                         }
                     />
@@ -472,7 +479,7 @@ function Inner<Datum>({
                             numTicks={5}
                             tickFormat={
                                 rightTickFormat
-                                    ? (v) => rightTickFormat(v as number)
+                                    ? (v) => rightTickFormat(axisNumber(v))
                                     : undefined
                             }
                         />
@@ -500,12 +507,15 @@ function Inner<Datum>({
                         : hoverDatum != null
                           ? // App date format, not the browser locale, for the fallback title
                             String(
-                                xAccessor(hoverDatum) instanceof Date
-                                    ? formatDateWithAppSettings(
-                                          xAccessor(hoverDatum) as Date,
-                                          appSettings.dateFormat,
-                                      )
-                                    : xAccessor(hoverDatum),
+                                (() => {
+                                    const x = xAccessor(hoverDatum);
+                                    return x instanceof Date
+                                        ? formatDateWithAppSettings(
+                                              x,
+                                              appSettings.dateFormat,
+                                          )
+                                        : x;
+                                })(),
                             )
                           : undefined
                 }

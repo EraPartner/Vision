@@ -9,6 +9,8 @@ import type {
 } from "@/types/api";
 import {
     CategoryListSchema,
+    CategoryNodeSchema,
+    CategorySchema,
     CategoryTreeSchema,
 } from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
@@ -31,11 +33,11 @@ export function getCategories(params?: {
 export async function createCategory(
     category: CategoryCreate,
 ): Promise<{ category: Category; wasCreated: boolean }> {
-    const { data, wasCreated } = await createWithStatus<
-        CategoryCreate,
-        Category
-    >("/api/categories", category);
-    return { category: data, wasCreated };
+    const { data, wasCreated } = await createWithStatus(
+        "/api/categories",
+        category,
+    );
+    return { category: data as Category, wasCreated };
 }
 
 export function updateCategory(
@@ -45,11 +47,12 @@ export function updateCategory(
     return apiRequest<Category>(`/api/categories/${id}`, {
         method: "PATCH",
         body: JSON.stringify(category),
+        schema: CategorySchema,
     });
 }
 
 export async function deleteCategory(id: CategoryId): Promise<void> {
-    await apiRequest<void>(`/api/categories/${id}`, { method: "DELETE" });
+    await apiRequest(`/api/categories/${id}`, { method: "DELETE" });
 }
 
 export function getCategoryTree(): Promise<{
@@ -68,6 +71,7 @@ export function createCategoryNode(
     return apiRequest<CategoryNode>("/api/categories/tree", {
         method: "POST",
         body: JSON.stringify(input),
+        schema: CategoryNodeSchema,
     });
 }
 
@@ -78,11 +82,12 @@ export function updateCategoryNode(
     return apiRequest<CategoryNode>(`/api/categories/tree/${id}`, {
         method: "PATCH",
         body: JSON.stringify(input),
+        schema: CategoryNodeSchema,
     });
 }
 
 export async function deleteCategoryNode(id: CategoryId): Promise<void> {
-    await apiRequest<void>(`/api/categories/tree/${id}`, { method: "DELETE" });
+    await apiRequest(`/api/categories/tree/${id}`, { method: "DELETE" });
 }
 
 export function mergeCategoryNode(
@@ -92,5 +97,6 @@ export function mergeCategoryNode(
     return apiRequest<CategoryNode>(`/api/categories/tree/${sourceId}/merge`, {
         method: "POST",
         body: JSON.stringify({ targetId }),
+        schema: CategoryNodeSchema,
     });
 }

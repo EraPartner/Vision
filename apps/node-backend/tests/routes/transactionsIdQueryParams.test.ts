@@ -64,7 +64,7 @@ vi.mock("../../src/services/attachmentService.ts", () =>
 );
 vi.mock("../../src/services/transferReconciliationService.ts", () => ({
   scheduleReconcile: vi.fn(),
-  getTransferSuggestions: vi.fn(async () => []),
+  getTransferSuggestions: vi.fn(() => Promise.resolve([])),
   markTransfer: vi.fn(),
   unmarkTransfer: vi.fn(),
 }));
@@ -77,7 +77,9 @@ import type { PgQueryResult } from "../../src/database/connection.ts";
 import { convertRowsToEur as rawConvertRowsToEur } from "../../src/services/currency/currencyConversionService.ts";
 import type { ConvertedRow } from "../../src/services/currency/currencyConversionService.ts";
 import { attachmentRepository as rawAttachmentRepository } from "../../src/services/attachmentRecordService.ts";
+import { must } from "../helpers/must.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const transactionRepository = vi.mocked(rawTransactionRepository);
 const dbQuery = vi.mocked(rawDbQuery);
 const convertRowsToEur = vi.mocked(rawConvertRowsToEur);
@@ -94,9 +96,9 @@ const exportCsv = (query = "") =>
   api.get(`/api/transactions/export/csv${query ? `?${query}` : ""}`);
 
 /** Filter options the list handler passed to the repository. */
-const listOpts = () => transactionRepository.getAllWithCount.mock.calls[0]![0]!;
+const listOpts = () => must(must(transactionRepository.getAllWithCount.mock.calls[0], "transactionRepository.getAllWithCount.mock.calls[0]")[0], "transactionRepository.getAllWithCount.mock.calls[0]![0]");
 /** WHERE SQL + params of the export's first (probe) query. */
-const exportQuery = () => dbQuery.mock.calls[0]!;
+const exportQuery = () => must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]");
 
 /** The export streams: a row-probe query, then the chunked page query. */
 const armExport = () => {
@@ -107,7 +109,7 @@ const armExport = () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  convertRowsToEur.mockImplementation(async (rows) => rows as ConvertedRow[]);
+  convertRowsToEur.mockImplementation((rows) => Promise.resolve(rows as ConvertedRow[]));
   attachmentRepository.listPathsByTransactionIds.mockResolvedValue([]);
   transactionRepository.getAllWithCount.mockResolvedValue({
     rows: [],
@@ -168,7 +170,7 @@ describe("GET /api/transactions — scalar id query params reject instead of tru
             message: `${param} must be a positive integer`,
           }),
         );
-        expect(transactionRepository.getAllWithCount).not.toHaveBeenCalled();
+        expect(mockOf(transactionRepository, "getAllWithCount")).not.toHaveBeenCalled();
       });
     }
 
@@ -194,7 +196,7 @@ describe("GET /api/transactions — scalar id query params reject instead of tru
   // value. An id param is single-valued; two of them is a malformed request.
   it("rejects a repeated scalar param rather than taking the first value", async () => {
     await list("recipient_id=1&recipient_id=2").expect(400);
-    expect(transactionRepository.getAllWithCount).not.toHaveBeenCalled();
+    expect(mockOf(transactionRepository, "getAllWithCount")).not.toHaveBeenCalled();
   });
 });
 
@@ -220,7 +222,7 @@ describe("GET /api/transactions — category_ids rejects instead of retargeting 
           message: `category_ids contains invalid value: ${raw}`,
         }),
       );
-      expect(transactionRepository.getAllWithCount).not.toHaveBeenCalled();
+      expect(mockOf(transactionRepository, "getAllWithCount")).not.toHaveBeenCalled();
     });
   }
 
@@ -231,19 +233,19 @@ describe("GET /api/transactions — category_ids rejects instead of retargeting 
     expect(bodyAt(res, "error", "message")).toBe(
       "category_ids contains invalid value: 12abc",
     );
-    expect(transactionRepository.getAllWithCount).not.toHaveBeenCalled();
+    expect(mockOf(transactionRepository, "getAllWithCount")).not.toHaveBeenCalled();
   });
 
   // The widen half: an all-bad list parsed to [], which the caller mapped back
   // to "no filter" and answered with the unfiltered dataset.
   it("rejects an all-bad list rather than answering with no category filter", async () => {
     await list("category_ids=abc,def").expect(400);
-    expect(transactionRepository.getAllWithCount).not.toHaveBeenCalled();
+    expect(mockOf(transactionRepository, "getAllWithCount")).not.toHaveBeenCalled();
   });
 
   it("rejects an empty element inside a list (distinct from an empty param)", async () => {
     await list("category_ids=5,").expect(400);
-    expect(transactionRepository.getAllWithCount).not.toHaveBeenCalled();
+    expect(mockOf(transactionRepository, "getAllWithCount")).not.toHaveBeenCalled();
   });
 
   it('treats absent and empty category_ids as "no filter" (200, undefined)', async () => {
@@ -320,12 +322,12 @@ describe("GET /api/transactions/export/* — account_ids no longer widens the ex
   it('treats absent and empty account_ids as "no account filter" (200, no IN clause)', async () => {
     armExport();
     await exportCsv().expect(200);
-    expect(exportQuery()![0]).not.toMatch(/t\.account_id IN/);
+    expect(must(exportQuery(), "exportQuery()")[0]).not.toMatch(/t\.account_id IN/);
 
     vi.clearAllMocks();
     armExport();
     await exportCsv("account_ids=").expect(200);
-    expect(exportQuery()![0]).not.toMatch(/t\.account_id IN/);
+    expect(must(exportQuery(), "exportQuery()")[0]).not.toMatch(/t\.account_id IN/);
   });
 
   // Validation runs over the whole list before EXPORT_MAX_LIST_SIZE (50) caps
@@ -341,7 +343,7 @@ describe("GET /api/transactions/export/* — account_ids no longer widens the ex
     vi.clearAllMocks();
     armExport();
     await exportCsv(`account_ids=${overCap.join(",")}`).expect(200);
-    expect(exportQuery()![1]).toHaveLength(50);
+    expect(must(exportQuery(), "exportQuery()")[1]).toHaveLength(50);
   });
 
   it("applies the same strict parse to the export path's scalar and category filters", async () => {

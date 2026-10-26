@@ -117,7 +117,8 @@ export async function buildDemoSeed({
   });
   try {
     const generated = await load(referenceDate);
-    const sql = String(generated.demoSeedSql || "");
+    const sql =
+      typeof generated.demoSeedSql === "string" ? generated.demoSeedSql : "";
     const summary = generated.demoSeedSummary;
     if (!sql.trim() || !isRecord(summary)) {
       throw new Error("Synthetic Demo generator returned an invalid result");
@@ -175,7 +176,9 @@ export async function main(): Promise<void> {
 if (require.main === module) {
   main().catch((error: unknown) => {
     const message = isRecord(error) ? error.message : undefined;
-    console.error(error && message ? String(message) : String(error));
+    console.error(
+      typeof message === "string" && message !== "" ? message : String(error),
+    );
     process.exitCode = 1;
   });
 }

@@ -69,7 +69,10 @@ try {
 const inventory: JsonObject = isObject(parsed) ? parsed : {};
 
 if (inventory.version !== 1) fail("version must equal 1");
-if (!/^\d{4}-\d{2}-\d{2}$/.test(String(inventory.auditedAt ?? ""))) {
+if (
+  typeof inventory.auditedAt !== "string" ||
+  !/^\d{4}-\d{2}-\d{2}$/.test(inventory.auditedAt)
+) {
   fail("auditedAt must be YYYY-MM-DD");
 }
 if (!Array.isArray(inventory.searches) || inventory.searches.length === 0) {
@@ -99,8 +102,11 @@ const counts: Record<Classification, number> = {
 };
 for (const [index, entry] of records.entries()) {
   const record: JsonObject = isObject(entry) ? entry : {};
-  const label = String(record.id || `record ${index}`);
-  if (!/^LEG-[A-Z0-9-]+$/.test(String(record.id ?? ""))) {
+  const label =
+    typeof record.id === "string" && record.id !== ""
+      ? record.id
+      : `record ${index}`;
+  if (typeof record.id !== "string" || !/^LEG-[A-Z0-9-]+$/.test(record.id)) {
     fail(`${label}: id must match LEG-[A-Z0-9-]+`);
   } else if (ids.has(record.id)) {
     fail(`${label}: duplicate id`);
@@ -187,7 +193,7 @@ if (summary?.total !== ids.size) {
   fail(`summary.total must equal ${ids.size}, got ${String(summary?.total)}`);
 }
 
-if (!process.exitCode) {
+if ((process.exitCode ?? 0) === 0) {
   console.log(
     `[legacy-inventory] OK: ${ids.size} records (${counts["remove-now"]} remove now, ${counts["migrate-then-remove"]} migrate then remove)`,
   );

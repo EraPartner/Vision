@@ -192,10 +192,11 @@ export type FinancialReportData = {
  */
 function unwrap<T>(result: PromiseSettledResult<T>, label: string): T | null {
   if (result.status === "fulfilled") return result.value;
+  const reason: unknown = result.reason;
   logger.warn(`[dataFetcher] ${label} failed — report generation stopped`, {
-    reason: result.reason?.message,
+    reason: reason instanceof Error ? reason.message : undefined,
   });
-  throw result.reason;
+  throw reason;
 }
 
 /**
@@ -361,8 +362,8 @@ export function filterMonthsByPeriod<
       // yields UTC midnight while `new Date(m.year, m.month-1, 1)` is local
       // midnight — at a month boundary the two could disagree by a day and
       // drop or add an edge month.
-      const fromYm = String(period.from).slice(0, 7);
-      const toYm = String(period.to).slice(0, 7);
+      const fromYm = period.from.slice(0, 7);
+      const toYm = period.to.slice(0, 7);
       return months.filter((m) => {
         const mYm = `${m.year}-${String(m.month).padStart(2, "0")}`;
         return mYm >= fromYm && mYm <= toYm;

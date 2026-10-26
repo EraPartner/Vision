@@ -36,8 +36,20 @@ import { closePool } from '../src/database/connection.ts';
 import { commitPortfolioImport } from '../src/services/portfolioImportPipeline/index.ts';
 import { rollbackBatch } from '../src/services/portfolioImportBatchService.ts';
 import { partial } from './helpers/partial.ts';
+import { must } from "./helpers/must.ts";
+import type { Pool } from "pg";
 
-const pool = getTestPool()!;
+/** A row from an ad-hoc SQL read: column values are narrowed where used. */
+type DbRow = Record<string, unknown>;
+interface IdRow {
+  id: number;
+}
+/** BIGINT ids arrive from node-postgres as strings. */
+interface BigIdRow {
+  id: string;
+}
+
+let pool: Pool;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
 /** Ids seeded by `seedAccount()`. */
@@ -51,11 +63,11 @@ async function seedAccount({
   name = 'DEGIRO SLEEVE',
   institution = ' DeGiro ',
 }: { name?: string; institution?: string | null } = {}): Promise<number> {
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<IdRow>(
     `INSERT INTO accounts (name, display_name, institution) VALUES ($1, $1, $2) RETURNING id`,
     [name, institution],
   );
-  return rows[0].id;
+  return must(rows[0], "rows[0]").id;
 }
 
 async function wipe() {
@@ -69,13 +81,13 @@ async function wipe() {
 
 /** @param {number|null} accountId */
 async function newBrokerageBatch(accountId: number | null) {
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<BigIdRow>(
     `INSERT INTO portfolio_import_batches
        (adapter_name, status, rows_total, account_id, is_brokerage)
      VALUES ('generic', 'awaiting_review', 0, $1, true) RETURNING id`,
     [accountId],
   );
-  return Number(rows[0].id);
+  return Number(must(rows[0], "rows[0]").id);
 }
 
 /** Stage one 'matched' CASH row. */
@@ -88,18 +100,25 @@ async function stageCash(
     note = null,
   }: { typeRaw?: string; amount?: number; note?: string | null } = {},
 ) {
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<BigIdRow>(
     `INSERT INTO portfolio_import_staging_rows
        (batch_id, row_index, status, tx_date, type_raw, route, amount, currency, note)
      VALUES ($1, $2, 'matched', '2026-02-01', $3, 'cash', $4, 'EUR', $5)
      RETURNING id`,
     [batchId, rowIndex, typeRaw, amount, note],
   );
-  return Number(rows[0].id);
+  return Number(must(rows[0], "rows[0]").id);
 }
 
 async function ledgerRows() {
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<{
+    id: number;
+    amount: number;
+    memo: string | null;
+    account_id: number;
+    recipient_id: number;
+    recipient_name: string;
+  }>(
     `SELECT t.id, t.amount::float8 AS amount, t.memo, t.account_id, t.recipient_id, r.name AS recipient_name
        FROM transactions t JOIN recipients r ON r.id = t.recipient_id
       ORDER BY t.id`,
@@ -108,6 +127,9 @@ async function ledgerRows() {
 }
 
 describeDb('portfolio import — brokerage cash commit (real Postgres)', () => {
+  beforeAll(() => {
+    pool = must(getTestPool(), "test pool");
+  });
   beforeAll(acquireDbSuiteLock, 180_000);
 
   beforeEach(async () => {
@@ -116,7 +138,6 @@ describeDb('portfolio import — brokerage cash commit (real Postgres)', () => {
   });
 
   afterAll(async () => {
-    if (!pool) return;
     await wipe();
     await releaseDbSuiteLock();
     await closeTestPool();
@@ -144,14 +165,14 @@ describeDb('portfolio import — brokerage cash commit (real Postgres)', () => {
     expect(rows.map((r) => r.amount).sort((a, b) => a - b)).toEqual([-250, 1000]);
 
     // Staging rows are committed and point at their ledger rows.
-    const { rows: staged } = await pool.query(
+    const { rows: staged } = await pool.query<DbRow>(
       `SELECT id, status, committed_txn_id FROM portfolio_import_staging_rows WHERE batch_id = $1 ORDER BY row_index`,
       [batchId],
     );
     expect(staged.map((s) => s.status)).toEqual(['committed', 'committed']);
-    expect(new Set(staged.map((s) => Number(s.committed_txn_id)))).toEqual(new Set(rows.map((r) => Number(r.id))));
-    expect(Number(staged[0].id)).toBe(depositRow);
-    expect(Number(staged[1].id)).toBe(withdrawalRow);
+    expect(new Set(staged.map((s) => Number(s.committed_txn_id)))).toEqual(new Set(rows.map((r) => r.id)));
+    expect(Number(must(staged[0], "staged[0]").id)).toBe(depositRow);
+    expect(Number(must(staged[1], "staged[1]").id)).toBe(withdrawalRow);
   });
 
   it('does not fork the broker identity across batches with casing/whitespace variants', async () => {
@@ -164,11 +185,11 @@ describeDb('portfolio import — brokerage cash commit (real Postgres)', () => {
     await stageCash(batchB, 0, { typeRaw: 'deposit', amount: 200, note: 'second batch' });
     expect((await commitPortfolioImport({ batchId: batchB })).imported).toBe(1);
 
-    const { rows } = await pool.query(`SELECT id, name FROM recipients WHERE normalized_name = 'DEGIRO'`);
+    const { rows } = await pool.query<DbRow>(`SELECT id, name FROM recipients WHERE normalized_name = 'DEGIRO'`);
     expect(rows).toHaveLength(1); // one identity, not 'DEGIRO' + ' DeGiro ' twins
-    const { rows: distinct } = await pool.query(`SELECT DISTINCT recipient_id FROM transactions`);
+    const { rows: distinct } = await pool.query<DbRow>(`SELECT DISTINCT recipient_id FROM transactions`);
     expect(distinct).toHaveLength(1);
-    expect(Number(distinct[0].recipient_id)).toBe(Number(rows[0].id));
+    expect(Number(must(distinct[0], "distinct[0]").recipient_id)).toBe(Number(must(rows[0], "rows[0]").id));
   });
 
   it('falls back to the account name when the institution is empty', async () => {
@@ -179,7 +200,7 @@ describeDb('portfolio import — brokerage cash commit (real Postgres)', () => {
     expect((await commitPortfolioImport({ batchId })).imported).toBe(1);
     const rows = await ledgerRows();
     expect(rows).toHaveLength(1);
-    expect(rows[0].recipient_name).toBe('IBKR-MAIN');
+    expect(must(rows[0], "rows[0]").recipient_name).toBe('IBKR-MAIN');
   });
 
   it('re-importing the same statement is a no-op (field dedup, not a second ledger row)', async () => {
@@ -196,13 +217,13 @@ describeDb('portfolio import — brokerage cash commit (real Postgres)', () => {
 
   it('rollback deletes exactly the cash rows the commit path itself created', async () => {
     // A decoy ledger row from ANOTHER source must survive the rollback.
-    const { rows: decoyRec } = await pool.query(
+    const { rows: decoyRec } = await pool.query<IdRow>(
       `INSERT INTO recipients (name, normalized_name) VALUES ('BYSTANDER', 'BYSTANDER') RETURNING id`,
     );
-    const { rows: decoy } = await pool.query(
+    const { rows: decoy } = await pool.query<IdRow>(
       `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, is_active)
        VALUES ('2026-01-15', 77, 'EUR', 'unrelated', $1, $2, true) RETURNING id`,
-      [fx.accountId, decoyRec[0].id],
+      [fx.accountId, must(decoyRec[0], "decoyRec[0]").id],
     );
 
     const batchId = await newBrokerageBatch(fx.accountId);
@@ -216,14 +237,14 @@ describeDb('portfolio import — brokerage cash commit (real Postgres)', () => {
 
     const remaining = await ledgerRows();
     expect(remaining).toHaveLength(1);
-    expect(Number(remaining[0].id)).toBe(Number(decoy[0].id));
+    expect(must(remaining[0], "remaining[0]").id).toBe(must(decoy[0], "decoy[0]").id);
     // The broker recipient row itself survives — recipients are shared state.
-    const { rows: rec } = await pool.query(`SELECT 1 FROM recipients WHERE normalized_name = 'DEGIRO'`);
+    const { rows: rec } = await pool.query<DbRow>(`SELECT 1 FROM recipients WHERE normalized_name = 'DEGIRO'`);
     expect(rec).toHaveLength(1);
 
     // Rollback also resets the staging rows to their pre-commit state: no
     // committed_txn_id left dangling at the deleted ledger rows.
-    const { rows: staged } = await pool.query(
+    const { rows: staged } = await pool.query<DbRow>(
       `SELECT status, committed_txn_id FROM portfolio_import_staging_rows WHERE batch_id = $1 ORDER BY row_index`,
       [batchId],
     );

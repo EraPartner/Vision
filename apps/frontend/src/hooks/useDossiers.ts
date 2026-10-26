@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+    skipToken,
+    useMutation,
+    useQuery,
+    useQueryClient,
+} from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import type { DossierContent } from "@/lib/api/dossiers";
 
@@ -34,7 +39,7 @@ export function useDossierPickers() {
 export function useDossier(id: string | null) {
     return useQuery({
         queryKey: [...key, id],
-        queryFn: () => apiClient.getDossier(id!),
+        queryFn: id ? () => apiClient.getDossier(id) : skipToken,
         enabled: Boolean(id),
     });
 }
@@ -42,7 +47,7 @@ export function useDossier(id: string | null) {
 export function useDossierVersions(id: string | null) {
     return useQuery({
         queryKey: [...key, id, "versions"],
-        queryFn: () => apiClient.listDossierVersions(id!),
+        queryFn: id ? () => apiClient.listDossierVersions(id) : skipToken,
         enabled: Boolean(id),
     });
 }

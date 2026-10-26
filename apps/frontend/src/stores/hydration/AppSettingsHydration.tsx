@@ -21,7 +21,6 @@ import type { AppSettings } from "@/stores/settingsStore";
 import { setSkinV2 } from "@/lib/skin";
 
 // Re-export the app-settings types alongside the hydration bridge.
-export type { AppSettings };
 
 interface AppSettingsHydrationValue {
     appSettings: AppSettings;
@@ -35,8 +34,9 @@ const SETTINGS_KEY = "app_settings";
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function AppSettingsProvider({ children }: { children: ReactNode }) {
-    const { value: preloaded, isLoading: preloadLoading } =
-        usePreloadedSetting<AppSettings>(SETTINGS_KEY);
+    const { value: preloadedValue, isLoading: preloadLoading } =
+        usePreloadedSetting(SETTINGS_KEY);
+    const preloaded = preloadedValue;
 
     const _hydrateAppSettings = useSettingsStore((s) => s._hydrateAppSettings);
     const _markSettingsSaveError = useSettingsStore(
@@ -55,7 +55,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     // Hydrate and sanitize the preloaded server value.
     useEffect(() => {
         if (preloadLoading) return;
-        const migrated = migrateAppSettings(preloaded ?? undefined);
+        const migrated = migrateAppSettings(preloaded);
         _hydrateAppSettings(migrated, false);
         hasHydrated.current = true;
         // Sync the colorblind-safe gain/loss skin to the (server) preference,
@@ -82,7 +82,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
 
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
-            apiClient.saveSetting(SETTINGS_KEY, appSettings).catch((err) => {
+            apiClient.saveSetting(SETTINGS_KEY, appSettings).catch((err: unknown) => {
                 logger.error("Failed to save app settings:", err);
                 // Instant-apply has no Save button, so a silent failure means the
                 // user believes a change persisted when it didn't. Signal it so the

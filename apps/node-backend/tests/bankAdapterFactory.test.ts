@@ -11,38 +11,39 @@ import {
 } from "../src/services/importPipeline/adapters/index.ts";
 
 import { useTempCSV } from "./helpers/tempFile.ts";
+import { must } from "./helpers/must.ts";
 
 const writeTempCSV = useTempCSV("factory");
 
 describe("BankAdapterFactory", () => {
   let tmpPath;
 
-  it("creates belfius adapter", async () => {
+  it("creates belfius adapter", () => {
     const parser = createAdapter("belfius");
     expect(typeof parser).toBe("function");
   });
 
-  it("creates revolut adapter", async () => {
+  it("creates revolut adapter", () => {
     const parser = createAdapter("revolut");
     expect(typeof parser).toBe("function");
   });
 
-  it("creates kbc adapter", async () => {
+  it("creates kbc adapter", () => {
     const parser = createAdapter("kbc");
     expect(typeof parser).toBe("function");
   });
 
-  it("creates ing adapter", async () => {
+  it("creates ing adapter", () => {
     const parser = createAdapter("ing");
     expect(typeof parser).toBe("function");
   });
 
-  it("creates bnp adapter", async () => {
+  it("creates bnp adapter", () => {
     const parser = createAdapter("bnp");
     expect(typeof parser).toBe("function");
   });
 
-  it("is case-insensitive", async () => {
+  it("is case-insensitive", () => {
     expect(() => createAdapter("BELFIUS")).not.toThrow();
     expect(() => createAdapter("Revolut")).not.toThrow();
     expect(() => createAdapter("KBC")).not.toThrow();
@@ -50,13 +51,13 @@ describe("BankAdapterFactory", () => {
     expect(() => createAdapter("BNP")).not.toThrow();
   });
 
-  it("throws for unsupported bank", async () => {
+  it("throws for unsupported bank", () => {
     expect(() => createAdapter("UnknownBank")).toThrow(
       "No configuration found",
     );
   });
 
-  it("creates generic adapter with custom config", async () => {
+  it("creates generic adapter with custom config", () => {
     const config = {
       bank_name: "TestBank",
       date_format: "%Y-%m-%d",
@@ -96,10 +97,10 @@ describe("BankAdapterFactory", () => {
     const parser = createAdapter("TestBank", config);
     const txns = await parser(tmpPath);
     expect(txns).toHaveLength(2);
-    expect(txns[0]!.recipient).toBe("Grocery Store");
-    expect(txns[0]!.amount).toBe(-50.0);
-    expect(txns[1]!.amount).toBe(2000.0);
-    expect(txns[0]!.bankAccount).toBe("TESTBANK");
+    expect(must(txns[0], "txns[0]").recipient).toBe("Grocery Store");
+    expect(must(txns[0], "txns[0]").amount).toBe(-50.0);
+    expect(must(txns[1], "txns[1]").amount).toBe(2000.0);
+    expect(must(txns[0], "txns[0]").bankAccount).toBe("TESTBANK");
   });
 
   describe("ING adapter", () => {
@@ -113,14 +114,14 @@ describe("BankAdapterFactory", () => {
       const parser = createAdapter("ing");
       const txns = await parser(tmpPath);
       expect(txns).toHaveLength(2);
-      expect(txns[0]!.amount).toBe(-50);
-      expect(txns[0]!.recipient).toBe("SUPERMARKT AH");
-      expect(txns[0]!.memo).toBe("EUROPESE OVERSCHRIJVING");
-      expect(txns[0]!.currency).toBe("EUR");
-      expect(txns[0]!.recipientAccount).toBe("BE98765432109876");
-      expect(txns[0]!.bankAccount).toBe("BE12345678901234");
-      expect(txns[1]!.amount).toBe(2000);
-      expect(txns[1]!.recipientAccount).toBeNull();
+      expect(must(txns[0], "txns[0]").amount).toBe(-50);
+      expect(must(txns[0], "txns[0]").recipient).toBe("SUPERMARKT AH");
+      expect(must(txns[0], "txns[0]").memo).toBe("EUROPESE OVERSCHRIJVING");
+      expect(must(txns[0], "txns[0]").currency).toBe("EUR");
+      expect(must(txns[0], "txns[0]").recipientAccount).toBe("BE98765432109876");
+      expect(must(txns[0], "txns[0]").bankAccount).toBe("BE12345678901234");
+      expect(must(txns[1], "txns[1]").amount).toBe(2000);
+      expect(must(txns[1], "txns[1]").recipientAccount).toBeNull();
     });
 
     it("detects ING header correctly", () => {
@@ -150,14 +151,14 @@ describe("BankAdapterFactory", () => {
       const parser = createAdapter("bnp");
       const txns = await parser(tmpPath);
       expect(txns).toHaveLength(2);
-      expect(txns[0]!.amount).toBe(-50);
-      expect(txns[0]!.recipient).toBe("SUPERMARKT AH");
-      expect(txns[0]!.memo).toBe("AANKOOP MET KAART");
-      expect(txns[0]!.currency).toBe("EUR");
-      expect(txns[0]!.recipientAccount).toBe("BE98765432109876");
-      expect(txns[0]!.bankAccount).toBe("BE12345678901234");
-      expect(txns[1]!.amount).toBe(2000);
-      expect(txns[1]!.recipientAccount).toBeNull();
+      expect(must(txns[0], "txns[0]").amount).toBe(-50);
+      expect(must(txns[0], "txns[0]").recipient).toBe("SUPERMARKT AH");
+      expect(must(txns[0], "txns[0]").memo).toBe("AANKOOP MET KAART");
+      expect(must(txns[0], "txns[0]").currency).toBe("EUR");
+      expect(must(txns[0], "txns[0]").recipientAccount).toBe("BE98765432109876");
+      expect(must(txns[0], "txns[0]").bankAccount).toBe("BE12345678901234");
+      expect(must(txns[1], "txns[1]").amount).toBe(2000);
+      expect(must(txns[1], "txns[1]").recipientAccount).toBeNull();
     });
 
     it("parses BNP CSV with dot decimals", async () => {
@@ -169,8 +170,8 @@ describe("BankAdapterFactory", () => {
       const parser = createAdapter("bnp");
       const txns = await parser(tmpPath);
       expect(txns).toHaveLength(1);
-      expect(txns[0]!.amount).toBeCloseTo(-12.34, 2);
-      expect(txns[0]!.recipient).toBe("BAKKERIJ");
+      expect(must(txns[0], "txns[0]").amount).toBeCloseTo(-12.34, 2);
+      expect(must(txns[0], "txns[0]").recipient).toBe("BAKKERIJ");
     });
 
     it("detects BNP header correctly", () => {

@@ -1,3 +1,4 @@
+import { axisDate } from "@/components/charts/axisValue";
 import { useMemo, type ReactNode } from "react";
 import {
     AreaChart as VisxAreaChart,
@@ -7,6 +8,7 @@ import {
 } from "@/components/charts";
 import { parseLocalDateFromYmd } from "@/lib/dateUtils";
 import { type NetWorthSnapshot, normalizeYmd } from "./netWorthChartUtils";
+import type { TranslationKey } from "@/locales/keys";
 
 interface NetWorthChartProps {
     snapshots: NetWorthSnapshot[];
@@ -15,7 +17,7 @@ interface NetWorthChartProps {
     fmt: (val: number) => string;
     xTickFormat: (value: Date) => string;
     tooltipLabelFormatter: (v: string) => string;
-    t: (key: string) => string;
+    t: (key: TranslationKey) => string;
 }
 
 type NetWorthChartPoint = NetWorthSnapshot & { chartDate: Date };
@@ -36,7 +38,7 @@ export function NetWorthChart({
     // Only plot the liabilities line when there is debt to show, so debt-free
     // portfolios keep the original three-line chart.
     const hasLiabilities = useMemo(
-        () => snapshots.some((s) => Math.abs(s.liabilities ?? 0) > 0.005),
+        () => snapshots.some((s) => Math.abs(s.liabilities) > 0.005),
         [snapshots],
     );
 
@@ -123,7 +125,7 @@ export function NetWorthChart({
                 xAccessor={(d) => d.chartDate}
                 series={series}
                 xIsDate
-                xTickFormat={(v) => xTickFormat(v as Date)}
+                xTickFormat={(v) => xTickFormat(axisDate(v))}
                 yTickFormat={(v) => fmt(v)}
                 tooltipTitle={(d) => tooltipLabelFormatter(d.date)}
                 tooltipValueFormat={(v) => fmt(v)}

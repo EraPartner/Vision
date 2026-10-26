@@ -12,6 +12,7 @@ import type { BelgianTaxDashboardSuggestion } from "@/lib/api/belgianTax";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { TaxProfileDialog } from "./TaxProfileDialog";
+import { translateDynamic } from "@/lib/translateDynamic";
 
 const PWC_DEDUCTIONS_URL =
     "https://taxsummaries.pwc.com/belgium/individual/deductions";
@@ -48,10 +49,16 @@ function SuggestedDeductionsCard({
         () =>
             serverSuggestions?.map((item) => ({
                 id: item.id,
-                title: t(item.titleKey),
-                desc: t(item.descriptionKey, item.descriptionParams),
+                title: translateDynamic(t, item.titleKey),
+                desc: translateDynamic(
+                    t,
+                    item.descriptionKey,
+                    item.descriptionParams,
+                ),
                 estimate: item.estimate,
-                note: item.noteKey ? t(item.noteKey) : undefined,
+                note: item.noteKey
+                    ? translateDynamic(t, item.noteKey)
+                    : undefined,
             })),
         [serverSuggestions, t],
     );

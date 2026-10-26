@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it } from "vitest";
 import { http, HttpResponse } from "msw";
+import { ApiContractError } from "@/lib/api/client";
 import { server } from "@/test/msw/server";
-import { SPLIT_STUB } from "@/test/msw/handlers";
+import { SPLIT_PAYMENT_STUB, SPLIT_STUB } from "@/test/msw/handlers";
 import { API_BASE, ok } from "./clientTestHarness";
 
 import { getOwedSummary, getOwedByRecipient, getSplitsByTransaction, createSplitsBatch, recordSplitPayment, settleSplit, settleAllSplitsByRecipient, deleteSplit } from "@/lib/api/splits";
@@ -69,7 +70,7 @@ describe("splits API client", () => {
     server.use(
       http.post(`${API_BASE}/api/splits/batch`, async ({ request }) => {
         body = await request.json();
-        return ok({ items: [{ id: 1 }] });
+        return ok({ items: [SPLIT_STUB], total: 1 });
       }),
     );
     await createSplitsBatch(asTransactionId(8), [{ recipient_id: asRecipientId(2), amount: 5 }]);
@@ -81,7 +82,7 @@ describe("splits API client", () => {
     server.use(
       http.post(`${API_BASE}/api/splits/3/pay`, async ({ request }) => {
         body = await request.json();
-        return ok({ id: 1, split_id: 3, amount: 5, paid_at: "2026-06-01", created_at: "" });
+        return ok(SPLIT_PAYMENT_STUB);
       }),
     );
     await recordSplitPayment(asSplitId(3), 5, "note", "2026-06-01");
@@ -89,7 +90,7 @@ describe("splits API client", () => {
   });
 
   it("settleSplit POSTs to the settle route", async () => {
-    server.use(http.post(`${API_BASE}/api/splits/3/settle`, () => ok({ id: 3 })));
+    server.use(http.post(`${API_BASE}/api/splits/3/settle`, () => ok({ ...SPLIT_STUB, id: 3 })));
     expect((await settleSplit(asSplitId(3))).id).toBe(3);
   });
 
@@ -115,5 +116,32 @@ describe("splits API client", () => {
       name: "ApiContractError",
       endpoint: "GET /api/splits/owed/4",
     });
+  });
+
+  it("recordSplitPayment rejects a payment amount sent as a string", async () => {
+    server.use(
+      http.post(`${API_BASE}/api/splits/3/pay`, () =>
+        ok({
+          id: 1,
+          split_id: 3,
+          amount: "5.00",
+          note: null,
+          paid_at: "2026-06-01",
+          created_at: "2026-06-01T00:00:00.000Z",
+        }),
+      ),
+    );
+
+    await expect(recordSplitPayment(asSplitId(3), 5)).rejects.toBeInstanceOf(ApiContractError);
+  });
+
+  it("createSplitsBatch rejects items that are not splits", async () => {
+    server.use(
+      http.post(`${API_BASE}/api/splits/batch`, () => ok({ items: [{ id: 1 }], total: 1 })),
+    );
+
+    await expect(
+      createSplitsBatch(1 as never, [{ recipient_id: asRecipientId(2), amount: 5 }]),
+    ).rejects.toBeInstanceOf(ApiContractError);
   });
 });

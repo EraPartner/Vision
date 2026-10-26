@@ -26,6 +26,11 @@ import {
   __PROVIDER_DEFINITIONS as PROVIDER_DEFINITIONS,
 } from '../src/services/providerHealthService.ts';
 
+/** The spy behind `obj[key]`, read without taking an unbound method reference. */
+function methodMock<T extends object, K extends keyof T>(obj: T, key: K) {
+  return vi.mocked(obj)[key];
+}
+
 const providerHealthRepository = vi.mocked(rawProviderHealthRepository);
 
 beforeEach(() => {
@@ -73,7 +78,7 @@ describe('recordSuccess', () => {
   it('swallows repository errors and logs at debug', async () => {
     providerHealthRepository.recordSuccess.mockRejectedValueOnce(new Error('db down'));
     await expect(recordSuccess('yahoo')).resolves.toBeUndefined();
-    expect(logger.debug).toHaveBeenCalledWith(
+    expect(methodMock(logger, "debug")).toHaveBeenCalledWith(
       'Failed to record provider success',
       expect.objectContaining({ provider: 'yahoo', error: 'db down' }),
     );
@@ -101,7 +106,7 @@ describe('recordError', () => {
   it('swallows repository errors', async () => {
     providerHealthRepository.recordError.mockRejectedValueOnce(new Error('db'));
     await expect(recordError('binance', new Error('x'))).resolves.toBeUndefined();
-    expect(logger.debug).toHaveBeenCalled();
+    expect(methodMock(logger, "debug")).toHaveBeenCalled();
   });
 });
 
@@ -134,7 +139,7 @@ describe('listProviderHealth', () => {
 describe('probeProvider', () => {
   it('throws 404-tagged error for unknown provider', async () => {
     await expect(probeProvider('mystery')).rejects.toMatchObject({
-      message: expect.stringContaining('Unknown provider'),
+      message: expect.stringContaining('Unknown provider') as unknown,
       status: 404,
     });
   });
@@ -170,11 +175,11 @@ describe('probeProvider', () => {
     expect(result.ok).toBe(true);
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT',
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) as unknown }),
     );
     expect(providerHealthRepository.recordSuccess).toHaveBeenCalledWith('binance', 'price');
     expect(result.provider).toMatchObject({ provider: 'binance', label: 'Binance', kind: 'price' });
-    expect(logger.info).toHaveBeenCalledWith('Provider probe succeeded', { provider: 'binance' });
+    expect(methodMock(logger, "info")).toHaveBeenCalledWith('Provider probe succeeded', { provider: 'binance' });
   });
 
   it('records error and returns ok=false when probe fails', async () => {
@@ -196,7 +201,7 @@ describe('probeProvider', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toBe('HTTP 503');
     expect(providerHealthRepository.recordError).toHaveBeenCalledWith('ecb', 'fx', 'HTTP 503');
-    expect(logger.warn).toHaveBeenCalledWith('Provider probe failed', { provider: 'ecb', error: 'HTTP 503' });
+    expect(methodMock(logger, "warn")).toHaveBeenCalledWith('Provider probe failed', { provider: 'ecb', error: 'HTTP 503' });
   });
 
   it('returns ok=false when probe throws non-HTTP error', async () => {

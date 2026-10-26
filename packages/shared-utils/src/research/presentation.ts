@@ -1,3 +1,4 @@
+import { isFiniteNumber, isNonZeroNumber } from "../numeric.ts";
 import {
   computeStats,
   dailyReturnsByTime,
@@ -64,9 +65,9 @@ export function chartPresentation(input: {
   const factor = new Map(
     series.map((s) => {
       const firstClose = s.points.find(
-        (p) => Number.isFinite(p.close) && (p.close as number) > 0,
+        (p) => isFiniteNumber(p.close) && p.close > 0,
       )?.close;
-      return [s.id, input.rebase && firstClose ? 100 / firstClose : 1];
+      return [s.id, input.rebase && firstClose != null && firstClose !== 0 ? 100 / firstClose : 1];
     }),
   );
   const times = Array.from(
@@ -78,18 +79,18 @@ export function chartPresentation(input: {
   const rows: ResearchRow[] = times.map((time) => {
     const row: ResearchRow = { time };
     for (const s of series) {
-      const p = byTime.get(s.id)!.get(time);
-      const f = factor.get(s.id)!;
+      const p = byTime.get(s.id)?.get(time);
+      const f = factor.get(s.id) ?? 1;
       if (s.field === "volume") row[s.id] = p ? (p.volume as number) : null;
       else {
         row[s.id] =
-          p && Number.isFinite(p.close) ? (p.close as number) * f : null;
+          p && isFiniteNumber(p.close) ? p.close * f : null;
         row[`${s.id}_o`] =
-          p && Number.isFinite(p.close) ? (p.close as number) * f : null;
+          p && isFiniteNumber(p.close) ? p.close * f : null;
         row[`${s.id}_h`] =
-          p && Number.isFinite(p.high) ? (p.high as number) * f : null;
+          p && isFiniteNumber(p.high) ? p.high * f : null;
         row[`${s.id}_l`] =
-          p && Number.isFinite(p.low) ? (p.low as number) * f : null;
+          p && isFiniteNumber(p.low) ? p.low * f : null;
       }
     }
     return row;
@@ -107,7 +108,7 @@ export function chartPresentation(input: {
     const pts = pointsBySeries.get(ind.seriesId) ?? [];
     const f = factor.get(ind.seriesId) ?? 1;
     const closes = pts.map((p) =>
-      Number.isFinite(p.close) ? (p.close as number) * f : NaN,
+      isFiniteNumber(p.close) ? p.close * f : NaN,
     );
     const assign = (key: string, values: (number | null)[]) => {
       const m = new Map(pts.map((p, i) => [p.time, values[i] ?? null]));
@@ -158,30 +159,30 @@ export function watchlistPresentation(input: {
 }) {
   const { targetPrice, currentPrice, addedPrice, points } = input;
   const hasValidTarget =
-    Number.isFinite(targetPrice) && (targetPrice as number) > 0;
+    isFiniteNumber(targetPrice) && targetPrice > 0;
   const chartDistance =
     currentPrice != null && hasValidTarget
-      ? ((currentPrice - (targetPrice as number)) / (targetPrice as number)) *
+      ? ((currentPrice - targetPrice) / targetPrice) *
         100
       : null;
   const prices = points
     .map((p) => p.close)
-    .filter((p): p is number => Number.isFinite(p) && (p as number) > 0);
-  if (hasValidTarget) prices.push(targetPrice as number);
-  const domain: [number, number] = prices.length
+    .filter((p): p is number => isFiniteNumber(p) && p > 0);
+  if (hasValidTarget) prices.push(targetPrice);
+  const domain: [number, number] = prices.length > 0
     ? [Math.min(...prices) * 0.98, Math.max(...prices) * 1.02]
     : [0, 1];
   const preview =
-    Number.isFinite(currentPrice) &&
-    (currentPrice as number) > 0 &&
+    isFiniteNumber(currentPrice) &&
+    currentPrice > 0 &&
     hasValidTarget
       ? {
           absolutePercent:
-            (targetPrice as number) < (currentPrice as number)
-              ? (1 - (targetPrice as number) / (currentPrice as number)) * 100
-              : ((targetPrice as number) / (currentPrice as number) - 1) * 100,
+            targetPrice < currentPrice
+              ? (1 - targetPrice / currentPrice) * 100
+              : (targetPrice / currentPrice - 1) * 100,
           direction:
-            (targetPrice as number) < (currentPrice as number)
+            targetPrice < currentPrice
               ? ("below" as const)
               : ("above" as const),
         }
@@ -199,7 +200,7 @@ export function watchlistPresentation(input: {
       isAtOrBelowTarget:
         currentPrice != null &&
         hasValidTarget &&
-        currentPrice <= (targetPrice as number),
+        currentPrice <= targetPrice,
       hasValidTarget,
       domain,
     },
@@ -213,6 +214,13 @@ export interface AnalystConsensus {
   sell: number;
   strongSell: number;
 }
+/** i18n keys the analyst verdict can resolve to (literal so frontends can type-check them). */
+export type AnalystVerdictKey =
+  | "market.strongBuy"
+  | "market.buy"
+  | "market.hold"
+  | "market.sell"
+  | "market.strongSell";
 export function analystPresentation(consensus: AnalystConsensus | null) {
   const total = consensus
     ? consensus.strongBuy +
@@ -224,20 +232,21 @@ export function analystPresentation(consensus: AnalystConsensus | null) {
   if (!consensus || total === 0) return null;
   const bullFraction = (consensus.strongBuy + consensus.buy) / total;
   const bearFraction = (consensus.sell + consensus.strongSell) / total;
+  const verdictKey: AnalystVerdictKey =
+    bullFraction >= 0.6
+      ? "market.strongBuy"
+      : bullFraction >= 0.45
+        ? "market.buy"
+        : bearFraction >= 0.6
+          ? "market.strongSell"
+          : bearFraction >= 0.45
+            ? "market.sell"
+            : "market.hold";
   return {
     total,
     bullFraction,
     bearFraction,
-    verdictKey:
-      bullFraction >= 0.6
-        ? "market.strongBuy"
-        : bullFraction >= 0.45
-          ? "market.buy"
-          : bearFraction >= 0.6
-            ? "market.strongSell"
-            : bearFraction >= 0.45
-              ? "market.sell"
-              : "market.hold",
+    verdictKey,
     tone:
       bullFraction >= 0.45
         ? "success"
@@ -275,7 +284,7 @@ export function providerQuotePresentation(
     name: investment.name,
     price: last,
     change,
-    changePercent: first ? (change / first) * 100 : 0,
+    changePercent: isNonZeroNumber(first) ? (change / first) * 100 : 0,
     currency: investment.currency,
     exchange: "",
     type: (investment.priceProvider ?? "").toUpperCase(),

@@ -16,6 +16,7 @@
  */
 
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import type * as Yauzl from "yauzl";
@@ -30,13 +31,18 @@ import { createZipWriter } from "./zip-writer";
 // yauzl is only needed by the restore path, which runs well after boot.
 // Lazy-require it via a memoized getter so `require('./backup/bundle')` at
 // Electron module-eval time stays cheap. A static import would load it
-// eagerly, so this stays a plain require() typed through the type-only import
-// above. The zip writer uses only node builtins.
+// eagerly, so this stays a synchronous require() typed through the type-only
+// import above. The zip writer uses only node builtins.
+
+function isYauzl(value: unknown): value is typeof Yauzl {
+  return isRecord(value) && typeof value.open === "function";
+}
 
 let _yauzl: typeof Yauzl | undefined;
 function getYauzl(): typeof Yauzl {
   if (!_yauzl) {
-    const yauzl: typeof Yauzl = require("yauzl");
+    const yauzl: unknown = createRequire(__filename)("yauzl");
+    if (!isYauzl(yauzl)) throw new TypeError("yauzl failed to load");
     _yauzl = yauzl;
   }
   return _yauzl;
@@ -291,7 +297,7 @@ function extractZip(zipPath: string, destDir: string): Promise<void> {
           }
 
           // Reject implausible header-declared sizes up front (cheap pre-check).
-          const declared = Number(entry.uncompressedSize);
+          const declared = entry.uncompressedSize;
           if (
             Number.isFinite(declared) &&
             (declared < 0 || totalBytes + declared > MAX_RESTORE_BYTES)

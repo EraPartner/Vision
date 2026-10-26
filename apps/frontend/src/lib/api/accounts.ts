@@ -22,30 +22,24 @@ import type {
     PortfolioTransactionId,
     TransactionId,
 } from "@vision/types/brands";
+import {
+    AccountIdSchema,
+    CurrencyCodeSchema,
+    TransactionIdSchema,
+} from "@vision/types/brands";
+import { z } from "zod";
 
 // Money fields the Account type declares as numbers. accountService.list emits
-// them as JSON numbers and AccountListSchema requires that, so `Number(...)` is
-// an identity here; the one real conversion is `drift: null` (no statement
+// them as JSON numbers and AccountListSchema requires that, so no numeric
+// conversion is needed; the one real conversion is `null` (no statement
 // reading) becoming `undefined`: the frontend convention is that absent means
 // absent.
 function normalizeAccount(a: Account): Account {
     return {
         ...a,
-        computed_balance:
-            a.computed_balance == null ? undefined : Number(a.computed_balance),
-        balance_parts: a.balance_parts?.map((part) => ({
-            ...part,
-            balance: Number(part.balance),
-        })),
-        statement_balances: a.statement_balances?.map((statement) => ({
-            ...statement,
-            balance: Number(statement.balance),
-        })),
-        reconcilable_balance:
-            a.reconcilable_balance == null
-                ? undefined
-                : Number(a.reconcilable_balance),
-        drift: a.drift == null ? undefined : Number(a.drift),
+        computed_balance: a.computed_balance ?? undefined,
+        reconcilable_balance: a.reconcilable_balance ?? undefined,
+        drift: a.drift ?? undefined,
     };
 }
 
@@ -89,11 +83,12 @@ export function updateAccount(
     return apiRequest<Account>(`/api/accounts/${id}`, {
         method: "PATCH",
         body: JSON.stringify(account),
+        schema: AccountSchema,
     });
 }
 
 export async function deleteAccount(id: AccountId): Promise<void> {
-    await apiRequest<void>(`/api/accounts/${id}`, { method: "DELETE" });
+    await apiRequest(`/api/accounts/${id}`, { method: "DELETE" });
 }
 
 export type AccountCloseBalanceHandling = "preserve" | "adjustment";
@@ -126,6 +121,21 @@ export interface AccountCloseResult {
     }>;
 }
 
+/** `POST /api/accounts/:id/close`: money amounts are JSON numbers. */
+const AccountCloseResultSchema = z.looseObject({
+    account_id: AccountIdSchema,
+    balance_handling: z.enum(["preserve", "adjustment"]),
+    already_closed: z.boolean(),
+    adjustments: z.array(
+        z.looseObject({
+            id: TransactionIdSchema,
+            amount: z.number(),
+            currency: CurrencyCodeSchema,
+            transfer_source: z.literal("adjustment"),
+        }),
+    ),
+});
+
 export function closeAccount(
     id: AccountId,
     balanceHandling: AccountCloseBalanceHandling,
@@ -133,6 +143,7 @@ export function closeAccount(
     return apiRequest<AccountCloseResult>(`/api/accounts/${id}/close`, {
         method: "POST",
         body: JSON.stringify({ balance_handling: balanceHandling }),
+        schema: AccountCloseResultSchema,
     });
 }
 
@@ -264,6 +275,22 @@ export interface ReconcileResult {
  * `reconcilable_currency` so the base rises to meet the statement (balance-free
  * — ADR-094 descriptive-only default preserved).
  */
+/** `POST /api/accounts/:id/reconcile`: money amounts are JSON numbers. */
+const ReconcileResultSchema = z.looseObject({
+    mode: z.enum(["accept", "adjustment"]),
+    drift: z.number(),
+    currency: CurrencyCodeSchema,
+    statement_balance: z.number(),
+    computed_balance: z.number(),
+    transaction: z
+        .looseObject({
+            id: TransactionIdSchema,
+            amount: z.number(),
+            transfer_source: z.string(),
+        })
+        .nullable(),
+});
+
 export function reconcileAccount(
     id: AccountId,
     mode: ReconcileMode,
@@ -272,8 +299,17 @@ export function reconcileAccount(
     return apiRequest<ReconcileResult>(`/api/accounts/${id}/reconcile`, {
         method: "POST",
         body: JSON.stringify({ mode, currency }),
+        schema: ReconcileResultSchema,
     });
 }
+
+/** `PUT /api/accounts/:id/statement-balances/:currency`. */
+const StatementBalanceSchema = z.looseObject({
+    account_id: AccountIdSchema,
+    currency: CurrencyCodeSchema,
+    balance: z.number(),
+    balance_date: z.string(),
+});
 
 export function setStatementBalance(
     id: AccountId,
@@ -288,6 +324,7 @@ export function setStatementBalance(
     return apiRequest(`/api/accounts/${id}/statement-balances/${currency}`, {
         method: "PUT",
         body: JSON.stringify(input),
+        schema: StatementBalanceSchema,
     });
 }
 

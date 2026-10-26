@@ -14,6 +14,13 @@ import {
   asPlannedTransactionId,
   asTransactionId,
 } from "@vision/types/brands";
+import type { PlannedTransactionId } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
+import { valueAt } from "./helpers/responseBody.ts";
+
+interface IdRow {
+  id: number;
+}
 
 type ExecutePlannedResult = Awaited<ReturnType<typeof executePlanned>>;
 
@@ -30,15 +37,15 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      await getTestPool()!.query(
+      await must(getTestPool(), "test pool").query(
         "DELETE FROM planned_transactions WHERE id = ANY($1::int[])",
         [plannedIds.splice(0)],
       );
-      await getTestPool()!.query(
+      await must(getTestPool(), "test pool").query(
         "DELETE FROM transactions WHERE id = ANY($1::int[])",
         [transactionIds.splice(0)],
       );
-      await getTestPool()!.query(
+      await must(getTestPool(), "test pool").query(
         "DELETE FROM recipients WHERE id = ANY($1::int[])",
         [recipientIds.splice(0)],
       );
@@ -54,22 +61,22 @@ describe.skipIf(!hasTestDatabase())(
       max = null,
       end = null,
     }: { max?: number | null; end?: string | null } = {}) {
-      const pool = getTestPool()!;
-      const recipient = await pool.query(
+      const pool = must(getTestPool(), "test pool");
+      const recipient = await pool.query<IdRow>(
         "INSERT INTO recipients (name, normalized_name) VALUES ('Concurrency fixture', 'concurrency fixture') RETURNING id",
       );
-      recipientIds.push(recipient.rows[0].id);
-      const transactions = await pool.query(
+      recipientIds.push(must(recipient.rows[0], "recipient.rows[0]").id);
+      const transactions = await pool.query<IdRow>(
         "INSERT INTO transactions (date, amount, currency, recipient_id) VALUES ('2026-07-01', '-10.00', 'EUR', $1), ('2026-08-01', '-10.00', 'EUR', $1) RETURNING id",
-        [recipient.rows[0].id],
+        [must(recipient.rows[0], "recipient.rows[0]").id],
       );
       const ids = transactions.rows.map((row: { id: number }) => row.id);
       transactionIds.push(...ids);
-      const planned = await pool.query(
+      const planned = await pool.query<IdRow>(
         "INSERT INTO planned_transactions (planned_date, amount, currency, is_recurring, recurrence_pattern, max_occurrences, recurrence_end_date) VALUES ('2026-07-01', '-10.00', 'EUR', true, 'monthly', $1, $2) RETURNING id",
         [max, end],
       );
-      const id = planned.rows[0].id;
+      const id = asPlannedTransactionId(must(planned.rows[0], "planned row").id);
       plannedIds.push(id);
       return { id, ids };
     }
@@ -78,11 +85,11 @@ describe.skipIf(!hasTestDatabase())(
     // implementation reads stale state before blocking on the execution insert;
     // the fixed implementation waits on the parent before its first read.
     async function concurrently(
-      id: number,
+      id: PlannedTransactionId,
       ids: number[],
       expectedOccurrence?: string,
     ) {
-      const gate = await getTestPool()!.connect();
+      const gate = await must(getTestPool(), "test pool").connect();
       let outcomes:
         Promise<PromiseSettledResult<ExecutePlannedResult>[]> | undefined;
       try {
@@ -94,7 +101,7 @@ describe.skipIf(!hasTestDatabase())(
         outcomes = Promise.allSettled(
           ids.map((executedTransactionId: number) =>
             executePlanned({
-              id: asPlannedTransactionId(id),
+              id,
               executedTransactionId: asTransactionId(executedTransactionId),
               executionDate: "2026-07-01",
               expectedOccurrence,
@@ -104,10 +111,10 @@ describe.skipIf(!hasTestDatabase())(
         const deadline = Date.now() + 5000;
         let waiters = 0;
         while (Date.now() < deadline) {
-          const result = await getTestPool()!.query(
+          const result = await must(getTestPool(), "test pool").query<{ count: number }>(
             "SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%planned_transaction%'",
           );
-          waiters = result.rows[0].count;
+          waiters = must(result.rows[0], "result.rows[0]").count;
           if (waiters >= 2) break;
           await new Promise((resolve) => setTimeout(resolve, 20));
         }
@@ -122,7 +129,7 @@ describe.skipIf(!hasTestDatabase())(
     }
 
     async function persisted(id: number) {
-      const { rows } = await getTestPool()!.query(
+      const { rows } = await must(getTestPool(), "test pool").query<{ day: string; is_executed: boolean; count: number }>(
         "SELECT to_char(planned_date, 'YYYY-MM-DD') AS day, is_executed, (SELECT count(*)::int FROM planned_transaction_executions WHERE planned_transaction_id = pt.id) AS count FROM planned_transactions pt WHERE id = $1",
         [id],
       );
@@ -133,14 +140,14 @@ describe.skipIf(!hasTestDatabase())(
       "rejects inactive payments without advancing (expected occurrence %s)",
       async (expectedOccurrence) => {
         const { id, ids } = await fixture();
-        await getTestPool()!.query(
+        await must(getTestPool(), "test pool").query(
           "UPDATE transactions SET is_active = false WHERE id = $1",
           [ids[0]],
         );
         await expect(
           executePlanned({
             id,
-            executedTransactionId: asTransactionId(ids[0]!),
+            executedTransactionId: asTransactionId(must(ids[0], "ids[0]")),
             expectedOccurrence,
           }),
         ).rejects.toMatchObject({ status: 409 });
@@ -154,26 +161,26 @@ describe.skipIf(!hasTestDatabase())(
 
     it("replays an existing execution even if its ledger row was later deactivated", async () => {
       const { id, ids } = await fixture();
-      await executePlanned({ id, executedTransactionId: asTransactionId(ids[0]!) });
+      await executePlanned({ id, executedTransactionId: asTransactionId(must(ids[0], "ids[0]")) });
       const before = await persisted(id);
-      await getTestPool()!.query(
+      await must(getTestPool(), "test pool").query(
         "UPDATE transactions SET is_active = false WHERE id = $1",
         [ids[0]],
       );
       await expect(
-        executePlanned({ id, executedTransactionId: asTransactionId(ids[0]!) }),
+        executePlanned({ id, executedTransactionId: asTransactionId(must(ids[0], "ids[0]")) }),
       ).resolves.toMatchObject({ duplicate: true });
       expect(await persisted(id)).toEqual(before);
     });
 
     it("rejects a different currency without advancing or recording execution", async () => {
       const { id, ids } = await fixture();
-      await getTestPool()!.query(
+      await must(getTestPool(), "test pool").query(
         "UPDATE transactions SET currency = 'USD' WHERE id = $1",
         [ids[0]],
       );
       await expect(
-        executePlanned({ id, executedTransactionId: asTransactionId(ids[0]!) }),
+        executePlanned({ id, executedTransactionId: asTransactionId(must(ids[0], "ids[0]")) }),
       ).rejects.toMatchObject({ status: 409 });
       expect(await persisted(id)).toEqual({
         day: "2026-07-01",
@@ -184,7 +191,7 @@ describe.skipIf(!hasTestDatabase())(
 
     it("allows only one payment for a one-off, but accepts its replay", async () => {
       const { id, ids } = await fixture();
-      await getTestPool()!.query(
+      await must(getTestPool(), "test pool").query(
         "UPDATE planned_transactions SET is_recurring = false WHERE id = $1",
         [id],
       );
@@ -199,11 +206,11 @@ describe.skipIf(!hasTestDatabase())(
 
     it("serializes two automatic matches for the same recurring occurrence", async () => {
       const { id, ids } = await fixture();
-      await getTestPool()!.query(
+      await must(getTestPool(), "test pool").query(
         "UPDATE planned_transactions SET recipient_id = (SELECT recipient_id FROM transactions WHERE id = $2) WHERE id = $1",
         [id, ids[0]],
       );
-      await getTestPool()!.query(
+      await must(getTestPool(), "test pool").query(
         "UPDATE transactions SET date = '2026-07-01' WHERE id = ANY($1::int[])",
         [ids],
       );
@@ -218,20 +225,20 @@ describe.skipIf(!hasTestDatabase())(
 
     it("rejects a stale automatic occurrence after a concurrent execution", async () => {
       const { id, ids } = await fixture();
-      await getTestPool()!.query(
+      await must(getTestPool(), "test pool").query(
         "UPDATE planned_transactions SET recipient_id = (SELECT recipient_id FROM transactions WHERE id = $2) WHERE id = $1",
         [id, ids[0]],
       );
       await executePlanned({
         id,
-        executedTransactionId: asTransactionId(ids[0]!),
+        executedTransactionId: asTransactionId(must(ids[0], "ids[0]")),
         expectedOccurrence: "2026-07-01",
         hydrateResult: false,
       });
       await expect(
         executePlanned({
           id,
-          executedTransactionId: asTransactionId(ids[1]!),
+          executedTransactionId: asTransactionId(must(ids[1], "ids[1]")),
           expectedOccurrence: "2026-07-01",
           hydrateResult: false,
         }),
@@ -245,13 +252,13 @@ describe.skipIf(!hasTestDatabase())(
 
     it("preserves earlier and latest executions when single or bulk deletion is rejected", async () => {
       const { id, ids } = await fixture();
-      await executePlanned({ id, executedTransactionId: asTransactionId(ids[0]!) });
-      await executePlanned({ id, executedTransactionId: asTransactionId(ids[1]!) });
+      await executePlanned({ id, executedTransactionId: asTransactionId(must(ids[0], "ids[0]")) });
+      await executePlanned({ id, executedTransactionId: asTransactionId(must(ids[1], "ids[1]")) });
       await expect(
-        transactionRepository.hardDelete(asTransactionId(ids[0]!)),
+        transactionRepository.hardDelete(asTransactionId(must(ids[0], "ids[0]"))),
       ).rejects.toMatchObject({ status: 409 });
       await expect(
-        transactionRepository.hardDelete(asTransactionId(ids[1]!)),
+        transactionRepository.hardDelete(asTransactionId(must(ids[1], "ids[1]"))),
       ).rejects.toMatchObject({ status: 409 });
       await expect(bulkDeleteTransactions({ ids })).rejects.toMatchObject({
         status: 409,
@@ -263,7 +270,7 @@ describe.skipIf(!hasTestDatabase())(
       });
       expect(
         (
-          await getTestPool()!.query(
+          await must(getTestPool(), "test pool").query<IdRow>(
             "SELECT id FROM transactions WHERE id = ANY($1::int[])",
             [ids],
           )
@@ -286,7 +293,7 @@ describe.skipIf(!hasTestDatabase())(
 
     it("advances concurrent replay only once", async () => {
       const { id, ids } = await fixture();
-      const results = await concurrently(id, [ids[0]!, ids[0]!]);
+      const results = await concurrently(id, [must(ids[0], "ids[0]"), must(ids[0], "ids[0]")]);
       expect(
         results
           .map(
@@ -294,7 +301,7 @@ describe.skipIf(!hasTestDatabase())(
               (result as PromiseFulfilledResult<ExecutePlannedResult>).value
                 .duplicate,
           )
-          .sort(),
+          .sort((a, b) => Number(a) - Number(b)),
       ).toEqual([false, true]);
       expect(await persisted(id)).toEqual({
         day: "2026-08-01",
@@ -310,39 +317,44 @@ describe.skipIf(!hasTestDatabase())(
         results.filter((result) => result.status === "fulfilled"),
       ).toHaveLength(1);
       expect(
-        (
-          results.find(
-            (result) => result.status === "rejected",
-          ) as PromiseRejectedResult
-        ).reason.status,
+        valueAt(
+          (
+            results.find(
+              (result) => result.status === "rejected",
+            ) as PromiseRejectedResult
+          ).reason,
+          "status",
+        ),
       ).toBe(409);
       expect(await persisted(id)).toEqual({
         day: "2026-07-01",
         count: 1,
         is_executed: true,
       });
-      const execution = await getTestPool()!.query(
+      const execution = await must(getTestPool(), "test pool").query<{ executed_transaction_id: number }>(
         "SELECT executed_transaction_id FROM planned_transaction_executions WHERE planned_transaction_id = $1",
         [id],
       );
       await expect(
         executePlanned({
           id,
-          executedTransactionId: execution.rows[0].executed_transaction_id,
+          executedTransactionId: asTransactionId(
+            must(execution.rows[0], "execution row").executed_transaction_id,
+          ),
         }),
       ).resolves.toMatchObject({ duplicate: true });
-      expect((await persisted(id)).count).toBe(1);
+      expect(must((await persisted(id)), "persisted result").count).toBe(1);
     });
 
     it("does not execute a second payment after end-date completion", async () => {
       const { id, ids } = await fixture({ end: "2026-07-15" });
       await executePlanned({
         id,
-        executedTransactionId: asTransactionId(ids[0]!),
+        executedTransactionId: asTransactionId(must(ids[0], "ids[0]")),
         executionDate: "2026-07-01",
       });
       await expect(
-        executePlanned({ id, executedTransactionId: asTransactionId(ids[1]!) }),
+        executePlanned({ id, executedTransactionId: asTransactionId(must(ids[1], "ids[1]")) }),
       ).rejects.toMatchObject({ status: 409 });
       expect(await persisted(id)).toEqual({
         day: "2026-07-01",
@@ -350,7 +362,7 @@ describe.skipIf(!hasTestDatabase())(
         is_executed: true,
       });
       await expect(
-        executePlanned({ id, executedTransactionId: asTransactionId(ids[0]!) }),
+        executePlanned({ id, executedTransactionId: asTransactionId(must(ids[0], "ids[0]")) }),
       ).resolves.toMatchObject({ duplicate: true });
     });
   },

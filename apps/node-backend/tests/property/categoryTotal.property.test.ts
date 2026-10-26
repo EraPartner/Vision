@@ -9,6 +9,8 @@ import { mockConnection } from "../helpers/repoMocks.ts";
 vi.mock("../../src/database/connection.ts", () => mockConnection());
 
 import { buildCategoryFromConvertedRows } from "../../src/repositories/infoRepositoryHelpers.ts";
+import { must } from "../helpers/must.ts";
+import { closeTo, objectContaining } from "../helpers/matchers.ts";
 
 function seeded(seed: number) {
   let t = seed >>> 0;
@@ -30,7 +32,7 @@ describe("property: production category totals", () => {
       const entries = Array.from(
         { length: 50 + Math.floor(rng() * 500) },
         () => {
-          const id = categories[Math.floor(rng() * categories.length)]!;
+          const id = must(categories[Math.floor(rng() * categories.length)], "categories[Math.floor(rng() * categories.length)]");
           return {
             id,
             cents: Math.floor(rng() * 500001) - 250000,
@@ -60,8 +62,8 @@ describe("property: production category totals", () => {
         expect(category?.name).toBe(
           id === -1 ? "Uncategorized" : `Category ${id}`,
         );
-        expect(Math.round(category!.total * 100)).toBe(Number(expectedCents));
-        expect(category!.count).toBe(
+        expect(Math.round(must(category, "category").total * 100)).toBe(Number(expectedCents));
+        expect(must(category, "category").count).toBe(
           expectedEntries.reduce((total, entry) => total + entry.count, 0),
         );
       }
@@ -73,10 +75,10 @@ describe("property: production category totals", () => {
       expect(buildCategoryFromConvertedRows([...rows].reverse())).toEqual(
         expect.arrayContaining(
           result.map((entry) =>
-            expect.objectContaining({
+            objectContaining({
               id: entry.id,
               count: entry.count,
-              total: expect.closeTo(entry.total, 8),
+              total: closeTo(entry.total, 8),
             }),
           ),
         ),

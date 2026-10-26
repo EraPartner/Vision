@@ -60,6 +60,7 @@ import {
     splitAppliedTaxCredits,
     type ForfaitCategory,
 } from "./personPit.ts";
+import { isNonZeroNumber, orZero } from "../numeric.ts";
 
 /** Art. 51 forfait category of the single-profile employment type. */
 function forfaitCategoryForProfile(profile: BelgianTaxProfile): ForfaitCategory {
@@ -94,7 +95,7 @@ function computeProfessionalExpenses(
         {
             category: forfaitCategoryForProfile(profile),
             grossAfterContributions: Math.max(
-                Math.max(profile.grossAnnualIncome || 0, 0) -
+                Math.max(orZero(profile.grossAnnualIncome), 0) -
                     Math.max(employeeSocialSecurity, 0),
                 0,
             ),
@@ -204,7 +205,7 @@ function applyMaritalQuotient(
     // name (décumul), so the spouse's own professional income carries its own progressive tax
     // and basic exemption even when no quotient is transferred. The no-quotient baseline is
     // therefore the sum of both spouses' taxes, not the earner's tax alone.
-    const spouseTaxableIn = Math.max(profile.spouseProfessionalIncome || 0, 0);
+    const spouseTaxableIn = Math.max(orZero(profile.spouseProfessionalIncome), 0);
     const spouseOwnBracket = computeProgressiveTax(spouseTaxableIn, table.brackets);
     const spouseOwnExBenefit = computeExemptionBenefit(
         Math.min(table.basicPersonalExemption, spouseTaxableIn),
@@ -278,8 +279,8 @@ export function computeBelgianPIT(
     const table = getTaxTable(profile.taxYear);
 
     // 1. Gross income (salary + other taxable income)
-    const grossSalary = Math.max(profile.grossAnnualIncome || 0, 0);
-    const otherIncome = Math.max(profile.otherTaxableIncome || 0, 0);
+    const grossSalary = Math.max(orZero(profile.grossAnnualIncome), 0);
+    const otherIncome = Math.max(orZero(profile.otherTaxableIncome), 0);
     const gross = grossSalary + otherIncome;
 
     // 2. Employee social security
@@ -297,10 +298,10 @@ export function computeBelgianPIT(
     //    computeProfessionalExpenses); medical expenses are not deductible at all
     //    in Belgian PIT — both previously deducted here and understated the tax.
     const cappedAlimony =
-        Math.max(profile.alimonyPaid || 0, 0) * table.alimonyDeductibleFraction;
+        Math.max(orZero(profile.alimonyPaid), 0) * table.alimonyDeductibleFraction;
     const appliedUnionDues =
         profile.professionalExpenseMethod === "actual"
-            ? Math.max(profile.unionDues || 0, 0)
+            ? Math.max(orZero(profile.unionDues), 0)
             : 0;
 
     const otherDeductions = cappedAlimony;
@@ -360,7 +361,7 @@ export function computeBelgianPIT(
     const totalNetIncome = clampAtZero(netAfterSS - profExpenses);
     const donationBaseIncome =
         profile.filingStatus === "married_joint"
-            ? totalNetIncome + Math.max(profile.spouseProfessionalIncome || 0, 0)
+            ? totalNetIncome + Math.max(orZero(profile.spouseProfessionalIncome), 0)
             : totalNetIncome;
     const reductions = computeTaxReductions(
         profile,
@@ -398,7 +399,7 @@ export function computeBelgianPIT(
                   {
                       pensionIncome: movedPension,
                       netIncome:
-                          Math.max(profile.spouseProfessionalIncome || 0, 0) + quotient.transfer,
+                          Math.max(orZero(profile.spouseProfessionalIncome), 0) + quotient.transfer,
                       taxableIncome: quotient.spouseTaxable,
                       taxAfterExemption: quotient.spousePitAfterExemption,
                   },
@@ -434,7 +435,8 @@ export function computeBelgianPIT(
     // 8b. State + regional factor: reduced state tax (75.043%) × (1 + regional opcentiemen);
     // 1.0000 for Flanders and Wallonia, 0.9950 for Brussels (sources in constants.ts).
     // Defaults to 1.0 when the region's factor is missing.
-    const autonomyFactor = table.regionalAutonomyFactor?.[profile.region] ?? 1;
+    const autonomyFactors: Partial<Record<string, number>> = table.regionalAutonomyFactor;
+    const autonomyFactor = autonomyFactors[profile.region] ?? 1;
     const federalPITAfterReductions = federalPITBeforeAutonomy * autonomyFactor;
 
     // 9. Communal surcharge applied to federal PIT after reductions.
@@ -449,7 +451,7 @@ export function computeBelgianPIT(
     const csssBase =
         profile.filingStatus === "married_joint"
             ? netTaxableProfessional +
-              Math.max(profile.spouseProfessionalIncome || 0, 0)
+              Math.max(orZero(profile.spouseProfessionalIncome), 0)
             : netTaxableProfessional;
     const specialSS = computeSpecialSocialSecurityContribution(
         profile,
@@ -473,7 +475,7 @@ export function computeBelgianPIT(
     //     professional income as well; the per-step rows above stay the earner's.
     const spouseIncome =
         profile.filingStatus === "married_joint"
-            ? Math.max(profile.spouseProfessionalIncome || 0, 0)
+            ? Math.max(orZero(profile.spouseProfessionalIncome), 0)
             : 0;
     const householdGross = gross + spouseIncome;
     const totalPIT = federalPITAfterReductions + communalSurcharge;
@@ -496,7 +498,7 @@ export function computeBelgianPIT(
         employeeSocialSecurity: employeeSS,
         netIncomeAfterSS: netAfterSS,
         professionalExpenses: profExpenses,
-        showAlimonyRow: !!profile.alimonyPaid,
+        showAlimonyRow: isNonZeroNumber(profile.alimonyPaid),
         alimonyDeduction: cappedAlimony,
         unionDuesApplied: appliedUnionDues,
         taxableIncome,
@@ -534,7 +536,7 @@ export function computeBelgianPIT(
             personalPensionContributions: 0,
             lifeInsurancePremiums: 0,
             mortgageInterestPaid: Math.max(
-                profile.mortgageInterestPaid || 0,
+                orZero(profile.mortgageInterestPaid),
                 0,
             ),
             charitableDonations: 0,

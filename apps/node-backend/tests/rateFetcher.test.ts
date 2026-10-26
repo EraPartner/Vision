@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Mock } from "vitest";
 
 import { mockLogger } from "./helpers/mockLogger.ts";
 import { mockConnection } from "./helpers/repoMocks.ts";
@@ -27,17 +28,22 @@ import {
   findRateOnOrBeforeInIndex,
   getRateToEurForDate,
 } from "../src/services/currency/rateFetcher.ts";
+import { must } from "./helpers/must.ts";
 
-// The connection module is the mock surface; its spies stay untyped because
-// the tests read raw SQL and params from mock.calls.
-const { query, withTransaction } =
-  connection as unknown as ConnectionMockSurface;
+// The connection module is the mock surface; the spies take raw SQL and params.
+const surface = connection as unknown as ConnectionMockSurface;
+const query = surface.query as Mock<
+  (sql: string, params?: unknown[]) => Promise<unknown>
+>;
+const withTransaction = surface.withTransaction as Mock<
+  (fn: (client: unknown) => unknown) => Promise<unknown>
+>;
 
 beforeEach(() => {
   vi.clearAllMocks();
   clearHistoricalCache();
-  let mockClient = { query: vi.fn().mockResolvedValue({ rows: [] }) };
-  withTransaction.mockImplementation(async (fn) => fn(mockClient));
+  const mockClient = { query: vi.fn().mockResolvedValue({ rows: [] }) };
+  withTransaction.mockImplementation((fn) => Promise.resolve(fn(mockClient)));
 });
 
 afterEach(() => {
@@ -72,18 +78,18 @@ describe("fetchFromEcb", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        text: async () => `
+        text: () => Promise.resolve(`
         <Cube currency="USD" rate="1.10"/>
         <Cube currency="GBP" rate="0.85"/>
-      `,
+      `),
       }),
     );
 
     const r = await fetchFromEcb();
-    expect(r!.EUR).toBe(1);
-    expect(r!.USD).toBeCloseTo(1 / 1.1, 4);
-    expect(r!.GBP).toBeCloseTo(1 / 0.85, 4);
-  });
+    expect(must(r, "r").EUR).toBe(1);
+    expect(must(r, "r").USD).toBeCloseTo(1 / 1.1, 4);
+    expect(must(r, "r").GBP).toBeCloseTo(1 / 0.85, 4);
+});
 
   it("returns null on non-OK response", async () => {
     vi.stubGlobal(
@@ -101,28 +107,28 @@ describe("fetchFromEcb", () => {
   it("returns null when XML has no Cube elements", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({ ok: true, text: async () => "<empty/>" }),
+      vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve("<empty/>") }),
     );
     expect(await fetchFromEcb()).toBeNull();
-  });
+});
 
   it("rejects out-of-range rates (clamp <0.0001 or >100000)", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        text: async () => `
+        text: () => Promise.resolve(`
         <Cube currency="USD" rate="1.0"/>
         <Cube currency="ZZZ" rate="0.00001"/>
         <Cube currency="QQQ" rate="9999999"/>
-      `,
+      `),
       }),
     );
     const r = await fetchFromEcb();
-    expect(r!.USD).toBe(1);
-    expect(r!.ZZZ).toBeUndefined();
-    expect(r!.QQQ).toBeUndefined();
-  });
+    expect(must(r, "r").USD).toBe(1);
+    expect(must(r, "r").ZZZ).toBeUndefined();
+    expect(must(r, "r").QQQ).toBeUndefined();
+});
 });
 
 describe("fetchFromErApi", () => {
@@ -131,16 +137,16 @@ describe("fetchFromErApi", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({
+        json: () => Promise.resolve({
           result: "success",
           rates: { USD: 1.1, GBP: 0.85 },
         }),
       }),
     );
     const r = await fetchFromErApi();
-    expect(r!.USD).toBeCloseTo(1 / 1.1, 4);
-    expect(r!.EUR).toBe(1);
-  });
+    expect(must(r, "r").USD).toBeCloseTo(1 / 1.1, 4);
+    expect(must(r, "r").EUR).toBe(1);
+});
 
   it("returns null on non-OK", async () => {
     vi.stubGlobal(
@@ -155,11 +161,11 @@ describe("fetchFromErApi", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ result: "error" }),
+        json: () => Promise.resolve({ result: "error" }),
       }),
     );
     expect(await fetchFromErApi()).toBeNull();
-  });
+});
 
   it("returns null on fetch throw", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("boom")));
@@ -173,20 +179,20 @@ describe("fetchHistoricalFromEcb90d", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        text: async () => `
+        text: () => Promise.resolve(`
         <Cube time="2025-04-15">
           <Cube currency="USD" rate="1.10"/>
         </Cube>
         <Cube time="2025-04-16">
           <Cube currency="USD" rate="1.11"/>
         </Cube>
-      `,
+      `),
       }),
     );
     const r = await fetchHistoricalFromEcb90d();
-    expect(r.get("2025-04-15")!.USD).toBeCloseTo(1 / 1.1, 4);
-    expect(r.get("2025-04-16")!.USD).toBeCloseTo(1 / 1.11, 4);
-  });
+    expect(must(r.get("2025-04-15"), "r.get(\"2025-04-15\")").USD).toBeCloseTo(1 / 1.1, 4);
+    expect(must(r.get("2025-04-16"), "r.get(\"2025-04-16\")").USD).toBeCloseTo(1 / 1.11, 4);
+});
 
   it("returns empty Map on error", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("net")));
@@ -196,15 +202,15 @@ describe("fetchHistoricalFromEcb90d", () => {
   it("caches the result for 24 hours", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      text: async () =>
-        '<Cube time="2025-04-15"><Cube currency="USD" rate="1.10"/></Cube>',
+      text: () =>
+        Promise.resolve('<Cube time="2025-04-15"><Cube currency="USD" rate="1.10"/></Cube>'),
     });
     vi.stubGlobal("fetch", fetchMock);
 
     await fetchHistoricalFromEcb90d();
     await fetchHistoricalFromEcb90d();
     expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
+});
 });
 
 describe("loadFromDatabase", () => {
@@ -218,8 +224,8 @@ describe("loadFromDatabase", () => {
       rows: [{ currency_code: "USD", rate_to_eur: "0.91" }],
     });
     const r = await loadFromDatabase();
-    expect(r!.EUR).toBe(1);
-    expect(r!.USD).toBeCloseTo(0.91, 4);
+    expect(must(r, "r").EUR).toBe(1);
+    expect(must(r, "r").USD).toBeCloseTo(0.91, 4);
   });
 
   it("returns null and logs on query error", async () => {
@@ -248,10 +254,10 @@ describe("getUnindexedRatesToEurForDates", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        text: async () => `
+        text: () => Promise.resolve(`
         <Cube time="2025-04-01"><Cube currency="USD" rate="2"/></Cube>
         <Cube time="2025-04-02"><Cube currency="USD" rate="4"/></Cube>
-      `,
+      `),
       }),
     );
     query.mockResolvedValue({ rows: [] });
@@ -268,14 +274,14 @@ describe("getUnindexedRatesToEurForDates", () => {
     );
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(query).toHaveBeenCalledTimes(1);
-    const [sql, params] = query.mock.calls[0]!;
+    const [sql, params] = must(query.mock.calls[0], "query.mock.calls[0]");
     expect(sql).toContain("FROM UNNEST");
     expect(params).toEqual([
       ["USD", "USD"],
       [0.25, 0.5],
       ["2025-04-02", "2025-04-01"],
     ]);
-  });
+});
 
   it("loads each provider tier at most once for many unresolved pairs", async () => {
     vi.stubGlobal(
@@ -283,7 +289,7 @@ describe("getUnindexedRatesToEurForDates", () => {
       vi.fn().mockResolvedValue({
         ok: false,
         status: 503,
-        text: async () => "",
+        text: () => Promise.resolve(""),
       }),
     );
 
@@ -297,17 +303,17 @@ describe("getUnindexedRatesToEurForDates", () => {
     expect(result).toEqual(new Map());
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(query).not.toHaveBeenCalled();
-  });
+});
 
   it("uses the recent and full feeds once each for a mixed date set", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockImplementation(async (url) => ({
+      vi.fn().mockImplementation((url) => Promise.resolve({
         ok: true,
-        text: async () =>
-          String(url).includes("hist-90d")
+        text: () =>
+          Promise.resolve(String(url).includes("hist-90d")
             ? '<Cube time="2025-04-01"><Cube currency="USD" rate="2"/></Cube>'
-            : '<Cube time="2020-01-03"><Cube currency="USD" rate="4"/></Cube>',
+            : '<Cube time="2020-01-03"><Cube currency="USD" rate="4"/></Cube>'),
       })),
     );
     query.mockResolvedValue({ rows: [] });
@@ -324,7 +330,7 @@ describe("getUnindexedRatesToEurForDates", () => {
     );
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(query).toHaveBeenCalledTimes(1);
-    expect(query.mock.calls[0]![1]).toEqual([
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([
       ["USD", "USD"],
       [0.5, 0.25],
       ["2025-04-01", "2020-01-04"],
@@ -348,7 +354,7 @@ describe("buildHistoricalRateIndex", () => {
       { currency_code: "gbp", rate_date: "2025-04-01", rate_to_eur: "1.18" },
     ]);
     expect(idx.get("USD")).toHaveLength(2);
-    expect(idx.get("USD")![0]!.date).toBe("2025-04-01");
+    expect(must(must(idx.get("USD"), "idx.get(\"USD\")")[0], "idx.get(\"USD\")[0]").date).toBe("2025-04-01");
     expect(idx.get("GBP")).toHaveLength(1);
   });
 
@@ -431,8 +437,8 @@ describe("getRateToEurForDate", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        text: async () =>
-          '<Cube time="2025-04-01"><Cube currency="USD" rate="1.10"/></Cube>',
+        text: () =>
+          Promise.resolve('<Cube time="2025-04-01"><Cube currency="USD" rate="1.10"/></Cube>'),
       }),
     );
 
@@ -443,7 +449,7 @@ describe("getRateToEurForDate", () => {
     expect(sqlCalls.some((s) => /insert into "?exchange_rates/i.test(s))).toBe(
       true,
     );
-  });
+});
 
   it("skips persistence when saveFetchedHistoricalRate=false", async () => {
     query.mockResolvedValueOnce({ rows: [] });
@@ -451,8 +457,8 @@ describe("getRateToEurForDate", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        text: async () =>
-          '<Cube time="2025-04-01"><Cube currency="USD" rate="1.10"/></Cube>',
+        text: () =>
+          Promise.resolve('<Cube time="2025-04-01"><Cube currency="USD" rate="1.10"/></Cube>'),
       }),
     );
 
@@ -463,19 +469,19 @@ describe("getRateToEurForDate", () => {
     expect(sqlCalls.some((s) => /insert into "?exchange_rates/i.test(s))).toBe(
       false,
     );
-  });
+});
 
   it("falls back to nearest DB rate when neither exact nor ECB match found", async () => {
     query.mockResolvedValueOnce({ rows: [] }); // exact
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({ ok: true, text: async () => "<empty/>" }),
+      vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve("<empty/>") }),
     );
     query.mockResolvedValueOnce({ rows: [{ rate_to_eur: "0.95" }] }); // nearest
 
     const r = await getRateToEurForDate("USD", "2025-04-01");
     expect(r).toBeCloseTo(0.95, 4);
-  });
+});
 });
 
 describe("fetchHistoricalFromEcbFull idle eviction", () => {

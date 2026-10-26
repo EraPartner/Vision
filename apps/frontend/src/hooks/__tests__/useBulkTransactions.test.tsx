@@ -57,8 +57,9 @@ describe("useBulkDeleteTransactions", () => {
         const { result } = renderHook(() => useBulkDeleteTransactions(), {
             wrapper: makeWrapper(),
         });
-        await act(async () => {
+        await act(() => {
             result.current.mutate({ ids: [1, 2, 3] });
+            return Promise.resolve();
         });
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -81,7 +82,7 @@ describe("useBulkDeleteTransactions", () => {
             wrapper: makeWrapper(),
         });
 
-        await act(async () => result.current.mutate({ ids: [1] }));
+        await act(() => Promise.resolve(result.current.mutate({ ids: [1] })));
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(toast.success).toHaveBeenCalledWith("Deleted 1 transaction");
@@ -95,8 +96,9 @@ describe("useBulkDeleteTransactions", () => {
         const { result } = renderHook(() => useBulkDeleteTransactions(), {
             wrapper: makeWrapper(),
         });
-        await act(async () => {
+        await act(() => {
             result.current.mutate({ ids: [1] });
+            return Promise.resolve();
         });
 
         await waitFor(() => expect(result.current.isError).toBe(true));
@@ -113,11 +115,12 @@ describe("useBulkDeleteTransactions", () => {
         const { result } = renderHook(() => useBulkDeleteTransactions(), {
             wrapper: makeWrapper(),
         });
-        await act(async () => {
+        await act(() => {
             result.current.mutate({
                 filter: { search: "coffee" },
                 expected_count: 10,
             });
+            return Promise.resolve();
         });
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -136,8 +139,9 @@ describe("useBulkDeleteTransactions", () => {
         const { result } = renderHook(() => useBulkDeleteTransactions(), {
             wrapper: makeWrapper(),
         });
-        await act(async () => {
+        await act(() => {
             result.current.mutate({ ids: [1, 2, 3] });
+            return Promise.resolve();
         });
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -157,8 +161,9 @@ describe("useBulkDeleteTransactions", () => {
         const { result } = renderHook(() => useBulkDeleteTransactions(), {
             wrapper: makeWrapper(),
         });
-        await act(async () => {
+        await act(() => {
             result.current.mutate({ ids: [1] });
+            return Promise.resolve();
         });
 
         await waitFor(() => expect(toast.error).toHaveBeenCalled());
@@ -180,8 +185,9 @@ describe("useBulkDeleteTransactions", () => {
         const { result } = renderHook(() => useBulkDeleteTransactions(), {
             wrapper: makeWrapper(),
         });
-        await act(async () => {
+        await act(() => {
             result.current.mutate({ ids: [1] });
+            return Promise.resolve();
         });
 
         await waitFor(() => expect(toast.error).toHaveBeenCalled());
@@ -203,8 +209,9 @@ describe("useBulkDeleteTransactions", () => {
         const { result } = renderHook(() => useBulkDeleteTransactions(), {
             wrapper: makeWrapper(),
         });
-        await act(async () => {
+        await act(() => {
             result.current.mutate({ ids: [1] });
+            return Promise.resolve();
         });
 
         await waitFor(() => expect(toast.error).toHaveBeenCalled());
@@ -223,11 +230,12 @@ describe("useBulkUpdateTransactions", () => {
         const { result } = renderHook(() => useBulkUpdateTransactions(), {
             wrapper: makeWrapper(),
         });
-        await act(async () => {
+        await act(() => {
             result.current.mutate({
                 ids: [1, 2, 3, 4, 5],
                 fields: { is_active: false },
             });
+            return Promise.resolve();
         });
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -253,11 +261,13 @@ describe("useBulkUpdateTransactions", () => {
             wrapper: makeWrapper(),
         });
 
-        await act(async () =>
-            result.current.mutate({
-                ids: [1],
-                fields: { is_active: false },
-            }),
+        await act(() =>
+            Promise.resolve(
+                result.current.mutate({
+                    ids: [1],
+                    fields: { is_active: false },
+                }),
+            ),
         );
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -274,12 +284,13 @@ describe("useBulkUpdateTransactions", () => {
         const { result } = renderHook(() => useBulkUpdateTransactions(), {
             wrapper: makeWrapper(),
         });
-        await act(async () => {
+        await act(() => {
             result.current.mutate({
                 filter: { active: true },
                 expected_count: 5,
                 fields: { is_active: false },
             });
+            return Promise.resolve();
         });
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -299,8 +310,9 @@ describe("useBulkExportTransactions", () => {
         const { result } = renderHook(() => useBulkExportTransactions(), {
             wrapper: makeWrapper(),
         });
-        await act(async () => {
+        await act(() => {
             result.current.mutate({ ids: [1], format: "csv" });
+            return Promise.resolve();
         });
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));

@@ -6,7 +6,9 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { useParams, useNavigate } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
+import { useRouteParams } from "@/hooks/useRouteParams";
+import { ROUTES, type PortfolioImportBatchId } from "@/lib/routes";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -130,12 +132,12 @@ function PreviewRowList({ rows }: { rows: PortfolioPreviewRow[] }) {
     }, [rowEstimate, virtualizer]);
 
     const items = virtualizer.getVirtualItems();
-    const paddingTop = items.length > 0 ? items[0]!.start - scrollMargin : 0;
-    const paddingBottom =
-        items.length > 0
-            ? virtualizer.getTotalSize() -
-              (items[items.length - 1]!.end - scrollMargin)
-            : 0;
+    const firstItem = items[0];
+    const lastItem = items[items.length - 1];
+    const paddingTop = firstItem ? firstItem.start - scrollMargin : 0;
+    const paddingBottom = lastItem
+        ? virtualizer.getTotalSize() - (lastItem.end - scrollMargin)
+        : 0;
 
     return (
         <div
@@ -186,10 +188,33 @@ function PreviewRowList({ rows }: { rows: PortfolioPreviewRow[] }) {
 
 export function PortfolioImportReviewPage() {
     const { t } = useLanguage();
-    const navigate = useNavigate();
+    const params = useRouteParams(ROUTES.portfolioImportReview);
+    // A malformed batch id gets the page's load-failure state (no request is made).
+    if (!params) {
+        return (
+            <PageShell className="mx-auto max-w-3xl">
+                <PageHeader
+                    title={t("portfolioImport.review.title")}
+                    icon={PageIcon}
+                />
+                <PageError
+                    title={t("importPage.failed")}
+                    message={t("common.error")}
+                />
+            </PageShell>
+        );
+    }
+    return <PortfolioImportReviewContent batchId={params.batchId} />;
+}
+
+function PortfolioImportReviewContent({
+    batchId,
+}: {
+    batchId: PortfolioImportBatchId;
+}) {
+    const { t } = useLanguage();
+    const navigate = useAppNavigate();
     const queryClient = useQueryClient();
-    const { batchId: batchIdParam } = useParams<{ batchId: string }>();
-    const batchId = Number(batchIdParam);
     const [busyGroup, setBusyGroup] = useState<string | null>(null);
     const [repairAccountId, setRepairAccountId] = useState<AccountId>();
     const { data: accountsData } = useAccounts({ active: "true" });

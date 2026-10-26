@@ -49,7 +49,7 @@ export async function findRecipientClusters({
       .select(['id', 'name', 'default_category_id'])
       .where('is_active', '=', true)
       .where('primary_recipient_id', 'is', null)
-      .orderBy(['name', 'id'])
+      .orderBy('name').orderBy('id')
       .limit(MAX_RECIPIENT_SCAN),
   );
 

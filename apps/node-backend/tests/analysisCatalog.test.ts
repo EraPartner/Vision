@@ -3,6 +3,7 @@ import {
   compileVisualAnalysis,
   getAnalysisCatalog,
 } from "../src/services/analysisCatalog.ts";
+import { must } from "./helpers/must.ts";
 
 describe("analysis catalog compiler", () => {
   it("compiles the no-AI monthly spending workflow with typed values", () => {
@@ -131,7 +132,7 @@ describe("analysis catalog compiler", () => {
     const holdings = getAnalysisCatalog().datasets.find(
       ({ id }) => id === "holdings",
     );
-    expect(holdings!.measures.map(({ label }) => label)).toEqual([
+    expect(must(holdings, "holdings").measures.map(({ label }) => label)).toEqual([
       "Event count",
       "Raw event amount total",
       "Raw event units total",
@@ -212,7 +213,7 @@ describe("analysis catalog compiler", () => {
   it("publishes only explicit, safe many-to-one joins", () => {
     const catalog = getAnalysisCatalog();
     expect(
-      catalog.datasets.find((dataset) => dataset.id === "cash-flows")!.joins,
+      must(catalog.datasets.find((dataset) => dataset.id === "cash-flows"), "catalog.datasets.find((dataset) => dataset.id === \"cash-f...").joins,
     ).toEqual([
       expect.objectContaining({
         id: "cash-flows.account",

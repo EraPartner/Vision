@@ -12,6 +12,7 @@ import { query as rawQuery } from "../src/database/connection.ts";
 import type { PgQueryResult } from "../src/database/connection.ts";
 import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.ts";
 import { partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 const query = vi.mocked(rawQuery);
 
@@ -55,7 +56,7 @@ function groupedLookup(
     if (!inv.is_active) continue;
     const key = keyFn(inv);
     if (!buckets.has(key)) buckets.set(key, []);
-    buckets.get(key)!.push(inv.id);
+    must(buckets.get(key), "buckets.get(key)").push(inv.id);
   }
   const wantedSet = new Set(wanted);
   const rows = [];
@@ -113,7 +114,7 @@ function makeDispatch(
       return groupedLookup(
         investments,
         (inv) => inv.symbol.toLowerCase(),
-        params![0] as string[],
+        must(params, "params")[0] as string[],
       );
     }
     if (/LOWER\(TRIM\(name\)\)/.test(sql)) {
@@ -121,7 +122,7 @@ function makeDispatch(
       return groupedLookup(
         investments,
         (inv) => inv.name.trim().toLowerCase(),
-        params![0] as string[],
+        must(params, "params")[0] as string[],
       );
     }
     if (/SET\s+status = 'matched'/.test(sql)) {
@@ -575,7 +576,9 @@ describe("matchBatch (investment matching)", () => {
     const dualNameQueried = query.mock.calls.some(
       ([sql, params]) =>
         /LOWER\(TRIM\(name\)\)/.test(sql) &&
-        ((params![0] as string[] | undefined) || []).includes("dual corp"),
+        ((must(params, "params")[0] as string[] | undefined) ?? []).includes(
+          "dual corp",
+        ),
     );
     expect(dualNameQueried).toBe(false);
   });

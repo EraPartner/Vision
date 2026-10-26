@@ -203,7 +203,6 @@ export function LinkTransactionDialog({
         }
         if (
             txFilters.matchAmount &&
-            payment !== null &&
             typeof payment.amount === "number"
         ) {
             const planned = Math.abs(payment.amount);

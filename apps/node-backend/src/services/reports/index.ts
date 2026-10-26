@@ -770,7 +770,7 @@ async function generateReportInner({
     });
   } else if (type === "portfolio") {
     bodyHtml = await buildPortfolioBody({ currency, period, sections });
-  } else if (type === "tax") {
+  } else {
     bodyHtml = await buildTaxBody({
       currency,
       period,
@@ -780,12 +780,6 @@ async function generateReportInner({
       household,
       precomputedHousehold,
     });
-  } else {
-    bodyHtml = `
-      <div class="page placeholder-notice">
-        <strong>Unknown report type</strong>
-        Report type "${escapeHtml(String(type))}" is not supported.
-      </div>`;
   }
 
   signal?.throwIfAborted();

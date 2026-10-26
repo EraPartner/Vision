@@ -8,6 +8,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import TableDataEditorPage from "@/pages/admin/TableDataEditorPage";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -405,8 +406,8 @@ describe("TableDataEditorPage (integration)", () => {
         await user.click(screen.getByRole("button", { name: /add row/i }));
 
         // The new row is the first body row; its ••• menu holds "Discard new row".
-        const newRow = screen
-            .getAllByRole("button", { name: /actions for this row/i })[0]!
+        const newRow = must(screen
+            .getAllByRole("button", { name: /actions for this row/i })[0])
             .closest("tr");
         expect(newRow).not.toBeNull();
         await user.click(

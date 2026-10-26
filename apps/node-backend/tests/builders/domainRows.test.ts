@@ -3,6 +3,7 @@ import type {
   PlannedExecutionRow,
   TransactionTagRef,
 } from "../../src/types/rows.ts";
+import { partial } from "../helpers/partial.ts";
 import {
   makeImportStagingRow,
   makeInvestmentRow,
@@ -62,8 +63,8 @@ describe("domain row builders", () => {
     const first = makePlannedTransactionRow();
     const second = makePlannedTransactionRow();
     // Partial placeholders: only identity matters for the aliasing check.
-    first.tags.push({ id: 1 } as TransactionTagRef);
-    first.executions.push({ id: 1 } as PlannedExecutionRow);
+    first.tags.push(partial<TransactionTagRef>({ id: 1 }));
+    first.executions.push(partial<PlannedExecutionRow>({ id: 1 }));
     first.planned_date.setUTCFullYear(2040);
 
     expect(second.tags).toEqual([]);

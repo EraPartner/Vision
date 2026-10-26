@@ -15,7 +15,7 @@ import {
 
 // Latest stored rates: 1 USD = 0.5 EUR; any other currency has no rate.
 const { mockListLatestStoredRates } = vi.hoisted(() => ({
-  mockListLatestStoredRates: vi.fn(async () => ({
+  mockListLatestStoredRates: vi.fn(() => Promise.resolve(({
     rows: [
       {
         currency_code: "USD",
@@ -24,7 +24,7 @@ const { mockListLatestStoredRates } = vi.hoisted(() => ({
         fetched_at: "2026-06-01T10:00:00Z",
       },
     ],
-  })),
+  }))),
 }));
 
 vi.mock("../src/database/connection.ts", () => mockTxConnection());
@@ -39,12 +39,13 @@ import { query as rawQuery } from "../src/database/connection.ts";
 import type { PgQueryResult } from "../src/database/connection.ts";
 import accountRepository from "../src/repositories/accountRepository.ts";
 import { accountService } from "../src/services/accountService.ts";
+import { must } from "./helpers/must.ts";
 
 const query = rawQuery as unknown as Mock<
   (
     text: string,
     params?: readonly unknown[],
-  ) => Promise<Partial<PgQueryResult<unknown>>>
+  ) => Promise<Partial<PgQueryResult>>
 >;
 
 const listAccounts = async (
@@ -122,7 +123,7 @@ describe("accountRepository", () => {
           }),
         ],
       });
-      const row = (await listAccounts())[0]!;
+      const row = must((await listAccounts())[0], "(await listAccounts())[0]");
       expect(row.computed_balance).toBe(150); // 100 EUR + 100 USD × 0.5
       expect(row.balance_parts).toEqual([
         { currency: "EUR", balance: 100 },
@@ -156,7 +157,7 @@ describe("accountRepository", () => {
           }),
         ],
       });
-      const row = (await listAccounts())[0]!;
+      const row = must((await listAccounts())[0], "(await listAccounts())[0]");
       expect(row.computed_balance).toBe(150);
       expect(row.drift).toBe(20); // 120 − the EUR partition's 100, NOT 120 − 150
       // …and the base behind that subtraction is emitted, so the reconcile
@@ -165,7 +166,7 @@ describe("accountRepository", () => {
       expect(row.reconcilable_balance).toBe(100);
       expect(row.reconcilable_currency).toBe("EUR");
       expect(row.drift).toBe(
-        row.statement_balances[0]!.balance - row.reconcilable_balance,
+        must(row.statement_balances[0], "row.statement_balances[0]").balance - row.reconcilable_balance,
       );
     });
 
@@ -183,7 +184,7 @@ describe("accountRepository", () => {
           }),
         ],
       });
-      const row = (await listAccounts())[0]!;
+      const row = must((await listAccounts())[0], "(await listAccounts())[0]");
       expect(row.computed_balance).toBe(100);
       expect(row.balance_incomplete).toBe(true);
       expect(row.unconverted_currencies).toEqual(["ZZZ"]);
@@ -217,11 +218,11 @@ describe("accountRepository", () => {
           }),
         ],
       });
-      const row = (await listAccounts())[0]!;
+      const row = must((await listAccounts())[0], "(await listAccounts())[0]");
       expect(row.reconcilable_balance).toBe(100.02);
       expect(row.drift).toBe(-0.01);
       expect(row.drift).toBeCloseTo(
-        row.statement_balances[0]!.balance - row.reconcilable_balance,
+        must(row.statement_balances[0], "row.statement_balances[0]").balance - row.reconcilable_balance,
         10,
       );
     });
@@ -241,7 +242,7 @@ describe("accountRepository", () => {
           }),
         ],
       });
-      const row = (await listAccounts())[0]!;
+      const row = must((await listAccounts())[0], "(await listAccounts())[0]");
       expect(row.computed_balance).toBe(100);
       expect(row.reconcilable_balance).toBe(100);
       expect(row.reconcilable_currency).toBe("EUR");
@@ -268,7 +269,7 @@ describe("accountRepository", () => {
           }),
         ],
       });
-      const row = (await listAccounts())[0]!;
+      const row = must((await listAccounts())[0], "(await listAccounts())[0]");
       expect(row.reconcilable_balance).toBe(0);
       expect(row.reconcilable_currency).toBe("GBP");
       expect(row.drift).toBe(50);
@@ -290,7 +291,7 @@ describe("accountRepository", () => {
           }),
         ],
       });
-      const row = (await listAccounts())[0]!;
+      const row = must((await listAccounts())[0], "(await listAccounts())[0]");
       expect(row.computed_balance).toBe(50); // 100 USD × 0.5, into the account's EUR
       expect(row.drift).toBe(-10); // native: 90 − the sole partition's 100
       // D3: the base carries the partition's OWN code, so the dialog can label
@@ -323,7 +324,7 @@ describe("accountRepository", () => {
           }),
         ],
       });
-      const row = (await listAccounts())[0]!;
+      const row = must((await listAccounts())[0], "(await listAccounts())[0]");
       expect(row.reconcilable_balance).toBe(100); // the USD partition, as if the noise were absent
       expect(row.reconcilable_currency).toBe("USD");
       expect(row.drift).toBe(0); // was 100 — the whole balance — before the noise was dropped
@@ -349,11 +350,11 @@ describe("accountRepository", () => {
         ],
       });
       const rows = await listAccounts();
-      expect(rows[0]!.anchor_date).toBe("2026-06-30");
-      expect(rows[0]!.post_anchor_count).toBe(2);
+      expect(must(rows[0], "rows[0]").anchor_date).toBe("2026-06-30");
+      expect(must(rows[0], "rows[0]").post_anchor_count).toBe(2);
       // Backend never returns null — SQL NULL maps to undefined at the boundary.
-      expect(rows[1]!.anchor_date).toBeUndefined();
-      expect(rows[1]!.post_anchor_count).toBe(3);
+      expect(must(rows[1], "rows[1]").anchor_date).toBeUndefined();
+      expect(must(rows[1], "rows[1]").post_anchor_count).toBe(3);
     });
   });
 

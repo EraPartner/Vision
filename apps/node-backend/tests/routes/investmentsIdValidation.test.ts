@@ -83,7 +83,9 @@ vi.mock("../../src/config/logger.ts", () => ({ logger: mockLogger() }));
 import rawInvestmentRepository from "../../src/repositories/investmentRepository.ts";
 import portfolioTransactionPersistence from "../../src/repositories/portfolioTransactionRepository.ts";
 import rawPortfolioTransactionService from "../../src/services/portfolio/portfolioTransactionService.ts";
+import { must } from "../helpers/must.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const investmentRepository = vi.mocked(rawInvestmentRepository);
 const portfolioTransactionService = vi.mocked(rawPortfolioTransactionService);
 
@@ -266,7 +268,7 @@ describe("account_id on the portfolio-transaction write bodies", () => {
       .send({ note: "only-this" })
       .expect(200);
     expect(
-      "account_id" in portfolioTransactionRepository.update.mock.calls[0]![1],
+      "account_id" in must(portfolioTransactionRepository.update.mock.calls[0], "portfolioTransactionRepository.update.mock.calls[0]")[1],
     ).toBe(false);
   });
 
@@ -358,7 +360,7 @@ describe("route-level params/query schemas", () => {
     const res = await api.get(`${BASE}${path}`).expect(400);
     expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
     expect(bodyAt(res, "error", "message")).toMatch(/must be a single value/);
-    expect(investmentRepository.getAll).not.toHaveBeenCalled();
+    expect(mockOf(investmentRepository, "getAll")).not.toHaveBeenCalled();
     expect(
       portfolioTransactionPersistence.getAllByInvestmentIds,
     ).not.toHaveBeenCalled();
@@ -374,7 +376,7 @@ describe("route-level params/query schemas", () => {
       expect(bodyAt(res, "error", "message")).toBe(
         "id: must be a positive integer",
       );
-      expect(investmentRepository.getById).not.toHaveBeenCalled();
+      expect(mockOf(investmentRepository, "getById")).not.toHaveBeenCalled();
     },
   );
 });

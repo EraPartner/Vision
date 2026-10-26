@@ -46,9 +46,7 @@ export function AnalysisPreferencesSettings({
                 onValueChange={(next) =>
                     onChange({
                         aiAnswerDepth:
-                            next === "product-default"
-                                ? undefined
-                                : (next as "quick" | "detailed"),
+                            next === "product-default" ? undefined : next,
                     })
                 }
                 options={[

@@ -16,10 +16,11 @@ import {
     currencyOr,
 } from "@/utils/currency";
 import { getCategoryChartColor } from "@/utils/categoryColors";
-import { useNavigate } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
+import type { AppPath } from "@/lib/routes";
 
 interface CategoryPieChartProps {
-    readonly data: Array<{ name: string; value: number; to?: string }>;
+    readonly data: Array<{ name: string; value: number; to?: AppPath }>;
     readonly embedded?: boolean;
     readonly formatValue?: (v: number) => string;
 }
@@ -30,7 +31,7 @@ export function CategoryPieChart({
     formatValue,
 }: CategoryPieChartProps) {
     const { t } = useLanguage();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = currencyOr(
@@ -52,7 +53,7 @@ export function CategoryPieChart({
                     v,
                     defaultCurrency,
                     locale,
-                    appSettings.showDecimalPlaces ?? 2,
+                    appSettings.showDecimalPlaces,
                 )),
         [formatValue, defaultCurrency, locale, appSettings.showDecimalPlaces],
     );

@@ -9,8 +9,8 @@
     "start": "bun run src/main.ts",
     "dev": "VISION_DEV=true bun --watch src/main.ts",
     "test": "bun vitest run",
-    "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix",
+    "lint": "NODE_OPTIONS=--max-old-space-size=6144 eslint src/ tests/ scripts/",
+    "lint:fix": "NODE_OPTIONS=--max-old-space-size=6144 eslint src/ tests/ scripts/ --fix",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json && tsc -p tsconfig.scripts.json"
   },
   "devDependencies": {

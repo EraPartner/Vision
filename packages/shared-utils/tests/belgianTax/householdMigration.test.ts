@@ -12,6 +12,7 @@ import { computeHouseholdTax, toBelgianTaxCalculation } from "../../src/belgianT
 import { computeBelgianPIT } from "../../src/belgianTax/pit.ts";
 import { firstDifference } from "./householdParity.ts";
 import { makeTaxProfile } from "./testProfile.ts";
+import { must } from "../helpers/must.ts";
 
 const employee = makeTaxProfile({ filingStatus: "single", dependentChildren: 2, unionDues: 120 });
 const joint = makeTaxProfile({
@@ -25,7 +26,7 @@ describe("upgradeProfileV1ToHousehold", () => {
         const h = upgradeProfileV1ToHousehold(employee);
         expect(h.version).toBe(2);
         expect(h.partners).toHaveLength(1);
-        const a = h.partners[0]!;
+        const a = must(h.partners[0], "partners[0]");
         expect(a.activities).toEqual([{ id: "act_A_1", kind: "employee", grossIncome: 50_000 }]);
         expect(a.professionalExpenses).toEqual({ remuneration: { method: "lump_sum", actualAmount: 0 } });
         expect(a.unionDues).toBe(120);
@@ -48,8 +49,8 @@ describe("upgradeProfileV1ToHousehold", () => {
             professionalExpenseMethod: "actual",
             actualProfessionalExpenses: 900,
         });
-        const a = upgradeProfileV1ToHousehold(profile).partners[0]!;
-        expect(a.activities[0]!.kind).toBe(activityKind);
+        const a = must(upgradeProfileV1ToHousehold(profile).partners[0], "partners[0]");
+        expect(must(a.activities[0], "activities[0]").kind).toBe(activityKind);
         expect(a.professionalExpenses[category]).toEqual({ method: "actual", actualAmount: 900 });
     });
 
@@ -88,8 +89,8 @@ describe("upgradeProfileV1ToHousehold", () => {
     test("does not share references with the source profile", () => {
         const profile = makeTaxProfile({ additionalResidences: [{ cadastralIncome: 500 }] });
         const h = upgradeProfileV1ToHousehold(profile);
-        h.home.additionalResidences![0]!.cadastralIncome = 1;
-        expect(profile.additionalResidences![0]!.cadastralIncome).toBe(500);
+        must(must(h.home.additionalResidences, "h.home.additionalResidences")[0], "ences, 'h.home.additionalResidences')[0]").cadastralIncome = 1;
+        expect(must(must(profile.additionalResidences, "profile.additionalResidences")[0], "nces, 'profile.additionalResidences')[0]").cadastralIncome).toBe(500);
     });
 
     test("the upgraded household passes the settings schema", () => {
@@ -103,7 +104,7 @@ describe("upgradeSnapshotsV1ToV2", () => {
         const v2 = upgradeProfileV1ToHousehold(joint);
         const result = upgradeSnapshotsV1ToV2({ 2024: makeTaxProfile({ taxYear: 2024 }), 2025: v2 } as never);
         expect(Object.keys(result)).toEqual(["2024", "2025"]);
-        expect(result[2024]!.taxYear).toBe(2024);
+        expect(must(result[2024], "result[2024]").taxYear).toBe(2024);
         expect(result[2025]).toBe(v2);
         expect(parseHouseholdSnapshotsV2(result).ok).toBe(true);
         expect(upgradeSnapshotsV1ToV2(result)).toEqual(result);
@@ -199,16 +200,16 @@ describe("applyProfileV1PatchToHousehold", () => {
     test("keeps household-only data", () => {
         const h = upgradeProfileV1ToHousehold(joint);
         h.relationship.events.push({ id: "evt_1", kind: "marriage", date: "2015-05-02" });
-        h.partners[0]!.birthYear = 1980;
-        h.partners[0]!.activities.push({ id: "act_A_2", kind: "self_employed_profits", grossIncome: 5_000 });
+        must(h.partners[0], "partners[0]").birthYear = 1980;
+        must(h.partners[0], "partners[0]").activities.push({ id: "act_A_2", kind: "self_employed_profits", grossIncome: 5_000 });
         const patched = applyProfileV1PatchToHousehold(h, { grossAnnualIncome: 70_000 }, filesJointly);
         expect(patched.relationship.events).toHaveLength(1);
-        expect(patched.partners[0]!.birthYear).toBe(1980);
-        expect(patched.partners[0]!.activities.map((a) => [a.id, a.grossIncome])).toEqual([
+        expect(must(patched.partners[0], "partners[0]").birthYear).toBe(1980);
+        expect(must(patched.partners[0], "partners[0]").activities.map((a) => [a.id, a.grossIncome])).toEqual([
             ["act_A_1", 70_000],
             ["act_A_2", 5_000],
         ]);
-        expect(h.partners[0]!.activities[0]!.grossIncome).toBe(50_000);
+        expect(must(must(h.partners[0], "partners[0]").activities[0], "activities[0]").grossIncome).toBe(50_000);
     });
 });
 
@@ -259,22 +260,22 @@ describe("parseHouseholdV2", () => {
 
     test("accepts pensionKind on a pension only; the upgrade leaves it undefined and a v1 kind edit drops it", () => {
         const h = upgradeProfileV1ToHousehold({ ...employee, employmentType: "retired" });
-        const act = h.partners[0]!.activities[0]!;
+        const act = must(must(h.partners[0], "partners[0]").activities[0], "activities[0]");
         expect(act.kind).toBe("pension");
         expect(act).not.toHaveProperty("pensionKind");
         const typed = structuredClone(h);
-        typed.partners[0]!.activities[0]!.pensionKind = "survivor_or_transition";
+        must(must(typed.partners[0], "partners[0]").activities[0], "activities[0]").pensionKind = "survivor_or_transition";
         expect(parseHouseholdV2(typed).ok).toBe(true);
         const wrong = structuredClone(typed);
-        wrong.partners[0]!.activities[0]!.kind = "employee";
+        must(must(wrong.partners[0], "partners[0]").activities[0], "activities[0]").kind = "employee";
         const result = parseHouseholdV2(wrong);
         expect(result.ok).toBe(false);
         if (!result.ok) expect(result.issues.some((i) => i.includes("pensionKind"))).toBe(true);
         const edited = applyProfileV1PatchToHousehold(typed, { employmentType: "employee" }, filesJointly);
-        expect(edited.partners[0]!.activities[0]).not.toHaveProperty("pensionKind");
+        expect(must(edited.partners[0], "partners[0]").activities[0]).not.toHaveProperty("pensionKind");
         expect(parseHouseholdV2(edited).ok).toBe(true);
         expect(
-            applyProfileV1PatchToHousehold(typed, { grossAnnualIncome: 30_000 }, filesJointly).partners[0]!.activities[0]!.pensionKind,
+            must(must(applyProfileV1PatchToHousehold(typed, { grossAnnualIncome: 30_000 }, filesJointly).partners[0], "partners[0]").activities[0], "activities[0]").pensionKind,
         ).toBe("survivor_or_transition");
     });
 

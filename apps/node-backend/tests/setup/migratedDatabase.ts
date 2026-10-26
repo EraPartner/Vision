@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { runMigrations } from "../../src/database/migrate.ts";
 import type { RunMigrationsResult } from "../../src/database/migrate.ts";
+import { must } from "../helpers/must.ts";
 
 export function hasIsolatedTestDatabase(): boolean {
   return (
@@ -44,7 +45,7 @@ export async function createEmptyDatabase(
   if (!/^[a-z][a-z0-9_]{0,62}$/.test(name)) {
     throw new Error(`Unsafe database name: ${name}`);
   }
-  const url = new URL(process.env.TEST_DATABASE_URL!);
+  const url = new URL(must(process.env.TEST_DATABASE_URL, "process.env.TEST_DATABASE_URL"));
   url.pathname = `/${name}`;
   await withAdmin((admin) =>
     admin.query(
@@ -79,7 +80,7 @@ export async function migrateDatabase(
     return await runMigrations();
   } finally {
     for (const [key, value] of Object.entries(saved)) {
-      if (value === undefined) delete process.env[key];
+      if (value === undefined) Reflect.deleteProperty(process.env, key);
       else process.env[key] = value;
     }
   }

@@ -33,13 +33,14 @@ import {
 import { useRecurringPatterns } from "@/hooks/usePlannedMatchSuggestions";
 import { useCategoryTree } from "@/hooks/useCategories";
 import type { RecipientId } from "@vision/types/brands";
+import type { TranslationKey } from "@/locales/keys";
 
 const DISMISSED_PATTERNS_STORAGE_KEY = "dismissed_recurring_patterns";
 
 function safeDateLabel(
     value: string,
     appDateFormat: string,
-    t: (key: string) => string,
+    t: (key: TranslationKey) => string,
 ): string {
     if (!value || typeof value !== "string") return t("common.unknownDate");
     return formatDateStringWithAppSettings(value, appDateFormat);
@@ -80,7 +81,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                 DISMISSED_PATTERNS_STORAGE_KEY,
             );
             if (!raw) return [];
-            const parsed = JSON.parse(raw);
+            const parsed: unknown = JSON.parse(raw);
             if (Array.isArray(parsed)) {
                 return parsed
                     .map((v) => Number(v))
@@ -124,7 +125,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                 const setting = await apiClient.getSetting(
                     DISMISSED_PATTERNS_STORAGE_KEY,
                 );
-                const settingValues = Array.isArray(setting?.value)
+                const settingValues = Array.isArray(setting.value)
                     ? setting.value
                           .map((v) => Number(v))
                           .filter((v) => Number.isInteger(v) && v > 0)
@@ -173,6 +174,11 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
         }
 
         try {
+            // The create endpoint requires an account; a pattern without one
+            // used to be sent as null and rejected by the server.
+            if (pattern.accountId === null) {
+                throw new Error("The detected pattern has no account");
+            }
             await apiClient.createPlannedTransaction({
                 planned_date: pattern.predictedNext,
                 recipient_id: pattern.recipientId,
@@ -191,7 +197,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                         : -Math.abs(pattern.latestAmount),
                 currency: pattern.currency,
                 category_id: pattern.categoryId ?? undefined,
-                account_id: pattern.accountId!,
+                account_id: pattern.accountId,
                 is_recurring: true,
                 recurrence_pattern:
                     pattern.detectedPattern === "custom"
@@ -593,7 +599,7 @@ function ConfidenceBadge({
     t,
 }: {
     confidence: number;
-    t: (key: string) => string;
+    t: (key: TranslationKey) => string;
 }) {
     let variant: "outline" | "success" | "warning" = "outline";
     let label = t("recurring.confidence.low");

@@ -8,7 +8,7 @@
 import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
-import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
+import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
 import {
   asCategoryId,
 } from "@vision/types/brands";
@@ -40,6 +40,8 @@ vi.mock("../../src/config/logger.ts", () => ({
 import rawCategoryRepository from "../../src/repositories/categoryRepository.ts";
 import type { EnrichedCategoryRow } from "../../src/repositories/categoryRepository.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
+import { anything, objectContaining } from "../helpers/matchers.ts";
 const categoryRepository = vi.mocked(rawCategoryRepository);
 
 /** Category fixture carrying only the columns a test sets. */
@@ -64,7 +66,7 @@ describe("Category Routes", () => {
       expect(res.body).toEqual(
         expect.objectContaining({
           ok: true,
-          data: expect.objectContaining({ items: [], total: 0 }),
+          data: objectContaining({ items: [], total: 0 }),
         }),
       );
     });
@@ -107,10 +109,10 @@ describe("Category Routes", () => {
 
       const res = await api.get(BASE).expect(200);
 
-      expect(categoryRepository.getAll).toHaveBeenCalledWith(
-        expect.not.objectContaining({ limit: expect.anything() }),
+      expect(mockOf(categoryRepository, "getAll")).toHaveBeenCalledWith(
+        expect.not.objectContaining({ limit: anything() }),
       );
-      expect(categoryRepository.getCount).not.toHaveBeenCalled();
+      expect(mockOf(categoryRepository, "getCount")).not.toHaveBeenCalled();
       expect(bodyAt(res, "data", "items")).toHaveLength(60);
       expect(bodyAt(res, "data", "total")).toBe(60);
       expect(bodyAt(res, "data", "limit")).toBeUndefined();
@@ -122,7 +124,7 @@ describe("Category Routes", () => {
 
       const res = await api.get(`${BASE}?limit=`).expect(200);
 
-      expect(categoryRepository.getCount).not.toHaveBeenCalled();
+      expect(mockOf(categoryRepository, "getCount")).not.toHaveBeenCalled();
       expect(bodyAt(res, "data", "limit")).toBeUndefined();
     });
 
@@ -134,7 +136,7 @@ describe("Category Routes", () => {
 
       const res = await api.get(`${BASE}?limit=1&offset=2`).expect(200);
 
-      expect(categoryRepository.getAll).toHaveBeenCalledWith(
+      expect(mockOf(categoryRepository, "getAll")).toHaveBeenCalledWith(
         expect.objectContaining({ limit: 1, offset: 2 }),
       );
       expect(bodyAt(res, "data", "total")).toBe(12);
@@ -148,7 +150,7 @@ describe("Category Routes", () => {
 
       await api.get(`${BASE}?limit=99999`).expect(200);
 
-      expect(categoryRepository.getAll).toHaveBeenCalledWith(
+      expect(mockOf(categoryRepository, "getAll")).toHaveBeenCalledWith(
         expect.objectContaining({ limit: 1000, offset: 0 }),
       );
     });
@@ -216,7 +218,7 @@ describe("Category Routes", () => {
       // validateIdParam with a pass-through, so this guard was never tested.
       const res = await api.get(`${BASE}/abc`).expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(categoryRepository.getById).not.toHaveBeenCalled();
+      expect(mockOf(categoryRepository, "getById")).not.toHaveBeenCalled();
     });
   });
 
@@ -291,8 +293,8 @@ describe("Category Routes", () => {
         })
         .expect(404);
 
-      expect(categoryRepository.createOrGet).not.toHaveBeenCalled();
-      expect(categoryRepository.assignToRecipients).not.toHaveBeenCalled();
+      expect(mockOf(categoryRepository, "createOrGet")).not.toHaveBeenCalled();
+      expect(mockOf(categoryRepository, "assignToRecipients")).not.toHaveBeenCalled();
     });
   });
 
@@ -372,14 +374,14 @@ describe("Category request schemas (ADR-193)", () => {
       .send({ general: 5, detail: "FOOD" })
       .expect(400);
     expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-    expect(categoryRepository.createOrGet).not.toHaveBeenCalled();
+    expect(mockOf(categoryRepository, "createOrGet")).not.toHaveBeenCalled();
   });
 
   // The repository used to destructure the absent body (TypeError → 500).
   it("PATCH /:id without a JSON body answers 400", async () => {
     const res = await api.patch(`${BASE}/1`).expect(400);
     expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-    expect(categoryRepository.update).not.toHaveBeenCalled();
+    expect(mockOf(categoryRepository, "update")).not.toHaveBeenCalled();
   });
 
   it.each([{ general: 7 }, { is_active: "yes" }, { description: 3 }])(
@@ -387,7 +389,7 @@ describe("Category request schemas (ADR-193)", () => {
     async (body) => {
       const res = await api.patch(`${BASE}/1`).send(body).expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(categoryRepository.update).not.toHaveBeenCalled();
+      expect(mockOf(categoryRepository, "update")).not.toHaveBeenCalled();
     },
   );
 
@@ -397,7 +399,7 @@ describe("Category request schemas (ADR-193)", () => {
       .patch(`${BASE}/1`)
       .send({ general: "g", is_active: false, id: 99 })
       .expect(200);
-    expect(categoryRepository.update).toHaveBeenCalledWith(1, {
+    expect(mockOf(categoryRepository, "update")).toHaveBeenCalledWith(1, {
       general: "g",
       is_active: false,
     });
@@ -411,7 +413,7 @@ describe("Category request schemas (ADR-193)", () => {
     expect(bodyAt(res, "error", "message")).toBe(
       "recipient_ids contains invalid value: abc",
     );
-    expect(categoryRepository.assignToRecipients).not.toHaveBeenCalled();
+    expect(mockOf(categoryRepository, "assignToRecipients")).not.toHaveBeenCalled();
   });
 
   it("POST /:id/assign keeps the missing-ids message and wraps a scalar", async () => {
@@ -420,7 +422,7 @@ describe("Category request schemas (ADR-193)", () => {
 
     categoryRepository.assignToRecipients.mockResolvedValue(1);
     await api.post(`${BASE}/1/assign`).send({ recipient_ids: "7" }).expect(200);
-    expect(categoryRepository.assignToRecipients).toHaveBeenCalledWith(1, [7]);
+    expect(mockOf(categoryRepository, "assignToRecipients")).toHaveBeenCalledWith(1, [7]);
   });
 
   it("POST /tree reports zod issues with their field path", async () => {

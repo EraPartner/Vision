@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
+import { transactionRow } from "@/test/msw/rowFixtures";
 import { ACCOUNT_LIST_ITEM_STUB, ok } from "@/test/msw/handlers";
 import {
     TransactionInspector,
@@ -41,6 +42,18 @@ const TX: TableTransaction = {
     comment: "Test comment",
     is_active: true,
 };
+
+/** The PATCH response: a full backend row for transaction 42 (ADR-194). */
+function txRow(fields: Record<string, unknown> = {}) {
+    return transactionRow({
+        id: 42,
+        memo: "Test purchase",
+        amount: -25.5,
+        currency: "EUR",
+        is_active: true,
+        ...fields,
+    });
+}
 
 function renderInspector(
     overrides: Partial<TransactionInspectorProps> = {},
@@ -345,7 +358,7 @@ describe("TransactionInspector", () => {
                 `${API_BASE}/api/transactions/42`,
                 async ({ request }) => {
                     receivedBody = await request.json();
-                    return ok({ ...TX, comment: "Added note" });
+                    return ok(txRow({ comment: "Added note" }));
                 },
             ),
         );
@@ -397,7 +410,7 @@ describe("TransactionInspector", () => {
                         string,
                         unknown
                     >;
-                    return ok({ ...TX, account_id: 1 });
+                    return ok(txRow({ account_id: 1 }));
                 },
             ),
         );
@@ -433,7 +446,7 @@ describe("TransactionInspector", () => {
         server.use(
             http.patch(`${API_BASE}/api/transactions/42`, () => {
                 patchCount += 1;
-                return ok(TX);
+                return ok(txRow());
             }),
         );
 
@@ -465,13 +478,7 @@ describe("TransactionInspector", () => {
             server.use(
                 http.patch(`${API_BASE}/api/transactions/42`, () => {
                     patchCount += 1;
-                    return ok({
-                        id: 42,
-                        memo: "New memo",
-                        amount: -25.5,
-                        currency: "EUR",
-                        is_active: true,
-                    });
+                    return ok(txRow({ memo: "New memo" }));
                 }),
             );
 
@@ -512,7 +519,7 @@ describe("TransactionInspector", () => {
         server.use(
             http.patch(`${API_BASE}/api/transactions/42`, () => {
                 patchCount += 1;
-                return ok(TX);
+                return ok(txRow());
             }),
         );
         renderInspector();
@@ -610,13 +617,7 @@ describe("TransactionInspector", () => {
                 async ({ request }) => {
                     const body = (await request.json()) as { amount?: number };
                     receivedAmount = body.amount;
-                    return ok({
-                        id: 42,
-                        memo: "x",
-                        amount: body.amount ?? 0,
-                        currency: "EUR",
-                        is_active: true,
-                    });
+                    return ok(txRow({ memo: "x", amount: body.amount ?? 0 }));
                 },
             ),
         );
@@ -672,14 +673,7 @@ describe("TransactionInspector", () => {
                 async ({ request }) => {
                     const body = (await request.json()) as { tags?: unknown };
                     receivedTags = body.tags;
-                    return ok({
-                        id: 42,
-                        memo: "Test purchase",
-                        amount: -25.5,
-                        currency: "EUR",
-                        is_active: true,
-                        tags: [],
-                    });
+                    return ok(txRow({ tags: [] }));
                 },
             ),
         );
@@ -711,13 +705,7 @@ describe("TransactionInspector", () => {
         server.use(
             http.patch(`${API_BASE}/api/transactions/42`, () => {
                 patchCalled = true;
-                return ok({
-                    id: 42,
-                    memo: "x",
-                    amount: -25.5,
-                    currency: "EUR",
-                    is_active: true,
-                });
+                return ok(txRow({ memo: "x" }));
             }),
         );
 
@@ -746,7 +734,7 @@ it("retains malformed amount and explains the error before allowing a corrected 
     server.use(
         http.patch(`${API_BASE}/api/transactions/42`, () => {
             writes++;
-            return ok({ id: 42 });
+            return ok(txRow());
         }),
     );
     renderInspector({ onApplyLocal });

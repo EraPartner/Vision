@@ -62,24 +62,33 @@ import { banksRepository } from "../src/repositories/infoRepositoryBanks.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
+import { must } from "./helpers/must.ts";
+import type { AccountId, RecipientId } from "@vision/types/brands";
+
+/** A result row whose columns the test reads without a fixed shape. */
+type DbRow = Record<string, unknown>;
 
 // Rates come only from the rows each test seeds: a date with no seeded rate must
 // not reach the live ECB feed, whose 8 s fetch timeout outlasts the test timeout
 // whenever the feed is slow from CI.
-vi.mock("../src/services/currency/rateFetcher.ts", async (original) => ({
-  ...(await original<
-    typeof import("../src/services/currency/rateFetcher.ts")
-  >()),
-  getUnindexedRatesToEurForDates: async () => new Map(),
-}));
+vi.mock("../src/services/currency/rateFetcher.ts", async (original) =>
+  Promise.resolve({
+    ...(await original<
+      typeof import("../src/services/currency/rateFetcher.ts")
+    >()),
+    getUnindexedRatesToEurForDates: () => Promise.resolve(new Map()),
+  }),
+);
 
 const rec: Record<string, number> = {};
 
 async function seedRecipient() {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    id: RecipientId;
+  }>(
     `INSERT INTO recipients (name, normalized_name) VALUES ('Misc Payee', 'misc payee') RETURNING id`,
   );
-  rec.misc = rows[0].id;
+  rec.misc = must(rows[0], "rows[0]").id;
 }
 
 /**
@@ -111,15 +120,17 @@ async function addAccount(
     statementCurrency = currency,
   }: AccountSeed = {},
 ) {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    id: AccountId;
+  }>(
     `INSERT INTO accounts (name, type, currency, spendable, in_net_worth, is_active)
      VALUES ($1, $2::account_type, $3, $4, $5, $6)
      RETURNING id`,
     [name, type, currency, spendable, inNetWorth, isActive],
   );
-  const id = rows[0].id;
+  const id = must(rows[0], "rows[0]").id;
   if (statementBalance != null) {
-    await getTestPool()!.query(
+    await must(getTestPool(), "getTestPool()").query(
       `INSERT INTO account_statement_balances (account_id, currency, balance, balance_date)
        VALUES ($1, $2, $3, (${statementBalanceDate ?? "CURRENT_DATE"})::date)`,
       [id, statementCurrency, statementBalance],
@@ -144,15 +155,21 @@ async function insertTxn({
   balance?: string | null;
   isActive?: boolean;
 }) {
-  const account = await getTestPool()!.query(
-    `SELECT id FROM accounts WHERE name = $1`,
-    [bank],
-  );
+  const account = await must(getTestPool(), "getTestPool()").query<{
+    id: AccountId;
+  }>(`SELECT id FROM accounts WHERE name = $1`, [bank]);
   expect(account.rows).toHaveLength(1);
-  await getTestPool()!.query(
+  await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO transactions (date, amount, currency, recipient_id, account_id, balance, is_active)
      VALUES ((${dateExpr})::date, $1, $2, $3, $4, $5, $6)`,
-    [amount, currency, rec.misc, account.rows[0].id, balance, isActive],
+    [
+      amount,
+      currency,
+      rec.misc,
+      must(account.rows[0], "account.rows[0]").id,
+      balance,
+      isActive,
+    ],
   );
 }
 
@@ -163,7 +180,7 @@ async function insertRate(
   rate: string,
   isLatest = true,
 ) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
      VALUES ($1, (${dateExpr})::date, $2, $3)`,
     [code, rate, isLatest],
@@ -212,13 +229,13 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     async function resetNetWorthInputs() {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       await pool.query("DELETE FROM transactions");
       await pool.query("DELETE FROM accounts");
       await pool.query("DELETE FROM recipients");
       await pool.query("DELETE FROM exchange_rates");
       await pool.query("DELETE FROM portfolio_performance_snapshots");
-      for (const k of Object.keys(rec)) delete rec[k];
+      for (const k of Object.keys(rec)) Reflect.deleteProperty(rec, k);
       clearMemoryCache();
       clearMvCache();
     }
@@ -250,7 +267,10 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         await accountService.update(created.id, { currency: "USD" });
-        let account = (await listAccounts())[0]!;
+        let account = must(
+          (await listAccounts())[0],
+          "(await listAccounts())[0]",
+        );
         expect(account.statement_balances).toEqual([
           { currency: "EUR", balance: 10, balance_date: "2026-09-01" },
           { currency: "USD", balance: 20, balance_date: "2026-09-02" },
@@ -260,7 +280,7 @@ describe.skipIf(!hasTestDatabase())(
           balance: 25,
           date: "2026-09-03",
         });
-        let { rows } = await getTestPool()!.query(
+        let { rows } = await must(getTestPool(), "getTestPool()").query<DbRow>(
           `SELECT currency, balance::text AS balance,
                   to_char(balance_date, 'YYYY-MM-DD') AS balance_date
              FROM account_statement_balances
@@ -273,11 +293,11 @@ describe.skipIf(!hasTestDatabase())(
         ]);
 
         await accountService.removeStatementBalance(created.id, "USD");
-        account = (await listAccounts())[0]!;
+        account = must((await listAccounts())[0], "(await listAccounts())[0]");
         expect(account.statement_balances).toEqual([
           { currency: "EUR", balance: 10, balance_date: "2026-09-01" },
         ]);
-        ({ rows } = await getTestPool()!.query(
+        ({ rows } = await must(getTestPool(), "getTestPool()").query<DbRow>(
           `SELECT currency FROM account_statement_balances
             WHERE account_id = $1 ORDER BY currency`,
           [created.id],
@@ -288,7 +308,10 @@ describe.skipIf(!hasTestDatabase())(
       it("keeps the repository raw and shapes mixed-currency rows in the service", async () => {
         await seedMultiCurrencyAccount();
 
-        const raw = (await accountRepository.getAll())[0]!;
+        const raw = must(
+          (await accountRepository.getAll())[0],
+          "(await accountRepository.getAll())[0]",
+        );
         expect(raw.balance_parts).toEqual([
           { currency: "EUR", balance: "100.0000" },
           { currency: "USD", balance: "100.0000" },
@@ -297,7 +320,10 @@ describe.skipIf(!hasTestDatabase())(
         expect(raw).not.toHaveProperty("computed_balance");
         expect(raw).not.toHaveProperty("drift");
 
-        const shaped = (await listAccounts())[0]!;
+        const shaped = must(
+          (await listAccounts())[0],
+          "(await listAccounts())[0]",
+        );
         expect(shaped.computed_balance).toBe(150);
         expect(shaped.balance_parts).toEqual([
           { currency: "EUR", balance: 100 },
@@ -308,7 +334,10 @@ describe.skipIf(!hasTestDatabase())(
       it("sums the currency partitions into the account currency instead of across them", async () => {
         await seedMultiCurrencyAccount();
 
-        const row = (await listAccounts())[0]!;
+        const row = must(
+          (await listAccounts())[0],
+          "(await listAccounts())[0]",
+        );
 
         expect(row.computed_balance).toBe(150); // NOT 100
         // Provenance still describes the account, not one currency: nothing is
@@ -326,7 +355,10 @@ describe.skipIf(!hasTestDatabase())(
           statementBalance: "120.00",
         });
 
-        const row = (await listAccounts())[0]!;
+        const row = must(
+          (await listAccounts())[0],
+          "(await listAccounts())[0]",
+        );
 
         expect(row.computed_balance).toBe(150);
         expect(row.drift).toBe(20);
@@ -337,7 +369,8 @@ describe.skipIf(!hasTestDatabase())(
         expect(row.reconcilable_balance).toBe(100);
         expect(row.reconcilable_currency).toBe("EUR");
         expect(
-          row.statement_balances[0]!.balance - row.reconcilable_balance,
+          must(row.statement_balances[0], "row.statement_balances[0]").balance -
+            row.reconcilable_balance,
         ).toBe(row.drift);
       });
 
@@ -360,7 +393,10 @@ describe.skipIf(!hasTestDatabase())(
           bank: "NOISY",
         });
 
-        const before = (await listAccounts())[0]!;
+        const before = must(
+          (await listAccounts())[0],
+          "(await listAccounts())[0]",
+        );
         expect(before.reconcilable_balance).toBe(100);
         expect(before.drift).toBe(0);
 
@@ -378,7 +414,10 @@ describe.skipIf(!hasTestDatabase())(
           bank: "NOISY",
         });
 
-        const after = (await listAccounts())[0]!;
+        const after = must(
+          (await listAccounts())[0],
+          "(await listAccounts())[0]",
+        );
         // Nothing about the account's money changed, so nothing about its
         // reconciliation may change. Before the zero-sum drop this flipped the
         // base to 0 and the drift to the whole 100.
@@ -411,7 +450,10 @@ describe.skipIf(!hasTestDatabase())(
           bank: "GBP SHELL",
         });
 
-        const row = (await listAccounts())[0]!;
+        const row = must(
+          (await listAccounts())[0],
+          "(await listAccounts())[0]",
+        );
 
         expect(row.reconcilable_balance).toBe(0);
         expect(row.reconcilable_currency).toBe("GBP");
@@ -447,7 +489,10 @@ describe.skipIf(!hasTestDatabase())(
           bank: "WISE STAMPED",
         });
 
-        const row = (await listAccounts())[0]!;
+        const row = must(
+          (await listAccounts())[0],
+          "(await listAccounts())[0]",
+        );
 
         // The cross-currency form gave 1000 + (100 − 25) = 1075.
         expect(row.computed_balance).toBe(1025);
@@ -474,7 +519,10 @@ describe.skipIf(!hasTestDatabase())(
           bank: "ONE CCY USD",
         });
 
-        const row = (await listAccounts())[0]!;
+        const row = must(
+          (await listAccounts())[0],
+          "(await listAccounts())[0]",
+        );
 
         // Native USD throughout: the account currency IS the partition currency,
         // so nothing is converted and the drift is the same native figure as before.
@@ -492,9 +540,9 @@ describe.skipIf(!hasTestDatabase())(
         await addAccount("FRESH");
         const rows = await listAccounts();
         expect(rows.map((r) => r.name)).toEqual(["FRESH"]);
-        expect(rows[0]!.computed_balance).toBe(0);
-        expect(rows[0]!.drift).toBeNull();
-        expect(rows[0]!.has_transactions).toBe(false);
+        expect(must(rows[0], "rows[0]").computed_balance).toBe(0);
+        expect(must(rows[0], "rows[0]").drift).toBeNull();
+        expect(must(rows[0], "rows[0]").has_transactions).toBe(false);
       });
 
       it("pages by ACCOUNT, not by currency partition", async () => {
@@ -512,8 +560,8 @@ describe.skipIf(!hasTestDatabase())(
 
         const page = await listAccounts({ limit: 2, offset: 0 });
         expect(page.map((r) => r.name)).toEqual(["AAA MULTI", "BBB PLAIN"]);
-        expect(page[0]!.computed_balance).toBe(150);
-        expect(page[1]!.computed_balance).toBe(10);
+        expect(must(page[0], "page[0]").computed_balance).toBe(150);
+        expect(must(page[1], "page[1]").computed_balance).toBe(10);
       });
     });
 
@@ -536,15 +584,24 @@ describe.skipIf(!hasTestDatabase())(
           date: "2026-09-02",
         });
 
-        const before = (await listAccounts())[0]!;
+        const before = must(
+          (await listAccounts())[0],
+          "(await listAccounts())[0]",
+        );
         expect(before.statement_balances).toEqual([
           { currency: "EUR", balance: 120, balance_date: "2026-09-01" },
           { currency: "USD", balance: 80, balance_date: "2026-09-02" },
         ]);
-        expect(before.statement_balances[0]!.balance).toBe(120);
+        expect(
+          must(before.statement_balances[0], "before.statement_balances[0]")
+            .balance,
+        ).toBe(120);
 
         await reconcileAccount(id, { mode: "accept", currency: "USD" });
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(
+          getTestPool(),
+          "getTestPool()",
+        ).query<DbRow>(
           `SELECT currency, balance::text AS balance,
                   to_char(balance_date, 'YYYY-MM-DD') AS balance_date
              FROM account_statement_balances
@@ -556,9 +613,10 @@ describe.skipIf(!hasTestDatabase())(
           {
             currency: "USD",
             balance: "100.0000",
-            balance_date: expect.any(String),
+            balance_date: rows[1]?.balance_date,
           },
         ]);
+        expect(typeof rows[1]?.balance_date).toBe("string");
       });
 
       it("'accept' adopts exactly the base the hub displays when no partition matches", async () => {
@@ -585,7 +643,10 @@ describe.skipIf(!hasTestDatabase())(
           bank: "GBP SHELL",
         });
 
-        const shown = (await listAccounts())[0]!.reconcilable_balance;
+        const shown = must(
+          (await listAccounts())[0],
+          "(await listAccounts())[0]",
+        ).reconcilable_balance;
         const result = await reconcileAccount(id, { mode: "accept" });
 
         expect(result.statement_balance).toBe(shown);
@@ -594,9 +655,15 @@ describe.skipIf(!hasTestDatabase())(
           drift: 0,
           computed_balance: 0,
         });
-        const after = (await listAccounts())[0]!;
+        const after = must(
+          (await listAccounts())[0],
+          "(await listAccounts())[0]",
+        );
         expect(after.drift).toBe(0);
-        expect(after.statement_balances[0]!.balance).toBe(0);
+        expect(
+          must(after.statement_balances[0], "after.statement_balances[0]")
+            .balance,
+        ).toBe(0);
       });
 
       it("'accept' adopts the own-currency partition as the statement of record", async () => {
@@ -614,7 +681,10 @@ describe.skipIf(!hasTestDatabase())(
           statement_balance: 100,
           computed_balance: 100,
         });
-        const row = (await listAccounts())[0]!;
+        const row = must(
+          (await listAccounts())[0],
+          "(await listAccounts())[0]",
+        );
         // The badge the user clicked is now actually clear, and the converted
         // balance beside it is untouched (no ledger row was created).
         expect(row.drift).toBe(0);
@@ -631,10 +701,11 @@ describe.skipIf(!hasTestDatabase())(
         await expect(
           reconcileAccount(id, { mode: "adjustment" }),
         ).rejects.toThrow(/already reconciled/i);
-        const { rows } = await getTestPool()!.query(
-          `SELECT COUNT(*)::int AS n FROM transactions`,
-        );
-        expect(rows[0].n).toBe(2); // nothing inserted
+        const { rows } = await must(
+          getTestPool(),
+          "getTestPool()",
+        ).query<DbRow>(`SELECT COUNT(*)::int AS n FROM transactions`);
+        expect(must(rows[0], "rows[0]").n).toBe(2); // nothing inserted
       });
     });
 
@@ -650,7 +721,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(out.availableCash).toBe(150); // NOT 100
         expect(out.cashAccounts).toEqual([
           {
-            id: expect.any(Number),
+            id: out.cashAccounts[0]?.id,
             name: "WISE MULTI",
             accountCurrency: "EUR",
             balance: 150,
@@ -658,6 +729,7 @@ describe.skipIf(!hasTestDatabase())(
             unconvertedCurrencies: [],
           },
         ]);
+        expect(typeof out.cashAccounts[0]?.id).toBe("number");
       });
 
       it("honours the spendable/active gates and keeps a zero-activity account listed", async () => {
@@ -683,7 +755,10 @@ describe.skipIf(!hasTestDatabase())(
           "WISE MULTI",
         ]);
         expect(
-          out.cashAccounts.find((a) => a.name === "NO ACTIVITY")!.balance,
+          must(
+            out.cashAccounts.find((a) => a.name === "NO ACTIVITY"),
+            'out.cashAccounts.find((a) => a.name === "NO ACTIVITY")',
+          ).balance,
         ).toBe(0);
         expect(out.availableCash).toBe(150);
       });
@@ -721,13 +796,16 @@ describe.skipIf(!hasTestDatabase())(
         await seedMultiCurrencyAccount("WISE MULTI");
 
         const nw = await netWorthRepository.getNetWorthFromSnapshots("EUR");
-        const last = nw.snapshots[nw.snapshots.length - 1]!;
+        const last = must(
+          nw.snapshots[nw.snapshots.length - 1],
+          "nw.snapshots[nw.snapshots.length - 1]",
+        );
 
         expect(last.liquid).toBe(nw.current.liquid);
         expect(last.netWorth).toBe(nw.current.netWorth);
         // …and the point before the USD leg posted holds only the EUR partition,
         // so the series genuinely moves rather than being flat by accident.
-        expect(nw.snapshots[0]!.liquid).toBe(100);
+        expect(must(nw.snapshots[0], "nw.snapshots[0]").liquid).toBe(100);
       });
 
       it("splits liabilities out of the liquid bucket per currency", async () => {
@@ -834,8 +912,10 @@ describe.skipIf(!hasTestDatabase())(
 
         const rows = await listAccounts();
         expect(rows.map((r) => r.name)).toEqual(["SURVIVOR"]);
-        expect(rows[0]!.computed_balance).toBe(preview.projectedBalance);
-        expect(rows[0]!.computed_balance).toBe(250);
+        expect(must(rows[0], "rows[0]").computed_balance).toBe(
+          preview.projectedBalance,
+        );
+        expect(must(rows[0], "rows[0]").computed_balance).toBe(250);
       });
 
       it("anchors each currency of the union on that currency's own latest stamp", async () => {
@@ -897,7 +977,7 @@ describe.skipIf(!hasTestDatabase())(
         statementBalance: "120.00",
       });
 
-      const hub = (await listAccounts())[0]!;
+      const hub = must((await listAccounts())[0], "(await listAccounts())[0]");
       const cash = await assembleRebalanceInputs({ currency: "EUR" });
       const nw = await netWorthRepository.getNetWorthFromSnapshots("EUR");
       const widget = await banksRepository.getBankBalances("EUR");
@@ -910,14 +990,15 @@ describe.skipIf(!hasTestDatabase())(
       // the figure reconcile acts on. Keeping those two in step is what previously
       // held the dashboard on the cross-currency sum.
       expect(hub.drift).toBe(20);
-      expect(widget.accounts[0]!.drift).toBe(20);
+      expect(must(widget.accounts[0], "widget.accounts[0]").drift).toBe(20);
       // …and the dialog's three native figures are arithmetically consistent with
       // each other, which is what stops it previewing a number the server would
       // contradict: drift = statement − base, all in reconcilable_currency.
       expect(hub.reconcilable_balance).toBe(100);
       expect(hub.reconcilable_currency).toBe("EUR");
       expect(
-        hub.statement_balances[0]!.balance - hub.reconcilable_balance,
+        must(hub.statement_balances[0], "hub.statement_balances[0]").balance -
+          hub.reconcilable_balance,
       ).toBe(hub.drift);
     });
   },

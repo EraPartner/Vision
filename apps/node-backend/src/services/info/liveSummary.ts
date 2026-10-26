@@ -16,6 +16,7 @@ import {
   PORTFOLIO_SUMMARY_CACHE_TTL_MS,
   resolveCacheWithInflight,
 } from "./cache.ts";
+import { errorMessage } from "../../lib/errors.ts";
 
 /** Live portfolio summary (cached, inflight-deduped). */
 export function resolveLiveSummary(
@@ -40,8 +41,9 @@ export async function resolveLivePortfolioValue(
   try {
     // getPortfolioSummary builds `totals.totalPortfolioValue` as a rounded
     // number; the optional chaining guards a summary that resolved empty.
-    const summary: Partial<PortfolioSummary> | undefined =
-      await resolveLiveSummary(targetCurrency);
+    const summary = (await resolveLiveSummary(targetCurrency)) as
+      | Partial<PortfolioSummary>
+      | undefined;
     const value = summary?.totals?.totalPortfolioValue;
     return Number.isFinite(value) ? value : undefined;
   } catch (err) {
@@ -49,7 +51,7 @@ export async function resolveLivePortfolioValue(
       "Live portfolio value unavailable for net-worth overlay; using snapshot value",
       {
         targetCurrency,
-        error: (err as Error | undefined)?.message,
+        error: errorMessage(err),
       },
     );
     return undefined;

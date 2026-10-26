@@ -33,6 +33,7 @@ import {
     asInvestmentId,
     asPortfolioTransactionId,
 } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -341,7 +342,7 @@ describe("Portfolio pages (integration)", () => {
         expect(assets.parentElement).toHaveTextContent(/12\.000,00/);
         expect(debt.parentElement).toHaveTextContent(/1\.000,00/);
         // The asset split stays readable under the bar.
-        const assetsBar = assets.parentElement!.parentElement!;
+        const assetsBar = must(must(assets.parentElement).parentElement);
         expect(assetsBar).toHaveTextContent(/Cash & savings.*5\.000,00/);
         expect(assetsBar).toHaveTextContent(/Investments.*7\.000,00/);
         // Shares of net worth are gone; the month change and all-time change remain.
@@ -706,7 +707,7 @@ describe("Portfolio pages (integration)", () => {
         const buttons = await screen.findAllByRole("button", {
             name: /add to watchlist/i,
         });
-        await user.click(buttons[0]!);
+        await user.click(must(buttons[0]));
 
         // addWatchlist.title = "Add to Watchlist"
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -793,7 +794,7 @@ describe("Portfolio pages (integration)", () => {
         expect(
             screen.getByText(/income already included in acquired units/i),
         ).toBeInTheDocument();
-        const url = requests.at(-1)!;
+        const url = must(requests.at(-1));
         expect(url.searchParams.get("year")).toMatch(/^\d{4}$/);
         expect(url.searchParams.get("currency")).toBe("EUR");
     });
@@ -1016,7 +1017,7 @@ describe("Portfolio pages (integration)", () => {
         const buttons = await screen.findAllByRole("button", {
             name: /add to watchlist/i,
         });
-        await user.click(buttons[0]!);
+        await user.click(must(buttons[0]));
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
 
         await user.keyboard("{Escape}");
@@ -1219,7 +1220,7 @@ describe("Portfolio pages (integration)", () => {
         const addBtns = await screen.findAllByRole("button", {
             name: /add investment/i,
         });
-        await user.click(addBtns[0]!);
+        await user.click(must(addBtns[0]));
 
         // With a single allowed asset class, dialog skips the type selector
         const dialog = await screen.findByRole("dialog");
@@ -1248,7 +1249,7 @@ describe("Portfolio pages (integration)", () => {
         const addBtns = await screen.findAllByRole("button", {
             name: /add investment/i,
         });
-        await user.click(addBtns[0]!);
+        await user.click(must(addBtns[0]));
 
         const nameInput = await screen.findByLabelText(/^name$/i);
         await user.type(nameInput, "Bitcoin");
@@ -1286,7 +1287,7 @@ describe("Portfolio pages (integration)", () => {
         const addBtns = await screen.findAllByRole("button", {
             name: /add investment/i,
         });
-        await user.click(addBtns[0]!);
+        await user.click(must(addBtns[0]));
 
         const nameInput = await screen.findByLabelText(/^name$/i);
         await user.type(nameInput, "Bitcoin");
@@ -1337,7 +1338,7 @@ describe("Portfolio pages (integration)", () => {
         const addBtns = await screen.findAllByRole("button", {
             name: /add investment/i,
         });
-        await user.click(addBtns[0]!);
+        await user.click(must(addBtns[0]));
 
         const nameInput = await screen.findByLabelText(/^name$/i);
         await user.type(nameInput, "Bitcoin");
@@ -1358,7 +1359,7 @@ describe("Portfolio pages (integration)", () => {
         const addBtns = await screen.findAllByRole("button", {
             name: /add investment/i,
         });
-        await user.click(addBtns[0]!);
+        await user.click(must(addBtns[0]));
 
         // StocksPage has 2 allowed types → type selector appears first
         // addInv.chooseType = "Choose Asset Type"
@@ -1380,7 +1381,7 @@ describe("Portfolio pages (integration)", () => {
         const addBtns = await screen.findAllByRole("button", {
             name: /add investment/i,
         });
-        await user.click(addBtns[0]!);
+        await user.click(must(addBtns[0]));
 
         await screen.findByRole("heading", { name: /choose asset type/i });
         await user.click(screen.getByRole("button", { name: /^stock/i }));
@@ -1524,7 +1525,7 @@ describe("Portfolio pages (integration)", () => {
         const addBtns = await screen.findAllByRole("button", {
             name: /add to watchlist/i,
         });
-        await user.click(addBtns[0]!);
+        await user.click(must(addBtns[0]));
 
         const dialog = await screen.findByRole("dialog");
 
@@ -1976,7 +1977,7 @@ describe("Portfolio pages (integration)", () => {
             const addBtns = await screen.findAllByRole("button", {
                 name: /add investment/i,
             });
-            await user.click(addBtns[0]!);
+            await user.click(must(addBtns[0]));
             const nameInput = await screen.findByLabelText(/^name$/i);
             await user.type(nameInput, "Bitcoin");
             await user.click(screen.getByRole("button", { name: /^add$/i }));
@@ -2031,7 +2032,7 @@ describe("Portfolio pages (integration)", () => {
             const addBtns = await screen.findAllByRole("button", {
                 name: /add investment/i,
             });
-            await user.click(addBtns[0]!);
+            await user.click(must(addBtns[0]));
 
             // StocksPage: type selector first → pick Stock
             await screen.findByRole("heading", { name: /choose asset type/i });

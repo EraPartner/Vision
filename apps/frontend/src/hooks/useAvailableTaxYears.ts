@@ -59,8 +59,8 @@ export function useAvailableTaxYears(): AvailableTaxYear[] {
 
     const portfolioTaxFeeYears = useMemo(() => {
         const years = new Set<number>();
-        for (const inv of summaries ?? []) {
-            for (const txn of inv.transactions ?? []) {
+        for (const inv of summaries) {
+            for (const txn of inv.transactions) {
                 const hasTaxOrFee =
                     Number(txn.taxes) > 0 ||
                     Number(txn.fees) > 0 ||

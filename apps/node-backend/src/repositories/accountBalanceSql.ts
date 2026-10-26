@@ -280,7 +280,7 @@ export function statementPartition(
   const want = storedCurrencyCode(accountCurrency);
   const list = (parts ?? []).map((p) => ({
     currency: storedCurrencyCode(p.currency),
-    balance: String(p.balance),
+    balance: p.balance,
   }));
 
   const own = list.find((p) => p.currency === want);

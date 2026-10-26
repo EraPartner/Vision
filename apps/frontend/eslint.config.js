@@ -3,7 +3,7 @@ import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
-import { typeAwareRules } from "../../config/eslint-type-aware.mjs";
+import { strictTypeAwareRules } from "../../config/eslint-type-aware.mjs";
 
 // ── custom local rule ─────────────────────────────────────────────────────────
 
@@ -260,7 +260,8 @@ const noInlineServerQuery = {
 export default tseslint.config(
   // coverage/ is an istanbul build artifact — linting it produced six
   // "unused eslint-disable" warnings from generated files.
-  { ignores: ["../../dist", "coverage"] },
+  // generated.ts is openapi-typescript output, drift-checked against openapi.yaml.
+  { ignores: ["../../dist", "coverage", "src/types/generated.ts"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -304,7 +305,7 @@ export default tseslint.config(
         "warn",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      ...typeAwareRules,
+      ...strictTypeAwareRules(tseslint),
       // A `default` arm does not excuse a missing union member (ADR-251): list
       // every known API enum value, and keep `default` only as the fallback for
       // values a newer server may send.
@@ -364,6 +365,33 @@ export default tseslint.config(
     },
     rules: {
       "vision-i18n/no-hardcoded-user-facing-string": "warn",
+    },
+  },
+  {
+    // In-app navigation goes through the typed wrappers so a removed or
+    // misspelled route fails to compile (lib/routes, lib/appNavigation).
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: [
+      "src/lib/appNavigation.tsx",
+      "src/hooks/useAppNavigate.ts",
+      "src/**/__tests__/**",
+      "src/**/*.test.{ts,tsx}",
+      "src/test/**",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "react-router",
+              importNames: ["Link", "NavLink", "Navigate", "useNavigate"],
+              message:
+                "Use AppLink, AppNavLink, AppNavigate (@/lib/appNavigation) or useAppNavigate (@/hooks/useAppNavigate) so the target is a type-checked AppPath.",
+            },
+          ],
+        },
+      ],
     },
   },
 );

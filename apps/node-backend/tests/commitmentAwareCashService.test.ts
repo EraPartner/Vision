@@ -16,7 +16,7 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () => ({
       },
     ],
   }),
-  convertWithRates: vi.fn((amount, from, to) =>
+  convertWithRates: vi.fn((amount: number, from: string, to: string) =>
     from === "USD" && to !== "USD" ? amount / 2 : amount,
   ),
 }));
@@ -29,9 +29,9 @@ import {
   listLatestStoredRates as rawListLatestStoredRates,
 } from "../src/services/currency/currencyConversionService.ts";
 import { computeCommitmentAwareCash } from "../src/services/commitmentAwareCashService.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
 import { loose, partial } from "./helpers/partial.ts";
 
+import { mockOf } from "./helpers/mockOf.ts";
 const plannedTransactionRepository = vi.mocked(rawPlannedTransactionRepository);
 const assembleRebalanceInputs = vi.mocked(rawAssembleRebalanceInputs);
 const convertWithRates = vi.mocked(rawConvertWithRates);
@@ -106,7 +106,7 @@ describe("computeCommitmentAwareCash", () => {
     try {
       const result = await computeCommitmentAwareCash({ reserveFloor: 250 });
       expect(
-        plannedTransactionRepository.getForCommitmentProjection,
+        mockOf(plannedTransactionRepository, "getForCommitmentProjection"),
       ).toHaveBeenCalledWith("2026-12-18");
       expect(result).toMatchObject({
         currentCash: 1000,

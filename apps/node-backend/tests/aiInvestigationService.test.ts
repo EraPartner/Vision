@@ -131,8 +131,8 @@ describe("AI investigation orchestration", () => {
   it("queues unfinished durable jobs again after startup", async () => {
     const resumed: string[] = [];
     const count = await resumeRecoverableInvestigations({
-      list: async () => [{ id: "oldest" }, { id: "newest" }],
-      run: async (id) => resumed.push(id),
+      list: () => Promise.resolve([{ id: "oldest" }, { id: "newest" }]),
+      run: (id) => Promise.resolve(resumed.push(id)),
     });
     expect(count).toBe(2);
     expect(resumed).toEqual(["oldest", "newest"]);
@@ -172,11 +172,11 @@ describe("AI investigation orchestration", () => {
         synthesisInput: partial<ProviderGenerationInput>({
           signal: controller.signal,
         }),
-        generate: async () => {
+        generate: () => {
           controller.abort();
-          return partial<ProviderGeneration>({
+          return Promise.resolve(partial<ProviderGeneration>({
             text: JSON.stringify(__fallbackAnswer(request, [])),
-          });
+          }));
         },
         store,
       }),

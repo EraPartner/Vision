@@ -28,7 +28,7 @@ export function formatDateToYmd(date: Date): string {
  */
 export function toYmd(value: string | Date): string {
   if (value instanceof Date) return formatDateToYmd(value);
-  return String(value).slice(0, 10);
+  return value.slice(0, 10);
 }
 
 /**

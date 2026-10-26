@@ -7,6 +7,7 @@ import {
     type AnalysisDataset,
     type VisualAnalysisPlan,
 } from "@/lib/api/analysis";
+import { must } from "@/test/must";
 vi.mock("@/lib/api/analysis", () => ({ executeAnalysisPivot: vi.fn() }));
 vi.mock("@/stores/hydration/AppSettingsHydration", () => ({
     useAppSettings: () => ({ appSettings: { numberFormat: "1,234.56" } }),
@@ -104,9 +105,9 @@ describe("configured server pivot UI", () => {
             }),
         ).toBeNull();
         fireEvent.click(
-            screen.getAllByRole("button", {
+            must(screen.getAllByRole("button", {
                 name: "analysis.ext.pivot.addField",
-            })[0]!,
+            })[0]),
         );
         fireEvent.change(
             screen.getByRole("textbox", {
@@ -121,9 +122,9 @@ describe("configured server pivot UI", () => {
             })[0],
         );
         fireEvent.click(
-            screen.getAllByRole("button", {
+            must(screen.getAllByRole("button", {
                 name: "analysis.ext.pivot.addField",
-            })[0]!,
+            })[0]),
         );
         fireEvent.keyDown(
             screen.getByRole("textbox", {
@@ -298,7 +299,7 @@ describe("configured server pivot UI", () => {
             screen.getByRole("button", { name: "analysis.ext.pivot.expand" }),
         );
         expect(screen.getByText("Checking")).toBeVisible();
-        fireEvent.click(screen.getAllByRole("button", { name: "20" })[1]!);
+        fireEvent.click(must(screen.getAllByRole("button", { name: "20" })[1]));
         expect(drill).toHaveBeenCalledWith(
             ["category_general", "account", "month", "currency"],
             { ...base, account: "Checking", month: "2026-01-01" },

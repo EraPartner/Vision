@@ -63,8 +63,10 @@ function parseJsonStat(
 const eurostatAdapter = {
   key: 'eurostat',
 
-  async macroSearch(query: string) {
-    return { items: searchCatalog('eurostat', query) };
+  macroSearch(query: string) {
+    return new Promise<{ items: ReturnType<typeof searchCatalog> }>((resolve) => {
+      resolve({ items: searchCatalog('eurostat', query) });
+    });
   },
 
   async macroSeries(seriesId: string, { range = '5y' }: { range?: string } = {}) {
@@ -77,9 +79,9 @@ const eurostatAdapter = {
     const points = parseJsonStat(data).map((p) => ({
       time: p.time,
       close: p.value,
-      high: undefined as number | undefined,
-      low: undefined as number | undefined,
-      volume: undefined as number | undefined,
+      high: undefined,
+      low: undefined,
+      volume: undefined,
     }));
     const entry = catalogEntry('eurostat', seriesId);
     return {

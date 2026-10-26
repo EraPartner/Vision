@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '@/lib/api';
 import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
@@ -30,12 +31,30 @@ export interface TaxClassificationEntry {
 
 export type PortfolioTaxClassificationMap = Record<string, TaxClassificationEntry>;
 
+const classificationMapSchema = z.record(
+    z.string(),
+    z
+        .object({
+            etfStructure: z
+                .enum(['accumulating', 'distributing'])
+                .optional()
+                .catch(undefined),
+            subjectToReynders: z.boolean().optional().catch(undefined),
+            reyndersInterestPortion: z.number().optional().catch(undefined),
+        })
+        .catch({}),
+);
+
 function keyFor(investmentId: InvestmentId): string {
     return String(investmentId);
 }
 
 export function usePortfolioTaxClassifications() {
-    const { value: preloaded, isLoading } = usePreloadedSetting<PortfolioTaxClassificationMap>(SETTINGS_KEY);
+    const { value: preloadedValue, isLoading } = usePreloadedSetting(SETTINGS_KEY);
+    const preloaded = useMemo(() => {
+        const parsed = classificationMapSchema.safeParse(preloadedValue);
+        return parsed.success ? parsed.data : null;
+    }, [preloadedValue]);
     const [classifications, setClassifications] = useState<PortfolioTaxClassificationMap>({});
 
     useEffect(() => {
@@ -76,7 +95,7 @@ export function usePortfolioTaxClassifications() {
                 stripped.reyndersInterestPortion = entry.reyndersInterestPortion;
             }
             if (Object.keys(stripped).length === 0) {
-                delete next[key];
+                Reflect.deleteProperty(next, key);
             } else {
                 next[key] = stripped;
             }

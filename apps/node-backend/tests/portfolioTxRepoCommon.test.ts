@@ -369,7 +369,7 @@ describe("validateSellUnitsAvailability", () => {
       }),
     ).rejects.toMatchObject({
       code: "VALIDATION_ERROR",
-      message: expect.stringContaining("sell units exceed"),
+      message: expect.stringContaining("sell units exceed") as unknown,
     });
   });
 

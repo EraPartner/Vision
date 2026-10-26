@@ -16,6 +16,7 @@ import {
     asPlannedTransactionId,
     asTransactionId,
 } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -158,7 +159,7 @@ describe("ExecutionHistoryDialog", () => {
         const closeBtns = await screen.findAllByRole("button", {
             name: /^close$/i,
         });
-        const footerCloseBtn = closeBtns[closeBtns.length - 1]!;
+        const footerCloseBtn = must(closeBtns[closeBtns.length - 1]);
         await user.click(footerCloseBtn);
 
         // Assert

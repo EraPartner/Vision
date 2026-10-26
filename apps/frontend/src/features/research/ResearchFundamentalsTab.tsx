@@ -13,6 +13,7 @@ import { ResearchUnavailableNote } from "@/features/research/ResearchUnavailable
 import { ScorecardPanel } from "@/features/research/ResearchScorecard";
 import type { ResearchFundamentals } from "@/types/research";
 import { useResearchScorecardQuery } from "./useResearchQueries";
+import type { TranslationKey } from "@/locales/keys";
 
 interface ResearchFundamentalsTabProps {
     symbol: string;
@@ -23,12 +24,12 @@ type MetricFormat = "ratio" | "pct" | "largeNum" | "price";
 
 interface MetricDescriptor {
     key: keyof ResearchFundamentals;
-    labelKey: string;
+    labelKey: TranslationKey;
     format: MetricFormat;
 }
 
 /** Metrics grouped by analytical theme; groups with no data are hidden. */
-const METRIC_GROUPS: { titleKey: string; metrics: MetricDescriptor[] }[] = [
+const METRIC_GROUPS: { titleKey: TranslationKey; metrics: MetricDescriptor[] }[] = [
     {
         titleKey: "research.fundamentals.groupValuation",
         metrics: [
@@ -271,7 +272,7 @@ export function ResearchFundamentalsTab({
                             <List>
                                 {visible.map((m) => (
                                     <ListRow
-                                        key={String(m.key)}
+                                        key={m.key}
                                         className="min-h-10"
                                         title={
                                             <span className="text-label-secondary">

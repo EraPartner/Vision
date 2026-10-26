@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router";
+import { useRouteParams } from "@/hooks/useRouteParams";
+import { ROUTES } from "@/lib/routes";
 import {
     Plus,
     Trash2,
@@ -64,6 +65,7 @@ import {
     useTableMutationData,
     useTableRows,
 } from "@/features/admin/useTableDataEditorData";
+import type { TranslationKey } from "@/locales/keys";
 
 const MATVIEW_BASE_TABLES = new Set([
     "transactions",
@@ -109,7 +111,19 @@ function valuesEqual(a: unknown, b: unknown): boolean {
             JSON.stringify(a) ===
             (typeof b === "object" ? JSON.stringify(b) : b)
         );
-    return String(a) === String(b);
+    return scalarText(a) === scalarText(b);
+}
+
+/** Text of a non-object cell value (strings, numbers, booleans, bigints). */
+function scalarText(value: unknown): string {
+    if (typeof value === "string") return value;
+    if (
+        typeof value === "number" ||
+        typeof value === "boolean" ||
+        typeof value === "bigint"
+    )
+        return String(value);
+    return "";
 }
 
 function display(value: unknown): { text: string; isNull: boolean } {
@@ -119,7 +133,7 @@ function display(value: unknown): { text: string; isNull: boolean } {
         return { text: JSON.stringify(value), isNull: false };
     if (typeof value === "boolean")
         return { text: value ? "true" : "false", isNull: false };
-    return { text: String(value), isNull: false };
+    return { text: scalarText(value), isNull: false };
 }
 
 // ── editable cell ───────────────────────────────────────────────────────────
@@ -131,7 +145,7 @@ function RevertCellButton({
     t,
 }: {
     onRevert: () => void;
-    t: (k: string) => string;
+    t: (k: TranslationKey) => string;
 }) {
     const label = t("dbEditor.revertCell");
     return (
@@ -174,7 +188,7 @@ function EditableCell({
     lockEdit?: boolean;
     onChange: (next: unknown) => void;
     onRevert: () => void;
-    t: (k: string) => string;
+    t: (k: TranslationKey) => string;
 }) {
     const [editing, setEditing] = useState(false);
     const cellRef = useRef<HTMLTableCellElement>(null);
@@ -222,7 +236,7 @@ function EditableCell({
                 ? ""
                 : typeof value === "object"
                   ? JSON.stringify(value)
-                  : String(value);
+                  : scalarText(value);
         return (
             <TableCell className={cn("py-1.5", dirtyCls)}>
                 <Input
@@ -322,7 +336,7 @@ function EditableCell({
 // ── page ──────────────────────────────────────────────────────────────────────
 
 export default function TableDataEditorPage() {
-    const { table = "" } = useParams();
+    const { table } = useRouteParams(ROUTES.adminDbTable) ?? { table: "" };
     const { t, tc } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
 
@@ -423,21 +437,18 @@ export default function TableDataEditorPage() {
         setEdits((prev) => {
             const rowEdits = prev[key];
             if (!rowEdits || !(col in rowEdits)) return prev;
-            const nextRowEdits = { ...rowEdits };
-            delete nextRowEdits[col];
+            const { [col]: _removed, ...nextRowEdits } = rowEdits;
             if (Object.keys(nextRowEdits).length > 0) {
                 return { ...prev, [key]: nextRowEdits };
             }
-            const next = { ...prev };
-            delete next[key];
+            const { [key]: _removedRow, ...next } = prev;
             return next;
         });
     }
     function revertRow(key: string) {
         setEdits((prev) => {
             if (!(key in prev)) return prev;
-            const next = { ...prev };
-            delete next[key];
+            const { [key]: _removed, ...next } = prev;
             return next;
         });
     }
@@ -454,8 +465,7 @@ export default function TableDataEditorPage() {
         setNewRows((prev) =>
             prev.map((row) => {
                 if (row.tempId !== tempId || !(col in row.values)) return row;
-                const values = { ...row.values };
-                delete values[col];
+                const { [col]: _removed, ...values } = row.values;
                 return { ...row, values };
             }),
         );

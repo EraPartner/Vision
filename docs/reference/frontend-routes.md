@@ -2,8 +2,8 @@
 title: Frontend Routes Reference
 type: reference
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-26
+updated: 2026-10-26
 tags:
   [reference, frontend, routing, pages, react-router, admin, sidebar-sections]
 description: Complete reference of all frontend routes and their page components, including admin routes and the sidebar sections that offer them
@@ -16,6 +16,17 @@ Lazy page paths, literal chunk loaders, and admin-gate flags have one source of 
 `apps/frontend/src/lib/routePreload.ts`'s ordered `appRouteManifest`. `App.tsx` derives route
 elements from it. The wildcard catch-all remains explicit in `App.tsx` and renders `NotFound` for
 every path absent from the manifest.
+
+Page patterns are declared once in the typed `ROUTES` table in `apps/frontend/src/lib/routes.ts`;
+the manifest takes its `path`s from it, and the `AppPath` type (a known pathname plus an optional
+`?query` or `#hash`) is derived from the same table. In-app navigation goes through `AppLink`,
+`AppNavLink` and `AppNavigate` (`lib/appNavigation.tsx`) and `useAppNavigate` (`hooks/useAppNavigate.ts`),
+so a typo'd or removed route fails to compile; an ESLint rule bans the untyped react-router
+`Link`, `NavLink`, `Navigate` and `useNavigate`. `isAppPath` guards paths that arrive as plain
+strings (native menu payloads, the persisted last page). Dynamic segments carry branded ids
+(ADR-220), so `/accounts/${id}` only compiles for an `AccountId`; pages read them with
+`useRouteParams` (`hooks/useRouteParams.ts`), which parses `useParams()` into branded ids and
+returns `null` for a malformed segment so the page takes its existing not-found or redirect path.
 
 ## Shareable page state
 

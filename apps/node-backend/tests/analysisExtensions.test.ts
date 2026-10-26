@@ -8,6 +8,7 @@ import {
   seekAnalysisGoal,
 } from "../src/services/analysisExtensions.ts";
 import type { PrepareAnalysisDataInput } from "../src/services/analysisExtensions.ts";
+import { must } from "./helpers/must.ts";
 const columns = [
   { id: "date", type: "date" },
   { id: "amount", type: "decimal", unit: { kind: "money", currency: "EUR" } },
@@ -58,8 +59,8 @@ describe("bounded analysis extensions", () => {
       valueColumns: ["amount"],
     });
     expect(output.rows.map((row) => row.amount)).toEqual(["10", null, "30"]);
-    expect(output.rows[2]!.amount_previous).toBeNull();
-    expect(output.rows[2]!.amount_cumulative).toBeNull();
+    expect(must(output.rows[2], "output.rows[2]").amount_previous).toBeNull();
+    expect(must(output.rows[2], "output.rows[2]").amount_cumulative).toBeNull();
     expect(output.coverage.missingPeriods).toBe(1);
     const zero = compareAnalysisTime({
       rows,
@@ -69,8 +70,8 @@ describe("bounded analysis extensions", () => {
       missing: "zero",
       rollingWindow: 2,
     });
-    expect(zero.rows[2]!.amount_cumulative).toBe("40");
-    expect(zero.rows[2]!.amount_rolling_average).toBe("15");
+    expect(must(zero.rows[2], "zero.rows[2]").amount_cumulative).toBe("40");
+    expect(must(zero.rows[2], "zero.rows[2]").amount_rolling_average).toBe("15");
   });
   it("uses ISO Monday weeks and leap-day prior-year clamping", () => {
     const weeks = compareAnalysisTime({
@@ -80,7 +81,7 @@ describe("bounded analysis extensions", () => {
       valueColumns: ["amount"],
       bucket: "week",
     });
-    expect(weeks.rows[0]!.date).toBe("2024-01-01");
+    expect(must(weeks.rows[0], "weeks.rows[0]").date).toBe("2024-01-01");
     const years = compareAnalysisTime({
       rows: [
         { date: "2023-02-28", amount: "10", category: "A" },
@@ -92,8 +93,8 @@ describe("bounded analysis extensions", () => {
       bucket: "day",
       missing: "zero",
     });
-    expect(years.rows.at(-1)!.amount_yoy).toBe("10");
-    expect(years.rows.at(-1)!.amount_yoy_percent).toBe("50");
+    expect(must(years.rows.at(-1), "years.rows.at(-1)").amount_yoy).toBe("10");
+    expect(must(years.rows.at(-1), "years.rows.at(-1)").amount_yoy_percent).toBe("50");
   });
   it("rejects partial population operations and mixed units", () => {
     expect(() =>
@@ -107,7 +108,7 @@ describe("bounded analysis extensions", () => {
     ).toThrow("complete");
     expect(() =>
       compareAnalysisTime({
-        rows: rows.map((row, i) => ({ ...row, currency: i ? "USD" : "EUR" })),
+        rows: rows.map((row, i) => ({ ...row, currency: i > 0 ? "USD" : "EUR" })),
         columns: [...columns, { id: "currency", type: "currency" }],
         dateColumn: "date",
         valueColumns: ["amount"],
@@ -149,8 +150,8 @@ describe("bounded analysis extensions", () => {
       steps: [{ type: "lookup", input, keys: ["id"], inputKeys: ["id"] }],
     };
     const output = prepareAnalysisData(request);
-    expect(output.rows[0]!["input.name"]).toBe("matched");
-    expect(output.lineage[0]!.unmatchedRows).toBe(1);
+    expect(must(output.rows[0], "output.rows[0]")["input.name"]).toBe("matched");
+    expect(must(output.lineage[0], "output.lineage[0]").unmatchedRows).toBe(1);
     input.rows.push({ id: "1", name: "duplicate" });
     expect(() => prepareAnalysisData(request)).toThrow("multiply");
   });
@@ -175,7 +176,7 @@ describe("bounded analysis extensions", () => {
     });
     expect(output.rows.map((row) => row.value)).toEqual(["10", "30"]);
     expect(
-      output.columns.find((column) => column.id === "value")!.unit!.currency,
+      must(must(output.columns.find((column) => column.id === "value"), "output.columns.find((column) => column.id === \"value\")").unit, "output.columns.find((column) => column.id === \"value\")!.unit").currency,
     ).toBe("EUR");
     expect(() =>
       prepareAnalysisData({
@@ -265,9 +266,9 @@ describe("extension missing coverage and stock semantics", () => {
       valueColumns: ["amount"],
       missing: "zero",
     });
-    expect(output.rows[0]!.amount).toBeNull();
+    expect(must(output.rows[0], "output.rows[0]").amount).toBeNull();
     expect(output.coverage.complete).toBe(false);
-    expect(output.errors[0]!.code).toBe("MISSING_CONTRIBUTOR");
+    expect(must(output.errors[0], "output.errors[0]").code).toBe("MISSING_CONTRIBUTOR");
   });
   it("withholds preparation pivots with missing contributors and rejects cross-unit append", () => {
     const output = prepareAnalysisData({
@@ -287,7 +288,7 @@ describe("extension missing coverage and stock semantics", () => {
         },
       ],
     });
-    expect(output.rows[0]!.pivot_0).toBeNull();
+    expect(must(output.rows[0], "output.rows[0]").pivot_0).toBeNull();
     expect(output.coverage.complete).toBe(false);
     expect(() =>
       prepareAnalysisData({
@@ -323,7 +324,7 @@ describe("extension missing coverage and stock semantics", () => {
     };
     expect(() => compareAnalysisTime(request)).toThrow("last aggregation");
     expect(
-      compareAnalysisTime({ ...request, aggregation: "last" }).rows[0]!.amount,
+      must(compareAnalysisTime({ ...request, aggregation: "last" }).rows[0], "compareAnalysisTime({ ...request, aggregation: \"last\" })....").amount,
     ).toBe("110");
   });
 });
@@ -347,10 +348,10 @@ describe("extension output unit resolution", () => {
       missing: "zero",
     });
     expect(
-      output.columns.find((column) => column.id === "amount")!.unit,
+      must(output.columns.find((column) => column.id === "amount"), "output.columns.find((column) => column.id === \"amount\")").unit,
     ).toEqual({ kind: "money", currency: "EUR" });
     expect(
-      output.columns.find((column) => column.id === "amount_previous")!.unit,
+      must(output.columns.find((column) => column.id === "amount_previous"), "output.columns.find((column) => column.id === \"amount_pre...").unit,
     ).toEqual({ kind: "money", currency: "EUR" });
     const formula = evaluateAnalysisFormulas({
       rows: output.rows,
@@ -375,7 +376,7 @@ describe("extension output unit resolution", () => {
       ],
     });
     expect(
-      pivot.columns.find((column) => column.id === "pivot_0")!.unit,
+      must(pivot.columns.find((column) => column.id === "pivot_0"), "pivot.columns.find((column) => column.id === \"pivot_0\")").unit,
     ).toEqual({ kind: "money", currency: "EUR" });
   });
   it("resolves omitted single-instrument scope without inventing an identity", () => {
@@ -394,7 +395,7 @@ describe("extension output unit resolution", () => {
       valueColumns: ["units"],
     });
     expect(
-      output.columns.find((column) => column.id === "units")!.unit,
+      must(output.columns.find((column) => column.id === "units"), "output.columns.find((column) => column.id === \"units\")").unit,
     ).toEqual({ kind: "quantity", instrumentId: "7" });
     const formula = evaluateAnalysisFormulas({
       rows: output.rows,
@@ -460,7 +461,7 @@ it("binds imported monetary values to imported currency", () => {
     ],
   });
   expect(
-    output.columns.find((c) => c.id === "input.amount")!.unit!.currencyColumn,
+    must(must(output.columns.find((c) => c.id === "input.amount"), "output.columns.find((c) => c.id === \"input.amount\")").unit, "output.columns.find((c) => c.id === \"input.amount\")!.unit").currencyColumn,
   ).toBe("input.currency");
-  expect(output.rows[0]!["input.currency"]).toBe("USD");
+  expect(must(output.rows[0], "output.rows[0]")["input.currency"]).toBe("USD");
 });

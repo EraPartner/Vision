@@ -85,14 +85,14 @@ export function useCartesianFrame<Datum>({
     const xScale = useMemo<CartesianXScale>(() => {
         const values = data.map(stableXAccessor);
         if (xIsDate) {
-            const [lo, hi] = extent(values as Date[]);
+            const [lo, hi] = extent(values.filter((v) => v instanceof Date));
             return scaleTime({
                 range: [0, innerWidth],
                 domain: [lo ?? new Date(), hi ?? new Date()],
             });
         }
 
-        const numbers = values as number[];
+        const numbers = values.filter((v) => typeof v === "number");
         return scaleLinear({
             range: [0, innerWidth],
             domain: [min(numbers) ?? 0, max(numbers) ?? 0],

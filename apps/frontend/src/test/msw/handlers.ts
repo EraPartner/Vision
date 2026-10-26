@@ -28,7 +28,7 @@ interface EnvelopeMeta {
  * drifts — hence the explicit `ok201`/`ok202` variants below, and the
  * status column pinned per row in contracts.test.ts.
  */
-function okWithStatus<T>(status: number, data: T, meta?: EnvelopeMeta) {
+function okWithStatus(status: number, data: unknown, meta?: EnvelopeMeta) {
     return HttpResponse.json(
         { ok: true, data, ...(meta ? { meta } : {}) },
         { status },
@@ -36,17 +36,17 @@ function okWithStatus<T>(status: number, data: T, meta?: EnvelopeMeta) {
 }
 
 /** 200 OK — routes that call `res.ok(...)` with no preceding `res.status(...)`. */
-export function ok<T>(data: T, meta?: EnvelopeMeta) {
+export function ok(data: unknown, meta?: EnvelopeMeta) {
     return okWithStatus(200, data, meta);
 }
 
 /** 201 Created — routes that call `res.status(201)` before `res.ok(...)`. */
-export function ok201<T>(data: T, meta?: EnvelopeMeta) {
+export function ok201(data: unknown, meta?: EnvelopeMeta) {
     return okWithStatus(201, data, meta);
 }
 
 /** 202 Accepted — the deferred-work arm (CSV import's review branch). */
-export function ok202<T>(data: T, meta?: EnvelopeMeta) {
+export function ok202(data: unknown, meta?: EnvelopeMeta) {
     return okWithStatus(202, data, meta);
 }
 
@@ -81,7 +81,7 @@ export function err(status: number, message: string, code?: string) {
 const AGG_COMPUTED_AT = "2025-01-01T00:00:00Z";
 
 /** Aggregation-endpoint envelope: ok({ data, meta: { computedAt, source: "live" } }). */
-export function aggOk<T>(data: T, computedAt: string = AGG_COMPUTED_AT) {
+export function aggOk(data: unknown, computedAt: string = AGG_COMPUTED_AT) {
     return ok({ data, meta: { computedAt, source: "live" as const } });
 }
 
@@ -1688,7 +1688,7 @@ export const defaultHandlers = [
     // Splits sub-routes
     http.get(`${API_BASE}/api/splits/transaction/:id`, () => ok({ items: [], total: 0 })),
     // 201: routes/splits.js:298.
-    http.post(`${API_BASE}/api/splits/batch`, () => ok201({ items: [] })),
+    http.post(`${API_BASE}/api/splits/batch`, () => ok201({ items: [], total: 0 })),
     // NOTE: there is deliberately no `http.patch('/api/splits/:id')` handler.
     // routes/splits.js registers get/post/delete only — a PATCH there 404s in
     // production, and no frontend client sends one. Mocking it would resurrect

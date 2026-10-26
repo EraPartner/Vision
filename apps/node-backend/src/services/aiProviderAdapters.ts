@@ -17,7 +17,7 @@ export interface ProviderGenerationInput {
 }
 
 function outputText(response: { content?: string } | null | undefined) {
-  return String(response?.content ?? "").trim();
+  return (response?.content ?? "").trim();
 }
 
 /** Every investigation model pass runs on the configured Ollama endpoint. */

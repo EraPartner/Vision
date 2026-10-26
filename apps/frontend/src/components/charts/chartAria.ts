@@ -1,3 +1,4 @@
+import type { TranslationKey } from "@/locales/keys";
 /**
  * Accessible, localized summaries for chart `role="img"` labels.
  *
@@ -11,12 +12,12 @@
  * hardcoded English, so Dutch screen-reader users heard English for every chart).
  */
 
-type TFn = (key: string, vars?: Record<string, string | number>) => string;
+type TFn = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 
 /** Summary for category/series charts (bar, line, area, stacked bar). */
 export function summarizeSeriesChart(
   t: TFn,
-  kindKey: string,
+  kindKey: TranslationKey,
   categoryCount: number,
   seriesLabels: ReadonlyArray<string | undefined>,
 ): string {
@@ -27,7 +28,7 @@ export function summarizeSeriesChart(
 }
 
 /** Summary for proportion charts (pie, donut), listing the first few segment names. */
-export function summarizeProportionChart(t: TFn, kindKey: string, names: ReadonlyArray<string>): string {
+export function summarizeProportionChart(t: TFn, kindKey: TranslationKey, names: ReadonlyArray<string>): string {
   const kind = t(kindKey);
   const named = names.filter(Boolean);
   const shown = named.slice(0, 6);

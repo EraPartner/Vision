@@ -16,7 +16,7 @@ import { z } from "zod";
 
 export const LinkSchema = z.strictObject({ rel: z.string(), href: z.string() });
 
-export const paginatedOf = <T extends z.ZodTypeAny>(item: T) =>
+export const paginatedOf = <T extends z.ZodType>(item: T) =>
   z.strictObject({
     items: z.array(item),
     total: z.number().int().nonnegative(),
@@ -26,14 +26,14 @@ export const paginatedOf = <T extends z.ZodTypeAny>(item: T) =>
   });
 
 /** `{ items, total }` — the canonical body for unpaginated collection GETs. */
-export const collectionSchema = (item: z.ZodTypeAny = z.unknown()) =>
+export const collectionSchema = (item: z.ZodType = z.unknown()) =>
   z.strictObject({
     items: z.array(item),
     total: z.number().int().nonnegative(),
   });
 
 /** Category lists include hypermedia links even when pagination is omitted. */
-export const linkedCollectionOf = <T extends z.ZodTypeAny>(item: T) =>
+export const linkedCollectionOf = (item: z.ZodType) =>
   collectionSchema(item).extend({ links: z.array(LinkSchema) });
 
 // ── Wire contracts ───────────────────────────────────────────────────────────
@@ -80,7 +80,7 @@ export const WireLinkSchema = z.looseObject({
  * present. Some routes always paginate (`PaginationFields` in openapi.yaml),
  * others only on request (`OptionalPaginationFields`); both pass here.
  */
-export const wireListOf = <T extends z.ZodTypeAny>(item: T) =>
+export const wireListOf = <T extends z.ZodType>(item: T) =>
   z.looseObject({
     items: z.array(item),
     total: CountSchema,
@@ -90,7 +90,7 @@ export const wireListOf = <T extends z.ZodTypeAny>(item: T) =>
   });
 
 /** A list body the backend always paginates: `PaginationFields` plus `links`. */
-export const wirePageOf = <T extends z.ZodTypeAny>(item: T) =>
+export const wirePageOf = <T extends z.ZodType>(item: T) =>
   z.looseObject({
     items: z.array(item),
     total: CountSchema,
@@ -100,5 +100,5 @@ export const wirePageOf = <T extends z.ZodTypeAny>(item: T) =>
   });
 
 /** `{ items, total }` — an unpaginated collection body. */
-export const wireCollectionOf = <T extends z.ZodTypeAny>(item: T) =>
+export const wireCollectionOf = <T extends z.ZodType>(item: T) =>
   z.looseObject({ items: z.array(item), total: CountSchema });

@@ -21,6 +21,7 @@ import { logger } from "../config/logger.ts";
 import { addAll, roundMoney, toDecimal } from "../lib/money.ts";
 import { median } from "../lib/math.ts";
 import type Decimal from "decimal.js";
+import { errorMessage } from "../lib/errors.ts";
 
 export interface CategoryOutlierFinding {
   categoryId: number;
@@ -221,11 +222,13 @@ function computeOutliers(
 
     const currentValue = currentSpend.toNumber();
     // priorWindowValues is non-empty (length ≥ MIN_POPULATED_PRIOR_MONTHS), so
-    // neither median is undefined.
-    const baselineMedian = median(priorWindowValues)!;
+    // neither median is undefined; the guards only narrow.
+    const baselineMedian = median(priorWindowValues);
+    if (baselineMedian === undefined) continue;
     const mad = median(
       priorWindowValues.map((v) => Math.abs(v - baselineMedian)),
-    )!;
+    );
+    if (mad === undefined) continue;
 
     const diff = currentValue - baselineMedian;
     if (diff <= 0) continue; // only OVERSPEND ("creep") is surfaced
@@ -275,7 +278,7 @@ function computeOutliers(
  */
 function filterDismissedFindings(
   findings: CategoryOutlierFinding[],
-  dismissRecords: CategoryOutlierDismissRecord[] = [],
+  dismissRecords: Array<CategoryOutlierDismissRecord | null> = [],
   now: Date = new Date(),
 ): CategoryOutlierFinding[] {
   if (!Array.isArray(findings) || findings.length === 0) return [];
@@ -306,7 +309,7 @@ function filterDismissedFindings(
     const rec = latestByKey.get(`${finding.categoryId}:${finding.monthKey}`);
     if (!rec) return true;
     if (nowMs - rec.dismissedMs > DISMISS_SUPPRESSION_MS) return true; // dismissal aged out
-    const dismissedDeviation = Number(rec.deviationAtDismiss);
+    const dismissedDeviation = rec.deviationAtDismiss;
     if (
       Number.isFinite(dismissedDeviation) &&
       finding.deviation >= dismissedDeviation + REALERT_DEVIATION_MARGIN
@@ -344,7 +347,8 @@ async function getRawFindings(): Promise<CategoryOutlierFinding[]> {
         .where("t.category_id", "is not", null)
         .where(sql<boolean>`t.amount < 0`)
         .where("t.date", ">=", sql<Date>`CURRENT_DATE - INTERVAL '7 months'`)
-        .orderBy(["t.category_id", "t.date"]),
+        .orderBy("t.category_id")
+        .orderBy("t.date"),
     );
 
     const findings = computeOutliers(rows, new Date());
@@ -355,7 +359,7 @@ async function getRawFindings(): Promise<CategoryOutlierFinding[]> {
     return findings;
   } catch (err) {
     logger.error("Error detecting category spend outliers", {
-      error: (err as Error).message,
+      error: errorMessage(err),
     });
     throw err;
   }

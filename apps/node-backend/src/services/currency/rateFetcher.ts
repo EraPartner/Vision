@@ -5,6 +5,7 @@
  * persists them to the database, and provides historical rate lookup utilities.
  */
 
+import { z } from "zod";
 import { sql } from "kysely";
 import { withTransaction } from "../../database/connection.ts";
 import { checkedRow, db } from "../../database/db.ts";
@@ -14,6 +15,7 @@ import {
   rateToEurRowSchema,
 } from "../../database/rows/portfolio.ts";
 import { logger } from "../../config/logger.ts";
+import { parseOr } from "../../lib/looseJson.ts";
 import { toDecimal, toNumber } from "../../lib/money.ts";
 import { todayAppDateString } from "../../lib/timezone.ts";
 import { formatDateToYmd, epochMsToUtcYmd } from "../../lib/dateFormat.ts";
@@ -72,10 +74,7 @@ function scheduleHistoricalFullEviction() {
     historicalEcbFullCache = null;
     historicalEcbFullEvictTimer = null;
   }, HISTORICAL_FULL_CACHE_IDLE_MS);
-  if (
-    historicalEcbFullEvictTimer != null &&
-    typeof historicalEcbFullEvictTimer.unref === "function"
-  ) {
+  if (typeof historicalEcbFullEvictTimer.unref === "function") {
     historicalEcbFullEvictTimer.unref();
   }
 }
@@ -104,7 +103,7 @@ export function normalizeDateInput(
     if (isNaN(dateValue.getTime())) return null;
     return formatDateToYmd(dateValue);
   }
-  const str = String(dateValue);
+  const str = dateValue;
   const m = str.match(/^\d{4}-\d{2}-\d{2}/);
   return m ? m[0] : null;
 }
@@ -157,6 +156,12 @@ function parseEcbHistoricalXml(xmlText: string): RatesByDate {
   return byDate;
 }
 
+/** open.er-api.com latest response; anything but an object reads as unexpected. */
+const erApiResponseSchema = z.looseObject({
+  result: z.unknown().optional(),
+  rates: z.record(z.string(), z.unknown()).optional().catch(undefined),
+});
+
 // ─── API fetchers ─────────────────────────────────────────────────────────────
 
 /**
@@ -201,13 +206,10 @@ export async function fetchFromErApi(): Promise<RateTable | null> {
       logger.error(`open.er-api returned ${response.status}`);
       return null;
     }
-    const data = (await response.json()) as {
-      result?: unknown;
-      rates?: Record<string, unknown>;
-    };
-    if (data.result !== "success" || !data.rates) {
+    const data = parseOr(erApiResponseSchema, await response.json(), null);
+    if (data?.result !== "success" || !data.rates) {
       logger.error("Unexpected response from open.er-api", {
-        result: data.result,
+        result: data?.result,
       });
       return null;
     }
@@ -318,7 +320,7 @@ export function rateOnOrBeforeFromMap(
   dateStr: string,
   maxLookbackDays = 7,
 ): number | undefined {
-  if (byDate == null || byDate.size === 0) return undefined;
+  if (byDate.size === 0) return undefined;
   // A missing part stays NaN, as it was when read past the end of the split.
   const [y = NaN, m = NaN, d = NaN] = dateStr.split("-").map(Number);
   let ts = Date.UTC(y, m - 1, d);
@@ -464,12 +466,12 @@ export async function getUnindexedRatesToEurForDates(
   }: { saveFetchedHistoricalRates?: boolean } = {},
 ): Promise<Map<string, number>> {
   const pairs: Array<{ currency: string; date: string }> = [];
-  for (const [rawCurrency, rawDates] of datesByCurrency ?? []) {
-    const currency = String(rawCurrency || "")
+  for (const [rawCurrency, rawDates] of datesByCurrency) {
+    const currency = (rawCurrency || "")
       .toUpperCase()
       .trim();
     if (!currency || currency === "EUR") continue;
-    for (const rawDate of new Set(rawDates ?? [])) {
+    for (const rawDate of new Set(rawDates)) {
       const date = normalizeDateInput(rawDate);
       if (date) pairs.push({ currency, date });
     }
@@ -557,7 +559,7 @@ export async function getStoredRateToEurOnOrBefore(
   dateValue: string | Date | null | undefined,
   maxLookbackDays = 7,
 ): Promise<number | undefined> {
-  const code = String(currencyCode || "")
+  const code = (currencyCode || "")
     .toUpperCase()
     .trim();
   if (!code) return undefined;
@@ -603,14 +605,15 @@ export function buildHistoricalRateIndex(
 ): HistoricalRateIndex {
   const byCurrency: HistoricalRateIndex = new Map();
   for (const row of rows) {
-    const currency = String(row.currency_code || "")
+    const currency = (row.currency_code || "")
       .toUpperCase()
       .trim();
     const date = normalizeDateInput(row.rate_date);
     const rate = toNumber(toDecimal(row.rate_to_eur));
     if (!currency || !date || !Number.isFinite(rate)) continue;
-    if (!byCurrency.has(currency)) byCurrency.set(currency, []);
-    byCurrency.get(currency)!.push({ date, rate });
+    const entries = byCurrency.get(currency);
+    if (entries) entries.push({ date, rate });
+    else byCurrency.set(currency, [{ date, rate }]);
   }
   for (const entries of byCurrency.values()) {
     entries.sort((a, b) => a.date.localeCompare(b.date));

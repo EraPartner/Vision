@@ -13,6 +13,7 @@ import {
     asCurrencyCode,
     asRecipientId,
 } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -89,7 +90,7 @@ describe("InsightsDigestPanel", () => {
         });
         expect(toggle).toHaveAttribute("aria-expanded", "false");
         expect(
-            document.getElementById(toggle.getAttribute("aria-controls")!),
+            document.getElementById(must(toggle.getAttribute("aria-controls"))),
         ).not.toBeVisible();
         expect(screen.getByText("Netflix")).not.toBeVisible();
         expect(
@@ -159,7 +160,7 @@ describe("InsightsDigestPanel", () => {
         stubDigest({
             ...DIGEST,
             cashForecast: {
-                ...DIGEST.cashForecast!,
+                ...must(DIGEST.cashForecast),
                 movedSignificantly: false,
                 prominence: "standing",
             },

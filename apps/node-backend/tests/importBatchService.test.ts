@@ -18,6 +18,7 @@ vi.mock("../src/repositories/importBatchRepository.ts", () => ({
 import { getPreviewRows as rawGetPreviewRows } from "../src/repositories/importBatchRepository.ts";
 import type { ImportPreviewRow } from "../src/repositories/importBatchRepository.ts";
 import { getImportBatchPreview } from "../src/services/importBatchService.ts";
+import { must } from "./helpers/must.ts";
 
 const getPreviewRows = vi.mocked(rawGetPreviewRows);
 
@@ -147,7 +148,7 @@ describe("getImportBatchPreview", () => {
         current_category_label: "Home: Tools",
       }),
     );
-    expect(result.groups[0]!.rows[0]).toEqual(
+    expect(must(result.groups[0], "result.groups[0]").rows[0]).toEqual(
       expect.objectContaining({
         id: "1",
         amount: "-12.50",
@@ -156,14 +157,21 @@ describe("getImportBatchPreview", () => {
         override_category_id: 22,
       }),
     );
-    expect(result.groups[0]!.rows[1]!.bank_account).toBeNull();
+    expect(
+      must(
+        must(result.groups[0], "result.groups[0]").rows[1],
+        "result.groups[0].rows[1]",
+      ).bank_account,
+    ).toBeNull();
     expect(result.groups[1]).toEqual(
       expect.objectContaining({
         recipient_id: null,
         row_count: 2,
       }),
     );
-    expect(result.groups[1]!.rows.map((row) => row.id)).toEqual(["3", "4"]);
+    expect(
+      must(result.groups[1], "result.groups[1]").rows.map((row) => row.id),
+    ).toEqual(["3", "4"]);
   });
 
   it("returns the complete zeroed totals shape for an empty preview", async () => {
@@ -194,9 +202,11 @@ describe("getImportBatchPreview", () => {
       }),
     ]);
     const { groups } = await getImportBatchPreview(9);
-    expect(groups[0]!.recipient_default_category_label).toBe(
+    expect(must(groups[0], "groups[0]").recipient_default_category_label).toBe(
       "Living:Food:Fresh",
     );
-    expect(groups[0]!.current_category_label).toBe("Living:Food:Fresh:Apples");
+    expect(must(groups[0], "groups[0]").current_category_label).toBe(
+      "Living:Food:Fresh:Apples",
+    );
   });
 });

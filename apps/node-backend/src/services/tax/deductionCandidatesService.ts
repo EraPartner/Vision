@@ -93,7 +93,7 @@ export async function computeDeductionCandidates({
   );
   const pathsById: Map<number, string[]> = hasCategoryIds
     ? new Map((await listCategoryNodes()).map((node) => [node.id, node.path]))
-    : new Map();
+    : new Map<number, string[]>();
   const hasAccountIds = rows.some((row) => row.account_id != null);
   const ownerById: Map<number, AccountOwner> = hasAccountIds
     ? new Map(
@@ -102,7 +102,7 @@ export async function computeDeductionCandidates({
           toOwner(account.owner),
         ]),
       )
-    : new Map();
+    : new Map<number, AccountOwner>();
 
   // Pass 1: group outflows by raw category name, classifying each category.
   const byCategory = new Map<
@@ -116,7 +116,7 @@ export async function computeDeductionCandidates({
     }
   >();
   for (const row of rows) {
-    const amount = toDecimal(row.amount ?? 0);
+    const amount = toDecimal(row.amount);
     if (amount.gte(0)) continue; // outflows only
 
     if (!row.category_name) continue;
@@ -181,13 +181,15 @@ export async function computeDeductionCandidates({
       total: roundToCents(agg.total).toNumber(),
       byOwner: roundOwnerTotals(agg.total, agg.byOwner),
       categoryCount: agg.categories.length,
-      categories: agg.categories.sort((a, b) => b.total - a.total),
+      categories: agg.categories.sort((a, b) =>
+        toDecimal(b.total).comparedTo(a.total),
+      ),
     }))
     .map((group) => ({
       ...group,
       partnerShares: attributeToPartners(group.total, group.byOwner, true),
     }))
-    .sort((a, b) => b.total - a.total);
+    .sort((a, b) => toDecimal(b.total).comparedTo(a.total));
 
   return { year, from, to, currency: "EUR", byDeductionType };
 }

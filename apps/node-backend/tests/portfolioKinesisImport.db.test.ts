@@ -17,34 +17,38 @@ import { closePool } from "../src/database/connection.ts";
 import { runPortfolioImportPipeline } from "../src/services/portfolioImportPipeline/index.ts";
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.ts";
 import { rollbackBatch } from "../src/services/portfolioImportBatchService.ts";
+import { must } from "./helpers/must.ts";
+import type { Pool } from "pg";
 
-const pool = getTestPool()!;
+/** A row from an ad-hoc SQL read: column values are narrowed where used. */
+type DbRow = Record<string, unknown>;
+interface IdRow {
+  id: number;
+}
+
+let pool: Pool;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const fixture = (name: string) =>
   fileURLToPath(new URL(`./fixtures/portfolio/${name}`, import.meta.url));
 const owned = { accounts: [] as number[], investments: [] as number[] };
 
 async function account(): Promise<number> {
-  const id = Number(
-    (
-      await pool.query(
+  const id = must((
+      await pool.query<IdRow>(
         "INSERT INTO accounts(name,institution,type,currency) VALUES('KINESIS SYNTHETIC','Kinesis','brokerage','EUR') RETURNING id",
       )
-    ).rows[0].id,
-  );
+    ).rows[0], "query row").id;
   owned.accounts.push(id);
   return id;
 }
 
 async function investment(symbol: string): Promise<number> {
-  const id = Number(
-    (
-      await pool.query(
+  const id = must((
+      await pool.query<IdRow>(
         "INSERT INTO investments(name,symbol,asset_class,currency) VALUES($1,$1,'metals','EUR') RETURNING id",
         [symbol],
       )
-    ).rows[0].id,
-  );
+    ).rows[0], "query row").id;
   owned.investments.push(id);
   return id;
 }
@@ -70,12 +74,12 @@ async function importKinesis(file: string, accountId: number) {
 }
 
 async function cleanup() {
-  if (owned.investments.length)
+  if (owned.investments.length > 0)
     await pool.query(
       "DELETE FROM portfolio_transactions WHERE investment_id=ANY($1::integer[])",
       [owned.investments],
     );
-  if (owned.accounts.length) {
+  if (owned.accounts.length > 0) {
     await pool.query(
       "DELETE FROM portfolio_asset_adjustment_sources WHERE adjustment_id IN (SELECT id FROM portfolio_asset_adjustments WHERE account_id=ANY($1::integer[]))",
       [owned.accounts],
@@ -93,11 +97,11 @@ async function cleanup() {
       [owned.accounts],
     );
   }
-  if (owned.investments.length)
+  if (owned.investments.length > 0)
     await pool.query("DELETE FROM investments WHERE id=ANY($1::integer[])", [
       owned.investments,
     ]);
-  if (owned.accounts.length)
+  if (owned.accounts.length > 0)
     await pool.query("DELETE FROM accounts WHERE id=ANY($1::integer[])", [
       owned.accounts,
     ]);
@@ -106,6 +110,9 @@ async function cleanup() {
 }
 
 describeDb("Kinesis imports without reconciliation scopes", () => {
+  beforeAll(() => {
+    pool = must(getTestPool(), "test pool");
+  });
   beforeAll(acquireDbSuiteLock, 180000);
   afterEach(cleanup);
   afterAll(async () => {
@@ -122,7 +129,7 @@ describeDb("Kinesis imports without reconciliation scopes", () => {
     expect(first).toMatchObject({ errors: 0 });
     const ledger = async () =>
       (
-        await pool.query(
+        await pool.query<DbRow>(
           "SELECT to_char(date,'YYYY-MM-DD') AS date,amount::text AS amount,currency,memo FROM transactions WHERE account_id=$1 ORDER BY date,id",
           [sleeve],
         )
@@ -183,7 +190,7 @@ describeDb("Kinesis imports without reconciliation scopes", () => {
     expect(first).toMatchObject({ errors: 0 });
     const history = async () =>
       (
-        await pool.query(
+        await pool.query<DbRow>(
           `SELECT type,to_char(date,'YYYY-MM-DD') AS date,amount::text AS amount,units::text AS units,
             price_per_unit::text AS price,fees::text AS fees,taxes::text AS taxes,currency,
             fx_rate_to_eur::text AS fx,income_recognition_role AS role

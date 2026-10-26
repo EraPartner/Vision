@@ -24,7 +24,16 @@ const MARGIN = { top: 8, right: 12, bottom: 28, left: 48 };
 
 /** Category label for a row; tool rows are untyped JSON. */
 function label(row: Row, key: string): string {
-    return String(row[key] ?? "");
+    const value = row[key];
+    if (value === null || value === undefined) return "";
+    if (typeof value === "string") return value;
+    if (
+        typeof value === "number" ||
+        typeof value === "boolean" ||
+        typeof value === "bigint"
+    )
+        return String(value);
+    return JSON.stringify(value);
 }
 
 /** Non-numeric cells plot as gaps (lines) or zero-height bars, as before. */

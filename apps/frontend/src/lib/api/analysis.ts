@@ -1,4 +1,5 @@
 import {
+    AnalysisCancelResultSchema,
     AnalysisCatalogSchema,
     AnalysisPivotResultSchema,
     AnalysisProposalPreviewSchema,
@@ -234,7 +235,7 @@ export function executeAnalysis(input: {
 export const cancelAnalysis = (requestId: string) =>
     apiRequest<{ cancelled: boolean; reason?: string }>(
         `/api/analysis/cancel/${encodeURIComponent(requestId)}`,
-        { method: "POST" },
+        { method: "POST", schema: AnalysisCancelResultSchema },
     );
 export function drillAnalysis(
     plan: VisualAnalysisPlan,
@@ -278,8 +279,8 @@ export const runSavedAnalysis = (id: string) =>
         `/api/analysis/saved/${encodeURIComponent(id)}/run`,
         { method: "POST", schema: SavedAnalysisSchema },
     );
-export const deleteSavedAnalysis = (id: string) =>
-    apiRequest<void>(`/api/analysis/saved/${encodeURIComponent(id)}`, {
+export const deleteSavedAnalysis = (id: string): Promise<void> =>
+    apiRequest(`/api/analysis/saved/${encodeURIComponent(id)}`, {
         method: "DELETE",
     });
 

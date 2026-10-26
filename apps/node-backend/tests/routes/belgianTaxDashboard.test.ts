@@ -24,7 +24,7 @@ vi.mock("../../src/repositories/portfolioTransactionRepository.ts", () => ({
 vi.mock("../../src/services/currency/currencyConversionService.ts", () => ({
   listLatestStoredRates: vi.fn(),
   // No stored historical rates: only rates stamped on a transaction are dated.
-  getHistoricalRateIndex: vi.fn(async () => new Map()),
+  getHistoricalRateIndex: vi.fn(() => Promise.resolve(new Map())),
 }));
 import settingsService from "../../src/services/settingsService.ts";
 import { computeMonthlySummary } from "../../src/services/calculations/aggregation/monthly.ts";
@@ -32,6 +32,7 @@ import { computeCategoryPivot } from "../../src/services/calculations/aggregatio
 import { portfolioTransactionRepository } from "../../src/repositories/portfolioTransactionRepository.ts";
 import { listLatestStoredRates } from "../../src/services/currency/currencyConversionService.ts";
 import router from "../../src/routes/belgianTaxDashboard.ts";
+import { must } from "../helpers/must.ts";
 
 const api = routeAgent(router, { mountPath: "/api/belgian-tax" });
 const path = "/api/belgian-tax/dashboard";
@@ -87,7 +88,7 @@ function cell(income: number, owner?: { partner?: number; joint?: number }) {
 }
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(settingsService.getAllWithBaselines).mockResolvedValue({
+  vi.mocked(settingsService).getAllWithBaselines.mockResolvedValue({
     settings: { belgian_tax_household_v2: household() },
     expected: {},
   });
@@ -143,7 +144,7 @@ describe("Native Tax dashboard source contract", () => {
     );
   });
   it("scales filed PIT by frozen gross and keeps partial frozen trend fields verbatim", async () => {
-    vi.mocked(settingsService.getAllWithBaselines).mockResolvedValue({
+    vi.mocked(settingsService).getAllWithBaselines.mockResolvedValue({
       settings: {
         belgian_tax_household_v2: { ...household(), taxYear: 2026 },
         belgian_tax_profile_snapshot_meta_v1: {
@@ -177,13 +178,13 @@ describe("Native Tax dashboard source contract", () => {
       filingStatus: "married_joint",
       spouseProfessionalIncome: 30000,
     });
-    const partnerB = input.partners.find((p) => p.id === "B")!;
-    partnerB.activities = input.partners[0]!.activities.map((a, index) => ({
+    const partnerB = must(input.partners.find((p) => p.id === "B"), "input.partners.find((p) => p.id === \"B\")");
+    partnerB.activities = must(input.partners[0], "input.partners[0]").activities.map((a, index) => ({
       ...a,
       id: `act_synthetic_b_${index}`,
       grossIncome: 30000,
     }));
-    vi.mocked(settingsService.getAllWithBaselines).mockResolvedValue({
+    vi.mocked(settingsService).getAllWithBaselines.mockResolvedValue({
       settings: { belgian_tax_household_v2: input },
       expected: {},
     });
@@ -205,10 +206,10 @@ describe("Native Tax dashboard source contract", () => {
       A: 70000,
       B: 30000,
     });
-    const attributed = householdForRecordedIncome(input, 100000, {
+    const attributed = must(householdForRecordedIncome(input, 100000, {
       partner: 20000,
       joint: 20000,
-    })!;
+    }), "householdForRecordedIncome(input, 100000, { partner: 2000...");
     const expected = toBelgianTaxCalculation(
       computeHouseholdTax(attributed),
       attributed,
@@ -306,7 +307,7 @@ describe("Native Tax dashboard source contract", () => {
       profileConfigured: false,
       grossAnnualIncome: 0,
     });
-    vi.mocked(settingsService.getAllWithBaselines).mockResolvedValue({
+    vi.mocked(settingsService).getAllWithBaselines.mockResolvedValue({
       settings: { belgian_tax_household_v2: live },
       expected: {},
     });
@@ -324,7 +325,7 @@ describe("Native Tax dashboard source contract", () => {
       taxIncomeCategoryIds: [99],
     });
     const historical = household();
-    vi.mocked(settingsService.getAllWithBaselines).mockResolvedValue({
+    vi.mocked(settingsService).getAllWithBaselines.mockResolvedValue({
       settings: {
         belgian_tax_household_v2: live,
         belgian_tax_household_snapshots_v2: { "2025": historical },

@@ -48,6 +48,7 @@ import {
   runPortfolioImportPipeline,
 } from "../src/services/portfolioImportPipeline/index.ts";
 import { partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 /** The structural slice of pg's query surface these fakes implement. */
 type FakeQuery = (
@@ -79,7 +80,7 @@ describe("portfolio import zero-row guard", () => {
 
     await expect(
       prepareImport({ batchId: 42, filePath: "/tmp/f.csv", customConfig: {} }),
-    ).rejects.toThrowError(/all 7 data rows failed to parse/);
+    ).rejects.toThrow(/all 7 data rows failed to parse/);
     await expect(
       prepareImport({ batchId: 42, filePath: "/tmp/f.csv", customConfig: {} }),
     ).rejects.toBeInstanceOf(ValidationError);
@@ -91,7 +92,7 @@ describe("portfolio import zero-row guard", () => {
 
     await expect(
       prepareImport({ batchId: 42, filePath: "/tmp/f.csv", customConfig: {} }),
-    ).rejects.toThrowError(/No importable rows found/);
+    ).rejects.toThrow(/No importable rows found/);
   });
 
   it("marks the batch failed when the full pipeline hits the guard", async () => {
@@ -111,8 +112,8 @@ describe("portfolio import zero-row guard", () => {
         params?.[0] === "failed",
     );
     expect(failedUpdate).toBeDefined();
-    expect(failedUpdate![1]).toContain("42");
-    expect(failedUpdate![1]![1]).toMatch(/failed to parse/);
+    expect(must(failedUpdate, "failedUpdate")[1]).toContain("42");
+    expect(must(must(failedUpdate, "failedUpdate")[1], "must result")[1]).toMatch(/failed to parse/);
   });
 });
 

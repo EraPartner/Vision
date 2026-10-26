@@ -12,7 +12,6 @@ vi.mock(
   () => ({ parseSaxoTransactionHistory: vi.fn() }),
 );
 
-import { logger } from "../src/config/logger.ts";
 import { parseSaxoTransactionHistory } from "../src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.ts";
 import {
   parsedPortfolioRowSchema,
@@ -42,7 +41,7 @@ function row(overrides: Record<string, unknown> = {}): ParsedPortfolioRow {
     sourceAccountIdentity: null,
     sourceId: null,
     ...overrides,
-  } as ParsedPortfolioRow;
+  };
 }
 
 function result(rows: ParsedPortfolioRow[], skipped = 0): ParsedPortfolioRows {

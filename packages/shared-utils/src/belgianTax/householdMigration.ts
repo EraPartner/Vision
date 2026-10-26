@@ -20,6 +20,7 @@
  */
 
 import { forfaitCategoryOf } from "./forfaitCategory.ts";
+import { isTruthy, present } from "../invariant.ts";
 import type {
     ActivityKind,
     BelgianTaxHouseholdSnapshotsV2,
@@ -283,7 +284,7 @@ export function upgradeProfileV1ToHousehold(
     };
     const partnerA: HouseholdPartner = {
         id: "A",
-        isDisabled: !!p.isDisabled,
+        isDisabled: isTruthy(p.isDisabled),
         activities: [primary],
         professionalExpenses: {
             [forfaitCategoryOf(kind)]: {
@@ -347,7 +348,7 @@ export function upgradeProfileV1ToHousehold(
     const household: BelgianTaxHouseholdV2 = {
         version: 2,
         taxYear: p.taxYear,
-        profileConfigured: !!p.profileConfigured,
+        profileConfigured: isTruthy(p.profileConfigured),
         region: p.region,
         communalSurchargePercent: num(p.communalSurchargePercent),
         partners,
@@ -485,13 +486,16 @@ export function applyProfileV1PatchToHousehold(
     const entries = Object.entries(patch) as [ProfileKey, unknown][];
     let a = next.partners.find((p) => p.id === "A");
     if (!a) {
-        a = upgradeProfileV1ToHousehold(projectHouseholdToProfileV1(next, isJointFiling)).partners[0] as HouseholdPartner;
+        a = present(
+            upgradeProfileV1ToHousehold(projectHouseholdToProfileV1(next, isJointFiling)).partners[0],
+            "partner A of the upgraded household",
+        );
         next.partners.unshift(a);
     }
     const partnerA = a;
     const set = (target: object, key: string, value: unknown) => {
         const record = target as Record<string, unknown>;
-        if (value === undefined) delete record[key];
+        if (value === undefined) Reflect.deleteProperty(record, key);
         else record[key] = structuredClone(value);
     };
 
@@ -527,7 +531,7 @@ export function applyProfileV1PatchToHousehold(
             primary.kind = kind;
             // Drop the expense choice of a category no activity uses any more.
             if (!partnerA.activities.some((x) => forfaitCategoryOf(x.kind) === oldCategory))
-                delete partnerA.professionalExpenses[oldCategory];
+                Reflect.deleteProperty(partnerA.professionalExpenses, oldCategory);
         }
         if (Object.hasOwn(patch, "grossAnnualIncome")) primary.grossIncome = num(merged.grossAnnualIncome);
         partnerA.professionalExpenses[forfaitCategoryOf(kind)] = {
@@ -542,7 +546,7 @@ export function applyProfileV1PatchToHousehold(
         if (merged.filingStatus === "married_joint") {
             if (bIndex < 0) next.partners.push(legacySpouse(merged));
             const b = next.partners.find((p) => p.id === "B") as HouseholdPartner;
-            if (Object.hasOwn(patch, "isSpouseDisabled")) b.isDisabled = !!merged.isSpouseDisabled;
+            if (Object.hasOwn(patch, "isSpouseDisabled")) b.isDisabled = isTruthy(merged.isSpouseDisabled);
             const netActivity = b.activities.find((x) => x.kind === "net_professional_amount");
             if (Object.hasOwn(patch, "spouseProfessionalIncome") && netActivity)
                 netActivity.netProfessionalIncome = num(merged.spouseProfessionalIncome);

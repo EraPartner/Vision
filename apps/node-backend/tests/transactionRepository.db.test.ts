@@ -40,12 +40,18 @@ import { toWireDate } from "../src/lib/dateFormat.ts";
 import {
   asAccountId,
   asCategoryId,
-  asCurrencyCode,
   type CurrencyCode,
   asRecipientId,
   asTransactionId,
 } from "@vision/types/brands";
 import { loose } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
+
+/** A row from an ad-hoc SQL read: column values are narrowed where used. */
+type DbRow = Record<string, unknown>;
+interface IdRow {
+  id: number;
+}
 
 /** 'YYYY-MM-DD' of a row's `date` column, using the production DATE boundary. */
 const ymd = (d: Date | string) => toWireDate(d);
@@ -68,17 +74,17 @@ const T = {} as Record<"t1" | "t2" | "t3" | "t4" | "t5" | "t6" | "t7", number>;
  * current repository contract without depending on the compatibility trigger.
  */
 async function ensureAccount(name: string) {
-  const pool = getTestPool()!;
+  const pool = must(getTestPool(), "test pool");
   await pool.query(
     `INSERT INTO accounts (name, display_name) VALUES ($1, $1)
      ON CONFLICT (lower(btrim(name))) DO NOTHING`,
     [name],
   );
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<IdRow>(
     "SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))",
     [name],
   );
-  return rows[0].id;
+  return asAccountId(must(rows[0], "account row").id);
 }
 
 /**
@@ -115,7 +121,7 @@ async function insertTxn({
   transferSource = null,
 }: TxnFixture) {
   const accountId = bank ? await ensureAccount(bank) : null;
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "test pool").query<IdRow>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, memo, is_active, is_transfer, balance, transfer_source)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING id`,
@@ -133,7 +139,7 @@ async function insertTxn({
       transferSource,
     ],
   );
-  return rows[0].id;
+  return asTransactionId(must(rows[0], "transaction row").id);
 }
 
 /**
@@ -152,18 +158,18 @@ async function insertTxn({
 async function seedCorpus() {
   // Fixtures write SQL directly, outside the repository's cache invalidation.
   clearTransactionCountCache();
-  const pool = getTestPool()!;
+  const pool = must(getTestPool(), "test pool");
 
   for (const [key, [general, detail]] of Object.entries({
     Food: ["Food", "Groceries"],
     Bills: ["Bills", "Utilities"],
     Salary: ["Income", "Salary"],
   })) {
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<IdRow>(
       "INSERT INTO categories (general, detail) VALUES ($1, $2) RETURNING id",
       [general, detail],
     );
-    cat[key as keyof typeof cat] = rows[0].id;
+    cat[key as keyof typeof cat] = must(rows[0], "rows[0]").id;
   }
 
   const addRecipient = async (
@@ -173,12 +179,12 @@ async function seedCorpus() {
       primaryId = null,
     }: { defaultCategoryId?: number | null; primaryId?: number | null } = {},
   ) => {
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<IdRow>(
       `INSERT INTO recipients (name, normalized_name, default_category_id, primary_recipient_id)
        VALUES ($1, $2, $3, $4) RETURNING id`,
       [name, name.toLowerCase(), defaultCategoryId, primaryId],
     );
-    return rows[0].id;
+    return must(rows[0], "rows[0]").id;
   };
   rec.delhaize = await addRecipient("Delhaize");
   rec.delhaizeAlias = await addRecipient("Delhaize BXL", {
@@ -198,11 +204,11 @@ async function seedCorpus() {
     groceries: ["groceries", "#0a0", true],
     archived: ["archived", "#999", false],
   })) {
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<IdRow>(
       "INSERT INTO tags (slug, color, is_active) VALUES ($1, $2, $3) RETURNING id",
       [slug, color, isActive],
     );
-    tag[key as keyof typeof tag] = rows[0].id;
+    tag[key as keyof typeof tag] = must(rows[0], "rows[0]").id;
   }
 
   T.t1 = await insertTxn({
@@ -254,7 +260,9 @@ async function seedCorpus() {
   });
 
   // Account ids linked by the fixture inserts.
-  const accounts = await pool.query("SELECT id, name FROM accounts");
+  const accounts = await pool.query<{ id: number; name: string }>(
+    "SELECT id, name FROM accounts",
+  );
   for (const row of accounts.rows) acc[row.name] = row.id;
 
   await pool.query(
@@ -278,7 +286,7 @@ describe.skipIf(!hasTestDatabase())(
     beforeEach(seedCorpus);
 
     afterEach(async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "test pool");
       // FK order: executions → planned → junction → transactions → the rest.
       // (transactions.account_id is ON DELETE RESTRICT, so accounts go after.)
       await pool.query("DELETE FROM planned_transaction_executions");
@@ -290,7 +298,7 @@ describe.skipIf(!hasTestDatabase())(
       await pool.query("DELETE FROM recipients");
       await deleteAllCategoryFixtures(pool);
       for (const bag of [cat, rec, acc, tag, T] as Record<string, number>[])
-        for (const k of Object.keys(bag)) delete bag[k];
+        for (const k of Object.keys(bag)) Reflect.deleteProperty(bag, k);
     });
 
     afterAll(async () => {
@@ -315,37 +323,37 @@ describe.skipIf(!hasTestDatabase())(
         ]);
         const t2 = rows.find((r) => r.id === T.t2);
         // pg NUMERIC arrives as a string, at the column's scale: NUMERIC(18,4).
-        expect(t2!.amount).toBe("-18.7500");
-        expect(ymd(t2!.date)).toBe("2024-02-29"); // leap day survives the DATE round-trip
-        expect(t2!.currency).toBe("EUR");
+        expect(must(t2, "t2").amount).toBe("-18.7500");
+        expect(ymd(must(t2, "t2").date)).toBe("2024-02-29"); // leap day survives the DATE round-trip
+        expect(must(t2, "t2").currency).toBe("EUR");
       });
 
       it("resolves recipient_name and the 3-level effective category for alias rows", async () => {
         const rows = await transactionRepository.getAll({});
         const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
         // Alias rows display the PRIMARY's name.
-        expect(byId[T.t1]!.recipient_name).toBe("Delhaize");
-        expect(byId[T.t3]!.recipient_name).toBe("Electrabel");
+        expect(must(byId[T.t1], "byId[T.t1]").recipient_name).toBe("Delhaize");
+        expect(must(byId[T.t3], "byId[T.t3]").recipient_name).toBe("Electrabel");
         // Effective category: own → recipient default → primary default → null.
-        expect(byId[T.t2]!.effective_category_id).toBe(cat.Food);
-        expect(byId[T.t7]!.effective_category_id).toBe(cat.Bills);
-        expect(byId[T.t3]!.effective_category_id).toBe(cat.Bills); // via the PRIMARY's default
-        expect(byId[T.t3]!.category_name).toBe("Bills:Utilities");
-        expect(byId[T.t1]!.effective_category_id).toBeNull();
-        expect(byId[T.t1]!.category_name).toBeNull();
+        expect(must(byId[T.t2], "byId[T.t2]").effective_category_id).toBe(cat.Food);
+        expect(must(byId[T.t7], "byId[T.t7]").effective_category_id).toBe(cat.Bills);
+        expect(must(byId[T.t3], "byId[T.t3]").effective_category_id).toBe(cat.Bills); // via the PRIMARY's default
+        expect(must(byId[T.t3], "byId[T.t3]").category_name).toBe("Bills:Utilities");
+        expect(must(byId[T.t1], "byId[T.t1]").effective_category_id).toBeNull();
+        expect(must(byId[T.t1], "byId[T.t1]").category_name).toBeNull();
       });
 
       it("attaches tags per row (junction truth, inactive tags included) and [] otherwise", async () => {
         const rows = await transactionRepository.getAll({});
         const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
-        expect(byId[T.t1]!.tags.map((t) => t.slug).sort()).toEqual([
+        expect(must(byId[T.t1], "byId[T.t1]").tags.map((t) => t.slug).sort()).toEqual([
           "archived",
           "groceries",
         ]);
         expect(
-          byId[T.t1]!.tags.find((t) => t.slug === "archived")!.is_active,
+          must(must(byId[T.t1], "byId[T.t1]").tags.find((t) => t.slug === "archived"), "matching entry").is_active,
         ).toBe(false);
-        expect(byId[T.t2]!.tags).toEqual([
+        expect(must(byId[T.t2], "byId[T.t2]").tags).toEqual([
           {
             id: tag.groceries,
             slug: "groceries",
@@ -353,12 +361,12 @@ describe.skipIf(!hasTestDatabase())(
             is_active: true,
           },
         ]);
-        expect(byId[T.t4]!.tags).toEqual([]);
+        expect(must(byId[T.t4], "byId[T.t4]").tags).toEqual([]);
       });
 
       it("filters by accountId and bankAccount (ILIKE substring)", async () => {
         const wise = await transactionRepository.getAll({
-          accountId: asAccountId(acc["WISE USD"]!),
+          accountId: asAccountId(must(acc["WISE USD"], "acc['WISE USD']")),
         });
         expect(wise.map((r) => r.id)).toEqual([T.t5]);
         const kbc = await transactionRepository.getAll({ bankAccount: "kbc" });
@@ -590,7 +598,7 @@ describe.skipIf(!hasTestDatabase())(
           const rows = await read({ includeBalance: true, limit: 100 });
           const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
           for (const [id, balance] of Object.entries(expected)) {
-            expect(Number(byId[id]!.running_balance)).toBe(balance);
+            expect(Number(must(byId[id], "byId[id]").running_balance)).toBe(balance);
             expect(byId[id]).not.toHaveProperty("cumulative");
             expect(byId[id]).not.toHaveProperty("stamp");
           }
@@ -608,10 +616,10 @@ describe.skipIf(!hasTestDatabase())(
           const filtered = await read(options);
           expect(filtered.some((row) => row.id === prior)).toBe(false);
           expect(
-            Number(filtered.find((row) => row.id === before)!.running_balance),
+            Number(must(filtered.find((row) => row.id === before), "matching filtered").running_balance),
           ).toBe(-20);
           expect(
-            Number(filtered.find((row) => row.id === opening)!.running_balance),
+            Number(must(filtered.find((row) => row.id === opening), "matching filtered").running_balance),
           ).toBe(50);
           const page = await read({ ...options, limit: 2, offset: 2 });
           expect(page.map((row) => [row.id, row.running_balance])).toEqual(
@@ -634,15 +642,15 @@ describe.skipIf(!hasTestDatabase())(
       // compatibility schemas and schemas without the old string column.
       async function repointT1() {
         const canonicalId = await ensureAccount("CANONICAL KBC");
-        await getTestPool()!.query(
+        await must(getTestPool(), "test pool").query(
           "UPDATE transactions SET account_id = $1 WHERE id = $2",
           [canonicalId, T.t1],
         );
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(getTestPool(), "test pool").query<DbRow>(
           "SELECT account_id FROM transactions WHERE id = $1",
           [T.t1],
         );
-        expect(rows[0].account_id).toBe(canonicalId);
+        expect(must(rows[0], "rows[0]").account_id).toBe(canonicalId);
       }
 
       it("bankAccount filter matches the linked accounts.name", async () => {
@@ -660,18 +668,18 @@ describe.skipIf(!hasTestDatabase())(
       it("projects bank_account from accounts.name across getAll/getById/getAllWithCount/getUncategorised", async () => {
         await repointT1();
         const all = await transactionRepository.getAll({});
-        expect(all.find((r) => r.id === T.t1)!.bank_account).toBe(
+        expect(must(all.find((r) => r.id === T.t1), "matching all").bank_account).toBe(
           "CANONICAL KBC",
         );
-        expect((await transactionRepository.getById(asTransactionId(T.t1)))!.bank_account).toBe(
+        expect(must(await transactionRepository.getById(asTransactionId(T.t1)), "transactionRepository.getById result").bank_account).toBe(
           "CANONICAL KBC",
         );
         const { rows } = await transactionRepository.getAllWithCount({});
-        expect(rows.find((r) => r.id === T.t1)!.bank_account).toBe(
+        expect(must(rows.find((r) => r.id === T.t1), "matching rows").bank_account).toBe(
           "CANONICAL KBC",
         );
         const unc = await transactionRepository.getUncategorised({});
-        expect(unc.find((r) => r.id === T.t1)!.bank_account).toBe(
+        expect(must(unc.find((r) => r.id === T.t1), "matching unc").bank_account).toBe(
           "CANONICAL KBC",
         );
       });
@@ -695,21 +703,26 @@ describe.skipIf(!hasTestDatabase())(
           sortDir: "asc",
         });
         const banks = rows.map((r) => r.bank_account);
-        expect(banks).toEqual([...banks].sort());
-        expect(rows.at(-1)!.bank_account).toBe("WISE USD");
+        // Default `sort()` order is by UTF-16 code unit; spell that out.
+        const byCodeUnit = (a: string | null | undefined, b: string | null | undefined) =>
+          String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
+        expect(banks).toEqual([...banks].sort(byCodeUnit));
+        expect(must(rows.at(-1), "rows entry last").bank_account).toBe("WISE USD");
         expect(banks).toContain("KBC CURRENT");
         expect(banks).toContain("CANONICAL KBC");
       });
 
       it("projects null for rows with no account", async () => {
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(getTestPool(), "test pool").query<IdRow>(
           `INSERT INTO transactions (date, amount, currency, recipient_id)
          VALUES ('2024-03-03', -1.00, 'EUR', $1) RETURNING id`,
           [rec.delhaize],
         );
-        const row = await transactionRepository.getById(rows[0].id);
-        expect(row!.bank_account).toBeNull();
-        expect(row!.account_id).toBeNull();
+        const row = await transactionRepository.getById(
+          asTransactionId(must(rows[0], "inserted row").id),
+        );
+        expect(must(row, "row").bank_account).toBeNull();
+        expect(must(row, "row").account_id).toBeNull();
       });
     });
 
@@ -895,7 +908,7 @@ describe.skipIf(!hasTestDatabase())(
             { startDate: "2024-02-01", endDate: "2024-03-31", active: false },
             1,
           ],
-          [{ accountId: asAccountId(acc["KBC CURRENT"]!) }, 1],
+          [{ accountId: asAccountId(must(acc["KBC CURRENT"], "acc['KBC CURRENT']")) }, 1],
           [{ bankAccount: "wise" }, 0],
           [{ categoryId: asCategoryId(cat.Food) }, 1],
           [{ categoryId: asCategoryId(cat.Bills) }, 1],
@@ -940,10 +953,10 @@ describe.skipIf(!hasTestDatabase())(
         let bakery: number;
 
         beforeEach(async () => {
-          const { rows } = await getTestPool()!.query(
+          const { rows } = await must(getTestPool(), "test pool").query<IdRow>(
             "INSERT INTO recipients (name, normalized_name) VALUES ('Bakery', 'bakery') RETURNING id",
           );
-          bakery = rows[0].id;
+          bakery = must(rows[0], "rows[0]").id;
           // Bakery has no default category and no primary, so all three rows are
           // uncategorised — they differ only in amount/sign, and none is tagged.
           U.small = await insertTxn({
@@ -1228,17 +1241,17 @@ describe.skipIf(!hasTestDatabase())(
           is_active: true,
           tags: [],
         });
-        expect(row!.balance).toBeNull(); // manual rows never carry a bank stamp
-        expect(row!.account_id).toBe(revolutId);
-        const { rows } = await getTestPool()!.query(
+        expect(must(row, "row").balance).toBeNull(); // manual rows never carry a bank stamp
+        expect(must(row, "row").account_id).toBe(revolutId);
+        const { rows } = await must(getTestPool(), "test pool").query<DbRow>(
           `SELECT count(*)::int AS n FROM accounts WHERE lower(name) = 'revolut main'`,
         );
-        expect(rows[0].n).toBe(1);
-        const { rows: stored } = await getTestPool()!.query(
+        expect(must(rows[0], "rows[0]").n).toBe(1);
+        const { rows: stored } = await must(getTestPool(), "test pool").query<DbRow>(
           "SELECT account_id FROM transactions WHERE id = $1",
-          [row!.id],
+          [must(row, "row").id],
         );
-        expect(stored[0].account_id).toBe(revolutId);
+        expect(must(stored[0], "stored[0]").account_id).toBe(revolutId);
       });
 
       it("reuses normalized account identity for account_id writes", async () => {
@@ -1261,13 +1274,13 @@ describe.skipIf(!hasTestDatabase())(
           category_id: null,
           comment: null,
         });
-        const { rows: accounts } = await getTestPool()!.query(
+        const { rows: accounts } = await must(getTestPool(), "test pool").query<DbRow>(
           `SELECT id, name FROM accounts WHERE lower(btrim(name)) = 'brand new bank'`,
         );
         expect(accounts).toHaveLength(1);
-        expect(accounts[0].name).toBe("BRAND NEW BANK");
-        expect(first!.account_id).toBe(accounts[0].id);
-        expect(second!.account_id).toBe(accounts[0].id);
+        expect(must(accounts[0], "accounts[0]").name).toBe("BRAND NEW BANK");
+        expect(must(first, "first").account_id).toBe(must(accounts[0], "accounts[0]").id);
+        expect(must(second, "second").account_id).toBe(must(accounts[0], "accounts[0]").id);
       });
 
       it("defaults currency to EUR and nulls bank/memo when absent", async () => {
@@ -1278,10 +1291,10 @@ describe.skipIf(!hasTestDatabase())(
           category_id: null,
           comment: null,
         });
-        expect(row!.currency).toBe("EUR");
-        expect(row!.bank_account).toBeNull();
-        expect(row!.memo).toBeNull();
-        expect(row!.account_id).toBeNull();
+        expect(must(row, "row").currency).toBe("EUR");
+        expect(must(row, "row").bank_account).toBeNull();
+        expect(must(row, "row").memo).toBeNull();
+        expect(must(row, "row").account_id).toBeNull();
       });
 
       it("resolves the effective category through the recipient on the returned row", async () => {
@@ -1292,9 +1305,9 @@ describe.skipIf(!hasTestDatabase())(
           category_id: null,
           comment: null,
         });
-        expect(row!.recipient_name).toBe("Electrabel");
-        expect(row!.effective_category_id).toBe(cat.Bills);
-        expect(row!.category_name).toBe("Bills:Utilities");
+        expect(must(row, "row").recipient_name).toBe("Electrabel");
+        expect(must(row, "row").effective_category_id).toBe(cat.Bills);
+        expect(must(row, "row").category_name).toBe("Bills:Utilities");
       });
 
       it("sets tags atomically, silently dropping inactive/unknown slugs", async () => {
@@ -1306,10 +1319,10 @@ describe.skipIf(!hasTestDatabase())(
           comment: null,
           tags: ["groceries", "archived", "does-not-exist"],
         });
-        expect(row!.tags.map((t) => t.slug)).toEqual(["groceries"]);
-        const { rows } = await getTestPool()!.query(
+        expect(must(row, "row").tags.map((t) => t.slug)).toEqual(["groceries"]);
+        const { rows } = await must(getTestPool(), "test pool").query<DbRow>(
           "SELECT tag_id FROM transaction_tags WHERE transaction_id = $1",
-          [row!.id],
+          [must(row, "row").id],
         );
         expect(rows).toEqual([{ tag_id: tag.groceries }]);
       });
@@ -1321,15 +1334,15 @@ describe.skipIf(!hasTestDatabase())(
           transaction_date: "2024-03-15",
           amount: "-60.00",
         });
-        expect(ymd(row!.date)).toBe("2024-03-15");
-        expect(row!.amount).toBe("-60.0000");
-        expect(row!.updated_at).not.toBeNull();
-        const { rows } = await getTestPool()!.query(
+        expect(ymd(must(row, "row").date)).toBe("2024-03-15");
+        expect(must(row, "row").amount).toBe("-60.0000");
+        expect(must(row, "row").updated_at).not.toBeNull();
+        const { rows } = await must(getTestPool(), "test pool").query<{ date: Date | string; amount: string }>(
           "SELECT date, amount FROM transactions WHERE id = $1",
           [T.t1],
         );
-        expect(ymd(rows[0].date)).toBe("2024-03-15");
-        expect(rows[0].amount).toBe("-60.0000");
+        expect(ymd(must(rows[0], "rows[0]").date)).toBe("2024-03-15");
+        expect(must(rows[0], "rows[0]").amount).toBe("-60.0000");
       });
 
       it("returns null for a missing id, with fields and tags-only alike", async () => {
@@ -1344,7 +1357,7 @@ describe.skipIf(!hasTestDatabase())(
           }),
         ).toBeNull();
         // The tags-only 404 probe must not have leaked a junction row (FK 23503 → 500 bug).
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(getTestPool(), "test pool").query<DbRow>(
           "SELECT 1 FROM transaction_tags WHERE transaction_id = $1",
           [T.t7 + 100_000],
         );
@@ -1355,15 +1368,15 @@ describe.skipIf(!hasTestDatabase())(
         const row = await transactionRepository.update(asTransactionId(T.t1), {
           tags: ["groceries"],
         });
-        expect(row!.tags.map((t) => t.slug)).toEqual(["groceries"]); // 'archived' junction removed
+        expect(must(row, "row").tags.map((t) => t.slug)).toEqual(["groceries"]); // 'archived' junction removed
         const cleared = await transactionRepository.update(asTransactionId(T.t1), { tags: [] });
-        expect(cleared!.tags).toEqual([]);
+        expect(must(cleared, "cleared").tags).toEqual([]);
       });
 
       it("no writable fields and no tags falls back to the current row", async () => {
         const row = await transactionRepository.update(asTransactionId(T.t2), {});
-        expect(row!.id).toBe(T.t2);
-        expect(row!.amount).toBe("-18.7500");
+        expect(must(row, "row").id).toBe(T.t2);
+        expect(must(row, "row").amount).toBe("-18.7500");
       });
 
       // Regression coverage (formerly a pinned bug): update()'s RETURNING
@@ -1380,9 +1393,9 @@ describe.skipIf(!hasTestDatabase())(
           amount: "-121.00",
         });
         const fetched = await transactionRepository.getById(asTransactionId(T.t3));
-        expect(updated!.category_name).toBe("Bills:Utilities"); // via the PRIMARY's default
-        expect(updated!.effective_category_id).toBe(cat.Bills);
-        expect(updated!.recipient_name).toBe("Electrabel"); // COALESCE(pr.name, r.name)
+        expect(must(updated, "updated").category_name).toBe("Bills:Utilities"); // via the PRIMARY's default
+        expect(must(updated, "updated").effective_category_id).toBe(cat.Bills);
+        expect(must(updated, "updated").recipient_name).toBe("Electrabel"); // COALESCE(pr.name, r.name)
         expect(fetched).toEqual(updated); // response ≡ immediate GET, field for field
 
         // The tags-path fetch (fields + tags in one PATCH) resolves identically.
@@ -1390,9 +1403,9 @@ describe.skipIf(!hasTestDatabase())(
           amount: "-122.00",
           tags: [],
         });
-        expect(withTags!.category_name).toBe("Bills:Utilities");
-        expect(withTags!.effective_category_id).toBe(cat.Bills);
-        expect(withTags!.recipient_name).toBe("Electrabel");
+        expect(must(withTags, "withTags").category_name).toBe("Bills:Utilities");
+        expect(must(withTags, "withTags").effective_category_id).toBe(cat.Bills);
+        expect(must(withTags, "withTags").recipient_name).toBe("Electrabel");
       });
     });
 
@@ -1413,20 +1426,20 @@ describe.skipIf(!hasTestDatabase())(
       let aliasTxn: number;
 
       beforeEach(async () => {
-        const pool = getTestPool()!;
+        const pool = must(getTestPool(), "test pool");
         // Sorts after every other fixture category, so the ORDER BY assertion
         // below can tell the two resolutions apart.
-        const { rows: catRows } = await pool.query(
+        const { rows: catRows } = await pool.query<IdRow>(
           `INSERT INTO categories (general, detail) VALUES ('Zzz', 'Last') RETURNING id`,
         );
-        cat.Zzz = catRows[0].id;
+        cat.Zzz = must(catRows[0], "catRows[0]").id;
         // ALIAS of Electrabel (whose default is Bills) with its OWN default Zzz.
-        const { rows: recRows } = await pool.query(
+        const { rows: recRows } = await pool.query<IdRow>(
           `INSERT INTO recipients (name, normalized_name, default_category_id, primary_recipient_id)
          VALUES ('Electrabel Retail', 'electrabel retail', $1, $2) RETURNING id`,
           [cat.Zzz, rec.electrabel],
         );
-        aliasId = recRows[0].id;
+        aliasId = must(recRows[0], "recRows[0]").id;
         aliasTxn = await insertTxn({
           date: "2024-03-05",
           amount: "-11.11",
@@ -1461,17 +1474,17 @@ describe.skipIf(!hasTestDatabase())(
           category_id: null,
           comment: null,
         });
-        expect(created!.effective_category_id).toBe(cat.Zzz);
-        expect(created!.category_name).toBe("Zzz:Last");
-        expect(await transactionRepository.getById(created!.id)).toEqual(
+        expect(must(created, "created").effective_category_id).toBe(cat.Zzz);
+        expect(must(created, "created").category_name).toBe("Zzz:Last");
+        expect(await transactionRepository.getById(must(created, "created").id)).toEqual(
           created,
         );
 
         const updated = await transactionRepository.update(asTransactionId(aliasTxn), {
           amount: "-33.33",
         });
-        expect(updated!.effective_category_id).toBe(cat.Zzz);
-        expect(updated!.category_name).toBe("Zzz:Last");
+        expect(must(updated, "updated").effective_category_id).toBe(cat.Zzz);
+        expect(must(updated, "updated").category_name).toBe("Zzz:Last");
         expect(await transactionRepository.getById(asTransactionId(aliasTxn))).toEqual(updated);
 
         // The tags-path fetch (fields + tags in one PATCH) resolves identically.
@@ -1479,16 +1492,16 @@ describe.skipIf(!hasTestDatabase())(
           amount: "-34.00",
           tags: [],
         });
-        expect(withTags!.effective_category_id).toBe(cat.Zzz);
-        expect(withTags!.category_name).toBe("Zzz:Last");
+        expect(must(withTags, "withTags").effective_category_id).toBe(cat.Zzz);
+        expect(must(withTags, "withTags").category_name).toBe("Zzz:Last");
       });
 
       it("an own category_id still wins over both defaults", async () => {
         const row = await transactionRepository.update(asTransactionId(aliasTxn), {
           category_id: cat.Food,
         });
-        expect(row!.effective_category_id).toBe(cat.Food);
-        expect(row!.category_name).toBe("Food:Groceries");
+        expect(must(row, "row").effective_category_id).toBe(cat.Food);
+        expect(must(row, "row").category_name).toBe("Food:Groceries");
       });
 
       it("sorts by the same resolved name it displays", async () => {
@@ -1508,7 +1521,7 @@ describe.skipIf(!hasTestDatabase())(
       it("deletes exactly once (junction rows cascade)", async () => {
         expect(await transactionRepository.hardDelete(asTransactionId(T.t1))).toBe(true);
         expect(await transactionRepository.hardDelete(asTransactionId(T.t1))).toBe(false);
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(getTestPool(), "test pool").query<DbRow>(
           "SELECT 1 FROM transaction_tags WHERE transaction_id = $1",
           [T.t1],
         );
@@ -1521,8 +1534,8 @@ describe.skipIf(!hasTestDatabase())(
     // ───────────────────────────────────────────────────────────────────────────
     describe("listRecentUnlinked", () => {
       it("excludes already-linked and inactive rows, resolves the recipient cluster root", async () => {
-        const pool = getTestPool()!;
-        const planned = await pool.query(
+        const pool = must(getTestPool(), "test pool");
+        const planned = await pool.query<IdRow>(
           `INSERT INTO planned_transactions (planned_date, amount, recipient_id)
          VALUES ('2024-02-29', '-18.75', $1) RETURNING id`,
           [rec.delhaize],
@@ -1530,7 +1543,7 @@ describe.skipIf(!hasTestDatabase())(
         await pool.query(
           `INSERT INTO planned_transaction_executions (planned_transaction_id, executed_transaction_id, execution_date)
          VALUES ($1, $2, '2024-02-29')`,
-          [planned.rows[0].id, T.t2],
+          [must(planned.rows[0], "planned.rows[0]").id, T.t2],
         );
 
         const rows = await transactionRepository.listRecentUnlinked({
@@ -1539,9 +1552,9 @@ describe.skipIf(!hasTestDatabase())(
         // t1 predates sinceDate, t2 is linked, t6 is inactive.
         expect(rows.map((r) => r.id)).toEqual([T.t5, T.t4, T.t3, T.t7]);
         const t3 = rows.find((r) => r.id === T.t3);
-        expect(t3!.recipient_cluster_id).toBe(rec.electrabel); // alias resolves to its primary
-        expect(t3!.recipient_name).toBe("Electrabel Invoicing"); // but the row keeps its own name
-        expect(t3!.amount).toBe("-120.0000");
+        expect(must(t3, "t3").recipient_cluster_id).toBe(rec.electrabel); // alias resolves to its primary
+        expect(must(t3, "t3").recipient_name).toBe("Electrabel Invoicing"); // but the row keeps its own name
+        expect(must(t3, "t3").amount).toBe("-120.0000");
       });
     });
   },

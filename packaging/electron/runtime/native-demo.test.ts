@@ -93,47 +93,56 @@ function runtimeMock(userDataDir: string, initialState: MockState = {}) {
     paths: {
       nativeRoot: path.join(userDataDir, "native", DEMO_RUNTIME_ID),
     },
-    async ensureLayout() {
+    ensureLayout() {
       calls.push("ensureLayout");
+      return Promise.resolve();
     },
-    async discover() {
+    discover() {
       calls.push("discover");
+      return Promise.resolve();
     },
-    async readState() {
-      return structuredClone(state);
+    readState() {
+      return Promise.resolve(structuredClone(state));
     },
-    async writeState(next: Record<string, unknown>) {
+    writeState(next: Record<string, unknown>) {
       calls.push("writeState");
       state = { ...state, ...next };
+      return Promise.resolve();
     },
-    async ensurePostgresReady() {
+    ensurePostgresReady() {
       calls.push("ensurePostgresReady");
+      return Promise.resolve();
     },
-    async recoverInterruptedRestore() {
+    recoverInterruptedRestore() {
       calls.push("recoverInterruptedRestore");
       state.pendingAttachmentSwitch = undefined;
       state.pendingDatabaseSwitch = undefined;
+      return Promise.resolve();
     },
-    async rollbackDatabaseSwitch() {
+    rollbackDatabaseSwitch() {
       calls.push("rollbackDatabaseSwitch");
       state.pendingDatabaseSwitch = undefined;
+      return Promise.resolve();
     },
-    async validateCustomDump() {
+    validateCustomDump() {
       calls.push("validateCustomDump");
+      return Promise.resolve();
     },
-    async activateRestoredDatabase(_source: string, options: unknown) {
+    activateRestoredDatabase(_source: string, options: unknown) {
       calls.push(["activateRestoredDatabase", options]);
-      return { switchToken: { liveDatabase: "vision_demo" } };
+      return Promise.resolve({ switchToken: { liveDatabase: "vision_demo" } });
     },
-    async getDatabaseStats() {
+    getDatabaseStats() {
       calls.push("getDatabaseStats");
-      return structuredClone(stats);
+      return Promise.resolve(structuredClone(stats));
     },
-    async finalizeDatabaseSwitch() {
+    finalizeDatabaseSwitch() {
       calls.push("finalizeDatabaseSwitch");
+      return Promise.resolve();
     },
-    async stop() {
+    stop() {
       calls.push("stop");
+      return Promise.resolve();
     },
     state: () => structuredClone(state),
     stats,
@@ -141,7 +150,7 @@ function runtimeMock(userDataDir: string, initialState: MockState = {}) {
   return runtime satisfies NativeDemoRuntime;
 }
 
-test("validates and checksums the packaged Demo seed", async (t) => {
+void test("validates and checksums the packaged Demo seed", async (t) => {
   const { manifest, seedRoot } = await fixture(t);
   assert.deepEqual((await loadDemoSeed(seedRoot)).manifest, manifest);
   await fs.promises.appendFile(
@@ -158,7 +167,7 @@ test("validates and checksums the packaged Demo seed", async (t) => {
   );
 });
 
-test("skips an already-current native Demo seed", async (t) => {
+void test("skips an already-current native Demo seed", async (t) => {
   const { manifest, seedRoot, userDataDir } = await fixture(t);
   const runtime = runtimeMock(userDataDir, {
     activeRuntime: "native",
@@ -173,7 +182,7 @@ test("skips an already-current native Demo seed", async (t) => {
   assert.equal(runtime.state().activeRuntime, "native");
 });
 
-test("recovers paired restore journals before trusting a current Demo seed", async (t) => {
+void test("recovers paired restore journals before trusting a current Demo seed", async (t) => {
   const { manifest, seedRoot, userDataDir } = await fixture(t);
   const runtime = runtimeMock(userDataDir, {
     pendingDatabaseSwitch: { previousDatabase: "vision_demo_previous" },
@@ -183,7 +192,7 @@ test("recovers paired restore journals before trusting a current Demo seed", asy
       schemaRevision: manifest.schemaRevision,
     },
   });
-  const readState = runtime.readState;
+  const readState = runtime.readState.bind(runtime);
   runtime.readState = async () => {
     const state = await readState();
     assert.equal(state.pendingDatabaseSwitch, undefined);
@@ -199,16 +208,15 @@ test("recovers paired restore journals before trusting a current Demo seed", asy
   assert.ok(!runtime.calls.some((call) => Array.isArray(call)));
 });
 
-test("stops Demo preparation when coordinated recovery fails", async (t) => {
+void test("stops Demo preparation when coordinated recovery fails", async (t) => {
   const { seedRoot, userDataDir } = await fixture(t);
   const journals = {
     pendingDatabaseSwitch: { previousDatabase: "vision_demo_previous" },
     pendingAttachmentSwitch: { previousDirectory: "attachments.previous" },
   };
   const runtime = runtimeMock(userDataDir, journals);
-  runtime.recoverInterruptedRestore = async () => {
-    throw new Error("Synthetic recovery failure");
-  };
+  runtime.recoverInterruptedRestore = () =>
+    Promise.reject(new Error("Synthetic recovery failure"));
   await assert.rejects(
     prepareNativeDemo(runtime, { seedRoot }),
     /Synthetic recovery failure/,
@@ -219,7 +227,7 @@ test("stops Demo preparation when coordinated recovery fails", async (t) => {
   assert.ok(!runtime.calls.some((call) => Array.isArray(call)));
 });
 
-test("activates, verifies, and finalizes a changed Demo seed", async (t) => {
+void test("activates, verifies, and finalizes a changed Demo seed", async (t) => {
   const { manifest, seedRoot, userDataDir } = await fixture(t);
   const runtime = runtimeMock(userDataDir);
   const prepared = await prepareNativeDemo(runtime, { seedRoot });
@@ -233,7 +241,7 @@ test("activates, verifies, and finalizes a changed Demo seed", async (t) => {
   assert.equal(runtime.state().demoSeed?.logicalSha256, manifest.logicalSha256);
 });
 
-test("finalization permits a runtime-owned settings marker", async (t) => {
+void test("finalization permits a runtime-owned settings marker", async (t) => {
   const { seedRoot, userDataDir } = await fixture(t);
   const runtime = runtimeMock(userDataDir);
   const stableImportantRowCounts = {
@@ -253,7 +261,7 @@ test("finalization permits a runtime-owned settings marker", async (t) => {
   );
 });
 
-test("rolls back a staged Demo database after verification failure", async (t) => {
+void test("rolls back a staged Demo database after verification failure", async (t) => {
   const { seedRoot, userDataDir } = await fixture(t);
   const runtime = runtimeMock(userDataDir);
   runtime.stats.transactions += 1;
@@ -265,7 +273,7 @@ test("rolls back a staged Demo database after verification failure", async (t) =
   assert.ok(runtime.calls.includes("rollbackDatabaseSwitch"));
 });
 
-test("rollback restores the seed marker that belongs to the previous database", async (t) => {
+void test("rollback restores the seed marker that belongs to the previous database", async (t) => {
   const { seedRoot, userDataDir } = await fixture(t);
   const previousDemoSeed = {
     logicalSha256: "b".repeat(64),
@@ -283,7 +291,7 @@ test("rollback restores the seed marker that belongs to the previous database", 
   assert.deepEqual(runtime.state().demoSeed, previousDemoSeed);
 });
 
-test("reset requests are isolated and retained until successful finalization", async (t) => {
+void test("reset requests are isolated and retained until successful finalization", async (t) => {
   const { seedRoot, userDataDir } = await fixture(t);
   await requestNativeDemoReset(userDataDir);
   const runtime = runtimeMock(userDataDir, {
@@ -313,7 +321,7 @@ test("reset requests are isolated and retained until successful finalization", a
   );
 });
 
-test("rejects a reset request that is a symbolic link, directory or FIFO", async (t) => {
+void test("rejects a reset request that is a symbolic link, directory or FIFO", async (t) => {
   const { seedRoot, userDataDir } = await fixture(t);
   const requestPath = path.join(userDataDir, "demo-reset-request.json");
   await fs.promises.mkdir(userDataDir, { recursive: true });
@@ -338,7 +346,7 @@ test("rejects a reset request that is a symbolic link, directory or FIFO", async
   );
 });
 
-test("refuses to seed outside the Vision Demo application-data directory", async (t) => {
+void test("refuses to seed outside the Vision Demo application-data directory", async (t) => {
   const { seedRoot } = await fixture(t);
   const runtime = runtimeMock(path.join(os.tmpdir(), "Vision"));
   await assert.rejects(

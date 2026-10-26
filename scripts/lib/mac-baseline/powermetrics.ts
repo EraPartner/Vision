@@ -131,7 +131,7 @@ export function parsePlist(xml: string): PlistValue {
 
 type Dict = { [key: string]: PlistValue };
 const isDict = (value: PlistValue | undefined): value is Dict =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+  typeof value === "object" && !Array.isArray(value);
 const num = (dict: Dict | undefined, ...keys: string[]): number | null => {
   if (!dict) return null;
   for (const key of keys) {
@@ -177,7 +177,7 @@ function power(
     const direct = num(dict, `${name}_power`, `${name}_power_mw`);
     if (direct !== null) return direct;
   }
-  if (elapsedSeconds && elapsedSeconds > 0) {
+  if (elapsedSeconds !== null && elapsedSeconds > 0) {
     for (const dict of dicts) {
       const energy = num(dict, `${name}_energy`);
       if (energy !== null) return energy / elapsedSeconds;
@@ -211,7 +211,7 @@ export function extractSample(
         cpuMsPerS: num(task, "cputime_ms_per_s"),
         gpuMsPerS:
           num(task, "gputime_ms_per_s", "gpu_ms_per_s") ??
-          (gpuNs !== null && elapsedSeconds
+          (gpuNs !== null && elapsedSeconds !== null && elapsedSeconds !== 0
             ? gpuNs / 1e6 / elapsedSeconds
             : null),
         energyImpactPerS: num(task, "energy_impact_per_s"),

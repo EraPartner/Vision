@@ -1,3 +1,4 @@
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { useMemo, useState } from "react";
 import {
     TrendingUp,
@@ -60,8 +61,9 @@ import { PAGE_ICONS } from "@/lib/pageIcons";
 import { PageShell } from "@/components/shared/PageShell";
 import { usePortfolioForecastQuery } from "@/features/research/useResearchQueries";
 import { parseDecimal } from "@/lib/decimal";
+import type { TranslationKey } from "@/locales/keys";
 
-const HORIZONS = [
+const HORIZONS: Array<{ labelKey: TranslationKey; months: number }> = [
     { labelKey: "research.forecast.h1y", months: 12 },
     { labelKey: "research.forecast.h3y", months: 36 },
     { labelKey: "research.forecast.h5y", months: 60 },
@@ -70,6 +72,7 @@ const HORIZONS = [
 const PATH_OPTIONS = [500, 1000, 2000];
 
 type ReturnSource = "historical" | "blended";
+const isReturnSource = enumGuard<ReturnSource>({ historical: true, blended: true });
 
 interface ForecastRow extends ForecastPoint {
     ts: number;
@@ -220,7 +223,7 @@ export default function PortfolioForecastPage() {
         return { rows: r, series: s };
     }, [forecast, t]);
 
-    const unavailable = forecast && forecast.available === false;
+    const unavailable = forecast && !forecast.available;
 
     return (
         <PageShell className="">
@@ -347,9 +350,7 @@ export default function PortfolioForecastPage() {
                                     label={t("research.forecast.returnSource")}
                                     size="sm"
                                     value={returnSource}
-                                    onValueChange={(v) =>
-                                        setReturnSource(v as ReturnSource)
-                                    }
+                                    onValueChange={onGuarded(isReturnSource, setReturnSource)}
                                 >
                                     <SegmentedControlItem value="historical">
                                         {t(
@@ -459,7 +460,7 @@ export default function PortfolioForecastPage() {
                             size="compact"
                             icon={AlertTriangle}
                             title={
-                                forecast?.reason === "no_holdings"
+                                forecast.reason === "no_holdings"
                                     ? t("research.forecast.noHoldings")
                                     : t("research.forecast.insufficientHistory")
                             }
@@ -522,7 +523,7 @@ export default function PortfolioForecastPage() {
                             value={fmtPct(
                                 forecast?.targetValue != null &&
                                     forecast.targetValue !== 0
-                                    ? forecast?.probTarget
+                                    ? forecast.probTarget
                                     : forecast?.probBelowInvested,
                             )}
                             subtitle={

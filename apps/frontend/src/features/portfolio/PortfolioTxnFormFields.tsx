@@ -42,9 +42,10 @@ import {
     formatEditableNumber,
     formatNumberPlaceholder,
 } from "@/utils/currency";
+import type { TranslationKey } from "@/locales/keys";
 
 type TranslateFn = (
-    key: string,
+    key: TranslationKey,
     params?: Record<string, string | number>,
 ) => string;
 
@@ -286,16 +287,7 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                             {t("portfolio.txn.valueIncreaseHelp")}
                         </p>
                     )}
-                    {/* When the amount slot holds the two-of-three error (units hidden),
-              the live message below is the error element — don't render it twice. */}
-                    <FieldError
-                        field={amountId}
-                        message={
-                            twoOfThreeShown && !showUnits
-                                ? undefined
-                                : errors?.[amountId]
-                        }
-                    />
+                    <FieldError field={amountId} message={errors?.[amountId]} />
                 </div>
 
                 {twoOfThreeShown && (

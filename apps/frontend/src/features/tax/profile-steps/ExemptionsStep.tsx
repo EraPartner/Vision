@@ -1,3 +1,4 @@
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import type { ReactNode } from "react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -27,6 +28,9 @@ interface EligibilitySwitchProps {
 }
 
 /** Inline "this item qualifies" switch under a deduction amount. */
+type PensionScheme = "1050" | "1350";
+const isPensionScheme = enumGuard<PensionScheme>({ "1050": true, "1350": true });
+
 function EligibilitySwitch({
     id,
     label,
@@ -228,11 +232,11 @@ export function ExemptionsStep({
                             {...(r.pensionScheme === undefined
                                 ? {}
                                 : { value: r.pensionScheme })}
-                            onValueChange={(v) =>
-                                setReductions({
-                                    pensionScheme: v as "1050" | "1350",
-                                })
-                            }
+                            onValueChange={onGuarded(
+                                isPensionScheme,
+                                (pensionScheme) =>
+                                    setReductions({ pensionScheme }),
+                            )}
                         >
                             <SelectTrigger id={`pension-scheme-${pid}`} className="w-56">
                                 <SelectValue />

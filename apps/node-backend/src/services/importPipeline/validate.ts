@@ -17,6 +17,7 @@ import {
 import { pendingStagingRowSchema } from "../../database/rows/imports.ts";
 import type { PendingStagingRow } from "../../database/rows/imports.ts";
 import type { ImportBatchId, ImportProgressCallback } from "./index.ts";
+import { requiredValue } from "../requiredValue.ts";
 
 const VALIDATE_CHUNK = 500;
 
@@ -59,7 +60,7 @@ export async function validateBatch({
   );
 
   const pending = batchRows.filter(
-    (row) => row.status == null || row.status === "pending",
+    (row) => row.status === "pending",
   );
   const total = pending.length;
   let seen = 0;
@@ -69,7 +70,7 @@ export async function validateBatch({
     budgetingIdentityBase(row, row.adapter_name),
   );
   const identityById = new Map(
-    batchRows.map((row, index) => [String(row.id), identities[index]]),
+    batchRows.map((row, index) => [row.id, identities[index]]),
   );
 
   if (onProgress) onProgress({ phase: "validating", current: 0, total });
@@ -85,7 +86,10 @@ export async function validateBatch({
     const errorMessages: (string | null)[] = [];
     for (const row of chunk) {
       // Every pending row is one of batchRows, which keyed identityById.
-      const identity = identityById.get(String(row.id))!;
+      const identity = requiredValue(
+        identityById.get(row.id),
+        "every pending row is one of batchRows, which keyed identityById",
+      );
       const issue = validateRow(row);
       ids.push(row.id);
       if (issue) {

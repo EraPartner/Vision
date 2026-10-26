@@ -28,6 +28,13 @@ import {
   asTransactionId,
 } from "@vision/types/brands";
 import type { AccountId, RecipientId } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
+
+/** A row from an ad-hoc SQL read: column values are narrowed where used. */
+type DbRow = Record<string, unknown>;
+interface IdRow {
+  id: number;
+}
 
 vi.mock("../src/services/plannedMatchService.ts", () => ({
   autoLinkTransactions: vi.fn().mockResolvedValue({
@@ -54,13 +61,13 @@ async function insertRecipient(
   defaultCategoryId: number | null = null,
   primaryId: number | null = null,
 ): Promise<number> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "test pool").query<IdRow>(
     `INSERT INTO recipients (name, normalized_name, default_category_id, primary_recipient_id)
      VALUES (upper($1), lower($1), $2, $3) RETURNING id`,
     [name, defaultCategoryId, primaryId],
   );
-  created.recipientIds.push(rows[0].id);
-  return rows[0].id;
+  created.recipientIds.push(must(rows[0], "rows[0]").id);
+  return must(rows[0], "rows[0]").id;
 }
 
 describe.skipIf(!hasTestDatabase())("transaction service (real DB)", () => {
@@ -71,20 +78,20 @@ describe.skipIf(!hasTestDatabase())("transaction service (real DB)", () => {
   beforeAll(async () => {
     expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
     await acquireDbSuiteLock();
-    accountId = (await accountRepository.resolveOrCreateByName(ACCOUNT))!;
+    accountId = must(await accountRepository.resolveOrCreateByName(ACCOUNT), "accountRepository.resolveOrCreateByName result");
     const root = await createCategoryNode({ name: `FOOD${MARK}` });
     const leaf = await createCategoryNode({
       name: "GROCERIES",
-      parentId: root!.id,
+      parentId: must(root, "root").id,
     });
-    created.categoryIds.push(root!.id, leaf!.id);
-    categoryId = leaf!.id;
+    created.categoryIds.push(must(root, "root").id, must(leaf, "leaf").id);
+    categoryId = must(leaf, "leaf").id;
     shopId = asRecipientId(await insertRecipient(`shop ${MARK}`));
   }, 180_000);
 
   afterAll(async () => {
     try {
-      const db = getTestPool()!;
+      const db = must(getTestPool(), "test pool");
       await db.query(
         `DELETE FROM manual_transaction_dedup_claims m USING transactions t
           WHERE m.transaction_id = t.id AND t.account_id = $1`,
@@ -131,11 +138,11 @@ describe.skipIf(!hasTestDatabase())("transaction service (real DB)", () => {
       allow_duplicate: true,
     });
     expect(second.transaction.id).not.toBe(first.transaction.id);
-    const { rows } = await getTestPool()!.query(
+    const { rows } = await must(getTestPool(), "test pool").query<DbRow>(
       "SELECT count(*)::int AS n FROM transactions WHERE account_id = $1 AND date = '1902-03-04'",
       [accountId],
     );
-    expect(rows[0].n).toBe(2);
+    expect(must(rows[0], "rows[0]").n).toBe(2);
   });
 
   it("resolves PATCH recipient and category names and keeps explicit ids", async () => {
@@ -149,7 +156,7 @@ describe.skipIf(!hasTestDatabase())("transaction service (real DB)", () => {
     const other = await recipientRepository.createOrGet({
       name: `other ${MARK}`,
     });
-    const otherId = other.recipient!.id;
+    const otherId = must(other.recipient, "other.recipient").id;
     created.recipientIds.push(otherId);
 
     const renamed = await transactionService.update(transaction.id, {
@@ -186,12 +193,12 @@ describe.skipIf(!hasTestDatabase())("transaction service (real DB)", () => {
     const alias = await insertRecipient(`alias ${MARK}`, null, primary);
     const plain = await insertRecipient(`plain ${MARK}`);
     const insert = async (recipientId: number, ownCategory: number | null) => {
-      const { rows } = await getTestPool()!.query(
+      const { rows } = await must(getTestPool(), "test pool").query<IdRow>(
         `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, memo)
          VALUES ('1902-04-01', '-1.0000', 'EUR', $1, $2, $3, $4) RETURNING id`,
         [recipientId, ownCategory, accountId, `${MARK} bulk`],
       );
-      return rows[0].id as number;
+      return must(rows[0], "rows[0]").id;
     };
     await insert(primary, null); // category via recipient default
     await insert(alias, null); // category via the PRIMARY's default

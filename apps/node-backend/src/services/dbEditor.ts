@@ -124,7 +124,7 @@ type CursorPayload = {
   filters?: unknown;
   orderColumns?: unknown;
   values?: unknown;
-} | null;
+};
 
 /** The fields of a pg driver error that `mapDbError` reads. */
 type PgDriverError = {
@@ -336,6 +336,13 @@ function withWireDates(
   return row;
 }
 
+/** Text form of a filter value for LIKE patterns. */
+function filterText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && value !== null) return JSON.stringify(value);
+  return String(value);
+}
+
 function buildFilterFragment(
   filter: Filter,
   params: unknown[],
@@ -356,10 +363,10 @@ function buildFilterFragment(
     case "notnull":
       return `${col} IS NOT NULL`;
     case "contains":
-      params.push(`%${filter.value}%`);
+      params.push(`%${filterText(filter.value)}%`);
       return `${col}::text ILIKE $${params.length}`;
     case "startsWith":
-      params.push(`${filter.value}%`);
+      params.push(`${filterText(filter.value)}%`);
       return `${col}::text ILIKE $${params.length}`;
     default: {
       const sqlOpByOp: Record<string, string> = {
@@ -400,7 +407,7 @@ export async function readRows(table: string, opts: ReadRowsOptions = {}) {
     whereParts.push(buildFilterFragment(filter, params, columnNames));
   }
 
-  if (opts.where !== undefined && String(opts.where).trim() !== "") {
+  if (opts.where !== undefined && opts.where.trim() !== "") {
     throw new ValidationError(
       "The raw WHERE parameter has been removed. Use the structured filters[] parameter instead.",
     );
@@ -408,7 +415,7 @@ export async function readRows(table: string, opts: ReadRowsOptions = {}) {
 
   const dir = String(opts.dir).toLowerCase() === "desc" ? "DESC" : "ASC";
   const orderColumns: string[] = [];
-  if (opts.orderBy !== undefined && String(opts.orderBy) !== "") {
+  if (opts.orderBy !== undefined && opts.orderBy !== "") {
     const orderCol = resolveIdent(opts.orderBy, columnNames);
     if (orderCol === null) {
       throw new ValidationError(`Unknown sort column: ${opts.orderBy}`);
@@ -459,36 +466,43 @@ export async function readRows(table: string, opts: ReadRowsOptions = {}) {
       .digest("hex"),
   };
   if (opts.cursor) {
-    let decoded: CursorPayload;
+    let parsed: unknown;
     try {
-      decoded = JSON.parse(
-        Buffer.from(String(opts.cursor), "base64url").toString("utf8"),
-      ) as CursorPayload;
+      parsed = JSON.parse(
+        Buffer.from(opts.cursor, "base64url").toString("utf8"),
+      );
     } catch {
       throw new ValidationError("Invalid pagination cursor");
     }
+    // A non-object payload (e.g. `null`) is mismatched like any other bad cursor.
+    const decoded: CursorPayload =
+      typeof parsed === "object" && parsed !== null
+        ? parsed
+        : {};
+    const cursorRawValues = decoded.values;
     if (
-      decoded?.v !== cursorContext.v ||
-      decoded?.table !== cursorContext.table ||
-      decoded?.dir !== cursorContext.dir ||
-      decoded?.filters !== cursorContext.filters ||
-      JSON.stringify(decoded?.orderColumns) !==
+      decoded.v !== cursorContext.v ||
+      decoded.table !== cursorContext.table ||
+      decoded.dir !== cursorContext.dir ||
+      decoded.filters !== cursorContext.filters ||
+      JSON.stringify(decoded.orderColumns) !==
         JSON.stringify(cursorContext.orderColumns) ||
-      !Array.isArray(decoded?.values) ||
-      decoded.values.length !== cursorColumns.length
+      !Array.isArray(cursorRawValues) ||
+      cursorRawValues.length !== cursorColumns.length
     ) {
       throw new ValidationError(
         "Pagination cursor does not match the current table, sort, or filters",
       );
     }
+    const cursorValues = cursorRawValues as unknown[];
     if (
-      decoded.values.some(
-        (value: unknown) => value !== null && typeof value !== "string",
+      !cursorValues.every(
+        (value): value is string | null =>
+          value === null || typeof value === "string",
       )
     ) {
       throw new ValidationError("Invalid pagination cursor");
     }
-    const cursorValues: Array<string | null> = decoded.values;
     const branches: string[] = [];
     for (const [index, column] of cursorColumns.entries()) {
       const prefix: string[] = [];
@@ -554,7 +568,8 @@ export async function readRows(table: string, opts: ReadRowsOptions = {}) {
           ).toString("base64url")
         : null;
     for (const row of rows) {
-      for (const column of cursorColumns) delete row[column.valueKey];
+      for (const column of cursorColumns)
+        Reflect.deleteProperty(row, column.valueKey);
       withWireDates(row, columns);
     }
     await client.query("COMMIT");
@@ -584,7 +599,10 @@ function literalForDisplay(value: unknown): string {
   if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
   if (typeof value === "object")
     return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
-  return `'${String(value).replace(/'/g, "''")}'`;
+  // Pool rows and JSON bodies only carry strings and bigints past this point.
+  if (typeof value !== "string" && typeof value !== "bigint") return "NULL";
+  const text = typeof value === "string" ? value : value.toString();
+  return `'${text.replace(/'/g, "''")}'`;
 }
 
 function renderPreview(sql: string, params: unknown[]): string {
@@ -604,6 +622,13 @@ function normalizeWrite(value: unknown): unknown {
  *
  * @param table must already be catalog-resolved (resolveEditableTable)
  */
+/** Column metadata for a name already filtered against the catalog. */
+function requireColumn(ctx: MutationCtx, name: string): ColumnMeta {
+  const meta = ctx.colMeta.get(name);
+  if (!meta) throw new ValidationError(`Unknown column "${name}"`);
+  return meta;
+}
+
 function buildMutationSql(
   table: string,
   change: Change,
@@ -642,7 +667,7 @@ function buildMutationSql(
     if (cols.length === 0)
       throw new ValidationError(`Insert #${ctx.index} has no values`);
     for (const c of cols) {
-      if (!ctx.colMeta.get(c)!.writable) {
+      if (!requireColumn(ctx, c).writable) {
         throw new ValidationError(
           `Column "${c}" is generated and cannot be written`,
         );
@@ -650,7 +675,7 @@ function buildMutationSql(
     }
     const params = cols.map((c) => normalizeWrite(values[c]));
     const placeholders = cols.map((_, i) => `$${i + 1}`);
-    const sql = `INSERT INTO ${tbl} (${cols.map((c) => quoteIdent(ctx.colMeta.get(c)!.name)).join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
+    const sql = `INSERT INTO ${tbl} (${cols.map((c) => quoteIdent(requireColumn(ctx, c).name)).join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
     return { sql, params };
   }
 
@@ -663,7 +688,7 @@ function buildMutationSql(
       if (ctx.primaryKey.includes(c)) {
         throw new ValidationError(`Primary-key column "${c}" cannot be edited`);
       }
-      if (!ctx.colMeta.get(c)!.writable) {
+      if (!requireColumn(ctx, c).writable) {
         throw new ValidationError(
           `Column "${c}" is generated and cannot be written`,
         );
@@ -672,7 +697,7 @@ function buildMutationSql(
     const params: unknown[] = [];
     const assigns = cols.map((c) => {
       params.push(normalizeWrite(set[c]));
-      return `${quoteIdent(ctx.colMeta.get(c)!.name)} = $${params.length}`;
+      return `${quoteIdent(requireColumn(ctx, c).name)} = $${params.length}`;
     });
     const where = ctx.primaryKey
       .map((k) => {
@@ -684,7 +709,10 @@ function buildMutationSql(
     return { sql, params };
   }
 
-  if (change.op === "delete") {
+  // Widened: the route validates `op`, but this stays a runtime guard for any
+  // other caller.
+  const op: string = change.op;
+  if (op === "delete") {
     const params: unknown[] = [];
     const where = ctx.primaryKey
       .map((k) => {
@@ -695,14 +723,15 @@ function buildMutationSql(
     return { sql: `DELETE FROM ${tbl} WHERE ${where}`, params };
   }
 
-  throw new ValidationError(`Unknown op: ${change.op}`);
+  throw new ValidationError(`Unknown op: ${op}`);
 }
 
-function validateChange(change: Change, ctx: MutationCtx): void {
+function validateChange(change: Change | null | undefined, ctx: MutationCtx): void {
   if (change == null || typeof change !== "object") {
     throw new ValidationError(`Change #${ctx.index} is malformed`);
   }
-  if (change.op === "update" || change.op === "delete") {
+  const op: string = change.op;
+  if (op === "update" || op === "delete") {
     const pk = change.pk ?? {};
     for (const k of ctx.primaryKey) {
       if (!(k in pk)) {
@@ -711,12 +740,20 @@ function validateChange(change: Change, ctx: MutationCtx): void {
         );
       }
     }
-  } else if (change.op !== "insert") {
-    throw new ValidationError(`Unknown op: ${change.op}`);
+  } else if (op !== "insert") {
+    throw new ValidationError(`Unknown op: ${op}`);
   }
 }
 
 // ── Mutation execution ──────────────────────────────────────────────────────
+
+/** xmin arrives as `xmin::text`; anything else is stringified defensively. */
+function xminText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "bigint")
+    return value.toString();
+  return JSON.stringify(value);
+}
 
 function pickPk(
   row: Record<string, unknown> | null | undefined,
@@ -778,7 +815,7 @@ async function applyOne(
   const currentXmin = (cur.rows[0] as Record<string, unknown>).__xmin;
   if (
     change.xmin !== undefined &&
-    String(change.xmin) !== String(currentXmin)
+    xminText(change.xmin) !== xminText(currentXmin)
   ) {
     throw new ConflictError(
       "Row changed since it was loaded — refresh and retry",

@@ -66,7 +66,7 @@ export function MultiYearTrendStrip({
     const tiles = useMemo(() => {
         const rows = years.slice(0, maxYears).map((entry) => ({
             ...entry,
-            totalPIT: entry.calculation.totalPIT ?? 0,
+            totalPIT: entry.calculation.totalPIT,
             effectiveRate: entry.calculation.effectiveRate ?? 0,
         }));
         const maxPIT = rows.reduce((m, r) => Math.max(m, r.totalPIT), 0);

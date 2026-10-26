@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { MockInstance } from "vitest";
+import type { Mock, MockInstance } from "vitest";
 
 vi.mock("../src/config/config.ts", () => {
   const settings = {
@@ -65,7 +65,10 @@ import type {
 import type { ToolResult } from "../src/services/aiChat/tools/index.ts";
 import type { AiChatServiceEvent } from "@vision/types/aiChat";
 import { loose, partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
+import { mockOf } from "./helpers/mockOf.ts";
+import { anyInstance, objectContaining } from "./helpers/matchers.ts";
 const aiChatRepository = vi.mocked(rawAiChatRepository);
 const dispatchTool = vi.mocked(rawDispatchTool);
 type ServiceEvent = AiChatServiceEvent<AiMessageRow>;
@@ -104,8 +107,23 @@ function makeMessage(overrides: Record<string, unknown> = {}) {
   });
 }
 
+// The fixtures reply with the fields the service reads rather than the whole
+// wire response, so the mock is typed by what the tests send and receive and
+// presented to the service as the client's `chat`.
+type MockChatParams = {
+  model?: string | undefined;
+  messages: OllamaMessage[];
+  tools?: unknown[] | undefined;
+};
+type MockChat = Mock<(params: MockChatParams) => Promise<unknown>> &
+  AiChatClient["chat"];
+
+function makeMockChat(): MockChat {
+  return loose<MockChat>(vi.fn<(params: MockChatParams) => Promise<unknown>>());
+}
+
 function makeMockOllama() {
-  return { chat: vi.fn() };
+  return { chat: makeMockChat() };
 }
 
 let originalEnabled: boolean;
@@ -116,11 +134,11 @@ beforeEach(() => {
   settings.aiChat.enabled = true;
 
   aiChatRepository.getMessages.mockResolvedValue([]);
-  aiChatRepository.appendMessage.mockImplementation(async (input) =>
-    makeMessage({ ...input, conversation_id: input.conversationId }),
+  aiChatRepository.appendMessage.mockImplementation((input) =>
+    Promise.resolve(makeMessage({ ...input, conversation_id: input.conversationId })),
   );
   aiChatRepository.createConversation.mockImplementation(
-    async ({ title, model }) => makeConversation({ title, model }),
+    ({ title, model }) => Promise.resolve(makeConversation({ title, model })),
   );
   aiChatRepository.getConversation.mockResolvedValue(makeConversation());
   aiChatRepository.updateConversationModel.mockResolvedValue(
@@ -140,7 +158,7 @@ describe("listConversations", () => {
       items: [{ id: "conv-1" }],
       total: 101,
     });
-    expect(aiChatRepository.listConversations).toHaveBeenCalledWith(page);
+    expect(mockOf(aiChatRepository, "listConversations")).toHaveBeenCalledWith(page);
   });
 });
 
@@ -239,7 +257,7 @@ describe("runChatTurn — conversation lifecycle", () => {
     expect(result.userMessage).toBe(priorUser);
     expect(events).toEqual([]);
     const modelUserMessages =
-      ollamaClient.chat.mock.calls[0]![0].messages.filter(
+      must(ollamaClient.chat.mock.calls[0], "ollamaClient.chat.mock.calls[0]")[0].messages.filter(
         (entry: OllamaMessage) => entry.role === "user",
       );
     expect(modelUserMessages).toEqual([
@@ -265,19 +283,19 @@ describe("runChatTurn — conversation lifecycle", () => {
         ollamaClient: makeMockOllama(),
       }),
     ).rejects.toMatchObject({ code: "TURN_ALREADY_COMPLETE", status: 409 });
-    expect(aiChatRepository.appendMessage).not.toHaveBeenCalled();
+    expect(mockOf(aiChatRepository, "appendMessage")).not.toHaveBeenCalled();
   });
 
   it("serializes a retry behind an in-flight turn and prevents two answers", async () => {
     const persisted: AiMessageRow[] = [];
-    aiChatRepository.getMessages.mockImplementation(async () => [...persisted]);
-    aiChatRepository.appendMessage.mockImplementation(async (input) => {
+    aiChatRepository.getMessages.mockImplementation(() => Promise.resolve([...persisted]));
+    aiChatRepository.appendMessage.mockImplementation((input) => {
       const row = makeMessage({
         ...input,
         conversation_id: input.conversationId,
       });
       persisted.push(row);
-      return row;
+      return Promise.resolve(row);
     });
     let resolveOriginal!: (value: unknown) => void;
     const ollamaClient = makeMockOllama();
@@ -304,7 +322,7 @@ describe("runChatTurn — conversation lifecycle", () => {
       ollamaClient,
     });
     await Promise.resolve();
-    expect(aiChatRepository.getMessages).toHaveBeenCalledTimes(1);
+    expect(mockOf(aiChatRepository, "getMessages")).toHaveBeenCalledTimes(1);
 
     resolveOriginal({
       content: "only answer",
@@ -333,14 +351,14 @@ describe("runChatTurn — conversation lifecycle", () => {
 
   it("cancels a queued turn without persisting or calling the model", async () => {
     const persisted: AiMessageRow[] = [];
-    aiChatRepository.getMessages.mockImplementation(async () => [...persisted]);
-    aiChatRepository.appendMessage.mockImplementation(async (input) => {
+    aiChatRepository.getMessages.mockImplementation(() => Promise.resolve([...persisted]));
+    aiChatRepository.appendMessage.mockImplementation((input) => {
       const row = makeMessage({
         ...input,
         conversation_id: input.conversationId,
       });
       persisted.push(row);
-      return row;
+      return Promise.resolve(row);
     });
     let resolveOriginal!: (value: unknown) => void;
     const ollamaClient = makeMockOllama();
@@ -405,9 +423,9 @@ describe("runChatTurn — conversation lifecycle", () => {
 
     await runChatTurn({ message: longMessage, ollamaClient });
 
-    expect(aiChatRepository.createConversation).toHaveBeenCalledTimes(1);
+    expect(mockOf(aiChatRepository, "createConversation")).toHaveBeenCalledTimes(1);
     const { title, model } =
-      aiChatRepository.createConversation.mock.calls[0]![0];
+      must(aiChatRepository.createConversation.mock.calls[0], "aiChatRepository.createConversation.mock.calls[0]")[0];
     expect(title.length).toBeLessThanOrEqual(60);
     expect(title.endsWith("…")).toBe(true);
     expect(model).toBe(settings.ollama.defaultModel);
@@ -432,8 +450,8 @@ describe("runChatTurn — conversation lifecycle", () => {
       ollamaClient,
     });
 
-    expect(aiChatRepository.createConversation).not.toHaveBeenCalled();
-    expect(aiChatRepository.getConversation).toHaveBeenCalledWith("c-99");
+    expect(mockOf(aiChatRepository, "createConversation")).not.toHaveBeenCalled();
+    expect(mockOf(aiChatRepository, "getConversation")).toHaveBeenCalledWith("c-99");
     expect(result.conversation.id).toBe("c-99");
   });
 
@@ -474,11 +492,11 @@ describe("runChatTurn — conversation lifecycle", () => {
       ollamaClient,
     });
 
-    expect(aiChatRepository.updateConversationModel).toHaveBeenCalledWith(
+    expect(mockOf(aiChatRepository, "updateConversationModel")).toHaveBeenCalledWith(
       "c-1",
       "qwen2.5:7b",
     );
-    const chatCall = ollamaClient.chat.mock.calls[0]![0];
+    const chatCall = must(ollamaClient.chat.mock.calls[0], "ollamaClient.chat.mock.calls[0]")[0];
     expect(chatCall.model).toBe("qwen2.5:7b");
   });
 
@@ -502,7 +520,7 @@ describe("runChatTurn — conversation lifecycle", () => {
       ollamaClient,
     });
 
-    expect(aiChatRepository.updateConversationModel).not.toHaveBeenCalled();
+    expect(mockOf(aiChatRepository, "updateConversationModel")).not.toHaveBeenCalled();
   });
 });
 
@@ -523,12 +541,12 @@ describe("runChatTurn — single turn (no tool calls)", () => {
     });
 
     expect(ollamaClient.chat).toHaveBeenCalledTimes(1);
-    expect(aiChatRepository.appendMessage).toHaveBeenCalledTimes(2);
-    expect(aiChatRepository.appendMessage).toHaveBeenNthCalledWith(
+    expect(mockOf(aiChatRepository, "appendMessage")).toHaveBeenCalledTimes(2);
+    expect(mockOf(aiChatRepository, "appendMessage")).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ role: "user", content: "biggest category?" }),
     );
-    expect(aiChatRepository.appendMessage).toHaveBeenNthCalledWith(
+    expect(mockOf(aiChatRepository, "appendMessage")).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         role: "assistant",
@@ -567,7 +585,7 @@ describe("runChatTurn — single turn (no tool calls)", () => {
     expect(events[0]).toEqual({
       type: "user_message",
       data: {
-        message: expect.objectContaining({ role: "user", content: "hi" }),
+        message: objectContaining({ role: "user", content: "hi" }),
       },
     });
   });
@@ -621,9 +639,9 @@ describe("runChatTurn — tool-call loop", () => {
     expect(dispatchTool).toHaveBeenCalledWith(
       "getSpendByCategory",
       { from: "2025-01-01", to: "2025-12-31" },
-      { cache: expect.any(Map), maxRows: settings.aiChat.maxToolRows },
+      { cache: anyInstance(Map), maxRows: settings.aiChat.maxToolRows },
     );
-    expect(dispatchTool.mock.calls[0]![2]).not.toHaveProperty("conversationId");
+    expect(must(dispatchTool.mock.calls[0], "dispatchTool.mock.calls[0]")[2]).not.toHaveProperty("conversationId");
     expect(result.toolMessages).toHaveLength(1);
     expect(result.iterations).toBe(2);
     expect(result.assistantMessage.content).toBe("Rent was €3600.");
@@ -666,7 +684,7 @@ describe("runChatTurn — tool-call loop", () => {
     const toolAppend = aiChatRepository.appendMessage.mock.calls.find(
       ([arg]) => arg.role === "tool",
     );
-    expect(toolAppend![0]).toMatchObject({
+    expect(must(toolAppend, "toolAppend")[0]).toMatchObject({
       role: "tool",
       toolName: "getSpendByCategory",
       toolArgs: { from: "2025-01-01", to: "2025-12-31" },
@@ -724,7 +742,7 @@ describe("runChatTurn — tool-call loop", () => {
     const toolAppend = aiChatRepository.appendMessage.mock.calls.find(
       ([arg]) => arg.role === "tool",
     );
-    expect(toolAppend![0].toolArgs).toEqual(coerced);
+    expect(must(toolAppend, "toolAppend")[0].toolArgs).toEqual(coerced);
     // The pre-dispatch tool_call frame cannot know the coerced value yet:
     // string args ride as `{}` (the frame schema requires a record); the
     // tool_result frame that follows carries the coerced record.
@@ -784,8 +802,8 @@ describe("runChatTurn — tool-call loop", () => {
     const toolAppend = aiChatRepository.appendMessage.mock.calls.find(
       ([arg]) => arg.role === "tool",
     );
-    expect(toolAppend![0].toolArgs).toBe(rawArgs);
-    expect(toolAppend![0].toolResult).toBe(validationResult);
+    expect(must(toolAppend, "toolAppend")[0].toolArgs).toBe(rawArgs);
+    expect(must(toolAppend, "toolAppend")[0].toolResult).toBe(validationResult);
 
     // The SSE frame schema requires a plain object — a non-record falls
     // back to {} (the raw value rides in the following tool_result row).
@@ -800,11 +818,11 @@ describe("runChatTurn — tool-call loop", () => {
 
     // LLM retry contract: the second model call sees the byte-identical
     // stringified error payload as its role:'tool' message.
-    const secondCallMessages = ollamaClient.chat.mock.calls[1]![0].messages;
+    const secondCallMessages = must(ollamaClient.chat.mock.calls[1], "ollamaClient.chat.mock.calls[1]")[0].messages;
     const toolMsg = secondCallMessages.find(
       (m: OllamaMessage) => m.role === "tool",
     );
-    expect(toolMsg.content).toBe(JSON.stringify(validationResult));
+    expect(must(toolMsg, "toolMsg").content).toBe(JSON.stringify(validationResult));
   });
 
   it("handles multiple tool calls in one model response", async () => {
@@ -946,17 +964,17 @@ describe("runChatTurn — server-side pre-call (ADR-110 §4)", () => {
     expect(dispatchTool).toHaveBeenCalledWith(
       "insightsDigest",
       {},
-      { cache: expect.any(Map), maxRows: settings.aiChat.maxToolRows },
+      { cache: anyInstance(Map), maxRows: settings.aiChat.maxToolRows },
     );
-    expect(dispatchTool.mock.calls[0]![2]).not.toHaveProperty("conversationId");
+    expect(must(dispatchTool.mock.calls[0], "dispatchTool.mock.calls[0]")[2]).not.toHaveProperty("conversationId");
     expect(dispatchTool.mock.invocationCallOrder[0]).toBeLessThan(
-      ollamaClient.chat.mock.invocationCallOrder[0]!,
+      must(ollamaClient.chat.mock.invocationCallOrder[0], "ollamaClient.chat.mock.invocationCallOrder[0]"),
     );
     expect(events).toEqual(["user_message", "tool_call", "tool_result"]);
     const toolAppend = aiChatRepository.appendMessage.mock.calls.find(
       ([arg]) => arg.role === "tool",
     );
-    expect(toolAppend![0]).toMatchObject({
+    expect(must(toolAppend, "toolAppend")[0]).toMatchObject({
       role: "tool",
       toolName: "insightsDigest",
       toolArgs: {},
@@ -968,7 +986,7 @@ describe("runChatTurn — server-side pre-call (ADR-110 §4)", () => {
     // role:'tool' digest message before being asked to generate — with tool
     // schemas still enabled.
     expect(ollamaClient.chat).toHaveBeenCalledTimes(1);
-    const chatArgs = ollamaClient.chat.mock.calls[0]![0];
+    const chatArgs = must(ollamaClient.chat.mock.calls[0], "ollamaClient.chat.mock.calls[0]")[0];
     const syntheticIdx = chatArgs.messages.findIndex(
       (m: OllamaMessage) =>
         m.role === "assistant" && Array.isArray(m.tool_calls),
@@ -978,12 +996,12 @@ describe("runChatTurn — server-side pre-call (ADR-110 §4)", () => {
     );
     expect(syntheticIdx).toBeGreaterThanOrEqual(0);
     expect(toolMsgIdx).toBe(syntheticIdx + 1);
-    expect(chatArgs.messages[syntheticIdx].tool_calls).toEqual([
+    expect(must(chatArgs.messages[syntheticIdx], "synthetic message").tool_calls).toEqual([
       { function: { name: "insightsDigest", arguments: "{}" } },
     ]);
-    expect(chatArgs.messages[toolMsgIdx].content).toBe(JSON.stringify(digest));
+    expect(must(chatArgs.messages[toolMsgIdx], "tool message").content).toBe(JSON.stringify(digest));
     expect(chatArgs.tools).toBeDefined();
-    expect(chatArgs.tools.length).toBeGreaterThan(0);
+    expect(must(chatArgs.tools, "chatArgs.tools").length).toBeGreaterThan(0);
 
     // (c) the final assistant message is the narration.
     expect(result.assistantMessage.content).toBe(
@@ -1013,7 +1031,7 @@ describe("runChatTurn — server-side pre-call (ADR-110 §4)", () => {
 
     expect(result.assistantMessage.content).toBe("plain reply");
     expect(result.toolMessages).toHaveLength(0);
-    const sentMessages = ollamaClient.chat.mock.calls[0]![0].messages;
+    const sentMessages = must(ollamaClient.chat.mock.calls[0], "ollamaClient.chat.mock.calls[0]")[0].messages;
     expect(sentMessages.some((m: OllamaMessage) => m.role === "tool")).toBe(
       false,
     );
@@ -1170,17 +1188,17 @@ describe("runChatTurn — streaming", () => {
   it("emits token events for each delta and leaves the final assistant row to done", async () => {
     const ollamaClient = {
       chat: vi.fn(),
-      chatStream: vi.fn(async ({ onToken }: StreamParams) => {
-        onToken!("Hel");
-        onToken!("lo ");
-        onToken!("world");
-        return {
+      chatStream: vi.fn(({ onToken }: StreamParams) => {
+        void must(onToken, "onToken")("Hel");
+        void must(onToken, "onToken")("lo ");
+        void must(onToken, "onToken")("world");
+        return Promise.resolve({
           content: "Hello world",
           toolCalls: [],
           evalCount: 3,
           promptEvalCount: 2,
           totalDurationMs: 50,
-        };
+        });
       }),
     };
 
@@ -1215,13 +1233,13 @@ describe("runChatTurn — streaming", () => {
   it("sends the Apple Foundation model no keep_alive or num_predict", async () => {
     const ollamaClient = {
       chat: vi.fn(),
-      chatStream: vi.fn(async () => ({
+      chatStream: vi.fn(() => Promise.resolve(({
         content: "ok",
         toolCalls: [],
         evalCount: 1,
         promptEvalCount: 1,
         totalDurationMs: 1,
-      })),
+      }))),
     };
     await runChatTurn({
       message: "hi",
@@ -1239,17 +1257,17 @@ describe("runChatTurn — streaming", () => {
   it("skips empty-string delta tokens", async () => {
     const ollamaClient = {
       chat: vi.fn(),
-      chatStream: vi.fn(async ({ onToken }: StreamParams) => {
-        onToken!("A");
-        onToken!("");
-        onToken!("B");
-        return {
+      chatStream: vi.fn(({ onToken }: StreamParams) => {
+        void must(onToken, "onToken")("A");
+        void must(onToken, "onToken")("");
+        void must(onToken, "onToken")("B");
+        return Promise.resolve({
           content: "AB",
           toolCalls: [],
           evalCount: 2,
           promptEvalCount: 1,
           totalDurationMs: 10,
-        };
+        });
       }),
     };
 
@@ -1270,10 +1288,13 @@ describe("runChatTurn — streaming", () => {
 
   it("emits tool_call before dispatch (progress affordance) and tool_result after", async () => {
     const ollamaClient = {
-      chat: vi.fn(),
-      chatStream: vi
-        .fn()
-        .mockImplementationOnce(async () => ({
+      chat: makeMockChat(),
+      chatStream: loose<
+        Mock<(params: StreamParams) => Promise<unknown>> &
+          NonNullable<AiChatClient["chatStream"]>
+      >(vi
+        .fn<(params: StreamParams) => Promise<unknown>>()
+        .mockImplementationOnce(() => Promise.resolve(({
           content: "",
           toolCalls: [
             {
@@ -1286,17 +1307,17 @@ describe("runChatTurn — streaming", () => {
           evalCount: 1,
           promptEvalCount: 1,
           totalDurationMs: 10,
-        }))
-        .mockImplementationOnce(async ({ onToken }) => {
-          onToken("done");
-          return {
+        })))
+        .mockImplementationOnce(({ onToken }) => {
+          void must(onToken, "onToken")("done");
+          return Promise.resolve({
             content: "done",
             toolCalls: [],
             evalCount: 1,
             promptEvalCount: 1,
             totalDurationMs: 10,
-          };
-        }),
+          });
+        })),
     };
 
     dispatchTool.mockResolvedValueOnce({
@@ -1330,7 +1351,7 @@ describe("runChatTurn — streaming", () => {
     expect(toolMsgIdx).toBeGreaterThan(toolCallIdx);
     expect(dispatchCountAtToolCall).toBe(0);
 
-    const toolCallEvt = events[toolCallIdx]!;
+    const toolCallEvt = must(events[toolCallIdx], "events[toolCallIdx]");
     expect(toolCallEvt.data).toEqual({
       name: "getSpendByCategory",
       args: { from: "2025-01-01", to: "2025-12-31" },
@@ -1429,8 +1450,8 @@ describe("no-external-calls guarantee", () => {
   it("does not call fetch when ollamaClient is injected", async () => {
     const ollamaClient = {
       chat: vi.fn().mockResolvedValue({
-        message: { role: "assistant", content: "All clear." },
-        tool_calls: [],
+        content: "All clear.",
+        toolCalls: [],
       }),
     };
 
@@ -1444,12 +1465,16 @@ describe("no-external-calls guarantee", () => {
   });
 
   it("does not call fetch even when tools are dispatched", async () => {
+    // The tool row is read back after dispatch.
+    aiChatRepository.appendMessage.mockResolvedValue(
+      loose<AiMessageRow>({ toolResult: null }),
+    );
     const ollamaClient = {
       chat: vi
         .fn()
         .mockResolvedValueOnce({
-          message: { role: "assistant", content: null },
-          tool_calls: [
+          content: "",
+          toolCalls: [
             {
               function: {
                 name: "getSpendByCategory",
@@ -1459,8 +1484,8 @@ describe("no-external-calls guarantee", () => {
           ],
         })
         .mockResolvedValueOnce({
-          message: { role: "assistant", content: "Here are your expenses." },
-          tool_calls: [],
+          content: "Here are your expenses.",
+          toolCalls: [],
         }),
     };
 
@@ -1476,11 +1501,8 @@ describe("no-external-calls guarantee", () => {
   it("does not call fetch on the insights pre-call path (ADR-110 §4)", async () => {
     const ollamaClient = {
       chat: vi.fn().mockResolvedValue({
-        message: {
-          role: "assistant",
-          content: "Here is what stands out this month.",
-        },
-        tool_calls: [],
+        content: "Here is what stands out this month.",
+        toolCalls: [],
       }),
     };
 

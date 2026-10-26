@@ -7,6 +7,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import PortfolioImportPage from "../PortfolioImportPage";
+import { must } from "@/test/must";
 
 it("starts with file selection and reveals mappings after choosing a CSV", async () => {
     server.use(
@@ -25,10 +26,10 @@ it("starts with file selection and reveals mappings after choosing a CSV", async
     await user.click(screen.getByText("Advanced single-file import"));
     expect(await screen.findByText("Transaction history file")).toBeVisible();
     expect(screen.queryByLabelText(/Date column/)).not.toBeInTheDocument();
-    const input = screen
+    const input = must(must(screen
         .getByText("Advanced single-file import")
-        .closest("details")!
-        .querySelector<HTMLInputElement>('input[type="file"]')!;
+        .closest("details"))
+        .querySelector<HTMLInputElement>('input[type="file"]'));
     expect(input).toHaveAttribute("accept", ".csv,.xlsx,.xls");
     expect(screen.getByRole("combobox", { name: "Parser" })).toHaveTextContent(
         "Detect automatically",

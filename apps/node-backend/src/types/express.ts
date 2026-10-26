@@ -78,7 +78,7 @@ export interface ExpressResponse {
     chunk?: ResponseChunk | ResponseCallback,
     encoding?: BufferEncoding | ResponseCallback,
     cb?: ResponseCallback,
-  ): ExpressResponse | void;
+  ): ExpressResponse | undefined;
   /** Express's `res.sendFile`, used by routes/attachments.js's download endpoint. */
   sendFile?: (path: string, callback?: (err?: Error) => void) => void;
   getHeader?: (name: string) => number | string | string[] | undefined;

@@ -22,6 +22,7 @@ import type {
   CategoryOutlierDismissRecord,
   CategoryOutlierFinding,
 } from "../src/services/categoryOutlierService.ts";
+import { must } from "./helpers/must.ts";
 
 /**
  * Expense row as returned by the service's SELECT: pg NUMERIC is a string and
@@ -184,7 +185,7 @@ describe("detectCategoryOutliers", () => {
       baselineMedian: 100,
       direction: "increased",
     });
-    expect(findings[0]!.deviation).toBeGreaterThan(3.5);
+    expect(must(findings[0], "findings[0]").deviation).toBeGreaterThan(3.5);
   });
 
   it("compares like-for-like windows — never a full prior month vs the partial current month", async () => {
@@ -256,7 +257,7 @@ describe("detectCategoryOutliers", () => {
       ],
     });
     expect(aged).toHaveLength(1);
-    expect(aged[0]!.monthKey).toBe("2026-07");
+    expect(must(aged[0], "aged[0]").monthKey).toBe("2026-07");
     // A dismissal of a DIFFERENT category never suppresses.
     const otherCategory = await detectCategoryOutliers({
       dismissRecords: [
@@ -291,7 +292,7 @@ describe("detectCategoryOutliers", () => {
       ],
     });
     expect(realerted).toHaveLength(1);
-    expect(realerted[0]!.deviation).toBe(40.47);
+    expect(must(realerted[0], "realerted[0]").deviation).toBe(40.47);
 
     // Within the re-alert margin (40.47 < 40.4 + 0.5) → still suppressed.
     const withinMargin = await detectCategoryOutliers({

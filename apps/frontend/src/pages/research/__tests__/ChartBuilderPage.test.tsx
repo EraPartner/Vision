@@ -14,6 +14,7 @@ import {
     encodeSharedChart,
 } from "@/pages/research/chartBuilderLayouts";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
+import { must } from "@/test/must";
 
 const queryState = vi.hoisted(() => ({ loading: true }));
 
@@ -186,7 +187,7 @@ describe("ChartBuilderPage oscillator state", () => {
     it("keeps chart options collapsed and preserves scale choices", async () => {
         const user = userEvent.setup();
         renderPage();
-        const options = screen.getByText("Chart options").closest("details")!;
+        const options = must(screen.getByText("Chart options").closest("details"));
         expect(options).not.toHaveAttribute("open");
         await user.click(screen.getByText("Chart options"));
         const scale = screen.getByRole("switch", { name: "Log scale" });
@@ -209,7 +210,7 @@ describe("ChartBuilderPage oscillator state", () => {
         expect(screen.getByText("Belgian view")).toBeInTheDocument();
         const stored = JSON.parse(
             storageValues.get(LOCAL_STORAGE_KEYS.CHART_BUILDER_LAYOUTS) ?? "{}",
-        );
+        ) as { layouts: { name: string }[] };
         expect(stored.layouts).toHaveLength(1);
 
         await user.click(screen.getByRole("button", { name: "More actions" }));
@@ -223,7 +224,7 @@ describe("ChartBuilderPage oscillator state", () => {
         expect(toast.success).toHaveBeenCalledWith(
             "Layout deleted",
             expect.objectContaining({
-                action: expect.objectContaining({ label: "Undo" }),
+                action: expect.objectContaining({ label: "Undo" }) as unknown,
             }),
         );
 

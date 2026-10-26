@@ -13,17 +13,21 @@ import {
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { upsertExposureBundle } from "../src/repositories/portfolioExposureRepository.ts";
+import { must } from "./helpers/must.ts";
+interface IdRow {
+  id: number;
+}
 
 const SUFFIX = `PES${process.pid}`;
 const investmentIds: number[] = [];
 
 async function investment(): Promise<number> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "test pool").query<IdRow>(
     `INSERT INTO investments (name, asset_class, currency) VALUES ($1, 'stock', 'EUR') RETURNING id`,
     [`Exposure ${SUFFIX} ${investmentIds.length}`],
   );
-  investmentIds.push(rows[0].id);
-  return rows[0].id;
+  investmentIds.push(must(rows[0], "rows[0]").id);
+  return must(rows[0], "rows[0]").id;
 }
 
 describe.skipIf(!hasTestDatabase())(
@@ -35,7 +39,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const db = getTestPool()!;
+      const db = must(getTestPool(), "test pool");
       const ids = investmentIds.splice(0);
       await db.query(
         "DELETE FROM portfolio_exposure_classifications WHERE investment_id = ANY($1::int[])",
@@ -72,10 +76,10 @@ describe.skipIf(!hasTestDatabase())(
       });
       expect(
         bundle.classifications
-          .filter((row) => [first, second].includes(row.investmentId!))
+          .filter((row) => [first, second].includes(must(row.investmentId, "row.investmentId")))
           .map((row) => row.investmentId)
-          .sort(),
-      ).toEqual([first, second].sort());
+          .sort((a, b) => must(a, "a") - must(b, "b")),
+      ).toEqual([first, second].sort((a, b) => a - b));
 
       const updated = await upsertExposureBundle({
         classifications: [classify(first, "Issuer One Renamed")],

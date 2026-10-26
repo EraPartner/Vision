@@ -15,6 +15,7 @@ import { PortfolioImportSession } from "../PortfolioImportSession";
 import { portfolioImportPresetConfig } from "../portfolioImportPresets";
 import { ibkrFundingStatement } from "./fixtures/ibkrFundingStatement";
 import { asAccountId } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 const api = "http://localhost:3002/api/portfolio/import";
 const nexoHeader =
@@ -157,7 +158,7 @@ beforeEach(() => {
             return ok(
                 plan(
                     body.batch_ids as number[],
-                    (body.adopt_policy as string) ?? null,
+                    (body.adopt_policy as string | undefined) ?? null,
                     (
                         (body.batch_policies ?? []) as Array<{
                             batch_id: number;
@@ -1079,14 +1080,14 @@ describe("reviewed portfolio import sessions", () => {
 
     it("retains distinct custody origin and destination fields in the staging API", async () => {
         const config = {
-            ...portfolioImportPresetConfig("nexo")!,
+            ...must(portfolioImportPresetConfig("nexo")),
             transferOriginAccountId: asAccountId(2),
             transferDestinationAccountId: asAccountId(3),
         };
         await importPortfolioCSVWithProgress(
             statement(),
             config,
-            config.format!,
+            must(config.format),
             () => {},
             { isBrokerage: true, accountId: asAccountId(1) },
         ).result;
@@ -1291,7 +1292,7 @@ describe("reviewed portfolio import sessions", () => {
                         return ok(
                             plan(
                                 [11],
-                                (body.adopt_policy as string) ?? null,
+                                (body.adopt_policy as string | undefined) ?? null,
                                 (
                                     (body.batch_policies ?? []) as Array<{
                                         batch_id: number;
@@ -1321,7 +1322,7 @@ describe("reviewed portfolio import sessions", () => {
                     "wallet.csv",
                     "preserve_existing",
                 );
-            await act(async () => finish());
+            await act(() => Promise.resolve(finish()));
             await waitFor(() =>
                 expect(
                     screen.queryByText(
@@ -1473,7 +1474,7 @@ describe("reviewed portfolio import sessions", () => {
                 name: "Stop after current statement",
             }),
         );
-        await act(async () => finish());
+        await act(() => Promise.resolve(finish()));
         expect(
             await screen.findByText(/Stopped after the current statement/),
         ).toBeVisible();

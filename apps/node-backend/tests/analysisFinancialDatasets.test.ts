@@ -11,6 +11,7 @@ import {
 } from "../src/services/analysisFinancialDatasets.ts";
 import type { FinancialQuery } from "../src/services/analysisFinancialDatasets.ts";
 import { assertAnalysisDatasetReference } from "@vision/types/analysis-datasets";
+import { must } from "./helpers/must.ts";
 
 /** FinancialQuery is generic over its row type; each mock returns fixed rows. */
 const financialQuery = (impl: (sql: string) => Promise<{ rows: unknown[] }>) =>
@@ -18,7 +19,7 @@ const financialQuery = (impl: (sql: string) => Promise<{ rows: unknown[] }>) =>
 
 describe("canonical financial analysis", () => {
   it("withholds valuation for missing market quotes while retaining basis and quantity", async () => {
-    const query = financialQuery(async (sql) => ({
+    const query = financialQuery((sql) => Promise.resolve(({
       rows: sql.includes("FROM investments WHERE")
         ? [
             {
@@ -42,7 +43,7 @@ describe("canonical financial analysis", () => {
               },
             ]
           : [],
-    }));
+    })));
     const result = await executeFinancialAnalysis(
       {
         datasetId: "positions",
@@ -74,8 +75,8 @@ describe("canonical financial analysis", () => {
       },
       { deps: { query } },
     );
-    expect(scoped.rows[0]!.sum_total_units).toBe("10");
-    expect(scoped.declaredColumns[0]!.unit).toEqual({
+    expect(must(scoped.rows[0], "scoped.rows[0]").sum_total_units).toBe("10");
+    expect(must(scoped.declaredColumns[0], "scoped.declaredColumns[0]").unit).toEqual({
       kind: "quantity",
       instrumentId: "1",
     });
@@ -87,7 +88,7 @@ describe("canonical financial analysis", () => {
     expect(result.provenance.coverageReasons).toEqual(["market-quote-missing"]);
   });
   it("does not require market quotes for fixed income or closed market positions", async () => {
-    const query = financialQuery(async (sql) => ({
+    const query = financialQuery((sql) => Promise.resolve(({
       rows: sql.includes("FROM investments WHERE")
         ? [
             {
@@ -118,7 +119,7 @@ describe("canonical financial analysis", () => {
               },
             ]
           : [],
-    }));
+    })));
     const result = await executeFinancialAnalysis(
       { datasetId: "positions", fields: ["investment_id", "current_value"] },
       { deps: { query } },
@@ -141,7 +142,7 @@ describe("canonical financial analysis", () => {
       const dataset = FINANCIAL_ANALYSIS_DATASETS.find(
         (item) => item.id === id,
       );
-      expect(dataset!.fields.find((item) => item.id === field)).toMatchObject({
+      expect(must(dataset, "dataset").fields.find((item) => item.id === field)).toMatchObject({
         temporalKind: "stock",
         aggregation: "last",
       });
@@ -153,7 +154,7 @@ describe("canonical financial analysis", () => {
         (item) => item.id === id,
       );
       for (const field of ["value", "invested", "gain_loss"]) {
-        expect(dataset!.fields.find((item) => item.id === field)).toMatchObject(
+        expect(must(dataset, "dataset").fields.find((item) => item.id === field)).toMatchObject(
           {
             temporalKind: "stock",
             aggregation: "last",
@@ -163,14 +164,14 @@ describe("canonical financial analysis", () => {
       }
       if (id === "broker-history")
         expect(
-          dataset!.fields.find((item) => item.id === "value")!
+          must(must(dataset, "dataset").fields.find((item) => item.id === "value"), "dataset!.fields.find((item) => item.id === \"value\")")
             .requiredTimeGroups,
         ).toEqual(["account_key"]);
     }
     expect(
-      FINANCIAL_ANALYSIS_DATASETS.find(
+      must(must(FINANCIAL_ANALYSIS_DATASETS.find(
         (item) => item.id === "positions",
-      )!.fields.find((item) => item.id === "total_units")!.unit,
+      ), "FINANCIAL_ANALYSIS_DATASETS.find( (item) => item.id === \"...").fields.find((item) => item.id === "total_units"), "FINANCIAL_ANALYSIS_DATASETS.find( (item) => item.id === \"...").unit,
     ).toEqual({ kind: "quantity", instrumentColumn: "investment_id" });
   });
   it("converts exact decimals using prior evidence and rejects missing history", () => {
@@ -203,7 +204,7 @@ describe("canonical financial analysis", () => {
     );
     expect(result.rows).toEqual([{ currency: "EUR", sum_value: "0.2" }]);
     expect(result.window.hasMore).toBe(false);
-    expect(query.mock.calls[0]![0]).toContain("LIMIT 100001");
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toContain("LIMIT 100001");
   });
   it("reuses an unfiltered source across pivot levels without reusing filtered results", async () => {
     const query = vi.fn().mockResolvedValue({
@@ -232,7 +233,7 @@ describe("canonical financial analysis", () => {
     expect(query).toHaveBeenCalledTimes(2);
   });
   it("uses canonical partial-sale units and excludes unrelated private fields", async () => {
-    const query = financialQuery(async (sql) => ({
+    const query = financialQuery((sql) => Promise.resolve(({
       rows: sql.includes("FROM investments WHERE")
         ? [
             {
@@ -268,7 +269,7 @@ describe("canonical financial analysis", () => {
               },
             ]
           : [],
-    }));
+    })));
     const result = await executeFinancialAnalysis(
       {
         datasetId: "positions",
@@ -287,7 +288,7 @@ describe("canonical financial analysis", () => {
     ).rejects.toThrow("Unsupported");
   });
   it("withholds money when FX evidence is absent", async () => {
-    const query = financialQuery(async (sql) => ({
+    const query = financialQuery((sql) => Promise.resolve(({
       rows: sql.includes("FROM investments WHERE")
         ? [
             {
@@ -311,7 +312,7 @@ describe("canonical financial analysis", () => {
               },
             ]
           : [],
-    }));
+    })));
     const result = await executeFinancialAnalysis(
       {
         datasetId: "positions",
@@ -360,7 +361,7 @@ describe("canonical financial analysis", () => {
       },
       { deps: { fetchBenchmark } },
     );
-    expect(result.rows[1]!.return_pct).toBe("10");
+    expect(must(result.rows[1], "result.rows[1]").return_pct).toBe("10");
     expect(result.provenance).toMatchObject({
       provider: "fixture",
       reportingCurrency: "USD",
@@ -378,7 +379,7 @@ describe("canonical financial analysis", () => {
       },
       {
         deps: {
-          fetchBenchmark: async () => ({
+          fetchBenchmark: () => Promise.resolve(({
             data: {
               currency: "USD",
               points: [
@@ -388,7 +389,7 @@ describe("canonical financial analysis", () => {
                 { time: Date.UTC(2026, 0, 4), close: null },
               ],
             },
-          }),
+          })),
         },
       },
     );
@@ -400,7 +401,7 @@ describe("canonical financial analysis", () => {
     });
   });
   it("sums the latest broker value per account even when closing dates differ", async () => {
-    const query = financialQuery(async (sql) => ({
+    const query = financialQuery((sql) => Promise.resolve(({
       rows: sql.includes("to_regclass")
         ? [{ relation: "portfolio_broker_snapshots" }]
         : [
@@ -423,7 +424,7 @@ describe("canonical financial analysis", () => {
               value: "120",
             },
           ],
-    }));
+    })));
     const result = await executeFinancialAnalysis(
       {
         datasetId: "broker-history",
@@ -440,12 +441,12 @@ describe("canonical financial analysis", () => {
       { datasetId: "portfolio-history", measures: ["sum_value"] },
       {
         deps: {
-          query: loose<FinancialQuery>(async () => ({
+          query: loose<FinancialQuery>(() => Promise.resolve(({
             rows: [
               { date: "2026-01-01", currency: "EUR", value: "100" },
               { date: "2026-01-02", currency: "EUR", value: null },
             ],
-          })),
+          }))),
         },
       },
     );
@@ -475,7 +476,7 @@ describe("canonical financial analysis", () => {
       { datasetId: "benchmark-history", symbol: "TEST", fields: ["close"] },
       { deps: { fetchBenchmark } },
     );
-    expect(result.declaredColumns[0]!.unit).toEqual({
+    expect(must(result.declaredColumns[0], "result.declaredColumns[0]").unit).toEqual({
       kind: "money",
       currencyColumn: "currency",
     });
@@ -494,7 +495,7 @@ describe("canonical financial analysis", () => {
       { datasetId: "portfolio-history", measures: ["sum_value"] },
       { deps: { query } },
     );
-    expect(total.rows[0]!.sum_value).toBeNull();
+    expect(must(total.rows[0], "total.rows[0]").sum_value).toBeNull();
     const sorted = await executeFinancialAnalysis(
       {
         datasetId: "portfolio-history",

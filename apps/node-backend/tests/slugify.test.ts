@@ -51,9 +51,4 @@ describe('slugify', () => {
   it('returns empty string for empty input', () => {
     expect(slugify('')).toBe('');
   });
-
-  it('coerces non-string via String()', () => {
-    // @ts-expect-error -- deliberately passes a non-string to check String() coercion
-    expect(slugify(42)).toBe('42');
-  });
 });

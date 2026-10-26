@@ -115,7 +115,11 @@ import {
 } from "../../src/services/portfolioImportBatchService.ts";
 import rawAccountService from "../../src/services/accountService.ts";
 import rawCustomParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
+import { must } from "../helpers/must.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
+import { loose } from "../helpers/partial.ts";
+import { objectContaining } from "../helpers/matchers.ts";
 const runPortfolioImportPipeline = vi.mocked(rawRunPortfolioImportPipeline);
 const dbQuery = vi.mocked(rawDbQuery);
 const commitReviewedPortfolioImport = vi.mocked(
@@ -127,15 +131,6 @@ const createInvestmentForRow = vi.mocked(rawCreateInvestmentForRow);
 const resolveInvestmentRows = vi.mocked(rawResolveInvestmentRows);
 const accountService = vi.mocked(rawAccountService);
 const customParserConfigRepository = vi.mocked(rawCustomParserConfigRepository);
-
-/**
- * The routes forward service and repository results without reading most of
- * their fields, so fixtures carry only the fields a test asserts on. `loose`
- * casts one to the type the mocked function resolves with.
- */
-function loose<T>(value: unknown): T {
-  return value as T;
-}
 
 const { default: portfolioImportRouter } =
   await import("../../src/routes/portfolioImportRoutes.ts");
@@ -371,7 +366,7 @@ describe("override/commit body id shape", () => {
         `expected ${JSON.stringify(account_id)} to be rejected`,
       ).toBe("VALIDATION_ERROR");
     }
-    expect(accountService.get).not.toHaveBeenCalled();
+    expect(mockOf(accountService, "get")).not.toHaveBeenCalled();
     expect(commitReviewedPortfolioImport).not.toHaveBeenCalled();
   });
 
@@ -538,7 +533,7 @@ describe("buildPortfolioConfig pins (POST /csv/custom)", () => {
       expect.objectContaining({
         adapterName: "portfolio_generic",
         defaultType: "buy",
-        customConfig: expect.objectContaining({
+        customConfig: objectContaining({
           date_format: "%Y-%m-%d",
           separator: ",",
           encoding: "utf-8",
@@ -558,7 +553,7 @@ describe("buildPortfolioConfig pins (POST /csv/custom)", () => {
     }).expect(201);
     expect(runPortfolioImportPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
-        customConfig: expect.objectContaining({
+        customConfig: objectContaining({
           separator: ",",
           type_mapping: {},
         }),
@@ -629,7 +624,7 @@ describe("normalizePortfolioParserConfig pins (POST /parsers)", () => {
       custom_extra: { nested: true },
     };
     await create(config).expect(201);
-    expect(customParserConfigRepository.create).toHaveBeenCalledWith(
+    expect(mockOf(customParserConfigRepository, "create")).toHaveBeenCalledWith(
       expect.objectContaining({
         config: { ...config, number_format: "auto" },
         kind: "portfolio",
@@ -694,14 +689,14 @@ describe("parser :id shape (PATCH/DELETE /parsers/:id)", () => {
       await api.delete(`${BASE}/parsers/${id}`).expect(400);
       await api.patch(`${BASE}/parsers/${id}`).send({ name: "X" }).expect(400);
     }
-    expect(customParserConfigRepository.delete).not.toHaveBeenCalled();
-    expect(customParserConfigRepository.update).not.toHaveBeenCalled();
+    expect(mockOf(customParserConfigRepository, "delete")).not.toHaveBeenCalled();
+    expect(mockOf(customParserConfigRepository, "update")).not.toHaveBeenCalled();
   });
 
   it("still deletes on a real id", async () => {
     customParserConfigRepository.delete.mockResolvedValue(true);
     await api.delete(`${BASE}/parsers/22`).expect(204);
-    expect(customParserConfigRepository.delete).toHaveBeenCalledWith(22);
+    expect(mockOf(customParserConfigRepository, "delete")).toHaveBeenCalledWith(22);
   });
 });
 
@@ -795,8 +790,8 @@ describe("literal generic source identity HTTP mappings", () => {
     }).expect(201);
     expect(runPortfolioImportPipeline).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        customConfig: expect.objectContaining({
-          column_mapping: expect.objectContaining({
+        customConfig: objectContaining({
+          column_mapping: objectContaining({
             date: "D",
             name: "N",
             source_id: "Source_ID",
@@ -807,7 +802,7 @@ describe("literal generic source identity HTTP mappings", () => {
       }),
     );
     expect(
-      runPortfolioImportPipeline.mock.lastCall![0].customConfig,
+      must(runPortfolioImportPipeline.mock.lastCall, "runPortfolioImportPipeline.mock.lastCall")[0].customConfig,
     ).not.toHaveProperty("format");
   });
   it("preserves the omitted mapping shape for old and blank requests", async () => {
@@ -817,7 +812,7 @@ describe("literal generic source identity HTTP mappings", () => {
     ]) {
       await runCustom({ ...minimalBody, ...optional }).expect(201);
       const mapping =
-        runPortfolioImportPipeline.mock.lastCall![0].customConfig
+        must(runPortfolioImportPipeline.mock.lastCall, "runPortfolioImportPipeline.mock.lastCall")[0].customConfig
           .column_mapping;
       expect(mapping).not.toHaveProperty("source_id");
       expect(mapping).not.toHaveProperty("source_account");
@@ -840,7 +835,7 @@ describe("literal generic source identity HTTP mappings", () => {
  */
 describe("review body schemas", () => {
   const bulk = (body: unknown) =>
-    api.post(`${BASE}/batches/5/rows/investment-override`).send(body as object);
+    api.post(`${BASE}/batches/5/rows/investment-override`).send(body);
 
   it.each([
     [{}, "row_ids must be a non-empty array"],

@@ -100,7 +100,7 @@ export async function getAssetTransfersForBatch(
     portfolioAssetTransferRowSchema,
     selectTransfers()
       .where("at.import_batch_id", "=", String(batchId))
-      .orderBy(["at.investment_id", "at.date", "at.id"]),
+      .orderBy("at.investment_id").orderBy("at.date").orderBy("at.id"),
   );
 }
 

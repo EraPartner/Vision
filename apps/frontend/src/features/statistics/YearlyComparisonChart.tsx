@@ -26,7 +26,7 @@ export const YearlyComparisonChart = memo(function YearlyComparisonChart({
         spending: Math.round(y.totalSpending),
     }));
 
-    const series: BarSeries<YearlyDatum>[] = [
+    const series: (BarSeries<YearlyDatum> & { color: string })[] = [
         {
             key: "income",
             label: t("statsPage.income"),
@@ -46,7 +46,7 @@ export const YearlyComparisonChart = memo(function YearlyComparisonChart({
             <ChartLegend
                 items={series.map((item) => ({
                     label: item.label ?? item.key,
-                    color: item.color!,
+                    color: item.color,
                 }))}
             />
             <p className="type-footnote text-label-secondary">

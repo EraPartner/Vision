@@ -1,3 +1,4 @@
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { taxKeys } from "@/lib/queryKeys";
@@ -43,6 +44,15 @@ import {
 } from "@/utils/currency";
 
 type ReyndersChoice = "auto" | "yes" | "no";
+const isReyndersChoice = enumGuard<ReyndersChoice>({
+    auto: true,
+    yes: true,
+    no: true,
+});
+const isEtfStructure = enumGuard<EtfStructure>({
+    accumulating: true,
+    distributing: true,
+});
 
 function reyndersFromChoice(v: ReyndersChoice): boolean | undefined {
     if (v === "yes") return true;
@@ -193,7 +203,7 @@ export function PortfolioTaxAdjustmentsDialog({
             [id]: { ...(prev[id] ?? EMPTY_CLASS), ...patch },
         }));
 
-    async function handleSave(e: React.FormEvent) {
+    async function handleSave(e: React.SubmitEvent) {
         e.preventDefault();
         const payload: Record<number, { taxes: number; fees: number }> = {};
         const classPayload: Record<number, TaxClassificationEntry> = {};
@@ -409,17 +419,14 @@ export function PortfolioTaxAdjustmentsDialog({
                                                                     cls.etfStructure ??
                                                                     "accumulating"
                                                                 }
-                                                                onValueChange={(
-                                                                    v,
-                                                                ) =>
-                                                                    updateClass(
-                                                                        inv.id,
-                                                                        {
-                                                                            etfStructure:
-                                                                                v as EtfStructure,
-                                                                        },
-                                                                    )
-                                                                }
+                                                                onValueChange={onGuarded(
+                                                                    isEtfStructure,
+                                                                    (etfStructure) =>
+                                                                        updateClass(
+                                                                            inv.id,
+                                                                            { etfStructure },
+                                                                        ),
+                                                                )}
                                                             >
                                                                 <SelectTrigger
                                                                     id={`etf-structure-${inv.id}`}
@@ -460,17 +467,14 @@ export function PortfolioTaxAdjustmentsDialog({
                                                                 value={
                                                                     cls.reynders
                                                                 }
-                                                                onValueChange={(
-                                                                    v,
-                                                                ) =>
-                                                                    updateClass(
-                                                                        inv.id,
-                                                                        {
-                                                                            reynders:
-                                                                                v as ReyndersChoice,
-                                                                        },
-                                                                    )
-                                                                }
+                                                                onValueChange={onGuarded(
+                                                                    isReyndersChoice,
+                                                                    (reynders) =>
+                                                                        updateClass(
+                                                                            inv.id,
+                                                                            { reynders },
+                                                                        ),
+                                                                )}
                                                             >
                                                                 <SelectTrigger
                                                                     id={`reynders-${inv.id}`}

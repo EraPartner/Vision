@@ -35,6 +35,21 @@ const OBSERVATION = {
     checkedAt: "2026-09-19T00:00:00.000Z",
 };
 
+/** `mapNotification` for an unread inbox entry. */
+const NOTIFICATION = {
+    id: "n-1",
+    monitorId: "m-1",
+    observationId: "o-1",
+    kind: "analysis-threshold",
+    title: "Limit crossed",
+    reasonCode: "threshold-crossed",
+    reason: "Value rose above the limit",
+    previousValue: "90",
+    currentValue: "110",
+    createdAt: "2026-09-18T00:00:00Z",
+    readAt: null,
+};
+
 /** `mapMonitor` for a threshold rule that has not been checked yet. */
 const MONITOR = {
     id: "m-1",
@@ -115,7 +130,7 @@ describe("analysis monitor API client", () => {
                 `${API_BASE}/api/analysis/monitors/m-1`,
                 async ({ request }) => {
                     bodies.push(await request.json());
-                    return ok({ id: "m-1" });
+                    return ok({ ...MONITOR, enabled: false });
                 },
             ),
         );
@@ -148,7 +163,7 @@ describe("analysis monitor API client", () => {
             ),
             http.post(
                 `${API_BASE}/api/analysis/monitors/notifications/n-1/read`,
-                () => ok({ id: "n-1", readAt: "2026-09-19T00:00:00Z" }),
+                () => ok({ ...NOTIFICATION, readAt: "2026-09-19T00:00:00Z" }),
             ),
         );
         expect((await checkMonitor("m-1")).status).toBe("baseline");

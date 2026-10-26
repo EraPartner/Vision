@@ -24,7 +24,7 @@ vi.mock("../../src/services/currency/currencyConversionService.ts", () => ({
   FALLBACK_RATES: { EUR: 1, USD: 0.9 },
   listLatestStoredRates: vi.fn(),
   // No stored historical rates: only rates stamped on a transaction are dated.
-  getHistoricalRateIndex: vi.fn(async () => new Map()),
+  getHistoricalRateIndex: vi.fn(() => Promise.resolve(new Map())),
 }));
 import settingsService from "../../src/services/settingsService.ts";
 import { investmentRepository } from "../../src/repositories/investmentRepository.ts";
@@ -33,6 +33,7 @@ import { getPortfolioSummary } from "../../src/services/portfolio/portfolioSumma
 import { listLatestStoredRates } from "../../src/services/currency/currencyConversionService.ts";
 import router from "../../src/routes/belgianPortfolioTax.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const api = routeAgent(router, { mountPath: "/api/belgian-tax" });
 const path = "/api/belgian-tax/portfolio-dashboard";
 const live = defaultHousehold({
@@ -126,7 +127,7 @@ const txnRows = [
 ];
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(settingsService.getAllWithBaselines).mockResolvedValue({
+  vi.mocked(settingsService).getAllWithBaselines.mockResolvedValue({
     settings,
     expected: {
       portfolio_tax_adjustments_v1: {
@@ -139,7 +140,7 @@ beforeEach(() => {
       },
     },
   });
-  vi.mocked(investmentRepository.getAllWithCount).mockResolvedValue({
+  vi.mocked(investmentRepository).getAllWithCount.mockResolvedValue({
     rows,
     total: 502,
   } as unknown as Metadata);
@@ -155,9 +156,9 @@ beforeEach(() => {
       : throughDate >= "2025-12-31"
         ? 1
         : 0;
-  vi.mocked(getPortfolioSummary).mockImplementation(async (_target, opts) => {
+  vi.mocked(getPortfolioSummary).mockImplementation((_target, opts) => {
     const years = realizedThrough(opts?.throughDate);
-    return {
+    return Promise.resolve({
       summaries: [
         {
           ...rows[0],
@@ -193,7 +194,7 @@ beforeEach(() => {
           unrealizedGain: 60,
         },
       ],
-    } as unknown as Holdings;
+    } as unknown as Holdings);
   });
   vi.mocked(listLatestStoredRates).mockResolvedValue({
     rows: [{ currency_code: "USD", rate_to_eur: 0.8 }],
@@ -259,7 +260,7 @@ describe("Portfolio Tax authoritative dashboard", () => {
       realizedGain: 777,
       currency: "EUR",
     });
-    expect(investmentRepository.getAllWithCount).toHaveBeenCalledWith({
+    expect(mockOf(investmentRepository, "getAllWithCount")).toHaveBeenCalledWith({
       limit: 500,
       offset: 0,
       active: false,
@@ -322,13 +323,13 @@ describe("Portfolio Tax authoritative dashboard", () => {
     );
   });
   it("returns empty holdings success without inventing a profile", async () => {
-    vi.mocked(settingsService.getAllWithBaselines).mockResolvedValue({
+    vi.mocked(settingsService).getAllWithBaselines.mockResolvedValue({
       settings: {
         belgian_tax_household_v2: defaultHousehold(DEFAULT_BELGIAN_TAX_PROFILE),
       },
       expected: {},
     });
-    vi.mocked(investmentRepository.getAllWithCount).mockResolvedValue({
+    vi.mocked(investmentRepository).getAllWithCount.mockResolvedValue({
       rows: [],
       total: 0,
     });
@@ -369,7 +370,7 @@ describe("Portfolio Tax authoritative dashboard", () => {
     expect((await api.get(path)).status).toBe(500);
   });
   it("rejects malformed frozen PIT instead of replacing filed numbers", async () => {
-    vi.mocked(settingsService.getAllWithBaselines).mockResolvedValue({
+    vi.mocked(settingsService).getAllWithBaselines.mockResolvedValue({
       settings: {
         ...settings,
         belgian_tax_profile_snapshot_meta_v1: {

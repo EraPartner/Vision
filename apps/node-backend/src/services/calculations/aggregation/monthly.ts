@@ -19,8 +19,8 @@ export async function computeMonthlySummary({
   excludedCategoryIds = [],
   excludedRecipientIds = [],
   allTime = false,
-  startDate = undefined,
-  endDate = undefined,
+  startDate,
+  endDate,
 }: {
   targetCurrency?: string | undefined;
   excludedCategoryIds?: number[] | undefined;
@@ -39,7 +39,7 @@ export async function computeMonthlySummary({
   );
 
   assertNoNaN(data, "computeMonthlySummary");
-  assertMonthlyInvariants(Array.isArray(data) ? data : data?.months);
+  assertMonthlyInvariants(Array.isArray(data) ? data : data.months);
 
   const hasExclusions =
     excludedCategoryIds.length > 0 || excludedRecipientIds.length > 0;

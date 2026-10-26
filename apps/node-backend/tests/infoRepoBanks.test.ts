@@ -16,7 +16,7 @@ import { query as rawQuery } from "../src/database/connection.ts";
 import type { PgQueryResult } from "../src/database/connection.ts";
 import { batchConvertGroupsWithHistoricalRateFallback as rawBatchConvertGroupsWithHistoricalRateFallback } from "../src/repositories/infoRepositoryHelpers.ts";
 import { banksRepository } from "../src/repositories/infoRepositoryBanks.ts";
-import { balanceProvenanceLateral } from "../src/repositories/accountBalanceSql.ts";
+import { must } from "./helpers/must.ts";
 
 const query = rawQuery as unknown as Mock<
   (text: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
@@ -32,7 +32,9 @@ beforeEach(() => vi.clearAllMocks());
  * first/last transaction as local-midnight Dates, `date` through to_char.
  */
 function balanceRow(overrides: Record<string, unknown> = {}) {
-  const bankAccount = String(overrides.bank_account ?? "A");
+  const bankAccountOverride = overrides.bank_account;
+  const bankAccount =
+    typeof bankAccountOverride === "string" ? bankAccountOverride : "A";
   return {
     account_id: 1,
     bank_account: bankAccount,
@@ -209,7 +211,9 @@ describe("banksRepository.getBankBalances", () => {
     ]);
 
     const r = await banksRepository.getBankBalances();
-    expect(r.history.A![0]!.date).toBe("2025-04-01");
+    expect(
+      must(must(r.history.A, "r.history.A")[0], "r.history.A[0]").date,
+    ).toBe("2025-04-01");
   });
 
   it("drops history rows with a blank bank_account", async () => {
@@ -330,8 +334,8 @@ describe("banksRepository.getBankBalances", () => {
       balance: 200,
       post_anchor_count: 3,
     });
-    expect(r.accounts[0]!.anchor_date).toBeUndefined();
-    expect(r.accounts[0]!.drift).toBeUndefined();
+    expect(must(r.accounts[0], "r.accounts[0]").anchor_date).toBeUndefined();
+    expect(must(r.accounts[0], "r.accounts[0]").drift).toBeUndefined();
 
     // (b) stamped + manual: "as of 2026-06-30 statement + 2 entries since",
     // drift is the hub's native-currency figure, derived per currency from the
@@ -380,6 +384,6 @@ describe("banksRepository.getBankBalances", () => {
     ]);
 
     const r = await banksRepository.getBankBalances();
-    expect(r.accounts[0]!.display_name).toBe("Old Row");
+    expect(must(r.accounts[0], "r.accounts[0]").display_name).toBe("Old Row");
   });
 });

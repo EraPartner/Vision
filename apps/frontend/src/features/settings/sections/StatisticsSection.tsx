@@ -9,10 +9,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import {
-    useSettings,
-    type ExclusionScope,
-} from "@/stores/hydration/SettingsHydration";
+import { useSettings } from "@/stores/hydration/SettingsHydration";
 import { apiClient } from "@/lib/api";
 import { settingKeys } from "@/lib/queryKeys";
 import { useCategoryTree } from "@/hooks/useCategories";
@@ -200,8 +197,8 @@ export const StatisticsSection = memo(function StatisticsSection() {
                     title={t("settings.dashboard.exclusionScope")}
                     description={t("settings.dashboard.exclusionScopeHint")}
                     value={settings.exclusionScope}
-                    onValueChange={(v) =>
-                        updateSettings({ exclusionScope: v as ExclusionScope })
+                    onValueChange={(exclusionScope) =>
+                        updateSettings({ exclusionScope })
                     }
                     triggerAriaLabel={t("settings.dashboard.exclusionScope")}
                     options={[

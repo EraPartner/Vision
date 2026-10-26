@@ -24,37 +24,42 @@ import {
 import {
   asAccountId,
 } from "@vision/types/brands";
+import { must } from "../helpers/must.ts";
 
 async function insertAccount(
   name: string,
   fundingAccountId: number | null = null,
 ): Promise<number> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: number }>(
     `INSERT INTO accounts (name, display_name, funding_account_id)
      VALUES ($1, $1, $2)
      RETURNING id`,
     [name, fundingAccountId],
   );
-  return rows[0].id;
+  return must(rows[0], "row").id;
 }
 
 async function expectAcyclic() {
-  const { rows } = await getTestPool()!.query(
-    "SELECT id, funding_account_id FROM accounts ORDER BY id",
-  );
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{
+    id: number;
+    funding_account_id: number | null;
+  }>("SELECT id, funding_account_id FROM accounts ORDER BY id");
   const parentById = new Map(
-    rows.map((row) => [Number(row.id), row.funding_account_id]),
+    rows.map((row): [number, number | null] => [
+      row.id,
+      row.funding_account_id,
+    ]),
   );
   for (const start of parentById.keys()) {
-    const seen = new Set();
-    let current = start;
+    const seen = new Set<number>();
+    let current: number | null = start;
     while (current != null) {
       expect(
         seen.has(current),
         `funding cycle reachable from account ${start}`,
       ).toBe(false);
       seen.add(current);
-      current = parentById.get(Number(current)) ?? null;
+      current = parentById.get(current) ?? null;
     }
   }
 }
@@ -69,7 +74,7 @@ function expectOneWinner(outcomes: PromiseSettledResult<unknown>[]) {
 }
 
 async function holdFundingGraphLock() {
-  const client = await getTestPool()!.connect();
+  const client = await must(getTestPool(), "getTestPool()").connect();
   await client.query("BEGIN");
   await client.query(ACCOUNT_FUNDING_GRAPH_LOCK_SQL, [
     ...ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS,
@@ -89,7 +94,7 @@ async function holdFundingGraphLock() {
 async function waitForFundingGraphWaiters(expected: number) {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
-    const { rows } = await getTestPool()!.query(
+    const { rows } = await must(getTestPool(), "getTestPool()").query<{ count: number }>(
       `SELECT count(*)::integer AS count
          FROM pg_stat_activity
         WHERE state = 'active'
@@ -97,7 +102,7 @@ async function waitForFundingGraphWaiters(expected: number) {
           AND wait_event = 'advisory'
           AND query LIKE 'SELECT pg_advisory_xact_lock%'`,
     );
-    if (rows[0].count >= expected) return;
+    if (must(rows[0], "row").count >= expected) return;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
   throw new Error(
@@ -121,7 +126,11 @@ async function releaseLockAndCollect<
     await releaseLock();
   }
   const outcomes = await outcomesPromise;
-  if (waiterError) throw waiterError;
+  if (waiterError) {
+      throw waiterError instanceof Error
+        ? waiterError
+        : new Error("funding-graph waiter failed", { cause: waiterError });
+    }
   return outcomes;
 }
 
@@ -137,7 +146,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       await pool.query("UPDATE accounts SET funding_account_id = NULL");
       await pool.query("DELETE FROM accounts");
     });
@@ -167,7 +176,9 @@ describe.skipIf(!hasTestDatabase())(
         outcomes.some(
           (outcome) =>
             outcome.status === "rejected" &&
-            /funding cycle/.test(outcome.reason?.message),
+            /funding cycle/.test(
+                (outcome.reason as Error | undefined)?.message ?? "",
+              ),
         ),
       ).toBe(true);
       await expectAcyclic();
@@ -210,14 +221,14 @@ describe.skipIf(!hasTestDatabase())(
       expect(
         outcomes[1].status === "fulfilled" ||
           /does not reference an existing account/.test(
-            outcomes[1].reason?.message,
+            (outcomes[1].reason as Error | undefined)?.message ?? "",
           ),
       ).toBe(true);
-      const { rows } = await getTestPool()!.query(
+      const { rows } = await must(getTestPool(), "getTestPool()").query<{ funding_account_id: number | null }>(
         "SELECT funding_account_id FROM accounts WHERE id = $1",
         [dependent],
       );
-      expect(rows[0].funding_account_id).toBeNull();
+      expect(must(rows[0], "row").funding_account_id).toBeNull();
       await expectAcyclic();
     });
   },

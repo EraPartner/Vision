@@ -14,6 +14,7 @@ import {
     BulkDeleteResultSchema,
     BulkUpdateResultSchema,
     TransactionCreatedSchema,
+    TransactionSchema,
     TransactionListSchema,
 } from "@vision/types/contracts";
 import { apiRequest, checkResponseContract } from "@/lib/api/client";
@@ -99,6 +100,7 @@ export function updateTransaction(
     return apiRequest<Transaction>(`/api/transactions/${id}`, {
         method: "PATCH",
         body: JSON.stringify(transaction),
+        schema: TransactionSchema,
     });
 }
 
@@ -107,14 +109,14 @@ export function updateTransaction(
  * both must be active, on different accounts and of opposite sign.
  */
 export function markTransfer(aId: TransactionId, bId: TransactionId): Promise<void> {
-    return apiRequest<void>("/api/transactions/transfers", {
+    return apiRequest("/api/transactions/transfers", {
         method: "POST",
         body: JSON.stringify({ aId, bId }),
     });
 }
 
 export async function deleteTransaction(id: TransactionId): Promise<void> {
-    await apiRequest<void>(`/api/transactions/${id}`, { method: "DELETE" });
+    await apiRequest(`/api/transactions/${id}`, { method: "DELETE" });
 }
 
 export function bulkDeleteTransactions(
@@ -160,8 +162,6 @@ export async function bulkExportTransactions(
         exported:
             Number.isSafeInteger(exported) && exported >= 0
                 ? exported
-                : "ids" in request && request.ids != null
-                  ? request.ids.length
-                  : 0,
+                : (request.ids?.length ?? 0),
     };
 }

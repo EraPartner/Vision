@@ -22,7 +22,7 @@ export function computeRollingAverage(
     return values.map((_, i) => {
         if (i < window - 1) return null;
         let sum = 0;
-        for (let j = i - window + 1; j <= i; j++) sum += values[j]!;
+        for (const value of values.slice(i - window + 1, i + 1)) sum += value;
         return sum / window;
     });
 }

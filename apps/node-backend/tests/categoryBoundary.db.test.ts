@@ -26,6 +26,7 @@ import {
   asRecipientId,
 } from "@vision/types/brands";
 import type { CategoryId } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
 
 const SUFFIX = `CB${process.pid}`;
 const created = {
@@ -41,21 +42,21 @@ async function legacy(general: string, detail: string, description?: string) {
     detail,
     description,
   });
-  created.categoryIds.push(result.category!.id);
-  return result.category!;
+  created.categoryIds.push(must(result.category, "result.category").id);
+  return must(result.category, "result.category");
 }
 
 async function node(name: string, parentId?: CategoryId) {
-  const createdNode = (await createCategoryNode({
+  const createdNode = must((await createCategoryNode({
     name,
     ...(parentId === undefined ? {} : { parentId }),
-  }))!;
+  })), "(await createCategoryNode({ name, ...(parentId === undefi...");
   created.categoryIds.push(createdNode.id);
   return createdNode;
 }
 
 async function categoryExists(id: number) {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query(
     "SELECT 1 FROM categories WHERE id = $1",
     [id],
   );
@@ -69,7 +70,7 @@ describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
   }, 180_000);
 
   afterEach(async () => {
-    const db = getTestPool()!;
+    const db = must(getTestPool(), "getTestPool()");
     await db.query("DELETE FROM transactions WHERE id = ANY($1::int[])", [
       created.transactionIds.splice(0),
     ]);
@@ -109,7 +110,7 @@ describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
       detail: " groceries  ",
       description: "Weekly groceries",
     });
-    created.categoryIds.push(first.category!.id);
+    created.categoryIds.push(must(first.category, "first.category").id);
     expect(first).toMatchObject({
       created: true,
       category: {
@@ -125,10 +126,10 @@ describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
     });
     expect(again).toMatchObject({
       created: false,
-      category: { id: first.category!.id, description: "Weekly groceries" },
+      category: { id: must(first.category, "first.category").id, description: "Weekly groceries" },
     });
 
-    const updated = await categoryRepository.update(first.category!.id, {
+    const updated = await categoryRepository.update(must(first.category, "first.category").id, {
       general: ` utilities${SUFFIX} `,
       detail: " water ",
       description: "Water bill",
@@ -141,7 +142,7 @@ describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
     });
     // No patchable field: the current row comes back unchanged.
     expect(
-      (await categoryRepository.update(first.category!.id, {}))?.detail,
+      (await categoryRepository.update(must(first.category, "first.category").id, {}))?.detail,
     ).toBe("WATER");
     expect(await categoryRepository.getById(asCategoryId(-1))).toBeNull();
   });
@@ -197,19 +198,19 @@ describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
 
   it("assigns a default category to recipients and reports the count", async () => {
     const category = await legacy(`ASSIGN${SUFFIX}`, "ONE");
-    const db = getTestPool()!;
-    const { rows } = await db.query(
+    const db = must(getTestPool(), "getTestPool()");
+    const { rows } = await db.query<{ id: number }>(
       `INSERT INTO recipients (name, normalized_name)
        VALUES ($1, lower($1)), ($2, lower($2)) RETURNING id`,
       [`Assign A ${SUFFIX}`, `Assign B ${SUFFIX}`],
     );
-    const recipientIds = rows.map((row) => row.id as number);
+    const recipientIds = rows.map((row) => row.id);
     created.recipientIds.push(...recipientIds);
 
     expect(
       await categoryRepository.assignToRecipients(category.id, recipientIds.map(asRecipientId)),
     ).toBe(2);
-    const { rows: after } = await db.query(
+    const { rows: after } = await db.query<{ default_category_id: number | null }>(
       "SELECT default_category_id FROM recipients WHERE id = ANY($1::int[])",
       [recipientIds],
     );
@@ -254,25 +255,25 @@ describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
     const target = await node(`TARGET${SUFFIX}`);
     const child = await node("CHILD", source.id);
 
-    const db = getTestPool()!;
-    const { rows: accountRows } = await db.query(
+    const db = must(getTestPool(), "getTestPool()");
+    const { rows: accountRows } = await db.query<{ id: number }>(
       `INSERT INTO accounts (name, display_name, currency)
        VALUES ($1, $1, 'EUR') RETURNING id`,
       [`Merge Account ${SUFFIX}`],
     );
-    created.accountIds.push(accountRows[0].id);
-    const { rows: recipientRows } = await db.query(
+    created.accountIds.push(must(accountRows[0], "row").id);
+    const { rows: recipientRows } = await db.query<{ id: number }>(
       `INSERT INTO recipients (name, normalized_name)
        VALUES ($1, lower($1)) RETURNING id`,
       [`Merge Recipient ${SUFFIX}`],
     );
-    created.recipientIds.push(recipientRows[0].id);
-    const { rows: txRows } = await db.query(
+    created.recipientIds.push(must(recipientRows[0], "row").id);
+    const { rows: txRows } = await db.query<{ id: number }>(
       `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id)
        VALUES (CURRENT_DATE, -12.34, 'EUR', $1, $2, $3) RETURNING id`,
-      [recipientRows[0].id, source.id, accountRows[0].id],
+      [must(recipientRows[0], "row").id, source.id, must(accountRows[0], "row").id],
     );
-    created.transactionIds.push(txRows[0].id);
+    created.transactionIds.push(must(txRows[0], "row").id);
 
     const merged = await mergeCategoryNodes(source.id, target.id);
     expect(merged?.id).toBe(target.id);
@@ -280,11 +281,11 @@ describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
 
     expect(await categoryExists(source.id)).toBe(false);
     expect((await getCategoryNode(child.id))?.parentId).toBe(target.id);
-    const { rows: tx } = await db.query(
+    const { rows: tx } = await db.query<{ category_id: number | null }>(
       "SELECT category_id FROM transactions WHERE id = $1",
-      [txRows[0].id],
+      [must(txRows[0], "row").id],
     );
-    expect(tx[0].category_id).toBe(target.id);
+    expect(must(tx[0], "row").category_id).toBe(target.id);
     // Children are deleted before parents in cleanup: put the moved child last.
     created.categoryIds.splice(created.categoryIds.indexOf(child.id), 1);
     created.categoryIds.push(child.id);

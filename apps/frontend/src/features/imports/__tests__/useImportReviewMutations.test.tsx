@@ -26,9 +26,13 @@ describe("import review write ordering", () => {
             },
         );
         vi.spyOn(apiClient, "commitImportBatch").mockImplementation(
-            async () => {
+            () => {
                 order.push("commit");
-                return { imported: 1, duplicates: 0, errors: 0 } as never;
+                return Promise.resolve({
+                    imported: 1,
+                    duplicates: 0,
+                    errors: 0,
+                } as never);
             },
         );
         const { result } = renderHook(() => useImportReviewMutations(1, 0), {
@@ -48,10 +52,10 @@ describe("import review write ordering", () => {
     });
     it("blocks commit after partial failure until the saved staging state is explicitly reviewed", async () => {
         vi.spyOn(apiClient, "overrideImportRowCategory").mockImplementation(
-            async (_batch, row) => {
-                if (row === "2") throw new Error("failed row");
-                return {} as never;
-            },
+            (_batch, row) =>
+                row === "2"
+                    ? Promise.reject(new Error("failed row"))
+                    : Promise.resolve({} as never),
         );
         const commit = vi
             .spyOn(apiClient, "commitImportBatch")

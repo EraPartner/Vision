@@ -37,7 +37,7 @@ export function VirtualRecipientExclusions({
         estimateSize: () => 40,
         initialRect: { height: 200, width: 300 },
         overscan: 4,
-        getItemKey: (index) => recipients[index]!.id,
+        getItemKey: (index) => recipients[index]?.id ?? index,
         // Preserve the focused checkbox when scrolling or changing its sort position.
         rangeExtractor: (range) =>
             [...new Set([...defaultRangeExtractor(range), activeIndex])].sort(
@@ -65,7 +65,8 @@ export function VirtualRecipientExclusions({
                 style={{ height: virtualizer.getTotalSize() }}
             >
                 {virtualizer.getVirtualItems().map((row) => {
-                    const recipient = recipients[row.index]!;
+                    const recipient = recipients[row.index];
+                    if (!recipient) return null;
                     return (
                         <div
                             key={recipient.id}

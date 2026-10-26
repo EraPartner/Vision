@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type SubmitEvent } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,7 +71,7 @@ export function CategoryNodeDialog({
             (!editNode || !node.pathIds.includes(editNode.id)),
     );
 
-    const submit = (event: FormEvent) => {
+    const submit = (event: SubmitEvent) => {
         event.preventDefault();
         const normalized = name.trim();
         if (!normalized) {

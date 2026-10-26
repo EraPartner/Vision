@@ -17,6 +17,7 @@
  * elsewhere on the page.
  */
 // @refresh reset
+import { listGuard, onGuarded } from "@/lib/enumGuard";
 import {
     useCallback,
     useReducer,
@@ -69,6 +70,7 @@ import {
     RegionStep,
 } from "./profile-steps";
 import { resolvePartnerId } from "./profile-steps/householdEditing";
+import { translateDynamic } from "@/lib/translateDynamic";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const STEPS = [
@@ -80,6 +82,7 @@ export const STEPS = [
     "region",
 ] as const;
 export type Step = (typeof STEPS)[number];
+const isStep = listGuard(STEPS);
 
 const STEP_ICONS: Record<Step, ElementType> = {
     household: Users,
@@ -221,7 +224,7 @@ export function TaxProfileDialog({
                 const issue = result.success
                     ? undefined
                     : result.error.issues[0];
-                if (issue) return t(issue.message);
+                if (issue) return translateDynamic(t, issue.message);
             }
             return null;
         },
@@ -331,7 +334,7 @@ export function TaxProfileDialog({
                     <SegmentedControl
                         key={pickerKey}
                         value={step}
-                        onValueChange={(value) => goToStep(value as Step)}
+                        onValueChange={onGuarded(isStep, goToStep)}
                         aria-label={t("tax.profile.title")}
                         className="w-full"
                     >

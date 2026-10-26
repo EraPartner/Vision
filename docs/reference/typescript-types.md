@@ -300,7 +300,7 @@ interface PortfolioTransaction {
 }
 ```
 
-`PortfolioTransactionUpdate` is the PATCH payload type. It excludes the create-only `cash_account_id` field and permits explicit `null` for `fx_rate_to_eur`, `account_id`, `note`, `recurrence_interval`, and `recurrence_end_date`. The edit dialog sends those nulls when a user clears a stored value; `undefined` would omit the key and leave the old backend value unchanged. `dividend_amount_convention` is `gross`, `net`, or `unknown`; legacy rows use `unknown` (ADR-126).
+`PortfolioTransactionUpdate` is the PATCH payload type. It permits explicit `null` for `fx_rate_to_eur`, `account_id`, `note`, `recurrence_interval`, and `recurrence_end_date`. The edit dialog sends those nulls when a user clears a stored value; `undefined` would omit the key and leave the old backend value unchanged. `dividend_amount_convention` is `gross`, `net`, or `unknown`; legacy rows use `unknown` (ADR-126).
 
 ### PortfolioTxnType
 

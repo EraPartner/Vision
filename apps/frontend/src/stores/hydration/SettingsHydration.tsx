@@ -17,11 +17,9 @@ import { usePreloadedSetting } from "@/contexts/SettingsPreloadContext";
 import {
     useSettingsStore,
     DEFAULT_DASHBOARD_SETTINGS,
+    migrateDashboardSettings,
 } from "@/stores/settingsStore";
-import type { ExclusionScope, DashboardSettings } from "@/stores/settingsStore";
-
-// Re-export the dashboard-settings types alongside the hydration bridge.
-export type { ExclusionScope, DashboardSettings };
+import type { DashboardSettings } from "@/stores/settingsStore";
 
 interface SettingsHydrationValue {
     settings: DashboardSettings;
@@ -35,8 +33,9 @@ const SETTINGS_KEY = "dashboard_settings";
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-    const { value: preloaded, isLoading: preloadLoading } =
-        usePreloadedSetting<DashboardSettings>(SETTINGS_KEY);
+    const { value: preloadedValue, isLoading: preloadLoading } =
+        usePreloadedSetting(SETTINGS_KEY);
+    const preloaded = preloadedValue;
 
     const _hydrateDashboardSettings = useSettingsStore(
         (s) => s._hydrateDashboardSettings,
@@ -59,7 +58,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
         if (preloaded) {
             _hydrateDashboardSettings(
-                { ...DEFAULT_DASHBOARD_SETTINGS, ...preloaded },
+                migrateDashboardSettings(preloaded),
                 false,
             );
         } else {
@@ -86,7 +85,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         saveTimerRef.current = setTimeout(() => {
             apiClient
                 .saveSetting(SETTINGS_KEY, dashboardSettings)
-                .catch((err) => {
+                .catch((err: unknown) => {
                     logger.error("Failed to save settings to database:", err);
                     _markSettingsSaveError();
                 });

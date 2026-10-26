@@ -28,7 +28,7 @@ vi.mock("../src/repositories/settingsRepository.ts", async (original) => {
   return {
     settingField: actual.settingField,
     default: {
-      get: async () => ({ value: { autoClearPlannedOnMatch: true } }),
+      get: () => Promise.resolve({ value: { autoClearPlannedOnMatch: true } }),
     },
   };
 });
@@ -37,6 +37,7 @@ vi.mock("../src/services/plannedExecutionService.ts", () => ({
 }));
 import * as matching from "../src/lib/plannedMatching.ts";
 import { autoLinkTransactions } from "../src/services/plannedMatchService.ts";
+import { must } from "./helpers/must.ts";
 
 type Plan = {
   id: number;
@@ -52,8 +53,8 @@ function fixture() {
   const plans: Plan[] = Array.from({ length: 2400 }, (_, i) => ({
     id: i + 1,
     recipient_cluster_id: (i % 200) + 1,
-    currency: ["EUR", "USD", "GBP"][Math.floor(i / 200) % 3]!,
-    amount: String((Math.floor(i / 600) % 2 ? 1 : -1) * (20 + (i % 47))),
+    currency: must(["EUR", "USD", "GBP"][Math.floor(i / 200) % 3], "value"),
+    amount: String((Math.floor(i / 600) % 2 !== 0 ? 1 : -1) * (20 + (i % 47))),
     planned_date: ymd(Math.floor(i / 1200) * 24 + (i % 9)),
   }));
   const txs: AutoLinkTxRow[] = plans
@@ -61,7 +62,7 @@ function fixture() {
     .map((p, i) => ({
       id: asTransactionId(10_000 + i),
       recipient_id: asRecipientId(p.recipient_cluster_id),
-      currency: i % 2 ? p.currency.toLowerCase() : p.currency,
+      currency: i % 2 !== 0 ? p.currency.toLowerCase() : p.currency,
       amount: p.amount,
       transaction_date: p.planned_date,
     }));
@@ -117,9 +118,9 @@ function exhaustive(plans: Plan[], txs: AutoLinkTxRow[]) {
   return {
     comparisons,
     links: txs.flatMap((tx) => {
-      const ids = matches.get(tx.id)!;
-      return ids.length === 1 && reverse.get(ids[0]!)?.length === 1
-        ? [{ plannedTransactionId: ids[0]!, transactionId: tx.id }]
+      const ids = must(matches.get(tx.id), "matches.get result");
+      return ids.length === 1 && reverse.get(must(ids[0], "ids[0]"))?.length === 1
+        ? [{ plannedTransactionId: must(ids[0], "ids[0]"), transactionId: tx.id }]
         : [];
     }),
   };
@@ -146,7 +147,7 @@ async function previousTraversal(
   }
   const links = [];
   for (const tx of txs) {
-    const matched = candidates.get(tx.id)!;
+    const matched = must(candidates.get(tx.id), "candidates.get result");
     const plan = matched.length === 1 ? matched[0] : undefined;
     if (!plan || reverse.get(plan.id)?.length !== 1) continue;
     await mocks.execute({
@@ -294,7 +295,7 @@ it("keeps calendar windows across DST, leap day and year boundaries and rejects 
   expect(
     (
       await autoLinkTransactions([
-        { ...txs[0]!, transaction_date: "not-a-date" },
+        { ...must(txs[0], "txs[0]"), transaction_date: "not-a-date" },
       ])
     ).links,
   ).toEqual([]);

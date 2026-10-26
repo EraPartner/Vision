@@ -16,6 +16,9 @@ import { execFile, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { z } from "zod";
+import { looseArray, parseOr } from "../../lib/looseJson.ts";
+import { isRecord, isUnknownArray } from "../../lib/typeGuards.ts";
 
 export const APPLE_FOUNDATION_MODEL = "apple-foundation";
 
@@ -26,22 +29,30 @@ const MAX_SYSTEM_CHARS = 4_500;
 const MAX_MESSAGE_CHARS = 1_500;
 const MAX_CONVERSATION_CHARS = 4_000;
 
-interface ChatMessage {
-  role?: string;
-  content?: unknown;
-  [key: string]: unknown;
-}
+const optString = z.string().optional().catch(undefined);
 
-interface ToolSchema {
-  function?: { name?: string; description?: string };
-}
-
-interface ChatBody {
-  model?: string;
-  messages?: ChatMessage[];
-  tools?: ToolSchema[] | undefined;
-  [key: string]: unknown;
-}
+/**
+ * The /api/chat request as the helper shim reads it. Loose: unknown keys
+ * (options, stream, ...) pass through to the helper, and junk messages or
+ * tools are skipped rather than failing the chat.
+ */
+const chatMessageSchema = z.looseObject({
+  role: optString,
+  content: z.unknown().optional(),
+});
+const toolSchema = z.looseObject({
+  function: z
+    .looseObject({ name: optString, description: optString })
+    .optional()
+    .catch(undefined),
+});
+const chatBodySchema = z.looseObject({
+  model: optString,
+  messages: looseArray(chatMessageSchema).optional(),
+  tools: looseArray(toolSchema).optional(),
+});
+type ChatMessage = z.output<typeof chatMessageSchema>;
+type ChatBody = z.output<typeof chatBodySchema>;
 
 function appleHelperPath(env: NodeJS.ProcessEnv = process.env): string | null {
   if (process.platform !== "darwin") return null;
@@ -70,7 +81,14 @@ function appleModelAvailable(): Promise<boolean> {
     ? new Promise<boolean>((resolve) => {
         execFile(helper, ["--check"], { timeout: 5_000 }, (error, stdout) => {
           try {
-            resolve(!error && JSON.parse(stdout).available === true);
+            const status: unknown = JSON.parse(stdout);
+            resolve(
+              !error &&
+                typeof status === "object" &&
+                status !== null &&
+                "available" in status &&
+                status.available === true,
+            );
           } catch {
             resolve(false);
           }
@@ -120,7 +138,9 @@ function fitForAppleModel(body: ChatBody): ChatBody {
   }
 
   const question = contentText(
-    messages.findLast((message) => message.role === "user") ?? {},
+    messages.findLast((message) => message.role === "user") ?? {
+      content: undefined,
+    },
   );
   const stems = new Set(words(question).map((word) => word.slice(0, 5)));
   const tools = (body.tools ?? [])
@@ -168,13 +188,18 @@ async function runHelper(
   child.stdin.end(JSON.stringify(fitForAppleModel(body)));
 
   if (body.stream === true) {
+    // node:stream/web and the DOM-style global ReadableStream are the same
+    // runtime class with separate type declarations.
     return new Response(Readable.toWeb(child.stdout) as ReadableStream, {
       status: 200,
       headers: { "Content-Type": "application/x-ndjson" },
     });
   }
   const chunks: Buffer[] = [];
-  for await (const chunk of child.stdout) chunks.push(chunk as Buffer);
+  for await (const chunk of child.stdout) {
+    const piece: unknown = chunk;
+    chunks.push(Buffer.isBuffer(piece) ? piece : Buffer.from(String(piece)));
+  }
   const exitCode = await new Promise<number | null>((resolve) => {
     if (child.exitCode !== null) resolve(child.exitCode);
     else child.once("close", resolve);
@@ -193,8 +218,8 @@ export function withAppleFoundation(baseFetch: typeof fetch): typeof fetch {
   ): Promise<Response> {
     const url = new URL(input instanceof Request ? input.url : String(input));
     if (url.pathname === "/api/chat" && typeof init?.body === "string") {
-      const body = JSON.parse(init.body) as ChatBody;
-      if (body.model === APPLE_FOUNDATION_MODEL) {
+      const body = parseOr(chatBodySchema, JSON.parse(init.body), null);
+      if (body?.model === APPLE_FOUNDATION_MODEL) {
         const helper = appleHelperPath();
         if (!helper || !(await appleModelAvailable()))
           return errorResponse(
@@ -217,8 +242,9 @@ export function withAppleFoundation(baseFetch: typeof fetch): typeof fetch {
     try {
       const response = await baseFetch(input, init);
       if (response.ok) {
-        const data = (await response.json()) as { models?: unknown[] } | null;
-        models = Array.isArray(data?.models) ? data.models : [];
+        const data: unknown = await response.json();
+        const listed = isRecord(data) ? data.models : undefined;
+        models = isUnknownArray(listed) ? listed : [];
       }
     } catch (error) {
       if (init?.signal?.aborted) throw error;

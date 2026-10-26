@@ -396,33 +396,40 @@ router.get("/cashflow-forecast-accuracy", async (req, res) => {
 
   const rows = await getAllAccuracyHistory({ userId, limitMonths });
 
-  const byMethod = new Map();
+  const byMethod = new Map<string, typeof rows>();
   for (const row of rows) {
-    if (!byMethod.has(row.methodId)) byMethod.set(row.methodId, []);
-    byMethod.get(row.methodId).push(row);
+    const bucket = byMethod.get(row.methodId);
+    if (bucket) bucket.push(row);
+    else byMethod.set(row.methodId, [row]);
   }
 
-  const methods = Array.from(byMethod.entries()).map(([methodId, history]) => {
-    const sorted = [...history].sort((a, b) =>
-      b.asOfMonth.localeCompare(a.asOfMonth),
-    );
-    const latest = sorted[0];
-    return {
-      method_id: methodId,
-      as_of_month: latest.asOfMonth,
-      mae: latest.mae,
-      rmse: latest.rmse,
-      mape: latest.mape,
-      sample_days: latest.sampleDays,
-      history: sorted.map(({ asOfMonth, mae, rmse, mape, sampleDays }) => ({
-        month: asOfMonth,
-        mae,
-        rmse,
-        mape,
-        sample_days: sampleDays,
-      })),
-    };
-  });
+  // Every bucket holds at least one row, so `latest` is always present.
+  const methods = Array.from(byMethod.entries()).flatMap(
+    ([methodId, history]) => {
+      const sorted = [...history].sort((a, b) =>
+        b.asOfMonth.localeCompare(a.asOfMonth),
+      );
+      const latest = sorted[0];
+      if (!latest) return [];
+      return [
+        {
+          method_id: methodId,
+          as_of_month: latest.asOfMonth,
+          mae: latest.mae,
+          rmse: latest.rmse,
+          mape: latest.mape,
+          sample_days: latest.sampleDays,
+          history: sorted.map(({ asOfMonth, mae, rmse, mape, sampleDays }) => ({
+            month: asOfMonth,
+            mae,
+            rmse,
+            mape,
+            sample_days: sampleDays,
+          })),
+        },
+      ];
+    },
+  );
 
   res.ok({
     data: { methods, limit_months: limitMonths },

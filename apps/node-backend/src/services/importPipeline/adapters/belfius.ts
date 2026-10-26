@@ -104,7 +104,7 @@ function applyRunningBalances(
 function parseTransactionLine(
   parts: string[],
 ): SequencedBankTransaction | null {
-  if (parts == null || parts.length < MIN_FIELDS) return null;
+  if (parts.length < MIN_FIELDS) return null;
 
   const accountNumber = cellAt(parts, 0).trim();
   const transactionDateStr = cellAt(parts, 1).trim();

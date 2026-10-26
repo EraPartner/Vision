@@ -12,13 +12,15 @@ import { cleanup } from "./csvUpload.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 import { logger } from "../config/logger.ts";
 import { ApiErrorCode } from "@vision/types/errors";
+import { errorMessage } from "./errors.ts";
 
 /**
  * The `{ phase, current, total, ... }` shape both pipelines' `onProgress`
  * callback is invoked with.
  */
 export interface ImportProgressEvent {
-  phase: 'staging'|'validating'|'matching'|'committing'|'complete'|string;
+  /** 'staging' | 'validating' | 'matching' | 'committing' | 'complete', or a pipeline-specific phase. */
+  phase: string;
   current?: number;
   total?: number;
   imported?: number;
@@ -111,7 +113,7 @@ export async function streamImport<R extends StreamImportResult>(
     const result = await run((ev) => {
       writer.write("progress", progressToPercent(ev)).catch((err: unknown) => {
         logger.warn("Import progress event write failed", {
-          error: (err as Error).message,
+          error: errorMessage(err),
         });
       });
     });
@@ -135,7 +137,7 @@ export async function streamImport<R extends StreamImportResult>(
       writer.end();
     }
   } catch (err) {
-    logger.error(errorLogMessage, { error: (err as Error).message });
+    logger.error(errorLogMessage, { error: errorMessage(err) });
     if (!writer.closed) {
       const expected = err instanceof ValidationError;
       const detail = expected ? err.message : "Import failed";

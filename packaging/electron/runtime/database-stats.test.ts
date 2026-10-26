@@ -32,13 +32,13 @@ function statsOutput({ transactions = 7 }: { transactions?: number } = {}) {
   ].join("\n");
 }
 
-test("all-table statistics use catalog identifiers with PostgreSQL quoting", () => {
+void test("all-table statistics use catalog identifiers with PostgreSQL quoting", () => {
   assert.match(DATABASE_STATS_SQL, /FROM pg_catalog\.pg_tables/);
   assert.match(DATABASE_STATS_SQL, /FROM %I\.%I/);
   assert.match(DATABASE_STATS_SQL, /SELECT %L/);
 });
 
-test("database statistics preserve schema, server version, and exact table counts", () => {
+void test("database statistics preserve schema, server version, and exact table counts", () => {
   const stats = parseDatabaseStats(statsOutput());
   assert.equal(stats.schema, "0064_example");
   assert.equal(stats.postgresVersionNum, 180_006);
@@ -53,7 +53,7 @@ test("database statistics preserve schema, server version, and exact table count
   assert.deepEqual(databaseStatsManifest(stats).tableCounts, stats.tableCounts);
 });
 
-test("database statistics comparison rejects any table row-count drift", () => {
+void test("database statistics comparison rejects any table row-count drift", () => {
   const expected = parseDatabaseStats(statsOutput());
   const actual = parseDatabaseStats(statsOutput({ transactions: 8 }));
   assert.throws(
@@ -62,7 +62,7 @@ test("database statistics comparison rejects any table row-count drift", () => {
   );
 });
 
-test("post-start comparison permits runtime cache writes but protects user data", () => {
+void test("post-start comparison permits runtime cache writes but protects user data", () => {
   const expected = {
     ...parseDatabaseStats(statsOutput()),
     tableCounts: {
@@ -89,7 +89,7 @@ test("post-start comparison permits runtime cache writes but protects user data"
   );
 });
 
-test("post-start comparison permits only runtime-managed user settings", () => {
+void test("post-start comparison permits only runtime-managed user settings", () => {
   const expected = parseDatabaseStats(statsOutput());
   const runtimeMarkerInserted = {
     ...expected,
@@ -116,7 +116,7 @@ test("post-start comparison permits only runtime-managed user settings", () => {
 // Runs DATABASE_STATS_SQL against a real PostgreSQL when TEST_DATABASE_URL
 // names a disposable, migrated database. Everything happens inside one
 // transaction that is rolled back.
-test(
+void test(
   "stable user-settings count ignores daily job markers written after ready",
   { skip: !process.env.TEST_DATABASE_URL && "TEST_DATABASE_URL not set" },
   () => {
@@ -183,7 +183,7 @@ test(
   },
 );
 
-test("post-start comparison still rejects schema and table-set drift", () => {
+void test("post-start comparison still rejects schema and table-set drift", () => {
   const expected = parseDatabaseStats(statsOutput());
   assert.throws(
     () =>

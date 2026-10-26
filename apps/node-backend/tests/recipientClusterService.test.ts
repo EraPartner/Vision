@@ -1,3 +1,4 @@
+import { must } from "./helpers/must.ts";
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockConnection } from './helpers/repoMocks.ts';
 import { partial } from './helpers/partial.ts';
@@ -51,7 +52,7 @@ describe('recipientClusterService', () => {
     const clusters = await findRecipientClusters();
 
     expect(clusters).toHaveLength(50);
-    expect(clusters[0]!.recipientIds).toEqual([1, 2]);
-    expect(clusters.at(-1)!.recipientIds).toEqual([99, 100]);
+    expect(must(clusters[0], "clusters[0]").recipientIds).toEqual([1, 2]);
+    expect(must(clusters.at(-1), "clusters.at(-1)").recipientIds).toEqual([99, 100]);
   });
 });

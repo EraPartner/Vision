@@ -97,6 +97,7 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
         if (!hasUnsavedChanges) return;
         const handleBeforeUnload = (event: BeforeUnloadEvent) => {
             event.preventDefault();
+            // eslint-disable-next-line @typescript-eslint/no-deprecated -- legacy engines show the leave prompt only when returnValue is set; dropping it is not a verified drop-in
             event.returnValue = "";
         };
         window.addEventListener("beforeunload", handleBeforeUnload);

@@ -69,6 +69,7 @@ import {
   fetchPublicResearchPage,
   getSavedAnalysisContext,
 } from "./research.ts";
+import { isRecord } from "../../../lib/typeGuards.ts";
 
 /**
  * A tool's result envelope: `{ ok, data, meta }` on success, or
@@ -155,13 +156,13 @@ export function getToolNames() {
 
 function coerceArguments(rawArgs: unknown): Record<string, unknown> {
   if (rawArgs == null) return {};
-  if (typeof rawArgs === "object") return rawArgs as Record<string, unknown>;
+  if (isRecord(rawArgs)) return rawArgs;
   if (typeof rawArgs === "string") {
     const trimmed = rawArgs.trim();
     if (!trimmed) return {};
     try {
-      const parsed = JSON.parse(trimmed);
-      if (parsed && typeof parsed === "object") return parsed;
+      const parsed: unknown = JSON.parse(trimmed);
+      if (isRecord(parsed)) return parsed;
       throw new ToolValidationError("arguments must be a JSON object");
     } catch (err) {
       if (err instanceof ToolValidationError) throw err;
@@ -193,9 +194,7 @@ function formatError(err: unknown) {
       code: "TOOL_ERROR",
       // `err?.message`, boxing primitives exactly like optional chaining.
       message:
-        (err == null
-          ? undefined
-          : (Object(err) as { message?: unknown }).message) ||
+        (isRecord(err) ? err.message : undefined) ||
         "Tool execution failed",
     },
   };

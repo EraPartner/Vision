@@ -31,6 +31,7 @@ import pg from "pg";
 import { z } from "zod";
 import { logger } from "../config/logger.ts";
 import { checkRows } from "./rowContracts.ts";
+import { errorCode, errorMessage } from "../lib/errors.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -205,7 +206,7 @@ async function grantCurrentRelations(
     } catch (err) {
       failures++;
       log.warn(
-        `[role-bootstrap] grant failed (${(err as Error).message}) for relation ${relation}`,
+        `[role-bootstrap] grant failed (${errorMessage(err)}) for relation ${relation}`,
       );
     }
   }
@@ -241,7 +242,7 @@ async function connectPrivileged(
     // A failed pg.Client keeps its socket handle until end() is called.
     await client.end().catch(() => {});
     log.warn(
-      `[role-bootstrap] cannot connect as the migration role (${(err as Error).message}) — ` +
+      `[role-bootstrap] cannot connect as the migration role (${errorMessage(err)}) — ` +
         "skipping least-privilege bootstrap. Check DATABASE_URL_MIGRATIONS.",
     );
     return null;
@@ -314,7 +315,7 @@ export async function ensureAppRole({
       });
     } catch (err) {
       log.warn(
-        `[role-bootstrap] cannot read grant template ${GRANTS_TEMPLATE_PATH} (${(err as Error).message}) — skipping bootstrap.`,
+        `[role-bootstrap] cannot read grant template ${GRANTS_TEMPLATE_PATH} (${errorMessage(err)}) — skipping bootstrap.`,
       );
       return { status: "error", reason: "grants-template-unreadable" };
     }
@@ -363,12 +364,12 @@ export async function ensureAppRole({
             `[role-bootstrap] created least-privilege application role ${appConn.user}.`,
           );
         } catch (err) {
-          if ((err as { code?: string }).code === "42710") {
+          if (errorCode(err) === "42710") {
             // duplicate_object: raced another boot — the role now exists.
             roleExists = true;
           } else {
             log.warn(
-              `[role-bootstrap] CREATE ROLE ${appConn.user} failed (${(err as Error).message}) — ` +
+              `[role-bootstrap] CREATE ROLE ${appConn.user} failed (${errorMessage(err)}) — ` +
                 "continuing without least-privilege bootstrap.",
             );
             return { status: "degraded", reason: "create-role-failed" };
@@ -396,13 +397,14 @@ export async function ensureAppRole({
           await client.query(stmt);
         } catch (err) {
           grantFailures++;
+          const code = errorCode(err);
           const missing =
             beforeMigrations &&
-            UNDEFINED_OBJECT_CODES.has((err as { code?: string }).code ?? "");
+            UNDEFINED_OBJECT_CODES.has(typeof code === "string" ? code : "");
           (missing ? log.info : log.warn).call(
             log,
             `[role-bootstrap] grant ${missing ? "deferred until migrations" : "failed"} ` +
-              `(${(err as Error).message}): ${stmt.slice(0, 120)}`,
+              `(${errorMessage(err)}): ${stmt.slice(0, 120)}`,
           );
         }
       }
@@ -416,7 +418,7 @@ export async function ensureAppRole({
   } catch (err) {
     // Absolute backstop — this function must never take the boot path down.
     logger.warn(
-      `[role-bootstrap] unexpected error (${(err as Error | undefined)?.message}) — continuing boot without bootstrap.`,
+      `[role-bootstrap] unexpected error (${errorMessage(err)}) — continuing boot without bootstrap.`,
     );
     return { status: "error", reason: "unexpected" };
   }

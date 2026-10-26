@@ -39,7 +39,6 @@ vi.mock("../src/services/aiChat/tools/_financialMetrics.ts", () => ({
 
 import { transactionRepository as rawTransactionRepository } from "../src/repositories/transactionRepository.ts";
 import { investmentRepository as rawInvestmentRepository } from "../src/repositories/investmentRepository.ts";
-import { portfolioTransactionRepository } from "../src/repositories/portfolioTransactionRepository.ts";
 import { plannedTransactionRepository as rawPlannedTransactionRepository } from "../src/repositories/plannedTransactionRepository.ts";
 import rawInfoRepository from "../src/repositories/infoRepository.ts";
 import {
@@ -82,7 +81,10 @@ import {
 } from "../src/services/aiChat/tools/_validate.ts";
 import type { ToolResult } from "../src/services/aiChat/tools/index.ts";
 import { loose, partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
+import { mockOf } from "./helpers/mockOf.ts";
+import { stringMatching } from "./helpers/matchers.ts";
 type Resolved<F extends (...args: never[]) => unknown> = Awaited<ReturnType<F>>;
 
 /** The error envelope dispatchTool builds; ToolResult types it as unknown. */
@@ -419,7 +421,7 @@ describe("getMonthlyCategoryBreakdown", () => {
       to: "2026-06-30",
     });
 
-    expect(result.data[0]!.month).toBe("2026-06"); // not 2026-05
+    expect(must(result.data[0], "result.data[0]").month).toBe("2026-06"); // not 2026-05
   });
 });
 
@@ -664,7 +666,7 @@ describe("getTransactionsInRange", () => {
       limit: 20,
     });
 
-    expect(transactionRepository.getAll).toHaveBeenCalledWith(
+    expect(mockOf(transactionRepository, "getAll")).toHaveBeenCalledWith(
       expect.objectContaining({ categoryId: 7, recipientId: 42, limit: 20 }),
     );
   });
@@ -819,8 +821,8 @@ describe("getAssetAllocation", () => {
       marketValue: 1500,
       positions: 2,
     });
-    const cryptoPct = result.data[0]!.percent;
-    const etfPct = result.data[1]!.percent;
+    const cryptoPct = must(result.data[0], "result.data[0]").percent;
+    const etfPct = must(result.data[1], "result.data[1]").percent;
     expect(cryptoPct + etfPct).toBeCloseTo(100, 1);
     expect(result.meta.renderAs).toBe("pie");
   });
@@ -945,7 +947,7 @@ describe("getSubscriptionTotal", () => {
 
     const result = await getSubscriptionTotal.run({ period: "yearly" });
 
-    expect(result.data[0]!.normalizedAmount).toBe(120);
+    expect(must(result.data[0], "result.data[0]").normalizedAmount).toBe(120);
     expect(result.meta.period).toBe("yearly");
   });
 
@@ -1038,13 +1040,13 @@ describe("getTaxableIncomeSummary", () => {
       .mockResolvedValueOnce(
         partial<Resolved<typeof loadCanonicalPortfolioSummary>>({
           currency: "EUR",
-          totals: { totalDividends: 130, totalIncome: 540 },
+          totals: { totalDividends: 130, totalIncome: 540, totalInKindIncome: 0 },
         }),
       )
       .mockResolvedValueOnce(
         partial<Resolved<typeof loadCanonicalPortfolioSummary>>({
           currency: "EUR",
-          totals: { totalDividends: 100, totalIncome: 300 },
+          totals: { totalDividends: 100, totalIncome: 300, totalInKindIncome: 0 },
         }),
       );
 
@@ -1254,7 +1256,7 @@ describe("dispatchTool", () => {
     expect(result.ok).toBe(true);
     // The single coercion point reports back exactly what the tool ran with.
     expect(args).toEqual({ from: "2025-01-01", to: "2025-01-31" });
-    expect(transactionRepository.getAll).toHaveBeenCalled();
+    expect(mockOf(transactionRepository, "getAll")).toHaveBeenCalled();
   });
 
   it("rejects malformed JSON argument string — raw value returned, LLM-facing error shape pinned", async () => {
@@ -1273,7 +1275,7 @@ describe("dispatchTool", () => {
       error: {
         code: "VALIDATION_ERROR",
         field: null,
-        message: expect.stringMatching(/^arguments is not valid JSON: /),
+        message: stringMatching(/^arguments is not valid JSON: /),
       },
     });
   });
@@ -1435,9 +1437,9 @@ describe("parsePositiveInt — the AI-chat tools' id/bound parser", () => {
       caught = err as ToolValidationError;
     }
     expect(caught).toBeInstanceOf(ToolValidationError);
-    expect(caught!.field).toBe("categoryId");
-    expect(caught!.message).toContain("categoryId must be an integer");
-    expect(caught!.message).toContain('"12.9"');
+    expect(must(caught, "caught").field).toBe("categoryId");
+    expect(must(caught, "caught").message).toContain("categoryId must be an integer");
+    expect(must(caught, "caught").message).toContain('"12.9"');
   });
 
   it("a malformed id reaches the model as a VALIDATION_ERROR, not a wrong-record answer", async () => {
@@ -1453,7 +1455,7 @@ describe("parsePositiveInt — the AI-chat tools' id/bound parser", () => {
     expect(result.error.code).toBe("VALIDATION_ERROR");
     expect(result.error.field).toBe("categoryId");
     // The old parse would have answered 200 about category 12.
-    expect(transactionRepository.getAll).not.toHaveBeenCalled();
+    expect(mockOf(transactionRepository, "getAll")).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -1473,8 +1475,8 @@ describe("parsePositiveInt — the AI-chat tools' id/bound parser", () => {
       expect(result.error.field).toBe(field);
       expect(result.error.message).toBe(`${field} is required`);
       // Before, a missing value ran as year "null" or id null.
-      expect(transactionRepository.getAll).not.toHaveBeenCalled();
-      expect(plannedTransactionRepository.getById).not.toHaveBeenCalled();
+      expect(mockOf(transactionRepository, "getAll")).not.toHaveBeenCalled();
+      expect(mockOf(plannedTransactionRepository, "getById")).not.toHaveBeenCalled();
     },
   );
 });

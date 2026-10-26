@@ -48,7 +48,7 @@ vi.mock("../src/database/connection.ts", async (importOriginal) => {
   return {
     ...actual,
     query: vi.fn((...args: Parameters<typeof actual.query>) =>
-      actual.query(...args),
+      actual.query<DbRow>(...args),
     ),
   };
 });
@@ -74,23 +74,42 @@ import {
   importRecipientsCSV,
 } from "../src/services/dataImportService.ts";
 import { useTempCSV } from "./helpers/tempFile.ts";
+import { must } from "./helpers/must.ts";
+import type { CategoryId } from "@vision/types/brands";
+import { loose } from "./helpers/partial.ts";
+import type { LoggerMock } from "./helpers/mockLogger.ts";
+import type { Mock } from "vitest";
 
-const pool = getTestPool()!;
+const loggerMock = loose<LoggerMock>(logger);
+/** The given methods of `T`, typed as the spies a `vi.mock` factory installed. */
+type Spies<T, K extends keyof T> = Record<
+  K,
+  Mock<Extract<T[K], (...args: never[]) => unknown>>
+>;
+
+const recipientRepositoryMock =
+  loose<Spies<typeof recipientRepository, "createOrGet">>(recipientRepository);
+const categoryRepositoryMock =
+  loose<Spies<typeof categoryRepository, "createOrGet">>(categoryRepository);
+
+/** A result row whose columns the test reads without a fixed shape. */
+type DbRow = Record<string, unknown>;
+
+const maybePool = getTestPool();
+const pool = () => must(maybePool, "test pool");
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const writeTempCSV = useTempCSV("data_import");
 
 /** The batched path must be what ran — the fallback would mask everything. */
 function expectBatchedPathRan() {
-  const fellBack = vi
-    .mocked(logger.warn)
-    .mock.calls.some((args) =>
-      String(args[0]).includes("falling back to per-row"),
-    );
+  const fellBack = loggerMock.warn.mock.calls.some((args) =>
+    String(args[0]).includes("falling back to per-row"),
+  );
   expect(fellBack).toBe(false);
 }
 
 async function recipientRow(normalizedName: string) {
-  const { rows } = await pool.query(
+  const { rows } = await pool().query<DbRow>(
     `SELECT r.id, r.name, r.notes, c.general, c.detail
        FROM recipients r
        LEFT JOIN categories c ON c.id = r.default_category_id
@@ -105,15 +124,15 @@ describeDb("data import (real Postgres)", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    await pool.query("DELETE FROM recipient_bank_accounts");
-    await pool.query("DELETE FROM recipients");
-    await deleteAllCategoryFixtures(pool);
+    await pool().query("DELETE FROM recipient_bank_accounts");
+    await pool().query("DELETE FROM recipients");
+    await deleteAllCategoryFixtures(pool());
   });
 
   afterEach(async () => {
-    await pool.query("DELETE FROM recipient_bank_accounts");
-    await pool.query("DELETE FROM recipients");
-    await deleteAllCategoryFixtures(pool);
+    await pool().query("DELETE FROM recipient_bank_accounts");
+    await pool().query("DELETE FROM recipients");
+    await deleteAllCategoryFixtures(pool());
   });
 
   afterAll(async () => {
@@ -135,7 +154,7 @@ describeDb("data import (real Postgres)", () => {
         errors: 0,
         bank_account_errors: 0,
       });
-      const { rows } = await pool.query(
+      const { rows } = await pool().query<DbRow>(
         "SELECT name FROM recipients ORDER BY name",
       );
       expect(rows.map((/** @type {any} */ r) => r.name)).toEqual([
@@ -146,7 +165,7 @@ describeDb("data import (real Postgres)", () => {
     });
 
     it("matches a pre-existing recipient on the token-sorted normalized name", async () => {
-      await pool.query(
+      await pool().query(
         `INSERT INTO recipients (name, normalized_name) VALUES ('JOHN SMITH', 'JOHN SMITH')`,
       );
 
@@ -156,15 +175,15 @@ describeDb("data import (real Postgres)", () => {
 
       expect(result.imported).toBe(0);
       expect(result.skipped).toBe(2);
-      const { rows } = await pool.query(
+      const { rows } = await pool().query<DbRow>(
         "SELECT count(*)::int AS n FROM recipients",
       );
-      expect(rows[0].n).toBe(1);
+      expect(must(rows[0], "rows[0]").n).toBe(1);
       expectBatchedPathRan();
     });
 
     it("writes the first address of the file to notes and never overwrites one", async () => {
-      await pool.query(
+      await pool().query(
         `INSERT INTO recipients (name, normalized_name, notes)
          VALUES ('OLD', 'OLD', 'kept')`,
       );
@@ -176,19 +195,23 @@ describeDb("data import (real Postgres)", () => {
       );
 
       expect(result).toMatchObject({ imported: 1, skipped: 2, errors: 0 });
-      expect((await recipientRow("OLD")).notes).toBe("kept");
-      expect((await recipientRow("NEW")).notes).toBe("first addr");
+      expect(must(await recipientRow("OLD"), "OLD recipient").notes).toBe(
+        "kept",
+      );
+      expect(must(await recipientRow("NEW"), "NEW recipient").notes).toBe(
+        "first addr",
+      );
       expectBatchedPathRan();
     });
 
     it("assigns the first category named for a recipient and never overwrites one", async () => {
-      const { rows: seeded } = await pool.query(
+      const { rows: seeded } = await pool().query<{ id: CategoryId }>(
         `INSERT INTO categories (general, detail) VALUES ('HOME', 'RENT') RETURNING id`,
       );
-      await pool.query(
+      await pool().query(
         `INSERT INTO recipients (name, normalized_name, default_category_id)
          VALUES ('LANDLORD', 'LANDLORD', $1)`,
-        [seeded[0].id],
+        [must(seeded[0], "seeded[0]").id],
       );
 
       const result = await importRecipientsCSV(
@@ -201,10 +224,10 @@ describeDb("data import (real Postgres)", () => {
       expect(result).toMatchObject({ imported: 3, skipped: 2, errors: 0 });
       // No ':' at all warns; an empty part after a well-placed ':' is a silent
       // skip. Neither is a row error, and neither recipient gets a category.
-      expect(logger.warn).toHaveBeenCalledWith(
+      expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.stringContaining('invalid category format "INVALID_FORMAT"'),
       );
-      expect(logger.warn).not.toHaveBeenCalledWith(
+      expect(loggerMock.warn).not.toHaveBeenCalledWith(
         expect.stringContaining('"FOOD:"'),
       );
       expect(await recipientRow("GINA")).toMatchObject({ general: null });
@@ -219,7 +242,7 @@ describeDb("data import (real Postgres)", () => {
       });
       // Both categories the file names are created even when the assignment
       // they were named for is a no-op.
-      const { rows: cats } = await pool.query(
+      const { rows: cats } = await pool().query<DbRow>(
         "SELECT general, detail FROM categories WHERE legacy_compatible = true ORDER BY general",
       );
       expect(cats).toEqual([
@@ -242,11 +265,11 @@ describeDb("data import (real Postgres)", () => {
         errors: 0,
         bank_account_errors: 1,
       });
-      const { rows } = await pool.query(
+      const { rows } = await pool().query<DbRow>(
         `SELECT account_number, is_primary FROM recipient_bank_accounts`,
       );
       expect(rows).toEqual([{ account_number: "BE11 1111", is_primary: true }]);
-      expect(logger.warn).toHaveBeenCalledWith(
+      expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.stringContaining('could not add bank account for "Erin"'),
       );
       expectBatchedPathRan();
@@ -282,19 +305,19 @@ describeDb("data import (real Postgres)", () => {
       // Two resolve statements per entity plus the one batched category
       // assignment; the per-row loop issued ~5 statements per row.
       expect(vi.mocked(query).mock.calls.length).toBeLessThanOrEqual(6);
-      expect(recipientRepository.createOrGet).not.toHaveBeenCalled();
-      expect(categoryRepository.createOrGet).not.toHaveBeenCalled();
-      const { rows: assigned } = await pool.query(
+      expect(recipientRepositoryMock.createOrGet).not.toHaveBeenCalled();
+      expect(categoryRepositoryMock.createOrGet).not.toHaveBeenCalled();
+      const { rows: assigned } = await pool().query<DbRow>(
         `SELECT count(*)::int AS n FROM recipients WHERE default_category_id IS NOT NULL`,
       );
-      expect(assigned[0].n).toBe(60);
+      expect(must(assigned[0], "assigned[0]").n).toBe(60);
       expectBatchedPathRan();
     });
   });
 
   describe("importCategoriesCSV", () => {
     it("creates each distinct pair once and counts repeats and pre-existing as skipped", async () => {
-      await pool.query(
+      await pool().query(
         `INSERT INTO categories (general, detail) VALUES ('FOOD', 'GROCERIES')`,
       );
 
@@ -310,7 +333,7 @@ describeDb("data import (real Postgres)", () => {
         skipped: 2,
         errors: 0,
       });
-      const { rows } = await pool.query(
+      const { rows } = await pool().query<DbRow>(
         "SELECT general, detail FROM categories WHERE legacy_compatible = true ORDER BY general",
       );
       expect(rows).toEqual([
@@ -329,10 +352,10 @@ describeDb("data import (real Postgres)", () => {
       );
 
       expect(result).toMatchObject({ imported: 1, skipped: 0, errors: 3 });
-      const { rows } = await pool.query(
+      const { rows } = await pool().query<DbRow>(
         "SELECT count(*)::int AS n FROM categories WHERE legacy_compatible = true",
       );
-      expect(rows[0].n).toBe(1);
+      expect(must(rows[0], "rows[0]").n).toBe(1);
       expectBatchedPathRan();
     });
 
@@ -346,73 +369,93 @@ describeDb("data import (real Postgres)", () => {
 
       expect(result).toMatchObject({ imported: 60, skipped: 0, errors: 0 });
       expect(vi.mocked(query).mock.calls.length).toBeLessThanOrEqual(4);
-      expect(categoryRepository.createOrGet).not.toHaveBeenCalled();
+      expect(categoryRepositoryMock.createOrGet).not.toHaveBeenCalled();
       expectBatchedPathRan();
     });
 
     it("keeps old import pairs and root prefixes redirected through chained merges", async () => {
-      const ids = [];
+      const ids: CategoryId[] = [];
       for (const detail of ["FIRST", "SECOND", "THIRD"]) {
-        const { rows } = await pool.query(
+        const { rows } = await pool().query<{ id: CategoryId }>(
           "INSERT INTO categories (general, detail) VALUES ('FOOD', $1) RETURNING id",
           [detail],
         );
-        ids.push(rows[0].id);
+        ids.push(must(rows[0], "rows[0]").id);
       }
-      await mergeCategoryNodes(ids[0], ids[1]);
-      await mergeCategoryNodes(ids[1], ids[2]);
+      const [firstId, secondId, thirdId] = [
+        must(ids[0], "ids[0]"),
+        must(ids[1], "ids[1]"),
+        must(ids[2], "ids[2]"),
+      ];
+      await mergeCategoryNodes(firstId, secondId);
+      await mergeCategoryNodes(secondId, thirdId);
       const alias = await categoryRepository.createOrGet({
         general: "FOOD",
         detail: "FIRST",
       });
-      expect(alias).toMatchObject({ category: { id: ids[2] }, created: false });
+      expect(alias).toMatchObject({
+        category: { id: thirdId },
+        created: false,
+      });
       const result = await importCategoriesCSV(
         writeTempCSV("category\nFOOD:FIRST\nFOOD:SECOND\n"),
       );
       expect(result).toMatchObject({ imported: 0, skipped: 2, errors: 0 });
       expectBatchedPathRan();
 
-      const root = await pool.query(
+      const root = await pool().query<{ parent_id: CategoryId }>(
         "SELECT parent_id FROM categories WHERE id=$1",
-        [ids[2]],
+        [thirdId],
       );
-      await updateCategoryNode(root.rows[0].parent_id, {
+      const rootParentId = must(root.rows[0], "root.rows[0]").parent_id;
+      await updateCategoryNode(rootParentId, {
         name: "RENAMED FOOD",
       });
       const renamedImport = await categoryRepository.createOrGet({
         general: "FOOD",
         detail: "AFTER_RENAME",
       });
-      const renamedParent = await pool.query(
+      const renamedParent = await pool().query<DbRow>(
         "SELECT parent_id FROM categories WHERE id=$1",
-        [renamedImport.category!.id],
+        [must(renamedImport.category, "renamedImport.category").id],
       );
-      expect(renamedParent.rows[0].parent_id).toBe(root.rows[0].parent_id);
-      await updateCategoryNode(root.rows[0].parent_id, { name: "FOOD FINAL" });
+      expect(
+        must(renamedParent.rows[0], "renamedParent.rows[0]").parent_id,
+      ).toBe(rootParentId);
+      await updateCategoryNode(rootParentId, {
+        name: "FOOD FINAL",
+      });
       const middleNameImport = await categoryRepository.createOrGet({
         general: "RENAMED FOOD",
         detail: "AFTER_SECOND_RENAME",
       });
-      const middleParent = await pool.query(
+      const middleParent = await pool().query<DbRow>(
         "SELECT parent_id FROM categories WHERE id=$1",
-        [middleNameImport.category!.id],
+        [must(middleNameImport.category, "middleNameImport.category").id],
       );
-      expect(middleParent.rows[0].parent_id).toBe(root.rows[0].parent_id);
-      const otherRoot = await pool.query(
+      expect(must(middleParent.rows[0], "middleParent.rows[0]").parent_id).toBe(
+        rootParentId,
+      );
+      const otherRoot = await pool().query<{ id: CategoryId }>(
         "INSERT INTO categories (general,detail,name,hierarchy_only,legacy_compatible) VALUES ('OTHER','','OTHER',true,false) RETURNING id",
       );
-      await mergeCategoryNodes(root.rows[0].parent_id, otherRoot.rows[0].id);
+      await mergeCategoryNodes(
+        rootParentId,
+        must(otherRoot.rows[0], "otherRoot.rows[0]").id,
+      );
       const fresh = await categoryRepository.createOrGet({
         general: "FOOD",
         detail: "NEW",
       });
       expect(fresh.category).toMatchObject({ general: "FOOD", detail: "NEW" });
-      const parent = await pool.query(
+      const parent = await pool().query<DbRow>(
         "SELECT parent_id FROM categories WHERE id=$1",
-        [fresh.category!.id],
+        [must(fresh.category, "fresh.category").id],
       );
-      expect(parent.rows[0].parent_id).toBe(otherRoot.rows[0].id);
-      const oldRoot = await pool.query(
+      expect(must(parent.rows[0], "parent.rows[0]").parent_id).toBe(
+        must(otherRoot.rows[0], "otherRoot.rows[0]").id,
+      );
+      const oldRoot = await pool().query<{ id: CategoryId }>(
         "SELECT id FROM categories WHERE parent_id IS NULL AND name='FOOD'",
       );
       expect(oldRoot.rows).toEqual([]);

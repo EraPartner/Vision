@@ -37,8 +37,9 @@ import { PageError } from "@/components/shared/PageError";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { ExportDialog } from "@/features/reports/ExportDialog";
 import { PageShell } from "@/components/shared/PageShell";
+import type { TranslationKey } from "@/locales/keys";
 
-function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
+function getBudgetTaxWidgets(t: (key: TranslationKey) => string): WidgetDefinition[] {
     return [
         {
             id: "summaryCards",

@@ -47,9 +47,10 @@ async function fetchTransactions(): Promise<unknown[]> {
       throw new Error("Vision transaction response has an unexpected shape");
     }
     total = Number(page.total);
-    rows.push(...page.items);
-    offset += page.items.length;
-    if (page.items.length === 0) break;
+    const items: unknown[] = page.items;
+    rows.push(...items);
+    offset += items.length;
+    if (items.length === 0) break;
   }
   return rows;
 }

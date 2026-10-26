@@ -8,6 +8,8 @@ import {
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import recipientRepository from "../src/repositories/recipientRepository.ts";
+import { must } from "./helpers/must.ts";
+import type { RecipientId } from "@vision/types/brands";
 
 // Real PostgreSQL is essential: mocked ILIKE cannot expose the native C-locale bug.
 describe.skipIf(!hasTestDatabase())("recipient Unicode search", () => {
@@ -18,16 +20,18 @@ describe.skipIf(!hasTestDatabase())("recipient Unicode search", () => {
       ["QA CAFÉ 🧪 unicode-search", ""],
       ["QA Élise unicode-search", "RÉSUMÉ unicode-note"],
     ]) {
-      const result = await getTestPool()!.query(
+      const result = await must(getTestPool(), "getTestPool()").query<{
+        id: RecipientId;
+      }>(
         "INSERT INTO recipients (name, normalized_name, notes) VALUES ($1, $2, $3) RETURNING id",
         [name, name, notes],
       );
-      ids.push(result.rows[0].id);
+      ids.push(must(result.rows[0], "result.rows[0]").id);
     }
   }, 180_000);
   afterAll(async () => {
-    if (ids.length)
-      await getTestPool()!.query(
+    if (ids.length > 0)
+      await must(getTestPool(), "getTestPool()").query(
         "DELETE FROM recipients WHERE id = ANY($1::int[])",
         [ids],
       );

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { sma, ema, bollinger, rsi, macd, rebase } from "@/lib/research/indicators";
+import { must } from "@/test/must";
 
 describe("indicators", () => {
   it("sma nulls the warm-up then averages the window", () => {
@@ -21,8 +22,8 @@ describe("indicators", () => {
     const { middle, upper, lower } = bollinger(values, 20, 2);
     const i = 24;
     expect(middle[i]).not.toBeNull();
-    expect(upper[i]! > middle[i]!).toBe(true);
-    expect(lower[i]! < middle[i]!).toBe(true);
+    expect(must(upper[i]) > must(middle[i])).toBe(true);
+    expect(must(lower[i]) < must(middle[i])).toBe(true);
   });
 
   it("rsi is 100 for a monotonically rising series", () => {

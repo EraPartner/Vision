@@ -43,6 +43,18 @@ import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.ts";
 import { statisticsRepository } from "../src/repositories/infoRepositoryStatistics.ts";
 import { addDaysYmd, todayAppDateString } from "../src/lib/timezone.ts";
+import { must } from "./helpers/must.ts";
+import type {
+  AccountId,
+  CategoryId,
+  InvestmentId,
+  RecipientId,
+  TagId,
+  TransactionId,
+} from "@vision/types/brands";
+
+/** A result row whose columns the test reads without a fixed shape. */
+type DbRow = Record<string, unknown>;
 
 // Neither the MV refresh nor planned-payment auto-linking is under test here.
 vi.mock("../src/services/aggregationRefresh.ts", () => ({
@@ -88,22 +100,22 @@ function writeCsv(csv: string): string {
 }
 
 async function insertAccount(name: string, type = "checking"): Promise<number> {
-  const { rows } = await pool!.query(
+  const { rows } = await must(pool, "pool").query<{ id: AccountId }>(
     `INSERT INTO accounts (name, display_name, type, currency)
      VALUES ($1, $1, $2::account_type, 'EUR') RETURNING id`,
     [name, type],
   );
-  owned.accountIds.push(rows[0].id);
-  return rows[0].id;
+  owned.accountIds.push(must(rows[0], "rows[0]").id);
+  return must(rows[0], "rows[0]").id;
 }
 
 async function insertRecipient(name: string): Promise<number> {
-  const { rows } = await pool!.query(
+  const { rows } = await must(pool, "pool").query<{ id: RecipientId }>(
     `INSERT INTO recipients (name, normalized_name) VALUES ($1, lower($1)) RETURNING id`,
     [name],
   );
-  owned.recipientIds.push(rows[0].id);
-  return rows[0].id;
+  owned.recipientIds.push(must(rows[0], "rows[0]").id);
+  return must(rows[0], "rows[0]").id;
 }
 
 async function insertTransaction(
@@ -112,13 +124,13 @@ async function insertTransaction(
   date: string,
   amount: string,
 ): Promise<number> {
-  const { rows } = await pool!.query(
+  const { rows } = await must(pool, "pool").query<{ id: TransactionId }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, account_id, is_active)
      VALUES ($1, $2, 'EUR', $3, $4, true) RETURNING id`,
     [date, amount, recipientId, accountId],
   );
-  owned.transactionIds.push(rows[0].id);
-  return rows[0].id;
+  owned.transactionIds.push(must(rows[0], "rows[0]").id);
+  return must(rows[0], "rows[0]").id;
 }
 
 describe.skipIf(!hasTestDatabase())(
@@ -131,7 +143,7 @@ describe.skipIf(!hasTestDatabase())(
 
     afterAll(async () => {
       try {
-        const db = pool!;
+        const db = must(pool, "pool");
         await db.query(
           "DELETE FROM transactions WHERE id = ANY($1) OR import_batch_id = ANY($2)",
           [owned.transactionIds, owned.batchIds],
@@ -263,7 +275,7 @@ describe.skipIf(!hasTestDatabase())(
       });
       // The metric columns are nullable (migration 0012); a row written
       // outside `upsert` must still pass the read contract.
-      await pool!.query(
+      await must(pool, "pool").query<DbRow>(
         `INSERT INTO cashflow_forecast_accuracy
            (user_id, method_id, as_of_month, mae, rmse, mape, sample_days)
          VALUES ($1, 'null-metrics', date_trunc('month', CURRENT_DATE)::date,
@@ -333,7 +345,7 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     it("reads Belgian inflation rates from the database", async () => {
-      await pool!.query(
+      await must(pool, "pool").query(
         `INSERT INTO belgian_inflation_rates (month_date, monthly_rate, source)
          VALUES ('1990-01-01', 0.0031, $1), ('1990-02-01', 0.0012, $1)`,
         [SUFFIX],
@@ -351,9 +363,10 @@ describe.skipIf(!hasTestDatabase())(
 
     it("reads tag pivots, Sankey aggregates and rebalance cash accounts", async () => {
       const accountId = await insertAccount(`IIRC Cash ${SUFFIX}`);
-      await pool!.query("UPDATE accounts SET spendable = true WHERE id = $1", [
-        accountId,
-      ]);
+      await must(pool, "pool").query(
+        "UPDATE accounts SET spendable = true WHERE id = $1",
+        [accountId],
+      );
       const recipientId = await insertRecipient(`IIRC Tagged ${SUFFIX}`);
       const txId = await insertTransaction(
         accountId,
@@ -362,13 +375,13 @@ describe.skipIf(!hasTestDatabase())(
         "-12.5000",
       );
       await insertTransaction(accountId, recipientId, "2025-06-11", "40.0000");
-      const { rows: tagRows } = await pool!.query(
+      const { rows: tagRows } = await must(pool, "pool").query<{ id: TagId }>(
         "INSERT INTO tags (slug) VALUES ($1) RETURNING id",
         [`iirc-${SUFFIX.toLowerCase()}`],
       );
-      const tagId = tagRows[0].id;
+      const tagId = must(tagRows[0], "tagRows[0]").id;
       owned.tagIds.push(tagId);
-      await pool!.query(
+      await must(pool, "pool").query(
         "INSERT INTO transaction_tags (transaction_id, tag_id) VALUES ($1, $2)",
         [txId, tagId],
       );
@@ -405,18 +418,20 @@ describe.skipIf(!hasTestDatabase())(
       >("../src/services/materializedViewService.ts");
       const accountId = await insertAccount(`IIRC MV ${SUFFIX}`);
       const recipientId = await insertRecipient(`IIRC MV Payee ${SUFFIX}`);
-      const { rows: catRows } = await pool!.query(
+      const { rows: catRows } = await must(pool, "pool").query<{
+        id: CategoryId;
+      }>(
         "INSERT INTO categories (general, detail) VALUES ($1, 'MV') RETURNING id",
         [`IIRC_${SUFFIX}`],
       );
-      const categoryId = catRows[0].id;
+      const categoryId = must(catRows[0], "catRows[0]").id;
       const txId = await insertTransaction(
         accountId,
         recipientId,
         addDaysYmd(todayAppDateString(), -3),
         "-7.2500",
       );
-      await pool!.query(
+      await must(pool, "pool").query(
         "UPDATE transactions SET category_id = $1 WHERE id = $2",
         [categoryId, txId],
       );
@@ -431,12 +446,17 @@ describe.skipIf(!hasTestDatabase())(
           await statisticsRepository.getCategoryBreakdown("EUR");
         expect(categories.some((c) => c.id === categoryId)).toBe(true);
       } finally {
-        await pool!.query(
+        await must(pool, "pool").query(
           "DROP MATERIALIZED VIEW IF EXISTS mv_monthly_summary, mv_category_totals CASCADE",
         );
         clearMvCache();
-        await pool!.query("DELETE FROM transactions WHERE id = $1", [txId]);
-        await pool!.query("DELETE FROM categories WHERE id = $1", [categoryId]);
+        await must(pool, "pool").query(
+          "DELETE FROM transactions WHERE id = $1",
+          [txId],
+        );
+        await must(pool, "pool").query("DELETE FROM categories WHERE id = $1", [
+          categoryId,
+        ]);
       }
     });
 
@@ -445,14 +465,14 @@ describe.skipIf(!hasTestDatabase())(
         `IIRC Broker ${SUFFIX}`,
         "brokerage",
       );
-      const { rows } = await pool!.query(
+      const { rows } = await must(pool, "pool").query<{ id: InvestmentId }>(
         `INSERT INTO investments (name, symbol, asset_class, currency, current_price)
          VALUES ($1, 'IIRC', 'stock', 'EUR', 12) RETURNING id`,
         [`IIRC Asset ${SUFFIX}`],
       );
-      const investmentId = rows[0].id;
+      const investmentId = must(rows[0], "rows[0]").id;
       owned.investmentIds.push(investmentId);
-      await pool!.query(
+      await must(pool, "pool").query(
         `INSERT INTO portfolio_transactions
            (investment_id, type, date, units, amount, price_per_unit, fees, taxes, currency, account_id)
          VALUES ($1, 'dividend', '2019-05-10', NULL, 10, NULL, 0, 3, 'EUR', $2)`,

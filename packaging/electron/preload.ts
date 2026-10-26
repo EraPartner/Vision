@@ -15,9 +15,9 @@ import type {
 
 // `value?.[key]` for event targets, errors and rejection reasons of unknown shape.
 function property(value: unknown, key: string): unknown {
-  return typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)[key]
-    : undefined;
+  if (typeof value !== "object" || value === null) return undefined;
+  const field: unknown = Reflect.get(value, key);
+  return field;
 }
 
 function rendererFailureSource(event: ErrorEvent): string {
@@ -26,8 +26,9 @@ function rendererFailureSource(event: ErrorEvent): string {
     property(event.target, "src") ||
     property(event.target, "href") ||
     "";
+  if (typeof candidate !== "string") return "unknown";
   try {
-    return new URL(String(candidate)).pathname.split("/").pop() || "unknown";
+    return new URL(candidate).pathname.split("/").pop() || "unknown";
   } catch {
     return "unknown";
   }

@@ -1,3 +1,5 @@
+import { axisDate } from "@/components/charts/axisValue";
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -115,6 +117,15 @@ import {
     useMacroSearchQuery,
 } from "@/features/research/useResearchQueries";
 
+const isSeriesType = enumGuard<SeriesType>({
+    line: true,
+    area: true,
+    candlestick: true,
+    bar: true,
+});
+const isSeriesAxis = enumGuard<"left" | "right">({ left: true, right: true });
+const isOscillator = enumGuard<Oscillator>({ none: true, rsi: true, macd: true });
+
 const PROVIDERS = [
     "",
     "yahoo",
@@ -140,6 +151,14 @@ function seriesLabel(s: BuilderSeries): string {
 }
 
 type Row = { time: number } & Record<string, number | null>;
+
+type ChartPreset =
+    | "priceVolume"
+    | "sma"
+    | "bollinger"
+    | "rsi"
+    | "macd"
+    | "rebased";
 
 export default function ChartBuilderPage() {
     const { t } = useLanguage();
@@ -496,7 +515,7 @@ export default function ChartBuilderPage() {
                     open: (d) => d[`${s.id}_o`],
                     high: (d) => d[`${s.id}_h`],
                     low: (d) => d[`${s.id}_l`],
-                    close: (d) => d[`${s.id}`],
+                    close: (d) => d[s.id],
                 });
             } else {
                 composed.push({
@@ -509,7 +528,7 @@ export default function ChartBuilderPage() {
                     axis: s.axis,
                     color,
                     fillOpacity: s.field === "volume" ? 0.4 : undefined,
-                    accessor: (d) => d[`${s.id}`],
+                    accessor: (d) => d[s.id],
                 });
             }
         });
@@ -614,7 +633,7 @@ export default function ChartBuilderPage() {
     }, [oscillator, oscillatorSeriesId, series, pointsByKey]);
 
     // ── Presets ──
-    const applyPreset = (preset: string) => {
+    const applyPreset = (preset: ChartPreset) => {
         const primary = series.find((s) => s.field === "price");
         if (!primary) return;
         const priceOnly = series.filter((s) => s.field === "price");
@@ -683,7 +702,7 @@ export default function ChartBuilderPage() {
             patch({ oscillator: "rsi", oscillatorSeriesId: primary.id });
         } else if (preset === "macd") {
             patch({ oscillator: "macd", oscillatorSeriesId: primary.id });
-        } else if (preset === "rebased") {
+        } else {
             patch({
                 rebase: true,
                 series: priceOnly.map((s) => ({
@@ -868,14 +887,14 @@ export default function ChartBuilderPage() {
                                     {t("research.builder.presets")}
                                 </p>
                                 <div className="flex flex-wrap gap-2">
-                                    {[
+                                    {([
                                         "priceVolume",
                                         "sma",
                                         "bollinger",
                                         "rsi",
                                         "macd",
                                         "rebased",
-                                    ].map((p) => (
+                                    ] as const).map((p) => (
                                         <Button
                                             key={p}
                                             size="sm"
@@ -925,7 +944,7 @@ export default function ChartBuilderPage() {
                                 series={composed}
                                 xTickFormat={(v) =>
                                     formatDateWithAppSettings(
-                                        v as Date,
+                                        axisDate(v),
                                         appSettings.dateFormat,
                                     )
                                 }
@@ -1000,11 +1019,11 @@ export default function ChartBuilderPage() {
                                     ) : (
                                         <Select
                                             value={s.type}
-                                            onValueChange={(v) =>
-                                                updateSeries(s.id, {
-                                                    type: v as SeriesType,
-                                                })
-                                            }
+                                            onValueChange={onGuarded(
+                                                isSeriesType,
+                                                (type) =>
+                                                    updateSeries(s.id, { type }),
+                                            )}
                                         >
                                             <SelectTrigger
                                                 className="h-8 w-32"
@@ -1035,11 +1054,11 @@ export default function ChartBuilderPage() {
                                     )}
                                     <Select
                                         value={s.axis}
-                                        onValueChange={(v) =>
-                                            updateSeries(s.id, {
-                                                axis: v as "left" | "right",
-                                            })
-                                        }
+                                        onValueChange={onGuarded(
+                                            isSeriesAxis,
+                                            (axis) =>
+                                                updateSeries(s.id, { axis }),
+                                        )}
                                     >
                                         <SelectTrigger
                                             className="h-8 w-28"
@@ -1319,9 +1338,10 @@ export default function ChartBuilderPage() {
                             </CardTitle>
                             <Select
                                 value={oscillator}
-                                onValueChange={(v) =>
-                                    patch({ oscillator: v as Oscillator })
-                                }
+                                onValueChange={onGuarded(
+                                    isOscillator,
+                                    (oscillator) => patch({ oscillator }),
+                                )}
                             >
                                 <SelectTrigger
                                     className="h-8 w-32"
@@ -1360,7 +1380,7 @@ export default function ChartBuilderPage() {
                                     }
                                     xTickFormat={(v) =>
                                         formatDateWithAppSettings(
-                                            v as Date,
+                                            axisDate(v),
                                             appSettings.dateFormat,
                                         )
                                     }

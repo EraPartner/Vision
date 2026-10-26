@@ -13,11 +13,12 @@ import {
     matchNavTitleKey,
 } from "@/lib/navigation";
 import { appRouteManifest } from "@/lib/routePreload";
+import { must } from "@/test/must";
 
 // Parity guard for the sections sidebar (ADR-180): every page a user could
 // open from the old workspace sidebars must still have a sidebar entry.
 
-const navUrls = new Set(ALL_NAV_ITEMS.map((item) => item.url));
+const navUrls = new Set<string>(ALL_NAV_ITEMS.map((item) => item.url));
 
 describe("navigation registry", () => {
     it("lists every parameterless page route exactly once", () => {
@@ -83,11 +84,11 @@ describe("navigation registry", () => {
     });
 
     it("lights up the owning item for child routes without prefix bleed", () => {
-        const importItem = ALL_NAV_ITEMS.find((i) => i.url === "/import")!;
-        const marketItem = ALL_NAV_ITEMS.find(
+        const importItem = must(ALL_NAV_ITEMS.find((i) => i.url === "/import"));
+        const marketItem = must(ALL_NAV_ITEMS.find(
             (i) => i.url === "/research/market",
-        )!;
-        const homeItem = ALL_NAV_ITEMS.find((i) => i.url === "/")!;
+        ));
+        const homeItem = must(ALL_NAV_ITEMS.find((i) => i.url === "/"));
         expect(isActiveNavItem(importItem, "/import/42/review")).toBe(true);
         expect(isActiveNavItem(marketItem, "/research/markets")).toBe(false);
         expect(isActiveNavItem(homeItem, "/transactions")).toBe(false);

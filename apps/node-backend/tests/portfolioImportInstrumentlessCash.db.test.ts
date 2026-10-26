@@ -44,8 +44,20 @@ import { rollbackBatch } from "../src/services/portfolioImportBatchService.ts";
 import { accountService } from "../src/services/accountService.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
+import type { Pool } from "pg";
 
-const pool = getTestPool()!;
+/** A row from an ad-hoc SQL read: column values are narrowed where used. */
+type DbRow = Record<string, unknown>;
+interface IdRow {
+  id: number;
+}
+/** BIGINT ids arrive from node-postgres as strings. */
+interface BigIdRow {
+  id: string;
+}
+
+let pool: Pool;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
 /** Ids seeded per test. */
@@ -68,23 +80,23 @@ async function wipe() {
 }
 
 async function seedAccount() {
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<IdRow>(
     `INSERT INTO accounts (name, display_name, institution, currency)
      VALUES ('DEGIRO SLEEVE', 'DEGIRO SLEEVE', 'DeGiro', 'EUR') RETURNING id`,
   );
-  return rows[0].id;
+  return must(rows[0], "rows[0]").id;
 }
 
 async function seedInvestment() {
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<IdRow>(
     `INSERT INTO investments (name, symbol, asset_class, currency)
      VALUES ('Acme Corp', 'ACME', 'stock', 'EUR') RETURNING id`,
   );
-  return rows[0].id;
+  return must(rows[0], "rows[0]").id;
 }
 
 async function seedCashCategories() {
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<{ id: number; detail: string }>(
     `INSERT INTO categories (general, detail, is_active)
      VALUES ('INCOME', 'DIVIDENDS', true),
             ('INCOME', 'INTEREST', true),
@@ -111,13 +123,13 @@ async function newBrokerageBatch(
   accountId: number,
   customConfig: object | null = null,
 ) {
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<BigIdRow>(
     `INSERT INTO portfolio_import_batches
        (adapter_name, status, rows_total, account_id, is_brokerage, custom_config)
      VALUES ('generic', 'pending', 0, $1, true, $2) RETURNING id`,
     [accountId, customConfig ? JSON.stringify(customConfig) : null],
   );
-  return Number(rows[0].id);
+  return Number(must(rows[0], "rows[0]").id);
 }
 
 /** Stage one PENDING row (route/type resolved by validateBatch, not seeded). */
@@ -140,7 +152,7 @@ async function stagePending(
     currency?: string;
   },
 ) {
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<BigIdRow>(
     `INSERT INTO portfolio_import_staging_rows
        (batch_id, row_index, status, tx_date, type_raw, symbol_raw, name_raw, amount, currency, note, raw_data)
      VALUES ($1, $2, 'pending', '2026-02-02', $3, $4, $5, $6, $7, $8, $9)
@@ -157,11 +169,20 @@ async function stagePending(
       `${rowIndex}|${typeRaw}|${amount}|${currency}`,
     ],
   );
-  return Number(rows[0].id);
+  return Number(must(rows[0], "rows[0]").id);
 }
 
 async function ledgerRows() {
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<{
+    id: number;
+    amount: number;
+    memo: string | null;
+    account_id: number;
+    recipient_id: number;
+    recipient_name: string;
+    cat_general: string | null;
+    cat_detail: string | null;
+  }>(
     `SELECT t.id, t.amount::float8 AS amount, t.memo, t.account_id, t.recipient_id,
             r.name AS recipient_name, c.general AS cat_general, c.detail AS cat_detail
        FROM transactions t
@@ -198,6 +219,9 @@ const TYPE_MAPPING = { type_mapping: { "Custody Fee": "fee" } };
 describeDb(
   "portfolio import — D6 instrument-less cash rows (real Postgres)",
   () => {
+    beforeAll(() => {
+      pool = must(getTestPool(), "test pool");
+    });
     beforeAll(acquireDbSuiteLock, 180_000);
 
     beforeEach(async () => {
@@ -208,7 +232,6 @@ describeDb(
     });
 
     afterAll(async () => {
-      if (!pool) return;
       await wipe();
       await releaseDbSuiteLock();
       await closeTestPool();
@@ -229,7 +252,7 @@ describeDb(
       // D6 routing is decided at validate time, deterministic from the row: no
       // symbol AND no name → 'cash' (with the canonical type persisted for the
       // sign/category); an instrument-bearing row keeps 'portfolio'.
-      const { rows: routed } = await pool.query(
+      const { rows: routed } = await pool.query<DbRow>(
         `SELECT row_index, route, type FROM portfolio_import_staging_rows WHERE batch_id = $1 ORDER BY row_index`,
         [batchId],
       );
@@ -254,7 +277,7 @@ describeDb(
       // THE discriminating assertion: pre-D6 these four rows each errored
       // "unresolved instrument — pick or create a holding" (imported 1, errors 4).
       expect(res).toMatchObject({ imported: 5, duplicates: 0, errors: 0 });
-      const { rows: errRows } = await pool.query(
+      const { rows: errRows } = await pool.query<DbRow>(
         `SELECT error_message FROM portfolio_import_staging_rows WHERE batch_id = $1 AND status = 'error'`,
         [batchId],
       );
@@ -292,7 +315,7 @@ describeDb(
 
       // The instrument-bearing dividend stays a PORTFOLIO row (tax/stats source)
       // and emitted NO ledger row — the double-count guard.
-      const { rows: ptx } = await pool.query(
+      const { rows: ptx } = await pool.query<DbRow>(
         `SELECT investment_id, type, amount::float8 AS amount, account_id FROM portfolio_transactions`,
       );
       expect(ptx).toHaveLength(1);
@@ -324,15 +347,15 @@ describeDb(
 
     it("rollback restores exactly: D6 ledger rows deleted via the cash route, bystanders untouched", async () => {
       // Decoys from OTHER sources on both sides of the route split.
-      const { rows: decoyRec } = await pool.query(
+      const { rows: decoyRec } = await pool.query<IdRow>(
         `INSERT INTO recipients (name, normalized_name) VALUES ('BYSTANDER', 'BYSTANDER') RETURNING id`,
       );
-      const { rows: decoyTxn } = await pool.query(
+      const { rows: decoyTxn } = await pool.query<IdRow>(
         `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, is_active)
        VALUES ('2026-01-15', 77, 'EUR', 'unrelated', $1, $2, true) RETURNING id`,
-        [fx.accountId, decoyRec[0].id],
+        [fx.accountId, must(decoyRec[0], "decoyRec[0]").id],
       );
-      const { rows: decoyTrade } = await pool.query(
+      const { rows: decoyTrade } = await pool.query<IdRow>(
         `INSERT INTO portfolio_transactions (investment_id, type, date, amount)
        VALUES ($1, 'buy', '2026-01-10', 500) RETURNING id`,
         [fx.investmentId],
@@ -350,16 +373,16 @@ describeDb(
 
       const remainingLedger = await ledgerRows();
       expect(remainingLedger).toHaveLength(1);
-      expect(Number(remainingLedger[0].id)).toBe(Number(decoyTxn[0].id));
-      const { rows: remainingTrades } = await pool.query(
+      expect(must(remainingLedger[0], "remainingLedger[0]").id).toBe(must(decoyTxn[0], "decoyTxn[0]").id);
+      const { rows: remainingTrades } = await pool.query<IdRow>(
         `SELECT id FROM portfolio_transactions`,
       );
       expect(remainingTrades).toHaveLength(1);
-      expect(Number(remainingTrades[0].id)).toBe(Number(decoyTrade[0].id));
+      expect(must(remainingTrades[0], "remainingTrades[0]").id).toBe(must(decoyTrade[0], "decoyTrade[0]").id);
 
       // Staging reset to the pre-commit state; shared state (categories,
       // recipient) survives.
-      const { rows: staged } = await pool.query(
+      const { rows: staged } = await pool.query<DbRow>(
         `SELECT status, committed_txn_id FROM portfolio_import_staging_rows WHERE batch_id = $1`,
         [batchId],
       );
@@ -367,7 +390,7 @@ describeDb(
         expect(s.status).toBe("matched");
         expect(s.committed_txn_id).toBeNull();
       }
-      const { rows: cats } = await pool.query(
+      const { rows: cats } = await pool.query<DbRow>(
         `SELECT general, detail FROM categories ORDER BY general, detail`,
       );
       expect(cats.length).toBeGreaterThanOrEqual(4);
@@ -410,13 +433,13 @@ describeDb(
       // The legacy |amount| branch exists only for pre-sign-fix
       // deposit/withdrawal rows. Applied to D6 kinds it made a NEW fee vanish
       // whenever any same-day +10 row happened to share the memo.
-      const { rows: rec } = await pool.query(
+      const { rows: rec } = await pool.query<IdRow>(
         `INSERT INTO recipients (name, normalized_name) VALUES ('OTHER', 'OTHER') RETURNING id`,
       );
       await pool.query(
         `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, is_active)
        VALUES ('2026-02-02', 10, 'EUR', 'CUSTODY FEE', $1, $2, true)`,
-        [fx.accountId, rec[0].id],
+        [fx.accountId, must(rec[0], "rec[0]").id],
       );
 
       const batchId = await newBrokerageBatch(fx.accountId, TYPE_MAPPING);
@@ -454,7 +477,7 @@ describeDb(
       expect((await commitPortfolioImport({ batchId })).imported).toBe(2);
 
       // (a) native currency stored raw on the row.
-      const { rows: usdRows } = await pool.query(
+      const { rows: usdRows } = await pool.query<DbRow>(
         `SELECT amount::float8 AS amount, currency FROM transactions WHERE currency = 'USD'`,
       );
       expect(usdRows).toEqual([{ amount: 100, currency: "USD" }]);
@@ -464,34 +487,34 @@ describeDb(
       // not (100 + 100) × 0.5 = 100.
       const { items: accounts } = await accountService.list();
       const sleeve = accounts.find(
-        (a) => Number(a.id) === Number(fx.accountId),
+        (a) => Number(a.id) === fx.accountId,
       );
-      expect(sleeve!.computed_balance).toBe(150);
+      expect(must(sleeve, "sleeve").computed_balance).toBe(150);
     });
 
     it('non-brokerage batches are untouched: an instrument-less dividend still blocks with "unresolved instrument"', async () => {
-      const { rows } = await pool.query(
+      const { rows } = await pool.query<BigIdRow>(
         `INSERT INTO portfolio_import_batches (adapter_name, status, rows_total, is_brokerage)
        VALUES ('generic', 'pending', 0, false) RETURNING id`,
       );
-      const batchId = Number(rows[0].id);
+      const batchId = Number(must(rows[0], "rows[0]").id);
       await stagePending(batchId, 0, { typeRaw: "dividend", amount: 12.34 });
 
       await validateBatch({ batchId });
-      const { rows: routed } = await pool.query(
+      const { rows: routed } = await pool.query<DbRow>(
         `SELECT route FROM portfolio_import_staging_rows WHERE batch_id = $1`,
         [batchId],
       );
-      expect(routed[0].route).toBeNull();
+      expect(must(routed[0], "routed[0]").route).toBeNull();
 
       await matchBatch({ batchId });
       const res = await commitPortfolioImport({ batchId });
       expect(res).toMatchObject({ imported: 0, errors: 1 });
-      const { rows: errRows } = await pool.query(
+      const { rows: errRows } = await pool.query<DbRow>(
         `SELECT error_message FROM portfolio_import_staging_rows WHERE batch_id = $1`,
         [batchId],
       );
-      expect(errRows[0].error_message).toMatch(/unresolved instrument/);
+      expect(must(errRows[0], "errRows[0]").error_message).toMatch(/unresolved instrument/);
       expect(await ledgerRows()).toHaveLength(0);
     });
   },

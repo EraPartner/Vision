@@ -6,23 +6,38 @@ import {
   asTransactionId,
 } from "@vision/types/brands";
 
+interface SplitInput {
+  transaction_id: number;
+  amount: number;
+}
+interface SplitTotals {
+  transaction_total: number;
+  current_split_total: number;
+}
+
 const { mockClient, mockWithTransaction, mockRepository, mockPrimitives } =
   vi.hoisted(() => {
     const client = { query: vi.fn() };
     return {
       mockClient: client,
-      mockWithTransaction: vi.fn(async (fn) => fn(client)),
+      mockWithTransaction: vi.fn((fn: (tx: typeof client) => unknown) =>
+        Promise.resolve(fn(client)),
+      ),
       mockRepository: {
         getOwedSummaryRows: vi.fn(),
         getOwedByRecipientRows: vi.fn(),
       },
       mockPrimitives: {
-        formatSplit: vi.fn((row) => row),
+        formatSplit: vi.fn((row: unknown) => row),
         getPaidAmountInTransaction: vi.fn(),
         insertPaymentInTransaction: vi.fn(),
-        insertSplitInTransaction: vi.fn(),
+        insertSplitInTransaction: vi.fn<
+          (client: unknown, input: SplitInput) => Promise<unknown>
+        >(),
         insertSplitsBatchInTransaction: vi.fn(),
-        lockAndGetTotals: vi.fn(),
+        lockAndGetTotals: vi.fn<
+          (client: unknown, id: number) => Promise<SplitTotals | null>
+        >(),
         lockSplitForPayment: vi.fn(),
         markSettledIfCovered: vi.fn(),
         recipientExistsInTransaction: vi.fn(),
@@ -97,7 +112,7 @@ describe("splitService.createBulkSplitsAtomic", () => {
   beforeEach(() => {
     mockPrimitives.recipientExistsInTransaction.mockResolvedValue(true);
     mockPrimitives.insertSplitInTransaction.mockImplementation(
-      async (_client, input) => ({ id: input.transaction_id * 10, ...input }),
+      (_client, input) => Promise.resolve({ id: input.transaction_id * 10, ...input }),
     );
   });
 
@@ -111,7 +126,7 @@ describe("splitService.createBulkSplitsAtomic", () => {
       5: { transaction_total: 7.5, current_split_total: 0 },
     };
     mockPrimitives.lockAndGetTotals.mockImplementation(
-      async (_client, id) => totals[id] ?? null,
+      (_client, id) => Promise.resolve(totals[id] ?? null),
     );
 
     const result = await createBulkSplitsAtomic({
@@ -173,7 +188,7 @@ describe("splitService.createBulkSplitsAtomic", () => {
       3: { transaction_total: 9, current_split_total: 0 },
     };
     mockPrimitives.lockAndGetTotals.mockImplementation(
-      async (_client, id) => totals[id] ?? null,
+      (_client, id) => Promise.resolve(totals[id] ?? null),
     );
 
     const result = await createBulkSplitsAtomic({

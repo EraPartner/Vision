@@ -66,7 +66,7 @@ export function updatePlannedTransaction(
 }
 
 export async function deletePlannedTransaction(id: PlannedTransactionId): Promise<void> {
-    await apiRequest<void>(`/api/planned-transactions/${id}`, {
+    await apiRequest(`/api/planned-transactions/${id}`, {
         method: "DELETE",
     });
 }

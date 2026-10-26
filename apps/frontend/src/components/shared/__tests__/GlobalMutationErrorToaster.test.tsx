@@ -61,8 +61,9 @@ describe("GlobalMutationErrorToaster", () => {
             { wrapper: makeWrapper() },
         );
 
-        await act(async () => {
+        await act(() => {
             result.current.mutate(undefined);
+            return Promise.resolve();
         });
 
         await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
@@ -81,8 +82,9 @@ describe("GlobalMutationErrorToaster", () => {
             { wrapper: makeWrapper() },
         );
 
-        await act(async () => {
+        await act(() => {
             result.current.mutate(undefined);
+            return Promise.resolve();
         });
 
         await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
@@ -108,8 +110,9 @@ describe("GlobalMutationErrorToaster", () => {
             { wrapper: makeWrapper() },
         );
 
-        await act(async () => {
+        await act(() => {
             result.current.mutate(undefined);
+            return Promise.resolve();
         });
 
         await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
@@ -127,8 +130,9 @@ describe("GlobalMutationErrorToaster", () => {
             { wrapper: makeWrapper() },
         );
 
-        await act(async () => {
+        await act(() => {
             result.current.mutate(undefined);
+            return Promise.resolve();
         });
 
         await waitFor(() => expect(result.current.isError).toBe(true));

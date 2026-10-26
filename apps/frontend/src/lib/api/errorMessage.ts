@@ -22,13 +22,15 @@
  * presentation-layer helper only.
  */
 
+import { isRecord } from "@/lib/isRecord";
 import { ApiErrorCode } from "@vision/types";
 
 import { ApiClientError, ApiContractError } from "@/lib/api/client";
+import type { TranslationKey } from "@/locales/keys";
 
 /** The `t` from `useLanguage()`. Kept structural so this module stays React-free. */
 export type TranslateFn = (
-    key: string,
+    key: TranslationKey,
     vars?: Record<string, string | number>,
 ) => string;
 
@@ -74,7 +76,7 @@ const NETWORK_PATTERN =
     /^Failed to fetch$|^Load failed$|^NetworkError|^Network request failed$/i;
 const RETRY_EXHAUSTED_PATTERN = /^Server returned (\d{3})$/i;
 
-const CODE_TO_KEY: Partial<Record<string, string>> = {
+const CODE_TO_KEY: Partial<Record<string, TranslationKey>> = {
     [ApiErrorCode.RATE_LIMITED]: API_ERROR_KEYS.rateLimited,
     [ApiErrorCode.INTERNAL_SERVER_ERROR]: API_ERROR_KEYS.server,
     [ApiErrorCode.BAD_GATEWAY]: API_ERROR_KEYS.server,
@@ -112,16 +114,16 @@ export function isAuthoredMessage(message: unknown): boolean {
  * makes no promise about timing.
  */
 function readRetryAfter(details: unknown): number | null {
-    if (!details || typeof details !== "object") return null;
-    const raw = (details as Record<string, unknown>).retry_after;
+    if (!isRecord(details)) return null;
+    const raw = details.retry_after;
     const seconds = typeof raw === "number" ? raw : Number(raw);
     return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : null;
 }
 
 /** Read a string property off an unknown throwable without narrowing it first. */
 function readString(value: unknown, key: "name" | "message"): string {
-    if (!value || typeof value !== "object") return "";
-    const raw = (value as Record<string, unknown>)[key];
+    if (!isRecord(value)) return "";
+    const raw = value[key];
     return typeof raw === "string" ? raw.trim() : "";
 }
 
@@ -136,7 +138,7 @@ function transportKey(
     err: unknown,
     name: string,
     message: string,
-): string | null {
+): TranslationKey | null {
     if (TIMEOUT_PATTERN.test(message)) return API_ERROR_KEYS.timeout;
     if (name === "AbortError" || ABORT_PATTERN.test(message))
         return API_ERROR_KEYS.cancelled;

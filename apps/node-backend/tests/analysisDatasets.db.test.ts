@@ -9,6 +9,7 @@ import {
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.ts";
+import { firstRow, must } from "./helpers/must.ts";
 
 describe.skipIf(!hasTestDatabase())(
   "versioned analysis datasets (real DB)",
@@ -22,7 +23,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       await pool.query(
         "DELETE FROM user_settings WHERE key = 'includeTransfers'",
       );
@@ -41,13 +42,13 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     it("creates queryable typed views with stable grains and denied PUBLIC access", async () => {
-      const pool = getTestPool()!;
-      const { rows: accountRows } = await pool.query(
+      const pool = must(getTestPool(), "getTestPool()");
+      const { rows: accountRows } = await pool.query<{ id: number }>(
         `INSERT INTO accounts (name, display_name, currency)
          VALUES ('Analysis DB Account', 'Analysis DB Account', 'EUR')
          RETURNING id`,
       );
-      const accountId = accountRows[0].id;
+      const accountId = must(accountRows[0], "row").id;
       await pool.query(
         `INSERT INTO account_statement_balances
            (account_id, currency, balance, balance_date)
@@ -55,12 +56,12 @@ describe.skipIf(!hasTestDatabase())(
                 ($1, 'USD', 30, '2026-01-31')`,
         [accountId],
       );
-      const { rows: recipientRows } = await pool.query(
+      const { rows: recipientRows } = await pool.query<{ id: number }>(
         `INSERT INTO recipients (name, normalized_name)
          VALUES ('Analysis DB Recipient', 'analysis db recipient')
          RETURNING id`,
       );
-      const recipientId = recipientRows[0].id;
+      const recipientId = must(recipientRows[0], "row").id;
       await pool.query(
         `INSERT INTO transactions
            (date, account_id, recipient_id, amount, currency, memo, is_transfer)
@@ -71,7 +72,7 @@ describe.skipIf(!hasTestDatabase())(
            ('2026-01-04', $1, $2,   50, 'EUR', 'ANALYSIS TRANSFER IN', true)`,
         [accountId, recipientId],
       );
-      const { rows: investmentRows } = await pool.query(
+      const { rows: investmentRows } = await pool.query<{ id: number }>(
         `INSERT INTO investments (name, symbol, asset_class, currency)
          VALUES ('Analysis DB Asset', 'ADB', 'stock', 'EUR') RETURNING id`,
       );
@@ -80,18 +81,18 @@ describe.skipIf(!hasTestDatabase())(
            (investment_id, account_id, type, date, amount, units,
             price_per_unit, fees, taxes, currency)
          VALUES ($1, $2, 'buy', '2026-01-05', 100, 1, 100, 0, 0, 'EUR')`,
-        [investmentRows[0].id, accountId],
+        [must(investmentRows[0], "row").id, accountId],
       );
 
       const [transactions, accounts, holdings, cashFlows] = await Promise.all([
-        pool.query("SELECT * FROM vision_analysis.transactions_v1"),
-        pool.query("SELECT * FROM vision_analysis.accounts_v1"),
-        pool.query("SELECT * FROM vision_analysis.holding_events_v1"),
-        pool.query("SELECT * FROM vision_analysis.cash_flows_v1"),
+        pool.query<{ transaction_id: unknown }>("SELECT * FROM vision_analysis.transactions_v1"),
+        pool.query<{ account_id: unknown; statement_balances: unknown[] }>("SELECT * FROM vision_analysis.accounts_v1"),
+        pool.query<{ event_id: unknown }>("SELECT * FROM vision_analysis.holding_events_v1"),
+        pool.query<{ cash_flow_id: unknown }>("SELECT * FROM vision_analysis.cash_flows_v1"),
       ]);
       expect(transactions.rows).toHaveLength(4);
       expect(accounts.rows).toHaveLength(1);
-      expect(accounts.rows[0].statement_balances).toHaveLength(2);
+      expect(must(accounts.rows[0], "row").statement_balances).toHaveLength(2);
       expect(holdings.rows).toHaveLength(1);
       expect(cashFlows.rows).toHaveLength(4);
       expect(
@@ -160,17 +161,17 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     it("reconciles transfer-safe cash-flow totals with the monthly report query", async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       await pool.query(
         `INSERT INTO user_settings (key, value)
          VALUES ('includeTransfers', 'false'::jsonb)
          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
       );
-      const { rows: accountRows } = await pool.query(
+      const { rows: accountRows } = await pool.query<{ id: number }>(
         `INSERT INTO accounts (name, display_name, currency)
          VALUES ('Analysis Reconcile', 'Analysis Reconcile', 'EUR') RETURNING id`,
       );
-      const { rows: recipientRows } = await pool.query(
+      const { rows: recipientRows } = await pool.query<{ id: number }>(
         `INSERT INTO recipients (name, normalized_name)
          VALUES ('Analysis Reconcile Recipient', 'analysis reconcile recipient')
          RETURNING id`,
@@ -182,9 +183,9 @@ describe.skipIf(!hasTestDatabase())(
                 ('2026-01-03', $1, $2,   25, 'EUR', false),
                 ('2026-01-04', $1, $2,  -50, 'EUR', true),
                 ('2026-01-04', $1, $2,   50, 'EUR', true)`,
-        [accountRows[0].id, recipientRows[0].id],
+        [must(accountRows[0], "row").id, must(recipientRows[0], "row").id],
       );
-      const { rows: viewRows } = await pool.query(
+      const { rows: viewRows } = await pool.query<{ spending: string; positive_flow: string }>(
         `SELECT sum(spending_amount)::numeric AS spending,
                 sum(positive_flow_amount)::numeric AS positive_flow
            FROM vision_analysis.cash_flows_v1
@@ -201,8 +202,8 @@ describe.skipIf(!hasTestDatabase())(
       const january = report.months.find(
         ({ year, month }) => year === 2026 && month === 1,
       );
-      expect(Number(viewRows[0].spending)).toBe(-january!.total_spending);
-      expect(Number(viewRows[0].positive_flow)).toBe(january!.total_income);
+      expect(Number(firstRow({ rows: viewRows }).spending)).toBe(-must(january, "january").total_spending);
+      expect(Number(firstRow({ rows: viewRows }).positive_flow)).toBe(must(january, "january").total_income);
       expect(january).toMatchObject({
         total_spending: -100,
         total_income: 25,

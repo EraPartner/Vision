@@ -4,12 +4,13 @@ import { loose } from "./helpers/partial.ts";
 import {
   asCurrencyCode,
 } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
 
 const mockComputeMetrics = vi.fn<(snapshots: PerformanceSnapshot[]) => null>(
   () => null,
 );
 const mockComputeHeatmap = vi.fn(() => ({}));
-const mockGetPortfolioSummary = vi.fn(async () => ({
+const mockGetPortfolioSummary = vi.fn(() => Promise.resolve({
   summaries: [],
   totals: {},
 }));
@@ -74,8 +75,8 @@ function snapshot({
 async function build(rows: WireSnapshot[]) {
   return buildPortfolioPerformancePayload(
     "EUR",
-    rows[0]!.snapshot_date,
-    rows.at(-1)!.snapshot_date,
+    must(rows[0], "rows[0]").snapshot_date,
+    must(rows.at(-1), "rows entry last").snapshot_date,
     // The helper accepts string dates as well as pg's Date values.
     loose<PerformanceSnapshot[]>(rows),
     "all",
@@ -116,7 +117,7 @@ describe("buildPortfolioPerformancePayload spike reconciliation", () => {
     ];
 
     const payload = await build(rows);
-    const cleanedMiddle = mockComputeMetrics.mock.calls[0]![0][1]!;
+    const cleanedMiddle = must(must(mockComputeMetrics.mock.calls[0], "mockComputeMetrics.mock.calls[0]")[0][1], "must result");
 
     expect(cleanedMiddle.value).toBe("68000");
     expect(cleanedMiddle.cash_value).toBe("60000");
@@ -158,12 +159,12 @@ describe("buildPortfolioPerformancePayload spike reconciliation", () => {
         cash: 10_200,
       }),
     ];
-    rows[1]!.gain_loss = "999999";
-    rows[1]!.return_pct = "-999";
+    must(rows[1], "rows[1]").gain_loss = "999999";
+    must(rows[1], "rows[1]").return_pct = "-999";
 
     const payload = await build(rows);
-    const cleanedMiddle = mockComputeMetrics.mock.calls[0]![0][1]!;
-    const servedMiddle = payload.snapshots[1]!;
+    const cleanedMiddle = must(must(mockComputeMetrics.mock.calls[0], "mockComputeMetrics.mock.calls[0]")[0][1], "must result");
+    const servedMiddle = must(payload.snapshots[1], "payload.snapshots[1]");
     const storedDecomposedValue =
       Number(cleanedMiddle.stocks_etfs_value) +
       Number(cleanedMiddle.crypto_value) +
@@ -223,6 +224,6 @@ describe("buildPortfolioPerformancePayload spike reconciliation", () => {
     expect(
       payload.snapshots.map(({ is_provisional }) => is_provisional),
     ).toEqual([false, false, true]);
-    expect(payload.snapshots.at(-1)!.value).toBe(500);
+    expect(must(payload.snapshots.at(-1), "payload.snapshots entry last").value).toBe(500);
   });
 });

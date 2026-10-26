@@ -15,6 +15,12 @@ import { recipientInsightsRepository } from "../src/repositories/infoRepositoryR
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
+import { must } from "./helpers/must.ts";
+import type {
+  AccountId,
+  RecipientId,
+  TransactionId,
+} from "@vision/types/brands";
 
 const SUFFIX = `IRB${process.pid}`;
 const created = {
@@ -24,20 +30,20 @@ const created = {
 };
 
 async function seed() {
-  const db = getTestPool()!;
-  const { rows: account } = await db.query(
+  const db = must(getTestPool(), "getTestPool()");
+  const { rows: account } = await db.query<{ id: AccountId }>(
     `INSERT INTO accounts (name, display_name, currency) VALUES ($1, $1, 'EUR') RETURNING id`,
     [`Recipients ${SUFFIX}`],
   );
-  created.accountIds.push(account[0].id);
-  const { rows: recipients } = await db.query(
+  created.accountIds.push(must(account[0], "account[0]").id);
+  const { rows: recipients } = await db.query<{ id: RecipientId }>(
     `INSERT INTO recipients (name, normalized_name)
      VALUES ($1, lower($1)), ($2, lower($2)) RETURNING id`,
     [`Kept ${SUFFIX}`, `Excluded ${SUFFIX}`],
   );
   created.recipientIds.push(...recipients.map((r) => r.id as number));
-  const kept = recipients[0].id as number;
-  const excluded = recipients[1].id as number;
+  const kept = must(recipients[0], "recipients[0]").id as number;
+  const excluded = must(recipients[1], "recipients[1]").id as number;
   const rows: [string, string, number][] = [
     ["2024-09-30", "-1.00", kept], // before the window
     ["2024-10-01", "-10.00", kept],
@@ -46,12 +52,12 @@ async function seed() {
     ["2026-09-08", "-50.00", kept], // after the window
   ];
   for (const [date, amount, recipientId] of rows) {
-    const { rows: inserted } = await db.query(
+    const { rows: inserted } = await db.query<{ id: TransactionId }>(
       `INSERT INTO transactions (date, amount, currency, recipient_id, account_id)
        VALUES ($1, $2, 'EUR', $3, $4) RETURNING id`,
-      [date, amount, recipientId, account[0].id],
+      [date, amount, recipientId, must(account[0], "account[0]").id],
     );
-    created.transactionIds.push(inserted[0].id);
+    created.transactionIds.push(must(inserted[0], "inserted[0]").id);
   }
   return { kept, excluded };
 }
@@ -67,7 +73,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const db = getTestPool()!;
+      const db = must(getTestPool(), "getTestPool()");
       await db.query("DELETE FROM transactions WHERE id = ANY($1::int[])", [
         created.transactionIds.splice(0),
       ]);

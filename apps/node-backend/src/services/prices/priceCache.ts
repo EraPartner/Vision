@@ -120,6 +120,16 @@ function dateOnlyToTimestampMs(
 // ─── History point helpers ────────────────────────────────────────────────────
 
 /**
+ * `Array.isArray` narrows a `readonly T[]` to `any[]`; this keeps the element
+ * type. Anything that is not an array (a missing series) reads as empty.
+ */
+export function readonlyArrayOrEmpty<T>(
+  value: readonly T[] | null | undefined,
+): readonly T[] {
+  return Array.isArray(value) ? (value as readonly T[]) : [];
+}
+
+/**
  * Validate, de-duplicate by calendar day (last one wins) and date-sort a raw
  * point series. Non-array input and malformed points are dropped, not thrown.
  *
@@ -128,10 +138,11 @@ function dateOnlyToTimestampMs(
 export function normalizeHistoryPoints(
   points: readonly RawPricePoint[] | null | undefined,
 ): PricePoint[] {
-  if (!Array.isArray(points) || points.length === 0) return [];
+  const rawPoints = readonlyArrayOrEmpty<RawPricePoint | null | undefined>(points);
+  if (rawPoints.length === 0) return [];
   const byDate = new Map<string, PricePoint>();
 
-  for (const point of points) {
+  for (const point of rawPoints) {
     const timestampMs = Number(point?.timestampMs);
     const price = toNumber(point?.price);
     if (!Number.isFinite(timestampMs) || !isValidPrice(price)) continue;
@@ -155,7 +166,7 @@ export function filterPointsByRange(
   const from = Number.isFinite(Number(fromMs)) ? Number(fromMs) : undefined;
   const to = Number.isFinite(Number(toMs)) ? Number(toMs) : undefined;
 
-  return (Array.isArray(points) ? points : []).filter((p) => {
+  return readonlyArrayOrEmpty(points).filter((p) => {
     if (from !== undefined && p.timestampMs < from) return false;
     if (to !== undefined && p.timestampMs > to) return false;
     return true;
@@ -195,12 +206,13 @@ export function countChangedPointPrices(
   beforePoints: readonly RawPricePoint[] | null | undefined,
   afterPoints: readonly RawPricePoint[] | null | undefined,
 ): number {
-  if (!Array.isArray(beforePoints) || !Array.isArray(afterPoints)) return 0;
-  const len = Math.min(beforePoints.length, afterPoints.length);
+  const before = readonlyArrayOrEmpty<RawPricePoint | null | undefined>(beforePoints);
+  const after = readonlyArrayOrEmpty<RawPricePoint | null | undefined>(afterPoints);
+  const len = Math.min(before.length, after.length);
   let changed = 0;
   for (let i = 0; i < len; i += 1) {
-    const beforePrice = toNumber(beforePoints[i]?.price);
-    const afterPrice = toNumber(afterPoints[i]?.price);
+    const beforePrice = toNumber(before[i]?.price);
+    const afterPrice = toNumber(after[i]?.price);
     if (!isValidPrice(beforePrice) || !isValidPrice(afterPrice)) continue;
     if (Math.abs(beforePrice - afterPrice) > 1e-9) changed += 1;
   }
@@ -260,7 +272,7 @@ export async function loadHistoricalPointsFromDatabase(
   investmentId: number,
   { fromMs, toMs }: PointRange = {},
 ): Promise<PricePoint[]> {
-  if (!Number.isFinite(Number(investmentId))) return [];
+  if (!Number.isFinite(investmentId)) return [];
   const fromDate = Number.isFinite(Number(fromMs))
     ? toDateOnly(Number(fromMs))
     : null;
@@ -272,7 +284,7 @@ export async function loadHistoricalPointsFromDatabase(
     let builder = db
       .selectFrom("asset_price_history")
       .select(["price_date", "close_price"])
-      .where("investment_id", "=", asInvestmentId(Number(investmentId)))
+      .where("investment_id", "=", asInvestmentId(investmentId))
       .orderBy("price_date", "asc");
     if (fromDate !== null)
       builder = builder.where("price_date", ">=", sql<Date>`${fromDate}::date`);
@@ -351,7 +363,7 @@ export async function saveHistoricalPointsToDatabase(
   source: string | null | undefined,
 ): Promise<void> {
   const normalized = normalizeHistoryPoints(points);
-  if (!Number.isFinite(Number(investmentId)) || normalized.length === 0) return;
+  if (!Number.isFinite(investmentId) || normalized.length === 0) return;
 
   const priceDates: string[] = [];
   const closePrices: number[] = [];
@@ -367,7 +379,7 @@ export async function saveHistoricalPointsToDatabase(
 
   try {
     await sql`INSERT INTO asset_price_history (investment_id, price_date, close_price, source)
-     SELECT ${Number(investmentId)}, p.price_date::date, p.close_price::numeric, ${source || "provider"}
+     SELECT ${investmentId}, p.price_date::date, p.close_price::numeric, ${source || "provider"}
      FROM UNNEST(${priceDates}::date[], ${closePrices}::numeric[]) AS p(price_date, close_price)
      ON CONFLICT (investment_id, price_date)
      DO UPDATE SET

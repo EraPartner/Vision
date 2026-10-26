@@ -282,7 +282,7 @@ export function MergeRecipientsDialog({
                                                             {t(
                                                                 "merge.aliasOf",
                                                                 {
-                                                                    name: r.primary_recipient_name!,
+                                                                    name: r.primary_recipient_name ?? "",
                                                                 },
                                                             )}
                                                         </span>

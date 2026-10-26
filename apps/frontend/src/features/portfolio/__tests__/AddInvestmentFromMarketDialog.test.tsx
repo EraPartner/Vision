@@ -13,6 +13,7 @@ import {
 } from "@/test/msw/handlers";
 import { AddInvestmentFromMarketDialog } from "@/features/portfolio/AddInvestmentFromMarketDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -179,9 +180,9 @@ describe("AddInvestmentFromMarketDialog", () => {
         );
         const dialog = await screen.findByRole("dialog");
         // Scope to dialog to avoid matching the trigger button outside the portal
-        const txnOptionBtn = within(dialog)
+        const txnOptionBtn = must(within(dialog)
             .getAllByRole("button")
-            .find((b) => /add transaction/i.test(b.textContent ?? ""))!;
+            .find((b) => /add transaction/i.test(b.textContent)));
         await user.click(txnOptionBtn);
 
         // Assert — transaction form fields are visible
@@ -203,9 +204,9 @@ describe("AddInvestmentFromMarketDialog", () => {
             await screen.findByRole("button", { name: /add transaction/i }),
         );
         const dialog = await screen.findByRole("dialog");
-        const txnOptionBtn = within(dialog)
+        const txnOptionBtn = must(within(dialog)
             .getAllByRole("button")
-            .find((b) => /add transaction/i.test(b.textContent ?? ""))!;
+            .find((b) => /add transaction/i.test(b.textContent)));
         await user.click(txnOptionBtn);
         await screen.findByLabelText(/units/i);
         await user.click(await screen.findByRole("button", { name: /back/i }));
@@ -236,9 +237,9 @@ describe("AddInvestmentFromMarketDialog", () => {
             await screen.findByRole("button", { name: /add transaction/i }),
         );
         const dialog = await screen.findByRole("dialog");
-        const txnOptionBtn = within(dialog)
+        const txnOptionBtn = must(within(dialog)
             .getAllByRole("button")
-            .find((b) => /add transaction/i.test(b.textContent ?? ""))!;
+            .find((b) => /add transaction/i.test(b.textContent)));
         await user.click(txnOptionBtn);
 
         // Fill the amount field (required for submission)

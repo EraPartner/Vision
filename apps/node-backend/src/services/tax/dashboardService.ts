@@ -38,6 +38,7 @@ import { toYmd } from "../../lib/dateFormat.ts";
 import { getTaxOverview } from "./overviewService.ts";
 import { buildDashboardSuggestions } from "./dashboardSuggestions.ts";
 import { restateAtTransactionDateRates } from "./transactionDateFx.ts";
+import { isRecord } from "../../lib/typeGuards.ts";
 
 type Overview = Awaited<ReturnType<typeof getTaxOverview>>;
 type Monthly = { year: number; month: number; total_income: number };
@@ -56,9 +57,7 @@ export interface TaxDashboardOptions {
   excludedRecipientIds?: number[] | undefined;
 }
 function object(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  return isRecord(value) && !Array.isArray(value) ? value : {};
 }
 export const TAX_DASHBOARD_RULES = [
   {
@@ -114,7 +113,7 @@ export function buildTaxDashboard(
   const transactionYears = new Set<number>();
   for (const [period, cells] of Object.entries(pivot.categoryPivot)) {
     for (const cell of cells) {
-      const path = cell.categoryPathIds?.length > 0
+      const path = cell.categoryPathIds.length > 0
         ? cell.categoryPathIds
         : cell.categoryId != null
           ? [cell.categoryId]
@@ -432,7 +431,7 @@ export async function getTaxDashboard(options: TaxDashboardOptions = {}) {
         amount: Number(t.amount),
         taxes: Number(t.taxes),
         fees: Number(t.fees),
-        currency: t.currency ?? "EUR",
+        currency: t.currency,
         fx_rate_to_eur: t.fx_rate_to_eur,
       })),
       currency,

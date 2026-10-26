@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
+import { useRouteParams } from "@/hooks/useRouteParams";
+import { ROUTES, type ImportBatchId } from "@/lib/routes";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { ImportStagingRow, ImportPreviewGroup } from "@/lib/api";
@@ -131,12 +133,35 @@ interface AccountDisclosureEntry {
 }
 
 export default function ImportReviewPage() {
-    const { batchId: batchIdParam } = useParams<{ batchId: string }>();
-    const batchId = Number(batchIdParam);
-    const navigate = useNavigate();
+    const params = useRouteParams(ROUTES.importReview);
+    const navigate = useAppNavigate();
+    const { t } = useLanguage();
+    // A malformed batch id gets the page's load-failure state (no request is made).
+    if (!params) {
+        return (
+            <PageShell className="max-w-3xl mx-auto">
+                <div>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate("/import")}
+                    >
+                        <ArrowLeft className="h-4 w-4" aria-hidden />
+                        {t("importReview.back")}
+                    </Button>
+                </div>
+                <PageError message={apiErrorToMessage(undefined, t)} />
+            </PageShell>
+        );
+    }
+    return <ImportReviewContent batchId={params.batchId} />;
+}
+
+function ImportReviewContent({ batchId }: { batchId: ImportBatchId }) {
+    const navigate = useAppNavigate();
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
-    const locale = numberFormatToLocale(appSettings?.numberFormat ?? "us");
+    const locale = numberFormatToLocale(appSettings.numberFormat);
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const [groupOverrides, setGroupOverrides] = useState<
@@ -693,8 +718,7 @@ export default function ImportReviewPage() {
                                                     <span className="shrink-0 tabular-nums text-label-secondary">
                                                         {formatDateStringWithAppSettings(
                                                             row.tx_date,
-                                                            appSettings?.dateFormat ??
-                                                                "YYYY-MM-DD",
+                                                            appSettings.dateFormat,
                                                         )}
                                                     </span>
                                                     <span className="min-w-0 truncate text-foreground">
@@ -776,7 +800,7 @@ export default function ImportReviewPage() {
                                         .then(() =>
                                             setGroupOverrides(new Map()),
                                         )
-                                        .catch((err: Error) =>
+                                        .catch((err: unknown) =>
                                             toast.error(
                                                 apiErrorToMessage(err, t),
                                             ),

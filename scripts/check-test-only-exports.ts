@@ -362,10 +362,10 @@ for (const [file, names] of exportsByFile) {
   }
 }
 
-violations.sort(
-  (left, right) =>
-    left.file.localeCompare(right.file) || left.name.localeCompare(right.name),
-);
+violations.sort((left, right) => {
+  const byFile = left.file.localeCompare(right.file);
+  return byFile !== 0 ? byFile : left.name.localeCompare(right.name);
+});
 
 if (process.argv.includes("--json")) {
   console.log(JSON.stringify({ stalePublicExports, violations }, null, 2));

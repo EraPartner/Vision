@@ -3,6 +3,7 @@
  * Supports vertical (default) and horizontal layouts, single or grouped series.
  * Per-datum color override via optional colorForIndex prop.
  */
+import { axisNumber } from "./axisValue";
 import { Group } from "@visx/group";
 import { summarizeSeriesChart } from "./chartAria";
 import { ParentSize } from "@visx/responsive";
@@ -80,7 +81,7 @@ function buildOverlayPath<Datum>(
     accessor: (d: Datum) => number | null,
     categoryAccessor: (d: Datum) => string,
     categoryScale: { (value: string): number | undefined; bandwidth(): number },
-    valueScale: ReturnType<typeof scaleLinear>,
+    valueScale: ReturnType<typeof scaleLinear<number>>,
 ): string {
     let path = "";
     let inSegment = false;
@@ -92,7 +93,7 @@ function buildOverlayPath<Datum>(
         }
         const cat = categoryAccessor(datum);
         const x = (categoryScale(cat) ?? 0) + categoryScale.bandwidth() / 2;
-        const y = valueScale(val) ?? 0;
+        const y = valueScale(val);
         path += inSegment ? `L${x},${y}` : `M${x},${y}`;
         inSegment = true;
     }
@@ -164,8 +165,8 @@ function BarLayerInner<Datum>({
                         const bandOffset = (seriesScale.bandwidth() - bw) / 2;
                         const x =
                             c0 + (seriesScale(s.key) ?? 0) + bandOffset;
-                        const yTop = valueScale(Math.max(v, 0)) ?? 0;
-                        const yBot = valueScale(Math.min(v, 0)) ?? baseline;
+                        const yTop = valueScale(Math.max(v, 0));
+                        const yBot = valueScale(Math.min(v, 0));
                         const h = Math.max(0, yBot - yTop);
                         return (
                             <m.rect
@@ -203,8 +204,8 @@ function BarLayerInner<Datum>({
                     );
                     const bandOffset = (seriesScale.bandwidth() - bh) / 2;
                     const y = c0 + (seriesScale(s.key) ?? 0) + bandOffset;
-                    const xStart = valueScale(Math.min(v, 0)) ?? 0;
-                    const xEnd = valueScale(Math.max(v, 0)) ?? 0;
+                    const xStart = valueScale(Math.min(v, 0));
+                    const xEnd = valueScale(Math.max(v, 0));
                     const w = Math.max(0, xEnd - xStart);
                     return (
                         <m.rect
@@ -249,7 +250,7 @@ function BarLayerInner<Datum>({
                     if (val === null) return [];
                     const cat = categoryAccessor(datum);
                     const cx = (categoryScale(cat) ?? 0) + categoryScale.bandwidth() / 2;
-                    const cy = valueScale(val) ?? 0;
+                    const cy = valueScale(val);
                     return [{ cx, cy }];
                 });
 
@@ -345,7 +346,8 @@ function Inner<Datum>({
         const lo = values.length > 0 ? Math.min(0, ...values) : 0;
         const hi = values.length > 0 ? Math.max(0, ...values) : 1;
         const pad = hi !== lo ? (hi - lo) * 0.08 : 1;
-        return [lo, hi + pad] as const;
+        const domain: [number, number] = [lo, hi + pad];
+        return domain;
     }, [data, series, overlays, yDomain]);
 
     const categoryScale = useMemo(
@@ -372,7 +374,7 @@ function Inner<Datum>({
         () =>
             scaleLinear({
                 range: layout === "vertical" ? [innerHeight, 0] : [0, innerWidth],
-                domain: valueDomain as [number, number],
+                domain: [valueDomain[0], valueDomain[1]],
                 nice: true,
             }),
         [innerHeight, innerWidth, layout, valueDomain],
@@ -391,7 +393,7 @@ function Inner<Datum>({
     );
     const handleLeave = useCallback(() => setHover(null), []);
 
-    const baseline = layout === "vertical" ? valueScale(0) ?? innerHeight : valueScale(0) ?? 0;
+    const baseline = layout === "vertical" ? valueScale(0) : valueScale(0);
 
     // Keyboard path (←/→, Home/End, Escape): step per category, anchoring the
     // tooltip where the pointer would — the tip of the tallest positive bar in
@@ -405,14 +407,14 @@ function Inner<Datum>({
             if (layout === "vertical") {
                 let yTop = baseline;
                 for (const s of series) {
-                    const yv = valueScale(Math.max(s.accessor(datum), 0)) ?? baseline;
+                    const yv = valueScale(Math.max(s.accessor(datum), 0));
                     if (yv < yTop) yTop = yv;
                 }
                 setHover({ index, datum, x: mid, y: yTop });
             } else {
                 let xEnd = baseline;
                 for (const s of series) {
-                    const xv = valueScale(Math.max(s.accessor(datum), 0)) ?? baseline;
+                    const xv = valueScale(Math.max(s.accessor(datum), 0));
                     if (xv > xEnd) xEnd = xv;
                 }
                 setHover({ index, datum, x: xEnd, y: mid });
@@ -522,7 +524,7 @@ function Inner<Datum>({
                                 scale={valueScale}
                                 tickFormat={
                                     valueTickFormat
-                                        ? (v) => valueTickFormat(v as number)
+                                        ? (v) => valueTickFormat(axisNumber(v))
                                         : undefined
                                 }
                             />
@@ -534,7 +536,7 @@ function Inner<Datum>({
                                 top={innerHeight}
                                 tickFormat={
                                     valueTickFormat
-                                        ? (v) => valueTickFormat(v as number)
+                                        ? (v) => valueTickFormat(axisNumber(v))
                                         : undefined
                                 }
                             />

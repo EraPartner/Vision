@@ -102,7 +102,7 @@ export function EditPortfolioTxnDialog({
     const initialForm = () => ({
         date: normalizeYmdInput(transaction.date),
         amount: formatEditableNumber(
-            transaction.amount ?? 0,
+            transaction.amount,
             appSettings.numberFormat,
         ),
         units:
@@ -147,7 +147,7 @@ export function EditPortfolioTxnDialog({
             transaction.account_id != null
                 ? String(transaction.account_id)
                 : "",
-        isRecurring: Boolean(transaction.is_recurring),
+        isRecurring: transaction.is_recurring,
         recurrenceInterval: transaction.recurrence_interval ?? "monthly",
         recurrenceEndDate: normalizeYmdInput(transaction.recurrence_end_date),
     });
@@ -254,7 +254,7 @@ export function EditPortfolioTxnDialog({
         setOpen(v);
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.SubmitEvent) => {
         e.preventDefault();
         if (!checkValid()) return;
         // Narrowing only — checkValid() mirrors the schema's rules field-by-field,
@@ -345,7 +345,7 @@ export function EditPortfolioTxnDialog({
                         idPrefix="edit-txn"
                         form={form}
                         setForm={setForm}
-                        currency={transaction.currency ?? investment.currency}
+                        currency={transaction.currency}
                         t={t}
                         typeField={
                             <div className="space-y-2">

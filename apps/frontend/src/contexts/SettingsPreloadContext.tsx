@@ -11,6 +11,7 @@
  * Now there is exactly 1 round-trip at mount time.
  */
 
+import { isRecord } from "@/lib/isRecord";
 import {
     createContext,
     useContext,
@@ -55,18 +56,8 @@ export function SettingsPreloadProvider({ children }: { children: ReactNode }) {
                     const map: Record<string, unknown> = {};
                     if (Array.isArray(all)) {
                         for (const row of all) {
-                            if (
-                                row !== null &&
-                                typeof row === "object" &&
-                                "key" in row &&
-                                typeof (row as { key: unknown }).key ===
-                                    "string"
-                            ) {
-                                const typed = row as {
-                                    key: string;
-                                    value: unknown;
-                                };
-                                map[typed.key] = typed.value;
+                            if (isRecord(row) && typeof row.key === "string") {
+                                map[row.key] = row.value;
                             }
                         }
                     } else if (all && typeof all === "object") {
@@ -76,7 +67,7 @@ export function SettingsPreloadProvider({ children }: { children: ReactNode }) {
                     setRawSettings(map);
                 }
             })
-            .catch((err) => {
+            .catch((err: unknown) => {
                 // Backend unreachable on startup — contexts will use their own defaults
                 logger.warn("Settings preload failed; using defaults", err);
                 if (!cancelled) setRawSettings({});
@@ -106,12 +97,12 @@ export function SettingsPreloadProvider({ children }: { children: ReactNode }) {
  * Returns `undefined` while loading, and `null` if the key was not found.
  */
 // eslint-disable-next-line react-refresh/only-export-components
-export function usePreloadedSetting<T>(key: string): {
-    value: T | null;
+export function usePreloadedSetting(key: string): {
+    value: unknown;
     isLoading: boolean;
 } {
     const { rawSettings, isLoading } = useContext(SettingsPreloadContext);
     if (isLoading) return { value: null, isLoading: true };
     const v = rawSettings?.[key];
-    return { value: v !== undefined ? (v as T) : null, isLoading: false };
+    return { value: v !== undefined ? v : null, isLoading: false };
 }

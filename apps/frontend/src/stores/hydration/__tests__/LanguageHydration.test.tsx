@@ -7,6 +7,7 @@ import {
     useLanguage,
     type Language,
 } from "@/stores/hydration/LanguageHydration";
+import { translateDynamic } from "@/lib/translateDynamic";
 
 function makeWrapper(initial: Language = "en") {
     return function Wrapper({ children }: { children: ReactNode }) {
@@ -29,9 +30,9 @@ describe("LanguageHydration", () => {
         const { result } = renderHook(() => useLanguage(), {
             wrapper: makeWrapper(),
         });
-        expect(result.current.t("nonexistent.key.xyz")).toBe(
-            "nonexistent.key.xyz",
-        );
+        expect(
+            translateDynamic(result.current.t, "nonexistent.key.xyz"),
+        ).toBe("nonexistent.key.xyz");
     });
 
     it("interpolates variables in translation strings once locale loads", async () => {

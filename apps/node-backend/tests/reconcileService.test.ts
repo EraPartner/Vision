@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mockTxConnection } from "./helpers/repoMocks.ts";
 import type { TxConnectionMock } from "./helpers/repoMocks.ts";
-const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
+const { mockClient } = vi.hoisted(() => ({
+  mockClient: {
+    query: vi.fn<(sql: string, params?: unknown[]) => Promise<unknown>>(),
+  },
+}));
 // Transaction shim: runs the callback directly; a throw propagates (= rollback).
 vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
 
@@ -11,12 +15,24 @@ import {
   __normalizeReconcile as normalizeReconcile,
   reconcileAccount,
 } from "../src/services/reconcileService.ts";
+import { must } from "./helpers/must.ts";
 
-// `query` stays an untyped spy: the tests read raw SQL/params from mock.calls.
-const { query, withTransaction } = connection as unknown as TxConnectionMock<
-  typeof mockClient,
-  Record<never, never>
->;
+// The tests read raw SQL/params from the spy's mock.calls.
+const { query, withTransaction } = connection as unknown as Omit<
+  TxConnectionMock<typeof mockClient, object>,
+  "query"
+> & { query: typeof mockClient.query };
+
+/** SQL of the nth `query` call. */
+function querySql(n: number): string {
+  return must(query.mock.calls[n], `query call ${n}`)[0];
+}
+
+/** SQL and bound values of the nth `query` call. */
+function queryCall(n: number): [string, unknown[]] {
+  const [sql, params] = must(query.mock.calls[n], `query call ${n}`);
+  return [sql, must(params, `query call ${n} params`)];
+}
 
 /** SQL text without identifier quotes, for case-insensitive matching. */
 const text = (sql: string): string => sql.replaceAll('"', "");
@@ -51,7 +67,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       /not found/i,
     );
     // First (and only) query is the lock, and it must take FOR UPDATE.
-    expect(query.mock.calls[0]![0]).toMatch(/FOR UPDATE/i);
+    expect(querySql(0)).toMatch(/FOR UPDATE/i);
   });
 
   it("rejects when the account has no statement balance", async () => {
@@ -112,13 +128,13 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
 
     expect(withTransaction).toHaveBeenCalledTimes(1);
     // First query is the row lock, taken before the drift read.
-    const [lockSql, lockParams] = query.mock.calls[0]!;
+    const [lockSql, lockParams] = queryCall(0);
     expect(text(lockSql)).toMatch(
       /SELECT id FROM accounts WHERE id = \$1 FOR UPDATE/i,
     );
     expect(lockParams).toEqual([5]);
-    expect(query.mock.calls[1]![0]).toMatch(/s\.balance AS statement_balance/);
-    expect(query.mock.calls[1]![0]).not.toMatch(/a\.statement_balance/);
+    expect(querySql(1)).toMatch(/s\.balance AS statement_balance/);
+    expect(querySql(1)).not.toMatch(/a\.statement_balance/);
   });
 
   it("accept mode rewrites the statement balance to the computed figure (drift → 0)", async () => {
@@ -147,7 +163,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
     });
 
     // Third call atomically upserts the authoritative currency row.
-    const [sql, params] = query.mock.calls[2]!;
+    const [sql, params] = queryCall(2);
     expect(text(sql)).toMatch(/INSERT INTO account_statement_balances/i);
     expect(text(sql)).not.toMatch(/UPDATE accounts/i);
     expect(params[0]).toBe(5);
@@ -189,7 +205,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
 
     // Fourth call is the INSERT (lock, drift read, system-recipient upsert,
     // INSERT); amount is the drift, no `balance` column is written.
-    const [sql, params] = query.mock.calls[3]!;
+    const [sql, params] = queryCall(3);
     expect(text(sql)).toMatch(/INSERT INTO transactions/i);
     expect(sql).toMatch(/transfer_source/);
     expect(sql).not.toMatch(/\bbalance\b/);
@@ -201,7 +217,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
     // column must actually be in the statement (omitting it raised 23502 live).
     expect(sql).toMatch(/recipient_id/);
     expect(params[5]).toBe(900);
-    expect(text(query.mock.calls[2]![0])).toMatch(
+    expect(text(querySql(2))).toMatch(
       /SELECT id FROM recipients WHERE normalized_name/i,
     );
   });
@@ -226,7 +242,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
 
     const result = await reconcileAccount(5, { mode: "adjustment" });
     expect(result.computed_balance).toBe(80);
-    const [, params] = query.mock.calls[3]!;
+    const [, params] = queryCall(3);
     expect(params[1]).toBe(-20);
   });
 
@@ -264,7 +280,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       statement_balance: 120,
       computed_balance: 120,
     });
-    const [, params] = query.mock.calls[3]!;
+    const [, params] = queryCall(3);
     expect(params[1]).toBe(20); // 120 − the EUR partition's 100 (not 120 − 200)
     expect(params[2]).toBe("EUR");
   });
@@ -317,7 +333,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
 
     await reconcileAccount(5, { mode: "adjustment" });
 
-    const [, params] = query.mock.calls[3]!;
+    const [, params] = queryCall(3);
     expect(params[1]).toBe(20); // 120 − the sole (USD) partition's 100
     expect(params[2]).toBe("USD");
   });
@@ -374,7 +390,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       statement_balance: 0,
       computed_balance: 0,
     });
-    expect(query.mock.calls[2]![1][1]).toBe("GBP");
-    expect(query.mock.calls[2]![1][2]).toBe(0);
+    expect(queryCall(2)[1][1]).toBe("GBP");
+    expect(queryCall(2)[1][2]).toBe(0);
   });
 });

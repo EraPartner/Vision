@@ -77,8 +77,8 @@ export function invalidateStatisticsCaches(): void {
 function pruneExpiredCacheEntries(cache: InfoCache): void {
   const now = Date.now();
   for (const [key, value] of cache.entries()) {
-    const hasInflight = Boolean(value?.inflight);
-    if (!hasInflight && (value?.expiresAt ?? 0) <= now) {
+    const hasInflight = Boolean(value.inflight);
+    if (!hasInflight && value.expiresAt <= now) {
       cache.delete(key);
     }
   }
@@ -97,7 +97,7 @@ function enforceCacheSizeLimit(
   const overflow = cache.size - maxEntries;
   const removableKeys: string[] = [];
   for (const [key, value] of cache.entries()) {
-    if (!value?.inflight) {
+    if (!value.inflight) {
       removableKeys.push(key);
     }
     if (removableKeys.length >= overflow) break;

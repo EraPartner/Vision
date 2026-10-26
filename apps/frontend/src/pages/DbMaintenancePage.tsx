@@ -1,6 +1,7 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import type { AppPath } from "@/lib/routes";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminKeys } from "@/lib/queryKeys";
 import { Database, HardDrive, RefreshCw, Table2, Zap } from "lucide-react";
@@ -99,12 +100,12 @@ function TableStatRow({
     isVacuuming: boolean;
 }) {
     const { t } = useLanguage();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     // App settings, not the browser locale: an eu-format nl user with an
     // en-US browser otherwise saw US date order and separators here.
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
-    const editorHref = `/admin/db/${encodeURIComponent(row.table_name)}`;
+    const editorHref: AppPath = `/admin/db/${encodeURIComponent(row.table_name)}`;
 
     function fmt(ts: string | null) {
         if (!ts) return "—";

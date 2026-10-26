@@ -1,3 +1,5 @@
+import { stringifyUnknown } from "./stringify.ts";
+
 /** Maintained statement detection shared by web and native backend probe. */
 export type PortfolioImportSource =
   "ibkr" | "kinesis" | "nexo" | "nexo_pro" | "saxo";
@@ -91,7 +93,7 @@ const HEADER_SIGNATURES: Record<
 };
 
 function cell(value: unknown): string {
-  return String(value ?? "")
+  return stringifyUnknown(value)
     .replaceAll("\u00a0", " ")
     .trim();
 }
@@ -164,10 +166,10 @@ export function detectIbkrFundingWorkbook(
 ): DetectedPortfolioImport | undefined {
   if (
     workbook.vbaraw ||
-    !workbook.SheetNames.length ||
+    workbook.SheetNames.length === 0 ||
     workbook.SheetNames.length > 2 ||
     new Set(workbook.SheetNames).size !== workbook.SheetNames.length ||
-    workbook.Workbook?.Sheets?.some((sheet) => sheet.Hidden)
+    workbook.Workbook?.Sheets?.some((sheet) => sheet.Hidden !== undefined && sheet.Hidden !== 0)
   )
     return undefined;
   const identities = new Set<string>();
@@ -179,7 +181,7 @@ export function detectIbkrFundingWorkbook(
     if (
       !sheet ||
       !sheet["!ref"] ||
-      sheet["!merges"]?.length ||
+      (sheet["!merges"]?.length ?? 0) > 0 ||
       (sheet["!type"] && sheet["!type"] !== "sheet")
     )
       return undefined;
@@ -254,7 +256,7 @@ export function detectIbkrFundingWorkbook(
       identities.add(field("Account ID"));
     }
   }
-  return references.size && identities.size === 1
+  return references.size > 0 && identities.size === 1
     ? {
         source: "ibkr",
         sourceAccountIdentities: [...identities],

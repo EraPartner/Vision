@@ -13,11 +13,12 @@ import { useLargeDisplay } from '@/hooks/useVisualEffectsTier';
 import { SettingsSection, SettingsGroup, SettingRow, SelectSettingRow } from '../SettingsPrimitives';
 import { cn } from '@/lib/utils';
 import { gainLossPreviewStyle } from './gainLossPreview';
+import type { TranslationKey } from "@/locales/keys";
 
 interface VariantMeta {
     value: ThemeVariant;
-    labelKey: string;
-    descKey: string;
+    labelKey: TranslationKey;
+    descKey: TranslationKey;
 }
 
 const VARIANT_META: VariantMeta[] = [
@@ -63,10 +64,10 @@ export const AppearanceSection = memo(function AppearanceSection() {
     // Labelled sidebar or icon rail (ADR-180): the same remembered choice the
     // sidebar's own collapse button makes.
     const sidebar = useOptionalSidebar();
-    const capped = (appSettings.autoAdaptDisplay ?? true) && largeDisplay;
+    const capped = appSettings.autoAdaptDisplay && largeDisplay;
     const tierInUse: VisualEffectsTier = capped
         ? (sessionTierOverride ?? 'reduced')
-        : (appSettings.visualEffects ?? 'standard');
+        : appSettings.visualEffects;
 
     const handleTierChange = (tier: VisualEffectsTier) => {
         if (capped) {
@@ -145,7 +146,7 @@ export const AppearanceSection = memo(function AppearanceSection() {
                     title={t('settings.appearance.mode')}
                     description={t('settings.appearance.modeHint')}
                     value={mode}
-                    onValueChange={(v) => setMode(v as typeof mode)}
+                    onValueChange={setMode}
                     options={[
                         { value: 'light', label: t('settings.appearance.modes.light') },
                         { value: 'dark', label: t('settings.appearance.modes.dark') },
@@ -196,7 +197,7 @@ export const AppearanceSection = memo(function AppearanceSection() {
                     title={t('settings.appearance.visualEffects')}
                     description={t('settings.appearance.visualEffectsHint')}
                     value={tierInUse}
-                    onValueChange={(v) => handleTierChange(v as VisualEffectsTier)}
+                    onValueChange={handleTierChange}
                     options={[
                         { value: 'reduced', label: t('settings.appearance.visualEffects.reduced') },
                         { value: 'standard', label: t('settings.appearance.visualEffects.standard') },
@@ -218,7 +219,7 @@ export const AppearanceSection = memo(function AppearanceSection() {
                 >
                     <Switch
                         id="auto-adapt-display"
-                        checked={appSettings.autoAdaptDisplay ?? true}
+                        checked={appSettings.autoAdaptDisplay}
                         onCheckedChange={handleAutoAdaptChange}
                     />
                 </SettingRow>
@@ -230,7 +231,7 @@ export const AppearanceSection = memo(function AppearanceSection() {
                 >
                     <Switch
                         id="full-effects"
-                        checked={appSettings.fullEffects ?? false}
+                        checked={appSettings.fullEffects}
                         onCheckedChange={(v) => updateAppSettings({ fullEffects: v })}
                     />
                 </SettingRow>
@@ -241,7 +242,7 @@ export const AppearanceSection = memo(function AppearanceSection() {
                 <SelectSettingRow
                     title={t('settings.appearance.gainLossColors')}
                     description={t('settings.appearance.gainLossColorsHint')}
-                    value={(appSettings.colorblindGainLoss ?? true) ? 'colorblind' : 'classic'}
+                    value={appSettings.colorblindGainLoss ? 'colorblind' : 'classic'}
                     onValueChange={(v) => updateAppSettings({ colorblindGainLoss: v === 'colorblind' })}
                     options={[
                         {

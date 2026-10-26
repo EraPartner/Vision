@@ -5,7 +5,7 @@ import Decimal from "decimal.js";
 
 const scalar = z.union([
   z.string().max(10_000),
-  z.number().finite(),
+  z.number(),
   z.boolean(),
   z.null(),
 ]);
@@ -224,10 +224,15 @@ export function applyScenarioInputs(
   for (const binding of model.joins) {
     const input = model.attachments.find(({ id }) => id === binding.inputId);
     if (!input) continue;
-    // validateScenarioBindings rejected joins on missing result columns.
-    const resultType = inferredColumns.find(
+    const resultColumn = inferredColumns.find(
       ({ id }) => id === binding.resultColumn,
-    )!.type;
+    );
+    // validateScenarioBindings rejected joins on missing result columns.
+    if (!resultColumn)
+      throw new Error(
+        `Analysis invariant broken: result column ${binding.resultColumn} is missing`,
+      );
+    const resultType = resultColumn.type;
     const index = new Map(
       input.rows.flatMap((row): Array<[string, typeof row]> => {
         const key = canonicalJoinKey(row[binding.inputColumn], resultType);
@@ -242,7 +247,7 @@ export function applyScenarioInputs(
       const matched = resultKey === null ? undefined : index.get(resultKey);
       return Object.fromEntries([
         ...Object.entries(row),
-        ...addedColumns.map(({ sourceId, resultId }) => [
+        ...addedColumns.map(({ sourceId, resultId }): [string, unknown] => [
           resultId,
           matched?.[sourceId] ?? null,
         ]),

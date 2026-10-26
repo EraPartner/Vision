@@ -8,6 +8,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { err, ok, settingsWithBaselines } from "@/test/msw/handlers";
 import ImportPage from "@/pages/ImportPage";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -205,7 +206,7 @@ describe("ImportPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("renders the CSV file drop zone", async () => {
+    it("renders the CSV file drop zone", () => {
         renderWithApp(<ImportPage />);
         // The hidden file input is present in the DOM
         const fileInput = document.querySelector(
@@ -460,7 +461,7 @@ describe("ImportPage (integration)", () => {
 
         // Open the bank source selector (first combobox on the page)
         const comboboxes = await screen.findAllByRole("combobox");
-        await user.click(comboboxes[0]!);
+        await user.click(must(comboboxes[0]));
 
         // Select "Custom / Other"
         await user.click(

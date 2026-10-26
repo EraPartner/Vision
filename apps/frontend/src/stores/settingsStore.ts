@@ -267,7 +267,7 @@ export function migrateAppSettings(raw: unknown): AppSettings {
         // Retired with the OpenAI route (ADR-229); not carried forward.
         openAiDefaultModel: _openAiDefaultModel,
         ...rest
-    } = parsed.data as typeof parsed.data & { openAiDefaultModel?: unknown };
+    } = parsed.data;
     const merged: AppSettings = { ...DEFAULT_APP_SETTINGS, ...rest };
     if (aiDefaultModel !== undefined) merged.aiDefaultModel = aiDefaultModel;
     if (aiAnswerDepth !== undefined) merged.aiAnswerDepth = aiAnswerDepth;

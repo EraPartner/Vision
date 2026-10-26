@@ -29,6 +29,7 @@ import { DEFAULT_BELGIAN_TAX_PROFILE } from "@vision/shared-utils/belgian-tax/pr
 import { defaultHousehold } from "@vision/shared-utils/belgian-tax/settings";
 import router from "../../src/routes/belgianTax.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const api = routeAgent(router, { mountPath: "/api/belgian-tax" });
 const path = "/api/belgian-tax/overview";
 const settings = vi.mocked(settingsService);
@@ -63,8 +64,8 @@ describe("Read-only native Tax overview", () => {
       exists: false,
     });
     expect(bodyAt(response, "data", "householdMigrationNeeded")).toBe(false);
-    expect(settings.replace).not.toHaveBeenCalled();
-    expect(settings.replaceMany).not.toHaveBeenCalled();
+    expect(mockOf(settings, "replace")).not.toHaveBeenCalled();
+    expect(mockOf(settings, "replaceMany")).not.toHaveBeenCalled();
   });
 
   it("uses the existing v1 migration, including null defaults and meaningful-data detection", async () => {
@@ -87,7 +88,7 @@ describe("Read-only native Tax overview", () => {
       10994.5175,
       8,
     );
-    expect(settings.replaceMany).not.toHaveBeenCalled();
+    expect(mockOf(settings, "replaceMany")).not.toHaveBeenCalled();
   });
 
   it("prefers a valid v2 household and its historical snapshot over v1 values", async () => {
@@ -136,7 +137,7 @@ describe("Read-only native Tax overview", () => {
       expect(bodyAt(response, "data", "isHistorical")).toBe(true);
       expect(bodyAt(response, "data", "hasSnapshot")).toBe(false);
       expect(typeof bodyAt(response, "data", "calculation", "totalPIT")).toBe("number");
-      expect(settings.replaceMany).not.toHaveBeenCalled();
+      expect(mockOf(settings, "replaceMany")).not.toHaveBeenCalled();
     },
   );
 
@@ -231,7 +232,7 @@ describe("Read-only native Tax overview", () => {
       expected,
     );
     expect(bodyAt(response, "data", "householdMigrationNeeded")).toBe(false);
-    expect(settings.replaceMany).not.toHaveBeenCalled();
+    expect(mockOf(settings, "replaceMany")).not.toHaveBeenCalled();
   });
 
   it.each(["2025abc", "2e3", " 2025", "2025.5", "12025", "-2025"])(
@@ -239,7 +240,7 @@ describe("Read-only native Tax overview", () => {
     async (year) => {
       const response = await api.get(path).query({ year }).expect(400);
       expect(bodyAt(response, "error", "code")).toBe("VALIDATION_ERROR");
-      expect(settings.getAllWithBaselines).not.toHaveBeenCalled();
+      expect(mockOf(settings, "getAllWithBaselines")).not.toHaveBeenCalled();
     },
   );
 });

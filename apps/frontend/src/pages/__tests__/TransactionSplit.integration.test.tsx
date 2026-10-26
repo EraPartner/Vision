@@ -111,7 +111,7 @@ describe("Single transaction split entry points", () => {
                     async ({ request }) => {
                         requests.push(await request.json());
                         saved = true;
-                        return ok({ items: [] });
+                        return ok({ items: [], total: 0 });
                     },
                 ),
             );

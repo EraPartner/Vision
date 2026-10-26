@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mapToStatisticsData } from './useStatistics';
 import { asCategoryId, asRecipientId } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 // ── Fixture builders ──────────────────────────────────────────────────────────
 
@@ -116,7 +117,7 @@ describe('mapToStatisticsData', () => {
       recipientInsights([]),
       recipientByYear({}),
     );
-    const m = result.monthlyData[0]!;
+    const m = must(result.monthlyData[0]);
     expect(m.income).toBe(1000);
     expect(m.spending).toBe(400);
     expect(m.net).toBe(600);
@@ -149,8 +150,8 @@ describe('mapToStatisticsData', () => {
       recipientInsights([]),
       recipientByYear({}),
     );
-    const y2025 = result.yearlyComparison.find((y) => y.year === 2025)!;
-    const y2026 = result.yearlyComparison.find((y) => y.year === 2026)!;
+    const y2025 = must(result.yearlyComparison.find((y) => y.year === 2025));
+    const y2026 = must(result.yearlyComparison.find((y) => y.year === 2026));
     expect(y2025.totalIncome).toBe(1000);
     expect(y2025.totalSpending).toBe(200);
     expect(y2025.transactionCount).toBe(5);
@@ -190,7 +191,7 @@ describe('mapToStatisticsData', () => {
         recipientInsights([]),
         recipientByYear({}),
       );
-      const food = result.categoryPivot.find((c) => c.categoryId === 1)!;
+      const food = must(result.categoryPivot.find((c) => c.categoryId === 1));
       expect(food).toBeDefined();
       expect(food.total).toBe(170);       // 100 + 40 + 30
       expect(food.incomeTotal).toBe(100);
@@ -208,7 +209,7 @@ describe('mapToStatisticsData', () => {
         recipientInsights([]),
         recipientByYear({}),
       );
-      const food = result.categoryPivot.find((c) => c.categoryId === 1)!;
+      const food = must(result.categoryPivot.find((c) => c.categoryId === 1));
       expect(food.incomeMonths['2026-01']).toBe(500); // not 200 (the net)
       expect(food.expenseMonths['2026-01']).toBe(300); // not 0
       expect(food.netMonths['2026-01']).toBe(200);
@@ -225,7 +226,7 @@ describe('mapToStatisticsData', () => {
         recipientInsights([]),
         recipientByYear({}),
       );
-      const food = result.categoryPivot.find((c) => c.categoryId === 1)!;
+      const food = must(result.categoryPivot.find((c) => c.categoryId === 1));
       expect(food.expenseMonths['2026-01']).toBe(40);
       expect(food.expenseMonths['2026-02']).toBe(30);
       expect(food.incomeMonths['2026-01']).toBe(0);
@@ -242,7 +243,7 @@ describe('mapToStatisticsData', () => {
         recipientInsights([]),
         recipientByYear({}),
       );
-      const uncategorized = result.categoryPivot.find((c) => c.categoryId === null)!;
+      const uncategorized = must(result.categoryPivot.find((c) => c.categoryId === null));
       expect(uncategorized).toBeDefined();
       expect(uncategorized.expenseTotal).toBe(50);
     });

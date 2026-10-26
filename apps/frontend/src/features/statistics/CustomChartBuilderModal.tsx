@@ -1,3 +1,4 @@
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { useState, useMemo, useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,8 +59,15 @@ import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { CustomChart } from "./CustomChart";
 import { getChartColor } from "@/components/charts/palette";
 import type { CategoryId, RecipientId, TagId } from "@vision/types/brands";
+import type { TranslationKey } from "@/locales/keys";
 
-type ChartCombo = { type: ChartType; variant: ChartVariant; label: string };
+const isTimeBucket = enumGuard<TimeBucket>({ monthly: true, yearly: true });
+
+type ChartCombo = {
+    type: ChartType;
+    variant: ChartVariant;
+    label: TranslationKey;
+};
 
 const CHART_COMBOS: ChartCombo[] = [
     { type: "line", variant: "default", label: "customChart.line" },
@@ -234,7 +242,7 @@ export function CustomChartBuilderModal({
             state.allRecipients ||
             state.allTags);
 
-    const handleSave = (e: React.FormEvent) => {
+    const handleSave = (e: React.SubmitEvent) => {
         e.preventDefault();
         if (!canSave || createChart.isPending || updateChart.isPending) return;
         const payload = {
@@ -352,9 +360,10 @@ export function CustomChartBuilderModal({
                                     label={t("customChart.timeBucket")}
                                     wrapperClassName="space-y-1"
                                     value={state.timeBucket}
-                                    onValueChange={(v) =>
-                                        update("timeBucket", v as TimeBucket)
-                                    }
+                                    onValueChange={onGuarded(
+                                        isTimeBucket,
+                                        (bucket) => update("timeBucket", bucket),
+                                    )}
                                     className="w-full"
                                 >
                                     <SegmentedControlItem value="monthly">

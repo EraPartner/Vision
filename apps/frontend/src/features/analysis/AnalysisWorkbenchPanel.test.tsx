@@ -15,6 +15,7 @@ import {
     AnalysisWorkbenchPanel,
     type AnalysisWorkbenchConfig,
 } from "./AnalysisWorkbenchPanel";
+import { must } from "@/test/must";
 vi.mock("@/stores/hydration/LanguageHydration", () => ({
     useLanguage: () => ({ t: (key: string) => key }),
 }));
@@ -403,9 +404,9 @@ it("queues unpivot with a new value column name and retains the pivot source sel
     );
     fireEvent.click(
         within(
-            screen.getAllByRole("group", {
+            must(screen.getAllByRole("group", {
                 name: "analysis.ext.workbench.values",
-            })[0]!,
+            })[0]),
         ).getByRole("checkbox", { name: "amount" }),
     );
     const valueName = screen.getByRole("textbox", {

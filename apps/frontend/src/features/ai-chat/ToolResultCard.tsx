@@ -19,10 +19,13 @@ import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { numberFormatToLocale } from "@/utils/currency";
 import type { ToolRenderAs, ToolResultPayload } from "@/types/aiChat";
+import type { TranslationKey } from "@/locales/keys";
 
 const ToolResultChart = lazy(() => import("./ToolResultChart"));
 
-function toolErrorTranslationKey(error: ToolResultPayload["error"]): string {
+function toolErrorTranslationKey(
+    error: ToolResultPayload["error"],
+): TranslationKey {
     if (error == null || typeof error === "string") return "aiChat.toolFailed";
     const detail = error;
     if (detail.code === "VALIDATION_ERROR") {
@@ -55,7 +58,7 @@ function formatCell(value: unknown, locale: string): string {
     try {
         return JSON.stringify(value);
     } catch {
-        return String(value);
+        return Object.prototype.toString.call(value);
     }
 }
 
@@ -152,7 +155,7 @@ function TableView({
                     {rows.map((row, idx) => (
                         <TableRow
                             key={`${idx}-${cols
-                                .map((c) => String(row[c] ?? ""))
+                                .map((c) => formatCell(row[c], locale))
                                 .join("|")
                                 .slice(0, 80)}`}
                         >

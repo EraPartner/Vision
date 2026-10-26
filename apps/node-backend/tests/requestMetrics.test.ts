@@ -1,3 +1,4 @@
+import { must } from "./helpers/must.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { requestMetrics, getMetrics, __resetMetrics as resetMetrics } from '../src/middleware/requestMetrics.ts';
 import type { ExpressRequest, ExpressResponse } from '../src/types/express.ts';
@@ -60,7 +61,7 @@ describe('requestMetrics middleware', () => {
     const { req, res, fire } = makeReqRes({ baseUrl: '/api/users', routePath: '/:id' });
     requestMetrics(req, res, () => {});
     fire();
-    expect(getMetrics()[0]!.path).toBe('/api/users/:id');
+    expect(must(getMetrics()[0], "getMetrics()[0]").path).toBe('/api/users/:id');
   });
 
   it('counts 4xx and 5xx as errors', () => {
@@ -70,9 +71,9 @@ describe('requestMetrics middleware', () => {
       fire();
     }
     const m = getMetrics();
-    expect(m[0]!.count).toBe(4);
-    expect(m[0]!.errors).toBe(4);
-    expect(m[0]!.error_rate).toBe(100);
+    expect(must(m[0], "m[0]").count).toBe(4);
+    expect(must(m[0], "m[0]").errors).toBe(4);
+    expect(must(m[0], "m[0]").error_rate).toBe(100);
   });
 
   it('does not count 2xx/3xx as errors', () => {
@@ -82,8 +83,8 @@ describe('requestMetrics middleware', () => {
       fire();
     }
     const m = getMetrics();
-    expect(m[0]!.errors).toBe(0);
-    expect(m[0]!.error_rate).toBe(0);
+    expect(must(m[0], "m[0]").errors).toBe(0);
+    expect(must(m[0], "m[0]").error_rate).toBe(0);
   });
 
   it('rounds error_rate to two decimals', () => {
@@ -95,7 +96,7 @@ describe('requestMetrics middleware', () => {
       requestMetrics(req, res, () => {});
       fire();
     });
-    expect(getMetrics()[0]!.error_rate).toBe(33.33);
+    expect(must(getMetrics()[0], "getMetrics()[0]").error_rate).toBe(33.33);
   });
 
   it('aggregates separate routes into separate entries sorted by count desc', () => {
@@ -110,10 +111,10 @@ describe('requestMetrics middleware', () => {
 
     const m = getMetrics();
     expect(m).toHaveLength(2);
-    expect(m[0]!.path).toBe('/popular');
-    expect(m[0]!.count).toBe(5);
-    expect(m[1]!.path).toBe('/rare');
-    expect(m[1]!.count).toBe(1);
+    expect(must(m[0], "m[0]").path).toBe('/popular');
+    expect(must(m[0], "m[0]").count).toBe(5);
+    expect(must(m[1], "m[1]").path).toBe('/rare');
+    expect(must(m[1], "m[1]").count).toBe(1);
   });
 
   it('collapses unmatched routes (no req.route) into a single bucket per method', () => {
@@ -124,8 +125,8 @@ describe('requestMetrics middleware', () => {
     }
     const m = getMetrics();
     expect(m).toHaveLength(1);
-    expect(m[0]!.route).toBe('GET <unmatched>');
-    expect(m[0]!.count).toBe(3);
+    expect(must(m[0], "m[0]").route).toBe('GET <unmatched>');
+    expect(must(m[0], "m[0]").count).toBe(3);
   });
 
   it('separates unmatched buckets by method', () => {
@@ -136,8 +137,8 @@ describe('requestMetrics middleware', () => {
     }
     const m = getMetrics();
     expect(m).toHaveLength(2);
-    expect(m.find((r) => r.method === 'GET')!.count).toBe(2);
-    expect(m.find((r) => r.method === 'POST')!.count).toBe(1);
+    expect(must(m.find((r) => r.method === 'GET'), "m.find((r) => r.method === 'GET')").count).toBe(2);
+    expect(must(m.find((r) => r.method === 'POST'), "m.find((r) => r.method === 'POST')").count).toBe(1);
   });
 
   it('reports null percentiles when no latencies fall in the window', () => {
@@ -158,7 +159,7 @@ describe('requestMetrics middleware', () => {
       vi.setSystemTime(now);
       fire();
     }
-    const m = getMetrics()[0]!;
+    const m = must(getMetrics()[0], "getMetrics()[0]");
     expect(m.count).toBe(10);
     expect(m.p50_ms).toBe(50);
     expect(m.p95_ms).toBe(100);
@@ -182,7 +183,7 @@ describe('requestMetrics middleware', () => {
     r2.fire();
 
     const m = getMetrics();
-    expect(m[0]!.count).toBe(1); // only the recent one survives
+    expect(must(m[0], "m[0]").count).toBe(1); // only the recent one survives
   });
 
   it('resetMetrics clears all stored data', () => {

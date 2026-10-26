@@ -16,6 +16,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { must } from "../helpers/must.ts";
 
 // The seam is always imported directly ('./setup/db.ts' / '../setup/db.ts'),
 // so a source-level match is enough to tell a DB-backed module from one that
@@ -85,7 +86,7 @@ export function collectDbSkips(
     let moduleSkipped = 0;
     try {
       // A module whose children cannot be walked throws here and counts as 0.
-      for (const _test of testModule.children!.allTests('skipped')) moduleSkipped += 1;
+      for (const _test of must(testModule.children, "testModule.children").allTests('skipped')) moduleSkipped += 1;
     } catch {
       moduleSkipped = 0;
     }
@@ -137,7 +138,7 @@ export function createDbSkipBannerReporter(
   const write = options.write ?? ((text: string) => process.stdout.write(text));
   const color =
     options.color ??
-    (!env.NO_COLOR && (Boolean(env.FORCE_COLOR) || Boolean(process.stdout.isTTY)));
+    (!env.NO_COLOR && (Boolean(env.FORCE_COLOR) || process.stdout.isTTY));
 
   return {
     isDbSkipBanner: true,

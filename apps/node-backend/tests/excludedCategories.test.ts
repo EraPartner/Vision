@@ -17,7 +17,6 @@ vi.mock('../src/config/logger.ts', () => ({
 }));
 
 import { query as rawQuery } from '../src/database/connection.ts';
-import infoRepository from '../src/repositories/infoRepository.ts';
 
 // The fake returns plain (non-promise) result objects, which `await` accepts.
 const query = rawQuery as unknown as Mock<(sql: string) => unknown>;

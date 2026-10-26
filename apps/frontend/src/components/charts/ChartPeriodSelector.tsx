@@ -34,7 +34,10 @@ export function ChartPeriodSelector<P extends string>({
     return (
         <SegmentedControl
             value={value}
-            onValueChange={(next) => onChange(next as P)}
+            onValueChange={(next) => {
+                const period = periods.find((candidate) => candidate === next);
+                if (period !== undefined) onChange(period);
+            }}
             size={size === "sm" ? "sm" : "default"}
             aria-label={ariaLabel}
             aria-labelledby={ariaLabelledBy}

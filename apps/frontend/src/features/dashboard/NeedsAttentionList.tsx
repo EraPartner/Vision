@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import { CheckCircle2, Import, ReceiptText, Tag, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -98,7 +98,7 @@ export function NeedsAttentionList({ currency }: NeedsAttentionListProps) {
                 })}
                 trailing={t("home.attention.review")}
             >
-                <Link to="/transactions?uncategorised=true" />
+                <AppLink to="/transactions?uncategorised=true" />
             </ListRow>,
         );
     }
@@ -119,7 +119,7 @@ export function NeedsAttentionList({ currency }: NeedsAttentionListProps) {
                     .join(", ")}
                 trailing={t("home.attention.confirm")}
             >
-                <Link to="/planned" />
+                <AppLink to="/planned" />
             </ListRow>,
         );
     }
@@ -162,7 +162,7 @@ export function NeedsAttentionList({ currency }: NeedsAttentionListProps) {
                     </Button>
                 }
             >
-                <Link to="/import" />
+                <AppLink to="/import" />
             </ListRow>,
         );
     }

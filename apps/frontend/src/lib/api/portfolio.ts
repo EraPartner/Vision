@@ -46,7 +46,7 @@ function verifiedPortfolioTransaction(
         error.name = "PortfolioResponseError";
         throw error;
     }
-    const raw = tx as PortfolioTransaction & { transaction_date?: string };
+    const raw = tx as { date?: string; transaction_date?: string };
     return {
         ...tx,
         date: raw.date ?? raw.transaction_date ?? "",
@@ -131,7 +131,7 @@ export function updateInvestment(
 }
 
 export async function deleteInvestment(id: InvestmentId): Promise<void> {
-    await apiRequest<void>(`/api/investments/${id}`, { method: "DELETE" });
+    await apiRequest(`/api/investments/${id}`, { method: "DELETE" });
 }
 
 export function getInvestmentPriceHistory(
@@ -227,7 +227,7 @@ export async function updatePortfolioTransaction(
 }
 
 export async function deletePortfolioTransaction(txnId: PortfolioTransactionId): Promise<void> {
-    await apiRequest<void>(`/api/investments/transactions/${txnId}`, {
+    await apiRequest(`/api/investments/transactions/${txnId}`, {
         method: "DELETE",
     });
 }

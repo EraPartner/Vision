@@ -36,6 +36,7 @@ import {
   portfolioTransactionDbRow,
   portfolioUnitEventDbRow,
 } from "./helpers/portfolioPgRows.ts";
+import { must } from "./helpers/must.ts";
 
 /** `query` as these tests drive it: SQL text in, a bare `{ rows }` result out. */
 const query = vi.mocked(rawQuery) as unknown as Mock<
@@ -298,7 +299,7 @@ describe("portfolioTransactionService.remove", () => {
         "change would create or worsen an oversold partition at Broker A",
     });
     expect(
-      query.mock.calls.some(([sql]) => /^delete/i.test(String(sql))),
+      query.mock.calls.some(([sql]) => /^delete/i.test(sql)),
     ).toBe(false);
   });
 
@@ -389,7 +390,7 @@ describe("portfolioTransactionService.remove", () => {
     });
     expect(
       query.mock.calls.some(([sql]) =>
-        /^delete from "?portfolio_transactions/i.test(String(sql)),
+        /^delete from "?portfolio_transactions/i.test(sql),
       ),
     ).toBe(false);
   });
@@ -426,7 +427,7 @@ describe("portfolioTransactionService.remove", () => {
 
     expect(
       query.mock.calls.some(([sql]) =>
-        /^delete from "?portfolio_transactions/i.test(String(sql)),
+        /^delete from "?portfolio_transactions/i.test(sql),
       ),
     ).toBe(false);
   });
@@ -731,7 +732,7 @@ describe("portfolioTransactionRepository.getAllByInvestmentIds", () => {
       investmentIds: [asInvestmentId(5), "12abc"],
     });
 
-    expect(query.mock.calls[0]![1]![0]).toEqual([5]);
+    expect(must(must(query.mock.calls[0], "query.mock.calls[0]")[1], "must result")[0]).toEqual([5]);
   });
 
 });

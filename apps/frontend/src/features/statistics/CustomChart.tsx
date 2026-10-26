@@ -1,3 +1,4 @@
+import { axisDate } from "@/components/charts/axisValue";
 import { useMemo, useRef } from "react";
 import {
     Card,
@@ -329,7 +330,7 @@ export function CustomChart({
     const yTick = formatAxisCompact;
     const xTickFmt = (v: unknown) =>
         formatDate(
-            v as Date,
+            axisDate(v),
             bucket === "yearly"
                 ? CHART_DATE_PATTERNS.yearTick
                 : CHART_DATE_PATTERNS.monthTick,

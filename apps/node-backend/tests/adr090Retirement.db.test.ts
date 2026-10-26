@@ -6,6 +6,7 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.ts";
+import { must } from "./helpers/must.ts";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
@@ -21,7 +22,7 @@ describeDb("ADR-090 transaction schema retirement", () => {
   });
 
   it("removes the retired link and narrows transfer_source", async () => {
-    const pool = getTestPool()!;
+    const pool = must(getTestPool(), "getTestPool()");
     const column = await pool.query(
       `SELECT 1
          FROM information_schema.columns
@@ -31,14 +32,14 @@ describeDb("ADR-090 transaction schema retirement", () => {
     );
     expect(column.rows).toHaveLength(0);
 
-    const constraint = await pool.query(
+    const constraint = await pool.query<{ definition: string }>(
       `SELECT pg_get_constraintdef(oid) AS definition
          FROM pg_constraint
         WHERE conrelid = 'public.transactions'::regclass
           AND conname = 'chk_transactions_transfer_source'`,
     );
     expect(constraint.rows).toHaveLength(1);
-    const definition = constraint.rows[0].definition;
+    const definition = must(constraint.rows[0], "row").definition;
     expect(definition).toContain("'auto'::text");
     expect(definition).toContain("'manual'::text");
     expect(definition).toContain("'opening'::text");

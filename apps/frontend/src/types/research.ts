@@ -43,7 +43,8 @@ export interface ResearchQuote {
     name: string;
     price: number;
     change: number;
-    changePercent: number;
+    /** Provider-sourced: Yahoo omits it for some instruments (MarketQuoteSchema). */
+    changePercent?: number | null | undefined;
     currency: string;
     exchange: string;
     type: string;

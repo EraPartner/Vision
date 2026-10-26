@@ -147,11 +147,10 @@ export default function RecipientsPage() {
             setLoadMoreFailed(false);
             setAllItems(initialData.items);
             setHasInitialItems(true);
-            setTotalItems(initialData.total ?? initialData.items.length);
+            setTotalItems(initialData.total);
             offsetRef.current = initialData.items.length;
             hasMoreRef.current =
-                initialData.items.length <
-                (initialData.total ?? initialData.items.length);
+                initialData.items.length < initialData.total;
         }
     }, [initialData]);
 
@@ -181,8 +180,8 @@ export default function RecipientsPage() {
             });
             offsetRef.current += result.items.length;
             hasMoreRef.current =
-                offsetRef.current < (result.total ?? result.items.length);
-            setTotalItems(result.total ?? result.items.length);
+                offsetRef.current < result.total;
+            setTotalItems(result.total);
         } catch (err) {
             if (generationRef.current === gen) setLoadMoreFailed(true);
             logger.error("Failed to load more recipients:", err);
@@ -478,7 +477,7 @@ export default function RecipientsPage() {
                         <Skeleton className="h-6 w-44" />
                     </CardHeader>
                     <CardContent className="space-y-2">
-                        {[...Array(8)].map((_, i) => (
+                        {Array.from({ length: 8 }).map((_, i) => (
                             <Skeleton key={i} className="h-12 w-full" />
                         ))}
                     </CardContent>
@@ -520,7 +519,7 @@ export default function RecipientsPage() {
                     <DropdownMenuCheckboxItem
                         checked={showAll}
                         onCheckedChange={(checked) =>
-                            setShowAll(checked === true)
+                            setShowAll(checked)
                         }
                     >
                         {t("common.includeInactive")}
@@ -528,7 +527,7 @@ export default function RecipientsPage() {
                     <DropdownMenuCheckboxItem
                         checked={showUncategorized}
                         onCheckedChange={(checked) =>
-                            setShowUncategorized(checked === true)
+                            setShowUncategorized(checked)
                         }
                     >
                         {t("recipients.uncategorizedOnly")}
@@ -707,7 +706,7 @@ export default function RecipientsPage() {
 
                 {patternsDialogRecipient && (
                     <RecipientPatternsDialog
-                        open={patternsDialogRecipient != null}
+                        open
                         onOpenChange={(o) => {
                             if (!o) setPatternsDialogRecipient(null);
                         }}

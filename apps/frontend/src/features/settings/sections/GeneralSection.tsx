@@ -1,3 +1,4 @@
+import { selectRow } from "../selectRow";
 import { memo } from "react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -14,6 +15,7 @@ import {
 } from "@/utils/currency";
 import type { AppDateFormat } from "@/stores/settingsStore";
 import { asCurrencyCode } from "@vision/types/brands";
+import type { TranslationKey } from "@/locales/keys";
 
 const DATE_FORMATS = [
     { value: "DD/MM/YYYY", labelKey: "settings.dateFormat.ddmmyyyy" },
@@ -21,14 +23,14 @@ const DATE_FORMATS = [
     { value: "YYYY-MM-DD", labelKey: "settings.dateFormat.yyyymmdd" },
     { value: "DD.MM.YYYY", labelKey: "settings.dateFormat.ddmmyyyy2" },
     { value: "DD-MM-YYYY", labelKey: "settings.dateFormat.ddmmyyyy3" },
-] satisfies ReadonlyArray<{ value: AppDateFormat; labelKey: string }>;
+] satisfies ReadonlyArray<{ value: AppDateFormat; labelKey: TranslationKey }>;
 
 const NUMBER_FORMATS = [
     { value: "eu", labelKey: "settings.numberFormat.eu" },
     { value: "us", labelKey: "settings.numberFormat.us" },
     { value: "ch", labelKey: "settings.numberFormat.ch" },
     { value: "in", labelKey: "settings.numberFormat.in" },
-] satisfies ReadonlyArray<{ value: NumberFormat; labelKey: string }>;
+] satisfies ReadonlyArray<{ value: NumberFormat; labelKey: TranslationKey }>;
 
 export const GeneralSection = memo(function GeneralSection() {
     const { t } = useLanguage();
@@ -85,27 +87,25 @@ export const GeneralSection = memo(function GeneralSection() {
     ];
 
     const localeRows: SelectRowConfig[] = [
-        {
+        selectRow({
             title: t("settings.general.language"),
             description: t("settings.general.languageHint"),
-            value: appSettings.language ?? "en",
-            onValueChange: (v) =>
-                updateAppSettings({ language: v as "en" | "nl" }),
+            value: appSettings.language,
+            onValueChange: (language) => updateAppSettings({ language }),
             options: [
                 { value: "en", label: t("settings.general.lang.en") },
                 { value: "nl", label: t("settings.general.lang.nl") },
             ],
-        },
-        {
+        }),
+        selectRow({
             title: t("settings.general.startOfWeek"),
             value: appSettings.startOfWeek,
-            onValueChange: (v) =>
-                updateAppSettings({ startOfWeek: v as "monday" | "sunday" }),
+            onValueChange: (startOfWeek) => updateAppSettings({ startOfWeek }),
             options: [
                 { value: "monday", label: t("settings.general.monday") },
                 { value: "sunday", label: t("settings.general.sunday") },
             ],
-        },
+        }),
         {
             title: t("settings.general.pageSize"),
             description: t("settings.general.pageSizeHint"),

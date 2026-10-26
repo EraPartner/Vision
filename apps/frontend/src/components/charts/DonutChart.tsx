@@ -13,8 +13,9 @@ import { durations, easings } from "@/lib/motion";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { PieDatum } from "./PieChart";
 import { useChartKeyboardNav } from "./keyboardNav";
+import type { AppPath } from "@/lib/routes";
 
-type DonutDatum = PieDatum & { readonly to?: string };
+type DonutDatum = PieDatum & { readonly to?: AppPath };
 
 export interface DonutChartProps {
     readonly data: ReadonlyArray<DonutDatum>;
@@ -24,7 +25,7 @@ export interface DonutChartProps {
     readonly center?: ReactNode | undefined;
     readonly tooltipValueFormat?: ((value: number) => string) | undefined;
     readonly ariaLabel?: string | undefined;
-    readonly onNavigate?: ((to: string) => void) | undefined;
+    readonly onNavigate?: ((to: AppPath) => void) | undefined;
 }
 
 export function DonutChart(props: DonutChartProps) {
@@ -147,10 +148,11 @@ function Inner({
                                         }}
                                     />
                                 );
-                                return arc.data.to ? (
+                                const to = arc.data.to;
+                                return to ? (
                                     <a
                                         key={`arc-${i}`}
-                                        href={arc.data.to}
+                                        href={to}
                                         aria-label={`${arc.data.name}: ${formatValue(arc.data.value)}`}
                                         onClick={(event) => {
                                             if (
@@ -162,7 +164,7 @@ function Inner({
                                                 onNavigate
                                             ) {
                                                 event.preventDefault();
-                                                onNavigate(arc.data.to!);
+                                                onNavigate(to);
                                             }
                                         }}
                                     >
@@ -216,7 +218,7 @@ function Inner({
                                         className="inline-block h-2 w-2 shrink-0 rounded-full"
                                         style={{
                                             backgroundColor:
-                                                hover.color ?? undefined,
+                                                hover.color,
                                         }}
                                     />
                                     <span className="truncate">

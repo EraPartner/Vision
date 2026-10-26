@@ -1,7 +1,9 @@
+import { enumGuard, listGuard } from "@/lib/enumGuard";
+import { asPortfolioImportBatchId } from "@/lib/routes";
 import { CloudUpload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { Link } from "react-router";
+import { AppLink } from "@/lib/appNavigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +51,9 @@ import { portfolioImportPresetConfig } from "./portfolioImportPresets";
 import { PortfolioImportHistory } from "./PortfolioImportHistory";
 import { asAccountId } from "@vision/types/brands";
 import type { AccountId } from "@vision/types/brands";
+import type { TranslationKey } from "@/locales/keys";
+import type { TranslationKeySuffix } from "@/types/i18n";
+import { translateDynamic } from "@/lib/translateDynamic";
 
 const STORAGE_KEY = "vision.portfolio-import.latest-session.v1";
 const SETTINGS_STORAGE_KEY =
@@ -183,8 +188,8 @@ function readSettings(statements: Statement[]) {
             JSON.stringify(parsed.data.batchIds) ===
                 JSON.stringify(
                     statements
-                        .map((item) => item.batchId)
-                        .sort((a, b) => a! - b!),
+                        .map((item) => item.batchId ?? Number.NaN)
+                        .sort((a, b) => a - b),
                 )
         )
             return parsed.data;
@@ -194,7 +199,7 @@ function readSettings(statements: Statement[]) {
     return undefined;
 }
 
-const sourceLabels = {
+const sourceLabels: Record<DetectedPortfolioImport["source"], TranslationKey> = {
     ibkr: "portfolioImport.ibkrParser",
     kinesis: "portfolioImport.kinesisParser",
     nexo: "portfolioImport.nexoParser",
@@ -202,7 +207,7 @@ const sourceLabels = {
     saxo: "portfolioImport.saxoParser",
 };
 /** The parser label of a detected statement; IBKR has two exports. */
-const detectedLabel = (detected: DetectedPortfolioImport) =>
+const detectedLabel = (detected: DetectedPortfolioImport): TranslationKey =>
     detected.presetKey === "ibkr_funding_history"
         ? "portfolioImport.ibkrFundingParser"
         : sourceLabels[detected.source];
@@ -218,7 +223,16 @@ const actions = [
     "settled",
     "blocked",
     "policy_required",
-];
+] as const;
+const isImportAction = listGuard(actions);
+const isReconciliationPolicy = enumGuard<PortfolioReconciliationPolicy>({
+    preserve_existing: true,
+    prefer_source: true,
+});
+const isSessionPolicy = (
+    value: string,
+): value is "auto" | PortfolioReconciliationPolicy =>
+    value === "auto" || isReconciliationPolicy(value);
 const fields = [
     "date",
     "type",
@@ -231,8 +245,11 @@ const fields = [
     "fx_rate_to_eur",
     "dividend_amount_convention",
     "income_recognition_role",
-];
-const blockerKeys: Record<string, string> = {
+] as const;
+const blockerKeys: Record<
+    string,
+    TranslationKeySuffix<"portfolioImport.session.blockers.">
+> = {
     incomplete_source: "incomplete",
     invalid_source_values: "invalid",
     source_identity_conflict: "identity",
@@ -361,8 +378,11 @@ export function PortfolioImportSession({ accounts }: Props) {
         }
     }, [accounts, statements, updateStatements, invalidate]);
     const ids = statements
-        .filter((item) => item.status === "staged")
-        .map((item) => item.batchId!)
+        .flatMap((item) =>
+            item.status === "staged" && item.batchId !== undefined
+                ? [item.batchId]
+                : [],
+        )
         .sort((a, b) => a - b);
     const routingKey = sourceRoutingKey(statements);
     const scopeFor = (choices: PortfolioRowChoice[]) => ({
@@ -374,15 +394,18 @@ export function PortfolioImportSession({ accounts }: Props) {
         )
             ? {
                   batchPolicies: statements
-                      .filter(
-                          (item) =>
-                              item.status === "staged" &&
-                              item.adoptPolicy !== undefined,
+                      .flatMap((item) =>
+                          item.status === "staged" &&
+                          item.batchId !== undefined &&
+                          item.adoptPolicy !== undefined
+                              ? [
+                                    {
+                                        batchId: item.batchId,
+                                        adoptPolicy: item.adoptPolicy,
+                                    },
+                                ]
+                              : [],
                       )
-                      .map((item) => ({
-                          batchId: item.batchId!,
-                          adoptPolicy: item.adoptPolicy!,
-                      }))
                       .sort((left, right) => left.batchId - right.batchId),
               }
             : {}),
@@ -444,7 +467,7 @@ export function PortfolioImportSession({ accounts }: Props) {
         review.plan.blockers.length === 0 &&
         review.plan.actions.every(
             (action) =>
-                actions.includes(action.action) &&
+                isImportAction(action.action) &&
                 !["blocked", "policy_required"].includes(action.action),
         );
 
@@ -469,7 +492,9 @@ export function PortfolioImportSession({ accounts }: Props) {
             ...entries,
         ]);
         for (const entry of entries) {
-            void detectPortfolioImportFile(entry.file!)
+            const entryFile = entry.file;
+            if (entryFile === undefined) continue;
+            void detectPortfolioImportFile(entryFile)
                 .then((detected) => {
                     updateStatements((previous) =>
                         previous.map((item) =>
@@ -565,8 +590,8 @@ export function PortfolioImportSession({ accounts }: Props) {
                 item.id === id
                     ? {
                           ...item,
-                          adoptPolicy: value
-                              ? (value as PortfolioReconciliationPolicy)
+                          adoptPolicy: isReconciliationPolicy(value)
+                              ? value
                               : undefined,
                       }
                     : item,
@@ -621,10 +646,16 @@ export function PortfolioImportSession({ accounts }: Props) {
                 ),
             );
             try {
+                const { detected, file } = item;
+                if (!detected || !file)
+                    throw new Error("Statement is not ready to stage");
+                const preset = portfolioImportPresetConfig(
+                    detected.presetKey ?? detected.source,
+                );
+                if (!preset)
+                    throw new Error("Statement has no import preset");
                 const config = {
-                    ...portfolioImportPresetConfig(
-                        item.detected!.presetKey ?? item.detected!.source,
-                    )!,
+                    ...preset,
                     accountId: item.accountId,
                     includedSymbols: item.includedSymbols,
                     transferDestinationAccountId:
@@ -635,7 +666,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                         : {}),
                 };
                 const pending = importPortfolioCSVWithProgress(
-                    item.file!,
+                    file,
                     config,
                     config.format ?? "portfolio_generic",
                     () => {},
@@ -803,9 +834,12 @@ export function PortfolioImportSession({ accounts }: Props) {
         value: string | number | null | undefined,
     ) =>
         field === "dividend_amount_convention" && value != null
-            ? t(`portfolioImport.session.convention.${value}`)
+            ? translateDynamic(
+                  t,
+                  `portfolioImport.session.convention.${value}`,
+              )
             : field === "income_recognition_role" && value != null
-              ? t(`portfolio.incomeRole.${value}`)
+              ? translateDynamic(t, `portfolio.incomeRole.${value}`)
               : String(value ?? "—");
     return (
         <Card>
@@ -1107,15 +1141,15 @@ export function PortfolioImportSession({ accounts }: Props) {
                                 )}
                                 {item.batchId !== undefined && (
                                     <p className="type-footnote text-label-secondary">
-                                        <Link
+                                        <AppLink
                                             className="underline"
-                                            to={`/portfolio/import/${item.batchId}/review`}
+                                            to={`/portfolio/import/${asPortfolioImportBatchId(item.batchId)}/review`}
                                         >
                                             {t(
                                                 "portfolioImport.session.batch",
                                                 { id: item.batchId },
                                             )}
-                                        </Link>
+                                        </AppLink>
                                         {item.rows !== undefined &&
                                             ` · ${t("portfolioImport.session.rows", { n: item.rows, skipped: item.skipped ?? 0, errors: item.sourceErrors ?? 0 })}`}
                                     </p>
@@ -1128,15 +1162,15 @@ export function PortfolioImportSession({ accounts }: Props) {
                                         {t(
                                             "portfolioImport.session.previousPending",
                                         )}{" "}
-                                        <Link
+                                        <AppLink
                                             className="underline"
-                                            to={`/portfolio/import/${batchId}/review`}
+                                            to={`/portfolio/import/${asPortfolioImportBatchId(batchId)}/review`}
                                         >
                                             {t(
                                                 "portfolioImport.session.batch",
                                                 { id: batchId },
                                             )}
-                                        </Link>
+                                        </AppLink>
                                     </p>
                                 ))}
                                 {item.error && (
@@ -1159,7 +1193,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                         value={policy}
                         onValueChange={(value) => {
                             invalidate();
-                            setPolicy(value as typeof policy);
+                            if (isSessionPolicy(value)) setPolicy(value);
                         }}
                     >
                         <SelectTrigger
@@ -1311,13 +1345,17 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                                     operation !==
                                                                     "idle"
                                                                 }
-                                                                onClick={() =>
-                                                                    choose(
-                                                                        blocker.batchId,
-                                                                        blocker.rowId!,
-                                                                        "keep_both",
+                                                                onClick={() => {
+                                                                    if (
+                                                                        blocker.rowId !==
+                                                                        undefined
                                                                     )
-                                                                }
+                                                                        choose(
+                                                                            blocker.batchId,
+                                                                            blocker.rowId,
+                                                                            "keep_both",
+                                                                        );
+                                                                }}
                                                             >
                                                                 {t(
                                                                     "portfolioImport.session.choice.keepBoth",
@@ -1338,13 +1376,17 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                                         operation !==
                                                                         "idle"
                                                                     }
-                                                                    onClick={() =>
-                                                                        choose(
-                                                                            blocker.batchId,
-                                                                            blocker.rowId!,
-                                                                            "same_transaction",
+                                                                    onClick={() => {
+                                                                        if (
+                                                                            blocker.rowId !==
+                                                                            undefined
                                                                         )
-                                                                    }
+                                                                            choose(
+                                                                                blocker.batchId,
+                                                                                blocker.rowId,
+                                                                                "same_transaction",
+                                                                            );
+                                                                    }}
                                                                 >
                                                                     {t(
                                                                         "portfolioImport.session.choice.sameTransaction",
@@ -1380,7 +1422,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                 )}{" "}
                                                 ·{" "}
                                                 {t(
-                                                    `portfolioImport.session.actions.${actions.includes(action.action) ? action.action : "other"}`,
+                                                    `portfolioImport.session.actions.${isImportAction(action.action) ? action.action : "other"}`,
                                                 )}
                                             </p>
                                             {action.existingTransactionId !== undefined && (

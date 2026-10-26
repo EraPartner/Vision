@@ -41,6 +41,7 @@ import {
 } from "../../src/services/info/cache.ts";
 import type { AggregationEnvelope } from "../../src/services/calculations/aggregation/_envelope.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 /** The mocked repository spies; fixtures below are partial row shapes. */
 const repo = infoRepository as unknown as Record<
   | "getMonthlyFinancialSummary"
@@ -188,7 +189,7 @@ describe("computeCategoryBreakdown", () => {
   it("returns mv-sourced envelope", async () => {
     repo.getCategoryBreakdown.mockResolvedValue([{ id: 1 }]);
     const env = await computeCategoryBreakdown({ targetCurrency: "EUR" });
-    expect(infoRepository.getCategoryBreakdown).toHaveBeenCalledWith(
+    expect(mockOf(infoRepository, "getCategoryBreakdown")).toHaveBeenCalledWith(
       "EUR",
       undefined,
       {},
@@ -210,7 +211,7 @@ describe("computeCategoryBreakdown", () => {
       targetCurrency: "EUR",
       ancestorCategoryId: 12,
     });
-    expect(infoRepository.getCategoryBreakdown).toHaveBeenCalledWith(
+    expect(mockOf(infoRepository, "getCategoryBreakdown")).toHaveBeenCalledWith(
       "EUR",
       12,
       {},
@@ -229,7 +230,7 @@ describe("computeRecipientInsights", () => {
       top_recipients: [],
     });
     const env = await computeRecipientInsights({ targetCurrency: "EUR" });
-    expect(infoRepository.getRecipientInsights).toHaveBeenCalledWith("EUR", {
+    expect(mockOf(infoRepository, "getRecipientInsights")).toHaveBeenCalledWith("EUR", {
       excludedCategoryIds: [],
       excludedRecipientIds: [],
       startDate: undefined,
@@ -248,7 +249,7 @@ describe("computeRecipientInsights", () => {
       startDate: "2024-10-01",
       endDate: "2026-09-07",
     });
-    expect(infoRepository.getRecipientInsights).toHaveBeenCalledWith("USD", {
+    expect(mockOf(infoRepository, "getRecipientInsights")).toHaveBeenCalledWith("USD", {
       excludedCategoryIds: [],
       excludedRecipientIds: [],
       startDate: "2024-10-01",
@@ -323,7 +324,7 @@ describe("computeBankBalances", () => {
       { account: "A", balance: 100 },
     ]);
     const env = await computeBankBalances({ targetCurrency: "EUR" });
-    expect(infoRepository.getBankBalances).toHaveBeenCalledWith("EUR");
+    expect(mockOf(infoRepository, "getBankBalances")).toHaveBeenCalledWith("EUR");
     expectEnvelope(env, { source: "live" });
     expect(env.data).toEqual([{ account: "A", balance: 100 }]);
   });
@@ -334,7 +335,7 @@ describe("computeBankBalances", () => {
     ]);
     const first = await computeBankBalances({ targetCurrency: "EUR" });
     const second = await computeBankBalances({ targetCurrency: "EUR" });
-    expect(infoRepository.getBankBalances).toHaveBeenCalledTimes(1);
+    expect(mockOf(infoRepository, "getBankBalances")).toHaveBeenCalledTimes(1);
     expect(second).toEqual(first);
     expect(second.data).toEqual([{ account: "A", balance: 100 }]);
   });
@@ -346,6 +347,6 @@ describe("computeBankBalances", () => {
     await computeBankBalances({ targetCurrency: "EUR" });
     invalidatePortfolioCaches();
     await computeBankBalances({ targetCurrency: "EUR" });
-    expect(infoRepository.getBankBalances).toHaveBeenCalledTimes(2);
+    expect(mockOf(infoRepository, "getBankBalances")).toHaveBeenCalledTimes(2);
   });
 });

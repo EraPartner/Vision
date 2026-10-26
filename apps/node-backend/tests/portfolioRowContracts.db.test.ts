@@ -36,10 +36,10 @@ vi.mock("../src/services/priceProviderService.ts", async () => ({
   ...(await vi.importActual<
     typeof import("../src/services/priceProviderService.ts")
   >("../src/services/priceProviderService.ts")),
-  fetchHistoricalPrices: vi.fn(async () => []),
+  fetchHistoricalPrices: vi.fn(() => Promise.resolve([])),
 }));
 
-import { closePool, withTransaction } from "../src/database/connection.ts";
+import { closePool } from "../src/database/connection.ts";
 import investmentRepository from "../src/repositories/investmentRepository.ts";
 import watchlistRepository from "../src/repositories/watchlistRepository.ts";
 import * as instrumentProviderMap from "../src/repositories/instrumentProviderMapRepository.ts";
@@ -101,8 +101,13 @@ import {
   getSnapshots,
 } from "../src/services/portfolioPerformanceSnapshotService.ts";
 import { todayAppDateString } from "../src/lib/timezone.ts";
+import { must } from "./helpers/must.ts";
+import type { Pool } from "pg";
 
-const pool = getTestPool()!;
+/** A row from an ad-hoc SQL read: column values are narrowed where used. */
+type DbRow = Record<string, unknown>;
+
+let pool: Pool;
 const cleanup: { sql: string; params: unknown[] }[] = [];
 function onCleanup(sql: string, ...params: unknown[]) {
   cleanup.unshift({ sql, params });
@@ -118,7 +123,7 @@ async function account(): Promise<number> {
     "INSERT INTO accounts(name,type,currency) VALUES($1,'brokerage','EUR') RETURNING id",
     [tag("Row contract broker")],
   );
-  const id = rows[0]!.id;
+  const id = must(rows[0], "rows[0]").id;
   onCleanup("DELETE FROM accounts WHERE id=$1", id);
   onCleanup("DELETE FROM portfolio_transactions WHERE account_id=$1", id);
   return id;
@@ -133,7 +138,7 @@ async function investment(
      VALUES($1,$2,$3,$4,10,2) RETURNING id`,
     [tag("Row contract asset"), null, assetClass, currency],
   );
-  const id = rows[0]!.id;
+  const id = must(rows[0], "rows[0]").id;
   onCleanup("DELETE FROM asset_price_history WHERE investment_id=$1", id);
   onCleanup("DELETE FROM portfolio_transactions WHERE investment_id=$1", id);
   onCleanup("DELETE FROM investments WHERE id=$1", id);
@@ -146,7 +151,7 @@ async function batch(accountId: number): Promise<string> {
      VALUES('kinesis_transaction_history',$1,'complete',2,$2,true) RETURNING id`,
     [JSON.stringify({ format: "kinesis_transaction_history" }), accountId],
   );
-  const id = rows[0]!.id;
+  const id = must(rows[0], "rows[0]").id;
   onCleanup("DELETE FROM portfolio_import_staging_rows WHERE batch_id=$1", id);
   onCleanup("DELETE FROM portfolio_import_batches WHERE id=$1", id);
   return id;
@@ -164,21 +169,24 @@ async function stagingRow(
      VALUES(${columns.map((_, i) => `$${i + 1}`).join(",")}) RETURNING id`,
     values,
   );
-  return rows[0]!.id;
+  return must(rows[0], "rows[0]").id;
 }
 
 describe.skipIf(!hasTestDatabase())(
   "portfolio, investment, price and currency row contracts (real Postgres)",
   () => {
+    beforeAll(() => {
+      pool = must(getTestPool(), "test pool");
+    });
     const realFetch = globalThis.fetch;
 
     beforeAll(async () => {
       expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
       await acquireDbSuiteLock();
       // No live FX or quote provider is ever asked.
-      globalThis.fetch = vi.fn(async () => {
-        throw new Error("network disabled in this suite");
-      }) as typeof fetch;
+      globalThis.fetch = vi.fn(() =>
+        Promise.reject(new Error("network disabled in this suite")),
+      );
     }, 180_000);
 
     afterEach(async () => {
@@ -202,7 +210,7 @@ describe.skipIf(!hasTestDatabase())(
         current_price: 12.5,
       });
       expect(created).not.toBeNull();
-      const id = Number(created!.id);
+      const id = Number(must(created, "created").id);
       onCleanup(
         "DELETE FROM investment_ticker_prefs WHERE investment_id=$1",
         id,
@@ -483,7 +491,7 @@ describe.skipIf(!hasTestDatabase())(
          VALUES($1,'gift','2025-03-03',0,0.1,0,0,0,'EUR',$2,$3,$4) RETURNING id`,
         [inv, source, hex("income"), importBatch],
       );
-      const unitId = unitRows[0]!.id;
+      const unitId = must(unitRows[0], "unitRows[0]").id;
       const incomeRow = await stagingRow(importBatch, 4, {
         status: "matched",
         type: "dividend",
@@ -514,7 +522,7 @@ describe.skipIf(!hasTestDatabase())(
       );
       expect(
         (
-          await pool.query(
+          await pool.query<DbRow>(
             "SELECT investment_id,income_recognition_role,fx_rate_to_eur FROM portfolio_transactions WHERE id=$1",
             [incomeId],
           )
@@ -762,7 +770,7 @@ describe.skipIf(!hasTestDatabase())(
       });
       // Only the one-time full-history repair feed answers, so the repair's
       // stored-rate read runs too; every other fetch still fails.
-      const previousFlag = await pool.query(
+      const previousFlag = await pool.query<DbRow>(
         "SELECT value FROM user_settings WHERE key='fx_full_history_repair_done'",
       );
       onCleanup(
@@ -772,20 +780,20 @@ describe.skipIf(!hasTestDatabase())(
       await pool.query(
         "DELETE FROM user_settings WHERE key='fx_full_history_repair_done'",
       );
-      vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
-        if (String(url).includes("eurofxref-hist.xml"))
-          return new Response(
+      vi.mocked(globalThis.fetch).mockImplementation((url) => {
+        if ((url instanceof Request ? url.url : String(url)).includes("eurofxref-hist.xml"))
+          return Promise.resolve(new Response(
             "<Cube><Cube time='2025-01-06'><Cube currency='USD' rate='1.1111'/></Cube></Cube>",
-          );
-        throw new Error("network disabled in this suite");
+          ));
+        return Promise.reject(new Error("network disabled in this suite"));
       });
       await expect(backfillPortfolioHistoricalRates()).resolves.toEqual(
-        expect.objectContaining({ missing: expect.any(Number) }),
+        expect.objectContaining({ missing: expect.any(Number) as unknown }),
       );
       if (previousFlag.rows.length > 0)
         await pool.query(
           "UPDATE user_settings SET value=$1 WHERE key='fx_full_history_repair_done'",
-          [previousFlag.rows[0].value],
+          [must(previousFlag.rows[0], "previousFlag.rows[0]").value],
         );
     });
   },

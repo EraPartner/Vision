@@ -5,6 +5,7 @@ import { makeTaxProfile } from "./testProfile";
 import { computeBelgianPIT } from "@vision/shared-utils/belgian-tax/pit";
 import { computeHouseholdTax } from "@vision/shared-utils/belgian-tax/household";
 import { activity, household, married, partner } from "./testHousehold";
+import { must } from "@/test/must";
 
 function buildCsv(
     overrides: Partial<Parameters<typeof buildTaxYearCsv>[0]> = {},
@@ -58,7 +59,7 @@ describe("buildTaxYearCsv", () => {
 
     it("adds per-partner inputs, results and the quotient for two partners", () => {
         const h = married([activity("employee", 60_000)], [activity("employee", 10_000)]);
-        h.partners[1]!.reductions.charitableDonations = 250;
+        must(h.partners[1]).reductions.charitableDonations = 250;
         const result = computeHouseholdTax(h);
         const csv = buildCsv({ household: h, householdResult: result });
         const [a, b] = result.partners;
@@ -67,7 +68,7 @@ describe("buildTaxYearCsv", () => {
         expect(csv).toContain("Charitable donations,0,250,250");
         expect(csv).toContain("Component,You (EUR),Partner (EUR),Household (EUR)");
         expect(csv).toContain(
-            `Total PIT,${a!.totalPIT.toFixed(2).replace(/\.?0+$/, "")},${b!.totalPIT
+            `Total PIT,${must(a).totalPIT.toFixed(2).replace(/\.?0+$/, "")},${must(b).totalPIT
                 .toFixed(2)
                 .replace(/\.?0+$/, "")},`,
         );

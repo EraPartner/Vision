@@ -23,7 +23,7 @@ describe("BackgroundQueryIndicator", () => {
         const client = createTestQueryClient({ gcTime: Infinity });
         client.setQueryData(["cached"], { items: [1] });
         let finish: ((value: { items: number[] }) => void) | undefined;
-        const refresh = client.fetchQuery({
+        const refresh = client.query({
             queryKey: ["cached"],
             queryFn: () =>
                 new Promise<{ items: number[] }>((resolve) => {
@@ -58,7 +58,7 @@ describe("BackgroundQueryIndicator", () => {
     it("does not replace a cold query's page-owned loading surface", async () => {
         const client = createTestQueryClient({ gcTime: Infinity });
         let finish: ((value: { items: number[] }) => void) | undefined;
-        const initialLoad = client.fetchQuery({
+        const initialLoad = client.query({
             queryKey: ["cold"],
             queryFn: () =>
                 new Promise<{ items: number[] }>((resolve) => {
@@ -193,14 +193,14 @@ describe("BackgroundQueryIndicator", () => {
             screen.queryByTestId("background-query-indicator"),
         ).not.toBeInTheDocument();
 
-        await act(async () => finish({ items: ["fresh"] }));
+        await act(() => Promise.resolve(finish({ items: ["fresh"] })));
     });
 
     it("does not treat an unrelated cached sibling as a placeholder cue", async () => {
         const client = createTestQueryClient({ gcTime: Infinity });
         client.setQueryData(["admin", "stats"], { ready: true });
         let finish: ((value: { ready: boolean }) => void) | undefined;
-        const coldProviderHealth = client.fetchQuery({
+        const coldProviderHealth = client.query({
             queryKey: ["admin", "provider-health"],
             queryFn: () =>
                 new Promise<{ ready: boolean }>((resolve) => {

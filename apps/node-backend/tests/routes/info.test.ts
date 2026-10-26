@@ -67,7 +67,8 @@ const mockWarmCache = vi.fn();
 const mockClearMemoryCache = vi.fn();
 const mockListLatestStoredRates = vi.fn();
 const mockGetSnapshots = vi.fn();
-const mockGetBrokerSnapshots = vi.fn();
+const mockGetBrokerSnapshots =
+  vi.fn<(startDate: string, endDate: string, currency: string) => Promise<unknown>>();
 const mockGetPortfolioSummary = vi.fn();
 const mockGetInsightsDigest = vi.fn();
 const mockGetInsightsCount = vi.fn();
@@ -101,7 +102,7 @@ vi.mock("../../src/services/portfolioPerformanceSnapshotService.ts", () => ({
     cumulativeInflation: 0,
   })),
   computeHeatmap: vi.fn(() => ({ years: [], data: {}, maxAbsPct: 0 })),
-  getBreakdownSummary: vi.fn(async () => []),
+  getBreakdownSummary: vi.fn(() => Promise.resolve([])),
 }));
 
 vi.mock("../../src/services/portfolio/portfolioSummaryService.ts", () => ({
@@ -123,15 +124,11 @@ import {
   invalidatePortfolioCaches,
   invalidateStatisticsCaches,
 } from "../../src/services/info/cache.ts";
+import { must } from "../helpers/must.ts";
+import { mockOf } from "../helpers/mockOf.ts";
+import { loose } from "../helpers/partial.ts";
+import { anyInstance } from "../helpers/matchers.ts";
 const infoRepository = vi.mocked(rawInfoRepository);
-
-/** Stand-in for a full result: the route reads only the fields given. */
-const partial = <T>(value: Partial<NoInfer<T>>) => value as T;
-/**
- * Stand-in whose shape the source has since outgrown (e.g. net-worth figures
- * without `liabilities`); the routes under test only forward it.
- */
-const loose = <T>(value: unknown) => value as T;
 
 const { default: infoRouter } = await import("../../src/routes/info.ts");
 const { warmInfoCaches } = await import("../../src/routes/info.ts");
@@ -582,7 +579,7 @@ describe("Info Routes", () => {
 
       const res = await api.get(`${BASE}/recurring-patterns`).expect(200);
 
-      expect(logger.error).toHaveBeenCalledWith(
+      expect(mockOf(logger, "error")).toHaveBeenCalledWith(
         "Error detecting recurring patterns; returning empty result",
         expect.objectContaining({ error: "detector failed" }),
       );
@@ -688,7 +685,7 @@ describe("Info Routes", () => {
         await Promise.resolve();
         await Promise.resolve();
 
-        expect(logger.warn).toHaveBeenCalledWith(
+        expect(mockOf(logger, "warn")).toHaveBeenCalledWith(
           "Background exchange rate refresh failed",
           expect.objectContaining({ error: "refresh failed" }),
         );
@@ -739,7 +736,7 @@ describe("Info Routes", () => {
         okEnvelope(
           expect.objectContaining({
             message: "Materialized views refreshed",
-            duration_ms: expect.any(Number),
+            duration_ms: anyInstance(Number),
           }),
         ),
       );
@@ -907,7 +904,7 @@ describe("Info Routes", () => {
           .query({ currency: "JPY" })
           .expect(200);
 
-        expect(infoRepository.getNetWorthFromSnapshots).toHaveBeenCalledTimes(
+        expect(mockOf(infoRepository, "getNetWorthFromSnapshots")).toHaveBeenCalledTimes(
           1,
         );
         expect(mockGetSnapshots).toHaveBeenCalledTimes(1);
@@ -937,7 +934,7 @@ describe("Info Routes", () => {
 
         await warmInfoCaches("CAD");
 
-        expect(logger.error).toHaveBeenCalledWith(
+        expect(mockOf(logger, "error")).toHaveBeenCalledWith(
           "Failed to warm net-worth cache",
           expect.objectContaining({ error: "net-worth warm failed" }),
         );
@@ -967,7 +964,7 @@ describe("Info Routes", () => {
 
         await warmInfoCaches("AUD");
 
-        expect(logger.error).toHaveBeenCalledWith(
+        expect(mockOf(logger, "error")).toHaveBeenCalledWith(
           "Failed to warm portfolio-performance cache",
           expect.objectContaining({ error: "portfolio warm failed" }),
         );
@@ -1199,7 +1196,7 @@ describe("Info Routes", () => {
           .query({ currency: "USD", from: "", to: "" })
           .expect(200);
         const [startDate, endDate, currency] =
-          mockGetBrokerSnapshots.mock.calls[0]!;
+          must(mockGetBrokerSnapshots.mock.calls[0], "mockGetBrokerSnapshots.mock.calls[0]");
         expect(startDate).toBe("2000-01-01");
         expect(endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
         expect(currency).toBe("USD");
@@ -1265,7 +1262,7 @@ describe("Info Routes", () => {
       expect(res.body).toEqual(
         validationError("account_id must be a positive integer"),
       );
-      expect(infoRepository.getTransactionCount).not.toHaveBeenCalled();
+      expect(mockOf(infoRepository, "getTransactionCount")).not.toHaveBeenCalled();
     });
 
     it("rejects a malformed year on /deduction-candidates", async () => {

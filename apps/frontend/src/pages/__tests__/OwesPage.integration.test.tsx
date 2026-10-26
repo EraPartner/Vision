@@ -6,7 +6,7 @@ import { http, HttpResponse } from "msw";
 import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok, err } from "@/test/msw/handlers";
+import { ok, err, SPLIT_PAYMENT_STUB } from "@/test/msw/handlers";
 import OwesPage from "@/pages/OwesPage";
 import { transactionRow, transactionsBody } from "@/test/msw/rowFixtures";
 
@@ -347,7 +347,7 @@ describe("OwesPage (integration)", () => {
             ),
             http.post(`${API_BASE}/api/splits/101/pay`, async ({ request }) => {
                 payments.push(await request.json());
-                return ok({ id: 1 });
+                return ok(SPLIT_PAYMENT_STUB);
             }),
         );
         renderWithApp(<OwesPage />);

@@ -13,6 +13,7 @@ import {
   getLatestAccuracyByMethod,
   getAllAccuracyHistory,
 } from "../../src/services/calculations/forecast/accuracyStore.ts";
+import { must } from "../helpers/must.ts";
 
 const dbRows = vi.hoisted(() => [
   {
@@ -50,11 +51,11 @@ const dbRows = vi.hoisted(() => [
 vi.mock("../../src/repositories/cashflowForecastAccuracyRepository.ts", () => ({
   default: {
     upsert: vi.fn(async () => {}),
-    getHistory: vi.fn(async ({ methodId }) =>
-      dbRows.filter((r) => r.method_id === methodId),
+    getHistory: vi.fn(({ methodId }) =>
+      Promise.resolve(dbRows.filter((r) => r.method_id === methodId)),
     ),
-    getLatestByMethod: vi.fn(async () => dbRows),
-    getAllHistory: vi.fn(async () => dbRows),
+    getLatestByMethod: vi.fn(() => Promise.resolve(dbRows)),
+    getAllHistory: vi.fn(() => Promise.resolve(dbRows)),
   },
 }));
 
@@ -76,8 +77,8 @@ describe("accuracyStore DB path returns camelCase records", () => {
   it("getAccuracyHistory normalizes snake_case repository rows", async () => {
     const rows = await getAccuracyHistory({ userId: "u1", methodId: "ewma" });
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.methodId).toBe("ewma");
-    expect(rows[0]!.rmse).toBe(60.3);
+    expect(must(rows[0], "rows[0]").methodId).toBe("ewma");
+    expect(must(rows[0], "rows[0]").rmse).toBe(60.3);
     expect(rows[0]).not.toHaveProperty("method_id");
   });
 
@@ -99,14 +100,14 @@ describe("accuracyStore DB path returns camelCase records", () => {
     // Pre-fix, snake_case rows made this map empty → equal-weight fallback.
     expect(weights.size).toBe(3);
 
-    const values = methodIds.map((id) => weights.get(id)!);
+    const values = methodIds.map((id) => must(weights.get(id), "weights.get(id)"));
     for (const v of values) expect(Number.isFinite(v)).toBe(true);
     expect(values.reduce((s, v) => s + v, 0)).toBeCloseTo(1, 6);
 
     // Weights track backtest accuracy: lower RMSE → higher weight.
-    expect(weights.get("ewma")).toBeGreaterThan(weights.get("holt_winters")!);
+    expect(weights.get("ewma")).toBeGreaterThan(must(weights.get("holt_winters"), "weights.get(\"holt_winters\")"));
     expect(weights.get("holt_winters")).toBeGreaterThan(
-      weights.get("simple_avg")!,
+      must(weights.get("simple_avg"), "weights.get(\"simple_avg\")"),
     );
 
     // And they are decisively non-equal — equal weighting (1/3 each) would fail.

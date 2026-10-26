@@ -21,8 +21,9 @@ import splitService from "../src/services/splitService.ts";
 import splitsRouter from "../src/routes/splits.ts";
 import { routeAgent } from "./helpers/routeApp.ts";
 import { bodyAt } from "./helpers/responseBody.ts";
-import { asRecipientId } from "@vision/types/brands";
+import { asRecipientId, type RecipientId, type TransactionId } from "@vision/types/brands";
 import { OwedDetailListSchema } from "@vision/types/contracts";
+import { must } from "./helpers/must.ts";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const MARK = `owed_dates_${process.pid}`;
@@ -37,19 +38,19 @@ describeDb("owed split dates are calendar days (real DB, Europe/Brussels)", () =
     // pg reads DATE as a local-midnight Date; east of UTC that is the
     // previous day in UTC, which is what exposed the bug.
     process.env.TZ = "Europe/Brussels";
-    const pool = getTestPool()!;
-    const { rows: recipients } = await pool.query(
+    const pool = must(getTestPool(), "getTestPool()");
+    const { rows: recipients } = await pool.query<{ id: RecipientId }>(
       `INSERT INTO recipients (name, normalized_name) VALUES ($1, $1) RETURNING id`,
       [`${MARK}_debtor`],
     );
-    recipientId = recipients[0].id;
-    const { rows: transactions } = await pool.query(
+    recipientId = must(recipients[0], "recipients[0]").id;
+    const { rows: transactions } = await pool.query<{ id: TransactionId }>(
       `INSERT INTO transactions (date, amount, memo, currency, recipient_id)
        VALUES ('2025-11-04', -40, $1, 'EUR', $2) RETURNING id`,
       [MARK, recipientId],
     );
     await splitService.createSplitAtomic({
-      transaction_id: transactions[0].id,
+      transaction_id: must(transactions[0], "transactions[0]").id,
       recipient_id: asRecipientId(recipientId),
       amount: 40,
       note: null,

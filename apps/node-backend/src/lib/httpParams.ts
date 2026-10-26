@@ -1,4 +1,5 @@
 import { ValidationError } from "../middleware/errorHandler.ts";
+import { looseString } from "./looseString.ts";
 
 /**
  * Parse a boolean query parameter with one accepted spelling set.
@@ -17,7 +18,7 @@ export function parseBooleanQueryParam(
   if (raw === true || raw === 1) return true;
   if (raw === false || raw === 0) return false;
 
-  const normalized = String(raw).trim().toLowerCase();
+  const normalized = looseString(raw).trim().toLowerCase();
   if (normalized === "true" || normalized === "1") return true;
   if (normalized === "false" || normalized === "0") return false;
   return defaultValue;

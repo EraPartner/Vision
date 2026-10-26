@@ -169,7 +169,7 @@ export function mockConnection(
  */
 export function mockTxConnection<C extends MockTxClient>(
   client?: C,
-): TxConnectionMock<C, Record<never, never>>;
+): TxConnectionMock<C, object>;
 export function mockTxConnection<
   C extends MockTxClient,
   E extends ConnectionMockOverrides,
@@ -192,16 +192,18 @@ export function mockTxConnection(
 
   const query: Mock = vi.fn((...args: unknown[]) => {
     const active = ambient();
-    return active ? active.query(...args) : callProcedure(poolQuery, args);
+    if (!active) return callProcedure(poolQuery, args);
+    const result: unknown = active.query(...args);
+    return result;
   });
 
   const queryPrepared = vi.fn(
     (name: string, text: string, values?: unknown[]) => {
       const active = ambient();
       // pg's object form, exactly as connection.js:151 passes it.
-      return active
-        ? active.query({ name, text, values })
-        : callProcedure(poolQuery, [text, values]);
+      if (!active) return callProcedure(poolQuery, [text, values]);
+      const result: unknown = active.query({ name, text, values });
+      return result;
     },
   );
 
@@ -302,6 +304,16 @@ export function mockTxConnection(
   }) as unknown as TxConnectionMock<MockTxClient, ConnectionMockOverrides>;
 }
 
+/** The client a test primes `getClient` with: a `query` spy and a `release`. */
+interface PooledClient {
+  query: (sql: string) => unknown;
+  release: () => unknown;
+}
+
+function asPooledClient(value: unknown): PooledClient {
+  return value as PooledClient;
+}
+
 /**
  * Connection mock with the full client-pool transaction ceremony:
  * `withTransaction` checks out `getClient()`, issues BEGIN/COMMIT (ROLLBACK
@@ -319,7 +331,7 @@ export function mockPooledTxConnection(): ConnectionMock<{
     query: vi.fn(),
     getClient,
     withTransaction: vi.fn(async (fn: (client: unknown) => unknown) => {
-      const client = await getClient();
+      const client = asPooledClient(await getClient());
       try {
         await client.query("BEGIN");
         const result = await fn(client);

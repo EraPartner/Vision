@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../src/database/connection.ts", () =>
   mockConnection({
     // The LOCK TABLE statement; it returns no rows.
-    query: async () => ({ rows: [] }),
+    query: () => Promise.resolve({ rows: [] }),
     withTransaction: (fn: () => unknown) => fn(),
   }),
 );

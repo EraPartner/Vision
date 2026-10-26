@@ -5,6 +5,7 @@
  * vision-local/no-repo-direct-from-route); they go through this service, which
  * is where category name→id resolution and bulk operations belong.
  */
+import { looseText } from "../lib/looseText.ts";
 import { checkedRows, db } from "../database/db.ts";
 import { categoryKeyRowSchema } from "../database/rowSchemas.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
@@ -34,9 +35,9 @@ export {
  * @throws {ValidationError} on malformed input or when no category matches
  */
 export async function resolveCategoryIdByName(
-  name: string,
+  name: unknown,
 ): Promise<CategoryId> {
-  const normalized = String(name).toUpperCase().trim();
+  const normalized = looseText(name).toUpperCase().trim();
   const byPath = await checkedRows(
     categoryKeyRowSchema,
     db

@@ -93,7 +93,7 @@ export function UpcomingPaymentsNotification() {
                                     Math.abs(pt.amount),
                                     pt.currency || appSettings.defaultCurrency,
                                     locale,
-                                    appSettings.showDecimalPlaces ?? 2,
+                                    appSettings.showDecimalPlaces,
                                 )}
                             </span>
                             <Button

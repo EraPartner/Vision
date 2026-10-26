@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { must } from "../helpers/must.ts";
 
 const exposure = vi.hoisted(() => ({
   getPortfolioExposure: vi.fn(),
@@ -34,14 +35,14 @@ vi.mock("../../src/services/investmentService.ts", () =>
 const { default: router } = await import("../../src/routes/investments.ts");
 // Express's IRoute type omits the runtime `methods` map.
 const routeHandler = (method: string, path: string) =>
-  router.stack
+  must(must(must(router.stack
     .find(
       (layer) =>
         layer.route?.path === path &&
         (layer.route as unknown as { methods: Record<string, boolean> })
           .methods[method],
-    )!
-    .route!.stack.at(-1)!.handle as unknown as (
+    ), "router.stack .find( (layer) => layer.route?.path === path...")
+    .route, "router.stack .find( (layer) => layer.route?.path === path...").stack.at(-1), "router.stack .find( (layer) => layer.route?.path === path...").handle as unknown as (
     req: unknown,
     res: unknown,
   ) => Promise<void>;

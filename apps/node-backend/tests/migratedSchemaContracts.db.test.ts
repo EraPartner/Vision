@@ -16,11 +16,20 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.ts";
+import { must } from "./helpers/must.ts";
+import type {
+  AccountId,
+  InvestmentId,
+  PortfolioTransactionId,
+} from "@vision/types/brands";
+
+/** A result row whose columns the test reads without a fixed shape. */
+type DbRow = Record<string, unknown>;
 
 const pool = getTestPool();
 
 async function inRollback(run: (client: PoolClient) => Promise<void>) {
-  const client = await pool!.connect();
+  const client = await must(pool, "pool").connect();
   try {
     await client.query("BEGIN");
     await run(client);
@@ -37,7 +46,9 @@ async function failsWith(
   code: string,
 ) {
   await client.query("SAVEPOINT expected_failure");
-  await expect(client.query(text, params)).rejects.toMatchObject({ code });
+  await expect(client.query<DbRow>(text, params)).rejects.toMatchObject({
+    code,
+  });
   await client.query("ROLLBACK TO SAVEPOINT expected_failure");
 }
 
@@ -49,7 +60,7 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
   });
 
   it("has no audit history tables or functions after migration 0004", async () => {
-    const relations = await pool!.query(
+    const relations = await must(pool, "pool").query<DbRow>(
       `SELECT c.relname FROM pg_class c
          JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'public'
@@ -58,7 +69,7 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
             'portfolio_retag_audit')`,
     );
     expect(relations.rows).toEqual([]);
-    const functions = await pool!.query(
+    const functions = await must(pool, "pool").query<DbRow>(
       `SELECT p.proname FROM pg_proc p
          JOIN pg_namespace n ON n.oid = p.pronamespace
         WHERE n.nspname = 'public' AND p.proname LIKE 'audit_chain%'`,
@@ -67,7 +78,7 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
   });
 
   it("keeps per-currency statement balances constrained and owned by their account", async () => {
-    const constraints = await pool!.query(
+    const constraints = await must(pool, "pool").query<DbRow>(
       `SELECT conname FROM pg_constraint
         WHERE conrelid = 'public.account_statement_balances'::regclass
           AND contype <> 'n'
@@ -80,13 +91,16 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
     ]);
 
     await inRollback(async (client) => {
-      const account = (
-        await client.query(
-          `INSERT INTO accounts (name, display_name, currency)
+      const account = must(
+        (
+          await client.query<{ id: AccountId }>(
+            `INSERT INTO accounts (name, display_name, currency)
            VALUES ('Schema contract account', 'Schema contract', 'EUR')
            RETURNING id`,
-        )
-      ).rows[0].id;
+          )
+        ).rows[0],
+        "( await client.query<{ id: AccountId }>( `INSERT I",
+      ).id;
       await client.query(
         `INSERT INTO account_statement_balances
            (account_id, currency, balance, balance_date)
@@ -104,7 +118,7 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
       );
       expect(
         (
-          await client.query(
+          await client.query<DbRow>(
             `SELECT currency, balance::text FROM account_statement_balances
               WHERE account_id = $1 ORDER BY currency`,
             [account],
@@ -116,18 +130,21 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
       ]);
       await client.query("DELETE FROM accounts WHERE id = $1", [account]);
       expect(
-        (
-          await client.query(
-            "SELECT count(*)::int AS n FROM account_statement_balances WHERE account_id = $1",
-            [account],
-          )
-        ).rows[0].n,
+        must(
+          (
+            await client.query<DbRow>(
+              "SELECT count(*)::int AS n FROM account_statement_balances WHERE account_id = $1",
+              [account],
+            )
+          ).rows[0],
+          '( await client.query<DbRow>( "SELECT count(*)::int',
+        ).n,
       ).toBe(0);
     });
   });
 
   it("stores portfolio recurrence as constrained text with the 'biweekly' spelling", async () => {
-    const column = await pool!.query(
+    const column = await must(pool, "pool").query<DbRow>(
       `SELECT data_type FROM information_schema.columns
         WHERE table_schema = 'public'
           AND table_name = 'portfolio_transactions'
@@ -136,23 +153,29 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
     expect(column.rows[0]?.data_type).toBe("text");
 
     await inRollback(async (client) => {
-      const investment = (
-        await client.query(
-          `INSERT INTO investments (name, symbol, asset_class, currency)
+      const investment = must(
+        (
+          await client.query<{ id: InvestmentId }>(
+            `INSERT INTO investments (name, symbol, asset_class, currency)
            VALUES ('Schema contract recurrence', 'SCREC', 'stock', 'EUR')
            RETURNING id`,
-        )
-      ).rows[0].id;
-      const transaction = (
-        await client.query(
-          `INSERT INTO portfolio_transactions
+          )
+        ).rows[0],
+        "( await client.query<{ id: InvestmentId }>( `INSER",
+      ).id;
+      const transaction = must(
+        (
+          await client.query<{ id: PortfolioTransactionId }>(
+            `INSERT INTO portfolio_transactions
              (investment_id, type, date, amount, units, price_per_unit, currency,
               is_recurring, recurrence_interval)
            VALUES ($1, 'buy', '2026-01-01', 100, 1, 100, 'EUR', true, 'biweekly')
            RETURNING id`,
-          [investment],
-        )
-      ).rows[0].id;
+            [investment],
+          )
+        ).rows[0],
+        "( await client.query<{ id: PortfolioTransactionId ",
+      ).id;
       await failsWith(
         client,
         "UPDATE portfolio_transactions SET recurrence_interval = 'bi-weekly' WHERE id = $1",
@@ -163,7 +186,7 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
   });
 
   it("keeps cash-flow cache keys as DATE columns", async () => {
-    const columns = await pool!.query(
+    const columns = await must(pool, "pool").query<DbRow>(
       `SELECT table_name, column_name, data_type
          FROM information_schema.columns
         WHERE table_schema = 'public'
@@ -202,7 +225,7 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
       "import_staging_rows",
       "portfolio_import_staging_rows",
     ];
-    const triggers = await pool!.query(
+    const triggers = await must(pool, "pool").query<DbRow>(
       `SELECT c.relname AS table_name
          FROM pg_trigger t
          JOIN pg_class c ON c.oid = t.tgrelid
@@ -215,7 +238,7 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
     expect(triggers.rows.map((row) => row.table_name as string).sort()).toEqual(
       [...tables].sort(),
     );
-    const columns = await pool!.query(
+    const columns = await must(pool, "pool").query<DbRow>(
       `SELECT table_name FROM information_schema.columns
         WHERE table_schema = 'public' AND column_name = 'updated_at'
           AND is_nullable = 'NO' AND column_default ILIKE 'now()%'
@@ -232,15 +255,15 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
       await client.query(
         "UPDATE user_settings SET value = '2'::jsonb WHERE key = 'schema_contract_probe'",
       );
-      const row = await client.query(
+      const row = await client.query<DbRow>(
         "SELECT updated_at > '2000-01-02'::timestamptz AS touched FROM user_settings WHERE key = 'schema_contract_probe'",
       );
-      expect(row.rows[0].touched).toBe(true);
+      expect(must(row.rows[0], "row.rows[0]").touched).toBe(true);
     });
   });
 
   it("links saved-chart memberships to their entities with cascading foreign keys", async () => {
-    const keys = await pool!.query(
+    const keys = await must(pool, "pool").query<DbRow>(
       `SELECT c.conrelid::regclass::text AS table_name,
               c.confrelid::regclass::text AS referenced,
               c.confdeltype AS on_delete
@@ -278,7 +301,7 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
       },
       { table_name: "saved_chart_tags", referenced: "tags", on_delete: "c" },
     ]);
-    const arrays = await pool!.query(
+    const arrays = await must(pool, "pool").query<DbRow>(
       `SELECT column_name FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = 'saved_charts'
           AND column_name IN ('category_ids', 'recipient_ids', 'tag_ids')`,
@@ -287,7 +310,7 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
   });
 
   it("keeps insight dismissals tied to their category and recipient", async () => {
-    const constraints = await pool!.query(
+    const constraints = await must(pool, "pool").query<DbRow>(
       `SELECT conname FROM pg_constraint
         WHERE conrelid = 'public.insight_dismissals'::regclass AND contype = 'f'`,
     );
@@ -298,26 +321,27 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
       ]),
     );
     for (const table of ["insight_digest_state", "insight_cash_projections"]) {
-      const exists = await pool!.query("SELECT to_regclass($1) AS name", [
-        `public.${table}`,
-      ]);
-      expect(exists.rows[0].name).toBe(table);
+      const exists = await must(pool, "pool").query<DbRow>(
+        "SELECT to_regclass($1) AS name",
+        [`public.${table}`],
+      );
+      expect(must(exists.rows[0], "exists.rows[0]").name).toBe(table);
     }
   });
 
   it("enables pg_stat_statements and has retired the daily cash-flow view", async () => {
-    const extension = await pool!.query(
+    const extension = await must(pool, "pool").query<DbRow>(
       "SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements'",
     );
     expect(extension.rows).toHaveLength(1);
-    const view = await pool!.query(
+    const view = await must(pool, "pool").query<DbRow>(
       "SELECT to_regclass('public.mv_cashflow_daily') AS name",
     );
-    expect(view.rows[0].name).toBeNull();
+    expect(must(view.rows[0], "view.rows[0]").name).toBeNull();
   });
 
   it("exposes analysis datasets only as security-barrier views without secret or admin surfaces", async () => {
-    const views = await pool!.query(
+    const views = await must(pool, "pool").query<DbRow>(
       `SELECT c.relname,
               coalesce('security_barrier=true' = ANY(c.reloptions), false) AS barrier,
               EXISTS (
@@ -337,19 +361,22 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
       ]),
     );
     for (const row of views.rows) {
-      expect(row, row.relname).toMatchObject({
+      expect(
+        row,
+        typeof row.relname === "string" ? row.relname : undefined,
+      ).toMatchObject({
         barrier: true,
         public_grant: false,
       });
     }
-    const kinds = await pool!.query(
+    const kinds = await must(pool, "pool").query<DbRow>(
       `SELECT DISTINCT c.relkind FROM pg_class c
          JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'vision_analysis'`,
     );
     expect(kinds.rows.map((row) => row.relkind)).toEqual(["v"]);
 
-    const forbiddenTables = await pool!.query(
+    const forbiddenTables = await must(pool, "pool").query<DbRow>(
       `SELECT DISTINCT v.relname AS view_name, t.relname AS table_name
          FROM pg_depend d
          JOIN pg_rewrite r ON r.oid = d.objid
@@ -360,7 +387,7 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
           AND t.relname = 'provider_api_keys'`,
     );
     expect(forbiddenTables.rows).toEqual([]);
-    const forbiddenColumns = await pool!.query(
+    const forbiddenColumns = await must(pool, "pool").query<DbRow>(
       `SELECT table_name, column_name FROM information_schema.columns
         WHERE table_schema = 'vision_analysis'
           AND column_name IN ('raw_csv_line', 'dedup_fingerprint', 'tx_hash')`,

@@ -12,8 +12,9 @@ import { categoryRepository } from "../../../repositories/categoryRepository.ts"
 import { transactionRepository } from "../../../repositories/transactionRepository.ts";
 import settings from "../../../config/config.ts";
 import { toDecimal, roundToCents } from "../../../lib/money.ts";
+import type { Decimal } from "decimal.js";
 import { toYmd } from "../../calculations/portfolioMath.ts";
-import { parseEnum, parsePositiveInt } from "./_validate.ts";
+import { argText, parseEnum, parsePositiveInt } from "./_validate.ts";
 import type { ToolContext } from "./_validate.ts";
 import { getQuotes } from "../../marketLookupService.ts";
 import { detectRecurringPatterns } from "../../recurringDetectionService.ts";
@@ -24,6 +25,22 @@ import { currencyOrEur } from "../../../lib/currencyCode.ts";
 type AverageVsCurrentSpending = Awaited<
   ReturnType<typeof infoRepository.getAverageVsCurrentSpending>
 >;
+
+function ymdOrNull(value: Date | string | null | undefined): string | null {
+  return value === null || value === undefined || value === ""
+    ? null
+    : toYmd(value);
+}
+
+/** A bank balance row as the tool tolerates it (see getBankBalances). */
+interface LooseBankAccount {
+  account_id?: number | string | undefined;
+  bank_account?: string | undefined;
+  balance?: number | string | null | undefined;
+  transaction_count?: number | null | undefined;
+  first_transaction?: Date | string | null | undefined;
+  last_transaction?: Date | string | null | undefined;
+}
 
 /**
  * Current bank account balances + total net position.
@@ -41,7 +58,10 @@ export const getBankBalances = {
     { maxRows = settings.aiChat.maxToolRows, scope = {} }: ToolContext = {},
   ) {
     const currency = scope.currency || "EUR";
-    const result = await infoRepository.getBankBalances(currency);
+    // The tool tolerates a loose payload: balances may be strings and the
+    // account list or its counts may be missing.
+    const result: { accounts?: LooseBankAccount[] | undefined } =
+      await infoRepository.getBankBalances(currency);
     const allowedAccountIds = new Set(scope.accountIds ?? []);
     const scopedAccounts = (result.accounts ?? []).filter(
       (account) =>
@@ -62,8 +82,8 @@ export const getBankBalances = {
       transactionCount: a.transaction_count ?? null,
       // toYmd uses local getters for pg's local-midnight DATE values —
       // toISOString() shifted these one day back on a UTC+ server.
-      firstTransaction: a.first_transaction ? toYmd(a.first_transaction) : null,
-      lastTransaction: a.last_transaction ? toYmd(a.last_transaction) : null,
+      firstTransaction: ymdOrNull(a.first_transaction),
+      lastTransaction: ymdOrNull(a.last_transaction),
     }));
 
     return {
@@ -109,12 +129,14 @@ export const getSpendingPace = {
     const mult = period === "yearly" ? 12 : 1;
 
     const result = await infoRepository.getAverageVsCurrentSpending("EUR");
+    // Sections may be missing from a loose payload; each field then defaults.
+    const loose: Partial<AverageVsCurrentSpending> = result;
     const p6: Partial<AverageVsCurrentSpending["past_6_months"]> =
-      result.past_6_months ?? {};
+      loose.past_6_months ?? {};
     const cm: Partial<AverageVsCurrentSpending["current_month"]> =
-      result.current_month ?? {};
+      loose.current_month ?? {};
     const cmp: Partial<AverageVsCurrentSpending["comparison"]> =
-      result.comparison ?? {};
+      loose.comparison ?? {};
 
     return {
       ok: true,
@@ -188,7 +210,8 @@ export const getRecipientInsights = {
             max: Number.MAX_SAFE_INTEGER,
           })
         : null;
-    const recipientId = recipientIdArg == null ? null : asRecipientId(recipientIdArg);
+    const recipientId =
+      recipientIdArg == null ? null : asRecipientId(recipientIdArg);
 
     const SCAN_LIMIT = 50_000;
     const allRows = await transactionRepository.getAll({
@@ -204,13 +227,23 @@ export const getRecipientInsights = {
     // partial view. Surface that so the model can caveat its answer.
     const truncated = rows.length >= SCAN_LIMIT;
 
-    const byRecipient = new Map();
+    const byRecipient = new Map<
+      string,
+      {
+        recipient: string;
+        recipientId: (typeof rows)[number]["recipient_id"] | null;
+        count: number;
+        totalSpend: Decimal;
+        totalIncome: Decimal;
+        lastDate: string | null;
+      }
+    >();
     for (const row of rows) {
       const name = row.recipient_name || null;
       if (!name) continue;
 
       const amount = toDecimal(row.amount);
-      const entry = byRecipient.get(name) || {
+      const entry = byRecipient.get(name) ?? {
         recipient: name,
         recipientId: row.recipient_id ?? null,
         count: 0,
@@ -375,7 +408,7 @@ export const getCategories = {
       limit: 500,
       offset: 0,
       active: true,
-      search: args.search ? String(args.search).trim() : undefined,
+      search: argText(args.search).trim() || undefined,
     });
 
     const shaped = rows.map((row) => ({

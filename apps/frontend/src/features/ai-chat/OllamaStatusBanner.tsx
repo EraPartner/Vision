@@ -51,7 +51,7 @@ export function OllamaStatusBanner({
                                 {shownUrl && (
                                     <p className="mt-2 break-all">{shownUrl}</p>
                                 )}
-                                {status?.hint && (
+                                {status.hint && (
                                     <p className="mt-1">{status.hint}</p>
                                 )}
                             </Disclosure>

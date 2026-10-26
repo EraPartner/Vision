@@ -40,7 +40,7 @@ export function useCurrencyConverter(targetCurrency: string) {
             ...Object.fromEntries(
                 (exchangeData?.rates ?? []).map((r) => [
                     r.currency,
-                    Number(r.rate_to_eur),
+                    r.rate_to_eur,
                 ]),
             ),
         }),

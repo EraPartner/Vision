@@ -10,7 +10,7 @@ import {
 } from "./native";
 
 for (const phase of ["before", "between", "after"] as const) {
-  test(`attachment journal recovers ${phase} rename interruption repeatedly`, async (t) => {
+  void test(`attachment journal recovers ${phase} rename interruption repeatedly`, async (t) => {
     const root = await fs.mkdtemp(
       path.join(os.tmpdir(), "vision-attachment-journal-"),
     );

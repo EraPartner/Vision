@@ -138,7 +138,8 @@ export function RequestList({ events, inFlight, onSelect, selectedId }: Props) {
                         className="relative"
                     >
                         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                            const event = filtered[virtualRow.index]!;
+                            const event = filtered[virtualRow.index];
+                            if (!event) return null;
                             return (
                                 <div
                                     key={`${event.id}-${event.phase}`}

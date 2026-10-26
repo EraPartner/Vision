@@ -4,13 +4,30 @@ import { createHash } from "node:crypto";
 import { promises as fsp } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { must } from "./helpers/must.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
+// The compiled CommonJS module is loaded at run time, so the part of its shape
+// this test reads is declared here (importing the source's types would pull in
+// the untyped yauzl dependency).
+interface OpenedBundle {
+  metadata: Readonly<Record<string, unknown>>;
+  dbSqlPath: string;
+  attachmentsDir: string | null;
+  frontendState: unknown;
+  cleanup: () => void;
+}
+interface BundleModule {
+  openBundle: (
+    bundlePath: string,
+    options?: { passphrase?: string | null },
+  ) => Promise<OpenedBundle>;
+}
 const require = createRequire(import.meta.url);
 const { openBundle } = require(
   join(repoRoot, "packaging/electron/out/backup/bundle.js"),
-);
+) as BundleModule;
 
 describe("backup release compatibility", () => {
   it("opens the sanitized bundle produced by Vision 1.0.2", async () => {
@@ -36,7 +53,7 @@ describe("backup release compatibility", () => {
       });
       expect(
         await fsp.readFile(
-          join(result.attachmentsDir, "tx-001", "receipt.txt"),
+          join(must(result.attachmentsDir, "attachmentsDir"), "tx-001", "receipt.txt"),
           "utf8",
         ),
       ).toBe("SANITIZED-RECEIPT");

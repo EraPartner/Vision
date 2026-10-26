@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { format } from "date-fns";
 import { enUS, nl } from "date-fns/locale";
 import { DatePicker } from "./DatePicker";
+import { must } from "@/test/must";
 
 const languageState = vi.hoisted(() => ({ value: "en" }));
 const dateFormatState = vi.hoisted(() => ({ value: "YYYY-MM-DD" }));
@@ -83,7 +84,7 @@ describe("DatePicker calendar locale", () => {
 
     it("applies valid typed input on Enter without submitting a parent form", () => {
         const onChange = vi.fn();
-        const onSubmit = vi.fn((event: React.FormEvent) =>
+        const onSubmit = vi.fn((event: React.SubmitEvent) =>
             event.preventDefault(),
         );
         render(
@@ -132,7 +133,7 @@ describe("DatePicker calendar locale", () => {
         expect(onChange).not.toHaveBeenCalled();
         expect(input).toHaveAttribute("aria-invalid", "true");
         const errorId = input.getAttribute("aria-describedby");
-        expect(document.getElementById(errorId!)).toHaveTextContent(
+        expect(document.getElementById(must(errorId))).toHaveTextContent(
             /datePicker.invalidFormat/,
         );
     });

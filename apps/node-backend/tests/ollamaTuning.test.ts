@@ -219,10 +219,12 @@ describe("releaseLoadedModels", () => {
     await tuner.choose("b", messagesOfChars(10));
     const setModelResidency = vi.fn().mockResolvedValue(undefined);
     await releaseLoadedModels({ tuner, client: { setModelResidency } });
-    expect(setModelResidency.mock.calls.map(([arg]) => arg)).toEqual([
-      expect.objectContaining({ model: "a", keepAlive: 0 }),
-      expect.objectContaining({ model: "b", keepAlive: 0 }),
-    ]);
+    expect(setModelResidency.mock.calls.map(([arg]: unknown[]) => arg)).toEqual(
+      [
+        expect.objectContaining({ model: "a", keepAlive: 0 }),
+        expect.objectContaining({ model: "b", keepAlive: 0 }),
+      ],
+    );
     expect(tuner.loadedModels()).toEqual([]);
   });
 

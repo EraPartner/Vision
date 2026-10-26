@@ -16,10 +16,13 @@ import { toDecimal, toNumber, roundToCents } from "../../lib/money.ts";
  *                       absent one it contributes 0 (realized is still counted).
  */
 function aggregateIncome(
-  summaries: Array<{
-    totalIncome?: number | string;
-    projectedAnnualInterest?: number | string;
-  }>,
+  summaries:
+    | Array<{
+        totalIncome?: number | string;
+        projectedAnnualInterest?: number | string;
+      }>
+    | null
+    | undefined,
 ): { realizedIncome: number; projectedAnnualIncome: number } {
   let realized = toDecimal(0);
   let projected = toDecimal(0);
@@ -41,9 +44,9 @@ function coverageRatio(
   annualPassiveIncome: number,
   annualSpending: number,
 ): number | null {
-  const spend = toDecimal(annualSpending ?? 0);
+  const spend = toDecimal(annualSpending);
   if (spend.lte(0)) return null;
-  return toNumber(toDecimal(annualPassiveIncome ?? 0).dividedBy(spend));
+  return toNumber(toDecimal(annualPassiveIncome).dividedBy(spend));
 }
 
 export {

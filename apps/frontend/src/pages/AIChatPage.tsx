@@ -267,10 +267,7 @@ export default function AIChatPage() {
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className={cn(
-                                                    "md:hidden",
-                                                    mode !== "chat" && "hidden",
-                                                )}
+                                                className="md:hidden"
                                                 aria-label={t(
                                                     "aiChat.conversations",
                                                 )}
@@ -298,13 +295,8 @@ export default function AIChatPage() {
                                     </Sheet>
                                     <div className="min-w-0">
                                         <h2 className="truncate type-title-3">
-                                            {(mode === "chat" &&
-                                                detail?.conversation.title) ||
-                                                t(
-                                                    mode === "chat"
-                                                        ? "aiChat.mode.chat"
-                                                        : "aiChat.mode.investigation",
-                                                )}
+                                            {detail?.conversation.title ||
+                                                t("aiChat.mode.chat")}
                                         </h2>
                                         {(statusLoading || status?.ok) && (
                                             <p className="mt-0.5 flex items-center gap-1.5 type-footnote text-label-secondary">

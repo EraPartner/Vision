@@ -26,6 +26,7 @@ vi.mock("../../src/repositories/tagRepository.ts", () => ({
 import tagRepository from "../../src/repositories/tagRepository.ts";
 import type { TagRow } from "../../src/repositories/tagRepository.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const repo = vi.mocked(tagRepository);
 const tag = (row: Partial<TagRow>) => row as TagRow;
 
@@ -43,7 +44,7 @@ describe("GET /api/tags", () => {
     ]);
     repo.getCount.mockResolvedValue(1);
     const res = await api.get(BASE).expect(200);
-    expect(tagRepository.getAll).toHaveBeenCalledWith(
+    expect(mockOf(tagRepository, "getAll")).toHaveBeenCalledWith(
       expect.objectContaining({ active: true }),
     );
     expect(bodyAt(res, "data", "total")).toBe(1);
@@ -54,7 +55,7 @@ describe("GET /api/tags", () => {
     repo.getAll.mockResolvedValue([]);
     repo.getCount.mockResolvedValue(0);
     await api.get(`${BASE}?active=false`).expect(200);
-    expect(tagRepository.getAll).toHaveBeenCalledWith(
+    expect(mockOf(tagRepository, "getAll")).toHaveBeenCalledWith(
       expect.objectContaining({ active: false }),
     );
   });
@@ -63,7 +64,7 @@ describe("GET /api/tags", () => {
     repo.getAll.mockResolvedValue([]);
     repo.getCount.mockResolvedValue(0);
     await api.get(`${BASE}?active=all`).expect(200);
-    expect(tagRepository.getAll).toHaveBeenCalledWith(
+    expect(mockOf(tagRepository, "getAll")).toHaveBeenCalledWith(
       expect.objectContaining({ active: null }),
     );
   });
@@ -86,12 +87,12 @@ describe("GET /api/tags — pagination is opt-in", () => {
     repo.getAll.mockResolvedValue(rows);
     const res = await api.get(BASE).expect(200);
 
-    expect(tagRepository.getAll).toHaveBeenCalledWith({
+    expect(mockOf(tagRepository, "getAll")).toHaveBeenCalledWith({
       active: true,
       limit: null,
       offset: 0,
     });
-    expect(tagRepository.getCount).not.toHaveBeenCalled();
+    expect(mockOf(tagRepository, "getCount")).not.toHaveBeenCalled();
     expect(bodyAt(res, "data", "items")).toHaveLength(60);
     expect(bodyAt(res, "data", "total")).toBe(60);
     expect(bodyAt(res, "data", "limit")).toBeUndefined();
@@ -102,7 +103,7 @@ describe("GET /api/tags — pagination is opt-in", () => {
     repo.getAll.mockResolvedValue([tag({ id: asTagId(1), slug: "a", is_active: true })]);
     const res = await api.get(`${BASE}?limit=`).expect(200);
 
-    expect(tagRepository.getAll).toHaveBeenCalledWith({
+    expect(mockOf(tagRepository, "getAll")).toHaveBeenCalledWith({
       active: true,
       limit: null,
       offset: 0,
@@ -115,7 +116,7 @@ describe("GET /api/tags — pagination is opt-in", () => {
     repo.getCount.mockResolvedValue(12);
     const res = await api.get(`${BASE}?limit=1&offset=2`).expect(200);
 
-    expect(tagRepository.getAll).toHaveBeenCalledWith({
+    expect(mockOf(tagRepository, "getAll")).toHaveBeenCalledWith({
       active: true,
       limit: 1,
       offset: 2,
@@ -134,7 +135,7 @@ describe("GET /api/tags — pagination is opt-in", () => {
     repo.getCount.mockResolvedValue(0);
     await api.get(`${BASE}?limit=99999`).expect(200);
 
-    expect(tagRepository.getAll).toHaveBeenCalledWith({
+    expect(mockOf(tagRepository, "getAll")).toHaveBeenCalledWith({
       active: true,
       limit: 1000,
       offset: 0,
@@ -152,7 +153,7 @@ describe("POST /api/tags", () => {
       reactivated: false,
     });
     const res = await api.post(BASE).send({ slug: "Rome 2020" }).expect(201);
-    expect(tagRepository.findOrCreateBySlug).toHaveBeenCalledWith(
+    expect(mockOf(tagRepository, "findOrCreateBySlug")).toHaveBeenCalledWith(
       "rome-2020",
       null,
     );
@@ -222,7 +223,7 @@ describe("POST /api/tags", () => {
       reactivated: false,
     });
     await api.post(BASE).send({ slug: "x", color: null }).expect(201);
-    expect(tagRepository.findOrCreateBySlug).toHaveBeenCalledWith("x", null);
+    expect(mockOf(tagRepository, "findOrCreateBySlug")).toHaveBeenCalledWith("x", null);
   });
 });
 
@@ -275,7 +276,7 @@ describe("PATCH /api/tags/:id", () => {
       .send({ color: "#f00" })
       .expect(400);
     expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-    expect(tagRepository.update).not.toHaveBeenCalled();
+    expect(mockOf(tagRepository, "update")).not.toHaveBeenCalled();
   });
 });
 
@@ -316,14 +317,14 @@ describe("tag request schemas (zod)", () => {
     async (body) => {
       const res = await api.post(BASE).send(body).expect(400);
       expect(bodyAt(res, "error", "message")).toContain("slug");
-      expect(repo.findOrCreateBySlug).not.toHaveBeenCalled();
+      expect(mockOf(repo, "findOrCreateBySlug")).not.toHaveBeenCalled();
     },
   );
 
   it("PATCH without a body stays a no-op update", async () => {
     repo.update.mockResolvedValue(tag({ id: asTagId(1) }));
     await api.patch(`${BASE}/1`).expect(200);
-    expect(repo.update).toHaveBeenCalledWith(1, {
+    expect(mockOf(repo, "update")).toHaveBeenCalledWith(1, {
       color: undefined,
       is_active: undefined,
     });
@@ -331,6 +332,6 @@ describe("tag request schemas (zod)", () => {
 
   it("DELETE rejects a malformed :id before deactivating", async () => {
     await api.delete(`${BASE}/12abc`).expect(400);
-    expect(repo.softDelete).not.toHaveBeenCalled();
+    expect(mockOf(repo, "softDelete")).not.toHaveBeenCalled();
   });
 });

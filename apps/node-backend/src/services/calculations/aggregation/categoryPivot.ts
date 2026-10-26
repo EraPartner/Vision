@@ -15,8 +15,8 @@ export async function computeCategoryPivot({
   targetCurrency = "EUR",
   excludedCategoryIds = [],
   excludedRecipientIds = [],
-  startDate = undefined,
-  endDate = undefined,
+  startDate,
+  endDate,
 }: CategoryPivotOptions = {}) {
   const key = `cat|${targetCurrency}|c:${statsKeyPart(excludedCategoryIds)}|r:${statsKeyPart(excludedRecipientIds)}|s:${startDate || ""}|e:${endDate || ""}`;
   return withStatisticsCache(key, async () => {

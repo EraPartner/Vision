@@ -36,7 +36,9 @@ import { logger } from "../src/config/logger.ts";
 import { partial } from "./helpers/partial.ts";
 import { pgLocalDate } from "./helpers/portfolioPgRows.ts";
 import { RowContractError } from "../src/database/rowContracts.ts";
+import { must } from "./helpers/must.ts";
 
+import { mockOf } from "./helpers/mockOf.ts";
 // The cases prime `query` with bare `{ rows }` results and never read
 // `rowCount`, so the mock is typed with a partial result.
 const query = vi.mocked(rawQuery) as unknown as Mock<
@@ -49,7 +51,7 @@ type QueryHandler =
   | QueryResultFixture
   | ((params: readonly unknown[], sql: string) => QueryResultFixture);
 
-const originalFetch = global.fetch;
+const originalFetch = global.fetch as typeof fetch | undefined;
 
 /**
  * SQL text lower-cased with identifier quotes removed, so the routing below
@@ -171,7 +173,7 @@ describe("Currency Conversion Service", () => {
     expect(typeof gbp).toBe("number");
     expect(typeof jpy).toBe("number");
     // GBP should be worth more than USD per unit
-    expect(gbp).toBeGreaterThan(usd!);
+    expect(gbp).toBeGreaterThan(must(usd, "usd"));
   });
 
   // ── convertRowsToEur ─────────────────────────────────────
@@ -183,8 +185,8 @@ describe("Currency Conversion Service", () => {
 
     const results = await convertRowsToEur(rows);
     expect(results).toHaveLength(2);
-    expect(results[0]!.amount_eur).toBe(100.0);
-    expect(results[1]!.amount_eur).toBe(-50.0);
+    expect(must(results[0], "results[0]").amount_eur).toBe(100.0);
+    expect(must(results[1], "results[1]").amount_eur).toBe(-50.0);
   });
 
   it("should return empty array for empty rows", async () => {
@@ -193,7 +195,6 @@ describe("Currency Conversion Service", () => {
   });
 
   it("should return empty array for null rows", async () => {
-    // @ts-expect-error -- deliberately passes null to check the runtime guard
     const results = await convertRowsToEur(null);
     expect(results).toEqual([]);
   });
@@ -209,7 +210,7 @@ describe("Currency Conversion Service", () => {
     const rows = [{ amount: 100, currency: "USD" }];
     const results = await convertRowsToEur(rows, "HUF");
     // USD->EUR: 100 * 0.5 = 50; EUR->HUF divide by 0.0025 => 20000
-    expect(results[0]!.amount_eur).toBeCloseTo(20000, 6);
+    expect(must(results[0], "results[0]").amount_eur).toBeCloseTo(20000, 6);
   });
 
   it("should convert amount between arbitrary currencies", async () => {
@@ -239,7 +240,7 @@ describe("Currency Conversion Service", () => {
       [{ amount: 50, currency: "XYZ" }],
       "EUR",
     );
-    expect(row!.amount_eur).toBeUndefined();
+    expect(must(row, "row").amount_eur).toBeUndefined();
   });
 
   it("leaves a row unconverted when the target currency has no stored rate", async () => {
@@ -247,7 +248,7 @@ describe("Currency Conversion Service", () => {
       [{ amount: 50, currency: "USD" }],
       "ZZZ",
     );
-    expect(row!.amount_eur).toBeUndefined();
+    expect(must(row, "row").amount_eur).toBeUndefined();
   });
 
   it("uses an earlier historical rate even when a future rate is closer", async () => {
@@ -272,7 +273,7 @@ describe("Currency Conversion Service", () => {
       useHistoricalRatesByDate: true,
       dateField: "day",
     });
-    expect(converted[0]!.amount_eur).toBeCloseTo(80, 6);
+    expect(must(converted[0], "converted[0]").amount_eur).toBeCloseTo(80, 6);
   });
 
   it("prefetches history when the stored currency has only future rates", async () => {
@@ -287,16 +288,16 @@ describe("Currency Conversion Service", () => {
       });
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      text: async () =>
-        '<Cube time="2020-01-14"><Cube currency="USD" rate="1.25"/></Cube>',
+      text: () =>
+        Promise.resolve('<Cube time="2020-01-14"><Cube currency="USD" rate="1.25"/></Cube>'),
     });
     const [row] = await convertRowsToEur(
       [{ amount: 100, currency: "USD", day: "2020-01-16" }],
       "EUR",
       { useHistoricalRatesByDate: true },
     );
-    expect(row!.amount_eur).toBeCloseTo(80, 6);
-    expect(row!.used_fallback_rate).toBeUndefined();
+    expect(must(row, "row").amount_eur).toBeCloseTo(80, 6);
+    expect(must(row, "row").used_fallback_rate).toBeUndefined();
     expect(global.fetch).toHaveBeenCalled();
   });
 
@@ -316,9 +317,9 @@ describe("Currency Conversion Service", () => {
       "EUR",
       { useHistoricalRatesByDate: true },
     );
-    expect(row!.amount_eur).toBeCloseTo(90, 6);
-    expect(row!.used_fallback_rate).toBe(true);
-    expect(row!.fallback_reason).toBe("historical_rate_missing");
+    expect(must(row, "row").amount_eur).toBeCloseTo(90, 6);
+    expect(must(row, "row").used_fallback_rate).toBe(true);
+    expect(must(row, "row").fallback_reason).toBe("historical_rate_missing");
   });
 
   it("should batch repeated historical misses without point DB lookups", async () => {
@@ -331,7 +332,7 @@ describe("Currency Conversion Service", () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 503,
-      text: async () => "",
+      text: () => Promise.resolve(""),
     });
 
     const rows = [
@@ -346,8 +347,8 @@ describe("Currency Conversion Service", () => {
 
     expect(converted).toHaveLength(2);
     // No rate anywhere: both rows stay unconverted, never 1:1.
-    expect(converted[0]!.amount_eur).toBeUndefined();
-    expect(converted[1]!.amount_eur).toBeUndefined();
+    expect(must(converted[0], "converted[0]").amount_eur).toBeUndefined();
+    expect(must(converted[1], "converted[1]").amount_eur).toBeUndefined();
 
     const sqlCalls = query.mock.calls.map(([sql]) => sqlText(sql));
     const exactLookups = sqlCalls.filter((sql) =>
@@ -367,7 +368,7 @@ describe("Currency Conversion Service", () => {
     query.mockResolvedValue({ rows: [] });
     global.fetch = vi
       .fn()
-      .mockResolvedValue({ ok: false, status: 503, text: async () => "" });
+      .mockResolvedValue({ ok: false, status: 503, text: () => Promise.resolve("") });
 
     const rows = Array.from({ length: 60 }, (_, i) => ({
       amount: 1,
@@ -395,14 +396,14 @@ describe("Currency Conversion Service", () => {
 
   it("keeps historical fallback metadata as an internal diagnostic", async () => {
     // A latest stored rate exists, but no historical one on or before the day.
-    query.mockImplementation(async (sql) =>
-      sqlText(sql).includes("is_latest =")
+    query.mockImplementation((sql) =>
+      Promise.resolve(sqlText(sql).includes("is_latest =")
         ? { rows: [{ currency_code: "USD", rate_to_eur: "0.9" }] }
-        : { rows: [] },
+        : { rows: [] }),
     );
     global.fetch = vi
       .fn()
-      .mockResolvedValue({ ok: false, status: 503, text: async () => "" });
+      .mockResolvedValue({ ok: false, status: 503, text: () => Promise.resolve("") });
 
     const [converted] = await convertRowsToEur(
       [{ id: 7, amount: 100, currency: "USD", day: "2020-01-15" }],
@@ -416,7 +417,7 @@ describe("Currency Conversion Service", () => {
       used_fallback_rate: true,
       fallback_reason: "historical_rate_missing",
     });
-    expect(logger.warn).toHaveBeenCalledWith(
+    expect(mockOf(logger, "warn")).toHaveBeenCalledWith(
       "Historical FX missing, falling back to current rate",
       { currency: "USD", date: "2020-01-15" },
     );
@@ -426,10 +427,10 @@ describe("Currency Conversion Service", () => {
     query.mockResolvedValue({ rows: [] });
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      text: async () => `
+      text: () => Promise.resolve(`
         <Cube time="2025-04-01"><Cube currency="USD" rate="2"/></Cube>
         <Cube time="2025-04-02"><Cube currency="USD" rate="4"/></Cube>
-      `,
+      `),
     });
     const rows = [
       { id: 1, amount: 100, currency: "USD", day: "2025-04-01" },
@@ -484,7 +485,7 @@ describe("Currency Conversion Service", () => {
       { useHistoricalRatesByDate: true, dateField: "day" },
     );
 
-    expect(converted[0]!.amount_eur).toBe(100);
+    expect(must(converted[0], "converted[0]").amount_eur).toBe(100);
     expect(global.fetch).not.toHaveBeenCalled();
     expect(
       query.mock.calls.some(([sql]) => sqlText(sql).includes("from unnest")),
@@ -499,8 +500,8 @@ describe("Currency Conversion Service", () => {
           releaseFetch = () =>
             resolve({
               ok: true,
-              text: async () =>
-                '<Cube time="2025-04-01"><Cube currency="USD" rate="2"/></Cube>',
+              text: () =>
+                Promise.resolve('<Cube time="2025-04-01"><Cube currency="USD" rate="2"/></Cube>'),
             });
         }),
     );
@@ -515,7 +516,7 @@ describe("Currency Conversion Service", () => {
 
     clearHistoricalIndexCache();
     await getHistoricalRateIndex(["USD"]);
-    releaseFetch!();
+    must(releaseFetch, "releaseFetch")();
     await conversion;
 
     const indexLoadsBefore = query.mock.calls.filter(([sql]) =>
@@ -534,16 +535,16 @@ describe("Currency Conversion Service", () => {
    * fx_rate_to_eur stamping, so positional mocks are unreadable.
    */
   function dispatchQueries(handlers: Array<[string, QueryHandler]>) {
-    query.mockImplementation(async (sql, params) => {
+    query.mockImplementation((sql, params) => {
       const s = sqlText(sql);
       for (const [pattern, result] of handlers) {
         if (s.includes(sqlText(pattern))) {
-          return typeof result === "function"
+          return Promise.resolve(typeof result === "function"
             ? result(params as readonly unknown[], s)
-            : result;
+            : result);
         }
       }
-      return { rows: [], rowCount: 0 };
+      return Promise.resolve({ rows: [], rowCount: 0 });
     });
   }
 
@@ -552,7 +553,7 @@ describe("Currency Conversion Service", () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 503,
-      text: async () => "",
+      text: () => Promise.resolve(""),
     });
 
     dispatchQueries([
@@ -606,8 +607,8 @@ describe("Currency Conversion Service", () => {
 
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      text: async () =>
-        "<Cube><Cube time='2026-02-01'><Cube currency='USD' rate='2.0000'/></Cube></Cube>",
+      text: () =>
+        Promise.resolve("<Cube><Cube time='2026-02-01'><Cube currency='USD' rate='2.0000'/></Cube></Cube>"),
     });
 
     let savedRate = false;
@@ -671,15 +672,15 @@ describe("Currency Conversion Service", () => {
   it("surfaces a stored rate that breaks its contract during the one-time repair", async () => {
     query.mockReset();
     clearMemoryCache();
-    global.fetch = vi.fn().mockImplementation(async (url) => {
+    global.fetch = vi.fn().mockImplementation((url) => {
       if (String(url).includes("eurofxref-hist.xml")) {
-        return {
+        return Promise.resolve({
           ok: true,
-          text: async () =>
-            "<Cube><Cube time='2020-03-02'><Cube currency='USD' rate='2.0000'/></Cube></Cube>",
-        };
+          text: () =>
+            Promise.resolve("<Cube><Cube time='2020-03-02'><Cube currency='USD' rate='2.0000'/></Cube></Cube>"),
+        });
       }
-      return { ok: false, status: 503, text: async () => "" };
+      return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve("") });
     });
 
     dispatchQueries([
@@ -717,15 +718,15 @@ describe("Currency Conversion Service", () => {
     clearMemoryCache();
 
     // 90d feed empty; full-history feed carries the true old rate (1/2 = 0.5).
-    global.fetch = vi.fn().mockImplementation(async (url) => {
+    global.fetch = vi.fn().mockImplementation((url) => {
       if (String(url).includes("eurofxref-hist.xml")) {
-        return {
+        return Promise.resolve({
           ok: true,
-          text: async () =>
-            "<Cube><Cube time='2020-03-02'><Cube currency='USD' rate='2.0000'/></Cube></Cube>",
-        };
+          text: () =>
+            Promise.resolve("<Cube><Cube time='2020-03-02'><Cube currency='USD' rate='2.0000'/></Cube></Cube>"),
+        });
       }
-      return { ok: false, status: 503, text: async () => "" };
+      return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve("") });
     });
 
     let repairFlagSet = false;
@@ -787,9 +788,9 @@ describe("Currency Conversion Service", () => {
     // saved under the transaction's own date. saveHistoricalRate binds
     // (currency, rate, date).
     expect(savedRates).toHaveLength(1);
-    expect(savedRates[0]![0]).toBe("USD");
-    expect(savedRates[0]![1]).toBeCloseTo(0.5, 10);
-    expect(savedRates[0]![2]).toBe("2020-03-07");
+    expect(must(savedRates[0], "savedRates[0]")[0]).toBe("USD");
+    expect(must(savedRates[0], "savedRates[0]")[1]).toBeCloseTo(0.5, 10);
+    expect(must(savedRates[0], "savedRates[0]")[2]).toBe("2020-03-07");
     expect(repairFlagSet).toBe(true);
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining("eurofxref-hist.xml"),
@@ -800,11 +801,11 @@ describe("Currency Conversion Service", () => {
   it("caches the historical rate index and reuses it across convertRowsToEur calls", async () => {
     clearMemoryCache();
     query.mockReset();
-    query.mockImplementation(async (sql) => {
+    query.mockImplementation((sql) => {
       const s = sqlText(sql);
-      if (s.includes("is_latest =")) return { rows: [] }; // getRates → fallback
+      if (s.includes("is_latest =")) return Promise.resolve({ rows: [] }); // getRates → fallback
       if (s.includes("where currency_code = any")) {
-        return {
+        return Promise.resolve({
           rows: [
             {
               currency_code: "USD",
@@ -812,9 +813,9 @@ describe("Currency Conversion Service", () => {
               rate_to_eur: "0.9",
             },
           ],
-        };
+        });
       }
-      return { rows: [] };
+      return Promise.resolve({ rows: [] });
     });
 
     const rows = [{ amount: 100, currency: "USD", day: "2024-03-15" }];
@@ -823,8 +824,8 @@ describe("Currency Conversion Service", () => {
     const [first] = await convertRowsToEur(rows, "EUR", opts);
     const [second] = await convertRowsToEur(rows, "EUR", opts);
 
-    expect(first!.amount_eur).toBeCloseTo(90, 6);
-    expect(second!.amount_eur).toBeCloseTo(90, 6);
+    expect(must(first, "first").amount_eur).toBeCloseTo(90, 6);
+    expect(must(second, "second").amount_eur).toBeCloseTo(90, 6);
 
     // The full-history index load runs once; the second call reuses the cache.
     const indexLoads = query.mock.calls.filter(([sql]) =>
@@ -845,19 +846,19 @@ describe("Currency Conversion Service", () => {
       withTransaction.mockImplementation(async (fn) =>
         fn(partial<PgPoolClient>({ query: vi.fn() })),
       );
-      global.fetch = vi.fn().mockImplementation(async (url) =>
-        String(url).includes("ecb")
+      global.fetch = vi.fn().mockImplementation((url) =>
+        Promise.resolve(String(url).includes("ecb")
           ? {
               ok: provider !== "supplementary",
-              text: async () => '<Cube currency="USD" rate="2"/>',
+              text: () => Promise.resolve('<Cube currency="USD" rate="2"/>'),
             }
           : {
               ok: provider !== "ecb",
-              json: async () => ({
+              json: () => Promise.resolve(({
                 result: "success",
                 rates: { USD: 4, GBP: 2 },
-              }),
-            },
+              })),
+            }),
       );
       await warmCache();
       expect(await convertToCurrency(10, "AED", "EUR")).toBeCloseTo(3);
@@ -870,7 +871,7 @@ describe("Currency Conversion Service", () => {
       const written = query.mock.calls
         .filter(([sql]) => sqlText(sql).includes("insert into exchange_rates"))
         .map(([, params]) => params?.[0]);
-      expect(written.sort()).toEqual(
+      expect(written.sort((a, b) => String(a).localeCompare(String(b)))).toEqual(
         provider === "ecb" ? ["USD"] : ["GBP", "USD"],
       );
     },
@@ -882,10 +883,10 @@ describe("Currency Conversion Service", () => {
     });
     global.fetch = vi
       .fn()
-      .mockImplementation(async (url) =>
-        String(url).includes("ecb")
-          ? { ok: true, text: async () => '<Cube currency="USD" rate="2"/>' }
-          : { ok: false, status: 503 },
+      .mockImplementation((url) =>
+        Promise.resolve(String(url).includes("ecb")
+          ? { ok: true, text: () => Promise.resolve('<Cube currency="USD" rate="2"/>') }
+          : { ok: false, status: 503 }),
       );
 
     await expect(warmCache()).rejects.toBeInstanceOf(RowContractError);
@@ -897,11 +898,11 @@ describe("Currency Conversion Service", () => {
     // (845ms locally → >5s in CI when network was slow/blocked).
     global.fetch = vi
       .fn()
-      .mockResolvedValueOnce({ ok: false, status: 503, text: async () => "" })
+      .mockResolvedValueOnce({ ok: false, status: 503, text: () => Promise.resolve("") })
       .mockResolvedValueOnce({
         ok: false,
         status: 500,
-        json: async () => ({}),
+        json: () => Promise.resolve(({})),
       });
 
     await expect(warmCache()).resolves.not.toThrow();
@@ -910,17 +911,17 @@ describe("Currency Conversion Service", () => {
   it("should warm cache from fallback when both APIs are unavailable", async () => {
     global.fetch = vi
       .fn()
-      .mockResolvedValueOnce({ ok: false, status: 503, text: async () => "" })
+      .mockResolvedValueOnce({ ok: false, status: 503, text: () => Promise.resolve("") })
       .mockResolvedValueOnce({
         ok: false,
         status: 500,
-        json: async () => ({}),
+        json: () => Promise.resolve(({})),
       });
 
     await warmCache();
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
-    expect(logger.warn).toHaveBeenCalledWith(
+    expect(mockOf(logger, "warn")).toHaveBeenCalledWith(
       expect.stringContaining("all APIs unavailable"),
     );
   });

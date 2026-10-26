@@ -10,6 +10,7 @@
  * lossless.
  */
 
+import { listGuard } from "@/lib/enumGuard";
 import { REPORT_THEME_DEFAULTS } from "@vision/types/reportThemeDefaults";
 
 export type ThemeMode = "light" | "dark";
@@ -25,12 +26,7 @@ export const THEME_VARIANTS: ThemeVariant[] = [
     "high-contrast",
 ];
 
-export function isThemeVariant(value: unknown): value is ThemeVariant {
-    return (
-        typeof value === "string" &&
-        (THEME_VARIANTS as string[]).includes(value)
-    );
-}
+export const isThemeVariant = listGuard(THEME_VARIANTS);
 
 export type ThemeTokens = {
     background: string;

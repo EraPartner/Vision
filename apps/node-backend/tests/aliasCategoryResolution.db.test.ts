@@ -68,6 +68,8 @@ import {
   asPlannedTransactionId,
   asRecipientId,
 } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
+import { valueAt } from "./helpers/responseBody.ts";
 
 const MANAGED_VIEWS = ["mv_monthly_summary", "mv_category_totals"];
 
@@ -96,16 +98,16 @@ const rec = {} as Record<
  *   Misc Payee        — no default category anywhere
  */
 async function seedBase() {
-  const pool = getTestPool()!;
+  const pool = must(getTestPool(), "getTestPool()");
   for (const [key, [general, detail]] of Object.entries({
     Food: ["Food", "Groceries"],
     Bills: ["Bills", "Utilities"],
   })) {
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<{ id: number }>(
       "INSERT INTO categories (general, detail) VALUES ($1, $2) RETURNING id",
       [general, detail],
     );
-    cat[key as keyof typeof cat] = rows[0].id;
+    cat[key as keyof typeof cat] = must(rows[0], "row").id;
   }
   const addRecipient = async (
     name: string,
@@ -114,12 +116,12 @@ async function seedBase() {
       primaryId = null,
     }: { defaultCategoryId?: number | null; primaryId?: number | null } = {},
   ): Promise<number> => {
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<{ id: number }>(
       `INSERT INTO recipients (name, normalized_name, default_category_id, primary_recipient_id)
        VALUES ($1, $2, $3, $4) RETURNING id`,
       [name, name.toLowerCase(), defaultCategoryId, primaryId],
     );
-    return rows[0].id;
+    return must(rows[0], "row").id;
   };
   rec.electrabel = await addRecipient("Electrabel", {
     defaultCategoryId: cat.Bills,
@@ -133,13 +135,13 @@ async function seedBase() {
 
 /** Resolve the canonical account ID used by transaction fixtures. */
 async function ensureAccount(name: string): Promise<number> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: number }>(
     `INSERT INTO accounts (name, display_name) VALUES ($1, $1)
      ON CONFLICT (lower(btrim(name))) DO UPDATE SET name = EXCLUDED.name
      RETURNING id`,
     [name],
   );
-  return rows[0].id;
+  return must(rows[0], "row").id;
 }
 
 /**
@@ -192,12 +194,12 @@ async function insertTxn({
         isTransfer,
       ];
   const n = dateSql ? 0 : 1;
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: number }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, is_active, is_transfer)
      VALUES (${dateExpr}, $${n + 1}, $${n + 2}, $${n + 3}, $${n + 4}, $${n + 5}, $${n + 6}, $${n + 7}) RETURNING id`,
     params,
   );
-  return rows[0].id;
+  return must(rows[0], "row").id;
 }
 
 /**
@@ -216,17 +218,17 @@ async function insertTxn({
  */
 async function seedAliasWithOwnDefault() {
   await seedBase();
-  const pool = getTestPool()!;
-  const { rows: catRows } = await pool.query(
+  const pool = must(getTestPool(), "getTestPool()");
+  const { rows: catRows } = await pool.query<{ id: number }>(
     `INSERT INTO categories (general, detail) VALUES ('Zzz', 'Last') RETURNING id`,
   );
-  cat.Zzz = catRows[0].id;
-  const { rows: recRows } = await pool.query(
+  cat.Zzz = must(catRows[0], "row").id;
+  const { rows: recRows } = await pool.query<{ id: number }>(
     `INSERT INTO recipients (name, normalized_name, default_category_id, primary_recipient_id)
      VALUES ('Electrabel Retail', 'electrabel retail', $1, $2) RETURNING id`,
     [cat.Zzz, rec.electrabel],
   );
-  rec.electrabelOwnAlias = recRows[0].id;
+  rec.electrabelOwnAlias = must(recRows[0], "row").id;
 }
 
 /**
@@ -239,13 +241,13 @@ async function listResolvedCategoryName(txnId: number) {
   const listed = (await transactionRepository.getAll({})).find(
     (t) => t.id === txnId,
   );
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{ name: string }>(
     `SELECT general || ':' || detail AS name FROM categories WHERE id = $1`,
-    [listed!.effective_category_id],
+    [must(listed, "listed").effective_category_id],
   );
   return {
-    effectiveCategoryId: listed!.effective_category_id,
-    name: rows[0].name,
+    effectiveCategoryId: must(listed, "listed").effective_category_id,
+    name: must(rows[0], "row").name,
   };
 }
 
@@ -284,16 +286,16 @@ async function insertPlanned({
   categoryId?: number | null;
   memo?: string | null;
 }): Promise<number> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: number }>(
     `INSERT INTO planned_transactions (planned_date, amount, currency, recipient_id, category_id, memo)
      VALUES (${dateSql}, $1, 'EUR', $2, $3, $4) RETURNING id`,
     [amount, recipientId, categoryId, memo],
   );
-  return rows[0].id;
+  return must(rows[0], "row").id;
 }
 
 async function dropManagedViews() {
-  const pool = getTestPool()!;
+  const pool = must(getTestPool(), "getTestPool()");
   for (const view of MANAGED_VIEWS) {
     await pool.query(`DROP MATERIALIZED VIEW IF EXISTS ${view} CASCADE`);
   }
@@ -312,7 +314,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       // MVs first: they are the only artefact of this suite that outlives a row
       // wipe, and every other DB suite assumes a migrated DB with no MVs.
       await dropManagedViews();
@@ -328,7 +330,7 @@ describe.skipIf(!hasTestDatabase())(
         `DELETE FROM user_settings WHERE key = 'includeTransfers'`,
       );
       for (const bag of [cat, rec] as Record<string, number>[])
-        for (const k of Object.keys(bag)) delete bag[k];
+        for (const k of Object.keys(bag)) Reflect.deleteProperty(bag, k);
       clearMemoryCache();
       __clearRecurringCacheForTests();
     });
@@ -377,12 +379,12 @@ describe.skipIf(!hasTestDatabase())(
         const listed = (await transactionRepository.getAll({})).find(
           (t) => t.id === aliasTxn,
         );
-        expect(listed!.effective_category_id).toBe(cat.Bills);
-        expect(listed!.category_name).toBe("Bills:Utilities");
+        expect(must(listed, "listed").effective_category_id).toBe(cat.Bills);
+        expect(must(listed, "listed").category_name).toBe("Bills:Utilities");
 
         await createMaterializedViews();
 
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(getTestPool(), "getTestPool()").query<{ category_id: number | null; category_id_key: number; category_name: string; total_spending: string; total_income: string }>(
           `SELECT category_id, category_id_key, category_name, total_spending, total_income, transaction_count
            FROM mv_monthly_summary
           WHERE month_start = date_trunc('month', ${appTodaySql()})::date
@@ -401,7 +403,10 @@ describe.skipIf(!hasTestDatabase())(
           ["Food:Groceries", -40, 0],
           ["UNCATEGORISED", 0, 2000], // the genuinely uncategorised income row
         ]);
-        const bills = rows.find((r) => r.category_name === "Bills:Utilities");
+        const bills = must(
+          rows.find((r) => r.category_name === "Bills:Utilities"),
+          "Bills:Utilities summary row",
+        );
         expect(bills.category_id).toBe(cat.Bills);
         expect(bills.category_id_key).toBe(cat.Bills);
         // Nothing but the real uncategorised row is left in the −1 bucket.
@@ -431,10 +436,10 @@ describe.skipIf(!hasTestDatabase())(
         expect(mv.months).toEqual(live.months);
         expect(mv.summary).toEqual(live.summary);
         // Sanity: the alias row's −120 and −33 really are in there.
-        const current = mv.months[mv.months.length - 1]!;
+        const current = must(mv.months[mv.months.length - 1], "mv.months[mv.months.length - 1]");
         expect(current.total_spending).toBe(-160);
         expect(current.total_income).toBe(2000);
-        expect(mv.months[mv.months.length - 2]!.total_spending).toBe(-33);
+        expect(must(mv.months[mv.months.length - 2], "mv.months[mv.months.length - 2]").total_spending).toBe(-33);
       });
 
       // The live path's category exclusion resolves 3 levels too: excluding the
@@ -444,12 +449,12 @@ describe.skipIf(!hasTestDatabase())(
 
         const withBills = await getMonthlyFinancialSummary();
         expect(
-          withBills.months[withBills.months.length - 1]!.total_spending,
+          must(withBills.months[withBills.months.length - 1], "withBills.months[withBills.months.length - 1]").total_spending,
         ).toBe(-160);
 
         const withoutBills = await getMonthlyFinancialSummary([cat.Bills]);
         expect(
-          withoutBills.months[withoutBills.months.length - 1]!.total_spending,
+          must(withoutBills.months[withoutBills.months.length - 1], "withoutBills.months[withoutBills.months.length - 1]").total_spending,
         ).toBe(-40);
       });
     });
@@ -567,7 +572,7 @@ describe.skipIf(!hasTestDatabase())(
           spending: { "Food: Groceries": 40 }, // pre-fix: + Uncategorised 900
         });
 
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', 'true'::jsonb)`,
         );
         expect(await flow({})).toEqual({
@@ -596,10 +601,10 @@ describe.skipIf(!hasTestDatabase())(
         const { patterns } = await detectRecurringPatterns();
         const alias = patterns.find((p) => p.recipientId === rec.electrabel);
         expect(alias).toBeDefined();
-        expect(alias!.detectedPattern).toBe("monthly");
-        expect(alias!.occurrences).toBe(3);
+        expect(must(alias, "alias").detectedPattern).toBe("monthly");
+        expect(must(alias, "alias").occurrences).toBe(3);
         // Formerly null: the 2-level join found no category for the alias.
-        expect(alias!.categoryName).toBe("Bills:Utilities");
+        expect(must(alias, "alias").categoryName).toBe("Bills:Utilities");
       });
 
       it("categoryId denotes the same category categoryName names, even for a recipient-default-resolved alias", async () => {
@@ -623,13 +628,13 @@ describe.skipIf(!hasTestDatabase())(
         // recipient-default-categorised pattern reported categoryId: null beside
         // a non-null categoryName, and any consumer keying on the id (e.g. the
         // "create planned payment" POST) saw it as uncategorised.
-        expect(alias!.categoryId).not.toBeNull();
-        const { rows } = await getTestPool()!.query(
+        expect(must(alias, "alias").categoryId).not.toBeNull();
+        const { rows } = await must(getTestPool(), "getTestPool()").query<{ name: string }>(
           `SELECT general || ':' || detail AS name FROM categories WHERE id = $1`,
-          [alias!.categoryId],
+          [must(alias, "alias").categoryId],
         );
-        expect(rows[0]?.name).toBe(alias!.categoryName);
-        expect(alias!.categoryId).toBe(cat.Bills);
+        expect(rows[0]?.name).toBe(must(alias, "alias").categoryName);
+        expect(must(alias, "alias").categoryId).toBe(cat.Bills);
       });
 
       it("marks a PRIMARY pattern as planned when the planned row names an alias", async () => {
@@ -676,15 +681,20 @@ describe.skipIf(!hasTestDatabase())(
         const csvRes = collectingRes();
         await streamCsvExport(csvRes, buildIdListWhere([aliasTxn]));
         // [0] is the header line, [1] the single data row.
-        expect(csvRes.chunks[0]!.split(",")[CSV_CATEGORY_COL]).toBe("Category");
+        expect(must(csvRes.chunks[0], "csvRes.chunks[0]").split(",")[CSV_CATEGORY_COL]).toBe("Category");
         // Pre-fix: 'Bills:Utilities' — the PRIMARY's category, not the alias's.
-        expect(csvRes.chunks[1]!.trim().split(",")[CSV_CATEGORY_COL]).toBe(
+        expect(must(csvRes.chunks[1], "csvRes.chunks[1]").trim().split(",")[CSV_CATEGORY_COL]).toBe(
           name,
         );
 
         const jsonRes = collectingRes();
         await streamNdjsonExport(jsonRes, buildIdListWhere([aliasTxn]));
-        expect(JSON.parse(jsonRes.chunks[0]!).category).toBe(name);
+        expect(
+            valueAt(
+              JSON.parse(must(jsonRes.chunks[0], "jsonRes.chunks[0]")),
+              "category",
+            ),
+          ).toBe(name);
       });
 
       it("an own category_id still wins over both recipient defaults", async () => {
@@ -701,7 +711,7 @@ describe.skipIf(!hasTestDatabase())(
 
         const res = collectingRes();
         await streamCsvExport(res, buildIdListWhere([ownTxn]));
-        expect(res.chunks[1]!.trim().split(",")[CSV_CATEGORY_COL]).toBe(name);
+        expect(must(res.chunks[1], "res.chunks[1]").trim().split(",")[CSV_CATEGORY_COL]).toBe(name);
       });
 
       it("still reaches the PRIMARY default when the alias has none of its own", async () => {
@@ -717,7 +727,7 @@ describe.skipIf(!hasTestDatabase())(
 
         const res = collectingRes();
         await streamCsvExport(res, buildIdListWhere([aliasTxn]));
-        expect(res.chunks[1]!.trim().split(",")[CSV_CATEGORY_COL]).toBe(name);
+        expect(must(res.chunks[1], "res.chunks[1]").trim().split(",")[CSV_CATEGORY_COL]).toBe(name);
       });
     });
 
@@ -733,7 +743,7 @@ describe.skipIf(!hasTestDatabase())(
           recipientId: rec.electrabelOwnAlias,
         });
         // rec.misc owes half of the alias-recipient transaction.
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           `INSERT INTO transaction_splits (transaction_id, recipient_id, amount, is_settled)
          VALUES ($1, $2, '5.00', false)`,
           [aliasTxn, rec.misc],
@@ -746,9 +756,9 @@ describe.skipIf(!hasTestDatabase())(
           asRecipientId(rec.misc),
         );
         expect(rows).toHaveLength(1);
-        expect(rows[0]!.amount).toBe(5);
+        expect(must(rows[0], "rows[0]").amount).toBe(5);
         // Pre-fix: 'Bills:Utilities' — the PRIMARY's category, not the alias's.
-        expect(rows[0]!.category_name).toBe(name);
+        expect(must(rows[0], "rows[0]").category_name).toBe(name);
       });
 
       it("still reaches the PRIMARY default when the alias has none of its own", async () => {
@@ -758,7 +768,7 @@ describe.skipIf(!hasTestDatabase())(
           amount: "-11.11",
           recipientId: rec.electrabelAlias,
         });
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           `INSERT INTO transaction_splits (transaction_id, recipient_id, amount, is_settled)
          VALUES ($1, $2, '4.00', false)`,
           [aliasTxn, rec.misc],
@@ -768,7 +778,7 @@ describe.skipIf(!hasTestDatabase())(
         const rows = await splitRepository.getOwedExportRowsByRecipient(
           asRecipientId(rec.misc),
         );
-        expect(rows[0]!.category_name).toBe(name);
+        expect(must(rows[0], "rows[0]").category_name).toBe(name);
       });
     });
 
@@ -834,12 +844,12 @@ describe.skipIf(!hasTestDatabase())(
 
         for (const [id, name] of Object.entries(expected)) {
           const row = await plannedTransactionRepository.getById(asPlannedTransactionId(Number(id)));
-          expect(row!.category_name).toBe(name);
-          expect(row!.recipient_name).toBe("Electrabel");
+          expect(must(row, "row").category_name).toBe(name);
+          expect(must(row, "row").recipient_name).toBe("Electrabel");
           // Where the row carries its OWN category_id, the id and the displayed
           // name must denote the same category; where it does not, the name is
           // an inherited display value and category_id is legitimately null.
-          if (row!.category_id != null) expect(row!.category_id).toBe(cat.Food);
+          if (must(row, "row").category_id != null) expect(must(row, "row").category_id).toBe(cat.Food);
           else expect(name).not.toBe("Food:Groceries");
         }
 

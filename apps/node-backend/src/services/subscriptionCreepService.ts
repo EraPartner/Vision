@@ -78,8 +78,7 @@ function dismissKey(
 }
 
 /**
- * Build the Set of suppression keys from dismiss records, ignoring malformed
- * entries instead of throwing.
+ * Build the Set of suppression keys from dismiss records.
  */
 function buildDismissedSet(
   dismissRecords: SubscriptionDismissRecord[] | undefined,
@@ -87,7 +86,6 @@ function buildDismissedSet(
   const dismissed = new Set<string>();
   if (!Array.isArray(dismissRecords)) return dismissed;
   for (const rec of dismissRecords) {
-    if (rec == null || rec.recipientId == null || !rec.findingType) continue;
     dismissed.add(dismissKey(rec.recipientId, rec.findingType));
   }
   return dismissed;
@@ -126,7 +124,7 @@ function topByConfidence<T extends { confidence: number }>(findings: T[]): T[] {
   const priceChangeFindings: SubscriptionPriceChangeFinding[] = [];
 
   for (const pattern of patterns) {
-    if (pattern == null || pattern.direction !== 'expense') continue; // outflows only
+    if (pattern.direction !== 'expense') continue; // outflows only
 
     if (!dismissed.has(dismissKey(pattern.recipientId, 'new'))) {
       newFindings.push({

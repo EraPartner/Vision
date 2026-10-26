@@ -15,8 +15,8 @@ import type { upsert as repoUpsert } from '../../src/repositories/instrumentProv
 import {
   asInvestmentId,
 } from "@vision/types/brands";
+import { must } from "../helpers/must.ts";
 
-type ServiceDeps = NonNullable<Parameters<typeof createResearchMappingService>[0]>;
 type UpsertInput = Parameters<typeof repoUpsert>[0];
 
 /** In-memory stand-in for an instrument_provider_map row. */
@@ -41,13 +41,13 @@ const makeRepo = (seed: FakeMapSeed[] = []) => {
   let rows: FakeMapRow[] = seed.map((r, i) => ({ id: r.id ?? i + 1, verified_at: undefined, ...r }));
   return {
     rows: () => rows,
-    listByInstrument: vi.fn(async (k: string, t: string) => rows.filter((r) => r.instrument_key === k && r.key_type === t)),
-    upsert: vi.fn(async (m: UpsertInput) => {
+    listByInstrument: vi.fn((k: string, t: string) => Promise.resolve(rows.filter((r) => r.instrument_key === k && r.key_type === t))),
+    upsert: vi.fn((m: UpsertInput) => {
       const idx = rows.findIndex(
         (r) => r.instrument_key === m.instrumentKey && r.key_type === m.keyType && r.provider === m.provider,
       );
       const row: FakeMapRow = {
-        id: idx >= 0 ? rows[idx]!.id : rows.length + 1,
+        id: idx >= 0 ? must(rows[idx], "rows[idx]").id : rows.length + 1,
         instrument_key: m.instrumentKey,
         key_type: m.keyType,
         provider: m.provider,
@@ -60,14 +60,14 @@ const makeRepo = (seed: FakeMapSeed[] = []) => {
       };
       if (idx >= 0) rows[idx] = row;
       else rows.push(row);
-      return row;
+      return Promise.resolve(row);
     }),
-    deleteById: vi.fn(async (id: number) => {
+    deleteById: vi.fn((id: number) => {
       const before = rows.length;
       rows = rows.filter((r) => r.id !== id);
-      return rows.length < before;
+      return Promise.resolve(rows.length < before);
     }),
-    markVerified: vi.fn(async (k: string, t: string) => {
+    markVerified: vi.fn((k: string, t: string) => {
       let n = 0;
       rows.forEach((r) => {
         if (r.instrument_key === k && r.key_type === t) {
@@ -75,12 +75,12 @@ const makeRepo = (seed: FakeMapSeed[] = []) => {
           n += 1;
         }
       });
-      return n;
+      return Promise.resolve(n);
     }),
   };
 };
 
-const governorAllow = () => ({ canSpend: vi.fn(async () => true), spend: vi.fn(async () => {}) });
+const governorAllow = () => ({ canSpend: vi.fn(() => Promise.resolve(true)), spend: vi.fn(async () => {}) });
 
 let recordSuccess: Mock;
 let recordError: Mock;
@@ -91,12 +91,12 @@ beforeEach(() => {
 
 // Fakes implement only what each case exercises, hence the single cast here.
 const build = (deps: Record<string, unknown>) =>
-  createResearchMappingService({ recordSuccess, recordError, ...deps } as ServiceDeps);
+  createResearchMappingService({ recordSuccess, recordError, ...deps });
 
 describe('researchMappingService.resolve', () => {
   it('auto-proposes the top search hit for a keyed, search-capable provider', async () => {
     const adapters = {
-      yahoo: { search: vi.fn(async () => ({ items: [{ symbol: 'AAPL', name: 'Apple Inc.', exchange: 'NASDAQ' }] })) },
+      yahoo: { search: vi.fn(() => Promise.resolve(({ items: [{ symbol: 'AAPL', name: 'Apple Inc.', exchange: 'NASDAQ' }] }))) },
     };
     const governor = governorAllow();
     const svc = build({ repo: makeRepo(), adapters, governor, isKeyed: (p: string) => p === 'yahoo' });
@@ -105,7 +105,7 @@ describe('researchMappingService.resolve', () => {
 
     const yahoo = proposals.find((p) => p.provider === 'yahoo');
     expect(yahoo).toMatchObject({ status: 'auto', providerSymbol: 'AAPL', resolvedName: 'Apple Inc.' });
-    expect(yahoo!.candidates).toHaveLength(1);
+    expect(must(yahoo, "yahoo").candidates).toHaveLength(1);
     expect(governor.spend).toHaveBeenCalledWith('yahoo');
     expect(recordSuccess).toHaveBeenCalledWith('yahoo');
   });
@@ -126,7 +126,7 @@ describe('researchMappingService.resolve', () => {
 
   it('marks a provider skipped when its quota is exhausted', async () => {
     const adapters = { yahoo: { search: vi.fn() } };
-    const governor = { canSpend: vi.fn(async () => false), spend: vi.fn() };
+    const governor = { canSpend: vi.fn(() => Promise.resolve(false)), spend: vi.fn() };
     const svc = build({ repo: makeRepo(), adapters, governor, isKeyed: () => true });
 
     const { proposals } = await svc.resolve({ instrumentKey: KEY, keyType: TYPE, assetClass: 'stock', query: 'apple' });
@@ -137,15 +137,15 @@ describe('researchMappingService.resolve', () => {
 
   it('pre-seeds a held investment\'s configured provider as confirmed and skips its search', async () => {
     const adapters = {
-      yahoo: { search: vi.fn(async () => ({ items: [{ symbol: 'WRONG', name: 'Wrong Co.' }] })) },
+      yahoo: { search: vi.fn(() => Promise.resolve(({ items: [{ symbol: 'WRONG', name: 'Wrong Co.' }] }))) },
     };
     const investments = {
-      getById: vi.fn(async () => ({
+      getById: vi.fn(() => Promise.resolve(({
         price_provider: 'yahoo',
         price_provider_id: 'AAPL',
         name: 'Apple Inc.',
         currency: 'USD',
-      })),
+      }))),
     };
     const svc = build({ repo: makeRepo(), adapters, investments, governor: governorAllow(), isKeyed: () => true });
 
@@ -173,7 +173,7 @@ describe('researchMappingService.resolve', () => {
       { instrument_key: KEY, key_type: TYPE, provider: 'yahoo', provider_symbol: 'STORED', resolved_name: 'Stored Co.', status: 'confirmed' },
     ]);
     const investments = {
-      getById: vi.fn(async () => ({ price_provider: 'yahoo', price_provider_id: 'AAPL', name: 'Apple Inc.', currency: 'USD' })),
+      getById: vi.fn(() => Promise.resolve(({ price_provider: 'yahoo', price_provider_id: 'AAPL', name: 'Apple Inc.', currency: 'USD' }))),
     };
     const svc = build({ repo, adapters, investments, governor: governorAllow(), isKeyed: () => true });
 
@@ -189,7 +189,7 @@ describe('researchMappingService.resolve', () => {
 
   it('surfaces an existing mapping for an unkeyed provider instead of searching', async () => {
     const adapters = {
-      yahoo: { search: vi.fn(async () => ({ items: [] })) },
+      yahoo: { search: vi.fn(() => Promise.resolve(({ items: [] }))) },
       twelve_data: { search: vi.fn() },
     };
     const repo = makeRepo([
@@ -239,8 +239,8 @@ describe('researchMappingService.save / remove', () => {
 describe('researchMappingService.audit', () => {
   it('flags currency mismatch + price outlier across providers and stamps verified', async () => {
     const adapters = {
-      yahoo: { quote: vi.fn(async () => ({ currency: 'USD', price: 100 })) },
-      twelve_data: { quote: vi.fn(async () => ({ currency: 'EUR', price: 45 })) },
+      yahoo: { quote: vi.fn(() => Promise.resolve(({ currency: 'USD', price: 100 }))) },
+      twelve_data: { quote: vi.fn(() => Promise.resolve(({ currency: 'EUR', price: 45 }))) },
     };
     const repo = makeRepo([
       { instrument_key: KEY, key_type: TYPE, provider: 'yahoo', provider_symbol: 'AAPL' },

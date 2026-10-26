@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import type { AppPath } from "@/lib/routes";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import {
     CommandDialog,
     CommandEmpty,
@@ -25,7 +26,7 @@ import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { Keyboard, Calculator, Clock, MonitorSmartphone, Plus } from "lucide-react";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
-import { numberFormatToLocale, DEFAULT_CURRENCY } from "@/utils/currency";
+import { numberFormatToLocale } from "@/utils/currency";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -73,7 +74,7 @@ export function CommandPalette({
 }: CommandPaletteProps) {
     const formatPercent = usePercentFormatter();
     const formatCurrency = useCurrencyFormatter();
-    const navigate = useNavigate();
+    const navigate = useAppNavigate();
     const { t } = useLanguage();
     const { setMode } = useTheme();
     const { appSettings } = useAppSettings();
@@ -94,7 +95,7 @@ export function CommandPalette({
         () => parseFxQuery(query.trim(), appSettings.numberFormat),
         [appSettings.numberFormat, query],
     );
-    const fxTarget = fxParsed?.to ?? appSettings.defaultCurrency ?? DEFAULT_CURRENCY;
+    const fxTarget = fxParsed?.to ?? appSettings.defaultCurrency;
     // Preview of typed input; no result when either stored rate is missing.
     const { convertToTargetIfAvailable } = useCurrencyConverter(fxTarget);
     // User-typed/provider currency codes share the canonical guarded formatter.
@@ -103,7 +104,7 @@ export function CommandPalette({
         (val: number, currency: string, decimals?: number) => {
             const formatted = formatCurrency(val, {
                 currency,
-                decimals: decimals ?? appSettings.showDecimalPlaces ?? 2,
+                decimals: decimals ?? appSettings.showDecimalPlaces,
             });
             return formatted === `${val}`
                 ? `${val.toFixed(2)} ${currency}`
@@ -137,7 +138,8 @@ export function CommandPalette({
 
     const copyResult = (text: string) => {
         onOpenChange(false);
-        navigator.clipboard?.writeText(text).then(
+        // Insecure contexts have no clipboard; the DOM typings omit that.
+        (navigator.clipboard as Clipboard | undefined)?.writeText(text).then(
             () => toast.success(t("commandPalette.copied")),
             () => undefined,
         );
@@ -147,6 +149,7 @@ export function CommandPalette({
         debouncedQuery,
         open,
     );
+    const recipientItems = recipientHits?.items ?? [];
 
     // Inline ticker quote — when the query looks like a symbol, fetch a price-only
     // quote and surface its absolute + relative move. Enter opens Market Lookup.
@@ -168,7 +171,7 @@ export function CommandPalette({
         return () => document.removeEventListener("keydown", onKeyDown);
     }, [open, onOpenChange]);
 
-    const goTo = (url: string) => {
+    const goTo = (url: AppPath) => {
         onOpenChange(false);
         pushPaletteRecent(url);
         void navigate(url);
@@ -313,9 +316,9 @@ export function CommandPalette({
                         </CommandItem>
                     </CommandGroup>
                 )}
-                {(recipientHits?.items?.length ?? 0) > 0 && (
+                {recipientItems.length > 0 && (
                     <CommandGroup heading={t("nav.recipients")} forceMount>
-                        {recipientHits!.items.map((r) => (
+                        {recipientItems.map((r) => (
                             <CommandItem
                                 key={`recipient-${r.id}`}
                                 forceMount

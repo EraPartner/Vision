@@ -37,6 +37,7 @@ import {
   getToolSchemas,
 } from "../src/services/aiChat/tools/index.ts";
 import { partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 const detectSubscriptionCreep = vi.mocked(rawDetectSubscriptionCreep);
 const detectCategoryOutliers = vi.mocked(rawDetectCategoryOutliers);
@@ -232,9 +233,10 @@ describe("insightsDigest", () => {
   it("is registered in TOOLS and exposed via getToolSchemas()", () => {
     expect(TOOLS.insightsDigest).toBe(insightsDigest);
 
-    const schema = getToolSchemas().find(
-      (s) => s.function.name === "insightsDigest",
-    )!;
+    const schema = must(
+      getToolSchemas().find((s) => s.function.name === "insightsDigest"),
+      'getToolSchemas().find( (s) => s.function.name === "insightsD',
+    );
     expect(schema).toBeDefined();
     expect(schema.type).toBe("function");
     expect(schema.function.parameters).toEqual({

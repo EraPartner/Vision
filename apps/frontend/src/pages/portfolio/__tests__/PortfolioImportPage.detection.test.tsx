@@ -9,6 +9,7 @@ import { ACCOUNT_LIST_ITEM_STUB, ok } from "@/test/msw/handlers";
 import PortfolioImportPage from "../PortfolioImportPage";
 import workbookFixtures from "./fixtures/portfolioDetectionWorkbooks";
 import { ibkrFundingStatement } from "./fixtures/ibkrFundingStatement";
+import { must } from "@/test/must";
 
 const api = "http://localhost:3002/api";
 const headers = {
@@ -79,7 +80,10 @@ beforeEach(() => {
             submissions.push(
                 Object.fromEntries(
                     [...body.matchAll(/name="([^"]+)"\r\n\r\n([^\r\n]*)/g)].map(
-                        (match) => [match[1], match[2]],
+                        (match): [string, string] => [
+                            must(match[1]),
+                            must(match[2]),
+                        ],
                     ),
                 ),
             );
@@ -98,10 +102,10 @@ async function renderAdvanced(user: ReturnType<typeof userEvent.setup>) {
 }
 
 function fileInput(_container: HTMLElement) {
-    return screen
+    return must(must(screen
         .getByText("Advanced single-file import")
-        .closest("details")!
-        .querySelector<HTMLInputElement>('input[type="file"]')!;
+        .closest("details"))
+        .querySelector<HTMLInputElement>('input[type="file"]'));
 }
 
 function importButton() {
@@ -307,7 +311,7 @@ describe("automatic portfolio upload", () => {
         const input = fileInput(container);
         await user.upload(input, first.file);
         await user.upload(input, second.file);
-        await act(async () => first.finish());
+        await act(() => Promise.resolve(first.finish()));
         expect(screen.getByText(/Detecting statement format/)).toHaveAttribute(
             "role",
             "status",
@@ -315,7 +319,7 @@ describe("automatic portfolio upload", () => {
         expect(importButton()).toBeDisabled();
         expect(brokerField()).toHaveTextContent("Unassigned");
 
-        await act(async () => second.finish());
+        await act(() => Promise.resolve(second.finish()));
         await waitFor(() => expect(brokerField()).toHaveTextContent("Kinesis"));
         await user.click(importButton());
         await waitFor(() => expect(submissions).toHaveLength(1));
@@ -354,7 +358,7 @@ describe("automatic portfolio upload", () => {
         const { container } = await renderAdvanced(user);
         await user.upload(fileInput(container), pending.file);
         await chooseBroker(user, "Explicit destination");
-        await act(async () => pending.finish());
+        await act(() => Promise.resolve(pending.finish()));
         await waitFor(() => expect(importButton()).toBeEnabled());
         expect(brokerField()).toHaveTextContent("Explicit destination");
         await user.click(importButton());
