@@ -50,8 +50,18 @@ public protocol APITransport: Sendable {
 public struct URLSessionAPITransport: APITransport {
     let session: URLSession
 
-    public init(session: URLSession = URLSession(configuration: .ephemeral)) {
+    public init(session: URLSession = URLSession(configuration: URLSessionAPITransport.configuration)) {
         self.session = session
+    }
+
+    /// Every request already ignores the local cache (`reloadIgnoringLocalCacheData`) and the
+    /// loopback backend sends no cache validators, so the session keeps no response cache: it
+    /// would only hold a second in-memory copy of each answer.
+    public static var configuration: URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return configuration
     }
 
     public func send(_ request: APIRequest) async throws -> APIResponse {
@@ -318,6 +328,8 @@ public struct APIClient: Sendable {
             }
             switch outcome {
             case .success(let value):
+                // The answer's buffers are free by now; relieve once the app goes quiet.
+                MemoryRelief.shared.request()
                 return value
             case .failure(let error):
                 lastError = error
@@ -439,10 +451,6 @@ public struct APIClient: Sendable {
         if response.status == 204 || response.body.isEmpty && Value.self == APIEmpty.self {
             return decodeNull(as: type, label: label)
         }
-        guard (try? JSONSerialization.jsonObject(with: response.body, options: [.fragmentsAllowed])) != nil else {
-            // `response.json()` rejects; apiRequest treats that like a network failure.
-            return .failure(.network("The response is not JSON"))
-        }
         let decoder = JSONDecoder()
         let endpoint = label.split(separator: "?").first.map(String.init) ?? label
         // `unwrapEnvelope`: `{ ok: true, data }` yields `data`; any other body is used as is.
@@ -460,6 +468,12 @@ public struct APIClient: Sendable {
         do {
             return .success(try decoder.decode(Value.self, from: response.body))
         } catch let error as DecodingError {
+            // Only a body that failed to decode is checked for being JSON at all: parsing every
+            // answer into Foundation objects first built a transient copy of each large page.
+            guard (try? JSONSerialization.jsonObject(with: response.body, options: [.fragmentsAllowed])) != nil else {
+                // `response.json()` rejects; apiRequest treats that like a network failure.
+                return .failure(.network("The response is not JSON"))
+            }
             return .failure(.contract(APIContractError(endpoint: endpoint, issues: issues(error, dropping: 0))))
         } catch {
             return .failure(.contract(APIContractError(endpoint: endpoint, issues: ["(root): Invalid value"])))

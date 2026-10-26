@@ -37,7 +37,7 @@ public struct PortfolioTaxView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            LazyVStack(alignment: .leading, spacing: 20) {
                 header
                 if let error = tax.routeLoadError ?? tax.overview.error ?? model.error ?? tax.dashboard.error {
                     Text(strings.t("tax.page.loadError", ["msg": error])).foregroundStyle(theme.destructive)

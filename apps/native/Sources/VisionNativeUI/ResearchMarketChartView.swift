@@ -11,37 +11,36 @@ struct ResearchMarketChartView: View {
     @State private var selected: Int?
     @State private var selectsVolume = false
     @FocusState private var focused: Bool
+    @State private var plotCache = ChartLinePlotCache()
     @Environment(\.visionTheme) private var theme
     /// `isPositive ? hsl(var(--accent)) : hsl(var(--destructive))` in MarketLookupPage.
     private var color: Color { positive ? theme.accent : theme.destructive }
-    /// The web AreaChart's value domain: the closes plus 8 %, niced, never zero-based.
-    private var priceDomain: ClosedRange<Double> {
-        ChartAxisTicks.fittedDomain(data.points.compactMap { $0.close.map { NSDecimalNumber(decimal: $0).doubleValue } })
-    }
     var body: some View {
-        let domain = priceDomain
+        // Converted once per loaded series: a hover re-renders this body for every point it
+        // crosses, and the series can hold thousands of daily closes.
+        let plot = plotCache.plot(for: data.points)
+        // The web AreaChart's value domain: the closes plus 8 %, niced, never zero-based.
+        let domain = ChartAxisTicks.fittedDomain(plot.closes)
         VStack(alignment: .leading, spacing: 10) {
             Chart {
-                ForEach(Array(data.points.enumerated()), id: \.offset) { _, point in
-                    if let close = point.close {
-                        AreaMark(
-                            x: .value("Time", ResearchMarketDisplay.date(point.time)),
-                            yStart: .value("Price", domain.lowerBound),
-                            yEnd: .value("Price", NSDecimalNumber(decimal: close).doubleValue)
-                        )
-                        .foregroundStyle(ChartFill.areaGradient(color))
-                        .interpolationMethod(.monotone)
-                        LineMark(
-                            x: .value("Time", ResearchMarketDisplay.date(point.time)),
-                            y: .value("Price", NSDecimalNumber(decimal: close).doubleValue)
-                        )
-                        .foregroundStyle(color)
-                        .lineStyle(StrokeStyle(lineWidth: 2))
-                        .interpolationMethod(.monotone)
-                    }
+                ForEach(plot.marks, id: \.offset) { mark in
+                    AreaMark(
+                        x: .value("Time", mark.time),
+                        yStart: .value("Price", domain.lowerBound),
+                        yEnd: .value("Price", mark.close)
+                    )
+                    .foregroundStyle(ChartFill.areaGradient(color))
+                    .interpolationMethod(.monotone)
+                    LineMark(
+                        x: .value("Time", mark.time),
+                        y: .value("Price", mark.close)
+                    )
+                    .foregroundStyle(color)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+                    .interpolationMethod(.monotone)
                 }
-                if let selected, data.points.indices.contains(selected) {
-                    RuleMark(x: .value("Time", ResearchMarketDisplay.date(data.points[selected].time))).foregroundStyle(
+                if let selected, plot.times.indices.contains(selected) {
+                    RuleMark(x: .value("Time", plot.times[selected])).foregroundStyle(
                         theme.secondaryLabel.opacity(0.6))
                 }
             }
@@ -66,7 +65,7 @@ struct ResearchMarketChartView: View {
                             switch phase {
                             case .active(let location):
                                 selectsVolume = false
-                                select(location.x, proxy: proxy, geometry: geometry)
+                                select(location.x, proxy: proxy, geometry: geometry, plot: plot)
                             case .ended: selected = nil
                             }
                         }
@@ -74,7 +73,7 @@ struct ResearchMarketChartView: View {
                             DragGesture(minimumDistance: 0).onChanged { value in
                                 focused = true
                                 selectsVolume = false
-                                select(value.location.x, proxy: proxy, geometry: geometry)
+                                select(value.location.x, proxy: proxy, geometry: geometry, plot: plot)
                             })
                 }
             }
@@ -92,42 +91,20 @@ struct ResearchMarketChartView: View {
             }.onChange(of: data.raw) { _, _ in selected = nil }
             .accessibilityLabel(shell.strings.t("market.priceChart"))
             if showsVolume {
-                Chart {
-                    ForEach(Array(data.points.enumerated()), id: \.offset) { offset, point in
-                        if let volume = point.volume {
-                            // One evenly spaced band per point (the web `BarChart` band scale), not a
-                            // bar on the time axis, whose bars were thin slivers with gaps at weekends.
-                            RectangleMark(
-                                xStart: .value("Time", Double(offset) - 0.375),
-                                xEnd: .value("Time", Double(offset) + 0.375),
-                                yStart: .value("Volume", 0.0),
-                                yEnd: .value("Volume", NSDecimalNumber(decimal: volume).doubleValue)
-                            )
-                            .foregroundStyle(theme.mutedForeground).cornerRadius(2)
+                // Its bars do not depend on the selection, so a hover leaves them alone.
+                MarketVolumeBars(
+                    bars: plot.bars, count: plot.times.count, color: theme.mutedForeground,
+                    label: shell.strings.t("market.volume"),
+                    onHover: { position in
+                        guard let position else {
+                            selected = nil
+                            return
                         }
+                        selectsVolume = true
+                        selected = position
                     }
-                }
-                .chartXScale(domain: -0.5...(Double(max(data.points.count, 1)) - 0.5))
-                .chartXAxis(.hidden).chartYAxis(.hidden)
-                    .chartOverlay { proxy in
-                        GeometryReader { geometry in
-                            Rectangle().fill(.clear).contentShape(Rectangle())
-                                .onContinuousHover { phase in
-                                    switch phase {
-                                    case .active(let location):
-                                        selectsVolume = true
-                                        selectVolumeBar(location.x, proxy: proxy, geometry: geometry)
-                                    case .ended: selected = nil
-                                    }
-                                }
-                                .gesture(
-                                    DragGesture(minimumDistance: 0).onChanged { value in
-                                        selectsVolume = true
-                                        selectVolumeBar(value.location.x, proxy: proxy, geometry: geometry)
-                                    })
-                        }
-                    }.frame(height: 60).accessibilityLabel(
-                        shell.strings.t("market.volume"))
+                )
+                .equatable()
             }
             if let selected, data.points.indices.contains(selected) {
                 let point = data.points[selected]
@@ -164,29 +141,74 @@ struct ResearchMarketChartView: View {
         }
         return formatter.string(from: date)
     }
-    private func select(_ x: CGFloat, proxy: ChartProxy, geometry: GeometryProxy) {
+    private func select(_ x: CGFloat, proxy: ChartProxy, geometry: GeometryProxy, plot: ChartLinePlot) {
         guard let frame = proxy.plotFrame, let date: Date = proxy.value(atX: x - geometry[frame].origin.x) else {
             selected = nil
             return
         }
-        selected = data.points.indices.min {
-            abs(ResearchMarketDisplay.date(data.points[$0].time).timeIntervalSince(date))
-                < abs(ResearchMarketDisplay.date(data.points[$1].time).timeIntervalSince(date))
-        }
-    }
-    /// The volume chart's x axis counts points, so a position maps straight to a point index.
-    private func selectVolumeBar(_ x: CGFloat, proxy: ChartProxy, geometry: GeometryProxy) {
-        guard let frame = proxy.plotFrame,
-            let position: Double = proxy.value(atX: x - geometry[frame].origin.x), !data.points.isEmpty
-        else {
-            selected = nil
-            return
-        }
-        selected = min(max(Int(position.rounded()), 0), data.points.count - 1)
+        let nearest = plot.nearestOffset(to: date)
+        if nearest != selected { selected = nearest }
     }
     private func move(_ step: Int) {
         if !data.points.isEmpty {
             selected = min(max((selected ?? (step > 0 ? -1 : data.points.count)) + step, 0), data.points.count - 1)
         }
+    }
+}
+
+/// The volume strip under the price chart: one evenly spaced band per point (the web `BarChart`
+/// band scale), not a bar on the time axis, whose bars were thin slivers with gaps at weekends.
+/// Equatable on what it draws, so the price chart's hover does not rebuild its bars.
+private struct MarketVolumeBars: View, Equatable {
+    let bars: [ChartLinePlot.Bar]
+    let count: Int
+    let color: Color
+    let label: String
+    let onHover: (Int?) -> Void
+
+    nonisolated static func == (lhs: MarketVolumeBars, rhs: MarketVolumeBars) -> Bool {
+        lhs.count == rhs.count && lhs.color == rhs.color && lhs.label == rhs.label
+            && lhs.bars.count == rhs.bars.count && lhs.bars.first?.volume == rhs.bars.first?.volume
+            && lhs.bars.last?.volume == rhs.bars.last?.volume
+    }
+
+    var body: some View {
+        Chart {
+            ForEach(bars, id: \.offset) { bar in
+                RectangleMark(
+                    xStart: .value("Time", Double(bar.offset) - 0.375),
+                    xEnd: .value("Time", Double(bar.offset) + 0.375),
+                    yStart: .value("Volume", 0.0),
+                    yEnd: .value("Volume", bar.volume)
+                )
+                .foregroundStyle(color).cornerRadius(2)
+            }
+        }
+        .chartXScale(domain: -0.5...(Double(max(count, 1)) - 0.5))
+        .chartXAxis(.hidden).chartYAxis(.hidden)
+        .chartOverlay { proxy in
+            GeometryReader { geometry in
+                Rectangle().fill(.clear).contentShape(Rectangle())
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case .active(let location): onHover(index(location.x, proxy: proxy, geometry: geometry))
+                        case .ended: onHover(nil)
+                        }
+                    }
+                    .gesture(
+                        DragGesture(minimumDistance: 0).onChanged { value in
+                            onHover(index(value.location.x, proxy: proxy, geometry: geometry))
+                        })
+            }
+        }
+        .frame(height: 60).accessibilityLabel(label)
+    }
+
+    /// The x axis counts points, so a position maps straight to a point index.
+    private func index(_ x: CGFloat, proxy: ChartProxy, geometry: GeometryProxy) -> Int? {
+        guard let frame = proxy.plotFrame,
+            let position: Double = proxy.value(atX: x - geometry[frame].origin.x), count > 0
+        else { return nil }
+        return min(max(Int(position.rounded()), 0), count - 1)
     }
 }

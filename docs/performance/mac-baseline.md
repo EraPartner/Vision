@@ -2,12 +2,12 @@
 title: Mac Performance Baseline
 type: performance
 status: active
-date: 2026-10-24
-last_modified: 2026-10-24
+date: 2026-10-26
+last_modified: 2026-10-26
 tags: [performance, macos, gpu, energy, measurement, electron]
 description: Repeatable before/after measurement of the installed Vision apps on a Mac (memory, CPU, GPU, power, launch, frames) across the three UI tiers
 aliases: [mac baseline, performance baseline, powermetrics run]
-related_code: ["scripts/mac-baseline.ts", "scripts/lib/mac-baseline/"]
+related_code: ["scripts/mac-baseline.ts", "scripts/lib/mac-baseline/", "apps/native/VisionNative/PerfRun.swift", "apps/native/Sources/VisionNativeCore/Perf/PerfRunModel.swift"]
 ---
 
 # Mac Performance Baseline
@@ -52,7 +52,8 @@ WindowServer (compositing cost lands there). CPU % is CPU time per wall second o
 3. Enter the sudo password once when asked (for `powermetrics`). Leave the Vision window in front
    until the run ends; an unfocused window pauses the aurora and the run reports a warning.
 
-Results land in `perf-results/<timestamp>/` (git-ignored): `results.json`, `summary.md`,
+Results land in `perf-results/<timestamp>/` of the main checkout (git-ignored), also when the
+script runs from a linked worktree: `results.json`, `summary.md`,
 `powermetrics.jsonl`, `traces/*.json.gz` (open in Perfetto or Chrome DevTools) and app logs.
 `bun scripts/mac-baseline.ts --help` lists the options (`--app`, `--tiers`, `--idle`,
 `--sustained`, `--cooldown`, `--pages`, `--full-effects`, `--repeat`, `--no-powermetrics`,
@@ -123,6 +124,78 @@ claim a win.
 - The first page-switch pass includes lazy route chunks and cold queries; the second is warm.
 - `powermetrics` key names vary across macOS releases. `results.json` lists the keys seen, and
   `powermetrics.jsonl` keeps each sample's raw processor and GPU dictionaries for re-parsing.
+
+## Native app
+
+The Swift app (`apps/native`) is measured with the same procedure so its numbers sit next to the
+Electron ones. It has no DevTools port, so the app runs its own scripted scenario and writes the
+result; the script launches it, samples its processes and joins both.
+
+```sh
+bun scripts/mac-baseline.ts --native                      # Vision Native Demo and Vision Native when installed
+bun scripts/mac-baseline.ts --native-app "/Applications/Vision Native Demo.app" --quick
+bun scripts/mac-baseline.ts --native --app "/Applications/Vision Demo.app"   # Electron and native in one run
+```
+
+`--native` replaces the default Electron apps (an explicit `--app` keeps them). `--idle`,
+`--sustained`, `--cooldown`, `--quick` and `--no-powermetrics` apply as above; the native app's own
+defaults are a 30 s idle window and a 60 s sustained loop. `--tiers`, `--full-effects`,
+`--repeat`, `--scroll-px`, `--pages` and `--no-trace` do not apply. `--compare <dir>` picks the
+Electron run to compare with; by default it is the newest run in `perf-results/` that measured
+Electron apps (then the `perf-results/` of the repository's other git worktrees, so a build in a
+linked worktree compares with runs recorded in the main checkout), using the same edition (Vision Demo for Vision Native Demo), Full effects on, and
+the standard tier.
+
+**What the app does** (`VisionPerfRun`, `apps/native/VisionNative/PerfRun.swift`): waits for the
+shell to be ready (launch to ready is measured from the process start time), settles 10 s, idles
+on Home, scrolls the largest scroll view on Transactions down and back up at 1500 px/s for about
+10 s, switches over the same six pages as the script twice with the Go menu's navigation, then runs
+the sustained scroll/switch loop. It records display-link frame timestamps for every window except
+idle (the link stays off there so it does not add wakeups), frames later than 1.5x the refresh
+interval as hitches, the process's own CPU time (`getrusage`) and `phys_footprint`
+(`proc_pid_rusage`) per window, and writes `results.json` to the directory it was given. It deletes the
+persistent setting as soon as the run starts (a crashed run never repeats) and quits at the end, so
+the next normal launch is clean. When it is not set, the only cost is one
+`UserDefaults` read at launch.
+
+**What the script adds:** 1 s `ps` samples of the Swift app, its Bun backend and PostgreSQL (found
+through the runtime's `backend.pid.json` and `postgres.pid.json`) matched to each window for CPU
+per role, `footprint(1)` samples every 15 s for the backend and PostgreSQL, and the powermetrics
+slice for each window. Frame statistics reuse `computeFrameStats` and `fpsBuckets`, so FPS,
+dropped %, p95 and frames over 50 ms mean the same as for Electron. Results go to
+`<run>/results.json` (key `native`), a per-app folder holding the app's raw `results.json`, and the
+"Native app (Swift)" section of `summary.md` with the side-by-side table. When the same run also
+measured Electron apps, the table compares with those.
+
+**Profiling pass.** After the measured runs the script launches each native app once more and
+attaches `sample` while it idles (8 s), scrolls (3 s) and switches pages (6 s); the app
+writes the running phase to `phase.txt` in its output folder. Sampling stops threads, so this run
+is not measured: it only lists the heaviest busy leaf frames and the app's own frames with their
+inclusive counts under "hot spots" in the app's part of `summary.md`, with the full reports beside them
+(`<app>-profile/<phase>.sample.txt`). Near the end of the sustained loop it also saves `vmmap -summary`
+and `heap -sortBySize` of the app (`vmmap.txt`, `heap.txt`) to show what the run's added memory is.
+`--no-profile` skips it.
+
+**Without arguments.** UserDefaults reads launch arguments and the app's defaults domain alike, so
+the run can also start from a normal launch:
+
+```sh
+defaults write com.vaultvoyager.vision-native-demo VisionPerfRun /tmp/vision-perf
+open -a "Vision Native Demo"          # runs, writes /tmp/vision-perf/results.json, quits
+# or: open -a "Vision Native Demo" --args -VisionPerfRun /tmp/vision-perf -VisionPerfIdleSeconds 10
+```
+
+`VisionPerfIdleSeconds` and `VisionPerfSustainedSeconds` override the window lengths. Without the
+script no power or backend numbers are collected; read `results.json` for the app's own frames,
+CPU and footprint. Keep the window in front and the Mac awake, as for the Electron run, and leave
+the Mac alone while it runs: a hidden or inactive window records no phase and an empty profile.
+
+> [!note] Comparing frames
+> Electron frames are `requestAnimationFrame` callbacks, which fire only when the page draws.
+> Native frames are display-link ticks on the main window, which fire every refresh while the main
+> thread is free, so a native frame count shows main-thread stalls (hitches) more than it shows
+> skipped draws. Compare GPU and power, CPU, and the hitch counts as well as FPS, and confirm
+> smoothness by eye.
 
 ## Related
 

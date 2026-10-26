@@ -30,7 +30,8 @@ public struct HomeView: View {
     public var body: some View {
         ScrollView {
             // PageShell rhythm="airy": 32 pt between the header, the cards and the charts.
-            VStack(alignment: .leading, spacing: 32) {
+            // Lazy: the charts below the fold are not built (or measured) for the first frame.
+            LazyVStack(alignment: .leading, spacing: 32) {
                 // The shared reminder banner is the first thing in the page, so it scrolls away
                 // with it (AppLayout renders it above the routed page inside `<main>`).
                 if let notifications = shell.shellNotifications, notifications.upcoming.shouldShow {
@@ -194,10 +195,13 @@ public struct HomeView: View {
         }
     }
     private var monthName: String {
-        let format = DateFormatter()
-        format.locale =
-            strings.language == .nl ? Locale(identifier: "nl_NL") : Locale(identifier: "en_US")
-        format.dateFormat = "LLLL"
+        let locale = LanguageLocale.locale(strings.language)
+        let format = FormatterCache.shared("home.monthName|\(locale.identifier)") { () -> DateFormatter in
+            let made = DateFormatter()
+            made.locale = locale
+            made.dateFormat = "LLLL"
+            return made
+        }
         return format.string(from: Date())
     }
     private func paceDescription(_ pace: HomeSpendingPace) -> String {
@@ -777,10 +781,13 @@ public struct HomeView: View {
         return VisionFormat.appDate(day, format: settings.dateFormat)
     }
     private var todayLong: String {
-        let format = DateFormatter()
-        format.locale =
-            strings.language == .nl ? Locale(identifier: "nl_NL") : Locale(identifier: "en_US")
-        format.dateStyle = .full
+        let locale = LanguageLocale.locale(strings.language)
+        let format = FormatterCache.shared("home.todayLong|\(locale.identifier)") { () -> DateFormatter in
+            let made = DateFormatter()
+            made.locale = locale
+            made.dateStyle = .full
+            return made
+        }
         return format.string(from: Date())
     }
     private func routeRow(

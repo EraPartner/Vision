@@ -40,18 +40,21 @@ struct PortfolioTickerView: View {
                     ScrollView(.horizontal) { tape }.scrollIndicators(.hidden)
                 } else {
                     GeometryReader { geometry in
-                        TimelineView(.animation(minimumInterval: 1 / 30, paused: !moving)) { timeline in
-                            let width = CGFloat(quoted.count) * 250
-                            let duration = max(24, Double(quoted.count) * 4.5)
-                            let time = elapsed + (startedAt.map { timeline.date.timeIntervalSince($0) } ?? 0)
-                            HStack(spacing: 0) {
-                                ForEach(0..<max(2, Int((geometry.size.width / width).rounded(.up)) + 1), id: \.self) {
-                                    index in
-                                    tape.accessibilityHidden(index > 0)
-                                }
+                        // The tape is built once per pass, not per animation tick: the timeline only moves it.
+                        let count = quoted.count
+                        let width = CGFloat(count) * 250
+                        let duration = max(24, Double(count) * 4.5)
+                        let strip = HStack(spacing: 0) {
+                            ForEach(0..<max(2, Int((geometry.size.width / width).rounded(.up)) + 1), id: \.self) {
+                                index in
+                                tape.accessibilityHidden(index > 0)
                             }
-                            .offset(x: -width * CGFloat(time.truncatingRemainder(dividingBy: duration) / duration))
-                            .frame(width: max(geometry.size.width, width * 2), alignment: .leading)
+                        }
+                        TimelineView(.animation(minimumInterval: 1 / 30, paused: !moving)) { timeline in
+                            let time = elapsed + (startedAt.map { timeline.date.timeIntervalSince($0) } ?? 0)
+                            strip
+                                .offset(x: -width * CGFloat(time.truncatingRemainder(dividingBy: duration) / duration))
+                                .frame(width: max(geometry.size.width, width * 2), alignment: .leading)
                         }
                     }.frame(height: 54).clipped()
                 }

@@ -11,7 +11,6 @@ struct TransactionsTableCard: View {
     let shell: NativeShellModel
     @State private var widths: [String: CGFloat] = [:]
     @State private var openFilter: String?
-    @State private var hoveredHeader: String?
     @State private var tableWidth: CGFloat = 1000
     @State private var suggestionsOpen = false
     @State private var suggestions = TransactionSearchSuggestions(thisYear: 2026)
@@ -218,13 +217,13 @@ struct TransactionsTableCard: View {
         ).mapValues { CGFloat($0) }
     }
 
-    private func width(_ column: TransactionColumn) -> CGFloat {
-        fittedWidths[column.rawValue] ?? CGFloat(column.width)
+    private func width(_ column: TransactionColumn, fitted: [String: CGFloat]) -> CGFloat {
+        fitted[column.rawValue] ?? CGFloat(column.width)
     }
 
-    private func widthBinding(_ column: TransactionColumn) -> Binding<CGFloat> {
+    private func widthBinding(_ column: TransactionColumn, fitted: [String: CGFloat]) -> Binding<CGFloat> {
         Binding(
-            get: { width(column) },
+            get: { width(column, fitted: fitted) },
             set: { widths[column.rawValue] = min(LocalDataTableMetrics.maximumWidth, max(CGFloat(column.minWidth), $0)) })
     }
 
@@ -239,7 +238,9 @@ struct TransactionsTableCard: View {
     // MARK: Header
 
     private var headerRow: some View {
-        HStack(spacing: 0) {
+        // The fitted widths are solved once per pass, not once per header cell.
+        let fitted = fittedWidths
+        return HStack(spacing: 0) {
             selectAllBox
                 .frame(width: Self.selectWidth, alignment: .leading)
             if isCompact {
@@ -251,10 +252,10 @@ struct TransactionsTableCard: View {
                     .accessibilityAddTraits(.isHeader)
             }
             ForEach(dataColumns, id: \.self) { column in
-                headerCell(column)
-                    .frame(width: isFlexible(column) ? nil : width(column), alignment: .leading)
+                headerCell(column, fitted: fitted)
+                    .frame(width: isFlexible(column) ? nil : width(column, fitted: fitted), alignment: .leading)
                     .frame(
-                        minWidth: isFlexible(column) ? width(column) : nil,
+                        minWidth: isFlexible(column) ? width(column, fitted: fitted) : nil,
                         maxWidth: isFlexible(column) ? .infinity : nil, alignment: .leading)
             }
             Text(strings.t("table.edit"))
@@ -281,33 +282,30 @@ struct TransactionsTableCard: View {
     }
 
     @ViewBuilder
-    private func headerCell(_ column: TransactionColumn) -> some View {
+    private func headerCell(_ column: TransactionColumn, fitted: [String: CGFloat]) -> some View {
         let title = strings.t(column.headerKey)
-        HStack(spacing: 4) {
-            if column.sortable {
-                sortButton(column, title: title)
-                filterButton(column, title: title)
-            } else {
-                Text(title)
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(theme.secondaryLabel)
-                    .lineLimit(1)
-                    .padding(.vertical, 11)
-                    .accessibilityAddTraits(.isHeader)
-            }
-            Spacer(minLength: 0)
-            ColumnResizeHandle(label: title, width: widthBinding(column))
-        }
-        .onHover { inside in
-            if inside {
-                hoveredHeader = column.rawValue
-            } else if hoveredHeader == column.rawValue {
-                hoveredHeader = nil
+        // The hover lives in the header cell, so moving across the header redraws a cell and not
+        // the card with its rows.
+        HoverTracking { hovered in
+            HStack(spacing: 4) {
+                if column.sortable {
+                    sortButton(column, title: title, hovered: hovered)
+                    filterButton(column, title: title, hovered: hovered)
+                } else {
+                    Text(title)
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(theme.secondaryLabel)
+                        .lineLimit(1)
+                        .padding(.vertical, 11)
+                        .accessibilityAddTraits(.isHeader)
+                }
+                Spacer(minLength: 0)
+                ColumnResizeHandle(label: title, width: widthBinding(column, fitted: fitted))
             }
         }
     }
 
-    private func sortButton(_ column: TransactionColumn, title: String) -> some View {
+    private func sortButton(_ column: TransactionColumn, title: String, hovered: Bool) -> some View {
         let active = model.sort?.key == column.rawValue ? model.sort : nil
         return Button {
             Task { await model.toggleSort(column) }
@@ -319,7 +317,7 @@ struct TransactionsTableCard: View {
                 Image(systemName: active.map { $0.ascending ? "arrow.up" : "arrow.down" } ?? "arrow.up.arrow.down")
                     .imageScale(.small)
                     .foregroundStyle(active == nil ? theme.tertiaryLabel : theme.primary)
-                    .opacity(active == nil && hoveredHeader != column.rawValue ? 0.5 : 1)
+                    .opacity(active == nil && !hovered ? 0.5 : 1)
                     .accessibilityHidden(true)
             }
             .foregroundStyle(theme.secondaryLabel)
@@ -331,7 +329,7 @@ struct TransactionsTableCard: View {
         .accessibilityValue(Text(verbatim: active.map { $0.ascending ? "ascending" : "descending" } ?? ""))
     }
 
-    private func filterButton(_ column: TransactionColumn, title: String) -> some View {
+    private func filterButton(_ column: TransactionColumn, title: String, hovered: Bool) -> some View {
         let key = column.rawValue
         let hasFilter = !model.columnFilters.value(for: key).isEmpty
         let label = strings.t("aria.filterColumn", ["header": title])
@@ -343,7 +341,7 @@ struct TransactionsTableCard: View {
         }
         .buttonStyle(.borderless)
         .foregroundStyle(hasFilter ? theme.primary : theme.tertiaryLabel)
-        .opacity(hasFilter || hoveredHeader == key || openFilter == key ? 1 : 0)
+        .opacity(hasFilter || hovered || openFilter == key ? 1 : 0)
         .visionTooltip(label)
         .accessibilityLabel(label)
         .popover(
@@ -380,12 +378,21 @@ struct TransactionsTableCard: View {
                 .padding(.vertical, 32)
         } else {
             let fitted = fittedWidths
+            // Resolved once per pass: each is rebuilt from the model on every read.
+            let columns = dataColumns
+            let labels = model.labels
+            let accountNames = model.accountNames
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(rows) { row in
-                    TransactionRowView(
-                        model: model, shell: shell, row: row, columns: dataColumns, compact: isCompact,
-                        widths: fitted, focusedRow: $focusedRow)
-                    Divider()
+                    // The row and its divider are one lazy child, not two.
+                    VStack(alignment: .leading, spacing: 0) {
+                        TransactionRowView(
+                            model: model, shell: shell, row: row, columns: columns, compact: isCompact,
+                            widths: fitted, labels: labels, accountNames: accountNames, focusedRow: $focusedRow
+                        )
+                        .equatable()
+                        Divider()
+                    }
                 }
             }
         }
@@ -420,40 +427,55 @@ struct TransactionsTableCard: View {
 
 /// One row: the select box, the cells (or the stacked summary), the Edit column, and while
 /// editing the Date, Amount, Payee and Category editors with Save and Cancel.
-struct TransactionRowView: View {
+struct TransactionRowView: View, Equatable {
     let model: TransactionsModel
     let shell: NativeShellModel
     let row: TransactionRow
     let columns: [TransactionColumn]
     let compact: Bool
     let widths: [String: CGFloat]
+    /// The model's fallback labels and account names, shared by every row of a pass.
+    let labels: TransactionLabels
+    let accountNames: [AccountID: String]
     var focusedRow: FocusState<TransactionID?>.Binding
     @Environment(\.visionTheme) private var theme
 
+    /// What a row draws from its inputs. The model and shell are the same for every row of a
+    /// card, and what changes under them (selection, editor, settings) is observed by the body
+    /// itself, so a parent pass with equal inputs skips the row.
+    nonisolated static func == (lhs: TransactionRowView, rhs: TransactionRowView) -> Bool {
+        lhs.row == rhs.row && lhs.columns == rhs.columns && lhs.compact == rhs.compact
+            && lhs.widths == rhs.widths && lhs.labels == rhs.labels && lhs.accountNames == rhs.accountNames
+    }
+
     private var strings: any Localizing { shell.strings }
     private var settings: NativeAppSettings { shell.settings }
-    private var labels: TransactionLabels { model.labels }
     private var isEditing: Bool { model.rowEditor?.id == row.id }
     private var isSelected: Bool { model.selectedId == row.id }
 
     var body: some View {
-        HStack(spacing: 0) {
-            checkbox
+        // The label formats the date and amount; it serves the row, its box and its Edit button.
+        // The date and amount are formatted once here and shared by the cells and the label.
+        let dateText = VisionFormat.appDate(row.date, format: settings.dateFormat)
+        let amountLabel = MoneyText.text(row.amount, currency: row.displayCurrency, settings: settings, signed: false)
+        let rowLabel = row.accessibilityLabel(labels, dateText: dateText, amountText: amountLabel)
+        return HStack(spacing: 0) {
+            checkbox(label: rowLabel)
                 .frame(width: TransactionsTableCard.selectWidth, alignment: .leading)
             if compact {
-                summaryCell
+                summaryCell(dateText: dateText)
                     .padding(.trailing, 8)
                     .frame(minWidth: TransactionsTableCard.summaryWidth, maxWidth: .infinity, alignment: .leading)
             }
             ForEach(columns, id: \.self) { column in
-                cell(column)
+                cell(column, dateText: dateText)
                     .padding(.trailing, 8)
                     .frame(width: column == .category ? nil : width(column), alignment: alignment(column))
                     .frame(
                         minWidth: column == .category ? width(column) : nil,
                         maxWidth: column == .category ? .infinity : nil, alignment: alignment(column))
             }
-            editCell
+            editCell(label: rowLabel)
                 .frame(width: TransactionsTableCard.editWidth, alignment: .center)
         }
         .padding(.horizontal, 16)
@@ -479,7 +501,7 @@ struct TransactionRowView: View {
         .contextMenu { contextMenu }
         .task { await model.rowAppeared(row.id) }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(row.accessibilityLabel(labels, settings: settings))
+        .accessibilityLabel(rowLabel)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
@@ -517,7 +539,7 @@ struct TransactionRowView: View {
         }
     }
 
-    private var checkbox: some View {
+    private func checkbox(label: String) -> some View {
         let checked = model.selection.contains(row.id)
         return Button {
             model.toggleSelection(row.id)
@@ -526,21 +548,20 @@ struct TransactionRowView: View {
                 .foregroundStyle(checked ? theme.primary : theme.tertiaryLabel)
         }
         .buttonStyle(.borderless)
-        .accessibilityLabel(
-            "\(strings.t("aria.selectTransaction")): \(row.accessibilityLabel(labels, settings: settings))")
+        .accessibilityLabel("\(strings.t("aria.selectTransaction")): \(label)")
         .accessibilityValue(Text(verbatim: checked ? "1" : "0"))
     }
 
     // MARK: Cells
 
     @ViewBuilder
-    private func cell(_ column: TransactionColumn) -> some View {
+    private func cell(_ column: TransactionColumn, dateText: String) -> some View {
         switch column {
-        case .date: dateCell
+        case .date: dateCell(dateText)
         case .recipient: recipientCell
         case .category: categoryCell
         case .bank:
-            Text(row.accountLabel(model.accountNames))
+            Text(row.accountLabel(accountNames))
                 .lineLimit(1)
                 .foregroundStyle(theme.secondaryLabel)
                 .strikethrough(!row.isActive)
@@ -561,7 +582,7 @@ struct TransactionRowView: View {
     }
 
     @ViewBuilder
-    private var dateCell: some View {
+    private func dateCell(_ dateText: String) -> some View {
         if isEditing {
             VisionDateField(
                 day: model.rowEditor?.day, placeholder: strings.t("txPage.col.date"), settings: settings,
@@ -570,7 +591,7 @@ struct TransactionRowView: View {
                 model.rowEditor?.day = day
             }
         } else {
-            Text(VisionFormat.appDate(row.date, format: settings.dateFormat))
+            Text(dateText)
                 .monospacedDigit()
                 .foregroundStyle(theme.secondaryLabel)
                 .strikethrough(!row.isActive)
@@ -669,11 +690,11 @@ struct TransactionRowView: View {
     }
 
     /// The stacked cell of the compact layout: date, payee, account, category and memo.
-    private var summaryCell: some View {
+    private func summaryCell(dateText: String) -> some View {
         let uncategorised = row.isUncategorised(labels)
         return VStack(alignment: .leading, spacing: 4) {
             Text(
-                verbatim: [VisionFormat.appDate(row.date, format: settings.dateFormat), row.accountLabel(model.accountNames)]
+                verbatim: [dateText, row.accountLabel(accountNames)]
                     .filter { !$0.isEmpty }
                     .joined(separator: " · ")
             )
@@ -714,8 +735,7 @@ struct TransactionRowView: View {
     }
 
     @ViewBuilder
-    private var editCell: some View {
-        let label = row.accessibilityLabel(labels, settings: settings)
+    private func editCell(label: String) -> some View {
         if isEditing {
             HStack(spacing: 4) {
                 Button {

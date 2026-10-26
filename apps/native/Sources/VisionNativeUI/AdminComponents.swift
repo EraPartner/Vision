@@ -169,13 +169,22 @@ struct NativeScrollRestoration {
     var grow: @MainActor () async -> Void = {}
 }
 
+/// Holds the scroll position outside the view's state. SwiftUI writes the position back on
+/// every scrolled frame; with `@State` each write re-evaluated the page and its content.
+@MainActor
+final class AdminScrollPositionBox {
+    var value = ScrollPosition(edge: .top)
+}
+
 struct AdminPage<Content: View>: View {
     private let restoration: NativeScrollRestoration?
     /// A centred width cap, for the few web pages that set one (`max-w-7xl` on Import).
     private let maxWidth: CGFloat?
     private let content: () -> Content
     @Environment(\.visionTheme) var theme
-    @State private var position = ScrollPosition(edge: .top)
+    @State private var positionBox = AdminScrollPositionBox()
+    /// Bumped after a programmatic scroll so the page reads the box once.
+    @State private var restoreTick = 0
     @State private var maximumOffset: CGFloat = 0
     @State private var isRestoring = true
 
@@ -189,6 +198,8 @@ struct AdminPage<Content: View>: View {
     }
 
     var body: some View {
+        // Read so the restore's `restoreTick` bump re-evaluates the page once and applies the scroll.
+        let _ = restoreTick
         ScrollView {
             VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
                 content()
@@ -197,7 +208,9 @@ struct AdminPage<Content: View>: View {
             .frame(maxWidth: maxWidth ?? .infinity, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .scrollPosition($position)
+        .scrollPosition(
+            Binding(get: { positionBox.value }, set: { positionBox.value = $0 })
+        )
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
             geometry.contentOffset.y
         } action: { _, offset in
@@ -206,7 +219,8 @@ struct AdminPage<Content: View>: View {
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
             max(0, geometry.contentSize.height - geometry.containerSize.height)
         } action: { _, maximum in
-            maximumOffset = maximum
+            // Only the restore reads it; a lazy list re-estimating its height must not rebuild the page.
+            if isRestoring { maximumOffset = maximum }
         }
         .task { await restore() }
         .foregroundStyle(theme.foreground)
@@ -227,6 +241,7 @@ struct AdminPage<Content: View>: View {
             try? await Task.sleep(for: .milliseconds(50))
             if Task.isCancelled { return }
         }
-        position.scrollTo(y: min(CGFloat(target), maximumOffset))
+        positionBox.value.scrollTo(y: min(CGFloat(target), maximumOffset))
+        restoreTick += 1
     }
 }

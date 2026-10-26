@@ -5,21 +5,44 @@ struct PortfolioPerformanceWidgets: View {
     let model: PortfolioModel
     let shell: NativeShellModel
     @Environment(\.visionTheme) private var theme
+    /// The chart series built from the snapshots, kept until the snapshots, the broker rows, the
+    /// language or the fx-neutral switch change (a hover or a theme pass re-evaluates the body).
+    @State private var derivedSeries = ChartDerivedMemo<DerivedInput, DerivedSeries>()
+    private struct DerivedInput: Equatable {
+        let snapshots: [PortfolioPerformanceSnapshot]
+        let startDate: String
+        let endDate: String
+        let broker: PortfolioBrokerPerformance?
+        let language: String
+        let showFxNeutral: Bool
+    }
+    private struct DerivedSeries {
+        let hasFxNeutral: Bool
+        let value: [InsightChartSeries]
+        let relative: [InsightChartSeries]
+        let broker: [InsightChartSeries]
+    }
     private var data: PortfolioPerformanceData? {
         guard model.performance?.currency == shell.settings.portfolioCurrency else { return nil }
         return model.performance
     }
     var body: some View {
         if let data {
+            let derived = derivedSeries.output(
+                for: DerivedInput(
+                    snapshots: data.snapshots, startDate: data.startDate, endDate: data.endDate,
+                    broker: model.brokerPerformance, language: shell.strings.language.rawValue,
+                    showFxNeutral: model.showFxNeutral)
+            ) { derive(data) }
             if model.widgets.isVisible("valueChart"), data.snapshots.count > 1 {
                 PortfolioCard(
                     title: shell.strings.t("performance.valueOverTime"),
                     description: shell.strings.t("performance.chartDesc", ["period": period])
                 ) {
                     PortfolioSeriesChart(
-                        series: valueSeries(data), title: shell.strings.t("performance.valueOverTime"),
+                        series: derived.value, title: shell.strings.t("performance.valueOverTime"),
                         currency: data.currency, shell: shell, area: true, dayTicks: dayTicks, colors: colors)
-                    if hasFxNeutral(data) {
+                    if derived.hasFxNeutral {
                         HStack {
                             Toggle(
                                 shell.strings.t("performance.fxNeutral"),
@@ -41,7 +64,7 @@ struct PortfolioPerformanceWidgets: View {
                     description: shell.strings.t("performance.byBrokerDescription")
                 ) {
                     PortfolioSeriesChart(
-                        series: brokerSeries(broker, data: data),
+                        series: derived.broker,
                         title: shell.strings.t("performance.byBrokerTitle"), currency: data.currency, shell: shell,
                         area: true, dayTicks: dayTicks)
                 }
@@ -52,7 +75,7 @@ struct PortfolioPerformanceWidgets: View {
                     description: shell.strings.t("performance.relativeDesc", ["period": period])
                 ) {
                     PortfolioSeriesChart(
-                        series: relativeSeries(data), title: shell.strings.t("performance.relativeTitle"),
+                        series: derived.relative, title: shell.strings.t("performance.relativeTitle"),
                         currency: data.currency, shell: shell, percent: true, area: true, dayTicks: dayTicks, colors: colors)
                 }
             }
@@ -71,6 +94,13 @@ struct PortfolioPerformanceWidgets: View {
             "value": theme.primary,
         ]
     }
+    private func derive(_ data: PortfolioPerformanceData) -> DerivedSeries {
+        let fxNeutral = hasFxNeutral(data)
+        return DerivedSeries(
+            hasFxNeutral: fxNeutral, value: valueSeries(data, hasFxNeutral: fxNeutral),
+            relative: relativeSeries(data),
+            broker: model.brokerPerformance.map { brokerSeries($0, data: data) } ?? [])
+    }
     private func hasFxNeutral(_ data: PortfolioPerformanceData) -> Bool {
         data.snapshots.contains { snapshot in
             snapshot.valueFxNeutral.map { abs($0 - snapshot.value) > Decimal(1) / 100 } ?? false
@@ -86,7 +116,7 @@ struct PortfolioPerformanceWidgets: View {
                 amount(row).map { InsightChartPoint(key: row.date, value: $0) }
             }, dashed: dashed)
     }
-    private func valueSeries(_ data: PortfolioPerformanceData) -> [InsightChartSeries] {
+    private func valueSeries(_ data: PortfolioPerformanceData, hasFxNeutral: Bool) -> [InsightChartSeries] {
         var lines = [
             line("stocksEtfs", "performance.relativeStocksEtfs", data) { $0.stocksEtfsValue },
             line("crypto", "performance.crypto", data) { $0.cryptoValue },
@@ -94,7 +124,7 @@ struct PortfolioPerformanceWidgets: View {
             line("inflation", "performance.inflationAdjusted", data) { $0.inflationAdjustedValue },
             line("value", "portfolio.portfolioValue", data) { $0.value },
         ]
-        if model.showFxNeutral && hasFxNeutral(data) {
+        if model.showFxNeutral && hasFxNeutral {
             lines.append(line("fxNeutral", "performance.fxNeutral", data, dashed: true) { $0.valueFxNeutral })
         }
         return lines
@@ -137,6 +167,7 @@ struct PortfolioBreakdownView: View {
         Dictionary(grouping: data.breakdownSummary, by: \.assetClass)
     }
     var body: some View {
+        let groups = self.groups
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), alignment: .leading)], alignment: .leading) {
             ForEach(groups.keys.sorted { $0.rawValue < $1.rawValue }, id: \.self) { group in
                 let rows = groups[group] ?? []
@@ -164,11 +195,12 @@ struct PortfolioBreakdownView: View {
                 title: shell.strings.t("performance.monthlyHeatmap"),
                 description: shell.strings.t("performance.heatmapDesc"), large: true
             ) {
+                let monthNames = (1...12).map { monthLabel($0) }
                 ScrollView(.horizontal) {
                     Grid(horizontalSpacing: 5, verticalSpacing: 5) {
                         GridRow {
                             Text(shell.strings.t("performance.year"))
-                            ForEach(1...12, id: \.self) { month in Text(monthLabel(month)).frame(minWidth: 48) }
+                            ForEach(1...12, id: \.self) { month in Text(monthNames[month - 1]).frame(minWidth: 48) }
                             Text(shell.strings.t("performance.ytd")).frame(minWidth: 58)
                         }.font(.caption.weight(.medium)).foregroundStyle(theme.secondaryLabel)
                         ForEach(data.heatmap.years, id: \.self) { year in
@@ -176,15 +208,14 @@ struct PortfolioBreakdownView: View {
                                 GridRow {
                                     Text(String(year)).font(.caption.weight(.medium)).monospacedDigit()
                                     ForEach(0..<12, id: \.self) { index in
-                                        heatCell(index < months.count ? months[index] : nil)
-                                            .accessibilityLabel("\(monthLabel(index + 1)) \(year)")
-                                            .accessibilityValue(
-                                                index < months.count
-                                                    ? months[index].map { signedPercent($0, digits: 2) }
-                                                        ?? shell.strings.t("common.noData2")
-                                                    : shell.strings.t("common.noData2"))
+                                        let cell: Decimal? = index < months.count ? months[index] : nil
+                                        let cellText = cell.map { signedPercent($0, digits: 2) }
+                                        heatCell(cell, text: cellText)
+                                            .accessibilityLabel("\(monthNames[index]) \(year)")
+                                            .accessibilityValue(cellText ?? shell.strings.t("common.noData2"))
                                     }
-                                    heatCell(yearReturn(months))
+                                    let yearly = yearReturn(months)
+                                    heatCell(yearly, text: yearly.map { signedPercent($0, digits: 2) })
                                 }
                             }
                         }
@@ -246,7 +277,7 @@ struct PortfolioBreakdownView: View {
             }
         }.frame(minWidth: 280)
     }
-    private func heatCell(_ value: Decimal?) -> some View {
+    private func heatCell(_ value: Decimal?, text: String?) -> some View {
         let amount = value ?? 0
         let magnitude = abs(amount)
         let ratio = magnitude / max(data.heatmap.maxAbsPct, 1)
@@ -258,10 +289,10 @@ struct PortfolioBreakdownView: View {
             value == nil || magnitude < Decimal(25) / 100
             ? theme.foreground.opacity(0.04)
             : (amount >= 0 ? theme.gain : theme.loss).opacity(opacity)
-        return Text(value.map { signedPercent($0, digits: 2) } ?? "—")
+        return Text(text ?? "—")
             .font(.caption.monospaced()).frame(minWidth: 48).padding(.vertical, 8)
             .background(color, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.sm))
-            .visionTooltip(value.map { signedPercent($0, digits: 2) } ?? shell.strings.t("common.noData2"))
+            .visionTooltip(text ?? shell.strings.t("common.noData2"))
     }
     private func yearReturn(_ months: [Decimal?]) -> Decimal? {
         let known = months.compactMap { $0 }

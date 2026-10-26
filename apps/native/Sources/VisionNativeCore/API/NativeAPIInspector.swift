@@ -64,6 +64,9 @@ public struct APIInspectorEvent: Equatable, Sendable, Identifiable {
     }
 
     public static let ringCapacity = 200
+    /// The most endpoints `queries` tracks. A paged ledger asks for a new URL per page, so the
+    /// table would otherwise grow with every offset ever requested.
+    public static let queryCapacity = 400
     public static let slowThresholdMs = 1000.0
 
     public var isOpen = false
@@ -129,7 +132,16 @@ public struct APIInspectorEvent: Equatable, Sendable, Identifiable {
             entry.errorCount += 1
             entry.lastError = event.errorMessage
         }
+        if queries[event.endpoint] == nil, queries.count >= Self.queryCapacity { evictQuery() }
         queries[event.endpoint] = entry
+    }
+
+    /// Drops the entry fetched longest ago that is not fetching now.
+    private func evictQuery() {
+        let idle = queries.values.filter { !$0.isFetching }
+        guard let oldest = idle.min(by: { ($0.lastUpdated ?? .distantPast) < ($1.lastUpdated ?? .distantPast) })
+        else { return }
+        queries[oldest.key] = nil
     }
 
     /// `resetQueryMetrics()` + `clearApiRequestLog()`.

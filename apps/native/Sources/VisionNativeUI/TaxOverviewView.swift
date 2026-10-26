@@ -28,7 +28,7 @@ public struct TaxOverviewView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            LazyVStack(alignment: .leading, spacing: 20) {
                 header
                 if let error = screens.routeLoadError ?? screens.overview.error ?? screens.dashboard.error {
                     Text(strings.t("tax.page.loadError", ["msg": error])).foregroundStyle(theme.destructive)

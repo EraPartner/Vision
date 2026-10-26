@@ -19,28 +19,37 @@ struct PortfolioSeriesChart: View {
     @State private var rangeStart: String?
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
-    private var keys: [String] { Array(Set(series.flatMap { $0.points.map(\.key) })).sorted() }
-    /// Each key's position: the x axis is quantitative over these indices, so it draws only
-    /// the requested ticks. A String-keyed (categorical) axis drew a grid line and a label
-    /// for every day of a long series.
-    private var keyIndex: [String: Int] {
-        Dictionary(uniqueKeysWithValues: keys.enumerated().map { ($1, $0) })
-    }
-    /// The web AreaChart's fitted domain: the data range plus an 8 % margin, niced, not
-    /// zero-based, so a slowly growing portfolio fills the plot instead of a flat line at the top.
-    private var yDomain: ClosedRange<Double> {
-        ChartAxisTicks.fittedDomain(series.flatMap { $0.points.map { coordinate($0.value) } })
-    }
+    /// The sorted keys and their positions, the thinned lines and the value coordinates,
+    /// rebuilt only when the series change.
+    @State private var plotCache = ChartSeriesPlotCache()
+    /// The accessibility strings of each drawn point, formatted once per series and context.
+    @State private var markLabels = ChartMarkLabelCache()
+    /// Date strings shared by the lines' marks, formatted once per context.
+    @State private var labelMemo = ChartLabelMemo()
+    private var keys: [String] { plotCache.plot(for: series).layout.keys }
 
     var body: some View {
-        let keys = self.keys
-        let index = keyIndex
-        let domain = yDomain
+        let plot = plotCache.plot(for: series)
+        let keys = plot.layout.keys
+        // Each key's position: the x axis is quantitative over these indices, so it draws only
+        // the requested ticks. A String-keyed (categorical) axis drew a grid line and a label
+        // for every day of a long series.
+        let index = plot.layout.index
+        // The web AreaChart's fitted domain: the data range plus an 8 % margin, niced, not
+        // zero-based, so a slowly growing portfolio fills the plot instead of a flat line at
+        // the top. It spans the full series, not only the drawn points.
+        let domain = ChartAxisTicks.fittedDomain(plot.values)
+        let context = labelContext
         VStack(alignment: .leading, spacing: 10) {
             Chart {
-                ForEach(series) { line in
+                ForEach(plot.drawn) { line in
                     let color = lineColor(line)
-                    ForEach(line.points) { point in
+                    let marks = markLabels.marks(for: line, context: context) { point in
+                        ChartMarkLabelCache.Mark(
+                            label: line.label + ". " + pointDate(point.key), value: format(point.value))
+                    }
+                    ForEach(line.points.indices, id: \.self) { position in
+                        let point = line.points[position]
                         if area && !line.dashed, let x = index[point.key] {
                             AreaMark(
                                 x: .value(title, x), yStart: .value(line.label, domain.lowerBound),
@@ -63,8 +72,8 @@ struct PortfolioSeriesChart: View {
                                     dash: line.dashed ? [4, 4] : [])
                             )
                             .interpolationMethod(.monotone)
-                            .accessibilityLabel(line.label + ". " + dateLabel(point.key))
-                            .accessibilityValue(format(point.value))
+                            .accessibilityLabel(marks[position].label)
+                            .accessibilityValue(marks[position].value)
                         }
                     }
                 }
@@ -94,8 +103,11 @@ struct PortfolioSeriesChart: View {
                     Rectangle().fill(.clear).contentShape(Rectangle())
                         .onContinuousHover { phase in
                             switch phase {
-                            case .active(let location): selected = key(location.x, proxy: proxy, geometry: geometry)
-                            case .ended: if rangeStart == nil { selected = nil }
+                            case .active(let location):
+                                // Scrolling re-reports a parked pointer every frame: write on change only.
+                                let hovered = key(location.x, proxy: proxy, geometry: geometry)
+                                if selected != hovered { selected = hovered }
+                            case .ended: if rangeStart == nil, selected != nil { selected = nil }
                             }
                         }
                         .gesture(
@@ -104,7 +116,8 @@ struct PortfolioSeriesChart: View {
                                 if rangeStart == nil {
                                     rangeStart = key(value.startLocation.x, proxy: proxy, geometry: geometry)
                                 }
-                                selected = key(value.location.x, proxy: proxy, geometry: geometry)
+                                let dragged = key(value.location.x, proxy: proxy, geometry: geometry)
+                                if selected != dragged { selected = dragged }
                             })
                 }
             }
@@ -152,6 +165,15 @@ struct PortfolioSeriesChart: View {
                     .accessibilityElement(children: .combine)
             }
         }
+    }
+    /// What the date and value strings of a point depend on besides the point.
+    private var labelContext: String {
+        let locale = shell.settings.numberFormat.locale.identifier
+        let language = shell.strings.language.rawValue
+        return "\(language)|\(locale)|\(currency.rawValue)|\(percent)|\(shell.settings.showDecimalPlaces)"
+    }
+    private func pointDate(_ key: String) -> String {
+        labelMemo.label(key, context: labelContext) { dateLabel(key) }
     }
     private func lineColor(_ line: InsightChartSeries) -> Color {
         let position = series.firstIndex { $0.id == line.id } ?? 0

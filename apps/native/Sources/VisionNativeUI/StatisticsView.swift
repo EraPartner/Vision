@@ -71,7 +71,7 @@ public struct StatisticsView: View {
     }
     private var liveContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
+            LazyVStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
                 VisionPageHeader(
                     title: strings.t("statsPage.title"), subtitle: strings.t("statsPage.subtitle"), symbol: "chart.bar"
                 ) {
@@ -116,7 +116,7 @@ public struct StatisticsView: View {
                             .font(.footnote).foregroundStyle(theme.warning)
                     }
                     // `<Tabs className="space-y-4">`: the tab bar sits 16 pt above its content.
-                    VStack(alignment: .leading, spacing: 16) {
+                    LazyVStack(alignment: .leading, spacing: 16) {
                         VisionSegmentedControl(
                             selection: Binding(
                                 get: { model.tab },
@@ -193,45 +193,52 @@ public struct StatisticsView: View {
                     get: { model.printLocalState.rangeStart[key] }, set: { model.printLocalState.rangeStart[key] = $0 })
         )
     }
-    private var overview: some View {
-        VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
-            if includes(.rhythm), model.isVisible("summaryCards"), let snapshot = model.filtered { rhythm(snapshot) }
-            if includes(.digest) {
-                StatisticsDigestView(
-                    model: screens.digest, settings: settings, strings: strings, isPrinting: isPrinting)
-            }
-            if includes(.monthly), model.isVisible("monthly") {
-                cardWithControls(
-                    "statsPage.chart.monthlyTitle", subtitle: strings.t("statsPage.chart.monthlyDesc"),
-                    graph: "monthly"
-                ) {
-                    if !isPrinting {
-                        // MonthlyChart's `<Toggle size="sm">`, at the right of the header.
-                        InsightsLabelToggle(
-                            title: strings.t("statsPage.toggleRollingAvg", ["n": "3"]),
-                            isOn: Binding(
-                                get: { model.printLocalState.rollingAverage },
-                                set: { model.printLocalState.rollingAverage = $0 }))
-                    }
-                } content: {
-                    chart(
-                        monthlySeries(model.data(for: "monthly"), average: model.printLocalState.rollingAverage),
-                        key: "monthly", bars: true)
+    /// Lazy on screen so the cards below the fold are built on scroll; a printed page lays out
+    /// every card eagerly, since nothing scrolls to them.
+    @ViewBuilder private var overview: some View {
+        if isPrinting {
+            VStack(alignment: .leading, spacing: VisionPageLayout.spacing) { overviewCards }
+        } else {
+            LazyVStack(alignment: .leading, spacing: VisionPageLayout.spacing) { overviewCards }
+        }
+    }
+    @ViewBuilder private var overviewCards: some View {
+        if includes(.rhythm), model.isVisible("summaryCards"), let snapshot = model.filtered { rhythm(snapshot) }
+        if includes(.digest) {
+            StatisticsDigestView(
+                model: screens.digest, settings: settings, strings: strings, isPrinting: isPrinting)
+        }
+        if includes(.monthly), model.isVisible("monthly") {
+            cardWithControls(
+                "statsPage.chart.monthlyTitle", subtitle: strings.t("statsPage.chart.monthlyDesc"),
+                graph: "monthly"
+            ) {
+                if !isPrinting {
+                    // MonthlyChart's `<Toggle size="sm">`, at the right of the header.
+                    InsightsLabelToggle(
+                        title: strings.t("statsPage.toggleRollingAvg", ["n": "3"]),
+                        isOn: Binding(
+                            get: { model.printLocalState.rollingAverage },
+                            set: { model.printLocalState.rollingAverage = $0 }))
                 }
+            } content: {
+                chart(
+                    monthlySeries(model.data(for: "monthly"), average: model.printLocalState.rollingAverage),
+                    key: "monthly", bars: true)
             }
-            if includes(.netTrend), model.isVisible("netTrend") {
-                card(
-                    "statsPage.chart.netTitle", subtitle: strings.t("statsPage.chart.netDesc"), graph: "netTrend"
-                ) {
-                    chart(
-                        [
-                            InsightChartSeries(
-                                id: "net", label: strings.t("statsPage.net"),
-                                points: (model.data(for: "netTrend")?.monthly.orderedMonths ?? []).map {
-                                    InsightChartPoint(key: $0.id, value: $0.total_income - abs($0.total_spending))
-                                })
-                        ], key: "netTrend", areas: true)
-                }
+        }
+        if includes(.netTrend), model.isVisible("netTrend") {
+            card(
+                "statsPage.chart.netTitle", subtitle: strings.t("statsPage.chart.netDesc"), graph: "netTrend"
+            ) {
+                chart(
+                    [
+                        InsightChartSeries(
+                            id: "net", label: strings.t("statsPage.net"),
+                            points: (model.data(for: "netTrend")?.monthly.orderedMonths ?? []).map {
+                                InsightChartPoint(key: $0.id, value: $0.total_income - abs($0.total_spending))
+                            })
+                    ], key: "netTrend", areas: true)
             }
         }
     }

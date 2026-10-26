@@ -588,6 +588,18 @@ extension TransactionPatch {
         #expect(!model.isFetchingMore)
     }
 
+    @Test func loadingMoreAppendsTheNextPageInOrder() async throws {
+        let service = FakeTransactionsService(rows: TxFixture.rows(120))
+        let (model, shell) = try await TxFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
+        let first = model.rows?.map(\.id) ?? []
+        await model.loadMore()
+        let all = model.rows?.map(\.id) ?? []
+        #expect(all.count == 100)
+        #expect(Array(all.prefix(first.count)) == first)
+        #expect(Set(all).count == all.count)
+    }
+
     @Test func theSearchSettlesIntoTheURLWithReplace() async throws {
         let service = FakeTransactionsService(rows: TxFixture.rows(6))
         let (model, shell) = try await TxFixture.opened(service)
@@ -971,5 +983,22 @@ extension TransactionPatch {
         #expect(model.visibleRows.isEmpty)
         #expect(model.emptyState == .noFilterResults)
         #expect(model.footer() == "0 of 2 shown (filtered)")
+    }
+
+    @Test func theFilteredRowsAreBuiltOnceUntilTheRowsOrFiltersChange() async throws {
+        let service = FakeTransactionsService(rows: TxFixture.rows(8))
+        let (model, _) = try await TxFixture.opened(service)
+        #expect(model.visibleRows.count == 8)
+        #expect(model.visibleRowsBuilds == 0)
+        model.columnFilters.set(TransactionColumn.recipient.rawValue, to: "bakery")
+        let first = model.visibleRows
+        #expect(first.count == 4)
+        #expect(model.visibleRows == first)
+        _ = model.footer()
+        _ = model.allSelected
+        #expect(model.visibleRowsBuilds == 1)
+        model.columnFilters.set(TransactionColumn.recipient.rawValue, to: "garage")
+        #expect(model.visibleRows.count == 4)
+        #expect(model.visibleRowsBuilds == 2)
     }
 }

@@ -5,6 +5,13 @@ public struct NetWorthView: View {
     let model: NetWorthModel
     let shell: NativeShellModel
     @State private var connectivity = PortfolioConnectivity()
+    /// The chart's lines, rebuilt only when the displayed snapshots or the language change: a
+    /// daily history is thousands of snapshots, and the page body runs on every selection.
+    @State private var seriesMemo = ChartDerivedMemo<SeriesInput, [InsightChartSeries]>()
+    private struct SeriesInput: Equatable {
+        let snapshots: [OpenAPI.NetWorthSnapshot]
+        let language: String
+    }
     @Environment(\.visionTheme) private var theme
     public init(model: NetWorthModel, shell: NativeShellModel) {
         self.model = model
@@ -16,7 +23,7 @@ public struct NetWorthView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            LazyVStack(alignment: .leading, spacing: 20) {
                 VisionPageHeader(title: strings.t("networth.title"), subtitle: "", symbol: "chart.line.uptrend.xyaxis")
                 {}
                 if model.isLoading || model.currency != currency {
@@ -330,14 +337,19 @@ public struct NetWorthView: View {
         }
     }
     private var series: [InsightChartSeries] {
+        let display = model.displaySnapshots
+        let input = SeriesInput(snapshots: display, language: strings.language.rawValue)
+        return seriesMemo.output(for: input) { makeSeries(display) }
+    }
+    private func makeSeries(_ display: [OpenAPI.NetWorthSnapshot]) -> [InsightChartSeries] {
         let keys =
             ["liquid", "investments"]
-            + (model.displaySnapshots.contains { abs($0.liabilities) > Decimal(string: "0.005")! }
+            + (display.contains { abs($0.liabilities) > Decimal(string: "0.005")! }
                 ? ["liabilities"] : []) + ["netWorth"]
         return keys.map { key in
             InsightChartSeries(
                 id: key, label: strings.t(key == "netWorth" ? "networth.seriesTotal" : "networth." + key),
-                points: model.displaySnapshots.map { snapshot in
+                points: display.map { snapshot in
                     let value: Decimal
                     switch key {
                     case "liquid": value = snapshot.liquid

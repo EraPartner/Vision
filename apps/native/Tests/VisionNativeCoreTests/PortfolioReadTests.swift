@@ -159,6 +159,35 @@ struct PortfolioReadTests {
         #expect(model.filteredHoldings.isEmpty)
     }
 
+    @Test func cachedHoldingRowsFollowTheSummaryBrokerFilterSortAndTableQuery() async throws {
+        let model = PortfolioModel(service: portfolioReadClient(PortfolioReadTransport()))
+        #expect(model.active.isEmpty)
+        #expect(model.filteredHoldings.isEmpty)
+        await model.load(currency: "EUR")
+        let holding = try #require(model.active.first)
+        #expect(model.filteredHoldings.map(\.id) == model.active.map(\.id))
+        #expect(model.holdings(assetClasses: nil) == model.filteredHoldings)
+        #expect(model.holdings(assetClasses: []).isEmpty)
+        let broker = model.metrics(for: holding)
+        model.brokerFilter = .account(42)
+        #expect(model.metrics(for: holding) != broker)
+        #expect(model.metrics(for: holding).returnPercent == 50)
+        #expect(model.filteredHoldings.count == 1)
+        model.brokerFilter = .account(999)
+        #expect(model.filteredHoldings.isEmpty)
+        #expect(!model.active.isEmpty)
+        model.brokerFilter = .all
+        #expect(model.metrics(for: holding) == broker)
+        #expect(model.filteredHoldings.count == model.active.count)
+        model.sort = .returnRate
+        #expect(model.filteredHoldings.map(\.id) == model.active.map(\.id))
+        model.tableQuery.search = "zzz-no-such-holding"
+        #expect(model.filteredHoldings.isEmpty)
+        #expect(model.holdings(assetClasses: [holding.assetClass]).isEmpty)
+        model.tableQuery = LocalTableQuery()
+        #expect(model.filteredHoldings.count == model.active.count)
+    }
+
     @Test func yahooQuotesUseOnlyEligibleConfiguredProviderIdentities() async {
         let transport = PortfolioReadTransport()
         await transport.addProviderIdentityCases()

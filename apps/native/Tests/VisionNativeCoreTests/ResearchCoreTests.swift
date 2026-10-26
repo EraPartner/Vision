@@ -71,6 +71,18 @@ struct ResearchCoreTests {
             try await researchCoreClient(transport).researchPresentation(.object(["kind": .string("watchlist")]))
         }
     }
+    @Test func readCacheKeepsAtMostItsCapacityAndEvictsTheLeastRecentlyUsed() async throws {
+        let cache = ResearchReadCache(capacity: 3)
+        for name in ["a", "b", "c"] {
+            _ = try await cache.request(key: name, freshFor: 60) { name }
+        }
+        _ = try await cache.request(key: "a", freshFor: 60) { "unused" }
+        _ = try await cache.request(key: "d", freshFor: 60) { "d" }
+        #expect(cache.count == 3)
+        #expect(cache.cached(key: "a", as: String.self) == "a")
+        #expect(cache.cached(key: "b", as: String.self) == nil)
+        #expect(cache.cached(key: "d", as: String.self) == "d")
+    }
     @Test func readCacheCoalescesSameScopeAndInvalidatedLateReadCannotPopulateFreshCache() async throws {
         let transport = ResearchCoreTransport()
         let client = researchCoreClient(transport)

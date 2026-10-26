@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import VisionNativeCore
 
@@ -45,33 +46,76 @@ struct VisionCardBackground: View {
             // `.premium-frame-interactive::after` / hover box-shadow, a fade in (index.css).
             let lift = DesignTokens.Hover.cardShadow.value(isDark: theme.isDark).first
             let liftAlpha = lifted ? (lift?.alpha ?? 0) : 0
-            fill(shape)
-                // premium-frame's inset edge: `0 1px 0 highlight inset` and, light only,
-                // `0 -1px 0 shadow/0.05 inset`.
-                .overlay(
-                    shape.inset(by: 1).strokeBorder(
-                        LinearGradient(
-                            stops: [
-                                .init(color: Color(token: palette.glassHighlight, opacity: highlightAlpha), location: 0),
-                                .init(color: .clear, location: 0.12),
-                                .init(color: .clear, location: 0.88),
-                                .init(
-                                    color: Color(token: palette.glassShadow, opacity: theme.isDark ? 0 : 0.05),
-                                    location: 1),
-                            ], startPoint: .top, endPoint: .bottom),
-                        lineWidth: 1)
-                )
-                .overlay(shape.strokeBorder(frame, lineWidth: 1))
-                // `0 4px 12px shadow/0.04` light, `0 5px 16px shadow/0.2` dark (CSS blur ≈ 2 × radius).
-                .shadow(
-                    color: Color(token: palette.glassShadow, opacity: theme.isDark ? 0.2 : 0.04),
-                    radius: theme.isDark ? 8 : 6, y: theme.isDark ? 5 : 4)
-                .shadow(
-                    color: Color(token: palette.glassShadow, opacity: liftAlpha),
-                    radius: interactive ? (lift?.blur ?? 0) / 2 : 0, x: lift?.x ?? 0, y: lift?.y ?? 0
-                )
-                .animation(hoverAnimation, value: hovering)
+            if !fullEffects {
+                // The same surface as Core Animation layers (`VisionCardLayers`), which the
+                // render server draws instead of SwiftUI rasterising the gradients on the CPU.
+                VisionCardLayers(
+                    style: layerStyle(
+                        frame: frame, highlightAlpha: highlightAlpha, lift: lift, liftAlpha: liftAlpha))
+            } else {
+                fill(shape)
+                    // premium-frame's inset edge: `0 1px 0 highlight inset` and, light only,
+                    // `0 -1px 0 shadow/0.05 inset`.
+                    .overlay(
+                        shape.inset(by: 1).strokeBorder(
+                            LinearGradient(
+                                stops: [
+                                    .init(
+                                        color: Color(token: palette.glassHighlight, opacity: highlightAlpha),
+                                        location: 0),
+                                    .init(color: .clear, location: 0.12),
+                                    .init(color: .clear, location: 0.88),
+                                    .init(
+                                        color: Color(token: palette.glassShadow, opacity: theme.isDark ? 0 : 0.05),
+                                        location: 1),
+                                ], startPoint: .top, endPoint: .bottom),
+                            lineWidth: 1)
+                    )
+                    .overlay(shape.strokeBorder(frame, lineWidth: 1))
+                    // `0 4px 12px shadow/0.04` light, `0 5px 16px shadow/0.2` dark (CSS blur ≈ 2 × radius).
+                    .shadow(
+                        color: Color(token: palette.glassShadow, opacity: theme.isDark ? 0.2 : 0.04),
+                        radius: theme.isDark ? 8 : 6, y: theme.isDark ? 5 : 4)
+                    .modifier(
+                        LiftShadow(
+                            enabled: interactive, color: Color(token: palette.glassShadow, opacity: liftAlpha),
+                            radius: CGFloat((lift?.blur ?? 0) / 2), x: CGFloat(lift?.x ?? 0), y: CGFloat(lift?.y ?? 0))
+                    )
+                    .animation(hoverAnimation, value: hovering)
+            }
         }
+    }
+
+    /// `glass-thin`'s surface for `VisionCardLayers`. SwiftUI shades a view's shadow by the view's
+    /// own alpha, so the shadows are scaled by the surface's alpha at the bottom edge, where they show.
+    private func layerStyle(frame: Color, highlightAlpha: Double, lift: ShadowLayer?, liftAlpha: Double)
+        -> VisionCardLayerStyle
+    {
+        let palette = theme.palette
+        let dark = theme.isDark
+        let fillTop = Color(token: palette.glassSurface, opacity: dark ? 0.64 : 0.72)
+        let bottomAlpha = dark ? 0.78 : 0.56
+        let fillBottom =
+            dark
+            ? Color(token: palette.glassSurfaceDeep, opacity: bottomAlpha)
+            : Color(token: palette.glassSurface, opacity: bottomAlpha)
+        return VisionCardLayerStyle(
+            cornerRadius: cornerRadius,
+            fillTop: NSColor(fillTop).cgColor,
+            fillBottom: NSColor(fillBottom).cgColor,
+            edgeTop: NSColor(Color(token: palette.glassHighlight, opacity: highlightAlpha)).cgColor,
+            edgeBottom: NSColor(Color(token: palette.glassShadow, opacity: dark ? 0 : 0.05)).cgColor,
+            frame: NSColor(frame).cgColor,
+            shadow: VisionCardShadow(
+                color: NSColor(Color(token: palette.glassShadow, opacity: (dark ? 0.2 : 0.04) * bottomAlpha)).cgColor,
+                radius: dark ? 8 : 6, x: 0, y: dark ? 5 : 4),
+            lift: interactive
+                ? VisionCardShadow(
+                    color: NSColor(Color(token: palette.glassShadow, opacity: liftAlpha * bottomAlpha)).cgColor,
+                    radius: CGFloat((lift?.blur ?? 0) / 2), x: CGFloat(lift?.x ?? 0), y: CGFloat(lift?.y ?? 0))
+                : nil,
+            transitionDuration: hoverAnimation == nil ? nil : DesignTokens.Duration.normal,
+            transitionCurve: DesignTokens.Ease.glide)
     }
 
     /// `transition` of `.premium-frame-interactive`: the frame and shadow ease over
@@ -111,6 +155,25 @@ struct VisionCardBackground: View {
                             Color(token: palette.glassSurface, opacity: 0.56),
                         ],
                     startPoint: .top, endPoint: .bottom))
+        }
+    }
+}
+
+/// The hover lift shadow of an interactive card. A static card has none (zero radius and alpha),
+/// so it skips the extra shadow pass instead of drawing an invisible one.
+private struct LiftShadow: ViewModifier {
+    let enabled: Bool
+    let color: Color
+    let radius: CGFloat
+    let x: CGFloat
+    let y: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content.shadow(color: color, radius: radius, x: x, y: y)
+        } else {
+            content
         }
     }
 }

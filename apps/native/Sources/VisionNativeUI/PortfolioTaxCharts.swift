@@ -119,7 +119,7 @@ private struct PortfolioTaxBarChart: View {
                         .onContinuousHover { phase in
                             if case .active(let location) = phase {
                                 select(location.x, proxy: proxy, geometry: geometry)
-                            } else {
+                            } else if selection != nil {
                                 selection = nil
                             }
                         }
@@ -162,18 +162,20 @@ private struct PortfolioTaxBarChart: View {
     }
     private var selected: PortfolioTaxBarRow? { rows.first { $0.id == selection } }
     private func select(_ x: CGFloat, proxy: ChartProxy, geometry: GeometryProxy) {
+        // Scrolling re-reports a parked pointer every frame: write on change only.
+        func set(_ id: String?) { if selection != id { selection = id } }
         guard let plot = proxy.plotFrame else {
-            selection = nil
+            set(nil)
             return
         }
         let frame = geometry[plot]
         guard let position = proxy.value(atX: min(max(0, x - frame.minX), frame.width), as: Double.self),
             !rows.isEmpty
         else {
-            selection = nil
+            set(nil)
             return
         }
-        selection = rows[min(max(Int(position.rounded()), 0), rows.count - 1)].id
+        set(rows[min(max(Int(position.rounded()), 0), rows.count - 1)].id)
     }
     private func move(_ press: KeyPress) -> KeyPress.Result {
         guard !rows.isEmpty else { return .ignored }

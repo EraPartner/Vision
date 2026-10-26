@@ -16,6 +16,27 @@ struct VisionGridLayout: Layout {
         var size: CGSize
     }
 
+    /// The plan for the last width measured: `sizeThatFits` and `placeSubviews` run with the
+    /// same width in one layout pass, and a plan measures every child's whole subtree.
+    struct Cache {
+        var width: CGFloat?
+        var frames: [CGRect] = []
+        var size: CGSize = .zero
+    }
+
+    func makeCache(subviews: Subviews) -> Cache { Cache() }
+
+    private func plan(width: CGFloat, subviews: Subviews, cache: inout Cache) -> Plan {
+        if cache.width == width, cache.frames.count == subviews.count {
+            return Plan(frames: cache.frames, size: cache.size)
+        }
+        let made = plan(width: width, subviews: subviews)
+        cache.width = width
+        cache.frames = made.frames
+        cache.size = made.size
+        return made
+    }
+
     private func plan(width: CGFloat, subviews: Subviews) -> Plan {
         let count = subviews.count
         guard count > 0 else { return Plan(frames: [], size: CGSize(width: width, height: 0)) }
@@ -38,13 +59,13 @@ struct VisionGridLayout: Layout {
         return Plan(frames: frames, size: CGSize(width: width, height: max(0, originY - spacing)))
     }
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
         let width = proposal.width ?? 0
-        return plan(width: width, subviews: subviews).size
+        return plan(width: width, subviews: subviews, cache: &cache).size
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let layout = plan(width: bounds.width, subviews: subviews)
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
+        let layout = plan(width: bounds.width, subviews: subviews, cache: &cache)
         for (subview, frame) in zip(subviews, layout.frames) {
             subview.place(
                 at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),

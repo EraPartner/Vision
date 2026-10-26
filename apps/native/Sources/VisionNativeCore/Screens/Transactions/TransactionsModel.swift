@@ -183,6 +183,11 @@ public final class TransactionsModel {
     @ObservationIgnored private var loadedOffset = 0
     @ObservationIgnored private var listVersion = 0
     @ObservationIgnored private var inFlight: (query: TransactionListQuery, task: Task<Void, Never>)?
+    /// The rows through the column filters, kept while the loaded rows, the filters and the
+    /// labels are the ones it was built from.
+    @ObservationIgnored private var visibleCache: VisibleRowsCache?
+    /// How often the filtered rows were rebuilt, for tests.
+    @ObservationIgnored public private(set) var visibleRowsBuilds = 0
     /// The `?search=` value last read or written, so only a new value from the route
     /// replaces the typed search (a palette search while the page is open).
     @ObservationIgnored private var lastSearchParam: String?
@@ -493,8 +498,10 @@ public final class TransactionsModel {
         do {
             let page = try await service.transactionPage(query, offset: loadedOffset)
             guard mine == listVersion else { return }
+            // Append in place: a new array per page would copy every loaded row.
             let existing = Set((rows ?? []).map(\.id))
-            rows = (rows ?? []) + page.items.filter { !existing.contains($0.id) }.map(TransactionRow.init)
+            let fresh = page.items.filter { !existing.contains($0.id) }.map(TransactionRow.init)
+            if rows == nil { rows = fresh } else { rows?.append(contentsOf: fresh) }
             loadedOffset += page.items.count
             total = page.total
         } catch is CancellationError {
@@ -514,11 +521,15 @@ public final class TransactionsModel {
 
     /// A row was drawn: within the threshold of the end, the next page loads.
     public func rowAppeared(_ id: TransactionID) async {
+        // Nothing to load past the last page: skip the search for the row.
+        guard hasMore else { return }
         let shown = visibleRows
-        guard let index = shown.firstIndex(where: { $0.id == id }) else { return }
         let threshold = ServerTablePaging.loadMoreThreshold(pageSize: query?.pageSize ?? 50)
+        // Only the last `threshold` rows can ask: scan that tail, not the whole list, for each drawn row.
+        let tailStart = max(0, shown.count - max(1, threshold))
+        guard let offset = shown[tailStart...].firstIndex(where: { $0.id == id }) else { return }
         if ServerTablePaging.shouldLoadMore(
-            rowIndex: index, shownCount: shown.count, threshold: threshold, hasMore: hasMore)
+            rowIndex: offset, shownCount: shown.count, threshold: threshold, hasMore: hasMore)
         {
             await loadMore()
         }
@@ -578,8 +589,18 @@ public final class TransactionsModel {
 
     /// The rows the table shows: the loaded rows through the client column filters.
     public var visibleRows: [TransactionRow] {
+        let loaded = rows ?? []
+        guard !columnFilters.isEmpty else { return loaded }
         let labels = labels
-        return columnFilters.apply(rows ?? []) { row, key in row.rawValue(key, labels: labels) }
+        // Every row drawn, the footer and the header box ask for these rows; filtering a few
+        // thousand of them each time made scrolling and hovering cost a pass over the list.
+        if let cache = visibleCache, cache.filters == columnFilters, cache.labels == labels, cache.source == loaded {
+            return cache.result
+        }
+        let result = columnFilters.apply(loaded) { row, key in row.rawValue(key, labels: labels) }
+        visibleCache = VisibleRowsCache(source: loaded, filters: columnFilters, labels: labels, result: result)
+        visibleRowsBuilds += 1
+        return result
     }
 
     /// The distinct values the column filter lists.
@@ -832,8 +853,8 @@ public final class TransactionsModel {
         selection.toggleAll(shownIds)
     }
 
-    public var allSelected: Bool { selection.allSelected(shownIds) }
-    public var someSelected: Bool { selection.someSelected(shownIds) }
+    public var allSelected: Bool { selection.mode == .filter || selection.coversAll(visibleRows.lazy.map(\.id)) }
+    public var someSelected: Bool { !selection.ids.isEmpty && !allSelected }
 
     public func clearSelection() {
         selection.clear()
@@ -1280,6 +1301,7 @@ public final class TransactionsModel {
     /// The screen went away: its dialogs, editors and table state go with it, like an
     /// unmounted page. The loaded list stays cached; a toast and its Undo stay.
     public func disappear() {
+        visibleCache = nil
         pendingDelete = nil
         rowEditor = nil
         quickLookId = nil
@@ -1300,4 +1322,12 @@ public final class TransactionsModel {
         bannerRecipientId = nil
         pickers.reset()
     }
+}
+
+/// The filtered rows of `TransactionsModel.visibleRows` and what they were built from.
+private struct VisibleRowsCache {
+    let source: [TransactionRow]
+    let filters: ServerColumnFilters
+    let labels: TransactionLabels
+    let result: [TransactionRow]
 }

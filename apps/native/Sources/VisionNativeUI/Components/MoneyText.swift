@@ -112,8 +112,8 @@ struct MoneyText: View {
 
     /// The formatted amount, for labels and tests.
     static func text(_ amount: Decimal, currency: CurrencyCode, settings: NativeAppSettings, signed: Bool = true) -> String {
-        VisionFormat.currency(
-            amount, code: currency, locale: settings.numberFormat.locale,
+        MoneyTextCache.shared.text(
+            amount, currency: currency, locale: settings.numberFormat.locale,
             fractionDigits: settings.showDecimalPlaces, signed: signed)
     }
 }

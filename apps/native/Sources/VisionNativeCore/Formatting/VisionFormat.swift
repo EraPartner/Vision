@@ -42,13 +42,44 @@ public enum VisionFormat {
         _ value: Decimal, code: CurrencyCode, locale: Locale, fractionDigits: Int, signed: Bool = false
     ) -> String {
         guard (0...20).contains(fractionDigits), !value.isNaN else { return "\(value)" }
-        let style = Decimal.FormatStyle.Currency(code: code.rawValue, locale: locale)
-            .precision(.fractionLength(fractionDigits))
-            .rounded(rule: .toNearestOrAwayFromZero)
-        if signed {
-            return value.formatted(style.sign(strategy: .always(showZero: false)))
-        }
+        let style = currencyStyles.style(code: code, locale: locale, fractionDigits: fractionDigits, signed: signed)
         return value.formatted(style)
+    }
+
+    /// The currency styles built so far. A chart formats the amount of every drawn point, and
+    /// building the style (locale, precision, rounding, sign) is repeated work for the same four
+    /// inputs.
+    private static let currencyStyles = CurrencyStyles()
+
+    // lint:allow unchecked-sendable cache guarded by an NSLock
+    private final class CurrencyStyles: @unchecked Sendable {
+        private struct Key: Hashable {
+            let code: String
+            let localeIdentifier: String
+            let fractionDigits: Int
+            let signed: Bool
+        }
+        private static let capacity = 256
+        private let lock = NSLock()
+        private var styles: [Key: Decimal.FormatStyle.Currency] = [:]
+
+        func style(code: CurrencyCode, locale: Locale, fractionDigits: Int, signed: Bool)
+            -> Decimal.FormatStyle.Currency
+        {
+            let key = Key(
+                code: code.rawValue, localeIdentifier: locale.identifier, fractionDigits: fractionDigits,
+                signed: signed)
+            lock.lock()
+            defer { lock.unlock() }
+            if let cached = styles[key] { return cached }
+            var made = Decimal.FormatStyle.Currency(code: code.rawValue, locale: locale)
+                .precision(.fractionLength(fractionDigits))
+                .rounded(rule: .toNearestOrAwayFromZero)
+            if signed { made = made.sign(strategy: .always(showZero: false)) }
+            if styles.count >= Self.capacity { styles.removeAll(keepingCapacity: true) }
+            styles[key] = made
+            return made
+        }
     }
 
     /// `1 / rate` for the "1 EUR =" column; `1 / 0` is `Infinity` in JavaScript.

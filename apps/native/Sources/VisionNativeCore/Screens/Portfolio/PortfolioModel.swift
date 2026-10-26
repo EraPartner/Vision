@@ -67,7 +67,9 @@ public struct PortfolioBrokerSubtotal: Equatable, Sendable {
 
 @MainActor @Observable
 public final class PortfolioModel {
-    public private(set) var summary: PortfolioSummaryData?
+    public private(set) var summary: PortfolioSummaryData? {
+        didSet { rebuildActive() }
+    }
     public private(set) var archiveSummary: PortfolioSummaryData?
     public private(set) var investments: [PortfolioInvestment] = []
     public private(set) var accounts: [OpenAPI.Account] = []
@@ -92,9 +94,22 @@ public final class PortfolioModel {
     public private(set) var currency = PortfolioCurrency.eur
     public var period: PortfolioPeriod = .all
     public var showFxNeutral = false
-    public var brokerFilter = PortfolioBrokerFilter.all
-    public var sort: PortfolioHoldingsSort = .value
-    public var tableQuery = LocalTableQuery()
+    public var brokerFilter = PortfolioBrokerFilter.all {
+        didSet { if brokerFilter != oldValue { rebuildRows() } }
+    }
+    public var sort: PortfolioHoldingsSort = .value {
+        didSet { if sort != oldValue { rebuildRows() } }
+    }
+    public var tableQuery = LocalTableQuery() {
+        didSet { if tableQuery != oldValue { rebuildVisible() } }
+    }
+    /// The active holdings, the broker-scoped rows in sort order, the table-query result and the
+    /// per-holding metrics. They are stored and rebuilt when `summary`, `brokerFilter`, `sort` or
+    /// `tableQuery` change, because the overview reads them several times per body pass.
+    public private(set) var active: [PortfolioHolding] = []
+    public private(set) var filteredHoldings: [PortfolioHolding] = []
+    @ObservationIgnored private var rowMetrics: [InvestmentID: PortfolioBrokerSubtotal] = [:]
+    @ObservationIgnored private var sortedRows: [PortfolioHolding] = []
     public var isOnline = true
     public let widgets: PortfolioWidgetsModel
     public private(set) var selectedInvestmentId: InvestmentID?
@@ -114,7 +129,6 @@ public final class PortfolioModel {
         if summary?.currency != currency { return "portfolio.brokerFilter.loading" }
         return nil
     }
-    public var active: [PortfolioHolding] { summary?.summaries.filter(\.isActive) ?? [] }
     public var priceFreshness: PortfolioPriceFreshness { .aggregate(active) }
     public var stalePriceCount: Int { active.filter { PortfolioPriceFreshness.isStale($0, now: now()) }.count }
     /// Archived holdings come from the all-holdings summary (`active=false`), the same engine as
@@ -187,6 +201,9 @@ public final class PortfolioModel {
         return result
     }
     public func metrics(for holding: PortfolioHolding) -> PortfolioBrokerSubtotal {
+        rowMetrics[holding.id] ?? computeMetrics(for: holding)
+    }
+    private func computeMetrics(for holding: PortfolioHolding) -> PortfolioBrokerSubtotal {
         if brokerFilter.isAll {
             return .init(
                 currentValue: holding.currentValue, totalInvested: holding.totalInvested, gainLoss: holding.gainLoss,
@@ -201,7 +218,6 @@ public final class PortfolioModel {
             currentValue: row.currentValue, totalInvested: row.totalInvested, gainLoss: row.gainLoss,
             oversold: row.oversold)
     }
-    public var filteredHoldings: [PortfolioHolding] { holdings(assetClasses: nil) }
     /// The holdings and P/L subtotals of the footer: the summary totals, or the selected broker
     /// account's server total, never a sum of the visible rows.
     public var brokerSubtotal: PortfolioBrokerSubtotal {
@@ -220,20 +236,40 @@ public final class PortfolioModel {
     }
     /// The active holdings of these asset classes (`nil`: every class) in the selected broker.
     public func holdings(assetClasses: Set<OpenAPI.AssetClass>?) -> [PortfolioHolding] {
+        guard let assetClasses else { return filteredHoldings }
+        return applyQuery(sortedRows.filter { assetClasses.contains($0.assetClass) })
+    }
+    private func rebuildActive() {
+        active = summary?.summaries.filter(\.isActive) ?? []
+        rebuildRows()
+    }
+    /// Filters the active holdings to the broker and sorts them by the selected measure.
+    private func rebuildRows() {
+        var metrics: [InvestmentID: PortfolioBrokerSubtotal] = [:]
+        metrics.reserveCapacity(active.count)
+        for holding in active { metrics[holding.id] = computeMetrics(for: holding) }
+        rowMetrics = metrics
         var rows = active.filter { holding in
-            guard assetClasses?.contains(holding.assetClass) ?? true else { return false }
             if brokerFilter.isAll { return true }
             let account = brokerFilter.selectedAccount
             return holding.accountTotals.contains { $0.accountId == account }
         }
+        let byValue = sort == .value
         rows.sort { a, b in
-            let first = metrics(for: a)
-            let second = metrics(for: b)
-            let left = sort == .value ? first.currentValue : first.returnPercent
-            let right = sort == .value ? second.currentValue : second.returnPercent
+            let first = metrics[a.id] ?? computeMetrics(for: a)
+            let second = metrics[b.id] ?? computeMetrics(for: b)
+            let left = byValue ? first.currentValue : first.returnPercent
+            let right = byValue ? second.currentValue : second.returnPercent
             return left == right ? a.id < b.id : left > right
         }
-        return tableQuery.apply(
+        sortedRows = rows
+        rebuildVisible()
+    }
+    private func rebuildVisible() {
+        filteredHoldings = applyQuery(sortedRows)
+    }
+    private func applyQuery(_ rows: [PortfolioHolding]) -> [PortfolioHolding] {
+        tableQuery.apply(
             rows,
             keys: [
                 "name", "symbol", "assetClass", "currency", "totalUnits", "currentPrice", "currentValue", "gainLoss",

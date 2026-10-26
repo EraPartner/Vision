@@ -137,6 +137,10 @@ else
 fi
 
 echo "==> Building $APP_NAME ($CONFIGURATION)..."
+# The payload script rewrites Contents/Resources on every build, but Xcode skips CodeSign
+# when no tracked input changed, which leaves a stale seal. A missing bundle makes Xcode
+# assemble and sign it again; compiled objects stay cached.
+rm -rf "$DERIVED_DATA/Build/Products/$CONFIGURATION/$APP_NAME.app"
 xcodebuild \
   -project "$NATIVE_PATH/VisionNative.xcodeproj" \
   -scheme "Vision Native" \

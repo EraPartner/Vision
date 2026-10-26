@@ -17,12 +17,31 @@ enum VisionBreakpoint {
 /// (`lg:[&>*:only-child]:col-span-N`). The breakpoint is compared with the width this layout
 /// is given plus the page padding, which is the page width.
 struct VisionResponsiveColumns: Layout {
+    /// The plan for the last width measured: `sizeThatFits` and `placeSubviews` run with the
+    /// same width in one layout pass, and a plan measures every child's whole subtree.
+    struct Cache {
+        var width: CGFloat?
+        var frames: [CGRect] = []
+        var height: CGFloat = 0
+    }
+
     var weights: [Int]
     var minimumPageWidth: CGFloat = VisionBreakpoint.lg
     var spacing: CGFloat = 24
 
     private func isWide(_ width: CGFloat, count: Int) -> Bool {
         count > 1 && weights.count > 1 && width + 2 * VisionPageLayout.padding >= minimumPageWidth
+    }
+
+    func makeCache(subviews: Subviews) -> Cache { Cache() }
+
+    private func plan(width: CGFloat, subviews: Subviews, cache: inout Cache) -> (frames: [CGRect], height: CGFloat) {
+        if cache.width == width, cache.frames.count == subviews.count { return (cache.frames, cache.height) }
+        let made = plan(width: width, subviews: subviews)
+        cache.width = width
+        cache.frames = made.frames
+        cache.height = made.height
+        return made
     }
 
     private func plan(width: CGFloat, subviews: Subviews) -> (frames: [CGRect], height: CGFloat) {
@@ -61,13 +80,13 @@ struct VisionResponsiveColumns: Layout {
         return (frames, y)
     }
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
         let width = proposal.width ?? 0
-        return CGSize(width: width, height: plan(width: width, subviews: subviews).height)
+        return CGSize(width: width, height: plan(width: width, subviews: subviews, cache: &cache).height)
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let layout = plan(width: bounds.width, subviews: subviews)
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
+        let layout = plan(width: bounds.width, subviews: subviews, cache: &cache)
         for (index, subview) in subviews.enumerated() {
             let frame = layout.frames[index]
             subview.place(

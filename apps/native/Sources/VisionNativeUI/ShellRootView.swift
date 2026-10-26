@@ -22,6 +22,8 @@ public struct ShellRootView: View {
     /// The titlebar safe area the detail column really receives (zero when the window has no
     /// toolbar), so the topbar clearance only adds what the system does not already reserve.
     @State private var titlebarSafeInset: CGFloat = 0
+    /// The shell banners' height on a native page, the rest of its top inset.
+    @State private var bannersHeight: CGFloat = 0
     /// The native page's width while the sidebar animates in or out (see `FrozenWidthLayout`).
     @State private var frozenDetailWidth: CGFloat?
     /// The last settled column widths, the frozen width's sources. A plain reference, so the
@@ -63,6 +65,9 @@ public struct ShellRootView: View {
         }
     }
 
+    /// The page's clearance for the topbar drawn over the titlebar strip.
+    private var pageTopInset: CGFloat { max(0, NativeTopbar.barHeight - titlebarSafeInset) }
+
     /// The banners, the native screen and the topbar.
     @ViewBuilder
     private func pageColumn(_ theme: VisionTheme) -> some View {
@@ -74,15 +79,26 @@ public struct ShellRootView: View {
                 if case .native(let screen) = model.detail {
                     FrozenWidthLayout(width: frozenDetailWidth) {
                         NativePageZoomView(factor: model.pageZoom) {
+                            // The top inset is padding plus an overlay rather than `safeAreaInset`:
+                            // that inset measures the page's minimum size on every layout pass, which
+                            // sizes the whole scroll view's content (a profile put it at about a third
+                            // of the main thread while switching pages and scrolling).
                             NativeScreenContainer(screen: screen, model: model)
-                                .safeAreaInset(edge: .top, spacing: 0) {
+                                .safeAreaPadding(.top, pageTopInset + bannersHeight)
+                                .overlay(alignment: .top) {
                                     VStack(spacing: 0) {
                                         // The web topbar (`h-14`) is in flow above `<main>`: the page starts
                                         // below it, so titles and banners clear the traffic lights and the
                                         // sidebar and search buttons drawn in the titlebar strip.
-                                        Color.clear.frame(height: max(0, NativeTopbar.barHeight - titlebarSafeInset))
+                                        Color.clear.frame(height: pageTopInset)
+                                        // The frame keeps a node to measure when no banner shows.
                                         shellBanners
+                                            .frame(maxWidth: .infinity)
+                                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                                                bannersHeight = height
+                                            }
                                     }
+                                    .fixedSize(horizontal: false, vertical: true)
                                 }
                                 .overlay(alignment: .topLeading) { contentLanding }
                                 .background { PageScrollObserver { pageScrollDidChange($0) } }
@@ -171,6 +187,7 @@ public struct ShellRootView: View {
             detailColumn(theme)
         }
         .environment(\.visionTheme, theme)
+        .background { WindowAppearanceSync(isDark: theme.isDark) }
         // Prominent buttons, toggles and pickers take the web's emerald `--primary` (or the
         // chosen accent) instead of the system blue.
         .tint(theme.primary)
@@ -276,6 +293,13 @@ public struct ShellRootView: View {
         .onDisappear { connectivity.stop() }
         .disabled(model.isReloadingGraph)
         .allowsHitTesting(!model.isReloadingGraph)
+        // Outermost, so the chrome the dialog and alert modifiers add (scrim, glass panel and
+        // their materials) resolves in the app theme and effects rather than the defaults and
+        // the system appearance: those modifiers sit outside the environment set above.
+        .environment(\.visionTheme, theme)
+        .environment(\.visionVisualEffects, model.nativeSettings?.effectiveVisualEffects ?? .standard)
+        .environment(\.visionFullEffects, model.nativeSettings?.fullEffects ?? false)
+        .environment(\.colorScheme, theme.colorScheme)
     }
     private var shellBanners: some View {
         VStack(spacing: 0) { shellBannerStack }
@@ -307,6 +331,7 @@ struct NativeSidebar: View {
     let model: NativeShellModel
     /// AppLayout's skip link; `nil` while no native screen is shown.
     var skipToContent: (() -> Void)?
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.visionTheme) private var theme
     @FocusState private var skipFocused: Bool
 
@@ -349,7 +374,12 @@ struct NativeSidebar: View {
         .background(SidebarGlassBackground())
         // The counts' own refetch policies run for the sidebar's lifetime; a route change
         // re-reads any count that is no longer fresh.
-        .task { await model.sidebarBadges?.run() }
+        // It idles while the app is inactive or hidden (the web pauses refetch intervals while
+        // the document is hidden) and re-reads whatever went stale when the app returns.
+        .task(id: scenePhase == .active) {
+            guard scenePhase == .active else { return }
+            await model.sidebarBadges?.run()
+        }
         .task(id: model.route.path) { await model.sidebarBadges?.refresh() }
     }
 

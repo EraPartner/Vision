@@ -613,6 +613,20 @@ enum PlannedFixture {
         #expect(await service.totalsCurrencies == ["EUR", "USD", "USD"])
     }
 
+    @Test func theVisibleRowsAreSortedOnceUntilTheQueryOrThePaymentsChange() async {
+        let service = FakePlannedService(rows: Self.rows)
+        let model = PlannedFixture.model(service)
+        await model.appear(showAll: false, defaultCurrency: "EUR")
+        model.table.toggleSort(PlannedColumn.amount.rawValue)
+        let first = model.visibleRows
+        #expect(model.visibleRows == first)
+        #expect(model.visibleRows == first)
+        #expect(model.visibleRowBuilds == 1)
+        model.table.search = "hous"
+        #expect(model.visibleRows.count == 1)
+        #expect(model.visibleRowBuilds == 2)
+    }
+
     @Test func searchSortAndFiltersNarrowTheTableAndPickTheEmptyState() async {
         let service = FakePlannedService(rows: Self.rows)
         let model = PlannedFixture.model(service)

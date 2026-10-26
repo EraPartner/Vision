@@ -16,6 +16,19 @@ import Testing
         #expect(normalised(VisionFormat.currencyAxisCompact(2_400_000, code: .eur, locale: german)) == "2,4M €")
     }
 
+    @Test func cachedCurrencyStylesKeepEachLocaleDigitCountAndSignApart() {
+        let german = Locale(identifier: "de_DE")
+        let american = Locale(identifier: "en_US")
+        for _ in 0..<2 {
+            #expect(normalised(VisionFormat.currency(1234.5, code: .eur, locale: german, fractionDigits: 2)) == "1.234,50 €")
+            #expect(VisionFormat.currency(1234.5, code: .eur, locale: american, fractionDigits: 2) == "€1,234.50")
+            #expect(VisionFormat.currency(1234.5, code: .eur, locale: american, fractionDigits: 0) == "€1,235")
+            #expect(VisionFormat.currency(1234.5, code: .eur, locale: american, fractionDigits: 2, signed: true) == "+€1,234.50")
+            #expect(VisionFormat.currency(0, code: .eur, locale: american, fractionDigits: 2, signed: true) == "€0.00")
+            #expect(VisionFormat.currency(1234.5, code: "USD", locale: american, fractionDigits: 2) == "$1,234.50")
+        }
+    }
+
     @Test func axisAmountsUnderAThousandKeepNoFractionDigits() {
         let german = Locale(identifier: "de_DE")
         #expect(normalised(VisionFormat.currencyAxisCompact(0, code: .eur, locale: german)) == "0 €")
