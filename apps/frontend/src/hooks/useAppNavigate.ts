@@ -12,8 +12,11 @@ export type AppNavigateFn = {
 export function useAppNavigate(): AppNavigateFn {
     const navigate = useNavigate();
     return useCallback(
-        (to: AppPath | number, options?: NavigateOptions) =>
-            typeof to === "number" ? navigate(to) : navigate(to, options),
+        (to: AppPath | number, options?: NavigateOptions) => {
+            // Forward only what the caller passed, so calls match plain `useNavigate`.
+            if (typeof to === "number") return navigate(to);
+            return options === undefined ? navigate(to) : navigate(to, options);
+        },
         [navigate],
     );
 }
