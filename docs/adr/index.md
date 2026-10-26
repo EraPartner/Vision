@@ -284,6 +284,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-26: Strict type-checked TypeScript (accepted)
+
+[[docs/adr/253-strict-type-checked-typescript|ADR-253]] lints every TypeScript project, tests
+included, with typescript-eslint's strict-type-checked rules, types translation keys and in-app
+paths, checks raw SQL rows against their schemas at compile time, parses more API responses and
+all third-party JSON at the boundary, and audits type assertions. No new CI step.
+
 ### 2026-10-26: Stop the Swift port and remove it from main (accepted)
 
 [[docs/adr/254-remove-swift-app|ADR-254]] closes the Swift port: `apps/native/`, its generators,
