@@ -161,7 +161,10 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
 
     const { data, isLoading, error } = useRecurringPatterns();
 
-    const dismiss = (recipientId: RecipientId) => {
+    // Dismissals are persisted by recipient id; a pattern without a recipient
+    // has no key to remember and gets no dismiss button.
+    const dismiss = (recipientId: RecipientId | null) => {
+        if (recipientId === null) return;
         const next = new Set(dismissedIds);
         next.add(recipientId);
         persistDismissed(next);
@@ -181,7 +184,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
             }
             await apiClient.createPlannedTransaction({
                 planned_date: pattern.predictedNext,
-                recipient_id: pattern.recipientId,
+                recipient_id: pattern.recipientId ?? undefined,
                 memo: t("recurring.autoDetectedMemo", {
                     name: pattern.recipientName,
                 }),
@@ -226,12 +229,15 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
         }
     };
 
+    const isDismissed = (recipientId: RecipientId | null) =>
+        recipientId !== null && dismissedIds.has(recipientId);
+
     const patterns = (data?.patterns ?? []).filter(
-        (p) => !p.isAlreadyPlanned && !dismissedIds.has(p.recipientId),
+        (p) => !p.isAlreadyPlanned && !isDismissed(p.recipientId),
     );
 
     const amountAlerts = (data?.patterns ?? []).filter(
-        (p) => p.amountChanges.length > 0 && !dismissedIds.has(p.recipientId),
+        (p) => p.amountChanges.length > 0 && !isDismissed(p.recipientId),
     );
 
     if (!dismissedLoaded) {
@@ -420,17 +426,19 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                     })}
                                                 </p>
                                             </div>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="icon-touch-target shrink-0 text-label-secondary hover:text-foreground"
-                                                aria-label={t("aria.dismiss")}
-                                                onClick={() =>
-                                                    dismiss(pattern.recipientId)
-                                                }
-                                            >
-                                                <X className="h-3.5 w-3.5" aria-hidden />
-                                            </Button>
+                                            {pattern.recipientId !== null && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="icon-touch-target shrink-0 text-label-secondary hover:text-foreground"
+                                                    aria-label={t("aria.dismiss")}
+                                                    onClick={() =>
+                                                        dismiss(pattern.recipientId)
+                                                    }
+                                                >
+                                                    <X className="h-3.5 w-3.5" aria-hidden />
+                                                </Button>
+                                            )}
                                         </li>
                                     );
                                 })}
@@ -569,18 +577,20 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                     <Plus className="h-3 w-3" aria-hidden />
                                                     {t("recurring.track")}
                                                 </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    className="text-label-secondary"
-                                                    onClick={() =>
-                                                        dismiss(
-                                                            pattern.recipientId,
-                                                        )
-                                                    }
-                                                >
-                                                    {t("recurring.dismissBtn")}
-                                                </Button>
+                                                {pattern.recipientId !== null && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="text-label-secondary"
+                                                        onClick={() =>
+                                                            dismiss(
+                                                                pattern.recipientId,
+                                                            )
+                                                        }
+                                                    >
+                                                        {t("recurring.dismissBtn")}
+                                                    </Button>
+                                                )}
                                             </div>
                                         </div>
                                     </li>

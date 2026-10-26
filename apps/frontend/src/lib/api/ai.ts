@@ -124,7 +124,7 @@ export async function getConversations({
 }
 
 export function getConversation(id: string): Promise<ConversationDetail> {
-    return apiRequest<Awaited<ReturnType<typeof getConversation>>>(`/api/ai/conversations/${encodeURIComponent(id)}`, {
+    return apiRequest(`/api/ai/conversations/${encodeURIComponent(id)}`, {
         schema: AiConversationDetailSchema,
     });
 }
@@ -132,7 +132,7 @@ export function getConversation(id: string): Promise<ConversationDetail> {
 export function createConversation(
     body: CreateConversationBody = {},
 ): Promise<ConversationDetail> {
-    return apiRequest<Awaited<ReturnType<typeof createConversation>>>("/api/ai/conversations", {
+    return apiRequest("/api/ai/conversations", {
         method: "POST",
         body: JSON.stringify(body),
         schema: AiConversationDetailSchema,

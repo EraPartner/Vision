@@ -12,6 +12,7 @@ import {
     getAggregationRecipientInsights,
     getAggregationRecipientByYear,
     getSankeyFlow,
+    type CategoryPivotItem,
 } from "@/lib/api/aggregations";
 import type {
     CategoryId,
@@ -40,7 +41,10 @@ interface CategoryMonthlyData {
     months: Record<string, number>;
     incomeMonths: Record<string, number>;
     /** Per period, the part of the income on partner / joint accounts (ADR-201). */
-    incomeByOwnerMonths?: Record<string, { partner?: number; joint?: number }>;
+    incomeByOwnerMonths?: Record<
+        string,
+        NonNullable<CategoryPivotItem["incomeByOwner"]>
+    >;
     expenseMonths: Record<string, number>;
     netMonths: Record<string, number>;
     total: number;
@@ -224,8 +228,8 @@ export function mapToStatisticsData(
                 cd = {
                     categoryName: item.categoryName,
                     categoryId: item.categoryId,
-                    categoryPathIds: item.categoryPathIds ?? [],
-                    categoryPathSegments: item.categoryPathSegments ?? [],
+                    categoryPathIds: item.categoryPathIds,
+                    categoryPathSegments: item.categoryPathSegments,
                     months: {},
                     incomeMonths: {},
                     expenseMonths: {},
@@ -241,16 +245,10 @@ export function mapToStatisticsData(
             // Use the backend's explicit sign-split (income = Σ amount≥0, expense =
             // Σ amount<0) instead of classifying by the sign of the NET total — a
             // mixed-sign month (e.g. −300 purchases + 500 refund) was wholly counted
-            // as income or expense and the drill-through contradicted the cell. Fall
-            // back to the old heuristic only for pre-upgrade cached payloads.
-            const incomeAmount =
-                item.income ?? (item.total > 0 ? item.total : 0);
-            const expenseAmount =
-                item.expense != null
-                    ? Math.abs(item.expense)
-                    : item.total < 0
-                      ? absTotal
-                      : 0;
+            // as income or expense and the drill-through contradicted the cell. The
+            // category-pivot contract requires both fields.
+            const incomeAmount = item.income;
+            const expenseAmount = Math.abs(item.expense);
             cd.months[period] = (cd.months[period] ?? 0) + absTotal;
             cd.expenseMonths[period] =
                 (cd.expenseMonths[period] ?? 0) + expenseAmount;

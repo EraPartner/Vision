@@ -76,7 +76,11 @@ function MethodRow({
 
     const maePoints = useMemo(() => {
         if (persistedHistory && persistedHistory.length > 1) {
-            return persistedHistory.map((h) => h.mae);
+            // A persisted month with no measurement has a NULL mae; it is a gap,
+            // not a zero (the sparkline's min/max would read it as 0).
+            return persistedHistory.flatMap((h) =>
+                h.mae === null ? [] : [h.mae],
+            );
         }
         return entry.per_month.map((m) => m.mae);
     }, [persistedHistory, entry.per_month]);

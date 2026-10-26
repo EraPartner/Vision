@@ -8,15 +8,15 @@ import {
     CashflowForecastRollingSchema,
     CategoryPivotSchema,
     MonthlySummarySchema,
+    PeriodPivotConversionSchema,
     RecipientByYearSchema,
     RecipientInsightsSchema,
     RecipientPivotSchema,
     SankeyFlowSchema,
     TagPivotSchema,
 } from "@vision/types/contracts";
-import type { AggregationEnvelope } from "@/types/apiClient";
+import type { z } from "zod";
 import type {
-    AccountId,
     CategoryId,
     CurrencyCode,
     RecipientId,
@@ -30,31 +30,7 @@ export function getAggregationMonthlySummary(params?: {
     all_time?: boolean | undefined;
     start_date?: string | undefined;
     end_date?: string | undefined;
-}): Promise<
-    AggregationEnvelope<{
-        months: Array<{
-            month: number;
-            year: number;
-            period_start: string;
-            period_end: string;
-            total_spending: number;
-            total_income: number;
-            net_amount: number;
-            transaction_count: number;
-        }>;
-        summary: {
-            total_spending: number;
-            total_income: number;
-            net_amount: number;
-            transaction_count: number;
-            period_start: string;
-            period_end: string;
-        };
-        /** Transactions left out for want of a stored rate (ADR-216). */
-        unconverted_count: number;
-        unconverted_currencies: string[];
-    }>
-> {
+}): Promise<z.output<typeof MonthlySummarySchema>> {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set("currency", params.currency);
     if (params?.all_time) qp.set("all_time", "true");
@@ -77,7 +53,7 @@ export function getAggregationMonthlySummary(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest<Awaited<ReturnType<typeof getAggregationMonthlySummary>>>(`/api/aggregations/monthly-summary${q ? `?${q}` : ""}`, {
+    return apiRequest(`/api/aggregations/monthly-summary${q ? `?${q}` : ""}`, {
         schema: MonthlySummarySchema,
     });
 }
@@ -88,64 +64,18 @@ export function getAggregationRecipientInsights(params?: {
     end_date?: string | undefined;
     excluded_category_ids?: CategoryId[] | undefined;
     excluded_recipient_ids?: RecipientId[] | undefined;
-}): Promise<
-    AggregationEnvelope<{
-        topMerchants: Array<{
-            recipientId: RecipientId;
-            name: string;
-            totalSpend: number;
-            transactionCount: number;
-            avgAmount: number;
-            firstSeen: string;
-            lastSeen: string;
-        }>;
-        monthOverMonth: Array<{
-            recipientId: RecipientId;
-            name: string;
-            currentSpend: number;
-            previousSpend: number;
-            changePercent: number;
-        }>;
-        /** Transactions left out for want of a stored rate (ADR-216). */
-        unconverted_count: number;
-        unconverted_currencies: string[];
-    }>
-> {
+}): Promise<z.output<typeof RecipientInsightsSchema>> {
     const q = buildExclusionQuery(params);
-    return apiRequest<Awaited<ReturnType<typeof getAggregationRecipientInsights>>>(
+    return apiRequest(
         `/api/aggregations/recipient-insights${q ? `?${q}` : ""}`,
         { schema: RecipientInsightsSchema },
     );
 }
 
-export interface AverageVsCurrentData {
-    past_6_months: {
-        avg_daily_spending: number;
-        avg_monthly_spending: number;
-        months_counted: number;
-    };
-    current_month: {
-        /** One entry per day with activity; spending is a positive magnitude. */
-        daily_data: Array<{ date: string; spending: number; income: number }>;
-        total_spending: number;
-        days_elapsed: number;
-        days_in_month: number;
-    };
-    comparison: {
-        projected_monthly_total: number;
-        avg_monthly_spending: number;
-        variance: number;
-        pace: number | null;
-    };
-    /** Transactions left out for want of a stored rate (ADR-216). */
-    unconverted_count: number;
-    unconverted_currencies: string[];
-}
-
 /** Month-to-date spending against the six-month average (Home hero). */
 export function getAggregationAverageVsCurrent(params?: {
     currency?: CurrencyCode | undefined;
-}): Promise<AggregationEnvelope<AverageVsCurrentData>> {
+}): Promise<z.output<typeof AverageVsCurrentSchema>> {
     return requestWithQuery("/api/aggregations/average-vs-current", params, {
         schema: AverageVsCurrentSchema,
     });
@@ -153,64 +83,15 @@ export function getAggregationAverageVsCurrent(params?: {
 
 export function getAggregationBankBalances(params?: {
     currency?: CurrencyCode | undefined;
-}): Promise<
-    AggregationEnvelope<{
-        accounts: Array<{
-            account_id: AccountId;
-            bank_account: string;
-            display_name: string;
-            balance: number;
-            drift?: number;
-            anchor_date?: string;
-            post_anchor_count?: number;
-            transaction_count: number;
-            first_transaction: string;
-            last_transaction: string;
-            /** Partitions left out of `balance` for want of a stored rate. */
-            unconverted_currencies: string[];
-        }>;
-        total_net_position: number;
-        // Daily balance points (YYYY-MM-DD) over the last 12 months.
-        history: Record<string, Array<{ date: string; balance: number }>>;
-        total_history: Array<{ date: string; balance: number }>;
-        /** Currency partitions left out for want of a stored rate (ADR-216). */
-        unconverted_count: number;
-        unconverted_currencies: string[];
-    }>
-> {
+}): Promise<z.output<typeof BankBalancesSchema>> {
     return requestWithQuery("/api/aggregations/bank-balances", params, {
         schema: BankBalancesSchema,
     });
 }
 
-export interface CategoryPivotItem {
-    categoryId: CategoryId | null;
-    categoryName: string;
-    categoryPathIds?: CategoryId[];
-    categoryPathSegments?: string[];
-    total: number; // net (income + expense)
-    income?: number; // sum of amount >= 0 (explicit, not sign-of-net)
-    expense?: number; // sum of amount < 0 (negative)
-    transactionCount: number;
-    /** Part of `income` on partner / joint accounts (ADR-201); absent when both are 0. */
-    incomeByOwner?: { partner?: number; joint?: number };
-}
+export type CategoryPivotItem = z.output<typeof CategoryPivotSchema>["data"]["categoryPivot"][string][number];
 
-export interface RecipientYearlySpending {
-    recipientId: RecipientId;
-    name: string;
-    totalSpend: number;
-    transactionCount: number;
-}
-
-/** A period pivot's conversion contract (recipient and tag pivots). */
-export interface RecipientPivotConversion {
-    usedHistoricalFallback: boolean;
-    affectedCurrencies: CurrencyCode[];
-    /** Transactions left out for want of any stored rate (ADR-216). */
-    unconvertedCount: number;
-    unconvertedCurrencies: CurrencyCode[];
-}
+export type RecipientPivotConversion = z.output<typeof PeriodPivotConversionSchema>;
 
 export function getAggregationCategoryPivot(params?: {
     currency?: CurrencyCode | undefined;
@@ -218,14 +99,7 @@ export function getAggregationCategoryPivot(params?: {
     end_date?: string | undefined;
     excluded_category_ids?: CategoryId[] | undefined;
     excluded_recipient_ids?: RecipientId[] | undefined;
-}): Promise<
-    AggregationEnvelope<{
-        categoryPivot: Record<string, CategoryPivotItem[]>;
-        /** Transactions left out for want of a stored rate (ADR-216). */
-        unconverted_count: number;
-        unconverted_currencies: string[];
-    }>
-> {
+}): Promise<z.output<typeof CategoryPivotSchema>> {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set("currency", params.currency);
     if (params?.start_date) qp.set("start_date", params.start_date);
@@ -247,7 +121,7 @@ export function getAggregationCategoryPivot(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest<Awaited<ReturnType<typeof getAggregationCategoryPivot>>>(`/api/aggregations/category-pivot${q ? `?${q}` : ""}`, {
+    return apiRequest(`/api/aggregations/category-pivot${q ? `?${q}` : ""}`, {
         schema: CategoryPivotSchema,
     });
 }
@@ -258,14 +132,7 @@ export function getAggregationRecipientByYear(params?: {
     end_date?: string | undefined;
     excluded_recipient_ids?: RecipientId[] | undefined;
     excluded_category_ids?: CategoryId[] | undefined;
-}): Promise<
-    AggregationEnvelope<{
-        recipientsByYear: Record<string, RecipientYearlySpending[]>;
-        /** Transactions left out for want of a stored rate (ADR-216). */
-        unconverted_count: number;
-        unconverted_currencies: string[];
-    }>
-> {
+}): Promise<z.output<typeof RecipientByYearSchema>> {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set("currency", params.currency);
     if (params?.start_date) qp.set("start_date", params.start_date);
@@ -287,7 +154,7 @@ export function getAggregationRecipientByYear(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest<Awaited<ReturnType<typeof getAggregationRecipientByYear>>>(
+    return apiRequest(
         `/api/aggregations/recipient-by-year${q ? `?${q}` : ""}`,
         {
             schema: RecipientByYearSchema,
@@ -295,12 +162,7 @@ export function getAggregationRecipientByYear(params?: {
     );
 }
 
-export interface RecipientPivotItem {
-    recipientId: RecipientId;
-    name: string;
-    total: number;
-    transactionCount: number;
-}
+export type RecipientPivotItem = z.output<typeof RecipientPivotSchema>["data"]["recipientPivot"][string][number];
 
 export function getAggregationRecipientPivot(params?: {
     currency?: CurrencyCode | undefined;
@@ -309,12 +171,7 @@ export function getAggregationRecipientPivot(params?: {
     bucket?: "monthly" | "yearly" | undefined;
     start_date?: string | null | undefined;
     end_date?: string | null | undefined;
-}): Promise<
-    AggregationEnvelope<{
-        recipientPivot: Record<string, RecipientPivotItem[]>;
-        conversion: RecipientPivotConversion;
-    }>
-> {
+}): Promise<z.output<typeof RecipientPivotSchema>> {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set("currency", params.currency);
     if (params?.bucket) qp.set("bucket", params.bucket);
@@ -334,17 +191,12 @@ export function getAggregationRecipientPivot(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest<Awaited<ReturnType<typeof getAggregationRecipientPivot>>>(`/api/aggregations/recipient-pivot${q ? `?${q}` : ""}`, {
+    return apiRequest(`/api/aggregations/recipient-pivot${q ? `?${q}` : ""}`, {
         schema: RecipientPivotSchema,
     });
 }
 
-export interface TagPivotItem {
-    tagId: TagId;
-    slug: string;
-    total: number;
-    transactionCount: number;
-}
+export type TagPivotItem = z.output<typeof TagPivotSchema>["data"]["tagPivot"][string][number];
 
 export function getAggregationTagPivot(params?: {
     currency?: CurrencyCode | undefined;
@@ -353,12 +205,7 @@ export function getAggregationTagPivot(params?: {
     bucket?: "monthly" | "yearly" | undefined;
     start_date?: string | null | undefined;
     end_date?: string | null | undefined;
-}): Promise<
-    AggregationEnvelope<{
-        tagPivot: Record<string, TagPivotItem[]>;
-        conversion: RecipientPivotConversion;
-    }>
-> {
+}): Promise<z.output<typeof TagPivotSchema>> {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set("currency", params.currency);
     if (params?.bucket) qp.set("bucket", params.bucket);
@@ -371,102 +218,23 @@ export function getAggregationTagPivot(params?: {
         params.tag_ids.forEach((id) => qp.append("tag_ids", String(id)));
     }
     const q = qp.toString();
-    return apiRequest<Awaited<ReturnType<typeof getAggregationTagPivot>>>(`/api/aggregations/tag-pivot${q ? `?${q}` : ""}`, {
+    return apiRequest(`/api/aggregations/tag-pivot${q ? `?${q}` : ""}`, {
         schema: TagPivotSchema,
     });
 }
 
-export interface SankeyNode {
-    readonly id: string;
-    readonly label: string;
-    readonly value: number;
-}
-
-export interface SankeyLink {
-    readonly source: string;
-    readonly target: string;
-    readonly value: number;
-}
-
-export interface SankeyFlowData {
-    readonly nodes: SankeyNode[];
-    readonly links: SankeyLink[];
-    readonly year: number;
-    /** Transactions left out for want of a stored rate (ADR-216). */
-    readonly unconverted_count: number;
-    readonly unconverted_currencies: string[];
-}
+export type SankeyFlowData = z.output<typeof SankeyFlowSchema>["data"];
 
 // ==================== Cash Flow Forecast Methods ====================
 
-export interface ForecastDailyPoint {
-    readonly date: string;
-    readonly value: number;
-}
+/** Dynamic-percentile `bands`: keys are "p{N}" for each requested percentile. */
+export type CashflowForecastMethod = CashflowForecastMethodsData["methods"][number];
 
-/** Dynamic-percentile bands: keys are "p{N}" for each requested percentile. */
-export type ForecastBands = Record<string, ForecastDailyPoint[]>;
+export type ForecastBacktestEntry = ForecastDiagnostics["backtest"][number];
 
-export interface CashflowForecastMethod {
-    readonly id: string;
-    readonly label: string;
-    readonly daily: ForecastDailyPoint[];
-    readonly cumulative: ForecastDailyPoint[];
-    readonly bands: ForecastBands | null;
-    readonly cumulative_bands?: ForecastBands | null;
-    readonly error: string | null;
-}
+export type ForecastDiagnostics = NonNullable<CashflowForecastMethodsData["diagnostics"]>;
 
-export interface ForecastActualPoint {
-    readonly date: string;
-    readonly net: number | null;
-    readonly cumulative: number | null;
-}
-
-export interface ForecastPlannedPoint {
-    readonly date: string;
-    readonly net: number;
-}
-
-export interface ForecastBacktestEntry {
-    readonly method_id: string;
-    readonly label: string;
-    readonly mae: number;
-    readonly rmse: number;
-    readonly mape: number | null;
-    readonly months: number;
-    readonly per_month: ReadonlyArray<{
-        readonly month: string;
-        readonly mae: number;
-        readonly rmse: number;
-        readonly mape: number | null;
-        readonly sample_days: number;
-    }>;
-}
-
-export interface ForecastDiagnostics {
-    readonly history_months: number;
-    /** Weights the ensemble applied to each point method (server-computed). */
-    readonly ensemble_weights?: Readonly<Record<string, number>>;
-    readonly backtest: ForecastBacktestEntry[];
-}
-
-export interface CashflowForecastMethodsData {
-    readonly month: string;
-    readonly currency: CurrencyCode;
-    readonly days_in_month: number;
-    readonly current_day: number;
-    readonly actual: ForecastActualPoint[];
-    readonly scheduled_actual: ForecastPlannedPoint[];
-    readonly methods: CashflowForecastMethod[];
-    readonly planned: ForecastPlannedPoint[];
-    readonly diagnostics: ForecastDiagnostics | null;
-    readonly history_months: number;
-    readonly include_planned: boolean;
-    /** Inputs left out for want of a stored rate; absent on older cache entries. */
-    readonly unconverted_count?: number;
-    readonly unconverted_currencies?: string[];
-}
+export type CashflowForecastMethodsData = z.output<typeof CashflowForecastMethodsSchema>["data"];
 
 export function getCashflowForecastMethods(params?: {
     currency?: CurrencyCode | undefined;
@@ -477,7 +245,7 @@ export function getCashflowForecastMethods(params?: {
     mc_percentiles?: number[] | undefined;
     include_planned?: boolean | undefined;
     include_backtest?: boolean | undefined;
-}): Promise<AggregationEnvelope<CashflowForecastMethodsData>> {
+}): Promise<z.output<typeof CashflowForecastMethodsSchema>> {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set("currency", params.currency);
     if (params?.history_months != null)
@@ -509,7 +277,7 @@ export function getCashflowForecastMethods(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest<Awaited<ReturnType<typeof getCashflowForecastMethods>>>(
+    return apiRequest(
         `/api/aggregations/cashflow-forecast-methods${q ? `?${q}` : ""}`,
         { schema: CashflowForecastMethodsSchema },
     );
@@ -517,24 +285,7 @@ export function getCashflowForecastMethods(params?: {
 
 // ==================== Rolling-Window Cash Flow Forecast ====================
 
-export interface CashflowForecastRollingData {
-    readonly window_start: string;
-    readonly window_end: string;
-    readonly today: string;
-    readonly currency: CurrencyCode;
-    readonly days_back: number;
-    readonly days_forward: number;
-    readonly actual: ForecastActualPoint[];
-    readonly scheduled_actual: ForecastPlannedPoint[];
-    readonly methods: CashflowForecastMethod[];
-    readonly planned: ForecastPlannedPoint[];
-    readonly diagnostics: ForecastDiagnostics | null;
-    readonly history_months: number;
-    readonly include_planned: boolean;
-    /** Inputs left out for want of a stored rate; absent on older cache entries. */
-    readonly unconverted_count?: number;
-    readonly unconverted_currencies?: string[];
-}
+export type CashflowForecastRollingData = z.output<typeof CashflowForecastRollingSchema>["data"];
 
 export function getCashflowForecastRolling(params?: {
     currency?: CurrencyCode | undefined;
@@ -547,7 +298,7 @@ export function getCashflowForecastRolling(params?: {
     mc_percentiles?: number[] | undefined;
     include_planned?: boolean | undefined;
     include_backtest?: boolean | undefined;
-}): Promise<AggregationEnvelope<CashflowForecastRollingData>> {
+}): Promise<z.output<typeof CashflowForecastRollingSchema>> {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set("currency", params.currency);
     if (params?.history_months != null)
@@ -583,43 +334,26 @@ export function getCashflowForecastRolling(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest<Awaited<ReturnType<typeof getCashflowForecastRolling>>>(
+    return apiRequest(
         `/api/aggregations/cashflow-forecast-rolling${q ? `?${q}` : ""}`,
         { schema: CashflowForecastRollingSchema },
     );
 }
 
-export interface AccuracyHistoryPoint {
-    readonly month: string;
-    readonly mae: number;
-    readonly rmse: number;
-    readonly mape: number | null;
-    readonly sample_days: number;
-}
+export type AccuracyHistoryPoint = AccuracyMethodEntry["history"][number];
 
-export interface AccuracyMethodEntry {
-    readonly method_id: string;
-    readonly as_of_month: string;
-    readonly mae: number;
-    readonly rmse: number;
-    readonly mape: number | null;
-    readonly sample_days: number;
-    readonly history: AccuracyHistoryPoint[];
-}
+export type AccuracyMethodEntry = CashflowForecastAccuracyData["methods"][number];
 
-export interface CashflowForecastAccuracyData {
-    readonly methods: AccuracyMethodEntry[];
-    readonly limit_months: number;
-}
+export type CashflowForecastAccuracyData = z.output<typeof CashflowForecastAccuracySchema>["data"];
 
 export function getCashflowForecastAccuracy(params?: {
     limit_months?: number | undefined;
-}): Promise<AggregationEnvelope<CashflowForecastAccuracyData>> {
+}): Promise<z.output<typeof CashflowForecastAccuracySchema>> {
     const qp = new URLSearchParams();
     if (params?.limit_months != null)
         qp.set("limit_months", String(params.limit_months));
     const q = qp.toString();
-    return apiRequest<Awaited<ReturnType<typeof getCashflowForecastAccuracy>>>(
+    return apiRequest(
         `/api/aggregations/cashflow-forecast-accuracy${q ? `?${q}` : ""}`,
         { schema: CashflowForecastAccuracySchema },
     );
@@ -630,7 +364,7 @@ export function getSankeyFlow(params?: {
     year?: number | undefined;
     excluded_category_ids?: CategoryId[] | undefined;
     excluded_recipient_ids?: RecipientId[] | undefined;
-}): Promise<AggregationEnvelope<SankeyFlowData>> {
+}): Promise<z.output<typeof SankeyFlowSchema>> {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set("currency", params.currency);
     if (params?.year != null) qp.set("year", String(params.year));
@@ -651,7 +385,7 @@ export function getSankeyFlow(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest<Awaited<ReturnType<typeof getSankeyFlow>>>(`/api/aggregations/sankey${q ? `?${q}` : ""}`, {
+    return apiRequest(`/api/aggregations/sankey${q ? `?${q}` : ""}`, {
         schema: SankeyFlowSchema,
     });
 }

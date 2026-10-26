@@ -19,8 +19,10 @@ export interface ChatMessage {
     role: ChatRole;
     content: string | null;
     toolName?: string | null;
-    toolArgs?: Record<string, unknown> | null;
-    toolResult?: ToolResultPayload | null;
+    /** JSONB column: NULL on non-tool rows, otherwise whatever the tool call carried. */
+    toolArgs?: unknown;
+    /** JSONB column; narrow with `isToolResultPayload` before rendering. */
+    toolResult?: unknown;
     /**
      * Always selected by aiChatRepository's MESSAGE_COLUMNS; optional here only
      * because the UI synthesizes placeholder messages while a turn streams.

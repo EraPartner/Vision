@@ -10,15 +10,6 @@ import type { components } from "@/types/generated";
 import type { ResearchNewsArticle } from "@/types/research";
 import type { CategoryId, RecipientId, TagId } from "@vision/types/brands";
 
-export interface AggregationEnvelope<T> {
-    data: T;
-    meta: {
-        computedAt: string;
-        /** `cache` when the forecast cache served the payload. */
-        source: "mv" | "live" | "cache";
-    };
-}
-
 export interface ImportProgress {
     phase: string;
     current: number;

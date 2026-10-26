@@ -327,13 +327,13 @@ export function auditResearchMappings(input: {
 // Plain envelopes (no provenance meta); keys are returned masked, never in full.
 
 export function getResearchProviderKeys(): Promise<ProviderKeysResponse> {
-    return apiRequest<Awaited<ReturnType<typeof getResearchProviderKeys>>>('/api/research/provider-keys', {
+    return apiRequest('/api/research/provider-keys', {
         schema: ResearchProviderKeyListSchema,
     });
 }
 
 export function setResearchProviderKey(provider: ResearchProviderKeyId, apiKey: string): Promise<ProviderKeysResponse> {
-    return apiRequest<Awaited<ReturnType<typeof setResearchProviderKey>>>(`/api/research/provider-keys/${encodeURIComponent(provider)}`, {
+    return apiRequest(`/api/research/provider-keys/${encodeURIComponent(provider)}`, {
         method: 'PUT',
         body: JSON.stringify({ api_key: apiKey }),
         schema: ResearchProviderKeyListSchema,

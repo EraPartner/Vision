@@ -73,8 +73,10 @@ export function NeedsAttentionList({ currency }: NeedsAttentionListProps) {
         const cutoff = Date.now() - STALE_AFTER_DAYS * 86_400_000;
         return accounts
             .filter(
-                (a) =>
-                    Boolean(a.last_transaction) &&
+                (a): a is typeof a & { last_transaction: string } =>
+                    // An account with no transactions has a null last_transaction.
+                    a.last_transaction !== null &&
+                    a.last_transaction !== "" &&
                     new Date(a.last_transaction).getTime() < cutoff,
             )
             .filter(

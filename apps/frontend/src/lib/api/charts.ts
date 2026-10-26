@@ -6,14 +6,14 @@ export type { SavedChart, SavedChartCreate };
 
 /** Canonical `{items, total}` collection body — callers only need the rows. */
 export async function getSavedCharts(): Promise<SavedChart[]> {
-    const { items } = await apiRequest<{ items: SavedChart[]; total: number }>('/api/saved-charts', {
+    const { items } = await apiRequest('/api/saved-charts', {
         schema: SavedChartListSchema,
     });
     return items;
 }
 
 export function createSavedChart(payload: SavedChartCreate): Promise<SavedChart> {
-    return apiRequest<Awaited<ReturnType<typeof createSavedChart>>>('/api/saved-charts', {
+    return apiRequest('/api/saved-charts', {
         method: 'POST',
         body: JSON.stringify(payload),
         schema: SavedChartSchema,
@@ -21,7 +21,7 @@ export function createSavedChart(payload: SavedChartCreate): Promise<SavedChart>
 }
 
 export function updateSavedChart(id: number, payload: Partial<SavedChartCreate>): Promise<SavedChart> {
-    return apiRequest<Awaited<ReturnType<typeof updateSavedChart>>>(`/api/saved-charts/${id}`, {
+    return apiRequest(`/api/saved-charts/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(payload),
         schema: SavedChartSchema,
