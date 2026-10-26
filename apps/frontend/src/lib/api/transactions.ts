@@ -14,6 +14,7 @@ import {
     BulkDeleteResultSchema,
     BulkUpdateResultSchema,
     TransactionCreatedSchema,
+    TransactionSchema,
     TransactionListSchema,
 } from "@vision/types/contracts";
 import { apiRequest, checkResponseContract } from "@/lib/api/client";
@@ -99,6 +100,7 @@ export function updateTransaction(
     return apiRequest<Transaction>(`/api/transactions/${id}`, {
         method: "PATCH",
         body: JSON.stringify(transaction),
+        schema: TransactionSchema,
     });
 }
 

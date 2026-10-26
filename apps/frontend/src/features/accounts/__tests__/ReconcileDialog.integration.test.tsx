@@ -174,6 +174,8 @@ function mockAccountApi({ reconcileFails = false } = {}) {
                 return ok({
                     account_id: Number(params.id),
                     currency: params.currency,
+                    balance: 1000,
+                    balance_date: "2026-10-01",
                 });
             },
         ),
@@ -198,6 +200,7 @@ function mockAccountApi({ reconcileFails = false } = {}) {
                 return ok({
                     mode: "accept",
                     drift: 0,
+                    currency: "EUR",
                     statement_balance: 1000,
                     computed_balance: 1000,
                     transaction: null,
