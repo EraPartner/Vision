@@ -167,6 +167,7 @@ struct PortfolioBreakdownView: View {
         Dictionary(grouping: data.breakdownSummary, by: \.assetClass)
     }
     var body: some View {
+        let groups = self.groups
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), alignment: .leading)], alignment: .leading) {
             ForEach(groups.keys.sorted { $0.rawValue < $1.rawValue }, id: \.self) { group in
                 let rows = groups[group] ?? []
@@ -194,11 +195,12 @@ struct PortfolioBreakdownView: View {
                 title: shell.strings.t("performance.monthlyHeatmap"),
                 description: shell.strings.t("performance.heatmapDesc"), large: true
             ) {
+                let monthNames = (1...12).map { monthLabel($0) }
                 ScrollView(.horizontal) {
                     Grid(horizontalSpacing: 5, verticalSpacing: 5) {
                         GridRow {
                             Text(shell.strings.t("performance.year"))
-                            ForEach(1...12, id: \.self) { month in Text(monthLabel(month)).frame(minWidth: 48) }
+                            ForEach(1...12, id: \.self) { month in Text(monthNames[month - 1]).frame(minWidth: 48) }
                             Text(shell.strings.t("performance.ytd")).frame(minWidth: 58)
                         }.font(.caption.weight(.medium)).foregroundStyle(theme.secondaryLabel)
                         ForEach(data.heatmap.years, id: \.self) { year in
@@ -206,15 +208,14 @@ struct PortfolioBreakdownView: View {
                                 GridRow {
                                     Text(String(year)).font(.caption.weight(.medium)).monospacedDigit()
                                     ForEach(0..<12, id: \.self) { index in
-                                        heatCell(index < months.count ? months[index] : nil)
-                                            .accessibilityLabel("\(monthLabel(index + 1)) \(year)")
-                                            .accessibilityValue(
-                                                index < months.count
-                                                    ? months[index].map { signedPercent($0, digits: 2) }
-                                                        ?? shell.strings.t("common.noData2")
-                                                    : shell.strings.t("common.noData2"))
+                                        let cell: Decimal? = index < months.count ? months[index] : nil
+                                        let cellText = cell.map { signedPercent($0, digits: 2) }
+                                        heatCell(cell, text: cellText)
+                                            .accessibilityLabel("\(monthNames[index]) \(year)")
+                                            .accessibilityValue(cellText ?? shell.strings.t("common.noData2"))
                                     }
-                                    heatCell(yearReturn(months))
+                                    let yearly = yearReturn(months)
+                                    heatCell(yearly, text: yearly.map { signedPercent($0, digits: 2) })
                                 }
                             }
                         }
@@ -276,7 +277,7 @@ struct PortfolioBreakdownView: View {
             }
         }.frame(minWidth: 280)
     }
-    private func heatCell(_ value: Decimal?) -> some View {
+    private func heatCell(_ value: Decimal?, text: String?) -> some View {
         let amount = value ?? 0
         let magnitude = abs(amount)
         let ratio = magnitude / max(data.heatmap.maxAbsPct, 1)
@@ -288,10 +289,10 @@ struct PortfolioBreakdownView: View {
             value == nil || magnitude < Decimal(25) / 100
             ? theme.foreground.opacity(0.04)
             : (amount >= 0 ? theme.gain : theme.loss).opacity(opacity)
-        return Text(value.map { signedPercent($0, digits: 2) } ?? "—")
+        return Text(text ?? "—")
             .font(.caption.monospaced()).frame(minWidth: 48).padding(.vertical, 8)
             .background(color, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.sm))
-            .visionTooltip(value.map { signedPercent($0, digits: 2) } ?? shell.strings.t("common.noData2"))
+            .visionTooltip(text ?? shell.strings.t("common.noData2"))
     }
     private func yearReturn(_ months: [Decimal?]) -> Decimal? {
         let known = months.compactMap { $0 }
