@@ -1,3 +1,4 @@
+import { asImportBatchId } from "@/lib/routes";
 import { useEffect, useRef, useState } from "react";
 import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
@@ -285,7 +286,7 @@ export function TransactionImportCard({
                     // there is no completed-progress panel and no "imported N" toast to
                     // show — the review page is the entire outcome.
                     bypassNextNavigation();
-                    void navigate(`/import/${custom.batch_id}/review`);
+                    void navigate(`/import/${asImportBatchId(custom.batch_id)}/review`);
                     return;
                 }
                 // 201: the row count on this route is `total`. It was read as
@@ -318,7 +319,7 @@ export function TransactionImportCard({
                 data.batch_id != null
             ) {
                 bypassNextNavigation();
-                void navigate(`/import/${data.batch_id}/review`);
+                void navigate(`/import/${asImportBatchId(data.batch_id)}/review`);
                 return;
             }
 

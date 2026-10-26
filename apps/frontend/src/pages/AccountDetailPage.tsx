@@ -19,8 +19,9 @@
  * into Close; Reopen while closed), plus Delete only when the account has no
  * transactions — otherwise a disabled row routes the user to Close.
  */
+import { errorStatus } from "@/lib/api/errorStatus";
 import { useMemo, useState } from "react";
-import { useParams, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -71,6 +72,8 @@ import {
     useDeleteAccount,
 } from "@/hooks/useAccounts";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { useRouteParams } from "@/hooks/useRouteParams";
+import { ROUTES } from "@/lib/routes";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
@@ -119,9 +122,8 @@ const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default function AccountDetailPage() {
     const { t, tc } = useLanguage();
-    const { id } = useParams<{ id: string }>();
-    const accountId = Number(id);
-    const validId = Number.isInteger(accountId) && accountId > 0;
+    // A malformed id (`/accounts/abc`) finds no account: the not-found state below.
+    const accountId = useRouteParams(ROUTES.account)?.id;
     const navigate = useAppNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const balanceProvenance = useBalanceProvenance();
@@ -140,9 +142,10 @@ export default function AccountDetailPage() {
         active: "all",
     });
     const accounts = useMemo(() => data?.items ?? [], [data]);
-    const account = validId
-        ? accounts.find((a) => a.id === accountId)
-        : undefined;
+    const account =
+        accountId === undefined
+            ? undefined
+            : accounts.find((a) => a.id === accountId);
 
     const updateMutation = useUpdateAccount();
     const deleteMutation = useDeleteAccount();
@@ -305,7 +308,7 @@ export default function AccountDetailPage() {
             onError: (err) => {
                 // Still referenced (409): route to the close flow instead of
                 // dead-ending (lifecycle D5, ADR-088 addendum) — same as the hub.
-                if ((err as { status?: number }).status === 409) {
+                if (errorStatus(err) === 409) {
                     toast.info(
                         t("accounts.delete.stillReferenced", {
                             name: a.display_name || a.name,

@@ -5,6 +5,7 @@
  * to PortfolioImportReviewPage.
  */
 
+import { asPortfolioImportBatchId } from "@/lib/routes";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
@@ -328,17 +329,16 @@ export function PortfolioImportPage() {
             const data = await result;
             abortRef.current = null;
 
-            if ((data.skipped ?? 0) > 0) {
+            const skipped = data.skipped ?? 0;
+            if (skipped > 0) {
                 toast.warning(
-                    t("portfolioImport.toast.rowsSkipped", {
-                        n: data.skipped as number,
-                    }),
+                    t("portfolioImport.toast.rowsSkipped", { n: skipped }),
                 );
             }
 
             if (data.requires_review && data.batch_id !== 0) {
                 bypassNextNavigation();
-                void navigate(`/portfolio/import/${data.batch_id}/review`);
+                void navigate(`/portfolio/import/${asPortfolioImportBatchId(data.batch_id)}/review`);
                 return;
             }
 

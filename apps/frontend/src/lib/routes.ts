@@ -8,9 +8,13 @@
  * `<AppNavigate>` and nav-registry call site instead of 404-ing at runtime.
  *
  * Only the path part is typed: a query string (`?x=1`) or fragment (`#id`) may
- * follow any known path. A `:param` segment accepts any text, so
- * `/accounts/${id}` type-checks while `/acounts/${id}` does not.
+ * follow any known path. A `:param` segment takes the type in `RouteParamTypes`,
+ * so `/accounts/${accountId}` type-checks while `/accounts/${anyNumber}` and
+ * `/acounts/${accountId}` do not. `useRouteParams` (hooks/useRouteParams) is the
+ * inverse: it parses `useParams()` into those same types.
  */
+import type { AccountId, Brand } from "@vision/types/brands";
+
 export const ROUTES = {
     home: "/",
     transactions: "/transactions",
@@ -62,18 +66,54 @@ export const LEGACY_ROUTES = {
 /** A react-router pattern of a real page (`/accounts/:id`). */
 export type RoutePattern = (typeof ROUTES)[keyof typeof ROUTES];
 
-/** `/accounts/:id` becomes `/accounts/${string}`; patterns without params are unchanged. */
-type FillParams<P extends string> = P extends `${infer Head}:${infer Rest}`
-    ? Rest extends `${string}/${infer Tail}`
-        ? `${Head}${string}/${FillParams<Tail>}`
-        : `${Head}${string}`
-    : P;
-
-/** Every concrete pathname a page route can have, without query or fragment. */
-export type AppPathname = FillParams<RoutePattern>;
-
 /** Pathnames of param-free pages (the nav registry, icons, shortcuts). */
 export type StaticAppPath = Exclude<RoutePattern, `${string}:${string}`>;
+
+/** Branded id of a transaction import batch (`/import/:batchId/review`). */
+export type ImportBatchId = Brand<number, "ImportBatchId">;
+/** Branded id of a portfolio import batch (`/portfolio/import/:batchId/review`). */
+export type PortfolioImportBatchId = Brand<number, "PortfolioImportBatchId">;
+
+/** Unchecked constructors: the caller got the number from a validated API response. */
+export const asImportBatchId = (id: number): ImportBatchId => id as ImportBatchId;
+export const asPortfolioImportBatchId = (
+    id: number,
+): PortfolioImportBatchId => id as PortfolioImportBatchId;
+
+/**
+ * The type of each `:param` of a parameterised page. A param that is an id is
+ * branded, so `/accounts/${id}` only type-checks with an `AccountId`; the
+ * others accept any text (`:table` is a name, and the caller encodes it).
+ * `hooks/useRouteParams` parses `useParams()` into these same types.
+ */
+export interface RouteParamTypes {
+    [ROUTES.account]: { id: AccountId };
+    [ROUTES.importReview]: { batchId: ImportBatchId };
+    [ROUTES.portfolioImportReview]: { batchId: PortfolioImportBatchId };
+    [ROUTES.adminDbTable]: { table: string };
+}
+
+type ParamType<P extends string, Name extends string> =
+    P extends keyof RouteParamTypes
+        ? Name extends keyof RouteParamTypes[P]
+            ? RouteParamTypes[P][Name]
+            : string
+        : string;
+
+/** `/accounts/:id` becomes `/accounts/${AccountId}`; patterns without params are unchanged. */
+type FillParams<P extends string, Whole extends string = P> =
+    P extends `${infer Head}:${infer Name}/${infer Tail}`
+        ? `${Head}${ParamType<Whole, Name>}/${FillParams<Tail, Whole>}`
+        : P extends `${infer Head}:${infer Name}`
+          ? `${Head}${ParamType<Whole, Name>}`
+          : P;
+
+/** Every concrete pathname a page route can have, without query or fragment. */
+export type AppPathname = RoutePattern extends infer P extends string
+    ? P extends string
+        ? FillParams<P, P>
+        : never
+    : never;
 
 /** A navigable in-app target: a known pathname, optionally with `?query` or `#hash`. */
 export type AppPath =

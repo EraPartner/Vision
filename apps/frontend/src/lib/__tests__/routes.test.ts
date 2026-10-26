@@ -2,7 +2,13 @@
 import { describe, expect, it } from "vitest";
 import { ALL_NAV_ITEMS } from "@/lib/navigation";
 import { appRouteManifest, legacyRouteRedirects } from "@/lib/routePreload";
-import { isAppPath, LEGACY_ROUTES, ROUTES, type AppPath } from "@/lib/routes";
+import { asAccountId } from "@vision/types/brands";
+import {
+    isAppPath,
+    LEGACY_ROUTES,
+    ROUTES,
+    type AppPath,
+} from "@/lib/routes";
 
 describe("route table", () => {
     it("is the router manifest's exact path set", () => {
@@ -60,7 +66,7 @@ describe("isAppPath", () => {
     });
 
     it("narrows template paths at compile time", () => {
-        const id = 5;
+        const id = asAccountId(5);
         const path: AppPath = `/accounts/${id}?since=2025-01-01`;
         expect(isAppPath(path)).toBe(true);
         // @ts-expect-error a misspelled route is not an AppPath

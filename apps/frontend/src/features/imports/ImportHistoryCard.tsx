@@ -2,6 +2,7 @@
  * ImportHistoryCard — paginated list of import batches with rollback support.
  */
 
+import { asImportBatchId } from "@/lib/routes";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { AppLink } from "@/lib/appNavigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -194,7 +195,7 @@ function BatchRow({
                 <>
                     {batch.status === "awaiting_review" && (
                         <Button variant="ghost" size="sm" asChild>
-                            <AppLink to={`/import/${batch.id}/review`}>
+                            <AppLink to={`/import/${asImportBatchId(Number(batch.id))}/review`}>
                                 <FileSearch />
                                 {t("importHistory.resumeReview")}
                             </AppLink>

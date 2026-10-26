@@ -23,7 +23,10 @@ the manifest takes its `path`s from it, and the `AppPath` type (a known pathname
 `AppNavLink` and `AppNavigate` (`lib/appNavigation.tsx`) and `useAppNavigate` (`hooks/useAppNavigate.ts`),
 so a typo'd or removed route fails to compile; an ESLint rule bans the untyped react-router
 `Link`, `NavLink`, `Navigate` and `useNavigate`. `isAppPath` guards paths that arrive as plain
-strings (native menu payloads, the persisted last page).
+strings (native menu payloads, the persisted last page). Dynamic segments carry branded ids
+(ADR-220), so `/accounts/${id}` only compiles for an `AccountId`; pages read them with
+`useRouteParams` (`hooks/useRouteParams.ts`), which parses `useParams()` into branded ids and
+returns `null` for a malformed segment so the page takes its existing not-found or redirect path.
 
 ## Shareable page state
 

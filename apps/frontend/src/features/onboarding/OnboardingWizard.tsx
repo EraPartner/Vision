@@ -1,6 +1,10 @@
 // @refresh reset
 import { useState, useEffect, useRef } from "react";
-import { ROUTES, type AppPath } from "@/lib/routes";
+import {
+    asImportBatchId,
+    ROUTES,
+    type AppPath,
+} from "@/lib/routes";
 import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
@@ -675,7 +679,7 @@ export function OnboardingWizard({
      * the review page — a step-machine change this fix has no mandate for.
      */
     const goToReview = (batchId: number) =>
-        handleNavigate(`/import/${batchId}/review`);
+        handleNavigate(`/import/${asImportBatchId(batchId)}/review`);
 
     return (
         <>

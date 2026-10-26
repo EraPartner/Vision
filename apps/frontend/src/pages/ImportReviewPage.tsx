@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { useParams } from "react-router";
 import { useAppNavigate } from "@/hooks/useAppNavigate";
+import { useRouteParams } from "@/hooks/useRouteParams";
+import { ROUTES, type ImportBatchId } from "@/lib/routes";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { ImportStagingRow, ImportPreviewGroup } from "@/lib/api";
@@ -132,8 +133,31 @@ interface AccountDisclosureEntry {
 }
 
 export default function ImportReviewPage() {
-    const { batchId: batchIdParam } = useParams<{ batchId: string }>();
-    const batchId = Number(batchIdParam);
+    const params = useRouteParams(ROUTES.importReview);
+    const navigate = useAppNavigate();
+    const { t } = useLanguage();
+    // A malformed batch id gets the page's load-failure state (no request is made).
+    if (!params) {
+        return (
+            <PageShell className="max-w-3xl mx-auto">
+                <div>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate("/import")}
+                    >
+                        <ArrowLeft className="h-4 w-4" aria-hidden />
+                        {t("importReview.back")}
+                    </Button>
+                </div>
+                <PageError message={apiErrorToMessage(undefined, t)} />
+            </PageShell>
+        );
+    }
+    return <ImportReviewContent batchId={params.batchId} />;
+}
+
+function ImportReviewContent({ batchId }: { batchId: ImportBatchId }) {
     const navigate = useAppNavigate();
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();

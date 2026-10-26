@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router";
+import { useRouteParams } from "@/hooks/useRouteParams";
+import { ROUTES } from "@/lib/routes";
 import {
     Plus,
     Trash2,
@@ -335,7 +336,7 @@ function EditableCell({
 // ── page ──────────────────────────────────────────────────────────────────────
 
 export default function TableDataEditorPage() {
-    const { table = "" } = useParams();
+    const { table } = useRouteParams(ROUTES.adminDbTable) ?? { table: "" };
     const { t, tc } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
 

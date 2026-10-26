@@ -1,3 +1,5 @@
+import { enumGuard, listGuard } from "@/lib/enumGuard";
+import { asPortfolioImportBatchId } from "@/lib/routes";
 import { CloudUpload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
@@ -222,8 +224,15 @@ const actions = [
     "blocked",
     "policy_required",
 ] as const;
-const isImportAction = (action: string): action is (typeof actions)[number] =>
-    (actions as readonly string[]).includes(action);
+const isImportAction = listGuard(actions);
+const isReconciliationPolicy = enumGuard<PortfolioReconciliationPolicy>({
+    preserve_existing: true,
+    prefer_source: true,
+});
+const isSessionPolicy = (
+    value: string,
+): value is "auto" | PortfolioReconciliationPolicy =>
+    value === "auto" || isReconciliationPolicy(value);
 const fields = [
     "date",
     "type",
@@ -581,8 +590,8 @@ export function PortfolioImportSession({ accounts }: Props) {
                 item.id === id
                     ? {
                           ...item,
-                          adoptPolicy: value
-                              ? (value as PortfolioReconciliationPolicy)
+                          adoptPolicy: isReconciliationPolicy(value)
+                              ? value
                               : undefined,
                       }
                     : item,
@@ -1134,7 +1143,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                     <p className="type-footnote text-label-secondary">
                                         <AppLink
                                             className="underline"
-                                            to={`/portfolio/import/${item.batchId}/review`}
+                                            to={`/portfolio/import/${asPortfolioImportBatchId(item.batchId)}/review`}
                                         >
                                             {t(
                                                 "portfolioImport.session.batch",
@@ -1155,7 +1164,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                         )}{" "}
                                         <AppLink
                                             className="underline"
-                                            to={`/portfolio/import/${batchId}/review`}
+                                            to={`/portfolio/import/${asPortfolioImportBatchId(batchId)}/review`}
                                         >
                                             {t(
                                                 "portfolioImport.session.batch",
@@ -1184,7 +1193,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                         value={policy}
                         onValueChange={(value) => {
                             invalidate();
-                            setPolicy(value as typeof policy);
+                            if (isSessionPolicy(value)) setPolicy(value);
                         }}
                     >
                         <SelectTrigger
