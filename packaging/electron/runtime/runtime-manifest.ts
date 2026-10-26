@@ -182,7 +182,8 @@ function parseManifest(bytes: Buffer): ParsedManifest {
       typeof entry.bytes !== "number" ||
       !Number.isSafeInteger(entry.bytes) ||
       entry.bytes < 0 ||
-      !/^[0-9a-f]{64}$/.test(String(entry.sha256 || "")) ||
+      typeof entry.sha256 !== "string" ||
+      !/^[0-9a-f]{64}$/.test(entry.sha256) ||
       seen.has(entry.path)
     ) {
       throw corrupt("Native runtime manifest contains an invalid entry");
@@ -191,7 +192,7 @@ function parseManifest(bytes: Buffer): ParsedManifest {
     entries.push({
       path: entry.path,
       bytes: entry.bytes,
-      sha256: String(entry.sha256),
+      sha256: entry.sha256,
     });
   }
   return {
@@ -308,9 +309,10 @@ async function verifyManifestInWorker(
     let size = 0;
     const hash = crypto.createHash("sha256");
     try {
-      for await (const chunk of fs.createReadStream(absolute, {
+      const stream: AsyncIterable<Buffer> = fs.createReadStream(absolute, {
         highWaterMark: 64 * 1024,
-      })) {
+      });
+      for await (const chunk of stream) {
         size += chunk.length;
         hash.update(chunk);
       }
@@ -332,8 +334,12 @@ async function verifyManifestInWorker(
 }
 
 if (!isMainThread) {
-  void verifyManifestInWorker(workerData.runtimeRoot, {
-    required: workerData.required,
+  const data: unknown = workerData;
+  if (!isRecord(data) || typeof data.runtimeRoot !== "string") {
+    throw new TypeError("Invalid runtime verification worker data");
+  }
+  void verifyManifestInWorker(data.runtimeRoot, {
+    required: data.required === true,
   }).then(
     (result) => {
       parentPort?.postMessage({ result });

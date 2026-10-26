@@ -116,10 +116,6 @@ function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null;
 }
 
-function isUnknownArray(value: unknown): value is readonly unknown[] {
-  return Array.isArray(value);
-}
-
 /**
  * Field view of an untyped value with `value.field` semantics: null and
  * undefined throw a TypeError, and primitives expose none of the fields read.
@@ -162,7 +158,7 @@ export function safeChildEnv(
   for (const [key, value] of Object.entries(overrides)) {
     if (value !== undefined) env[key] = String(value);
   }
-  const inheritedPath = String(process.env.PATH || "")
+  const inheritedPath = (process.env.PATH ?? "")
     .split(path.delimiter)
     .filter((entry) => !/\/(?:opt\/)?postgresql@18\/bin\/?$/.test(entry))
     .join(path.delimiter);
@@ -244,7 +240,7 @@ export function defaultRunFile(
       args,
       {
         cwd: options.cwd,
-        env: options.env || safeChildEnv(),
+        env: options.env ?? safeChildEnv(),
         timeout: options.timeout ?? 30_000,
         maxBuffer: options.maxBuffer ?? 10 * 1024 * 1024,
         encoding: "utf8",
@@ -272,7 +268,7 @@ export function parsePostgresMajor(
 ): number | undefined {
   const match =
     /PostgreSQL\)\s+(\d+)(?:\.\d+)?|PostgreSQL\s+(\d+)(?:\.\d+)?/i.exec(
-      String(output || ""),
+      output ?? "",
     );
   return match ? Number(match[1] || match[2]) : undefined;
 }
@@ -282,7 +278,7 @@ export function parsePostgresVersionNumber(
 ): number | undefined {
   const match =
     /PostgreSQL\)\s+(\d+)(?:\.(\d+))?|PostgreSQL\s+(\d+)(?:\.(\d+))?/i.exec(
-      String(output || ""),
+      output ?? "",
     );
   if (!match) return undefined;
   const major = Number(match[1] || match[3]);
@@ -514,8 +510,7 @@ export async function discoverPostgres18({
 }
 
 function normalizeRuntimeId(value: string | undefined): string {
-  const normalized = String(value || "vision")
-    .toLowerCase()
+  const normalized = (value || "vision").toLowerCase()
     .replace(/[^a-z0-9_]/g, "_");
   if (!/^[a-z][a-z0-9_]{0,31}$/.test(normalized)) {
     throw new Error(`Invalid native runtime id: ${value}`);
@@ -543,7 +538,7 @@ export function runtimeNames(runtimeId: string | undefined): RuntimeNames {
 }
 
 function validateIdentifier(value: unknown, label: string): string {
-  const identifier = String(value || "");
+  const identifier = typeof value === "string" ? value : "";
   if (!/^[a-z][a-z0-9_]{0,62}$/.test(identifier)) {
     throw new Error(`Invalid ${label}`);
   }
@@ -591,7 +586,7 @@ export function materializedViewOwnershipSql(appRole: string): string {
 }
 
 function requireHexSecret(value: string | undefined): string {
-  const secret = String(value || "");
+  const secret = value ?? "";
   if (!/^[0-9a-f]{64}$/.test(secret)) {
     throw new Error(
       "Native database credentials must be 64 lowercase hexadecimal characters",
@@ -608,7 +603,7 @@ export function parseEnvFile(
   contents: string | undefined,
 ): Record<string, string> {
   const result: Record<string, string> = {};
-  for (const line of String(contents || "").split("\n")) {
+  for (const line of (contents ?? "").split("\n")) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
     const equals = trimmed.indexOf("=");
@@ -737,7 +732,7 @@ export const RETIRED_NATIVE_ENV_KEYS: ReadonlySet<string> = new Set([
 
 /** Removes every line that assigns a retired key; other lines stay byte-identical. */
 export function stripRetiredNativeEnv(contents: string): string {
-  const lines = String(contents || "").split("\n");
+  const lines = contents.split("\n");
   const kept = lines.filter((line) => {
     const key = /^\s*([A-Z_][A-Z0-9_]*)\s*=/.exec(line)?.[1];
     return !key || !RETIRED_NATIVE_ENV_KEYS.has(key);
@@ -761,7 +756,7 @@ export function ensureNativeAdminEnv(
   if (env.VISION_POSTGRES_ADMIN_ROLE && env.VISION_POSTGRES_ADMIN_PASSWORD) {
     return contents;
   }
-  const base = String(contents || "").replace(/\n?$/, "\n");
+  const base = contents.replace(/\n?$/, "\n");
   return `${base}VISION_POSTGRES_ADMIN_ROLE=${names.adminRole}\nVISION_POSTGRES_ADMIN_PASSWORD=${crypto.randomBytes(32).toString("hex")}\n`;
 }
 
@@ -883,7 +878,7 @@ function httpGetJson(url: string, timeoutMs = 2_000): Promise<unknown> {
         try {
           resolve(JSON.parse(body));
         } catch (error) {
-          reject(error);
+          reject(error instanceof Error ? error : new Error(String(error)));
         }
       });
     });
@@ -999,10 +994,10 @@ export async function directoryFingerprint(
         const hash = crypto.createHash("sha256");
         const handle = await fs.promises.open(absolute, "r");
         try {
-          for await (const chunk of handle.createReadStream({
+          const stream: AsyncIterable<Buffer> = handle.createReadStream({
             autoClose: false,
-          }))
-            hash.update(chunk);
+          });
+          for await (const chunk of stream) hash.update(chunk);
         } finally {
           await handle.close().catch(() => {});
         }
@@ -1238,8 +1233,6 @@ interface BackendCommand {
   cwd: string | undefined;
 }
 
-type NativeRuntime = ReturnType<typeof createNativeRuntime>;
-
 export function createNativeRuntime(options: NativeRuntimeOptions) {
   const userDataDir = path.resolve(options.userDataDir);
   const repoRoot = options.repoRoot
@@ -1257,16 +1250,24 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     "native PostgreSQL port",
   );
   const names = runtimeNames(runtimeId);
-  const runFile: RunFile = options.runFile || defaultRunFile;
-  const spawnProcess: SpawnProcess = options.spawnProcess || spawn;
+  const runFile: RunFile = options.runFile ?? defaultRunFile;
+  const spawnProcess: SpawnProcess = options.spawnProcess ?? spawn;
   const spawnPostgresProcess: SpawnProcess =
-    options.spawnPostgresProcess || spawn;
+    options.spawnPostgresProcess ?? spawn;
   const checkPortFree: (port: number) => Promise<boolean> =
-    options.isPortFree || isPortFree;
+    options.isPortFree ?? isPortFree;
   const getAppPort: () => number =
     typeof options.appPort === "function"
       ? options.appPort
-      : () => Number(options.appPort || DEFAULT_APP_PORT);
+      : () => {
+          // 0 and NaN fall back to the default port, like `||` did.
+          const configured = options.appPort;
+          return typeof configured === "number" &&
+            configured !== 0 &&
+            !Number.isNaN(configured)
+            ? configured
+            : DEFAULT_APP_PORT;
+        };
   const nativeRoot = path.join(userDataDir, "native", runtimeId);
   const paths: NativeRuntimePaths = Object.freeze({
     nativeRoot,
@@ -1309,7 +1310,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     }
     const existing = await fs.promises
       .readFile(paths.env, "utf8")
-      .catch((error) => {
+      .catch((error: unknown) => {
         if (errorCode(error) === "ENOENT") return undefined;
         throw error;
       });
@@ -1406,7 +1407,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
   }
 
   function postgresConfigString(value: string): string {
-    return `'${String(value).replaceAll("\\", "\\\\").replaceAll("'", "''")}'`;
+    return `'${value.replaceAll("\\", "\\\\").replaceAll("'", "''")}'`;
   }
 
   async function ensureManagedPostgresConfig(
@@ -1425,7 +1426,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     ].join("\n");
     const currentConfig = await fs.promises
       .readFile(visionConfig, "utf8")
-      .catch((error) => {
+      .catch((error: unknown) => {
         if (errorCode(error) === "ENOENT") return undefined;
         throw error;
       });
@@ -1452,7 +1453,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     const existingVersion = await fs.promises
       .readFile(versionPath, "utf8")
       .then((value) => value.trim())
-      .catch((error) => {
+      .catch((error: unknown) => {
         if (errorCode(error) === "ENOENT") return undefined;
         throw error;
       });
@@ -1477,7 +1478,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
 
     const liveStat = await fs.promises
       .lstat(paths.postgresData)
-      .catch((error) => {
+      .catch((error: unknown) => {
         if (errorCode(error) === "ENOENT") return undefined;
         throw error;
       });
@@ -1604,7 +1605,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       error.code = "POSTGRES_WRONG_VERSION";
       throw error;
     }
-    const addresses = String(lines[1] || "")
+    const addresses = (lines[1] ?? "")
       .split(",")
       .map((entry) => entry.trim())
       .filter(Boolean);
@@ -1701,10 +1702,14 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       dataDirectory: paths.postgresData,
       startedAt: new Date().toISOString(),
     });
-    postgresChild.once("exit", async () => {
-      const recorded = await readJson(paths.postgresPid).catch(() => undefined);
-      if (optionalFieldsOf(recorded)?.pid === pid)
-        await fs.promises.unlink(paths.postgresPid).catch(() => {});
+    postgresChild.once("exit", () => {
+      void (async () => {
+        const recorded = await readJson(paths.postgresPid).catch(
+          () => undefined,
+        );
+        if (optionalFieldsOf(recorded)?.pid === pid)
+          await fs.promises.unlink(paths.postgresPid).catch(() => {});
+      })();
     });
     if (typeof postgresChild.unref === "function") postgresChild.unref();
     return pid;
@@ -1763,7 +1768,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       await stopPostgres();
       ready = false;
     }
-    if (!ready && startService && requireTools().managed) {
+    if (startService && requireTools().managed) {
       await startManagedPostgres(config);
       // A clean cluster accepts connections ~0.1 s after spawn, so poll finely
       // instead of losing most of a coarse interval on every launch.
@@ -1771,7 +1776,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       while (Date.now() < deadline) {
         if (
           postgresChild?.exitCode !== undefined &&
-          postgresChild?.exitCode !== null
+          postgresChild.exitCode !== null
         )
           break;
         ready = await runFile(pgIsReady, readyArgs, { timeout: 3_000 })
@@ -1825,12 +1830,12 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     if (!tools?.managed)
       return runFile(executable, args, {
         ...options_,
-        env: safeChildEnv(options_.env || {}),
+        env: safeChildEnv(options_.env ?? {}),
       });
     return withPgPass(config, config.adminRole, config.adminPassword, (env) =>
       runFile(executable, args, {
         ...options_,
-        env: safeChildEnv({ ...env, ...(options_.env || {}) }),
+        env: safeChildEnv({ ...env, ...(options_.env ?? {}) }),
       }),
     );
   }
@@ -2016,7 +2021,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     await writeAtomicJson(paths.state, {
       version: 1,
       runtimeId,
-      ...(current || {}),
+      ...(current ?? {}),
       ...next,
       updatedAt: new Date().toISOString(),
     });
@@ -2117,10 +2122,10 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
 
   async function processMatchesBackend(
     pid: unknown,
-    command: BackendCommand | undefined = undefined,
+    command?: BackendCommand,
   ): Promise<boolean> {
     if (!processExists(pid)) return false;
-    const expected = command || (await backendCommand());
+    const expected = command ?? (await backendCommand());
     const result = await runFile(
       "/bin/ps",
       ["-p", String(pid), "-o", "command="],
@@ -2137,7 +2142,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
   }
 
   async function waitForChildSpawn(spawned: SpawnedChild): Promise<number> {
-    const immediatePid = probeableProcessId(spawned?.pid);
+    const immediatePid = probeableProcessId(spawned.pid);
     if (immediatePid !== undefined) return immediatePid;
     return new Promise((resolve, reject) => {
       const onSpawn = () => {
@@ -2251,11 +2256,13 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       command: path.basename(command.bin),
     });
     const spawned = child;
-    child.once("exit", async () => {
+    child.once("exit", () => {
       if (child === spawned) backendExit = { code: spawned.exitCode };
-      const recorded = await readJson(paths.pid).catch(() => undefined);
-      if (optionalFieldsOf(recorded)?.pid === childPid)
-        await fs.promises.unlink(paths.pid).catch(() => {});
+      void (async () => {
+        const recorded = await readJson(paths.pid).catch(() => undefined);
+        if (optionalFieldsOf(recorded)?.pid === childPid)
+          await fs.promises.unlink(paths.pid).catch(() => {});
+      })();
     });
     if (typeof child.unref === "function") child.unref();
     return {
@@ -2372,7 +2379,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
   }
 
   async function getSchemaHead({
-    database = undefined,
+    database,
   }: { database?: string | undefined } = {}): Promise<string> {
     const config = await ensureLayout();
     if (!tools) await discover();
@@ -2682,7 +2689,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     sourcePath: string,
     {
       format = "plain",
-      expectedSchemaHead = undefined,
+      expectedSchemaHead,
     }: { format?: string; expectedSchemaHead?: string | undefined } = {},
   ): Promise<{
     switchToken: DatabaseSwitchToken;
@@ -2781,7 +2788,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
   }
 
   async function getDatabaseStats({
-    database = undefined,
+    database,
   }: { database?: string | undefined } = {}): Promise<DatabaseStats> {
     const config = await ensureLayout();
     if (!tools) await discover();
@@ -2825,7 +2832,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
 
   async function applyOwnerSqlFile(
     sourcePath: string,
-    { database = undefined }: { database?: string | undefined } = {},
+    { database }: { database?: string | undefined } = {},
   ): Promise<{ status: "applied"; database: string; bytes: number }> {
     const source = path.resolve(sourcePath);
     const stat = await fs.promises.lstat(source);
@@ -2967,7 +2974,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     destination: string,
     {
       format = "plain",
-      database = undefined,
+      database,
     }: { format?: string; database?: string | undefined } = {},
   ): Promise<{ path: string; format: string; bytes: number }> {
     const config = await ensureLayout();
@@ -3061,7 +3068,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
   }
 
   async function rollbackAttachmentSwitch(
-    switchToken: unknown = undefined,
+    switchToken?: unknown,
   ): Promise<DirectoryRollbackResult> {
     const token = switchToken || (await readState())?.pendingAttachmentSwitch;
     const result = await rollbackDirectorySwitch(token);
@@ -3070,7 +3077,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
   }
 
   async function finalizeAttachmentSwitch(
-    switchToken: unknown = undefined,
+    switchToken?: unknown,
   ): Promise<DirectoryFinalizeResult> {
     const token = switchToken || (await readState())?.pendingAttachmentSwitch;
     const result = await finalizeDirectorySwitch(token);

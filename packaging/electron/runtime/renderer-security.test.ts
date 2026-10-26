@@ -12,14 +12,14 @@ import {
 const appUrl = "http://localhost:36962";
 const errorPage = path.join(appRoot, "assets", "error.html");
 
-test("renderer navigation is limited to the selected backend origin and exact error page", () => {
+void test("renderer navigation is limited to the selected backend origin and exact error page", () => {
   assert.equal(
     isTrustedRendererUrl(`${appUrl}/analysis?q=1`, appUrl, errorPage),
     true,
   );
   assert.equal(
     isTrustedRendererUrl(
-      `${pathToFileURL(errorPage)}?message=offline`,
+      `${pathToFileURL(errorPage).href}?message=offline`,
       appUrl,
       errorPage,
     ),
@@ -43,7 +43,7 @@ test("renderer navigation is limited to the selected backend origin and exact er
   }
 });
 
-test("only public http(s) links leave the app for the OS browser", () => {
+void test("only public http(s) links leave the app for the OS browser", () => {
   for (const candidate of [
     "https://ollama.com/download",
     "http://example.com/news?id=1",
@@ -90,7 +90,7 @@ test("only public http(s) links leave the app for the OS browser", () => {
   }
 });
 
-test("permission checks permit only app-origin clipboard writes and loopback access", () => {
+void test("permission checks permit only app-origin clipboard writes and loopback access", () => {
   for (const permission of [
     "clipboard-sanitized-write",
     "loopback-network",

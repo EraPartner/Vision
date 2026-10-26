@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { EventEmitter } from "node:events";
 import { appRoot } from "../paths";
+import { must, parseJsonAs } from "../test-support";
 import {
   safeChildEnv,
   managedPostgresChildEnv,
@@ -35,10 +36,19 @@ import {
   createNativeRuntime,
   type PortProbeServer,
   type RunFile,
+  type RunFileResult,
   type SpawnedChild,
 } from "./native";
 
 const repoRoot = path.resolve(appRoot, "..", "..");
+
+/** Adapts a synchronous fake to the async RunFile contract; a throw becomes a rejection. */
+function fakeRunFile(
+  fake: (executable: string, args: string[]) => RunFileResult,
+): RunFile {
+  return (executable, args) =>
+    new Promise((resolve) => resolve(fake(executable, args)));
+}
 
 interface ProcessCall {
   executable: string;
@@ -127,7 +137,7 @@ function postgresFixtureRunFile(calls: ProcessCall[] = []): RunFile {
   };
 }
 
-test("safeChildEnv carries only the declared host environment plus explicit overrides", () => {
+void test("safeChildEnv carries only the declared host environment plus explicit overrides", () => {
   const previous = process.env.VISION_TEST_SECRET;
   process.env.VISION_TEST_SECRET = "must-not-leak";
   try {
@@ -142,7 +152,7 @@ test("safeChildEnv carries only the declared host environment plus explicit over
   }
 });
 
-test("managed PostgreSQL uses a portable locale instead of the host locale", () => {
+void test("managed PostgreSQL uses a portable locale instead of the host locale", () => {
   const previous = {
     LANG: process.env.LANG,
     LC_ALL: process.env.LC_ALL,
@@ -158,19 +168,19 @@ test("managed PostgreSQL uses a portable locale instead of the host locale", () 
     assert.equal(env.LC_CTYPE, "C");
   } finally {
     for (const [key, value] of Object.entries(previous)) {
-      if (value === undefined) delete process.env[key];
+      if (value === undefined) Reflect.deleteProperty(process.env, key);
       else process.env[key] = value;
     }
   }
 });
 
-test("process execution arguments must remain an array of strings", () => {
+void test("process execution arguments must remain an array of strings", () => {
   assert.deepEqual(validateArgs(["-h", "127.0.0.1"]), ["-h", "127.0.0.1"]);
   assert.throws(() => validateArgs("psql -h 127.0.0.1"), /string array/);
   assert.throws(() => validateArgs(["-h", 42]), /string array/);
 });
 
-test("managed PostgreSQL disables Unix sockets and binds only loopback TCP", () => {
+void test("managed PostgreSQL disables Unix sockets and binds only loopback TCP", () => {
   assert.deepEqual(
     managedPostgresArgs("/private/path with spaces/data", 54329),
     [
@@ -186,7 +196,7 @@ test("managed PostgreSQL disables Unix sockets and binds only loopback TCP", () 
   );
 });
 
-test("PostgreSQL discovery accepts major 18 and rejects older tools", () => {
+void test("PostgreSQL discovery accepts major 18 and rejects older tools", () => {
   assert.equal(parsePostgresMajor("pg_dump (PostgreSQL) 18.6"), 18);
   assert.equal(parsePostgresMajor("postgres (PostgreSQL) 18.1"), 18);
   assert.equal(
@@ -203,7 +213,7 @@ test("PostgreSQL discovery accepts major 18 and rejects older tools", () => {
   );
 });
 
-test("database switch recovery classifies every atomic rename interruption point", () => {
+void test("database switch recovery classifies every atomic rename interruption point", () => {
   assert.equal(
     classifyDatabaseSwitchState({ liveExists: true, previousExists: false }),
     "before-renames",
@@ -222,7 +232,7 @@ test("database switch recovery classifies every atomic rename interruption point
   );
 });
 
-test("PostgreSQL discovery fails when a required version-18 tool is absent", async () => {
+void test("PostgreSQL discovery fails when a required version-18 tool is absent", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-pg-discovery-"),
   );
@@ -240,7 +250,7 @@ test("PostgreSQL discovery fails when a required version-18 tool is absent", asy
     await assert.rejects(
       discoverPostgres18({
         binDir: temp,
-        runFile: async () => ({ stdout: "PostgreSQL 18.6", stderr: "" }),
+        runFile: () => Promise.resolve({ stdout: "PostgreSQL 18.6", stderr: "" }),
       }),
       hasCode("POSTGRES_NOT_FOUND"),
     );
@@ -249,7 +259,7 @@ test("PostgreSQL discovery fails when a required version-18 tool is absent", asy
   }
 });
 
-test("bundled PostgreSQL metadata is pinned and cannot traverse the payload", async () => {
+void test("bundled PostgreSQL metadata is pinned and cannot traverse the payload", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-pg-metadata-"),
   );
@@ -258,8 +268,10 @@ test("bundled PostgreSQL metadata is pinned and cannot traverse the payload", as
     assert.equal(bundledPostgresBin(fixture.runtimeRoot), fixture.binDir);
 
     const metadataPath = path.join(fixture.postgresRoot, "runtime.json");
-    const metadata = JSON.parse(
+    const metadata = parseJsonAs(
       await fs.promises.readFile(metadataPath, "utf8"),
+      isRecord,
+      "runtime.json",
     );
     await fs.promises.writeFile(
       metadataPath,
@@ -283,7 +295,7 @@ test("bundled PostgreSQL metadata is pinned and cannot traverse the payload", as
   }
 });
 
-test("managed PostgreSQL initializes a private loopback-only cluster with argument arrays", async () => {
+void test("managed PostgreSQL initializes a private loopback-only cluster with argument arrays", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-pg-managed-init-"),
   );
@@ -339,7 +351,7 @@ test("managed PostgreSQL initializes a private loopback-only cluster with argume
   }
 });
 
-test("native PostgreSQL bootstraps query-statistics observability", () => {
+void test("native PostgreSQL bootstraps query-statistics observability", () => {
   assert.deepEqual(REQUIRED_POSTGRES_EXTENSIONS, [
     "pg_trgm",
     "pgcrypto",
@@ -347,7 +359,7 @@ test("native PostgreSQL bootstraps query-statistics observability", () => {
   ]);
 });
 
-test("managed PostgreSQL provisions roles, database and extensions in one session", async () => {
+void test("managed PostgreSQL provisions roles, database and extensions in one session", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-pg-extension-bootstrap-"),
   );
@@ -469,7 +481,7 @@ test("managed PostgreSQL provisions roles, database and extensions in one sessio
   }
 });
 
-test("managed PostgreSQL upgrades observability config for an existing cluster", async () => {
+void test("managed PostgreSQL upgrades observability config for an existing cluster", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-pg-observability-upgrade-"),
   );
@@ -518,7 +530,7 @@ test("managed PostgreSQL upgrades observability config for an existing cluster",
   }
 });
 
-test("managed PostgreSQL restarts a warm cluster after observability config changes", async () => {
+void test("managed PostgreSQL restarts a warm cluster after observability config changes", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-pg-observability-restart-"),
   );
@@ -534,12 +546,12 @@ test("managed PostgreSQL restarts a warm cluster after observability config chan
       postgresRuntimeRoot: fixture.runtimeRoot,
       runtimeId: "vision_observability_restart",
       bunPath: "/bin/echo",
-      isPortFree: async () => true,
+      isPortFree: () => Promise.resolve(true),
       spawnPostgresProcess: () => {
         spawned = true;
         return child;
       },
-      runFile: async (executable, args) => {
+      runFile: fakeRunFile((executable, args) => {
         const command = path.basename(executable);
         calls.push({ executable: command, args: [...args] });
         if (args[0] === "--version") {
@@ -558,7 +570,7 @@ test("managed PostgreSQL restarts a warm cluster after observability config chan
           };
         }
         return { stdout: "", stderr: "" };
-      },
+      }),
     });
     await runtime.ensureLayout();
     await fs.promises.mkdir(runtime.paths.postgresData, { recursive: true });
@@ -595,7 +607,7 @@ test("managed PostgreSQL restarts a warm cluster after observability config chan
   }
 });
 
-test("managed PostgreSQL quarantines an interrupted first initialization before retrying", async () => {
+void test("managed PostgreSQL quarantines an interrupted first initialization before retrying", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-pg-managed-recovery-"),
   );
@@ -635,7 +647,7 @@ test("managed PostgreSQL quarantines an interrupted first initialization before 
   }
 });
 
-test("managed PostgreSQL fails closed when its private port is occupied", async () => {
+void test("managed PostgreSQL fails closed when its private port is occupied", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-pg-managed-collision-"),
   );
@@ -648,8 +660,8 @@ test("managed PostgreSQL fails closed when its private port is occupied", async 
       postgresRuntimeRoot: fixture.runtimeRoot,
       runtimeId: "vision_managed_collision",
       bunPath: "/bin/echo",
-      isPortFree: async () => false,
-      runFile: async (executable, args) => {
+      isPortFree: () => Promise.resolve(false),
+      runFile: fakeRunFile((executable, args) => {
         if (args[0] === "--version") {
           return {
             stdout: `${path.basename(executable)} (PostgreSQL) 18.6`,
@@ -659,7 +671,7 @@ test("managed PostgreSQL fails closed when its private port is occupied", async 
         if (path.basename(executable) === "pg_isready")
           throw new Error("not ready");
         return { stdout: "", stderr: "" };
-      },
+      }),
     });
     await runtime.ensureLayout();
     await fs.promises.mkdir(runtime.paths.postgresData, { recursive: true });
@@ -680,7 +692,7 @@ test("managed PostgreSQL fails closed when its private port is occupied", async 
   }
 });
 
-test("managed PostgreSQL shutdown targets only Vision's exact data directory", async () => {
+void test("managed PostgreSQL shutdown targets only Vision's exact data directory", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-pg-managed-stop-"),
   );
@@ -725,7 +737,7 @@ test("managed PostgreSQL shutdown targets only Vision's exact data directory", a
   }
 });
 
-test("generated native environment is loopback-only and separates owner/application roles", () => {
+void test("generated native environment is loopback-only and separates owner/application roles", () => {
   const names = runtimeNames("vision_test");
   const config = databaseConfigFromEnv(nativeEnvContents(names));
   assert.equal(config.host, "127.0.0.1");
@@ -739,7 +751,7 @@ test("generated native environment is loopback-only and separates owner/applicat
   assert.match(config.ownerPassword, /^[0-9a-f]{64}$/);
 });
 
-test("native analysis credentials follow the configured executor and reject foreign targets", () => {
+void test("native analysis credentials follow the configured executor and reject foreign targets", () => {
   const contents = nativeEnvContents(runtimeNames("vision_test"));
   const config = databaseConfigFromEnv(contents);
   assert.equal(config.analysisPassword, config.appPassword);
@@ -764,7 +776,7 @@ test("native analysis credentials follow the configured executor and reject fore
   }
 });
 
-test("restore ownership handoff is limited to runtime-managed materialized views", () => {
+void test("restore ownership handoff is limited to runtime-managed materialized views", () => {
   assert.deepEqual(RUNTIME_MANAGED_MATERIALIZED_VIEWS, [
     "mv_monthly_summary",
     "mv_category_totals",
@@ -786,7 +798,7 @@ test("restore ownership handoff is limited to runtime-managed materialized views
   );
 });
 
-test("database activation applies materialized-view ownership inside the staging database", async () => {
+void test("database activation applies materialized-view ownership inside the staging database", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-native-restore-ownership-"),
   );
@@ -801,7 +813,7 @@ test("database activation applies materialized-view ownership inside the staging
     }
     const dumpPath = path.join(temp, "source.dump");
     await fs.promises.writeFile(dumpPath, "synthetic custom dump");
-    const runFile: RunFile = async (executable, args) => {
+    const runFile: RunFile = fakeRunFile((executable, args) => {
       calls.push({ executable: path.basename(executable), args: [...args] });
       if (args[0] === "--version") {
         return {
@@ -835,7 +847,7 @@ test("database activation applies materialized-view ownership inside the staging
         return { stdout: "42\n", stderr: "" };
       }
       return { stdout: "", stderr: "" };
-    };
+    });
     const runtime = createNativeRuntime({
       userDataDir: path.join(temp, "user-data"),
       repoRoot: repoRoot,
@@ -894,7 +906,7 @@ test("database activation applies materialized-view ownership inside the staging
   }
 });
 
-test("native seed SQL is applied transactionally with an argument array", async () => {
+void test("native seed SQL is applied transactionally with an argument array", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-native-seed-sql-"),
   );
@@ -918,7 +930,7 @@ test("native seed SQL is applied transactionally with an argument array", async 
       runtimeId,
       postgresBinDir: binDir,
       bunPath: "/bin/echo",
-      runFile: async (executable, args) => {
+      runFile: fakeRunFile((executable, args) => {
         calls.push({ executable: path.basename(executable), args: [...args] });
         if (args[0] === "--version") {
           return {
@@ -946,7 +958,7 @@ test("native seed SQL is applied transactionally with an argument array", async 
           return { stdout: "1\n", stderr: "" };
         }
         return { stdout: "", stderr: "" };
-      },
+      }),
     });
 
     const result = await runtime.applyOwnerSqlFile(sqlPath);
@@ -974,7 +986,7 @@ test("native seed SQL is applied transactionally with an argument array", async 
   }
 });
 
-test("native runtime rejects invalid PostgreSQL ports before creating state", () => {
+void test("native runtime rejects invalid PostgreSQL ports before creating state", () => {
   for (const postgresPort of [0, 65_536, 1.5, "not-a-port"]) {
     assert.throws(
       () =>
@@ -989,7 +1001,7 @@ test("native runtime rejects invalid PostgreSQL ports before creating state", ()
   }
 });
 
-test("native PostgreSQL readiness pins every probe to one loopback TCP port", async () => {
+void test("native PostgreSQL readiness pins every probe to one loopback TCP port", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-pg-port-"),
   );
@@ -1019,7 +1031,7 @@ test("native PostgreSQL readiness pins every probe to one loopback TCP port", as
       postgresBinDir: binDir,
       postgresPort: 55_432,
       bunPath: "/bin/echo",
-      runFile: async (executable, args) => {
+      runFile: fakeRunFile((executable, args) => {
         calls.push({ executable: path.basename(executable), args });
         if (args[0] === "--version") {
           return {
@@ -1032,7 +1044,7 @@ test("native PostgreSQL readiness pins every probe to one loopback TCP port", as
         }
         if (
           args.some((arg) =>
-            arg.includes?.("SHOW server_version_num; SHOW listen_addresses;"),
+            arg.includes("SHOW server_version_num; SHOW listen_addresses;"),
           )
         ) {
           return { stdout: "180006\nlocalhost\n/test/data\n", stderr: "" };
@@ -1041,7 +1053,7 @@ test("native PostgreSQL readiness pins every probe to one loopback TCP port", as
           return { stdout: "pg_stat_statements\n", stderr: "" };
         }
         throw new Error("Unexpected process call");
-      },
+      }),
     });
 
     await runtime.ensurePostgresReady({ startService: false });
@@ -1055,7 +1067,7 @@ test("native PostgreSQL readiness pins every probe to one loopback TCP port", as
   }
 });
 
-test("external PostgreSQL fails with an actionable observability prerequisite", async () => {
+void test("external PostgreSQL fails with an actionable observability prerequisite", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-pg-external-observability-"),
   );
@@ -1073,7 +1085,7 @@ test("external PostgreSQL fails with an actionable observability prerequisite", 
       runtimeId: "vision_external_observability",
       postgresBinDir: binDir,
       bunPath: "/bin/echo",
-      runFile: async (executable, args) => {
+      runFile: fakeRunFile((executable, args) => {
         if (args[0] === "--version") {
           return {
             stdout: `${path.basename(executable)} (PostgreSQL) 18.6`,
@@ -1085,7 +1097,7 @@ test("external PostgreSQL fails with an actionable observability prerequisite", 
         }
         if (
           args.some((arg) =>
-            arg.includes?.("SHOW server_version_num; SHOW listen_addresses;"),
+            arg.includes("SHOW server_version_num; SHOW listen_addresses;"),
           )
         ) {
           return { stdout: "180006\nlocalhost\n/test/data\n", stderr: "" };
@@ -1094,7 +1106,7 @@ test("external PostgreSQL fails with an actionable observability prerequisite", 
           return { stdout: "auto_explain\n", stderr: "" };
         }
         throw new Error("Unexpected process call");
-      },
+      }),
     });
 
     await assert.rejects(
@@ -1109,7 +1121,7 @@ test("external PostgreSQL fails with an actionable observability prerequisite", 
   }
 });
 
-test("native application environment accepts only fixed keys and single-line values", () => {
+void test("native application environment accepts only fixed keys and single-line values", () => {
   assert.deepEqual(
     validateApplicationEnv({
       FRED_API_KEY: "key",
@@ -1129,7 +1141,7 @@ test("native application environment accepts only fixed keys and single-line val
   );
 });
 
-test("native first-start layout is restrictive and safely resumable", async () => {
+void test("native first-start layout is restrictive and safely resumable", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-native-layout-"),
   );
@@ -1158,7 +1170,7 @@ test("native first-start layout is restrictive and safely resumable", async () =
   }
 });
 
-test("native layout strips retired secrets from an existing env file once", async () => {
+void test("native layout strips retired secrets from an existing env file once", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-native-retired-env-"),
   );
@@ -1196,7 +1208,7 @@ test("native layout strips retired secrets from an existing env file once", asyn
   }
 });
 
-test("native first start persists and unreferences an argument-array backend child", async () => {
+void test("native first start persists and unreferences an argument-array backend child", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-native-start-"),
   );
@@ -1236,8 +1248,8 @@ test("native first start persists and unreferences an argument-array backend chi
       appPort: 43_210,
       postgresBinDir: binDir,
       bunPath: "/bin/echo",
-      isPortFree: async () => true,
-      runFile: async (executable, args) => {
+      isPortFree: () => Promise.resolve(true),
+      runFile: fakeRunFile((executable, args) => {
         if (args[0] === "--version") {
           return {
             stdout: `${path.basename(executable)} (PostgreSQL) 18.6`,
@@ -1249,7 +1261,7 @@ test("native first start persists and unreferences an argument-array backend chi
         }
         if (
           args.some((arg) =>
-            arg.includes?.("SHOW server_version_num; SHOW listen_addresses;"),
+            arg.includes("SHOW server_version_num; SHOW listen_addresses;"),
           )
         ) {
           return { stdout: "180006\nlocalhost\n/test/data\n", stderr: "" };
@@ -1258,13 +1270,13 @@ test("native first start persists and unreferences an argument-array backend chi
           return { stdout: "pg_stat_statements\n", stderr: "" };
         }
         if (
-          args.some((arg) => arg.includes?.("SELECT 1 FROM pg_roles")) ||
-          args.some((arg) => arg.includes?.("SELECT 1 FROM pg_database"))
+          args.some((arg) => arg.includes("SELECT 1 FROM pg_roles")) ||
+          args.some((arg) => arg.includes("SELECT 1 FROM pg_database"))
         ) {
           return { stdout: "1\n", stderr: "" };
         }
         return { stdout: "", stderr: "" };
-      },
+      }),
       spawnProcess: (bin, args, options) => {
         spawned = { bin, args, options };
         return child;
@@ -1295,7 +1307,7 @@ test("native first start persists and unreferences an argument-array backend chi
   }
 });
 
-test("start runs the pre-migration hook only when the database is behind the packaged chain", async () => {
+void test("start runs the pre-migration hook only when the database is behind the packaged chain", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-native-premigrate-"),
   );
@@ -1337,8 +1349,8 @@ test("start runs the pre-migration hook only when the database is behind the pac
         appPort: 43_211,
         postgresBinDir: binDir,
         bunPath: "/bin/echo",
-        isPortFree: async () => true,
-        runFile: async (executable, args) => {
+        isPortFree: () => Promise.resolve(true),
+        runFile: fakeRunFile((executable, args) => {
           if (args[0] === "--version") {
             return {
               stdout: `${path.basename(executable)} (PostgreSQL) 18.6`,
@@ -1350,7 +1362,7 @@ test("start runs the pre-migration hook only when the database is behind the pac
           }
           if (
             args.some((arg) =>
-              arg.includes?.("SHOW server_version_num; SHOW listen_addresses;"),
+              arg.includes("SHOW server_version_num; SHOW listen_addresses;"),
             )
           ) {
             return { stdout: "180006\nlocalhost\n/test/data\n", stderr: "" };
@@ -1358,20 +1370,20 @@ test("start runs the pre-migration hook only when the database is behind the pac
           if (args.includes("SHOW shared_preload_libraries;")) {
             return { stdout: "pg_stat_statements\n", stderr: "" };
           }
-          if (args.some((arg) => arg.includes?.("to_regclass"))) {
+          if (args.some((arg) => arg.includes("to_regclass"))) {
             return { stdout: appliedHead ? "t\n" : "f\n", stderr: "" };
           }
-          if (args.some((arg) => arg.includes?.("max(name)"))) {
+          if (args.some((arg) => arg.includes("max(name)"))) {
             return { stdout: `${appliedHead}\n`, stderr: "" };
           }
           if (
-            args.some((arg) => arg.includes?.("SELECT 1 FROM pg_roles")) ||
-            args.some((arg) => arg.includes?.("SELECT 1 FROM pg_database"))
+            args.some((arg) => arg.includes("SELECT 1 FROM pg_roles")) ||
+            args.some((arg) => arg.includes("SELECT 1 FROM pg_database"))
           ) {
             return { stdout: "1\n", stderr: "" };
           }
           return { stdout: "", stderr: "" };
-        },
+        }),
         spawnProcess: () => {
           spawned += 1;
           totalSpawned += 1;
@@ -1387,11 +1399,12 @@ test("start runs the pre-migration hook only when the database is behind the pac
     };
 
     const calls: { appliedHead: string; packagedHead: string }[] = [];
-    const record = async (pending: {
+    const record = (pending: {
       appliedHead: string;
       packagedHead: string;
     }) => {
       calls.push(pending);
+      return Promise.resolve();
     };
     assert.equal(await run("0002_remove_cloud_ai", record), 1);
     assert.deepEqual(calls, [
@@ -1408,9 +1421,7 @@ test("start runs the pre-migration hook only when the database is behind the pac
     // A failed backup must keep the migrating backend from starting.
     const spawnedBefore = totalSpawned;
     await assert.rejects(
-      run("0001_baseline", async () => {
-        throw new Error("disk full");
-      }),
+      run("0001_baseline", () => Promise.reject(new Error("disk full"))),
       /disk full/,
     );
     assert.equal(totalSpawned, spawnedBefore);
@@ -1419,7 +1430,7 @@ test("start runs the pre-migration hook only when the database is behind the pac
   }
 });
 
-test("startup error is read from the last failed backend start in the log", () => {
+void test("startup error is read from the last failed backend start in the log", () => {
   const log = [
     `2026-10-19T18:37:01.000Z [ERROR] Failed to start application {"error":"old"}`,
     `2026-10-19T18:45:42.511Z [INFO] migration failed {"migration":"0001_baseline"}`,
@@ -1431,7 +1442,7 @@ test("startup error is read from the last failed backend start in the log", () =
   assert.equal(lastStartupError("[ERROR] Failed to start application {broken"), undefined);
 });
 
-test("packaged backend environment pins native data, migration, and loopback paths", () => {
+void test("packaged backend environment pins native data, migration, and loopback paths", () => {
   const runtimeRoot =
     "/Applications/Vision.app/Contents/Resources/native-runtime";
   const env = buildNativeBackendEnv({
@@ -1474,7 +1485,7 @@ test("packaged backend environment pins native data, migration, and loopback pat
   );
 });
 
-test("attachment replacement verifies content and atomically replaces the destination", async () => {
+void test("attachment replacement verifies content and atomically replaces the destination", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-attachment-swap-"),
   );
@@ -1506,7 +1517,7 @@ test("attachment replacement verifies content and atomically replaces the destin
   }
 });
 
-test("native port discovery rejects a foreign listener", async () => {
+void test("native port discovery rejects a foreign listener", async () => {
   const emitter = new EventEmitter();
   const fakeServer: PortProbeServer = Object.assign(emitter, {
     unref: () => {},
@@ -1517,7 +1528,7 @@ test("native port discovery rejects a foreign listener", async () => {
   assert.equal(await isPortFree(3002, "127.0.0.1", () => fakeServer), false);
 });
 
-test("detailed readiness requires the backend database connection", () => {
+void test("detailed readiness requires the backend database connection", () => {
   assert.equal(isDetailedHealthReady({ database: { connected: true } }), true);
   assert.equal(
     isDetailedHealthReady({ database: { connected: false } }),
@@ -1526,7 +1537,7 @@ test("detailed readiness requires the backend database connection", () => {
   assert.equal(isDetailedHealthReady({ database: true }), false);
 });
 
-test("native activation ignores retired legacy-install evidence", async () => {
+void test("native activation ignores retired legacy-install evidence", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-native-guard-"),
   );
@@ -1544,13 +1555,13 @@ test("native activation ignores retired legacy-install evidence", async () => {
     });
     const state = await runtime.assertNativeActive();
     assert.equal(state?.activeRuntime, "native");
-    assert.equal(state?.activation, "fresh-install");
+    assert.equal(state.activation, "fresh-install");
   } finally {
     await fs.promises.rm(temp, { recursive: true, force: true });
   }
 });
 
-test("packaged native payload verification rejects modified files", async () => {
+void test("packaged native payload verification rejects modified files", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-native-manifest-"),
   );
@@ -1591,7 +1602,7 @@ test("packaged native payload verification rejects modified files", async () => 
   }
 });
 
-test("native custom dump validation rejects corrupt or truncated input", async () => {
+void test("native custom dump validation rejects corrupt or truncated input", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-native-corrupt-dump-"),
   );
@@ -1621,7 +1632,7 @@ test("native custom dump validation rejects corrupt or truncated input", async (
       runtimeId: "vision_corrupt_dump",
       postgresBinDir: binDir,
       bunPath: "/bin/echo",
-      runFile: async (executable, args) => {
+      runFile: fakeRunFile((executable, args) => {
         if (args[0] === "--version") {
           return {
             stdout: `${path.basename(executable)} (PostgreSQL) 18.6`,
@@ -1631,7 +1642,7 @@ test("native custom dump validation rejects corrupt or truncated input", async (
         if (path.basename(executable) === "pg_restore" && args[0] === "--list")
           throw new Error("archive ended unexpectedly");
         return { stdout: "", stderr: "" };
-      },
+      }),
     });
     await assert.rejects(
       runtime.validateCustomDump(dumpPath),
@@ -1643,7 +1654,7 @@ test("native custom dump validation rejects corrupt or truncated input", async (
 });
 
 for (const phase of ["before", "between", "after"] as const) {
-  test(`startup recovers interrupted restore at ${phase} database renames before bootstrap`, async (t) => {
+  void test(`startup recovers interrupted restore at ${phase} database renames before bootstrap`, async (t) => {
     const temp = await fs.promises.mkdtemp(
       path.join(os.tmpdir(), "vision-restore-recovery-"),
     );
@@ -1678,7 +1689,10 @@ for (const phase of ["before", "between", "after"] as const) {
         if (rename?.[1] && rename[2]) {
           assert.ok(databases.has(rename[1]));
           assert.equal(databases.has(rename[2]), false);
-          databases.set(rename[2], databases.get(rename[1])!);
+          databases.set(
+            rename[2],
+            must(databases.get(rename[1]), "the renamed database"),
+          );
           databases.delete(rename[1]);
           return { stdout: "", stderr: "" };
         }

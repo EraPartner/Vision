@@ -6,8 +6,7 @@ import test from "node:test";
 
 import { decryptFile, encryptFileV2, isEncryptedFile } from "./encrypted-file";
 
-const FIXTURE_KINDS = ["rawV1", "bundleV1", "rawV2", "bundleV2"] as const;
-type FixtureKind = (typeof FIXTURE_KINDS)[number];
+type FixtureKind = "rawV1" | "bundleV1" | "rawV2" | "bundleV2";
 
 const PASSPHRASE = "fixture-pass";
 const PLAINTEXT = Buffer.from("Vision backup fixture\nline 2\n");
@@ -55,7 +54,7 @@ async function withTempDir(run: (directory: string) => Promise<void>) {
 
 for (const kind of ["rawV2", "bundleV2"] as const) {
   const hex = FIXTURES[kind];
-  test(`decrypts the fixed ${kind} fixture`, async () => {
+  void test(`decrypts the fixed ${kind} fixture`, async () => {
     await withTempDir(async (directory) => {
       const encryptedPath = path.join(directory, `${kind}.enc`);
       const destinationPath = path.join(directory, `${kind}.out`);
@@ -76,7 +75,7 @@ for (const kind of ["rawV2", "bundleV2"] as const) {
 // The v1 (AES-CBC, static salt) format is retired: a released v1 file is
 // refused by name and no plaintext is written.
 for (const kind of ["rawV1", "bundleV1"] as const) {
-  test(`refuses the retired ${kind} fixture`, async () => {
+  void test(`refuses the retired ${kind} fixture`, async () => {
     await withTempDir(async (directory) => {
       const encryptedPath = path.join(directory, `${kind}.enc`);
       const destinationPath = path.join(directory, `${kind}.out`);
@@ -99,7 +98,7 @@ for (const kind of ["rawV1", "bundleV1"] as const) {
   });
 }
 
-test("recognises both format generations without accepting arbitrary files", async () => {
+void test("recognises both format generations without accepting arbitrary files", async () => {
   await withTempDir(async (directory) => {
     const v1Path = path.join(directory, "v1.enc");
     const v2Path = path.join(directory, "v2.enc");
@@ -116,7 +115,7 @@ test("recognises both format generations without accepting arbitrary files", asy
   });
 });
 
-test("new v2 files round-trip with the requested magic", async () => {
+void test("new v2 files round-trip with the requested magic", async () => {
   await withTempDir(async (directory) => {
     const sourcePath = path.join(directory, "source.sql");
     const encryptedPath = path.join(directory, "source.sql.enc");
@@ -137,7 +136,7 @@ test("new v2 files round-trip with the requested magic", async () => {
   });
 });
 
-test("authentication failures remove the partial plaintext", async () => {
+void test("authentication failures remove the partial plaintext", async () => {
   await withTempDir(async (directory) => {
     const encryptedPath = path.join(directory, "wrong-pass.enc");
     const destinationPath = path.join(directory, "partial.sql");
@@ -159,7 +158,7 @@ test("authentication failures remove the partial plaintext", async () => {
   });
 });
 
-test("authentication failure waits for the output stream to close before cleanup", async () => {
+void test("authentication failure waits for the output stream to close before cleanup", async () => {
   await withTempDir(async (directory) => {
     const encryptedPath = path.join(directory, "ordered-cleanup.enc");
     const destinationPath = path.join(directory, "partial.sql");
@@ -206,7 +205,7 @@ test("authentication failure waits for the output stream to close before cleanup
   });
 });
 
-test("truncated authenticated files fail before creating plaintext", async () => {
+void test("truncated authenticated files fail before creating plaintext", async () => {
   await withTempDir(async (directory) => {
     const encryptedPath = path.join(directory, "truncated.enc");
     const destinationPath = path.join(directory, "partial.sql");

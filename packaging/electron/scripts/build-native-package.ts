@@ -56,7 +56,7 @@ export function nativeRuntimeRoot(): string {
 
 export function packageResources(
   runtimeRoot: string,
-  demoSeedRoot: string | undefined = undefined,
+  demoSeedRoot?: string,
 ): PackageResource[] {
   const resources = [{ from: runtimeRoot, to: "native-runtime" }];
   if (demoSeedRoot) {
@@ -67,7 +67,7 @@ export function packageResources(
 
 export function packageConfig(
   runtimeRoot: string,
-  { demoSeedRoot = undefined }: { demoSeedRoot?: string | undefined } = {},
+  { demoSeedRoot }: { demoSeedRoot?: string | undefined } = {},
 ): NativePackageConfig {
   return {
     ...(demoSeedRoot ? { extends: "./electron-builder-demo.json" } : {}),
@@ -82,19 +82,20 @@ function errorMessage(error: unknown): string {
     typeof error === "object" &&
     error !== null &&
     "message" in error &&
-    error.message
+    typeof error.message === "string" &&
+    error.message !== ""
   )
-    return String(error.message);
+    return error.message;
   return String(error);
 }
 
 export async function main(
   options: BuildNativePackageOptions = {},
 ): Promise<string[]> {
-  const args = parseArgs(options.argv || process.argv.slice(2));
-  const prepare = options.prepare || prepareNativeRuntime;
-  const prepareDemo = options.prepareDemo || buildDemoSeed;
-  const builder = options.builder || build;
+  const args = parseArgs(options.argv ?? process.argv.slice(2));
+  const prepare = options.prepare ?? prepareNativeRuntime;
+  const prepareDemo = options.prepareDemo ?? buildDemoSeed;
+  const builder = options.builder ?? build;
   prepare();
   const runtimeRoot = nativeRuntimeRoot();
   fs.accessSync(path.join(runtimeRoot, "manifest.json"), fs.constants.R_OK);

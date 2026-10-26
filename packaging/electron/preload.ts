@@ -26,8 +26,9 @@ function rendererFailureSource(event: ErrorEvent): string {
     property(event.target, "src") ||
     property(event.target, "href") ||
     "";
+  if (typeof candidate !== "string") return "unknown";
   try {
-    return new URL(String(candidate)).pathname.split("/").pop() || "unknown";
+    return new URL(candidate).pathname.split("/").pop() || "unknown";
   } catch {
     return "unknown";
   }

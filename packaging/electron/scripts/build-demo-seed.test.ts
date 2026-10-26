@@ -15,7 +15,7 @@ async function loadSql(referenceDate: string): Promise<string> {
   return String(demoSeedSql);
 }
 
-test("Demo seed transfer rows survive the startup transfer reconciler", async () => {
+void test("Demo seed transfer rows survive the startup transfer reconciler", async () => {
   // The backend's reconciler releases every is_transfer row with source
   // 'auto' or 'manual' that has no peer, turning it into income or spending.
   // The seed never writes transfer_peer_id, so it must flag only system-owned
@@ -43,7 +43,7 @@ test("Demo seed transfer rows survive the startup transfer reconciler", async ()
   }
 });
 
-test("Demo seed destinations are explicit generated directories", () => {
+void test("Demo seed destinations are explicit generated directories", () => {
   assert.equal(
     assertSafeDemoSeedDestination(
       path.join(os.tmpdir(), "vision-build", "demo-seed"),
@@ -56,7 +56,7 @@ test("Demo seed destinations are explicit generated directories", () => {
   );
 });
 
-test("the synthetic generator is deterministic data-only SQL", async () => {
+void test("the synthetic generator is deterministic data-only SQL", async () => {
   const first = await loadGenerator("2026-09-03");
   const second = await loadGenerator("2026-09-03");
   assert.equal(first.demoSeedSql, second.demoSeedSql);
@@ -77,7 +77,7 @@ test("the synthetic generator is deterministic data-only SQL", async () => {
   assert.equal(sha256(firstSql).length, 64);
 });
 
-test("demo planned loans use a loan type the API contract accepts", async () => {
+void test("demo planned loans use a loan type the API contract accepts", async () => {
   // openapi PlannedLoanType; a strict client rejects the whole planned list on any other.
   const demoSeedSql = await loadSql("2026-09-03");
   const loanTypes = demoSeedSql
@@ -98,7 +98,7 @@ test("demo planned loans use a loan type the API contract accepts", async () => 
   }
 });
 
-test("hierarchy root IDs cannot collide with explicit demo category IDs", async () => {
+void test("hierarchy root IDs cannot collide with explicit demo category IDs", async () => {
   const demoSeedSql = await loadSql("2026-09-03");
   const lines = demoSeedSql.split("\n");
   const categoryIds = lines
@@ -122,7 +122,7 @@ test("hierarchy root IDs cannot collide with explicit demo category IDs", async 
   );
 });
 
-test("the reference date shifts historical and planned rows together", async () => {
+void test("the reference date shifts historical and planned rows together", async () => {
   const earlier = { demoSeedSql: await loadSql("2026-09-03") };
   const later = { demoSeedSql: await loadSql("2026-10-03") };
 
@@ -149,7 +149,7 @@ test("the reference date shifts historical and planned rows together", async () 
   );
 });
 
-test("year-bearing demo labels and tax settings follow a year shift", async () => {
+void test("year-bearing demo labels and tax settings follow a year shift", async () => {
   const earlier = { demoSeedSql: await loadSql("2026-09-03") };
   const later = { demoSeedSql: await loadSql("2027-09-03") };
 
@@ -159,14 +159,14 @@ test("year-bearing demo labels and tax settings follow a year shift", async () =
   assert.match(later.demoSeedSql, /"mortgageStartYear":2019/);
 });
 
-test("the generator rejects an invalid reference calendar date", async () => {
+void test("the generator rejects an invalid reference calendar date", async () => {
   await assert.rejects(
     () => loadGenerator("2026-02-30"),
     /referenceDate must be an ISO calendar date/,
   );
 });
 
-test("seed build rejects generated row-count drift", () => {
+void test("seed build rejects generated row-count drift", () => {
   const summary = {
     accounts: 6,
     transactions: 10,

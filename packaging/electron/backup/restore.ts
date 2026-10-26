@@ -95,14 +95,15 @@ function getNativeRuntime(): NativeBackupRuntime {
   return runtime;
 }
 
-export async function resolveDatabaseEnvironment(): Promise<{
+export function resolveDatabaseEnvironment(): Promise<{
   nativeRuntime: NativeBackupRuntime;
 }> {
-  return { nativeRuntime: getNativeRuntime() };
+  // Deferred so a missing native runtime rejects instead of throwing.
+  return Promise.resolve().then(() => ({ nativeRuntime: getNativeRuntime() }));
 }
 
 function revisionNumericPrefix(rev: string): number | undefined {
-  const match = /^(\d+)_/.exec(String(rev || ""));
+  const match = /^(\d+)_/.exec(rev);
   return match?.[1] !== undefined ? Number.parseInt(match[1], 10) : undefined;
 }
 
@@ -295,7 +296,7 @@ export async function runBundleRestore(
     opened = await openBundle(bundlePath, { passphrase: effectivePassphrase });
   } catch (error) {
     const details = isRecord(error) ? error : {};
-    const message = String(details.message || "");
+    const message = typeof details.message === "string" ? details.message : "";
     if (
       encrypted &&
       (/bad decrypt|wrong final block|unable to authenticate|missing metadata\.json|missing db\.sql|end of central directory|not a zip file/i.test(
@@ -317,7 +318,12 @@ export async function runBundleRestore(
     const schemaHead = assertPostBaselineBackup(
       await readDumpSchemaLedger(dbSqlPath),
     );
-    if (metadata.schemaHead && String(metadata.schemaHead) !== schemaHead) {
+    const declaredHead = metadata.schemaHead;
+    const headMismatch =
+      typeof declaredHead === "string"
+        ? declaredHead !== "" && declaredHead !== schemaHead
+        : Boolean(declaredHead);
+    if (headMismatch) {
       throw new Error(
         "Backup schema revision does not match its metadata; the bundle is corrupt.",
       );

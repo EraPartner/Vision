@@ -18,7 +18,7 @@ function isRuntimeMode(value: string): value is RuntimeMode {
 }
 
 export function normalizeMode(value: unknown): RuntimeMode | undefined {
-  const mode = String(value || "")
+  const mode = (typeof value === "string" ? value : "")
     .trim()
     .toLowerCase();
   return isRuntimeMode(mode) ? mode : undefined;

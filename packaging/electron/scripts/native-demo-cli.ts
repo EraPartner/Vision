@@ -16,7 +16,7 @@ export function parseArgs(argv: readonly string[]): { command: "reset" } {
 }
 
 export async function main(options: NativeDemoCliOptions = {}): Promise<void> {
-  parseArgs(options.argv || process.argv.slice(2));
+  parseArgs(options.argv ?? process.argv.slice(2));
   const userDataDir = path.join(
     options.homeDir || os.homedir(),
     "Library",
@@ -37,10 +37,11 @@ if (require.main === module) {
 }
 
 function errorMessage(error: unknown): string {
-  return error &&
-    typeof error === "object" &&
+  return typeof error === "object" &&
+    error !== null &&
     "message" in error &&
-    error.message
-    ? String(error.message)
+    typeof error.message === "string" &&
+    error.message !== ""
+    ? error.message
     : String(error);
 }

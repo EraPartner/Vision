@@ -6,7 +6,7 @@
 // settings accessors are threaded in via init() so the module observes the
 // exact same values the code saw in-file.
 
-import { app, safeStorage } from "electron";
+import { app, safeStorage, type SafeStorage } from "electron";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -27,7 +27,7 @@ export interface BackupCryptoSettings {
 export interface BackupCryptoContext {
   APP_NAME: string;
   loadSettings(): Promise<BackupCryptoSettings>;
-  updateSettings(mutate: (current: BackupCryptoSettings) => void): unknown;
+  updateSettings(mutate: (current: BackupCryptoSettings) => undefined): unknown;
 }
 
 export interface BackupSettingsInput {
@@ -56,6 +56,18 @@ export function init(context: BackupCryptoContext): void {
 function context(): BackupCryptoContext {
   if (!ctx) throw new TypeError("backup/crypto used before init()");
   return ctx;
+}
+
+/**
+ * Electron's `safeStorage`. Loaded outside Electron (plain Node, tests) the
+ * `electron` import has no `safeStorage`, so the declared type is widened to
+ * what can actually be missing at runtime.
+ */
+type SecureStorage = Pick<SafeStorage, "decryptString" | "encryptString"> &
+  Partial<Pick<SafeStorage, "isEncryptionAvailable">>;
+
+function secureStorage(): SecureStorage | undefined {
+  return safeStorage;
 }
 
 const BACKUP_ENC_MAGIC = Buffer.from("VISIONENC1");
@@ -118,16 +130,16 @@ export async function getBackupPassphrase(): Promise<string | null> {
   const settings = await context().loadSettings();
   const encoded = settings.backupPassphraseEncrypted;
   if (!encoded || typeof encoded !== "string") return null;
+  const storage = secureStorage();
   if (
-    !safeStorage ||
-    typeof safeStorage.isEncryptionAvailable !== "function" ||
-    !safeStorage.isEncryptionAvailable()
+    typeof storage?.isEncryptionAvailable !== "function" ||
+    !storage.isEncryptionAvailable()
   ) {
     return null;
   }
   try {
     const raw = Buffer.from(encoded, "base64");
-    return safeStorage.decryptString(raw);
+    return storage.decryptString(raw);
   } catch {
     return null;
   }
@@ -142,10 +154,10 @@ export async function setBackupPassphrase(
     });
     return { success: true, available: true };
   }
+  const storage = secureStorage();
   if (
-    !safeStorage ||
-    typeof safeStorage.isEncryptionAvailable !== "function" ||
-    !safeStorage.isEncryptionAvailable()
+    typeof storage?.isEncryptionAvailable !== "function" ||
+    !storage.isEncryptionAvailable()
   ) {
     return {
       success: false,
@@ -154,7 +166,7 @@ export async function setBackupPassphrase(
     };
   }
   try {
-    const encrypted = safeStorage.encryptString(passphrase);
+    const encrypted = storage.encryptString(passphrase);
     const encoded = encrypted.toString("base64");
     await context().updateSettings((cur) => {
       cur.backupPassphraseEncrypted = encoded;
@@ -174,12 +186,10 @@ export async function getBackupPassphraseStatus(): Promise<PassphraseStatus> {
   // unsigned macOS build — when a passphrase is already stored (we need the key to
   // decrypt it anyway). With nothing stored, report availability from the API's mere
   // presence; setBackupPassphrase runs the real check when the user actually opts in.
-  const hasSafeStorageApi = Boolean(
-    safeStorage && typeof safeStorage.isEncryptionAvailable === "function",
-  );
+  const storage = secureStorage();
   const secureStorageAvailable = hasStoredPassphrase
-    ? hasSafeStorageApi && safeStorage.isEncryptionAvailable()
-    : hasSafeStorageApi;
+    ? storage?.isEncryptionAvailable?.() === true
+    : typeof storage?.isEncryptionAvailable === "function";
   return {
     hasEnvPassphrase: Boolean(process.env.VISION_BACKUP_PASSPHRASE),
     hasStoredPassphrase,

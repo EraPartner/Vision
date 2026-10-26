@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { replaceGeneratedDirectory } from "./replace-generated-directory";
 
-test("generated directory activation atomically replaces complete content", async () => {
+void test("generated directory activation atomically replaces complete content", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-generated-replace-"),
   );

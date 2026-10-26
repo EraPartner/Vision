@@ -187,7 +187,7 @@ function requestJson(
           try {
             resolve(JSON.parse(responseBody));
           } catch (error) {
-            reject(error);
+            reject(error instanceof Error ? error : new Error(String(error)));
           }
         });
       },
@@ -256,7 +256,7 @@ export function requestBuffer(
 }
 
 export function decodeFrontendBody(response: FrontendResponse): Buffer {
-  const encoding = String(response.headers["content-encoding"] || "").trim();
+  const encoding = (response.headers["content-encoding"] ?? "").trim();
   if (!encoding) return response.body;
   if (encoding === "gzip") return gunzipSync(response.body);
   throw new Error(`Unsupported frontend content encoding: ${encoding}`);
@@ -267,7 +267,7 @@ export async function verifyFrontendAssets(
   requester: FrontendRequester = requestBuffer,
 ): Promise<void> {
   const shellResponse = await requester(port, "/");
-  const shellType = String(shellResponse.headers["content-type"] || "");
+  const shellType = shellResponse.headers["content-type"] ?? "";
   if (!shellType.includes("text/html"))
     throw new Error("Native frontend shell did not return HTML");
   const shell = decodeFrontendBody(shellResponse).toString("utf8");
@@ -278,7 +278,7 @@ export async function verifyFrontendAssets(
     throw new Error("Native frontend shell has no packaged JavaScript entry");
 
   const entryResponse = await requester(port, entryPath);
-  const entryType = String(entryResponse.headers["content-type"] || "");
+  const entryType = entryResponse.headers["content-type"] ?? "";
   if (!/(?:java|ecma)script/i.test(entryType))
     throw new Error("Native frontend entry has an invalid content type");
   if (entryResponse.headers["content-encoding"] !== "gzip")
@@ -305,7 +305,7 @@ export async function cleanupSmokeUserData(
 }
 
 export function sanitizeSmokeDiagnostic(value: unknown): string {
-  return String(value || "")
+  return (typeof value === "string" ? value : "")
     .replace(/postgres(?:ql)?:\/\/[^\s'"`]+/gi, "[redacted database URL]")
     .replace(
       /\b(PGPASSWORD|DATABASE_URL|MIGRATION_DATABASE_URL|password|passphrase)\s*(?:=|:)\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi,
@@ -406,7 +406,7 @@ export async function main(): Promise<void> {
       currency: "EUR",
     });
     const accountId = field(syntheticAccount, "data", "id");
-    if (!Number.isInteger(accountId))
+    if (typeof accountId !== "number" || !Number.isInteger(accountId))
       throw new Error("Native smoke account creation failed");
     const syntheticRecipient = await requestJson(
       port,
@@ -431,7 +431,7 @@ export async function main(): Promise<void> {
       },
     );
     const transactionId = field(syntheticTransaction, "data", "id");
-    if (!Number.isInteger(transactionId))
+    if (typeof transactionId !== "number" || !Number.isInteger(transactionId))
       throw new Error("Native smoke transaction creation failed");
     const originalTransactionMemo = field(syntheticTransaction, "data", "memo");
     if (typeof originalTransactionMemo !== "string")
@@ -633,13 +633,21 @@ export async function main(): Promise<void> {
       await cleanupSmokeUserData(moveTargetDir, cleanup, !failure);
     }
   }
-  if (failure) throw failure;
+  if (failure instanceof Error) throw failure;
+  if (failure) {
+    throw new Error(
+      typeof failure === "string" ? failure : "Native smoke failed",
+      { cause: failure },
+    );
+  }
 }
 
 if (require.main === module) {
   main().catch((error: unknown) => {
     const message = field(error, "message");
-    console.error(error && message ? String(message) : String(error));
+    console.error(
+      typeof message === "string" && message !== "" ? message : String(error),
+    );
     process.exitCode = 1;
   });
 }

@@ -80,8 +80,12 @@ async function main(): Promise<void> {
 
 main().catch((error: unknown) => {
   console.error(
-    error && typeof error === "object" && "message" in error && error.message
-      ? String(error.message)
+    typeof error === "object" &&
+      error !== null &&
+      "message" in error &&
+      typeof error.message === "string" &&
+      error.message !== ""
+      ? error.message
       : String(error),
   );
   process.exitCode = 1;

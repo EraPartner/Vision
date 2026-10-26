@@ -40,7 +40,7 @@ function reject(
     : invalidResult;
 }
 
-test("argument-free channels accept no arguments and reject extra ones", () => {
+void test("argument-free channels accept no arguments and reject extra ones", () => {
   for (const channel of [
     "update:check-github",
     "backup:select-file",
@@ -60,7 +60,7 @@ test("argument-free channels accept no arguments and reject extra ones", () => {
   });
 });
 
-test("backup restore accepts only picker-blessed files with a backup extension", () => {
+void test("backup restore accepts only picker-blessed files with a backup extension", () => {
   assert.deepEqual(accept("backup:restore", PICKED), [
     PICKED,
     { passphrase: undefined },
@@ -102,13 +102,13 @@ test("backup restore accepts only picker-blessed files with a backup extension",
   );
 });
 
-test("backup:is-encrypted answers false for paths the picker did not bless", () => {
+void test("backup:is-encrypted answers false for paths the picker did not bless", () => {
   assert.deepEqual(accept("backup:is-encrypted", PICKED), [PICKED]);
   assert.equal(reject("backup:is-encrypted", [undefined]), false);
   assert.equal(reject("backup:is-encrypted", ["/etc/passwd"]), false);
 });
 
-test("backup:run validates the destination and the optional UI snapshot", () => {
+void test("backup:run validates the destination and the optional UI snapshot", () => {
   assert.deepEqual(accept("backup:run", "/Users/demo/Backups/"), [
     "/Users/demo/Backups",
     null,
@@ -129,7 +129,7 @@ test("backup:run validates the destination and the optional UI snapshot", () => 
   );
 });
 
-test("backup:save-settings rejects missing or mistyped settings instead of throwing", () => {
+void test("backup:save-settings rejects missing or mistyped settings instead of throwing", () => {
   assert.deepEqual(
     accept("backup:save-settings", {
       backupDir: "/Users/demo/Backups",
@@ -162,7 +162,7 @@ test("backup:save-settings rejects missing or mistyped settings instead of throw
   );
 });
 
-test("services:save-settings requires a boolean toggle", () => {
+void test("services:save-settings requires a boolean toggle", () => {
   assert.deepEqual(
     accept("services:save-settings", { keepServicesOnQuit: true }),
     [{ keepServicesOnQuit: true }],
@@ -180,7 +180,7 @@ test("services:save-settings requires a boolean toggle", () => {
   }
 });
 
-test("backup:set-passphrase no longer turns a non-string into a clear request", () => {
+void test("backup:set-passphrase no longer turns a non-string into a clear request", () => {
   assert.deepEqual(accept("backup:set-passphrase", ""), [""]);
   assert.deepEqual(accept("backup:set-passphrase", " secret "), [" secret "]);
   assert.deepEqual(reject("backup:set-passphrase", [undefined]), {
@@ -190,7 +190,7 @@ test("backup:set-passphrase no longer turns a non-string into a clear request", 
   });
 });
 
-test("renderer failure diagnostics normalize anything to structural metadata", () => {
+void test("renderer failure diagnostics normalize anything to structural metadata", () => {
   assert.deepEqual(
     accept("app:renderer-failure", {
       kind: "resource",
@@ -219,7 +219,7 @@ test("renderer failure diagnostics normalize anything to structural metadata", (
   }
 });
 
-test("native shell setters keep their accepted values", () => {
+void test("native shell setters keep their accepted values", () => {
   assert.deepEqual(accept("app:set-badge", 3), [3]);
   assert.deepEqual(accept("app:set-badge", "4.9"), [4]);
   assert.deepEqual(accept("app:set-badge", -2), [0]);
@@ -234,7 +234,7 @@ test("native shell setters keep their accepted values", () => {
   assert.deepEqual(reject("app:set-vibrancy", ["true"]), { success: false });
 });
 
-test("theme:persist-splash accepts only HSL component strings", () => {
+void test("theme:persist-splash accepts only HSL component strings", () => {
   const colors = {
     mode: "dark",
     background: "158 64% 52%",
@@ -275,7 +275,7 @@ test("theme:persist-splash accepts only HSL component strings", () => {
   }
 });
 
-test("report:print-pdf accepts only a bounded HTML document and footer", () => {
+void test("report:print-pdf accepts only a bounded HTML document and footer", () => {
   const html = "<!DOCTYPE html>\n<html><body>Report</body></html>";
   assert.deepEqual(
     accept("report:print-pdf", { html, footerTemplate: "<div></div>", x: 1 }),
@@ -303,7 +303,7 @@ test("report:print-pdf accepts only a bounded HTML document and footer", () => {
   );
 });
 
-test("shared helpers keep their previous decisions", () => {
+void test("shared helpers keep their previous decisions", () => {
   assert.equal(
     validateBackupDest("/Users/demo/Library/Mobile Documents"),
     null,

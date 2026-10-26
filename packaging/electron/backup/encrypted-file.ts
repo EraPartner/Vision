@@ -120,7 +120,7 @@ function pipeCipher(
           if (cleanupError && isRecord(err)) {
             err.cleanupError = cleanupError;
           }
-          reject(err);
+          reject(toError(err));
         });
       };
       input.destroy();
@@ -181,9 +181,15 @@ export async function encryptFileV2(
   }
 }
 
+// Stream and cipher failures are always Errors; anything else is wrapped so the
+// promise never rejects with a non-Error.
+function toError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(String(err));
+}
+
 function isAuthenticationFailure(err: unknown): boolean {
   if (!isRecord(err)) return false;
-  const message = err.message ? String(err.message) : "";
+  const message = typeof err.message === "string" ? err.message : "";
   return (
     /unable to authenticate|bad decrypt|wrong final block|unsupported state/i.test(
       message,
@@ -205,7 +211,13 @@ export async function decryptFile({
   unsupportedFormatMessage,
   retiredFormatMessage,
 }: DecryptFileOptions): Promise<void> {
-  if (!keyOrPassphrase) throw new Error(requiredError);
+  if (
+    keyOrPassphrase === null ||
+    keyOrPassphrase === undefined ||
+    keyOrPassphrase === ""
+  ) {
+    throw new Error(requiredError);
+  }
   const magic = await readMagic(
     encryptedPath,
     v2Magic.length,

@@ -14,11 +14,11 @@ function resolveWithRetiredInputs(input: {
   return resolveRuntimeMode(input);
 }
 
-test("native is the default runtime for normal Vision", () => {
+void test("native is the default runtime for normal Vision", () => {
   assert.equal(resolveWithRetiredInputs({ env: {}, settings: {} }), "native");
 });
 
-test("the seeded Demo always uses its isolated native runtime", () => {
+void test("the seeded Demo always uses its isolated native runtime", () => {
   assert.equal(
     resolveWithRetiredInputs({ env: {}, settings: {}, isDemo: true }),
     "native",
@@ -34,7 +34,7 @@ test("the seeded Demo always uses its isolated native runtime", () => {
   );
 });
 
-test("the Demo ignores runtime overrides to keep one synthetic data owner", () => {
+void test("the Demo ignores runtime overrides to keep one synthetic data owner", () => {
   assert.equal(
     resolveWithRetiredInputs({
       env: { VISION_RUNTIME_MODE: "legacy" },
@@ -45,7 +45,7 @@ test("the Demo ignores runtime overrides to keep one synthetic data owner", () =
   );
 });
 
-test("invalid explicit runtime modes fail closed", () => {
+void test("invalid explicit runtime modes fail closed", () => {
   assert.throws(
     () => resolveRuntimeMode({ env: { VISION_RUNTIME_MODE: "sqlite" } }),
     (error) =>
@@ -56,7 +56,7 @@ test("invalid explicit runtime modes fail closed", () => {
   );
 });
 
-test("retired persisted runtime markers no longer affect native selection", () => {
+void test("retired persisted runtime markers no longer affect native selection", () => {
   assert.equal(
     resolveWithRetiredInputs({
       env: {},

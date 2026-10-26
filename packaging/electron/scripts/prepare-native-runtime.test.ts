@@ -11,7 +11,7 @@ import {
   signCompiledBackend,
 } from "./prepare-native-runtime";
 
-test("native payload replacement is restricted to a native-runtime directory", () => {
+void test("native payload replacement is restricted to a native-runtime directory", () => {
   assert.equal(
     assertSafeNativeDestination("/private/tmp/vision-build/native-runtime"),
     path.resolve("/private/tmp/vision-build/native-runtime"),
@@ -26,7 +26,7 @@ test("native payload replacement is restricted to a native-runtime directory", (
   );
 });
 
-test("native payload manifests reject symbolic links", async () => {
+void test("native payload manifests reject symbolic links", async () => {
   const root = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-manifest-links-"),
   );
@@ -40,7 +40,7 @@ test("native payload manifests reject symbolic links", async () => {
   }
 });
 
-test(
+void test(
   "compiled backend is re-signed after Bun embeds the application",
   { skip: process.platform !== "darwin" },
   () => {
@@ -57,7 +57,7 @@ test(
 );
 
 for (const exitCode of [0, 1]) {
-  test(`backend compile removes Bun scratch files it created (exit ${exitCode})`, () => {
+  void test(`backend compile removes Bun scratch files it created (exit ${exitCode})`, () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "vision-compile-test-"));
     try {
       const earlier = ".1111111111111111-00000000.bun-build";

@@ -36,7 +36,7 @@ function isLocalIpv4(octets: readonly number[]): boolean {
 function ipv6Groups(host: string): number[] | undefined {
   const match = /^\[([0-9a-f:]+)\]$/.exec(host);
   if (!match) return undefined;
-  const [head = "", tail, extra] = match[1]!.split("::");
+  const [head = "", tail, extra] = (match[1] ?? "").split("::");
   if (extra !== undefined) return undefined;
   const parse = (part: string) =>
     part ? part.split(":").map((group) => Number.parseInt(group, 16)) : [];
@@ -60,14 +60,14 @@ function isLocalIpv6(host: string): boolean {
   const groups = ipv6Groups(host);
   if (!groups) return false;
   const embedded = [
-    groups[6]! >> 8,
-    groups[6]! & 0xff,
-    groups[7]! >> 8,
-    groups[7]! & 0xff,
+    (groups[6] ?? 0) >> 8,
+    (groups[6] ?? 0) & 0xff,
+    (groups[7] ?? 0) >> 8,
+    (groups[7] ?? 0) & 0xff,
   ];
   const zeros = (count: number) =>
     groups.slice(0, count).every((group) => group === 0);
-  if (zeros(7) && groups[7]! <= 1) return true;
+  if (zeros(7) && (groups[7] ?? 0) <= 1) return true;
   return (
     ((zeros(5) && (groups[5] === 0 || groups[5] === 0xffff)) ||
       (zeros(4) && groups[4] === 0xffff && groups[5] === 0)) &&

@@ -46,7 +46,7 @@ const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
   for (let n = 0; n < 256; n++) {
     let c = n;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    for (let k = 0; k < 8; k++) c = (c & 1) !== 0 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
     table[n] = c >>> 0;
   }
   return table;
@@ -56,7 +56,7 @@ const CRC_TABLE = (() => {
 export function crc32(data: Uint8Array, crc = 0): number {
   let c = ~crc >>> 0;
   for (let i = 0; i < data.length; i++) {
-    c = CRC_TABLE[(c ^ data[i]!) & 0xff]! ^ (c >>> 8);
+    c = (CRC_TABLE[(c ^ (data[i] ?? 0)) & 0xff] ?? 0) ^ (c >>> 8);
   }
   return ~c >>> 0;
 }
@@ -152,7 +152,6 @@ export async function createZipWriter(
     }
     return Buffer.from(name, "utf8");
   };
-  // eslint-disable-next-line no-control-regex
   const flagsFor = (name: string) => (/^[\x00-\x7f]*$/.test(name) ? 0 : UTF8_NAMES);
 
   /** Write a local header; returns where its CRC field starts. */
@@ -289,8 +288,8 @@ export async function createZipWriter(
       const fields: bigint[] = [];
       if (record.zip64Sizes) fields.push(BigInt(record.uncompressedSize), BigInt(record.compressedSize));
       if (zip64Offset) fields.push(BigInt(record.offset));
-      const extra = Buffer.alloc(fields.length ? 4 + fields.length * 8 : 0);
-      if (fields.length) {
+      const extra = Buffer.alloc(fields.length > 0 ? 4 + fields.length * 8 : 0);
+      if (fields.length > 0) {
         extra.writeUInt16LE(ZIP64_EXTRA, 0);
         extra.writeUInt16LE(fields.length * 8, 2);
         fields.forEach((value, i) => extra.writeBigUInt64LE(value, 4 + i * 8));
@@ -299,7 +298,7 @@ export async function createZipWriter(
       header.writeUInt32LE(CENTRAL_HEADER, 0);
       header.writeUInt16LE(VERSION_MADE_BY, 4);
       header.writeUInt16LE(
-        fields.length ? 45 : record.method === METHOD_DEFLATE ? 20 : 10,
+        fields.length > 0 ? 45 : record.method === METHOD_DEFLATE ? 20 : 10,
         6,
       );
       header.writeUInt16LE(record.flags, 8);

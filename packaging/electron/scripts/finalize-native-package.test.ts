@@ -11,12 +11,12 @@ import finalizeHook, {
   refreshRuntimeManifest,
 } from "./finalize-native-package";
 
-test("packaged app hook exports resolve to the finalizer", () => {
+void test("packaged app hook exports resolve to the finalizer", () => {
   assert.equal(finalizeHook, finalizePackagedApp);
   assert.equal(afterPack, finalizePackagedApp);
 });
 
-test("packaged app refuses to seal a bundle whose fuses it cannot flip", async () => {
+void test("packaged app refuses to seal a bundle whose fuses it cannot flip", async () => {
   await assert.rejects(
     finalizePackagedApp(
       { appOutDir: "/tmp", packager: { appInfo: { productFilename: "Vision" } } },
@@ -29,7 +29,7 @@ test("packaged app refuses to seal a bundle whose fuses it cannot flip", async (
   );
 });
 
-test("packaged app flips fuses, refreshes integrity after nested signing and seals the bundle", async () => {
+void test("packaged app flips fuses, refreshes integrity after nested signing and seals the bundle", async () => {
   const output = fs.mkdtempSync(path.join(os.tmpdir(), "vision-package-sign-"));
   const calls: [string, unknown][] = [];
   const refreshed: string[] = [];
@@ -40,8 +40,9 @@ test("packaged app flips fuses, refreshes integrity after nested signing and sea
         appOutDir: output,
         packager: {
           appInfo: { productFilename: "Vision" },
-          async addElectronFuses(_context, fuses) {
+          addElectronFuses(_context, fuses) {
             calls.push(["fuses", fuses]);
+            return Promise.resolve();
           },
         },
       },
@@ -53,8 +54,9 @@ test("packaged app flips fuses, refreshes integrity after nested signing and sea
           calls.push([executable, args]);
           return { status: 0, stdout: "", stderr: "" };
         },
-        async verifyManifest(runtimeRoot, options) {
+        verifyManifest(runtimeRoot, options) {
           verified.push([runtimeRoot, options]);
+          return Promise.resolve();
         },
       },
     );
@@ -110,7 +112,7 @@ test("packaged app flips fuses, refreshes integrity after nested signing and sea
   }
 });
 
-test("post-sign manifest refresh covers modified and newly sealed runtime files", async () => {
+void test("post-sign manifest refresh covers modified and newly sealed runtime files", async () => {
   const root = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-package-manifest-"),
   );

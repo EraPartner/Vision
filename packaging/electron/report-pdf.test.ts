@@ -9,6 +9,7 @@ import {
   type ReportPrintSession,
   type ReportPrintWindow,
 } from "./report-pdf";
+import { must } from "./test-support";
 
 const HTML = "<!DOCTYPE html><html><body>Report</body></html>";
 
@@ -61,8 +62,8 @@ interface FakeWindow extends ReportPrintWindow {
 
 function fakeWindowFactory(
   state: ReturnType<typeof fakeSession>["state"],
-  print: (window: FakeWindow) => Promise<Uint8Array> = async () =>
-    new Uint8Array([37, 80, 68, 70]),
+  print: (window: FakeWindow) => Promise<Uint8Array> = () =>
+    Promise.resolve(new Uint8Array([37, 80, 68, 70])),
 ) {
   const windows: FakeWindow[] = [];
   const createWindow = (options: BrowserWindowConstructorOptions) => {
@@ -75,7 +76,9 @@ function fakeWindowFactory(
       webContents: {
         async loadURL(url) {
           window.loaded.push(url);
-          const response = await state.handler!(new Request(url));
+          const response = await must(state.handler, "the protocol handler")(
+            new Request(url),
+          );
           window.served.push(await response.text());
         },
         printToPDF(printOptions) {
@@ -96,7 +99,7 @@ function fakeWindowFactory(
   return { windows, createWindow };
 }
 
-test("prints in a hidden, script-free, sandboxed window on the dedicated session", async () => {
+void test("prints in a hidden, script-free, sandboxed window on the dedicated session", async () => {
   const { session, state } = fakeSession();
   const { windows, createWindow } = fakeWindowFactory(state);
   const printer = createReportPdfPrinter({ session: () => session, createWindow });
@@ -128,13 +131,13 @@ test("prints in a hidden, script-free, sandboxed window on the dedicated session
   assert.match(window.loaded[0] ?? "", new RegExp(`^${REPORT_PRINT_SCHEME}://`));
   assert.deepEqual(window.served, [HTML]);
   assert.equal(window.printOptions[0]?.pageSize, "A4");
-  assert.equal(window.printOptions[0]?.printBackground, true);
-  assert.equal(window.printOptions[0]?.footerTemplate, "<div>f</div>");
-  assert.equal(window.printOptions[0]?.displayHeaderFooter, true);
+  assert.equal(window.printOptions[0].printBackground, true);
+  assert.equal(window.printOptions[0].footerTemplate, "<div>f</div>");
+  assert.equal(window.printOptions[0].displayHeaderFooter, true);
   assert.equal(window.destroyed, true);
 });
 
-test("the print session serves only live documents, denies permissions and blocks the network", async () => {
+void test("the print session serves only live documents, denies permissions and blocks the network", async () => {
   const { session, state } = fakeSession();
   const { windows, createWindow } = fakeWindowFactory(state);
   const printer = createReportPdfPrinter({ session: () => session, createWindow });
@@ -142,14 +145,21 @@ test("the print session serves only live documents, denies permissions and block
   await printer.print({ html: HTML, footerTemplate: "" });
 
   assert.equal(state.configured, 1, "the scheme is registered once");
-  const documentUrl = windows[0]!.loaded[0]!;
-  const stale = await state.handler!(new Request(documentUrl));
+  const documentUrl = must(
+    must(windows[0], "the first print window").loaded[0],
+    "the first loaded document",
+  );
+  const stale = await must(state.handler, "the protocol handler")(
+    new Request(documentUrl),
+  );
   assert.equal(stale.status, 404, "a printed document is no longer served");
 
   const live = createReportPdfPrinter({
     session: () => session,
     createWindow: fakeWindowFactory(state, async (window) => {
-      const response = await state.handler!(new Request(window.loaded[0]!));
+      const response = await must(state.handler, "the protocol handler")(
+        new Request(must(window.loaded[0], "the loaded document")),
+      );
       assert.equal(
         response.headers.get("Content-Security-Policy"),
         REPORT_PRINT_CSP,
@@ -166,26 +176,28 @@ test("the print session serves only live documents, denies permissions and block
     "file:///etc/hosts",
     `${REPORT_PRINT_SCHEME}://report/x`,
   ]) {
-    state.beforeRequest!({ url }, ({ cancel }) => decisions.push(cancel));
+    must(state.beforeRequest, "the request filter")({ url }, ({ cancel }) =>
+      decisions.push(cancel),
+    );
   }
   assert.deepEqual(decisions, [true, true, true, false]);
 
   let granted: boolean | undefined;
-  state.permissionRequest!(undefined, "media", (value) => {
+  must(state.permissionRequest, "the permission handler")(undefined, "media", (value) => {
     granted = value;
   });
   assert.equal(granted, false);
-  assert.equal(state.permissionCheck!(), false);
+  assert.equal(must(state.permissionCheck, "the permission check")(), false);
 });
 
-test("a failed or hung print destroys its window and does not block the next report", async () => {
+void test("a failed or hung print destroys its window and does not block the next report", async () => {
   const { session, state } = fakeSession();
   let call = 0;
-  const { windows, createWindow } = fakeWindowFactory(state, async () => {
+  const { windows, createWindow } = fakeWindowFactory(state, () => {
     call++;
-    if (call === 1) throw new Error("print failed");
+    if (call === 1) return Promise.reject(new Error("print failed"));
     if (call === 2) return new Promise<Uint8Array>(() => {});
-    return new Uint8Array([1]);
+    return Promise.resolve(new Uint8Array([1]));
   });
   const printer = createReportPdfPrinter({
     session: () => session,
@@ -199,10 +211,10 @@ test("a failed or hung print destroys its window and does not block the next rep
     printer.print({ html: HTML, footerTemplate: "" }),
   ]);
 
-  assert.equal(results[0]?.status, "rejected");
-  assert.equal(results[1]?.status, "rejected");
+  assert.equal(results[0].status, "rejected");
+  assert.equal(results[1].status, "rejected");
   assert.match(
-    String((results[1] as PromiseRejectedResult).reason),
+    String(results[1].reason),
     /timed out/,
   );
   assert.deepEqual(results[2], { status: "fulfilled", value: new Uint8Array([1]) });

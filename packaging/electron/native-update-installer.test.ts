@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { installNativeUpdate } from "./native-update-installer";
 
-test("partial removal of the previous app never rolls back a launched update", async () => {
+void test("partial removal of the previous app never rolls back a launched update", async () => {
   const root = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-update-cleanup-"),
   );
@@ -17,13 +17,13 @@ test("partial removal of the previous app never rolls back a launched update", a
       fs.mkdirSync(app, { recursive: true });
     fs.writeFileSync(path.join(sourceApp, "executable"), "new");
     fs.writeFileSync(path.join(destinationApp, "executable"), "old");
-    fs.rmSync = ((target, options) => {
+    fs.rmSync = (target, options) => {
       if (String(target).includes(".Vision-update-backup-")) {
         fs.unlinkSync(path.join(String(target), "executable"));
         throw new Error("injected partial cleanup failure");
       }
       originalRemove(target, options);
-    }) as typeof fs.rmSync;
+    };
     const result = installNativeUpdate({
       sourceApp,
       destinationApp,

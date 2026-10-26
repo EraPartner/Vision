@@ -45,19 +45,19 @@ export async function rollbackNativeRestore(
 ): Promise<unknown[]> {
   const rollbackErrors: unknown[] = [];
   if (attachmentSwitch) {
-    await runtime.rollbackAttachmentSwitch(attachmentSwitch).catch((error) => {
+    await runtime.rollbackAttachmentSwitch(attachmentSwitch).catch((error: unknown) => {
       rollbackErrors.push(error);
     });
   }
   if (databaseSwitch) {
     await runtime
       .rollbackDatabaseSwitch(databaseSwitch.switchToken)
-      .catch((error) => {
+      .catch((error: unknown) => {
         rollbackErrors.push(error);
       });
   }
   if (restart) {
-    await runtime.start().catch((error) => {
+    await runtime.start().catch((error: unknown) => {
       rollbackErrors.push(error);
     });
   }
@@ -76,7 +76,7 @@ export async function restoreNativeDatabase(
   sourcePath: string,
   {
     format = "plain",
-    expectedSchemaHead = undefined,
+    expectedSchemaHead,
   }: NativeRestoreOptions & { format?: string } = {},
 ): Promise<{ databaseSwitch: DatabaseSwitch }> {
   let databaseSwitch: DatabaseSwitch | undefined;
@@ -105,7 +105,7 @@ export async function restoreNativeBundle(
   {
     dbSqlPath,
     attachmentsDir,
-    expectedSchemaHead = undefined,
+    expectedSchemaHead,
   }: NativeRestoreOptions & {
     dbSqlPath: string;
     attachmentsDir?: string | null;

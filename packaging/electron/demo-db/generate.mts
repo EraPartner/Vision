@@ -78,10 +78,10 @@ const nlMonths = [
 // ---- SQL emission ----
 const out: string[] = [];
 const S = (s: string): number => out.push(s);
-const q = (v: unknown): string =>
+const q = (v: string | number | boolean | null | undefined): string =>
   v === null || v === undefined ? "NULL" : `'${String(v).replace(/'/g, "''")}'`;
 const num = (v: number | null | undefined, d = 2): string =>
-  v === null || v === undefined ? "NULL" : Number(v).toFixed(d);
+  v === null || v === undefined ? "NULL" : v.toFixed(d);
 S("-- Vision demo data (synthetic). Generated deterministically.");
 
 // ---- Accounts (ADR-088: real account entities) ----
@@ -232,7 +232,7 @@ RECIPS.forEach((r, i) => {
     .replace(/[^A-Z0-9]+/g, " ")
     .trim();
   S(
-    `INSERT INTO recipients (id,name,normalized_name,default_category_id,is_active) VALUES (${id},${q(r[0])},${q(norm)},${catId[r[1]] || "NULL"},true);`,
+    `INSERT INTO recipients (id,name,normalized_name,default_category_id,is_active) VALUES (${id},${q(r[0])},${q(norm)},${catId[r[1]] ?? "NULL"},true);`,
   );
 });
 
@@ -653,13 +653,14 @@ for (let y = 2024; y <= 2026; y++) {
 // running balance per account, then emit
 const byAcct: Record<string, SyntheticTransaction[]> = {};
 for (const t of txns) {
-  (byAcct[t.account] = byAcct[t.account] || []).push(t);
+  (byAcct[t.account] = byAcct[t.account] ?? []).push(t);
 }
 for (const [acct, accountTxns] of Object.entries(byAcct)) {
-  const list = accountTxns.sort(
-    (a, b) => a.date.getTime() - b.date.getTime() || a.id - b.id,
-  );
-  let bal = START_BAL[acct] || 0;
+  const list = accountTxns.sort((a, b) => {
+    const byDate = a.date.getTime() - b.date.getTime();
+    return byDate !== 0 ? byDate : a.id - b.id;
+  });
+  let bal = START_BAL[acct] ?? 0;
   for (const t of list) {
     bal += t.amount;
     t.balance = bal;
@@ -670,7 +671,9 @@ for (const [acct, accountTxns] of Object.entries(byAcct)) {
 // balance collection drives reconciliation drift: checking drifts +€15.50.
 const finalBal = (a: string): number => {
   const l = byAcct[a];
-  return l && l.length ? (at(l, l.length - 1).balance ?? 0) : 0;
+  return l !== undefined && l.length > 0
+    ? (at(l, l.length - 1).balance ?? 0)
+    : 0;
 };
 S(
   `INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency) VALUES (${AID.CHECKING},${q(ACCT.CHECKING)},'KBC Zichtrekening','KBC','checking','liquid','joint','EUR');`,
@@ -783,7 +786,7 @@ function planned(
 ): number {
   planId++;
   S(
-    `INSERT INTO planned_transactions (id,planned_date,amount,currency,memo,recipient_id,category_id,is_recurring,recurrence_pattern,is_executed,is_active,reminder_days_before) VALUES (${planId},'${fmt(date)}',${num(amount, 2)},'EUR',${q(memo)},${recId[recip]},${catId[catKey]},${recurring},${pattern ? q(pattern) : "NULL"},false,true,${reminder === null ? "NULL" : reminder});`,
+    `INSERT INTO planned_transactions (id,planned_date,amount,currency,memo,recipient_id,category_id,is_recurring,recurrence_pattern,is_executed,is_active,reminder_days_before) VALUES (${planId},'${fmt(date)}',${num(amount, 2)},'EUR',${q(memo)},${recId[recip]},${catId[catKey]},${recurring},${pattern ? q(pattern) : "NULL"},false,true,${reminder ?? "NULL"});`,
   );
   return planId;
 }
@@ -1495,8 +1498,11 @@ export const demoSeedSummary = Object.freeze({
   transactionSplits: splitId,
 });
 
+const entryScript = process.argv[1];
 const isDirectRun =
-  process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+  entryScript !== undefined &&
+  entryScript !== "" &&
+  import.meta.url === pathToFileURL(entryScript).href;
 if (isDirectRun) {
   process.stdout.write(demoSeedSql);
   process.stderr.write(

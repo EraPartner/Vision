@@ -29,7 +29,7 @@ function fileSets(
   });
 }
 
-test("native package builder accepts only the isolated directory mode flag", () => {
+void test("native package builder accepts only the isolated directory mode flag", () => {
   assert.deepEqual(parseArgs([]), { demo: false, directoryOnly: false });
   assert.deepEqual(parseArgs(["--dir"]), {
     demo: false,
@@ -42,7 +42,7 @@ test("native package builder accepts only the isolated directory mode flag", () 
   assert.throws(() => parseArgs(["--publish"]), /Unexpected package argument/);
 });
 
-test("native package resources use the prepared payload without path strings", () => {
+void test("native package resources use the prepared payload without path strings", () => {
   const runtimeRoot = path.join("/private", "tmp", "vision", "native-runtime");
   const resources = packageResources(runtimeRoot);
   assert.deepEqual(resources, [
@@ -57,7 +57,7 @@ test("native package resources use the prepared payload without path strings", (
   assert.ok(fs.existsSync(afterPack), "afterPack hook must be compiled");
 });
 
-test("Demo packages reuse the native payload and add only isolated seed resources", async () => {
+void test("Demo packages reuse the native payload and add only isolated seed resources", async () => {
   const runtimeRoot = path.join("/private", "tmp", "vision", "native-runtime");
   const demoSeedRoot = path.join("/private", "tmp", "vision", "demo-seed");
   const config = packageConfig(runtimeRoot, { demoSeedRoot });
@@ -68,7 +68,7 @@ test("Demo packages reuse the native payload and add only isolated seed resource
   ]);
 
   const { extends: configPath, ...overrides } = config;
-  const effective = await getConfig(appRoot, configPath ?? null, overrides);
+  const effective = await getConfig(appRoot, configPath, overrides);
   assert.equal(effective.appId, "com.vaultvoyager.vision-demo");
   assert.equal(effective.productName, "Vision Demo");
   assert.equal(effective.directories?.output, "dist-demo");
@@ -87,7 +87,7 @@ test("Demo packages reuse the native payload and add only isolated seed resource
   );
 });
 
-test("native package excludes test data, source maps, and foreign Bare prebuilds", async () => {
+void test("native package excludes test data, source maps, and foreign Bare prebuilds", async () => {
   const effective = await getConfig(appRoot, null, undefined);
   const [fileSet] = fileSets(effective.files);
   const files = fileSet?.filter;

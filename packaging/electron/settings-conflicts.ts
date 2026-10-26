@@ -13,10 +13,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function errorMessage(body: unknown): unknown {
-  return isRecord(body) && isRecord(body.error)
-    ? body.error.message
-    : undefined;
+function errorMessage(body: unknown): string | undefined {
+  if (!isRecord(body) || !isRecord(body.error)) return undefined;
+  const message = body.error.message;
+  return typeof message === "string" ? message : undefined;
 }
 
 // Preserve the baseline from the load that produced the displayed settings.
@@ -32,7 +32,7 @@ export function createSettingsWriter(
         baselines.set(key, result.expected);
     },
     save(key, value) {
-      const next = (pending.get(key) || Promise.resolve()).then(async () => {
+      const next = (pending.get(key) ?? Promise.resolve()).then(async () => {
         const expected = baselines.get(key);
         if (!expected)
           throw new Error(
@@ -40,9 +40,7 @@ export function createSettingsWriter(
           );
         const body = await put(key, { value, expected });
         if (!isRecord(body) || body.ok !== true)
-          throw new Error(
-            String(errorMessage(body) || "Could not save settings"),
-          );
+          throw new Error(errorMessage(body) || "Could not save settings");
         // An acknowledgment without data cannot advance the baseline.
         const data = body.data;
         if (data === undefined || data === null)

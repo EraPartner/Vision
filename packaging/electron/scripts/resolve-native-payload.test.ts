@@ -8,12 +8,12 @@ import {
   resolveNativePayloadRoot,
 } from "./resolve-native-payload";
 
-test("native smoke defaults to the prepared source payload", () => {
+void test("native smoke defaults to the prepared source payload", () => {
   assert.equal(resolveNativePayloadRoot(undefined), defaultNativePayloadRoot);
   assert.equal(defaultNativePayloadRoot, path.join(appRoot, "native-runtime"));
 });
 
-test("native smoke accepts an absolute packaged payload path", () => {
+void test("native smoke accepts an absolute packaged payload path", () => {
   const packaged = path.join(
     path.parse(process.cwd()).root,
     "Applications",
@@ -22,7 +22,7 @@ test("native smoke accepts an absolute packaged payload path", () => {
   assert.equal(resolveNativePayloadRoot(packaged), path.resolve(packaged));
 });
 
-test("native smoke rejects empty and relative payload overrides", () => {
+void test("native smoke rejects empty and relative payload overrides", () => {
   assert.throws(() => resolveNativePayloadRoot(""), /must be a non-empty path/);
   assert.throws(
     () => resolveNativePayloadRoot("packaging/electron/native-runtime"),

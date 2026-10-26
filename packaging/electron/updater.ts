@@ -177,10 +177,10 @@ function runCommand(
       child.kill("SIGTERM");
       reject(new Error(`${command} timed out`));
     }, timeout);
-    child.stdout?.on("data", (chunk: Buffer) => {
+    child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString();
     });
-    child.stderr?.on("data", (chunk: Buffer) => {
+    child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
     });
     child.once("error", (error) => {
@@ -200,7 +200,7 @@ function runCommand(
       reject(
         new Error(
           stderr.trim() ||
-            `${command} exited ${code === null ? `after ${signal}` : code}`,
+            `${command} exited ${code ?? `after ${signal}`}`,
         ),
       );
     });
@@ -260,27 +260,31 @@ export async function launchPreparedNativeInstaller({
 }
 
 function normalizeVersionTag(version: unknown): string {
-  if (!version) return "";
-  const s = String(version).trim();
+  if (typeof version !== "string" || version === "") return "";
+  const s = version.trim();
   return s.startsWith("v") ? s : `v${s}`;
 }
 
 function compareVersions(a: unknown, b: unknown): number {
   // Split off pre-release suffix (e.g. "1.2.3-rc.1" → ["1.2.3", "rc.1"])
   const splitPre = (v: unknown) => {
-    const s = String(v || "").replace(/^v/, "");
+    const s = (typeof v === "string" ? v : "").replace(/^v/, "");
     const dash = s.indexOf("-");
     if (dash === -1) return { core: s, pre: null };
     return { core: s.slice(0, dash), pre: s.slice(dash + 1) };
   };
   const { core: ca, pre: prea } = splitPre(a);
   const { core: cb, pre: preb } = splitPre(b);
-  const pa = ca.split(".").map((n) => parseInt(n, 10) || 0);
-  const pb = cb.split(".").map((n) => parseInt(n, 10) || 0);
+  const intOrZero = (n: string) => {
+    const parsed = parseInt(n, 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+  const pa = ca.split(".").map(intOrZero);
+  const pb = cb.split(".").map(intOrZero);
   const len = Math.max(pa.length, pb.length);
   for (let i = 0; i < len; i += 1) {
-    const da = pa[i] || 0;
-    const db = pb[i] || 0;
+    const da = pa[i] ?? 0;
+    const db = pb[i] ?? 0;
     if (da > db) return 1;
     if (da < db) return -1;
   }
@@ -378,8 +382,10 @@ function releaseAssets(release: unknown): JsonRecord[] {
 export function pickNativeAppZip(release: unknown): JsonRecord | null {
   return (
     releaseAssets(release).find((asset) =>
-      /^Vision-.*-arm64-mac\.zip$/i.test(String(asset.name || "")),
-    ) || null
+      /^Vision-.*-arm64-mac\.zip$/i.test(
+        typeof asset.name === "string" ? asset.name : "",
+      ),
+    ) ?? null
   );
 }
 
@@ -395,7 +401,7 @@ function openReleasePage(htmlUrl: unknown): string {
       ? htmlUrl
       : fallback;
   try {
-    shell.openExternal(url);
+    void shell.openExternal(url);
   } catch (err) {
     console.warn("Failed to open release page:", errorMessage(err) || err);
   }
@@ -409,8 +415,9 @@ function pickChecksumAsset(
   const wanted = `${zipName}.sha256`.toLowerCase();
   return (
     releaseAssets(release).find(
-      (a) => String(a.name || "").toLowerCase() === wanted,
-    ) || null
+      (a) =>
+        (typeof a.name === "string" ? a.name : "").toLowerCase() === wanted,
+    ) ?? null
   );
 }
 
@@ -485,7 +492,8 @@ async function prepareNativeUpdateInstaller(): Promise<PreparedUpdate> {
   };
   if (!latestVersion || compareVersions(latestVersion, currentVersion) <= 0)
     return { up_to_date: true, ...releaseInfo };
-  if (!app.isPackaged || !asset?.browser_download_url)
+  const zipUrl = asset?.browser_download_url;
+  if (!app.isPackaged || !asset || typeof zipUrl !== "string" || zipUrl === "")
     return { up_to_date: false, manual_download: true, ...releaseInfo };
 
   const assetName = String(asset.name);
@@ -497,14 +505,15 @@ async function prepareNativeUpdateInstaller(): Promise<PreparedUpdate> {
   const extractDir = path.join(tempRoot, "extract");
   fs.mkdirSync(extractDir, { recursive: true });
   try {
-    await downloadToFile(String(asset.browser_download_url), zipPath);
+    await downloadToFile(zipUrl, zipPath);
 
     const checksumAsset = pickChecksumAsset(release, assetName);
-    if (!checksumAsset?.browser_download_url) {
+    const checksumUrl = checksumAsset?.browser_download_url;
+    if (typeof checksumUrl !== "string" || checksumUrl === "") {
       throw new Error("No checksum asset found for the native update");
     }
     const expected = parseSha256Body(
-      await fetchUrlBody(String(checksumAsset.browser_download_url)),
+      await fetchUrlBody(checksumUrl),
       assetName,
     );
     if (!expected) {
@@ -640,7 +649,10 @@ export async function installPreparedShellUpdate(): Promise<ShellUpdateInstallRe
       const message = errorMessage(err);
       return {
         success: false,
-        error: err && message ? String(message) : String(err),
+        error:
+          typeof message === "string" && message !== ""
+            ? message
+            : String(err),
       };
     } finally {
       shellUpdateCheckInFlight = false;
@@ -669,7 +681,7 @@ export async function installPreparedShellUpdate(): Promise<ShellUpdateInstallRe
     try {
       const recheck = await checkForShellUpdate();
       if (
-        recheck?.latest_version &&
+        recheck.latest_version &&
         compareVersions(recheck.latest_version, latestVersion) > 0
       ) {
         pendingShellUpdate = null;
@@ -696,58 +708,63 @@ export async function installPreparedShellUpdate(): Promise<ShellUpdateInstallRe
   }
 }
 
+async function promptForManualShellUpdate(): Promise<void> {
+  try {
+    const update = await checkForShellUpdate();
+    if (update.up_to_date || !update.latest_version) return;
+
+    const { response } = await dialog.showMessageBox({
+      type: "info",
+      buttons: [t("update.download"), t("update.later")],
+      defaultId: 0,
+      cancelId: 1,
+      title: t("update.availableTitle", { app: ctx.APP_NAME }),
+      message: t("update.versionAvailable", {
+        version: update.latest_version,
+      }),
+      detail: t("update.detailDownload"),
+    });
+
+    if (response !== 0) return;
+
+    notify(t("update.downloading"));
+    const prepared = await prepareNativeUpdateInstaller();
+    if ("manual_download" in prepared) {
+      openReleasePage(prepared.html_url);
+      notify(t("update.manualDownload"));
+      return;
+    }
+    if (prepared.up_to_date || !prepared.installerPath) return;
+    pendingShellUpdate = prepared;
+
+    const { response: restartNow } = await dialog.showMessageBox({
+      type: "info",
+      buttons: [t("update.restartNow"), t("update.later")],
+      defaultId: 0,
+      cancelId: 1,
+      title: t("update.readyTitle", { app: ctx.APP_NAME }),
+      message: t("update.versionDownloaded", {
+        version: prepared.latest_version,
+      }),
+      detail: t("update.detailRestart"),
+    });
+
+    if (restartNow === 0) {
+      await installPreparedShellUpdate();
+    }
+  } catch (err) {
+    console.warn(
+      "Manual shell updater failed (non-fatal):",
+      errorMessage(err) || err,
+    );
+  }
+}
+
 export function setupManualShellUpdater(): void {
   // A development run has nothing to install; it updates from its checkout.
   if (!app.isPackaged) return;
-  setTimeout(async () => {
-    try {
-      const update = await checkForShellUpdate();
-      if (update.up_to_date || !update.latest_version) return;
-
-      const { response } = await dialog.showMessageBox({
-        type: "info",
-        buttons: [t("update.download"), t("update.later")],
-        defaultId: 0,
-        cancelId: 1,
-        title: t("update.availableTitle", { app: ctx.APP_NAME }),
-        message: t("update.versionAvailable", {
-          version: update.latest_version,
-        }),
-        detail: t("update.detailDownload"),
-      });
-
-      if (response !== 0) return;
-
-      notify(t("update.downloading"));
-      const prepared = await prepareNativeUpdateInstaller();
-      if ("manual_download" in prepared) {
-        openReleasePage(prepared.html_url);
-        notify(t("update.manualDownload"));
-        return;
-      }
-      if (prepared.up_to_date || !prepared.installerPath) return;
-      pendingShellUpdate = prepared;
-
-      const { response: restartNow } = await dialog.showMessageBox({
-        type: "info",
-        buttons: [t("update.restartNow"), t("update.later")],
-        defaultId: 0,
-        cancelId: 1,
-        title: t("update.readyTitle", { app: ctx.APP_NAME }),
-        message: t("update.versionDownloaded", {
-          version: prepared.latest_version,
-        }),
-        detail: t("update.detailRestart"),
-      });
-
-      if (restartNow === 0) {
-        await installPreparedShellUpdate();
-      }
-    } catch (err) {
-      console.warn(
-        "Manual shell updater failed (non-fatal):",
-        errorMessage(err) || err,
-      );
-    }
-  }, MANUAL_UPDATE_CHECK_DELAY_MS);
+  setTimeout(
+    () => void promptForManualShellUpdate(),
+    MANUAL_UPDATE_CHECK_DELAY_MS,
+  );
 }

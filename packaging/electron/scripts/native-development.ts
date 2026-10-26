@@ -49,10 +49,16 @@ export function waitForExit(child: ExitableChild): Promise<ChildExit> {
   });
 }
 
+// Read through a call: `exitCode` changes while the child shuts down, which a
+// repeated property comparison would not reflect.
+function hasExited(child: ExitableChild): boolean {
+  return child.exitCode !== null;
+}
+
 export async function terminateChild(
   child: ExitableChild | undefined,
 ): Promise<void> {
-  if (!child || child.exitCode !== null) return;
+  if (!child || hasExited(child)) return;
   child.kill("SIGTERM");
   const exited = await new Promise<boolean>((resolve) => {
     const timer = setTimeout(() => resolve(false), 10_000);
@@ -61,7 +67,7 @@ export async function terminateChild(
       resolve(true);
     });
   });
-  if (!exited && child.exitCode === null) child.kill("SIGKILL");
+  if (!exited && !hasExited(child)) child.kill("SIGKILL");
 }
 
 export async function main(): Promise<void> {
@@ -170,7 +176,8 @@ export async function main(): Promise<void> {
       waitForExit(frontend),
       stopSignal,
     ]);
-    if (result.code && result.code !== 0) process.exitCode = result.code;
+    if (result.code !== null && result.code !== 0)
+      process.exitCode = result.code;
   } finally {
     await Promise.all([terminateChild(backend), terminateChild(frontend)]);
     await runtime.stopPostgres();
@@ -185,10 +192,11 @@ if (require.main === module) {
 }
 
 function errorMessage(error: unknown): string {
-  return error &&
-    typeof error === "object" &&
+  return typeof error === "object" &&
+    error !== null &&
     "message" in error &&
-    error.message
-    ? String(error.message)
+    typeof error.message === "string" &&
+    error.message !== ""
+    ? error.message
     : String(error);
 }
