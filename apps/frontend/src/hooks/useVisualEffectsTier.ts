@@ -30,3 +30,25 @@ export function useVisualEffectsTier(): { tier: VisualEffectsTier; largeDisplay:
 export function useFullEffects(): boolean {
     return useSettingsStore((s) => s.appSettings.fullEffects);
 }
+
+/**
+ * Whether `<html data-fx-variant>` names `name`. Set only by the Mac
+ * measurement script (scripts/mac-baseline.ts --variant) to try a change
+ * before it ships; never set in normal use.
+ */
+export function useFxVariant(name: string): boolean {
+    const [active, setActive] = useState(() => hasFxVariant(name));
+    useEffect(() => {
+        const root = document.documentElement;
+        const update = () => setActive(hasFxVariant(name));
+        update();
+        const observer = new MutationObserver(update);
+        observer.observe(root, { attributes: true, attributeFilter: ['data-fx-variant'] });
+        return () => observer.disconnect();
+    }, [name]);
+    return active;
+}
+
+function hasFxVariant(name: string): boolean {
+    return (document.documentElement.dataset.fxVariant ?? '').split(/\s+/).includes(name);
+}

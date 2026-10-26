@@ -56,7 +56,8 @@ Results land in `perf-results/<timestamp>/` (git-ignored): `results.json`, `summ
 `powermetrics.jsonl`, `traces/*.json.gz` (open in Perfetto or Chrome DevTools) and app logs.
 `bun scripts/mac-baseline.ts --help` lists the options (`--app`, `--tiers`, `--idle`,
 `--sustained`, `--cooldown`, `--pages`, `--full-effects`, `--repeat`, `--no-powermetrics`,
-`--no-trace`, `--launch-probe`, `--background`, `--leak`, `--leak-window`).
+`--no-trace`, `--idle-trace`, `--variant`, `--variants-only-idle`, `--launch-probe`,
+`--background`, `--leak`, `--leak-window`).
 
 ## Idle renderer work and background windows
 
@@ -117,6 +118,22 @@ over all combinations. The summary opens with a headline table per app and tier:
 min–max per switch state, the change of the medians, and "beyond noise" only when the off and on
 ranges do not overlap (at least two runs per side). Later phases use the same rule before they
 claim a win.
+
+## Variants (phase D, ADR-255)
+
+`--variant <name>=<file>` (repeatable) adds a variant axis next to tier and switch: after launch
+the script sets `<html data-fx-variant="<name>">` and injects the file (`.css` as a style element,
+`.js` evaluated), then measures. `base` (no injection) is always measured. Relative files resolve
+from the working directory, then `scripts/mac-baseline-variants/`: `drift-10/20/30/60` (aurora
+cadence with Full effects), `glass-blur` (the pre-ADR-255 card and sidebar blur), `no-hover-fade`
+and `shader-standard` (WebGL aurora on standard; pair with `--tiers standard`).
+`--variants-only-idle` runs only the idle window for variant runs. The summary adds a
+"Variants vs base" table with the same beyond-noise rule.
+
+Every run now also reports the idle frame rate (presented frames per second from a 10 s trace at
+the end of the idle window; on by default, `--no-trace` skips it unless `--idle-trace` is given)
+and a glass census (`glass area %` and `glass surfaces`: elements with a backdrop filter, clipped
+to the viewport; nested surfaces add up, so area can exceed 100%).
 
 > [!warning] Side effects
 > Each app is launched once per tier plus once for setup. If backup-on-quit is enabled, every

@@ -13,6 +13,9 @@ export type AuroraDrawMode = 'loop' | 'static' | 'stopped';
  *   is already correct when the window is shown again.
  * - `stopped` while the window is blurred / the tab hidden: the last
  *   rendered frame stays on screen (mirrors fx-idle-atmosphere).
+ * - `stopped` while a modal is open (mirrors fx-modal-open): the overlay
+ *   covers the window, and a still backdrop lets every glass surface and
+ *   the frosted overlay blur once instead of on every frame.
  * - `loop` otherwise: animate at the capped frame rate.
  */
 export function resolveAuroraMode(state: {
@@ -21,9 +24,10 @@ export function resolveAuroraMode(state: {
     staticAtmosphere: boolean;
     hidden: boolean;
     focused: boolean;
+    modalOpen: boolean;
 }): AuroraDrawMode {
     if (state.contextLost) return 'stopped';
     if (state.reducedMotion || state.staticAtmosphere) return 'static';
-    if (state.hidden || !state.focused) return 'stopped';
+    if (state.hidden || !state.focused || state.modalOpen) return 'stopped';
     return 'loop';
 }

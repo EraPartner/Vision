@@ -23,6 +23,11 @@ import { useFullEffects, useVisualEffectsTier } from '@/hooks/useVisualEffectsTi
  *   moving backdrop defeats the compositor's blur cache — GPU burned while
  *   nobody is looking. Relevant for the always-open Electron window; rAF's
  *   implicit pause only covers fully hidden tabs, not unfocused windows.
+ * - `fx-modal-open` — a dialog, alert dialog or sheet is mounted (its
+ *   `.modal-overlay` is in the document): the aurora drift is paused too, so
+ *   the overlay and the glass behind it blur once instead of on every drift
+ *   step. Radix portals mount and unmount as direct children of <body>, so
+ *   watching body's child list (not the subtree) catches every open/close.
  */
 export function VisualEffectsController() {
     const { tier, largeDisplay } = useVisualEffectsTier();
@@ -60,6 +65,20 @@ export function VisualEffectsController() {
             window.removeEventListener('blur', update);
             document.removeEventListener('visibilitychange', update);
             root.classList.remove('fx-idle-atmosphere');
+        };
+    }, []);
+
+    useEffect(() => {
+        const root = document.documentElement;
+        const update = () => {
+            root.classList.toggle('fx-modal-open', document.querySelector('.modal-overlay') !== null);
+        };
+        update();
+        const observer = new MutationObserver(update);
+        observer.observe(document.body, { childList: true });
+        return () => {
+            observer.disconnect();
+            root.classList.remove('fx-modal-open');
         };
     }, []);
 

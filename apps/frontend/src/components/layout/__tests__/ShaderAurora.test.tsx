@@ -10,7 +10,7 @@ import { must } from "@/test/must";
 // across staticAtmosphere transitions arriving after a failed init.
 describe("ShaderAurora — WebGL-unavailable fallback path", () => {
     it("renders the canvas and survives init without a WebGL context", () => {
-        const { container } = render(<ShaderAurora staticAtmosphere={false} />);
+        const { container } = render(<ShaderAurora staticAtmosphere={false} blobDrift={false} />);
         const canvas = container.querySelector("canvas");
         expect(canvas).not.toBeNull();
         expect(must(canvas).getAttribute("aria-hidden")).toBe("true");
@@ -18,15 +18,15 @@ describe("ShaderAurora — WebGL-unavailable fallback path", () => {
     });
 
     it("ignores staticAtmosphere toggles when the context failed (blobs are the fallback)", () => {
-        const { rerender } = render(<ShaderAurora staticAtmosphere={false} />);
+        const { rerender } = render(<ShaderAurora staticAtmosphere={false} blobDrift={false} />);
         expect(() => {
-            rerender(<ShaderAurora staticAtmosphere={true} />);
-            rerender(<ShaderAurora staticAtmosphere={false} />);
+            rerender(<ShaderAurora staticAtmosphere={true} blobDrift={false} />);
+            rerender(<ShaderAurora staticAtmosphere={false} blobDrift={false} />);
         }).not.toThrow();
     });
 
     it("unmounts cleanly", () => {
-        const { unmount } = render(<ShaderAurora staticAtmosphere={true} />);
+        const { unmount } = render(<ShaderAurora staticAtmosphere={true} blobDrift={false} />);
         expect(() => unmount()).not.toThrow();
         expect(document.documentElement).not.toHaveClass("fx-webgl-live");
     });
@@ -64,7 +64,7 @@ describe("ShaderAurora live accessibility preference", () => {
         vi.stubGlobal("matchMedia", () => media);
         vi.stubGlobal("requestAnimationFrame", frames);
         vi.stubGlobal("cancelAnimationFrame", cancel);
-        const { unmount } = render(<ShaderAurora staticAtmosphere={false} />);
+        const { unmount } = render(<ShaderAurora staticAtmosphere={false} blobDrift={false} />);
         expect(frames).toHaveBeenCalledOnce();
         act(() => {
             media.matches = true;

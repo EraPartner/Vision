@@ -53,6 +53,9 @@ export type { Column };
 
 export type SortDirection = "asc" | "desc" | null;
 
+/** Quiet period after the last scroll event before row hover resumes. */
+const SCROLLING_IDLE_MS = 120;
+
 /**
  * Minimum trimmed length before a server-mode search is forwarded to
  * `search.onChange`. Below this the table forwards "" so the list shows
@@ -1076,6 +1079,28 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     // loop — the header has no onScroll handler writing back.
     const headerScrollRef = useRef<HTMLDivElement>(null);
     const loadRequestedForLengthRef = useRef<number | null>(null);
+    // `data-scrolling` is toggled straight on the scroll container (no React
+    // state) so rows stop entering :hover mid-scroll without a re-render per
+    // scroll event; it clears SCROLLING_IDLE_MS after the last scroll event.
+    const scrollIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null,
+    );
+    const markScrolling = useCallback((el: HTMLElement) => {
+        el.setAttribute("data-scrolling", "");
+        if (scrollIdleTimerRef.current !== null)
+            clearTimeout(scrollIdleTimerRef.current);
+        scrollIdleTimerRef.current = setTimeout(() => {
+            scrollIdleTimerRef.current = null;
+            el.removeAttribute("data-scrolling");
+        }, SCROLLING_IDLE_MS);
+    }, []);
+    useEffect(
+        () => () => {
+            if (scrollIdleTimerRef.current !== null)
+                clearTimeout(scrollIdleTimerRef.current);
+        },
+        [],
+    );
     const virtualizer = useVirtualizer({
         count: processedRows.length,
         getScrollElement: () => parentRef.current,
@@ -1661,10 +1686,11 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                 {/* Virtualised scrollable body */}
                 <div
                     ref={parentRef}
-                    className="overflow-auto overscroll-x-contain"
+                    className="overflow-auto overscroll-x-contain [&[data-scrolling]_[role=row]]:pointer-events-none"
                     style={{ maxHeight: `${maxHeight}px` }}
                     role="rowgroup"
                     onScroll={(e) => {
+                        markScrolling(e.currentTarget);
                         rememberTableScroll(
                             historyScrollKey,
                             e.currentTarget.scrollTop,

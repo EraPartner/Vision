@@ -87,7 +87,7 @@ function computePosition({ anchorX, anchorY, tw, th, vw, vh }: PositionInput): {
     return { x, y };
 }
 
-// Static style for the always-mounted positioner div. left/top/visibility are
+// Static style for the always-mounted positioner div. transform/visibility are
 // written imperatively in applyPosition(); React never renders a different
 // value for them, so its prop diffing never overwrites those writes.
 const POSITIONER_STYLE: CSSProperties = {
@@ -146,8 +146,9 @@ export function ChartTooltip({
             vh: window.innerHeight,
         });
 
-        tip.style.left = `${next.x}px`;
-        tip.style.top = `${next.y}px`;
+        // transform, not left/top: moving with the pointer, this must not
+        // relayout per frame (the positioner stays pinned at 0,0).
+        tip.style.transform = `translate(${next.x}px, ${next.y}px)`;
         tip.style.visibility = "visible";
     }, []);
 

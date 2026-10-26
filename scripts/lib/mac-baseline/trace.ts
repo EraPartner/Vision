@@ -79,6 +79,33 @@ const WRAPPER_EVENTS = new Set([
 const THREADS_OF_INTEREST =
   /^(CrBrowserMain|CrRendererMain|Compositor|CrGpuMain|VizCompositorThread)$/;
 
+export interface PresentedFps {
+  fps: number;
+  presentedFrames: number;
+  seconds: number;
+}
+
+/**
+ * Presented frames per second of one traced window, from the PipelineReporter
+ * counts: STATE_PRESENTED_ALL plus STATE_PRESENTED_PARTIAL. Several processes
+ * can report the same frame, so the busiest single process is used instead of
+ * the sum.
+ */
+export function presentedFps(summary: TraceSegmentSummary): PresentedFps {
+  let presentedFrames = 0;
+  for (const states of Object.values(summary.frameStates)) {
+    const presented =
+      (states.STATE_PRESENTED_ALL ?? 0) + (states.STATE_PRESENTED_PARTIAL ?? 0);
+    presentedFrames = Math.max(presentedFrames, presented);
+  }
+  const seconds = summary.durationMs / 1000;
+  return {
+    fps: seconds > 0 ? Math.round((presentedFrames / seconds) * 10) / 10 : 0,
+    presentedFrames,
+    seconds,
+  };
+}
+
 export function summarizeTrace(
   events: readonly TraceEvent[],
   window?: { start: number; end: number },

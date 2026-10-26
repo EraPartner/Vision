@@ -123,102 +123,110 @@ export function StatCard({
         <Card
             variant={to ? "interactive" : "static"}
             className={cn(
-                "relative overflow-hidden h-full",
+                "relative h-full",
                 emphasis === "primary" && "glass-elevated border-primary/25",
                 className,
             )}
         >
-            {to && (
-                <AppLink
-                    to={to}
-                    aria-label={title}
-                    className="absolute inset-0 z-10 rounded-[inherit] focus-ring"
-                />
-            )}
-            <div className={cn(to && "pointer-events-none relative z-20")}>
-                <CardHeader className={statHeaderVariants({ size })}>
-                    <CardTitle variant="label">{title}</CardTitle>
-                    {Icon && (
-                        <div
-                            className={cn(
-                                statChipVariants({ size }),
-                                "text-label-tertiary",
-                            )}
-                        >
-                            <Icon
-                                aria-hidden="true"
-                                className={
-                                    size === "compact"
-                                        ? "h-3.5 w-3.5"
-                                        : "h-4 w-4"
-                                }
-                            />
-                        </div>
-                    )}
-                </CardHeader>
-                <CardContent className={statContentVariants({ size })}>
-                    {/* aria-busy, not role="status": stat cards come in rows of
+            <div className="relative h-full overflow-hidden rounded-[inherit]">
+                {to && (
+                    <AppLink
+                        to={to}
+                        aria-label={title}
+                        className="absolute inset-0 z-10 rounded-[inherit] focus-ring"
+                    />
+                )}
+                <div className={cn(to && "pointer-events-none relative z-20")}>
+                    <CardHeader className={statHeaderVariants({ size })}>
+                        <CardTitle variant="label">{title}</CardTitle>
+                        {Icon && (
+                            <div
+                                className={cn(
+                                    statChipVariants({ size }),
+                                    "text-label-tertiary",
+                                )}
+                            >
+                                <Icon
+                                    aria-hidden="true"
+                                    className={
+                                        size === "compact"
+                                            ? "h-3.5 w-3.5"
+                                            : "h-4 w-4"
+                                    }
+                                />
+                            </div>
+                        )}
+                    </CardHeader>
+                    <CardContent className={statContentVariants({ size })}>
+                        {/* aria-busy, not role="status": stat cards come in rows of
                     four that all flip to `loading` together, and one live
                     region per card would announce "Loading" four times. The
                     page's stat grid carries the useLoadingSurfaceProps()
                     props and announces
                     once for the row. */}
-                    <div
-                        aria-busy={loading || undefined}
-                        className={cn(
-                            statValueVariants({ size }),
-                            valueClassName,
-                        )}
-                    >
-                        {loading ? (
-                            <Skeleton
-                                className={
-                                    size === "compact" ? "h-6 w-20" : "h-9 w-28"
-                                }
-                            />
-                        ) : (
-                            <CompactValueDisclosure
-                                fullValue={titleValue}
-                                className={
-                                    to ? "pointer-events-auto" : undefined
-                                }
-                                display={
-                                    typeof displayValue === "string" &&
-                                    odometer ? (
-                                        <RollingNumber value={displayValue} />
-                                    ) : (
-                                        displayValue
-                                    )
-                                }
-                            />
-                        )}
-                    </div>
-                    {change && (
-                        <div className={size === "compact" ? "mt-1" : "mt-2"}>
-                            <DeltaPill
-                                value={
-                                    changeType === "positive"
-                                        ? 1
-                                        : changeType === "negative"
-                                          ? -1
-                                          : 0
-                                }
-                                label={change}
-                            />
-                        </div>
-                    )}
-                    {Boolean(subtitle) && (
-                        <p
+                        <div
+                            aria-busy={loading || undefined}
                             className={cn(
-                                "type-footnote text-label-secondary",
-                                size === "compact" ? "mt-0.5" : "mt-2",
+                                statValueVariants({ size }),
+                                valueClassName,
                             )}
                         >
-                            {subtitle}
-                        </p>
-                    )}
-                    {children}
-                </CardContent>
+                            {loading ? (
+                                <Skeleton
+                                    className={
+                                        size === "compact"
+                                            ? "h-6 w-20"
+                                            : "h-9 w-28"
+                                    }
+                                />
+                            ) : (
+                                <CompactValueDisclosure
+                                    fullValue={titleValue}
+                                    className={
+                                        to ? "pointer-events-auto" : undefined
+                                    }
+                                    display={
+                                        typeof displayValue === "string" &&
+                                        odometer ? (
+                                            <RollingNumber
+                                                value={displayValue}
+                                            />
+                                        ) : (
+                                            displayValue
+                                        )
+                                    }
+                                />
+                            )}
+                        </div>
+                        {change && (
+                            <div
+                                className={size === "compact" ? "mt-1" : "mt-2"}
+                            >
+                                <DeltaPill
+                                    value={
+                                        changeType === "positive"
+                                            ? 1
+                                            : changeType === "negative"
+                                              ? -1
+                                              : 0
+                                    }
+                                    label={change}
+                                />
+                            </div>
+                        )}
+                        {Boolean(subtitle) && (
+                            <p
+                                className={cn(
+                                    "type-footnote text-label-secondary",
+                                    size === "compact" ? "mt-0.5" : "mt-2",
+                                )}
+                            >
+                                {subtitle}
+                            </p>
+                        )}
+                        {children}
+                    </CardContent>
+                </div>
             </div>
         </Card>
     );

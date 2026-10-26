@@ -40,7 +40,11 @@ import {
     useSectionCycleShortcuts,
 } from "@/hooks/useGoToShortcuts";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { useVisualEffectsTier } from "@/hooks/useVisualEffectsTier";
+import {
+    useFullEffects,
+    useFxVariant,
+    useVisualEffectsTier,
+} from "@/hooks/useVisualEffectsTier";
 import { consumeUndo } from "@/lib/undo";
 import { isShortcutSafeTarget, isTypingTarget } from "@/lib/keyboard";
 import { readSidebarCollapsed } from "@/hooks/useSidebarPreferences";
@@ -175,6 +179,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     }, [openSettingsOnTab, navigate]);
     const { t } = useLanguage();
     const { tier: effectsTier, largeDisplay } = useVisualEffectsTier();
+    const fullEffects = useFullEffects();
+    // Measurement only (scripts/mac-baseline.ts --variant shader-standard):
+    // tries the WebGL aurora on the standard tier before deciding whether it
+    // should ship there (phase D, Tor 2026-10-26).
+    const shaderOnStandard = useFxVariant("shader-standard");
+    const shaderAurora =
+        effectsTier === "enhanced" ||
+        (effectsTier === "standard" && shaderOnStandard);
     useGoToShortcuts();
     useSectionCycleShortcuts();
     useDocumentTitle();
@@ -261,10 +273,17 @@ export function AppLayout({ children }: AppLayoutProps) {
                     >
                         {/* staticAtmosphere mirrors VisualEffectsController's
                         fx-static-atmosphere (largeDisplay && tier !== 'reduced'):
-                        while ShaderAurora is mounted, tier is 'enhanced', so
-                        largeDisplay alone is exactly that condition (ADR-075). */}
-                        {effectsTier === "enhanced" && (
-                            <ShaderAurora staticAtmosphere={largeDisplay} />
+                        while ShaderAurora is mounted, tier is never 'reduced',
+                        so largeDisplay alone is exactly that condition
+                        (ADR-075). blobDrift mirrors the CSS blobs: they drift
+                        on standard, and on enhanced only with Full effects. */}
+                        {shaderAurora && (
+                            <ShaderAurora
+                                staticAtmosphere={largeDisplay}
+                                blobDrift={
+                                    fullEffects || effectsTier !== "enhanced"
+                                }
+                            />
                         )}
                         <div className="liquid-canvas-grain" />
                     </div>

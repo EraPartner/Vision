@@ -7,6 +7,7 @@ const base = {
     staticAtmosphere: false,
     hidden: false,
     focused: true,
+    modalOpen: false,
 };
 
 describe('resolveAuroraMode', () => {
@@ -29,6 +30,14 @@ describe('resolveAuroraMode', () => {
 
     it('stops (keeping the last frame) when the window is blurred', () => {
         expect(resolveAuroraMode({ ...base, focused: false })).toBe('stopped');
+    });
+
+    it('stops (keeping the last frame) while a modal is open', () => {
+        expect(resolveAuroraMode({ ...base, modalOpen: true })).toBe('stopped');
+    });
+
+    it('static outranks the modal pause', () => {
+        expect(resolveAuroraMode({ ...base, staticAtmosphere: true, modalOpen: true })).toBe('static');
     });
 
     it('stops when the document is hidden', () => {

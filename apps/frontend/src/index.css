@@ -443,6 +443,42 @@
             backdrop-filter: blur(var(--glass-elevated-blur))
                 saturate(var(--glass-saturate));
         }
+
+        /* Cards and the desktop sidebar rail only ever sit over the canvas:
+           soft aurora gradients, a wash and faint grain. Blurring that by
+           12-32px returns the same gradients (grain shows through the
+           0.55-0.9 alpha fills at about 2/255), so what the eye reads as the
+           material is the saturate lift and the fill. Saturate alone is a
+           single colour pass instead of downsample, blur and upsample passes
+           on every frame the backdrop moves (phase D, 2026-10-26). Surfaces
+           that sit over content keep their blur: top bar, dialogs, popovers,
+           tooltips, sheets (incl. the mobile sidebar), the chat composer and
+           sticky table parts. Declared after the materials above so it wins
+           at equal specificity; gated so prefers-reduced-transparency's
+           `none` below still applies. */
+        @media (prefers-reduced-transparency: no-preference) {
+            .card-material {
+                -webkit-backdrop-filter: saturate(var(--glass-saturate));
+                backdrop-filter: saturate(var(--glass-saturate));
+            }
+
+            /* The desktop rail stacked two glass-chrome layers with the same
+               bounds (the fixed .app-sidebar wrapper and the inner
+               data-sidebar panel), so it filtered twice. One pass on the
+               wrapper applies saturate twice (the CSS saturate matrices
+               compose exactly: S(a)S(b) = S(ab)); both fills stay. */
+            .app-sidebar.glass-chrome {
+                -webkit-backdrop-filter: saturate(var(--glass-saturate))
+                    saturate(var(--glass-saturate));
+                backdrop-filter: saturate(var(--glass-saturate))
+                    saturate(var(--glass-saturate));
+            }
+
+            .app-sidebar.glass-chrome [data-sidebar="sidebar"].glass-chrome {
+                -webkit-backdrop-filter: none;
+                backdrop-filter: none;
+            }
+        }
     }
 
     /* ------------------------------------------------------------------
@@ -636,6 +672,9 @@
         inset: 0;
         z-index: -1;
         overflow: hidden;
+        /* Its own layer, its own paint and layout: nothing inside can widen
+           the damage region the drift produces. */
+        contain: strict;
         pointer-events: none;
         background: radial-gradient(
             120rem 60rem at 70% -20%,
@@ -652,34 +691,40 @@
         will-change: transform;
     }
 
-    /* Emerald aurora — upper left, drifts right and breathes */
+    /* Emerald aurora — upper left, drifts right and breathes.
+       Geometry: a max(55vw, 34rem) square at top -18% / left -12% whose
+       radial gradient fades out at 72% of its radius. The box is cut down to
+       that visible 72% around the same centre (and the gradient stretched to
+       100%), so the pixels are identical but every drift frame damages half
+       the area — glass surfaces outside it need no re-blur. ShaderAurora
+       draws the same geometry on the WebGL path; keep the two in sync. */
     .liquid-canvas::before {
-        width: 55vw;
-        height: 55vw;
-        min-width: 34rem;
-        min-height: 34rem;
-        top: -18%;
-        left: -12%;
+        --blob-side: max(55vw, 34rem);
+        width: calc(var(--blob-side) * 0.72);
+        height: calc(var(--blob-side) * 0.72);
+        top: calc(-18% + var(--blob-side) * 0.14);
+        left: calc(-12% + var(--blob-side) * 0.14);
         background: radial-gradient(
             closest-side,
             hsl(var(--primary) / var(--aurora-primary-alpha)),
-            transparent 72%
+            transparent 100%
         );
         animation: aurora-drift-a 64s steps(40) infinite alternate;
     }
 
-    /* Champagne aurora — lower right, counter-drifts */
+    /* Champagne aurora — lower right, counter-drifts. A max(48vw, 30rem)
+       square at bottom -22% / right -10%, cut to its visible 72% like the
+       emerald one. */
     .liquid-canvas::after {
-        width: 48vw;
-        height: 48vw;
-        min-width: 30rem;
-        min-height: 30rem;
-        bottom: -22%;
-        right: -10%;
+        --blob-side: max(48vw, 30rem);
+        width: calc(var(--blob-side) * 0.72);
+        height: calc(var(--blob-side) * 0.72);
+        bottom: calc(-22% + var(--blob-side) * 0.14);
+        right: calc(-10% + var(--blob-side) * 0.14);
         background: radial-gradient(
             closest-side,
             hsl(var(--accent) / var(--aurora-accent-alpha)),
-            transparent 72%
+            transparent 100%
         );
         animation: aurora-drift-b 76s steps(40) infinite alternate;
     }
@@ -743,7 +788,7 @@
         background: radial-gradient(
             closest-side,
             hsl(var(--accent) / var(--aurora-primary-alpha)),
-            transparent 72%
+            transparent 100%
         );
     }
 
@@ -751,15 +796,18 @@
         background: radial-gradient(
             closest-side,
             hsl(var(--primary) / var(--aurora-accent-alpha)),
-            transparent 72%
+            transparent 100%
         );
     }
 
-    /* Enhanced mode draws the live WebGL aurora. Keep the CSS blobs as a
-       static fallback layer, but stop their second independent animator. */
+    /* While the WebGL aurora is live it draws the blobs itself, in the same
+       frame as its noise, so the two never animate out of step. The CSS blob
+       layers are dropped (content: none removes the pseudo-elements and their
+       compositor layers); they come back as the fallback the moment the
+       context is lost and ShaderAurora removes fx-webgl-live. */
     :root.fx-webgl-live .liquid-canvas::before,
     :root.fx-webgl-live .liquid-canvas::after {
-        animation: none;
+        content: none;
     }
 
     /* Film grain — tactile richness over the gradients */
@@ -1547,6 +1595,16 @@
         animation-play-state: paused;
     }
 
+    /* A modal is open (fx-modal-open, VisualEffectsController): the window is
+       covered by the overlay, so hold the drift too. With nothing moving
+       behind it, the overlay and every glass surface blur once and the
+       compositor reuses the result until the modal closes, instead of
+       re-blurring the whole window on every drift step. */
+    :root.fx-modal-open .liquid-canvas::before,
+    :root.fx-modal-open .liquid-canvas::after {
+        animation-play-state: paused;
+    }
+
     /* ------------------------------------------------------------------
      * "Full effects" switch (AppSettings.fullEffects -> :root.fx-full, set by
      * VisualEffectsController). Off by default.
@@ -1560,45 +1618,18 @@
      * useFullEffects.
      * ------------------------------------------------------------------ */
 
-    /* Continuous aurora drift (#329 stepped it to 100ms steps), also under
-       the live WebGL aurora (21775a26 froze the blobs there). Longhands, so
-       the idle pause's animation-play-state still applies; :not() keeps the
-       large-display freeze. */
+    /* Smooth aurora drift (#329 stepped it to 100ms steps): the same sampled
+       keyframes on a 33ms grid, i.e. 30 changes a second instead of 10.
+       At <=15px/s that is <=0.5px per step on a soft gradient, which reads
+       as continuous; drawing on every vsync instead re-blurred every glass
+       surface 60 times a second at rest (phase D, 2026-10-26). Longhands, so
+       the idle and modal pauses' animation-play-state still applies; :not()
+       keeps the large-display freeze. Under the live WebGL aurora the shader
+       draws the blobs (see fx-webgl-live above). */
     @media (prefers-reduced-motion: no-preference) {
-        :root.fx-full:not(.fx-static-atmosphere) .liquid-canvas::before {
-            animation-name: aurora-drift-a-smooth;
-            animation-duration: 64s;
-            animation-timing-function: var(--ease-in-out-quart);
-            animation-iteration-count: infinite;
-            animation-direction: alternate;
-        }
-
+        :root.fx-full:not(.fx-static-atmosphere) .liquid-canvas::before,
         :root.fx-full:not(.fx-static-atmosphere) .liquid-canvas::after {
-            animation-name: aurora-drift-b-smooth;
-            animation-duration: 76s;
-            animation-timing-function: var(--ease-in-out-quart);
-            animation-iteration-count: infinite;
-            animation-direction: alternate;
-        }
-    }
-
-    @keyframes aurora-drift-a-smooth {
-        from {
-            transform: translate3d(0, 0, 0) scale(1);
-        }
-
-        to {
-            transform: translate3d(14vw, 9vh, 0) scale(1.18);
-        }
-    }
-
-    @keyframes aurora-drift-b-smooth {
-        from {
-            transform: translate3d(0, 0, 0) scale(1.12);
-        }
-
-        to {
-            transform: translate3d(-11vw, -7vh, 0) scale(0.96);
+            animation-timing-function: steps(120);
         }
     }
 
@@ -1643,43 +1674,49 @@
         backdrop-filter: none;
     }
 
-    /* Dark-mode double halo on every heading and all canvas text (21775a26
-       narrowed it to a single 8px halo on the PageHeader title/subtitle). */
+    /* Dark-mode double halo on every heading (21775a26 narrowed it to a
+       single 8px halo on the PageHeader title/subtitle). Body and secondary
+       text on the canvas keeps the single 8px halo: the wide 14px pass on
+       every nested span/div was most of the raster cost and adds little
+       legibility at body sizes (phase D sweet spot). */
     .dark.fx-full h1,
     .dark.fx-full h2,
     .dark.fx-full h3,
     .dark.fx-full .font-display,
-    .dark.fx-full .canvas-text,
-    .dark.fx-full .canvas-text :is(h1, h2, h3, p, span, div) {
+    .dark.fx-full .canvas-text :is(h1, h2, h3) {
         text-shadow:
             0 1px 2px hsl(var(--background) / 0.6),
             0 2px 14px hsl(var(--background) / 0.45);
     }
 
-    /* Animated hover shadow and border on interactive cards (8461b2c0
-       replaced it with a pre-rendered ::after opacity fade). The shadow sits
-       on the card itself again, so overflow-hidden cards show it too. The
-       former --ease-out-quint token no longer exists; --ease-glide is the
-       current card curve. */
+    .dark.fx-full .canvas-text,
+    .dark.fx-full .canvas-text :is(p, span, div) {
+        text-shadow: 0 2px 8px hsl(var(--background) / 0.55);
+    }
+
+    /* Animated hover border and highlight on interactive cards (8461b2c0
+       replaced them with a pre-rendered ::after opacity fade). The border
+       fades again; the inset highlight joins the outer shadow on the
+       pre-rendered ::after, so the shadow still fades by opacity alone
+       instead of repainting the card's box-shadow on every frame of the
+       260ms hover. Overflow-clipping cards clip an inner wrapper, not the
+       card, so the ::after shadow shows on them too. The former
+       --ease-out-quint token no longer exists; --ease-glide is the current
+       card curve. */
     :root.fx-full .premium-frame.premium-frame-interactive {
         transition:
             border-color var(--duration-normal) var(--ease-glide),
-            box-shadow var(--duration-normal) var(--ease-glide),
             translate var(--duration-fast) var(--ease-glide),
             transform var(--duration-press) ease-out;
     }
 
     :root.fx-full .premium-frame-interactive::after {
-        content: none;
-    }
-
-    :root.fx-full .premium-frame-interactive:hover {
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.22) inset,
             0 12px 30px hsl(var(--glass-shadow) / 0.1);
     }
 
-    :root.fx-full.dark .premium-frame-interactive:hover {
+    :root.fx-full.dark .premium-frame-interactive::after {
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.12) inset,
             0 18px 40px hsl(var(--glass-shadow) / 0.48);

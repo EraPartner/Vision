@@ -270,62 +270,63 @@ export function BankBalancesWidget() {
     return (
         <div className="space-y-4">
             {/* Total Net Position Card */}
-            <Card
-                variant="interactive"
-                className="group relative overflow-hidden"
-            >
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                    <CardTitle variant="label">
-                        {t("bankWidget.netPosition")}
-                    </CardTitle>
-                    <Wallet
-                        aria-hidden="true"
-                        className="h-5 w-5 text-label-secondary"
-                    />
-                </CardHeader>
-                <CardContent>
-                    <div className="type-title-1 tabular-nums text-foreground">
-                        {(() => {
-                            const r = formatCurrencyCompact(
-                                total_net_position,
-                                defaultCurrency,
-                                locale,
-                                appSettings.showDecimalPlaces,
-                            );
-                            return (
-                                <CompactValueDisclosure
-                                    display={r.display}
-                                    fullValue={r.isCompact ? r.full : undefined}
-                                />
-                            );
-                        })()}
-                    </div>
-                    <p
-                        className={cn(
-                            "mt-2 flex items-center gap-1 type-footnote font-medium",
-                            isPositive ? "text-gain" : "text-loss",
-                        )}
-                    >
-                        {isPositive ? (
-                            <TrendingUp className="h-3 w-3" />
-                        ) : (
-                            <TrendingDown className="h-3 w-3" />
-                        )}
-                        {/* The count MUST describe the population summed into the
+            <Card variant="interactive" className="group relative">
+                <div className="overflow-hidden rounded-[inherit]">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                        <CardTitle variant="label">
+                            {t("bankWidget.netPosition")}
+                        </CardTitle>
+                        <Wallet
+                            aria-hidden="true"
+                            className="h-5 w-5 text-label-secondary"
+                        />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="type-title-1 tabular-nums text-foreground">
+                            {(() => {
+                                const r = formatCurrencyCompact(
+                                    total_net_position,
+                                    defaultCurrency,
+                                    locale,
+                                    appSettings.showDecimalPlaces,
+                                );
+                                return (
+                                    <CompactValueDisclosure
+                                        display={r.display}
+                                        fullValue={
+                                            r.isCompact ? r.full : undefined
+                                        }
+                                    />
+                                );
+                            })()}
+                        </div>
+                        <p
+                            className={cn(
+                                "mt-2 flex items-center gap-1 type-footnote font-medium",
+                                isPositive ? "text-gain" : "text-loss",
+                            )}
+                        >
+                            {isPositive ? (
+                                <TrendingUp className="h-3 w-3" />
+                            ) : (
+                                <TrendingDown className="h-3 w-3" />
+                            )}
+                            {/* The count MUST describe the population summed into the
                             total right above it (§3 F3). `total_net_position` is
                             the sum over exactly `data.accounts` (server-side:
                             non-liability, in_net_worth, with ledger activity), so
                             the count is that array's length — NOT the balance
                             cards below, which are a differently gated
                             (active-only, non-zero-balance) entity population. */}
-                        {tc("bankWidget.acrossAccounts", accounts.length)}
-                    </p>
-                    {data.unconverted_count > 0 && (
-                        <p className="mt-1 type-footnote text-warning">
-                            {t("accounts.totalIncomplete")}
+                            {tc("bankWidget.acrossAccounts", accounts.length)}
                         </p>
-                    )}
-                </CardContent>
+                        {data.unconverted_count > 0 && (
+                            <p className="mt-1 type-footnote text-warning">
+                                {t("accounts.totalIncomplete")}
+                            </p>
+                        )}
+                    </CardContent>
+                </div>
             </Card>
 
             {/* Per-Account Balance Cards — driven by the account entity; the

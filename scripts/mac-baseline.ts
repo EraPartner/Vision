@@ -12,6 +12,16 @@
  * app's own settings API, measured after a fresh launch, and the original
  * setting is restored at the end. --repeat measures every combination several
  * times so later phases can tell a win from run-to-run noise.
+ *
+ * --variant <name>=<file> adds an experiment axis next to the tier and Full
+ * effects switch: after each launch the runner sets
+ * document.documentElement.dataset.fxVariant and injects the .css (a <style>
+ * element) or runs the .js over the DevTools protocol, so a CSS or script idea
+ * can be measured against an unmodified "base" run in the same repeat loop.
+ * Ready-made variants live in scripts/mac-baseline-variants/. Every idle
+ * window also reports presented frames per second (from a short Chromium
+ * trace, since requestAnimationFrame runs whether or not frames are composited)
+ * and a census of backdrop-filter surfaces.
  */
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
@@ -70,9 +80,20 @@ import {
   MARK_PREFIX,
   TRACE_CATEGORIES,
   findSegments,
+  presentedFps,
   summarizeTrace,
   type TraceEvent,
 } from "./lib/mac-baseline/trace.ts";
+import {
+  BASE_VARIANT,
+  GLASS_CENSUS,
+  cssInjectionExpression,
+  jsInjectionExpression,
+  loadVariants,
+  type GlassCensus,
+  type Variant,
+  type VariantInjection,
+} from "./lib/mac-baseline/variants.ts";
 import {
   RUNNING_ANIMATIONS,
   recordRequests,
@@ -97,6 +118,8 @@ const DEFAULT_PAGES = [
   "/portfolio",
 ];
 
+const VARIANTS_DIR = path.join(import.meta.dirname, "mac-baseline-variants");
+
 const USAGE = `Usage: bun scripts/mac-baseline.ts [options]
 
   --app <path>          App bundle to measure; repeat for several
@@ -107,6 +130,22 @@ const USAGE = `Usage: bun scripts/mac-baseline.ts [options]
   --repeat <n>          Measure every tier/switch combination n times, each
                         from a fresh launch, and report median and min–max
                         (default 1)
+  --variant <name>=<file>
+                        Also measure an experiment: after launch the runner sets
+                        <html data-fx-variant="<name>"> and injects the file
+                        (.css: appended as <style id="mac-baseline-variant">;
+                        .js: evaluated), then waits 1 s. Repeatable. Name:
+                        [a-z0-9-]+. A relative file is looked up in the working
+                        directory, then in scripts/mac-baseline-variants/. An
+                        implicit "base" variant (no injection) is always
+                        measured; variants are one more axis inside the repeat
+                        loop (tier, Full effects, variant), labelled like
+                        standard/full-on/drift-20 in the log
+  --variants-only-idle  Run only the idle phase (plus fps and glass census) for
+                        variant runs; base runs keep every phase. Makes variant
+                        sweeps cheap (about 2 min each)
+  --idle-trace          Record the 10 s idle trace (presented fps) even with
+                        --no-trace. Without --no-trace it is on anyway
   --idle <s>            Idle window per tier (default 60)
   --sustained <s>       Sustained scroll/switch run per tier (default 300)
   --cooldown <s>        Wait with the app closed before each measured launch (default 60)
@@ -114,7 +153,8 @@ const USAGE = `Usage: bun scripts/mac-baseline.ts [options]
   --pages <list>        Page-switch sequence (default ${DEFAULT_PAGES.join(",")})
   --out <dir>           Results root (default perf-results/ in the checkout)
   --no-powermetrics     Skip sudo powermetrics (no GPU or power numbers)
-  --no-trace            Skip the Chromium trace pass
+  --no-trace            Skip the Chromium trace pass and the idle fps trace
+                        (--idle-trace keeps just the 10 s idle one)
   --launch-probe <s>    Before the settle, record running page animations (every
                         5 s), page requests, and per-process CPU/GPU for the first
                         <s> seconds after launch, without input; writes
@@ -133,10 +173,15 @@ const USAGE = `Usage: bun scripts/mac-baseline.ts [options]
   --help                This text
 `;
 
-interface Options {
+export interface Options {
   apps: string[];
   tiers: Tier[];
   fullEffects: boolean[];
+  /** Always starts with the implicit base variant. */
+  variants: Variant[];
+  variantsOnlyIdle: boolean;
+  /** Record the 10 s idle trace that yields presented fps. */
+  idleTrace: boolean;
   repeat: number;
   idleSeconds: number;
   sustainedSeconds: number;
@@ -153,13 +198,16 @@ interface Options {
   leakWindowSeconds: number;
 }
 
-function parseOptions(argv: string[]): Options | null {
+export function parseOptions(argv: string[]): Options | null {
   const { values } = parseArgs({
     args: argv,
     options: {
       app: { type: "string", multiple: true },
       tiers: { type: "string" },
       "full-effects": { type: "string" },
+      variant: { type: "string", multiple: true },
+      "variants-only-idle": { type: "boolean" },
+      "idle-trace": { type: "boolean" },
       repeat: { type: "string" },
       idle: { type: "string" },
       sustained: { type: "string" },
@@ -216,6 +264,9 @@ function parseOptions(argv: string[]): Options | null {
     apps: apps.map((app) => path.resolve(app)),
     tiers: tiers as Tier[],
     fullEffects: [...new Set(fullEffects)],
+    variants: loadVariants(values.variant ?? [], VARIANTS_DIR),
+    variantsOnlyIdle: values["variants-only-idle"] === true,
+    idleTrace: values["no-trace"] !== true || values["idle-trace"] === true,
     repeat,
     idleSeconds: number(values.idle, quick ? 10 : 60, "idle"),
     sustainedSeconds: number(values.sustained, quick ? 30 : 300, "sustained"),
@@ -901,12 +952,13 @@ async function measureQuietWindow(
   ctx: Context,
   app: RunningApp,
   seconds: number,
+  body: () => Promise<void> = () => sleep(seconds * 1000),
 ): Promise<
   WindowMeasurement & { pageMetrics: Record<string, number>; requests: number }
 > {
   const requestsBefore = await page<number>(app, REQUEST_COUNTER);
   const metricsBefore = await pageMetrics(app);
-  const { window } = await measureWindow(ctx, app, () => sleep(seconds * 1000));
+  const { window } = await measureWindow(ctx, app, body);
   const metricsAfter = await pageMetrics(app);
   const requestsAfter = await page<number>(app, REQUEST_COUNTER);
   return {
@@ -1012,6 +1064,75 @@ async function tracedPass(
   return { file: path.relative(ctx.outDir, file), segments };
 }
 
+/**
+ * Presented frames per second over a short Chromium trace. Counting
+ * requestAnimationFrame callbacks would be wrong: they run whether or not the
+ * compositor presents a frame. Tracing perturbs CPU slightly, so this runs in
+ * the tail of the idle window.
+ */
+async function idleFpsTrace(
+  ctx: Context,
+  app: RunningApp,
+  label: string,
+  seconds: number,
+): Promise<TierResult["idleFps"]> {
+  const mark = (name: string) =>
+    page(app, `console.timeStamp(${JSON.stringify(`${MARK_PREFIX}${name}`)})`);
+  await app.cdp.send("Tracing.start", {
+    transferMode: "ReturnAsStream",
+    traceConfig: {
+      recordMode: "recordAsMuchAsPossible",
+      traceBufferSizeInKb: 100 * 1024,
+      includedCategories: TRACE_CATEGORIES,
+    },
+  });
+  let text: string | undefined;
+  try {
+    await mark("idle-fps:start");
+    await sleep(seconds * 1000);
+    await mark("idle-fps:end");
+  } finally {
+    const complete = app.cdp.waitForEvent("Tracing.tracingComplete", 120_000);
+    await app.cdp.send("Tracing.end");
+    const stream = (await complete).params.stream;
+    if (typeof stream === "string") text = await readStream(app.cdp, stream);
+  }
+  if (text === undefined) return null;
+  const file = path.join(ctx.outDir, "traces", `${label}-idle.json.gz`);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, zlib.gzipSync(text));
+  const parsed = JSON.parse(text) as
+    { traceEvents?: TraceEvent[] } | TraceEvent[];
+  const events = Array.isArray(parsed) ? parsed : (parsed.traceEvents ?? []);
+  const window = findSegments(events).get("idle-fps");
+  if (!window) return null;
+  return presentedFps(summarizeTrace(events, window));
+}
+
+/** Tag <html> with the variant and inject its file; base injects nothing. */
+async function injectVariant(
+  app: RunningApp,
+  variant: Variant,
+  warnings: string[],
+): Promise<void> {
+  if (variant.kind === "none") return;
+  const injection = await page<VariantInjection>(
+    app,
+    variant.kind === "css"
+      ? cssInjectionExpression(variant)
+      : jsInjectionExpression(variant),
+  );
+  if (variant.kind === "js") await page(app, variant.content, 30_000);
+  if (!injection.applied) {
+    warnings.push(`variant ${variant.name} was not applied (stylesheet rejected)`);
+  } else if (injection.method === "adopted") {
+    warnings.push(
+      `variant ${variant.name}: the <style> element had no sheet (CSP?); used a constructed stylesheet`,
+    );
+  }
+  await sleep(1000);
+}
+
 /** Last lines of the newest backend log of the app's native runtime. */
 function backendLogTail(userData: string, lines: number): string[] {
   const nativeDir = path.join(userData, "native");
@@ -1103,15 +1224,26 @@ async function measureTier(
   fullEffects: boolean,
   run: number,
   label: string,
+  variant: Variant,
 ): Promise<TierResult> {
   const warnings: string[] = [];
   const { options } = ctx;
+  const idleOnly = options.variantsOnlyIdle && variant.name !== BASE_VARIANT;
   if (options.launchProbeSeconds > 0) {
     try {
       await launchProbe(ctx, app, label);
     } catch (error) {
       if (abort.signal.aborted) throw error;
       warnings.push(`launch probe failed: ${(error as Error).message}`);
+    }
+  }
+  if (variant.name !== BASE_VARIANT) {
+    log(`  injecting variant ${variant.name} (${path.basename(variant.file ?? "")})`);
+    try {
+      await injectVariant(app, variant, warnings);
+    } catch (error) {
+      if (abort.signal.aborted) throw error;
+      warnings.push(`variant ${variant.name} failed: ${(error as Error).message}`);
     }
   }
   log(`  launched in ${app.launch.spawnToRendererReadyMs} ms; settling 10 s`);
@@ -1133,12 +1265,31 @@ async function measureTier(
   await navigate(app, "/");
   await sleep(3000);
   log(`  idle ${options.idleSeconds} s on /`);
-  const idle = await measureQuietWindow(ctx, app, options.idleSeconds);
+  let idleFps: TierResult["idleFps"] = null;
+  const idle = await measureQuietWindow(ctx, app, options.idleSeconds, async () => {
+    // The trace sits in the tail of the window so the rest runs untraced.
+    const traced = options.idleTrace ? Math.min(10, options.idleSeconds) : 0;
+    await sleep((options.idleSeconds - traced) * 1000);
+    if (traced > 0) {
+      try {
+        idleFps = await idleFpsTrace(ctx, app, label, traced);
+      } catch (error) {
+        if (abort.signal.aborted) throw error;
+        warnings.push(`idle fps trace skipped: ${(error as Error).message}`);
+      }
+    }
+  });
   await checkFocus(app, warnings, "idle");
+  let glass: GlassCensus | null = null;
+  try {
+    glass = await page<GlassCensus>(app, GLASS_CENSUS);
+  } catch (error) {
+    warnings.push(`glass census skipped: ${(error as Error).message}`);
+  }
   const afterIdle = memorySnapshot(app);
 
   let background: TierResult["background"] = null;
-  if (options.backgroundSeconds > 0) {
+  if (options.backgroundSeconds > 0 && !idleOnly) {
     log(`  background ${options.backgroundSeconds} s (Finder frontmost)`);
     osascript('tell application "Finder" to activate');
     await sleep(2000);
@@ -1154,33 +1305,39 @@ async function measureTier(
   }
 
   let scroll: TierResult["scroll"] = null;
-  try {
-    log("  ledger scroll");
-    await navigate(app, "/transactions");
-    await sleep(1500);
-    const measured = await measureAction(ctx, app, () =>
-      scrollLedger(app, options.scrollPx),
-    );
-    scroll = {
-      ...measured.action,
-      ...measured.result,
-      requestedPx: options.scrollPx,
-    };
-  } catch (error) {
-    if (abort.signal.aborted) throw error;
-    warnings.push(`scroll skipped: ${(error as Error).message}`);
+  if (!idleOnly) {
+    try {
+      log("  ledger scroll");
+      await navigate(app, "/transactions");
+      await sleep(1500);
+      const measured = await measureAction(ctx, app, () =>
+        scrollLedger(app, options.scrollPx),
+      );
+      scroll = {
+        ...measured.action,
+        ...measured.result,
+        requestedPx: options.scrollPx,
+      };
+    } catch (error) {
+      if (abort.signal.aborted) throw error;
+      warnings.push(`scroll skipped: ${(error as Error).message}`);
+    }
+    await checkFocus(app, warnings, "scroll");
   }
-  await checkFocus(app, warnings, "scroll");
 
-  log("  page switches (2 passes)");
-  await navigate(app, options.pages.at(-1) ?? "/");
-  const switches = await measureAction(ctx, app, () =>
-    pageSwitches(app, options.pages, 2),
-  );
-  await checkFocus(app, warnings, "page switches");
+  let switches: Awaited<ReturnType<typeof measureAction<PageSwitch[][]>>> | null =
+    null;
+  if (!idleOnly) {
+    log("  page switches (2 passes)");
+    await navigate(app, options.pages.at(-1) ?? "/");
+    switches = await measureAction(ctx, app, () =>
+      pageSwitches(app, options.pages, 2),
+    );
+    await checkFocus(app, warnings, "page switches");
+  }
 
   let trace: TierResult["trace"] = null;
-  if (options.trace) {
+  if (options.trace && !idleOnly) {
     try {
       log("  traced pass");
       trace = await tracedPass(ctx, app, label);
@@ -1192,7 +1349,7 @@ async function measureTier(
 
   let sustained: TierResult["sustained"] = null;
   let afterSustained: RoleSummary | null = null;
-  if (options.sustainedSeconds > 0) {
+  if (options.sustainedSeconds > 0 && !idleOnly) {
     log(`  sustained ${options.sustainedSeconds} s`);
     let cycles = 0;
     const deadline = Date.now() + options.sustainedSeconds * 1000;
@@ -1239,6 +1396,9 @@ async function measureTier(
     tier,
     fullEffects,
     run,
+    variant: variant.name,
+    idleFps,
+    glass,
     effective: { tier: effective, classes: state.classes },
     page: {
       innerWidth: state.innerWidth,
@@ -1252,7 +1412,9 @@ async function measureTier(
     idle: { ...idle, seconds: options.idleSeconds, page: "/" },
     background,
     scroll,
-    pageSwitch: { ...switches.action, passes: switches.result },
+    pageSwitch: switches
+      ? { ...switches.action, passes: switches.result }
+      : null,
     trace,
     sustained,
     warnings,
@@ -1302,31 +1464,47 @@ async function measureApp(ctx: Context, appPath: string): Promise<AppResult> {
     for (let run = 1; run <= repeat; run += 1) {
       for (const tier of ctx.options.tiers) {
         for (const fullEffects of ctx.options.fullEffects) {
-          const name = [
-            tier,
-            fullEffects ? "full" : null,
-            repeat > 1 ? `run ${run}/${repeat}` : null,
-          ]
-            .filter(Boolean)
-            .join(" ");
-          await writeTier(running.origin, tier, fullEffects);
-          dirty = true;
-          await quitApp(running);
-          running = undefined;
-          log(`${info.name} ${name}: cooldown ${ctx.options.cooldownSeconds} s`);
-          await sleep(ctx.options.cooldownSeconds * 1000);
-          running = await launchApp(info, logPath);
-          const label = [
-            slug,
-            tier,
-            fullEffects ? "full" : null,
-            repeat > 1 ? `r${run}` : null,
-          ]
-            .filter(Boolean)
-            .join("-");
-          result.tiers.push(
-            await measureTier(ctx, running, tier, fullEffects, run, label),
-          );
+          for (const variant of ctx.options.variants) {
+            const name = [
+              [
+                tier,
+                `full-${fullEffects ? "on" : "off"}`,
+                variant.name,
+              ].join("/"),
+              repeat > 1 ? `run ${run}/${repeat}` : null,
+            ]
+              .filter(Boolean)
+              .join(" ");
+            await writeTier(running.origin, tier, fullEffects);
+            dirty = true;
+            await quitApp(running);
+            running = undefined;
+            log(
+              `${info.name} ${name}: cooldown ${ctx.options.cooldownSeconds} s`,
+            );
+            await sleep(ctx.options.cooldownSeconds * 1000);
+            running = await launchApp(info, logPath);
+            const label = [
+              slug,
+              tier,
+              fullEffects ? "full" : null,
+              variant.name === BASE_VARIANT ? null : variant.name,
+              repeat > 1 ? `r${run}` : null,
+            ]
+              .filter(Boolean)
+              .join("-");
+            result.tiers.push(
+              await measureTier(
+                ctx,
+                running,
+                tier,
+                fullEffects,
+                run,
+                label,
+                variant,
+              ),
+            );
+          }
         }
       }
     }
@@ -1609,12 +1787,18 @@ async function main(): Promise<number> {
   });
 
   const results: BaselineResults = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     startedAt: new Date().toISOString(),
     finishedAt: "",
     options: {
       tiers: options.tiers,
       fullEffects: options.fullEffects.map((on) => (on ? "on" : "off")),
+      variants: options.variants.map((variant) => ({
+        name: variant.name,
+        file: variant.file,
+      })),
+      variantsOnlyIdle: options.variantsOnlyIdle,
+      idleTrace: options.idleTrace,
       repeat: options.repeat,
       idleSeconds: options.idleSeconds,
       sustainedSeconds: options.sustainedSeconds,
