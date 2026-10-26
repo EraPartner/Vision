@@ -2,8 +2,8 @@
 title: Mac Performance Baseline
 type: performance
 status: active
-date: 2026-10-25
-last_modified: 2026-10-25
+date: 2026-10-26
+last_modified: 2026-10-26
 tags: [performance, macos, gpu, energy, measurement, electron]
 description: Repeatable before/after measurement of the installed Vision apps on a Mac (memory, CPU, GPU, power, launch, frames) across the three UI tiers
 aliases: [mac baseline, performance baseline, powermetrics run]
@@ -187,7 +187,8 @@ open -a "Vision Native Demo"          # runs, writes /tmp/vision-perf/results.js
 
 `VisionPerfIdleSeconds` and `VisionPerfSustainedSeconds` override the window lengths. Without the
 script no power or backend numbers are collected; read `results.json` for the app's own frames,
-CPU and footprint. Keep the window in front and the Mac awake, as for the Electron run.
+CPU and footprint. Keep the window in front and the Mac awake, as for the Electron run, and leave
+the Mac alone while it runs: a hidden or inactive window records no phase and an empty profile.
 
 > [!note] Comparing frames
 > Electron frames are `requestAnimationFrame` callbacks, which fire only when the page draws.
