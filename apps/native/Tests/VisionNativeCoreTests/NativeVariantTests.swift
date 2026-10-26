@@ -25,6 +25,19 @@ import Testing
         }
     }
 
+    @Test func theStandardVariantSharesElectronsBackupFolderButNotItsDeviceId() {
+        #expect(NativeVariant.standard.backupFolderName == "Vision")
+        #expect(NativeVariant.demo.backupFolderName == "Vision Native Demo")
+        // Retention only prunes `vision_backup_<deviceId>_*`, and the id hashes the data directory.
+        let native = BackupDevice.deviceId(
+            platform: "darwin", architecture: "arm64", hostname: "mac",
+            userData: NativeVariant.standard.userDataDirectory(homeDirectory: testHome))
+        let electron = BackupDevice.deviceId(
+            platform: "darwin", architecture: "arm64", hostname: "mac",
+            userData: "\(testHome)/Library/Application Support/Vision")
+        #expect(native != electron)
+    }
+
     @Test func theInfoPlistValuePicksTheVariant() {
         #expect(NativeVariant.fromInfoPlist("demo") == .demo)
         #expect(NativeVariant.fromInfoPlist("standard") == .standard)

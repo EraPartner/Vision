@@ -33,6 +33,17 @@ public enum NativeVariant: String, Sendable, CaseIterable {
 
     public var userDataName: String { appName }
 
+    /// The folder below iCloud Drive that holds the default backup directory. The standard
+    /// variant shares Electron Vision's `Vision/Backups` (ADR-253, Tor's choice); retention
+    /// is per device id, which includes the data directory, so neither app prunes the other's
+    /// backups.
+    public var backupFolderName: String {
+        switch self {
+        case .standard: return "Vision"
+        case .demo: return appName
+        }
+    }
+
     public var runtimeId: String {
         switch self {
         case .standard: return VisionNativeIdentity.runtimeId

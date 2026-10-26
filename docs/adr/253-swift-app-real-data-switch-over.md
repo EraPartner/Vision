@@ -4,7 +4,7 @@ type: adr
 status: proposed
 date: 2026-10-26
 tags: [adr, architecture, swift, native-app, switch-over, backup, keychain, demo, adr-205, adr-249]
-description: "Proposed on 2026-10-26. Tor's real data moves to the standard Swift build (Vision Native) by restoring a verified Electron backup; no data directory is moved, Demo seeding is limited to the Demo build, the backup passphrase is entered again, Electron stays an untouched fallback until the real-data checks pass, and only then are the TypeScript frontend and Electron archived off main."
+description: "Proposed on 2026-10-26. Tor's real data moves to the standard Swift build (Vision Native) by restoring a verified Electron backup; no data directory is moved, Demo seeding is limited to the Demo build, the backup passphrase is entered again, the standard build shares Electron's iCloud backup folder, Electron stays an untouched fallback until the real-data checks pass, and only then are the TypeScript frontend and Electron archived off main."
 aliases: [adr-253, swift switch-over, real data switch-over]
 related_code:
   [
@@ -65,7 +65,7 @@ Facts this builds on:
       restore the Electron backup there.
    4. Run the real-data checks (decision 4).
 3. **Electron stays a fallback, untouched.** No Swift build reads or writes Electron's data
-   directory, Keychain items, `settings.json` or backup folder. Going back means quitting Vision
+   directory, Keychain items or `settings.json`, and none deletes Electron's backups (decision 6). Going back means quitting Vision
    Native and opening Electron Vision; data entered in the Swift app in between is carried back
    the same way (Swift backup, Electron restore).
 4. **Real-data checks before any removal.** On Tor's database: totals on each screen equal
@@ -76,9 +76,11 @@ Facts this builds on:
    payload preparation that `install-native.sh` uses from `packaging/electron` moves with the
    Swift app, not into the archive.
 
-Open for Tor: the Swift app's backup folder. Its default is `Vision Native/Backups` in iCloud
-Drive, beside Electron's `Vision/Backups`; the alternative is pointing it at `Vision/Backups`.
-Retention is per app and device, so neither app prunes the other's backups.
+6. **One backup folder.** The standard build's default backup directory is Electron's
+   `Vision/Backups` in iCloud Drive (Tor chose this on 2026-10-26; `NativeVariant.backupFolderName`).
+   Retention removes only `vision_backup_<deviceId>_*` files, and the device id hashes the data
+   directory, so neither app prunes the other's backups. The Demo build keeps
+   `Vision Native Demo/Backups`.
 
 ## Consequences
 

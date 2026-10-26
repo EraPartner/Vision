@@ -1062,7 +1062,7 @@ final class ShellController: NSObject, NSWindowDelegate {
                     ?? "unknown",
                 userDataDirectory: AppRuntime.variant.userDataDirectory(homeDirectory: home),
                 homeDirectory: home,
-                appName: ShellController.appName),
+                appName: AppRuntime.variant.backupFolderName),
             settings: AppRuntime.supervisor,
             runtimeProvider: { await AppRuntime.supervisor.backupRuntime() },
             passphraseStoreFactory: { [service = AppRuntime.variant.backupPassphraseService] account in
