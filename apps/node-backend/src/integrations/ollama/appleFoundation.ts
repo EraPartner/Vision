@@ -16,6 +16,8 @@ import { execFile, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { z } from "zod";
+import { looseArray, parseOr } from "../../lib/looseJson.ts";
 import { isRecord, isUnknownArray } from "../../lib/typeGuards.ts";
 
 export const APPLE_FOUNDATION_MODEL = "apple-foundation";
@@ -27,22 +29,30 @@ const MAX_SYSTEM_CHARS = 4_500;
 const MAX_MESSAGE_CHARS = 1_500;
 const MAX_CONVERSATION_CHARS = 4_000;
 
-interface ChatMessage {
-  role?: string;
-  content?: unknown;
-  [key: string]: unknown;
-}
+const optString = z.string().optional().catch(undefined);
 
-interface ToolSchema {
-  function?: { name?: string; description?: string };
-}
-
-interface ChatBody {
-  model?: string;
-  messages?: ChatMessage[];
-  tools?: ToolSchema[] | undefined;
-  [key: string]: unknown;
-}
+/**
+ * The /api/chat request as the helper shim reads it. Loose: unknown keys
+ * (options, stream, ...) pass through to the helper, and junk messages or
+ * tools are skipped rather than failing the chat.
+ */
+const chatMessageSchema = z.looseObject({
+  role: optString,
+  content: z.unknown().optional(),
+});
+const toolSchema = z.looseObject({
+  function: z
+    .looseObject({ name: optString, description: optString })
+    .optional()
+    .catch(undefined),
+});
+const chatBodySchema = z.looseObject({
+  model: optString,
+  messages: looseArray(chatMessageSchema).optional(),
+  tools: looseArray(toolSchema).optional(),
+});
+type ChatMessage = z.output<typeof chatMessageSchema>;
+type ChatBody = z.output<typeof chatBodySchema>;
 
 function appleHelperPath(env: NodeJS.ProcessEnv = process.env): string | null {
   if (process.platform !== "darwin") return null;
@@ -128,7 +138,9 @@ function fitForAppleModel(body: ChatBody): ChatBody {
   }
 
   const question = contentText(
-    messages.findLast((message) => message.role === "user") ?? {},
+    messages.findLast((message) => message.role === "user") ?? {
+      content: undefined,
+    },
   );
   const stems = new Set(words(question).map((word) => word.slice(0, 5)));
   const tools = (body.tools ?? [])
@@ -206,8 +218,8 @@ export function withAppleFoundation(baseFetch: typeof fetch): typeof fetch {
   ): Promise<Response> {
     const url = new URL(input instanceof Request ? input.url : String(input));
     if (url.pathname === "/api/chat" && typeof init?.body === "string") {
-      const body = JSON.parse(init.body) as ChatBody;
-      if (body.model === APPLE_FOUNDATION_MODEL) {
+      const body = parseOr(chatBodySchema, JSON.parse(init.body), null);
+      if (body?.model === APPLE_FOUNDATION_MODEL) {
         const helper = appleHelperPath();
         if (!helper || !(await appleModelAvailable()))
           return errorResponse(

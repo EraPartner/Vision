@@ -21,6 +21,8 @@
  * of being paired by guess; indistinguishable rows pair by count.
  */
 import { parse } from "csv-parse/sync";
+import { z } from "zod";
+import { parseOr } from "../lib/looseJson.ts";
 import { Decimal, toDecimal } from "../lib/money.ts";
 import type { DecimalInput } from "../lib/money.ts";
 import { batchConfigFields } from "../database/rows/portfolioImport.ts";
@@ -256,6 +258,16 @@ function saxoLegacyCsvKey(row: StagedRow | CrossFormatLedgerSourceRow) {
     : undefined;
 }
 
+/** `raw_data` of a staged Saxo workbook row: the source records it was built from. */
+const saxoProvenanceSchema = z.looseObject({
+  records: z.array(
+    z.looseObject({
+      headers: z.array(z.unknown()),
+      cells: z.array(z.unknown()),
+    }),
+  ),
+});
+
 /**
  * Whether a workbook row's booking record id is none of its own
  * `Transactie-ID` or `Booking Id` values. Then a CSV row of the same event
@@ -265,19 +277,20 @@ function saxoWorkbookRecordIsOwnId(row: StagedRow): boolean {
   if (!isSaxoWorkbookRow(row)) return false;
   const record = text(row.source_transaction_id);
   try {
-    const provenance = JSON.parse(String(row.raw_data)) as {
-      records?: Array<{ headers?: unknown; cells?: unknown }>;
-    };
-    if (!Array.isArray(provenance.records) || provenance.records.length === 0)
-      return false;
+    // Any other shape (no records, a record without header and cell arrays)
+    // cannot name the row's own ids: not "own id".
+    const provenance = parseOr(
+      saxoProvenanceSchema,
+      JSON.parse(String(row.raw_data)),
+      null,
+    );
+    if (!provenance || provenance.records.length === 0) return false;
     const others = new Set<string>();
     for (const item of provenance.records) {
-      if (!Array.isArray(item.headers) || !Array.isArray(item.cells))
-        return false;
       item.headers.forEach((header, index) => {
         const name = String(header).replace(/\s/g, " ").trim();
         if (name === "Transactie-ID" || name === "Booking Id")
-          others.add(text((item.cells as unknown[])[index]));
+          others.add(text(item.cells[index]));
       });
     }
     return !!record && !others.has(record);

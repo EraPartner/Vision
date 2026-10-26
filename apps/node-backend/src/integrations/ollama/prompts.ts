@@ -22,8 +22,8 @@ export type { AiMessageRow };
 
 /** One entry of an Ollama `tool_calls[]` array; model-emitted, untrusted. */
 export interface OllamaToolCall {
-  id?: string;
-  function?: { name?: string; arguments?: unknown };
+  id?: string | undefined;
+  function?: { name?: string | undefined; arguments?: unknown } | undefined;
 }
 
 /** `tool_calls[]` as parsed from provider JSON: an entry can be null. */

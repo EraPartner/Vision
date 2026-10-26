@@ -6,8 +6,10 @@
  * statement base currency; the reconciliation plan pairs the two (ADR-236
  * amendment) so that neither import double counts the other.
  */
+import { z } from "zod";
 import { readIbkrFundingWorkbook } from "../../lib/portfolioUpload.ts";
 import type { FundingWorkbookCell } from "../../lib/portfolioUpload.ts";
+import { parseOr } from "../../lib/looseJson.ts";
 import { toDecimal } from "../../lib/money.ts";
 import { ValidationError } from "../../middleware/errorHandler.ts";
 import { asCurrencyCode } from "@vision/types/brands";
@@ -64,6 +66,25 @@ interface IbkrFundingEnvelope {
   columns: string[];
   cells: FundingWorkbookCell[];
 }
+
+/** The envelope fields `movement` reads back from a staged `raw_data`. */
+type IbkrFundingEnvelopeFields = Pick<
+  IbkrFundingEnvelope,
+  "sheet" | "columns" | "cells" | "row_number"
+>;
+const fundingCellSchema = z.union([
+  z.object({ type: z.literal("text"), value: z.string() }),
+  z.object({ type: z.literal("number"), value: z.string() }),
+  z.object({ type: z.literal("boolean"), value: z.boolean() }),
+  z.null(),
+]);
+const fundingEnvelopeSchema = z.looseObject({
+  schema: z.literal("ibkr_funding_workbook_row"),
+  sheet: z.string(),
+  row_number: z.number(),
+  columns: z.array(z.string()),
+  cells: z.array(fundingCellSchema),
+});
 
 /** One funding movement as the workbook states it. */
 export interface IbkrFundingFacts {
@@ -149,7 +170,9 @@ function nativeAmount(value: string | undefined): {
  * Read one envelope's movement, or undefined for a request that never moved
  * money (pending, rejected, cancelled).
  */
-function movement(envelope: IbkrFundingEnvelope): IbkrFundingFacts | undefined {
+function movement(
+  envelope: IbkrFundingEnvelopeFields,
+): IbkrFundingFacts | undefined {
   const sheet = envelope.sheet;
   if (!isFundingSheet(sheet) || !equal(envelope.columns, COLUMNS[sheet]))
     return fail("has an unsupported or changed header layout");
@@ -216,16 +239,13 @@ export function ibkrFundingFactsFromRawData(
   try {
     if (typeof rawData !== "string" || rawData.length > 200000)
       return undefined;
-    const parsed: unknown = JSON.parse(rawData);
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      !("schema" in parsed) ||
-      parsed.schema !== "ibkr_funding_workbook_row"
-    )
-      return undefined;
+    const envelope = parseOr(
+      fundingEnvelopeSchema,
+      JSON.parse(rawData),
+      null,
+    );
     // movement() re-checks the header layout and cells it reads.
-    return movement(parsed as IbkrFundingEnvelope);
+    return envelope ? movement(envelope) : undefined;
   } catch {
     return undefined;
   }

@@ -237,7 +237,7 @@ function normalizeToolCall(
     | null
     | undefined,
 ): { name: string | undefined; rawArgs: unknown } {
-  const fn: { name?: string; arguments?: unknown } =
+  const fn: { name?: string | undefined; arguments?: unknown } =
     toolCall?.function ?? toolCall ?? {};
   const name = fn.name || toolCall?.name || undefined;
   const rawArgs = fn.arguments ?? toolCall?.arguments;

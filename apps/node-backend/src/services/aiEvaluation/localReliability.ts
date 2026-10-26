@@ -44,8 +44,8 @@ export interface LocalAiCase {
 /** A model-emitted tool call in either nested (`function`) or flat form. */
 export type RawToolCall =
   | {
-      function?: { name?: string; arguments?: unknown };
-      name?: string;
+      function?: { name?: string | undefined; arguments?: unknown } | undefined;
+      name?: string | undefined;
       arguments?: unknown;
     }
   | null

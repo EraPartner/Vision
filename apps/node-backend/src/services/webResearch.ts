@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { parseOr } from "../lib/looseJson.ts";
 import { epochMsToUtcYmd } from "../lib/dateFormat.ts";
 import { assertPublicHttpUrl } from "../lib/urlSafety.ts";
 import settings from "../config/config.ts";
@@ -18,22 +20,32 @@ const BLOCKED_QUERY_PATTERNS = [
   /\bsecret[_-]?canary\b/i,
 ];
 
-/** Brave Search JSON as far as this module reads it; untrusted provider data. */
-interface BraveSearchResult {
-  title?: string;
-  url?: string;
-  description?: string;
-  page_age?: string;
-  age?: string;
-}
+const optString = z.string().optional().catch(undefined);
+
+/**
+ * Brave Search JSON as far as this module reads it; untrusted provider data.
+ * A result that is not an object is skipped; a field of the wrong type reads
+ * as absent.
+ */
+const braveResultSchema = z.looseObject({
+  title: optString,
+  url: optString,
+  description: optString,
+  page_age: optString,
+  age: optString,
+});
+const braveResponseSchema = z.looseObject({
+  web: z.looseObject({
+    results: z.array(braveResultSchema.nullable().catch(null)),
+  }),
+});
 
 /** The `web.results` array of a parsed Brave response, or null when absent. */
-function braveResults(parsed: unknown): BraveSearchResult[] | null {
-  if (typeof parsed !== "object" || parsed === null) return null;
-  const web: unknown = Reflect.get(parsed, "web");
-  if (typeof web !== "object" || web === null) return null;
-  const results: unknown = Reflect.get(web, "results");
-  return Array.isArray(results) ? (results as BraveSearchResult[]) : null;
+function braveResults(parsed: unknown) {
+  const response = parseOr(braveResponseSchema, parsed, null);
+  return response
+    ? response.web.results.filter((result) => result !== null)
+    : null;
 }
 
 export interface PublicWebSearchResult {

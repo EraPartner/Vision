@@ -53,6 +53,7 @@ import {
   applyMutations,
 } from "../services/dbEditor.ts";
 import { parseInput } from "../lib/zodInput.ts";
+import { parseOr } from "../lib/looseJson.ts";
 
 const GITHUB_OWNER = "EraPartner";
 const GITHUB_REPO = "Vision";
@@ -69,13 +70,14 @@ const GITHUB_FETCH_TIMEOUT_MS = 5000;
  * arbitrary upstream JSON shape read defensively
  * (hasValidReleaseTag/buildUpdateCheckPayload below).
  */
-interface GitHubRelease {
-  message?: unknown;
-  tag_name?: string;
-  published_at?: string;
-  body?: string;
-  html_url?: string;
-}
+const gitHubReleaseSchema = z.looseObject({
+  message: z.unknown().optional(),
+  tag_name: z.string().optional().catch(undefined),
+  published_at: z.string().optional().catch(undefined),
+  body: z.string().optional().catch(undefined),
+  html_url: z.string().optional().catch(undefined),
+});
+type GitHubRelease = z.output<typeof gitHubReleaseSchema>;
 
 /**
  * Fetch the latest GitHub Release metadata.
@@ -102,7 +104,7 @@ function fetchLatestRelease(): Promise<GitHubRelease | null> {
       });
       res.on("end", () => {
         try {
-          resolve(JSON.parse(body) as GitHubRelease | null);
+          resolve(parseOr(gitHubReleaseSchema, JSON.parse(body), null));
         } catch (e) {
           reject(
             new Error(

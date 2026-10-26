@@ -5,6 +5,7 @@
  * persists them to the database, and provides historical rate lookup utilities.
  */
 
+import { z } from "zod";
 import { sql } from "kysely";
 import { withTransaction } from "../../database/connection.ts";
 import { checkedRow, db } from "../../database/db.ts";
@@ -14,6 +15,7 @@ import {
   rateToEurRowSchema,
 } from "../../database/rows/portfolio.ts";
 import { logger } from "../../config/logger.ts";
+import { parseOr } from "../../lib/looseJson.ts";
 import { toDecimal, toNumber } from "../../lib/money.ts";
 import { todayAppDateString } from "../../lib/timezone.ts";
 import { formatDateToYmd, epochMsToUtcYmd } from "../../lib/dateFormat.ts";
@@ -154,6 +156,12 @@ function parseEcbHistoricalXml(xmlText: string): RatesByDate {
   return byDate;
 }
 
+/** open.er-api.com latest response; anything but an object reads as unexpected. */
+const erApiResponseSchema = z.looseObject({
+  result: z.unknown().optional(),
+  rates: z.record(z.string(), z.unknown()).optional().catch(undefined),
+});
+
 // ─── API fetchers ─────────────────────────────────────────────────────────────
 
 /**
@@ -198,13 +206,10 @@ export async function fetchFromErApi(): Promise<RateTable | null> {
       logger.error(`open.er-api returned ${response.status}`);
       return null;
     }
-    const data = (await response.json()) as {
-      result?: unknown;
-      rates?: Record<string, unknown>;
-    };
-    if (data.result !== "success" || !data.rates) {
+    const data = parseOr(erApiResponseSchema, await response.json(), null);
+    if (data?.result !== "success" || !data.rates) {
       logger.error("Unexpected response from open.er-api", {
-        result: data.result,
+        result: data?.result,
       });
       return null;
     }

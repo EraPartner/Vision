@@ -6,7 +6,10 @@
  *   - prices/priceProviderRegistry.js — provider strategies (Binance, Yahoo, custom, Kinesis)
  */
 
+import { z } from "zod";
 import { logger } from "../config/logger.ts";
+import { parseOr } from "../lib/looseJson.ts";
+import { isRecord } from "../lib/typeGuards.ts";
 import { RowContractError } from "../database/rowContracts.ts";
 import { UpstreamError } from "../middleware/errorHandler.ts";
 import { assertPublicHttpUrl } from "../lib/urlSafety.ts";
@@ -332,12 +335,16 @@ function _dayKey(ms: number): number {
  * Fetch daily Binance klines across an arbitrary window, paginating past the 1000-row
  * per-request limit via startTime/endTime. Returns the raw kline rows (caller maps/normalizes).
  */
+const binanceKlinesSchema = z.array(
+  z.array(z.unknown()).nullable().catch(null),
+);
+
 async function _fetchBinanceKlines(
   binanceSymbol: string,
   startMs: number,
   endMs: number,
-): Promise<(number | string)[][]> {
-  const collected: (number | string)[][] = [];
+): Promise<unknown[][]> {
+  const collected: unknown[][] = [];
   let cursor = startMs;
   const end = endMs;
 
@@ -351,14 +358,15 @@ async function _fetchBinanceKlines(
       signal: AbortSignal.timeout(8_000),
     });
     if (!res.ok) throw new UpstreamError(`Binance API error: ${res.status}`);
-    const data: unknown = await res.json();
-    if (!Array.isArray(data) || data.length === 0) return collected;
+    // A payload that is not an array, or a row that is not an array, carries
+    // no candle: the former ends the walk, the latter is skipped.
+    const data = parseOr(binanceKlinesSchema, await res.json(), null);
+    if (!data || data.length === 0) return collected;
 
-    const rows = data as (number | string)[][];
-    collected.push(...rows);
-    if (rows.length < BINANCE_PAGE_LIMIT) return collected;
+    collected.push(...data.filter((row) => row !== null));
+    if (data.length < BINANCE_PAGE_LIMIT) return collected;
 
-    const lastOpen = Number(rows[rows.length - 1]?.[0]);
+    const lastOpen = Number(data[data.length - 1]?.[0]);
     if (!Number.isFinite(lastOpen)) return collected;
     const next = lastOpen + BINANCE_DAY_MS;
     if (next > end) return collected;
@@ -609,8 +617,8 @@ export async function fetchHistoricalPrices(
           return _filterHistoricalPoints(cachedDbPoints, from, to);
         }
 
-        const data = (await res.json()) as Record<string, unknown> | null;
-        const rawPoints = data?.[symbol];
+        const data: unknown = await res.json();
+        const rawPoints = isRecord(data) ? data[symbol] : undefined;
         if (!Array.isArray(rawPoints)) {
           logger.warn(`Kinesis history: invalid data for ${symbol}`);
           return _filterHistoricalPoints(cachedDbPoints, from, to);

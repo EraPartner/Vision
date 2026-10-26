@@ -1,4 +1,5 @@
 import { sql } from "kysely";
+import { z } from "zod";
 import { withTransaction } from "../database/connection.ts";
 import { checkedRows, db } from "../database/db.ts";
 import { belgianInflationMonthRowSchema } from "../database/rows/info.ts";
@@ -9,6 +10,7 @@ import {
 } from "./providerHealthService.ts";
 import { roundMoney } from "../lib/money.ts";
 import { looseString } from "../lib/looseString.ts";
+import { parseOr } from "../lib/looseJson.ts";
 
 import type { BelgianInflationRate } from "../types/rows.ts";
 
@@ -17,14 +19,37 @@ export type { BelgianInflationRate };
 /** An object parsed from an untrusted provider JSON payload. */
 type JsonObject = Record<string, unknown>;
 
-/** The subset of the Statbel response read here; nothing in it is validated. */
-type StatbelPayload = { facts?: JsonObject[] };
+/** Any non-null object (arrays too: JSON-stat `value` may be dense). */
+const objectLike = z.custom<JsonObject>(
+  (value) => typeof value === "object" && value !== null,
+);
 
-/** The subset of the Eurostat JSON-stat response read here; nothing in it is validated. */
-type EurostatIndexPayload = {
-  dimension?: { time?: { category?: { index?: JsonObject } } };
-  value?: JsonObject;
-};
+/**
+ * The subset of the Statbel response read here. A non-array `facts` reads as
+ * empty and a fact that is not an object is skipped.
+ */
+const statbelPayloadSchema = z.looseObject({
+  facts: z.array(objectLike.nullable().catch(null)).catch([]),
+});
+
+/** The subset of the Eurostat JSON-stat response read here. */
+const eurostatIndexPayloadSchema = z.looseObject({
+  dimension: z
+    .looseObject({
+      time: z
+        .looseObject({
+          category: z
+            .looseObject({ index: objectLike.optional().catch(undefined) })
+            .optional()
+            .catch(undefined),
+        })
+        .optional()
+        .catch(undefined),
+    })
+    .optional()
+    .catch(undefined),
+  value: objectLike.optional().catch(undefined),
+});
 
 export interface InflationRatesResult {
   source: string;
@@ -382,11 +407,12 @@ function parseStatbelMonthString(value: unknown): string | undefined {
 function normalizeRatesFromStatbelPayload(
   payload: unknown,
 ): BelgianInflationRate[] {
-  const facts = (payload as StatbelPayload | null | undefined)?.facts;
-  if (!Array.isArray(facts) || facts.length === 0) return [];
+  const facts = parseOr(statbelPayloadSchema, payload, null)?.facts;
+  if (!facts || facts.length === 0) return [];
 
   const globalRows = facts.filter(
-    (row) => row["Level 1"] === null || row["Level 1"] === undefined,
+    (row): row is JsonObject =>
+      row !== null && (row["Level 1"] === null || row["Level 1"] === undefined),
   );
   const indexed = globalRows
     .map((row) => {
@@ -419,16 +445,10 @@ function normalizeRatesFromStatbelPayload(
 function normalizeRatesFromEurostatIndexPayload(
   payload: unknown,
 ): BelgianInflationRate[] {
-  const eurostat = payload as EurostatIndexPayload | null | undefined;
+  const eurostat = parseOr(eurostatIndexPayloadSchema, payload, null);
   const timeIndex = eurostat?.dimension?.time?.category?.index;
   const values = eurostat?.value;
-  if (
-    !timeIndex ||
-    typeof timeIndex !== "object" ||
-    !values ||
-    typeof values !== "object"
-  )
-    return [];
+  if (!timeIndex || !values) return [];
 
   const sortedTimeline = Object.entries(timeIndex)
     .map(([rawMonth, rawIndex]) => ({

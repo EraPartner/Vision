@@ -8,6 +8,8 @@
  */
 
 import { sql } from "kysely";
+import { z } from "zod";
+import { parseOr } from "../../lib/looseJson.ts";
 import { checkedRow, checkedRows, db } from "../../database/db.ts";
 import { toDecimal } from "../../lib/money.ts";
 import { logger } from "../../config/logger.ts";
@@ -32,7 +34,6 @@ import type {
   PortfolioImportBatchId,
   PortfolioImportProgressCallback,
 } from "./index.ts";
-import type { PortfolioParserConfig } from "./portfolioGenericAdapter.ts";
 import { requiredValue } from "../requiredValue.ts";
 
 /**
@@ -52,6 +53,11 @@ type RowResolution = {
   route?: string | undefined;
   error?: string | undefined;
 };
+
+/** The only part of a batch's stored parser config validation reads. */
+const typeMappingConfigSchema = z.looseObject({
+  type_mapping: z.record(z.string(), z.string()).optional().catch(undefined),
+});
 
 const VALIDATE_CHUNK = 500;
 
@@ -91,11 +97,12 @@ export async function validateBatch({
   const defaultAssetClass = batch.default_asset_class || undefined;
   const defaultType = batch.default_type || undefined;
   const isBrokerage = batch.is_brokerage === true;
-  const config: PortfolioParserConfig =
+  const config: unknown =
     typeof batch.custom_config === "string"
-      ? (JSON.parse(batch.custom_config) as PortfolioParserConfig)
-      : batch.custom_config ?? {};
-  const typeMapping = config.type_mapping ?? {};
+      ? JSON.parse(batch.custom_config)
+      : batch.custom_config;
+  const typeMapping =
+    parseOr(typeMappingConfigSchema, config, null)?.type_mapping ?? {};
   const unitBased = defaultAssetClass
     ? UNIT_BASED_ASSET_CLASSES.has(defaultAssetClass)
     : false;

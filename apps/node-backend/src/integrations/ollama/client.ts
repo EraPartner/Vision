@@ -11,11 +11,13 @@
  *     onToken, returns the final aggregated message + usage.
  */
 
+import { z } from "zod";
 import { logger } from "../../config/logger.ts";
 import settings from "../../config/config.ts";
 import { withAppleFoundation } from "./appleFoundation.ts";
 import type { ProviderToolCall } from "./prompts.ts";
 import { errorMessage, isAbortError } from "../../lib/errors.ts";
+import { looseArray, parseOr } from "../../lib/looseJson.ts";
 
 export interface OllamaErrorOptions {
   status?: number | null;
@@ -23,25 +25,39 @@ export interface OllamaErrorOptions {
   code?: string | null;
 }
 
-/** Ollama /api/tags and /api/ps entry; provider JSON, fields unchecked. */
-export interface OllamaModelEntry {
-  name?: string;
-  model?: string;
-  size?: number;
-  size_vram?: number;
-  context_length?: number;
-  expires_at?: string;
-  modified_at?: string;
-  details?: {
-    family?: string;
-    parameter_size?: string;
-    quantization_level?: string;
-  };
-}
+/**
+ * Provider JSON is validated once per response (or NDJSON chunk) with loose
+ * schemas that mirror the old optional-chain guards: extra keys pass through,
+ * a leaf of the wrong type degrades to "absent", and junk list entries are
+ * skipped, so a partly odd payload costs at most the odd field.
+ */
+const optString = z.string().optional().catch(undefined);
+const optNumber = z.number().optional().catch(undefined);
 
-export interface OllamaModelListResponse {
-  models?: OllamaModelEntry[];
-}
+/** Ollama /api/tags and /api/ps entry. */
+const modelEntrySchema = z.looseObject({
+  name: optString,
+  model: optString,
+  size: optNumber,
+  size_vram: optNumber,
+  context_length: optNumber,
+  expires_at: optString,
+  modified_at: optString,
+  details: z
+    .looseObject({
+      family: optString,
+      parameter_size: optString,
+      quantization_level: optString,
+    })
+    .optional()
+    .catch(undefined),
+});
+export type OllamaModelEntry = z.output<typeof modelEntrySchema>;
+
+const modelListResponseSchema = z.looseObject({
+  models: looseArray(modelEntrySchema).optional(),
+});
+export type OllamaModelListResponse = z.output<typeof modelListResponseSchema>;
 
 /** One installed model as reported by listModels(). */
 export interface OllamaModelSummary {
@@ -53,31 +69,50 @@ export interface OllamaModelSummary {
   modifiedAt: string | null;
 }
 
-export interface OllamaEmbedResponse {
-  model?: string;
-  embeddings?: number[][];
-}
+const embedResponseSchema = z.looseObject({
+  model: optString,
+  embeddings: z.array(z.array(z.number())).optional().catch(undefined),
+});
+export type OllamaEmbedResponse = z.output<typeof embedResponseSchema>;
 
-export interface OllamaResponseMessage {
-  role?: string;
-  content?: string;
-  tool_calls?: ProviderToolCall[];
-}
+const showResponseSchema = z.looseObject({
+  model_info: z.record(z.string(), z.unknown()).optional().catch(undefined),
+});
+
+/** `tool_calls[]` entry: model-emitted, so a junk entry becomes null. */
+const toolCallSchema = z
+  .looseObject({
+    id: optString,
+    function: z
+      .looseObject({ name: optString, arguments: z.unknown().optional() })
+      .optional()
+      .catch(undefined),
+  })
+  .nullable()
+  .catch(null);
+
+const responseMessageSchema = z.looseObject({
+  role: optString,
+  content: optString,
+  tool_calls: z.array(toolCallSchema).optional().catch(undefined),
+});
+export type OllamaResponseMessage = z.output<typeof responseMessageSchema>;
 
 /** One /api/chat response object (whole response or one NDJSON chunk). */
-export interface OllamaChatResponse {
-  model?: string;
-  message?: OllamaResponseMessage;
-  done?: boolean;
-  done_reason?: string;
-  eval_count?: number;
-  prompt_eval_count?: number;
-  total_duration?: number;
-  load_duration?: number;
-  prompt_eval_duration?: number;
-  eval_duration?: number;
-  error?: string;
-}
+const chatResponseSchema = z.looseObject({
+  model: optString,
+  message: responseMessageSchema.optional().catch(undefined),
+  done: z.boolean().optional().catch(undefined),
+  done_reason: optString,
+  eval_count: optNumber,
+  prompt_eval_count: optNumber,
+  total_duration: optNumber,
+  load_duration: optNumber,
+  prompt_eval_duration: optNumber,
+  eval_duration: optNumber,
+  error: optString,
+});
+export type OllamaChatResponse = z.output<typeof chatResponseSchema>;
 
 export interface OllamaClientOptions {
   baseUrl?: string;
@@ -344,10 +379,12 @@ function createOllamaClient({
 
   const url = (path: string) => `${baseUrl}${path}`;
 
-  // The type argument declares the expected provider JSON shape; the body is
-  // parsed, not validated, so callers keep their defensive optional access.
-  async function request<T>(
+  // The body is parsed with `schema` once per response. A payload the schema
+  // cannot accept (not an object) reads as an empty body: `null`, which every
+  // caller already handles.
+  async function request<S extends z.ZodType>(
     path: string,
+    schema: S,
     {
       method = "GET",
       body,
@@ -355,7 +392,7 @@ function createOllamaClient({
       timeoutMs = requestTimeoutMs,
       maxResponseBytes = 8 * 1024 * 1024,
     }: OllamaRequestOptions = {},
-  ): Promise<T | null> {
+  ): Promise<z.output<S> | null> {
     const {
       signal: composedSignal,
       cancel,
@@ -381,7 +418,7 @@ function createOllamaClient({
         );
       }
 
-      return (await readJson(response, maxResponseBytes)) as T | null;
+      return parseOr(schema, await readJson(response, maxResponseBytes), null);
     } catch (err) {
       throw normalizeFetchError(err, {
         isTimeout: isTimeout(),
@@ -396,13 +433,13 @@ function createOllamaClient({
 
   async function healthCheck() {
     try {
-      const data = await request<OllamaModelListResponse>("/api/tags", {
+      const data = await request("/api/tags", modelListResponseSchema, {
         timeoutMs: healthTimeoutMs,
       });
       return {
         reachable: true,
         baseUrl,
-        modelCount: Array.isArray(data?.models) ? data.models.length : 0,
+        modelCount: data?.models?.length ?? 0,
       };
     } catch (err) {
       // request() normalizes every failure to an OllamaError.
@@ -421,11 +458,11 @@ function createOllamaClient({
   async function listModels({ signal }: { signal?: AbortSignal } = {}): Promise<
     OllamaModelSummary[]
   > {
-    const data = await request<OllamaModelListResponse>("/api/tags", {
+    const data = await request("/api/tags", modelListResponseSchema, {
       signal,
       timeoutMs: healthTimeoutMs,
     });
-    const raw = Array.isArray(data?.models) ? data.models : [];
+    const raw = data?.models ?? [];
     return raw.map((m) => ({
       name: m.name,
       size: m.size ?? null,
@@ -463,7 +500,7 @@ function createOllamaClient({
         code: "INVALID_INPUT",
       });
     }
-    const data = await request<OllamaEmbedResponse>("/api/embed", {
+    const data = await request("/api/embed", embedResponseSchema, {
       method: "POST",
       body: {
         model,
@@ -475,14 +512,9 @@ function createOllamaClient({
       maxResponseBytes: 4 * 1024 * 1024,
     });
     if (
-      !Array.isArray(data?.embeddings) ||
-      data.embeddings.length !== values.length ||
+      data?.embeddings?.length !== values.length ||
       data.embeddings.some(
-        (vector) =>
-          !Array.isArray(vector) ||
-          vector.length === 0 ||
-          vector.length > 8192 ||
-          vector.some((number) => !Number.isFinite(number)),
+        (vector) => vector.length === 0 || vector.length > 8192,
       )
     ) {
       throw new OllamaError("Ollama returned invalid embeddings", {
@@ -497,11 +529,11 @@ function createOllamaClient({
    * is the provider-reported loaded memory, not the Vision process heap.
    */
   async function listRunningModels({ signal }: { signal?: AbortSignal } = {}) {
-    const data = await request<OllamaModelListResponse>("/api/ps", {
+    const data = await request("/api/ps", modelListResponseSchema, {
       signal,
       timeoutMs: healthTimeoutMs,
     });
-    const raw = Array.isArray(data?.models) ? data.models : [];
+    const raw = data?.models ?? [];
     return raw.map((model) => ({
       name: model.name,
       model: model.model ?? model.name,
@@ -517,8 +549,9 @@ function createOllamaClient({
     model: string,
     { signal }: { signal?: AbortSignal } = {},
   ): Promise<Record<string, unknown> | null> {
-    const data = await request<{ model_info?: Record<string, unknown> }>(
+    const data = await request(
       "/api/show",
+      showResponseSchema,
       { method: "POST", body: { model }, signal, timeoutMs: healthTimeoutMs },
     );
     return data?.model_info ?? null;
@@ -540,7 +573,7 @@ function createOllamaClient({
     numCtx?: number | undefined;
     signal?: AbortSignal | undefined;
   }) {
-    await request<OllamaChatResponse>("/api/chat", {
+    await request("/api/chat", chatResponseSchema, {
       method: "POST",
       body: {
         model,
@@ -577,7 +610,7 @@ function createOllamaClient({
     if (keepAlive !== undefined) body.keep_alive = keepAlive;
     if (format) body.format = format;
 
-    const data = await request<OllamaChatResponse>("/api/chat", {
+    const data = await request("/api/chat", chatResponseSchema, {
       method: "POST",
       body,
       signal,
@@ -588,7 +621,7 @@ function createOllamaClient({
       model: data?.model || model,
       role: message.role || "assistant",
       content: message.content || "",
-      toolCalls: Array.isArray(message.tool_calls) ? message.tool_calls : [],
+      toolCalls: message.tool_calls ?? [],
       done: data?.done ?? true,
       doneReason: data?.done_reason ?? null,
       evalCount: data?.eval_count ?? null,
@@ -725,15 +758,19 @@ function createOllamaClient({
     const handleLine = async (line: string): Promise<boolean> => {
       const trimmed = line.trim();
       if (!trimmed) return isDone;
-      let parsed: OllamaChatResponse;
+      let json: unknown;
       try {
-        parsed = JSON.parse(trimmed) as OllamaChatResponse;
+        json = JSON.parse(trimmed);
       } catch (err) {
         throw new OllamaError("Ollama returned malformed NDJSON chunk", {
           code: "INVALID_JSON",
           cause: err,
         });
       }
+      // A line that is valid JSON but not an object (`null`, a number, ...)
+      // carries no chunk: skip it.
+      const parsed = parseOr(chatResponseSchema, json, null);
+      if (!parsed) return isDone;
 
       if (typeof parsed.error === "string") {
         throw new OllamaError(parsed.error, { code: "PROVIDER_ERROR" });
@@ -751,7 +788,7 @@ function createOllamaClient({
           });
         }
       }
-      if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+      if (msg.tool_calls && msg.tool_calls.length > 0) {
         addToolCalls(msg.tool_calls);
       }
 

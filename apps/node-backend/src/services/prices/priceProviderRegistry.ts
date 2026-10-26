@@ -5,7 +5,10 @@
  * and the Kinesis-specific MAD spike detector.
  */
 
+import { z } from 'zod';
 import { logger } from '../../config/logger.ts';
+import { parseOr } from '../../lib/looseJson.ts';
+import { isRecord } from '../../lib/typeGuards.ts';
 import { UpstreamError } from '../../middleware/errorHandler.ts';
 import {
   KINESIS_BASE_URL,
@@ -71,11 +74,22 @@ export interface KinesisConfig {
   needsUsdToEur: boolean;
 }
 
-/** One entry of Binance's `/ticker/price` array. */
-interface BinanceTickerPrice {
-  symbol?: string;
-  price?: string;
-}
+/**
+ * Binance's `/ticker/price` array, parsed once per response: a row that is not
+ * an object is skipped, a symbol or price of the wrong type reads as absent.
+ */
+const binanceTickerSchema = z.array(
+  z
+    .looseObject({
+      symbol: z.string().optional().catch(undefined),
+      price: z
+        .union([z.string(), z.number().transform(String)])
+        .optional()
+        .catch(undefined),
+    })
+    .nullable()
+    .catch(null),
+);
 
 /** The `message` of a thrown value, when it has one (as `err?.message` read). */
 function _errorMessage(err: unknown): unknown {
@@ -509,11 +523,12 @@ export const PROVIDERS = {
       });
       if (!res.ok) throw new UpstreamError(`Binance API error: ${res.status}`);
       _assertResponseWithinCap(res, 'Binance');
-      const data = (await res.json()) as BinanceTickerPrice[];
+      const data = parseOr(binanceTickerSchema, await res.json(), null);
+      if (!data) throw new UpstreamError('Binance returned an unexpected payload');
 
       const priceMap: Record<string, number> = {};
       for (const item of data) {
-        if (!item.symbol || !item.price) continue;
+        if (!item?.symbol || !item.price) continue;
         const parsed = parseFloat(item.price);
         if (Number.isFinite(parsed) && parsed > 0) priceMap[item.symbol] = parsed;
       }
@@ -670,8 +685,8 @@ export const PROVIDERS = {
         }
 
         _assertResponseWithinCap(res, 'Kinesis');
-        const data = (await res.json()) as Record<string, unknown> | null;
-        const rawPoints = data?.[symbol];
+        const data: unknown = await res.json();
+        const rawPoints = isRecord(data) ? data[symbol] : undefined;
 
         if (!Array.isArray(rawPoints) || rawPoints.length === 0) {
           logger.warn(`Kinesis: no data returned for ${symbol}`);
