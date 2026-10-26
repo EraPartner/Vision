@@ -14,7 +14,10 @@ import {
     parseLocaleNumber,
     type NumberFormat,
 } from "@/utils/currency";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import {
+    measureElement as measureVirtualElement,
+    useVirtualizer,
+} from "@tanstack/react-virtual";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -1158,10 +1161,26 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         },
         [],
     );
+    // The estimate follows the first row the browser actually measured. A
+    // wrong constant (the ledger's 52 vs ~57 px rows) makes every newly
+    // mounted row shift all later rows, re-render the overscan band and grow
+    // the scroll extent on each scroll frame.
+    const measuredRowHeightRef = useRef<{ for: number; px: number } | null>(
+        null,
+    );
     const virtualizer = useVirtualizer({
         count: processedRows.length,
         getScrollElement: () => parentRef.current,
-        estimateSize: () => rowHeight,
+        estimateSize: () =>
+            measuredRowHeightRef.current?.for === rowHeight
+                ? measuredRowHeightRef.current.px
+                : rowHeight,
+        measureElement: (element, entry, instance) => {
+            const px = measureVirtualElement(element, entry, instance);
+            if (px > 0 && measuredRowHeightRef.current?.for !== rowHeight)
+                measuredRowHeightRef.current = { for: rowHeight, px };
+            return px;
+        },
         overscan: 10,
     });
     const pendingRestoreRef = useRef<number | null>(
@@ -1789,7 +1808,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                 {/* Virtualised scrollable body */}
                 <div
                     ref={parentRef}
-                    className="overflow-auto overscroll-x-contain [&[data-scrolling]_[role=row]]:pointer-events-none"
+                    className="virtual-table-body overflow-auto overscroll-x-contain [&[data-scrolling]_[role=row]]:pointer-events-none"
                     style={{ maxHeight: `${maxHeight}px` }}
                     role="rowgroup"
                     onScroll={(e) => {

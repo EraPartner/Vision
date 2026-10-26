@@ -1531,7 +1531,7 @@
     }
 
     /* Blur is static, so it belongs under reduced-transparency, not
-       reduced-motion. Fall back to near-opaque surfaces. */
+       reduced-motion. Fall back to opaque surfaces. */
     @media (prefers-reduced-transparency: reduce) {
         .glass,
         .glass-thin,
@@ -1547,7 +1547,7 @@
         .app-topbar {
             backdrop-filter: none;
             -webkit-backdrop-filter: none;
-            background: hsl(var(--card) / 0.97);
+            background: hsl(var(--card));
         }
 
         .liquid-canvas {
@@ -1580,7 +1580,15 @@
     :root.fx-reduced .app-topbar {
         backdrop-filter: none;
         -webkit-backdrop-filter: none;
-        background: hsl(var(--card) / 0.97);
+        /* Fully opaque (was 0.97, a ≤2/255 difference): the compositor only
+           culls what lies under layers it knows are opaque, so an opaque card
+           and table body stop the body colour and card fill being drawn
+           again under every scrolled row (ADR-257). */
+        background: hsl(var(--card));
+    }
+
+    :root.fx-reduced .virtual-table-body {
+        background: hsl(var(--card));
     }
 
     :root.fx-reduced .liquid-canvas {
@@ -1612,6 +1620,17 @@
        re-blurring the whole window on every drift step. */
     :root.fx-modal-open .liquid-canvas::before,
     :root.fx-modal-open .liquid-canvas::after {
+        animation-play-state: paused;
+    }
+
+    /* The portfolio ticker tape pauses with the aurora: on window blur, and
+       behind an open modal (fx-modal-open, ADR-255) together with loading
+       shimmers. Each animating frame is a full-window composite (and a
+       whole-window re-blur under the Full-effects frosted overlay) that
+       nobody can read. Resumes in place. */
+    :root.fx-idle-atmosphere .ticker-track,
+    :root.fx-modal-open .ticker-track,
+    :root.fx-modal-open .animate-shimmer {
         animation-play-state: paused;
     }
 

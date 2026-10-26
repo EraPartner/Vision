@@ -686,7 +686,10 @@ export function TransactionsTable({
                 selectedRowKey={selectedRowId}
                 onRowQuickLook={onQuickLook}
                 rowContextMenu={rowContextMenu}
-                rowHeight={compact ? 128 : 52}
+                // 57 = 40 px row-action touch target + 2 × 8 px cell padding
+                // + 1 px row border; the table refines it from the first
+                // measured row.
+                rowHeight={compact ? 128 : 57}
                 emptyMessage={
                     <EmptyState
                         headingLevel={3}

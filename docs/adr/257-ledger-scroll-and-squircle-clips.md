@@ -27,8 +27,8 @@ related_code:
 ## Status
 
 Accepted on 2026-10-26. Tor picked all four phase G proposals (G1 to G4) and then all five of the
-second list (H1 to H5). H2 and H5 follow once PR #369 lands, because they change the same chart
-files and measurement script. Not yet measured on the Mac; every gain below is an estimate.
+second list (H1 to H5), then all five of the third (I1 to I5). H2, H5, I1 and I5 follow in a later PR, because they change the same chart
+files, glass CSS and measurement script. Not yet measured on the Mac; every gain below is an estimate.
 
 ## Context
 
@@ -81,6 +81,18 @@ Chromium's compositor sources found four causes worth testing.
    itself and the header and footer have no fill. Dialogs keep their clip: their content is the
    scroller and 46 call sites override its layout classes, so moving the clip inward is not a
    safe mechanical change; a scrollable dialog is also short-lived.
+
+8. **The virtualizer estimate follows the first measured row (I2).** The ledger passed 52 px
+   while its rows are about 57 px (40 px action touch target, 2 × 8 px padding, 1 px border), so
+   each newly measured row shifted every later row and grew the scroll extent on every frame
+   into unmeasured rows. `VirtualDataTable` now uses the first measured height as the estimate
+   for its `rowHeight`, and the ledger passes 57.
+9. **The ticker pauses when nobody can see it (I3).** With the aurora on window blur
+   (`fx-idle-atmosphere`), and with loading shimmers behind an open modal (`fx-modal-open`,
+   added by ADR-255). The tape freezes behind the dim and resumes in place.
+10. **Reduced-tier surfaces are fully opaque (I4).** Card fill alpha 0.97 to 1 (also under
+    `prefers-reduced-transparency`), and the ledger body gets the card colour, so the compositor
+    can cull what lies underneath. Look change of at most about 2/255, approved by Tor with I4.
 
 ## Consequences
 
