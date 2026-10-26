@@ -8,7 +8,7 @@ import { upgradeProfileV1ToHousehold } from "@/lib/belgianTax/householdMigration
 import type { BelgianTaxHouseholdV2 } from "@/lib/belgianTax/householdTypes";
 import type { HouseholdUpdate } from "@/stores/belgianTaxStore";
 import { IncomeStep } from "../profile-steps/IncomeStep";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 function renderStep(
     household: BelgianTaxHouseholdV2,

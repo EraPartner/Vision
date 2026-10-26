@@ -7,7 +7,7 @@ import {
     type AnalysisDataset,
     type VisualAnalysisPlan,
 } from "@/lib/api/analysis";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 vi.mock("@/lib/api/analysis", () => ({ executeAnalysisPivot: vi.fn() }));
 vi.mock("@/stores/hydration/AppSettingsHydration", () => ({
     useAppSettings: () => ({ appSettings: { numberFormat: "1,234.56" } }),

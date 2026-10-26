@@ -9,7 +9,7 @@ import { ok, err } from "@/test/msw/handlers";
 import { PortfolioTaxAdjustmentsDialog } from "@/features/portfolio/PortfolioTaxAdjustmentsDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
 import { asCurrencyCode, asInvestmentId } from "@vision/types/brands";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 

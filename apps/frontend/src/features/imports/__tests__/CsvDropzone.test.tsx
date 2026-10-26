@@ -3,7 +3,7 @@ import { fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { renderWithApp } from "@/test/renderWithApp";
 import { CsvDropzone } from "../CsvDropzone";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 describe("CsvDropzone workbook opt-in", () => {
     it("keeps a bank CSV picker from accepting a workbook", () => {

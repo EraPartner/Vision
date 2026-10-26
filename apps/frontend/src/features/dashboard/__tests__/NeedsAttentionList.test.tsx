@@ -7,7 +7,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { NeedsAttentionList } from "../NeedsAttentionList";
 import { asCurrencyCode } from "@vision/types/brands";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 const state = vi.hoisted(() => ({
     accounts: [] as Array<{

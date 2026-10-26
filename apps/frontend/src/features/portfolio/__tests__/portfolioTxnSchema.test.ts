@@ -4,7 +4,7 @@ import {
     editPortfolioTxnSchema as createEditPortfolioTxnSchema,
     parseNonNegative as parseNonNegativeWithFormat,
 } from "../portfolioTxnSchema";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 const addPortfolioTxnSchema = (
     flags: Parameters<typeof createAddPortfolioTxnSchema>[0],

@@ -6,7 +6,7 @@ import { afterEach } from "vitest";
 import { AnalysisInterchangePanel } from "./AnalysisInterchangePanel";
 import type { AnalysisResult } from "@/lib/api/analysis";
 import type { AnalysisScenarioModel } from "./analysisInterchange";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 vi.mock("@/stores/hydration/LanguageHydration", () => ({
     useLanguage: () => ({ t: (key: string) => key }),
 }));

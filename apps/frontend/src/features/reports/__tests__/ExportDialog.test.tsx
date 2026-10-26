@@ -23,7 +23,7 @@ import {
     household,
     partner,
 } from "@/lib/belgianTax/__tests__/testHousehold";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 // jsdom does not implement these blob URL APIs
 beforeEach(() => {

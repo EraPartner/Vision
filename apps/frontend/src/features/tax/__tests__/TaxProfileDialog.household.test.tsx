@@ -14,7 +14,7 @@ import { applyProfileV1PatchToHousehold } from "@/lib/belgianTax/householdRuntim
 import type { BelgianTaxHouseholdV2 } from "@/lib/belgianTax/householdTypes";
 import { TaxProfileDialog } from "@/features/tax/TaxProfileDialog";
 import { TAX_COMPUTE_DEBOUNCE_MS } from "@/hooks/useBelgianTaxComputation";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 

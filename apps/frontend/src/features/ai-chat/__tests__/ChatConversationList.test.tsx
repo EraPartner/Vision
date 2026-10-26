@@ -8,7 +8,7 @@ import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import { ChatConversationList } from "@/features/ai-chat/ChatConversationList";
 import type { ConversationSummary } from "@/types/aiChat";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 

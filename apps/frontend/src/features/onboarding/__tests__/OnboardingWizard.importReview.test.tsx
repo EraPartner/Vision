@@ -25,7 +25,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, importCsvReviewRequiredHandlers } from "@/test/msw/handlers";
 import { OnboardingWizard } from "@/features/onboarding/OnboardingWizard";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 vi.mock("sonner", () => {
     const base = vi.fn();

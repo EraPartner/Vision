@@ -14,7 +14,7 @@ import {
     asInvestmentId,
     asPortfolioTransactionId,
 } from "@vision/types/brands";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 const virtualWindow = vi.hoisted(() => ({ measured: true }));
 

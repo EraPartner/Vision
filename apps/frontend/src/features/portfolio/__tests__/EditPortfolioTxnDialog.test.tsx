@@ -22,7 +22,7 @@ import {
     asInvestmentId,
     asPortfolioTransactionId,
 } from "@vision/types/brands";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 

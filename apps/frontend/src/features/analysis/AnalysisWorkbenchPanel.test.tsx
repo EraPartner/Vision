@@ -15,7 +15,7 @@ import {
     AnalysisWorkbenchPanel,
     type AnalysisWorkbenchConfig,
 } from "./AnalysisWorkbenchPanel";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 vi.mock("@/stores/hydration/LanguageHydration", () => ({
     useLanguage: () => ({ t: (key: string) => key }),
 }));

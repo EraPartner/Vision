@@ -26,7 +26,7 @@ import {
 } from "@/test/msw/handlers";
 import { TransactionImportCard } from "@/features/imports/TransactionImportCard";
 import type { SavedParserConfig } from "@/lib/api/imports";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 vi.mock("sonner", () => ({
     toast: {

@@ -8,7 +8,7 @@ import type { BelgianTaxHouseholdV2 } from "@/lib/belgianTax/householdTypes";
 import type { HouseholdUpdate } from "@/stores/belgianTaxStore";
 import { addActivity } from "../profile-steps/householdEditing";
 import { IncomeStep } from "../profile-steps/IncomeStep";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 describe("IncomeStep expense choices", () => {
     it("keeps both of two expense changes made before a re-render", () => {

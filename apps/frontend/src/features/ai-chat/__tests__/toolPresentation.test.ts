@@ -5,7 +5,7 @@ import {
     toolResultPresentation,
     toolResultRows,
 } from "@vision/shared-utils/ai-chat/toolPresentation";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 /**
  * Sectors recharts 3.10.1 computed for these inputs (computePieSectors with
  * cx/cy 50%, radii 40/80, 300x224) before recharts was removed (ADR-245). The

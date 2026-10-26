@@ -7,7 +7,7 @@ import { RestoreFromBackupCard } from "@/features/onboarding/RestoreFromBackupCa
 import type {
     ElectronBackupBridge,
 } from "@vision/types/electron";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 // Mock sonner toasts so we can assert without polluting the DOM.
 vi.mock("sonner", () => ({

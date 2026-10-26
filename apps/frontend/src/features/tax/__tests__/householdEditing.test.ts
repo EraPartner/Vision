@@ -13,7 +13,7 @@ import {
     updateActivity,
     updateRelationshipEvent,
 } from "../profile-steps/householdEditing";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 const base = (): BelgianTaxHouseholdV2 =>
     upgradeProfileV1ToHousehold({ ...DEFAULT_BELGIAN_TAX_PROFILE, grossAnnualIncome: 40_000 });

@@ -12,7 +12,7 @@ import {
     type AccountFormValues,
 } from "@/features/accounts/AddAccountDialog";
 import { asCurrencyCode } from "@vision/types/brands";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 vi.mock("sonner", () => ({
     toast: {

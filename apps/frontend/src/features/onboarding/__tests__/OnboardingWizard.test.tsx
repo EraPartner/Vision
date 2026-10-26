@@ -10,7 +10,7 @@ import { OnboardingWizard } from "@/features/onboarding/OnboardingWizard";
 import { DASHBOARD_ARRIVAL_EVENT } from "@/utils/dashboardArrival";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { toast } from "sonner";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 vi.mock("sonner", () => ({
     toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },

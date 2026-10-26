@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 vi.mock("@/stores/hydration/LanguageHydration", () => ({
     useLanguage: () => ({

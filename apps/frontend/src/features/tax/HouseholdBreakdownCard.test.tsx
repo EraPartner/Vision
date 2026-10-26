@@ -16,7 +16,7 @@ import {
 } from "@vision/shared-utils/belgian-tax/household";
 import type { BelgianTaxHouseholdV2 } from "@/lib/belgianTax/householdTypes";
 import { HouseholdBreakdownCard } from "./HouseholdBreakdownCard";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 

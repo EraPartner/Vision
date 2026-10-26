@@ -4,7 +4,7 @@ import { fireEvent, screen } from "@testing-library/react";
 import { renderWithApp } from "@/test/renderWithApp";
 import { MonthlyRhythm } from "../MonthlyRhythm";
 import type { StatisticsData } from "@/hooks/useStatistics";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 function month(period: string, net: number) {
     return {

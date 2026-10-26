@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { fetchRecentDashboardTransactions } from "@/features/dashboard/recentTransactions";
 import { server } from "@/test/msw/server";
 import { ok, TRANSACTION_STUB } from "@/test/msw/handlers";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 

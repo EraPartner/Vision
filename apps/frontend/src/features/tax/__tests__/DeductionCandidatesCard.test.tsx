@@ -15,7 +15,7 @@ import type { DeductionCandidatesResponse } from "@/lib/api/info";
 import { DISMISSED_DEDUCTION_CANDIDATES_STORAGE_KEY } from "@/lib/deductionCandidatesDismiss";
 import DeductionCandidatesCard from "../DeductionCandidatesCard";
 import { asCurrencyCode } from "@vision/types/brands";
-import { must } from "@/features/testing/must";
+import { must } from "@/test/must";
 
 vi.mock("@/stores/hydration/LanguageHydration", () => ({
     LanguageProvider: ({ children }: { children: React.ReactNode }) => (
