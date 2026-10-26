@@ -14,8 +14,16 @@ import {
   asAccountId,
   asPortfolioTransactionId,
 } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
+import type { Pool } from "pg";
 
-const pool = getTestPool()!;
+/** A row from an ad-hoc SQL read: column values are narrowed where used. */
+type DbRow = Record<string, unknown>;
+interface IdRow {
+  id: number;
+}
+
+let pool: Pool;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const runId = randomBytes(4).toString("hex");
 const uuid = (suffix: string) =>
@@ -29,13 +37,13 @@ async function wipe() {
 }
 
 async function seed() {
-  const accounts = await pool.query(
+  const accounts = await pool.query<DbRow>(
     `INSERT INTO accounts (name, display_name, type)
      VALUES ('WPC3 source', 'Source', 'brokerage'),
             ('WPC3 destination', 'Destination', 'brokerage')
      RETURNING id, name`,
   );
-  const investment = await pool.query(
+  const investment = await pool.query<IdRow>(
     `INSERT INTO investments (name, symbol, asset_class, currency, current_price)
      VALUES ('WPC3 instrument', 'WPC3', 'stock', 'EUR', 12)
      RETURNING id`,
@@ -43,14 +51,14 @@ async function seed() {
   const accountIdByName = new Map(
     accounts.rows.map((row) => [row.name, asAccountId(Number(row.id))]),
   );
-  const source = accountIdByName.get("WPC3 source")!;
-  const transactions = await pool.query(
+  const source = must(accountIdByName.get("WPC3 source"), "accountIdByName.get result");
+  const transactions = await pool.query<DbRow>(
     `INSERT INTO portfolio_transactions
        (investment_id, type, date, amount, units, currency, account_id)
      VALUES ($1, 'buy', '2026-01-01', 100, 10, 'EUR', $2),
             ($1, 'sell', '2026-02-01', 30, 3, 'EUR', $2)
      RETURNING id, type`,
-    [investment.rows[0].id, source],
+    [must(investment.rows[0], "investment.rows[0]").id, source],
   );
   const transactionIdByType = new Map(
     transactions.rows.map((row) => [
@@ -60,10 +68,10 @@ async function seed() {
   );
   return {
     source,
-    destination: accountIdByName.get("WPC3 destination")!,
+    destination: must(accountIdByName.get("WPC3 destination"), "accountIdByName.get result"),
     transactionIds: [
-      transactionIdByType.get("buy")!,
-      transactionIdByType.get("sell")!,
+      must(transactionIdByType.get("buy"), "transactionIdByType.get result"),
+      must(transactionIdByType.get("sell"), "transactionIdByType.get result"),
     ],
   };
 }
@@ -80,19 +88,22 @@ function request(idempotencyKey = uuid("1")) {
 async function waitForRetagAccountLock() {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
-    const result = await pool.query(
+    const result = await pool.query<{ count: number }>(
       `SELECT count(*)::int AS count
                FROM pg_stat_activity
               WHERE wait_event_type = 'Lock'
                 AND query ~* 'from "?accounts"? .*for update'`,
     );
-    if (result.rows[0].count > 0) return;
+    if (must(result.rows[0], "result.rows[0]").count > 0) return;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
   throw new Error("Timed out waiting for broker re-tag account-row lock");
 }
 
 describeDb("portfolio broker bulk re-tag (real Postgres)", () => {
+  beforeAll(() => {
+    pool = must(getTestPool(), "test pool");
+  });
   beforeAll(async () => {
     expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
     await acquireDbSuiteLock();
@@ -111,7 +122,7 @@ describeDb("portfolio broker bulk re-tag (real Postgres)", () => {
   });
 
   async function accountIds() {
-    const rows = await pool.query(
+    const rows = await pool.query<DbRow>(
       "SELECT account_id, xmin::text AS version FROM portfolio_transactions ORDER BY id",
     );
     return rows.rows.map((row) => ({
@@ -159,7 +170,9 @@ describeDb("portfolio broker bulk re-tag (real Postgres)", () => {
       retagPortfolioTransactions(request(uuid("6"))),
     ]);
     expect(
-      results.map((result) => [result.replayed, result.changed_count]).sort(),
+      results
+        .map((result) => [result.replayed, result.changed_count] as const)
+        .sort((a, b) => Number(a[0]) - Number(b[0])),
     ).toEqual([
       [false, 2],
       [true, 0],
@@ -187,10 +200,10 @@ describeDb("portfolio broker bulk re-tag (real Postgres)", () => {
     await expect(
       retagPortfolioTransactions({
         ...request(uuid("2")),
-        transaction_ids: [fixture.transactionIds[0]!],
+        transaction_ids: [must(fixture.transactionIds[0], "fixture.transactionIds[0]")],
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
-    const rows = await pool.query(
+    const rows = await pool.query<DbRow>(
       "SELECT account_id FROM portfolio_transactions ORDER BY id",
     );
     expect(rows.rows.map((row) => Number(row.account_id))).toEqual([
@@ -235,7 +248,7 @@ describeDb("portfolio broker bulk re-tag (real Postgres)", () => {
     // COMMIT releases the row lock, so the re-tag can reject before the
     // assertion below attaches; handle it now, the assertion still sees it.
     retag.catch(() => {});
-    let waitError;
+    let waitError: unknown;
     try {
       await waitForRetagAccountLock();
     } catch (err) {
@@ -248,10 +261,13 @@ describeDb("portfolio broker bulk re-tag (real Postgres)", () => {
       await closer.query("COMMIT");
       closer.release();
     }
-    if (waitError) throw waitError;
+    if (waitError !== undefined)
+      throw waitError instanceof Error
+        ? waitError
+        : new Error("waiting for the re-tag account lock failed", { cause: waitError });
 
     await expect(retag).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
-    const rows = await pool.query(
+    const rows = await pool.query<DbRow>(
       "SELECT account_id FROM portfolio_transactions ORDER BY id",
     );
     expect(rows.rows.map((row) => Number(row.account_id))).toEqual([

@@ -24,6 +24,8 @@ import type {
 } from "../src/types/express.ts";
 import { loose, partial } from "./helpers/partial.ts";
 import { ValidationError } from "../src/middleware/errorHandler.ts";
+import { must } from "./helpers/must.ts";
+import { valueAt } from "./helpers/responseBody.ts";
 
 // validateIdParam is unit-tested as a plain middleware function
 // (req, res, next) — a minimal res stub is enough; there is no router/HTTP
@@ -124,7 +126,7 @@ describe("Validation Middleware", () => {
       ]) {
         expect(
           validateId(bad).valid,
-          `expected ${String(bad)} to be rejected`,
+          `expected ${JSON.stringify(bad)} to be rejected`,
         ).toBe(false);
       }
     });
@@ -551,7 +553,7 @@ describe("Validation Middleware", () => {
       validateIdParam(req, res, next);
 
       expect(next).toHaveBeenCalledTimes(1);
-      expect(next.mock.calls[0]![0]).toBeInstanceOf(ValidationError);
+      expect(must(next.mock.calls[0], "next.mock.calls[0]")[0]).toBeInstanceOf(ValidationError);
       expect(res.status).not.toHaveBeenCalled();
       expect(res.json).not.toHaveBeenCalled();
     });
@@ -576,7 +578,7 @@ describe("Validation Middleware", () => {
         const next = vi.fn();
         validateIdParam(req, mockResponse(), next);
         expect(
-          next.mock.calls[0]![0],
+          must(next.mock.calls[0], "next.mock.calls[0]")[0],
           `expected ${JSON.stringify(id)} to be rejected`,
         ).toBeInstanceOf(ValidationError);
         expect(req.params.id).toBe(id);
@@ -615,13 +617,13 @@ describe("Validation Middleware", () => {
         "2147483648",
       ]) {
         const bad = loose<ExpressRequest>({ params: { id: 1, patternId } });
-        const badNext = vi.fn();
+        const badNext = vi.fn<(error?: unknown) => void>();
         guard(bad, mockResponse(), badNext);
         expect(
-          badNext.mock.calls[0]![0],
+          must(badNext.mock.calls[0], "badNext.mock.calls[0]")[0],
           `expected ${JSON.stringify(patternId)} to be rejected`,
         ).toBeInstanceOf(ValidationError);
-        expect(badNext.mock.calls[0]![0].message).toBe(
+        expect(valueAt(must(badNext.mock.calls[0], "badNext.mock.calls[0]")[0], "message")).toBe(
           "patternId must be a positive integer",
         );
       }
@@ -634,7 +636,7 @@ describe("Validation Middleware", () => {
         mockResponse(),
         next,
       );
-      expect(next.mock.calls[0]![0]).toBeInstanceOf(ValidationError);
+      expect(must(next.mock.calls[0], "next.mock.calls[0]")[0]).toBeInstanceOf(ValidationError);
     });
   });
 

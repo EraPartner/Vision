@@ -10,6 +10,7 @@ import type {
 } from "../src/repositories/portfolioImportReconciliationRepository.ts";
 import { loose } from "./helpers/partial.ts";
 import type { Built } from "./builders/domainRows.ts";
+import { must } from "./helpers/must.ts";
 
 const legacy = (over = {}) => ({
   id: 40,
@@ -31,7 +32,7 @@ const legacy = (over = {}) => ({
   dedup_fingerprint_version: null,
   ...over,
 });
-const source = <O extends Record<string, unknown> = Record<never, never>>(
+const source = <O extends Record<string, unknown> = { id?: number }>(
   over: O = {} as O,
 ) => {
   const row = {
@@ -102,19 +103,19 @@ describe("portfolio history adoption plan", () => {
       });
       expect(plan([income], [net], "prefer_source").plan.ready).toBe(true);
       expect(
-        plan([income], [{ ...net, amount: "115" }], "prefer_source").plan
-          .blockers[0]!.reason,
+        must(plan([income], [{ ...net, amount: "115" }], "prefer_source").plan
+          .blockers[0], "plan result").reason,
       ).toBe("unproven_economics");
       const foreign = { ...income, currency: "USD", fx_rate_to_eur: "0.8" };
       expect(
         plan([foreign], [{ ...net, amount: "68" }], "prefer_source").plan.ready,
       ).toBe(true);
       expect(
-        plan(
+        must(plan(
           [{ ...foreign, fx_rate_to_eur: null }],
           [{ ...net, amount: "68" }],
           "prefer_source",
-        ).plan.blockers[0]!.reason,
+        ).plan.blockers[0], "plan result").reason,
       ).toBe("unproven_currency_conversion");
     },
   );
@@ -144,11 +145,11 @@ describe("portfolio history adoption plan", () => {
       "preserve_existing",
       "prefer_source",
     ]);
-    expect(result.adoptions[0]!.after).toMatchObject({
+    expect(must(result.adoptions[0], "result.adoptions[0]").after).toMatchObject({
       currency: "EUR",
       amount: "500.0000",
     });
-    expect(result.adoptions[1]!.after).toMatchObject({
+    expect(must(result.adoptions[1], "result.adoptions[1]").after).toMatchObject({
       fees: "2",
       date: "2026-01-03",
     });
@@ -157,7 +158,7 @@ describe("portfolio history adoption plan", () => {
         .batchPolicies,
     ).toEqual(result.plan.batchPolicies);
     expect(
-      plan(rows, existing, "prefer_source", [overrides[1]!]).plan.ready,
+      plan(rows, existing, "prefer_source", [must(overrides[1], "overrides[1]")]).plan.ready,
     ).toBe(true);
     expect(() =>
       plan(rows, existing, undefined, [
@@ -165,12 +166,12 @@ describe("portfolio history adoption plan", () => {
       ]),
     ).toThrow("batch_policies");
     expect(() =>
-      plan(rows, existing, undefined, [overrides[0]!, overrides[0]!]),
+      plan(rows, existing, undefined, [must(overrides[0], "overrides[0]"), must(overrides[0], "overrides[0]")]),
     ).toThrow("batch_policies");
     const duplicate = { ...rows[0], id: 12, batch_id: 2 };
     expect(
-      plan([rows[0]!, duplicate], [existing[0]!], undefined, overrides).plan
-        .blockers[0]!.reason,
+      must(plan([must(rows[0], "rows[0]"), duplicate], [must(existing[0], "existing[0]")], undefined, overrides).plan
+        .blockers[0], "plan result").reason,
     ).toBe("source_policy_conflict");
   });
   it("requires same-account Pro history before accepting Wallet internal annotations", () => {
@@ -181,7 +182,7 @@ describe("portfolio history adoption plan", () => {
       asset_transfer_details: { direction: "internal" },
       custom_config: { format: "nexo_transaction_history" },
     });
-    expect(plan([movement], []).plan.blockers[0]!.reason).toBe(
+    expect(must(plan([movement], []).plan.blockers[0], "plan result").reason).toBe(
       "missing_companion_pro_history",
     );
     const pro = source({
@@ -194,7 +195,7 @@ describe("portfolio history adoption plan", () => {
       summary: { internal_annotation: 1, insert: 1 },
     });
     expect(
-      plan([{ ...movement, account_id: 9 }, pro], []).plan.blockers[0]!.reason,
+      must(plan([{ ...movement, account_id: 9 }, pro], []).plan.blockers[0], "plan result").reason,
     ).toBe("missing_companion_pro_history");
   });
   it("uses literal Nexo Pro base-fee proof for gross-to-net unit corrections", () => {
@@ -213,7 +214,7 @@ describe("portfolio history adoption plan", () => {
     expect(plan([pro], [old]).plan.summary.insert).toBe(0);
     const corrected = plan([pro], [old], "prefer_source");
     expect(corrected.plan.ready).toBe(true);
-    expect(corrected.adoptions[0]!.after).toMatchObject({
+    expect(must(corrected.adoptions[0], "corrected.adoptions[0]").after).toMatchObject({
       units: "9.97",
       amount: "19.94",
       fees: "0.06",
@@ -224,7 +225,7 @@ describe("portfolio history adoption plan", () => {
     };
     expect(plan([unproven], [old]).plan.summary.insert).toBe(0);
     expect(
-      plan([unproven], [old], "prefer_source").plan.blockers[0]!.reason,
+      must(plan([unproven], [old], "prefer_source").plan.blockers[0], "plan result").reason,
     ).toBe("unproven_units");
   });
 
@@ -279,10 +280,10 @@ describe("portfolio history adoption plan", () => {
       ready: true,
       summary: { adopt: 1, insert: 0 },
     });
-    expect(corrected.plan.actions[0]!.corrections).toContain("date");
-    expect(corrected.adoptions[0]!.after.date).toBe("2026-01-14");
+    expect(must(corrected.plan.actions[0], "corrected.plan.actions[0]").corrections).toContain("date");
+    expect(must(corrected.adoptions[0], "corrected.adoptions[0]").after.date).toBe("2026-01-14");
     expect(
-      plan([pro], [old, { ...old, id: 41 }], "prefer_source").plan.blockers[0]!
+      must(plan([pro], [old, { ...old, id: 41 }], "prefer_source").plan.blockers[0], "plan result")
         .reason,
     ).toBe("ambiguous_history");
     expect(
@@ -326,7 +327,7 @@ describe("portfolio history adoption plan", () => {
       ready: true,
       summary: { transfer: 1, duplicate_source: 1 },
     });
-    expect(preview.actions[0]!.transfer).toMatchObject({
+    expect(must(preview.actions[0], "preview.actions[0]").transfer).toMatchObject({
       sourceAccountId: 7,
       destinationAccountId: 8,
       units: "5.00000000",
@@ -346,7 +347,7 @@ describe("portfolio history adoption plan", () => {
     };
     expect(plan([outgoing], [existing]).plan.summary.duplicate).toBe(1);
     expect(
-      plan(
+      must(plan(
         [
           {
             ...outgoing,
@@ -354,7 +355,7 @@ describe("portfolio history adoption plan", () => {
           },
         ],
         [existing],
-      ).plan.blockers[0]!.reason,
+      ).plan.blockers[0], "plan result").reason,
     ).toBe("source_identity_conflict");
   });
   it("adopts exact legacy evidence without changing financial values or notes", () => {
@@ -365,7 +366,7 @@ describe("portfolio history adoption plan", () => {
       policy: "exact",
       existingTransactionId: 40,
     });
-    expect(result.adoptions[0]!.after).toMatchObject({
+    expect(must(result.adoptions[0], "result.adoptions[0]").after).toMatchObject({
       amount: "500.0000",
       date: "2026-01-01",
       note: "Manual research note",
@@ -382,7 +383,7 @@ describe("portfolio history adoption plan", () => {
     expect(result.plan.ready).toBe(false);
     expect(result.plan.actions[0]).toMatchObject({
       action: "policy_required",
-      corrections: expect.arrayContaining(["date", "fees"]),
+      corrections: expect.arrayContaining(["date", "fees"]) as unknown,
     });
   });
 
@@ -392,13 +393,13 @@ describe("portfolio history adoption plan", () => {
       [legacy()],
     );
     expect(result.plan.summary.insert).toBe(0);
-    expect(result.plan.blockers[0]!.reason).toBe("source_policy_required");
+    expect(must(result.plan.blockers[0], "result.plan.blockers[0]").reason).toBe("source_policy_required");
     expect(
-      plan(
+      must(plan(
         [source({ currency: "USD", amount: "600", price_per_unit: "120" })],
         [legacy()],
         "prefer_source",
-      ).plan.blockers[0]!.reason,
+      ).plan.blockers[0], "plan result").reason,
     ).toBe("unproven_currency_conversion");
   });
 
@@ -409,12 +410,12 @@ describe("portfolio history adoption plan", () => {
       price_per_unit: null,
       note: "Kinesis asset transfer in; original cost basis unavailable",
     });
-    expect(plan([incoming], [legacy()]).plan.blockers[0]!.reason).toBe(
+    expect(must(plan([incoming], [legacy()]).plan.blockers[0], "plan result").reason).toBe(
       "missing_original_basis",
     );
     const adopted = plan([incoming], [legacy()], "preserve_existing");
     expect(adopted.plan.ready).toBe(true);
-    expect(adopted.adoptions[0]!.after).toMatchObject({
+    expect(must(adopted.adoptions[0], "adopted.adoptions[0]").after).toMatchObject({
       type: "buy",
       amount: "500.0000",
       units: "5.00000000",
@@ -454,12 +455,12 @@ describe("portfolio history adoption plan", () => {
 
   it("blocks existing assigned or stamped transactions instead of treating them as new", () => {
     expect(
-      plan([source()], [legacy({ account_id: 7 })], "preserve_existing").plan
-        .blockers[0]!.reason,
+      must(plan([source()], [legacy({ account_id: 7 })], "preserve_existing").plan
+        .blockers[0], "plan result").reason,
     ).toBe("existing_assigned_or_imported_history");
     expect(
-      plan([source()], [legacy({ import_batch_id: "8" })], "preserve_existing")
-        .plan.blockers[0]!.reason,
+      must(plan([source()], [legacy({ import_batch_id: "8" })], "preserve_existing")
+        .plan.blockers[0], "plan result").reason,
     ).toBe("existing_assigned_or_imported_history");
   });
 

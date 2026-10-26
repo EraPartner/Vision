@@ -9,6 +9,17 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { hasTestDatabase } from "./setup/db.ts";
 import { migrateDatabase } from "./setup/migratedDatabase.ts";
+import { must } from "./helpers/must.ts";
+
+/** A row from an ad-hoc SQL read: column values are narrowed where used. */
+type DbRow = Record<string, unknown>;
+interface IdRow {
+  id: number;
+}
+/** BIGINT ids arrive from node-postgres as strings. */
+interface BigIdRow {
+  id: string;
+}
 
 /** A cash transaction's full image, as Kinesis cash receipts recorded it. */
 const CASH_SNAPSHOT_SQL = `jsonb_build_object('id',t.id,'date',to_char(t.date,'YYYY-MM-DD'),
@@ -26,7 +37,7 @@ const repoRoot = path.resolve(
 const require = createRequire(import.meta.url);
 const { createBundle, encryptBundle, openBundle } = require(
   path.join(repoRoot, "packaging/electron/out/backup/bundle.js"),
-);
+) as BundleModule;
 const tableNames = [
   "transactions",
   "portfolio_transactions",
@@ -42,9 +53,29 @@ const tableNames = [
 const sourceName = `vision_import_backup_source_${process.pid}`;
 const restoredName = `vision_import_backup_restored_${process.pid}`;
 function urlFor(name: string) {
-  const url = new URL(process.env.TEST_DATABASE_URL!);
+  const url = new URL(must(process.env.TEST_DATABASE_URL, "process.env.TEST_DATABASE_URL"));
   url.pathname = `/${name}`;
   return url.toString();
+}
+/** The parts of the packaged backup bundle module this suite calls. */
+interface BundleModule {
+  createBundle: (options: {
+    destDir: string;
+    deviceId: string;
+    schemaHead: string;
+    appVersion: string;
+    dbSqlPath: string;
+    attachmentsDir: string | null;
+    frontendState: { keys: Record<string, string> };
+  }) => Promise<{ bundlePath: string }>;
+  encryptBundle: (
+    bundlePath: string,
+    passphrase: string,
+  ) => Promise<{ encPath: string }>;
+  openBundle: (
+    encPath: string,
+    options: { passphrase: string },
+  ) => Promise<OpenedBundle>;
 }
 /** The parts of `openBundle`'s result this suite reads. */
 interface OpenedBundle {
@@ -52,8 +83,8 @@ interface OpenedBundle {
   dbSqlPath: string;
   cleanup(): void;
 }
-let source: pg.Client,
-  restored: pg.Client,
+let source: pg.Client | undefined,
+  restored: pg.Client | undefined,
   directory: string,
   opened: OpenedBundle | undefined;
 async function snapshot(client: pg.Client) {
@@ -64,7 +95,7 @@ async function snapshot(client: pg.Client) {
         ? "adjustment_id,staging_row_id"
         : "id";
     result[name] = (
-      await client.query(
+      await client.query<{ data: Record<string, unknown> }>(
         `SELECT to_jsonb(t) AS data FROM ${name} t ORDER BY ${order}`,
       )
     ).rows.map((row) => row.data);
@@ -113,17 +144,17 @@ describe.skipIf(
     await source.connect();
     await restored.connect();
     const accounts = (
-      await source.query(
+      await source.query<IdRow>(
         "INSERT INTO accounts(name,type) VALUES ('SYNTHETIC BACKUP EXCHANGE','crypto_exchange'),('SYNTHETIC BACKUP WALLET','wallet') RETURNING id",
       )
     ).rows.map((row) => row.id);
-    const investment = (
-      await source.query(
+    const investment = must((
+      await source.query<IdRow>(
         "INSERT INTO investments(name,symbol,asset_class,currency) VALUES ('Synthetic recovery asset','RECOVERYTEST','crypto','EUR') RETURNING id",
       )
-    ).rows[0].id;
-    const batch = (
-      await source.query(
+    ).rows[0], "query row").id;
+    const batch = must((
+      await source.query<BigIdRow>(
         "INSERT INTO portfolio_import_batches(adapter_name,status,account_id,custom_config) VALUES ('synthetic_recovery','complete',$1,$2) RETURNING id",
         [
           accounts[0],
@@ -135,19 +166,19 @@ describe.skipIf(
           }),
         ],
       )
-    ).rows[0].id;
+    ).rows[0], "query row").id;
     const rows = (
-      await source.query(
+      await source.query<BigIdRow>(
         "INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,raw_data) SELECT $1,n,'duplicate','Synthetic immutable recovery provenance' FROM generate_series(0,3) n RETURNING id",
         [batch],
       )
     ).rows.map((row) => row.id);
-    const transaction = (
-      await source.query(
+    const transaction = must((
+      await source.query<{ data: { id: number } & Record<string, unknown> }>(
         "INSERT INTO portfolio_transactions(investment_id,account_id,type,date,amount,units,currency,note) VALUES ($1,$2,'gift','2026-01-01',0,10,'EUR','Synthetic preserved manual note') RETURNING to_jsonb(portfolio_transactions) AS data",
         [investment, accounts[0]],
       )
-    ).rows[0].data;
+    ).rows[0], "query row").data;
     await source.query(
       "INSERT INTO portfolio_import_reconciliation_journal(batch_id,staging_row_id,transaction_id,action,policy,before_data,after_data) VALUES($1,$2,$3,'adopt','prefer_source',$4,$5)",
       [
@@ -219,8 +250,8 @@ describe.skipIf(
       [rows[0], "d".repeat(64), rows[3]],
     );
     const incomeBatch = Number(
-      (
-        await source.query(
+      must((
+        await source.query<BigIdRow>(
           "INSERT INTO portfolio_import_batches(adapter_name,status,account_id,custom_config) VALUES('kinesis_transaction_history','awaiting_review',$1,$2) RETURNING id",
           [
             accounts[0],
@@ -231,21 +262,21 @@ describe.skipIf(
             }),
           ],
         )
-      ).rows[0].id,
+      ).rows[0], "query row").id,
     );
-    const incomeSource = (
-      await source.query(
+    const incomeSource = must((
+      await source.query<BigIdRow>(
         "INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,raw_data,type,route) VALUES($1,0,'committed','Synthetic paired backup source','dividend','portfolio') RETURNING id",
         [incomeBatch],
       )
-    ).rows[0].id;
+    ).rows[0], "query row").id;
     await source.query("BEGIN");
-    const income = (
-      await source.query(
+    const income = must((
+      await source.query<IdRow>(
         "INSERT INTO portfolio_transactions(investment_id,account_id,type,date,amount,fees,taxes,currency,import_batch_id,income_recognition_role) VALUES($1,$2,'dividend','2026-01-01',5,0,0,'EUR',$3,'included_in_units') RETURNING id",
         [investment, accounts[0], incomeBatch],
       )
-    ).rows[0].id;
+    ).rows[0], "query row").id;
     await source.query(
       `INSERT INTO portfolio_import_income_recognition_journal(batch_id,staging_row_id,unit_staging_row_id,income_transaction_id,unit_transaction_id,action,income_data,unit_data,proof_data)
       SELECT $1,$2,$3,i.id,u.id,'record',portfolio_income_transaction_snapshot(i),portfolio_income_transaction_snapshot(u),$4 FROM portfolio_transactions i,portfolio_transactions u WHERE i.id=$5 AND u.id=$6`,
@@ -260,26 +291,26 @@ describe.skipIf(
     );
     await source.query("COMMIT");
     const cashBatch = Number(
-      (
-        await source.query(
+      must((
+        await source.query<BigIdRow>(
           "INSERT INTO portfolio_import_batches(adapter_name,status,account_id) VALUES('synthetic_cash_recovery','complete',$1) RETURNING id",
           [accounts[0]],
         )
-      ).rows[0].id,
+      ).rows[0], "query row").id,
     );
-    const cashRecipient = (
-      await source.query(
+    const cashRecipient = must((
+      await source.query<IdRow>(
         "INSERT INTO recipients(name,normalized_name) VALUES('Synthetic cash backup recipient','synthetic cash backup recipient') RETURNING id",
       )
-    ).rows[0].id;
+    ).rows[0], "query row").id;
     const cashIds = (
-      await source.query(
+      await source.query<IdRow>(
         "INSERT INTO transactions(account_id,recipient_id,date,amount,currency,memo,is_transfer,transfer_source) VALUES($1,$2,'2026-01-04',-9,'EUR','Synthetic net funding',true,'brokerage'),($1,$2,'2026-01-04',-1,'EUR','Synthetic funding fee',false,'brokerage') RETURNING id",
         [accounts[0], cashRecipient],
       )
     ).rows.map((row) => row.id);
     const cashImages = (
-      await source.query(
+      await source.query<DbRow>(
         `SELECT ${CASH_SNAPSHOT_SQL} AS data FROM transactions t WHERE id=ANY($1::integer[]) ORDER BY id`,
         [cashIds],
       )
@@ -322,9 +353,9 @@ describe.skipIf(
   });
 
   it("restores populated journals, lot allocation receipts, source provenance and custody protection triggers from an encrypted production bundle", async () => {
-    const expected = await snapshot(source);
+    const expected = await snapshot(must(source, "source"));
     for (const name of tableNames)
-      expect(expected[name]!.length).toBeGreaterThan(0);
+      expect(must(expected[name], "expected[name]").length).toBeGreaterThan(0);
     const bin = await postgresBin();
     const dump = path.join(directory, "db.sql");
     await run(
@@ -339,11 +370,11 @@ describe.skipIf(
       ],
       { timeout: 120000 },
     );
-    const head = (
-      await source.query(
+    const head = must((
+      await must(source, "source").query<{ head: string }>(
         "SELECT max(name) AS head FROM public.kysely_migration",
       )
-    ).rows[0].head;
+    ).rows[0], "query row").head;
     const { bundlePath } = await createBundle({
       destDir: directory,
       deviceId: "synthetic",
@@ -355,7 +386,7 @@ describe.skipIf(
     });
     const passphrase = "Synthetic import recovery test passphrase";
     const { encPath } = await encryptBundle(bundlePath, passphrase);
-    opened = (await openBundle(encPath, { passphrase })) as OpenedBundle;
+    opened = await openBundle(encPath, { passphrase });
     expect(opened.metadata.schemaHead).toBe(head);
     await run(
       path.join(bin, "psql"),
@@ -371,60 +402,60 @@ describe.skipIf(
       ],
       { timeout: 120000, maxBuffer: 4 * 1024 * 1024 },
     );
-    expect(await snapshot(restored)).toEqual(expected);
+    expect(await snapshot(must(restored, "restored"))).toEqual(expected);
     expect(
-      (
-        await restored.query(
+      must((
+        await must(restored, "restored").query<DbRow>(
           "SELECT max(name) AS head FROM public.kysely_migration",
         )
-      ).rows[0].head,
+      ).rows[0], "query row").head,
     ).toBe(head);
     await expect(
-      restored.query(
+      must(restored, "restored").query<DbRow>(
         "UPDATE portfolio_transactions SET note='Break active unit image' WHERE type='gift'",
       ),
     ).rejects.toThrow(/paired income/);
     await expect(
-      restored.query(
+      must(restored, "restored").query<DbRow>(
         "DELETE FROM portfolio_transactions WHERE income_recognition_role='included_in_units'",
       ),
     ).rejects.toThrow(/paired income/);
     expect(
       Number(
-        (
-          await restored.query(
+        must((
+          await must(restored, "restored").query<DbRow>(
             "SELECT nextval('portfolio_import_income_recognition_journal_id_seq') AS id",
           )
-        ).rows[0].id,
+        ).rows[0], "query row").id,
       ),
     ).toBeGreaterThan(
       Math.max(
-        ...expected.portfolio_import_income_recognition_journal!.map((row) =>
+        ...must(expected.portfolio_import_income_recognition_journal, "expected.portfolio_import_income_recognition_jo...").map((row) =>
           Number(row.id),
         ),
       ),
     );
     await expect(
-      restored.query("UPDATE portfolio_asset_transfers SET units=3"),
+      must(restored, "restored").query<DbRow>("UPDATE portfolio_asset_transfers SET units=3"),
     ).rejects.toThrow("immutable");
     await expect(
-      restored.query("UPDATE portfolio_asset_adjustments SET units=1"),
+      must(restored, "restored").query<DbRow>("UPDATE portfolio_asset_adjustments SET units=1"),
     ).rejects.toThrow("immutable");
     await expect(
-      restored.query(
+      must(restored, "restored").query<DbRow>(
         "UPDATE portfolio_asset_adjustment_sources SET source_record_hash=$1",
         ["1".repeat(64)],
       ),
     ).rejects.toThrow("immutable");
     await expect(
-      restored.query("DELETE FROM portfolio_asset_adjustment_sources"),
+      must(restored, "restored").query<DbRow>("DELETE FROM portfolio_asset_adjustment_sources"),
     ).rejects.toThrow("immutable");
     await expect(
-      restored.query("DELETE FROM portfolio_import_batches"),
+      must(restored, "restored").query<DbRow>("DELETE FROM portfolio_import_batches"),
     ).rejects.toThrow(/foreign key constraint|immutable/);
     expect(
       (
-        await restored.query(
+        await must(restored, "restored").query<DbRow>(
           "SELECT is_transfer,transfer_source,transfer_peer_id FROM transactions ORDER BY id",
         )
       ).rows,
@@ -445,15 +476,15 @@ describe.skipIf(
         "portfolio_transactions",
         "portfolio_asset_transfers",
         "portfolio_asset_adjustments",
-      ].flatMap((name) => expected[name]!.map((row) => Number(row.id))),
+      ].flatMap((name) => must(expected[name], "expected[name]").map((row) => Number(row.id))),
     );
     expect(
       Number(
-        (
-          await restored.query(
+        must((
+          await must(restored, "restored").query<DbRow>(
             "SELECT nextval('portfolio_transactions_id_seq') AS id",
           )
-        ).rows[0].id,
+        ).rows[0], "query row").id,
       ),
     ).toBeGreaterThan(maximum);
   }, 180000);

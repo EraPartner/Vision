@@ -29,6 +29,7 @@ import {
   overrideInvestments,
   setBatchAccount,
 } from "../src/repositories/portfolioImportBatchRepository.ts";
+import { must } from "./helpers/must.ts";
 
 const query = vi.mocked(rawQuery);
 const commitBatch = vi.mocked(rawCommitBatch);
@@ -48,7 +49,7 @@ describe("commitPortfolioImport — status reflects remaining error rows", () =>
       /update "?portfolio_import_batches"?[\s\S]*set "?status"?/i.test(sql),
     );
     expect(statusUpdate).toBeTruthy();
-    const [sql, params] = statusUpdate!;
+    const [sql, params] = must(statusUpdate, "statusUpdate");
     // Branches on the actual remaining error rows rather than unconditionally
     // marking the batch clean — this is what re-opens a partially-failed batch.
     expect(sql).toContain("'complete_with_errors'");
@@ -79,13 +80,13 @@ describe("overrideInvestment — repair path for errored rows", () => {
     });
 
     expect(rowCount).toBe(1);
-    const updateSql = query.mock.calls[0]![0];
+    const updateSql = must(query.mock.calls[0], "query.mock.calls[0]")[0];
     expect(updateSql).toContain(
       "error_message = 'unresolved instrument — pick or create a holding'",
     );
     expect(updateSql).toMatch(/'matched'/);
     // Second call decrements the batch counter (never below zero).
-    const decrement = query.mock.calls[1]!;
+    const decrement = must(query.mock.calls[1], "query.mock.calls[1]");
     expect(decrement[0]).toMatch(
       /"?rows_error"? = GREATEST\(COALESCE\(rows_error, 0\) - 1, 0\)/,
     );
@@ -132,13 +133,13 @@ describe("cash-row review guards and repair", () => {
 
     await overrideInvestment({ batchId: 5, rowId: 2, investmentId: 88 });
 
-    expect(query.mock.calls[0]![0]).toMatch(/route IS DISTINCT FROM 'cash'/);
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toMatch(/route IS DISTINCT FROM 'cash'/);
   });
 
   it("repairs only the missing-account cash error when setting an account", async () => {
     await setBatchAccount(5, 77);
 
-    const [sql, params] = query.mock.calls[0]!;
+    const [sql, params] = must(query.mock.calls[0], "query.mock.calls[0]");
     expect(sql).toContain("route = 'cash'");
     expect(sql).toContain(
       "error_message = 'brokerage cash row requires a batch account'",
@@ -163,7 +164,7 @@ describe("cash-row review guards and repair", () => {
 
     await overrideInvestments({ batchId: 5, rowIds: [2], investmentId: 88 });
 
-    expect(query.mock.calls[0]![0]).toMatch(/route IS DISTINCT FROM 'cash'/);
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toMatch(/route IS DISTINCT FROM 'cash'/);
   });
 });
 
@@ -195,7 +196,7 @@ describe("overrideInvestments — atomic row-set guard", () => {
       updatedCount: 3,
       resetErrorCount: 2,
     });
-    const [sql, params] = query.mock.calls[0]!;
+    const [sql, params] = must(query.mock.calls[0], "query.mock.calls[0]");
     expect(sql).toMatch(/counts\.requested_count = counts\.eligible_count/);
     expect(sql).toContain(
       "error_message = 'unresolved instrument — pick or create a holding'",
@@ -204,7 +205,7 @@ describe("overrideInvestments — atomic row-set guard", () => {
     expect(sql).toMatch(/FOR UPDATE OF r/);
     expect(params).toEqual([[10, 11, 12], 5, 88]);
     // [reset error count, batch id].
-    expect(query.mock.calls[1]![1]).toEqual([2, "5"]);
+    expect(must(query.mock.calls[1], "query.mock.calls[1]")[1]).toEqual([2, "5"]);
   });
 
   it("performs no update and no counter write when one requested row is ineligible", async () => {
@@ -274,11 +275,11 @@ describe("lockInvestmentResolutionRows — batch-first serialization", () => {
     });
 
     expect(result.batchStatus).toBe("awaiting_review");
-    expect(query.mock.calls[0]![0]).toMatch(
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toMatch(
       /portfolio_import_batches[\s\S]*FOR UPDATE/i,
     );
-    expect(query.mock.calls[1]![0]).toMatch(/ORDER BY "?id"?\s+FOR UPDATE/i);
-    expect(query.mock.calls[1]![1]).toEqual(["5", [11, 10]]);
+    expect(must(query.mock.calls[1], "query.mock.calls[1]")[0]).toMatch(/ORDER BY "?id"?\s+FOR UPDATE/i);
+    expect(must(query.mock.calls[1], "query.mock.calls[1]")[1]).toEqual(["5", [11, 10]]);
   });
 
   it("does not try to lock rows when the batch does not exist", async () => {

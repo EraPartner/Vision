@@ -29,6 +29,13 @@ import {
 } from "../src/services/transactionExport.ts";
 import type { ExpressResponse } from "../src/types/express.ts";
 import { loose, partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
+import { valueAt } from "./helpers/responseBody.ts";
+
+/** The spy behind `obj[key]`, read without taking an unbound method reference. */
+function methodMock<T extends object, K extends keyof T>(obj: T, key: K) {
+  return vi.mocked(obj)[key];
+}
 
 const getClient = vi.mocked(rawGetClient);
 const dbQuery = vi.mocked(rawDbQuery);
@@ -96,9 +103,9 @@ describe("export date serialization", () => {
       },
     });
 
-    expect(dbQuery.mock.calls[0]![0]).toMatch(/t\.account_id IN \(\$1, \$2\)/);
-    expect(dbQuery.mock.calls[0]![0]).toContain("t.amount < 0");
-    expect(dbQuery.mock.calls[0]![1]).toEqual([3, 9]);
+    expect(must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]")[0]).toMatch(/t\.account_id IN \(\$1, \$2\)/);
+    expect(must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]")[0]).toContain("t.amount < 0");
+    expect(must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]")[1]).toEqual([3, 9]);
   });
 
   it("destroys and rejects a response when a database failure happens after headers", async () => {
@@ -115,7 +122,7 @@ describe("export date serialization", () => {
     expect(res.destroy).toHaveBeenCalledWith(
       expect.objectContaining({ message: "stream failed" }),
     );
-    expect(res.end).not.toHaveBeenCalled();
+    expect(methodMock(res, "end")).not.toHaveBeenCalled();
   });
 
   it("CSV emits the calendar day, not String(pg Date)", async () => {
@@ -127,7 +134,7 @@ describe("export date serialization", () => {
     });
 
     const dataRow = res.chunks[1]; // [0] is the header line
-    expect(dataRow!.startsWith("2026-07-01,")).toBe(true);
+    expect(must(dataRow, "dataRow").startsWith("2026-07-01,")).toBe(true);
     expect(dataRow).not.toMatch(/GMT|Jul/);
   });
 
@@ -177,8 +184,8 @@ describe("export date serialization", () => {
       where: sql`1=1`,
     });
 
-    const parsed = JSON.parse(res.chunks[0]!);
-    expect(parsed.date).toBe("2026-07-01");
+    const parsed: unknown = JSON.parse(must(res.chunks[0], "res.chunks[0]"));
+    expect(valueAt(parsed, "date")).toBe("2026-07-01");
   });
 });
 
@@ -203,7 +210,7 @@ describe("export tag aggregation", () => {
       where: sql`1=1`,
     });
 
-    expect(JSON.parse(res.chunks[0]!).tags).toEqual(["alpha", "beta", "gamma"]);
+    expect(valueAt(JSON.parse(must(res.chunks[0], "res.chunks[0]")), "tags")).toEqual(["alpha", "beta", "gamma"]);
   });
 
   it("fetches tags via a single pre-aggregated LEFT JOIN, not a per-row correlated subquery", async () => {
@@ -215,7 +222,7 @@ describe("export tag aggregation", () => {
     });
 
     // dbQuery calls: [0] probe, [1] first chunk.
-    const chunkSql = dbQuery.mock.calls[1]![0];
+    const chunkSql = must(dbQuery.mock.calls[1], "dbQuery.mock.calls[1]")[0];
     // Slug ordering + active-only filter preserved …
     expect(chunkSql).toContain("array_agg(tg.slug ORDER BY tg.slug)");
     expect(chunkSql).toContain("WHERE tg.is_active = true");
@@ -260,12 +267,12 @@ describe("bulk export service snapshot", () => {
       format: "csv",
     });
 
-    expect(query.mock.calls[0]![0]).toBe(
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toBe(
       "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
     );
-    expect(query.mock.calls.at(-1)![0]).toBe("COMMIT");
+    expect(must(query.mock.calls.at(-1), "query.mock.calls entry last")[0]).toBe("COMMIT");
     expect(release).toHaveBeenCalledOnce();
-    expect(res.end).toHaveBeenCalledOnce();
+    expect(methodMock(res, "end")).toHaveBeenCalledOnce();
     expect(res.setHeader).toHaveBeenCalledWith("X-Exported-Count", "1");
   });
 
@@ -282,8 +289,8 @@ describe("bulk export service snapshot", () => {
       streamBulkTransactionExport(res, { ids: [1], format: "csv" }),
     ).rejects.toThrow("No transactions found");
 
-    expect(query.mock.calls.at(-1)![0]).toBe("ROLLBACK");
+    expect(must(query.mock.calls.at(-1), "query.mock.calls entry last")[0]).toBe("ROLLBACK");
     expect(release).toHaveBeenCalledOnce();
-    expect(res.end).not.toHaveBeenCalled();
+    expect(methodMock(res, "end")).not.toHaveBeenCalled();
   });
 });

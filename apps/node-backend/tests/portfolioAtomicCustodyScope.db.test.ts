@@ -24,8 +24,21 @@ import {
 } from "../src/services/portfolio/portfolioCustodyImportScope.ts";
 import { getUnitEventsForInvestment } from "../src/repositories/portfolioTxRepo.reads.ts";
 import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.ts";
+import { must } from "./helpers/must.ts";
+import { asAccountId, asInvestmentId } from "@vision/types/brands";
+import type { PortfolioParserConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
+import type { Pool } from "pg";
 
-const pool = getTestPool()!;
+interface IdRow {
+  id: number;
+}
+type BasisAllocations = Record<
+  string,
+  { lots: unknown[] } | undefined
+>;
+type StagedRow = Parameters<typeof commitPortfolioAssetTransfer>[0]["row"];
+
+let pool: Pool;
 const owned: { accounts: number[]; investments: number[]; batches: number[] } =
   { accounts: [], investments: [], batches: [] };
 const hash = (value: string) =>
@@ -33,26 +46,28 @@ const hash = (value: string) =>
 let sequence = 0;
 async function seed() {
   const accounts = (
-    await pool.query(
+    await pool.query<IdRow>(
       "INSERT INTO accounts(name,type) VALUES ('ATOMIC BROKER','brokerage'),('ATOMIC WALLET','wallet') RETURNING id",
     )
-  ).rows.map((row) => row.id);
+  ).rows.map((row) => asAccountId(row.id));
   owned.accounts.push(...accounts);
-  const investment = (
-    await pool.query(
+  const source = must(accounts[0], "broker account");
+  const wallet = must(accounts[1], "wallet account");
+  const investment = asInvestmentId(must((
+    await pool.query<IdRow>(
       "INSERT INTO investments(name,symbol,asset_class,currency) VALUES ('Synthetic atomic custody','ATOMICTEST','crypto','EUR') RETURNING id",
     )
-  ).rows[0].id;
+  ).rows[0], "investment row").id);
   owned.investments.push(investment);
   const originals = (
-    await pool.query(
+    await pool.query<IdRow>(
       `INSERT INTO portfolio_transactions(investment_id,account_id,type,date,units,amount,price_per_unit,currency,note)
       VALUES ($1,$2,'buy','2020-01-01',10,100,10,'EUR','Original acquisition'),
              ($1,$2,'sell','2022-01-01',8,160,20,'EUR','Original later sale') RETURNING id`,
-      [investment, accounts[0]],
+      [investment, source],
     )
   ).rows.map((row) => row.id);
-  return { investment, source: accounts[0], wallet: accounts[1], originals };
+  return { investment, source, wallet, originals };
 }
 type Position = Awaited<ReturnType<typeof seed>>;
 async function stage(
@@ -65,13 +80,13 @@ async function stage(
     feeUnits = "1",
   } = {},
 ) {
-  const config = {
+  const config: PortfolioParserConfig = {
     format: "nexo_transaction_history",
     transfer_destination_account_id: position.wallet,
     transfer_origin_account_id: position.wallet,
   };
-  const batch = (
-    await pool.query(
+  const created = must((
+    await pool.query<{ id: string; account_id: number }>(
       `INSERT INTO portfolio_import_batches(adapter_name,custom_config,status,rows_total,account_id,is_brokerage)
       VALUES ('nexo_transaction_history',$1::jsonb,'awaiting_review',$2,$3,true) RETURNING *`,
       [
@@ -80,9 +95,12 @@ async function stage(
         position.source,
       ],
     )
-  ).rows[0];
-  batch.id = Number(batch.id);
-  batch.custom_config = config;
+  ).rows[0], "batch row");
+  const batch = {
+    ...created,
+    id: Number(created.id),
+    custom_config: config,
+  };
   owned.batches.push(batch.id);
   const inputs: {
     date: string;
@@ -126,12 +144,12 @@ async function stage(
         accountId: position.wallet,
       },
     });
-  const rows = [];
+  const rows: StagedRow[] = [];
   for (const [index, input] of inputs.entries()) {
     const identity = `atomic-custody-${++sequence}`;
     rows.push(
-      (
-        await pool.query(
+      must((
+        await pool.query<StagedRow>(
           `INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,tx_date,type_raw,route,units,amount,fees,taxes,currency,resolved_investment_id,raw_data,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,asset_transfer_details,asset_adjustment_details)
       VALUES ($1,$2,'matched',$3,$4,$5,$6,0,0,0,'EUR',$7,$8,$9,$10,1,$11::jsonb,$12::jsonb)
       RETURNING *,to_char(tx_date,'YYYY-MM-DD') AS tx_date`,
@@ -152,21 +170,21 @@ async function stage(
             input.adjustment ? JSON.stringify(input.adjustment) : null,
           ],
         )
-      ).rows[0],
+      ).rows[0], "staged row"),
     );
   }
   return { batch, rows };
 }
 const countEvents = async (position: Position) =>
   Number(
-    (
-      await pool.query(
+    must((
+      await pool.query<{ n: string }>(
         `SELECT
   (SELECT count(*) FROM portfolio_asset_transfers WHERE investment_id=$1) +
   (SELECT count(*) FROM portfolio_asset_adjustments WHERE investment_id=$1) AS n`,
         [position.investment],
       )
-    ).rows[0].n,
+    ).rows[0], "event count row").n,
   );
 async function cleanup() {
   for (const table of [
@@ -198,6 +216,9 @@ async function cleanup() {
 describe.skipIf(!hasTestDatabase())(
   "reviewed atomic custody prefixes (real PostgreSQL)",
   () => {
+    beforeAll(() => {
+      pool = must(getTestPool(), "test pool");
+    });
     beforeAll(async () => {
       expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
       await acquireDbSuiteLock();
@@ -213,7 +234,7 @@ describe.skipIf(!hasTestDatabase())(
       const position = await seed();
       const { batch, rows } = await stage(position);
       await expect(
-        commitPortfolioAssetTransfer({ row: rows[0], batch }),
+        commitPortfolioAssetTransfer({ row: must(rows[0], "first staged row"), batch }),
       ).rejects.toThrow(/oversell/);
       expect(await countEvents(position)).toBe(0);
       const preview = await previewPortfolioImportReconciliation({
@@ -229,7 +250,7 @@ describe.skipIf(!hasTestDatabase())(
       expect(result).toMatchObject({ imported: 3, adopted: 0, errors: 0 });
       expect(await countEvents(position)).toBe(3);
       const originals = (
-        await pool.query(
+        await pool.query<{ id: number; note: string }>(
           "SELECT id,note FROM portfolio_transactions WHERE investment_id=$1 ORDER BY id",
           [position.investment],
         )
@@ -239,14 +260,14 @@ describe.skipIf(!hasTestDatabase())(
         "Original acquisition",
         "Original later sale",
       ]);
-      const allocation = (
-        await pool.query(
+      const allocation = must((
+        await pool.query<{ basis_allocations: BasisAllocations }>(
           "SELECT basis_allocations FROM portfolio_asset_adjustments WHERE investment_id=$1",
           [position.investment],
         )
-      ).rows[0].basis_allocations;
+      ).rows[0], "adjustment receipt").basis_allocations;
       for (const method of ["weighted_avg", "fifo", "lifo"])
-        expect(allocation[method].lots).toEqual([
+        expect(must(allocation[method], `${method} allocation`).lots).toEqual([
           expect.objectContaining({
             acquisitionId: position.originals[0],
             units: "1",
@@ -269,7 +290,7 @@ describe.skipIf(!hasTestDatabase())(
       expect(await countEvents(position)).toBe(0);
       expect(
         (
-          await pool.query(
+          await pool.query<{ id: number; note: string }>(
             "SELECT id,note FROM portfolio_transactions WHERE investment_id=$1 ORDER BY id",
             [position.investment],
           )
@@ -339,18 +360,18 @@ describe.skipIf(!hasTestDatabase())(
         batchIds: [batch.id],
       });
       expect(preview.ready).toBe(false);
-      expect(preview.blockers[0]!.reason).toBe("projected_history_conflict");
+      expect(must(preview.blockers[0], "preview.blockers[0]").reason).toBe("projected_history_conflict");
       await expect(
         commitReviewedPortfolioImports({ batchIds: [batch.id] }),
       ).rejects.toThrow(/oversell/);
       expect(await countEvents(position)).toBe(0);
       expect(
-        (
-          await pool.query(
+        must((
+          await pool.query<{ status: string }>(
             "SELECT status FROM portfolio_import_batches WHERE id=$1",
             [batch.id],
           )
-        ).rows[0].status,
+        ).rows[0], "batch row").status,
       ).toBe("awaiting_review");
     });
 
@@ -358,19 +379,19 @@ describe.skipIf(!hasTestDatabase())(
       const position = await seed();
       const { batch, rows } = await stage(position, { includeFee: false });
       const events = rows.map(
-        (row) => previewPortfolioAssetTransfer(row, batch).event!,
+        (row) => must(previewPortfolioAssetTransfer(row, batch).event, "previewPortfolioAssetTransfer result"),
       );
       await expect(
         withPortfolioCustodyImportScope(
           { events, validateHistory: validatePortfolioAssetTransferHistory },
           async () => {
-            await commitPortfolioAssetTransfer({ row: rows[0], batch });
+            await commitPortfolioAssetTransfer({ row: must(rows[0], "first staged row"), batch });
           },
         ),
       ).rejects.toThrow(/oversell/);
       expect(await countEvents(position)).toBe(0);
       await expect(
-        commitPortfolioAssetTransfer({ row: rows[0], batch }),
+        commitPortfolioAssetTransfer({ row: must(rows[0], "first staged row"), batch }),
       ).rejects.toThrow(/oversell/);
     });
 
@@ -378,14 +399,14 @@ describe.skipIf(!hasTestDatabase())(
       const position = await seed();
       const { batch, rows } = await stage(position, { includeFee: false });
       const events = rows.map(
-        (row) => previewPortfolioAssetTransfer(row, batch).event!,
+        (row) => must(previewPortfolioAssetTransfer(row, batch).event, "previewPortfolioAssetTransfer result"),
       );
       await expect(
         withPortfolioCustodyImportScope(
           { events, validateHistory: validatePortfolioAssetTransferHistory },
           async () => {
             await commitPortfolioAssetTransfer({
-              row: { ...rows[0], units: "9" },
+              row: { ...must(rows[0], "first staged row"), units: "9" },
               batch,
             });
           },
@@ -394,13 +415,14 @@ describe.skipIf(!hasTestDatabase())(
       await expect(
         withPortfolioCustodyImportScope(
           { events, validateHistory: validatePortfolioAssetTransferHistory },
-          async () => {
+          () => {
             // A stand-in for some other transaction's client.
             portfolioCustodyWriteHistory(
               [],
-              events[0]!,
+              must(events[0], "events[0]"),
               loose<PgPoolClient>({}),
             );
+            return Promise.resolve();
           },
         ),
       ).rejects.toThrow(/outside its reviewed transaction scope/);
@@ -411,12 +433,12 @@ describe.skipIf(!hasTestDatabase())(
       const position = await seed();
       const { batch, rows } = await stage(position, { includeFee: false });
       const events = rows.map(
-        (row) => previewPortfolioAssetTransfer(row, batch).event!,
+        (row) => must(previewPortfolioAssetTransfer(row, batch).event, "previewPortfolioAssetTransfer result"),
       );
       await expect(
         withPortfolioCustodyImportScope(
           { events, validateHistory: validatePortfolioAssetTransferHistory },
-          async () => undefined,
+          () => Promise.resolve(undefined),
         ),
       ).rejects.toThrow(/did not retain every approved event/);
       expect(await countEvents(position)).toBe(0);
@@ -426,15 +448,17 @@ describe.skipIf(!hasTestDatabase())(
       const position = await seed();
       const { batch, rows } = await stage(position, { includeFee: false });
       const events = rows.map(
-        (row) => previewPortfolioAssetTransfer(row, batch).event!,
+        (row) => must(previewPortfolioAssetTransfer(row, batch).event, "previewPortfolioAssetTransfer result"),
       );
       await expect(
         withPortfolioCustodyImportScope(
           {
             events,
-            validateHistory: async (history) => {
+            validateHistory: (history) => {
               validatePortfolioAssetTransferHistory(history);
-              throw new Error("Asynchronous final validation failed");
+              return Promise.reject(
+                new Error("Asynchronous final validation failed"),
+              );
             },
           },
           async () => {
@@ -450,7 +474,7 @@ describe.skipIf(!hasTestDatabase())(
     it("binds the approved eligible yield source hashes", async () => {
       const position = await seed();
       const { batch, rows } = await stage(position, { includeFee: false });
-      const transfer = previewPortfolioAssetTransfer(rows[0], batch).event!;
+      const transfer = must(previewPortfolioAssetTransfer(must(rows[0], "first staged row"), batch).event, "previewPortfolioAssetTransfer result");
       const event = {
         ...transfer,
         type: "asset_adjustment",
@@ -468,12 +492,13 @@ describe.skipIf(!hasTestDatabase())(
             validateHistory: validatePortfolioAssetTransferHistory,
           },
           async () => {
-            await withTransaction(async (client) => {
+            await withTransaction((client) => {
               portfolioCustodyWriteHistory(
                 [],
                 { ...event, eligible_source_record_hashes: ["b".repeat(64)] },
                 client,
               );
+              return Promise.resolve();
             });
           },
         ),

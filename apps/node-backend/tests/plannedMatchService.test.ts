@@ -5,11 +5,11 @@ import {
   asRecipientId,
   asTransactionId,
 } from "@vision/types/brands";
-const mockListActiveUnexecuted = vi.fn();
-const mockListRecentUnlinked = vi.fn();
-const mockGetClusterRootMap = vi.fn();
-const mockSettingsGet = vi.fn();
-const mockExecutePlanned = vi.fn();
+const mockListActiveUnexecuted = vi.fn<(...args: unknown[]) => unknown>();
+const mockListRecentUnlinked = vi.fn<(...args: unknown[]) => unknown>();
+const mockGetClusterRootMap = vi.fn<(...args: unknown[]) => unknown>();
+const mockSettingsGet = vi.fn<(...args: unknown[]) => unknown>();
+const mockExecutePlanned = vi.fn<(...args: unknown[]) => unknown>();
 
 vi.mock("../src/repositories/plannedTransactionRepository.ts", () => ({
   default: {
@@ -49,6 +49,7 @@ import {
   autoLinkTransactions,
   getMatchSuggestions,
 } from "../src/services/plannedMatchService.ts";
+import { must } from "./helpers/must.ts";
 
 const planned = (over = {}) => ({
   id: 1,
@@ -158,8 +159,8 @@ describe("autoLinkTransactions", () => {
         id: i + 1,
         recipient_id: i % 8,
         recipient_cluster_id: i % 8,
-        currency: i % 3 ? "EUR" : "USD",
-        amount: i % 2 ? -100 : 100,
+        currency: i % 3 !== 0 ? "EUR" : "USD",
+        amount: i % 2 !== 0 ? -100 : 100,
         planned_date: `2026-07-${String(1 + ((i * 7) % 28)).padStart(2, "0")}`,
       }),
     );
@@ -168,8 +169,8 @@ describe("autoLinkTransactions", () => {
         id: i + 1000,
         recipient_id: i % 8,
         recipient_cluster_id: i % 8,
-        currency: i % 3 ? "EUR" : "USD",
-        amount: i % 2 ? -102 : 102,
+        currency: i % 3 !== 0 ? "EUR" : "USD",
+        amount: i % 2 !== 0 ? -102 : 102,
         transaction_date: `2026-07-${String(1 + ((i * 11) % 28)).padStart(2, "0")}`,
       }),
     );
@@ -180,7 +181,7 @@ describe("autoLinkTransactions", () => {
         matchesTolerance(plan, transaction),
       );
       if (matches.length !== 1) return [];
-      const plan = matches[0]!;
+      const plan = must(matches[0], "matches[0]");
       if (
         transactions.filter((candidate) => matchesTolerance(plan, candidate))
           .length !== 1
@@ -319,9 +320,9 @@ describe("getMatchSuggestions", () => {
     ]);
     const res = await getMatchSuggestions();
     expect(res).toHaveLength(1);
-    expect(res[0]!.planned.id).toBe(1);
-    expect(res[0]!.candidates).toHaveLength(1);
-    expect(res[0]!.candidates[0]!.id).toBe(1000);
+    expect(must(res[0], "res[0]").planned.id).toBe(1);
+    expect(must(res[0], "res[0]").candidates).toHaveLength(1);
+    expect(must(must(res[0], "res[0]").candidates[0], "must result").id).toBe(1000);
   });
 
   it("returns empty when no planned payments are active", async () => {

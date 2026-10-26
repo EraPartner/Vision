@@ -22,6 +22,7 @@ import {
 import { routeAgent } from "./helpers/routeApp.ts";
 import { bodyAt } from "./helpers/responseBody.ts";
 import plannedRouter from "../src/routes/plannedTransactions.ts";
+import { must } from "./helpers/must.ts";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
@@ -37,7 +38,7 @@ interface PlannedSeed {
 }
 
 async function insertPlanned(row: PlannedSeed) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "test pool").query(
     `INSERT INTO planned_transactions
        (planned_date, amount, currency, is_recurring, recurrence_pattern,
         recurrence_end_date, max_occurrences, is_active, is_executed)
@@ -57,7 +58,7 @@ async function insertPlanned(row: PlannedSeed) {
 }
 
 async function setRate(code: string, rateToEur: string, rateDate: string) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "test pool").query(
     `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
      VALUES ($1, $2, $3, true)`,
     [code, rateToEur, rateDate],
@@ -79,7 +80,7 @@ describeDb("GET /api/planned-transactions/totals (real DB)", () => {
   });
 
   beforeEach(async () => {
-    const pool = getTestPool()!;
+    const pool = must(getTestPool(), "test pool");
     await pool.query("DELETE FROM planned_transaction_executions");
     await pool.query("DELETE FROM planned_transactions");
     await pool.query("DELETE FROM exchange_rates");

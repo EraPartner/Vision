@@ -35,6 +35,17 @@ import {
   releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { __getSupportedPatterns as getSupportedPatterns } from "../src/lib/calculations/recurrence.ts";
+import { must } from "./helpers/must.ts";
+
+/** A row from an ad-hoc SQL read: column values are narrowed where used. */
+type DbRow = Record<string, unknown>;
+interface IdRow {
+  id: number;
+}
+/** BIGINT ids arrive from node-postgres as strings. */
+interface BigIdRow {
+  id: string;
+}
 
 const pool = getTestPool();
 const describeDb = hasTestDatabase() ? describe : describe.skip;
@@ -163,7 +174,7 @@ const CATEGORY_CHECKS = [
 
 /** Run `fn(client)` inside a transaction that is always rolled back. */
 async function withRollback(fn: (client: PoolClient) => Promise<void>) {
-  const client = await pool!.connect();
+  const client = await must(pool, "pool").connect();
   try {
     await client.query("BEGIN");
     await fn(client);
@@ -184,17 +195,16 @@ async function expectCheckViolation(
   constraint: string,
 ) {
   await client.query("SAVEPOINT chk");
-  const err = await client.query(sql, params).then(
+  const err = await client.query<DbRow>(sql, params).then(
     () => null,
-    (e) => e,
+    (e: unknown) => e,
   );
   await client.query("ROLLBACK TO SAVEPOINT chk");
   expect(
     err,
     `expected 23514 from: ${sql} ← ${JSON.stringify(params)}`,
   ).not.toBeNull();
-  expect(err.code).toBe("23514");
-  expect(err.constraint).toBe(constraint);
+  expect(err).toMatchObject({ code: "23514", constraint });
 }
 
 describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
@@ -210,7 +220,7 @@ describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
   // ── 0089: surviving named CHECKs ─────────────────────────────────────────
   it("the surviving 0089 CHECK constraints exist, named and VALIDATED", async () => {
     for (const [table, name] of NEW_CHECKS) {
-      const r = await pool!.query(
+      const r = await must(pool, "pool").query<DbRow>(
         `SELECT convalidated FROM pg_constraint
           WHERE conname = $1 AND conrelid = $2::regclass AND contype = 'c'`,
         [name, `public.${table}`],
@@ -218,7 +228,7 @@ describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
       expect(r.rows, `${name} on ${table}`).toHaveLength(1);
       // A clean database must VALIDATE fully — a lingering NOT VALID means the
       // tolerant path fired where it had nothing to tolerate.
-      expect(r.rows[0].convalidated, `${name} validated`).toBe(true);
+      expect(must(r.rows[0], "r.rows[0]").convalidated, `${name} validated`).toBe(true);
     }
   });
 
@@ -233,11 +243,11 @@ describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
       null,
     ];
     await withRollback(async (client) => {
-      const rec = await client.query(
+      const rec = await client.query<IdRow>(
         `INSERT INTO recipients (name, normalized_name)
          VALUES ('_0089_chk', '_0089_chk') RETURNING id`,
       );
-      const recipientId = rec.rows[0].id;
+      const recipientId = must(rec.rows[0], "rec.rows[0]").id;
       for (const pattern of good) {
         await client.query(
           `INSERT INTO planned_transactions (planned_date, amount, recipient_id, is_recurring, recurrence_pattern)
@@ -257,11 +267,11 @@ describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
       "monthly x",
     ];
     await withRollback(async (client) => {
-      const rec = await client.query(
+      const rec = await client.query<IdRow>(
         `INSERT INTO recipients (name, normalized_name)
          VALUES ('_0089_chk_bad', '_0089_chk_bad') RETURNING id`,
       );
-      const recipientId = rec.rows[0].id;
+      const recipientId = must(rec.rows[0], "rec.rows[0]").id;
       for (const pattern of bad) {
         await expectCheckViolation(
           client,
@@ -276,13 +286,13 @@ describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
 
   it("portfolio staging match_source and route: accept the pipeline vocabulary + NULL, reject others", async () => {
     await withRollback(async (client) => {
-      const batch = await client.query(
+      const batch = await client.query<BigIdRow>(
         `INSERT INTO portfolio_import_batches (adapter_name) VALUES ('_0089_chk') RETURNING id`,
       );
-      const batchId = batch.rows[0].id;
+      const batchId = must(batch.rows[0], "batch.rows[0]").id;
       let rowIndex = 0;
       const insert = (matchSource: string | null, route: string | null) =>
-        client.query(
+        client.query<DbRow>(
           `INSERT INTO portfolio_import_staging_rows (batch_id, row_index, match_source, route)
            VALUES ($1, $2, $3, $4)`,
           [batchId, rowIndex++, matchSource, route],
@@ -315,19 +325,19 @@ describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
     await withRollback(async (client) => {
       let sourceId = process.pid * 1000;
       for (const sourceType of [...RAW_SOURCE_TYPES, "ing", "generic"]) {
-        const { rows } = await client.query(
+        const { rows } = await client.query<DbRow>(
           `INSERT INTO transaction_source_records
              (source_type, legacy_source_id, recorded_at, native_payload)
            VALUES ($1, $2, now(), '{}'::jsonb) RETURNING source_type`,
           [sourceType, sourceId++],
         );
-        expect(rows[0].source_type).toBe(sourceType);
+        expect(must(rows[0], "rows[0]").source_type).toBe(sourceType);
       }
     });
   });
 
   it("guarded contracts removed the retired raw references, scalar balance, and hash index", async () => {
-    const { rows } = await pool!.query(`
+    const { rows } = await must(pool, "pool").query<DbRow>(`
       SELECT to_regclass('public.transaction_raw_references') IS NULL AS raw_refs_gone,
              to_regclass('public.uq_transactions_tx_hash') IS NULL AS hash_index_gone,
              NOT EXISTS (
@@ -346,7 +356,7 @@ describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
   // ── 0090: renames ────────────────────────────────────────────────────────
   it("every 0090 constraint rename applied: new name present, old name gone", async () => {
     for (const [table, oldName, newName] of CONSTRAINT_RENAMES) {
-      const r = await pool!.query(
+      const r = await must(pool, "pool").query<DbRow>(
         `SELECT conname FROM pg_constraint
           WHERE conrelid = $1::regclass AND conname = ANY($2::name[])`,
         [`public.${table}`, [oldName, newName]],
@@ -360,7 +370,7 @@ describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
 
   it("every 0090 index rename applied: new name present (uniqueness preserved), old name gone", async () => {
     for (const [oldName, newName, isUnique] of INDEX_RENAMES) {
-      const r = await pool!.query(
+      const r = await must(pool, "pool").query<DbRow>(
         `SELECT c.relname, i.indisunique
            FROM pg_class c
            JOIN pg_index i ON i.indexrelid = c.oid
@@ -371,12 +381,12 @@ describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
         r.rows.map((row) => row.relname),
         `${oldName} → ${newName}`,
       ).toEqual([newName]);
-      expect(r.rows[0].indisunique, `${newName} uniqueness`).toBe(isUnique);
+      expect(must(r.rows[0], "r.rows[0]").indisunique, `${newName} uniqueness`).toBe(isUnique);
     }
   });
 
   it("no old naming prefixes remain beyond the intentional 0114 category checks", async () => {
-    const categoryChecks = await pool!.query(
+    const categoryChecks = await must(pool, "pool").query<DbRow>(
       `SELECT conname FROM pg_constraint
         WHERE conrelid = 'public.categories'::regclass
           AND conname = ANY($1::name[])
@@ -386,7 +396,7 @@ describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
     expect(categoryChecks.rows.map((row) => row.conname)).toEqual(
       [...CATEGORY_CHECKS].sort(),
     );
-    const cons = await pool!.query(
+    const cons = await must(pool, "pool").query<DbRow>(
       `SELECT conname FROM pg_constraint
         WHERE connamespace = 'public'::regnamespace
           AND (conname LIKE 'ck\\_%' OR conname LIKE 'uniq\\_%' OR conname LIKE 'ux\\_%' OR conname LIKE 'ix\\_%')
@@ -395,7 +405,7 @@ describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
       [CATEGORY_CHECKS],
     );
     expect(cons.rows).toEqual([]);
-    const idx = await pool!.query(
+    const idx = await must(pool, "pool").query<DbRow>(
       `SELECT indexname FROM pg_indexes
         WHERE schemaname = 'public'
           AND (indexname LIKE 'uniq\\_%' OR indexname LIKE 'ux\\_%' OR indexname LIKE 'ix\\_%' OR indexname LIKE '%\\_idx')

@@ -5,8 +5,8 @@ import { mockLogger } from "./helpers/mockLogger.ts";
 vi.mock("../src/database/connection.ts", () => mockConnection());
 vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 vi.mock("../src/services/portfolioPerformanceSnapshotService.ts", () => ({
-  getSnapshots: vi.fn(async () => []),
-  getBreakdownSummary: vi.fn(async () => [
+  getSnapshots: vi.fn(() => Promise.resolve([])),
+  getBreakdownSummary: vi.fn(() => Promise.resolve([
     {
       id: 1,
       name: "Synthetic asset",
@@ -15,7 +15,7 @@ vi.mock("../src/services/portfolioPerformanceSnapshotService.ts", () => ({
       gainLoss: 100,
       gainLossPercent: 0,
     },
-  ]),
+  ])),
 }));
 vi.mock(
   "../src/services/currency/currencyConversionService.ts",
@@ -26,9 +26,9 @@ vi.mock(
       >();
     return {
       ...actual,
-      loadCurrentRates: vi.fn(async () => ({ EUR: 1, USD: 0.5 })),
+      loadCurrentRates: vi.fn(() => Promise.resolve({ EUR: 1, USD: 0.5 })),
       getHistoricalRateIndex: vi.fn(
-        async () => new Map([["USD", [{ date: "2021-02-05", rate: 0.8 }]]]),
+        () => Promise.resolve(new Map([["USD", [{ date: "2021-02-05", rate: 0.8 }]]])),
       ),
     };
   },

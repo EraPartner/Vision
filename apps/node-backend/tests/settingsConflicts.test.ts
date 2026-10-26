@@ -8,6 +8,7 @@ import {
 import repo from "../src/repositories/settingsRepository.ts";
 import type { PgQueryResult } from "../src/database/connection.ts";
 import { partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 const query = vi.mocked(rawQuery);
 const withTransaction = vi.mocked(rawWithTransaction);
@@ -23,7 +24,7 @@ describe("conditional whole-value settings replacement", () => {
     await expect(
       repo.replace("app_settings", value, expected),
     ).resolves.toMatchObject({ value, expected: { exists: true, value } });
-    expect(query.mock.calls[0]![1]).toEqual(
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual(
       expect.arrayContaining([
         "app_settings",
         JSON.stringify(value),
@@ -82,7 +83,7 @@ describe("conditional whole-value settings replacement", () => {
       ),
     ).rejects.toMatchObject({ status: 409 });
     expect(withTransaction).toHaveBeenCalledOnce();
-    expect(query.mock.calls.map((call) => call[1]![0])).toEqual([
+    expect(query.mock.calls.map((call) => must(call[1], "call[1]")[0])).toEqual([
       "app_settings",
       "theme_settings",
     ]);

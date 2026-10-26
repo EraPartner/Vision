@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildInvestmentSummaryCorePartitioned,
-  calculateCostBasisByMethod,
   partitionOversellDeficits,
   projectAssetTransferPartitions,
 } from "@vision/shared-utils/portfolio";
@@ -13,6 +12,7 @@ import {
   previewPortfolioAssetTransfer,
   validatePortfolioAssetTransferHistory,
 } from "../src/services/portfolio/portfolioAssetTransferService.ts";
+import { must } from "./helpers/must.ts";
 
 const buy = (
   id: number,
@@ -91,9 +91,9 @@ describe("dated asset transfer replay", () => {
         ).toBe(true);
       }
       expect(
-        after.partitions.find((p) => p.accountId === 2)!.contributionKind,
+        must(after.partitions.find((p) => p.accountId === 2), "matching after.partitions").contributionKind,
       ).toBe("position");
-      const destination = after.partitions.find((p) => p.accountId === 2)!.core;
+      const destination = must(after.partitions.find((p) => p.accountId === 2), "matching after.partitions").core;
       expect(destination.totalInvested.toNumber()).toBe(
         { weighted_avg: 100, fifo: 50, lifo: 150 }[method],
       );
@@ -150,9 +150,9 @@ describe("dated asset transfer replay", () => {
       expect(result.core.converted.realizedGain.toNumber()).toBe(-20);
       expect(result.core.totalBuyCost.toNumber()).toBe(100);
       expect(result.core.totalSellProceeds.toNumber()).toBe(0);
-      const destination = result.partitions.find(
+      const destination = must(result.partitions.find(
         (p) => p.accountId === 2,
-      )!.core;
+      ), "matching result.partitions").core;
       expect(destination.totalUnits.toNumber()).toBe(4);
       expect(destination.totalInvested.toNumber()).toBe(40);
     },
@@ -241,10 +241,10 @@ describe("dated asset transfer replay", () => {
       }
       const afterFirst = summary(first, method);
       const destination = afterFirst.partitions.find((p) => p.accountId === 2);
-      expect(destination!.core.totalInvested.toNumber()).toBe(
+      expect(must(destination, "destination").core.totalInvested.toNumber()).toBe(
         { weighted_avg: 50, fifo: 0, lifo: 140 }[method],
       );
-      expect(destination!.core.converted.totalInvested.toNumber()).toBe(
+      expect(must(destination, "destination").core.converted.totalInvested.toNumber()).toBe(
         { weighted_avg: 147.5, fifo: 0, lifo: 420 }[method],
       );
     },

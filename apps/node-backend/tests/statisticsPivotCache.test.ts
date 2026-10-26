@@ -26,6 +26,11 @@ import { statsKeyPart } from "../src/services/calculations/aggregation/_statisti
 import { invalidateStatisticsCaches } from "../src/services/info/cache.ts";
 import { loose } from "./helpers/partial.ts";
 
+/** The spy behind `obj[key]`, read without taking an unbound method reference. */
+function methodMock<T extends object, K extends keyof T>(obj: T, key: K) {
+  return vi.mocked(obj)[key];
+}
+
 const infoRepository = vi.mocked(rawInfoRepository);
 const recipientInsightsRepository = vi.mocked(rawRecipientInsightsRepository);
 const tagInsightsRepository = vi.mocked(rawTagInsightsRepository);
@@ -54,7 +59,7 @@ describe("statistics pivot cache", () => {
     const a = await computeCategoryPivot({ targetCurrency: "EUR" });
     const b = await computeCategoryPivot({ targetCurrency: "EUR" });
     expect(a).toEqual(b);
-    expect(infoRepository.getCategoryPivot).toHaveBeenCalledTimes(1);
+    expect(methodMock(infoRepository, "getCategoryPivot")).toHaveBeenCalledTimes(1);
   });
 
   it("keys on the arguments — different exclusions recompute", async () => {
@@ -66,13 +71,13 @@ describe("statistics pivot cache", () => {
       targetCurrency: "EUR",
       excludedCategoryIds: [2],
     });
-    expect(infoRepository.getCategoryPivot).toHaveBeenCalledTimes(2);
+    expect(methodMock(infoRepository, "getCategoryPivot")).toHaveBeenCalledTimes(2);
   });
 
   it("keys on currency — a different target currency recomputes", async () => {
     await computeCategoryPivot({ targetCurrency: "EUR" });
     await computeCategoryPivot({ targetCurrency: "USD" });
-    expect(infoRepository.getCategoryPivot).toHaveBeenCalledTimes(2);
+    expect(methodMock(infoRepository, "getCategoryPivot")).toHaveBeenCalledTimes(2);
   });
 
   it("keys category and recipient-by-year pivots on the date range", async () => {
@@ -92,15 +97,15 @@ describe("statistics pivot cache", () => {
       startDate: "2024-11-01",
       endDate: "2026-09-07",
     });
-    expect(infoRepository.getCategoryPivot).toHaveBeenCalledTimes(2);
-    expect(infoRepository.getRecipientByYear).toHaveBeenCalledTimes(2);
+    expect(methodMock(infoRepository, "getCategoryPivot")).toHaveBeenCalledTimes(2);
+    expect(methodMock(infoRepository, "getRecipientByYear")).toHaveBeenCalledTimes(2);
   });
 
   it("invalidateStatisticsCaches() forces the next call to recompute", async () => {
     await computeCategoryPivot({ targetCurrency: "EUR" });
     invalidateStatisticsCaches();
     await computeCategoryPivot({ targetCurrency: "EUR" });
-    expect(infoRepository.getCategoryPivot).toHaveBeenCalledTimes(2);
+    expect(methodMock(infoRepository, "getCategoryPivot")).toHaveBeenCalledTimes(2);
   });
 
   it("recipient pivot caches, and keys on bucket/date/id params", async () => {
@@ -112,12 +117,12 @@ describe("statistics pivot cache", () => {
     };
     await computeRecipientPivot(base);
     await computeRecipientPivot(base); // cache hit
-    expect(recipientInsightsRepository.getRecipientPivot).toHaveBeenCalledTimes(
+    expect(methodMock(recipientInsightsRepository, "getRecipientPivot")).toHaveBeenCalledTimes(
       1,
     );
     await computeRecipientPivot({ ...base, bucket: "yearly" }); // different bucket → miss
     await computeRecipientPivot({ ...base, recipientIds: [5] }); // different ids → miss
-    expect(recipientInsightsRepository.getRecipientPivot).toHaveBeenCalledTimes(
+    expect(methodMock(recipientInsightsRepository, "getRecipientPivot")).toHaveBeenCalledTimes(
       3,
     );
   });
@@ -130,17 +135,17 @@ describe("statistics pivot cache", () => {
     };
     await computeTagPivot(base);
     await computeTagPivot(base); // cache hit
-    expect(tagInsightsRepository.getTagPivot).toHaveBeenCalledTimes(1);
+    expect(methodMock(tagInsightsRepository, "getTagPivot")).toHaveBeenCalledTimes(1);
     await computeTagPivot({ ...base, allTags: true }); // different allTags → miss
-    expect(tagInsightsRepository.getTagPivot).toHaveBeenCalledTimes(2);
+    expect(methodMock(tagInsightsRepository, "getTagPivot")).toHaveBeenCalledTimes(2);
   });
 
   it("does not collide across endpoints sharing the cache map", async () => {
     await computeCategoryPivot({ targetCurrency: "EUR" });
     await computeRecipientByYear({ targetCurrency: "EUR" });
     // Distinct key prefixes → both compute despite the shared Map.
-    expect(infoRepository.getCategoryPivot).toHaveBeenCalledTimes(1);
-    expect(infoRepository.getRecipientByYear).toHaveBeenCalledTimes(1);
+    expect(methodMock(infoRepository, "getCategoryPivot")).toHaveBeenCalledTimes(1);
+    expect(methodMock(infoRepository, "getRecipientByYear")).toHaveBeenCalledTimes(1);
   });
 
   it("forwards named pivot options to every repository boundary", async () => {
@@ -176,21 +181,21 @@ describe("statistics pivot cache", () => {
       allTags: true,
     });
 
-    expect(infoRepository.getCategoryPivot).toHaveBeenCalledWith({
+    expect(methodMock(infoRepository, "getCategoryPivot")).toHaveBeenCalledWith({
       excludedCategoryIds: [11],
       targetCurrency: "USD",
       excludedRecipientIds: [22],
       startDate: "2025-01-02",
       endDate: "2025-12-30",
     });
-    expect(infoRepository.getRecipientByYear).toHaveBeenCalledWith({
+    expect(methodMock(infoRepository, "getRecipientByYear")).toHaveBeenCalledWith({
       targetCurrency: "USD",
       excludedRecipientIds: [22],
       excludedCategoryIds: [11],
       startDate: "2025-01-02",
       endDate: "2025-12-30",
     });
-    expect(recipientInsightsRepository.getRecipientPivot).toHaveBeenCalledWith({
+    expect(methodMock(recipientInsightsRepository, "getRecipientPivot")).toHaveBeenCalledWith({
       excludedRecipientIds: [22],
       targetCurrency: "USD",
       bucket: "yearly",
@@ -198,7 +203,7 @@ describe("statistics pivot cache", () => {
       endDate: "2025-12-30",
       recipientIds: [33],
     });
-    expect(tagInsightsRepository.getTagPivot).toHaveBeenCalledWith({
+    expect(methodMock(tagInsightsRepository, "getTagPivot")).toHaveBeenCalledWith({
       targetCurrency: "USD",
       bucket: "yearly",
       startDate: "2025-01-02",
@@ -221,7 +226,7 @@ describe("statistics pivot cache", () => {
     const p2 = computeCategoryPivot({ targetCurrency: "EUR" });
     resolveLoad([{ category_id: 1, total: 10 }]);
     await Promise.all([p1, p2]);
-    expect(infoRepository.getCategoryPivot).toHaveBeenCalledTimes(1);
+    expect(methodMock(infoRepository, "getCategoryPivot")).toHaveBeenCalledTimes(1);
   });
 });
 

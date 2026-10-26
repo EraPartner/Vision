@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { __drainIfNeeded as drainIfNeeded, createSseWriter } from '../src/lib/sse.ts';
 import type { SseWriter } from '../src/lib/sse.ts';
 import { loose } from './helpers/partial.ts';
+import { must } from "./helpers/must.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -94,8 +95,8 @@ describe('createSseWriter', () => {
     createSseWriter(asReq(padReq), asRes(padRes));
     expect(padRes._written.length).toBeGreaterThan(0);
     const first = padRes._written[0];
-    expect(first!.startsWith(':')).toBe(true);
-    expect(first!.length).toBeGreaterThanOrEqual(2048);
+    expect(must(first, "first").startsWith(':')).toBe(true);
+    expect(must(first, "first").length).toBeGreaterThanOrEqual(2048);
   });
 
   it('writes correctly formatted SSE frame', async () => {

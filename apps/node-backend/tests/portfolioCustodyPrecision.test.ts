@@ -6,6 +6,7 @@ import type {
   PartitionedTxnLike,
 } from "@vision/shared-utils/portfolio";
 import { toDecimal } from "@vision/shared-utils/money";
+import { must } from "./helpers/must.ts";
 
 const methods: CostBasisMethod[] = ["weighted_avg", "fifo", "lifo"];
 const buy = (
@@ -60,7 +61,7 @@ const roundTrip = () => [
 const sum = (
   lots: readonly CustodyLot[] | undefined,
   field: "units" | "costBasis" | "costBasisConv",
-) => lots!.reduce((total, lot) => total.plus(lot[field]), toDecimal(0));
+) => must(lots, "lots").reduce((total, lot) => total.plus(lot[field]), toDecimal(0));
 
 describe("exact custody consumption across proportional lots", () => {
   it.each(methods)(
@@ -70,10 +71,10 @@ describe("exact custody consumption across proportional lots", () => {
         [...roundTrip(), fee()],
         method,
       );
-      const returned = partitions.get(1)!.find((row) => row.id === 5)!;
-      const consumed = partitions
-        .get(2)!
-        .find((row) => row.type === "asset_fee")!;
+      const returned = must(must(partitions.get(1), "partitions.get result").find((row) => row.id === 5), "matching entry");
+      const consumed = must(must(partitions
+        .get(2), "value")
+        .find((row) => row.type === "asset_fee"), "matching entry");
       expect(sum(returned.transferredLots, "units").eq("0.58365715")).toBe(
         true,
       );
@@ -121,10 +122,10 @@ describe("exact custody consumption across proportional lots", () => {
       transfer(5, "2020-03-01", "0.30207087", 1, 3),
     ];
     const partitions = projectAssetTransferPartitions(rows, "weighted_avg");
-    const first = partitions.get(2)!.find((row) => row.type === "transfer_in")!;
-    const remaining = partitions
-      .get(3)!
-      .find((row) => row.type === "transfer_in")!;
+    const first = must(must(partitions.get(2), "partitions.get result").find((row) => row.type === "transfer_in"), "matching entry");
+    const remaining = must(must(partitions
+      .get(3), "value")
+      .find((row) => row.type === "transfer_in"), "matching entry");
     expect(sum(first.transferredLots, "units").eq("0.28175913")).toBe(true);
     expect(sum(remaining.transferredLots, "units").eq("0.30207087")).toBe(true);
     expect(

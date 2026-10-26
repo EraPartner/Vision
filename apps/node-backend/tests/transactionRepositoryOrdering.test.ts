@@ -56,10 +56,10 @@ afterEach(() => {
 
 describe("transaction list count cache", () => {
   function stubListQueries(total = 7) {
-    query.mockImplementation(async (sql) =>
-      /SELECT COUNT\(\*\)::int AS total/.test(sql)
+    query.mockImplementation((sql) =>
+      Promise.resolve(/SELECT COUNT\(\*\)::int AS total/.test(sql)
         ? { rows: [{ total }] }
-        : { rows: [] },
+        : { rows: [] }),
     );
   }
 
@@ -141,13 +141,13 @@ describe("transaction list count cache", () => {
 
   it("separates distinct filters and evicts rejected counts", async () => {
     let failRent = true;
-    query.mockImplementation(async (sql, params) => {
-      if (!/SELECT COUNT\(\*\)::int AS total/.test(sql)) return { rows: [] };
+    query.mockImplementation((sql, params) => {
+      if (!/SELECT COUNT\(\*\)::int AS total/.test(sql)) return Promise.resolve({ rows: [] });
       if (params.includes("%rent%") && failRent) {
         failRent = false;
-        throw new Error("count failed");
+        return Promise.reject(new Error("count failed"));
       }
-      return { rows: [{ total: params.includes("%rent%") ? 3 : 4 }] };
+      return Promise.resolve({ rows: [{ total: params.includes("%rent%") ? 3 : 4 }] });
     });
 
     await expect(
@@ -170,7 +170,7 @@ describe("transaction list count cache", () => {
 
     withTransaction.mockImplementation(async (fn) =>
       fn({
-        query: vi.fn().mockImplementation(async (sql: string) => ({
+        query: vi.fn().mockImplementation((sql: string) => Promise.resolve({
           rows: /from "?accounts"?/i.test(sql)
             ? [{ id: 1, is_active: true }]
             : [{ id: 9, account_id: 1 }],
@@ -190,18 +190,18 @@ describe("transaction list count cache", () => {
     expect(countCalls()).toHaveLength(1);
 
     const client = {
-      query: vi.fn(async (text: string): Promise<FakeResult> => {
+      query: vi.fn((text: string): Promise<FakeResult> => {
         const sql = text.replaceAll('"', "").trim().toLowerCase();
         if (sql.startsWith("select id from transactions where")) {
-          return { rows: [{ id: 9 }] };
+          return Promise.resolve({ rows: [{ id: 9 }] });
         }
         if (sql.startsWith("select id from tags")) {
-          return { rows: [{ id: 3 }] };
+          return Promise.resolve({ rows: [{ id: 3 }] });
         }
         if (sql.includes("from transactions t")) {
-          return { rows: [txRow({ id: asTransactionId(9) })] };
+          return Promise.resolve({ rows: [txRow({ id: asTransactionId(9) })] });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       }),
     };
     withTransaction.mockImplementation(async (fn) => fn(client));

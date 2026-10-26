@@ -20,6 +20,7 @@ import { clearMemoryCache } from "../src/services/currency/currencyConversionSer
 import { routeAgent } from "./helpers/routeApp.ts";
 import { bodyAt } from "./helpers/responseBody.ts";
 import portfolioSummaryRouter from "../src/routes/info/portfolioSummary.ts";
+import { must } from "./helpers/must.ts";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
@@ -40,21 +41,21 @@ async function investment({
   isActive = true,
   currency = "EUR",
 }: InvestmentSeed) {
-  const { rows } = await getTestPool()!.query<{ id: number }>(
+  const { rows } = await must(getTestPool(), "test pool").query<{ id: number }>(
     `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, is_active)
      VALUES ($1, $1, $2, $6, $3, $4, $5) RETURNING id`,
     [name, assetClass, price, interestRate, isActive, currency],
   );
-  return rows[0]!.id;
+  return must(rows[0], "rows[0]").id;
 }
 
 async function brokerAccount(name: string) {
-  const { rows } = await getTestPool()!.query<{ id: number }>(
+  const { rows } = await must(getTestPool(), "test pool").query<{ id: number }>(
     `INSERT INTO accounts (name, type, currency)
      VALUES ($1, 'brokerage'::account_type, 'EUR') RETURNING id`,
     [name],
   );
-  return rows[0]!.id;
+  return must(rows[0], "rows[0]").id;
 }
 
 async function txn(
@@ -72,7 +73,7 @@ async function txn(
     accountId?: number | null;
   } = {},
 ) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "test pool").query(
     `INSERT INTO portfolio_transactions (investment_id, type, date, amount, units, currency, account_id)
      VALUES ($1, $2, $3::date, $4, $5, $6, $7)`,
     [investmentId, type, date, amount, units, currency, accountId],
@@ -80,7 +81,7 @@ async function txn(
 }
 
 async function setRate(code: string, rateToEur: string, rateDate: string) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "test pool").query(
     `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
      VALUES ($1, $2, $3, true)`,
     [code, rateToEur, rateDate],
@@ -118,7 +119,7 @@ describeDb("GET /api/info/portfolio-summary asset totals (real DB)", () => {
   });
 
   beforeEach(async () => {
-    const pool = getTestPool()!;
+    const pool = must(getTestPool(), "test pool");
     await pool.query("DELETE FROM portfolio_transactions");
     await pool.query("DELETE FROM investments");
     await pool.query(
@@ -133,7 +134,7 @@ describeDb("GET /api/info/portfolio-summary asset totals (real DB)", () => {
   });
 
   afterAll(async () => {
-    const pool = getTestPool()!;
+    const pool = must(getTestPool(), "test pool");
     await pool.query("DELETE FROM portfolio_transactions");
     await pool.query("DELETE FROM investments");
     await pool.query(

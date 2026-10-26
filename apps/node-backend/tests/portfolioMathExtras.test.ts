@@ -11,6 +11,7 @@ import {
   computeHeatmap,
   toYmd,
 } from "../src/services/calculations/portfolioMath.ts";
+import { must } from "./helpers/must.ts";
 
 describe("calculateCostBasis (weighted average)", () => {
   it("produces zero result when no transactions", () => {
@@ -475,7 +476,7 @@ describe("computeMetrics", () => {
       totalGainLoss: 100,
       totalReturnPct: 10,
     });
-    expect(r!.realReturnPct).toBe(5);
+    expect(must(r, "r").realReturnPct).toBe(5);
   });
 
   it("computes annualized return between first and last snapshot", () => {
@@ -495,7 +496,7 @@ describe("computeMetrics", () => {
         inflation_adjusted_value: 1050,
       },
     ]);
-    expect(r!.annualizedReturn).toBeCloseTo(10, 1);
+    expect(must(r, "r").annualizedReturn).toBeCloseTo(10, 1);
   });
 
   it("handles zero totalInvested by returning 0 percentages", () => {
@@ -508,9 +509,9 @@ describe("computeMetrics", () => {
         inflation_adjusted_value: 0,
       },
     ]);
-    expect(r!.totalReturnPct).toBe(0);
-    expect(r!.realReturnPct).toBe(0);
-    expect(r!.cumulativeInflation).toBe(0);
+    expect(must(r, "r").totalReturnPct).toBe(0);
+    expect(must(r, "r").realReturnPct).toBe(0);
+    expect(must(r, "r").cumulativeInflation).toBe(0);
   });
 
   it("rounds percentages to 2 decimals", () => {
@@ -523,8 +524,8 @@ describe("computeMetrics", () => {
         inflation_adjusted_value: 350,
       },
     ]);
-    expect(Number.isFinite(r!.totalReturnPct)).toBe(true);
-    expect(r!.totalReturnPct.toString()).not.toMatch(/\.\d{3,}/); // ≤2 decimals
+    expect(Number.isFinite(must(r, "r").totalReturnPct)).toBe(true);
+    expect(must(r, "r").totalReturnPct.toString()).not.toMatch(/\.\d{3,}/); // ≤2 decimals
   });
 });
 
@@ -546,9 +547,9 @@ describe("computeHeatmap", () => {
     ]);
     expect(r.years).toEqual([2025]);
     expect(r.data[2025]).toHaveLength(12);
-    expect(r.data[2025]![1]).toBeCloseTo(10, 2); // Feb +10%
-    expect(r.data[2025]![2]).toBeCloseTo(10, 2); // Mar +10%
-    expect(r.data[2025]![0]).toBeNull(); // Jan has no prior month
+    expect(must(r.data[2025], "r.data[2025]")[1]).toBeCloseTo(10, 2); // Feb +10%
+    expect(must(r.data[2025], "r.data[2025]")[2]).toBeCloseTo(10, 2); // Mar +10%
+    expect(must(r.data[2025], "r.data[2025]")[0]).toBeNull(); // Jan has no prior month
   });
 
   it("takes the last snapshot of each month for grouping", () => {
@@ -557,7 +558,7 @@ describe("computeHeatmap", () => {
       { snapshot_date: "2025-01-31", value: 105, invested: 100 }, // last of Jan wins
       { snapshot_date: "2025-02-28", value: 110, invested: 100 }, // 110/100 vs 105/100 → ~4.76%
     ]);
-    expect(r.data[2025]![1]).toBeCloseTo(4.76, 1);
+    expect(must(r.data[2025], "r.data[2025]")[1]).toBeCloseTo(4.76, 1);
   });
 
   it("reports maxAbsPct from the largest monthly move (positive or negative)", () => {
@@ -575,7 +576,7 @@ describe("computeHeatmap", () => {
       { snapshot_date: "2025-01-31", value: 110, invested: 100 },
     ]);
     expect(r.years).toEqual([2024, 2025]);
-    expect(r.data[2025]![0]).toBeCloseTo(10, 2);
+    expect(must(r.data[2025], "r.data[2025]")[0]).toBeCloseTo(10, 2);
   });
 
   it("accepts Date objects for snapshot_date", () => {
@@ -584,7 +585,7 @@ describe("computeHeatmap", () => {
       { snapshot_date: new Date("2025-02-28"), value: 110, invested: 100 },
     ]);
     expect(r.years).toEqual([2025]);
-    expect(r.data[2025]![1]).toBeCloseTo(10, 2);
+    expect(must(r.data[2025], "r.data[2025]")[1]).toBeCloseTo(10, 2);
   });
 
   it("buckets a local-midnight Date by its local calendar month (pg DATE shape)", () => {
@@ -597,8 +598,8 @@ describe("computeHeatmap", () => {
       { snapshot_date: new Date(2026, 5, 1), value: 110, invested: 100 }, // 2026-06-01
     ]);
     expect(r.years).toEqual([2026]);
-    expect(r.data[2026]![5]).toBeCloseTo(10, 2); // June move present (not May)
-    expect(r.data[2026]![4]).toBeNull(); // May is the first month, no prior
+    expect(must(r.data[2026], "r.data[2026]")[5]).toBeCloseTo(10, 2); // June move present (not May)
+    expect(must(r.data[2026], "r.data[2026]")[4]).toBeNull(); // May is the first month, no prior
   });
 });
 

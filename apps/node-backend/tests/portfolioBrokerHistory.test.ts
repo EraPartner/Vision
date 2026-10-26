@@ -9,7 +9,7 @@ vi.mock("../src/config/logger.ts", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock("../src/services/currency/currencyConversionService.ts", () => ({
-  convertToCurrency: vi.fn(async (value) => value),
+  convertToCurrency: vi.fn((value) => Promise.resolve(value)),
 }));
 
 import { query as rawQuery } from "../src/database/connection.ts";
@@ -17,6 +17,7 @@ import {
   getBrokerSnapshots,
   __storeCurrentBrokerSnapshot,
 } from "../src/services/portfolioPerformanceSnapshotService.ts";
+import { must } from "./helpers/must.ts";
 
 // Fixtures return only the `rows` the service reads.
 const query = rawQuery as unknown as Mock<
@@ -60,14 +61,14 @@ describe("forward-only broker snapshots", () => {
     const deleteCall = query.mock.calls.find(([sql]) =>
       sql.includes("DELETE FROM portfolio_broker_snapshots"),
     );
-    expect(deleteCall![1]).toEqual(["2026-09-13", "EUR"]);
+    expect(must(deleteCall, "deleteCall")[1]).toEqual(["2026-09-13", "EUR"]);
     const inserts = query.mock.calls.filter(([sql]) =>
       sql.includes("INSERT INTO portfolio_broker_snapshots"),
     );
-    expect(inserts[0]![1]).toContain("account:7");
-    expect(inserts[0]![1]).toContain("Broker Seven");
-    expect(inserts[1]![1]).toContain("unassigned");
-    expect(inserts[1]![1]).toContain("Unassigned");
+    expect(must(inserts[0], "inserts[0]")[1]).toContain("account:7");
+    expect(must(inserts[0], "inserts[0]")[1]).toContain("Broker Seven");
+    expect(must(inserts[1], "inserts[1]")[1]).toContain("unassigned");
+    expect(must(inserts[1], "inserts[1]")[1]).toContain("Unassigned");
   });
 
   it("refuses a broker split that does not reconcile with the global total", async () => {

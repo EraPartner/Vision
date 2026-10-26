@@ -3,7 +3,6 @@ import type { Mock } from "vitest";
 
 import { mockLogger } from "./helpers/mockLogger.ts";
 import { mockTxConnection } from "./helpers/repoMocks.ts";
-import type { TxConnectionMock } from "./helpers/repoMocks.ts";
 import { makePortfolioImportStagingRow } from "./builders/domainRows.ts";
 import { partial } from "./helpers/partial.ts";
 import type {
@@ -14,7 +13,11 @@ import type {
 import {
   asRecipientId,
 } from "@vision/types/brands";
-const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
+const { mockClient } = vi.hoisted(() => ({
+  mockClient: {
+    query: vi.fn<(sql: string, params: unknown[]) => Promise<unknown>>(),
+  },
+}));
 vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
@@ -53,14 +56,24 @@ import rawCategoryRepository from "../src/repositories/categoryRepository.ts";
 import rawSettingsRepository from "../src/repositories/settingsRepository.ts";
 import { autoResolveFxRateToEur as rawAutoResolveFxRateToEur } from "../src/services/portfolio/fxResolve.ts";
 import { commitBatch } from "../src/services/portfolioImportPipeline/commit.ts";
+import { must } from "./helpers/must.ts";
+
+/** The spy behind `obj[key]`, read without taking an unbound method reference. */
+function methodMock<T extends object, K extends keyof T>(obj: T, key: K) {
+  return vi.mocked(obj)[key];
+}
+
+const textMatches = (value: unknown, pattern: RegExp) =>
+  typeof value === "string" && pattern.test(value);
+type QueryMock = Mock<(sql: string, params: unknown[]) => Promise<unknown>>;
 
 // The connection module is replaced by mockTxConnection above; `poolQuery` is
 // the pool-side sink it adds. Both stay untyped spies because the tests read
 // raw SQL/params from mock.calls.
-const { query, poolQuery } = connection as unknown as Omit<
-  TxConnectionMock<{ query: Mock }, Record<never, never>>,
-  "poolQuery"
-> & { poolQuery: Mock };
+const { query, poolQuery } = connection as unknown as {
+  query: QueryMock;
+  poolQuery: QueryMock;
+};
 const recipientRepository = vi.mocked(rawRecipientRepository);
 const categoryRepository = vi.mocked(rawCategoryRepository);
 const settingsRepository = vi.mocked(rawSettingsRepository);
@@ -110,10 +123,10 @@ function dispatch(sql: string, params: unknown[]) {
   )
     return { rows: fingerprintDuplicate ? [{ "?column?": 1 }] : [] };
   if (/FROM portfolio_transactions\s+WHERE investment_id/.test(sql)) {
-    return { rows: [{ n: Number(fieldDuplicate) || 0 }] };
+    return { rows: [{ n: Number(fieldDuplicate) }] };
   }
   if (/select COUNT\(\*\)::int as "n" from "transactions"/.test(sql)) {
-    return { rows: [{ n: Number(cashDuplicate) || 0 }] };
+    return { rows: [{ n: Number(cashDuplicate) }] };
   }
   if (/INSERT INTO transactions/.test(sql)) return { rows: [{ id: 777 }] };
   if (/set "status" = \$1, "error_message" = \$2/.test(sql)) {
@@ -247,7 +260,7 @@ describe("commitBatch (portfolio)", () => {
     ];
     await commitBatch({ batchId: 5 });
     expect(
-      portfolioTransactionRepository.create.mock.calls[0]![0],
+      must(portfolioTransactionRepository.create.mock.calls[0], "portfolioTransactionRepository.create.mock.call...")[0],
     ).not.toMatchObject({ dividend_amount_convention: "gross" });
   });
 
@@ -257,7 +270,7 @@ describe("commitBatch (portfolio)", () => {
     expect(res).toMatchObject({ imported: 1, duplicates: 0, errors: 0 });
     expect(portfolioTransactionRepository.create).toHaveBeenCalledTimes(1);
     expect(
-      portfolioTransactionRepository.create.mock.calls[0]![0],
+      must(portfolioTransactionRepository.create.mock.calls[0], "portfolioTransactionRepository.create.mock.call...")[0],
     ).toMatchObject({
       investment_id: 1,
       type: "buy",
@@ -266,16 +279,16 @@ describe("commitBatch (portfolio)", () => {
       amount: 1855,
       preloaded_asset_class: "stock",
     });
-    const committedRow = query.mock.calls.find(
+    const committedRow = must(query.mock.calls.find(
       ([sql, params]) =>
         /update "portfolio_import_staging_rows"/.test(sql) &&
-        params?.[0] === "committed",
-    )!;
+        params[0] === "committed",
+    ), "matching query.mock.calls");
     // [status, committed_txn_id, staging id as BIGINT text].
     expect(committedRow[1]).toEqual(["committed", 100, "1"]);
-    const checkpoint = query.mock.calls.find(([sql]) =>
+    const checkpoint = must(query.mock.calls.find(([sql]) =>
       /set "rows_imported" = COALESCE/.test(sql),
-    )!;
+    ), "matching query.mock.calls");
     // [imported, duplicates, errors, batch id].
     expect(checkpoint[1]).toEqual([1, 0, 0, "5"]);
   });
@@ -345,20 +358,21 @@ describe("commitBatch (portfolio)", () => {
 
     const res = await commitBatch({ batchId: 5 });
     expect(res).toMatchObject({ imported: 1, errors: 1 });
-    expect(marked).toContainEqual(
-      expect.objectContaining({
-        id: "1",
-        status: "error",
-        message: expect.stringMatching(/exceed/),
-      }),
-    );
+    expect(
+      marked.some(
+        (entry) =>
+          entry.id === "1" &&
+          entry.status === "error" &&
+          textMatches(entry.message, /exceed/),
+      ),
+    ).toBe(true);
     const sqls = mockClient.query.mock.calls.map(([sql]) => sql);
     const rollback = sqls.findIndex((sql) =>
       sql.startsWith("ROLLBACK TO SAVEPOINT "),
     );
     expect(rollback).toBeGreaterThanOrEqual(0);
     expect(sqls[rollback + 1]).toBe(
-      sqls[rollback].replace("ROLLBACK TO", "RELEASE"),
+      must(sqls[rollback], "rolled-back savepoint statement").replace("ROLLBACK TO", "RELEASE"),
     );
   });
 
@@ -369,10 +383,10 @@ describe("commitBatch (portfolio)", () => {
       row({ id: 1, route: "cash", investment_id: null, amount: 10 }),
       row({ id: 2, tx_hash: "next" }),
     ];
-    mockClient.query.mockImplementation(async (sql, params) => {
+    mockClient.query.mockImplementation((sql, params) => {
       if (sql.includes("INSERT INTO transactions"))
-        throw new Error("synthetic cash insert failure");
-      return dispatch(sql, params);
+        return Promise.reject(new Error("synthetic cash insert failure"));
+      return Promise.resolve(dispatch(sql, params));
     });
     const res = await commitBatch({ batchId: 5 });
     expect(res).toMatchObject({ errors: 1, imported: 1 });
@@ -382,7 +396,7 @@ describe("commitBatch (portfolio)", () => {
     );
     expect(rollback).toBeGreaterThanOrEqual(0);
     expect(sqls[rollback + 1]).toBe(
-      sqls[rollback].replace("ROLLBACK TO", "RELEASE"),
+      must(sqls[rollback], "rolled-back savepoint statement").replace("ROLLBACK TO", "RELEASE"),
     );
     expect(portfolioTransactionRepository.create).toHaveBeenCalledTimes(1);
   });
@@ -392,10 +406,8 @@ describe("commitBatch (portfolio)", () => {
     const res = await commitBatch({ batchId: 5 });
     expect(res).toMatchObject({ imported: 0, errors: 1 });
     expect(portfolioTransactionRepository.create).not.toHaveBeenCalled();
-    expect(marked[0]).toMatchObject({
-      status: "error",
-      message: expect.stringMatching(/unresolved/),
-    });
+    expect(marked[0]).toMatchObject({ status: "error" });
+    expect(textMatches(marked[0]?.message, /unresolved/)).toBe(true);
   });
 
   it("auto-resolves FX for a non-EUR row with no supplied rate", async () => {
@@ -404,7 +416,7 @@ describe("commitBatch (portfolio)", () => {
     await commitBatch({ batchId: 5 });
     expect(autoResolveFxRateToEur).toHaveBeenCalledWith("USD", "2026-01-05");
     expect(
-      portfolioTransactionRepository.create.mock.calls[0]![0].fx_rate_to_eur,
+      must(portfolioTransactionRepository.create.mock.calls[0], "portfolioTransactionRepository.create.mock.call...")[0].fx_rate_to_eur,
     ).toBe(0.92);
   });
 
@@ -413,7 +425,7 @@ describe("commitBatch (portfolio)", () => {
     await commitBatch({ batchId: 5 });
     expect(autoResolveFxRateToEur).not.toHaveBeenCalled();
     expect(
-      portfolioTransactionRepository.create.mock.calls[0]![0].fx_rate_to_eur,
+      must(portfolioTransactionRepository.create.mock.calls[0], "portfolioTransactionRepository.create.mock.call...")[0].fx_rate_to_eur,
     ).toBe(0.9);
   });
 
@@ -487,9 +499,9 @@ describe("commitBatch (portfolio)", () => {
     const res = await commitBatch({ batchId: 5 });
 
     expect(res).toMatchObject({ imported: 0, duplicates: 1 });
-    const dedupCall = query.mock.calls.find(([sql]) =>
+    const dedupCall = must(query.mock.calls.find(([sql]) =>
       /FROM portfolio_transactions\s+WHERE investment_id/.test(sql),
-    )!;
+    ), "matching query.mock.calls");
     expect(dedupCall[1].slice(3, 5)).toEqual([100, 4]);
   });
 
@@ -500,9 +512,9 @@ describe("commitBatch (portfolio)", () => {
     const res = await commitBatch({ batchId: 5 });
 
     expect(res).toMatchObject({ imported: 0, duplicates: 1 });
-    const dedupCall = query.mock.calls.find(([sql]) =>
+    const dedupCall = must(query.mock.calls.find(([sql]) =>
       /FROM portfolio_transactions\s+WHERE investment_id/.test(sql),
-    )!;
+    ), "matching query.mock.calls");
     expect(dedupCall[1].slice(3, 5)).toEqual([100, 4]);
   });
 
@@ -510,9 +522,9 @@ describe("commitBatch (portfolio)", () => {
     batchAccountId = 7;
     matchedRows = [row({ currency: "USD", fx_rate_to_eur: 0.9 })];
     await commitBatch({ batchId: 5 });
-    const dedupCall = query.mock.calls.find(([sql]) =>
+    const dedupCall = must(query.mock.calls.find(([sql]) =>
       /FROM portfolio_transactions\s+WHERE investment_id/.test(sql),
-    )!;
+    ), "matching query.mock.calls");
     expect(dedupCall[0]).toContain("account_id IS NOT DISTINCT FROM");
     // [investment_id, tx_date, type, amount, units, account_id, currency]
     expect(dedupCall[1].slice(5)).toEqual([7, "USD"]);
@@ -523,7 +535,7 @@ describe("commitBatch (portfolio)", () => {
     matchedRows = [row()];
     await commitBatch({ batchId: 5 });
     expect(
-      portfolioTransactionRepository.create.mock.calls[0]![0].account_id,
+      must(portfolioTransactionRepository.create.mock.calls[0], "portfolioTransactionRepository.create.mock.call...")[0].account_id,
     ).toBe(7);
   });
 
@@ -532,7 +544,7 @@ describe("commitBatch (portfolio)", () => {
     matchedRows = [row()];
     await commitBatch({ batchId: 5 });
     expect(
-      portfolioTransactionRepository.create.mock.calls[0]![0].account_id,
+      must(portfolioTransactionRepository.create.mock.calls[0], "portfolioTransactionRepository.create.mock.call...")[0].account_id,
     ).toBeUndefined();
   });
 
@@ -603,9 +615,9 @@ describe("commitBatch (portfolio)", () => {
     ];
     await commitBatch({ batchId: 5 });
 
-    const [sql, params] = query.mock.calls.find(([s]) =>
+    const [sql, params] = must(query.mock.calls.find(([s]) =>
       /INSERT INTO transactions/.test(s),
-    )!;
+    ), "matching query.mock.calls");
     // Exact column list — a regression that drops recipient_id (or reorders it
     // away from its parameter) must fail here, not only on a real database.
     expect(sql).toMatch(
@@ -647,13 +659,13 @@ describe("commitBatch (portfolio)", () => {
     const res = await commitBatch({ batchId: 5 });
     expect(res).toMatchObject({ imported: 1, errors: 0 });
     expect(portfolioTransactionRepository.create).not.toHaveBeenCalled();
-    expect(settingsRepository.get).toHaveBeenCalledWith(
+    expect(methodMock(settingsRepository, "get")).toHaveBeenCalledWith(
       "brokerage_cash_category_ids",
     );
-    expect(categoryRepository.getActiveByIds).toHaveBeenCalledWith([314]);
-    const [, params] = query.mock.calls.find(([s]) =>
+    expect(methodMock(categoryRepository, "getActiveByIds")).toHaveBeenCalledWith([314]);
+    const [, params] = must(query.mock.calls.find(([s]) =>
       /INSERT INTO transactions/.test(s),
-    )!;
+    ), "matching query.mock.calls");
     // Signed by KIND (fee debits the sleeve) even though type_raw is a synonym
     // classifyBrokerageRow alone would send to review (defaulting to +1).
     expect(params).toEqual([
@@ -693,9 +705,9 @@ describe("commitBatch (portfolio)", () => {
     ];
     const res = await commitBatch({ batchId: 5 });
     expect(res).toMatchObject({ imported: 1, errors: 0 });
-    const [, params] = query.mock.calls.find(([s]) =>
+    const [, params] = must(query.mock.calls.find(([s]) =>
       /INSERT INTO transactions/.test(s),
-    )!;
+    ), "matching query.mock.calls");
     expect(params).toEqual([
       "2026-01-05",
       12.34,
@@ -731,9 +743,9 @@ describe("commitBatch (portfolio)", () => {
     ];
     const res = await commitBatch({ batchId: 5 });
     expect(res).toMatchObject({ imported: 1, errors: 0 });
-    const [, params] = query.mock.calls.find(([s]) =>
+    const [, params] = must(query.mock.calls.find(([s]) =>
       /INSERT INTO transactions/.test(s),
-    )!;
+    ), "matching query.mock.calls");
     expect(params).toEqual([
       "2026-01-05",
       12.34,
@@ -762,10 +774,10 @@ describe("commitBatch (portfolio)", () => {
     await commitBatch({ batchId: 5 });
     // createOrGet uppercases + writes normalized_name itself; commit's job is to
     // hand it the trimmed institution so identity can't fork on whitespace.
-    expect(recipientRepository.createOrGet).toHaveBeenCalledWith({
+    expect(methodMock(recipientRepository, "createOrGet")).toHaveBeenCalledWith({
       name: "DeGiro",
     });
-    expect(recipientRepository.getOrCreateSystemId).not.toHaveBeenCalled();
+    expect(methodMock(recipientRepository, "getOrCreateSystemId")).not.toHaveBeenCalled();
   });
 
   it("falls back to the account NAME when the institution is blank", async () => {
@@ -784,7 +796,7 @@ describe("commitBatch (portfolio)", () => {
       }),
     ];
     await commitBatch({ batchId: 5 });
-    expect(recipientRepository.createOrGet).toHaveBeenCalledWith({
+    expect(methodMock(recipientRepository, "createOrGet")).toHaveBeenCalledWith({
       name: "IBKR SLEEVE",
     });
   });
@@ -805,11 +817,11 @@ describe("commitBatch (portfolio)", () => {
       }),
     ];
     await commitBatch({ batchId: 5 });
-    expect(recipientRepository.createOrGet).not.toHaveBeenCalled();
-    expect(recipientRepository.getOrCreateSystemId).toHaveBeenCalledTimes(1);
-    const [, params] = query.mock.calls.find(([s]) =>
+    expect(methodMock(recipientRepository, "createOrGet")).not.toHaveBeenCalled();
+    expect(methodMock(recipientRepository, "getOrCreateSystemId")).toHaveBeenCalledTimes(1);
+    const [, params] = must(query.mock.calls.find(([s]) =>
       /INSERT INTO transactions/.test(s),
-    )!;
+    ), "matching query.mock.calls");
     expect(params[5]).toBe(99); // the SYSTEM id, not null
   });
 
@@ -838,7 +850,7 @@ describe("commitBatch (portfolio)", () => {
     ];
     const res = await commitBatch({ batchId: 5 });
     expect(res).toMatchObject({ imported: 2 });
-    expect(recipientRepository.createOrGet).toHaveBeenCalledTimes(1);
+    expect(methodMock(recipientRepository, "createOrGet")).toHaveBeenCalledTimes(1);
     const cashInserts = query.mock.calls.filter(([s]) =>
       /INSERT INTO transactions/.test(s),
     );
@@ -851,8 +863,8 @@ describe("commitBatch (portfolio)", () => {
     batchAccountId = 7;
     matchedRows = [row({ route: "portfolio", type: "buy", type_raw: "buy" })];
     await commitBatch({ batchId: 5 });
-    expect(recipientRepository.createOrGet).not.toHaveBeenCalled();
-    expect(recipientRepository.getOrCreateSystemId).not.toHaveBeenCalled();
+    expect(methodMock(recipientRepository, "createOrGet")).not.toHaveBeenCalled();
+    expect(methodMock(recipientRepository, "getOrCreateSystemId")).not.toHaveBeenCalled();
   });
 
   it("brokerage withdrawal: debits the sleeve (negative amount) even though staging is absolute", async () => {
@@ -870,9 +882,9 @@ describe("commitBatch (portfolio)", () => {
     ];
     const res = await commitBatch({ batchId: 5 });
     expect(res).toMatchObject({ imported: 1 });
-    const cashInsert = query.mock.calls.find(([s]) =>
+    const cashInsert = must(query.mock.calls.find(([s]) =>
       /INSERT INTO transactions/.test(s),
-    )!;
+    ), "matching query.mock.calls");
     expect(cashInsert[1][1]).toBe(-500); // amount param — was +500 (credited as a deposit)
   });
 
@@ -894,9 +906,9 @@ describe("commitBatch (portfolio)", () => {
     ];
     await commitBatch({ batchId: 5 });
 
-    const dedupCall = query.mock.calls.find(([s]) =>
+    const dedupCall = must(query.mock.calls.find(([s]) =>
       /as "n" from "transactions"/.test(s),
-    )!;
+    ), "matching query.mock.calls");
     // Predicate accepts either the post-fix signed value or the legacy magnitude.
     expect(dedupCall[0]).toMatch(/amount = \$3 OR amount = \$4/);
     // params: [accountId, tx_date, signed(-500), magnitude(500), currency, memo]
@@ -925,9 +937,9 @@ describe("commitBatch (portfolio)", () => {
     ];
     await commitBatch({ batchId: 5 });
 
-    const dedupCall = query.mock.calls.find(([s]) =>
+    const dedupCall = must(query.mock.calls.find(([s]) =>
       /as "n" from "transactions"/.test(s),
-    )!;
+    ), "matching query.mock.calls");
     expect(dedupCall[0]).toMatch(/amount = \$3/);
     expect(dedupCall[0]).not.toMatch(/amount = \$4|OR amount/); // no magnitude branch at all
     // params: [accountId, tx_date, signed(-10), currency, memo, is_active] — magnitude never sent.
@@ -951,9 +963,9 @@ describe("commitBatch (portfolio)", () => {
     ];
     await commitBatch({ batchId: 5 });
 
-    const dedupCall = query.mock.calls.find(([s]) =>
+    const dedupCall = must(query.mock.calls.find(([s]) =>
       /as "n" from "transactions"/.test(s),
-    )!;
+    ), "matching query.mock.calls");
     expect(dedupCall[1][2]).toBe(500); // signed
     expect(dedupCall[1][3]).toBe(500); // magnitude — same, so no negative branch
     expect(dedupCall[1][4]).toBe("EUR");
@@ -1149,9 +1161,9 @@ describe("commitBatch (portfolio)", () => {
 
     await commitBatch({ batchId: 5 });
 
-    const dedupCall = query.mock.calls.find(([sql]) =>
+    const dedupCall = must(query.mock.calls.find(([sql]) =>
       /as "n" from "transactions"/.test(sql),
-    )!;
+    ), "matching query.mock.calls");
     expect(dedupCall[0]).toContain("COALESCE(currency, 'EUR')");
     expect(dedupCall[1]).toContain("USD");
   });
@@ -1171,9 +1183,7 @@ describe("commitBatch (portfolio)", () => {
     ];
     const res = await commitBatch({ batchId: 5 });
     expect(res).toMatchObject({ imported: 0, errors: 1 });
-    expect(marked[0]).toMatchObject({
-      status: "error",
-      message: expect.stringMatching(/account/),
-    });
+    expect(marked[0]).toMatchObject({ status: "error" });
+    expect(textMatches(marked[0]?.message, /account/)).toBe(true);
   });
 });

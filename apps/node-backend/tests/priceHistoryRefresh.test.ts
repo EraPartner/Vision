@@ -8,7 +8,9 @@ import {
 } from "@vision/types/brands";
 
 const { chart, loadHistory, saveHistory } = vi.hoisted(() => ({
-  chart: vi.fn(),
+  chart: vi.fn<
+    (symbol: string, options: { period1: Date; period2: Date }) => Promise<unknown>
+  >(),
   loadHistory: vi.fn(),
   saveHistory: vi.fn(),
 }));
@@ -31,6 +33,7 @@ import {
   __resetPriceCache,
   fetchHistoricalPrices,
 } from "../src/services/priceProviderService.ts";
+import { must } from "./helpers/must.ts";
 
 /** `fetch` as these tests drive it: bare `{ ok, json }` responses, `init.signal` read back. */
 type FetchSpy = MockInstance<
@@ -94,7 +97,7 @@ describe("historical price refresh cache", () => {
 
   it("fetches an older Yahoo window after a narrow request and reuses its matching cache", async () => {
     const olderFrom = Date.UTC(2025, 0, 1);
-    chart.mockImplementation(async (_symbol, options) => ({
+    chart.mockImplementation((_symbol, options) => Promise.resolve({
       quotes: [{ date: options.period1, close: 100 }],
     }));
 
@@ -113,11 +116,11 @@ describe("historical price refresh cache", () => {
     ]);
     expect(repeated).toEqual(older);
     expect(chart).toHaveBeenCalledTimes(2);
-    expect(chart.mock.calls[1]![1].period1.getTime()).toBe(olderFrom);
+    expect(must(chart.mock.calls[1], "chart.mock.calls[1]")[1].period1.getTime()).toBe(olderFrom);
   });
 
   it("keys Yahoo history by the end of the requested window too", async () => {
-    chart.mockImplementation(async (_symbol, options) => ({
+    chart.mockImplementation((_symbol, options) => Promise.resolve({
       quotes: [
         { date: new Date(options.period2.getTime() - DAY_MS), close: 100 },
       ],
@@ -134,14 +137,14 @@ describe("historical price refresh cache", () => {
     expect(expanded).toEqual([
       { timestampMs: Date.UTC(2026, 1, 28, 12), price: 100 },
     ]);
-    expect(chart.mock.calls[1]![1].period2.getTime()).toBe(
+    expect(must(chart.mock.calls[1], "chart.mock.calls[1]")[1].period2.getTime()).toBe(
       Date.UTC(2026, 2, 1),
     );
   });
 
   it("keeps overlapping Yahoo windows separate when the narrow request finishes last", async () => {
     const olderFrom = Date.UTC(2025, 0, 1);
-    const pending = new Map();
+    const pending = new Map<number, () => void>();
     chart.mockImplementation(
       (_symbol, options) =>
         new Promise((resolve) => {
@@ -162,9 +165,9 @@ describe("historical price refresh cache", () => {
       toMs,
     });
     await vi.waitFor(() => expect(chart).toHaveBeenCalledTimes(2));
-    pending.get(olderFrom)();
+    must(pending.get(olderFrom), "older window resolver")();
     const older = await olderRequest;
-    pending.get(fromMs)();
+    must(pending.get(fromMs), "narrow window resolver")();
     await narrowRequest;
 
     const repeated = await fetchHistoricalPrices(investment("yahoo"), {
@@ -192,10 +195,10 @@ describe("historical price refresh cache", () => {
       "0",
     ]);
     fetchSpy
-      .mockResolvedValueOnce({ ok: true, json: async () => firstPage })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(firstPage) })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => [[fromMs + 1000 * DAY_MS, "0", "0", "0", "101", "0"]],
+        json: () => Promise.resolve([[fromMs + 1000 * DAY_MS, "0", "0", "0", "101", "0"]]),
       });
 
     const result = await fetchHistoricalPrices(investment("binance"), {
@@ -205,9 +208,9 @@ describe("historical price refresh cache", () => {
 
     expect(result).toHaveLength(1001);
     expect(timeout.mock.calls).toEqual([[8000], [8000]]);
-    expect(fetchSpy.mock.calls[0]![1].signal).toBe(controllers[0]!.signal);
-    expect(fetchSpy.mock.calls[1]![1].signal).toBe(controllers[1]!.signal);
-    expect(controllers[0]!.signal).not.toBe(controllers[1]!.signal);
+    expect(must(fetchSpy.mock.calls[0], "fetchSpy.mock.calls[0]")[1].signal).toBe(must(controllers[0], "controllers[0]").signal);
+    expect(must(fetchSpy.mock.calls[1], "fetchSpy.mock.calls[1]")[1].signal).toBe(must(controllers[1], "controllers[1]").signal);
+    expect(must(controllers[0], "controllers[0]").signal).not.toBe(must(controllers[1], "controllers[1]").signal);
   });
 
   it("returns DB history when a later Binance page times out and permits a fresh retry", async () => {
@@ -227,8 +230,8 @@ describe("historical price refresh cache", () => {
     ]);
     loadHistory.mockResolvedValueOnce(coveredHistory);
     fetchSpy
-      .mockResolvedValueOnce({ ok: true, json: async () => firstPage })
-      .mockImplementationOnce(async (_url, { signal }) => ({
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(firstPage) })
+      .mockImplementationOnce((_url, { signal }) => Promise.resolve({
         ok: true,
         json: () =>
           new Promise((_resolve, reject) => {
@@ -236,14 +239,21 @@ describe("historical price refresh cache", () => {
               reject(new Error("missing timeout signal"));
               return;
             }
-            signal.addEventListener("abort", () => reject(signal.reason), {
-              once: true,
-            });
+            signal.addEventListener(
+              "abort",
+              () =>
+                reject(
+                  signal.reason instanceof Error
+                    ? signal.reason
+                    : new Error("aborted"),
+                ),
+              { once: true },
+            );
           }),
       }))
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => [[middleMs, "0", "0", "0", "200", "0"]],
+        json: () => Promise.resolve([[middleMs, "0", "0", "0", "200", "0"]]),
       });
     const opts = { fromMs, toMs: fromMs + 1001 * DAY_MS, force: true };
     const request = fetchHistoricalPrices(investment("binance"), opts);
@@ -259,8 +269,8 @@ describe("historical price refresh cache", () => {
     expect(retry).toEqual([{ timestampMs: middleMs, price: 200 }]);
     expect(fetchSpy).toHaveBeenCalledTimes(3);
     expect(controllers).toHaveLength(3);
-    expect(fetchSpy.mock.calls[2]![1].signal).toBe(controllers[2]!.signal);
-    expect(controllers[2]!.signal.aborted).toBe(false);
+    expect(must(fetchSpy.mock.calls[2], "fetchSpy.mock.calls[2]")[1].signal).toBe(must(controllers[2], "controllers[2]").signal);
+    expect(must(controllers[2], "controllers[2]").signal.aborted).toBe(false);
     expect(saveHistory).toHaveBeenCalledTimes(1);
   });
 
@@ -268,12 +278,12 @@ describe("historical price refresh cache", () => {
     "%s force refresh bypasses both covered DB history and the provider cache",
     async (provider) => {
       let providerCalls = 0;
-      chart.mockImplementation(async () =>
-        providerPayload(provider, ++providerCalls * 100),
+      chart.mockImplementation(() =>
+        Promise.resolve(providerPayload(provider, ++providerCalls * 100)),
       );
-      fetchSpy.mockImplementation(async () => ({
+      fetchSpy.mockImplementation(() => Promise.resolve({
         ok: true,
-        json: async () => providerPayload(provider, ++providerCalls * 100),
+        json: () => Promise.resolve(providerPayload(provider, ++providerCalls * 100)),
       }));
       const inv = investment(provider);
 
@@ -325,7 +335,7 @@ describe("historical price refresh cache", () => {
       chart.mockResolvedValue(providerPayload(provider, 100));
       fetchSpy.mockResolvedValue({
         ok: true,
-        json: async () => providerPayload(provider, 100),
+        json: () => Promise.resolve(providerPayload(provider, 100)),
       });
       const inv = investment(provider);
       await fetchHistoricalPrices(inv, { fromMs, toMs });

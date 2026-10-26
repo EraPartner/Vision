@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { sanitizeKinesisIsolatedSpikes } from '../src/services/prices/priceProviderRegistry.ts';
+import { must } from "./helpers/must.ts";
 
 function pts(...prices: number[]) {
   return prices.map((price, i) => ({ timestampMs: i * 3_600_000, price }));
@@ -33,8 +34,8 @@ describe('sanitizeKinesisIsolatedSpikes', () => {
     });
 
     it('handles two separate stale runs in one series', () => {
-      const stale1 = Array(8).fill(50);
-      const stale2 = Array(9).fill(75);
+      const stale1 = Array<number>(8).fill(50);
+      const stale2 = Array<number>(9).fill(75);
       const input = pts(48, ...stale1, 52, 74, ...stale2, 77);
 
       const result = sanitizeKinesisIsolatedSpikes(input);
@@ -51,7 +52,7 @@ describe('sanitizeKinesisIsolatedSpikes', () => {
 
       const result = sanitizeKinesisIsolatedSpikes(input);
 
-      expect(result[0]!.price).toBeCloseTo(92.60, 2);
+      expect(must(result[0], "result[0]").price).toBeCloseTo(92.60, 2);
     });
 
     it('replaces first-point anomaly above threshold (2x spike)', () => {
@@ -59,7 +60,7 @@ describe('sanitizeKinesisIsolatedSpikes', () => {
 
       const result = sanitizeKinesisIsolatedSpikes(input);
 
-      expect(result[0]!.price).toBeCloseTo(99, 2);
+      expect(must(result[0], "result[0]").price).toBeCloseTo(99, 2);
     });
 
     it('replaces last-point anomaly below threshold', () => {
@@ -67,7 +68,7 @@ describe('sanitizeKinesisIsolatedSpikes', () => {
 
       const result = sanitizeKinesisIsolatedSpikes(input);
 
-      expect(result[result.length - 1]!.price).toBeCloseTo(92.70, 2);
+      expect(must(result[result.length - 1], "result[result.length - 1]").price).toBeCloseTo(92.70, 2);
     });
 
     it('replaces last-point anomaly above threshold', () => {
@@ -75,7 +76,7 @@ describe('sanitizeKinesisIsolatedSpikes', () => {
 
       const result = sanitizeKinesisIsolatedSpikes(input);
 
-      expect(result[result.length - 1]!.price).toBeCloseTo(99, 2);
+      expect(must(result[result.length - 1], "result[result.length - 1]").price).toBeCloseTo(99, 2);
     });
 
     it('leaves normal first and last points untouched', () => {
@@ -83,14 +84,14 @@ describe('sanitizeKinesisIsolatedSpikes', () => {
 
       const result = sanitizeKinesisIsolatedSpikes(input);
 
-      expect(result[0]!.price).toBeCloseTo(100, 4);
-      expect(result[result.length - 1]!.price).toBeCloseTo(100, 4);
+      expect(must(result[0], "result[0]").price).toBeCloseTo(100, 4);
+      expect(must(result[result.length - 1], "result[result.length - 1]").price).toBeCloseTo(100, 4);
     });
   });
 
   describe('combined scenarios', () => {
     it('handles stale run + edge anomaly in same series', () => {
-      const stale = Array(8).fill(114.30);
+      const stale = Array<number>(8).fill(114.30);
       // First point is half-price artifact, followed by stale run, then normal
       const input = pts(46.31, ...stale, 92.60, 92.40, 92.80);
 
@@ -134,11 +135,11 @@ describe('sanitizeKinesisIsolatedSpikes', () => {
   describe('preserves immutability', () => {
     it('does not mutate the input array', () => {
       const input = pts(46.31, 92.60, 92.40, 92.80, 92.50);
-      const originalFirst = input[0]!.price;
+      const originalFirst = must(input[0], "input[0]").price;
 
       sanitizeKinesisIsolatedSpikes(input);
 
-      expect(input[0]!.price).toBe(originalFirst);
+      expect(must(input[0], "input[0]").price).toBe(originalFirst);
     });
   });
 });

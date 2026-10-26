@@ -39,14 +39,37 @@ import {
 import { ValidationError } from "../src/middleware/errorHandler.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
+import { must } from "./helpers/must.ts";
+import { asAccountId } from "@vision/types/brands";
+
+/** A row from an ad-hoc SQL read: column values are narrowed where used. */
+type DbRow = Record<string, unknown>;
 
 const rec: Record<string, number> = {};
 
+interface IdRow {
+  id: number;
+}
+
+interface SystemRow {
+  id: number;
+  amount: string;
+  balance: string | null;
+  currency: string;
+  memo: string | null;
+  account_id: number;
+  recipient_id: number;
+  is_transfer: boolean;
+  transfer_source: string;
+  recipient_name: string;
+  recipient_active: boolean;
+}
+
 async function seedRecipient() {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "test pool").query<IdRow>(
     `INSERT INTO recipients (name, normalized_name) VALUES ('Misc Payee', 'misc payee') RETURNING id`,
   );
-  rec.misc = rows[0].id;
+  rec.misc = must(rows[0], "recipient row").id;
 }
 
 async function addAccount(
@@ -61,15 +84,15 @@ async function addAccount(
     statementCurrency?: string;
   } = {},
 ) {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "test pool").query<IdRow>(
     `INSERT INTO accounts (name, type, currency, spendable, in_net_worth, is_active)
      VALUES ($1, 'checking'::account_type, $2, true, true, true)
      RETURNING id`,
     [name, currency],
   );
-  const id = rows[0].id;
+  const id = asAccountId(must(rows[0], "account row").id);
   if (statementBalance != null) {
-    await getTestPool()!.query(
+    await must(getTestPool(), "test pool").query(
       `INSERT INTO account_statement_balances (account_id, currency, balance, balance_date)
        VALUES ($1, $2, $3, CURRENT_DATE)`,
       [id, statementCurrency, statementBalance],
@@ -89,7 +112,7 @@ async function insertTxn({
   currency?: string;
   accountId: number;
 }) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "test pool").query(
     `INSERT INTO transactions (date, amount, currency, recipient_id, account_id, is_active)
      VALUES ((${dateExpr})::date, $1, $2, $3, $4, true)`,
     [amount, currency, rec.misc, accountId],
@@ -97,7 +120,7 @@ async function insertTxn({
 }
 
 async function insertRate(code: string, rate: string | number) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "test pool").query(
     `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
      VALUES ($1, CURRENT_DATE, $2, true)`,
     [code, rate],
@@ -106,7 +129,7 @@ async function insertRate(code: string, rate: string | number) {
 
 /** Every row the services generate, newest first. */
 async function systemRows() {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "test pool").query<SystemRow>(
     `SELECT t.id, t.amount, t.balance, t.currency, t.memo, t.account_id, t.recipient_id,
             t.is_transfer, t.transfer_source, r.name AS recipient_name, r.is_active AS recipient_active
        FROM transactions t
@@ -129,12 +152,12 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "test pool");
       await pool.query("DELETE FROM transactions");
       await pool.query("DELETE FROM accounts");
       await pool.query("DELETE FROM recipients");
       await pool.query("DELETE FROM exchange_rates");
-      for (const k of Object.keys(rec)) delete rec[k];
+      for (const k of Object.keys(rec)) Reflect.deleteProperty(rec, k);
       clearMemoryCache();
     });
 
@@ -155,7 +178,7 @@ describe.skipIf(!hasTestDatabase())(
       // carried EXCEPT recipient_id. It cannot reach the ledger, so any test that
       // asserts an adjustment row exists is discriminating against this.
       await expect(
-        getTestPool()!.query(
+        must(getTestPool(), "test pool").query<DbRow>(
           `INSERT INTO transactions
          (date, amount, currency, memo, account_id, is_transfer, transfer_source, is_active)
        VALUES (CURRENT_DATE, 20, 'EUR', 'BALANCE ADJUSTMENT', $1, true, 'adjustment', true)`,
@@ -177,7 +200,7 @@ describe.skipIf(!hasTestDatabase())(
           accountId: id,
         });
 
-        const before = (await listAccounts())[0]!;
+        const before = must((await listAccounts())[0], "listAccounts result");
         expect(before.drift).toBe(20);
 
         const result = await reconcileAccount(id, { mode: "adjustment" });
@@ -188,16 +211,16 @@ describe.skipIf(!hasTestDatabase())(
           statement_balance: 120,
         });
         const [row] = await systemRows();
-        expect(Number(row.amount)).toBe(20);
-        expect(row.account_id).toBe(id);
-        expect(row.transfer_source).toBe("adjustment");
-        expect(row.is_transfer).toBe(true);
+        expect(Number(must(row, "row").amount)).toBe(20);
+        expect(must(row, "row").account_id).toBe(id);
+        expect(must(row, "row").transfer_source).toBe("adjustment");
+        expect(must(row, "row").is_transfer).toBe(true);
         // NOT an anchor: a stamped balance would freeze the computed balance here.
-        expect(row.balance).toBeNull();
-        expect(row.recipient_name).toBe(SYSTEM_RECIPIENT_NAME);
+        expect(must(row, "row").balance).toBeNull();
+        expect(must(row, "row").recipient_name).toBe(SYSTEM_RECIPIENT_NAME);
 
         // The badge the user clicked is actually clear on the next hub read.
-        const after = (await listAccounts())[0]!;
+        const after = must((await listAccounts())[0], "listAccounts result");
         expect(after.drift).toBe(0);
         expect(after.computed_balance).toBe(120);
       });
@@ -227,10 +250,10 @@ describe.skipIf(!hasTestDatabase())(
         await reconcileAccount(id, { mode: "adjustment" });
 
         const [row] = await systemRows();
-        expect(Number(row.amount)).toBe(20);
-        expect(row.currency).toBe("EUR");
+        expect(Number(must(row, "row").amount)).toBe(20);
+        expect(must(row, "row").currency).toBe("EUR");
 
-        const after = (await listAccounts())[0]!;
+        const after = must((await listAccounts())[0], "listAccounts result");
         expect(after.drift).toBe(0);
         expect(after.reconcilable_balance).toBe(120);
         // …and the USD partition is untouched: 120 EUR + 100 USD × 0.5.
@@ -257,9 +280,9 @@ describe.skipIf(!hasTestDatabase())(
         await reconcileAccount(id, { mode: "adjustment", currency: "USD" });
 
         const [row] = await systemRows();
-        expect(row.currency).toBe("USD");
-        expect(Number(row.amount)).toBe(20);
-        const after = (await listAccounts())[0]!;
+        expect(must(row, "row").currency).toBe("USD");
+        expect(Number(must(row, "row").amount)).toBe(20);
+        const after = must((await listAccounts())[0], "listAccounts result");
         expect(after.drift).toBe(0);
       });
 
@@ -300,14 +323,14 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         expect(warning).toBeNull();
-        expect(Number(transaction!.balance)).toBe(1000);
-        expect(Number(transaction!.amount)).toBe(0);
+        expect(Number(must(transaction, "transaction").balance)).toBe(1000);
+        expect(Number(must(transaction, "transaction").amount)).toBe(0);
         const [row] = await systemRows();
-        expect(row.transfer_source).toBe("opening");
-        expect(row.recipient_name).toBe(SYSTEM_RECIPIENT_NAME);
+        expect(must(row, "row").transfer_source).toBe("opening");
+        expect(must(row, "row").recipient_name).toBe(SYSTEM_RECIPIENT_NAME);
 
         // Anchor + the later −25 row.
-        expect((await listAccounts())[0]!.computed_balance).toBe(975);
+        expect(must((await listAccounts())[0], "listAccounts result").computed_balance).toBe(975);
       });
 
       it("re-running updates the one anchor and leaves its recipient alone", async () => {
@@ -317,7 +340,7 @@ describe.skipIf(!hasTestDatabase())(
         await setOpeningBalance(id, { balance: 1000, date: "2020-01-01" });
         // A user re-attributing the anchor to a real payee must survive a re-run:
         // the upsert's UPDATE branch does not touch recipient_id.
-        await getTestPool()!.query(
+        await must(getTestPool(), "test pool").query(
           `UPDATE transactions SET recipient_id = $1 WHERE transfer_source = 'opening'`,
           [rec.misc],
         );
@@ -326,8 +349,8 @@ describe.skipIf(!hasTestDatabase())(
 
         const rows = await systemRows();
         expect(rows).toHaveLength(1); // one anchor per (account, currency)
-        expect(Number(rows[0].balance)).toBe(2500);
-        expect(rows[0].recipient_id).toBe(rec.misc);
+        expect(Number(must(rows[0], "row").balance)).toBe(2500);
+        expect(must(rows[0], "row").recipient_id).toBe(rec.misc);
       });
 
       it("anchors each currency of a multi-currency account separately", async () => {
@@ -348,7 +371,7 @@ describe.skipIf(!hasTestDatabase())(
           rows.every((r) => r.recipient_name === SYSTEM_RECIPIENT_NAME),
         ).toBe(true);
         // 1000 EUR + 400 USD × 0.5
-        expect((await listAccounts())[0]!.computed_balance).toBe(1200);
+        expect(must((await listAccounts())[0], "listAccounts result").computed_balance).toBe(1200);
       });
     });
 
@@ -373,18 +396,19 @@ describe.skipIf(!hasTestDatabase())(
         // uq_transactions_opening_anchor is UNIQUE (account_id, currency) WHERE
         // transfer_source = 'opening', so the repoint would raise 23505 —
         // unmapped, therefore a 500. The guard turns it into an actionable 400.
-        const err = await mergeAccounts(survivor, [source]).catch((e) => e);
+        const err = await mergeAccounts(survivor, [source]).catch((e: unknown) => e);
         expect(err).toBeInstanceOf(ValidationError);
-        expect(err.status).toBe(400);
-        expect(err.message).toMatch(/opening balance in EUR/);
-        expect(err.message).not.toMatch(
+        const failure = err as ValidationError;
+        expect(failure.status).toBe(400);
+        expect(failure.message).toMatch(/opening balance in EUR/);
+        expect(failure.message).not.toMatch(
           /duplicate key|uq_transactions_opening_anchor/,
         );
-        expect(err.code).not.toBe("23505");
+        expect(failure.code).not.toBe("23505");
 
         // Nothing moved: both accounts and both anchors survive, each on its own
         // account, so the user can act on the message.
-        const { rows: accounts } = await getTestPool()!.query(
+        const { rows: accounts } = await must(getTestPool(), "test pool").query<IdRow>(
           `SELECT id FROM accounts ORDER BY id`,
         );
         expect(accounts.map((r) => r.id)).toEqual(
@@ -423,7 +447,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(anchors).toHaveLength(2);
         expect(anchors.every((r) => r.account_id === survivor)).toBe(true);
         // 1000 EUR + 400 USD × 0.5
-        expect((await listAccounts())[0]!.computed_balance).toBe(1200);
+        expect(must((await listAccounts())[0], "listAccounts result").computed_balance).toBe(1200);
       });
 
       it("does not flag a single account carrying both of the anchors", async () => {
@@ -467,17 +491,20 @@ describe.skipIf(!hasTestDatabase())(
         await reconcileAccount(id, { mode: "adjustment" });
         await setOpeningBalance(id, { balance: 10, date: "2020-01-01" });
 
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(getTestPool(), "test pool").query<{
+          id: number;
+          is_active: boolean;
+        }>(
           `SELECT id, is_active FROM recipients WHERE name = $1`,
           [SYSTEM_RECIPIENT_NAME],
         );
         expect(rows).toHaveLength(1);
-        expect(rows[0].is_active).toBe(false);
+        expect(must(rows[0], "row").is_active).toBe(false);
 
         const generated = await systemRows();
         expect(generated).toHaveLength(2);
         expect(new Set(generated.map((r) => r.recipient_id))).toEqual(
-          new Set([rows[0].id]),
+          new Set([must(rows[0], "row").id]),
         );
       });
 
@@ -491,7 +518,10 @@ describe.skipIf(!hasTestDatabase())(
         const id = await recipientRepository.getOrCreateSystemId();
         const version = async () =>
           (
-            await getTestPool()!.query(
+            await must(getTestPool(), "test pool").query<{
+              xmin: string;
+              updated_at: Date;
+            }>(
               `SELECT xmin::text AS xmin, updated_at FROM recipients WHERE id = $1`,
               [id],
             )
@@ -516,26 +546,28 @@ describe.skipIf(!hasTestDatabase())(
         expect(active.map((r) => r.name)).not.toContain(SYSTEM_RECIPIENT_NAME);
         // …but it is a real, joinable row — the FK and every transaction display
         // join (a plain LEFT JOIN) are indifferent to is_active.
-        expect((await recipientRepository.getById(first))!.name).toBe(
+        expect(must(await recipientRepository.getById(first), "recipientRepository.getById result").name).toBe(
           SYSTEM_RECIPIENT_NAME,
         );
       });
 
       it("adopts an existing recipient of the same name rather than deactivating it", async () => {
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(getTestPool(), "test pool").query<IdRow>(
           `INSERT INTO recipients (name, normalized_name, is_active)
          VALUES ($1, $1, true) RETURNING id`,
           [SYSTEM_RECIPIENT_NAME],
         );
 
         expect(await recipientRepository.getOrCreateSystemId()).toBe(
-          rows[0].id,
+          must(rows[0], "row").id,
         );
-        const after = await getTestPool()!.query(
+        const after = await must(getTestPool(), "test pool").query<{
+          is_active: boolean;
+        }>(
           `SELECT is_active FROM recipients WHERE id = $1`,
-          [rows[0].id],
+          [must(rows[0], "row").id],
         );
-        expect(after.rows[0].is_active).toBe(true);
+        expect(must(after.rows[0], "row").is_active).toBe(true);
       });
     });
   },

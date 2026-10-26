@@ -9,6 +9,8 @@ import {
 import type { BuildChatMessagesArgs } from "../src/integrations/ollama/prompts.ts";
 import type { AiMessageRow } from "../src/types/rows.ts";
 import { loose, partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
+import { valueAt } from "./helpers/responseBody.ts";
 
 describe("buildSystemPrompt", () => {
   it("injects comma-separated tool names into the prompt", () => {
@@ -119,7 +121,7 @@ describe("toOllamaMessage", () => {
       toolName: "getSpendByCategory",
       toolResult: { ok: true, data: [{ category: "Food", total: 42.5 }] },
     });
-    const msg = toOllamaMessage(row)!;
+    const msg = must(toOllamaMessage(row), "toOllamaMessage result");
     expect(msg.role).toBe("tool");
     expect(msg.name).toBe("getSpendByCategory");
     expect(JSON.parse(msg.content)).toEqual({
@@ -134,7 +136,7 @@ describe("toOllamaMessage", () => {
       toolName: "x",
       toolResult: '{"already":"json"}',
     });
-    const msg = toOllamaMessage(row)!;
+    const msg = must(toOllamaMessage(row), "toOllamaMessage result");
     expect(msg.content).toBe('{"already":"json"}');
   });
 
@@ -143,15 +145,15 @@ describe("toOllamaMessage", () => {
       role: "tool",
       toolResult: { ok: true, data: {} },
     });
-    expect(toOllamaMessage(row)!.name).toBe("unknown");
+    expect(must(toOllamaMessage(row), "toOllamaMessage result").name).toBe("unknown");
   });
 
   it("substitutes a fallback envelope when toolResult is missing", () => {
     const row = partial<AiMessageRow>({ role: "tool", toolName: "x" });
-    const msg = toOllamaMessage(row)!;
-    const parsed = JSON.parse(msg.content);
-    expect(parsed.ok).toBe(false);
-    expect(parsed.error.code).toBe("MISSING");
+    const msg = must(toOllamaMessage(row), "toOllamaMessage result");
+    const parsed: unknown = JSON.parse(msg.content);
+    expect(valueAt(parsed, "ok")).toBe(false);
+    expect(valueAt(parsed, "error", "code")).toBe("MISSING");
   });
 
   it("substitutes a fallback envelope when toolResult is null", () => {
@@ -160,8 +162,10 @@ describe("toOllamaMessage", () => {
       toolName: "x",
       toolResult: null,
     });
-    const parsed = JSON.parse(toOllamaMessage(row)!.content);
-    expect(parsed.ok).toBe(false);
+    const parsed: unknown = JSON.parse(
+      must(toOllamaMessage(row), "toOllamaMessage result").content,
+    );
+    expect(valueAt(parsed, "ok")).toBe(false);
   });
 
   it("caps large tool data while retaining ok, meta, and error fields", () => {
@@ -179,18 +183,18 @@ describe("toOllamaMessage", () => {
       },
     });
 
-    const parsed = JSON.parse(
-      toOllamaMessage(row, { maxToolResultChars: 300 })!.content,
+    const parsed: unknown = JSON.parse(
+      must(toOllamaMessage(row, { maxToolResultChars: 300 }), "toOllamaMessage result").content,
     );
-    expect(parsed.ok).toBe(false);
-    expect(parsed.meta).toEqual({ renderAs: "table", total: 100 });
-    expect(parsed.error).toEqual({
+    expect(valueAt(parsed, "ok")).toBe(false);
+    expect(valueAt(parsed, "meta")).toEqual({ renderAs: "table", total: 100 });
+    expect(valueAt(parsed, "error")).toEqual({
       code: "PARTIAL",
       message: "Some rows unavailable",
     });
-    expect(parsed.data).toMatchObject({ truncated: true });
-    expect(parsed.data.originalCharacters).toBeGreaterThan(
-      parsed.data.preview.length,
+    expect(valueAt(parsed, "data")).toMatchObject({ truncated: true });
+    expect(Number(valueAt(parsed, "data", "originalCharacters"))).toBeGreaterThan(
+      Number(valueAt(parsed, "data", "preview", "length")),
     );
   });
 
@@ -211,7 +215,7 @@ describe("toOllamaMessage", () => {
       100,
     );
     expect(serialized.length).toBeLessThanOrEqual(100);
-    const parsed = JSON.parse(serialized);
+    const parsed: unknown = JSON.parse(serialized);
     expect(parsed).toHaveProperty("ok", false);
     expect(parsed).toHaveProperty("meta");
     expect(parsed).toHaveProperty("error");
@@ -225,7 +229,9 @@ describe("toOllamaMessage", () => {
         limit,
       );
       expect(serialized.length).toBeLessThanOrEqual(limit);
-      expect(() => JSON.parse(serialized)).not.toThrow();
+      expect(() => {
+        JSON.parse(serialized);
+      }).not.toThrow();
     }
   });
 });
@@ -237,8 +243,8 @@ describe("buildChatMessages", () => {
       history: [],
       userInput: "hello",
     });
-    expect(messages[0]!.role).toBe("system");
-    expect(messages[0]!.content).toContain("getSpendByCategory");
+    expect(must(messages[0], "messages[0]").role).toBe("system");
+    expect(must(messages[0], "messages[0]").content).toContain("getSpendByCategory");
   });
 
   it("appends the user input as the final message", () => {
@@ -273,7 +279,7 @@ describe("buildChatMessages", () => {
       }),
     );
     expect(messages).toHaveLength(1);
-    expect(messages[0]!.role).toBe("system");
+    expect(must(messages[0], "messages[0]").role).toBe("system");
   });
 
   it("omits user message when userInput is empty", () => {
@@ -305,7 +311,7 @@ describe("buildChatMessages", () => {
       userInput: "second q",
     });
     expect(messages).toHaveLength(4);
-    expect(messages[0]!.role).toBe("system");
+    expect(must(messages[0], "messages[0]").role).toBe("system");
     expect(messages[1]).toEqual({ role: "user", content: "first q" });
     expect(messages[2]).toEqual({ role: "assistant", content: "first a" });
     expect(messages[3]).toEqual({ role: "user", content: "second q" });
@@ -326,8 +332,8 @@ describe("buildChatMessages", () => {
     });
     const historyMessages = messages.slice(1, -1);
     expect(historyMessages).toHaveLength(5);
-    expect(historyMessages[0]!.content).toBe("msg-45");
-    expect(historyMessages[4]!.content).toBe("msg-49");
+    expect(must(historyMessages[0], "historyMessages[0]").content).toBe("msg-45");
+    expect(must(historyMessages[4], "historyMessages[4]").content).toBe("msg-49");
   });
 
   it("defaults maxHistoryMessages to 30", () => {
@@ -344,8 +350,8 @@ describe("buildChatMessages", () => {
     });
     const historyMessages = messages.slice(1, -1);
     expect(historyMessages).toHaveLength(30);
-    expect(historyMessages[0]!.content).toBe("msg-10");
-    expect(historyMessages[29]!.content).toBe("msg-39");
+    expect(must(historyMessages[0], "historyMessages[0]").content).toBe("msg-10");
+    expect(must(historyMessages[29], "historyMessages[29]").content).toBe("msg-39");
   });
 
   it("walks history newest-first under the context budget", () => {
@@ -376,7 +382,7 @@ describe("buildChatMessages", () => {
       contextBudgetChars: buildSystemPrompt([]).length + 60,
     });
 
-    const historyMessage = messages[1]!;
+    const historyMessage = must(messages[1], "messages[1]");
     expect(historyMessage.role).toBe("assistant");
     expect(historyMessage.content).toMatch(/^…/);
     expect(historyMessage.content.endsWith("z".repeat(10))).toBe(true);
@@ -421,8 +427,9 @@ describe("buildChatMessages", () => {
     });
     const toolMsg = messages.find((m) => m.role === "tool");
     expect(toolMsg).toBeDefined();
-    expect(toolMsg!.name).toBe("getSpendByCategory");
-    expect(JSON.parse(toolMsg!.content).data[0].category).toBe("Food");
+    expect(must(toolMsg, "toolMsg").name).toBe("getSpendByCategory");
+    const toolBody: unknown = JSON.parse(must(toolMsg, "toolMsg").content);
+    expect(valueAt(toolBody, "data", 0, "category")).toBe("Food");
   });
 
   it("handles empty history with no user input (system-only)", () => {
@@ -430,12 +437,12 @@ describe("buildChatMessages", () => {
       partial<BuildChatMessagesArgs>({ toolNames: ["x"] }),
     );
     expect(messages).toHaveLength(1);
-    expect(messages[0]!.role).toBe("system");
+    expect(must(messages[0], "messages[0]").role).toBe("system");
   });
 });
 
 describe("serializeToolResultForPrompt leaner output", () => {
-  const serialize = (payload: unknown) =>
+  const serialize = (payload: unknown): unknown =>
     JSON.parse(serializeToolResultForPrompt(payload));
 
   it("drops null, undefined and empty-string object fields, at any depth", () => {
@@ -455,17 +462,25 @@ describe("serializeToolResultForPrompt leaner output", () => {
 
   it("rounds numbers beyond four decimals and leaves the rest exact", () => {
     expect(
-      serialize({
-        data: [
-          { a: 12.345678, b: 1234.5, c: 0.1234, d: 7, e: -2.00006, f: 99.99 },
-        ],
-      }).data[0],
+      valueAt(
+        serialize({
+          data: [
+            { a: 12.345678, b: 1234.5, c: 0.1234, d: 7, e: -2.00006, f: 99.99 },
+          ],
+        }),
+        "data",
+        0,
+      ),
     ).toEqual({ a: 12.3457, b: 1234.5, c: 0.1234, d: 7, e: -2.0001, f: 99.99 });
   });
 
   it("keeps four significant digits on numbers below 1", () => {
     expect(
-      serialize({ data: [{ btc: 0.000123456, rate: 0.0325 }] }).data[0],
+      valueAt(
+        serialize({ data: [{ btc: 0.000123456, rate: 0.0325 }] }),
+        "data",
+        0,
+      ),
     ).toEqual({ btc: 0.0001235, rate: 0.0325 });
   });
 
@@ -484,7 +499,7 @@ describe("serializeToolResultForPrompt leaner output", () => {
         from: "2025-01-01",
       },
     });
-    expect(parsed.meta).toEqual({
+    expect(valueAt(parsed, "meta")).toEqual({
       renderAs: "bar",
       currency: "EUR",
       from: "2025-01-01",

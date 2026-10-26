@@ -24,6 +24,7 @@ import type {
 import { toNumber, toDecimal } from "@vision/shared-utils/money";
 import type { DecimalInput } from "@vision/shared-utils/money";
 import { partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 const OPTS = { todayYmd: "2026-08-10" };
 const stock = (current_price: number) => ({
@@ -169,12 +170,12 @@ describe.each<CostBasisMethod>(["weighted_avg", "fifo", "lifo"])(
         },
       ];
       const streams = partitionTxnsByAccount(rows, costBasisMethod);
-      const reduction = streams
-        .get(1)!
-        .find((row) => row.type === "return_of_capital")!;
-      const incoming = streams
-        .get(2)!
-        .find((row) => row.type === "transfer_in")!;
+      const reduction = must(must(streams
+        .get(1), "value")
+        .find((row) => row.type === "return_of_capital"), "matching entry");
+      const incoming = must(must(streams
+        .get(2), "value")
+        .find((row) => row.type === "transfer_in"), "matching entry");
       expect(n(reduction.amount)).toBe(16);
       expect(n(incoming.transferredBasis)).toBe(72);
       expect(n(incoming.transferredBasisConv)).toBe(57.6);
@@ -204,17 +205,17 @@ describe.each<CostBasisMethod>(["weighted_avg", "fifo", "lifo"])(
         },
       ];
       const streams = partitionTxnsByAccount(rows, costBasisMethod);
-      const outgoing = streams
-        .get(1)!
-        .find((row) => row.type === "transfer_out")!;
-      const incoming = streams
-        .get(2)!
-        .find((row) => row.type === "transfer_in")!;
+      const outgoing = must(must(streams
+        .get(1), "value")
+        .find((row) => row.type === "transfer_out"), "matching entry");
+      const incoming = must(must(streams
+        .get(2), "value")
+        .find((row) => row.type === "transfer_in"), "matching entry");
       expect(n(outgoing.assetFeeBasis)).toBe(10);
       expect(n(outgoing.assetFeeBasisConv)).toBe(8);
       expect(n(incoming.transferredBasis)).toBe(90);
       expect(n(incoming.transferredBasisConv)).toBe(72);
-      expect(incoming.transferredLots![0]!.currency).toBe("USD");
+      expect(must(must(incoming.transferredLots, "incoming.transferredLots")[0], "must result").currency).toBe("USD");
       const { core } = buildInvestmentSummaryCorePartitioned(
         stock(20),
         rows,
@@ -315,7 +316,7 @@ describe.each<CostBasisMethod>(["weighted_avg", "fifo", "lifo"])(
       const realizedC = { weighted_avg: 151.5, fifo: 204, lifo: 99 };
       expect(n(core.realizedGain)).toBe(realized[costBasisMethod]);
       expect(n(core.converted.realizedGain)).toBe(realizedC[costBasisMethod]);
-      const incomePartition = partitions.find((part) => part.accountId === 2)!;
+      const incomePartition = must(partitions.find((part) => part.accountId === 2), "matching partitions");
       expect(n(incomePartition.core.gainLoss)).toBe(65);
       expect(n(incomePartition.core.converted.gainLoss)).toBe(71.5);
       expect(core.gainLoss.eq(core.converted.assetGain.div(0.8))).toBe(true);
@@ -416,9 +417,9 @@ describe("partitionTxnsByAccount — corporate actions apply across partitions",
       },
     ]);
 
-    expect([...partitions.keys()].sort()).toEqual([1, 2]);
-    const splitA = partitions.get(1)!.find((t) => t.type === "split")!;
-    const splitB = partitions.get(2)!.find((t) => t.type === "split")!;
+    expect([...partitions.keys()].sort((a, b) => must(a, "a") - must(b, "b"))).toEqual([1, 2]);
+    const splitA = must(must(partitions.get(1), "partitions.get result").find((t) => t.type === "split"), "matching entry");
+    const splitB = must(must(partitions.get(2), "partitions.get result").find((t) => t.type === "split"), "matching entry");
     expect(n(splitA.units)).toBe(20);
     expect(n(splitB.units)).toBe(60);
     // No unassigned partition minted for the fee-less rewritten action row.
@@ -442,10 +443,10 @@ describe("partitionTxnsByAccount — corporate actions apply across partitions",
     ]);
 
     expect(
-      n(partitions.get(1)!.find((t) => t.type === "return_of_capital")!.amount),
+      n(must(must(partitions.get(1), "partitions.get result").find((t) => t.type === "return_of_capital"), "matching entry").amount),
     ).toBe(200);
     expect(
-      n(partitions.get(2)!.find((t) => t.type === "return_of_capital")!.amount),
+      n(must(must(partitions.get(2), "partitions.get result").find((t) => t.type === "return_of_capital"), "matching entry").amount),
     ).toBe(100);
   });
 
@@ -466,12 +467,12 @@ describe("partitionTxnsByAccount — corporate actions apply across partitions",
 
     const residuals = partitions.get(null) ?? [];
     expect(residuals).toHaveLength(1);
-    expect(n(residuals[0]!.units)).toBe(0); // engine no-op
-    expect(residuals[0]!.fees).toBe(7);
-    expect(residuals[0]!.taxes).toBe(3);
+    expect(n(must(residuals[0], "residuals[0]").units)).toBe(0); // engine no-op
+    expect(must(residuals[0], "residuals[0]").fees).toBe(7);
+    expect(must(residuals[0], "residuals[0]").taxes).toBe(3);
     // …and the rewritten per-partition splits carry NO fees.
-    expect(partitions.get(1)!.find((t) => t.type === "split")!.fees).toBe(0);
-    expect(partitions.get(2)!.find((t) => t.type === "split")!.fees).toBe(0);
+    expect(must(must(partitions.get(1), "partitions.get result").find((t) => t.type === "split"), "matching entry").fees).toBe(0);
+    expect(must(must(partitions.get(2), "partitions.get result").find((t) => t.type === "split"), "matching entry").fees).toBe(0);
   });
 
   it("routes income rows to their own account's partition", () => {
@@ -480,8 +481,8 @@ describe("partitionTxnsByAccount — corporate actions apply across partitions",
       { type: "dividend", amount: 50, date: "2026-02-01", account_id: 2 },
       { type: "dividend", amount: 25, date: "2026-02-01", account_id: null },
     ]);
-    expect(partitions.get(2)!.map((t) => t.type)).toEqual(["dividend"]);
-    expect(partitions.get(null)!.map((t) => t.type)).toEqual(["dividend"]);
+    expect(must(partitions.get(2), "partitions.get result").map((t) => t.type)).toEqual(["dividend"]);
+    expect(must(partitions.get(null), "partitions.get result").map((t) => t.type)).toEqual(["dividend"]);
   });
 
   it("classifies an unassigned adjustment-only partition as non-position", () => {
@@ -553,10 +554,10 @@ describe("buildInvestmentSummaryCorePartitioned — sells consume SAME-account l
 
     expect(result.core.oversold).toBe(true);
     expect(
-      result.partitions.find((p) => p.accountId === 1)!.core.oversold,
+      must(result.partitions.find((p) => p.accountId === 1), "matching result.partitions").core.oversold,
     ).toBe(true);
     expect(
-      result.partitions.find((p) => p.accountId === 2)!.core.oversold,
+      must(result.partitions.find((p) => p.accountId === 2), "matching result.partitions").core.oversold,
     ).toBe(false);
     expect(toNumber(result.core.totalUnits)).toBe(5);
     expect(toNumber(result.core.currentValue)).toBe(50);
@@ -594,8 +595,8 @@ describe("buildInvestmentSummaryCorePartitioned — sells consume SAME-account l
         });
 
       expect(fullyAssigned).toBe(true);
-      const partB = partitions.find((p) => p.accountId === 2)!;
-      const partA = partitions.find((p) => p.accountId === 1)!;
+      const partB = must(partitions.find((p) => p.accountId === 2), "matching partitions");
+      const partA = must(partitions.find((p) => p.accountId === 1), "matching partitions");
       expect(toNumber(partB.core.realizedGain)).toBe(expectedRealized);
       expect(toNumber(partB.core.totalInvested)).toBe(expectedRemainingCostB);
       expect(toNumber(partA.core.realizedGain)).toBe(0);
@@ -645,8 +646,8 @@ describe("buildInvestmentSummaryCorePartitioned — sells consume SAME-account l
       { ...OPTS, costBasisMethod: "fifo" },
     );
 
-    const partA = partitions.find((p) => p.accountId === 1)!;
-    const partB = partitions.find((p) => p.accountId === 2)!;
+    const partA = must(partitions.find((p) => p.accountId === 1), "matching partitions");
+    const partB = must(partitions.find((p) => p.accountId === 2), "matching partitions");
     expect(toNumber(partA.core.totalUnits)).toBe(20);
     expect(toNumber(partB.core.totalUnits)).toBe(5);
     expect(toNumber(partB.core.realizedGain)).toBe(75);
@@ -683,10 +684,10 @@ describe("buildInvestmentSummaryCorePartitioned — sells consume SAME-account l
     );
 
     expect(
-      toNumber(partitions.find((p) => p.accountId === 1)!.core.totalInvested),
+      toNumber(must(partitions.find((p) => p.accountId === 1), "matching partitions").core.totalInvested),
     ).toBe(800); // 1000 − 200
     expect(
-      toNumber(partitions.find((p) => p.accountId === 2)!.core.totalInvested),
+      toNumber(must(partitions.find((p) => p.accountId === 2), "matching partitions").core.totalInvested),
     ).toBe(900); // 1000 − 100
     expect(toNumber(core.totalInvested)).toBe(1700);
 
@@ -713,8 +714,8 @@ describe("buildInvestmentSummaryCorePartitioned — sells consume SAME-account l
     );
 
     expect(after.partitions).toHaveLength(1);
-    expect(after.partitions[0]!.accountId).toBe(1);
-    expect(toNumber(after.partitions[0]!.core.totalInvested)).toBe(2000);
+    expect(must(after.partitions[0], "after.partitions[0]").accountId).toBe(1);
+    expect(toNumber(must(after.partitions[0], "after.partitions[0]").core.totalInvested)).toBe(2000);
     expect(toNumber(after.core.totalInvested)).toBe(
       toNumber(before.core.totalInvested),
     );
@@ -743,7 +744,7 @@ describe("buildInvestmentSummaryCorePartitioned — transition & degenerate case
 
     expect(fullyAssigned).toBe(false);
     expect(partitions).toHaveLength(1);
-    expect(partitions[0]!.accountId).toBe(null);
+    expect(must(partitions[0], "partitions[0]").accountId).toBe(null);
     for (const field of [
       "totalUnits",
       "totalInvested",
@@ -791,7 +792,7 @@ describe("buildInvestmentSummaryCorePartitioned — transition & degenerate case
 
     expect(fullyAssigned).toBe(true);
     expect(partitions).toHaveLength(1);
-    expect(partitions[0]!.accountId).toBe(7);
+    expect(must(partitions[0], "partitions[0]").accountId).toBe(7);
     for (const field of [
       "totalUnits",
       "totalInvested",
@@ -829,16 +830,16 @@ describe("buildInvestmentSummaryCorePartitioned — transition & degenerate case
     const single = buildInvestmentSummaryCorePartitioned(savings, rows, OPTS);
     expect(single.fullyAssigned).toBe(true);
     expect(single.partitions).toHaveLength(1);
-    expect(single.partitions[0]!.accountId).toBe(4);
+    expect(must(single.partitions[0], "single.partitions[0]").accountId).toBe(4);
 
     const mixed = buildInvestmentSummaryCorePartitioned(
       savings,
-      [rows[0]!, { ...rows[1]!, account_id: 9 }],
+      [must(rows[0], "rows[0]"), { ...must(rows[1], "rows[1]"), account_id: 9 }],
       OPTS,
     );
     expect(mixed.fullyAssigned).toBe(false);
     expect(mixed.partitions).toHaveLength(1);
-    expect(mixed.partitions[0]!.accountId).toBe(null);
+    expect(must(mixed.partitions[0], "mixed.partitions[0]").accountId).toBe(null);
   });
 
   it("no transactions → no partitions, vacuously fully assigned", () => {

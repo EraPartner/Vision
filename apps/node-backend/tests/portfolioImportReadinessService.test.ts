@@ -11,6 +11,7 @@ import {
   assertPortfolioImportReadiness,
   isMaintainedPortfolioImport,
 } from "../src/services/portfolioImportReadinessService.ts";
+import { must } from "./helpers/must.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -83,7 +84,7 @@ describe("maintained portfolio import readiness", () => {
     expect(
       mocks.lockImportReadinessHistory.mock.invocationCallOrder[0],
     ).toBeLessThan(
-      mocks.getManualPortfolioOverlaps.mock.invocationCallOrder[0]!,
+      must(mocks.getManualPortfolioOverlaps.mock.invocationCallOrder[0], "mocks.getManualPortfolioOverlaps.mock.invocatio..."),
     );
   });
 

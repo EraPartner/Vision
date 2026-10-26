@@ -31,6 +31,10 @@ import {
 import plannedTransactionRepository from '../src/repositories/plannedTransactionRepository.ts';
 import { closePool } from '../src/database/connection.ts';
 import { todayAppDateString, appDateStringToUtc } from '../src/lib/timezone.ts';
+import { must } from "./helpers/must.ts";
+interface IdRow {
+  id: number;
+}
 
 /** Insert one planned row directly, so the repository is not asserted against itself. */
 async function insertPlanned({
@@ -46,12 +50,12 @@ async function insertPlanned({
   isActive?: boolean;
   isExecuted?: boolean;
 }): Promise<number> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "test pool").query<IdRow>(
     `INSERT INTO planned_transactions (planned_date, amount, currency, is_active, is_executed, memo)
      VALUES ($1, $2, 'EUR', $3, $4, $5) RETURNING id`,
     [date, amount, isActive, isExecuted, memo],
   );
-  return rows[0].id;
+  return must(rows[0], "rows[0]").id;
 }
 
 describe.skipIf(!hasTestDatabase())('repositories/plannedTransactionRepository â€” one clock (real DB)', () => {
@@ -66,7 +70,7 @@ describe.skipIf(!hasTestDatabase())('repositories/plannedTransactionRepository â
 
   afterEach(async () => {
     vi.useRealTimers();
-    await getTestPool()!.query('DELETE FROM planned_transactions');
+    await must(getTestPool(), "test pool").query('DELETE FROM planned_transactions');
   });
 
   afterAll(async () => {
@@ -82,7 +86,14 @@ describe.skipIf(!hasTestDatabase())('repositories/plannedTransactionRepository â
    * the assertions are written against.
    */
   async function pinClockToNightlyDrift() {
-    const { rows } = await getTestPool()!.query(`
+    const { rows } = await must(getTestPool(), "test pool").query<{
+      db_today: string;
+      app_today: string;
+      due_window_end: string;
+      past_due_window: string;
+      forecast_horizon: string;
+      past_forecast_horizon: string;
+    }>(`
       SELECT to_char(CURRENT_DATE,                                'YYYY-MM-DD') AS db_today,
              to_char(CURRENT_DATE + 1,                            'YYYY-MM-DD') AS app_today,
              to_char(CURRENT_DATE + 1 + 7,                        'YYYY-MM-DD') AS due_window_end,
@@ -90,7 +101,7 @@ describe.skipIf(!hasTestDatabase())('repositories/plannedTransactionRepository â
              to_char((CURRENT_DATE + 1) + interval '1 month',     'YYYY-MM-DD') AS forecast_horizon,
              to_char((CURRENT_DATE + 1) + interval '1 month' + interval '1 day', 'YYYY-MM-DD') AS past_forecast_horizon
     `);
-    const facts = rows[0];
+    const facts = must(rows[0], "calendar facts");
     // 00:30 of the app-timezone day AFTER the DB's today == 22:30/23:30 UTC
     // on the DB's today.
     const instant = new Date(appDateStringToUtc(facts.app_today).getTime() + 30 * 60_000);

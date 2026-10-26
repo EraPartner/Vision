@@ -8,6 +8,7 @@ import type {
   CostBasisTxnLike,
   InvestmentLike,
 } from "@vision/shared-utils/portfolio";
+import { must } from "./helpers/must.ts";
 
 const investment: InvestmentLike = { asset_class: "metals", current_price: 40 };
 const positions = [
@@ -146,7 +147,7 @@ it("partitioned and archived math keeps the new subtotal and both accounting tra
   expect(result.core.converted.totalInKindIncome.toNumber()).toBe(42.5);
   expect(result.core.totalIncome.toNumber()).toBe(5);
   expect(
-    result.partitions[0]!.core.totalInKindIncome.eq(
+    must(result.partitions[0], "result.partitions[0]").core.totalInKindIncome.eq(
       result.core.totalInKindIncome,
     ),
   ).toBe(true);

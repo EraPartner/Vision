@@ -25,6 +25,10 @@ import {
   asSplitId,
   asTransactionId,
 } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
+interface IdRow {
+  id: number;
+}
 
 const splitRepository = { ...splitPersistence, ...splitService };
 const MARK = `split_boundary_${process.pid}`;
@@ -33,37 +37,37 @@ let recipientId: number;
 let payeeId: number;
 
 async function insertTx(amount: string, date = "2026-03-01"): Promise<number> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "test pool").query<IdRow>(
     `INSERT INTO transactions (date, amount, memo, currency, recipient_id)
      VALUES ($1, $2, $3, 'EUR', $4) RETURNING id`,
     [date, amount, MARK, payeeId],
   );
-  txIds.push(rows[0].id);
-  return rows[0].id;
+  txIds.push(must(rows[0], "rows[0]").id);
+  return must(rows[0], "rows[0]").id;
 }
 
 describe.skipIf(!hasTestDatabase())("split reads and writes (real DB)", () => {
   beforeAll(async () => {
     expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
     await acquireDbSuiteLock();
-    const pool = getTestPool()!;
-    const owes = await pool.query(
+    const pool = must(getTestPool(), "test pool");
+    const owes = await pool.query<IdRow>(
       `INSERT INTO recipients (name, normalized_name) VALUES ($1, $1) RETURNING id`,
       [`${MARK}_alice`],
     );
-    recipientId = owes.rows[0].id;
-    const payee = await pool.query(
+    recipientId = must(owes.rows[0], "owes.rows[0]").id;
+    const payee = await pool.query<IdRow>(
       `INSERT INTO recipients (name, normalized_name) VALUES ($1, $1) RETURNING id`,
       [`${MARK}_shop`],
     );
-    payeeId = payee.rows[0].id;
+    payeeId = must(payee.rows[0], "payee.rows[0]").id;
   }, 180_000);
 
   afterAll(async () => {
     try {
       const pool = getTestPool();
       if (pool) {
-        if (txIds.length)
+        if (txIds.length > 0)
           await pool.query("DELETE FROM transactions WHERE id = ANY($1)", [
             txIds,
           ]);
@@ -188,7 +192,7 @@ describe.skipIf(!hasTestDatabase())("split reads and writes (real DB)", () => {
       owedTotal,
     );
 
-    const first = all[0]!;
+    const first = must(all[0], "all[0]");
     await splitRepository.addPayment({ split_id: first.id, amount: 1 });
     await splitRepository.addPayment({ split_id: first.id, amount: 2 });
     expect(await splitRepository.countPayments(first.id)).toBe(2);

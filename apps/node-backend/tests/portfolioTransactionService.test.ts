@@ -42,7 +42,7 @@ describe("portfolioTransactionService recurrence compatibility", () => {
       recurrence_end_date: null,
       account_id: null,
     });
-    writes.updateFields.mockImplementation(async (_id, fields) => ({
+    writes.updateFields.mockImplementation((_id, fields) => Promise.resolve({
       id: 7,
       ...fields,
     }));

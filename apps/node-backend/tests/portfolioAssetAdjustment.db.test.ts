@@ -25,33 +25,65 @@ import { getUnitEventsForInvestment } from "../src/repositories/portfolioTxRepo.
 import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
 import { asPartitionedTxns } from "../src/services/portfolio/portfolioTransactionRules.ts";
 import {
+  asAccountId,
   asCurrencyCode,
+  asInvestmentId,
 } from "@vision/types/brands";
+import type { AccountId } from "@vision/types/brands";
+import type { PortfolioParserConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
+import { must } from "./helpers/must.ts";
+import type { Pool } from "pg";
 
-const pool = getTestPool()!,
-  owned: { accounts: number[]; investments: number[]; batches: number[] } = {
-    accounts: [],
-    investments: [],
-    batches: [],
-  };
+/** A row from an ad-hoc SQL read: column values are narrowed where used. */
+type DbRow = Record<string, unknown>;
+interface IdRow {
+  id: number;
+}
+/** `portfolio_import_batches` as read back; the BIGINT id arrives as text. */
+interface BatchRow {
+  id: string;
+  account_id: number;
+  custom_config: PortfolioParserConfig;
+}
+type BasisAllocations = Record<
+  string,
+  { lots: { nativeBasis: string; eurBasis: string }[] } | undefined
+>;
+type TransferRow = Parameters<typeof commitPortfolioAssetTransfer>[0]["row"];
+type AdjustmentRow = Parameters<
+  typeof commitPortfolioAssetAdjustment
+>[0]["row"];
+
+let pool: Pool;
+const owned: {
+  accounts: number[];
+  investments: number[];
+  batches: string[];
+} = {
+  accounts: [],
+  investments: [],
+  batches: [],
+};
 const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 async function seed() {
   const accounts = (
-    await pool.query(
+    await pool.query<IdRow>(
       "INSERT INTO accounts(name,type) VALUES ('ADJUSTMENT BROKER','crypto_exchange'),('ADJUSTMENT WALLET','wallet') RETURNING id",
     )
-  ).rows.map((r) => r.id);
+  ).rows.map((r) => asAccountId(r.id));
   owned.accounts.push(...accounts);
-  const investment = (
-    await pool.query(
+  const account = must(accounts[0], "broker account");
+  const wallet = must(accounts[1], "wallet account");
+  const investment = asInvestmentId(must((
+    await pool.query<IdRow>(
       "INSERT INTO investments(name,symbol,asset_class,currency) VALUES ('Synthetic correction coin','REVTEST','crypto','EUR') RETURNING id",
     )
-  ).rows[0].id;
+  ).rows[0], "investment row").id);
   owned.investments.push(investment);
-  const buy = (await transactionService.create({
+  const buy = must(await transactionService.create({
     investment_id: investment,
-    account_id: accounts[0],
+    account_id: account,
     type: "buy",
     date: "2020-01-01",
     units: 10,
@@ -59,8 +91,8 @@ async function seed() {
     price_per_unit: 10,
     currency: asCurrencyCode("USD"),
     fx_rate_to_eur: 2,
-  }))!;
-  return { account: accounts[0], wallet: accounts[1], investment, buy };
+  }), "transactionService.create result");
+  return { account, wallet, investment, buy };
 }
 type Position = Awaited<ReturnType<typeof seed>>;
 async function batch(
@@ -76,12 +108,12 @@ async function batch(
     transfer_destination_account_id: position.wallet,
   },
 ) {
-  const row = (
-    await pool.query(
+  const row = must((
+    await pool.query<BatchRow>(
       "INSERT INTO portfolio_import_batches(adapter_name,status,account_id,is_brokerage,default_asset_class,custom_config) VALUES ($1,'awaiting_review',$2,true,'crypto',$3::jsonb) RETURNING *",
       [config.format, account, JSON.stringify(config)],
     )
-  ).rows[0];
+  ).rows[0], "batch row");
   owned.batches.push(row.id);
   return row;
 }
@@ -108,14 +140,14 @@ async function source(
     const file = path.join(directory, "statement.csv");
     await writeFile(file, `${header}\n${rows.join("\n")}\n`);
     await stageBatch({
-      batchId: input.id,
+      batchId: Number(input.id),
       filePath: file,
       customConfig: input.custom_config,
     });
-    expect(await validateBatch({ batchId: input.id })).toMatchObject({
+    expect(await validateBatch({ batchId: Number(input.id) })).toMatchObject({
       errors: 0,
     });
-    expect(await matchBatch({ batchId: input.id })).toMatchObject({
+    expect(await matchBatch({ batchId: Number(input.id) })).toMatchObject({
       unresolved: 0,
     });
   } finally {
@@ -129,8 +161,8 @@ async function fee(position: Position, units = "1") {
   });
   const raw =
     "<transaction id='synthetic-fee' type='DELIVERY_OUTBOUND' shares='1'/>";
-  const row = (
-    await pool.query(
+  const row = must((
+    await pool.query<AdjustmentRow>(
       `INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,tx_date,type_raw,route,units,amount,fees,taxes,resolved_investment_id,raw_data,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,asset_adjustment_details)
     VALUES ($1,0,'matched','2020-02-01','AssetAdjustment','asset_adjustment',$2,0,0,0,$3,$4,$5,$6,1,$7::json) RETURNING *,to_char(tx_date,'YYYY-MM-DD') AS tx_date`,
       [
@@ -143,7 +175,7 @@ async function fee(position: Position, units = "1") {
         JSON.stringify({ kind: "asset_fee", basisPolicy: "carried" }),
       ],
     )
-  ).rows[0];
+  ).rows[0], "staged row");
   return { row, batch: input };
 }
 async function clear() {
@@ -181,6 +213,9 @@ async function clear() {
 describe.skipIf(!hasTestDatabase())(
   "canonical asset corrections (disposable PostgreSQL)",
   () => {
+    beforeAll(() => {
+      pool = must(getTestPool(), "test pool");
+    });
     beforeAll(acquireDbSuiteLock, 180000);
     afterEach(clear);
     afterAll(async () => {
@@ -206,8 +241,8 @@ describe.skipIf(!hasTestDatabase())(
           currency: asCurrencyCode("EUR"),
         });
       const transfer = async (
-        account: number,
-        destination: number,
+        account: AccountId,
+        destination: AccountId,
         quantity: string,
         date: string,
         label: string,
@@ -223,8 +258,8 @@ describe.skipIf(!hasTestDatabase())(
           feeUnits: "0",
           receivedUnits: quantity,
         };
-        const staged = (
-          await pool.query(
+        const staged = must((
+          await pool.query<TransferRow>(
             "INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,tx_date,type_raw,route,symbol_raw,units,amount,currency,resolved_investment_id,raw_data,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,asset_transfer_details) VALUES($1,0,'matched',$2,'AssetTransfer','asset_transfer','REVTEST',$3,0,'EUR',$4,$5,$6,$7,1,$8::jsonb) RETURNING *",
             [
               input.id,
@@ -237,7 +272,7 @@ describe.skipIf(!hasTestDatabase())(
               JSON.stringify(details),
             ],
           )
-        ).rows[0];
+        ).rows[0], "staged row");
         return commitPortfolioAssetTransfer({
           batch: input,
           row: {
@@ -275,12 +310,12 @@ describe.skipIf(!hasTestDatabase())(
         );
         expect(summary.core.totalUnits.toFixed(8)).toBe("0.70360358");
       }
-      const retained = (
-        await pool.query(
+      const retained = must((
+        await pool.query<{ basis_allocations: Record<string, unknown> }>(
           "SELECT basis_allocations FROM portfolio_asset_adjustments WHERE id=$1",
           [adjustment.id],
         )
-      ).rows[0].basis_allocations;
+      ).rows[0], "adjustment receipt").basis_allocations;
       expect(Object.keys(retained).sort()).toEqual([
         "fifo",
         "lifo",
@@ -289,7 +324,7 @@ describe.skipIf(!hasTestDatabase())(
     });
     it("adopts an original zero-basis yield ID before reversal and custody replay", async () => {
       const position = await seed();
-      const manual = (await transactionService.create({
+      const manual = must(await transactionService.create({
         investment_id: position.investment,
         type: "gift",
         date: "2020-01-02",
@@ -298,7 +333,7 @@ describe.skipIf(!hasTestDatabase())(
         price_per_unit: 0,
         currency: asCurrencyCode("EUR"),
         note: "Original synthetic yield",
-      }))!;
+      }), "transactionService.create result");
       const input = await source(position);
       const plan = await previewPortfolioImportReconciliation({
         batchIds: [Number(input.id)],
@@ -314,14 +349,18 @@ describe.skipIf(!hasTestDatabase())(
           batchIds: [Number(input.id)],
         }),
       ).toMatchObject({ imported: 2, adopted: 1, errors: 0 });
-      const adjustment = (
-        await pool.query(
+      const adjustment = must((
+        await pool.query<{
+          id: string;
+          basis_allocations: BasisAllocations;
+          eligible_source_record_hashes: string[];
+        }>(
           "SELECT * FROM portfolio_asset_adjustments WHERE import_batch_id=$1",
           [input.id],
         )
-      ).rows[0];
+      ).rows[0], "adjustment row");
       for (const method of ["weighted_avg", "fifo", "lifo"])
-        expect(adjustment.basis_allocations[method].lots).toEqual([
+        expect(adjustment.basis_allocations[method]?.lots).toEqual([
           expect.objectContaining({
             acquisitionId: manual.id,
             units: "2",
@@ -330,44 +369,44 @@ describe.skipIf(!hasTestDatabase())(
           }),
         ]);
       expect(
-        (
-          await pool.query(
+        must((
+          await pool.query<DbRow>(
             "SELECT count(*) FROM portfolio_asset_adjustment_sources WHERE adjustment_id=$1",
             [adjustment.id],
           )
-        ).rows[0].count,
+        ).rows[0], "query row").count,
       ).toBe("1");
       await expect(
-        pool.query(
+        pool.query<DbRow>(
           "DELETE FROM portfolio_asset_adjustment_sources WHERE adjustment_id=$1",
           [adjustment.id],
         ),
       ).rejects.toThrow(/source receipts are immutable/);
       await expect(
-        pool.query(
+        pool.query<DbRow>(
           "UPDATE portfolio_asset_adjustment_sources SET source_record_hash=$2 WHERE adjustment_id=$1",
           [adjustment.id, hash("changed receipt")],
         ),
       ).rejects.toThrow(/source receipts are immutable/);
       expect(
-        (
-          await pool.query(
+        must((
+          await pool.query<DbRow>(
             "SELECT custom_config->'source_columns' AS headers FROM portfolio_import_batches WHERE id=$1",
             [input.id],
           )
-        ).rows[0].headers,
+        ).rows[0], "query row").headers,
       ).toHaveLength(18);
       await expect(
         transactionService.update(manual.id, { amount: 10 }),
       ).rejects.toThrow(/source-proven zero-basis/);
       await expect(
-        pool.query(
+        pool.query<DbRow>(
           "UPDATE portfolio_asset_adjustments SET units=1 WHERE id=$1",
           [adjustment.id],
         ),
       ).rejects.toThrow(/immutable/);
       await expect(
-        pool.query(
+        pool.query<DbRow>(
           "DELETE FROM portfolio_import_staging_rows WHERE source_record_hash=ANY($1::text[]) AND batch_id=$2",
           [adjustment.eligible_source_record_hashes, input.id],
         ),
@@ -384,12 +423,12 @@ describe.skipIf(!hasTestDatabase())(
       ]);
       await rollbackBatch(Number(input.id));
       expect(
-        (
-          await pool.query(
+        must((
+          await pool.query<DbRow>(
             "SELECT count(*) FROM portfolio_asset_adjustment_sources WHERE adjustment_id=$1",
             [adjustment.id],
           )
-        ).rows[0].count,
+        ).rows[0], "query row").count,
       ).toBe("0");
       expect(
         (await getUnitEventsForInvestment(position.investment)).map(
@@ -419,14 +458,14 @@ describe.skipIf(!hasTestDatabase())(
           row: { ...adjustment.row, units: "2" },
         }),
       ).rejects.toThrow(/identity conflicts/);
-      const receipts = (
-        await pool.query(
+      const receipts = must((
+        await pool.query<{ basis_allocations: BasisAllocations }>(
           "SELECT basis_allocations FROM portfolio_asset_adjustments WHERE id=$1",
           [first.id],
         )
-      ).rows[0].basis_allocations;
+      ).rows[0], "adjustment receipt").basis_allocations;
       for (const method of ["weighted_avg", "fifo", "lifo"])
-        for (const lot of receipts[method].lots)
+        for (const lot of must(receipts[method], `${method} receipt`).lots)
           if (Number(lot.nativeBasis) > 0)
             expect(Number(lot.eurBasis)).toBeCloseTo(
               Number(lot.nativeBasis) * 2,
@@ -444,12 +483,12 @@ describe.skipIf(!hasTestDatabase())(
         expect(core.totalSellProceeds.toNumber()).toBe(0);
       }
       expect(
-        (
-          await pool.query(
+        must((
+          await pool.query<DbRow>(
             "SELECT count(*) FROM transactions WHERE account_id=ANY($1::int[])",
             [[position.account, position.wallet]],
           )
-        ).rows[0].count,
+        ).rows[0], "query row").count,
       ).toBe("0");
       await expect(rollbackBatch(Number(input.id))).rejects.toThrow(
         /custody history is invalid/,
@@ -489,12 +528,12 @@ describe.skipIf(!hasTestDatabase())(
         commitReviewedPortfolioImports({ batchIds: [Number(input.id)] }),
       ).rejects.toThrow(/source-proven zero-basis/);
       expect(
-        (
-          await pool.query(
+        must((
+          await pool.query<DbRow>(
             "SELECT count(*) FROM portfolio_asset_adjustments WHERE investment_id=$1",
             [position.investment],
           )
-        ).rows[0].count,
+        ).rows[0], "query row").count,
       ).toBe("0");
     });
     it("rolls back a fee atomically when its caller transaction fails", async () => {
@@ -517,12 +556,12 @@ describe.skipIf(!hasTestDatabase())(
         }),
       ).rejects.toThrow(/synthetic failure/);
       expect(
-        (
-          await pool.query(
+        must((
+          await pool.query<DbRow>(
             "SELECT count(*) FROM portfolio_asset_adjustments WHERE investment_id=$1",
             [position.investment],
           )
-        ).rows[0].count,
+        ).rows[0], "query row").count,
       ).toBe("0");
     });
   },

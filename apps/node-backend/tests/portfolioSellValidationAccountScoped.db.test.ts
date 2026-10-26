@@ -35,8 +35,10 @@ import {
   asCurrencyCode,
   asInvestmentId,
 } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
+import type { Pool } from "pg";
 
-const pool = getTestPool()!;
+let pool: Pool;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
 // Seeded in beforeEach.
@@ -47,7 +49,7 @@ async function seedAccount(name: string, displayName: string) {
     `INSERT INTO accounts (name, display_name) VALUES ($1, $2) RETURNING id`,
     [name, displayName],
   );
-  return rows[0]!.id;
+  return must(rows[0], "rows[0]").id;
 }
 
 async function seedInvestment(name: string) {
@@ -56,7 +58,7 @@ async function seedInvestment(name: string) {
      VALUES ($1, $1, 'stock', 'EUR', 10) RETURNING id`,
     [name],
   );
-  return rows[0]!.id;
+  return must(rows[0], "rows[0]").id;
 }
 
 const trade = (
@@ -82,6 +84,9 @@ async function wipe() {
 }
 
 describeDb("WP-C4 account-scoped sell validation (real Postgres)", () => {
+  beforeAll(() => {
+    pool = must(getTestPool(), "test pool");
+  });
   beforeAll(acquireDbSuiteLock, 180_000);
   afterAll(async () => {
     await wipe();
@@ -208,14 +213,14 @@ describeDb("WP-C4 account-scoped sell validation (real Postgres)", () => {
 
     // Growing the sell beyond Degiro's 20 units fails, naming the broker…
     await expect(
-      portfolioTransactionService.update(sale!.id, {
+      portfolioTransactionService.update(must(sale, "sale").id, {
         units: 25,
         price_per_unit: 10,
       }),
     ).rejects.toThrow(/available holdings at Degiro/);
     // …but re-pointing the same sell to IBKR (100 units) succeeds.
     await expect(
-      portfolioTransactionService.update(sale!.id, {
+      portfolioTransactionService.update(must(sale, "sale").id, {
         units: 25,
         price_per_unit: 10,
         account_id: fx.ibkr,

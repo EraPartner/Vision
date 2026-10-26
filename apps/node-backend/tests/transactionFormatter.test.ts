@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { __formatTransaction } from "../src/routes/transactions.ts";
 import { loose } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 // Rows carry wire-shaped values ('YYYY-MM-DD' dates, string amounts) where
 // the enriched row type has pg-parsed ones; the formatter accepts both.
@@ -17,7 +18,7 @@ describe("transaction response formatter", () => {
       }),
     );
 
-    expect(formatted!.transaction_date).toBe("2026-01-15");
+    expect(must(formatted, "formatted").transaction_date).toBe("2026-01-15");
     expect(formatted).not.toHaveProperty("date");
   });
   it("retains account and transfer identities needed to safely pair existing records", () => {

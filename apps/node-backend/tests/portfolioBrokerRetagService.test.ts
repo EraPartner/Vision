@@ -37,6 +37,7 @@ import {
   ConflictError,
   ValidationError,
 } from "../src/middleware/errorHandler.ts";
+import { must } from "./helpers/must.ts";
 
 // The fixtures carry NUMERIC columns as numbers where pg returns text; the
 // guards coerce both.
@@ -90,7 +91,7 @@ describe("portfolioBrokerRetagService", () => {
     expect(
       mocks.lockEligibleDestinationAccount.mock.invocationCallOrder[0],
     ).toBeLessThan(
-      mocks.lockPortfolioTransactionWrites.mock.invocationCallOrder[0]!,
+      must(mocks.lockPortfolioTransactionWrites.mock.invocationCallOrder[0], "mocks.lockPortfolioTransactionWrites.mock.invoc..."),
     );
     expect(mocks.lockPortfolioTransactionWrites).toHaveBeenCalledOnce();
     expect(mocks.lockTransactions).toHaveBeenCalledWith([11, 12]);
@@ -138,9 +139,13 @@ describe("portfolioBrokerRetagService", () => {
 
   it("rejects missing or stale compare-and-set rows", async () => {
     mocks.lockTransactions.mockResolvedValue([selected[0]]);
-    const error = await retagPortfolioTransactions(request).catch((err) => err);
+    const error = await retagPortfolioTransactions(request).catch(
+      (err: unknown) => err,
+    );
     expect(error).toBeInstanceOf(ConflictError);
-    expect(error.details.stale_transaction_ids).toEqual([12]);
+    expect((error as ConflictError).details?.stale_transaction_ids).toEqual([
+      12,
+    ]);
     expect(mocks.compareAndSetAccount).not.toHaveBeenCalled();
   });
 

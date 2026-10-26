@@ -16,8 +16,20 @@ import {
   asCurrencyCode,
   asInvestmentId,
 } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
+import type { Pool } from "pg";
 
-const pool = getTestPool()!;
+/** A row from an ad-hoc SQL read: column values are narrowed where used. */
+type DbRow = Record<string, unknown>;
+interface IdRow {
+  id: number;
+}
+/** BIGINT ids arrive from node-postgres as strings. */
+interface BigIdRow {
+  id: string;
+}
+
+let pool: Pool;
 const fixtures = {
   accountIds: [] as number[],
   investmentIds: [] as number[],
@@ -49,21 +61,21 @@ interface SourceRow {
 
 async function seedPosition(): Promise<Position> {
   fixtureSequence++;
-  const accountId: number = (
-    await pool.query(
+  const accountId: number = must((
+    await pool.query<IdRow>(
       `INSERT INTO accounts (name, institution, type, is_active, currency)
        VALUES ($1, 'READINESS TEST BROKER', 'brokerage', true, 'EUR')
        RETURNING id`,
       [`READINESS TEST ACCOUNT ${fixtureSequence}`],
     )
-  ).rows[0].id;
+  ).rows[0], "query row").id;
   fixtures.accountIds.push(accountId);
-  const investmentId: number = (
-    await pool.query(
+  const investmentId: number = must((
+    await pool.query<IdRow>(
       `INSERT INTO investments (name, symbol, asset_class, currency)
        VALUES ('Readiness test stock', 'READINESSTEST', 'stock', 'EUR') RETURNING id`,
     )
-  ).rows[0].id;
+  ).rows[0], "query row").id;
   fixtures.investmentIds.push(investmentId);
   return { accountId, investmentId };
 }
@@ -89,8 +101,8 @@ async function stageSource(
   opts: { adapter?: string; config?: unknown } = {},
 ) {
   const batchId = Number(
-    (
-      await pool.query(
+    must((
+      await pool.query<BigIdRow>(
         `INSERT INTO portfolio_import_batches
            (adapter_name, custom_config, status, rows_total, rows_error, account_id, is_brokerage)
          VALUES ($1, $2, 'awaiting_review', $3, $4, $5, true) RETURNING id`,
@@ -102,7 +114,7 @@ async function stageSource(
           position.accountId,
         ],
       )
-    ).rows[0].id,
+    ).rows[0], "query row").id,
   );
   fixtures.batchIds.push(batchId);
   for (const [rowIndex, row] of source.entries()) {
@@ -130,7 +142,7 @@ async function stageSource(
         units,
         price,
         // Non-cash rows always carry units and a price.
-        row.amount ?? (cash ? 500 : units! * price!),
+        row.amount ?? (cash ? 500 : must(units, "units") * must(price, "price")),
         row.fees ?? 0,
         row.taxes ?? 0,
         cash || row.unresolved ? null : position.investmentId,
@@ -146,7 +158,7 @@ async function stageSource(
 
 async function canonicalCounts(position: Position) {
   return (
-    await pool.query(
+    await pool.query<DbRow>(
       `SELECT (SELECT COUNT(*)::int FROM portfolio_transactions WHERE investment_id = $1) AS portfolio,
               (SELECT COUNT(*)::int FROM transactions WHERE account_id = $2) AS cash`,
       [position.investmentId, position.accountId],
@@ -162,7 +174,7 @@ async function assertBlockedWithoutWrites(
 ) {
   const before = await canonicalCounts(position);
   const stagingBefore = (
-    await pool.query(
+    await pool.query<DbRow>(
       `SELECT row_index, status, committed_txn_id, raw_data, dedup_fingerprint
          FROM portfolio_import_staging_rows WHERE batch_id = $1 ORDER BY row_index`,
       [batchId],
@@ -176,7 +188,7 @@ async function assertBlockedWithoutWrites(
         ? {
             reason: "reconciliation_required",
             blockers: ordinals.map((rowOrdinal) =>
-              expect.objectContaining({ rowOrdinal }),
+              expect.objectContaining({ rowOrdinal }) as unknown,
             ),
           }
         : { reason, count: ordinals.length, row_ordinals: ordinals },
@@ -184,7 +196,7 @@ async function assertBlockedWithoutWrites(
   expect(await canonicalCounts(position)).toEqual(before);
   expect(
     (
-      await pool.query(
+      await pool.query<DbRow>(
         `SELECT row_index, status, committed_txn_id, raw_data, dedup_fingerprint
            FROM portfolio_import_staging_rows WHERE batch_id = $1 ORDER BY row_index`,
         [batchId],
@@ -192,18 +204,21 @@ async function assertBlockedWithoutWrites(
     ).rows,
   ).toEqual(stagingBefore);
   expect(
-    (
-      await pool.query(
+    must((
+      await pool.query<DbRow>(
         "SELECT status FROM portfolio_import_batches WHERE id = $1",
         [batchId],
       )
-    ).rows[0].status,
+    ).rows[0], "query row").status,
   ).toBe("awaiting_review");
 }
 
 describe.skipIf(!hasTestDatabase())(
   "maintained portfolio import readiness (real Postgres)",
   () => {
+    beforeAll(() => {
+      pool = must(getTestPool(), "test pool");
+    });
     beforeAll(async () => {
       expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
       await acquireDbSuiteLock();
@@ -319,9 +334,9 @@ describe.skipIf(!hasTestDatabase())(
         );
         expect(
           (
-            await pool.query(
+            await pool.query<DbRow>(
               "SELECT account_id, import_batch_id, dedup_fingerprint FROM portfolio_transactions WHERE id = $1",
-              [existing!.id],
+              [must(existing, "existing").id],
             )
           ).rows,
         ).toEqual([
@@ -461,7 +476,7 @@ describe.skipIf(!hasTestDatabase())(
       const batchId = await stageSource(position, [{}]);
       await pool.query(
         `UPDATE portfolio_transactions SET dedup_fingerprint = $2, dedup_fingerprint_version = 1 WHERE id = $1`,
-        [canonical!.id, hash(`fingerprint:${position.accountId}:0`)],
+        [must(canonical, "canonical").id, hash(`fingerprint:${position.accountId}:0`)],
       );
       await assertBlockedWithoutWrites(
         position,
@@ -469,7 +484,7 @@ describe.skipIf(!hasTestDatabase())(
         "existing_history_overlap",
         [1],
       );
-      expect(manual!.id).not.toBe(canonical!.id);
+      expect(must(manual, "manual").id).not.toBe(must(canonical, "canonical").id);
     });
 
     it("preserves generic partial-commit behavior", async () => {
@@ -493,12 +508,12 @@ describe.skipIf(!hasTestDatabase())(
         cash: 1,
       });
       expect(
-        (
-          await pool.query(
+        must((
+          await pool.query<DbRow>(
             "SELECT status FROM portfolio_import_batches WHERE id = $1",
             [batchId],
           )
-        ).rows[0].status,
+        ).rows[0], "query row").status,
       ).toBe("complete_with_errors");
     });
 
@@ -516,13 +531,13 @@ describe.skipIf(!hasTestDatabase())(
         );
         pending = commitReviewedPortfolioImport({ batchId }).then(
           (value) => ({ value }),
-          (error) => ({ error }),
+          (error: unknown) => ({ error }),
         );
         let waiting = false;
         for (let attempt = 0; attempt < 100; attempt++) {
           waiting =
             (
-              await pool.query(
+              await pool.query<DbRow>(
                 `SELECT 1 FROM pg_locks
                 WHERE relation = 'portfolio_transactions'::regclass
                   AND mode = 'ShareRowExclusiveLock' AND NOT granted`,

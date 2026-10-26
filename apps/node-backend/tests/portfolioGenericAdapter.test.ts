@@ -17,6 +17,7 @@ vi.mock("../src/config/logger.ts", () => ({
 
 import { parse as rawParse } from "csv-parse/sync";
 import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
+import { must } from "./helpers/must.ts";
 
 // The adapter parses with `columns`, so the mock returns record rows.
 const parse = vi.mocked(
@@ -85,7 +86,7 @@ describe("portfolioGenericAdapter.parseWithConfig", () => {
       currency: "USD",
       note: "lot 1",
     });
-    expect(rows[0]!.date!.toISOString().slice(0, 10)).toBe("2026-01-05");
+    expect(must(must(rows[0], "rows[0]").date, "must result").toISOString().slice(0, 10)).toBe("2026-01-05");
   });
 
   it("stores absolute magnitudes (direction comes from the type)", async () => {
@@ -103,8 +104,8 @@ describe("portfolioGenericAdapter.parseWithConfig", () => {
       },
     ]);
     const rows = await parseWithConfig("/tmp/x.csv", config());
-    expect(rows[0]!.units).toBe(4);
-    expect(rows[0]!.amount).toBe(760.4);
+    expect(must(rows[0], "rows[0]").units).toBe(4);
+    expect(must(rows[0], "rows[0]").amount).toBe(760.4);
   });
 
   it("parses EU comma decimals via the shared amount parser", async () => {
@@ -120,7 +121,7 @@ describe("portfolioGenericAdapter.parseWithConfig", () => {
       },
     ]);
     const rows = await parseWithConfig("/tmp/x.csv", config());
-    expect(rows[0]!.amount).toBe(1234.56);
+    expect(must(rows[0], "rows[0]").amount).toBe(1234.56);
   });
 
   it.each([
@@ -142,7 +143,7 @@ describe("portfolioGenericAdapter.parseWithConfig", () => {
       "/tmp/x.csv",
       config({ date_format: fmt }),
     );
-    expect(rows[0]!.date!.toISOString().slice(0, 10)).toBe(iso);
+    expect(must(must(rows[0], "rows[0]").date, "must result").toISOString().slice(0, 10)).toBe(iso);
   });
 
   it("skips rows with no parseable date and reports the count", async () => {

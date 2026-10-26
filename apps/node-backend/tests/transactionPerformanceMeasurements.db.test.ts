@@ -22,6 +22,11 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.ts";
+import { must } from "./helpers/must.ts";
+
+interface IdRow {
+  id: number;
+}
 
 /** One node of an EXPLAIN (FORMAT JSON) plan tree, as far as this harness reads it. */
 interface PlanNode {
@@ -177,11 +182,11 @@ async function explain(
   sql: string,
   params: unknown[] = [],
 ): Promise<ExplainedPlan> {
-  const { rows } = await client.query(
+  const { rows } = await client.query<{ "QUERY PLAN": ExplainedPlan[] }>(
     `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${sql}`,
     params,
   );
-  return rows[0]["QUERY PLAN"][0];
+  return must(must(rows[0], "plan row")["QUERY PLAN"][0], "plan");
 }
 
 function findPlanNode(
@@ -190,7 +195,7 @@ function findPlanNode(
 ): PlanNode | undefined {
   const pending = [plan.Plan];
   while (pending.length > 0) {
-    const node = pending.pop()!;
+    const node = must(pending.pop(), "pending.pop result");
     if (predicate(node)) return node;
     pending.push(...(node.Plans ?? []));
   }
@@ -247,12 +252,12 @@ interface SortMeasurement {
 describe.skipIf(!shouldRun)(
   "transaction performance measurements (disposable PostgreSQL)",
   () => {
-    let client: PoolClient;
+    let client: PoolClient | undefined;
 
     beforeAll(async () => {
       expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
       await acquireDbSuiteLock();
-      client = await getTestPool()!.connect();
+      client = await must(getTestPool(), "test pool").connect();
       await client.query("BEGIN");
       await seedRepresentativeCorpus(client);
     }, 180_000);
@@ -273,10 +278,10 @@ describe.skipIf(!shouldRun)(
         const sql = `${transactionProjection}
         ORDER BY ${expression} ASC, t.date DESC, t.id DESC
         LIMIT 50 OFFSET 0`;
-        await explain(client, sql);
+        await explain(must(client, "client"), sql);
         const plans: ExplainedPlan[] = [];
         for (let run = 0; run < REPETITIONS; run += 1) {
-          plans.push(await explain(client, sql));
+          plans.push(await explain(must(client, "client"), sql));
         }
         const times = plans.map((plan) => plan["Execution Time"]);
         const medianExecutionMs = median(times);
@@ -340,7 +345,7 @@ describe.skipIf(!shouldRun)(
     }, 180_000);
 
     it("compares the exact latest stamped-balance probe with and without its partial index", async () => {
-      const target = await client.query(
+      const target = await must(client, "client").query<IdRow>(
         "SELECT id FROM perf_accounts WHERE seq = 1",
       );
       const sql = `
@@ -352,10 +357,10 @@ describe.skipIf(!shouldRun)(
       ORDER BY t.date DESC, t.id DESC
       LIMIT 1`;
 
-      await explain(client, sql, [target.rows[0].id]);
-      const withIndex = await explain(client, sql, [target.rows[0].id]);
-      await client.query("DROP INDEX idx_transactions_account_stamped");
-      const withoutIndex = await explain(client, sql, [target.rows[0].id]);
+      await explain(must(client, "client"), sql, [must(target.rows[0], "target.rows[0]").id]);
+      const withIndex = await explain(must(client, "client"), sql, [must(target.rows[0], "target.rows[0]").id]);
+      await must(client, "client").query("DROP INDEX idx_transactions_account_stamped");
+      const withoutIndex = await explain(must(client, "client"), sql, [must(target.rows[0], "target.rows[0]").id]);
 
       process.stdout.write(
         `\nSTAMPED_BALANCE_EXPLAIN_SUMMARY=${JSON.stringify({

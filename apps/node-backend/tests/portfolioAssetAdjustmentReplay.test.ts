@@ -8,6 +8,7 @@ import type {
   PartitionedTxnLike,
 } from "@vision/shared-utils/portfolio";
 import { previewPortfolioAssetAdjustment } from "../src/services/portfolio/portfolioAssetAdjustmentService.ts";
+import { must } from "./helpers/must.ts";
 
 const a = "a".repeat(64),
   b = "b".repeat(64),
@@ -71,19 +72,19 @@ describe("source-backed asset adjustment replay", () => {
       ).toBe(true);
       expect(after.core.totalBuyCost.toNumber()).toBe(180);
       expect(after.core.realizedGain.toNumber()).toBe(0);
-      const leg = projectAssetTransferPartitions([...origin, reversal], method)
-        .get(1)!
-        .at(-1)!;
+      const leg = must(must(projectAssetTransferPartitions([...origin, reversal], method)
+        .get(1), "projectAssetTransferPartitions result")
+        .at(-1), "must(projectAssetTransferPartitions([...origin, reversal], method) .get(1), 'projectAssetTransferPartitions([...origin, reve...')  entry last");
       expect(leg.type).toBe("unit_reversal");
       expect(
-        leg.consumedLots!.every(
+        must(leg.consumedLots, "leg.consumedLots").every(
           (l) => l.costBasis.eq(0) && [2, 3].includes(Number(l.acquisitionId)),
         ),
       ).toBe(true);
-      expect(leg.consumedLots!.map((l) => Number(l.acquisitionId))).toEqual(
+      expect(must(leg.consumedLots, "leg.consumedLots").map((l) => Number(l.acquisitionId))).toEqual(
         method === "lifo" ? [3, 2] : [2, 3],
       );
-      expect(leg.consumedLots!.map((l) => l.units.toNumber())).toEqual(
+      expect(must(leg.consumedLots, "leg.consumedLots").map((l) => l.units.toNumber())).toEqual(
         { weighted_avg: [2.8, 4.2], fifo: [4, 3], lifo: [6, 1] }[method],
       );
     },
@@ -119,20 +120,20 @@ describe("source-backed asset adjustment replay", () => {
       const rows = [...origin, reversal, out, back],
         before = summary(rows, method),
         after = summary([...rows, fee], method);
-      const leg = projectAssetTransferPartitions([...rows, fee], method)
-        .get(2)!
-        .at(-1)!;
+      const leg = must(must(projectAssetTransferPartitions([...rows, fee], method)
+        .get(2), "projectAssetTransferPartitions result")
+        .at(-1), "must(projectAssetTransferPartitions([...rows, fee], method) .get(2), 'projectAssetTransferPartitions([...rows, fee], ...')  entry last");
       expect(after.core.totalUnits.toNumber()).toBe(22);
       expect(
         after.core.totalInvested
-          .plus(leg.assetFeeBasis!)
+          .plus(must(leg.assetFeeBasis, "leg.assetFeeBasis"))
           .minus(before.core.totalInvested)
           .abs()
           .lt("0.02"),
       ).toBe(true);
       expect(
         after.core.converted.totalInvested
-          .plus(leg.assetFeeBasisConv!)
+          .plus(must(leg.assetFeeBasisConv, "leg.assetFeeBasisConv"))
           .minus(before.core.converted.totalInvested)
           .abs()
           .lt("0.02"),
@@ -140,7 +141,7 @@ describe("source-backed asset adjustment replay", () => {
       expect(after.core.totalSellProceeds.toNumber()).toBe(0);
       expect(after.core.totalBuyCost.toNumber()).toBe(180);
       expect(
-        leg.consumedLots!.every((l) =>
+        must(leg.consumedLots, "leg.consumedLots").every((l) =>
           [1, 2, 3, 4, 5].includes(Number(l.acquisitionId)),
         ),
       ).toBe(true);
@@ -215,14 +216,14 @@ describe("source-backed asset adjustment replay", () => {
       amount: "0",
     });
     expect(
-      previewPortfolioAssetAdjustment({
+      must(previewPortfolioAssetAdjustment({
         ...row,
         asset_adjustment_details: {
           kind: "asset_fee",
           basisPolicy: "carried",
           accountId: 2,
         },
-      }).event!.account_id,
+      }).event, "previewPortfolioAssetAdjustment result").account_id,
     ).toBe(2);
   });
 });

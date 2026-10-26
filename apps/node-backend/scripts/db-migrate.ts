@@ -96,7 +96,7 @@ try {
     const result = await runMigrations();
     console.log(
       `[db-migrate] schema is at ${result.revision}` +
-        (result.applied.length ? ` (applied ${result.applied.join(", ")})` : ""),
+        (result.applied.length > 0 ? ` (applied ${result.applied.join(", ")})` : ""),
     );
   } else if (command === "down") {
     const revision = await revertLatestMigration();

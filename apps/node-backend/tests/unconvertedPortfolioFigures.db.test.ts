@@ -31,17 +31,18 @@ import { routeAgent } from "./helpers/routeApp.ts";
 import { bodyAt } from "./helpers/responseBody.ts";
 import reportsRouter from "../src/routes/reports.ts";
 import belgianTaxRouter from "../src/routes/belgianTax.ts";
+import { must } from "./helpers/must.ts";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const PREFIX = "Synthetic FX fund";
 
 async function investment(name: string, currency: string): Promise<number> {
-  const { rows } = await getTestPool()!.query<{ id: number }>(
+  const { rows } = await must(getTestPool(), "test pool").query<{ id: number }>(
     `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, is_active)
      VALUES ($1, $3, 'stock', $2, 0, 0, true) RETURNING id`,
     [`${PREFIX} ${name}`, currency, `SYNFX${name}`],
   );
-  return rows[0]!.id;
+  return must(rows[0], "rows[0]").id;
 }
 
 async function txn(
@@ -51,7 +52,7 @@ async function txn(
   amount: number,
   currency: string,
 ) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "test pool").query(
     `INSERT INTO portfolio_transactions (investment_id, type, date, amount, currency)
      VALUES ($1, $2, $3::date, $4, $5)`,
     [investmentId, type, date, amount, currency],
@@ -59,7 +60,7 @@ async function txn(
 }
 
 async function setRate(code: string, rateToEur: string, rateDate: string) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "test pool").query(
     `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
      VALUES ($1, $2, $3, true)`,
     [code, rateToEur, rateDate],
@@ -77,7 +78,7 @@ describeDb(
     let xyzFund = 0;
 
     async function reset() {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "test pool");
       await pool.query("DELETE FROM portfolio_transactions");
       await pool.query("DELETE FROM investments");
       await pool.query("DELETE FROM exchange_rates");

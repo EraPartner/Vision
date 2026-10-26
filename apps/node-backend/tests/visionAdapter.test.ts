@@ -7,6 +7,7 @@ import { createAdapter } from "../src/services/importPipeline/adapters/index.ts"
 import { detect } from "../src/services/importPipeline/adapters/vision.ts";
 
 import { useTempCSV } from "./helpers/tempFile.ts";
+import { must } from "./helpers/must.ts";
 
 const writeTempCSV = useTempCSV("vision");
 
@@ -30,9 +31,9 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR,944.80,OTHER,invalid date
       "Data row 2: Date is invalid",
       "Data row 3: Amount is invalid",
     ]);
-    expect(txns[0]!.recipient).toBe("JOHN DOE");
-    expect(txns[0]!.amount).toBe(-45.2);
-    expect(txns[0]!.balance).toBe(954.8);
+    expect(must(txns[0], "txns[0]").recipient).toBe("JOHN DOE");
+    expect(must(txns[0], "txns[0]").amount).toBe(-45.2);
+    expect(must(txns[0], "txns[0]").balance).toBe(954.8);
   });
 
   it("re-imports guard-quoted negative amounts and balances (export round-trip)", async () => {
@@ -46,8 +47,8 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR,944.80,OTHER,invalid date
     const txns = await parse(tmpPath);
 
     expect(txns).toHaveLength(1);
-    expect(txns[0]!.amount).toBe(-45.2);
-    expect(txns[0]!.balance).toBe(-12);
+    expect(must(txns[0], "txns[0]").amount).toBe(-45.2);
+    expect(must(txns[0], "txns[0]").balance).toBe(-12);
   });
 
   it("parses EU-decimal amounts instead of stripping the comma into a 100× value", async () => {
@@ -60,8 +61,8 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR,944.80,OTHER,invalid date
     const txns = await parse(tmpPath);
 
     expect(txns).toHaveLength(1);
-    expect(txns[0]!.amount).toBe(-12.34);
-    expect(txns[0]!.balance).toBe(1234.56);
+    expect(must(txns[0], "txns[0]").amount).toBe(-12.34);
+    expect(must(txns[0], "txns[0]").balance).toBe(1234.56);
   });
 
   it("uses UNKNOWN recipient when recipient is empty", async () => {
@@ -73,7 +74,7 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR,944.80,OTHER,invalid date
     const txns = await parse(tmpPath);
 
     expect(txns).toHaveLength(1);
-    expect(txns[0]!.recipient).toBe("UNKNOWN");
+    expect(must(txns[0], "txns[0]").recipient).toBe("UNKNOWN");
   });
 
   it("defaults bank account to VISION and currency to EUR", async () => {
@@ -85,8 +86,8 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR,944.80,OTHER,invalid date
     const txns = await parse(tmpPath);
 
     expect(txns).toHaveLength(1);
-    expect(txns[0]!.bankAccount).toBe("VISION");
-    expect(txns[0]!.currency).toBe("EUR");
+    expect(must(txns[0], "txns[0]").bankAccount).toBe("VISION");
+    expect(must(txns[0], "txns[0]").currency).toBe("EUR");
   });
 
   it("uppercases an ISO currency and falls back to EUR for free text (was a commit-time CHECK 500)", async () => {
@@ -111,10 +112,10 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR,944.80,OTHER,invalid date
     const txns = await parse(tmpPath);
 
     expect(txns).toHaveLength(2);
-    expect(txns[0]!.comment).toBe(
+    expect(must(txns[0], "txns[0]").comment).toBe(
       "Imported Category: UTILITIES | Paid by direct debit",
     );
-    expect(txns[1]!.comment).toBeNull();
+    expect(must(txns[1], "txns[1]").comment).toBeNull();
   });
 
   it("normalizes memo to uppercase", async () => {
@@ -126,7 +127,7 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR,944.80,OTHER,invalid date
     const txns = await parse(tmpPath);
 
     expect(txns).toHaveLength(1);
-    expect(txns[0]!.memo).toBe("MIXED CASE MEMO");
+    expect(must(txns[0], "txns[0]").memo).toBe("MIXED CASE MEMO");
   });
 });
 

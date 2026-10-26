@@ -33,7 +33,7 @@ for (const skipped of [true, false]) {
     let finishRefresh!: () => void;
     const preparation = prepareViewsAfterBackfill({
       prepare: async () => {},
-      backfill: async () => ({ skipped }),
+      backfill: () => Promise.resolve({ skipped }),
       refresh: () =>
         new Promise<void>((resolve) => {
           events.push("refresh-started");
@@ -55,10 +55,8 @@ it("never reports readable views when preparation failed", async () => {
   const readable = vi.fn();
   await expect(
     prepareViewsAfterBackfill({
-      prepare: async () => {
-        throw new Error("prepare failed");
-      },
-      backfill: async () => ({ skipped: true }),
+      prepare: () => Promise.reject(new Error("prepare failed")),
+      backfill: () => Promise.resolve({ skipped: true }),
       refresh: vi.fn(async () => {}),
       backfillFailed: vi.fn(),
       readable,
@@ -75,8 +73,10 @@ for (const failedPreparation of [false, true]) {
     });
     const refresh = vi.fn(async () => {});
     const preparation = prepareViewsAfterBackfill({
-      prepare: async () => {
-        if (failedPreparation) throw new Error("prepare failed");
+      prepare: () => {
+        if (failedPreparation)
+          return Promise.reject(new Error("prepare failed"));
+        return Promise.resolve();
       },
       backfill: async () => {
         await backfill;

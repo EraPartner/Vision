@@ -19,13 +19,13 @@ vi.mock("../src/config/logger.ts", () => ({
 }));
 
 const { mockConvertToCurrency } = vi.hoisted(() => ({
-  mockConvertToCurrency: vi.fn(async (amount, from, to) => {
-    if (!from || from === to) return amount;
-    return new Map([
+  mockConvertToCurrency: vi.fn((amount: number, from: string | null | undefined, to: string) => {
+    if (!from || from === to) return Promise.resolve(amount);
+    return Promise.resolve(new Map([
       [1, 0.9],
       [100, 90],
       [200, 180],
-    ]).get(Number(amount));
+    ]).get(amount));
   }),
 }));
 
@@ -34,7 +34,7 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () =>
 );
 
 vi.mock("../src/repositories/settingsRepository.ts", () => ({
-  settingsRepository: { get: vi.fn(async () => null) },
+  settingsRepository: { get: vi.fn(() => Promise.resolve(null)) },
 }));
 
 import { __storeCurrentBrokerSnapshot } from "../src/services/portfolioPerformanceSnapshotService.ts";
@@ -46,6 +46,7 @@ import {
   getPortfolioSummary,
   getBreakdownSummary,
 } from "../src/services/portfolio/portfolioSummaryService.ts";
+import { must } from "./helpers/must.ts";
 
 /** `query` as these tests drive it: SQL text in, a bare `{ rows }` result out. */
 const query = vi.mocked(rawQuery) as unknown as Mock<
@@ -221,7 +222,7 @@ describe("getPortfolioSummary", () => {
           ],
         });
       try {
-        const s = (await getPortfolioSummary("EUR")).summaries[0]!;
+        const s = must((await getPortfolioSummary("EUR")).summaries[0], "getPortfolioSummary result");
         // Booked EUR80 is USD100 basis at the prior day's0.8 daily quote rate.
         // Current USD200 value at0.9 is EUR180: asset gain90 plus FX gain10.
         expect(s.totalBuyCost).toBe(80);
@@ -261,7 +262,7 @@ describe("getPortfolioSummary", () => {
           },
         ],
       });
-    const s = (await getPortfolioSummary("EUR")).summaries[0]!;
+    const s = must((await getPortfolioSummary("EUR")).summaries[0], "getPortfolioSummary result");
     expect(s.totalBuyCost).toBe(80);
     expect(s.gainLoss).toBe(120);
     expect(s.assetGain).toBe(120);
@@ -284,7 +285,7 @@ describe("getPortfolioSummary", () => {
         ],
       })
       .mockResolvedValueOnce({ rows: [] });
-    const s = (await getPortfolioSummary("EUR")).summaries[0]!;
+    const s = must((await getPortfolioSummary("EUR")).summaries[0], "getPortfolioSummary result");
     expect(s.totalBuyCost).toBe(80);
     expect(s.gainLoss).toBe(100);
     expect(s.assetGain).toBeCloseTo(100, 2);
@@ -349,7 +350,7 @@ describe("getPortfolioSummary", () => {
       includeBrokerSnapshotParity: true,
     });
     expect(result.totals.totalPortfolioValue).toBe(600.06);
-    expect(result.byAccount[0]!.currentValue).toBe(600.04);
+    expect(must(result.byAccount[0], "result.byAccount[0]").currentValue).toBe(600.04);
     expect(result.brokerSnapshotParity).toEqual({
       totalValue: "600.036",
       partitionValue: "600.036",
@@ -367,7 +368,7 @@ describe("getPortfolioSummary", () => {
     const insert = query.mock.calls.find(([sql]) =>
       sql.includes("INSERT INTO portfolio_broker_snapshots"),
     );
-    expect(insert![1]![5]).toBe("600.04");
+    expect(must(must(insert, "insert")[1], "must result")[5]).toBe("600.04");
   });
 
   it("computes single-currency stock totals correctly", async () => {
@@ -391,7 +392,7 @@ describe("getPortfolioSummary", () => {
     const result = await getPortfolioSummary("EUR");
 
     expect(result.summaries).toHaveLength(1);
-    const s = result.summaries[0]!;
+    const s = must(result.summaries[0], "result.summaries[0]");
     expect(s.totalUnits).toBe(2);
     expect(s.totalBuyCost).toBe(210);
     expect(s.currentValue).toBe(400); // 2 units * 200
@@ -417,7 +418,7 @@ describe("getPortfolioSummary", () => {
       .mockResolvedValueOnce({ rows: [] });
 
     const result = await getPortfolioSummary("EUR");
-    const s = result.summaries[0]!;
+    const s = must(result.summaries[0], "result.summaries[0]");
 
     // 1 unit * 200 USD * 0.9 = 180 EUR
     expect(s.currentValue).toBe(180);
@@ -449,7 +450,7 @@ describe("getPortfolioSummary", () => {
       .mockResolvedValueOnce({ rows: [] });
 
     const result = await getPortfolioSummary("EUR");
-    const s = result.summaries[0]!;
+    const s = must(result.summaries[0], "result.summaries[0]");
 
     // Invested locked at buy-date rate: 100 USD * 0.8 = 80 EUR (today's 0.9 must not move it)
     expect(s.totalInvested).toBe(80);
@@ -686,18 +687,18 @@ describe("getPortfolioSummary", () => {
       assignment: "unassigned",
       oversold: false,
     });
-    expect(result.summaries[0]!.fullyAssigned).toBe(false);
-    expect(result.summaries[0]!.byAccount).toEqual(result.byAccount);
+    expect(must(result.summaries[0], "result.summaries[0]").fullyAssigned).toBe(false);
+    expect(must(result.summaries[0], "result.summaries[0]").byAccount).toEqual(result.byAccount);
     // Global figures stay the exact flat-replay values.
-    expect(result.byAccount[0]!.currentValue).toBeCloseTo(
+    expect(must(result.byAccount[0], "result.byAccount[0]").currentValue).toBeCloseTo(
       result.totals.totalPortfolioValue,
       2,
     );
-    expect(result.byAccount[0]!.totalInvested).toBeCloseTo(
+    expect(must(result.byAccount[0], "result.byAccount[0]").totalInvested).toBeCloseTo(
       result.totals.totalInvested,
       2,
     );
-    expect(result.byAccount[0]!.gainLoss).toBeCloseTo(
+    expect(must(result.byAccount[0], "result.byAccount[0]").gainLoss).toBeCloseTo(
       result.totals.totalGainLoss,
       2,
     );
@@ -835,14 +836,14 @@ describe("getPortfolioSummary", () => {
 
     const result = await getPortfolioSummary("EUR");
 
-    expect(result.summaries[0]!.fullyAssigned).toBe(true);
-    expect(result.summaries[0]!.oversold).toBe(false);
+    expect(must(result.summaries[0], "result.summaries[0]").fullyAssigned).toBe(true);
+    expect(must(result.summaries[0], "result.summaries[0]").oversold).toBe(false);
     expect(result.byAccount.map((a) => a.account_id)).toEqual([10, 20]);
-    expect(result.summaries[0]!.byAccount).toEqual(result.byAccount);
+    expect(must(result.summaries[0], "result.summaries[0]").byAccount).toEqual(result.byAccount);
 
     // Account 20's sell consumes account 20's own 20/unit lot — NOT account
     // 10's older 10/unit lot that flat global FIFO would pick.
-    const acc20 = result.byAccount.find((a) => a.account_id === 20)!;
+    const acc20 = must(result.byAccount.find((a) => a.account_id === 20), "matching result.byAccount");
     expect(acc20.realizedGain).toBe(100); // 600 − 25×20
     expect(acc20).toMatchObject({ assignment: "account", oversold: false });
     expect(acc20.unrealizedGain).toBe(-200); // 25×12 − 25×20
@@ -856,7 +857,7 @@ describe("getPortfolioSummary", () => {
     });
 
     // The investment summary IS the partition sum (Σ partitions ≡ global).
-    expect(result.summaries[0]!.realizedGain).toBe(100); // flat FIFO would say 350
+    expect(must(result.summaries[0], "result.summaries[0]").realizedGain).toBe(100); // flat FIFO would say 350
     expect(result.totals.totalRealizedGain).toBe(100);
     const sumCV = result.byAccount.reduce((s, a) => s + a.currentValue, 0);
     const sumInv = result.byAccount.reduce((s, a) => s + a.totalInvested, 0);
@@ -934,7 +935,7 @@ describe("separate imported broker account fees", () => {
       })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: fees });
-    if (rates.length) query.mockResolvedValueOnce({ rows: rates });
+    if (rates.length > 0) query.mockResolvedValueOnce({ rows: rates });
   }
 
   it("subtracts dated cash fees once without altering investment gains or account partitions", async () => {
@@ -962,8 +963,8 @@ describe("separate imported broker account fees", () => {
     });
     expect(result.totals.totalGainLoss).toBe(50);
     expect(result.totals.totalFees).toBe(0);
-    expect(result.summaries[0]!.gainLoss).toBe(50);
-    expect(result.byAccount[0]!.gainLoss).toBe(50);
+    expect(must(result.summaries[0], "result.summaries[0]").gainLoss).toBe(50);
+    expect(must(result.byAccount[0], "result.byAccount[0]").gainLoss).toBe(50);
     expect(result.brokerageCashFees).toEqual({
       total: 10,
       gainAfterFees: 40,
@@ -974,7 +975,7 @@ describe("separate imported broker account fees", () => {
       ],
     });
     expect(
-      query.mock.calls.find(([sql]) => sql.includes("WITH owned_fee_ids"))![1],
+      must(query.mock.calls.find(([sql]) => sql.includes("WITH owned_fee_ids")), "matching query.mock.calls")[1],
     ).toEqual(["2026-01-02"]);
   });
 
@@ -1062,13 +1063,13 @@ describe("getBreakdownSummary (legacy compat)", () => {
       .mockResolvedValueOnce({ rows: [] });
     const breakdown = await getBreakdownSummary("EUR");
 
-    expect(breakdown[0]!.currentValue).toBe(summary.summaries[0]!.currentValue);
-    expect(breakdown[0]!.totalInvested).toBe(
-      summary.summaries[0]!.totalInvested,
+    expect(must(breakdown[0], "breakdown[0]").currentValue).toBe(must(summary.summaries[0], "summary.summaries[0]").currentValue);
+    expect(must(breakdown[0], "breakdown[0]").totalInvested).toBe(
+      must(summary.summaries[0], "summary.summaries[0]").totalInvested,
     );
-    expect(breakdown[0]!.gainLoss).toBe(summary.summaries[0]!.gainLoss);
-    expect(breakdown[0]!.assetGain).toBe(summary.summaries[0]!.assetGain);
-    expect(breakdown[0]!.fxGain).toBe(summary.summaries[0]!.fxGain);
+    expect(must(breakdown[0], "breakdown[0]").gainLoss).toBe(must(summary.summaries[0], "summary.summaries[0]").gainLoss);
+    expect(must(breakdown[0], "breakdown[0]").assetGain).toBe(must(summary.summaries[0], "summary.summaries[0]").assetGain);
+    expect(must(breakdown[0], "breakdown[0]").fxGain).toBe(must(summary.summaries[0], "summary.summaries[0]").fxGain);
   });
 });
 
@@ -1103,7 +1104,7 @@ describe("asset-class formula coverage", () => {
       });
 
     const result = await getPortfolioSummary("EUR");
-    const s = result.summaries[0]!;
+    const s = must(result.summaries[0], "result.summaries[0]");
 
     expect(s.totalInvested).toBe(1000);
     expect(s.projectedAnnualInterest).toBe(50); // 1000 * 5%
@@ -1147,7 +1148,7 @@ describe("asset-class formula coverage", () => {
       });
 
     const result = await getPortfolioSummary("EUR");
-    expect(result.summaries[0]!.gainLoss).toBe(400);
+    expect(must(result.summaries[0], "result.summaries[0]").gainLoss).toBe(400);
   });
 
   it("clamps negative net-invested to 0 instead of flipping it positive (abs)", async () => {
@@ -1186,7 +1187,7 @@ describe("asset-class formula coverage", () => {
       });
 
     const result = await getPortfolioSummary("EUR");
-    expect(result.summaries[0]!.totalInvested).toBe(0);
+    expect(must(result.summaries[0], "result.summaries[0]").totalInvested).toBe(0);
   });
 
   it("reduces non-unit invested and value on return_of_capital", async () => {
@@ -1226,7 +1227,7 @@ describe("asset-class formula coverage", () => {
       });
 
     const result = await getPortfolioSummary("EUR");
-    const s = result.summaries[0]!;
+    const s = must(result.summaries[0], "result.summaries[0]");
 
     expect(s.totalInvested).toBe(8000);
     expect(s.currentValue).toBeCloseTo(8000, 2);
@@ -1263,7 +1264,7 @@ describe("asset-class formula coverage", () => {
       });
 
     const result = await getPortfolioSummary("EUR");
-    const s = result.summaries[0]!;
+    const s = must(result.summaries[0], "result.summaries[0]");
 
     expect(s.totalInvested).toBe(250000);
     expect(s.totalAppreciation).toBe(25000);
@@ -1292,7 +1293,7 @@ describe("asset-class formula coverage", () => {
       });
 
     const result = await getPortfolioSummary("EUR");
-    expect(result.summaries[0]!.gainLoss).toBe(40);
+    expect(must(result.summaries[0], "result.summaries[0]").gainLoss).toBe(40);
   });
 
   it("does not double-count rent/fees/taxes in real-estate gainLoss", async () => {
@@ -1349,7 +1350,7 @@ describe("asset-class formula coverage", () => {
       });
 
     const result = await getPortfolioSummary("EUR");
-    expect(result.summaries[0]!.gainLoss).toBe(19000);
+    expect(must(result.summaries[0], "result.summaries[0]").gainLoss).toBe(19000);
   });
 
   it("sells reduce units and trigger realized gain on a unit-based holding", async () => {
@@ -1387,7 +1388,7 @@ describe("asset-class formula coverage", () => {
       });
 
     const result = await getPortfolioSummary("EUR");
-    const s = result.summaries[0]!;
+    const s = must(result.summaries[0], "result.summaries[0]");
 
     expect(s.totalUnits).toBe(1);
     expect(s.realizedGain).toBeGreaterThan(0); // sold above avg cost basis
@@ -1453,8 +1454,8 @@ describe("asset-class formula coverage", () => {
     });
 
     expect(result.summaries).toHaveLength(1);
-    expect(query.mock.calls[0]![0]).not.toContain("WHERE i.is_active = true");
-    expect(query.mock.calls[1]![0]).not.toContain("i.is_active = true");
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).not.toContain("WHERE i.is_active = true");
+    expect(must(query.mock.calls[1], "query.mock.calls[1]")[0]).not.toContain("i.is_active = true");
   });
 
   it("honors the cost_basis_method setting (fifo vs weighted_avg realized gain)", async () => {
@@ -1498,13 +1499,13 @@ describe("asset-class formula coverage", () => {
     settingsRepository.get.mockResolvedValueOnce("weighted_avg");
     seedQueries();
     const weighted = await getPortfolioSummary("EUR");
-    expect(weighted.summaries[0]!.realizedGain).toBe(90);
+    expect(must(weighted.summaries[0], "weighted.summaries[0]").realizedGain).toBe(90);
 
     settingsRepository.get.mockResolvedValueOnce("fifo");
     seedQueries();
     const fifo = await getPortfolioSummary("EUR");
-    expect(fifo.summaries[0]!.realizedGain).toBe(100);
-    expect(fifo.summaries[0]!.totalInvested).toBe(120); // remaining lot at 120
+    expect(must(fifo.summaries[0], "fifo.summaries[0]").realizedGain).toBe(100);
+    expect(must(fifo.summaries[0], "fifo.summaries[0]").totalInvested).toBe(120); // remaining lot at 120
   });
 
   it("falls back to weighted_avg on an invalid stored method", async () => {
@@ -1543,7 +1544,7 @@ describe("asset-class formula coverage", () => {
       });
 
     const result = await getPortfolioSummary("EUR");
-    expect(result.summaries[0]!.realizedGain).toBe(90); // weighted_avg
+    expect(must(result.summaries[0], "result.summaries[0]").realizedGain).toBe(90); // weighted_avg
   });
 });
 
@@ -1628,10 +1629,10 @@ it("converts archived included income at its own dated currency without changing
   expect(result.totals.totalInKindIncome).toBe(0);
   expect(result.summaries.map((row) => row.id)).toEqual([1]);
   // The archived read covers inactive investments' included income only.
-  const archivedRead = query.mock.calls.find(([sql]) =>
-    /join "?investments"? as "?i"?/i.test(String(sql)),
-  )!;
-  expect(String(archivedRead[0]).replace(/"/g, "")).toMatch(
+  const archivedRead = must(query.mock.calls.find(([sql]) =>
+    /join "?investments"? as "?i"?/i.test(sql),
+  ), "matching query.mock.calls");
+  expect(archivedRead[0].replace(/"/g, "")).toMatch(
     /i\.is_active = \$1 and pt\.income_recognition_role = \$2/,
   );
   expect(archivedRead[1]).toEqual([false, "included_in_units"]);

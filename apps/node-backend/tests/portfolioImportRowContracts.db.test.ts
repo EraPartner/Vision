@@ -22,12 +22,13 @@ import {
 } from "../src/repositories/portfolioImportBatchRepository.ts";
 import { readReconciliationBatchScope } from "../src/repositories/portfolioImportReconciliationRepository.ts";
 import { batchConfigFields } from "../src/database/rows/portfolioImport.ts";
+import { must } from "./helpers/must.ts";
 
 const pool = getTestPool();
 const created = { batchIds: [] as string[], investmentIds: [] as number[] };
 
 async function insertBatch(customConfig: string): Promise<string> {
-  const result = await pool!.query<{ id: string }>(
+  const result = await must(pool, "pool").query<{ id: string }>(
     `INSERT INTO portfolio_import_batches
        (adapter_name, source_filename, source_size_bytes, custom_config,
         status, rows_total)
@@ -36,7 +37,7 @@ async function insertBatch(customConfig: string): Promise<string> {
      RETURNING id`,
     [customConfig],
   );
-  const id = result.rows[0]!.id;
+  const id = must(result.rows[0], "result.rows[0]").id;
   created.batchIds.push(id);
   return id;
 }
@@ -50,12 +51,12 @@ describe.skipIf(!hasTestDatabase())(
     beforeAll(async () => {
       expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
       await acquireDbSuiteLock();
-      const investment = await pool!.query<{ id: number }>(
+      const investment = await must(pool, "pool").query<{ id: number }>(
         `INSERT INTO investments (name, symbol, asset_class, currency)
          VALUES ('Synthetic Row Contract Fund', 'SYNRC', 'stock', 'EUR')
          RETURNING id`,
       );
-      const investmentId = investment.rows[0]!.id;
+      const investmentId = must(investment.rows[0], "investment.rows[0]").id;
       created.investmentIds.push(investmentId);
       objectBatch = await insertBatch(
         JSON.stringify({ date_format: "%Y-%m-%d", source_columns: ["Date"] }),
@@ -64,7 +65,7 @@ describe.skipIf(!hasTestDatabase())(
       textBatch = await insertBatch(
         JSON.stringify(JSON.stringify({ format: "saxo_transaction_history" })),
       );
-      await pool!.query(
+      await must(pool, "pool").query(
         `INSERT INTO portfolio_import_staging_rows
            (batch_id, row_index, status, route, tx_date, type, type_raw,
             symbol_raw, name_raw, units, price_per_unit, amount, fees, taxes,
@@ -82,15 +83,15 @@ describe.skipIf(!hasTestDatabase())(
 
     afterAll(async () => {
       try {
-        await pool!.query(
+        await must(pool, "pool").query(
           "DELETE FROM portfolio_import_staging_rows WHERE batch_id = ANY($1::bigint[])",
           [created.batchIds],
         );
-        await pool!.query(
+        await must(pool, "pool").query(
           "DELETE FROM portfolio_import_batches WHERE id = ANY($1::bigint[])",
           [created.batchIds],
         );
-        await pool!.query("DELETE FROM investments WHERE id = ANY($1)", [
+        await must(pool, "pool").query("DELETE FROM investments WHERE id = ANY($1)", [
           created.investmentIds,
         ]);
       } finally {
@@ -122,7 +123,7 @@ describe.skipIf(!hasTestDatabase())(
       expect(rows[0]).toMatchObject({
         row_index: 0,
         tx_date: "2026-01-05",
-        units: expect.any(String),
+        units: expect.any(String) as unknown,
         investment_symbol: "SYNRC",
         effective_investment_id: created.investmentIds[0],
       });
@@ -140,10 +141,10 @@ describe.skipIf(!hasTestDatabase())(
         objectBatch,
         textBatch,
       ]);
-      expect(typeof scope[0]!.custom_config).toBe("object");
-      expect(typeof scope[1]!.custom_config).toBe("string");
+      expect(typeof must(scope[0], "scope[0]").custom_config).toBe("object");
+      expect(typeof must(scope[1], "scope[1]").custom_config).toBe("string");
       // Readers that do not parse the text see a config without fields.
-      expect(batchConfigFields(scope[1]!.custom_config)?.format).toBe(
+      expect(batchConfigFields(must(scope[1], "scope[1]").custom_config)?.format).toBe(
         undefined,
       );
       const locked = await lockBatchForUpdate(textBatch);
