@@ -36,7 +36,7 @@ const SETTINGS_KEY = "app_settings";
 export function AppSettingsProvider({ children }: { children: ReactNode }) {
     const { value: preloadedValue, isLoading: preloadLoading } =
         usePreloadedSetting(SETTINGS_KEY);
-    const preloaded = preloadedValue as AppSettings | null;
+    const preloaded = preloadedValue;
 
     const _hydrateAppSettings = useSettingsStore((s) => s._hydrateAppSettings);
     const _markSettingsSaveError = useSettingsStore(
@@ -55,7 +55,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     // Hydrate and sanitize the preloaded server value.
     useEffect(() => {
         if (preloadLoading) return;
-        const migrated = migrateAppSettings(preloaded ?? undefined);
+        const migrated = migrateAppSettings(preloaded);
         _hydrateAppSettings(migrated, false);
         hasHydrated.current = true;
         // Sync the colorblind-safe gain/loss skin to the (server) preference,

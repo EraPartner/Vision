@@ -7,6 +7,7 @@
  * `import.meta.env` since it must be usable before this module parses.
  */
 
+import { listGuard } from '@/lib/enumGuard';
 import { z } from 'zod';
 
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error', 'silent'] as const;
@@ -40,20 +41,22 @@ const optionalUrl = z
         return trimmed;
     });
 
+const isLogLevel = listGuard(LOG_LEVELS);
+
 const logLevelEnv = z
     .string()
     .optional()
     .transform((value, ctx) => {
         if (value === undefined || value.trim() === '') return undefined;
         const normalized = value.trim().toLowerCase();
-        if (!(LOG_LEVELS as readonly string[]).includes(normalized)) {
+        if (!isLogLevel(normalized)) {
             ctx.addIssue({
                 code: "custom",
                 message: `Expected one of ${LOG_LEVELS.join('|')}, got: ${value}`,
             });
             return z.NEVER;
         }
-        return normalized as (typeof LOG_LEVELS)[number];
+        return normalized;
     });
 
 const envSchema = z

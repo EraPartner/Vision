@@ -1,3 +1,4 @@
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +16,7 @@ import {
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 type ExportFormat = "csv" | "json";
+const isExportFormat = enumGuard<ExportFormat>({ csv: true, json: true });
 
 interface BulkExportDialogProps {
     open: boolean;
@@ -58,7 +60,7 @@ export function BulkExportDialog({
                         label={t("txPage.bulk.exportFormat")}
                         wrapperClassName="py-2"
                         value={format}
-                        onValueChange={(v) => setFormat(v as ExportFormat)}
+                        onValueChange={onGuarded(isExportFormat, setFormat)}
                         className="w-full"
                     >
                         <SegmentedControlItem value="csv">

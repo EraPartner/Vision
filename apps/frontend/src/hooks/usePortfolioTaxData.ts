@@ -1,3 +1,4 @@
+import { isAssetClass } from "@/utils/assetClass";
 import { useMemo } from "react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -135,8 +136,10 @@ function localizeDashboard(
         );
     const taxByAssetClass = dashboard.taxByAssetClass.map(
         (row): AssetClassTaxDatum => ({
-            name: getAssetClassLabel(t, row.assetClass as AssetClass) ||
-                row.assetClass,
+            name:
+                (isAssetClass(row.assetClass)
+                    ? getAssetClassLabel(t, row.assetClass)
+                    : "") || row.assetClass,
             taxes: row.taxes,
             fees: row.fees,
             total: row.total,
@@ -147,7 +150,9 @@ function localizeDashboard(
             ...row,
             id: asInvestmentId(row.id),
             symbol: row.symbol ?? undefined,
-            assetClass: getAssetClassLabel(t, row.assetClass as AssetClass),
+            assetClass: isAssetClass(row.assetClass)
+                ? getAssetClassLabel(t, row.assetClass)
+                : row.assetClass,
         }),
     );
     const summaries = dashboard.summaries.map(

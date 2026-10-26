@@ -1,3 +1,4 @@
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { Fragment, useId, useState, useMemo, useCallback } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import {
@@ -44,6 +45,12 @@ interface CategoryPivotTableProps {
 }
 
 const PERIOD_WINDOW_SIZE = 12;
+const isPivotValueMode = enumGuard<PivotValueMode>({
+    absolute: true,
+    net: true,
+    income: true,
+    expense: true,
+});
 
 /** A single category drills by id; several drill by the whole id list. */
 function drillCategoryFilter(
@@ -392,7 +399,7 @@ export function CategoryPivotTable({
                 <div className="flex items-center gap-2">
                     <Select
                         value={valueMode}
-                        onValueChange={(v) => setValueMode(v as PivotValueMode)}
+                        onValueChange={onGuarded(isPivotValueMode, setValueMode)}
                     >
                         <SelectTrigger className="w-[150px]">
                             <SelectValue

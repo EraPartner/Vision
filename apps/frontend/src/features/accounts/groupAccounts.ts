@@ -30,7 +30,7 @@ export const PORTFOLIO_ACCOUNT_TYPES: readonly AccountType[] = [
 ] as const;
 
 export function isPortfolioType(type: AccountType): boolean {
-    return (PORTFOLIO_ACCOUNT_TYPES as readonly string[]).includes(type);
+    return PORTFOLIO_ACCOUNT_TYPES.includes(type);
 }
 
 /** Portfolio accounts whose value and activity live only in holdings. */

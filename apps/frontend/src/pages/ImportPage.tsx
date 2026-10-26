@@ -1,3 +1,4 @@
+import { isRecord } from "@/lib/isRecord";
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router";
 import { ROUTES, type AppPath } from "@/lib/routes";
@@ -42,17 +43,10 @@ interface ImportCommitReceipt {
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
 function readCommitReceipt(state: unknown): ImportCommitReceipt | null {
-    if (
-        !state ||
-        typeof state !== "object" ||
-        !("importCommitReceipt" in state)
-    )
-        return null;
-    const receipt = (state as { importCommitReceipt?: unknown })
-        .importCommitReceipt;
-    if (!receipt || typeof receipt !== "object") return null;
-    const { imported, duplicates, errors, dateFrom, dateTo } =
-        receipt as Partial<ImportCommitReceipt>;
+    if (!isRecord(state)) return null;
+    const receipt = state.importCommitReceipt;
+    if (!isRecord(receipt)) return null;
+    const { imported, duplicates, errors, dateFrom, dateTo } = receipt;
     const isCount = (value: unknown): value is number =>
         typeof value === "number" && Number.isFinite(value) && value >= 0;
     if (!isCount(imported) || !isCount(duplicates) || !isCount(errors))

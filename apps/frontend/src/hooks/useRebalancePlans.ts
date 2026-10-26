@@ -10,7 +10,7 @@ import { apiClient } from "@/lib/api";
 import { settingKeys } from "@/lib/queryKeys";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import type { RebalancePlan } from "@/lib/api/crossWorkspace";
+import { RebalancePlanSchema, type RebalancePlan } from "@/lib/api/crossWorkspace";
 
 export type { RebalancePlan };
 
@@ -26,7 +26,13 @@ export function useRebalancePlans() {
         queryFn: async (): Promise<RebalancePlan[]> => {
             const res = await apiClient.getSetting(SETTING_KEY);
             const value = res.value;
-            return Array.isArray(value) ? (value as RebalancePlan[]) : [];
+            // Stored plans are untrusted: drop rows that are not plans.
+            return Array.isArray(value)
+                ? value.flatMap((row: unknown) => {
+                      const parsed = RebalancePlanSchema.safeParse(row);
+                      return parsed.success ? [parsed.data] : [];
+                  })
+                : [];
         },
         staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });

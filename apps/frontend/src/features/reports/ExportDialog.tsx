@@ -5,6 +5,7 @@
  * sections, and currency before triggering a server-side PDF download.
  */
 
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { useState } from "react";
 import { FileDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -66,6 +67,18 @@ import { asCurrencyCode } from "@vision/types/brands";
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 type PeriodPreset = "ytd" | "rolling3" | "rolling12" | "year" | "custom";
+const isPeriodPreset = enumGuard<PeriodPreset>({
+    ytd: true,
+    rolling3: true,
+    rolling12: true,
+    year: true,
+    custom: true,
+});
+const isReportType = enumGuard<ReportType>({
+    financial: true,
+    portfolio: true,
+    tax: true,
+});
 
 // First 12 of the canonical list: EUR..CZK (unchanged dropdown contents).
 const CURRENCIES = SUPPORTED_CURRENCIES.slice(0, 12);
@@ -322,9 +335,7 @@ export function ExportDialog({
                             <SegmentedControl
                                 aria-labelledby="export-report-type-label"
                                 value={reportType}
-                                onValueChange={(v) =>
-                                    handleReportTypeChange(v as ReportType)
-                                }
+                                onValueChange={onGuarded(isReportType, handleReportTypeChange)}
                                 className="w-full"
                             >
                                 {(
@@ -350,9 +361,7 @@ export function ExportDialog({
                             <RadioGroup
                                 aria-labelledby="export-period-label"
                                 value={periodPreset}
-                                onValueChange={(v) =>
-                                    setPeriodPreset(v as PeriodPreset)
-                                }
+                                onValueChange={onGuarded(isPeriodPreset, setPeriodPreset)}
                                 className="block"
                             >
                                 <List>

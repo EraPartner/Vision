@@ -1,3 +1,4 @@
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useCallback, useMemo, useState, lazy, Suspense } from "react";
 import { useSearchParams } from "react-router";
@@ -26,6 +27,8 @@ import { MonthlyRhythm } from "@/features/statistics/MonthlyRhythm";
 import { STATISTICS_WIDGETS } from "@/features/statistics/statisticsUtils";
 import { useTabParam } from "@/hooks/useTabParam";
 import { PageShell } from "@/components/shared/PageShell";
+
+const isStatisticsWindow = enumGuard<StatisticsWindow>({ "24m": true, all: true });
 
 const STATISTICS_TABS = [
     "overview",
@@ -114,7 +117,7 @@ function InsightsWindowControl({
     return (
         <SegmentedControl
             value={value}
-            onValueChange={(next) => onChange(next as StatisticsWindow)}
+            onValueChange={onGuarded(isStatisticsWindow, onChange)}
             aria-label={label}
             className="w-fit"
         >

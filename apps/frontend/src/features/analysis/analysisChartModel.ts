@@ -1,3 +1,4 @@
+import { isRecord } from "@/lib/isRecord";
 import type { AnalysisResult } from "@/lib/api/analysis";
 export interface AnalysisChartSpec {
     kind: "bar" | "line" | "stacked-bar" | "scatter" | "waterfall";
@@ -5,7 +6,7 @@ export interface AnalysisChartSpec {
     y: string[];
 }
 export function normalizeAnalysisChartSpec(value: unknown): AnalysisChartSpec {
-    const v = value as Partial<AnalysisChartSpec> | undefined;
+    const v = isRecord(value) ? value : undefined;
     const kinds: AnalysisChartSpec["kind"][] = [
         "bar",
         "line",
@@ -13,9 +14,8 @@ export function normalizeAnalysisChartSpec(value: unknown): AnalysisChartSpec {
         "scatter",
         "waterfall",
     ];
-    const kind = v?.kind;
     return {
-        kind: kind !== undefined && kinds.includes(kind) ? kind : "bar",
+        kind: kinds.find((kind) => kind === v?.kind) ?? "bar",
         x: typeof v?.x === "string" ? v.x : "",
         y:
             typeof v?.y === "string"

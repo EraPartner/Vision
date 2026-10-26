@@ -1,3 +1,4 @@
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { useState, useMemo, useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +60,8 @@ import { CustomChart } from "./CustomChart";
 import { getChartColor } from "@/components/charts/palette";
 import type { CategoryId, RecipientId, TagId } from "@vision/types/brands";
 import type { TranslationKey } from "@/locales/keys";
+
+const isTimeBucket = enumGuard<TimeBucket>({ monthly: true, yearly: true });
 
 type ChartCombo = {
     type: ChartType;
@@ -357,9 +360,10 @@ export function CustomChartBuilderModal({
                                     label={t("customChart.timeBucket")}
                                     wrapperClassName="space-y-1"
                                     value={state.timeBucket}
-                                    onValueChange={(v) =>
-                                        update("timeBucket", v as TimeBucket)
-                                    }
+                                    onValueChange={onGuarded(
+                                        isTimeBucket,
+                                        (bucket) => update("timeBucket", bucket),
+                                    )}
                                     className="w-full"
                                 >
                                     <SegmentedControlItem value="monthly">

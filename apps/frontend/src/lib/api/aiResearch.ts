@@ -1,7 +1,7 @@
 import {
     API_BASE_URL,
     apiRequest,
-    checkResponseContract,
+    checkWireData,
     parseEnvelopeError,
     rawFetch,
     unwrapEnvelope,
@@ -145,9 +145,9 @@ export async function uploadResearchDocument(file: File) {
     );
     if (!response.ok)
         throw await parseEnvelopeError(response, "Document upload failed");
-    return checkResponseContract(
+    return checkWireData(
         ResearchDocumentSchema,
-        unwrapEnvelope(await response.json()) as ResearchDocument,
+        unwrapEnvelope(await response.json()),
         "POST /api/ai-research/documents",
     );
 }

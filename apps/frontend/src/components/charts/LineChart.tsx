@@ -1,6 +1,7 @@
 /**
  * LineChart — visx + framer-motion multi-series line chart.
  */
+import { axisDateOrNumber, axisNumber } from "./axisValue";
 import { curveMonotoneX } from "@visx/curve";
 import { summarizeSeriesChart } from "./chartAria";
 import { Group } from "@visx/group";
@@ -224,8 +225,8 @@ function Inner<Datum>({
         }
         // values is finite-filtered above, so d3 min/max match Math.min/max(...)
         // exactly while avoiding the spread stack-size hazard on large series.
-        const lo = values.length > 0 ? (min(values) as number) : 0;
-        const hi = values.length > 0 ? (max(values) as number) : 1;
+        const lo = values.length > 0 ? (min(values) ?? 0) : 0;
+        const hi = values.length > 0 ? (max(values) ?? 1) : 1;
         const pad = hi !== lo ? (hi - lo) * 0.08 : 1;
         return scaleLinear({
             range: [innerHeight, 0],
@@ -506,7 +507,7 @@ function Inner<Datum>({
                         numTicks={Math.max(2, Math.floor(innerWidth / 90))}
                         tickFormat={
                             xTickFormat
-                                ? (v) => xTickFormat(v as Date | number)
+                                ? (v) => xTickFormat(axisDateOrNumber(v))
                                 : undefined
                         }
                     />
@@ -516,7 +517,7 @@ function Inner<Datum>({
                             numTicks={numYTicks}
                             tickFormat={
                                 yTickFormat
-                                    ? (v) => yTickFormat(v as number)
+                                    ? (v) => yTickFormat(axisNumber(v))
                                     : undefined
                             }
                         />
@@ -527,7 +528,7 @@ function Inner<Datum>({
                             numTicks={numYTicks}
                             tickFormat={
                                 yTickFormat
-                                    ? (v) => yTickFormat(v as number)
+                                    ? (v) => yTickFormat(axisNumber(v))
                                     : undefined
                             }
                         />

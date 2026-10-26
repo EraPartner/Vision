@@ -1,3 +1,5 @@
+import { axisDate } from "@/components/charts/axisValue";
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { useMemo, useState, type ReactNode } from "react";
 import { AppLink } from "@/lib/appNavigation";
 import { useAppNavigate } from "@/hooks/useAppNavigate";
@@ -126,6 +128,7 @@ const PERIOD_CODEC = enumSearchParamCodec<ChartPeriod>(CHART_PERIODS, "all");
 const PERIODS: ReadonlyArray<ChartPeriod> = CHART_PERIODS;
 
 type HoldingsSort = "value" | "return";
+const isHoldingsSort = enumGuard<HoldingsSort>({ value: true, return: true });
 
 const ImportIcon = PAGE_ICONS["/portfolio/import"];
 
@@ -293,7 +296,7 @@ export default function PortfolioPage() {
             ? CHART_DATE_PATTERNS.dayTick
             : CHART_DATE_PATTERNS.monthTick;
     const formatTickDate = (value: Date | number) =>
-        formatDate(value as Date, xTickPattern, monthLabelLocale);
+        formatDate(axisDate(value), xTickPattern, monthLabelLocale);
     const formatPointDate = (day: string) =>
         formatDate(parseISO(day), CHART_DATE_PATTERNS.detail, monthLabelLocale);
 
@@ -1168,9 +1171,10 @@ export default function PortfolioPage() {
                                         <SegmentedControl
                                             size="sm"
                                             value={sortBy}
-                                            onValueChange={(next) =>
-                                                setSortBy(next as HoldingsSort)
-                                            }
+                                            onValueChange={onGuarded(
+                                                isHoldingsSort,
+                                                setSortBy,
+                                            )}
                                             aria-label={t(
                                                 "portfolio.sort.label",
                                             )}

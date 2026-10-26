@@ -1,3 +1,4 @@
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { useMemo, useState } from "react";
 import {
     TrendingUp,
@@ -71,6 +72,7 @@ const HORIZONS: Array<{ labelKey: TranslationKey; months: number }> = [
 const PATH_OPTIONS = [500, 1000, 2000];
 
 type ReturnSource = "historical" | "blended";
+const isReturnSource = enumGuard<ReturnSource>({ historical: true, blended: true });
 
 interface ForecastRow extends ForecastPoint {
     ts: number;
@@ -348,9 +350,7 @@ export default function PortfolioForecastPage() {
                                     label={t("research.forecast.returnSource")}
                                     size="sm"
                                     value={returnSource}
-                                    onValueChange={(v) =>
-                                        setReturnSource(v as ReturnSource)
-                                    }
+                                    onValueChange={onGuarded(isReturnSource, setReturnSource)}
                                 >
                                     <SegmentedControlItem value="historical">
                                         {t(

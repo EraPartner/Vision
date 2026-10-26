@@ -1,3 +1,4 @@
+import { isRecord } from "@/lib/isRecord";
 import type { TranslationKey } from "@/locales/keys";
 /**
  * Humanizer for errors surfaced by the Electron IPC bridges.
@@ -56,8 +57,8 @@ const MACHINE_PATTERNS: { pattern: RegExp; key: TranslationKey }[] = [
 /** Pull a string message out of an unknown throwable or an IPC result field. */
 function readRaw(err: unknown): string {
     if (typeof err === "string") return err;
-    if (err && typeof err === "object") {
-        const message = (err as Record<string, unknown>).message;
+    if (isRecord(err)) {
+        const message = err.message;
         if (typeof message === "string") return message;
     }
     return "";

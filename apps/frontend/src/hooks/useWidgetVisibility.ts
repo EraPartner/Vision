@@ -1,3 +1,4 @@
+import { isRecord } from "@/lib/isRecord";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { apiClient } from "@/lib/api";
 import logger from "@/lib/logger";
@@ -13,6 +14,20 @@ export interface WidgetDefinition {
 }
 export type WidgetVisibilityMap = Record<string, Record<string, boolean>>;
 // e.g. { dashboard: { statCards: true, bankBalances: false }, statistics: { ... } }
+function isWidgetVisibilityMap(value: unknown): value is WidgetVisibilityMap {
+    return (
+        isRecord(value) &&
+        !Array.isArray(value) &&
+        Object.values(value).every(
+            (page) =>
+                isRecord(page) &&
+                !Array.isArray(page) &&
+                Object.values(page).every(
+                    (visible) => typeof visible === "boolean",
+                ),
+        )
+    );
+}
 let cachedVisibility: WidgetVisibilityMap | null = null;
 let pendingLoad: Promise<void> | null = null;
 let hydrated = false;
@@ -29,19 +44,7 @@ async function loadFromBackend(): Promise<void> {
         try {
             const result = await apiClient.getSetting(SETTINGS_KEY);
             const value: unknown = result.value ?? {};
-            if (
-                typeof value !== "object" ||
-                Array.isArray(value) ||
-                Object.values(value as Record<string, unknown>).some(
-                    (page) =>
-                        !page ||
-                        typeof page !== "object" ||
-                        Array.isArray(page) ||
-                        Object.values(page).some(
-                            (visible) => typeof visible !== "boolean",
-                        ),
-                )
-            ) {
+            if (!isWidgetVisibilityMap(value)) {
                 throw new Error("Invalid widget visibility setting");
             }
             // An early local edit is an operation, not a complete backend map.
@@ -49,7 +52,7 @@ async function loadFromBackend(): Promise<void> {
             const edits = pendingEdits;
             const merged = edits.reduce(
                 (base, edit) => edit(base),
-                value as WidgetVisibilityMap,
+                value,
             );
             pendingEdits = [];
             hydrated = true;

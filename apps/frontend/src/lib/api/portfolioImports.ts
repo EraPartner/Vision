@@ -1,3 +1,5 @@
+import { isAbortError } from "@/lib/api/abortError";
+import { isRecord } from "@/lib/isRecord";
 import { z } from "zod";
 import {
     API_BASE_URL,
@@ -283,8 +285,8 @@ export function importPortfolioCSVWithProgress(
     const url = `${API_BASE_URL}/api/portfolio/import/csv/stream`;
 
     const extractErrorDetail = (payload: unknown): string => {
-        if (payload && typeof payload === "object" && "detail" in payload) {
-            const detail = (payload as { detail?: unknown }).detail;
+        if (isRecord(payload)) {
+            const detail = payload.detail;
             if (typeof detail === "string" && detail.trim()) return detail;
         }
         return "Import failed";
@@ -358,7 +360,7 @@ export function importPortfolioCSVWithProgress(
                 }
             );
         } catch (err) {
-            if ((err as Error).name === "AbortError")
+            if (isAbortError(err))
                 throw new ImportCancelledError({ cause: err });
             throw err;
         }

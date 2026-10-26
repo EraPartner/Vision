@@ -1,6 +1,7 @@
 /**
  * StackedBarChart — visx + framer-motion stacked bar chart (vertical).
  */
+import { axisNumber } from "./axisValue";
 import { sum } from "d3-array";
 import { Group } from "@visx/group";
 import { summarizeSeriesChart } from "./chartAria";
@@ -358,7 +359,7 @@ function Inner<Datum>({
                         scale={valueScale}
                         tickFormat={
                             valueTickFormat
-                                ? (v) => valueTickFormat(v as number)
+                                ? (v) => valueTickFormat(axisNumber(v))
                                 : undefined
                         }
                     />

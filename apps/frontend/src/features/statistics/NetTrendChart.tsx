@@ -1,3 +1,4 @@
+import { axisDate } from "@/components/charts/axisValue";
 import { memo } from "react";
 import { AreaChart, type AreaSeries } from "@/components/charts";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -37,7 +38,7 @@ export const NetTrendChart = memo(function NetTrendChart({ data }: NetTrendChart
       xAccessor={(d) => d.date}
       series={series}
       height={300}
-      xTickFormat={(v) => formatDate(v as Date, CHART_DATE_PATTERNS.monthTick, monthLabelLocale)}
+      xTickFormat={(v) => formatDate(axisDate(v), CHART_DATE_PATTERNS.monthTick, monthLabelLocale)}
       yTickFormat={formatAxisCompact}
       tooltipTitle={(d) => formatPeriodShort(d.period, monthLabelLocale)}
       tooltipValueFormat={(v) => formatCurrency(v)}

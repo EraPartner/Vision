@@ -1,3 +1,4 @@
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -28,6 +29,11 @@ import {
 import type { CurrencyCode } from "@vision/types/brands";
 
 type Dimension = "issuer" | "sector" | "issuerCountry";
+const isDimension = enumGuard<Dimension>({
+    issuer: true,
+    sector: true,
+    issuerCountry: true,
+});
 
 export function PortfolioExposureCard({ currency }: { currency: CurrencyCode }) {
     const { t } = useLanguage();
@@ -104,7 +110,7 @@ export function PortfolioExposureCard({ currency }: { currency: CurrencyCode }) 
                 <SegmentedControl
                     size="sm"
                     value={dimension}
-                    onValueChange={(value) => setDimension(value as Dimension)}
+                    onValueChange={onGuarded(isDimension, setDimension)}
                     aria-label={t("portfolio.exposure.dimensionLabel")}
                 >
                     {(["issuer", "sector", "issuerCountry"] as const).map(

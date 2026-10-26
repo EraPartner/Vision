@@ -71,14 +71,11 @@ export function useRestoreBackup({ onSuccess }: RestoreOptions = {}) {
             if (result.success) {
                 if (result.frontendState?.keys) {
                     try {
-                        for (const [key, value] of Object.entries(
-                            // Parsed from the backup file, so values are not
-                            // guaranteed to be strings.
-                            result.frontendState.keys as Record<
-                                string,
-                                unknown
-                            >,
-                        )) {
+                        // Parsed from the backup file, so values are not
+                        // guaranteed to be strings.
+                        const keys: Record<string, unknown> =
+                            result.frontendState.keys;
+                        for (const [key, value] of Object.entries(keys)) {
                             window.localStorage.setItem(key, String(value));
                         }
                     } catch {

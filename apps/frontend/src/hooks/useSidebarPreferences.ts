@@ -1,3 +1,4 @@
+import { listGuard } from "@/lib/enumGuard";
 import { useCallback, useSyncExternalStore } from "react";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { NAV_SECTIONS, type NavSectionId } from "@/lib/navigation";
@@ -10,6 +11,7 @@ import { NAV_SECTIONS, type NavSectionId } from "@/lib/navigation";
  */
 
 type HiddenSections = Partial<Record<NavSectionId, boolean>>;
+const isNavSectionId = listGuard(NAV_SECTIONS.map((section) => section.id));
 
 const DEFAULT_HIDDEN: Readonly<HiddenSections> = Object.freeze(
     Object.fromEntries(
@@ -27,7 +29,8 @@ function readHidden(): HiddenSections {
         if (!parsed || typeof parsed !== "object") return { ...DEFAULT_HIDDEN };
         const out: HiddenSections = {};
         for (const [key, value] of Object.entries(parsed)) {
-            if (typeof value === "boolean") out[key as NavSectionId] = value;
+            if (typeof value === "boolean" && isNavSectionId(key))
+                out[key] = value;
         }
         return out;
     } catch {

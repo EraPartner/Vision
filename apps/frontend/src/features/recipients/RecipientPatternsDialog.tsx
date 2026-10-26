@@ -1,3 +1,4 @@
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -43,6 +44,11 @@ import { useRecipientPatterns } from "@/hooks/useRecipients";
 import type { RecipientId } from "@vision/types/brands";
 
 type PatternKind = "literal_prefix" | "glob" | "regex";
+const isPatternKind = enumGuard<PatternKind>({
+    literal_prefix: true,
+    glob: true,
+    regex: true,
+});
 
 interface PatternFormState {
     pattern: string;
@@ -453,13 +459,14 @@ export function RecipientPatternsDialog({
                                                 </Label>
                                                 <Select
                                                     value={form.pattern_kind}
-                                                    onValueChange={(v) =>
-                                                        setForm({
-                                                            ...form,
-                                                            pattern_kind:
-                                                                v as PatternKind,
-                                                        })
-                                                    }
+                                                    onValueChange={onGuarded(
+                                                        isPatternKind,
+                                                        (pattern_kind) =>
+                                                            setForm({
+                                                                ...form,
+                                                                pattern_kind,
+                                                            }),
+                                                    )}
                                                 >
                                                     <SelectTrigger id="pattern-kind">
                                                         <SelectValue />

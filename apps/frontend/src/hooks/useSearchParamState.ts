@@ -20,9 +20,10 @@ export function enumSearchParamCodec<const T extends string>(
     values: readonly T[],
     defaultValue: T,
 ): SearchParamCodec<T> {
-    const allowed = new Set<string>(values);
     return {
-        parse: (raw) => (raw && allowed.has(raw) ? (raw as T) : defaultValue),
+        parse: (raw) =>
+            (raw ? values.find((value) => value === raw) : undefined) ??
+            defaultValue,
         format: (value) => (value === defaultValue ? null : value),
     };
 }
@@ -45,7 +46,8 @@ export function useSearchParamState<T>(
                     const previousValue = codec.parse(previousParams.get(key));
                     const resolved =
                         typeof nextValue === "function"
-                            ? (nextValue as (previous: T) => T)(previousValue)
+                            ? // `T` may itself be a function type, so `typeof` cannot narrow the updater.
+                              (nextValue as (previous: T) => T)(previousValue)
                             : nextValue;
                     const serialized = codec.format(resolved);
                     if (serialized === null) nextParams.delete(key);

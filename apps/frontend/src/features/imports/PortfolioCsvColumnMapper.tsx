@@ -7,6 +7,7 @@
  * as the transaction import card), not here.
  */
 
+import { listGuard, onGuarded } from "@/lib/enumGuard";
 import { useMemo } from "react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCsvPreview } from "@/hooks/useCsvPreview";
@@ -32,7 +33,6 @@ import {
 import { ASSET_CLASSES } from "@/utils/assetClass";
 import type { PortfolioCustomConfig } from "@/lib/api/portfolioImports";
 import type { AssetClass } from "@vision/types/assetClasses";
-import type { PortfolioTxnType } from "@vision/types/portfolioTxnTypes";
 import type { PortfolioTxnType as UiPortfolioTxnType } from "@/types/portfolio";
 
 const ADDITIONAL_COLUMNS = new Set([
@@ -43,6 +43,7 @@ const ADDITIONAL_COLUMNS = new Set([
 ]);
 
 const ASSET_CLASS_OPTIONS: readonly AssetClass[] = ASSET_CLASSES;
+const isAssetClassOption = listGuard(ASSET_CLASS_OPTIONS);
 
 // The types with existing UI labels (portfolio.txnType.*). Corporate actions
 // (split/merger/...) are still importable when the CSV value is canonical, but
@@ -58,6 +59,7 @@ const TXN_TYPE_OPTIONS: UiPortfolioTxnType[] = [
     "rent_income",
     "appreciation",
 ];
+const isTxnTypeOption = listGuard(TXN_TYPE_OPTIONS);
 
 interface Props {
     file: File | null;
@@ -153,9 +155,10 @@ export function PortfolioCsvColumnMapper({
                     </Label>
                     <Select
                         value={config.defaultAssetClass}
-                        onValueChange={(v) =>
-                            set("defaultAssetClass")(v as AssetClass)
-                        }
+                        onValueChange={onGuarded(
+                            isAssetClassOption,
+                            set("defaultAssetClass"),
+                        )}
                     >
                         <SelectTrigger id="pf-asset-class">
                             <SelectValue />
@@ -175,9 +178,10 @@ export function PortfolioCsvColumnMapper({
                     </Label>
                     <Select
                         value={config.defaultType}
-                        onValueChange={(v) =>
-                            set("defaultType")(v as PortfolioTxnType)
-                        }
+                        onValueChange={onGuarded(
+                            isTxnTypeOption,
+                            set("defaultType"),
+                        )}
                     >
                         <SelectTrigger id="pf-default-type">
                             <SelectValue />

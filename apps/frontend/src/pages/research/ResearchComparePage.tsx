@@ -1,3 +1,4 @@
+import { axisDate } from "@/components/charts/axisValue";
 import {
     computeStats,
     dailyReturnsByTime,
@@ -222,15 +223,12 @@ export default function ResearchComparePage() {
     const selectedRange =
         RANGES.find((option) => option.range === searchParams.get("range")) ??
         COMPARE_DEFAULT_RANGE;
-    const metricKeys = useMemo(
-        () => new Set(FUNDAMENTALS_METRICS.map((metric) => metric.key)),
-        [],
-    );
     const rawSortMetric = searchParams.get("sort");
-    const sortMetric =
-        rawSortMetric && metricKeys.has(rawSortMetric as FundamentalsMetricKey)
-            ? (rawSortMetric as FundamentalsMetricKey)
-            : null;
+    const sortMetric: FundamentalsMetricKey | null =
+        (rawSortMetric
+            ? FUNDAMENTALS_METRICS.find((metric) => metric.key === rawSortMetric)
+            : undefined
+        )?.key ?? null;
     const {
         searchText,
         setSearchText,
@@ -335,7 +333,7 @@ export default function ResearchComparePage() {
             (s, i) => ({
                 key: s.symbol,
                 label: s.symbol,
-                accessor: (d) => d[s.symbol] as number | null,
+                accessor: (d) => d[s.symbol] ?? null,
                 color: getChartColor(i),
                 connectNulls: true,
                 strokeWidth: 2,
@@ -577,7 +575,7 @@ export default function ResearchComparePage() {
                                         ]}
                                         xTickFormat={(v) =>
                                             formatDateWithAppSettings(
-                                                v as Date,
+                                                axisDate(v),
                                                 appSettings.dateFormat,
                                             )
                                         }

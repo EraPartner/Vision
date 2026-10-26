@@ -1,3 +1,4 @@
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { useState } from "react";
 import { parseDecimal } from "@/lib/decimal";
 import {
@@ -62,6 +63,21 @@ type LoanType = NonNullable<PlannedPayment["loan_type"]>;
  * the sign; the two are recombined in handleSubmit.
  */
 type Direction = "expense" | "income";
+const isDirection = enumGuard<Direction>({ expense: true, income: true });
+const isLoanType = enumGuard<LoanType>({
+    amortizing: true,
+    fixed_principal: true,
+    interest_only: true,
+});
+const isFrequency = enumGuard<Frequency>({
+    daily: true,
+    weekly: true,
+    biweekly: true,
+    monthly: true,
+    quarterly: true,
+    yearly: true,
+    custom: true,
+});
 
 /** Visual order — decides which field gets focus on a blocked submit. */
 const FIELD_ORDER = [
@@ -499,9 +515,7 @@ export default function PlannedPaymentForm({
                                 label={t("plannedForm.direction")}
                                 wrapperClassName="space-y-1.5"
                                 value={effectiveDirection}
-                                onValueChange={(v) =>
-                                    setDirection(v as Direction)
-                                }
+                                onValueChange={onGuarded(isDirection, setDirection)}
                                 disabled={isLoan}
                                 className="w-full"
                             >
@@ -655,9 +669,7 @@ export default function PlannedPaymentForm({
                                     </Label>
                                     <Select
                                         value={loanType}
-                                        onValueChange={(v) =>
-                                            setLoanType(v as LoanType)
-                                        }
+                                        onValueChange={onGuarded(isLoanType, setLoanType)}
                                     >
                                         <SelectTrigger id="pp-loan-type">
                                             <SelectValue />
@@ -820,9 +832,7 @@ export default function PlannedPaymentForm({
                                     </Label>
                                     <Select
                                         value={frequency}
-                                        onValueChange={(v) =>
-                                            setFrequency(v as Frequency)
-                                        }
+                                        onValueChange={onGuarded(isFrequency, setFrequency)}
                                     >
                                         <SelectTrigger id="pp-frequency">
                                             <SelectValue />

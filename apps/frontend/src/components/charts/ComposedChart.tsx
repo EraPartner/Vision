@@ -4,6 +4,7 @@
  * candlestick. Backs the Research chart builder (ADR-081). Reuses the shared
  * axis/tooltip/palette infrastructure so it matches the other chart primitives.
  */
+import { axisDateOrNumber, axisNumber } from "./axisValue";
 import { curveMonotoneX } from "@visx/curve";
 import { Group } from "@visx/group";
 import { scaleLinear, scaleLog } from "@visx/scale";
@@ -25,6 +26,9 @@ import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { useChartKeyboardNav } from "./keyboardNav";
 import { summarizeSeriesChart } from "./chartAria";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+
+const isFiniteNumber = (value: number | null | undefined): value is number =>
+    value != null && Number.isFinite(value);
 
 export type ComposedSeriesType = "line" | "area" | "bar" | "candlestick";
 
@@ -176,18 +180,19 @@ function ComposedSeriesLayerInner<Datum>({
                             const l = s.low?.(d);
                             const c = s.close?.(d);
                             if (
-                                [o, h, l, c].some(
-                                    (v) => v == null || !Number.isFinite(v),
-                                )
+                                !isFiniteNumber(o) ||
+                                !isFiniteNumber(h) ||
+                                !isFiniteNumber(l) ||
+                                !isFiniteNumber(c)
                             )
                                 return null;
-                            const up = (c as number) >= (o as number);
+                            const up = c >= o;
                             const color = up ? UP : DOWN;
                             const x = cx(d);
-                            const yHigh = yS(h as number);
-                            const yLow = yS(l as number);
-                            const yOpen = yS(o as number);
-                            const yClose = yS(c as number);
+                            const yHigh = yS(h);
+                            const yLow = yS(l);
+                            const yOpen = yS(o);
+                            const yClose = yS(c);
                             const bodyTop = Math.min(yOpen, yClose);
                             const bodyH = Math.max(1, Math.abs(yClose - yOpen));
                             const bw = Math.max(1, barWidth);
@@ -304,8 +309,8 @@ function Inner<Datum>({
             }
             // values is finite-filtered above, so d3 min/max match Math.min/max(...)
             // exactly while avoiding the spread stack-size hazard on large series.
-            const lo = values.length > 0 ? (min(values) as number) : 0;
-            const hi = values.length > 0 ? (max(values) as number) : 1;
+            const lo = values.length > 0 ? (min(values) ?? 0) : 0;
+            const hi = values.length > 0 ? (max(values) ?? 1) : 1;
             if (axis === "left" && logLeft && lo > 0) {
                 return scaleLog({
                     range: [innerHeight, 0],
@@ -454,7 +459,7 @@ function Inner<Datum>({
                         numTicks={Math.max(2, Math.floor(innerWidth / 90))}
                         tickFormat={
                             xTickFormat
-                                ? (v) => xTickFormat(v as Date | number)
+                                ? (v) => xTickFormat(axisDateOrNumber(v))
                                 : undefined
                         }
                     />
@@ -463,7 +468,7 @@ function Inner<Datum>({
                         numTicks={5}
                         tickFormat={
                             leftTickFormat
-                                ? (v) => leftTickFormat(v as number)
+                                ? (v) => leftTickFormat(axisNumber(v))
                                 : undefined
                         }
                     />
@@ -474,7 +479,7 @@ function Inner<Datum>({
                             numTicks={5}
                             tickFormat={
                                 rightTickFormat
-                                    ? (v) => rightTickFormat(v as number)
+                                    ? (v) => rightTickFormat(axisNumber(v))
                                     : undefined
                             }
                         />
@@ -502,12 +507,15 @@ function Inner<Datum>({
                         : hoverDatum != null
                           ? // App date format, not the browser locale, for the fallback title
                             String(
-                                xAccessor(hoverDatum) instanceof Date
-                                    ? formatDateWithAppSettings(
-                                          xAccessor(hoverDatum) as Date,
-                                          appSettings.dateFormat,
-                                      )
-                                    : xAccessor(hoverDatum),
+                                (() => {
+                                    const x = xAccessor(hoverDatum);
+                                    return x instanceof Date
+                                        ? formatDateWithAppSettings(
+                                              x,
+                                              appSettings.dateFormat,
+                                          )
+                                        : x;
+                                })(),
                             )
                           : undefined
                 }

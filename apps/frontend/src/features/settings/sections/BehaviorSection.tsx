@@ -8,7 +8,7 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { portfolioKeys } from "@/lib/queryKeys";
 import { apiClient } from "@/lib/api";
-import type { CostBasisMethod, StartupSection } from "@/stores/settingsStore";
+import type { CostBasisMethod } from "@/stores/settingsStore";
 import {
     SettingsSection,
     SettingsGroup,
@@ -65,8 +65,8 @@ export const BehaviorSection = memo(function BehaviorSection() {
         });
     };
 
-    const handleCostBasisMethodChange = async (v: string) => {
-        updateAppSettings({ costBasisMethod: v as CostBasisMethod });
+    const handleCostBasisMethodChange = async (v: CostBasisMethod) => {
+        updateAppSettings({ costBasisMethod: v });
         try {
             // Server-computed summaries (portfolioSummaryService) read the
             // top-level cost_basis_method setting, not the app_settings blob.
@@ -114,10 +114,8 @@ export const BehaviorSection = memo(function BehaviorSection() {
                     title={t("settings.general.startupSection")}
                     description={t("settings.general.startupSectionHint")}
                     value={appSettings.startupSection}
-                    onValueChange={(v) =>
-                        updateAppSettings({
-                            startupSection: v as StartupSection,
-                        })
+                    onValueChange={(startupSection) =>
+                        updateAppSettings({ startupSection })
                     }
                     options={[
                         { value: "budgeting", label: t("nav.home") },

@@ -11,6 +11,7 @@
  * Now there is exactly 1 round-trip at mount time.
  */
 
+import { isRecord } from "@/lib/isRecord";
 import {
     createContext,
     useContext,
@@ -55,18 +56,8 @@ export function SettingsPreloadProvider({ children }: { children: ReactNode }) {
                     const map: Record<string, unknown> = {};
                     if (Array.isArray(all)) {
                         for (const row of all) {
-                            if (
-                                row !== null &&
-                                typeof row === "object" &&
-                                "key" in row &&
-                                typeof (row as { key: unknown }).key ===
-                                    "string"
-                            ) {
-                                const typed = row as {
-                                    key: string;
-                                    value: unknown;
-                                };
-                                map[typed.key] = typed.value;
+                            if (isRecord(row) && typeof row.key === "string") {
+                                map[row.key] = row.value;
                             }
                         }
                     } else if (all && typeof all === "object") {

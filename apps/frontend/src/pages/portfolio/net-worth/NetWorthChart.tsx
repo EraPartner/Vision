@@ -1,3 +1,4 @@
+import { axisDate } from "@/components/charts/axisValue";
 import { useMemo, type ReactNode } from "react";
 import {
     AreaChart as VisxAreaChart,
@@ -124,7 +125,7 @@ export function NetWorthChart({
                 xAccessor={(d) => d.chartDate}
                 series={series}
                 xIsDate
-                xTickFormat={(v) => xTickFormat(v as Date)}
+                xTickFormat={(v) => xTickFormat(axisDate(v))}
                 yTickFormat={(v) => fmt(v)}
                 tooltipTitle={(d) => tooltipLabelFormatter(d.date)}
                 tooltipValueFormat={(v) => fmt(v)}

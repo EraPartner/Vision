@@ -30,7 +30,8 @@ export function RegionStep({ profile, updateProfile }: StepProps) {
                     aria-labelledby="tax-region-label"
                     value={profile.region}
                     onValueChange={(v) => {
-                        const r = v as BelgianRegion;
+                        const r = REGIONS.find((region) => region === v);
+                        if (r === undefined) return;
                         updateProfile({
                             region: r,
                             communalSurchargePercent:

@@ -1,3 +1,4 @@
+import { listGuard, onGuarded } from "@/lib/enumGuard";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { ApiErrorCode } from "@vision/types";
@@ -68,6 +69,7 @@ export interface AddTransactionSheetProps {
 }
 
 const KINDS: TransactionKind[] = ["expense", "income", "transfer"];
+const isTransactionKind = listGuard(KINDS);
 
 function yesterdayYmd(): string {
     const today = parseLocalDateFromYmd(todayYmd());
@@ -348,9 +350,7 @@ export function AddTransactionSheet({
                         <SegmentedControl
                             aria-label={t("addTxn.kind")}
                             value={form.kind}
-                            onValueChange={(value) =>
-                                setKind(value as TransactionKind)
-                            }
+                            onValueChange={onGuarded(isTransactionKind, setKind)}
                             className="w-full max-w-[320px] self-center"
                         >
                             {KINDS.map((kind) => (

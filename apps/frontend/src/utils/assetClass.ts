@@ -1,3 +1,4 @@
+import { listGuard } from '@/lib/enumGuard';
 import type { AssetClass } from '@/types/portfolio';
 import {
   ASSET_CLASSES,
@@ -12,12 +13,14 @@ import {
 
 export { ASSET_CLASSES, UNIT_BASED_ASSET_CLASSES, FIXED_INCOME_ASSET_CLASSES };
 
+export const isAssetClass = listGuard(ASSET_CLASSES);
+
 export function isUnitBased(assetClass: AssetClass): boolean {
-  return (UNIT_BASED_ASSET_CLASSES as readonly string[]).includes(assetClass);
+  return UNIT_BASED_ASSET_CLASSES.some((member) => member === assetClass);
 }
 
 export function isFixedIncome(assetClass: AssetClass): boolean {
-  return (FIXED_INCOME_ASSET_CLASSES as readonly string[]).includes(assetClass);
+  return FIXED_INCOME_ASSET_CLASSES.some((member) => member === assetClass);
 }
 
 export function isRealEstate(assetClass: AssetClass): boolean {

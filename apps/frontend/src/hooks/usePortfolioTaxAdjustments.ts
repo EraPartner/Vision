@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '@/lib/api';
 import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
@@ -20,13 +21,23 @@ function toAmount(value: unknown): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
+const amountSchema = z.unknown().transform(toAmount);
+/** A garbage entry reads as zeros, like `toAmount` on each missing field. */
+const adjustmentMapSchema = z.record(
+  z.string(),
+  z.object({ taxes: amountSchema, fees: amountSchema }).catch({ taxes: 0, fees: 0 }),
+);
+
 function keyFor(taxYear: number, investmentId: InvestmentId): string {
   return `${taxYear}:${investmentId}`;
 }
 
 export function usePortfolioTaxAdjustments() {
   const { value: preloadedValue, isLoading } = usePreloadedSetting(SETTINGS_KEY);
-  const preloaded = preloadedValue as PortfolioTaxAdjustmentMap | null;
+  const preloaded = useMemo(() => {
+    const parsed = adjustmentMapSchema.safeParse(preloadedValue);
+    return parsed.success ? parsed.data : null;
+  }, [preloadedValue]);
   const [adjustments, setAdjustments] = useState<PortfolioTaxAdjustmentMap>({});
 
   useEffect(() => {
@@ -89,18 +100,15 @@ export function usePortfolioTaxAdjustments() {
   const byYear = useMemo(() => {
     return (taxYear: number) => {
       const result: Record<number, AdjustmentEntry> = {};
-      // Persisted settings may hold garbage entries (see toAmount).
-      Object.entries(
-        adjustments as Record<string, Partial<AdjustmentEntry> | null | undefined>,
-      ).forEach(([k, value]) => {
+      Object.entries(adjustments).forEach(([k, value]) => {
         const [yearStr, investmentIdStr] = k.split(':');
         const year = Number(yearStr);
         if (year !== taxYear) return;
         const investmentId = Number(investmentIdStr);
         if (!Number.isFinite(investmentId)) return;
         result[investmentId] = {
-          taxes: toAmount(value?.taxes),
-          fees: toAmount(value?.fees),
+          taxes: toAmount(value.taxes),
+          fees: toAmount(value.fees),
         };
       });
       return result;

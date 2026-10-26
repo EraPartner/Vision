@@ -1,3 +1,5 @@
+import { axisDate } from "@/components/charts/axisValue";
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -114,6 +116,15 @@ import {
     useChartBuilderSeriesQueries,
     useMacroSearchQuery,
 } from "@/features/research/useResearchQueries";
+
+const isSeriesType = enumGuard<SeriesType>({
+    line: true,
+    area: true,
+    candlestick: true,
+    bar: true,
+});
+const isSeriesAxis = enumGuard<"left" | "right">({ left: true, right: true });
+const isOscillator = enumGuard<Oscillator>({ none: true, rsi: true, macd: true });
 
 const PROVIDERS = [
     "",
@@ -933,7 +944,7 @@ export default function ChartBuilderPage() {
                                 series={composed}
                                 xTickFormat={(v) =>
                                     formatDateWithAppSettings(
-                                        v as Date,
+                                        axisDate(v),
                                         appSettings.dateFormat,
                                     )
                                 }
@@ -1008,11 +1019,11 @@ export default function ChartBuilderPage() {
                                     ) : (
                                         <Select
                                             value={s.type}
-                                            onValueChange={(v) =>
-                                                updateSeries(s.id, {
-                                                    type: v as SeriesType,
-                                                })
-                                            }
+                                            onValueChange={onGuarded(
+                                                isSeriesType,
+                                                (type) =>
+                                                    updateSeries(s.id, { type }),
+                                            )}
                                         >
                                             <SelectTrigger
                                                 className="h-8 w-32"
@@ -1043,11 +1054,11 @@ export default function ChartBuilderPage() {
                                     )}
                                     <Select
                                         value={s.axis}
-                                        onValueChange={(v) =>
-                                            updateSeries(s.id, {
-                                                axis: v as "left" | "right",
-                                            })
-                                        }
+                                        onValueChange={onGuarded(
+                                            isSeriesAxis,
+                                            (axis) =>
+                                                updateSeries(s.id, { axis }),
+                                        )}
                                     >
                                         <SelectTrigger
                                             className="h-8 w-28"
@@ -1327,9 +1338,10 @@ export default function ChartBuilderPage() {
                             </CardTitle>
                             <Select
                                 value={oscillator}
-                                onValueChange={(v) =>
-                                    patch({ oscillator: v as Oscillator })
-                                }
+                                onValueChange={onGuarded(
+                                    isOscillator,
+                                    (oscillator) => patch({ oscillator }),
+                                )}
                             >
                                 <SelectTrigger
                                     className="h-8 w-32"
@@ -1368,7 +1380,7 @@ export default function ChartBuilderPage() {
                                     }
                                     xTickFormat={(v) =>
                                         formatDateWithAppSettings(
-                                            v as Date,
+                                            axisDate(v),
                                             appSettings.dateFormat,
                                         )
                                     }

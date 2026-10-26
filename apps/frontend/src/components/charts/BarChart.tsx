@@ -3,6 +3,7 @@
  * Supports vertical (default) and horizontal layouts, single or grouped series.
  * Per-datum color override via optional colorForIndex prop.
  */
+import { axisNumber } from "./axisValue";
 import { Group } from "@visx/group";
 import { summarizeSeriesChart } from "./chartAria";
 import { ParentSize } from "@visx/responsive";
@@ -345,7 +346,8 @@ function Inner<Datum>({
         const lo = values.length > 0 ? Math.min(0, ...values) : 0;
         const hi = values.length > 0 ? Math.max(0, ...values) : 1;
         const pad = hi !== lo ? (hi - lo) * 0.08 : 1;
-        return [lo, hi + pad] as const;
+        const domain: [number, number] = [lo, hi + pad];
+        return domain;
     }, [data, series, overlays, yDomain]);
 
     const categoryScale = useMemo(
@@ -372,7 +374,7 @@ function Inner<Datum>({
         () =>
             scaleLinear({
                 range: layout === "vertical" ? [innerHeight, 0] : [0, innerWidth],
-                domain: valueDomain as [number, number],
+                domain: [valueDomain[0], valueDomain[1]],
                 nice: true,
             }),
         [innerHeight, innerWidth, layout, valueDomain],
@@ -522,7 +524,7 @@ function Inner<Datum>({
                                 scale={valueScale}
                                 tickFormat={
                                     valueTickFormat
-                                        ? (v) => valueTickFormat(v as number)
+                                        ? (v) => valueTickFormat(axisNumber(v))
                                         : undefined
                                 }
                             />
@@ -534,7 +536,7 @@ function Inner<Datum>({
                                 top={innerHeight}
                                 tickFormat={
                                     valueTickFormat
-                                        ? (v) => valueTickFormat(v as number)
+                                        ? (v) => valueTickFormat(axisNumber(v))
                                         : undefined
                                 }
                             />

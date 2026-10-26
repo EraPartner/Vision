@@ -8,11 +8,12 @@
  * See docs/adr/026-unified-api-response-envelope.md for the envelope contract.
  */
 
+import { listGuard } from "@/lib/enumGuard";
+import { isRecord } from "@/lib/isRecord";
+import { isAbortError } from "@/lib/api/abortError";
 import {
     ApiErrorCode,
     type ApiErrorCodeValue,
-    type ApiFailure,
-    type ApiResponse,
 } from "@vision/types";
 import type { z } from "zod";
 
@@ -128,7 +129,7 @@ const STATUS_FALLBACK_CODE: Record<number, ApiErrorCodeValue> = {
     504: ApiErrorCode.GATEWAY_TIMEOUT,
 };
 
-const API_ERROR_CODES = new Set<ApiErrorCodeValue>(Object.values(ApiErrorCode));
+const isApiErrorCode = listGuard(Object.values(ApiErrorCode));
 
 /**
  * Parse a non-OK `Response` as a unified API failure envelope and return an
@@ -152,24 +153,29 @@ export async function parseEnvelopeError(
             ? ApiErrorCode.INTERNAL_SERVER_ERROR
             : ApiErrorCode.APP_ERROR);
 
-    const fail = raw as Partial<ApiFailure> | null;
-    const code = fail?.error?.code;
-    const message = fail?.error?.message;
+    // The body is untrusted: read each field before relying on it.
+    const fail = isRecord(raw) ? raw : null;
+    const error = fail && isRecord(fail.error) ? fail.error : null;
+    const code = error?.code;
+    const message = error?.message;
     if (
         fail?.ok === false &&
-        fail.error &&
-        typeof fail.error === "object" &&
+        error &&
         typeof code === "string" &&
         code.trim() &&
         typeof message === "string" &&
         message.trim()
     ) {
+        const requestId =
+            isRecord(fail.meta) && typeof fail.meta.requestId === "string"
+                ? fail.meta.requestId
+                : undefined;
         return new ApiClientError({
             status: response.status,
-            code: API_ERROR_CODES.has(code) ? code : fallbackCode,
+            code: isApiErrorCode(code) ? code : fallbackCode,
             message,
-            details: fail.error.details,
-            requestId: fail.meta?.requestId,
+            details: error.details,
+            requestId,
         });
     }
 
@@ -234,13 +240,26 @@ export function checkResponseContract<T>(
 }
 
 /**
+ * `checkResponseContract` for data that is still `unknown`: validates it and
+ * returns it typed as the schema's output. The cast is the point of the schema
+ * check above it (contract-guard pins each schema to its hand-written type).
+ */
+export function checkWireData<S extends z.ZodType>(
+    schema: S,
+    data: unknown,
+    label: string,
+): z.output<S> {
+    checkResponseContract(schema, data, label);
+    return data as z.output<S>;
+}
+
+/**
  * Extract `data` from a unified envelope body. Tolerates non-envelope
  * responses during migration — returns the body as-is when `ok` is absent.
  */
 export function unwrapEnvelope(body: unknown): unknown {
-    if (body && typeof body === "object" && "ok" in body) {
-        const envelope = body as ApiResponse<unknown>;
-        if (envelope.ok) return envelope.data;
+    if (isRecord(body) && "ok" in body) {
+        if (body.ok) return body.data;
     }
     return body;
 }
@@ -297,7 +316,7 @@ export async function rawFetch(
             signal: controller.signal,
         });
     } catch (err: unknown) {
-        if ((err as Error).name === "AbortError") {
+        if (isAbortError(err)) {
             if (abort.timedOut) throw new Error("Request timed out", { cause: err });
             throw err;
         }
@@ -440,10 +459,16 @@ export async function apiRequest<T>(
                     durationMs,
                     status: 204,
                 });
+                // 204: callers that expect no body type `T` as void/unknown.
+                // 204: callers that expect no body type `T` as void/unknown.
                 return undefined as unknown as T;
             }
 
             const body: unknown = await response.json();
+            // `T` is the caller's claim about the wire shape; `schema` (when given)
+            // checks it below (ADR-193).
+            // `T` is the caller's claim about the wire shape; `schema` (when given)
+            // checks it below (ADR-193).
             const result = unwrapEnvelope(body) as T;
             if (schema) {
                 checkResponseContract(schema, result, `${method} ${endpoint}`);
@@ -488,7 +513,7 @@ export async function apiRequest<T>(
                     error: String(err),
                 });
             }
-            lastError = err as Error;
+            lastError = err instanceof Error ? err : new Error(String(err));
             const nonRetryable =
                 init.signal?.aborted ||
                 (err instanceof Error && err.name === "AbortError") ||

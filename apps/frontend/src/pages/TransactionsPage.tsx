@@ -1,3 +1,4 @@
+import { isRecord } from "@/lib/isRecord";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useLocation, useSearchParams } from "react-router";
@@ -68,6 +69,10 @@ import type {
 } from "@vision/types/brands";
 import { DEFAULT_CURRENCY } from "@/utils/currency";
 
+/** Raw rows carry loosely typed fields; keep only a real string. */
+const stringOrUndefined = (value: unknown): string | undefined =>
+    typeof value === "string" ? value : undefined;
+
 /** Router state Home passes to land on one row (`navigate("/transactions", { state })`). */
 export interface TransactionsLocationState {
     selectTransactionId?: TransactionId;
@@ -125,8 +130,11 @@ export default function TransactionsPage() {
     // The selected row drives the inspector; it is derived from the list on
     // every render, so local patches and refetches flow into it.
     const [selectedId, setSelectedId] = useState<TransactionId | null>(() => {
-        const state = location.state as TransactionsLocationState | null;
-        return state?.selectTransactionId ?? null;
+        // Router state is untrusted: read the one field this page understands.
+        const state: unknown = location.state;
+        return isRecord(state) && typeof state.selectTransactionId === "number"
+            ? asTransactionId(state.selectTransactionId)
+            : null;
     });
     const [quickLookTransaction, setQuickLookTransaction] =
         useState<TableTransaction | null>(null);
@@ -434,7 +442,7 @@ export default function TransactionsPage() {
         (row: TableTransaction) => {
             const raw = allItems.find((item) => item.id === row.id);
             const transactionDate = (
-                (raw?.transaction_date as string | undefined) || row.date
+                stringOrUndefined(raw?.transaction_date) || row.date
             ).split("T")[0];
             const accountId = raw?.account_id ?? row.accountId;
             const recipientId =
@@ -678,20 +686,17 @@ export default function TransactionsPage() {
         () =>
             allItems.map((tx) => ({
                 id: tx.id,
-                date:
-                    (tx.transaction_date as string | undefined) ||
-                    tx.date ||
-                    "",
+                date: stringOrUndefined(tx.transaction_date) || tx.date || "",
                 memo: tx.memo || "",
                 category:
-                    (tx.category_name as string | undefined) ||
+                    stringOrUndefined(tx.category_name) ||
                     t("txPage.field.uncategorized"),
                 categoryId: tx.category_id ?? undefined,
                 recipient:
-                    (tx.recipient_name as string | undefined) ||
+                    stringOrUndefined(tx.recipient_name) ||
                     t("txPage.field.unknown"),
                 recipientId: tx.recipient_id ?? undefined,
-                bank: (tx.bank_account as string | undefined) || tx.bank || "",
+                bank: stringOrUndefined(tx.bank_account) || tx.bank || "",
                 bankLabel: tx.account_id != null
                     ? accountLabels.get(tx.account_id)
                     : undefined,

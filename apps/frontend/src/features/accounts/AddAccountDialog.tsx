@@ -1,3 +1,4 @@
+import { listGuard, onGuarded } from "@/lib/enumGuard";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -75,11 +76,15 @@ const ACCOUNT_TYPES: AccountType[] = [
     "liability",
 ];
 const OWNERS: AccountOwner[] = ["me", "partner", "joint"];
+const isAccountType = listGuard(ACCOUNT_TYPES);
+const isAccountOwner = listGuard(OWNERS);
 const LIQUIDITY: AccountLiquidityClass[] = [
     "liquid",
     "semi_liquid",
     "illiquid",
 ];
+
+const isLiquidityClass = listGuard(LIQUIDITY);
 
 // Flag fields that flagsForType pre-fills. Once the user edits one of these
 // directly, a later type change must not clobber their choice — ADR-089
@@ -94,6 +99,7 @@ const FLAG_KEYS = [
     "tax_wrapper",
 ] as const;
 type FlagKey = (typeof FLAG_KEYS)[number];
+const isFlagKey = listGuard(FLAG_KEYS);
 
 const EMPTY: AccountFormValues = {
     name: "",
@@ -272,8 +278,8 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
         key: K,
         value: AccountFormValues[K],
     ) => {
-        if ((FLAG_KEYS as readonly string[]).includes(key)) {
-            setTouchedFlags((prev) => new Set(prev).add(key as FlagKey));
+        if (isFlagKey(key)) {
+            setTouchedFlags((prev) => new Set(prev).add(key));
         }
         setForm((f) => ({ ...f, [key]: value }));
     };
@@ -300,6 +306,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
 
     const onTypeChange = (type: AccountType) => {
         const defaults = flagsForType(type);
+        // `Object.fromEntries` widens the keys to `string`; they are FLAG_KEYS.
         const untouched = Object.fromEntries(
             FLAG_KEYS.filter((k) => !touchedFlags.has(k)).map((k) => [
                 k,
@@ -504,9 +511,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                         </Label>
                         <Select
                             value={form.type}
-                            onValueChange={(v) =>
-                                onTypeChange(v as AccountType)
-                            }
+                            onValueChange={onGuarded(isAccountType, onTypeChange)}
                         >
                             <SelectTrigger id="acct-type">
                                 <SelectValue />
@@ -639,9 +644,10 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                                         </Label>
                                         <Select
                                             value={form.owner}
-                                            onValueChange={(v) =>
-                                                set("owner", v as AccountOwner)
-                                            }
+                                            onValueChange={onGuarded(
+                                                isAccountOwner,
+                                                (owner) => set("owner", owner),
+                                            )}
                                         >
                                             <SelectTrigger id="acct-owner">
                                                 <SelectValue />
@@ -669,12 +675,14 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                                         </Label>
                                         <Select
                                             value={form.liquidity_class}
-                                            onValueChange={(v) =>
-                                                set(
-                                                    "liquidity_class",
-                                                    v as AccountLiquidityClass,
-                                                )
-                                            }
+                                            onValueChange={onGuarded(
+                                                isLiquidityClass,
+                                                (liquidity) =>
+                                                    set(
+                                                        "liquidity_class",
+                                                        liquidity,
+                                                    ),
+                                            )}
                                         >
                                             <SelectTrigger id="acct-liquidity">
                                                 <SelectValue />

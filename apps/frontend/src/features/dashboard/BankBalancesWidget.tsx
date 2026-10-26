@@ -1,3 +1,4 @@
+import { axisDate } from "@/components/charts/axisValue";
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -465,7 +466,7 @@ export function BankBalancesWidget() {
                             // no more duplicated "MMM yy" labels between sparse points.
                             xTickFormat={(v) =>
                                 formatDate(
-                                    v as Date,
+                                    axisDate(v),
                                     CHART_DATE_PATTERNS.monthTick,
                                     monthLabelLocale,
                                 )

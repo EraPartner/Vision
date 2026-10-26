@@ -22,6 +22,7 @@
  * presentation-layer helper only.
  */
 
+import { isRecord } from "@/lib/isRecord";
 import { ApiErrorCode } from "@vision/types";
 
 import { ApiClientError, ApiContractError } from "@/lib/api/client";
@@ -113,16 +114,16 @@ export function isAuthoredMessage(message: unknown): boolean {
  * makes no promise about timing.
  */
 function readRetryAfter(details: unknown): number | null {
-    if (!details || typeof details !== "object") return null;
-    const raw = (details as Record<string, unknown>).retry_after;
+    if (!isRecord(details)) return null;
+    const raw = details.retry_after;
     const seconds = typeof raw === "number" ? raw : Number(raw);
     return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : null;
 }
 
 /** Read a string property off an unknown throwable without narrowing it first. */
 function readString(value: unknown, key: "name" | "message"): string {
-    if (!value || typeof value !== "object") return "";
-    const raw = (value as Record<string, unknown>)[key];
+    if (!isRecord(value)) return "";
+    const raw = value[key];
     return typeof raw === "string" ? raw.trim() : "";
 }
 

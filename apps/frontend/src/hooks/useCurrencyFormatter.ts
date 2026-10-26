@@ -51,7 +51,10 @@ export function useCurrencyFormatSettings(
             locale: numberFormatToLocale(appSettings.numberFormat),
             // Persisted setting: an older or hand-edited store can lack the key,
             // and the formatters must keep degrading to two digits.
-            decimals: (appSettings.showDecimalPlaces as number | undefined) ?? 2,
+            decimals:
+                typeof appSettings.showDecimalPlaces === "number"
+                    ? appSettings.showDecimalPlaces
+                    : 2,
         }),
         [
             appSettings.defaultCurrency,

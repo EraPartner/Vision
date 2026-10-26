@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { CategoryIdSchema } from "@vision/types/brands";
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -46,6 +48,14 @@ export const EMPTY_BROKERAGE_CASH_CATEGORY_IDS: BrokerageCashCategoryIds = {
 
 const BROKERAGE_CASH_CATEGORY_KEY = "brokerage_cash_category_ids";
 
+const categorySlot = CategoryIdSchema.nullable().catch(null);
+const brokerageCashCategoryIdsSchema = z.object({
+    dividend: categorySlot,
+    interest: categorySlot,
+    fee: categorySlot,
+    tax: categorySlot,
+});
+
 export function useBrokerageCashCategoryIds() {
     const queryClient = useQueryClient();
     const queryKey = settingKeys.byKey(BROKERAGE_CASH_CATEGORY_KEY);
@@ -55,9 +65,13 @@ export function useBrokerageCashCategoryIds() {
             const result = await apiClient.getSetting(
                 BROKERAGE_CASH_CATEGORY_KEY,
             );
-            const value =
-                result.value as Partial<BrokerageCashCategoryIds> | null;
-            return { ...EMPTY_BROKERAGE_CASH_CATEGORY_IDS, ...(value ?? {}) };
+            // The stored value is untrusted: a malformed slot reads as "unset".
+            const parsed = brokerageCashCategoryIdsSchema.safeParse(
+                result.value,
+            );
+            return parsed.success
+                ? parsed.data
+                : EMPTY_BROKERAGE_CASH_CATEGORY_IDS;
         },
         staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });

@@ -12,7 +12,8 @@
  * re-renders in theme consumers.
  */
 
-import { useCallback, useEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { z } from "zod";
 import { useShallow } from "@/stores/createStore";
 import { apiClient } from "@/lib/api";
 import { prefersReducedMotion } from "@/utils/prefersReducedMotion";
@@ -95,15 +96,27 @@ function resolveTheme(mode: ThemeMode, schedule: ThemeSchedule): Theme {
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 
+/** The persisted theme blob is untrusted; a malformed field reads as unset. */
+const storedThemeSchema = z.looseObject({
+    mode: z
+        .enum(["light", "dark", "system", "schedule"] as const satisfies readonly ThemeMode[])
+        .optional()
+        .catch(undefined),
+    schedule: z
+        .object({ lightFrom: z.string(), darkFrom: z.string() })
+        .optional()
+        .catch(undefined),
+    variant: z.custom<ThemeVariant>(isThemeVariant).optional().catch(undefined),
+    systemAccent: z.boolean().optional().catch(undefined),
+});
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
     const { value: preloadedValue, isLoading: preloadLoading } =
         usePreloadedSetting(SETTINGS_KEY);
-    const preloaded = preloadedValue as {
-        mode?: ThemeMode;
-        schedule?: ThemeSchedule;
-        variant?: ThemeVariant;
-        systemAccent?: boolean;
-    } | null;
+    const preloaded = useMemo(() => {
+        const parsed = storedThemeSchema.safeParse(preloadedValue);
+        return parsed.success ? parsed.data : null;
+    }, [preloadedValue]);
 
     const _hydrateTheme = useSettingsStore((s) => s._hydrateTheme);
     const _setResolvedTheme = useSettingsStore((s) => s._setResolvedTheme);

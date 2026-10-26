@@ -1,3 +1,4 @@
+import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useMemo, useState } from "react";
@@ -33,6 +34,15 @@ import { marketChangeHeatStyle } from "./marketHeat";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageShell } from "@/components/shared/PageShell";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
+
+const isRegion = enumGuard<Region>({
+    worldwide: true,
+    usa: true,
+    europe: true,
+    asia: true,
+    japan: true,
+    latam: true,
+});
 
 interface OverviewQuote {
     symbol: string;
@@ -188,7 +198,7 @@ export default function MarketOverviewPage() {
                 <SegmentedControl
                     size="sm"
                     value={region}
-                    onValueChange={(v) => setRegion(v as Region)}
+                    onValueChange={onGuarded(isRegion, setRegion)}
                     aria-label={t("research.markets.regions")}
                     className="max-w-full overflow-x-auto"
                 >

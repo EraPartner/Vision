@@ -1,3 +1,4 @@
+import { listGuard } from "@/lib/enumGuard";
 import { useEffect, useRef } from "react";
 import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -20,11 +21,7 @@ const THEME_MODES: ReadonlyArray<ThemeMode> = [
     "schedule",
 ];
 
-function isThemeMode(value: unknown): value is ThemeMode {
-    return (
-        typeof value === "string" && (THEME_MODES as string[]).includes(value)
-    );
-}
+const isThemeMode = listGuard(THEME_MODES);
 
 interface ElectronBridgeProps {
     onOpenSettings: (tab: string) => void;

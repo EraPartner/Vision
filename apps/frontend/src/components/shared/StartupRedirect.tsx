@@ -1,3 +1,4 @@
+import { listGuard } from "@/lib/enumGuard";
 import { useEffect, useRef } from "react";
 import { useLocation } from "react-router";
 import { useAppNavigate } from "@/hooks/useAppNavigate";
@@ -36,6 +37,7 @@ const STARTUP_SECTIONS: readonly StartupSection[] = [
     "ai-chat",
     "last",
 ];
+const isStartupSection = listGuard(STARTUP_SECTIONS);
 
 // Startup section mirrored from the server-persisted setting on a prior session.
 // Available synchronously at launch, so we can redirect before the settings API
@@ -44,9 +46,7 @@ const STARTUP_SECTIONS: readonly StartupSection[] = [
 function readMirroredSection(): StartupSection | undefined {
     try {
         const v = localStorage.getItem(LOCAL_STORAGE_KEYS.STARTUP_SECTION);
-        return v != null && (STARTUP_SECTIONS as readonly string[]).includes(v)
-            ? (v as StartupSection)
-            : undefined;
+        return isStartupSection(v) ? v : undefined;
     } catch {
         return undefined;
     }

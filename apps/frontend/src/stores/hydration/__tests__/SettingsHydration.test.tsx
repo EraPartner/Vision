@@ -350,6 +350,28 @@ describe("SettingsHydration — edge cases", () => {
         spy.mockRestore();
     });
 
+    it("sanitizes a malformed preloaded dashboard_settings field to its default", async () => {
+        const spy = vi.spyOn(apiClient, "getSettings").mockResolvedValueOnce({
+            dashboard_settings: {
+                excludedCategoryIds: [42],
+                exclusionScope: "not-a-scope",
+                excludeHiddenCategories: "yes",
+            },
+        });
+        const { result } = renderHook(() => useSettings(), {
+            wrapper: makeProviderWrapper(),
+        });
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        expect(result.current.settings.excludedCategoryIds).toEqual([42]);
+        expect(result.current.settings.exclusionScope).toBe(
+            DEFAULT_DASHBOARD_SETTINGS.exclusionScope,
+        );
+        expect(result.current.settings.excludeHiddenCategories).toBe(
+            DEFAULT_DASHBOARD_SETTINGS.excludeHiddenCategories,
+        );
+        spy.mockRestore();
+    });
+
     it("falls back to defaults when preload boot fetch fails (network error)", async () => {
         const spy = vi
             .spyOn(apiClient, "getSettings")

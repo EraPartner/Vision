@@ -25,7 +25,7 @@ export function useTabParam<T extends string>(
     const [searchParams, setSearchParams] = useSearchParams();
 
     const raw = searchParams.get(paramKey);
-    const active = (tabs as readonly string[]).includes(raw ?? "") ? (raw as T) : defaultTab;
+    const active = tabs.find((tab) => tab === raw) ?? defaultTab;
 
     const setActive = useCallback(
         (value: string) => {

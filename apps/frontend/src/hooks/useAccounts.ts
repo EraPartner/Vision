@@ -1,3 +1,4 @@
+import { errorStatus } from "@/lib/api/errorStatus";
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import {
     skipToken,
@@ -150,7 +151,7 @@ export function useDeleteAccount() {
         onError: (error: Error) => {
             // 409 = account still referenced → the caller routes to the close
             // flow (lifecycle D5); no dead-end error toast for that case.
-            if ((error as { status?: number }).status === 409) return;
+            if (errorStatus(error) === 409) return;
             toast.error(t("accounts.deleteFailedTitle"), {
                 description: apiErrorToMessage(error, t),
             });

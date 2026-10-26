@@ -1,3 +1,4 @@
+import { isAbortError } from './abortError';
 /**
  * A real cancellation signal for import streams.
  *
@@ -26,6 +27,5 @@ export function isImportCancelled(err: unknown): boolean {
     if (err instanceof ImportCancelledError) return true;
     // A DOMException from an aborted fetch does not extend Error, so check the
     // name structurally rather than relying on instanceof.
-    return Boolean(err) && typeof err === 'object'
-        && (err as { name?: unknown }).name === 'AbortError';
+    return isAbortError(err);
 }

@@ -17,6 +17,7 @@ import { usePreloadedSetting } from "@/contexts/SettingsPreloadContext";
 import {
     useSettingsStore,
     DEFAULT_DASHBOARD_SETTINGS,
+    migrateDashboardSettings,
 } from "@/stores/settingsStore";
 import type { ExclusionScope, DashboardSettings } from "@/stores/settingsStore";
 
@@ -37,7 +38,7 @@ const SETTINGS_KEY = "dashboard_settings";
 export function SettingsProvider({ children }: { children: ReactNode }) {
     const { value: preloadedValue, isLoading: preloadLoading } =
         usePreloadedSetting(SETTINGS_KEY);
-    const preloaded = preloadedValue as DashboardSettings | null;
+    const preloaded = preloadedValue;
 
     const _hydrateDashboardSettings = useSettingsStore(
         (s) => s._hydrateDashboardSettings,
@@ -60,7 +61,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
         if (preloaded) {
             _hydrateDashboardSettings(
-                { ...DEFAULT_DASHBOARD_SETTINGS, ...preloaded },
+                migrateDashboardSettings(preloaded),
                 false,
             );
         } else {

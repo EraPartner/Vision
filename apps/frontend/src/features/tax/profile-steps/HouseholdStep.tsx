@@ -1,3 +1,4 @@
+import { listGuard, onGuarded } from "@/lib/enumGuard";
 import { Plus, Trash2, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,8 @@ function dateValue(iso: string): Date | undefined {
     return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
+const isRelationshipEventKind = listGuard(RELATIONSHIP_EVENT_KINDS);
+
 interface PartnerSelectProps {
     id: string;
     value: PartnerId;
@@ -61,7 +64,10 @@ function PartnerSelect({
     return (
         <Select
             value={value}
-            onValueChange={(next) => onValueChange(next as PartnerId)}
+            onValueChange={(next) => {
+                const partner = partners.find((candidate) => candidate === next);
+                if (partner !== undefined) onValueChange(partner);
+            }}
             {...(disabled ? { disabled: true } : {})}
         >
             <SelectTrigger
@@ -113,9 +119,10 @@ function EventRow({
                         </Label>
                         <Select
                             value={event.kind}
-                            onValueChange={(kind) =>
-                                onChange({ kind: kind as RelationshipEventKind })
-                            }
+                            onValueChange={onGuarded(
+                                isRelationshipEventKind,
+                                (kind) => onChange({ kind }),
+                            )}
                         >
                             <SelectTrigger id={`${event.id}-kind`} className="w-full">
                                 <SelectValue />

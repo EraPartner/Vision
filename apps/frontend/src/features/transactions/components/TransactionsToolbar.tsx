@@ -27,7 +27,16 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { AccountFilterCombobox } from "./AccountFilterCombobox";
 import type { DatePreset } from "../transactionColumns";
+import { listGuard } from "@/lib/enumGuard";
 import type { AccountId, CategoryId } from "@vision/types/brands";
+
+const DATE_PRESETS: readonly DatePreset[] = [
+    "any",
+    "thisMonth",
+    "lastMonth",
+    "thisYear",
+];
+const isDatePreset = listGuard(DATE_PRESETS);
 
 /** Chip-shaped toolbar button; `active` marks a filter that narrows the list. */
 export function FilterChip({
@@ -212,11 +221,11 @@ export function TransactionsToolbar({
                     <DropdownMenuRadioGroup
                         value={datePreset ?? "custom"}
                         onValueChange={(value) => {
-                            if (value !== "custom")
-                                onDatePresetChange(value as DatePreset);
+                            if (isDatePreset(value))
+                                onDatePresetChange(value);
                         }}
                     >
-                        {(["any", "thisMonth", "lastMonth", "thisYear"] as const).map(
+                        {DATE_PRESETS.map(
                             (preset) => (
                                 <DropdownMenuRadioItem key={preset} value={preset}>
                                     {t(`txPage.filter.date.${preset}`)}

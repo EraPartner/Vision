@@ -1,3 +1,4 @@
+import { listGuard, onGuarded } from "@/lib/enumGuard";
 import type { ReactNode } from "react";
 import {
     Select,
@@ -10,6 +11,7 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { BelgianRegion } from "@/lib/belgianTax";
 
 const REGIONS: BelgianRegion[] = ["flanders", "wallonia", "brussels"];
+const isRegion = listGuard(REGIONS);
 
 interface BelgianRegionSelectProps {
     id: string;
@@ -28,7 +30,7 @@ export function BelgianRegionSelect({
     return (
         <Select
             value={value}
-            onValueChange={(next) => onValueChange(next as BelgianRegion)}
+            onValueChange={onGuarded(isRegion, onValueChange)}
         >
             <SelectTrigger id={id} className={className}>
                 <SelectValue />

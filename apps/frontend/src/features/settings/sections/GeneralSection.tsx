@@ -1,3 +1,4 @@
+import { selectRow } from "../selectRow";
 import { memo } from "react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -86,27 +87,25 @@ export const GeneralSection = memo(function GeneralSection() {
     ];
 
     const localeRows: SelectRowConfig[] = [
-        {
+        selectRow({
             title: t("settings.general.language"),
             description: t("settings.general.languageHint"),
             value: appSettings.language,
-            onValueChange: (v) =>
-                updateAppSettings({ language: v as "en" | "nl" }),
+            onValueChange: (language) => updateAppSettings({ language }),
             options: [
                 { value: "en", label: t("settings.general.lang.en") },
                 { value: "nl", label: t("settings.general.lang.nl") },
             ],
-        },
-        {
+        }),
+        selectRow({
             title: t("settings.general.startOfWeek"),
             value: appSettings.startOfWeek,
-            onValueChange: (v) =>
-                updateAppSettings({ startOfWeek: v as "monday" | "sunday" }),
+            onValueChange: (startOfWeek) => updateAppSettings({ startOfWeek }),
             options: [
                 { value: "monday", label: t("settings.general.monday") },
                 { value: "sunday", label: t("settings.general.sunday") },
             ],
-        },
+        }),
         {
             title: t("settings.general.pageSize"),
             description: t("settings.general.pageSizeHint"),

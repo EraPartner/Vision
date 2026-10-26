@@ -2,6 +2,7 @@
  * Cross-workspace API (ADR-098) — cash-aware rebalancing composing Budgeting
  * + Portfolio data. (The unified-tax surface was removed in ADR-102.)
  */
+import { z } from "zod";
 import {
     CommitmentAwareCashResponseSchema,
     RebalanceResponseSchema,
@@ -23,8 +24,16 @@ export interface RebalancePlan {
     id: string;
     name: string;
     targetWeights: Record<string, number>;
-    cashCap?: number;
+    cashCap?: number | undefined;
 }
+
+/** Guard for the persisted `rebalance_plans` rows (user-editable JSON). */
+export const RebalancePlanSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    targetWeights: z.record(z.string(), z.number()),
+    cashCap: z.number().optional(),
+});
 
 export interface RebalanceRequest {
     /** Display/computation currency. Defaults to EUR server-side. */

@@ -548,18 +548,21 @@ export function AnalysisWorkbenchPanel(props: Props) {
             </div>
         );
     };
-    const segmented = (
+    const segmented = <T extends string>(
         label: WorkbenchKey,
-        value: string,
-        onChange: (value: string) => void,
-        options: string[],
+        value: T,
+        onChange: (value: T) => void,
+        options: readonly T[],
     ) => {
         return (
             <SegmentedControl
                 label={<span className="type-callout">{tr(label)}</span>}
                 wrapperClassName="min-w-0 space-y-1"
                 value={value}
-                onValueChange={onChange}
+                onValueChange={(next) => {
+                    const picked = options.find((option) => option === next);
+                    if (picked !== undefined) onChange(picked);
+                }}
                 className="w-full"
             >
                 {options.map((v) => (
@@ -1252,8 +1255,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                         ...props.config,
                                         time: {
                                             ...time,
-                                            aggregation: v as
-                                                "sum" | "last" | "average",
+                                            aggregation: v,
                                         },
                                     }),
                                 ["sum", "last", "average"],

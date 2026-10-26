@@ -6,6 +6,7 @@
  * planned toggle, per-method legend toggles, and a diagnostics button.
  */
 
+import { enumGuard, listGuard, onGuarded } from "@/lib/enumGuard";
 import { useState, useCallback } from "react";
 import { useSearchParams } from "react-router";
 import { AlertCircle, FlaskConical } from "lucide-react";
@@ -49,6 +50,10 @@ import type {
 type ForecastMode = "month" | "rolling";
 type RollingDays = 30 | 60 | 90 | 180;
 const ROLLING_PRESETS: ReadonlyArray<RollingDays> = [30, 60, 90, 180];
+const isRollingDays = listGuard(ROLLING_PRESETS);
+const isForecastMode = enumGuard<ForecastMode>({ month: true, rolling: true });
+type ForecastView = "cumulative" | "daily";
+const isForecastView = enumGuard<ForecastView>({ cumulative: true, daily: true });
 
 const BORDER_COLOR = "hsl(var(--border))";
 const EMPTY_CATEGORY_IDS: CategoryId[] = [];
@@ -88,9 +93,7 @@ export function CashFlowForecastChart({
         searchParams.get("forecastMode") === "rolling" ? "rolling" : "month";
     const rollingDays: RollingDays = (() => {
         const v = Number(searchParams.get("rollingDays"));
-        return (ROLLING_PRESETS as readonly number[]).includes(v)
-            ? (v as RollingDays)
-            : 90;
+        return isRollingDays(v) ? v : 90;
     })();
 
     function setMode(newMode: ForecastMode) {
@@ -114,7 +117,7 @@ export function CashFlowForecastChart({
         );
     }
 
-    const [view, setView] = useState<"cumulative" | "daily">("cumulative");
+    const [view, setView] = useState<ForecastView>("cumulative");
     const [includePlanned, setIncludePlanned] = useState(false);
     const [showDiagnostics, setShowDiagnostics] = useState(false);
 
@@ -183,7 +186,7 @@ export function CashFlowForecastChart({
         <SegmentedControl
             size="sm"
             value={mode}
-            onValueChange={(v) => setMode(v as ForecastMode)}
+            onValueChange={onGuarded(isForecastMode, setMode)}
             aria-label={t("cashflow.forecastTitle")}
             className="mb-3"
         >
@@ -207,7 +210,12 @@ export function CashFlowForecastChart({
             <SegmentedControl
                 size="sm"
                 value={String(rollingDays)}
-                onValueChange={(v) => setRollingDays(Number(v) as RollingDays)}
+                onValueChange={(v) => {
+                    const days = ROLLING_PRESETS.find(
+                        (preset) => String(preset) === v,
+                    );
+                    if (days !== undefined) setRollingDays(days);
+                }}
                 aria-labelledby="cashflow-rolling-window-label"
             >
                 {ROLLING_PRESETS.map((days) => (
@@ -224,7 +232,7 @@ export function CashFlowForecastChart({
             <SegmentedControl
                 size="sm"
                 value={view}
-                onValueChange={(v) => setView(v as "cumulative" | "daily")}
+                onValueChange={onGuarded(isForecastView, setView)}
                 aria-label={t("cashflow.cumulative")}
             >
                 <SegmentedControlItem value="cumulative">

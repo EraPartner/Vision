@@ -146,7 +146,7 @@ export const AppearanceSection = memo(function AppearanceSection() {
                     title={t('settings.appearance.mode')}
                     description={t('settings.appearance.modeHint')}
                     value={mode}
-                    onValueChange={(v) => setMode(v as typeof mode)}
+                    onValueChange={setMode}
                     options={[
                         { value: 'light', label: t('settings.appearance.modes.light') },
                         { value: 'dark', label: t('settings.appearance.modes.dark') },
@@ -197,7 +197,7 @@ export const AppearanceSection = memo(function AppearanceSection() {
                     title={t('settings.appearance.visualEffects')}
                     description={t('settings.appearance.visualEffectsHint')}
                     value={tierInUse}
-                    onValueChange={(v) => handleTierChange(v as VisualEffectsTier)}
+                    onValueChange={handleTierChange}
                     options={[
                         { value: 'reduced', label: t('settings.appearance.visualEffects.reduced') },
                         { value: 'standard', label: t('settings.appearance.visualEffects.standard') },

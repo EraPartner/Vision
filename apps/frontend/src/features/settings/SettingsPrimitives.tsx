@@ -119,12 +119,13 @@ interface SettingRowProps {
     className?: string;
 }
 
-export interface SelectRowConfig {
+export interface SelectRowConfig<T extends string = string> {
     title: string;
     description?: string;
-    value: string;
-    onValueChange: (v: string) => void;
-    options: { value: string; label: ReactNode }[];
+    value: T;
+    /** Called with one of `options`' values; anything else is ignored. */
+    onValueChange: (v: T) => void;
+    options: { value: T; label: ReactNode }[];
     /** aria-label for the select trigger when the row label alone is ambiguous. */
     triggerAriaLabel?: string;
     /** Optional extra content rendered below the select (e.g. hint notes). */
@@ -136,7 +137,7 @@ export interface SelectRowConfig {
  * are identical apart from their title/value/options/change handler, so they
  * are expressed as config.
  */
-export function SelectSettingRow({
+export function SelectSettingRow<T extends string = string>({
     title,
     description,
     value,
@@ -144,7 +145,7 @@ export function SelectSettingRow({
     options,
     triggerAriaLabel,
     children,
-}: SelectRowConfig) {
+}: SelectRowConfig<T>) {
     // Give the Radix SelectTrigger (role=combobox) an accessible name by pointing
     // it at the row's title <Label> — comboboxes otherwise announce only their value.
     const labelId = useId();
@@ -158,7 +159,14 @@ export function SelectSettingRow({
             // need the full row width. Only simple choices use compact rows.
             layout={hasChildren ? "stack" : "responsive"}
         >
-            <Select value={value} onValueChange={onValueChange}>
+            <Select
+                value={value}
+                onValueChange={(next) => {
+                    // Radix reports a string; map it back onto the option it came from.
+                    const picked = options.find((o) => o.value === next);
+                    if (picked) onValueChange(picked.value);
+                }}
+            >
                 <SelectTrigger
                     aria-labelledby={labelId}
                     aria-label={triggerAriaLabel}

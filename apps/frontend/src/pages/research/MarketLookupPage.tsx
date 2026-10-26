@@ -1,3 +1,4 @@
+import { axisDate } from "@/components/charts/axisValue";
 import { providerQuotePresentation } from "@vision/shared-utils/research/presentation";
 import { useState, useCallback, useMemo } from "react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -565,7 +566,7 @@ export default function MarketLookupPage() {
                                         height={320}
                                         xTickFormat={(v) =>
                                             formatMarketChartTick(
-                                                (v as Date).getTime(),
+                                                axisDate(v).getTime(),
                                                 selectedRange.range,
                                                 language,
                                             )

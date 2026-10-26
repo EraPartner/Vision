@@ -1,3 +1,4 @@
+import { isAbortError } from "@/lib/api/abortError";
 import { z } from "zod";
 import { AI_CHAT_STREAM_EVENT } from "@vision/types/aiChat";
 import {
@@ -300,14 +301,15 @@ export function streamChat(
             }
 
             if (terminalError) {
-                const te = terminalError as { detail: string; code?: string };
-                throw Object.assign(new Error(te.detail), { code: te.code });
+                throw Object.assign(new Error(terminalError.detail), {
+                    code: terminalError.code,
+                });
             }
             if (!terminal)
                 throw new Error("Stream ended without terminal event");
             return terminal;
         } catch (err) {
-            if ((err as Error).name === "AbortError") {
+            if (isAbortError(err)) {
                 if (abort.timedOut)
                     throw new Error("Chat stream timed out", { cause: err });
                 throw new Error("Chat cancelled", { cause: err });

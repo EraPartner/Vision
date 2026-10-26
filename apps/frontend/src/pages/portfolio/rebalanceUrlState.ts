@@ -83,9 +83,7 @@ export function parseRebalanceUrl(params: URLSearchParams): RebalanceUrlDraft {
             const pct = raw.slice(separator + 1).slice(0, 32);
             if (
                 sleeve !== "" &&
-                !REBALANCE_SLEEVES.includes(
-                    sleeve as (typeof REBALANCE_SLEEVES)[number],
-                )
+                !REBALANCE_SLEEVES.some((member) => member === sleeve)
             ) {
                 return undefined;
             }
