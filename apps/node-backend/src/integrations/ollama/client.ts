@@ -52,12 +52,12 @@ const modelEntrySchema = z.looseObject({
     .optional()
     .catch(undefined),
 });
-export type OllamaModelEntry = z.output<typeof modelEntrySchema>;
+type OllamaModelEntry = z.output<typeof modelEntrySchema>;
 
 const modelListResponseSchema = z.looseObject({
   models: looseArray(modelEntrySchema).optional(),
 });
-export type OllamaModelListResponse = z.output<typeof modelListResponseSchema>;
+type OllamaModelListResponse = z.output<typeof modelListResponseSchema>;
 
 /** One installed model as reported by listModels(). */
 export interface OllamaModelSummary {
@@ -73,7 +73,7 @@ const embedResponseSchema = z.looseObject({
   model: optString,
   embeddings: z.array(z.array(z.number())).optional().catch(undefined),
 });
-export type OllamaEmbedResponse = z.output<typeof embedResponseSchema>;
+type OllamaEmbedResponse = z.output<typeof embedResponseSchema>;
 
 const showResponseSchema = z.looseObject({
   model_info: z.record(z.string(), z.unknown()).optional().catch(undefined),
@@ -112,7 +112,7 @@ const chatResponseSchema = z.looseObject({
   eval_duration: optNumber,
   error: optString,
 });
-export type OllamaChatResponse = z.output<typeof chatResponseSchema>;
+type OllamaChatResponse = z.output<typeof chatResponseSchema>;
 
 export interface OllamaClientOptions {
   baseUrl?: string;

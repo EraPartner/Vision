@@ -19,10 +19,7 @@ import {
     DEFAULT_DASHBOARD_SETTINGS,
     migrateDashboardSettings,
 } from "@/stores/settingsStore";
-import type { ExclusionScope, DashboardSettings } from "@/stores/settingsStore";
-
-// Re-export the dashboard-settings types alongside the hydration bridge.
-export type { ExclusionScope };
+import type { DashboardSettings } from "@/stores/settingsStore";
 
 interface SettingsHydrationValue {
     settings: DashboardSettings;
