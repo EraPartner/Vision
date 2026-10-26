@@ -317,10 +317,8 @@ export default function SavingsPage() {
                                         </div>
                                     </div>
 
-                                    {(Boolean(
-                                        (a.interestRate ?? 0) !== 0 &&
-                                        a.projectedAnnualInterest > 0,
-                                    ) ||
+                                    {(((a.interestRate ?? 0) !== 0 &&
+                                        a.projectedAnnualInterest > 0) ||
                                         a.maturityDate ||
                                         a.totalFees > 0 ||
                                         a.totalTaxes > 0) && (

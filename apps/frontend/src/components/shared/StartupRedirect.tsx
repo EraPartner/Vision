@@ -88,7 +88,7 @@ export function StartupRedirect() {
         const target =
             section === "last"
                 ? lastPageAtLaunch.current ?? "/"
-                : SECTION_HOME[section] ?? "/";
+                : SECTION_HOME[section];
 
         if (target && target !== "/") void navigate(target, { replace: true });
     }, [isLoading, appSettings.startupSection, location.pathname, navigate]);

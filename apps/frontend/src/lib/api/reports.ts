@@ -146,7 +146,7 @@ async function postReportDownload(
 
   const report = checkResponseContract<ReportDocument>(
     ReportDocumentSchema,
-    unwrapEnvelope<ReportDocument>(await response.json()),
+    unwrapEnvelope(await response.json()) as ReportDocument,
     `POST ${path}`,
   );
 

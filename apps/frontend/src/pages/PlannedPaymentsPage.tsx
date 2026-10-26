@@ -254,7 +254,7 @@ export default function PlannedPaymentsPage() {
                             </div>
                         </div>
                         <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
-                            {[...Array(8)].map((_, index) => (
+                            {Array.from({ length: 8 }).map((_, index) => (
                                 <Skeleton
                                     key={index}
                                     className="h-[6.5rem] w-full rounded-card"
@@ -333,7 +333,7 @@ export default function PlannedPaymentsPage() {
                                     <DropdownMenuCheckboxItem
                                         checked={showAll}
                                         onCheckedChange={(checked) =>
-                                            setShowAll(checked === true)
+                                            setShowAll(checked)
                                         }
                                     >
                                         {t("plannedPage.includePaused")}

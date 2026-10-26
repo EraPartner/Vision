@@ -86,7 +86,7 @@ export async function* readSseFrames(response: Response): AsyncGenerator<ParsedF
     let buffer = '';
 
     try {
-        while (true) {
+        for (;;) {
             const { done, value } = await reader.read();
             if (done) break;
 

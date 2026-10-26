@@ -490,8 +490,9 @@ export interface Investment {
     maturity_date?: string;
     location?: string;
     municipality?: string;
-    cadastral_income?: number;
-    municipality_tax_rate?: number;
+    // The wire carries NUMERIC columns as `null` when unset.
+    cadastral_income?: number | null;
+    municipality_tax_rate?: number | null;
     notes?: string;
     price_provider: PriceProvider;
     price_provider_id?: string;

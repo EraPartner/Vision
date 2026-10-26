@@ -25,7 +25,7 @@ export function useRebalancePlans() {
         queryKey: QUERY_KEY,
         queryFn: async (): Promise<RebalancePlan[]> => {
             const res = await apiClient.getSetting(SETTING_KEY);
-            const value = res?.value;
+            const value = res.value;
             return Array.isArray(value) ? (value as RebalancePlan[]) : [];
         },
         staleTime: QUERY_STALE_TIME_MS.STANDARD,

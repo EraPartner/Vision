@@ -138,8 +138,8 @@ export const updateMonitor = (id: string, patch: MonitorUpdate) =>
         method: "PATCH",
         body: JSON.stringify(patch),
     });
-export const deleteMonitor = (id: string) =>
-    apiRequest<void>(path(id), { method: "DELETE" });
+export const deleteMonitor = (id: string): Promise<void> =>
+    apiRequest(path(id), { method: "DELETE" });
 export const checkMonitor = (id: string) =>
     apiRequest<MonitorObservation>(`${path(id)}/check`, {
         method: "POST",

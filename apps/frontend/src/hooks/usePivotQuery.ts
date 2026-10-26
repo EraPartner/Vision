@@ -1,6 +1,6 @@
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import type { SavedChart } from "@/types/apiClient";
 import { aggregationKeys } from "@/lib/queryKeys";
@@ -99,15 +99,17 @@ export function usePivotQuery<
             chart?.date_range_end ?? null,
             all ? "all" : (ids ?? []),
         ),
-        queryFn: () =>
-            config.fetchPivot({
-                currency: targetCurrency,
-                bucket: chart!.time_bucket,
-                start: chart!.date_range_start ?? undefined,
-                end: chart!.date_range_end ?? undefined,
-                all,
-                ids: ids ?? [],
-            }),
+        queryFn: chart
+            ? () =>
+                  config.fetchPivot({
+                      currency: targetCurrency,
+                      bucket: chart.time_bucket,
+                      start: chart.date_range_start ?? undefined,
+                      end: chart.date_range_end ?? undefined,
+                      all,
+                      ids: ids ?? [],
+                  })
+            : skipToken,
         enabled,
         staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });

@@ -45,7 +45,7 @@ export async function uploadAttachment(transactionId: TransactionId, file: File)
 
 /** Delete an attachment by ID. Responds 204 No Content — nothing to unwrap. */
 export async function deleteAttachment(attachmentId: string): Promise<void> {
-    await apiRequest<void>(`/api/attachments/${attachmentId}`, { method: 'DELETE' });
+    await apiRequest(`/api/attachments/${attachmentId}`, { method: 'DELETE' });
 }
 
 /** Build the URL that serves an attachment (used for inline thumbnails). */

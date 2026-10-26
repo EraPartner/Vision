@@ -71,7 +71,7 @@ export function useAllRecipientsForMerge(enabled: boolean) {
                     sort_dir: "asc",
                 });
                 recipients.push(...response.items);
-                total = response.total ?? recipients.length;
+                total = response.total;
                 offset += response.items.length;
                 if (response.items.length === 0) break;
             } while (offset < total);

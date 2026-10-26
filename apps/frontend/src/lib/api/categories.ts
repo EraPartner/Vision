@@ -31,11 +31,11 @@ export function getCategories(params?: {
 export async function createCategory(
     category: CategoryCreate,
 ): Promise<{ category: Category; wasCreated: boolean }> {
-    const { data, wasCreated } = await createWithStatus<
-        CategoryCreate,
-        Category
-    >("/api/categories", category);
-    return { category: data, wasCreated };
+    const { data, wasCreated } = await createWithStatus(
+        "/api/categories",
+        category,
+    );
+    return { category: data as Category, wasCreated };
 }
 
 export function updateCategory(
@@ -49,7 +49,7 @@ export function updateCategory(
 }
 
 export async function deleteCategory(id: CategoryId): Promise<void> {
-    await apiRequest<void>(`/api/categories/${id}`, { method: "DELETE" });
+    await apiRequest(`/api/categories/${id}`, { method: "DELETE" });
 }
 
 export function getCategoryTree(): Promise<{
@@ -82,7 +82,7 @@ export function updateCategoryNode(
 }
 
 export async function deleteCategoryNode(id: CategoryId): Promise<void> {
-    await apiRequest<void>(`/api/categories/tree/${id}`, { method: "DELETE" });
+    await apiRequest(`/api/categories/tree/${id}`, { method: "DELETE" });
 }
 
 export function mergeCategoryNode(

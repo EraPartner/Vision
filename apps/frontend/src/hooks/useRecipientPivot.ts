@@ -33,8 +33,8 @@ const config: PivotConfig<
             recipient_ids: all ? undefined : ids,
         });
         return {
-            pivot: res.data?.recipientPivot ?? {},
-            metadata: res.data?.conversion,
+            pivot: res.data.recipientPivot,
+            metadata: res.data.conversion,
         };
     },
     getItemId: (item) => item.recipientId,

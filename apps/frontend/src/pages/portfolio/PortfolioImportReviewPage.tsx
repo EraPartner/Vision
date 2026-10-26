@@ -130,12 +130,12 @@ function PreviewRowList({ rows }: { rows: PortfolioPreviewRow[] }) {
     }, [rowEstimate, virtualizer]);
 
     const items = virtualizer.getVirtualItems();
-    const paddingTop = items.length > 0 ? items[0]!.start - scrollMargin : 0;
-    const paddingBottom =
-        items.length > 0
-            ? virtualizer.getTotalSize() -
-              (items[items.length - 1]!.end - scrollMargin)
-            : 0;
+    const firstItem = items[0];
+    const lastItem = items[items.length - 1];
+    const paddingTop = firstItem ? firstItem.start - scrollMargin : 0;
+    const paddingBottom = lastItem
+        ? virtualizer.getTotalSize() - (lastItem.end - scrollMargin)
+        : 0;
 
     return (
         <div

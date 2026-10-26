@@ -135,7 +135,7 @@ export default function ResearchHomePage() {
                 {searchUnavailable ? (
                     <div className="p-2">
                         <ResearchUnavailableNote
-                            provider={searchResult?.meta.provider ?? null}
+                            provider={searchResult.meta.provider ?? null}
                         />
                     </div>
                 ) : items.length > 0 ? (

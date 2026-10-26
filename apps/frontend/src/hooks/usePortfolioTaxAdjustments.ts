@@ -25,7 +25,8 @@ function keyFor(taxYear: number, investmentId: InvestmentId): string {
 }
 
 export function usePortfolioTaxAdjustments() {
-  const { value: preloaded, isLoading } = usePreloadedSetting<PortfolioTaxAdjustmentMap>(SETTINGS_KEY);
+  const { value: preloadedValue, isLoading } = usePreloadedSetting(SETTINGS_KEY);
+  const preloaded = preloadedValue as PortfolioTaxAdjustmentMap | null;
   const [adjustments, setAdjustments] = useState<PortfolioTaxAdjustmentMap>({});
 
   useEffect(() => {
@@ -88,7 +89,10 @@ export function usePortfolioTaxAdjustments() {
   const byYear = useMemo(() => {
     return (taxYear: number) => {
       const result: Record<number, AdjustmentEntry> = {};
-      Object.entries(adjustments).forEach(([k, value]) => {
+      // Persisted settings may hold garbage entries (see toAmount).
+      Object.entries(
+        adjustments as Record<string, Partial<AdjustmentEntry> | null | undefined>,
+      ).forEach(([k, value]) => {
         const [yearStr, investmentIdStr] = k.split(':');
         const year = Number(yearStr);
         if (year !== taxYear) return;

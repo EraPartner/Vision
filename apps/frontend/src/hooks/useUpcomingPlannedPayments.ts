@@ -28,7 +28,7 @@ const DISMISS_KEY_RE = /^\d+:\d{4}-\d{2}-\d{2}$/;
  *  columns as full ISO timestamps on some paths; the pending global
  *  type-parser fix will turn them into plain YYYY-MM-DD strings. */
 export function dismissKeyFor(pt: DismissTarget): string {
-    return `${pt.id}:${String(pt.planned_date).slice(0, 10)}`;
+    return `${pt.id}:${pt.planned_date.slice(0, 10)}`;
 }
 
 let dismissedCache: Set<string> | undefined;
@@ -38,7 +38,7 @@ function loadDismissed(): Set<string> {
     try {
         const raw = window.localStorage.getItem(LOCAL_STORAGE_KEYS.DISMISSED_UPCOMING_PAYMENTS);
         if (raw) {
-            const parsed = JSON.parse(raw);
+            const parsed: unknown = JSON.parse(raw);
             if (Array.isArray(parsed)) {
                 const today = todayYmd();
                 return new Set(

@@ -204,7 +204,7 @@ function Inner<Datum>({
     );
 
     const totals = useMemo(
-        () => data.map((d) => sum(series, (s) => s.accessor(d) ?? 0)),
+        () => data.map((d) => sum(series, (s) => s.accessor(d))),
         [data, series],
     );
 
@@ -242,7 +242,7 @@ function Inner<Datum>({
                     __datum: d,
                     __category: stableCategoryAccessor(d),
                 } as StackRow<Datum>;
-                for (const s of series) row[s.key] = s.accessor(d) ?? 0;
+                for (const s of series) row[s.key] = s.accessor(d);
                 return row;
             }),
         [stableCategoryAccessor, data, series],
@@ -294,7 +294,7 @@ function Inner<Datum>({
         });
     }, [hoverDatum, series, tooltipValueFormat]);
 
-    const baseline = valueScale(0) ?? innerHeight;
+    const baseline = valueScale(0);
 
     return (
         <div style={{ position: "relative", width, height }}>

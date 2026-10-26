@@ -183,8 +183,8 @@ function readSettings(statements: Statement[]) {
             JSON.stringify(parsed.data.batchIds) ===
                 JSON.stringify(
                     statements
-                        .map((item) => item.batchId)
-                        .sort((a, b) => a! - b!),
+                        .map((item) => item.batchId ?? Number.NaN)
+                        .sort((a, b) => a - b),
                 )
         )
             return parsed.data;
@@ -361,8 +361,11 @@ export function PortfolioImportSession({ accounts }: Props) {
         }
     }, [accounts, statements, updateStatements, invalidate]);
     const ids = statements
-        .filter((item) => item.status === "staged")
-        .map((item) => item.batchId!)
+        .flatMap((item) =>
+            item.status === "staged" && item.batchId !== undefined
+                ? [item.batchId]
+                : [],
+        )
         .sort((a, b) => a - b);
     const routingKey = sourceRoutingKey(statements);
     const scopeFor = (choices: PortfolioRowChoice[]) => ({
@@ -374,15 +377,18 @@ export function PortfolioImportSession({ accounts }: Props) {
         )
             ? {
                   batchPolicies: statements
-                      .filter(
-                          (item) =>
-                              item.status === "staged" &&
-                              item.adoptPolicy !== undefined,
+                      .flatMap((item) =>
+                          item.status === "staged" &&
+                          item.batchId !== undefined &&
+                          item.adoptPolicy !== undefined
+                              ? [
+                                    {
+                                        batchId: item.batchId,
+                                        adoptPolicy: item.adoptPolicy,
+                                    },
+                                ]
+                              : [],
                       )
-                      .map((item) => ({
-                          batchId: item.batchId!,
-                          adoptPolicy: item.adoptPolicy!,
-                      }))
                       .sort((left, right) => left.batchId - right.batchId),
               }
             : {}),
@@ -469,7 +475,9 @@ export function PortfolioImportSession({ accounts }: Props) {
             ...entries,
         ]);
         for (const entry of entries) {
-            void detectPortfolioImportFile(entry.file!)
+            const entryFile = entry.file;
+            if (entryFile === undefined) continue;
+            void detectPortfolioImportFile(entryFile)
                 .then((detected) => {
                     updateStatements((previous) =>
                         previous.map((item) =>
@@ -621,10 +629,16 @@ export function PortfolioImportSession({ accounts }: Props) {
                 ),
             );
             try {
+                const { detected, file } = item;
+                if (!detected || !file)
+                    throw new Error("Statement is not ready to stage");
+                const preset = portfolioImportPresetConfig(
+                    detected.presetKey ?? detected.source,
+                );
+                if (!preset)
+                    throw new Error("Statement has no import preset");
                 const config = {
-                    ...portfolioImportPresetConfig(
-                        item.detected!.presetKey ?? item.detected!.source,
-                    )!,
+                    ...preset,
                     accountId: item.accountId,
                     includedSymbols: item.includedSymbols,
                     transferDestinationAccountId:
@@ -635,7 +649,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                         : {}),
                 };
                 const pending = importPortfolioCSVWithProgress(
-                    item.file!,
+                    file,
                     config,
                     config.format ?? "portfolio_generic",
                     () => {},
@@ -1311,13 +1325,17 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                                     operation !==
                                                                     "idle"
                                                                 }
-                                                                onClick={() =>
-                                                                    choose(
-                                                                        blocker.batchId,
-                                                                        blocker.rowId!,
-                                                                        "keep_both",
+                                                                onClick={() => {
+                                                                    if (
+                                                                        blocker.rowId !==
+                                                                        undefined
                                                                     )
-                                                                }
+                                                                        choose(
+                                                                            blocker.batchId,
+                                                                            blocker.rowId,
+                                                                            "keep_both",
+                                                                        );
+                                                                }}
                                                             >
                                                                 {t(
                                                                     "portfolioImport.session.choice.keepBoth",
@@ -1338,13 +1356,17 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                                         operation !==
                                                                         "idle"
                                                                     }
-                                                                    onClick={() =>
-                                                                        choose(
-                                                                            blocker.batchId,
-                                                                            blocker.rowId!,
-                                                                            "same_transaction",
+                                                                    onClick={() => {
+                                                                        if (
+                                                                            blocker.rowId !==
+                                                                            undefined
                                                                         )
-                                                                    }
+                                                                            choose(
+                                                                                blocker.batchId,
+                                                                                blocker.rowId,
+                                                                                "same_transaction",
+                                                                            );
+                                                                    }}
                                                                 >
                                                                     {t(
                                                                         "portfolioImport.session.choice.sameTransaction",

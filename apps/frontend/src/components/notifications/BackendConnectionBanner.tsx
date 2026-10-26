@@ -20,7 +20,11 @@ export function BackendConnectionBanner() {
         const recovery = window.electronRecovery;
         if (!recovery) return;
         const stopLost = recovery.onBackendLost((payload) =>
-            setLostMessage(payload?.message || t("app.backendLost")),
+            setLostMessage(
+                // The IPC payload is not guaranteed to be present or well-formed.
+                (payload as { message?: string } | undefined)?.message ||
+                    t("app.backendLost"),
+            ),
         );
         const stopRestored = recovery.onBackendRestored(() => {
             setLostMessage(undefined);

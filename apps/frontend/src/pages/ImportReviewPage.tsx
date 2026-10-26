@@ -136,7 +136,7 @@ export default function ImportReviewPage() {
     const navigate = useNavigate();
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
-    const locale = numberFormatToLocale(appSettings?.numberFormat ?? "us");
+    const locale = numberFormatToLocale(appSettings.numberFormat);
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const [groupOverrides, setGroupOverrides] = useState<
@@ -693,8 +693,7 @@ export default function ImportReviewPage() {
                                                     <span className="shrink-0 tabular-nums text-label-secondary">
                                                         {formatDateStringWithAppSettings(
                                                             row.tx_date,
-                                                            appSettings?.dateFormat ??
-                                                                "YYYY-MM-DD",
+                                                            appSettings.dateFormat,
                                                         )}
                                                     </span>
                                                     <span className="min-w-0 truncate text-foreground">
@@ -776,7 +775,7 @@ export default function ImportReviewPage() {
                                         .then(() =>
                                             setGroupOverrides(new Map()),
                                         )
-                                        .catch((err: Error) =>
+                                        .catch((err: unknown) =>
                                             toast.error(
                                                 apiErrorToMessage(err, t),
                                             ),

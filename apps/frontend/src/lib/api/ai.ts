@@ -170,7 +170,7 @@ export function streamChat(
         dataRaw: string,
     ): ChatStreamEvent | undefined => {
         if (eventName === AI_CHAT_STREAM_EVENT.TOKEN) {
-            let delta: string;
+            let delta: unknown;
             try {
                 delta = JSON.parse(dataRaw);
             } catch {
@@ -240,12 +240,14 @@ export function streamChat(
         ChatStreamEvent & { type: "complete" }
     > => {
         const start = Date.now();
-        let timedOut = false;
+        // Object holder: the watchdog timer writes it, which control-flow
+        // narrowing cannot see for a plain `let`.
+        const abort = { timedOut: false };
         let watchdog: ReturnType<typeof setTimeout> | undefined;
         const armWatchdog = () => {
             if (watchdog) clearTimeout(watchdog);
             watchdog = setTimeout(() => {
-                timedOut = true;
+                abort.timedOut = true;
                 controller.abort();
             }, CHAT_STREAM_STALL_TIMEOUT_MS);
         };
@@ -306,7 +308,7 @@ export function streamChat(
             return terminal;
         } catch (err) {
             if ((err as Error).name === "AbortError") {
-                if (timedOut)
+                if (abort.timedOut)
                     throw new Error("Chat stream timed out", { cause: err });
                 throw new Error("Chat cancelled", { cause: err });
             }

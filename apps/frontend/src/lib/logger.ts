@@ -11,9 +11,14 @@
 const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3, silent: 4 } as const;
 type LogLevel = keyof typeof LOG_LEVELS;
 
+// `import.meta.env` is typed with an `any` index signature; narrow explicitly.
+function envString(value: unknown): string | undefined {
+    return typeof value === 'string' ? value : undefined;
+}
+
 function resolveLogLevel(): number {
-    if (import.meta.env.VITE_ENABLE_LOGGING?.toLowerCase() === 'false') return LOG_LEVELS.silent;
-    const level = (import.meta.env.VITE_LOG_LEVEL || '').toLowerCase() as LogLevel;
+    if (envString(import.meta.env.VITE_ENABLE_LOGGING)?.toLowerCase() === 'false') return LOG_LEVELS.silent;
+    const level = (envString(import.meta.env.VITE_LOG_LEVEL) || '').toLowerCase() as LogLevel;
     if (level in LOG_LEVELS) return LOG_LEVELS[level];
     return import.meta.env.DEV ? LOG_LEVELS.debug : LOG_LEVELS.warn;
 }

@@ -1,5 +1,10 @@
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+    skipToken,
+    useMutation,
+    useQuery,
+    useQueryClient,
+} from "@tanstack/react-query";
 import { undoToast } from "@/lib/undoToast";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { apiClient } from "@/lib/api";
@@ -66,14 +71,17 @@ export function useAccountLedger(
 ) {
     const query = useQuery({
         queryKey: transactionKeys.accountLedger(accountId, ledgerLimit),
-        queryFn: () =>
-            apiClient.getTransactions({
-                account_id: accountId!,
-                limit: ledgerLimit,
-                sort_by: "date",
-                sort_dir: "desc",
-                include_balance: true,
-            }),
+        queryFn:
+            accountId === undefined
+                ? skipToken
+                : () =>
+                      apiClient.getTransactions({
+                          account_id: accountId,
+                          limit: ledgerLimit,
+                          sort_by: "date",
+                          sort_dir: "desc",
+                          include_balance: true,
+                      }),
         enabled,
         staleTime: QUERY_STALE_TIME_MS.FREQUENT,
         placeholderData: (previous) => previous,
@@ -107,7 +115,7 @@ export function useCreateTransaction(options: UseCreateTransactionOptions = {}) 
                 ...transaction,
                 id: tempId,
             } as unknown as Transaction;
-            queryClient.setQueriesData<TransactionsListResponse>(
+            queryClient.setQueriesData<CachedTransactionList>(
                 { queryKey: transactionKeys.all },
                 (old) => {
                     if (!old?.items) return old;
@@ -121,20 +129,18 @@ export function useCreateTransaction(options: UseCreateTransactionOptions = {}) 
             return { snapshot, tempId };
         },
         onSuccess: (created, _vars, context) => {
-            if (context?.tempId != null) {
-                queryClient.setQueriesData<TransactionsListResponse>(
-                    { queryKey: transactionKeys.all },
-                    (old) => {
-                        if (!old?.items) return old;
-                        return {
-                            ...old,
-                            items: old.items.map((tx) =>
-                                tx.id === context.tempId ? created : tx,
-                            ),
-                        };
-                    },
-                );
-            }
+            queryClient.setQueriesData<CachedTransactionList>(
+                { queryKey: transactionKeys.all },
+                (old) => {
+                    if (!old?.items) return old;
+                    return {
+                        ...old,
+                        items: old.items.map((tx) =>
+                            tx.id === context.tempId ? created : tx,
+                        ),
+                    };
+                },
+            );
             if (!options.silent) toast.success(t("transactions.created"));
         },
         onError: (error: Error, _vars, context) => {
@@ -155,8 +161,12 @@ export function useCreateTransaction(options: UseCreateTransactionOptions = {}) 
     });
 }
 
+// Everything under `transactionKeys.all` is patched, not only list pages, so
+// cached entries are not guaranteed to carry every list field.
+type CachedTransactionList = Partial<TransactionsListResponse>;
+
 type TransactionsSnapshot = Array<
-    [readonly unknown[], TransactionsListResponse | undefined]
+    [readonly unknown[], CachedTransactionList | undefined]
 >;
 
 /**
@@ -172,7 +182,7 @@ type TransactionsSnapshot = Array<
 function snapshotTransactionLists(
     queryClient: ReturnType<typeof useQueryClient>,
 ): TransactionsSnapshot {
-    return queryClient.getQueriesData<TransactionsListResponse>({
+    return queryClient.getQueriesData<CachedTransactionList>({
         queryKey: transactionKeys.all,
     });
 }
@@ -199,7 +209,7 @@ export function useUpdateTransaction() {
             // `tags` is excluded from the optimistic merge: the update payload
             // carries string[] while the cached rows hold Tag[] objects.
             const { tags: _tags, ...optimisticFields } = data;
-            queryClient.setQueriesData<TransactionsListResponse>(
+            queryClient.setQueriesData<CachedTransactionList>(
                 { queryKey: transactionKeys.all },
                 (old) => {
                     if (!old?.items) return old;
@@ -244,7 +254,7 @@ export function useDeleteTransaction() {
                 deletedRow = data?.items?.find((tx) => tx.id === id);
                 if (deletedRow) break;
             }
-            queryClient.setQueriesData<TransactionsListResponse>(
+            queryClient.setQueriesData<CachedTransactionList>(
                 { queryKey: transactionKeys.all },
                 (old) => {
                     if (!old?.items) return old;
@@ -260,7 +270,7 @@ export function useDeleteTransaction() {
             return { snapshot, deletedRow };
         },
         onSuccess: (_data, _id, context) => {
-            const row = context?.deletedRow;
+            const row = context.deletedRow;
             // recipient_id is required by the create contract — without it we
             // cannot faithfully restore, so no Undo is offered.
             if (

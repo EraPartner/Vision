@@ -40,14 +40,14 @@ export function findHoldingTotals(
 ): PortfolioHoldingTotals {
     if (!summary) return EMPTY_HOLDING_TOTALS;
     const wanted = new Set(assetClasses);
-    const group = (summary.byAssetGroup ?? []).find(
+    const group = summary.byAssetGroup.find(
         (entry) =>
             entry.assetClasses.length === wanted.size &&
             entry.assetClasses.every((cls) => wanted.has(cls)),
     );
     if (group) return group;
     if (assetClasses.length === 1) {
-        const single = (summary.byAssetClass ?? []).find(
+        const single = summary.byAssetClass.find(
             (entry) => entry.assetClass === assetClasses[0],
         );
         if (single) return single;

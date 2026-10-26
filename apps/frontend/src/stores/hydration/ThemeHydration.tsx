@@ -96,13 +96,14 @@ function resolveTheme(mode: ThemeMode, schedule: ThemeSchedule): Theme {
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-    const { value: preloaded, isLoading: preloadLoading } =
-        usePreloadedSetting<{
-            mode?: ThemeMode;
-            schedule?: ThemeSchedule;
-            variant?: ThemeVariant;
-            systemAccent?: boolean;
-        }>(SETTINGS_KEY);
+    const { value: preloadedValue, isLoading: preloadLoading } =
+        usePreloadedSetting(SETTINGS_KEY);
+    const preloaded = preloadedValue as {
+        mode?: ThemeMode;
+        schedule?: ThemeSchedule;
+        variant?: ThemeVariant;
+        systemAccent?: boolean;
+    } | null;
 
     const _hydrateTheme = useSettingsStore((s) => s._hydrateTheme);
     const _setResolvedTheme = useSettingsStore((s) => s._setResolvedTheme);
@@ -222,18 +223,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             document.documentElement.classList.contains("dark") ===
             (theme === "dark");
         const reducedMotion = prefersReducedMotion();
-        const startViewTransition = (
-            document as Document & {
-                startViewTransition?: (cb: () => void) => unknown;
-            }
-        ).startViewTransition;
+        const viewTransitionDocument: {
+            startViewTransition?: (cb: () => void) => unknown;
+        } = document;
 
         if (
             !alreadyApplied &&
             !reducedMotion &&
-            typeof startViewTransition === "function"
+            typeof viewTransitionDocument.startViewTransition === "function"
         ) {
-            startViewTransition.call(document, apply);
+            viewTransitionDocument.startViewTransition(apply);
         } else {
             apply();
         }

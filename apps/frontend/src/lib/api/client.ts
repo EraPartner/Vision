@@ -237,12 +237,12 @@ export function checkResponseContract<T>(
  * Extract `data` from a unified envelope body. Tolerates non-envelope
  * responses during migration — returns the body as-is when `ok` is absent.
  */
-export function unwrapEnvelope<T>(body: unknown): T {
+export function unwrapEnvelope(body: unknown): unknown {
     if (body && typeof body === "object" && "ok" in body) {
-        const envelope = body as ApiResponse<T>;
-        if (envelope.ok === true) return envelope.data;
+        const envelope = body as ApiResponse<unknown>;
+        if (envelope.ok) return envelope.data;
     }
-    return body as T;
+    return body;
 }
 
 // ---------------------------------------------------------------------------
@@ -269,7 +269,9 @@ export async function rawFetch(
     const controller = new AbortController();
     activeControllers.add(controller);
 
-    let timedOut = false;
+    // Object holder: the timer callback writes it, which control-flow narrowing
+    // cannot see for a plain `let`.
+    const abort = { timedOut: false };
     const abortHandler = () => controller.abort();
     if (options.signal) {
         // Honor a signal that is already aborted before the listener is wired.
@@ -278,7 +280,7 @@ export async function rawFetch(
     }
 
     const timeoutId = setTimeout(() => {
-        timedOut = true;
+        abort.timedOut = true;
         controller.abort();
     }, timeoutMs);
 
@@ -296,7 +298,7 @@ export async function rawFetch(
         });
     } catch (err: unknown) {
         if ((err as Error).name === "AbortError") {
-            if (timedOut) throw new Error("Request timed out", { cause: err });
+            if (abort.timedOut) throw new Error("Request timed out", { cause: err });
             throw err;
         }
         throw err;
@@ -328,11 +330,15 @@ export async function apiRequest<T>(
 ): Promise<T> {
     const { schema, ...init } = options;
     const requestId = generateRequestId();
-    const headers: HeadersInit = {
+    // Caller headers win over the defaults. `init.headers` may be a Headers
+    // instance or tuple array, which an object spread would silently drop.
+    const headers = new Headers({
         "Content-Type": "application/json",
         "X-Request-Id": requestId,
-        ...init.headers,
-    };
+    });
+    new Headers(init.headers).forEach((value, key) => {
+        headers.set(key, value);
+    });
 
     const url = `${API_BASE_URL}${endpoint}`;
     const method = init.method ?? "GET";
@@ -437,8 +443,8 @@ export async function apiRequest<T>(
                 return undefined as unknown as T;
             }
 
-            const body = await response.json();
-            const result = unwrapEnvelope<T>(body);
+            const body: unknown = await response.json();
+            const result = unwrapEnvelope(body) as T;
             if (schema) {
                 checkResponseContract(schema, result, `${method} ${endpoint}`);
             }

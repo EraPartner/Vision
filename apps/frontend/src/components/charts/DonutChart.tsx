@@ -147,10 +147,11 @@ function Inner({
                                         }}
                                     />
                                 );
-                                return arc.data.to ? (
+                                const to = arc.data.to;
+                                return to ? (
                                     <a
                                         key={`arc-${i}`}
-                                        href={arc.data.to}
+                                        href={to}
                                         aria-label={`${arc.data.name}: ${formatValue(arc.data.value)}`}
                                         onClick={(event) => {
                                             if (
@@ -162,7 +163,7 @@ function Inner({
                                                 onNavigate
                                             ) {
                                                 event.preventDefault();
-                                                onNavigate(arc.data.to!);
+                                                onNavigate(to);
                                             }
                                         }}
                                     >
@@ -216,7 +217,7 @@ function Inner({
                                         className="inline-block h-2 w-2 shrink-0 rounded-full"
                                         style={{
                                             backgroundColor:
-                                                hover.color ?? undefined,
+                                                hover.color,
                                         }}
                                     />
                                     <span className="truncate">

@@ -222,7 +222,7 @@ export default function AccountDetailPage() {
         () =>
             since
                 ? rows.filter(
-                      (r) => (r.transaction_date ?? "").slice(0, 10) >= since,
+                      (r) => r.transaction_date.slice(0, 10) >= since,
                   )
                 : rows,
         [rows, since],
@@ -754,9 +754,7 @@ export default function AccountDetailPage() {
                                                                 planned.amount
                                                             }
                                                             currency={
-                                                                planned.currency ??
-                                                                account?.currency ??
-                                                                "EUR"
+                                                                planned.currency
                                                             }
                                                             signed
                                                         />
@@ -871,10 +869,10 @@ export default function AccountDetailPage() {
                                             <TableRow key={txn.id}>
                                                 <TableCell className="whitespace-nowrap tabular-nums text-label-secondary">
                                                     {formatDateStringWithAppSettings(
-                                                        (
-                                                            txn.transaction_date ??
-                                                            ""
-                                                        ).slice(0, 10),
+                                                        txn.transaction_date.slice(
+                                                            0,
+                                                            10,
+                                                        ),
                                                         appSettings.dateFormat,
                                                     )}
                                                 </TableCell>

@@ -179,7 +179,7 @@ export function mapToStatisticsData(
     recipientInsights: RecipientInsightsPayload,
     recipientByYear: RecipientByYearPayload,
 ): StatisticsData {
-    const monthlyData: MonthlyData[] = (monthlySummary.months ?? [])
+    const monthlyData: MonthlyData[] = monthlySummary.months
         .map((m) => ({
             period: `${m.year}-${String(m.month).padStart(2, "0")}`,
             year: m.year,
@@ -193,16 +193,17 @@ export function mapToStatisticsData(
 
     const yearMap = new Map<number, YearlyComparison>();
     for (const m of monthlyData) {
-        if (!yearMap.has(m.year)) {
-            yearMap.set(m.year, {
+        let yd = yearMap.get(m.year);
+        if (yd === undefined) {
+            yd = {
                 year: m.year,
                 totalIncome: 0,
                 totalSpending: 0,
                 net: 0,
                 transactionCount: 0,
-            });
+            };
+            yearMap.set(m.year, yd);
         }
-        const yd = yearMap.get(m.year)!;
         yd.totalIncome += m.income;
         yd.totalSpending += m.spending;
         yd.net += m.net;
@@ -214,12 +215,13 @@ export function mapToStatisticsData(
 
     const catMap = new Map<string | number, CategoryMonthlyData>();
     for (const [period, items] of Object.entries(
-        categoryPivotPayload.categoryPivot ?? {},
+        categoryPivotPayload.categoryPivot,
     )) {
         for (const item of items) {
             const key = item.categoryId ?? "null";
-            if (!catMap.has(key)) {
-                catMap.set(key, {
+            let cd = catMap.get(key);
+            if (cd === undefined) {
+                cd = {
                     categoryName: item.categoryName,
                     categoryId: item.categoryId,
                     categoryPathIds: item.categoryPathIds ?? [],
@@ -232,9 +234,9 @@ export function mapToStatisticsData(
                     incomeTotal: 0,
                     expenseTotal: 0,
                     netTotal: 0,
-                });
+                };
+                catMap.set(key, cd);
             }
-            const cd = catMap.get(key)!;
             const absTotal = Math.abs(item.total);
             // Use the backend's explicit sign-split (income = Σ amount≥0, expense =
             // Σ amount<0) instead of classifying by the sign of the NET total — a
@@ -268,7 +270,7 @@ export function mapToStatisticsData(
     );
 
     const topRecipients: RecipientSpending[] = (
-        recipientInsights.topMerchants ?? []
+        recipientInsights.topMerchants
     )
         .slice(0, 20)
         .map((m) => ({
@@ -279,7 +281,7 @@ export function mapToStatisticsData(
 
     const topRecipientsByYear: Record<string, RecipientSpending[]> =
         Object.fromEntries(
-            Object.entries(recipientByYear.recipientsByYear ?? {}).map(
+            Object.entries(recipientByYear.recipientsByYear).map(
                 ([year, recs]) => [
                     year,
                     recs.map((r) => ({
@@ -310,7 +312,7 @@ export function mapToStatisticsData(
         averageMonthlySpending: totalSpending / monthCount,
         averageMonthlyIncome: totalIncome / monthCount,
         // The monthly summary covers every transaction in the window.
-        unconvertedCount: monthlySummary.unconverted_count ?? 0,
+        unconvertedCount: monthlySummary.unconverted_count,
     };
 }
 

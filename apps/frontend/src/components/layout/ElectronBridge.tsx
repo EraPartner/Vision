@@ -145,7 +145,7 @@ export function ElectronBridge({
                 e.target.closest("[data-dropzone]") !== null;
             e.preventDefault();
             if (handledByDropzone) return;
-            const file = e.dataTransfer?.files?.[0];
+            const file = e.dataTransfer?.files[0];
             if (file && /\.csv$/i.test(file.name)) {
                 registerPendingImportFile(file);
                 void handlersRef.current.navigate("/import");

@@ -68,7 +68,7 @@ interface RawEnvelope<T> {
 function normalizeMeta(meta: RawEnvelope<unknown>['meta']): ResearchMeta {
     return {
         provider: (meta?.provider) ?? null,
-        source: (meta?.source as ResearchMeta['source']) ?? 'unavailable',
+        source: meta?.source ?? 'unavailable',
         requestId: meta?.requestId,
     };
 }
@@ -283,7 +283,7 @@ export function saveResearchMappings(input: {
  * provenance meta, so this goes through `apiRequest` rather than `researchSend`.
  */
 export async function deleteResearchMapping(id: number): Promise<void> {
-    await apiRequest<void>(`/api/research/mappings/${id}`, { method: 'DELETE' });
+    await apiRequest(`/api/research/mappings/${id}`, { method: 'DELETE' });
 }
 
 export function auditResearchMappings(input: {
@@ -317,7 +317,7 @@ export function setResearchProviderKey(provider: ResearchProviderKeyId, apiKey: 
 
 /** Clear a provider key. Responds 204 No Content — callers refetch the statuses. */
 export async function clearResearchProviderKey(provider: ResearchProviderKeyId): Promise<void> {
-    await apiRequest<void>(`/api/research/provider-keys/${encodeURIComponent(provider)}`, {
+    await apiRequest(`/api/research/provider-keys/${encodeURIComponent(provider)}`, {
         method: 'DELETE',
     });
 }

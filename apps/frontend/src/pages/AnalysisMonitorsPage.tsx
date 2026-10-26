@@ -3,7 +3,7 @@ import {
     useMemo,
     useRef,
     useState,
-    type FormEvent,
+    type SyntheticEvent,
     type ReactNode,
 } from "react";
 import { Link } from "react-router";
@@ -129,7 +129,7 @@ function numericColumns(analysis: SavedAnalysis) {
     });
 }
 
-function revealInvalidSchedule(event: FormEvent<HTMLDetailsElement>) {
+function revealInvalidSchedule(event: SyntheticEvent<HTMLDetailsElement>) {
     // Reveal before the browser tries to focus a hidden invalid input.
     event.currentTarget.open = true;
     const input = event.target;
@@ -450,6 +450,7 @@ export default function AnalysisMonitorsPage() {
     const observations = useMonitorObservations(selectedId, observationOffset);
     const notifications = useMonitorNotifications(notificationOffset);
     const targets = useMonitorTargets(targetDossierOffset);
+    const targetDossierTotal = targets.dossiers.data?.total ?? 0;
     const actions = useMonitorActions();
     const { confirm, ConfirmDialog } = useConfirmDialog();
     const selected =
@@ -986,12 +987,12 @@ export default function AnalysisMonitorsPage() {
                                                     </AlertDescription>
                                                 </Alert>
                                             )}
-                                        {(targets.dossiers.data?.total ?? 0) >
+                                        {targetDossierTotal >
                                             TARGET_PAGE_SIZE && (
                                             <Pager
                                                 offset={targetDossierOffset}
                                                 total={
-                                                    targets.dossiers.data!.total
+                                                    targetDossierTotal
                                                 }
                                                 pageSize={TARGET_PAGE_SIZE}
                                                 onChange={(offset) => {

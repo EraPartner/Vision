@@ -103,12 +103,11 @@ function ComposedSeriesLayerInner<Datum>({
     xScale,
     leftScale,
     rightScale,
-    innerHeight,
     barWidth,
 }: ComposedSeriesLayerProps<Datum>) {
     const scaleFor = (s: ComposedSeries<Datum>) =>
         s.axis === "right" && rightScale ? rightScale : leftScale;
-    const cx = (d: Datum) => xScale(xAccessor(d)) ?? 0;
+    const cx = (d: Datum) => xScale(xAccessor(d));
 
     return (
         <>
@@ -118,13 +117,13 @@ function ComposedSeriesLayerInner<Datum>({
                 const yS = scaleFor(s);
                 const color = s.color ?? getChartColor(i);
                 const base =
-                    yS(Math.max(0, yS.domain()[0] ?? 0)) ?? innerHeight;
+                    yS(Math.max(0, yS.domain()[0] ?? 0));
                 return (
                     <g key={s.key} opacity={s.fillOpacity ?? 0.5}>
                         {data.map((d, j) => {
                             const v = s.accessor?.(d);
                             if (v == null || !Number.isFinite(v)) return null;
-                            const y = yS(v) ?? 0;
+                            const y = yS(v);
                             return (
                                 <rect
                                     key={j}
@@ -150,7 +149,7 @@ function ComposedSeriesLayerInner<Datum>({
                         key={s.key}
                         data={data as Datum[]}
                         x={(d) => cx(d)}
-                        y={(d) => yS(s.accessor?.(d) ?? 0) ?? 0}
+                        y={(d) => yS(s.accessor?.(d) ?? 0)}
                         yScale={yS as never}
                         curve={curveMonotoneX}
                         fill={color}
@@ -185,10 +184,10 @@ function ComposedSeriesLayerInner<Datum>({
                             const up = (c as number) >= (o as number);
                             const color = up ? UP : DOWN;
                             const x = cx(d);
-                            const yHigh = yS(h as number) ?? 0;
-                            const yLow = yS(l as number) ?? 0;
-                            const yOpen = yS(o as number) ?? 0;
-                            const yClose = yS(c as number) ?? 0;
+                            const yHigh = yS(h as number);
+                            const yLow = yS(l as number);
+                            const yOpen = yS(o as number);
+                            const yClose = yS(c as number);
                             const bodyTop = Math.min(yOpen, yClose);
                             const bodyH = Math.max(1, Math.abs(yClose - yOpen));
                             const bw = Math.max(1, barWidth);
@@ -230,7 +229,7 @@ function ComposedSeriesLayerInner<Datum>({
                         key={s.key}
                         data={filtered}
                         x={(d) => cx(d)}
-                        y={(d) => yS(s.accessor?.(d) ?? 0) ?? 0}
+                        y={(d) => yS(s.accessor?.(d) ?? 0)}
                         curve={curveMonotoneX}
                         stroke={color}
                         strokeWidth={s.strokeWidth ?? 2}
@@ -332,10 +331,13 @@ function Inner<Datum>({
     const step = innerWidth / Math.max(1, data.length);
     const barWidth = Math.max(1, step * 0.6);
 
-    const bisect = useMemo(
-        () => bisector<Datum, Date | number>((d) => stableXAccessor(d)).center,
-        [stableXAccessor],
-    );
+    const bisect = useMemo(() => {
+        const bisectX = bisector<Datum, Date | number>((d) =>
+            stableXAccessor(d),
+        );
+        return (array: ArrayLike<Datum>, x: Date | number) =>
+            bisectX.center(array, x);
+    }, [stableXAccessor]);
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
     // Cache the overlay rect for the duration of a hover session instead of
@@ -388,7 +390,7 @@ function Inner<Datum>({
             .filter((x): x is NonNullable<typeof x> => x !== null);
     }, [hoverDatum, series, tooltipValueFormat]);
 
-    const cx = (d: Datum) => xScale(stableXAccessor(d)) ?? 0;
+    const cx = (d: Datum) => xScale(stableXAccessor(d));
 
     return (
         <div style={{ position: "relative", width, height }}>

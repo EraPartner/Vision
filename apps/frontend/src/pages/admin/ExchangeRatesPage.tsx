@@ -84,7 +84,7 @@ function RatesTable({ rows }: { rows: { currency: string; rate: number }[] }) {
                                 100 * rate,
                                 "EUR",
                                 locale,
-                                appSettings.showDecimalPlaces ?? 2,
+                                appSettings.showDecimalPlaces,
                             )}
                         </TableCell>
                     </TableRow>

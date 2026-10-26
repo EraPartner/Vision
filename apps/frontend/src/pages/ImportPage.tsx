@@ -50,19 +50,14 @@ function readCommitReceipt(state: unknown): ImportCommitReceipt | null {
     if (!receipt || typeof receipt !== "object") return null;
     const { imported, duplicates, errors, dateFrom, dateTo } =
         receipt as Partial<ImportCommitReceipt>;
-    if (
-        ![imported, duplicates, errors].every(
-            (value) =>
-                typeof value === "number" &&
-                Number.isFinite(value) &&
-                value >= 0,
-        )
-    )
+    const isCount = (value: unknown): value is number =>
+        typeof value === "number" && Number.isFinite(value) && value >= 0;
+    if (!isCount(imported) || !isCount(duplicates) || !isCount(errors))
         return null;
     return {
-        imported: imported!,
-        duplicates: duplicates!,
-        errors: errors!,
+        imported,
+        duplicates,
+        errors,
         dateFrom:
             typeof dateFrom === "string" && YMD.test(dateFrom)
                 ? dateFrom

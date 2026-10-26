@@ -87,10 +87,10 @@ export function buildExclusionQuery(params?: {
     return queryParams.toString();
 }
 
-export async function createWithStatus<TPayload, TData>(
+export async function createWithStatus(
     endpoint: string,
-    payload: TPayload,
-): Promise<{ data: TData; wasCreated: boolean }> {
+    payload: unknown,
+): Promise<{ data: unknown; wasCreated: boolean }> {
     const url = `${API_BASE_URL}${endpoint}`;
     const response = await rawFetch(url, {
         method: "POST",
@@ -102,9 +102,9 @@ export async function createWithStatus<TPayload, TData>(
         throw await parseEnvelopeError(response, "Request failed");
     }
 
-    const body = await response.json();
+    const body: unknown = await response.json();
     return {
-        data: unwrapEnvelope<TData>(body),
+        data: unwrapEnvelope(body),
         wasCreated: response.status === 201,
     };
 }
@@ -125,8 +125,8 @@ export async function postMultipartImport<T>(
         throw await parseEnvelopeError(response, "Request failed");
     }
 
-    const body = await response.json();
-    return unwrapEnvelope<T>(body);
+    const body: unknown = await response.json();
+    return unwrapEnvelope(body) as T;
 }
 
 /**

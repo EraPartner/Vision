@@ -63,13 +63,13 @@ export const isPortfolioTxnType = enumGuard<PortfolioTxnType>({
 type _TxnTypeSubsetParity = PortfolioTxnType extends CanonicalPortfolioTxnType
     ? true
     : never;
-const _txnTypeSubsetParity: _TxnTypeSubsetParity = true;
-void _txnTypeSubsetParity;
+// Compile-time assertion only: fails to type-check if the subset drifts.
+true satisfies _TxnTypeSubsetParity;
 
 /** Returns a translated label for a portfolio transaction type. */
 export function getTxnTypeLabel(
     t: (key: string) => string,
-    type: PortfolioTxnType | string,
+    type: string,
 ): string {
     return t(`portfolio.txnType.${type}`) || type;
 }
@@ -108,8 +108,8 @@ export interface InvestmentSummary {
     maturity_date?: string | undefined;
     location?: string;
     municipality?: string;
-    cadastral_income?: number | undefined;
-    municipality_tax_rate?: number | undefined;
+    cadastral_income?: number | null | undefined;
+    municipality_tax_rate?: number | null | undefined;
     notes?: string;
     price_provider?: PriceProvider;
     price_provider_id?: string | undefined;

@@ -132,7 +132,7 @@ export function mapFromAPI(
         is_executed: pt.is_executed,
         last_executed_date: pt.last_executed_date,
         executed_transaction_id: pt.executed_transaction_id,
-        execution_count: pt.execution_count ?? 0,
+        execution_count: pt.execution_count,
         executions: pt.executions ?? [],
         created_at: pt.created_at,
     };
@@ -161,9 +161,13 @@ export function mapToCreateAPI(
     // "loan(12 months)" — it isn't a valid pattern and the UI renders the loan
     // label from loan_term_months, not this field.
 
+    if (payment.account_id === undefined) {
+        throw new Error("A planned payment needs an account");
+    }
+
     return {
         planned_date: payment.due_date,
-        account_id: payment.account_id!,
+        account_id: payment.account_id,
         recipient_id: payment.recipient_id ?? undefined,
         memo: payment.name,
         amount: payment.amount,

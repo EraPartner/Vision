@@ -192,10 +192,7 @@ export default function ProviderHealthPage() {
             setProbingSet((s) => new Set(s).add(name));
         },
         onSuccess: (result) => {
-            const label =
-                result.provider.label ??
-                result.provider.provider ??
-                String(result.provider);
+            const label = result.provider.label;
             if (result.ok) {
                 toast.success(
                     t("admin.providers.probeOk", { provider: label }),

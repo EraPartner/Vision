@@ -137,7 +137,7 @@ export default function PortfolioTaxPage() {
             <PageShell>
                 <PageError
                     title={t("common.error")}
-                    message={dashboardQuery.error?.message ?? t("common.error")}
+                    message={dashboardQuery.error.message}
                     onRetry={() => dashboardQuery.refetch()}
                 />
             </PageShell>

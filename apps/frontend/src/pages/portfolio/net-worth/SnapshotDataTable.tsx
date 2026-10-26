@@ -43,7 +43,7 @@ export function SnapshotDataTable({
       result.push({
         date: s.date,
         liquid: s.liquid,
-        liabilities: s.liabilities ?? 0,
+        liabilities: s.liabilities,
         investments: s.investments,
         netWorth: s.netWorth,
         change: older ? s.netWorth - older.netWorth : undefined,
@@ -55,7 +55,7 @@ export function SnapshotDataTable({
   // Only show the liabilities column when some day carries debt, so debt-free
   // portfolios keep the original column set.
   const hasLiabilities = useMemo(
-    () => snapshots.some((s) => Math.abs(s.liabilities ?? 0) > 0.005),
+    () => snapshots.some((s) => Math.abs(s.liabilities) > 0.005),
     [snapshots],
   );
 

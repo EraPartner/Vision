@@ -79,7 +79,7 @@ export default function WatchlistPage() {
 
     const symbols =
         data?.items
-            ?.map((i) => i.symbol)
+            .map((i) => i.symbol)
             .filter(Boolean)
             .join(",") || "";
     const { data: quotesData, isError: quotesError } = useMarketQuotesQuery(
@@ -237,7 +237,7 @@ export default function WatchlistPage() {
                                     isBelowTarget && "bg-success/[0.06]",
                                 )}
                                 leading={
-                                    Icon !== undefined ? <Icon /> : undefined
+                                    <Icon />
                                 }
                                 title={
                                     <span className="flex max-w-full flex-wrap items-baseline gap-x-2 gap-y-1">

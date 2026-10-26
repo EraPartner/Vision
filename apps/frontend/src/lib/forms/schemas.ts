@@ -56,7 +56,7 @@ export function moneyAmount(
     return z.string().transform((value, ctx) => {
         if (!value) {
             ctx.addIssue({
-                code: z.ZodIssueCode.custom,
+                code: "custom",
                 message: keys.required,
             });
             return z.NEVER;
@@ -64,13 +64,13 @@ export function moneyAmount(
         const parsed = parseLocaleNumber(value, numberFormat);
         if (!Number.isFinite(parsed)) {
             ctx.addIssue({
-                code: z.ZodIssueCode.custom,
+                code: "custom",
                 message: keys.invalid,
             });
             return z.NEVER;
         }
         if (keys.zero !== undefined && parsed === 0) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, message: keys.zero });
+            ctx.addIssue({ code: "custom", message: keys.zero });
             return z.NEVER;
         }
         return parsed;

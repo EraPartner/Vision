@@ -34,13 +34,14 @@ export function getRecipient(id: RecipientId): Promise<Recipient> {
 export async function createRecipient(
     recipient: RecipientCreate,
 ): Promise<{ recipient: Recipient; wasCreated: boolean }> {
-    const { data, wasCreated } = await createWithStatus<RecipientCreate, Recipient>(
-        '/api/recipients',
-        recipient,
-    );
+    const { data, wasCreated } = await createWithStatus('/api/recipients', recipient);
     // createWithStatus takes no schema; check the body the caller reads.
-    checkResponseContract(RecipientCreatedSchema, data, 'POST /api/recipients');
-    return { recipient: data, wasCreated };
+    const created = checkResponseContract(
+        RecipientCreatedSchema,
+        data as Recipient,
+        'POST /api/recipients',
+    );
+    return { recipient: created, wasCreated };
 }
 
 export function updateRecipient(id: RecipientId, recipient: RecipientUpdate): Promise<Recipient> {
@@ -51,7 +52,7 @@ export function updateRecipient(id: RecipientId, recipient: RecipientUpdate): Pr
 }
 
 export async function deleteRecipient(id: RecipientId): Promise<void> {
-    await apiRequest<void>(`/api/recipients/${id}`, { method: 'DELETE' });
+    await apiRequest(`/api/recipients/${id}`, { method: 'DELETE' });
 }
 
 export interface PatternSuggestion {
@@ -126,7 +127,7 @@ export function updateRecipientPattern(recipientId: RecipientId, patternId: numb
 
 /** Delete a pattern. Responds 204 No Content — nothing to unwrap. */
 export async function deleteRecipientPattern(recipientId: RecipientId, patternId: number): Promise<void> {
-    await apiRequest<void>(`/api/recipients/${recipientId}/patterns/${patternId}`, { method: 'DELETE' });
+    await apiRequest(`/api/recipients/${recipientId}/patterns/${patternId}`, { method: 'DELETE' });
 }
 
 export function previewRecipientPattern(recipientId: RecipientId, data: Pick<RecipientPatternCreate, 'pattern' | 'pattern_kind' | 'case_sensitive'>): Promise<{ matchCount: number; recipientIds: RecipientId[] }> {

@@ -319,7 +319,13 @@ function NavMenuItem({ item, collapsed, pathname, onHover }: NavMenuItemProps) {
 
     // A long sidebar scrolls; the page the user is on must be in view.
     useEffect(() => {
-        if (isActive) linkRef.current?.scrollIntoView?.({ block: "nearest" });
+        // jsdom does not implement scrollIntoView.
+        if (isActive)
+            (
+                linkRef.current as Partial<
+                    Pick<HTMLAnchorElement, "scrollIntoView">
+                > | null
+            )?.scrollIntoView?.({ block: "nearest" });
     }, [isActive]);
 
     return (

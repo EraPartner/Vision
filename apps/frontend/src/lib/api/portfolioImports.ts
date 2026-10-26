@@ -207,7 +207,10 @@ function configToParams(
     p.append("number_format", config.number_format ?? "auto");
     p.append("default_asset_class", config.defaultAssetClass);
     p.append("default_type", config.defaultType);
-    p.append("type_mapping", JSON.stringify(config.typeMapping ?? {}));
+    p.append("type_mapping", JSON.stringify(
+            // Saved parser configs predate the mapping, so it can be absent.
+            (config.typeMapping as Record<string, string> | undefined) ?? {},
+        ));
     p.append("date_column", config.dateColumn);
     if (config.typeColumn) p.append("type_column", config.typeColumn);
     if (config.symbolColumn) p.append("symbol_column", config.symbolColumn);
@@ -407,7 +410,7 @@ export function updatePortfolioParserConfig(
 }
 
 export function deletePortfolioParserConfig(id: number): Promise<void> {
-    return apiRequest<void>(`/api/portfolio/import/parsers/${id}`, {
+    return apiRequest(`/api/portfolio/import/parsers/${id}`, {
         method: "DELETE",
     });
 }

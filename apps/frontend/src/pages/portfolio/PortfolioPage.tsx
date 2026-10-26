@@ -469,12 +469,13 @@ export default function PortfolioPage() {
         );
         return {
             accounts: [...accountIds]
-                .map((id) => ({
-                    id,
-                    label: accounts.has(id)
-                        ? accountLabel(accounts.get(id)!)
-                        : `#${id}`,
-                }))
+                .map((id) => {
+                    const account = accounts.get(id);
+                    return {
+                        id,
+                        label: account ? accountLabel(account) : `#${id}`,
+                    };
+                })
                 .sort((a, b) =>
                     a.label.localeCompare(b.label, undefined, {
                         sensitivity: "base",
@@ -497,7 +498,7 @@ export default function PortfolioPage() {
         if (selectedAccountId === undefined) return undefined;
         const byInvestment = new Map<number, PortfolioSummaryAccountTotals>();
         for (const summary of portfolioSummary?.summaries ?? []) {
-            const row = summary.accountTotals?.find(
+            const row = summary.accountTotals.find(
                 (entry) => entry.account_id === selectedAccountId,
             );
             if (row) byInvestment.set(summary.id, row);
@@ -552,7 +553,7 @@ export default function PortfolioPage() {
         if (selectedAccountId === undefined) {
             return { currentValue: totalValue, gainLoss: totalGainLoss };
         }
-        const row = portfolioSummary?.accountTotals?.find(
+        const row = portfolioSummary?.accountTotals.find(
             (entry) => entry.account_id === selectedAccountId,
         );
         return {
@@ -1259,10 +1260,7 @@ export default function PortfolioPage() {
                                                             key={inv.id}
                                                             asChild
                                                             leading={
-                                                                Icon !==
-                                                                undefined ? (
-                                                                    <Icon />
-                                                                ) : undefined
+                                                                <Icon />
                                                             }
                                                             title={
                                                                 <span className="inline-flex max-w-full items-center gap-2">

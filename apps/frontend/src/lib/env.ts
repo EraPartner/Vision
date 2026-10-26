@@ -32,7 +32,7 @@ const optionalUrl = z
             new URL(trimmed);
         } catch {
             ctx.addIssue({
-                code: z.ZodIssueCode.custom,
+                code: "custom",
                 message: `Expected URL, got: ${trimmed}`,
             });
             return z.NEVER;
@@ -48,7 +48,7 @@ const logLevelEnv = z
         const normalized = value.trim().toLowerCase();
         if (!(LOG_LEVELS as readonly string[]).includes(normalized)) {
             ctx.addIssue({
-                code: z.ZodIssueCode.custom,
+                code: "custom",
                 message: `Expected one of ${LOG_LEVELS.join('|')}, got: ${value}`,
             });
             return z.NEVER;
@@ -69,7 +69,7 @@ const envSchema = z
         // build into colorblind-safe colors by default.
         VITE_SKIN_V2: booleanEnv(false),
     })
-    .passthrough();
+    .loose();
 
 export type FrontendEnv = z.infer<typeof envSchema>;
 

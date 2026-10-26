@@ -259,7 +259,7 @@ type Matches<A, B> =
           : WidenedEnumKeys<A, B>;
 
 type IsOptionalKey<T, K extends keyof T> =
-    Record<never, never> extends Pick<T, K> ? true : false;
+    Partial<Pick<T, K>> extends Pick<T, K> ? true : false;
 
 /** True iff `T`, with `null`/`undefined` stripped, is exactly `number`. */
 type IsNumeric<T> = [NonNullable<T>] extends [number]

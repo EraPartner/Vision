@@ -35,7 +35,8 @@ function keyFor(investmentId: InvestmentId): string {
 }
 
 export function usePortfolioTaxClassifications() {
-    const { value: preloaded, isLoading } = usePreloadedSetting<PortfolioTaxClassificationMap>(SETTINGS_KEY);
+    const { value: preloadedValue, isLoading } = usePreloadedSetting(SETTINGS_KEY);
+    const preloaded = preloadedValue as PortfolioTaxClassificationMap | null;
     const [classifications, setClassifications] = useState<PortfolioTaxClassificationMap>({});
 
     useEffect(() => {
@@ -76,7 +77,7 @@ export function usePortfolioTaxClassifications() {
                 stripped.reyndersInterestPortion = entry.reyndersInterestPortion;
             }
             if (Object.keys(stripped).length === 0) {
-                delete next[key];
+                Reflect.deleteProperty(next, key);
             } else {
                 next[key] = stripped;
             }

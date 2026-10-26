@@ -76,7 +76,7 @@ export function SettingsPreloadProvider({ children }: { children: ReactNode }) {
                     setRawSettings(map);
                 }
             })
-            .catch((err) => {
+            .catch((err: unknown) => {
                 // Backend unreachable on startup — contexts will use their own defaults
                 logger.warn("Settings preload failed; using defaults", err);
                 if (!cancelled) setRawSettings({});
@@ -106,12 +106,12 @@ export function SettingsPreloadProvider({ children }: { children: ReactNode }) {
  * Returns `undefined` while loading, and `null` if the key was not found.
  */
 // eslint-disable-next-line react-refresh/only-export-components
-export function usePreloadedSetting<T>(key: string): {
-    value: T | null;
+export function usePreloadedSetting(key: string): {
+    value: unknown;
     isLoading: boolean;
 } {
     const { rawSettings, isLoading } = useContext(SettingsPreloadContext);
     if (isLoading) return { value: null, isLoading: true };
     const v = rawSettings?.[key];
-    return { value: v !== undefined ? (v as T) : null, isLoading: false };
+    return { value: v !== undefined ? v : null, isLoading: false };
 }

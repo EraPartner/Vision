@@ -220,7 +220,7 @@ export default function PortfolioForecastPage() {
         return { rows: r, series: s };
     }, [forecast, t]);
 
-    const unavailable = forecast && forecast.available === false;
+    const unavailable = forecast && !forecast.available;
 
     return (
         <PageShell className="">
@@ -459,7 +459,7 @@ export default function PortfolioForecastPage() {
                             size="compact"
                             icon={AlertTriangle}
                             title={
-                                forecast?.reason === "no_holdings"
+                                forecast.reason === "no_holdings"
                                     ? t("research.forecast.noHoldings")
                                     : t("research.forecast.insufficientHistory")
                             }
@@ -522,7 +522,7 @@ export default function PortfolioForecastPage() {
                             value={fmtPct(
                                 forecast?.targetValue != null &&
                                     forecast.targetValue !== 0
-                                    ? forecast?.probTarget
+                                    ? forecast.probTarget
                                     : forecast?.probBelowInvested,
                             )}
                             subtitle={

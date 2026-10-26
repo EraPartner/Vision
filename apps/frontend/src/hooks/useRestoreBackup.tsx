@@ -72,7 +72,12 @@ export function useRestoreBackup({ onSuccess }: RestoreOptions = {}) {
                 if (result.frontendState?.keys) {
                     try {
                         for (const [key, value] of Object.entries(
-                            result.frontendState.keys,
+                            // Parsed from the backup file, so values are not
+                            // guaranteed to be strings.
+                            result.frontendState.keys as Record<
+                                string,
+                                unknown
+                            >,
                         )) {
                             window.localStorage.setItem(key, String(value));
                         }
@@ -171,7 +176,6 @@ export function useRestoreBackup({ onSuccess }: RestoreOptions = {}) {
             setPassphraseOpen(false);
             setPendingFile(null);
             setPassphraseInput("");
-            if (outcome !== "ok") setRunning(false);
         } catch (err: unknown) {
             toast.error(t("settings.restore.failed"), {
                 description: electronErrorToMessage(err, t),

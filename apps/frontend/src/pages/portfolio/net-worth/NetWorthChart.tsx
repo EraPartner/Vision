@@ -36,7 +36,7 @@ export function NetWorthChart({
     // Only plot the liabilities line when there is debt to show, so debt-free
     // portfolios keep the original three-line chart.
     const hasLiabilities = useMemo(
-        () => snapshots.some((s) => Math.abs(s.liabilities ?? 0) > 0.005),
+        () => snapshots.some((s) => Math.abs(s.liabilities) > 0.005),
         [snapshots],
     );
 

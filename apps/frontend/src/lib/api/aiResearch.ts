@@ -102,8 +102,8 @@ export const getInvestigation = (id: string) =>
         `/api/ai-research/investigations/${encodeURIComponent(id)}`,
         { schema: AiInvestigationDetailSchema },
     );
-export const deleteInvestigation = (id: string) =>
-    apiRequest<void>(
+export const deleteInvestigation = (id: string): Promise<void> =>
+    apiRequest(
         `/api/ai-research/investigations/${encodeURIComponent(id)}`,
         { method: "DELETE" },
     );
@@ -147,12 +147,12 @@ export async function uploadResearchDocument(file: File) {
         throw await parseEnvelopeError(response, "Document upload failed");
     return checkResponseContract(
         ResearchDocumentSchema,
-        unwrapEnvelope<ResearchDocument>(await response.json()),
+        unwrapEnvelope(await response.json()) as ResearchDocument,
         "POST /api/ai-research/documents",
     );
 }
 
-export const deleteResearchDocument = (id: string) =>
-    apiRequest<void>(`/api/ai-research/documents/${encodeURIComponent(id)}`, {
+export const deleteResearchDocument = (id: string): Promise<void> =>
+    apiRequest(`/api/ai-research/documents/${encodeURIComponent(id)}`, {
         method: "DELETE",
     });

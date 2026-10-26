@@ -321,7 +321,7 @@ export function updateCustomParserConfig(
 }
 
 export function deleteCustomParserConfig(id: number): Promise<void> {
-    return apiRequest<void>(`/api/import/parsers/${id}`, { method: "DELETE" });
+    return apiRequest(`/api/import/parsers/${id}`, { method: "DELETE" });
 }
 
 /** `POST /api/import/recipients` and `/categories` result. */

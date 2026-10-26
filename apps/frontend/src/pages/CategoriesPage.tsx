@@ -440,7 +440,7 @@ export default function CategoriesPage() {
                                     <DropdownMenuCheckboxItem
                                         checked={showAll}
                                         onCheckedChange={(checked) =>
-                                            setShowAll(checked === true)
+                                            setShowAll(checked)
                                         }
                                     >
                                         {t("common.includeInactive")}

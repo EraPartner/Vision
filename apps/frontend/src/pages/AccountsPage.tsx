@@ -161,7 +161,7 @@ export default function AccountsPage() {
         const drift = holdingsOnly ? undefined : driftBadge(a);
         const canReconcile =
             !holdingsOnly && (!!drift || a.multi_currency_cash);
-        const Icon = TYPE_ICON[a.type] ?? Landmark;
+        const Icon = TYPE_ICON[a.type];
 
         const metaParts: ReactNode[] = [
             <span key="type">{t(`accounts.type.${a.type}`)}</span>,

@@ -32,7 +32,7 @@ export function updateTag(id: TagId, data: TagUpdate): Promise<Tag> {
 }
 
 export async function deleteTag(id: TagId): Promise<void> {
-    await apiRequest<void>(`/api/tags/${id}`, { method: 'DELETE' });
+    await apiRequest(`/api/tags/${id}`, { method: 'DELETE' });
 }
 
 export function bulkTagTransactions(request: BulkTagRequest): Promise<BulkTagResult> {

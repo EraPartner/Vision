@@ -496,7 +496,7 @@ export default function ChartBuilderPage() {
                     open: (d) => d[`${s.id}_o`],
                     high: (d) => d[`${s.id}_h`],
                     low: (d) => d[`${s.id}_l`],
-                    close: (d) => d[`${s.id}`],
+                    close: (d) => d[s.id],
                 });
             } else {
                 composed.push({
@@ -509,7 +509,7 @@ export default function ChartBuilderPage() {
                     axis: s.axis,
                     color,
                     fillOpacity: s.field === "volume" ? 0.4 : undefined,
-                    accessor: (d) => d[`${s.id}`],
+                    accessor: (d) => d[s.id],
                 });
             }
         });

@@ -80,9 +80,9 @@ function Inner({
                 >
                     <Area<number>
                         data={data as number[]}
-                        x={(_, i) => xScale(i) ?? 0}
+                        x={(_, i) => xScale(i)}
                         y0={height}
-                        y1={(v) => yScale(v) ?? 0}
+                        y1={(v) => yScale(v)}
                         curve={curveMonotoneX}
                         fill={color}
                         fillOpacity={0.15}
@@ -99,8 +99,8 @@ function Inner({
             >
                 <LinePath<number>
                     data={data as number[]}
-                    x={(_, i) => xScale(i) ?? 0}
-                    y={(v) => yScale(v) ?? 0}
+                    x={(_, i) => xScale(i)}
+                    y={(v) => yScale(v)}
                     curve={curveMonotoneX}
                     stroke={color}
                     strokeWidth={strokeWidth}

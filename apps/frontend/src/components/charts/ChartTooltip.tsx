@@ -162,7 +162,10 @@ export function ChartTooltip({
             if (!el) return;
             const ro = new ResizeObserver((entries) => {
                 const entry = entries[entries.length - 1];
-                const box = entry?.borderBoxSize?.[0];
+                // Older WebKit omits borderBoxSize, which the DOM typings declare always set.
+                const sizes: ReadonlyArray<ResizeObserverSize> | undefined =
+                    entry?.borderBoxSize;
+                const box = sizes?.[0];
                 tipSizeRef.current = box
                     ? { w: box.inlineSize, h: box.blockSize }
                     : { w: el.offsetWidth, h: el.offsetHeight };

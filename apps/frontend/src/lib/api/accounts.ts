@@ -24,28 +24,16 @@ import type {
 } from "@vision/types/brands";
 
 // Money fields the Account type declares as numbers. accountService.list emits
-// them as JSON numbers and AccountListSchema requires that, so `Number(...)` is
-// an identity here; the one real conversion is `drift: null` (no statement
+// them as JSON numbers and AccountListSchema requires that, so no numeric
+// conversion is needed; the one real conversion is `null` (no statement
 // reading) becoming `undefined`: the frontend convention is that absent means
 // absent.
 function normalizeAccount(a: Account): Account {
     return {
         ...a,
-        computed_balance:
-            a.computed_balance == null ? undefined : Number(a.computed_balance),
-        balance_parts: a.balance_parts?.map((part) => ({
-            ...part,
-            balance: Number(part.balance),
-        })),
-        statement_balances: a.statement_balances?.map((statement) => ({
-            ...statement,
-            balance: Number(statement.balance),
-        })),
-        reconcilable_balance:
-            a.reconcilable_balance == null
-                ? undefined
-                : Number(a.reconcilable_balance),
-        drift: a.drift == null ? undefined : Number(a.drift),
+        computed_balance: a.computed_balance ?? undefined,
+        reconcilable_balance: a.reconcilable_balance ?? undefined,
+        drift: a.drift ?? undefined,
     };
 }
 
@@ -93,7 +81,7 @@ export function updateAccount(
 }
 
 export async function deleteAccount(id: AccountId): Promise<void> {
-    await apiRequest<void>(`/api/accounts/${id}`, { method: "DELETE" });
+    await apiRequest(`/api/accounts/${id}`, { method: "DELETE" });
 }
 
 export type AccountCloseBalanceHandling = "preserve" | "adjustment";

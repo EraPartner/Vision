@@ -169,7 +169,7 @@ export default function StatisticsPage() {
             widgetDefs.map((w) => ({
                 ...w,
                 label: (w as typeof w & { labelKey?: string }).labelKey
-                    ? t((w as typeof w & { labelKey?: string }).labelKey!)
+                    ? t((w as typeof w & { labelKey: string }).labelKey)
                     : (w.label ?? w.id),
             })),
         [widgetDefs, t],
@@ -254,7 +254,7 @@ export default function StatisticsPage() {
                                 <Skeleton className="h-32 w-full" />
                             </div>
                             <div className="grid gap-4 sm:grid-cols-3">
-                                {[...Array(3)].map((_, i) => (
+                                {Array.from({ length: 3 }).map((_, i) => (
                                     <Skeleton key={i} className="h-14 w-full" />
                                 ))}
                             </div>
@@ -483,7 +483,7 @@ export default function StatisticsPage() {
                             graphExclusions={graphExclusions}
                             onToggleExclusion={toggleGraphExclusion}
                             exclusionsApply={exclusionsApply}
-                            availableYears={data?.allYears}
+                            availableYears={data.allYears}
                         />
                     </Suspense>
                 </TabsContent>

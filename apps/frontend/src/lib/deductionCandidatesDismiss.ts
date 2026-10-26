@@ -21,7 +21,7 @@ export interface DeductionCandidateDismissal {
 function getStorage(): Storage | null {
     try {
         // globalThis: works in the browser and degrades to null in node-env tests.
-        return globalThis.localStorage ?? null;
+        return (globalThis as { localStorage?: Storage }).localStorage ?? null;
     } catch {
         return null;
     }

@@ -1,5 +1,10 @@
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+    skipToken,
+    useMutation,
+    useQuery,
+    useQueryClient,
+} from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import type { AccountCreate, AccountUpdate } from "@/types/api";
 import { toast } from "sonner";
@@ -41,7 +46,10 @@ export function useAccountTotals(currency: CurrencyCode) {
 export function useAccountMergePreview(sourceId: AccountId, targetId?: AccountId) {
     return useQuery({
         queryKey: accountKeys.mergePreview(sourceId, targetId ?? 0),
-        queryFn: () => apiClient.previewMerge(sourceId, targetId!),
+        queryFn:
+            targetId === undefined
+                ? skipToken
+                : () => apiClient.previewMerge(sourceId, targetId),
         enabled: targetId !== undefined,
         staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });

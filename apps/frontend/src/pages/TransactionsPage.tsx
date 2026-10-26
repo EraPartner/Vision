@@ -432,8 +432,7 @@ export default function TransactionsPage() {
         (row: TableTransaction) => {
             const raw = allItems.find((item) => item.id === row.id);
             const transactionDate = (
-                ((raw?.transaction_date as string | undefined) || row.date) ??
-                ""
+                (raw?.transaction_date as string | undefined) || row.date
             ).split("T")[0];
             const accountId = raw?.account_id ?? row.accountId;
             const recipientId =
@@ -774,7 +773,7 @@ export default function TransactionsPage() {
                         <Skeleton className="h-4 w-28 mt-1" />
                     </CardHeader>
                     <CardContent className="space-y-2">
-                        {[...Array(8)].map((_, i) => (
+                        {Array.from({ length: 8 }).map((_, i) => (
                             <Skeleton key={i} className="h-12 w-full" />
                         ))}
                     </CardContent>

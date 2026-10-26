@@ -122,7 +122,7 @@ function RecipientComboboxItems({
     const { t } = useLanguage();
     const typed = search.trim();
     const canCreate =
-        !!onCreate &&
+        onCreate !== undefined &&
         typed.length > 0 &&
         !recipients.some(
             (recipient) =>
@@ -144,7 +144,7 @@ function RecipientComboboxItems({
                     {canCreate && (
                         <CommandItem
                             value={`__create__ ${typed}`}
-                            onSelect={() => onCreate?.(typed)}
+                            onSelect={() => onCreate(typed)}
                         >
                             <Plus className="mr-2 h-4 w-4 text-primary" />
                             <span className="text-primary">

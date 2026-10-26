@@ -182,10 +182,12 @@ function visualPlanFromSource(
     source: Record<string, unknown>,
 ): VisualAnalysisPlan {
     const select =
-        (source.select as Array<{
-            id: string;
-            source: { kind: string };
-        }>) ?? [];
+        (source.select as
+            | Array<{
+                  id: string;
+                  source: { kind: string };
+              }>
+            | undefined) ?? [];
     return {
         datasetId: String(source.datasetId),
         fields: select
@@ -194,7 +196,9 @@ function visualPlanFromSource(
         measures: select
             .filter((entry) => entry.source.kind === "metric")
             .map((entry) => entry.id),
-        filters: ((source.filters as Array<Record<string, unknown>>) ?? []).map(
+        filters: (
+            (source.filters as Array<Record<string, unknown>> | undefined) ?? []
+        ).map(
             (filter) => {
                 const left = filter.left as Record<string, unknown>;
                 const columnId = String(left.columnId);
@@ -211,15 +215,19 @@ function visualPlanFromSource(
                 };
             },
         ),
-        groups: (source.groupBy as string[]) ?? [],
-        joins: ((source.joins as Array<{ pathId: string }>) ?? []).map(
+        groups: (source.groupBy as string[] | undefined) ?? [],
+        joins: (
+            (source.joins as Array<{ pathId: string }> | undefined) ?? []
+        ).map(
             (join) => join.pathId,
         ),
         orderBy: (
-            (source.orderBy as Array<{
-                outputId: string;
-                direction: "asc" | "desc";
-            }>) ?? []
+            (source.orderBy as
+                | Array<{
+                      outputId: string;
+                      direction: "asc" | "desc";
+                  }>
+                | undefined) ?? []
         ).map(({ outputId, direction }) => ({
             id: outputId,
             direction,
@@ -245,8 +253,8 @@ function sourceFromSaved(saved: SavedAnalysis): {
     }
     return {
         mode: "sql",
-        sql: String(source?.text ?? ""),
-        datasetIds: (source?.datasetIds as string[]) ?? [],
+        sql: typeof source?.text === "string" ? source.text : "",
+        datasetIds: (source?.datasetIds as string[] | undefined) ?? [],
         visualOrigin: source?.visualOrigin
             ? visualPlanFromSource(
                   source.visualOrigin as Record<string, unknown>,
@@ -276,6 +284,16 @@ function parseSqlValues(
         throw new Error(invalidMessage);
     }
     return parsed as AnalysisValue[];
+}
+
+/** Editor JSON is forwarded as-is; the server validates its shape. */
+function parseJson(text: string): unknown {
+    return JSON.parse(text) as unknown;
+}
+
+function requireResult(result: AnalysisResult | null | undefined): AnalysisResult {
+    if (result == null) throw new Error("No analysis result to read column types from");
+    return result;
 }
 
 function inferColumnType(result: AnalysisResult, id: string): string {
@@ -528,10 +546,15 @@ export default function AnalysisWorkspacePage() {
     const [sqlHistory, setSqlHistory] = useState<string[]>(() => {
         if (typeof window === "undefined") return [];
         try {
-            return JSON.parse(
+            const parsed: unknown = JSON.parse(
                 localStorage.getItem(LOCAL_STORAGE_KEYS.ANALYSIS_SQL_HISTORY) ||
                     "[]",
             );
+            return Array.isArray(parsed)
+                ? parsed.filter(
+                      (entry): entry is string => typeof entry === "string",
+                  )
+                : [];
         } catch {
             return [];
         }
@@ -737,7 +760,12 @@ export default function AnalysisWorkspacePage() {
     useEffect(() => {
         if (resultFocusRequest === 0) return;
         resultHeadingRef.current?.focus();
-        resultHeadingRef.current?.scrollIntoView?.({ block: "start" });
+        // jsdom does not implement scrollIntoView.
+        (
+            resultHeadingRef.current as Partial<
+                Pick<HTMLElement, "scrollIntoView">
+            > | null
+        )?.scrollIntoView?.({ block: "start" });
     }, [resultFocusRequest]);
 
     const execute = async (
@@ -791,9 +819,7 @@ export default function AnalysisWorkspacePage() {
                               label: String(
                                   "label" in column ? column.label : column.id,
                               ),
-                              type: String(
-                                  "type" in column ? column.type : "string",
-                              ),
+                              type: "type" in column ? column.type : "string",
                           })),
                           limit: planOverride.limit,
                           offset: pageOffset,
@@ -885,7 +911,7 @@ export default function AnalysisWorkspacePage() {
                               ...column,
                               label: column.id,
                               type: inferColumnType(
-                                  displayedResult!,
+                                  requireResult(displayedResult),
                                   column.id,
                               ),
                               nullable: true,
@@ -932,9 +958,9 @@ export default function AnalysisWorkspacePage() {
                     .split("\n")
                     .map((value) => value.trim())
                     .filter(Boolean),
-                formulas: JSON.parse(formulasJson || "[]"),
-                assumptions: JSON.parse(assumptionsJson || "[]"),
-                assumptionValues: JSON.parse(assumptionValuesJson || "{}"),
+                formulas: parseJson(formulasJson || "[]"),
+                assumptions: parseJson(assumptionsJson || "[]"),
+                assumptionValues: parseJson(assumptionValuesJson || "{}"),
             };
             return selectedSaved
                 ? apiClient.updateSavedAnalysis(selectedSaved.id, input)
@@ -1189,7 +1215,7 @@ export default function AnalysisWorkspacePage() {
             </nav>
             <div className="space-y-4">
                 <div className="min-w-0 space-y-4">
-                    {dataset?.relation?.startsWith("service:") && (
+                    {dataset?.relation.startsWith("service:") && (
                         <Card>
                             <CardContent
                                 variant="compact"
@@ -1218,7 +1244,7 @@ export default function AnalysisWorkspacePage() {
                                                     ? "date"
                                                     : "text"
                                             }
-                                            value={String(plan[key] ?? "")}
+                                            value={plan[key] ?? ""}
                                             onChange={(event) =>
                                                 setPlan({
                                                     ...plan,
@@ -3064,14 +3090,14 @@ export default function AnalysisWorkspacePage() {
                                             []
                                         }
                                         assumptions={{
-                                            definitions: JSON.parse(
+                                            definitions: parseJson(
                                                 resultInputs.assumptionsJson,
                                             ),
-                                            values: JSON.parse(
+                                            values: parseJson(
                                                 resultInputs.assumptionValuesJson,
                                             ),
                                         }}
-                                        formulas={JSON.parse(
+                                        formulas={parseJson(
                                             resultInputs.formulasJson,
                                         )}
                                         scenarioModel={scenarioModel}
@@ -3252,7 +3278,7 @@ export default function AnalysisWorkspacePage() {
                                                                 ),
                                                             );
                                                         })
-                                                        .catch((cause) =>
+                                                        .catch((cause: unknown) =>
                                                             setError(
                                                                 apiErrorToMessage(
                                                                     cause,
@@ -3281,7 +3307,7 @@ export default function AnalysisWorkspacePage() {
                                                             .then(
                                                                 setProposalPreview,
                                                             )
-                                                            .catch((cause) =>
+                                                            .catch((cause: unknown) =>
                                                                 setError(
                                                                     apiErrorToMessage(
                                                                         cause,
@@ -3369,7 +3395,7 @@ export default function AnalysisWorkspacePage() {
                         <CardContent className="space-y-2">
                             {(savedQuery.data != null && savedQuery.data.length > 0) && (
                                 <List>
-                                    {savedQuery.data?.map((saved) => {
+                                    {savedQuery.data.map((saved) => {
                                         const active =
                                             selectedSaved?.id === saved.id;
                                         return (

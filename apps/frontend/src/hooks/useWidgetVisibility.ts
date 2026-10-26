@@ -27,11 +27,11 @@ async function loadFromBackend(): Promise<void> {
     pendingLoad = (async () => {
         try {
             const result = await apiClient.getSetting(SETTINGS_KEY);
-            const value = result?.value ?? {};
+            const value: unknown = result.value ?? {};
             if (
                 typeof value !== "object" ||
                 Array.isArray(value) ||
-                Object.values(value).some(
+                Object.values(value as Record<string, unknown>).some(
                     (page) =>
                         !page ||
                         typeof page !== "object" ||
@@ -84,7 +84,7 @@ function scheduleSave(v: WidgetVisibilityMap) {
         saveQueue = saveQueue
             .then(() => apiClient.saveSetting(SETTINGS_KEY, v))
             .then(() => undefined)
-            .catch((err) => {
+            .catch((err: unknown) => {
                 logger.error("Failed to save widget visibility:", err);
                 useSettingsStore.getState()._markSettingsSaveError();
             });
@@ -145,8 +145,7 @@ export function useWidgetVisibility(
     );
     const resetToDefaults = useCallback(() => {
         applyEdit((base) => {
-            const next = { ...base };
-            delete next[pageKey];
+            const { [pageKey]: _removed, ...next } = base;
             return next;
         });
     }, [pageKey]);

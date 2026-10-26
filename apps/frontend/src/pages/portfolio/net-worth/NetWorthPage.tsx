@@ -318,8 +318,8 @@ export default function NetWorthPage() {
         firstNetWorth !== 0
             ? (allTimeChange / Math.abs(firstNetWorth)) * 100
             : 0;
-    const monthlyChange = data.monthlyChange ?? 0;
-    const monthlyChangePercent = data.monthlyChangePercent ?? 0;
+    const monthlyChange = data.monthlyChange;
+    const monthlyChangePercent = data.monthlyChangePercent;
 
     // The two bars read as a subtraction: assets minus debt is the number above.
     const assets = current.liquid + current.investments;
@@ -395,7 +395,7 @@ export default function NetWorthPage() {
                             scope="investment"
                             className="type-footnote text-label-tertiary"
                         />
-                        {(data.unconvertedCurrencies?.length ?? 0) > 0 && (
+                        {data.unconvertedCurrencies.length > 0 && (
                             <p className="type-footnote text-warning">
                                 {t("accounts.totalIncomplete")}
                             </p>

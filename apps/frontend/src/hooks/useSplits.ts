@@ -1,5 +1,10 @@
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+    skipToken,
+    useMutation,
+    useQuery,
+    useQueryClient,
+} from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { invalidateTransactionData, splitKeys } from "@/lib/queryKeys";
 import { toast } from "sonner";
@@ -29,7 +34,10 @@ export function useOwedByRecipient(
 ) {
     return useQuery({
         queryKey: splitKeys.owedByRecipient(recipientId, currency),
-        queryFn: () => apiClient.getOwedByRecipient(recipientId!, currency),
+        queryFn:
+            recipientId == null
+                ? skipToken
+                : () => apiClient.getOwedByRecipient(recipientId, currency),
         enabled: recipientId != null,
         staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });
@@ -38,7 +46,10 @@ export function useOwedByRecipient(
 export function useSplitsByTransaction(transactionId: TransactionId | null) {
     return useQuery({
         queryKey: splitKeys.byTransaction(transactionId),
-        queryFn: () => apiClient.getSplitsByTransaction(transactionId!),
+        queryFn:
+            transactionId == null
+                ? skipToken
+                : () => apiClient.getSplitsByTransaction(transactionId),
         enabled: transactionId != null,
         staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });

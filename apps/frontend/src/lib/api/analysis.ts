@@ -278,8 +278,8 @@ export const runSavedAnalysis = (id: string) =>
         `/api/analysis/saved/${encodeURIComponent(id)}/run`,
         { method: "POST", schema: SavedAnalysisSchema },
     );
-export const deleteSavedAnalysis = (id: string) =>
-    apiRequest<void>(`/api/analysis/saved/${encodeURIComponent(id)}`, {
+export const deleteSavedAnalysis = (id: string): Promise<void> =>
+    apiRequest(`/api/analysis/saved/${encodeURIComponent(id)}`, {
         method: "DELETE",
     });
 

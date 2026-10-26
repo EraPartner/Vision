@@ -135,9 +135,9 @@ function AreaSeriesLayerInner<Datum>({
                         const s = series.find((x) => x.key === key);
                         return s ? (s.accessor(d) ?? 0) : 0;
                     }}
-                    x={(d) => xScale(xAccessor(d.data)) ?? 0}
-                    y0={(d) => yScale(d[0]) ?? 0}
-                    y1={(d) => yScale(d[1]) ?? 0}
+                    x={(d) => xScale(xAccessor(d.data))}
+                    y0={(d) => yScale(d[0])}
+                    y1={(d) => yScale(d[1])}
                 >
                     {({ stacks, path }) =>
                         stacks.map((stack, i) => {
@@ -186,9 +186,9 @@ function AreaSeriesLayerInner<Datum>({
                                 {s.fillOpacity !== 0 && (
                                     <AreaClosed<Datum>
                                         data={data as Datum[]}
-                                        x={(d) => xScale(xAccessor(d)) ?? 0}
+                                        x={(d) => xScale(xAccessor(d))}
                                         y={(d) =>
-                                            yScale(s.accessor(d) ?? 0) ?? 0
+                                            yScale(s.accessor(d) ?? 0)
                                         }
                                         yScale={yScale}
                                         curve={curveMonotoneX}
@@ -198,8 +198,8 @@ function AreaSeriesLayerInner<Datum>({
                                 )}
                                 <LinePath<Datum>
                                     data={data as Datum[]}
-                                    x={(d) => xScale(xAccessor(d)) ?? 0}
-                                    y={(d) => yScale(s.accessor(d) ?? 0) ?? 0}
+                                    x={(d) => xScale(xAccessor(d))}
+                                    y={(d) => yScale(s.accessor(d) ?? 0)}
                                     curve={curveMonotoneX}
                                     stroke={color}
                                     strokeWidth={s.strokeWidth ?? 2}
@@ -317,10 +317,13 @@ function AreaChartInner<Datum>({
         });
     }, [data, innerHeight, referenceLines, series, stacked, yDomain]);
 
-    const bisect = useMemo(
-        () => bisector<Datum, Date | number>((d) => stableXAccessor(d)).center,
-        [stableXAccessor],
-    );
+    const bisect = useMemo(() => {
+        const bisectX = bisector<Datum, Date | number>((d) =>
+            stableXAccessor(d),
+        );
+        return (array: ArrayLike<Datum>, x: Date | number) =>
+            bisectX.center(array, x);
+    }, [stableXAccessor]);
 
     const [hoverIndex, setHoverIndex] = useState<number | null>(null);
     const { syncedX, publishHover } = useChartSync(syncId);
@@ -445,7 +448,7 @@ function AreaChartInner<Datum>({
 
     const tooltipLeft =
         hoverDatum != null
-            ? margin.left + (xScale(xAccessor(hoverDatum)) ?? 0)
+            ? margin.left + (xScale(xAccessor(hoverDatum)))
             : 0;
     const tooltipTop = margin.top;
 
@@ -581,8 +584,8 @@ function AreaChartInner<Datum>({
                               )
                                   return null;
                               const xA =
-                                  xScale(stableXAccessor(startDatum)) ?? 0;
-                              const xB = xScale(stableXAccessor(endDatum)) ?? 0;
+                                  xScale(stableXAccessor(startDatum));
+                              const xB = xScale(stableXAccessor(endDatum));
                               return (
                                   <rect
                                       x={Math.min(xA, xB)}
@@ -603,11 +606,11 @@ function AreaChartInner<Datum>({
                     {hoverDatum != null ? (
                         <Line
                             from={{
-                                x: xScale(xAccessor(hoverDatum)) ?? 0,
+                                x: xScale(xAccessor(hoverDatum)),
                                 y: 0,
                             }}
                             to={{
-                                x: xScale(xAccessor(hoverDatum)) ?? 0,
+                                x: xScale(xAccessor(hoverDatum)),
                                 y: innerHeight,
                             }}
                             stroke={CHART_NEUTRAL.label}
@@ -700,10 +703,10 @@ function AreaChartInner<Datum>({
                               : String(Math.round(v * 100) / 100);
                       const xA =
                           margin.left +
-                          (xScale(stableXAccessor(startDatum)) ?? 0);
+                          (xScale(stableXAccessor(startDatum)));
                       const xB =
                           margin.left +
-                          (xScale(stableXAccessor(endDatum)) ?? 0);
+                          (xScale(stableXAccessor(endDatum)));
                       const mid = (xA + xB) / 2;
                       const rising = b - a > 0;
                       return (

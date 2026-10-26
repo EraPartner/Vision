@@ -12,20 +12,23 @@ import plugin from "tailwindcss/plugin";
 
 type CssValue = string | number;
 type Scale = Record<string, CssValue>;
+type PluginApi = Parameters<Parameters<typeof plugin>[0]>[0];
+type CssInJs = Parameters<PluginApi["addBase"]>[0];
 
 function withoutDefault(values: Scale): Scale {
     return Object.fromEntries(Object.entries(values).filter(([key]) => key !== "DEFAULT"));
 }
 
 export const tailwindAnimate = plugin(
-    ({ addUtilities, matchUtilities, theme }) => {
-        const scale = (key: string) => (theme(key) ?? {}) as Scale;
-        addUtilities({
-            "@keyframes enter": theme("keyframes.enter"),
-            "@keyframes exit": theme("keyframes.exit"),
+    (api) => {
+        const scale = (key: string) => (api.theme(key) ?? {}) as Scale;
+        const animationDuration = api.theme("animationDuration.DEFAULT") as CssValue;
+        api.addUtilities({
+            "@keyframes enter": api.theme("keyframes.enter") as CssInJs,
+            "@keyframes exit": api.theme("keyframes.exit") as CssInJs,
             ".animate-in": {
                 animationName: "enter",
-                animationDuration: theme("animationDuration.DEFAULT"),
+                animationDuration,
                 "--tw-enter-opacity": "initial",
                 "--tw-enter-scale": "initial",
                 "--tw-enter-rotate": "initial",
@@ -34,7 +37,7 @@ export const tailwindAnimate = plugin(
             },
             ".animate-out": {
                 animationName: "exit",
-                animationDuration: theme("animationDuration.DEFAULT"),
+                animationDuration,
                 "--tw-exit-opacity": "initial",
                 "--tw-exit-scale": "initial",
                 "--tw-exit-rotate": "initial",
@@ -42,28 +45,28 @@ export const tailwindAnimate = plugin(
                 "--tw-exit-translate-y": "initial",
             },
         });
-        matchUtilities(
+        api.matchUtilities(
             {
                 "fade-in": (value) => ({ "--tw-enter-opacity": value }),
                 "fade-out": (value) => ({ "--tw-exit-opacity": value }),
             },
             { values: scale("animationOpacity") },
         );
-        matchUtilities(
+        api.matchUtilities(
             {
                 "zoom-in": (value) => ({ "--tw-enter-scale": value }),
                 "zoom-out": (value) => ({ "--tw-exit-scale": value }),
             },
             { values: scale("animationScale") },
         );
-        matchUtilities(
+        api.matchUtilities(
             {
                 "spin-in": (value) => ({ "--tw-enter-rotate": value }),
                 "spin-out": (value) => ({ "--tw-exit-rotate": value }),
             },
             { values: scale("animationRotate") },
         );
-        matchUtilities(
+        api.matchUtilities(
             {
                 "slide-in-from-top": (value) => ({ "--tw-enter-translate-y": `-${value}` }),
                 "slide-in-from-bottom": (value) => ({ "--tw-enter-translate-y": value }),
@@ -76,31 +79,31 @@ export const tailwindAnimate = plugin(
             },
             { values: scale("animationTranslate") },
         );
-        matchUtilities(
+        api.matchUtilities(
             { duration: (value) => ({ animationDuration: value }) },
             { values: withoutDefault(scale("animationDuration")) },
         );
-        matchUtilities(
+        api.matchUtilities(
             { delay: (value) => ({ animationDelay: value }) },
             { values: scale("animationDelay") },
         );
-        matchUtilities(
+        api.matchUtilities(
             { ease: (value) => ({ animationTimingFunction: value }) },
             { values: withoutDefault(scale("animationTimingFunction")) },
         );
-        addUtilities({
+        api.addUtilities({
             ".running": { animationPlayState: "running" },
             ".paused": { animationPlayState: "paused" },
         });
-        matchUtilities(
+        api.matchUtilities(
             { "fill-mode": (value) => ({ animationFillMode: value }) },
             { values: scale("animationFillMode") },
         );
-        matchUtilities(
+        api.matchUtilities(
             { direction: (value) => ({ animationDirection: value }) },
             { values: scale("animationDirection") },
         );
-        matchUtilities(
+        api.matchUtilities(
             { repeat: (value) => ({ animationIterationCount: value }) },
             { values: scale("animationRepeat") },
         );
@@ -108,9 +111,9 @@ export const tailwindAnimate = plugin(
     {
         theme: {
             extend: {
-                animationDelay: ({ theme }) => ({ ...theme("transitionDelay") }),
-                animationDuration: ({ theme }) => ({ 0: "0ms", ...theme("transitionDuration") }),
-                animationTimingFunction: ({ theme }) => ({ ...theme("transitionTimingFunction") }),
+                animationDelay: ({ theme }) => ({ ...(theme("transitionDelay") as Scale) }),
+                animationDuration: ({ theme }) => ({ 0: "0ms", ...(theme("transitionDuration") as Scale) }),
+                animationTimingFunction: ({ theme }) => ({ ...(theme("transitionTimingFunction") as Scale) }),
                 animationFillMode: {
                     none: "none",
                     forwards: "forwards",
@@ -123,10 +126,10 @@ export const tailwindAnimate = plugin(
                     alternate: "alternate",
                     "alternate-reverse": "alternate-reverse",
                 },
-                animationOpacity: ({ theme }) => ({ DEFAULT: 0, ...theme("opacity") }),
-                animationTranslate: ({ theme }) => ({ DEFAULT: "100%", ...theme("translate") }),
-                animationScale: ({ theme }) => ({ DEFAULT: 0, ...theme("scale") }),
-                animationRotate: ({ theme }) => ({ DEFAULT: "30deg", ...theme("rotate") }),
+                animationOpacity: ({ theme }) => ({ DEFAULT: 0, ...(theme("opacity") as Scale) }),
+                animationTranslate: ({ theme }) => ({ DEFAULT: "100%", ...(theme("translate") as Scale) }),
+                animationScale: ({ theme }) => ({ DEFAULT: 0, ...(theme("scale") as Scale) }),
+                animationRotate: ({ theme }) => ({ DEFAULT: "30deg", ...(theme("rotate") as Scale) }),
                 animationRepeat: { 0: "0", 1: "1", infinite: "infinite" },
                 keyframes: {
                     enter: {

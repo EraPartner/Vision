@@ -196,7 +196,7 @@ export async function loadBackupSettings(): Promise<{
     }
     try {
         const result = await getSetting("backup_settings");
-        if (result?.value) {
+        if (result.value) {
             const v = result.value as {
                 backupDir?: string;
                 backupOnQuit?: boolean;
@@ -243,7 +243,7 @@ export async function loadServicesSettings(): Promise<{
     }
     try {
         const result = await getSetting("services_settings");
-        if (result?.value) {
+        if (result.value) {
             const v = result.value as { keepServicesOnQuit?: boolean };
             return { keepServicesOnQuit: v.keepServicesOnQuit ?? false };
         }

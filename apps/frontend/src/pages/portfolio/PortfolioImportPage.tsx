@@ -152,16 +152,19 @@ export function PortfolioImportPage() {
             .then((result) => {
                 if (!isCurrent()) return;
                 setDetected(result ? { file, result } : undefined);
-                if (result)
-                    setConfig((previous) => ({
-                        ...portfolioImportPresetConfig(
-                            result.presetKey ?? result.source,
-                        )!,
-                        ...(accountChosenManually.current
-                            ? { accountId: previous.accountId }
-                            : {}),
-                    }));
-                else if (/\.xlsx?$/i.test(file.name)) setDetectionFailed(true);
+                if (result) {
+                    const preset = portfolioImportPresetConfig(
+                        result.presetKey ?? result.source,
+                    );
+                    if (preset)
+                        setConfig((previous) => ({
+                            ...preset,
+                            ...(accountChosenManually.current
+                                ? { accountId: previous.accountId }
+                                : {}),
+                        }));
+                } else if (/\.xlsx?$/i.test(file.name))
+                    setDetectionFailed(true);
             })
             .catch(() => {
                 if (isCurrent()) setDetectionFailed(true);
@@ -305,8 +308,8 @@ export function PortfolioImportPage() {
             errors: 0,
             percent: 0,
         });
-        const adapterName = isSpecializedFormat
-            ? config.format!
+        const adapterName = isSpecializedFormat && config.format
+            ? config.format
             : isSaved && selectedParser
               ? selectedParser.name
               : parserName.trim() || "portfolio_generic";

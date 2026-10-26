@@ -341,7 +341,7 @@ export default function DashboardPage() {
     const monthlyData = useMemo(() => {
         const useExclusions = graphExclusions["monthlyTrends"] ?? true;
         if (useExclusions && exclusionsApply && monthlySummaryFiltered) {
-            return monthlySummaryFiltered.months ?? [];
+            return monthlySummaryFiltered.months;
         }
         return monthlySummaryUnfiltered?.months ?? [];
     }, [
@@ -373,8 +373,9 @@ export default function DashboardPage() {
                 categoryId != null ? `category:${categoryId}` : "uncategorised";
             const name = tx.category_name || t("txPage.field.uncategorized");
 
-            if (categoryMap.has(key)) {
-                categoryMap.get(key)!.count++;
+            const existing = categoryMap.get(key);
+            if (existing) {
+                existing.count++;
             } else {
                 categoryMap.set(key, {
                     name,
@@ -486,7 +487,7 @@ export default function DashboardPage() {
             {...loadingSurfaceProps}
             className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
         >
-            {[...Array(4)].map((_, i) => (
+            {Array.from({ length: 4 }).map((_, i) => (
                 <Card key={i} variant="interactive">
                     <CardHeader className="pb-3 flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
                         <Skeleton className="h-4 w-28" />
@@ -508,7 +509,7 @@ export default function DashboardPage() {
                 <Skeleton className="h-4 w-32 mt-1" />
             </CardHeader>
             <CardContent className="space-y-2">
-                {[...Array(5)].map((_, i) => (
+                {Array.from({ length: 5 }).map((_, i) => (
                     <Skeleton key={i} className="h-10 w-full" />
                 ))}
             </CardContent>
@@ -529,7 +530,7 @@ export default function DashboardPage() {
     const partialErrorMessage = partialError ? partialError.message : "";
     const hasAnyData =
         Boolean(statsData) ||
-        (transactionsData?.items?.length ?? 0) > 0 ||
+        (transactionsData?.items.length ?? 0) > 0 ||
         Boolean(monthlySummaryFiltered) ||
         Boolean(monthlySummaryUnfiltered);
     const allFromCache = Boolean(statsError) && Boolean(transactionsError);
@@ -560,7 +561,7 @@ export default function DashboardPage() {
                 />
                 <PageError
                     message={t("dashboard.errorLoading", {
-                        msg: String(partialErrorMessage),
+                        msg: partialErrorMessage,
                     })}
                     onRetry={retryDashboard}
                 />
@@ -584,13 +585,13 @@ export default function DashboardPage() {
         totalIncome,
         appSettings.defaultCurrency,
         locale,
-        appSettings.showDecimalPlaces ?? 2,
+        appSettings.showDecimalPlaces,
     );
     const spendingCompact = formatCurrencyCompact(
         totalSpending,
         appSettings.defaultCurrency,
         locale,
-        appSettings.showDecimalPlaces ?? 2,
+        appSettings.showDecimalPlaces,
     );
 
     return (
@@ -646,13 +647,13 @@ export default function DashboardPage() {
                         <div className="text-foreground/80">
                             {allFromCache
                                 ? t("dashboard.staleDataWarning", {
-                                      msg: String(partialErrorMessage),
+                                      msg: partialErrorMessage,
                                   }) ||
                                   t("dashboard.partialDataWarning", {
-                                      msg: String(partialErrorMessage),
+                                      msg: partialErrorMessage,
                                   })
                                 : t("dashboard.partialDataWarning", {
-                                      msg: String(partialErrorMessage),
+                                      msg: partialErrorMessage,
                                   })}
                         </div>
                     </div>

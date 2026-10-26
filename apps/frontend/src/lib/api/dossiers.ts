@@ -118,8 +118,8 @@ export const updateDossier = (
         body: JSON.stringify({ ...content, expectedVersion }),
         schema: DossierSchema,
     });
-export const deleteDossier = (id: string) =>
-    apiRequest<void>(path(id), { method: "DELETE" });
+export const deleteDossier = (id: string): Promise<void> =>
+    apiRequest(path(id), { method: "DELETE" });
 export async function listDossierVersions(
     id: string,
 ): Promise<DossierVersion[]> {

@@ -20,21 +20,21 @@ export function usePortfolioPrefetch(_workspace?: string) {
   const currency = currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY);
 
   const prefetchNetWorth = useCallback(() => {
-    void queryClient.prefetchQuery({
+    void queryClient.query({
       queryKey: netWorthKeys.byCurrency(currency),
       queryFn: () => apiClient.getNetWorth({ currency }),
       staleTime: PREFETCH_STALE_TIME,
-    });
+    }).catch(() => undefined);
   }, [queryClient, currency]);
 
   const prefetchPerformance = useCallback(() => {
     // Same portfolioKeys.performance key PortfolioPage reads, so the
     // prefetch warms that exact cache entry.
-    void queryClient.prefetchQuery({
+    void queryClient.query({
       queryKey: portfolioKeys.performance(currency, "all"),
       queryFn: () => apiClient.getPortfolioPerformance({ currency, period: "all" }),
       staleTime: PREFETCH_STALE_TIME,
-    });
+    }).catch(() => undefined);
   }, [queryClient, currency]);
 
   // Fire both prefetches immediately on mount – no delay, no workspace check.

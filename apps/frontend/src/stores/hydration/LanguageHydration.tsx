@@ -64,7 +64,7 @@ const enDictPromise: Promise<Record<string, string>> | null =
     cachedLanguage === "en"
         ? englishLoader()
               .then((mod) => mod.default)
-              .catch((err) => {
+              .catch((err: unknown) => {
                   logger.error('Failed to preload locale "en":', err);
                   return {};
               })
@@ -169,7 +169,7 @@ export function LanguageHydration({ children }: { children: ReactNode }) {
             .then((mod) => {
                 setDictionary(language, mod.default);
             })
-            .catch((err) => {
+            .catch((err: unknown) => {
                 logger.error(`Failed to load locale "${language}":`, err);
             });
     }, [language, dicts, setDictionary]);

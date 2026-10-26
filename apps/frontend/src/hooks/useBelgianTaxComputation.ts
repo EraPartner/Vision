@@ -115,7 +115,7 @@ export function useTaxYearFigures(year: number): TaxYearFiguresView {
     if (frozenCalculation)
         return {
             calculation: frozenCalculation,
-            householdResult: meta?.frozenHouseholdResult ?? null,
+            householdResult: meta.frozenHouseholdResult ?? null,
             isPending: false,
             isComputing: false,
             error: null,

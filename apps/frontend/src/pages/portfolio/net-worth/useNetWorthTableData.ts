@@ -17,7 +17,7 @@ export interface UseNetWorthTableDataResult {
     isLoading: boolean;
     error: Error | null;
     isFetchingMore: boolean;
-    hasMoreRef: React.MutableRefObject<boolean>;
+    hasMoreRef: React.RefObject<boolean>;
     hasMore: boolean;
     loadMore: () => Promise<void>;
 }
@@ -50,7 +50,7 @@ export function useNetWorthTableData({
 
     useEffect(() => {
         if (!initialData) return;
-        const items = initialData.snapshots ?? [];
+        const items = initialData.snapshots;
         const total = initialData.snapshotsTotal ?? items.length;
         setAllItems(items);
         setTotalItems(total);
@@ -69,7 +69,7 @@ export function useNetWorthTableData({
                 limit: pageSize,
                 offset: offsetRef.current,
             });
-            const newSnapshots = result.snapshots ?? [];
+            const newSnapshots = result.snapshots;
             const total = result.snapshotsTotal ?? (offsetRef.current + newSnapshots.length);
             setAllItems((prev) => {
                 const existingDates = new Set(prev.map((s) => s.date));

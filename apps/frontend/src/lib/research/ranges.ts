@@ -12,13 +12,21 @@ export interface ChartRangeOption {
  * The 1M-5Y range ladder shared by the research compare/chart-builder pages
  * and the watchlist chart dialog.
  */
+const RANGE_1M: ChartRangeOption = { label: '1M', range: '1mo', interval: '1d' };
+const RANGE_1Y: ChartRangeOption = { label: '1Y', range: '1y', interval: '1wk' };
+
 export const RESEARCH_RANGES: ChartRangeOption[] = [
-    { label: '1M', range: '1mo', interval: '1d' },
+    RANGE_1M,
     { label: '3M', range: '3mo', interval: '1d' },
     { label: '6M', range: '6mo', interval: '1d' },
-    { label: '1Y', range: '1y', interval: '1wk' },
+    RANGE_1Y,
     { label: '5Y', range: '5y', interval: '1mo' },
 ];
+
+/** Default range of the market lookup chart. */
+export const LOOKUP_DEFAULT_RANGE = RANGE_1M;
+/** Default range of the research compare page. */
+export const COMPARE_DEFAULT_RANGE = RANGE_1Y;
 
 /**
  * The full ladder for the market lookup chart: intraday 1D/5D plus MAX around

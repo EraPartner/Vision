@@ -56,7 +56,7 @@ export interface SegmentedControlProps
 }
 
 const SegmentedControl = React.forwardRef<
-    React.ElementRef<typeof ToggleGroupPrimitive.Root>,
+    React.ComponentRef<typeof ToggleGroupPrimitive.Root>,
     SegmentedControlProps
 >(
     (
@@ -123,7 +123,7 @@ const SegmentedControl = React.forwardRef<
 SegmentedControl.displayName = "SegmentedControl";
 
 const SegmentedControlItem = React.forwardRef<
-    React.ElementRef<typeof ToggleGroupPrimitive.Item>,
+    React.ComponentRef<typeof ToggleGroupPrimitive.Item>,
     React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Item>
 >(({ className, value, children, ...props }, ref) => {
     const active = React.useContext(SegmentedControlValueContext);

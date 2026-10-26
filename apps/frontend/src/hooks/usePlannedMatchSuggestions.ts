@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, skipToken, useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { plannedKeys } from "@/lib/queryKeys";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
@@ -52,27 +52,31 @@ export function useLinkTransactionCandidates(
         queryKey: ["linkTxCandidates", payment?.id, filters],
         enabled: enabled && !!payment && filters !== null,
         placeholderData: keepPreviousData,
-        queryFn: async () => {
-            const current = filters!;
-            const params: Record<string, string | number | boolean> = {
-                limit: 50,
-            };
-            if (current.start_date) params.start_date = current.start_date;
-            if (current.end_date) params.end_date = current.end_date;
-            if (current.bank_account)
-                params.bank_account = current.bank_account;
-            if (current.recipient_id != null) {
-                params.recipient_id = current.recipient_id;
-            } else if (current.recipient_name) {
-                params.recipient_name = current.recipient_name;
-            } else if (payment?.recipient) {
-                params.recipient_name = payment.recipient;
-            }
-            if (current.uncategorised) params.uncategorised = true;
-            params.active = current.active;
-            const response = await apiClient.getTransactions(params);
-            return response.items ?? [];
-        },
+        queryFn:
+            filters === null
+                ? skipToken
+                : async () => {
+                      const params: Record<string, string | number | boolean> =
+                          {
+                              limit: 50,
+                          };
+                      if (filters.start_date)
+                          params.start_date = filters.start_date;
+                      if (filters.end_date) params.end_date = filters.end_date;
+                      if (filters.bank_account)
+                          params.bank_account = filters.bank_account;
+                      if (filters.recipient_id != null) {
+                          params.recipient_id = filters.recipient_id;
+                      } else if (filters.recipient_name) {
+                          params.recipient_name = filters.recipient_name;
+                      } else if (payment?.recipient) {
+                          params.recipient_name = payment.recipient;
+                      }
+                      if (filters.uncategorised) params.uncategorised = true;
+                      params.active = filters.active;
+                      const response = await apiClient.getTransactions(params);
+                      return response.items;
+                  },
     });
     useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
     return query;

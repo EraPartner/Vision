@@ -35,8 +35,9 @@ const SETTINGS_KEY = "dashboard_settings";
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-    const { value: preloaded, isLoading: preloadLoading } =
-        usePreloadedSetting<DashboardSettings>(SETTINGS_KEY);
+    const { value: preloadedValue, isLoading: preloadLoading } =
+        usePreloadedSetting(SETTINGS_KEY);
+    const preloaded = preloadedValue as DashboardSettings | null;
 
     const _hydrateDashboardSettings = useSettingsStore(
         (s) => s._hydrateDashboardSettings,
@@ -86,7 +87,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         saveTimerRef.current = setTimeout(() => {
             apiClient
                 .saveSetting(SETTINGS_KEY, dashboardSettings)
-                .catch((err) => {
+                .catch((err: unknown) => {
                     logger.error("Failed to save settings to database:", err);
                     _markSettingsSaveError();
                 });

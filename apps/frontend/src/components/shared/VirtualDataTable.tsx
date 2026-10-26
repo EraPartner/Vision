@@ -181,7 +181,7 @@ interface VirtualDataTableProps<T> {
     /** Estimated row height for virtualizer */
     rowHeight?: number | undefined;
     /** Optional ref callback to get the cancelEditing function for external use */
-    cancelEditingRef?: React.MutableRefObject<(() => void) | null> | undefined;
+    cancelEditingRef?: React.RefObject<(() => void) | null> | undefined;
     /** Optional callback to notify when editing state changes (true = editing started, false = editing ended) */
     onEditingChange?: ((editing: boolean) => void) | undefined;
     /** Stable identity within the current history entry for Back/Forward scroll restoration. */
@@ -197,11 +197,26 @@ function getSortValue(val: unknown): string | number {
     if (val == null) return "";
     if (typeof val === "number") return val;
     if (typeof val === "boolean") return val ? 1 : 0;
-    return String(val).toLowerCase();
+    return cellText(val).toLowerCase();
 }
 
-function getRowKey<T extends Record<string, unknown>>(
-    row: T,
+/** Plain-text form of an arbitrary cell value (never "[object Object]"). */
+function cellText(val: unknown): string {
+    if (val == null) return "";
+    if (typeof val === "string") return val;
+    if (
+        typeof val === "number" ||
+        typeof val === "boolean" ||
+        typeof val === "bigint"
+    )
+        return String(val);
+    if (val instanceof Date) return String(val);
+    if (Array.isArray(val)) return val.map(cellText).join(",");
+    return JSON.stringify(val);
+}
+
+function getRowKey(
+    row: Record<string, unknown>,
     fallbackIndex: number,
 ): string | number {
     const candidate = row.id;
@@ -471,7 +486,7 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
                                             ? "decimal"
                                             : undefined
                                     }
-                                    value={String(editValues?.[col.key] ?? "")}
+                                    value={cellText(editValues?.[col.key])}
                                     aria-invalid={
                                         col.type === "number" &&
                                         typeof editValues?.[col.key] ===
@@ -506,7 +521,7 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
                         ) : col.render ? (
                             col.render(row, isEditing, sourceIndex)
                         ) : (
-                            String(row[col.key] ?? "")
+                            cellText(row[col.key])
                         )}
                     </div>
                 );
@@ -727,7 +742,10 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
             // A suggestion may open a portaled Radix popper (e.g. the date-range
             // calendar) that lives outside the search container's subtree — clicks
             // inside it must not dismiss the dropdown.
-            if (target?.closest?.("[data-radix-popper-content-wrapper]"))
+            if (
+                target instanceof Element &&
+                target.closest("[data-radix-popper-content-wrapper]")
+            )
                 return;
             setSearchFocused(false);
         };
@@ -818,7 +836,10 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                 startX: e.clientX,
                 startWidth: currentWidth,
             };
-            e.currentTarget.setPointerCapture?.(e.pointerId);
+            // jsdom does not implement pointer capture.
+            (
+                e.currentTarget as Partial<Pick<Element, "setPointerCapture">>
+            ).setPointerCapture?.(e.pointerId);
             // Coalesce the per-pointermove state writes into one commit per animation
             // frame, so a fast drag re-renders the table at most once per frame.
             let rafId: number | null = null;
@@ -837,9 +858,8 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                 )
                     return;
                 const diff = ev.clientX - resizingRef.current.startX;
-                const col = columns.find(
-                    (c) => c.key === resizingRef.current!.key,
-                );
+                const resizingKey = resizingRef.current.key;
+                const col = columns.find((c) => c.key === resizingKey);
                 const minW = col?.minWidth ?? 60;
                 pendingWidth = Math.min(
                     MAX_COLUMN_WIDTH,
@@ -950,9 +970,8 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
 
     const setColumnFilter = (key: string, value: string) => {
         setColumnFilters((prev) => {
-            const next = { ...prev };
-            if (value) next[key] = value;
-            else delete next[key];
+            if (value) return { ...prev, [key]: value };
+            const { [key]: _removed, ...next } = prev;
             return next;
         });
     };
@@ -971,7 +990,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         const vals = new Set<string>();
         data.forEach((row) => {
             const v = row[col.key];
-            if (v != null && String(v).trim()) vals.add(String(v));
+            if (v != null && cellText(v).trim()) vals.add(cellText(v));
         });
         return Array.from(vals).sort((a, b) =>
             a.localeCompare(b, undefined, { numeric: true }),
@@ -1001,7 +1020,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
             const q = filterVal.toLowerCase();
             result = result.filter(({ row }) => {
                 const v = row[key];
-                return v != null && String(v).toLowerCase().includes(q);
+                return v != null && cellText(v).toLowerCase().includes(q);
             });
         }
 
@@ -1010,7 +1029,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
             result = result.filter(({ row }) =>
                 columnsRef.current.some((col) => {
                     const val = row[col.key];
-                    return val != null && String(val).toLowerCase().includes(q);
+                    return val != null && cellText(val).toLowerCase().includes(q);
                 }),
             );
         }
@@ -1226,7 +1245,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                         continue;
                     const raw = values[col.key];
                     if (typeof raw === "string") {
-                        if (raw.trim() === "") delete values[col.key];
+                        if (raw.trim() === "") Reflect.deleteProperty(values, col.key);
                         else {
                             const parsed = parseDecimal(
                                 raw,
@@ -1315,7 +1334,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                     <Input
                         placeholder={
                             isServerSearch
-                                ? (serverMode?.search?.placeholder ??
+                                ? (serverMode.search?.placeholder ??
                                   t("table.searchDatabase"))
                                 : t("table.searchAllColumns")
                         }
