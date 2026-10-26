@@ -5,7 +5,10 @@ import {
     ImportCsvResultSchema,
     ImportPreviewSchema,
     ImportRollbackResultSchema,
+    ImportRowCategoryOverrideSchema,
+    ImportRowRecipientOverrideSchema,
     SavedParserConfigListSchema,
+    SavedParserConfigSchema,
     SimpleImportResultSchema,
 } from "@vision/types/contracts";
 import {
@@ -307,6 +310,7 @@ export function createCustomParserConfig(
     return apiRequest<SavedParserConfig>("/api/import/parsers", {
         method: "POST",
         body: JSON.stringify({ name, config }),
+        schema: SavedParserConfigSchema,
     });
 }
 
@@ -317,6 +321,7 @@ export function updateCustomParserConfig(
     return apiRequest<SavedParserConfig>(`/api/import/parsers/${id}`, {
         method: "PATCH",
         body: JSON.stringify(patch),
+        schema: SavedParserConfigSchema,
     });
 }
 
@@ -403,6 +408,7 @@ export function overrideImportRow(
     return apiRequest(`/api/import/batches/${batchId}/rows/${rowId}/override`, {
         method: "POST",
         body: JSON.stringify({ recipient_id: recipientId }),
+        schema: ImportRowRecipientOverrideSchema,
     });
 }
 
@@ -416,6 +422,7 @@ export function overrideImportRowCategory(
         {
             method: "POST",
             body: JSON.stringify({ category_id: categoryId }),
+            schema: ImportRowCategoryOverrideSchema,
         },
     );
 }

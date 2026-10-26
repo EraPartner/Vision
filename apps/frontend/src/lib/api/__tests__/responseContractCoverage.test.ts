@@ -17,41 +17,24 @@ const sources = import.meta.glob<string>(["../*.ts", "!../*.test.ts"], {
 });
 
 const KNOWN_UNCHECKED = new Set([
-    "admin.ts POST '/api/admin/database/vacuum'",
+    // 204 No Content: there is no body to check.
     'ai.ts POST "/api/ai/model/release"',
     'ai.ts POST "/api/ai/model/warm"',
-    'analysis.ts POST "/api/analysis/extensions/evaluate"',
-    "analysis.ts POST `/api/analysis/cancel/${encodeURIComponent(requestId)}`",
-    "categories.ts PATCH `/api/categories/${id}`",
-    "categories.ts PATCH `/api/categories/tree/${id}`",
-    'categories.ts POST "/api/categories/tree"',
-    "categories.ts POST `/api/categories/tree/${sourceId}/merge`",
-    'electron.ts GET "/api/admin/update/check"',
-    "imports.ts PATCH `/api/import/parsers/${id}`",
-    'imports.ts POST "/api/import/parsers"',
-    "imports.ts POST `/api/import/batches/${batchId}/rows/${rowId}/category-override`",
-    "imports.ts POST `/api/import/batches/${batchId}/rows/${rowId}/override`",
+    // The caller discards the result (void or unknown).
     'info.ts PUT "/api/info/insight-dismissals"',
-    "monitors.ts PATCH path(id)",
-    "monitors.ts POST `${base}/notifications/${encodeURIComponent(id)}/read`",
     'portfolioExposure.ts PUT "/api/investments/exposure/sources"',
+    'transactions.ts POST "/api/transactions/transfers"',
+    // The body depends on the requested operation; the typed result is an
+    // open index signature, so there is no fixed shape to drift from.
+    'analysis.ts POST "/api/analysis/extensions/evaluate"',
+    // Fallback outside Electron; the payload varies by release state.
+    'electron.ts GET "/api/admin/update/check"',
     // Parsed with a local zod schema right after the call.
     "portfolioImports.ts GET `/api/portfolio/import/batches?limit=${pagination.limit}&offset=${pagination.offset}`",
     'portfolioImports.ts POST "/api/portfolio/import/reconciliation/commit"',
     'portfolioImports.ts POST "/api/portfolio/import/reconciliation/preview"',
-    "recipients.ts PATCH `/api/recipients/${id}`",
-    "recipients.ts PATCH `/api/recipients/${recipientId}/patterns/${patternId}`",
-    "recipients.ts POST `/api/recipients/${id}/unmerge`",
-    "recipients.ts POST `/api/recipients/${recipientId}/patterns`",
-    "splits.ts POST '/api/splits/batch'",
-    "splits.ts POST `/api/splits/${splitId}/pay`",
-    "splits.ts POST `/api/splits/${splitId}/settle`",
-    "tags.ts PATCH `/api/tags/${id}`",
-    "tags.ts POST '/api/tags'",
-    "tags.ts POST '/api/transactions/bulk-tag'",
     // Checked with checkResponseContract after a field guard.
     'transactions.ts GET "/api/transactions"',
-    'transactions.ts POST "/api/transactions/transfers"',
 ]);
 
 interface Call {

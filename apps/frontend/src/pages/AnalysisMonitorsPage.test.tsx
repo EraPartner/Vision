@@ -423,7 +423,19 @@ describe("AnalysisMonitorsPage", () => {
             ),
             http.post(`${api}/analysis/monitors/notifications/n-1/read`, () => {
                 reads += 1;
-                return ok({ id: "n-1", readAt: "2026-09-19T01:00:00Z" });
+                return ok({
+                    id: "n-1",
+                    monitorId: "m-1",
+                    observationId: "o-1",
+                    kind: "analysis-threshold",
+                    title: "Cash threshold",
+                    reasonCode: "threshold-crossed",
+                    reason: "English backend diagnostic",
+                    previousValue: "99",
+                    currentValue: "101",
+                    createdAt: "2026-09-19T00:00:00Z",
+                    readAt: "2026-09-19T01:00:00Z",
+                });
             }),
         );
         const user = userEvent.setup();

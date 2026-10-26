@@ -2,6 +2,7 @@ import {
     AnalysisMonitorPageSchema,
     AnalysisMonitorSchema,
     MonitorNotificationPageSchema,
+    MonitorNotificationSchema,
     MonitorObservationPageSchema,
     MonitorObservationSchema,
 } from "@vision/types/contracts";
@@ -137,6 +138,7 @@ export const updateMonitor = (id: string, patch: MonitorUpdate) =>
     apiRequest<AnalysisMonitor>(path(id), {
         method: "PATCH",
         body: JSON.stringify(patch),
+        schema: AnalysisMonitorSchema,
     });
 export const deleteMonitor = (id: string): Promise<void> =>
     apiRequest(path(id), { method: "DELETE" });
@@ -158,5 +160,5 @@ export const listMonitorNotifications = (offset = 0) =>
 export const readMonitorNotification = (id: string) =>
     apiRequest<MonitorNotification>(
         `${base}/notifications/${encodeURIComponent(id)}/read`,
-        { method: "POST" },
+        { method: "POST", schema: MonitorNotificationSchema },
     );

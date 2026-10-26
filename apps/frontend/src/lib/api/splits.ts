@@ -3,7 +3,10 @@ import {
     OwedDetailListSchema,
     OwedSummaryListSchema,
     SettleAllResultSchema,
+    SplitBatchResultSchema,
     SplitListSchema,
+    SplitPaymentSchema,
+    SplitSchema,
 } from '@vision/types/contracts';
 import { apiRequest } from '@/lib/api/client';
 import { requestBlob, requestWithQuery } from '@/lib/api/helpers';
@@ -146,6 +149,7 @@ export function createSplitsBatch(
     return apiRequest('/api/splits/batch', {
         method: 'POST',
         body: JSON.stringify({ transaction_id: transactionId, splits }),
+        schema: SplitBatchResultSchema,
     });
 }
 
@@ -166,11 +170,12 @@ export function recordSplitPayment(
     return apiRequest(`/api/splits/${splitId}/pay`, {
         method: 'POST',
         body: JSON.stringify({ amount, note, paid_at }),
+        schema: SplitPaymentSchema,
     });
 }
 
 export function settleSplit(splitId: SplitId): Promise<SplitItem> {
-    return apiRequest(`/api/splits/${splitId}/settle`, { method: 'POST' });
+    return apiRequest(`/api/splits/${splitId}/settle`, { method: 'POST', schema: SplitSchema });
 }
 
 export function settleAllSplitsByRecipient(recipientId: RecipientId): Promise<{ settled_count: number }> {

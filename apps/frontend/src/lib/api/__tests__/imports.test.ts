@@ -68,7 +68,7 @@ describe("imports API client", () => {
     server.use(
       http.post(`${API_BASE}/api/import/parsers`, async ({ request }) => {
         body = await request.json();
-        return ok({ id: 2, name: "Mine" });
+        return ok(PARSER_CONFIG);
       }),
     );
     await createCustomParserConfig("Mine", { foo: "bar" } as never);
@@ -76,7 +76,7 @@ describe("imports API client", () => {
   });
 
   it("updateCustomParserConfig PATCHes", async () => {
-    server.use(http.patch(`${API_BASE}/api/import/parsers/2`, () => ok({ id: 2, name: "R" })));
+    server.use(http.patch(`${API_BASE}/api/import/parsers/2`, () => ok({ ...PARSER_CONFIG, name: "R" })));
     expect((await updateCustomParserConfig(2, { name: "R" })).name).toBe("R");
   });
 

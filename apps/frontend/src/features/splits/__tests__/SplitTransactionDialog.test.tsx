@@ -208,7 +208,7 @@ describe("SplitTransactionDialog", () => {
         server.use(
             http.post(SPLITS_BATCH_URL, async ({ request }) => {
                 batchBody = await request.json();
-                return ok({ items: [] });
+                return ok({ items: [], total: 0 });
             }),
         );
 

@@ -1,4 +1,5 @@
 import {
+    AnalysisCancelResultSchema,
     AnalysisCatalogSchema,
     AnalysisPivotResultSchema,
     AnalysisProposalPreviewSchema,
@@ -234,7 +235,7 @@ export function executeAnalysis(input: {
 export const cancelAnalysis = (requestId: string) =>
     apiRequest<{ cancelled: boolean; reason?: string }>(
         `/api/analysis/cancel/${encodeURIComponent(requestId)}`,
-        { method: "POST" },
+        { method: "POST", schema: AnalysisCancelResultSchema },
     );
 export function drillAnalysis(
     plan: VisualAnalysisPlan,

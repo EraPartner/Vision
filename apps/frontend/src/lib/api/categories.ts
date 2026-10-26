@@ -9,6 +9,8 @@ import type {
 } from "@/types/api";
 import {
     CategoryListSchema,
+    CategoryNodeSchema,
+    CategorySchema,
     CategoryTreeSchema,
 } from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
@@ -45,6 +47,7 @@ export function updateCategory(
     return apiRequest<Category>(`/api/categories/${id}`, {
         method: "PATCH",
         body: JSON.stringify(category),
+        schema: CategorySchema,
     });
 }
 
@@ -68,6 +71,7 @@ export function createCategoryNode(
     return apiRequest<CategoryNode>("/api/categories/tree", {
         method: "POST",
         body: JSON.stringify(input),
+        schema: CategoryNodeSchema,
     });
 }
 
@@ -78,6 +82,7 @@ export function updateCategoryNode(
     return apiRequest<CategoryNode>(`/api/categories/tree/${id}`, {
         method: "PATCH",
         body: JSON.stringify(input),
+        schema: CategoryNodeSchema,
     });
 }
 
@@ -92,5 +97,6 @@ export function mergeCategoryNode(
     return apiRequest<CategoryNode>(`/api/categories/tree/${sourceId}/merge`, {
         method: "POST",
         body: JSON.stringify({ targetId }),
+        schema: CategoryNodeSchema,
     });
 }

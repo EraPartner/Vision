@@ -3,8 +3,10 @@ import {
     RecipientCreatedSchema,
     RecipientListSchema,
     RecipientMergeResultSchema,
+    RecipientPatternCreatedSchema,
     RecipientPatternListSchema,
     RecipientPatternPreviewSchema,
+    RecipientPatternUpdatedSchema,
     RecipientSchema,
 } from '@vision/types/contracts';
 import { apiRequest, checkResponseContract } from '@/lib/api/client';
@@ -48,6 +50,7 @@ export function updateRecipient(id: RecipientId, recipient: RecipientUpdate): Pr
     return apiRequest<Recipient>(`/api/recipients/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(recipient),
+        schema: RecipientSchema,
     });
 }
 
@@ -74,7 +77,7 @@ export function mergeRecipients(
 }
 
 export function unmergeRecipient(id: RecipientId): Promise<Recipient> {
-    return apiRequest<Recipient>(`/api/recipients/${id}/unmerge`, { method: 'POST' });
+    return apiRequest<Recipient>(`/api/recipients/${id}/unmerge`, { method: 'POST', schema: RecipientSchema });
 }
 
 export interface RecipientPattern {
@@ -115,6 +118,7 @@ export function createRecipientPattern(recipientId: RecipientId, data: Recipient
     return apiRequest(`/api/recipients/${recipientId}/patterns`, {
         method: 'POST',
         body: JSON.stringify(data),
+        schema: RecipientPatternCreatedSchema,
     });
 }
 
@@ -122,6 +126,7 @@ export function updateRecipientPattern(recipientId: RecipientId, patternId: numb
     return apiRequest(`/api/recipients/${recipientId}/patterns/${patternId}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
+        schema: RecipientPatternUpdatedSchema,
     });
 }
 

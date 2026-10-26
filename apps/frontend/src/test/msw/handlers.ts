@@ -1688,7 +1688,7 @@ export const defaultHandlers = [
     // Splits sub-routes
     http.get(`${API_BASE}/api/splits/transaction/:id`, () => ok({ items: [], total: 0 })),
     // 201: routes/splits.js:298.
-    http.post(`${API_BASE}/api/splits/batch`, () => ok201({ items: [] })),
+    http.post(`${API_BASE}/api/splits/batch`, () => ok201({ items: [], total: 0 })),
     // NOTE: there is deliberately no `http.patch('/api/splits/:id')` handler.
     // routes/splits.js registers get/post/delete only — a PATCH there 404s in
     // production, and no frontend client sends one. Mocking it would resurrect
