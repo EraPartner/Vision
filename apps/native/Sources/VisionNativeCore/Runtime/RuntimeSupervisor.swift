@@ -36,6 +36,10 @@ public struct SupervisorConfiguration: Sendable {
     /// Whether `VISION_NATIVE_RUNTIME_DIR` is honoured (Debug builds only, like the
     /// backend URL override).
     public var allowPayloadOverride: Bool
+    /// Whether launches activate the synthetic Demo seed. Only Vision Native Demo does: the
+    /// standard variant holds real data after the switch-over, and a seed change (a new
+    /// schema revision) would otherwise replace that database with Demo data.
+    public var seedsDemo: Bool
 
     public init(
         environment: [String: String],
@@ -45,6 +49,7 @@ public struct SupervisorConfiguration: Sendable {
         readinessAttempts: Int = 600,
         allowPayloadOverride: Bool = false,
         variant: NativeVariant = .standard,
+        seedsDemo: Bool? = nil,
         beforeMigrations: (@Sendable (PendingMigrations, NativeRuntime) async throws -> Void)? = nil
     ) {
         self.environment = environment
@@ -52,6 +57,7 @@ public struct SupervisorConfiguration: Sendable {
         self.resourcesDirectory = resourcesDirectory
         self.postgresPort = postgresPort ?? variant.postgresPort
         self.variant = variant
+        self.seedsDemo = seedsDemo ?? (variant == .demo)
         self.beforeMigrations = beforeMigrations
         self.readinessAttempts = readinessAttempts
         self.allowPayloadOverride = allowPayloadOverride
@@ -217,12 +223,21 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         // A restore interrupted mid-switch is recovered by the Demo preparation, attachments
         // and database together, before any write or seed decision. A malformed journal or
         // an ambiguous switch fails the launch closed (ADR-207).
-        try enterLaunchPhase(.seedingDemo)
         let clock = dependencies.clock
         let now: @Sendable () -> Date = { clock.now() }
-        let prepared = try await NativeDemo.prepare(
-            runtime: runtime, seedRoot: payload.demoSeedDirectory, fileSystem: fileSystem, now: now)
-        if prepared.status == .current,
+        let prepared: PreparedNativeDemo?
+        if configuration.seedsDemo {
+            try enterLaunchPhase(.seedingDemo)
+            prepared = try await NativeDemo.prepare(
+                runtime: runtime, seedRoot: payload.demoSeedDirectory, fileSystem: fileSystem, now: now)
+        } else {
+            // Real data: never seed. The same recovery runs as before a seed decision.
+            try await runtime.discover()
+            try await runtime.ensurePostgresReady()
+            try await runtime.recoverInterruptedRestore()
+            prepared = nil
+        }
+        if let prepared, prepared.status == .current,
             let warning = try await NativeDemo.finalize(
                 runtime: runtime, prepared: prepared, fileSystem: fileSystem, now: now)
         {
@@ -243,7 +258,7 @@ public actor RuntimeSupervisor: BackupSettingsStore {
                 started = try await runtime.start(beforeMigrations: beforeMigrations)
             }
             logger.log("log", "[runtime] backend \(started)")
-            if prepared.switchToken != nil {
+            if let prepared, prepared.switchToken != nil {
                 try await runtime.waitUntilReady(detailed: true)
                 try checkShutdown()
                 if let warning = try await NativeDemo.finalize(
@@ -254,7 +269,7 @@ public actor RuntimeSupervisor: BackupSettingsStore {
             }
         } catch {
             // During a quit the persisted switch plan is rolled back on the next launch.
-            if prepared.switchToken != nil, !shutdownRequested {
+            if let prepared, prepared.switchToken != nil, !shutdownRequested {
                 try await NativeDemo.rollback(runtime: runtime, prepared: prepared, now: now)
             }
             throw error

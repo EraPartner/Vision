@@ -51,7 +51,8 @@ private func makeSupervisor(
     environment: [String: String]? = nil,
     lock: FakeInstanceLock = FakeInstanceLock(),
     log: RecordingLog = RecordingLog(),
-    readinessAttempts: Int = 600
+    readinessAttempts: Int = 600,
+    seedsDemo: Bool = true
 ) -> RuntimeSupervisor {
     RuntimeSupervisor(
         configuration: SupervisorConfiguration(
@@ -60,7 +61,8 @@ private func makeSupervisor(
             homeDirectory: testHome,
             resourcesDirectory: bundleResources,
             readinessAttempts: readinessAttempts,
-            allowPayloadOverride: true),
+            allowPayloadOverride: true,
+            seedsDemo: seedsDemo),
         dependencies: harness.dependencies,
         instanceLock: lock,
         logger: log)
@@ -108,6 +110,28 @@ private func makeSupervisor(
         let again = try await supervisor.launch()
         #expect(again == url)
         #expect(harness.spawner.spawns.count == 2)
+    }
+
+    @Test func standardVariantNeverSeedsTheDemo() async throws {
+        let harness = try Harness()
+        harness.installSeed()
+        let configuration = SupervisorConfiguration(
+            environment: ["PATH": "/usr/bin", "HOME": testHome, RuntimePayload.environmentKey: testRuntimeRoot],
+            homeDirectory: testHome, resourcesDirectory: bundleResources, allowPayloadOverride: true)
+        #expect(!configuration.seedsDemo)
+        let demo = SupervisorConfiguration(
+            environment: [:], homeDirectory: testHome, resourcesDirectory: nil, variant: .demo)
+        #expect(demo.seedsDemo)
+        let supervisor = RuntimeSupervisor(
+            configuration: configuration, dependencies: harness.dependencies, instanceLock: FakeInstanceLock(),
+            logger: RecordingLog())
+        let url = try await supervisor.launch()
+        #expect(await supervisor.phase == .running(url))
+        #expect(harness.fileSystem.json(harness.layout.state)?["demoSeed"] == nil)
+        let restores = harness.runner.calls(named: "pg_restore").filter { call in
+            !call.arguments.contains("--list") && call.arguments != ["--version"]
+        }
+        #expect(restores.isEmpty)
     }
 
     @Test func shutdownStopsTheBackendAndPostgres() async throws {
