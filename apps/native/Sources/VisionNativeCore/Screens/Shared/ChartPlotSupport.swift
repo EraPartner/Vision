@@ -50,11 +50,18 @@ public final class ChartKeyLayoutCache {
 /// points on every body pass. The memo keeps them while the formatting context (locale,
 /// currency, decimals, language) is unchanged, so a hover re-renders without formatting again.
 public final class ChartLabelMemo {
+    /// The most labels kept at once. A chart formats one label per point; a series of years of
+    /// daily points would otherwise keep every string of every context it was ever drawn with.
+    public static let capacity = 2_048
+
     private var context = ""
     private var labels: [String: String] = [:]
     public private(set) var misses = 0
 
     public init() {}
+
+    /// How many labels are kept, for tests.
+    public var count: Int { labels.count }
 
     public func label(_ key: String, context: String, make: () -> String) -> String {
         if self.context != context {
@@ -64,6 +71,7 @@ public final class ChartLabelMemo {
         if let cached = labels[key] { return cached }
         misses += 1
         let made = make()
+        if labels.count >= Self.capacity { labels.removeAll(keepingCapacity: false) }
         labels[key] = made
         return made
     }
@@ -208,16 +216,29 @@ public final class ChartMarkLabelCache {
         let marks: [Mark]
     }
 
+    /// The most lines kept at once; the line that no longer fits replaces the oldest ones.
+    public static let capacity = 8
+
     private var entries: [String: Entry] = [:]
+    private var order: [String] = []
     /// How often a line's marks were built, for tests.
     public private(set) var builds = 0
 
     public init() {}
 
+    /// How many lines are kept, for tests.
+    public var count: Int { entries.count }
+
     /// One `Mark` per point of `line`, in order.
     public func marks(for line: InsightChartSeries, context: String, make: (InsightChartPoint) -> Mark) -> [Mark] {
         if let entry = entries[line.id], entry.context == context, entry.line == line { return entry.marks }
         let marks = line.points.map(make)
+        if entries[line.id] == nil {
+            order.append(line.id)
+            while order.count > Self.capacity {
+                entries[order.removeFirst()] = nil
+            }
+        }
         entries[line.id] = Entry(context: context, line: line, marks: marks)
         builds += 1
         return marks

@@ -146,4 +146,29 @@ import Testing
         #expect(memo.output(for: [1, 2, 3]) { 6 } == 6)
         #expect(memo.builds == 2)
     }
+
+    @Test func theLabelMemoKeepsAtMostItsCapacity() {
+        let memo = ChartLabelMemo()
+        for index in 0..<(ChartLabelMemo.capacity * 2 + 5) {
+            _ = memo.label("k\(index)", context: "en") { "v" }
+        }
+        #expect(memo.count <= ChartLabelMemo.capacity)
+        #expect(memo.label("k0", context: "en") { "again" } == "again")
+    }
+
+    @Test func markLabelsKeepAtMostCapacityLinesAndDropTheOldest() {
+        let cache = ChartMarkLabelCache()
+        let make: (InsightChartPoint) -> ChartMarkLabelCache.Mark = { point in
+            ChartMarkLabelCache.Mark(label: point.key, value: "1")
+        }
+        for index in 0..<(ChartMarkLabelCache.capacity + 3) {
+            _ = cache.marks(for: daily("line\(index)", count: 2), context: "en", make: make)
+        }
+        #expect(cache.count == ChartMarkLabelCache.capacity)
+        let builds = cache.builds
+        _ = cache.marks(for: daily("line\(ChartMarkLabelCache.capacity + 2)", count: 2), context: "en", make: make)
+        #expect(cache.builds == builds)
+        _ = cache.marks(for: daily("line0", count: 2), context: "en", make: make)
+        #expect(cache.builds == builds + 1)
+    }
 }
