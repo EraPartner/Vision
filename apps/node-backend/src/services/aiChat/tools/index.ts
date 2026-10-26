@@ -160,8 +160,9 @@ function coerceArguments(rawArgs: unknown): Record<string, unknown> {
     const trimmed = rawArgs.trim();
     if (!trimmed) return {};
     try {
-      const parsed = JSON.parse(trimmed);
-      if (parsed && typeof parsed === "object") return parsed;
+      const parsed: unknown = JSON.parse(trimmed);
+      if (parsed && typeof parsed === "object")
+        return parsed as Record<string, unknown>;
       throw new ToolValidationError("arguments must be a JSON object");
     } catch (err) {
       if (err instanceof ToolValidationError) throw err;

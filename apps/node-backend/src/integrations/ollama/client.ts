@@ -14,7 +14,7 @@
 import { logger } from "../../config/logger.ts";
 import settings from "../../config/config.ts";
 import { withAppleFoundation } from "./appleFoundation.ts";
-import type { OllamaToolCall } from "./prompts.ts";
+import type { ProviderToolCall } from "./prompts.ts";
 
 export interface OllamaErrorOptions {
   status?: number | null;
@@ -60,7 +60,7 @@ export interface OllamaEmbedResponse {
 export interface OllamaResponseMessage {
   role?: string;
   content?: string;
-  tool_calls?: OllamaToolCall[];
+  tool_calls?: ProviderToolCall[];
 }
 
 /** One /api/chat response object (whole response or one NDJSON chunk). */
@@ -83,7 +83,33 @@ export interface OllamaClientOptions {
   requestTimeoutMs?: number;
   healthTimeoutMs?: number;
   streamIdleTimeoutMs?: number;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: typeof fetch | null | undefined;
+}
+
+/** A byte-stream reader as the client uses it; shims and stubs may omit `releaseLock`. */
+interface ByteStreamReader {
+  read(): Promise<
+    { done: true; value?: undefined } | { done: false; value: Uint8Array }
+  >;
+  cancel(): Promise<unknown>;
+  releaseLock?: (() => void) | undefined;
+}
+
+/**
+ * The slice of a fetch Response the client reads. `fetchImpl` is injectable
+ * (Apple helper shim, test stubs), so headers, body and `text` are not assumed.
+ */
+interface FetchedResponse {
+  ok: boolean;
+  status: number;
+  headers?:
+    | { get?: ((name: string) => string | null) | undefined }
+    | undefined;
+  body?:
+    | { getReader?: (() => ByteStreamReader) | undefined }
+    | null
+    | undefined;
+  text: () => Promise<string>;
 }
 
 interface OllamaRequestOptions {
@@ -125,7 +151,7 @@ export interface OllamaChatStreamResult {
   model: string;
   role: "assistant";
   content: string;
-  toolCalls: OllamaToolCall[];
+  toolCalls: ProviderToolCall[];
   done: boolean;
   doneReason: string | null;
   evalCount: number | null;
@@ -192,7 +218,7 @@ function withTimeout(
 }
 
 async function readJson(
-  response: Response,
+  response: FetchedResponse,
   maxBytes = 8 * 1024 * 1024,
 ): Promise<unknown> {
   const declaredBytes = Number(response.headers?.get?.("content-length"));
@@ -226,7 +252,7 @@ async function readJson(
   const decoder = new TextDecoder();
   let bytes = 0;
   let text = "";
-  while (true) {
+  for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
     bytes += value.byteLength;
@@ -308,11 +334,12 @@ function createOllamaClient({
   requestTimeoutMs = settings.ollama.requestTimeoutMs,
   healthTimeoutMs = settings.ollama.healthTimeoutMs,
   streamIdleTimeoutMs = settings.ollama.streamIdleTimeoutMs,
-  fetchImpl = withAppleFoundation(globalThis.fetch),
+  fetchImpl: injectedFetch = withAppleFoundation(globalThis.fetch),
 }: OllamaClientOptions = {}) {
-  if (fetchImpl == null) {
+  if (injectedFetch == null) {
     throw new OllamaError("No fetch implementation available");
   }
+  const fetchImpl = injectedFetch;
 
   const url = (path: string) => `${baseUrl}${path}`;
 
@@ -334,7 +361,7 @@ function createOllamaClient({
       isTimeout,
     } = withTimeout(signal, timeoutMs);
     try {
-      const response = await fetchImpl(url(path), {
+      const response: FetchedResponse = await fetchImpl(url(path), {
         method,
         ...(body
           ? {
@@ -379,7 +406,7 @@ function createOllamaClient({
     } catch (err) {
       // request() normalizes every failure to an OllamaError.
       const error = err as OllamaError;
-      logger.debug?.("[ollama] healthCheck failed", {
+      logger.debug("[ollama] healthCheck failed", {
         message: error.message,
         code: error.code,
       });
@@ -620,7 +647,7 @@ function createOllamaClient({
       timeoutMs: requestTimeoutMs,
       idleTimeoutMs: streamIdleTimeoutMs,
     });
-    let response: Response;
+    let response: FetchedResponse;
     try {
       response = await fetchImpl(url("/api/chat"), {
         method: "POST",
@@ -644,7 +671,7 @@ function createOllamaClient({
 
     if (!response.ok) {
       cancel();
-      const payload = (await response.text?.().catch(() => "")) ?? "";
+      const payload = await response.text().catch(() => "");
       throw new OllamaError(
         `Ollama POST /api/chat failed with ${response.status}${upstreamDetail(payload)}`,
         {
@@ -654,23 +681,24 @@ function createOllamaClient({
       );
     }
 
-    if (!response.body || typeof response.body.getReader !== "function") {
+    const streamBody = response.body;
+    if (typeof streamBody?.getReader !== "function") {
       cancel();
       throw new OllamaError("Ollama streaming response has no readable body", {
         code: "NO_BODY",
       });
     }
 
-    const reader = response.body.getReader();
+    const reader = streamBody.getReader();
     const decoder = new TextDecoder("utf-8");
     let buffer = "";
     let accumulatedContent = "";
     // Tool calls can arrive spread across several NDJSON chunks; accumulate
     // them all. Some Ollama builds re-emit the complete list on the final
     // done chunk, so dedupe by call signature rather than trusting order.
-    const toolCalls: OllamaToolCall[] = [];
+    const toolCalls: ProviderToolCall[] = [];
     const seenToolCallSigs = new Set<string>();
-    const addToolCalls = (calls: OllamaToolCall[]) => {
+    const addToolCalls = (calls: ProviderToolCall[]) => {
       for (const call of calls) {
         const sig = JSON.stringify([
           call?.id ?? null,
@@ -693,9 +721,11 @@ function createOllamaClient({
     let doneReason: string | null = null;
     let isDone = false;
 
-    const handleLine = async (line: string) => {
+    // Resolves to whether the stream has reported `done` (TS cannot see the
+    // assignment to `isDone` from the read loop below).
+    const handleLine = async (line: string): Promise<boolean> => {
       const trimmed = line.trim();
-      if (!trimmed) return;
+      if (!trimmed) return isDone;
       let parsed: OllamaChatResponse;
       try {
         parsed = JSON.parse(trimmed) as OllamaChatResponse;
@@ -717,7 +747,7 @@ function createOllamaClient({
         try {
           await onToken?.(deltaContent);
         } catch (err) {
-          logger.warn?.("[ollama] onToken handler threw", {
+          logger.warn("[ollama] onToken handler threw", {
             error: (err as Error | null | undefined)?.message,
           });
         }
@@ -737,10 +767,12 @@ function createOllamaClient({
           parsed.prompt_eval_duration ?? promptEvalDurationNs;
         evalDurationNs = parsed.eval_duration ?? evalDurationNs;
       }
+      return isDone;
     };
 
     try {
-      while (!isDone) {
+      let streamDone = false;
+      while (!streamDone) {
         const { value, done } = await reader.read();
         if (done) break;
         // A chunk arrived — the stream is alive. Re-arm the abort window so
@@ -751,8 +783,8 @@ function createOllamaClient({
         while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
           const line = buffer.slice(0, newlineIndex);
           buffer = buffer.slice(newlineIndex + 1);
-          await handleLine(line);
-          if (isDone) break;
+          streamDone = await handleLine(line);
+          if (streamDone) break;
         }
       }
       if (buffer.length > 0) await handleLine(buffer);

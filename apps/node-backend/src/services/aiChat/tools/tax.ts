@@ -66,10 +66,7 @@ export const getTaxableIncomeSummary = {
   },
   async run(
     args: Record<string, unknown>,
-    {
-      maxRows = settings.aiChat.maxToolRows,
-      cache = undefined,
-    }: ToolContext = {},
+    { maxRows = settings.aiChat.maxToolRows, cache }: ToolContext = {},
   ) {
     const year = parseYear(args.year);
     const { from, to } = yearRange(year);
@@ -89,23 +86,22 @@ export const getTaxableIncomeSummary = {
         activeInvestmentsOnly: false,
       }),
       loadCanonicalPortfolioSummary(cache, {
-        // Number(null) - 1 === null - 1: a missing year behaves as before.
-        throughDate: `${Number(year) - 1}-12-31`,
+        throughDate: `${year - 1}-12-31`,
         activeInvestmentsOnly: false,
       }),
     ]);
-    const monthlyRows = Array.isArray(monthly) ? monthly : monthly.months;
+    const monthlyRows: Array<{ total_income?: number | null }> = monthly.months;
     let transactionIncome = toDecimal(0);
     for (const month of monthlyRows) {
       transactionIncome = transactionIncome.plus(month.total_income ?? 0);
     }
 
-    const dividends = toDecimal(throughYear.totals.totalDividends ?? 0).minus(
-      beforeYear.totals.totalDividends ?? 0,
+    const dividends = toDecimal(throughYear.totals.totalDividends).minus(
+      beforeYear.totals.totalDividends,
     );
-    const portfolioIncome = toDecimal(
-      throughYear.totals.totalIncome ?? 0,
-    ).minus(beforeYear.totals.totalIncome ?? 0);
+    const portfolioIncome = toDecimal(throughYear.totals.totalIncome).minus(
+      beforeYear.totals.totalIncome,
+    );
     const interestAndRent = portfolioIncome.minus(dividends);
 
     const rows = [
@@ -134,8 +130,8 @@ export const getTaxableIncomeSummary = {
         to,
         grossTotal: roundMoney(grossTotal),
         totalInKindIncome: roundMoney(
-          toDecimal(throughYear.totals.totalInKindIncome ?? 0).minus(
-            beforeYear.totals.totalInKindIncome ?? 0,
+          toDecimal(throughYear.totals.totalInKindIncome).minus(
+            beforeYear.totals.totalInKindIncome,
           ),
         ),
         inKindIncomeTaxClassification: "unassigned",
@@ -170,10 +166,7 @@ export const getCapitalGainsForYear = {
   },
   async run(
     args: Record<string, unknown>,
-    {
-      maxRows = settings.aiChat.maxToolRows,
-      cache = undefined,
-    }: ToolContext = {},
+    { maxRows = settings.aiChat.maxToolRows, cache }: ToolContext = {},
   ) {
     const year = parseYear(args.year);
     const { from, to } = yearRange(year);
@@ -184,8 +177,7 @@ export const getCapitalGainsForYear = {
         activeInvestmentsOnly: false,
       }),
       loadCanonicalPortfolioSummary(cache, {
-        // Number(null) - 1 === null - 1: a missing year behaves as before.
-        throughDate: `${Number(year) - 1}-12-31`,
+        throughDate: `${year - 1}-12-31`,
         activeInvestmentsOnly: false,
       }),
     ]);
@@ -198,14 +190,12 @@ export const getCapitalGainsForYear = {
     let totalRealizedGain = toDecimal(0);
     for (const current of throughYear.summaries) {
       const previous = beforeById.get(current.id);
-      const proceeds = toDecimal(current.totalSellProceeds ?? 0).minus(
+      const proceeds = toDecimal(current.totalSellProceeds).minus(
         previous?.totalSellProceeds ?? 0,
       );
       const realizedGainSupported = UNIT_BASED_CLASSES.has(current.asset_class);
       const realizedGain = realizedGainSupported
-        ? toDecimal(current.realizedGain ?? 0).minus(
-            previous?.realizedGain ?? 0,
-          )
+        ? toDecimal(current.realizedGain).minus(previous?.realizedGain ?? 0)
         : null;
       if (proceeds.isZero() && (!realizedGain || realizedGain.isZero()))
         continue;

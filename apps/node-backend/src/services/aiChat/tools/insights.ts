@@ -12,8 +12,9 @@ import { categoryRepository } from "../../../repositories/categoryRepository.ts"
 import { transactionRepository } from "../../../repositories/transactionRepository.ts";
 import settings from "../../../config/config.ts";
 import { toDecimal, roundToCents } from "../../../lib/money.ts";
+import type { Decimal } from "decimal.js";
 import { toYmd } from "../../calculations/portfolioMath.ts";
-import { parseEnum, parsePositiveInt } from "./_validate.ts";
+import { argText, parseEnum, parsePositiveInt } from "./_validate.ts";
 import type { ToolContext } from "./_validate.ts";
 import { getQuotes } from "../../marketLookupService.ts";
 import { detectRecurringPatterns } from "../../recurringDetectionService.ts";
@@ -43,23 +44,18 @@ export const getBankBalances = {
     const currency = scope.currency || "EUR";
     const result = await infoRepository.getBankBalances(currency);
     const allowedAccountIds = new Set(scope.accountIds ?? []);
-    const scopedAccounts = (result.accounts ?? []).filter(
+    const scopedAccounts = result.accounts.filter(
       (account) =>
         allowedAccountIds.size === 0 ||
-        allowedAccountIds.has(Number(account.account_id)),
+        allowedAccountIds.has(account.account_id),
     );
 
     const accounts = scopedAccounts.map((a) => ({
-      ...(Number.isInteger(Number(a.account_id))
-        ? { accountId: Number(a.account_id) }
-        : {}),
+      ...(Number.isInteger(a.account_id) ? { accountId: a.account_id } : {}),
       account: a.bank_account,
-      balance:
-        typeof a.balance === "number"
-          ? a.balance
-          : roundToCents(toDecimal(a.balance ?? 0)).toNumber(),
+      balance: a.balance,
       currency,
-      transactionCount: a.transaction_count ?? null,
+      transactionCount: a.transaction_count,
       // toYmd uses local getters for pg's local-midnight DATE values —
       // toISOString() shifted these one day back on a UTC+ server.
       firstTransaction: a.first_transaction ? toYmd(a.first_transaction) : null,
@@ -110,11 +106,11 @@ export const getSpendingPace = {
 
     const result = await infoRepository.getAverageVsCurrentSpending("EUR");
     const p6: Partial<AverageVsCurrentSpending["past_6_months"]> =
-      result.past_6_months ?? {};
+      result.past_6_months;
     const cm: Partial<AverageVsCurrentSpending["current_month"]> =
-      result.current_month ?? {};
+      result.current_month;
     const cmp: Partial<AverageVsCurrentSpending["comparison"]> =
-      result.comparison ?? {};
+      result.comparison;
 
     return {
       ok: true,
@@ -188,7 +184,8 @@ export const getRecipientInsights = {
             max: Number.MAX_SAFE_INTEGER,
           })
         : null;
-    const recipientId = recipientIdArg == null ? null : asRecipientId(recipientIdArg);
+    const recipientId =
+      recipientIdArg == null ? null : asRecipientId(recipientIdArg);
 
     const SCAN_LIMIT = 50_000;
     const allRows = await transactionRepository.getAll({
@@ -204,13 +201,23 @@ export const getRecipientInsights = {
     // partial view. Surface that so the model can caveat its answer.
     const truncated = rows.length >= SCAN_LIMIT;
 
-    const byRecipient = new Map();
+    const byRecipient = new Map<
+      string,
+      {
+        recipient: string;
+        recipientId: (typeof rows)[number]["recipient_id"] | null;
+        count: number;
+        totalSpend: Decimal;
+        totalIncome: Decimal;
+        lastDate: string | null;
+      }
+    >();
     for (const row of rows) {
       const name = row.recipient_name || null;
       if (!name) continue;
 
       const amount = toDecimal(row.amount);
-      const entry = byRecipient.get(name) || {
+      const entry = byRecipient.get(name) ?? {
         recipient: name,
         recipientId: row.recipient_id ?? null,
         count: 0,
@@ -375,7 +382,7 @@ export const getCategories = {
       limit: 500,
       offset: 0,
       active: true,
-      search: args.search ? String(args.search).trim() : undefined,
+      search: argText(args.search).trim() || undefined,
     });
 
     const shaped = rows.map((row) => ({

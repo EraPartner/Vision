@@ -542,7 +542,7 @@ describe("ollama client", () => {
       });
 
       expect(res.toolCalls).toHaveLength(2);
-      expect(res.toolCalls.map((c) => c.function!.name)).toEqual([
+      expect(res.toolCalls.map((c) => c?.function?.name)).toEqual([
         "getSpendByCategory",
         "getRecipients",
       ]);

@@ -6,6 +6,7 @@ import { getSavedAnalysis } from "../../savedAnalysisService.ts";
 import settings from "../../../config/config.ts";
 import {
   ToolValidationError,
+  argText,
   parseEnum,
   parsePositiveInt,
 } from "./_validate.ts";
@@ -32,7 +33,7 @@ export const getSavedAnalysisContext = {
         "Saved analysis context is not authorized for this request",
         "id",
       );
-    const id = String(args.id || "");
+    const id = argText(args.id);
     if (
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
         id,
@@ -72,9 +73,7 @@ function requireExternal(context: ToolContext): void {
     );
 }
 function symbol(value: unknown): string {
-  const normalized = String(value || "")
-    .trim()
-    .toUpperCase();
+  const normalized = argText(value).trim().toUpperCase();
   if (!SYMBOL.test(normalized))
     throw new ToolValidationError(
       "symbol must be a public market symbol",
@@ -186,7 +185,7 @@ export const searchMacroResearch = {
   },
   async run(args: Record<string, unknown>, context: ToolContext = {}) {
     requireExternal(context);
-    const query = String(args.query || "").trim();
+    const query = argText(args.query).trim();
     if (!query || query.length > 120)
       throw new ToolValidationError(
         "query must contain 1 to 120 characters",
@@ -227,7 +226,7 @@ export const getMacroResearchSeries = {
       provider: parseEnum(args.provider, "provider", MACRO_PROVIDER, {
         required: true,
       }),
-      seriesId: String(args.seriesId || "").trim(),
+      seriesId: argText(args.seriesId).trim(),
       range: parseEnum(args.range, "range", RANGE, { defaultValue: "5y" }),
     };
     if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$/.test(effective.seriesId))
@@ -268,7 +267,7 @@ export const getPortfolioResearchForecast = {
         max: 2000,
         defaultValue: 1000,
       }),
-      currency: String(args.currency || "EUR").toUpperCase(),
+      currency: (argText(args.currency) || "EUR").toUpperCase(),
       method: parseEnum(
         args.method,
         "method",
@@ -283,7 +282,7 @@ export const getPortfolioResearchForecast = {
       );
     const data = await runPortfolioForecast(effective);
     return {
-      ok: data.available !== false,
+      ok: data.available,
       data,
       meta: {
         effective,
@@ -312,7 +311,7 @@ export const searchLocalResearchDocuments = {
   async run(args: Record<string, unknown>, context: ToolContext = {}) {
     const data = await searchResearchDocuments(
       {
-        query: String(args.query || "").trim(),
+        query: argText(args.query).trim(),
         mode: parseEnum(args.mode, "mode", ["keyword", "semantic", "hybrid"], {
           defaultValue: "hybrid",
         }),

@@ -70,7 +70,14 @@ function appleModelAvailable(): Promise<boolean> {
     ? new Promise<boolean>((resolve) => {
         execFile(helper, ["--check"], { timeout: 5_000 }, (error, stdout) => {
           try {
-            resolve(!error && JSON.parse(stdout).available === true);
+            const status: unknown = JSON.parse(stdout);
+            resolve(
+              !error &&
+                typeof status === "object" &&
+                status !== null &&
+                "available" in status &&
+                status.available === true,
+            );
           } catch {
             resolve(false);
           }

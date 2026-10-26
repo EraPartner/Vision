@@ -33,6 +33,24 @@ export interface ToolContext {
   };
 }
 
+/**
+ * Text of a model-supplied scalar tool argument. Falsy values and non-scalars
+ * (objects, arrays, functions) yield "" so callers' empty-checks reject them
+ * instead of searching for "[object Object]".
+ */
+export function argText(value: unknown): string {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    typeof value === "bigint"
+  ) {
+    return String(value);
+  }
+  return "";
+}
+
 export class ToolValidationError extends Error {
   field: string | null;
 
@@ -110,7 +128,10 @@ export function parsePositiveInt(
     try {
       received = JSON.stringify(value);
     } catch {
-      received = String(value);
+      received =
+        typeof value === "bigint"
+          ? value.toString()
+          : Object.prototype.toString.call(value);
     }
     throw new ToolValidationError(
       `${field} must be an integer between ${min} and ${max} — received ${received.slice(0, 60)}`,

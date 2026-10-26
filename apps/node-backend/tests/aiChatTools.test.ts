@@ -1038,13 +1038,13 @@ describe("getTaxableIncomeSummary", () => {
       .mockResolvedValueOnce(
         partial<Resolved<typeof loadCanonicalPortfolioSummary>>({
           currency: "EUR",
-          totals: { totalDividends: 130, totalIncome: 540 },
+          totals: { totalDividends: 130, totalIncome: 540, totalInKindIncome: 0 },
         }),
       )
       .mockResolvedValueOnce(
         partial<Resolved<typeof loadCanonicalPortfolioSummary>>({
           currency: "EUR",
-          totals: { totalDividends: 100, totalIncome: 300 },
+          totals: { totalDividends: 100, totalIncome: 300, totalInKindIncome: 0 },
         }),
       );
 

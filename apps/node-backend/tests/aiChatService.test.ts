@@ -1429,8 +1429,8 @@ describe("no-external-calls guarantee", () => {
   it("does not call fetch when ollamaClient is injected", async () => {
     const ollamaClient = {
       chat: vi.fn().mockResolvedValue({
-        message: { role: "assistant", content: "All clear." },
-        tool_calls: [],
+        content: "All clear.",
+        toolCalls: [],
       }),
     };
 
@@ -1444,12 +1444,16 @@ describe("no-external-calls guarantee", () => {
   });
 
   it("does not call fetch even when tools are dispatched", async () => {
+    // The tool row is read back after dispatch.
+    aiChatRepository.appendMessage.mockResolvedValue(
+      loose<AiMessageRow>({ toolResult: null }),
+    );
     const ollamaClient = {
       chat: vi
         .fn()
         .mockResolvedValueOnce({
-          message: { role: "assistant", content: null },
-          tool_calls: [
+          content: "",
+          toolCalls: [
             {
               function: {
                 name: "getSpendByCategory",
@@ -1459,8 +1463,8 @@ describe("no-external-calls guarantee", () => {
           ],
         })
         .mockResolvedValueOnce({
-          message: { role: "assistant", content: "Here are your expenses." },
-          tool_calls: [],
+          content: "Here are your expenses.",
+          toolCalls: [],
         }),
     };
 
@@ -1476,11 +1480,8 @@ describe("no-external-calls guarantee", () => {
   it("does not call fetch on the insights pre-call path (ADR-110 §4)", async () => {
     const ollamaClient = {
       chat: vi.fn().mockResolvedValue({
-        message: {
-          role: "assistant",
-          content: "Here is what stands out this month.",
-        },
-        tool_calls: [],
+        content: "Here is what stands out this month.",
+        toolCalls: [],
       }),
     };
 
