@@ -1,7 +1,7 @@
 ---
 title: "ADR-252: Swift type strictness"
 type: adr
-status: accepted
+status: superseded
 date: 2026-10-25
 tags: [adr, architecture, swift, native-app, types, branded-types, openapi, lint, adr-220, adr-249]
 description: "Accepted on 2026-10-25. The Swift app is typed as strictly as the TypeScript app: a distinct identifier type for every entity, ISO currency codes, enums that keep unknown values, explicit-null PATCH fields, calendar days and instants, typed unions, typed settings and routes, a decode fixture for every generated model, and a ban-list lint with a ratchet."
@@ -23,6 +23,9 @@ related_code:
 ---
 
 # ADR-252: Swift type strictness
+
+> [!note] Superseded by [[docs/adr/254-remove-swift-app|ADR-254]] on 2026-10-26. The Swift app
+> was removed from `main`; its code is in Git history (see ADR-254).
 
 ## Status
 
@@ -88,5 +91,5 @@ enum value compiled. The gap audit of 2026-10-25 listed the work in seven packag
 
 - [[docs/adr/249-revive-swift-app|ADR-249]]
 - [[docs/adr/220-branded-ids-currency-codes-and-money|ADR-220]]
-- [[docs/architecture/native-app|Native app architecture]]
+- Native app architecture
 - [[docs/adr/index|All ADRs]]

@@ -1,7 +1,7 @@
 ---
 title: "ADR-250: Swift design-system parity foundation"
 type: adr
-status: accepted
+status: superseded
 date: 2026-10-25
 tags:
   [
@@ -34,6 +34,9 @@ related_code:
 ---
 
 # ADR-250: Swift design-system parity foundation
+
+> [!note] Superseded by [[docs/adr/254-remove-swift-app|ADR-254]] on 2026-10-26. The Swift app
+> was removed from `main`; its code is in Git history (see ADR-254).
 
 ## Status
 
@@ -129,13 +132,13 @@ tokens and components. Phase 2a builds the shared foundation; screens follow in 
 - Nothing here compiles on Linux. The macOS `swift-build` workflow and a side-by-side
   screenshot review on Tor's Mac gate each package, as in [[docs/adr/249-revive-swift-app|ADR-249]].
 - Screens still use system sheets and macOS-sized controls until phase 2b. The checklist is
-  [[docs/reference/native-parity/design-system|Native parity: design system]].
+  Native parity: design system.
 
 ## Related
 
 - [[docs/adr/249-revive-swift-app|ADR-249]]
 - [[docs/adr/244-full-effects-switch|ADR-244]]
-- [[docs/architecture/native-app|Native app architecture]]
+- Native app architecture
 - [[docs/features/appearance|Appearance]]
-- [[docs/reference/native-parity/design-system|Native parity: design system]]
+- Native parity: design system
 - [[docs/adr/index|All ADRs]]

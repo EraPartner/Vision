@@ -1,7 +1,0 @@
-{
-  "year": "string",
-  "income": 1.5,
-  "estimatedTax": 1.5,
-  "netAfterTax": 1.5,
-  "isApproximated": true
-}

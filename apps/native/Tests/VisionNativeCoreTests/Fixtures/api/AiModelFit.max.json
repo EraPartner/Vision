@@ -1,7 +1,0 @@
-{
-  "model": "string",
-  "totalMemoryBytes": 1,
-  "weightBytes": 1,
-  "kvBytesPerToken": 1,
-  "maxNumCtx": 1
-}

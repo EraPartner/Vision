@@ -1,9 +1,0 @@
-{
-  "ok": true,
-  "data": "value",
-  "error": {
-    "message": "string",
-    "code": "string",
-    "status": 1
-  }
-}

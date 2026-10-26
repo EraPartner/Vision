@@ -1,7 +1,0 @@
-{
-  "key": "string",
-  "value": "value",
-  "expected": {
-    "exists": false
-  }
-}
