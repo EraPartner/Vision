@@ -22,6 +22,7 @@ aliases: [adr-214, retire vision native, retire swift port]
 # ADR-214: Retire the Vision Native Swift port
 
 > [!note] Superseded by [[docs/adr/249-revive-swift-app|ADR-249]] on 2026-10-25.
+> [[docs/adr/254-remove-swift-app|ADR-254]] retired ADR-249 again on 2026-10-26.
 
 ## Status
 

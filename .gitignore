@@ -93,10 +93,3 @@ apps/node-backend/tests/golden/__fixtures__/__harness_self_test/
 
 # Mac performance baseline output (scripts/mac-baseline.ts)
 perf-results/
-
-# Vision Native (XcodeGen output, SwiftPM state, local signing team)
-apps/native/*.xcodeproj
-apps/native/VisionNative/Info.plist
-apps/native/.build/
-apps/native/.swiftpm/
-apps/native/Config/Local.xcconfig

@@ -14,7 +14,6 @@
 #   4. ESLint on staged JS/TS -- fully-staged files are auto-fixed and re-staged,
 #      partially-staged files are checked only (we never touch unstaged hunks)
 #   5. validate-locales -- only when locale sources are touched
-#   6. native Swift lint (ban-list + ratchet) -- only when apps/native Swift sources are touched
 #
 # Output is ASCII-only on purpose: this runs under dash/busybox sh too, where a
 # multibyte char next to a $var expansion breaks name parsing under `set -u`.
@@ -139,12 +138,6 @@ lint_workspace apps/node-backend '^apps/node-backend/src/'
 if printf '%s\n' "$STAGED" | grep -qE '^(i18n/source/|apps/frontend/src/locales/|packaging/electron/i18n/)'; then
   echo "[pre-commit] locale files changed -- running validate-locales..."
   bun scripts/validate-locales.ts || fail=1
-fi
-
-# --- 6. Native Swift lint (only when Swift sources change) -----------------
-if printf '%s\n' "$STAGED" | grep -qE '^apps/native/.*\.swift$'; then
-  echo "[pre-commit] Swift sources changed -- running native-lint..."
-  bun scripts/native-lint.ts || fail=1
 fi
 
 # --- Result ------------------------------------------------------------------

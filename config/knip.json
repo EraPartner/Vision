@@ -3,7 +3,6 @@
   "ignoreExportsUsedInFile": true,
   "ignoreBinaries": [
     "caffeinate",
-    "sample",
     "mkfifo",
     "build.ts"
   ],

@@ -1,9 +1,0 @@
-{
-  "provider": "fred",
-  "seriesId": "id-1",
-  "title": "string",
-  "region": "string",
-  "units": "string",
-  "frequency": "string",
-  "source": "string"
-}

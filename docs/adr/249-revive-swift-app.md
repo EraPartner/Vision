@@ -1,7 +1,7 @@
 ---
 title: "ADR-249: Revive the Swift app and bring it to full parity"
 type: adr
-status: accepted
+status: superseded
 date: 2026-10-25
 tags: [adr, architecture, swift, swiftui, native-app, parity, electron, adr-214]
 description: "Accepted on 2026-10-25 by Tor. The retired Vision Native Swift app is restored under apps/native/ from d9b0836, caught up to today's TypeScript app and brought to full visual and functional parity. The TypeScript backend and PostgreSQL stay; Electron stays the product until a switch-over is decided. Swift builds run only in a manual macOS workflow, never in PR CI."
@@ -19,6 +19,9 @@ related_code:
 ---
 
 # ADR-249: Revive the Swift app and bring it to full parity
+
+> [!note] Superseded by [[docs/adr/254-remove-swift-app|ADR-254]] on 2026-10-26. The Swift app
+> was removed from `main`; its code is in Git history (see ADR-254).
 
 ## Status
 

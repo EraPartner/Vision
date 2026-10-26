@@ -19,8 +19,6 @@ export function classify(
       (!path.includes("/") && path.endsWith(".md"))
     )
       continue;
-    // The Swift app is built only by the manual swift-build workflow (ADR-249).
-    if (path.startsWith("apps/native/")) continue;
     // Configuration, executables and unknown formats still run the full suite.
     if (
       (path.startsWith(".agents/") || path.startsWith(".codex/")) &&

@@ -1,9 +1,0 @@
-{
-  "title": "string",
-  "enabled": true,
-  "fieldId": "id-1",
-  "operator": "above",
-  "threshold": "1.5",
-  "intervalMinutes": 15,
-  "cooldownMinutes": 1
-}

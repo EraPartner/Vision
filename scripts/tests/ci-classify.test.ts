@@ -27,20 +27,6 @@ test("documentation and instruction Markdown may skip the application pipeline",
   );
 });
 
-test("Swift app changes skip the application pipeline", () => {
-  assert.equal(
-    classify([
-      "apps/native/Sources/VisionNativeUI/RootView.swift",
-      "apps/native/project.yml",
-    ]),
-    false,
-  );
-  assert.equal(
-    classify(["apps/native/project.yml", "scripts/native-openapi.ts"]),
-    true,
-  );
-});
-
 test("executable, configuration and nested Markdown changes run the full pipeline", () => {
   for (const changed of [
     ".agents/skills/example/run.sh",
