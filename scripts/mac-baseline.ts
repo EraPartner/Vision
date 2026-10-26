@@ -121,6 +121,9 @@ const USAGE = `Usage: bun scripts/mac-baseline.ts [options]
                         launch-probe/<label>.json with the backend log tail.
                         A diagnostic: it delays the idle window, so leave it off
                         for before/after runs (default 0 = off)
+  --background <s>      After the idle window, make Finder frontmost and measure
+                        the same page for <s> seconds while Vision is in the
+                        background (default 0 = off)
   --quick               Smoke run: idle 10, sustained 30, cooldown 5, scroll 4000
   --leak <min>          Leak check instead of the tier matrix: one launch of the
                         first app at its current tier, alternating active and
@@ -144,6 +147,7 @@ interface Options {
   powermetrics: boolean;
   trace: boolean;
   launchProbeSeconds: number;
+  backgroundSeconds: number;
   quick: boolean;
   leakMinutes: number | null;
   leakWindowSeconds: number;
@@ -166,6 +170,7 @@ function parseOptions(argv: string[]): Options | null {
       "no-powermetrics": { type: "boolean" },
       "no-trace": { type: "boolean" },
       "launch-probe": { type: "string" },
+      background: { type: "string" },
       quick: { type: "boolean" },
       leak: { type: "string" },
       "leak-window": { type: "string" },
@@ -225,6 +230,7 @@ function parseOptions(argv: string[]): Options | null {
     powermetrics: values["no-powermetrics"] !== true,
     trace: values["no-trace"] !== true,
     launchProbeSeconds: number(values["launch-probe"], 0, "launch-probe"),
+    backgroundSeconds: number(values.background, 0, "background"),
     quick,
     leakMinutes:
       values.leak === undefined ? null : number(values.leak, 45, "leak"),
@@ -874,6 +880,42 @@ async function measureAction<T>(
   };
 }
 
+// Counts resource requests the page starts (fetches included) from the
+// moment it is installed; read twice to get the requests inside a window.
+const REQUEST_COUNTER = `(() => {
+  if (window.__visionBaselineRequests === undefined) {
+    window.__visionBaselineRequests = 0;
+    new PerformanceObserver((list) => {
+      window.__visionBaselineRequests += list.getEntries().length;
+    }).observe({ type: "resource" });
+  }
+  return window.__visionBaselineRequests;
+})()`;
+
+function osascript(script: string): void {
+  run("osascript", ["-e", script]);
+}
+
+/** A quiet window with renderer work and page requests alongside CPU/power. */
+async function measureQuietWindow(
+  ctx: Context,
+  app: RunningApp,
+  seconds: number,
+): Promise<
+  WindowMeasurement & { pageMetrics: Record<string, number>; requests: number }
+> {
+  const requestsBefore = await page<number>(app, REQUEST_COUNTER);
+  const metricsBefore = await pageMetrics(app);
+  const { window } = await measureWindow(ctx, app, () => sleep(seconds * 1000));
+  const metricsAfter = await pageMetrics(app);
+  const requestsAfter = await page<number>(app, REQUEST_COUNTER);
+  return {
+    ...window,
+    pageMetrics: metricsDelta(metricsBefore, metricsAfter),
+    requests: requestsAfter - requestsBefore,
+  };
+}
+
 /** Roles whose processes share memory (PostgreSQL's shared buffers). */
 const SHARED_ONCE_ROLES = ["backend", "postgres"] as const;
 
@@ -1091,11 +1133,25 @@ async function measureTier(
   await navigate(app, "/");
   await sleep(3000);
   log(`  idle ${options.idleSeconds} s on /`);
-  const idle = await measureWindow(ctx, app, () =>
-    sleep(options.idleSeconds * 1000),
-  );
+  const idle = await measureQuietWindow(ctx, app, options.idleSeconds);
   await checkFocus(app, warnings, "idle");
   const afterIdle = memorySnapshot(app);
+
+  let background: TierResult["background"] = null;
+  if (options.backgroundSeconds > 0) {
+    log(`  background ${options.backgroundSeconds} s (Finder frontmost)`);
+    osascript('tell application "Finder" to activate');
+    await sleep(2000);
+    const state = await page<PageState>(app, PAGE_STATE);
+    if (state.focused)
+      warnings.push("background: Vision still had focus after Finder activated");
+    background = {
+      ...(await measureQuietWindow(ctx, app, options.backgroundSeconds)),
+      seconds: options.backgroundSeconds,
+    };
+    osascript(`tell application id "${app.info.bundleId}" to activate`);
+    await sleep(2000);
+  }
 
   let scroll: TierResult["scroll"] = null;
   try {
@@ -1193,7 +1249,8 @@ async function measureTier(
     },
     launch: app.launch,
     memory: { afterLaunch, afterIdle, afterSustained },
-    idle: { ...idle.window, seconds: options.idleSeconds, page: "/" },
+    idle: { ...idle, seconds: options.idleSeconds, page: "/" },
+    background,
     scroll,
     pageSwitch: { ...switches.action, passes: switches.result },
     trace,
@@ -1566,6 +1623,7 @@ async function main(): Promise<number> {
       pages: options.pages,
       powermetrics: options.powermetrics,
       trace: options.trace,
+      backgroundSeconds: options.backgroundSeconds,
       quick: options.quick,
     },
     machine,

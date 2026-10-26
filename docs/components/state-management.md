@@ -2,7 +2,7 @@
 title: State Management Deep Dive
 type: component
 status: active
-date: 2026-10-19
+date: 2026-10-26
 tags: [state-management, react-query, context, frontend, patterns, workspace]
 description: Comprehensive guide to Vision's state management architecture — React Query for server state, React Context for global state, and local component state patterns
 aliases:
@@ -64,7 +64,7 @@ Vision uses a **three-layer state management strategy** with no external state l
 | Setting     | Value            | Purpose                                     |
 | ----------- | ---------------- | ------------------------------------------- |
 | `staleTime` | 30,000ms (30s)   | Data considered fresh for 30 seconds        |
-| `gcTime`    | 300,000ms (5min) | Garbage collection for unused cache entries |
+| `gcTime`    | 300,000ms (5min) | Garbage collection for unused cache entries; ledger pages and chat history use 2 min (`QUERY_GC_TIME_MS.LARGE_LIST`, ADR-256) |
 
 ### Query Key Patterns
 

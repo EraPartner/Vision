@@ -2,6 +2,7 @@
 import { act, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { focusManager } from "@tanstack/react-query";
 import { ElectronBridge } from "./ElectronBridge";
 
 const mocks = vi.hoisted(() => {
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => {
         menuAction: undefined as
             | ((event: { action: string; payload?: unknown }) => void)
             | undefined,
+        userIdle: undefined as ((idle: boolean) => void) | undefined,
         setNativeVibrancy: vi.fn(),
         api: {
             ready: vi.fn().mockResolvedValue({ success: true }),
@@ -30,6 +32,10 @@ const mocks = vi.hoisted(() => {
                 },
             ),
             onCsvOpen: vi.fn(() => unsubscribe),
+            onUserIdleChange: vi.fn((callback: (idle: boolean) => void) => {
+                mocks.userIdle = callback;
+                return unsubscribe;
+            }),
         },
     };
 });
@@ -140,5 +146,27 @@ describe("ElectronBridge menu routes", () => {
 
         expect(mocks.setThemeMode).toHaveBeenCalledTimes(1);
         expect(mocks.setThemeMode).toHaveBeenCalledWith("dark");
+    });
+});
+
+describe("ElectronBridge user idle", () => {
+    it("pauses React Query focus while the user is away and restores it on return", () => {
+        const view = render(
+            <ElectronBridge
+                onOpenSettings={vi.fn()}
+                onOpenShortcuts={vi.fn()}
+            />,
+        );
+        expect(focusManager.isFocused()).toBe(true);
+
+        act(() => mocks.userIdle?.(true));
+        expect(focusManager.isFocused()).toBe(false);
+
+        act(() => mocks.userIdle?.(false));
+        expect(focusManager.isFocused()).toBe(true);
+
+        act(() => mocks.userIdle?.(true));
+        view.unmount();
+        expect(focusManager.isFocused()).toBe(true);
     });
 });

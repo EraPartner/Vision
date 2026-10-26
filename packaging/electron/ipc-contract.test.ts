@@ -54,7 +54,7 @@ void test("preload subscriptions and main sends match the shared event contract"
     ...matches(main, /sendToApp\(\s*"([^"]+)"/g),
   ]);
 
-  assert.equal(declared.size, 6);
+  assert.equal(declared.size, 7);
   assert.deepEqual(subscribed, declared);
   assert.deepEqual(sent, declared);
 });

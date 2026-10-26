@@ -56,7 +56,18 @@ Results land in `perf-results/<timestamp>/` (git-ignored): `results.json`, `summ
 `powermetrics.jsonl`, `traces/*.json.gz` (open in Perfetto or Chrome DevTools) and app logs.
 `bun scripts/mac-baseline.ts --help` lists the options (`--app`, `--tiers`, `--idle`,
 `--sustained`, `--cooldown`, `--pages`, `--full-effects`, `--repeat`, `--no-powermetrics`,
-`--no-trace`, `--launch-probe`, `--leak`, `--leak-window`).
+`--no-trace`, `--launch-probe`, `--background`, `--leak`, `--leak-window`).
+
+## Idle renderer work and background windows
+
+The idle window also records the renderer's `Performance.getMetrics` deltas (`ScriptDurationMs`,
+`TaskDurationMs`, ...) and the number of resource requests the page starts, so timer and poll
+changes show up even when total CPU is noisy. `--background <s>` adds a window right after idle in
+which Finder is frontmost and Vision stays visible behind it; Vision is brought back to the front
+afterwards. The spread table compares idle and background renderer work, renderer and GPU memory
+after the sustained run, JS heap used and DOM node count (ADR-256). After 5 min without real
+keyboard or mouse input macOS reports the user as idle and Vision pauses its React Query polls, so
+long unattended phases run in that state.
 
 ## Launch probe
 

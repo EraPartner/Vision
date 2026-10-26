@@ -1376,6 +1376,10 @@ function createWindow(): BrowserWindow {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      // Cache compiled renderer code on first run instead of after a script
+      // has run a few times, so the launch after an update already starts
+      // from V8's code cache (ADR-256).
+      v8CacheOptions: "bypassHeatCheck",
       // Preload exposes a minimal update API to the renderer
       preload: path.join(__dirname, "preload.js"),
     },
@@ -2720,6 +2724,27 @@ let isQuitting = false;
 // optional backup so Vision never holds up logout, but still stops PostgreSQL.
 let systemShuttingDown = false;
 
+// After this long without keyboard or mouse input (or while the screen is
+// locked) the renderer treats itself as unfocused, which pauses its React
+// Query polls until the user is back (ADR-256).
+const USER_IDLE_THRESHOLD_S = 5 * 60;
+const USER_IDLE_POLL_MS = 60_000;
+let userIdle = false;
+
+function setUserIdle(idle: boolean): void {
+  if (idle === userIdle) return;
+  userIdle = idle;
+  if (mainWindow && !mainWindow.isDestroyed())
+    mainWindow.webContents.send("app:user-idle", idle);
+}
+
+function checkUserIdle(): void {
+  if (systemSuspended) return;
+  setUserIdle(
+    powerMonitor.getSystemIdleState(USER_IDLE_THRESHOLD_S) !== "active",
+  );
+}
+
 function registerPowerHandlers(): void {
   powerMonitor.on("suspend", () => {
     systemSuspended = true;
@@ -2727,7 +2752,15 @@ function registerPowerHandlers(): void {
   powerMonitor.on("resume", () => {
     systemSuspended = false;
     watchdogFailureCount = 0;
+    checkUserIdle();
   });
+  powerMonitor.on("lock-screen", () => {
+    setUserIdle(true);
+  });
+  powerMonitor.on("unlock-screen", () => {
+    checkUserIdle();
+  });
+  setInterval(checkUserIdle, USER_IDLE_POLL_MS);
   // macOS posts this (NSWorkspaceWillPowerOff) for logout, restart and shut
   // down before it asks Vision to quit, so the quit that follows sees the flag.
   powerMonitor.on("shutdown", () => {

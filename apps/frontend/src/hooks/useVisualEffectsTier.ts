@@ -1,47 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { useAppSettings } from '@/stores/hydration/AppSettingsHydration';
-import { currentDisplayIsLarge, resolveEffectiveTier } from '@/lib/visualEffects';
-import { canCheckBuiltInDisplay, getDisplayIsBuiltIn } from '@/lib/api/electron';
+import { resolveEffectiveTier } from '@/lib/visualEffects';
+import { getDisplayIsLargeSnapshot, subscribeDisplayProbe } from '@/lib/displayProbe';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { VisualEffectsTier } from '@/stores/settingsStore';
 
-// No DOM event fires reliably when a window is dragged between displays
-// (resize covers most moves; same-DPR moves between different-resolution
-// screens fire nothing), so a cheap poll (four property reads, plus one IPC
-// call in the desktop app) backstops it.
-const DISPLAY_POLL_MS = 5000;
-
+/** Whether the window's display counts as large; one shared probe for all
+ *  callers (lib/displayProbe.ts). */
 export function useLargeDisplay(): boolean {
-    // In the desktop app, main answers whether the window is on a built-in
-    // panel, which is never large (lib/visualEffects.ts). Until the first
-    // answer arrives, assume built-in so the Mac's own screen never flashes
-    // the reduced tier at launch; an external 4K output drops to reduced one
-    // IPC round trip later. Outside Electron the pixel heuristic alone applies.
-    const [builtIn, setBuiltIn] = useState<boolean | null>(() =>
-        canCheckBuiltInDisplay() ? true : null,
-    );
-    const [pixelsLarge, setPixelsLarge] = useState(() => currentDisplayIsLarge());
-
-    useEffect(() => {
-        let cancelled = false;
-        const check = () => {
-            setPixelsLarge(currentDisplayIsLarge());
-            if (!canCheckBuiltInDisplay()) return;
-            void getDisplayIsBuiltIn().then((value) => {
-                if (!cancelled) setBuiltIn(value);
-            });
-        };
-        check();
-        window.addEventListener('resize', check);
-        const interval = setInterval(check, DISPLAY_POLL_MS);
-        return () => {
-            cancelled = true;
-            window.removeEventListener('resize', check);
-            clearInterval(interval);
-        };
-    }, []);
-
-    return builtIn === true ? false : pixelsLarge;
+    return useSyncExternalStore(subscribeDisplayProbe, getDisplayIsLargeSnapshot);
 }
 
 /** Effective visual-effects tier for the display the window is on (ADR-075). */
