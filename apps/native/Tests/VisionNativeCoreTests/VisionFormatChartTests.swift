@@ -25,7 +25,7 @@ import Testing
             #expect(VisionFormat.currency(1234.5, code: .eur, locale: american, fractionDigits: 0) == "€1,235")
             #expect(VisionFormat.currency(1234.5, code: .eur, locale: american, fractionDigits: 2, signed: true) == "+€1,234.50")
             #expect(VisionFormat.currency(0, code: .eur, locale: american, fractionDigits: 2, signed: true) == "€0.00")
-            #expect(VisionFormat.currency(1234.5, code: .usd, locale: american, fractionDigits: 2) == "$1,234.50")
+            #expect(VisionFormat.currency(1234.5, code: "USD", locale: american, fractionDigits: 2) == "$1,234.50")
         }
     }
 
