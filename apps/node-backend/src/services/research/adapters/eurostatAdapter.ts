@@ -63,8 +63,10 @@ function parseJsonStat(
 const eurostatAdapter = {
   key: 'eurostat',
 
-  async macroSearch(query: string) {
-    return { items: searchCatalog('eurostat', query) };
+  macroSearch(query: string) {
+    return new Promise<{ items: ReturnType<typeof searchCatalog> }>((resolve) => {
+      resolve({ items: searchCatalog('eurostat', query) });
+    });
   },
 
   async macroSeries(seriesId: string, { range = '5y' }: { range?: string } = {}) {

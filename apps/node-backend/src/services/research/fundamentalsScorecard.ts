@@ -228,8 +228,8 @@ export function fundamentalsScorecard(
       reason,
       benchmark,
     });
-    counts[severity] = (counts[severity] ?? 0) + 1;
-    penalty += PENALTY[severity] ?? 0;
+    counts[severity] += 1;
+    penalty += PENALTY[severity];
   }
 
   const evaluated = flags.length;

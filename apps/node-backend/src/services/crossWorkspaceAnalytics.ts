@@ -21,10 +21,10 @@ export function resolveDeployableCash({
   availableCash: number;
   cap?: number | null | undefined;
 }): number {
-  const avail = toDecimal(availableCash ?? 0);
+  const avail = toDecimal(availableCash);
   const base = avail.lt(0) ? toDecimal(0) : avail;
-  if (cap == null || !Number.isFinite(Number(cap))) return toNumber(roundToCents(base));
-  let c = toDecimal(Number(cap));
+  if (cap == null || !Number.isFinite(cap)) return toNumber(roundToCents(base));
+  let c = toDecimal(cap);
   if (c.lt(0)) c = toDecimal(0);
   if (c.gt(base)) c = base;
   return toNumber(roundToCents(c));
@@ -45,17 +45,17 @@ export function rebalanceDeployment({
   targetWeights: Record<string, number>;
   availableCash: number;
 }): Record<string, number> {
-  const cash = toDecimal(availableCash ?? 0);
+  const cash = toDecimal(availableCash);
   if (cash.lte(0)) return {};
-  const actualTotal = Object.values(actualValues ?? {}).reduce((s, v) => s.plus(toDecimal(v ?? 0)), toDecimal(0));
+  const actualTotal = Object.values(actualValues).reduce((s, v) => s.plus(toDecimal(v)), toDecimal(0));
   const totalAfter = actualTotal.plus(cash);
 
   // Shortfall per sleeve = max(0, desired − actual) where desired = totalAfter·target.
   const shortfalls: Record<string, ReturnType<typeof toDecimal>> = {};
   let shortfallSum = toDecimal(0);
-  for (const [sleeve, weight] of Object.entries(targetWeights ?? {})) {
-    const desired = totalAfter.times(toDecimal(weight ?? 0));
-    const actual = toDecimal(actualValues?.[sleeve] ?? 0);
+  for (const [sleeve, weight] of Object.entries(targetWeights)) {
+    const desired = totalAfter.times(toDecimal(weight));
+    const actual = toDecimal(actualValues[sleeve] ?? 0);
     const short = desired.minus(actual);
     if (short.gt(0)) {
       shortfalls[sleeve] = short;

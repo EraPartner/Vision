@@ -11,8 +11,10 @@ import {
 } from "./savedAnalysisService.ts";
 import type {
   SavedAnalysis,
+  SavedAnalysisParameters,
   SavedAnalysisQuerySpec,
 } from "./savedAnalysisService.ts";
+import { valueText } from "./valueText.ts";
 import type { VisualAnalysisPlan } from "./analysisCatalog.ts";
 import { APPLE_FOUNDATION_MODEL } from "../integrations/ollama/appleFoundation.ts";
 import { getOllamaClient } from "../integrations/ollama/client.ts";
@@ -81,6 +83,18 @@ function editable(saved: SavedAnalysis) {
     sourceReferences: saved.sourceReferences,
   };
 }
+/** The proposal's own operations may remove `/parameters`, so it can be absent. */
+function proposedFormulaModel(
+  parameters: SavedAnalysisParameters | undefined,
+): SavedAnalysisParameters["formulaModel"] {
+  return parameters?.formulaModel;
+}
+/** `candidate?.[key]` for parsed model JSON, which may be any value. */
+function candidateField(candidate: unknown, key: string): unknown {
+  return typeof candidate === "object" && candidate !== null
+    ? Reflect.get(candidate, key)
+    : undefined;
+}
 function segments(path: string) {
   return path
     .slice(1)
@@ -124,7 +138,7 @@ function applyOperations<T>(
       if (!Array.isArray(container) && !Object.hasOwn(container, key))
         throw new Error(`Proposal path does not exist: ${operation.path}`);
       if (Array.isArray(container)) container.splice(Number(key), 1);
-      else delete container[key];
+      else Reflect.deleteProperty(container, key);
     } else if (
       Array.isArray(container) &&
       operation.op === "add" &&
@@ -155,8 +169,8 @@ export async function previewAnalysisProposal(value: unknown) {
     ...after,
     definitionId: saved.definitionId,
     version: saved.version + 1,
-    formulas: after.parameters?.formulaModel?.formulas ?? [],
-    assumptions: after.parameters?.formulaModel?.assumptions ?? [],
+    formulas: proposedFormulaModel(after.parameters)?.formulas ?? [],
+    assumptions: proposedFormulaModel(after.parameters)?.assumptions ?? [],
   });
   return { proposal, before, after, baseVersion: saved.version };
 }
@@ -170,7 +184,7 @@ export async function generateAnalysisProposal({
   instruction: unknown;
   model?: string | null | undefined;
 }) {
-  const text = String(instruction || "").trim();
+  const text = (instruction ? valueText(instruction) : "").trim();
   if (!text || text.length > 2000)
     throw new Error("AI edit instruction must contain 1 to 2000 characters");
   const saved = await getSavedAnalysis(savedAnalysisId);
@@ -215,7 +229,7 @@ export async function generateAnalysisProposal({
       { cause: error },
     );
   }
-  let candidate;
+  let candidate: unknown;
   try {
     candidate = JSON.parse(response.content);
   } catch {
@@ -227,8 +241,8 @@ export async function generateAnalysisProposal({
     schemaVersion: 1,
     savedAnalysisId: saved.id,
     baseVersion: saved.version,
-    rationale: candidate?.rationale,
-    operations: candidate?.operations,
+    rationale: candidateField(candidate, "rationale"),
+    operations: candidateField(candidate, "operations"),
   });
   if (!parsed.success)
     throw new UpstreamError(

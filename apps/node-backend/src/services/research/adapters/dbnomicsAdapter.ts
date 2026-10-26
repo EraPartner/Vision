@@ -14,6 +14,7 @@ import { getJson, num } from './httpClient.ts';
 import { periodToMs, trimToRange } from './macroRange.ts';
 import { searchCatalog, catalogEntry } from './macroCatalog.ts';
 import { looseString, parseOr } from './schemas.ts';
+import { valueText } from '../../valueText.ts';
 
 const BASE = 'https://api.db.nomics.world/v22/series';
 
@@ -21,22 +22,24 @@ const BASE = 'https://api.db.nomics.world/v22/series';
 // "series not found" throw, while a truthy-but-malformed doc degrades to an
 // empty series (as the old Array.isArray guards did).
 const seriesEnvelopeSchema = z.looseObject({
-  series: z.looseObject({ docs: z.array(z.any()).catch([]) }).catch({ docs: [] }),
+  series: z.looseObject({ docs: z.array(z.unknown()).catch([]) }).catch({ docs: [] }),
 });
 
 const seriesDocSchema = z.looseObject({
   series_name: looseString,
   '@frequency': looseString,
-  period_start_day: z.array(z.any()).catch([]),
-  period: z.array(z.any()).catch([]),
-  value: z.array(z.any()).catch([]),
+  period_start_day: z.array(z.unknown()).catch([]),
+  period: z.array(z.unknown()).catch([]),
+  value: z.array(z.unknown()).catch([]),
 });
 
 const dbnomicsAdapter = {
   key: 'dbnomics',
 
-  async macroSearch(query: string) {
-    return { items: searchCatalog('dbnomics', query) };
+  macroSearch(query: string) {
+    return new Promise<{ items: ReturnType<typeof searchCatalog> }>((resolve) => {
+      resolve({ items: searchCatalog('dbnomics', query) });
+    });
   },
 
   async macroSeries(seriesId: string, { range = '5y' }: { range?: string } = {}) {
@@ -49,7 +52,7 @@ const dbnomicsAdapter = {
     for (let i = 0; i < values.length; i += 1) {
       const close = num(values[i]); // DBnomics encodes missing as "NA" → undefined
       if (close === undefined) continue;
-      const time = days[i] ? Date.parse(days[i]) : periodToMs(periods[i]);
+      const time = days[i] ? Date.parse(valueText(days[i])) : periodToMs(periods[i]);
       if (time === undefined || !Number.isFinite(time)) continue;
       points.push({ time, close, high: undefined, low: undefined, volume: undefined });
     }

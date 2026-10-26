@@ -12,6 +12,8 @@ import { getJson } from "./httpClient.ts";
 import { requireProviderKey } from "../providerKeys.ts";
 import { looseArray, looseString, numish, parseOr } from "./schemas.ts";
 import { makeChartRangeMap } from "@vision/types/chartRanges";
+import { lookup } from "../tableLookup.ts";
+import { valueText } from "../../valueText.ts";
 
 const BASE = "https://api.twelvedata.com";
 
@@ -74,7 +76,7 @@ function assertOk(payload: unknown): unknown {
   if (payload && typeof payload === "object") {
     const p = payload as Record<string, unknown>;
     if (p.status === "error")
-      throw new Error(p.message ? String(p.message) : "twelve_data error");
+      throw new Error(p.message ? valueText(p.message) : "twelve_data error");
   }
   return payload;
 }
@@ -124,8 +126,7 @@ const twelveDataAdapter = {
 
   async chart(symbol: string, { range = "1mo" }: { range?: string } = {}) {
     const outputsize =
-      RANGE_TO_OUTPUTSIZE[range as keyof typeof RANGE_TO_OUTPUTSIZE] ??
-      RANGE_TO_OUTPUTSIZE["1mo"];
+      lookup(RANGE_TO_OUTPUTSIZE, range) ?? RANGE_TO_OUTPUTSIZE["1mo"];
     const url = `${BASE}/time_series?symbol=${encodeURIComponent(symbol)}&interval=1day&outputsize=${outputsize}&apikey=${key()}`;
     const payload = assertOk(await getJson(url));
     const { meta, values } = parseOr(timeSeriesResponseSchema, payload, {

@@ -31,6 +31,7 @@ import type {
   YahooQuoteSummary,
 } from "../../prices/yahooClient.ts";
 import { makeChartRangeMap } from "@vision/types/chartRanges";
+import { lookup } from "../tableLookup.ts";
 
 /** `Number.isFinite` as a type guard (same semantics: false for non-numbers). */
 function isFiniteNumber(value: unknown): value is number {
@@ -60,10 +61,7 @@ function yearsAgo(n: number) {
 }
 
 function rangeToDate(range: string) {
-  return (
-    RANGE_TO_PERIOD1[range as keyof typeof RANGE_TO_PERIOD1] ??
-    RANGE_TO_PERIOD1["1mo"]
-  )();
+  return (lookup(RANGE_TO_PERIOD1, range) ?? RANGE_TO_PERIOD1["1mo"])();
 }
 
 function normalizeThumbnailUrl(url: unknown) {
@@ -109,7 +107,7 @@ const yahooAdapter = {
       await yahoo.search(query, { quotesCount: 8, newsCount: 0 }, NO_VALIDATE),
       "search",
     );
-    const items = (results.quotes ?? [])
+    const items = results.quotes
       .filter((r) => r.symbol)
       .map((r) => ({
         symbol: r.symbol,
@@ -301,7 +299,7 @@ const yahooAdapter = {
       await yahoo.search(symbol, { quotesCount: 0, newsCount }, NO_VALIDATE),
       "search",
     );
-    const articles = (results.news ?? []).map((n) => ({
+    const articles = results.news.map((n) => ({
       title: n.title,
       link: n.link,
       publisher: n.publisher,

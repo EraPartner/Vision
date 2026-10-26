@@ -11,6 +11,8 @@
  * map itself stays deterministic and unit-testable.
  */
 
+import { lookup } from "./tableLookup.ts";
+
 /** Canonical provider keys (match DB provider keys + adapter module names). */
 const PROVIDERS = Object.freeze({
   yahoo: "yahoo",
@@ -73,7 +75,7 @@ const CAPABILITY: Readonly<
 function providerChain(dataType: string, assetClass?: string): string[] {
   const byClass = CAPABILITY[dataType];
   if (!byClass) return [];
-  const chain = byClass[assetClass ?? ""] ?? byClass.default ?? [];
+  const chain = lookup(byClass, assetClass ?? "") ?? byClass.default;
   return [...chain];
 }
 

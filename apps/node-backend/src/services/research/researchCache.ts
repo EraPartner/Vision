@@ -8,6 +8,8 @@
  * only and is NEVER persisted to asset_price_history.
  */
 
+import { lookup } from './tableLookup.ts';
+
 /** Type-aware TTLs in milliseconds. */
 const TTL_BY_TYPE = Object.freeze({
   search: 10 * 60_000, //        10 min
@@ -25,7 +27,7 @@ const DEFAULT_TTL = 10 * 60_000;
 
 /** TTL for a research data type. */
 export function ttlForType(dataType: string): number {
-  return TTL_BY_TYPE[dataType as keyof typeof TTL_BY_TYPE] ?? DEFAULT_TTL;
+  return lookup(TTL_BY_TYPE, dataType) ?? DEFAULT_TTL;
 }
 
 /** Create a TTL cache with a periodic self-sweep. Inject `now` for tests. */

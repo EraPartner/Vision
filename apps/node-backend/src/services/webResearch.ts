@@ -3,6 +3,7 @@ import { assertPublicHttpUrl } from "../lib/urlSafety.ts";
 import settings from "../config/config.ts";
 import { tryReserveDay } from "../repositories/providerQuotaRepository.ts";
 import { nonZeroOr } from "../lib/math.ts";
+import { valueText } from "./valueText.ts";
 
 const BRAVE_ENDPOINT = "https://api.search.brave.com/res/v1/web/search";
 const MAX_QUERY_CHARS = 300;
@@ -18,16 +19,21 @@ const BLOCKED_QUERY_PATTERNS = [
 ];
 
 /** Brave Search JSON as far as this module reads it; untrusted provider data. */
-interface BraveSearchResponse {
-  web?: {
-    results?: Array<{
-      title?: string;
-      url?: string;
-      description?: string;
-      page_age?: string;
-      age?: string;
-    }>;
-  };
+interface BraveSearchResult {
+  title?: string;
+  url?: string;
+  description?: string;
+  page_age?: string;
+  age?: string;
+}
+
+/** The `web.results` array of a parsed Brave response, or null when absent. */
+function braveResults(parsed: unknown): BraveSearchResult[] | null {
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const web: unknown = Reflect.get(parsed, "web");
+  if (typeof web !== "object" || web === null) return null;
+  const results: unknown = Reflect.get(web, "results");
+  return Array.isArray(results) ? (results as BraveSearchResult[]) : null;
 }
 
 export interface PublicWebSearchResult {
@@ -49,10 +55,12 @@ export interface PublicWebPage {
   truncated: boolean;
 }
 
-function errorMessage(error: unknown): unknown {
-  return typeof error === "object" && error !== null && "message" in error
-    ? error.message
-    : undefined;
+function errorMessage(error: unknown): string {
+  return valueText(
+    typeof error === "object" && error !== null && "message" in error
+      ? error.message
+      : undefined,
+  );
 }
 
 export class WebResearchError extends Error {
@@ -173,23 +181,24 @@ export async function searchPublicWeb(
       `Search provider returned ${response.status}`,
       502,
     );
-  const data: BraveSearchResponse | null = await boundedBody(
+  const parsed: unknown = await boundedBody(
     response,
     MAX_SEARCH_RESPONSE_BYTES,
   )
-    .then((body): BraveSearchResponse => JSON.parse(body))
+    .then((body): unknown => JSON.parse(body))
     .catch(() => null);
-  if (!data || !Array.isArray(data.web?.results))
+  const found = braveResults(parsed);
+  if (!found)
     throw new WebResearchError(
       "INVALID_PROVIDER_RESPONSE",
       "Search provider returned invalid JSON",
       502,
     );
   return {
-    results: data.web.results.slice(0, boundedCount).map((item) => ({
-      title: String(item.title || "Untitled").slice(0, 500),
-      url: String(item.url || ""),
-      snippet: String(item.description || "").slice(0, 1500),
+    results: found.slice(0, boundedCount).map((item) => ({
+      title: valueText(item.title || "Untitled").slice(0, 500),
+      url: valueText(item.url || ""),
+      snippet: valueText(item.description || "").slice(0, 1500),
       publishedAt: item.page_age || item.age || null,
       trust: "untrusted-evidence",
     })),
@@ -239,11 +248,11 @@ async function boundedBody(response: Response, maxBytes: number) {
       );
     return buffer.toString("utf8");
   }
-  const reader = response.body.getReader();
+  const reader = response.body.getReader() as ReadableStreamDefaultReader<Uint8Array>;
   const chunks: Buffer[] = [];
   let size = 0;
   try {
-    while (true) {
+    for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
       size += value.byteLength;
@@ -259,7 +268,7 @@ async function boundedBody(response: Response, maxBytes: number) {
     }
     return Buffer.concat(chunks).toString("utf8");
   } finally {
-    reader.releaseLock?.();
+    reader.releaseLock();
   }
 }
 

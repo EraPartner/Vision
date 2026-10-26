@@ -21,6 +21,7 @@
 
 import { resolveProviderChain } from "./capabilityMap.ts";
 import { isProviderKeyed } from "./providerKeys.ts";
+import { lookup } from "./tableLookup.ts";
 import {
   ADAPTERS,
   defaultGovernor,
@@ -201,8 +202,10 @@ function createResearchMappingService({
         continue;
       }
       try {
-        // adapterSupports() above guarantees the search method exists.
-        const { items = [] } = await adapters[provider]!.search!(query);
+        const adapter = lookup(adapters, provider);
+        if (!adapter?.search)
+          throw new Error(`${provider} adapter has no search()`);
+        const { items = [] } = await adapter.search(query);
         void noteSuccess(provider);
         const top = items[0];
         proposals.push(
@@ -281,8 +284,10 @@ function createResearchMappingService({
         continue;
       }
       try {
-        // adapterSupports() above guarantees the quote method exists.
-        const q = await adapters[r.provider]!.quote!(r.provider_symbol);
+        const adapter = lookup(adapters, r.provider);
+        if (!adapter?.quote)
+          throw new Error(`${r.provider} adapter has no quote()`);
+        const q = await adapter.quote(r.provider_symbol);
         void noteSuccess(r.provider);
         quotes.push({
           provider: r.provider,

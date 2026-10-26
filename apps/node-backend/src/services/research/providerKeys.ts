@@ -40,7 +40,7 @@ const overrides = new Map<string, string>();
  * @param value  falsy clears the override
  */
 export function setKeyOverride(provider: string, value: string | undefined) {
-  const trimmed = value && String(value).trim();
+  const trimmed = value?.trim();
   if (trimmed) overrides.set(provider, trimmed);
   else overrides.delete(provider);
 }
@@ -52,8 +52,8 @@ export function loadKeyOverrides(
   rows: Array<{ provider: string; api_key: string }>,
 ) {
   overrides.clear();
-  for (const row of rows ?? []) {
-    if (row?.provider && row?.api_key) overrides.set(row.provider, String(row.api_key).trim());
+  for (const row of rows) {
+    if (row.provider && row.api_key) overrides.set(row.provider, row.api_key.trim());
   }
 }
 
@@ -61,7 +61,8 @@ function envKey(provider: string, env: NodeJS.ProcessEnv): string | undefined {
   const varName = ENV_VAR_LOOKUP[provider];
   if (!varName) return undefined;
   const value = env[varName];
-  return value && String(value).trim() ? String(value).trim() : undefined;
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 /**

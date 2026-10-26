@@ -8,6 +8,7 @@
  */
 
 import * as keyRepo from '../../repositories/providerApiKeyRepository.ts';
+import { lookup } from './tableLookup.ts';
 import {
   KEYED_PROVIDERS,
   ENV_VAR_BY_PROVIDER,
@@ -49,17 +50,22 @@ export interface ProviderKeyStatus {
 }
 
 /** Status of every keyed provider for the Settings UI. Never includes a full key. */
-export async function listKeyStatuses(): Promise<ProviderKeyStatus[]> {
-  return KEYED_PROVIDERS.map((provider) => {
-    const source = keySource(provider);
-    return {
-      provider,
-      label: LABELS[provider as keyof typeof LABELS] ?? provider,
-      envVar: ENV_VAR_BY_PROVIDER[provider as keyof typeof ENV_VAR_BY_PROVIDER],
-      configured: source !== 'none',
-      source, // 'settings' | 'env' | 'none'
-      masked: mask(providerKey(provider)),
-    };
+export function listKeyStatuses(): Promise<ProviderKeyStatus[]> {
+  return new Promise((resolve) => {
+    resolve(
+      KEYED_PROVIDERS.map((provider) => {
+        const source = keySource(provider);
+        return {
+          provider,
+          label: lookup(LABELS, provider) ?? provider,
+          envVar:
+            ENV_VAR_BY_PROVIDER[provider as keyof typeof ENV_VAR_BY_PROVIDER],
+          configured: source !== 'none',
+          source, // 'settings' | 'env' | 'none'
+          masked: mask(providerKey(provider)),
+        };
+      }),
+    );
   });
 }
 

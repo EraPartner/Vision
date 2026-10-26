@@ -15,6 +15,8 @@
  *   fred:     `<series_id>` (open search means FRED rarely needs catalog entries)
  */
 
+import { lookup } from "../tableLookup.ts";
+
 const SOURCE_LABEL = Object.freeze({
   fred: "FRED",
   eurostat: "Eurostat",
@@ -139,7 +141,7 @@ function toItem(e: (typeof MACRO_CATALOG)[number]) {
     region: e.region,
     units: e.units,
     frequency: e.frequency,
-    source: SOURCE_LABEL[e.provider as keyof typeof SOURCE_LABEL] ?? e.provider,
+    source: lookup(SOURCE_LABEL, e.provider) ?? e.provider,
   };
 }
 
@@ -148,7 +150,7 @@ function toItem(e: (typeof MACRO_CATALOG)[number]) {
  * (title + region + keywords). Returns wire-shaped items.
  */
 export function searchCatalog(provider: string, query: string) {
-  const q = String(query || "")
+  const q = (query || "")
     .trim()
     .toLowerCase();
   if (!q) return [];
@@ -174,8 +176,8 @@ export function isValidSeriesId(
   provider: string,
   seriesId: unknown,
 ): seriesId is string {
-  const re = SERIES_ID_PATTERN[provider as keyof typeof SERIES_ID_PATTERN];
-  return Boolean(re != null && typeof seriesId === "string" && re.test(seriesId));
+  const re = lookup(SERIES_ID_PATTERN, provider);
+  return re !== undefined && typeof seriesId === "string" && re.test(seriesId);
 }
 
 export { MACRO_CATALOG };

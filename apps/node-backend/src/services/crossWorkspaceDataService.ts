@@ -79,7 +79,7 @@ export async function assembleRebalanceInputs({
     const key = SLEEVE_ROLLUP[assetClass] ?? assetClass;
     actualValues[key] = toNumber(
       roundToCents(
-        toDecimal(actualValues[key] ?? 0).plus(toDecimal(s.currentValue ?? 0)),
+        toDecimal(actualValues[key] ?? 0).plus(toDecimal(s.currentValue)),
       ),
     );
   }

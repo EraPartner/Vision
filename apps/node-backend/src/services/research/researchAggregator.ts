@@ -26,9 +26,10 @@ import {
   adapterSupports,
   recordProviderError,
 } from "./providerRegistry.ts";
-import type { AdapterMap } from "./providerRegistry.ts";
+import type { AdapterMap, ResearchAdapter } from "./providerRegistry.ts";
 import type { QuotaReserver } from "./quotaGovernor.ts";
 import { MACRO_PROVIDERS } from "./adapters/macroCatalog.ts";
+import { lookup } from "./tableLookup.ts";
 
 /** One provider the aggregator tried (or skipped) for a request. */
 export interface ResearchAttempt {
@@ -83,6 +84,13 @@ function createResearchAggregator({
   // quota). Keyed by the same cache key; cleared in `finally`.
   const inFlight = new Map<string, Promise<ResearchFetchResult>>();
 
+  /** The adapter for a provider the caller already checked with adapterSupports(). */
+  function adapterFor(provider: string): ResearchAdapter {
+    const adapter = lookup(adapters, provider);
+    if (!adapter) throw new Error(`No adapter for research provider: ${provider}`);
+    return adapter;
+  }
+
   async function reserveProvider(provider: string) {
     if (typeof governor.reserve === "function")
       return governor.reserve(provider);
@@ -116,7 +124,7 @@ function createResearchAggregator({
       cacheKey?: string | undefined;
     } = {},
   ): Promise<ResearchFetchResult> {
-    const method = METHOD_BY_TYPE[dataType as keyof typeof METHOD_BY_TYPE];
+    const method = lookup(METHOD_BY_TYPE, dataType);
     if (!method) throw new Error(`Unknown research data type: ${dataType}`);
 
     const { symbol, assetClass, range, count, cacheKey } = params;
@@ -139,10 +147,10 @@ function createResearchAggregator({
         }
         try {
           // usableChain() only yields providers whose adapter has `method`.
-          const data = await adapters[provider]![method]!(symbol, {
-            range,
-            count,
-          });
+          const adapter = adapterFor(provider);
+          if (!adapter[method])
+            throw new Error(`${provider} adapter has no ${method}()`);
+          const data = await adapter[method](symbol, { range, count });
           Promise.resolve(recordSuccess(provider)).catch(() => {});
           const result = { provider, data, attempted: [...attempted] };
           cache.set(key, result, ttlForType(dataType));
@@ -219,7 +227,10 @@ function createResearchAggregator({
         }
         try {
           // `order` keeps only providers whose adapter has fundamentals().
-          const data = await adapters[provider]!.fundamentals!(symbol, {});
+          const adapter = adapterFor(provider);
+          if (!adapter.fundamentals)
+            throw new Error(`${provider} adapter has no fundamentals()`);
+          const data = await adapter.fundamentals(symbol, {});
           Promise.resolve(recordSuccess(provider)).catch(() => {});
           return { provider, data };
         } catch (err) {
@@ -253,12 +264,12 @@ function createResearchAggregator({
    * and not a field-merge. Each item carries its own provider; a provider that
    * errors or is unkeyed (e.g. no FRED key) is simply absent from the union.
    */
-  async function searchMacro(query: string): Promise<{
+  async function searchMacro(query: string | null | undefined): Promise<{
     items: unknown[];
     source: "cache" | "live";
     attempted?: ResearchAttempt[];
   }> {
-    const q = String(query ?? "").trim();
+    const q = (query ?? "").trim();
     if (!q) return { items: [], source: "live" };
 
     const key = `macro_search::${q.toLowerCase()}`;
@@ -277,9 +288,13 @@ function createResearchAggregator({
         }
         try {
           // `providers` keeps only adapters that implement macroSearch().
-          const res = await adapters[provider]!.macroSearch!(q);
+          const adapter = adapterFor(provider);
+          if (!adapter.macroSearch)
+            throw new Error(`${provider} adapter has no macroSearch()`);
+          const res = await adapter.macroSearch(q);
           Promise.resolve(recordSuccess(provider)).catch(() => {});
-          return Array.isArray(res?.items) ? res.items : [];
+          const items = res.items;
+          return Array.isArray(items) ? (items as unknown[]) : [];
         } catch (err) {
           Promise.resolve(recordError(provider, err)).catch(() => {});
           attempted.push({
@@ -336,7 +351,10 @@ function createResearchAggregator({
     }
     try {
       // adapterSupports() above guarantees the macroSeries method exists.
-      const data = await adapters[provider]!.macroSeries!(seriesId, { range });
+      const adapter = adapterFor(provider);
+      if (!adapter.macroSeries)
+        throw new Error(`${provider} adapter has no macroSeries()`);
+      const data = await adapter.macroSeries(seriesId, { range });
       Promise.resolve(recordSuccess(provider)).catch(() => {});
       const result = { provider, data };
       cache.set(key, result, ttlForType("macro_series"));
