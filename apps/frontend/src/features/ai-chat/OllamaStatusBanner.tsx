@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Info, ExternalLink, RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { aiKeys } from "@/lib/queryKeys";
@@ -14,7 +15,9 @@ interface OllamaStatusBannerProps {
 
 const OLLAMA_SETUP_URL = "https://ollama.com/download";
 
-export function OllamaStatusBanner({
+// Memoized: `status` is structurally shared React Query data, so unrelated AI
+// page re-renders bail out here.
+export const OllamaStatusBanner = memo(function OllamaStatusBanner({
     status,
     isLoading,
 }: OllamaStatusBannerProps) {
@@ -84,4 +87,4 @@ export function OllamaStatusBanner({
             </AlertDescription>
         </Alert>
     );
-}
+});

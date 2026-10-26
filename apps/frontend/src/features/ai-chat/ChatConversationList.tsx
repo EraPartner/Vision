@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from "react";
+import { memo, useId, useMemo, useState } from "react";
 import { Plus, Pencil, Trash2, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,8 +40,11 @@ interface ChatConversationListProps {
  * The conversation rail: one row per conversation with a ••• menu (Rename,
  * Delete). Delete keeps its confirmation because the backend cascade-deletes
  * every message and there is no restore endpoint.
+ *
+ * Memoized: the AI page re-renders on status polls and mode switches; with
+ * stable props this subtree bails out.
  */
-export function ChatConversationList({
+export const ChatConversationList = memo(function ChatConversationList({
     selectedId,
     onSelect,
 }: ChatConversationListProps) {
@@ -227,7 +230,7 @@ export function ChatConversationList({
             <ConfirmDialog />
         </>
     );
-}
+});
 
 function RenameDialog({
     target,

@@ -13,7 +13,7 @@ import {
 } from "@/hooks/useAIChat";
 import { aiChatStreamStore } from "@/lib/aiChatStreamStore";
 import { ChatConversationList } from "@/features/ai-chat/ChatConversationList";
-import { ChatMessageList } from "@/features/ai-chat/ChatMessageList";
+import { LiveChatMessageList } from "@/features/ai-chat/ChatMessageList";
 import { ChatComposer } from "@/features/ai-chat/ChatComposer";
 import { OllamaStatusBanner } from "@/features/ai-chat/OllamaStatusBanner";
 import { Button } from "@/components/ui/button";
@@ -76,16 +76,10 @@ export default function AIChatPage() {
 
     const { data: detail } = useConversation(selectedId);
     const createMut = useCreateConversation();
-    const {
-        send,
-        cancel,
-        isStreaming,
-        assistantDraft,
-        status: streamStatus,
-        lastRequest,
-        userMessage: streamingUserMessage,
-        toolMessages: streamingToolMessages,
-    } = useSendChatMessage(selectedId);
+    // Narrow subscription: the per-token draft is read by LiveChatMessageList,
+    // so a streamed token does not re-render this page.
+    const { send, cancel, isStreaming, lastRequest } =
+        useSendChatMessage(selectedId);
     const streamingIds = useStreamingConversationIds();
 
     // If the user returns to the page with no selection but a stream is in
@@ -124,10 +118,13 @@ export default function AIChatPage() {
 
     useModelResidency(activeModel, status?.ok === true);
 
-    const ensureConversation = async (): Promise<string | null> => {
+    // Callbacks below are stable so the memoized composer and transcript
+    // bail out of page re-renders. `mutateAsync` is stable across renders.
+    const createConversation = createMut.mutateAsync;
+    const ensureConversation = useCallback(async (): Promise<string | null> => {
         if (selectedId) return selectedId;
         try {
-            const created = await createMut.mutateAsync(
+            const created = await createConversation(
                 activeModel ? { model: activeModel } : {},
             );
             setSelectedId(created.conversation.id);
@@ -135,29 +132,32 @@ export default function AIChatPage() {
         } catch {
             return null;
         }
-    };
+    }, [selectedId, createConversation, activeModel, setSelectedId]);
 
-    const handleSend = async (message: string) => {
-        const conversationId = await ensureConversation();
-        if (!conversationId) return;
-        await send({
-            conversationId,
-            message,
-            model: activeModel ?? undefined,
-            useTools,
-        });
-    };
+    const handleSend = useCallback(
+        async (message: string) => {
+            const conversationId = await ensureConversation();
+            if (!conversationId) return;
+            await send({
+                conversationId,
+                message,
+                model: activeModel ?? undefined,
+                useTools,
+            });
+        },
+        [ensureConversation, send, activeModel, useTools],
+    );
 
-    const handleRetry = () => {
+    const handleRetry = useCallback(() => {
         if (lastRequest) {
             void send({ ...lastRequest, retryLastTurn: true });
         }
-    };
+    }, [lastRequest, send]);
 
     // Canned insights-digest turn. Forces tools on regardless of the composer
     // toggle (the digest is meaningless without the insights tool) and sets
     // `insightsPreCall` so the backend pre-runs the insights tool.
-    const handleInsightsDigest = async () => {
+    const handleInsightsDigest = useCallback(async () => {
         const conversationId = await ensureConversation();
         if (!conversationId) return;
         await send({
@@ -167,7 +167,15 @@ export default function AIChatPage() {
             useTools: true,
             insightsPreCall: true,
         });
-    };
+    }, [ensureConversation, send, t, activeModel]);
+
+    const handleDrawerSelect = useCallback(
+        (id: string | null) => {
+            setSelectedId(id);
+            setRailOpen(false);
+        },
+        [setSelectedId],
+    );
 
     const statusLabel = statusLoading
         ? t("aiChat.checkingOllama")
@@ -183,29 +191,32 @@ export default function AIChatPage() {
 
     const composerDisabled = !status?.ok;
 
-    const emptyState = (
-        <Card className="mx-auto max-w-2xl">
-            <EmptyState
-                size="compact"
-                icon={PAGE_ICONS["/ai-chat"]}
-                title={t("aiChat.emptyTitle")}
-                description={t("aiChat.emptyState")}
-                action={
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleInsightsDigest}
-                        disabled={composerDisabled}
-                    >
-                        <Sparkles
-                            className="h-4 w-4 text-primary"
-                            aria-hidden
-                        />
-                        {t("aiChat.insightsDigestButton")}
-                    </Button>
-                }
-            />
-        </Card>
+    const emptyState = useMemo(
+        () => (
+            <Card className="mx-auto max-w-2xl">
+                <EmptyState
+                    size="compact"
+                    icon={PAGE_ICONS["/ai-chat"]}
+                    title={t("aiChat.emptyTitle")}
+                    description={t("aiChat.emptyState")}
+                    action={
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleInsightsDigest}
+                            disabled={composerDisabled}
+                        >
+                            <Sparkles
+                                className="h-4 w-4 text-primary"
+                                aria-hidden
+                            />
+                            {t("aiChat.insightsDigestButton")}
+                        </Button>
+                    }
+                />
+            </Card>
+        ),
+        [t, handleInsightsDigest, composerDisabled],
     );
 
     return (
@@ -286,10 +297,7 @@ export default function AIChatPage() {
                                             </SheetHeader>
                                             <ChatConversationList
                                                 selectedId={selectedId}
-                                                onSelect={(id) => {
-                                                    setSelectedId(id);
-                                                    setRailOpen(false);
-                                                }}
+                                                onSelect={handleDrawerSelect}
                                             />
                                         </SheetContent>
                                     </Sheet>
@@ -339,15 +347,10 @@ export default function AIChatPage() {
                                 mode === "chat" ? "flex" : "hidden",
                             )}
                         >
-                            <ChatMessageList
+                            <LiveChatMessageList
                                 isVisible={mode === "chat"}
                                 conversationId={selectedId}
                                 messages={messages}
-                                streamingUserMessage={streamingUserMessage}
-                                streamingToolMessages={streamingToolMessages}
-                                assistantDraft={assistantDraft}
-                                isStreaming={isStreaming}
-                                streamStatus={streamStatus}
                                 onRetry={
                                     lastRequest && !composerDisabled
                                         ? handleRetry

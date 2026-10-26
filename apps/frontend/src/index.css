@@ -481,6 +481,16 @@
         }
     }
 
+    /* AI chat bubbles sit inside the already-glass transcript Card. A nested
+       backdrop filter is one more render surface per bubble that re-reads the
+       blurred parent every frame (every streamed token), for a near-invisible
+       difference. Fill, border and shadow stay; on every tier. Two classes to
+       outrank the single-class materials above. */
+    .card-material.chat-bubble-flat {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
     /* ------------------------------------------------------------------
      * Modal overlay backdrop (ui/dialog, ui/alert-dialog, ui/sheet).
      *

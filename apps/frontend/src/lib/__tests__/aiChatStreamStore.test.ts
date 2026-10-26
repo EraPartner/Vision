@@ -231,3 +231,124 @@ describe("aiChatStreamStore interrupted drafts", () => {
         await secondSend;
     });
 });
+
+describe("aiChatStreamStore token coalescing", () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it("emits once per frame for tokens and flushes terminal events synchronously", async () => {
+        // Node has no requestAnimationFrame, so the store uses its timer
+        // fallback; fake timers stand in for the frame boundary.
+        vi.useFakeTimers();
+        const stream = deferredStream();
+        const drafts: string[] = [];
+        const unsubscribe = aiChatStreamStore.subscribe(() => {
+            drafts.push(
+                aiChatStreamStore.getState(CONVERSATION_ID).assistantDraft,
+            );
+        });
+        const send = aiChatStreamStore.send(
+            request(),
+            new QueryClient(),
+            vi.fn(),
+        );
+        drafts.length = 0; // drop the synchronous stream-start emit
+
+        stream.emit({ type: "token", delta: "Hel" });
+        stream.emit({ type: "token", delta: "lo" });
+        stream.emit({ type: "token", delta: " there" });
+        // State is current immediately; only the notification waits.
+        expect(drafts).toEqual([]);
+        expect(aiChatStreamStore.getState(CONVERSATION_ID).assistantDraft).toBe(
+            "Hello there",
+        );
+        vi.runOnlyPendingTimers();
+        expect(drafts).toEqual(["Hello there"]);
+
+        stream.emit({ type: "token", delta: "," });
+        stream.emit({ type: "token", delta: " friend" });
+        stream.emit({ type: "error", detail: "model crashed" });
+        // The terminal event emits synchronously with the full draft, and
+        // takes the pending frame with it: nothing fires afterwards.
+        expect(drafts).toEqual(["Hello there", "Hello there, friend"]);
+        expect(vi.getTimerCount()).toBe(0);
+        vi.runOnlyPendingTimers();
+        expect(drafts).toHaveLength(2);
+        expect(aiChatStreamStore.getState(CONVERSATION_ID)).toMatchObject({
+            isStreaming: false,
+            status: "interrupted",
+            assistantDraft: "Hello there, friend",
+        });
+
+        unsubscribe();
+        aiChatStreamStore.cancel(CONVERSATION_ID);
+        stream.reject(new Error("Chat cancelled"));
+        await send;
+    });
+
+    it("flushes a pending token frame synchronously on complete", async () => {
+        vi.useFakeTimers();
+        const stream = deferredStream();
+        const queryClient = new QueryClient();
+        queryClient.setQueryData(aiKeys.conversation(CONVERSATION_ID), {
+            conversation: { id: CONVERSATION_ID },
+            messages: [],
+        });
+        const seen: string[] = [];
+        const unsubscribe = aiChatStreamStore.subscribe(() => {
+            const state = aiChatStreamStore.getState(CONVERSATION_ID);
+            seen.push(state.isStreaming ? state.assistantDraft : "done");
+        });
+        const send = aiChatStreamStore.send(request(), queryClient, vi.fn());
+        seen.length = 0;
+
+        stream.emit({ type: "token", delta: "Full" });
+        stream.emit({ type: "token", delta: " answer" });
+        stream.emit({
+            type: "complete",
+            payload: {
+                conversation: { id: CONVERSATION_ID },
+                assistantMessage: {
+                    id: "assistant-1",
+                    role: "assistant",
+                    content: "Full answer",
+                },
+            },
+        } as never);
+
+        expect(seen).toEqual(["done"]);
+        expect(vi.getTimerCount()).toBe(0);
+        expect(
+            queryClient.getQueryData(aiKeys.conversation(CONVERSATION_ID)),
+        ).toMatchObject({
+            messages: [{ id: "assistant-1", content: "Full answer" }],
+        });
+
+        unsubscribe();
+        stream.reject(new Error("Chat cancelled"));
+        await send;
+    });
+
+    it("drops a pending token frame when the stream is cancelled", async () => {
+        vi.useFakeTimers();
+        const stream = deferredStream();
+        const listener = vi.fn();
+        const unsubscribe = aiChatStreamStore.subscribe(listener);
+        const send = aiChatStreamStore.send(
+            request(),
+            new QueryClient(),
+            vi.fn(),
+        );
+        listener.mockClear();
+
+        stream.emit({ type: "token", delta: "Partial" });
+        aiChatStreamStore.cancel(CONVERSATION_ID);
+        expect(listener).toHaveBeenCalledOnce();
+        expect(vi.getTimerCount()).toBe(0);
+
+        unsubscribe();
+        stream.reject(new Error("Chat cancelled"));
+        await send;
+    });
+});

@@ -307,6 +307,12 @@ describe("ChatMessageList auto-scroll", () => {
         );
         scrollTo.mockClear();
 
+        // The replacement transcript lays out at its own height, so the view
+        // the previous commit left flush is no longer at the bottom.
+        Object.defineProperty(log, "scrollHeight", {
+            configurable: true,
+            value: 1_500,
+        });
         view.rerender(
             <LanguageProvider language="en" setLanguage={vi.fn()}>
                 <ChatMessageList
@@ -320,7 +326,7 @@ describe("ChatMessageList auto-scroll", () => {
             </LanguageProvider>,
         );
 
-        expect(scrollTo).toHaveBeenCalledWith({ top: 1_200 });
+        expect(scrollTo).toHaveBeenCalledWith({ top: 1_500 });
     });
 
     it("does not yank a scrolled-up reader on a same-conversation stream update", () => {
@@ -357,5 +363,52 @@ describe("ChatMessageList auto-scroll", () => {
         );
 
         expect(scrollTo).not.toHaveBeenCalled();
+    });
+
+    it("skips the scroll write while a pinned view is already flush", () => {
+        vi.spyOn(window, "requestAnimationFrame").mockImplementation(
+            (callback) => {
+                callback(0);
+                return 1;
+            },
+        );
+        vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+        const scrollTo = vi.spyOn(Element.prototype, "scrollTo");
+
+        const view = renderMessageList(
+            firstConversation,
+            "conversation-one",
+            "A",
+        );
+        const log = screen.getByRole("log");
+        setScrollableGeometry(log);
+        log.scrollTop = 1_000;
+        fireEvent.scroll(log);
+        scrollTo.mockClear();
+
+        const rerenderDraft = (assistantDraft: string) =>
+            view.rerender(
+                <LanguageProvider language="en" setLanguage={vi.fn()}>
+                    <ChatMessageList
+                        messages={firstConversation}
+                        streamingUserMessage={null}
+                        streamingToolMessages={[]}
+                        assistantDraft={assistantDraft}
+                        isStreaming
+                        conversationId="conversation-one"
+                    />
+                </LanguageProvider>,
+            );
+
+        rerenderDraft("AB");
+        expect(scrollTo).not.toHaveBeenCalled();
+
+        // Content grew below the pinned view: follow it.
+        Object.defineProperty(log, "scrollHeight", {
+            configurable: true,
+            value: 1_240,
+        });
+        rerenderDraft("ABC");
+        expect(scrollTo).toHaveBeenCalledWith({ top: 1_240 });
     });
 });

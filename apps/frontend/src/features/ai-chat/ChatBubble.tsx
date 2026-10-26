@@ -48,7 +48,9 @@ function TextBubble({
                     {content}
                 </div>
             ) : (
-                <Card className="max-w-[85%] whitespace-pre-wrap break-words px-4 py-2.5 type-body leading-relaxed">
+                // chat-bubble-flat: the transcript Card is already glass; see
+                // index.css for why bubbles drop their own backdrop filter.
+                <Card className="chat-bubble-flat max-w-[85%] whitespace-pre-wrap break-words px-4 py-2.5 type-body leading-relaxed">
                     {content}
                     {streaming && (
                         <span
@@ -67,7 +69,7 @@ function ToolBubble({ message }: { message: ChatMessage }) {
     return (
         <div className="flex gap-3 px-1">
             <Avatar role="tool" />
-            <Card className="max-w-[90%] flex-1 p-3">
+            <Card className="chat-bubble-flat max-w-[90%] flex-1 p-3">
                 <div className="mb-2 flex items-center gap-2 type-footnote font-medium text-label-secondary">
                     <Wrench className="h-3 w-3" aria-hidden="true" />
                     <span>{message.toolName ?? t("aiChat.toolResult")}</span>

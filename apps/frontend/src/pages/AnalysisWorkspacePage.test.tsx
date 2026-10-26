@@ -14,6 +14,29 @@ import { analysisDraftSignature } from "@/features/analysis/analysisPresentation
 import { must } from "@/test/must";
 
 const presentation = vi.hoisted(() => ({ language: "en" }));
+const pivotRenders = vi.hoisted(() => ({ count: 0 }));
+
+vi.mock("@/features/analysis/AnalysisPivotPanel", async (importOriginal) => {
+    const actual =
+        await importOriginal<
+            typeof import("@/features/analysis/AnalysisPivotPanel")
+        >();
+    // Count renders of the real component while keeping its own memo wrapper.
+    const memoised = actual.AnalysisPivotPanel as unknown as {
+        type: (props: object) => unknown;
+    };
+    const inner = memoised.type;
+    return {
+        ...actual,
+        AnalysisPivotPanel: {
+            ...memoised,
+            type: (props: object) => {
+                pivotRenders.count += 1;
+                return inner(props);
+            },
+        },
+    };
+});
 
 vi.mock("@/lib/downloadBlob", () => ({ downloadBlob: vi.fn() }));
 
@@ -24,17 +47,30 @@ vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
         >();
     const { default: en } = await import("@/locales/en");
     const { default: nl } = await import("@/locales/nl");
+    // Like the real hook, `t` keeps its identity until the language changes.
+    const translators = new Map<
+        string,
+        (key: string, params?: Record<string, string | number>) => string
+    >();
+    const translatorFor = (language: string) => {
+        let t = translators.get(language);
+        if (!t) {
+            t = (key, params = {}) =>
+                Object.entries(params).reduce(
+                    (text, [name, value]) =>
+                        text.replaceAll(`{${name}}`, String(value)),
+                    (language === "nl" ? nl : en)[key] ?? key,
+                );
+            translators.set(language, t);
+        }
+        return t;
+    };
     return {
         ...actual,
         useLanguage: () => ({
             language: presentation.language,
             setLanguage: vi.fn(),
-            t: (key: string, params: Record<string, string | number> = {}) =>
-                Object.entries(params).reduce(
-                    (text, [name, value]) =>
-                        text.replaceAll(`{${name}}`, String(value)),
-                    (presentation.language === "nl" ? nl : en)[key] ?? key,
-                ),
+            t: translatorFor(presentation.language),
         }),
     };
 });
@@ -229,6 +265,36 @@ describe("AnalysisWorkspacePage", () => {
                 name: nlText("analysis.ext.pivot.run"),
             }),
         ).toBeInTheDocument();
+    });
+
+    it("does not re-render the pivot panel while typing a field search", async () => {
+        const user = userEvent.setup();
+        renderPage();
+        await screen.findByText("Cash flows");
+        await user.click(screen.getByRole("button", { name: "Run" }));
+        await user.click(
+            await screen.findByRole("tab", { name: "Pivot table" }),
+        );
+        expect(
+            screen.getByRole("button", { name: "Build pivot" }),
+        ).toBeInTheDocument();
+        const fields = screen.getByRole("group", { name: "Fields" });
+        const search = within(fields).getByRole("textbox", {
+            name: "Search fields",
+        });
+        const rendersBefore = pivotRenders.count;
+        expect(rendersBefore).toBeGreaterThan(0);
+        await user.type(search, "trans");
+        expect(search).toHaveValue("trans");
+        await waitFor(() =>
+            expect(
+                within(fields).queryByRole("checkbox", { name: "Currency" }),
+            ).not.toBeInTheDocument(),
+        );
+        expect(
+            within(fields).getByRole("checkbox", { name: "Transfer" }),
+        ).toBeInTheDocument();
+        expect(pivotRenders.count).toBe(rendersBefore);
     });
 
     it("keeps optional tools collapsed and preserves edits when reopening them", async () => {

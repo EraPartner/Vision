@@ -1,6 +1,13 @@
 import Decimal from "decimal.js";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+    useCallback,
+    useDeferredValue,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     ArrowUpDown,
@@ -172,6 +179,8 @@ const OPERATORS = [
 ] as const;
 const requestId = () => `analysis-${crypto.randomUUID()}`;
 const DEFAULT_PREFERENCE = "__default__";
+// Shared fallback so a missing export context does not defeat panel memoisation.
+const NO_IDS: string[] = [];
 const codeBlockClass =
     "max-h-64 overflow-auto rounded-card corner-continuous border border-border/50 bg-background/60 p-3 type-footnote leading-snug text-foreground/80";
 const chipLabelClass =
@@ -621,19 +630,22 @@ export default function AnalysisWorkspacePage() {
 
     const { catalog: catalogQuery, saved: savedQuery } =
         useAnalysisWorkspaceQueries(workspace);
-    const localizedDatasets = (catalogQuery.data?.datasets ?? []).map(
-        (entry) => ({
-            ...entry,
-            label: analysisCatalogLabel(entry.label, t),
-            fields: entry.fields.map((field) => ({
-                ...field,
-                label: analysisCatalogLabel(field.label, t),
+    // Stable identities let the memoised panels skip renders on unrelated state changes.
+    const localizedDatasets = useMemo(
+        () =>
+            (catalogQuery.data?.datasets ?? []).map((entry) => ({
+                ...entry,
+                label: analysisCatalogLabel(entry.label, t),
+                fields: entry.fields.map((field) => ({
+                    ...field,
+                    label: analysisCatalogLabel(field.label, t),
+                })),
+                measures: entry.measures.map((measure) => ({
+                    ...measure,
+                    label: analysisCatalogLabel(measure.label, t),
+                })),
             })),
-            measures: entry.measures.map((measure) => ({
-                ...measure,
-                label: analysisCatalogLabel(measure.label, t),
-            })),
-        }),
+        [catalogQuery.data, t],
     );
     const rawDataset = catalogQuery.data?.datasets.find(
         (entry) => entry.id === plan.datasetId,
@@ -1034,8 +1046,12 @@ export default function AnalysisWorkspacePage() {
         selectedSaved?.id,
     ]);
 
-    const presentationDatasets = (catalogQuery.data?.datasets ?? []).filter(
-        (entry) => entry.id === resultDatasetId,
+    const presentationDatasets = useMemo(
+        () =>
+            (catalogQuery.data?.datasets ?? []).filter(
+                (entry) => entry.id === resultDatasetId,
+            ),
+        [catalogQuery.data, resultDatasetId],
     );
     const displayedResult = result ?? lastUsableResult;
     draftSnapshot.current = JSON.stringify({
@@ -1061,6 +1077,97 @@ export default function AnalysisWorkspacePage() {
             scenarioModel,
         });
     const queryOutdated = resultQuery !== null && resultQuery !== currentQuery;
+    // Typing stays urgent; the field list filters against the deferred value.
+    const deferredFieldSearch = useDeferredValue(fieldSearch);
+
+    const chartResult = useMemo(
+        () =>
+            displayedResult
+                ? {
+                      ...displayedResult,
+                      declaredColumns: (displayedResult.declaredColumns !=
+                          null && displayedResult.declaredColumns.length > 0
+                          ? displayedResult.declaredColumns
+                          : displayedResult.columns
+                      ).map((column) => ({
+                          ...column,
+                          label: analysisColumnLabel(
+                              displayedResult,
+                              column.id,
+                              presentationDatasets,
+                              t,
+                          ),
+                          nullable: true,
+                      })),
+                  }
+                : null,
+        [displayedResult, presentationDatasets, t],
+    );
+    const handlePivotDrill = useCallback(
+        async (groups: string[], row: Record<string, AnalysisValue>) => {
+            try {
+                setDrillResult(
+                    await apiClient.drillAnalysis(
+                        {
+                            ...plan,
+                            groups,
+                            filters: [...plan.filters, ...pivotConfig.filters],
+                        },
+                        row,
+                        requestId(),
+                    ),
+                );
+            } catch (cause) {
+                setError(apiErrorToMessage(cause, t));
+            }
+        },
+        [plan, pivotConfig.filters, t],
+    );
+    const scenarioModelStale = useMemo(
+        () =>
+            JSON.stringify(resultInputs.scenarioModel) !==
+            JSON.stringify(scenarioModel),
+        [resultInputs.scenarioModel, scenarioModel],
+    );
+    const handleWorkbenchResultChange = useCallback(
+        (next: AnalysisResult) => {
+            setResultInputs({
+                formulasJson,
+                assumptionsJson,
+                assumptionValuesJson,
+                workbench,
+                scenarioModel,
+            });
+            const updated = {
+                ...next,
+                sourceResult:
+                    displayedResult?.sourceResult ??
+                    displayedResult ??
+                    undefined,
+            };
+            setResult(updated);
+            setLastUsableResult(updated);
+        },
+        [
+            formulasJson,
+            assumptionsJson,
+            assumptionValuesJson,
+            workbench,
+            scenarioModel,
+            displayedResult,
+        ],
+    );
+    const exportAssumptions = useMemo(
+        () => ({
+            definitions: parseJson(resultInputs.assumptionsJson),
+            values: parseJson(resultInputs.assumptionValuesJson),
+        }),
+        [resultInputs.assumptionsJson, resultInputs.assumptionValuesJson],
+    );
+    const exportFormulas = useMemo(
+        () => parseJson(resultInputs.formulasJson),
+        [resultInputs.formulasJson],
+    );
 
     return (
         <PageShell>
@@ -1533,7 +1640,7 @@ export default function AnalysisWorkspacePage() {
                                                                 `${field.label} ${field.id}`
                                                                     .toLowerCase()
                                                                     .includes(
-                                                                        fieldSearch.toLowerCase(),
+                                                                        deferredFieldSearch.toLowerCase(),
                                                                     ),
                                                             )
                                                             .map((field) => (
@@ -2574,30 +2681,13 @@ export default function AnalysisWorkspacePage() {
                                 )}
                                 <TabsContent value="chart" className="mt-0">
                                     <CardContent>
-                                        <AnalysisChartPanel
-                                            result={{
-                                                ...displayedResult,
-                                                declaredColumns:
-                                                    (displayedResult.declaredColumns !=
-                                                        null &&
-                                                    displayedResult.declaredColumns
-                                                        .length > 0
-                                                        ? displayedResult.declaredColumns
-                                                        : displayedResult.columns
-                                                    ).map((column) => ({
-                                                        ...column,
-                                                        label: analysisColumnLabel(
-                                                            displayedResult,
-                                                            column.id,
-                                                            presentationDatasets,
-                                                            t,
-                                                        ),
-                                                        nullable: true,
-                                                    })),
-                                            }}
-                                            spec={chartSpec}
-                                            onChange={setChartSpec}
-                                        />
+                                        {chartResult && (
+                                            <AnalysisChartPanel
+                                                result={chartResult}
+                                                spec={chartSpec}
+                                                onChange={setChartSpec}
+                                            />
+                                        )}
                                     </CardContent>
                                 </TabsContent>
                                 <TabsContent value="pivot" className="mt-0">
@@ -2608,34 +2698,7 @@ export default function AnalysisWorkspacePage() {
                                                 dataset={dataset}
                                                 config={pivotConfig}
                                                 onChange={setPivotConfig}
-                                                onDrill={async (
-                                                    groups,
-                                                    row,
-                                                ) => {
-                                                    try {
-                                                        setDrillResult(
-                                                            await apiClient.drillAnalysis(
-                                                                {
-                                                                    ...plan,
-                                                                    groups,
-                                                                    filters: [
-                                                                        ...plan.filters,
-                                                                        ...pivotConfig.filters,
-                                                                    ],
-                                                                },
-                                                                row,
-                                                                requestId(),
-                                                            ),
-                                                        );
-                                                    } catch (cause) {
-                                                        setError(
-                                                            apiErrorToMessage(
-                                                                cause,
-                                                                t,
-                                                            ),
-                                                        );
-                                                    }
-                                                }}
+                                                onDrill={handlePivotDrill}
                                             />
                                         ) : (
                                             <p className="type-callout text-label-secondary">
@@ -2697,28 +2760,9 @@ export default function AnalysisWorkspacePage() {
                                     sourceStale={
                                         queryOutdated ||
                                         Boolean(activeRequest) ||
-                                        JSON.stringify(
-                                            resultInputs.scenarioModel,
-                                        ) !== JSON.stringify(scenarioModel)
+                                        scenarioModelStale
                                     }
-                                    onResultChange={(next) => {
-                                        setResultInputs({
-                                            formulasJson,
-                                            assumptionsJson,
-                                            assumptionValuesJson,
-                                            workbench,
-                                            scenarioModel,
-                                        });
-                                        const updated = {
-                                            ...next,
-                                            sourceResult:
-                                                displayedResult?.sourceResult ??
-                                                displayedResult ??
-                                                undefined,
-                                        };
-                                        setResult(updated);
-                                        setLastUsableResult(updated);
-                                    }}
+                                    onResultChange={handleWorkbenchResultChange}
                                 />
                             </CardContent>
                         </Disclosure>
@@ -2957,23 +3001,14 @@ export default function AnalysisWorkspacePage() {
                                             exportContext?.definitionVersion
                                         }
                                         datasetIds={
-                                            exportContext?.datasetIds ?? []
+                                            exportContext?.datasetIds ?? NO_IDS
                                         }
                                         sourceReferences={
                                             exportContext?.sourceReferences ??
-                                            []
+                                            NO_IDS
                                         }
-                                        assumptions={{
-                                            definitions: parseJson(
-                                                resultInputs.assumptionsJson,
-                                            ),
-                                            values: parseJson(
-                                                resultInputs.assumptionValuesJson,
-                                            ),
-                                        }}
-                                        formulas={parseJson(
-                                            resultInputs.formulasJson,
-                                        )}
+                                        assumptions={exportAssumptions}
+                                        formulas={exportFormulas}
                                         scenarioModel={scenarioModel}
                                         onScenarioModelChange={setScenarioModel}
                                     />
