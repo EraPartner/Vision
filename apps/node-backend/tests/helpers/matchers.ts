@@ -44,7 +44,8 @@ export function objectContaining<T extends object>(
 
 /** `expect.arrayContaining(expected)` typed as the array it matches. */
 export function arrayContaining<T>(expected: T[]): T[] {
-  return expect.arrayContaining(expected) as T[];
+  const items: unknown[] = expected;
+  return expect.arrayContaining(items) as T[];
 }
 
 /** `expect.stringMatching(pattern)` typed as a string. */

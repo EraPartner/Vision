@@ -1610,7 +1610,7 @@ async function main(): Promise<number> {
     caffeinate.kill();
   }
   log(`Done. Summary: ${path.join(outDir, "summary.md")}`);
-  return results.apps.some((app) => app.error || !app.restored) ? 1 : 0;
+  return results.apps.some((app) => app.error !== null || !app.restored) ? 1 : 0;
 }
 
 if (isEntrypoint(import.meta)) {
