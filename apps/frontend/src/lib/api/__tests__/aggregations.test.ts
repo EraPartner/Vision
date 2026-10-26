@@ -23,7 +23,7 @@ import {
 
 const API_BASE = "http://localhost:3002";
 
-function ok<T>(data: T) {
+function ok(data: unknown) {
     return HttpResponse.json({ ok: true, data, meta: {} });
 }
 

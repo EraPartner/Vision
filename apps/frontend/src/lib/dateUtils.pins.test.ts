@@ -3,6 +3,7 @@
 import { describe, expect, test } from "vitest";
 import { CHART_DATE_PATTERNS, formatDate, parseISO } from "./dateUtils";
 import { filterByPeriod, CHART_PERIOD_OFFSET_DAYS } from "@/components/charts/chartPeriods";
+import { must } from "@/test/must";
 
 describe("formatDate numeric patterns (PKG-12 pins)", () => {
   // Single-digit day+month, and double-digit day+month with an afternoon time.
@@ -88,7 +89,7 @@ describe("filterByPeriod day-subtraction cutoff (PKG-09 pins)", () => {
     // The cutoff is anchor(last row) minus `days`, compared as YMD strings
     // (inclusive). Pin both the count and the boundary element.
     expect(out.length).toBe(days + 1);
-    expect(out[0]?.d).toBe(rows[rows.length - 1 - days]!.d);
+    expect(out[0]?.d).toBe(must(rows[rows.length - 1 - days]).d);
     expect(out[out.length - 1]?.d).toBe("2026-01-30");
   });
 

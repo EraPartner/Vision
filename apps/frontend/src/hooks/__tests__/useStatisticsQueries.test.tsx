@@ -27,6 +27,7 @@ import {
     asCurrencyCode,
     asRecipientId,
 } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 interface SeenRequest {
     endpoint: string;
@@ -133,7 +134,7 @@ describe("useRecipientInsights window", () => {
         });
 
         await waitFor(() => expect(seen).toHaveLength(1));
-        expect(summarize(seen[0]!)).toEqual({
+        expect(summarize(must(seen[0]))).toEqual({
             endpoint: "recipient-insights",
             currency: "USD",
             start_date: "2024-10-01",

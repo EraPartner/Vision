@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import { mergeForViewRolling } from "./forecastMerge";
 import type { CashflowForecastRollingData } from "@/lib/api/aggregations";
 import { asCurrencyCode } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 function buildData(
     daysBack: number,
@@ -101,7 +102,7 @@ describe("mergeForViewRolling", () => {
         const visible = new Set(["simple_avg"]);
         const { rows } = mergeForViewRolling(data, "daily", visible, "Actual");
         expect(rows.every((r) => r.t instanceof Date)).toBe(true);
-        const first = rows[0]!;
+        const first = must(rows[0]);
         const t = first.t;
         const localDate = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
         expect(localDate).toBe(first.date);
@@ -125,14 +126,14 @@ describe("mergeForViewRolling", () => {
             visible,
             "Actual",
         );
-        const futureRow = rows[4]!;
+        const futureRow = must(rows[4]);
         expect(futureRow.monte_carlo_parametric__pLo).toBe(42);
         expect(futureRow.monte_carlo_parametric__pHi).toBe(48);
     });
 
     test("cumulative bands apply scheduled ledger rows", () => {
         const data = buildData(3, 3);
-        data.scheduled_actual.push({ date: data.actual[4]!.date, net: -12 });
+        data.scheduled_actual.push({ date: must(data.actual[4]).date, net: -12 });
         const mc = data.methods.find(
             (method) => method.id === "monte_carlo_parametric",
         );
@@ -175,7 +176,7 @@ describe("mergeForViewRolling", () => {
             visible,
             "Actual",
         );
-        expect(rows[0]!.simple_avg).toBeUndefined();
+        expect(must(rows[0]).simple_avg).toBeUndefined();
         // Only the actual series remains.
         expect(series).toHaveLength(1);
         expect(series[0]?.key).toBe("actual");

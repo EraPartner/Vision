@@ -7,6 +7,7 @@ import { server } from "@/test/msw/server";
 import { ok, TRANSACTION_STUB } from "@/test/msw/handlers";
 import DashboardPage from "@/pages/DashboardPage";
 import { transactionRow, transactionsBody } from "@/test/msw/rowFixtures";
+import { must } from "@/test/must";
 
 vi.mock("@/components/charts", async (importOriginal) => {
     const original =
@@ -69,7 +70,7 @@ describe("Dashboard category drill-down composition", () => {
         });
         expect(
             new URL(
-                named.getAttribute("href")!,
+                must(named.getAttribute("href")),
                 "http://test",
             ).searchParams.get("category_id"),
         ).toBe("1");
@@ -79,7 +80,7 @@ describe("Dashboard category drill-down composition", () => {
         });
         expect(
             new URL(
-                uncategorized.getAttribute("href")!,
+                must(uncategorized.getAttribute("href")),
                 "http://test",
             ).searchParams.get("uncategorised"),
         ).toBe("true");
@@ -87,7 +88,7 @@ describe("Dashboard category drill-down composition", () => {
         const other = screen.getByRole("link", { name: /other: 1/i });
         expect(
             new URL(
-                other.getAttribute("href")!,
+                must(other.getAttribute("href")),
                 "http://test",
             ).searchParams.get("category_ids"),
         ).toBe("6");

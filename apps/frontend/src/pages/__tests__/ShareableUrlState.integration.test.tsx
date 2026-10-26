@@ -133,7 +133,7 @@ describe("shareable page URL state", () => {
                 "source=custom",
             ),
         );
-        const search = screen.getByLabelText("location").textContent ?? "";
+        const search = screen.getByLabelText("location").textContent;
         expect(search).toContain("target=stocks%3A55");
         expect(search).toContain("target=bonds%3A45");
         expect(search).toContain("name=Shared+draft");

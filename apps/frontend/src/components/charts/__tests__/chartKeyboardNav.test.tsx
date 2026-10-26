@@ -9,7 +9,7 @@
  * scrubbable charts, and Escape/blur clear so no tooltip lingers. Pointer
  * behavior must be byte-identical to before — asserted at the end.
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 import { fireEvent, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { KeyboardEvent } from "react";
@@ -23,6 +23,7 @@ import { ComposedChart } from "@/components/charts/ComposedChart";
 import { DonutChart } from "@/components/charts/DonutChart";
 import { PieChart } from "@/components/charts/PieChart";
 import { StackedBarChart } from "@/components/charts/StackedBarChart";
+import { must } from "@/test/must";
 
 // ParentSize measures 0×0 in jsdom, which suppresses every chart's inner
 // render; give it a fixed viewport so LineChart/BarChart mount their SVGs.
@@ -41,12 +42,16 @@ vi.mock("@visx/responsive", async (importOriginal) => {
     };
 });
 
-function keyEvent(key: string, shiftKey = false): KeyboardEvent {
+type SpyKeyboardEvent = Omit<KeyboardEvent, "preventDefault"> & {
+    preventDefault: Mock;
+};
+
+function keyEvent(key: string, shiftKey = false): SpyKeyboardEvent {
     return {
         key,
         shiftKey,
         preventDefault: vi.fn(),
-    } as unknown as KeyboardEvent;
+    } as unknown as SpyKeyboardEvent;
 }
 
 describe("useChartKeyboardNav (shared key map)", () => {
@@ -456,7 +461,7 @@ describe("remaining chart primitive keyboard access", () => {
             <DonutChart data={PROPORTIONS} tooltipValueFormat={fmt} />,
         );
         const paths = container.querySelectorAll("path");
-        fireEvent.pointerEnter(paths[1]!);
+        fireEvent.pointerEnter(must(paths[1]));
         expect(await screen.findByText("Rent")).toBeInTheDocument();
 
         rerender(
@@ -487,9 +492,9 @@ describe("remaining chart primitive keyboard access", () => {
             />,
         );
         const stackedBars = stacked.container.querySelectorAll("rect[fill]");
-        fireEvent.pointerEnter(stackedBars[1]!);
+        fireEvent.pointerEnter(must(stackedBars[1]));
         await expectTooltipValue(15);
-        fireEvent.pointerLeave(stackedBars[1]!);
+        fireEvent.pointerLeave(must(stackedBars[1]));
         await expectNoTooltipValues();
         stacked.unmount();
 
@@ -499,9 +504,9 @@ describe("remaining chart primitive keyboard access", () => {
         const pieSlices = pie.container.querySelectorAll(
             'path[style*="cursor"]',
         );
-        fireEvent.pointerEnter(pieSlices[1]!);
+        fireEvent.pointerEnter(must(pieSlices[1]));
         await expectTooltipValue(15);
-        fireEvent.pointerLeave(pieSlices[1]!);
+        fireEvent.pointerLeave(must(pieSlices[1]));
         await expectNoTooltipValues();
         pie.unmount();
 

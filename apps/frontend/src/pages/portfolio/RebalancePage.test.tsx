@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
 import RebalancePage from "@/pages/portfolio/RebalancePage";
 import { apiClient } from "@/lib/api";
+import { must } from "@/test/must";
 
 const { deletePlan, upsertPlan } = vi.hoisted(() => ({
     deletePlan: vi.fn().mockResolvedValue(undefined),
@@ -37,6 +38,7 @@ describe("RebalancePage saved-plan deletion", () => {
             deployment: {},
             targetWeights: {},
             cashAccounts: [],
+            unconvertedCurrencies: [],
         } as never);
         vi.spyOn(apiClient, "computeCommitmentAwareCash").mockResolvedValue({
             candidateCashCap: 500,
@@ -125,14 +127,15 @@ describe("RebalancePage saved-plan deletion", () => {
         } as never);
         const calls: unknown[] = [];
         vi.spyOn(apiClient, "computeRebalance").mockImplementation(
-            async (input) => {
+            (input) => {
                 calls.push(input);
-                return {
+                return Promise.resolve({
                     availableCash: 5000,
                     actualValues: {},
                     targetWeights: {},
                     deployment: {},
-                } as never;
+                    unconvertedCurrencies: [],
+                } as never);
             },
         );
         const user = userEvent.setup();
@@ -168,7 +171,7 @@ describe("RebalancePage saved-plan deletion", () => {
         });
 
         await user.click(
-            (await screen.findByText(/load from a preset/i)).closest("button")!,
+            must((await screen.findByText(/load from a preset/i)).closest("button")),
         );
         await user.click(
             await screen.findByRole("option", { name: /awesome portfolio/i }),

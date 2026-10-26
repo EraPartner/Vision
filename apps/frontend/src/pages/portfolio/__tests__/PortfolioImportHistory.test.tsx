@@ -7,6 +7,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, err } from "@/test/msw/handlers";
 import { PortfolioImportHistory } from "../PortfolioImportHistory";
+import { must } from "@/test/must";
 
 const api = "http://localhost:3002/api/portfolio/import/batches";
 const restored = vi.fn();
@@ -84,9 +85,9 @@ describe("portfolio statement rollback", () => {
             await screen.findByRole("button", { name: "Roll back statement" }),
         );
         await user.click(
-            screen
+            must(screen
                 .getAllByRole("button", { name: "Roll back statement" })
-                .find((button) => button.closest('[role="alertdialog"]'))!,
+                .find((button) => button.closest('[role="alertdialog"]'))),
         );
         await waitFor(() => expect(restored).toHaveBeenCalledWith(8));
         await waitFor(() =>
@@ -107,9 +108,9 @@ describe("portfolio statement rollback", () => {
             await screen.findByRole("button", { name: "Roll back statement" }),
         );
         await user.click(
-            screen
+            must(screen
                 .getAllByRole("button", { name: "Roll back statement" })
-                .find((button) => button.closest('[role="alertdialog"]'))!,
+                .find((button) => button.closest('[role="alertdialog"]'))),
         );
         await waitFor(() => expect(busy).toHaveBeenLastCalledWith(false));
         expect(restored).not.toHaveBeenCalled();

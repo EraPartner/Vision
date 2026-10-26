@@ -5,6 +5,7 @@ import type {
     CashflowForecastMethodsData,
 } from "@/lib/api/aggregations";
 import { asCurrencyCode } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 function baseData(
     methods: CashflowForecastMethod[],
@@ -81,7 +82,7 @@ describe("mergeForView", () => {
             new Set<string>(),
             "Actual",
         );
-        expect(rows[2]!.simple_avg).toBeUndefined();
+        expect(must(rows[2]).simple_avg).toBeUndefined();
         expect(series.map((s) => s.key)).toEqual(["actual"]);
     });
 

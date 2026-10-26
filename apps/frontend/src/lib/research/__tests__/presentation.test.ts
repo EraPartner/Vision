@@ -12,6 +12,7 @@ import type {
     ChartPresentationSeries,
     ChartPresentationIndicator,
 } from "@vision/shared-utils/research/types";
+import { must } from "@/test/must";
 
 const json = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
 describe("Research shared presentation source goldens", () => {
@@ -31,7 +32,7 @@ describe("Research shared presentation source goldens", () => {
                           series: input.series as ChartPresentationSeries[],
                           indicators:
                               input.indicators as ChartPresentationIndicator[],
-                          rebase: input.rebase!,
+                          rebase: must(input.rebase),
                           oscillator: input.oscillator as
                               "none" | "rsi" | "macd",
                           oscillatorSeriesId: input.oscillatorSeriesId ?? null,

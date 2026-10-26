@@ -13,6 +13,7 @@ import {
     taxOverviewStub,
 } from "@/test/msw/handlers";
 import TaxOverviewPage from "@/pages/TaxOverviewPage";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -48,7 +49,7 @@ describe("TaxOverviewPage (integration)", () => {
         const [setupBtn] = await screen.findAllByRole("button", {
             name: /set up tax profile/i,
         });
-        await user.click(setupBtn!);
+        await user.click(must(setupBtn));
 
         // Sheet header title "Belgian Tax Profile" appears
         expect(await screen.findByText(/^tax profile$/i)).toBeInTheDocument();
@@ -61,7 +62,7 @@ describe("TaxOverviewPage (integration)", () => {
         const [setupBtn] = await screen.findAllByRole("button", {
             name: /set up tax profile/i,
         });
-        await user.click(setupBtn!);
+        await user.click(must(setupBtn));
 
         // The first step is the household: the derived assessment and the partner switch.
         expect(await screen.findByText("Your household")).toBeInTheDocument();
@@ -77,7 +78,7 @@ describe("TaxOverviewPage (integration)", () => {
         const [setupBtn] = await screen.findAllByRole("button", {
             name: /set up tax profile/i,
         });
-        await user.click(setupBtn!);
+        await user.click(must(setupBtn));
 
         await screen.findByText(/^tax profile$/i);
         await user.keyboard("{Escape}");
@@ -299,7 +300,7 @@ describe("TaxOverviewPage (integration)", () => {
         );
         renderWithApp(<TaxOverviewPage />);
         await screen.findByText(/no tax profile yet/i);
-        const url = requests.at(-1)!;
+        const url = must(requests.at(-1));
         expect(url.searchParams.get("year")).toMatch(/^\d{4}$/);
         expect(url.searchParams.get("currency")).toBe("EUR");
         expect(url.searchParams.get("start_date")).toMatch(

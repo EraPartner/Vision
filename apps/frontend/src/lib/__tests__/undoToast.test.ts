@@ -31,7 +31,7 @@ describe("undoToast", () => {
         undoToast({ message: "Transaction deleted", undoLabel: "Undo", undo });
         expect(toastMock.success).toHaveBeenCalledWith(
             "Transaction deleted",
-            expect.objectContaining({ duration: 8_000, action: expect.objectContaining({ label: "Undo" }) }),
+            expect.objectContaining({ duration: 8_000, action: expect.objectContaining({ label: "Undo" }) as unknown }),
         );
         expect(consumeUndo()).toBe(true);
         expect(undo).toHaveBeenCalledTimes(1);

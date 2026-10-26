@@ -34,11 +34,12 @@ import {
     SheetTitle,
     SheetDescription,
 } from "@/components/ui/sheet";
+import { must } from "@/test/must";
 
 function overlayEl(): HTMLElement {
     const el = document.querySelector<HTMLElement>(".fixed.inset-0.z-50");
     expect(el).not.toBeNull();
-    return el!;
+    return must(el);
 }
 
 describe("modal overlay — rendered classes (default tier = dim)", () => {

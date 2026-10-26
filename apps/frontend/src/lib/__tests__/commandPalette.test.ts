@@ -77,6 +77,11 @@ describe("command palette inline helpers", () => {
         expect(evaluateArithmetic("1.234 + 2,5", "eu")).toBe(1236.5);
         expect(evaluateArithmetic("1,234.5 + 2", "us")).toBe(1236.5);
         expect(evaluateArithmetic("2**3", "eu")).toBe(8);
+        expect(evaluateArithmetic("2**-1 + .5", "eu")).toBe(1);
+        expect(evaluateArithmetic("(-2)**2 - -3", "eu")).toBe(7);
+        expect(evaluateArithmetic("-2**2", "eu")).toBeNull();
+        expect(evaluateArithmetic("2--3", "eu")).toBeNull();
+        expect(evaluateArithmetic("2(3)", "eu")).toBeNull();
         expect(evaluateArithmetic("42", "eu")).toBeNull();
         expect(evaluateArithmetic("process.exit()", "eu")).toBeNull();
         expect(evaluateArithmetic("2 +", "eu")).toBeNull();

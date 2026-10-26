@@ -11,6 +11,7 @@ import { downloadBlob } from "@/lib/downloadBlob";
 import AnalysisWorkspacePage from "@/pages/AnalysisWorkspacePage";
 
 import { analysisDraftSignature } from "@/features/analysis/analysisPresentation";
+import { must } from "@/test/must";
 
 const presentation = vi.hoisted(() => ({ language: "en" }));
 
@@ -210,7 +211,7 @@ describe("AnalysisWorkspacePage", () => {
         await user.click(
             screen.getByRole("tab", { name: nlText("analysis.chart") }),
         );
-        await user.click(screen.getByLabelText(nl["analysis.ext.chart.x"]!));
+        await user.click(screen.getByLabelText(must(nl["analysis.ext.chart.x"])));
         expect(
             await screen.findByRole("option", { name: "Uitgaven" }),
         ).toBeInTheDocument();
@@ -234,9 +235,9 @@ describe("AnalysisWorkspacePage", () => {
         const user = userEvent.setup();
         renderPage();
         await screen.findByText("Cash flows");
-        const disclosure = screen
+        const disclosure = must(screen
             .getByText("Refine this analysis")
-            .closest("details")!;
+            .closest("details"));
         expect(disclosure).not.toHaveAttribute("open");
         await user.click(screen.getByRole("link", { name: "Calculate" }));
         expect(disclosure).toHaveAttribute("open");
@@ -397,7 +398,7 @@ describe("AnalysisWorkspacePage", () => {
         ).toBeVisible();
         await user.click(screen.getByRole("tab", { name: "Pivot table" }));
         expect(screen.queryByRole("table")).not.toBeInTheDocument();
-        const rows = screen.getByText("Rows").closest("fieldset")!;
+        const rows = must(screen.getByText("Rows").closest("fieldset"));
         await user.click(
             within(rows).getByRole("button", { name: "Add field" }),
         );
@@ -510,7 +511,7 @@ describe("AnalysisWorkspacePage", () => {
             expect(
                 screen.getByLabelText("Category / X axis"),
             ).toHaveTextContent(
-                { month: "Month", category_general: "Category" }[expectedX]!,
+                must({ month: "Month", category_general: "Category" }[expectedX]),
             );
             expect(
                 within(screen.getByRole("tabpanel")).getByRole("checkbox", {
@@ -925,8 +926,8 @@ describe("AnalysisWorkspacePage", () => {
                                 operator: "neq",
                                 value: false,
                             }),
-                        ]),
-                    }),
+                        ]) as unknown,
+                    }) as unknown,
                 }),
             ),
         );
@@ -954,7 +955,7 @@ describe("AnalysisWorkspacePage", () => {
                     plan: expect.objectContaining({
                         datasetId: "cash-flows",
                         measures: ["sum_spending"],
-                    }),
+                    }) as unknown,
                 }),
             ),
         );
@@ -983,14 +984,14 @@ describe("AnalysisWorkspacePage", () => {
         await user.click(
             screen.getByRole("button", { name: /Category spending/ }),
         );
-        const chooser = screen
+        const chooser = must(screen
             .getByRole("button", { name: /Category spending/, hidden: true })
-            .closest("details")!;
+            .closest("details"));
         expect(chooser).not.toHaveAttribute("open");
         expect(screen.getByText("Edit configuration")).toHaveFocus();
-        const editor = screen
+        const editor = must(screen
             .getByText("Edit configuration")
-            .closest("details")!;
+            .closest("details"));
         expect(editor).not.toHaveAttribute("open");
         expect(screen.getByLabelText("Dataset")).not.toBeVisible();
         expect(screen.getByRole("button", { name: "Run" })).toBeEnabled();
@@ -999,7 +1000,7 @@ describe("AnalysisWorkspacePage", () => {
         const nameInput = screen.getByLabelText("Analysis name");
         await user.clear(nameInput);
         await user.type(nameInput, "My edited analysis");
-        await user.click(chooser.querySelector("summary")!);
+        await user.click(must(chooser.querySelector("summary")));
         expect(chooser).toHaveAttribute("open");
         expect(nameInput).toHaveValue("My edited analysis");
         await user.click(screen.getByRole("button", { name: "Run" }));
@@ -1012,7 +1013,7 @@ describe("AnalysisWorkspacePage", () => {
                         datasetId: "cash-flows",
                         fields: ["month", "category_general", "currency"],
                         measures: ["sum_spending"],
-                    }),
+                    }) as unknown,
                 }),
             ),
         );
@@ -1032,9 +1033,9 @@ describe("AnalysisWorkspacePage", () => {
         await user.click(
             await screen.findByRole("button", { name: /Category spending/ }),
         );
-        const editor = screen
+        const editor = must(screen
             .getByText("Edit configuration")
-            .closest("details")!;
+            .closest("details"));
         expect(editor).not.toHaveAttribute("open");
         await user.click(screen.getByRole("button", { name: "Run" }));
         await screen.findByRole("alert");
@@ -1093,7 +1094,7 @@ describe("AnalysisWorkspacePage", () => {
                     mode: "visual",
                     plan: expect.objectContaining({
                         orderBy: [{ id: "month", direction: "desc" }],
-                    }),
+                    }) as unknown,
                 }),
             ),
         );
@@ -1104,7 +1105,7 @@ describe("AnalysisWorkspacePage", () => {
         renderPage();
         await screen.findByText("Cash flows");
         const blank = screen.getByRole("button", { name: "Start blank" });
-        const chooser = blank.closest("details")!;
+        const chooser = must(blank.closest("details"));
         await user.click(blank);
         expect(chooser).not.toHaveAttribute("open");
         expect(screen.getByText("Edit configuration")).toHaveFocus();
@@ -1156,7 +1157,7 @@ describe("AnalysisWorkspacePage", () => {
         await waitFor(() =>
             expect(create).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    parameters: expect.objectContaining({ benchmark: null }),
+                    parameters: expect.objectContaining({ benchmark: null }) as unknown,
                 }),
             ),
         );
@@ -1264,7 +1265,7 @@ describe("AnalysisWorkspacePage", () => {
         expect(chartPanel.getByRole("checkbox", { name: "net" })).toBeChecked();
         await user.click(screen.getByRole("tab", { name: "Pivot table" }));
         expect(
-            within(screen.getByText("Rows").closest("fieldset")!).getByRole(
+            within(must(screen.getByText("Rows").closest("fieldset"))).getByRole(
                 "button",
                 { name: "Remove Currency" },
             ),
@@ -1292,7 +1293,7 @@ describe("AnalysisWorkspacePage", () => {
                     parameters: expect.objectContaining({
                         pivotConfig,
                         workbench,
-                    }),
+                    }) as unknown,
                     formulas: saved.parameters.formulaModel.formulas,
                     assumptions: saved.parameters.formulaModel.assumptions,
                     assumptionValues: { rate: "0.2" },

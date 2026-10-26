@@ -20,6 +20,7 @@ import {
     accountListItem,
     accountsBody,
 } from "@/test/msw/rowFixtures";
+import { must } from "@/test/must";
 
 // The table virtualizes rows via @tanstack/react-virtual, which renders nothing
 // in jsdom's zero-height scroll container. Mock the virtualizer to materialise
@@ -520,9 +521,9 @@ describe("PlannedPaymentForm (inline validation)", () => {
     function describedError(control: HTMLElement): HTMLElement {
         const describedBy = control.getAttribute("aria-describedby");
         expect(describedBy).toBeTruthy();
-        const message = document.getElementById(describedBy!);
+        const message = document.getElementById(must(describedBy));
         expect(message).toBeInTheDocument();
-        return message!;
+        return must(message);
     }
 
     /** Choose an existing bank account from the account picker. */

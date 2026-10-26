@@ -20,16 +20,17 @@ afterEach(() => vi.restoreAllMocks());
 describe("category merge dependent views", () => {
     it("refreshes mounted category, transaction, recipient and aggregate consumers inside their stale time", async () => {
         let categoryId = 1;
-        const readCategory = async () => ({
-            categoryId,
-            categoryName:
-                categoryId === 1 ? "Original category" : "Merged category",
-            total: 125,
-        });
+        const readCategory = () =>
+            Promise.resolve({
+                categoryId,
+                categoryName:
+                    categoryId === 1 ? "Original category" : "Merged category",
+                total: 125,
+            });
         vi.spyOn(apiClient, "mergeCategoryNode").mockImplementation(
-            async () => {
+            () => {
                 categoryId = 2;
-                return {} as never;
+                return Promise.resolve({} as never);
             },
         );
         const { result } = renderHook(

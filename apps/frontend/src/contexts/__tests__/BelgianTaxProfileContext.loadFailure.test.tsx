@@ -1,5 +1,13 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+    afterEach,
+    beforeEach,
+    describe,
+    expect,
+    it,
+    vi,
+    type MockInstance,
+} from "vitest";
 import { type ReactNode } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { http } from "msw";
@@ -30,6 +38,8 @@ function Wrapper({ children }: { children: ReactNode }) {
 }
 
 describe("BelgianTaxProfileContext when the household helpers fail to load", () => {
+    let errorSpy: MockInstance;
+
     beforeEach(() => {
         server.use(
             http.get(`${API_BASE}/api/settings`, () =>
@@ -43,7 +53,7 @@ describe("BelgianTaxProfileContext when the household helpers fail to load", () 
         vi.spyOn(apiClient, "saveSetting").mockResolvedValue(
             undefined as never,
         );
-        vi.spyOn(logger, "error").mockImplementation(() => {});
+        errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
     });
 
     afterEach(() => {
@@ -59,7 +69,7 @@ describe("BelgianTaxProfileContext when the household helpers fail to load", () 
         );
         expect(result.current.isLoading).toBe(false);
         expect(result.current.household).toBeNull();
-        expect(logger.error).toHaveBeenCalledWith(
+        expect(errorSpy).toHaveBeenCalledWith(
             "Failed to load the Belgian tax household:",
             expect.any(Error),
         );

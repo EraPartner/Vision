@@ -6,6 +6,7 @@ import { usePortfolioSummaries } from "@/hooks/portfolio/usePortfolioSummaries";
 import type { Investment, PortfolioTransaction } from "@/types/api";
 import type { PortfolioSummaryItem } from "@/lib/api/info";
 import { asInvestmentId, asPortfolioTransactionId } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 const makeWrapper = createQueryWrapper;
 
@@ -65,7 +66,7 @@ describe("usePortfolioSummaries — canonical identity columns", () => {
                 }),
             { wrapper: makeWrapper() },
         );
-        const summary = result.current.summaries[0]!;
+        const summary = must(result.current.summaries[0]);
         expect(summary.cadastral_income).toBe(1250);
         expect(summary.municipality_tax_rate).toBe(7.5);
         expect(summary.maturity_date).toBe("2030-06-15");

@@ -16,6 +16,7 @@ import {
     asPlannedTransactionId,
     asRecipientId,
 } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 const makeQueryWrapper = createQueryWrapper;
 
@@ -67,8 +68,8 @@ function listOf(items: PlannedTransaction[]) {
 function installMemoryLocalStorage() {
     const backing = new Map<string, string>();
     const stub: Pick<Storage, "getItem" | "setItem" | "removeItem" | "clear"> = {
-        getItem: (k) => (backing.has(k) ? backing.get(k)! : null),
-        setItem: (k, v) => void backing.set(k, String(v)),
+        getItem: (k) => (backing.has(k) ? must(backing.get(k)) : null),
+        setItem: (k, v) => void backing.set(k, v),
         removeItem: (k) => void backing.delete(k),
         clear: () => backing.clear(),
     };
@@ -157,7 +158,7 @@ describe("useUpcomingPlannedPayments", () => {
         act(() => result.current.dismiss({ id: asPlannedTransactionId(8), planned_date: todayYmd() }));
         const stored = JSON.parse(
             window.localStorage.getItem(LOCAL_STORAGE_KEYS.DISMISSED_UPCOMING_PAYMENTS) ?? "[]",
-        );
+        ) as unknown;
         expect(stored).toEqual(
             expect.arrayContaining([`7:${todayYmd()}`, `8:${todayYmd()}`]),
         );

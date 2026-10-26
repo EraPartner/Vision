@@ -11,7 +11,7 @@ import {
 const API_BASE = "http://localhost:3002";
 
 /** Research envelope: standard ADR-026 success + provenance meta. */
-function research<T>(data: T, meta: { provider: string | null; source: string }) {
+function research(data: unknown, meta: { provider: string | null; source: string }) {
   return HttpResponse.json({ ok: true, data, meta });
 }
 

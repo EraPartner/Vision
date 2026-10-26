@@ -9,10 +9,11 @@ import {
     previewTableMutation,
     commitTableMutation,
 } from "@/lib/api/dbEditor";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 
-function ok<T>(data: T) {
+function ok(data: unknown) {
     return HttpResponse.json({ ok: true, data });
 }
 
@@ -86,7 +87,7 @@ describe("dbEditor API client", () => {
         expect(p.get("dir")).toBe("desc");
         // The raw `where` param was removed (SQLi oracle) — never sent.
         expect(p.get("where")).toBeNull();
-        expect(JSON.parse(p.get("filters")!)).toEqual([
+        expect(JSON.parse(must(p.get("filters")))).toEqual([
             { col: "x", op: "=", val: 1 },
         ]);
     });

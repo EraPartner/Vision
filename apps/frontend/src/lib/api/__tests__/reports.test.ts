@@ -25,11 +25,12 @@ import {
     asCurrencyCode,
     asRecipientId,
 } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 const HTML = "<!DOCTYPE html><html><body>Report</body></html>";
 
 function mockFetchOk(type = "financial") {
-  const fetchMock = vi.fn().mockResolvedValue({
+  const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
     ok: true,
     status: 200,
     json: () =>
@@ -41,7 +42,7 @@ function mockFetchOk(type = "financial") {
           footerTemplate: "<div>footer</div>",
         },
       }),
-  });
+  } as unknown as Response);
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
@@ -74,10 +75,11 @@ describe("report export helpers", () => {
     await expect(downloadFinancialReport()).resolves.toBe("downloaded");
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0]!;
+    const [url, requestInit] = must(fetchMock.mock.calls[0]);
+    const init = must(requestInit);
     expect(url).toBe("/api/reports/financial");
     expect(init.method).toBe("POST");
-    const body = JSON.parse(init.body as string);
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body.currency).toBe("EUR");
     expect(body.period).toEqual({ kind: "rolling", months: 12 });
     expect(body.sections).toEqual([]);
@@ -91,7 +93,7 @@ describe("report export helpers", () => {
       html: HTML,
       footerTemplate: "<div>footer</div>",
     });
-    const [blob, filename] = vi.mocked(downloadBlob).mock.calls[0]!;
+    const [blob, filename] = must(vi.mocked(downloadBlob).mock.calls[0]);
     expect(filename).toBe("vision-financial-2026-06-22.pdf");
     expect(blob.type).toBe("application/pdf");
     expect(blob.size).toBe(4);
@@ -112,9 +114,10 @@ describe("report export helpers", () => {
       precomputedPIT: { totalTax: 100 },
     });
 
-    const [url, init] = fetchMock.mock.calls[0]!;
+    const [url, requestInit] = must(fetchMock.mock.calls[0]);
+    const init = must(requestInit);
     expect(url).toBe("/api/reports/portfolio");
-    const body = JSON.parse(init.body as string);
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body.currency).toBe("USD");
     expect(body.period).toEqual({ kind: "year", year: 2025 });
     expect(body.sections).toEqual(["holdings"]);
@@ -139,8 +142,8 @@ describe("report export helpers", () => {
     vi.spyOn(document.body, "appendChild").mockImplementation((node) => {
       const appended = appendChild(node);
       if (node instanceof HTMLIFrameElement) {
-        Object.defineProperty(node.contentWindow!, "print", { value: print });
-        Object.defineProperty(node.contentWindow!, "focus", { value: vi.fn() });
+        Object.defineProperty(must(node.contentWindow), "print", { value: print });
+        Object.defineProperty(must(node.contentWindow), "focus", { value: vi.fn() });
         node.dispatchEvent(new Event("load"));
       }
       return appended;

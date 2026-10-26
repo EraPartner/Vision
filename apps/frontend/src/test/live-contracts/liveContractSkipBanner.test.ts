@@ -9,7 +9,7 @@ function fakeModule(moduleId: string, skipped = 0) {
     return {
         moduleId,
         children: {
-            *allTests(state: 'skipped') {
+            *allTests(state: string) {
                 if (state !== 'skipped') return;
                 for (let index = 0; index < skipped; index += 1) yield { name: `${moduleId}#${index}` };
             },

@@ -2,6 +2,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, act } from "@testing-library/react";
 import { ShaderAurora } from "@/components/layout/ShaderAurora";
+import { must } from "@/test/must";
 
 // jsdom has no WebGL: canvas.getContext('webgl') returns null, which IS the
 // component's real failure path — these tests pin down that the fallback
@@ -12,7 +13,7 @@ describe("ShaderAurora — WebGL-unavailable fallback path", () => {
         const { container } = render(<ShaderAurora staticAtmosphere={false} />);
         const canvas = container.querySelector("canvas");
         expect(canvas).not.toBeNull();
-        expect(canvas!.getAttribute("aria-hidden")).toBe("true");
+        expect(must(canvas).getAttribute("aria-hidden")).toBe("true");
         expect(document.documentElement).not.toHaveClass("fx-webgl-live");
     });
 

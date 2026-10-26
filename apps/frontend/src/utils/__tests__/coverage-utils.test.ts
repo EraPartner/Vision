@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 import { onActivateKeyDown } from "@/utils/a11y";
 import {
     getCategoryColor,
@@ -18,7 +18,9 @@ describe("onActivateKeyDown", () => {
             target: sameTarget ? node : ({} as HTMLElement),
             currentTarget: node,
             preventDefault: vi.fn(),
-        } as unknown as React.KeyboardEvent<HTMLElement>;
+        } as unknown as Omit<React.KeyboardEvent<HTMLElement>, "preventDefault"> & {
+            preventDefault: Mock;
+        };
     }
 
     it("invokes the handler on Enter and prevents default", () => {

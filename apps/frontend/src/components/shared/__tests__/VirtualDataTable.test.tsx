@@ -15,6 +15,7 @@ import {
 import type { Column } from "@/types/dataTable";
 import { SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import type { MemoryRouterProps } from "react-router";
+import { must } from "@/test/must";
 
 const measureElementMock = vi.hoisted(() => vi.fn());
 
@@ -175,7 +176,7 @@ describe("VirtualDataTable — rendering", () => {
             const [rows, setRows] = useState<TestRow[]>([]);
             useLayoutEffect(() => {
                 if (rows.length > 0)
-                    committedText.push(document.body.textContent ?? "");
+                    committedText.push(document.body.textContent);
             }, [rows]);
             return (
                 <>
@@ -241,7 +242,7 @@ describe("VirtualDataTable — rendering", () => {
         const first = renderTable({ scrollRestorationKey: "transactions" }, [
             entry,
         ]);
-        const firstBody = screen.getAllByRole("rowgroup").at(-1)!;
+        const firstBody = must(screen.getAllByRole("rowgroup").at(-1));
         Object.defineProperties(firstBody, {
             scrollHeight: { configurable: true, value: 500 },
             clientHeight: { configurable: true, value: 100 },
@@ -251,7 +252,7 @@ describe("VirtualDataTable — rendering", () => {
         first.unmount();
 
         renderTable({ scrollRestorationKey: "transactions" }, [entry]);
-        const restoredBody = screen.getAllByRole("rowgroup").at(-1)!;
+        const restoredBody = must(screen.getAllByRole("rowgroup").at(-1));
         Object.defineProperties(restoredBody, {
             scrollHeight: { configurable: true, value: 500 },
             clientHeight: { configurable: true, value: 100 },
@@ -260,12 +261,12 @@ describe("VirtualDataTable — rendering", () => {
         await waitFor(() => expect(restoredBody.scrollTop).toBe(140));
     });
 
-    it("does not restore scroll into a different browser history entry", async () => {
+    it("does not restore scroll into a different browser history entry", () => {
         const first = renderTable(
             { scrollRestorationKey: "history-isolation" },
             [{ pathname: "/transactions", key: "entry-one" }],
         );
-        const firstBody = screen.getAllByRole("rowgroup").at(-1)!;
+        const firstBody = must(screen.getAllByRole("rowgroup").at(-1));
         firstBody.scrollTop = 90;
         fireEvent.scroll(firstBody);
         first.unmount();
@@ -274,7 +275,7 @@ describe("VirtualDataTable — rendering", () => {
             { pathname: "/transactions", key: "entry-two" },
         ]);
 
-        expect(screen.getAllByRole("rowgroup").at(-1)!.scrollTop).toBe(0);
+        expect(must(screen.getAllByRole("rowgroup").at(-1)).scrollTop).toBe(0);
     });
 
     it("loads more pages until a remembered offset is reachable", async () => {
@@ -283,7 +284,7 @@ describe("VirtualDataTable — rendering", () => {
             { scrollRestorationKey: "paged-restoration" },
             [entry],
         );
-        const firstBody = screen.getAllByRole("rowgroup").at(-1)!;
+        const firstBody = must(screen.getAllByRole("rowgroup").at(-1));
         firstBody.scrollTop = 300;
         fireEvent.scroll(firstBody);
         first.unmount();
@@ -303,7 +304,7 @@ describe("VirtualDataTable — rendering", () => {
             },
             [entry],
         );
-        const restoredBody = screen.getAllByRole("rowgroup").at(-1)!;
+        const restoredBody = must(screen.getAllByRole("rowgroup").at(-1));
         Object.defineProperties(restoredBody, {
             scrollHeight: { configurable: true, value: 100 },
             clientHeight: { configurable: true, value: 100 },
@@ -475,7 +476,7 @@ describe("VirtualDataTable — local search", () => {
         );
 
         // The X button appears next to the input when search is non-empty
-        const clearBtn = input.parentElement!.querySelector("button")!;
+        const clearBtn = must(must(input.parentElement).querySelector("button"));
         await user.click(clearBtn);
         await waitFor(() =>
             expect(screen.getByText(/3 of 3 loaded/)).toBeInTheDocument(),
@@ -659,7 +660,7 @@ describe("VirtualDataTable — server-side sort", () => {
                 sort: { onChange: onSortChange, key: null, dir: null },
             },
         });
-        await user.click(screen.getAllByRole("button", { name: /Name/ })[0]!);
+        await user.click(must(screen.getAllByRole("button", { name: /Name/ })[0]));
         expect(onSortChange).toHaveBeenCalledWith("name", "asc");
     });
 
@@ -671,7 +672,7 @@ describe("VirtualDataTable — server-side sort", () => {
                 sort: { onChange: onSortChange, key: "name", dir: "asc" },
             },
         });
-        await user.click(screen.getAllByRole("button", { name: /Name/ })[0]!);
+        await user.click(must(screen.getAllByRole("button", { name: /Name/ })[0]));
         expect(onSortChange).toHaveBeenCalledWith("name", "desc");
     });
 
@@ -683,7 +684,7 @@ describe("VirtualDataTable — server-side sort", () => {
                 sort: { onChange: onSortChange, key: "name", dir: "desc" },
             },
         });
-        await user.click(screen.getAllByRole("button", { name: /Name/ })[0]!);
+        await user.click(must(screen.getAllByRole("button", { name: /Name/ })[0]));
         expect(onSortChange).toHaveBeenCalledWith(null, null);
     });
 });
@@ -726,7 +727,7 @@ describe("VirtualDataTable — inline editing", () => {
         renderTable({ columns: EDITABLE_COLUMNS });
         await user.dblClick(screen.getByText("Alpha"));
         // Focus the name edit input (index 1; index 0 is the search input) before pressing Escape
-        const nameInput = screen.getAllByRole("textbox")[1]!;
+        const nameInput = must(screen.getAllByRole("textbox")[1]);
         await user.click(nameInput);
         await user.keyboard("{Escape}");
         // 1 textbox remains: the always-visible search input
@@ -742,7 +743,7 @@ describe("VirtualDataTable — inline editing", () => {
 
         await user.dblClick(screen.getByText("Alpha"));
         // index 0 = search input; index 1 = name column edit input
-        const nameInput = screen.getAllByRole("textbox")[1]!;
+        const nameInput = must(screen.getAllByRole("textbox")[1]);
         await user.clear(nameInput);
         await user.type(nameInput, "Updated");
         await user.keyboard("{Enter}");
@@ -948,7 +949,7 @@ describe("VirtualDataTable — keyboard navigation", () => {
 
 describe("VirtualDataTable — row context menu", () => {
     it("right-click opens the menu and onSelect receives the row", async () => {
-        const onAction = vi.fn();
+        const onAction = vi.fn<(id: number) => void>();
         renderTable({
             rowContextMenu: (row) => (
                 <ContextMenuContent>

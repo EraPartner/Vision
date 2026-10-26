@@ -111,13 +111,14 @@ describe("useWidgetVisibility persistence feedback", () => {
             await vi.advanceTimersByTimeAsync(600);
         });
         expect(apiMocks.saveSetting).not.toHaveBeenCalled();
-        await act(async () => {
+        await act(() => {
             read.resolve({
                 value: {
                     dashboard: { summary: true, balances: false },
                     portfolioTax: { income: false },
                 },
             });
+            return Promise.resolve();
         });
         expect(first.result.current.isVisible("summary")).toBe(false);
         expect(first.result.current.isLoaded).toBe(true);
@@ -152,13 +153,14 @@ describe("useWidgetVisibility persistence feedback", () => {
             result.current.resetToDefaults();
             result.current.setWidgetVisible("summary", false);
         });
-        await act(async () => {
+        await act(() => {
             read.resolve({
                 value: {
                     dashboard: { summary: true, balances: true },
                     statistics: { chart: false },
                 },
             });
+            return Promise.resolve();
         });
         expect(result.current.isVisible("summary")).toBe(false);
         expect(result.current.isVisible("balances")).toBe(false);
@@ -182,8 +184,9 @@ describe("useWidgetVisibility persistence feedback", () => {
             ]),
         );
         act(() => result.current.setWidgetVisible("summary", false));
-        await act(async () => {
+        await act(() => {
             read.reject(new Error("offline"));
+            return Promise.resolve();
         });
         expect(result.current.isLoaded).toBe(false);
         expect(result.current.isVisible("summary")).toBe(false);
@@ -195,8 +198,8 @@ describe("useWidgetVisibility persistence feedback", () => {
         apiMocks.getSetting.mockResolvedValueOnce({
             value: { statistics: { chart: false } },
         });
-        await act(async () =>
-            result.current.setWidgetVisible("balances", false),
+        await act(() =>
+            Promise.resolve(result.current.setWidgetVisible("balances", false)),
         );
         expect(result.current.isLoaded).toBe(true);
         await act(async () => {

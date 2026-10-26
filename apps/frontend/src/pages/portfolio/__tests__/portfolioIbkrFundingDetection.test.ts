@@ -7,6 +7,7 @@ import {
     resolveDetectedPortfolioAccount,
 } from "../portfolioImportDetection";
 import { asAccountId } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 const headers = [
     "Request Date",
@@ -28,6 +29,12 @@ function depositSheet(workbook: XLSX.WorkBook): XLSX.WorkSheet {
     const sheet = workbook.Sheets.Deposit;
     if (!sheet) throw new Error("fixture workbook has no Deposit sheet");
     return sheet;
+}
+function depositCell(
+    workbook: XLSX.WorkBook,
+    address: string,
+): XLSX.CellObject {
+    return must(depositSheet(workbook)[address] as XLSX.CellObject | undefined);
 }
 const record = () => [
     "2025-01-02",
@@ -87,11 +94,11 @@ describe("IBKR native funding workbook detection", () => {
                 type: "brokerage",
                 is_active: true,
             } as Account;
-            expect(resolveDetectedPortfolioAccount(detected!, [account])).toBe(
+            expect(resolveDetectedPortfolioAccount(must(detected), [account])).toBe(
                 1,
             );
             expect(
-                resolveDetectedPortfolioAccount(detected!, [
+                resolveDetectedPortfolioAccount(must(detected), [
                     account,
                     { ...account, id: asAccountId(2) },
                 ]),
@@ -182,10 +189,10 @@ describe("IBKR native funding workbook detection", () => {
     it("does not select altered workbook layouts, formulas or numeric account identifiers", async () => {
         for (const mutate of [
             (workbook: XLSX.WorkBook) => {
-                depositSheet(workbook).N1.v = "Amount";
+                depositCell(workbook, "N1").v = "Amount";
             },
             (workbook: XLSX.WorkBook) => {
-                depositSheet(workbook).M2.f = '"USD 123.45"';
+                depositCell(workbook, "M2").f = '"USD 123.45"';
             },
             (workbook: XLSX.WorkBook) => {
                 depositSheet(workbook).D2 = { t: "n", v: 123456 };

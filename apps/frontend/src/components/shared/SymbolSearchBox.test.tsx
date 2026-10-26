@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 import { MemoryRouter } from "react-router";
+import { must } from "@/test/must";
 
 const apple = {
     symbol: "AAPL",
@@ -67,7 +68,7 @@ describe("SymbolSearchBox", () => {
         expect(input).toHaveFocus();
         expect(input).toHaveAttribute(
             "aria-activedescendant",
-            screen.getAllByRole("option")[1]!.id,
+            must(screen.getAllByRole("option")[1]).id,
         );
         expect(screen.getAllByRole("option")[1]).toHaveAttribute(
             "aria-selected",

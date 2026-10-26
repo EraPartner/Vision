@@ -8,6 +8,7 @@ import { server } from "@/test/msw/server";
 import { aggOk, err, ok, TRANSACTION_STUB } from "@/test/msw/handlers";
 import DashboardPage from "@/pages/DashboardPage";
 import { transactionRow, transactionsBody } from "@/test/msw/rowFixtures";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -264,7 +265,7 @@ describe("DashboardPage (integration)", () => {
         const income = await screen.findByRole("link", {
             name: /latest month.*income/i,
         });
-        const incomeUrl = new URL(income.getAttribute("href")!, "http://test");
+        const incomeUrl = new URL(must(income.getAttribute("href")), "http://test");
         expect(incomeUrl.pathname).toBe("/transactions");
         expect(incomeUrl.searchParams.get("start_date")).toBe("2026-02-01");
         expect(incomeUrl.searchParams.get("end_date")).toBe("2026-02-28");
@@ -274,7 +275,7 @@ describe("DashboardPage (integration)", () => {
             name: /latest month.*spending/i,
         });
         const spendingUrl = new URL(
-            spending.getAttribute("href")!,
+            must(spending.getAttribute("href")),
             "http://test",
         );
         expect(spendingUrl.searchParams.get("start_date")).toBe("2026-02-01");

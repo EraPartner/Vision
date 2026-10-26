@@ -7,6 +7,7 @@ import {
     detectPortfolioImportRecords,
     resolveDetectedPortfolioAccount,
 } from "../portfolioImportDetection";
+import { must } from "@/test/must";
 
 const nexoHeaders = [
     "Transaction",
@@ -111,12 +112,12 @@ describe("automatic portfolio statement detection", () => {
             sourceAccountIdentities: [],
         });
         expect(
-            resolveDetectedPortfolioAccount(detected!, [
+            resolveDetectedPortfolioAccount(must(detected), [
                 account(1, "Nexo", "Nexo"),
             ]),
         ).toBe(1);
         expect(
-            resolveDetectedPortfolioAccount(detected!, [
+            resolveDetectedPortfolioAccount(must(detected), [
                 account(1, "Nexo", "One"),
                 account(2, "Nexo", "Two"),
             ]),
@@ -167,7 +168,7 @@ describe("automatic portfolio statement detection", () => {
             sourceAccountIdentities: ["HIN-ONE", "HIN-TWO"],
         });
         expect(
-            resolveDetectedPortfolioAccount(detected!, [
+            resolveDetectedPortfolioAccount(must(detected), [
                 account(1, "Kinesis", "HIN-ONE"),
             ]),
         ).toBeUndefined();

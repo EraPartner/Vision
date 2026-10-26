@@ -11,6 +11,7 @@ import {
     asPlannedTransactionId,
     asRecipientId,
 } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 // The hook now backs its list with React Query (queryKey ['plannedTransactions',
 // showInactive]) and busts ['upcomingPlannedPayments'] on mutations, so it must
@@ -93,7 +94,7 @@ describe("usePlannedPayments", () => {
         const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         expect(result.current.payments).toHaveLength(1);
-        const p = result.current.payments[0]!;
+        const p = must(result.current.payments[0]);
         expect(p.name).toBe("Monthly rent");
         expect(p.amount).toBe(1200);
         expect(p.currency).toBe("EUR");

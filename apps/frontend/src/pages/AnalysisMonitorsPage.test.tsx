@@ -7,6 +7,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { err, ok } from "@/test/msw/handlers";
 import AnalysisMonitorsPage from "@/pages/AnalysisMonitorsPage";
+import { must } from "@/test/must";
 
 const api = "http://localhost:3002/api";
 const stamp = "2026-09-19T00:00:00Z";
@@ -124,7 +125,7 @@ describe("AnalysisMonitorsPage", () => {
             ),
         );
         await user.click(
-            within(error.parentElement!).getByRole("button", { name: "Retry" }),
+            within(must(error.parentElement)).getByRole("button", { name: "Retry" }),
         );
         await waitFor(() =>
             expect(

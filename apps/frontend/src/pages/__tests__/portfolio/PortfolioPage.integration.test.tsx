@@ -20,6 +20,7 @@ import {
     accountsBody,
 } from "@/test/msw/rowFixtures";
 import { asAccountId } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -415,7 +416,7 @@ describe("PortfolioPage (integration)", () => {
         const [button] = await screen.findAllByRole("button", {
             name: /add investment/i,
         });
-        await user.click(button!);
+        await user.click(must(button));
         expect(
             await screen.findByRole("heading", { name: /choose asset type/i }),
         ).toBeInTheDocument();
@@ -435,13 +436,15 @@ describe("PortfolioPage (integration)", () => {
             name: /refresh prices/i,
         });
         expect(refresh).toBeEnabled();
-        await act(async () => {
+        await act(() => {
             window.dispatchEvent(new Event("offline"));
+            return Promise.resolve();
         });
         expect(refresh).toBeDisabled();
         // React Query pauses every later fetch while the window is offline.
-        await act(async () => {
+        await act(() => {
             window.dispatchEvent(new Event("online"));
+            return Promise.resolve();
         });
         expect(refresh).toBeEnabled();
     });
@@ -675,7 +678,7 @@ describe("PortfolioPage (integration)", () => {
             (await screen.findByText("Per year")).closest(".glass-thin") as HTMLElement,
         );
         const figure = (label: string) =>
-            figures.getByText(label).closest("div")!.parentElement as HTMLElement;
+            must(figures.getByText(label).closest("div")).parentElement as HTMLElement;
         const totalReturn = figure("Investment return");
         expect(totalReturn).toHaveTextContent(/\+11,1\s?%/);
         expect(totalReturn).toHaveTextContent(/\+120,00/);
@@ -706,7 +709,7 @@ describe("PortfolioPage (integration)", () => {
         const figures = within(
             (await screen.findByText("Per year")).closest(".glass-thin") as HTMLElement,
         );
-        const afterInflation = figures.getByText("After inflation").closest("div")!
+        const afterInflation = must(figures.getByText("After inflation").closest("div"))
             .parentElement as HTMLElement;
         expect(afterInflation).toHaveTextContent("—");
         expect(afterInflation).toHaveTextContent("Inflation data missing");
@@ -886,7 +889,7 @@ describe("PortfolioPage (integration)", () => {
         const figures = within(
             (await screen.findByText("Per year")).closest(".glass-thin") as HTMLElement,
         );
-        const investmentReturn = figures.getByText("Investment return").closest("div")!
+        const investmentReturn = must(figures.getByText("Investment return").closest("div"))
             .parentElement as HTMLElement;
         expect(investmentReturn).toHaveTextContent(/\+120,00/);
         expect(card).toHaveTextContent(/Unrealized gains\s*\+120,00/);

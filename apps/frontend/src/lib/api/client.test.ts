@@ -20,6 +20,7 @@ import {
     asCurrencyCode,
     asRecipientId,
 } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 const TEST_URL = "http://localhost:3002/api/client-test";
 
@@ -362,6 +363,34 @@ describe("apiRequest", () => {
         expect(result).toEqual({ id: 1 });
     });
 
+    it("keeps caller headers given as a Headers instance or tuple array", async () => {
+        const seen: (string | null)[] = [];
+        server.use(
+            http.get(TEST_URL, ({ request }) => {
+                seen.push(
+                    request.headers.get("x-custom"),
+                    request.headers.get("content-type"),
+                );
+                return HttpResponse.json({ ok: true, data: {} });
+            }),
+        );
+        await apiRequest("/api/client-test", {
+            headers: new Headers({ "X-Custom": "from-headers" }),
+        });
+        await apiRequest("/api/client-test", {
+            headers: [
+                ["X-Custom", "from-tuples"],
+                ["Content-Type", "text/plain"],
+            ],
+        });
+        expect(seen).toEqual([
+            "from-headers",
+            "application/json",
+            "from-tuples",
+            "text/plain",
+        ]);
+    });
+
     it("204 returns undefined", async () => {
         server.use(
             http.get(TEST_URL, () => new HttpResponse(null, { status: 204 })),
@@ -578,7 +607,7 @@ describe("caller cancellation", () => {
         const transport = vi.spyOn(globalThis, "fetch").mockImplementation(
             async (_url, options) =>
                 new Promise((_resolve, reject) => {
-                    options!.signal!.addEventListener(
+                    must(must(options).signal).addEventListener(
                         "abort",
                         () =>
                             reject(new DOMException("Cancelled", "AbortError")),

@@ -22,7 +22,7 @@ import { asCurrencyCode } from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
-function ok<T>(data: T, init?: ResponseInit) {
+function ok(data: unknown, init?: ResponseInit) {
     return HttpResponse.json({ ok: true, data }, init);
 }
 

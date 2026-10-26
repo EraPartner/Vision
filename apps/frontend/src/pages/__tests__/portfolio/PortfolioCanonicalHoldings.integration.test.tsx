@@ -19,6 +19,7 @@ import {
 import type { PortfolioSummaryItem } from "@/lib/api/info";
 import type { Investment, PortfolioTransaction } from "@/types/api";
 import { asCurrencyCode, asInvestmentId } from "@vision/types/brands";
+import { must } from "@/test/must";
 
 const API_BASE = "http://localhost:3002";
 const investment: Investment = {
@@ -162,7 +163,7 @@ describe("canonical portfolio holdings", () => {
         );
         renderWithApp(<CryptoPage />);
         const units = await screen.findByText("0,04987654");
-        const row = units.closest("tr")!;
+        const row = must(units.closest("tr"));
         expect(within(row).getByText(investment.name)).toBeInTheDocument();
         expect(
             within(row).queryByRole("status", { name: /oversold broker/i }),
