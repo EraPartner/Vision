@@ -384,10 +384,15 @@ struct TransactionsTableCard: View {
             let accountNames = model.accountNames
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(rows) { row in
-                    TransactionRowView(
-                        model: model, shell: shell, row: row, columns: columns, compact: isCompact,
-                        widths: fitted, labels: labels, accountNames: accountNames, focusedRow: $focusedRow)
-                    Divider()
+                    // The row and its divider are one lazy child, not two.
+                    VStack(alignment: .leading, spacing: 0) {
+                        TransactionRowView(
+                            model: model, shell: shell, row: row, columns: columns, compact: isCompact,
+                            widths: fitted, labels: labels, accountNames: accountNames, focusedRow: $focusedRow
+                        )
+                        .equatable()
+                        Divider()
+                    }
                 }
             }
         }
@@ -422,7 +427,7 @@ struct TransactionsTableCard: View {
 
 /// One row: the select box, the cells (or the stacked summary), the Edit column, and while
 /// editing the Date, Amount, Payee and Category editors with Save and Cancel.
-struct TransactionRowView: View {
+struct TransactionRowView: View, Equatable {
     let model: TransactionsModel
     let shell: NativeShellModel
     let row: TransactionRow
@@ -435,6 +440,14 @@ struct TransactionRowView: View {
     var focusedRow: FocusState<TransactionID?>.Binding
     @Environment(\.visionTheme) private var theme
 
+    /// What a row draws from its inputs. The model and shell are the same for every row of a
+    /// card, and what changes under them (selection, editor, settings) is observed by the body
+    /// itself, so a parent pass with equal inputs skips the row.
+    nonisolated static func == (lhs: TransactionRowView, rhs: TransactionRowView) -> Bool {
+        lhs.row == rhs.row && lhs.columns == rhs.columns && lhs.compact == rhs.compact
+            && lhs.widths == rhs.widths && lhs.labels == rhs.labels && lhs.accountNames == rhs.accountNames
+    }
+
     private var strings: any Localizing { shell.strings }
     private var settings: NativeAppSettings { shell.settings }
     private var isEditing: Bool { model.rowEditor?.id == row.id }
@@ -442,17 +455,20 @@ struct TransactionRowView: View {
 
     var body: some View {
         // The label formats the date and amount; it serves the row, its box and its Edit button.
-        let rowLabel = row.accessibilityLabel(labels, settings: settings)
+        // The date and amount are formatted once here and shared by the cells and the label.
+        let dateText = VisionFormat.appDate(row.date, format: settings.dateFormat)
+        let amountLabel = MoneyText.text(row.amount, currency: row.displayCurrency, settings: settings, signed: false)
+        let rowLabel = row.accessibilityLabel(labels, dateText: dateText, amountText: amountLabel)
         return HStack(spacing: 0) {
             checkbox(label: rowLabel)
                 .frame(width: TransactionsTableCard.selectWidth, alignment: .leading)
             if compact {
-                summaryCell
+                summaryCell(dateText: dateText)
                     .padding(.trailing, 8)
                     .frame(minWidth: TransactionsTableCard.summaryWidth, maxWidth: .infinity, alignment: .leading)
             }
             ForEach(columns, id: \.self) { column in
-                cell(column)
+                cell(column, dateText: dateText)
                     .padding(.trailing, 8)
                     .frame(width: column == .category ? nil : width(column), alignment: alignment(column))
                     .frame(
@@ -539,9 +555,9 @@ struct TransactionRowView: View {
     // MARK: Cells
 
     @ViewBuilder
-    private func cell(_ column: TransactionColumn) -> some View {
+    private func cell(_ column: TransactionColumn, dateText: String) -> some View {
         switch column {
-        case .date: dateCell
+        case .date: dateCell(dateText)
         case .recipient: recipientCell
         case .category: categoryCell
         case .bank:
@@ -566,7 +582,7 @@ struct TransactionRowView: View {
     }
 
     @ViewBuilder
-    private var dateCell: some View {
+    private func dateCell(_ dateText: String) -> some View {
         if isEditing {
             VisionDateField(
                 day: model.rowEditor?.day, placeholder: strings.t("txPage.col.date"), settings: settings,
@@ -575,7 +591,7 @@ struct TransactionRowView: View {
                 model.rowEditor?.day = day
             }
         } else {
-            Text(VisionFormat.appDate(row.date, format: settings.dateFormat))
+            Text(dateText)
                 .monospacedDigit()
                 .foregroundStyle(theme.secondaryLabel)
                 .strikethrough(!row.isActive)
@@ -674,11 +690,11 @@ struct TransactionRowView: View {
     }
 
     /// The stacked cell of the compact layout: date, payee, account, category and memo.
-    private var summaryCell: some View {
+    private func summaryCell(dateText: String) -> some View {
         let uncategorised = row.isUncategorised(labels)
         return VStack(alignment: .leading, spacing: 4) {
             Text(
-                verbatim: [VisionFormat.appDate(row.date, format: settings.dateFormat), row.accountLabel(accountNames)]
+                verbatim: [dateText, row.accountLabel(accountNames)]
                     .filter { !$0.isEmpty }
                     .joined(separator: " · ")
             )

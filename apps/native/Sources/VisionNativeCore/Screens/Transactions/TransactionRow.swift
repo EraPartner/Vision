@@ -153,7 +153,14 @@ public struct TransactionRow: Equatable, Sendable, Identifiable {
         let amountText = VisionFormat.currency(
             amount, code: displayCurrency, locale: settings.numberFormat.locale,
             fractionDigits: settings.showDecimalPlaces)
-        return [VisionFormat.appDate(date, format: settings.dateFormat), recipient(labels), amountText]
+        return accessibilityLabel(
+            labels, dateText: VisionFormat.appDate(date, format: settings.dateFormat), amountText: amountText)
+    }
+
+    /// The same label from a date and an amount the caller already formatted (the row view
+    /// formats them once for its cells and the label).
+    public func accessibilityLabel(_ labels: TransactionLabels, dateText: String, amountText: String) -> String {
+        [dateText, recipient(labels), amountText]
             .filter { !$0.isEmpty }
             .joined(separator: ", ")
     }
