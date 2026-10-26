@@ -3,7 +3,7 @@ import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
-import { typeAwareRules } from "../../config/eslint-type-aware.mjs";
+import { strictTypeAwareRules } from "../../config/eslint-type-aware.mjs";
 
 // ── custom local rule ─────────────────────────────────────────────────────────
 
@@ -304,7 +304,7 @@ export default tseslint.config(
         "warn",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      ...typeAwareRules,
+      ...strictTypeAwareRules(tseslint),
       // A `default` arm does not excuse a missing union member (ADR-251): list
       // every known API enum value, and keep `default` only as the fallback for
       // values a newer server may send.
