@@ -27,6 +27,15 @@ extension View {
 /// equally, so a lone child spans the row as `[&>*:only-child]:col-span-N` does. `stretch`
 /// gives every cell the height of the tallest one, the grid's default `align-items: stretch`.
 struct InsightsColumns: Layout {
+    /// The cell heights of the last widths measured. `sizeThatFits` and `placeSubviews` run with
+    /// the same widths in one layout pass, and measuring a cell sizes its whole subtree (charts
+    /// included), so the second ask reuses the first. SwiftUI rebuilds the cache when the
+    /// subviews change.
+    struct Cache {
+        var widths: [CGFloat] = []
+        var heights: [CGFloat] = []
+    }
+
     var weights: [CGFloat]
     var spacing: CGFloat = VisionPageLayout.spacing
     var stretch = false
@@ -39,21 +48,27 @@ struct InsightsColumns: Layout {
         return used.map { free * $0 / sum }
     }
 
-    private func heights(_ subviews: Subviews, widths: [CGFloat]) -> [CGFloat] {
-        subviews.enumerated().map { index, subview in
+    func makeCache(subviews: Subviews) -> Cache { Cache() }
+
+    private func heights(_ subviews: Subviews, widths: [CGFloat], cache: inout Cache) -> [CGFloat] {
+        if cache.widths == widths, cache.heights.count == subviews.count { return cache.heights }
+        let measured = subviews.enumerated().map { index, subview in
             subview.sizeThatFits(ProposedViewSize(width: widths[index], height: nil)).height
         }
+        cache.widths = widths
+        cache.heights = measured
+        return measured
     }
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGSize {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
         let total = proposal.width ?? 640
         let cells = widths(total: total, count: subviews.count)
-        return CGSize(width: total, height: heights(subviews, widths: cells).max() ?? 0)
+        return CGSize(width: total, height: heights(subviews, widths: cells, cache: &cache).max() ?? 0)
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
         let cells = widths(total: bounds.width, count: subviews.count)
-        let rowHeight = heights(subviews, widths: cells).max() ?? 0
+        let rowHeight = heights(subviews, widths: cells, cache: &cache).max() ?? 0
         var x = bounds.minX
         for (index, subview) in subviews.enumerated() {
             subview.place(
