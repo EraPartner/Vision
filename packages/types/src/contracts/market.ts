@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { ASSET_CLASSES } from "../assetClasses.ts";
 import { IdSchema } from "./common.ts";
 
 /*
@@ -101,13 +102,6 @@ export const MarketNewsListSchema = z.looseObject({
 });
 
 /**
- * The watchlist only tracks priced instruments: routes/watchlist.ts rejects the
- * other portfolio asset classes on every write (the column is the shared PG
- * enum, but nothing else inserts), and openapi.yaml lists the same four.
- */
-const WATCHLIST_ASSET_CLASSES = ["stock", "etf", "crypto", "metals"] as const;
-
-/**
  * One `watchlist` row after watchlistRepository.mapWatchlistRow: the NUMERIC
  * `target_price` and nullable `added_price` are JSON numbers.
  */
@@ -115,7 +109,7 @@ export const WatchlistItemSchema = z.looseObject({
   id: IdSchema,
   name: z.string(),
   symbol: z.string().nullable(),
-  asset_class: z.enum(WATCHLIST_ASSET_CLASSES),
+  asset_class: z.enum(ASSET_CLASSES),
   target_price: z.number(),
   added_price: z.number().nullable(),
   currency: z.string(),
