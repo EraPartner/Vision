@@ -1297,6 +1297,7 @@ public final class TransactionsModel {
     /// The screen went away: its dialogs, editors and table state go with it, like an
     /// unmounted page. The loaded list stays cached; a toast and its Undo stay.
     public func disappear() {
+        visibleCache = nil
         pendingDelete = nil
         rowEditor = nil
         quickLookId = nil

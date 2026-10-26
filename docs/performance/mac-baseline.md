@@ -172,7 +172,9 @@ attaches `sample` while it idles (8 s), scrolls (3 s) and switches pages (6 s); 
 writes the running phase to `phase.txt` in its output folder. Sampling stops threads, so this run
 is not measured: it only lists the heaviest busy leaf frames and the app's own frames with their
 inclusive counts under "hot spots" in the app's part of `summary.md`, with the full reports beside them
-(`<app>-profile/<phase>.sample.txt`). `--no-profile` skips it.
+(`<app>-profile/<phase>.sample.txt`). Near the end of the sustained loop it also saves `vmmap -summary`
+and `heap -sortBySize` of the app (`vmmap.txt`, `heap.txt`) to show what the run's added memory is.
+`--no-profile` skips it.
 
 **Without arguments.** UserDefaults reads launch arguments and the app's defaults domain alike, so
 the run can also start from a normal launch:

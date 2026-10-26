@@ -1607,6 +1607,27 @@ function mainWorktreeRoot(): string {
   return first ? path.resolve(first.slice("worktree ".length)) : repo;
 }
 
+/** Runs a macOS inspection tool and writes its output to `file`; failures are ignored. */
+function snapshotTo(
+  command: string,
+  args: string[],
+  file: string,
+): Promise<void> {
+  return new Promise((resolve) => {
+    const out = fs.openSync(file, "w");
+    const tool = spawn(command, args, { stdio: ["ignore", out, out] });
+    let closed = false;
+    const done = (): void => {
+      if (closed) return;
+      closed = true;
+      fs.closeSync(out);
+      resolve();
+    };
+    tool.once("exit", done);
+    tool.once("error", done);
+  });
+}
+
 /** perf-results/ of the repository's other git worktrees. */
 function otherWorktreeResultRoots(): string[] {
   const repo = path.join(import.meta.dirname, "..");
@@ -1661,6 +1682,7 @@ async function profileNativeApp(
   const plan: Record<string, number> = { idle: 8, scroll: 3, pageSwitch: 6 };
   const samplers: Promise<void>[] = [];
   const files: { phase: string; file: string }[] = [];
+  let memorySnapshot: Promise<void> | null = null;
   let postgresPid: number | undefined;
   const deadline = Date.now() + 400_000;
   await sleep(1000);
@@ -1675,6 +1697,24 @@ async function profileNativeApp(
       phase = fs.readFileSync(path.join(dir, "phase.txt"), "utf8").trim();
     } catch {
       // Not started yet, or finished.
+    }
+    if (phase === "sustained" && memorySnapshot === null) {
+      // Near the end of the sustained loop: what the memory the run added is made of.
+      const delay = Math.max(1, (options.nativeSustainedSeconds ?? 60) - 3);
+      memorySnapshot = sleep(delay * 1000).then(() =>
+        Promise.all([
+          snapshotTo(
+            "vmmap",
+            ["-summary", String(pid)],
+            path.join(dir, "vmmap.txt"),
+          ),
+          snapshotTo(
+            "heap",
+            [String(pid), "-sortBySize"],
+            path.join(dir, "heap.txt"),
+          ),
+        ]).then(() => undefined),
+      );
     }
     const seconds = plan[phase];
     if (seconds !== undefined) {
@@ -1697,6 +1737,7 @@ async function profileNativeApp(
   }
   if (!exited) child.kill("SIGTERM");
   await Promise.all(samplers);
+  await memorySnapshot;
   const pgDeadline = Date.now() + 30_000;
   while (
     postgresPid !== undefined &&

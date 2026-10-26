@@ -166,6 +166,32 @@ actor SleepRecorder {
         #expect(await transport.requests.count == 1)
     }
 
+    @Test func aBodyThatIsNotJSONIsANetworkFailureAndValidJSONOfTheWrongShapeIsAContractViolation() {
+        let notJSON = APIResponse(status: 200, body: Data("<html>".utf8))
+        guard case .failure(.network(let message)) = APIClient.decode(notJSON, as: String.self, label: "GET /x")
+        else {
+            Issue.record("a non-JSON body must fail as a network error")
+            return
+        }
+        #expect(message == "The response is not JSON")
+        let wrongShape = APIResponse(status: 200, body: Data("[1,2]".utf8))
+        guard case .failure(.contract) = APIClient.decode(wrongShape, as: String.self, label: "GET /x")
+        else {
+            Issue.record("valid JSON of the wrong shape must fail as a contract violation")
+            return
+        }
+        let fine = APIResponse(status: 200, body: Data(#"{"ok":true,"data":"v"}"#.utf8))
+        guard case .success(let value) = APIClient.decode(fine, as: String.self, label: "GET /x") else {
+            Issue.record("an envelope must unwrap")
+            return
+        }
+        #expect(value == "v")
+    }
+
+    @Test func theTransportKeepsNoResponseCache() {
+        #expect(URLSessionAPITransport.configuration.urlCache == nil)
+    }
+
     @Test func aMissingFieldIsRequired() async {
         let body = #"{"ok":true,"data":{"rates":[],"fallback_rates":{},"source":"database","is_stale":false}}"#
         let transport = FakeTransport([.response(200, body)])
