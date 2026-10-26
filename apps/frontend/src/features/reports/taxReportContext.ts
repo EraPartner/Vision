@@ -26,7 +26,7 @@ export async function taxReportContext(
         (year === state.profile.taxYear ||
             Object.hasOwn(state.householdSnapshots, year) ||
             Boolean(state.snapshotMetas[year]?.frozenCalculation));
-    const configured = hasYearProfile && state.profile.profileConfigured === true;
+    const configured = hasYearProfile && state.profile.profileConfigured;
     const yearProfile = resolveBelgianTaxProfile(state, year);
     const taxProfile = configured ? {
         filingStatus: yearProfile.employmentType,

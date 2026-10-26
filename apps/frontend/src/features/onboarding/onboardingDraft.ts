@@ -14,7 +14,7 @@ export const ONBOARDING_STEP_KEYS = [
 
 export type OnboardingStepKey = (typeof ONBOARDING_STEP_KEYS)[number];
 
-const countSchema = z.number().int().nonnegative().safe();
+const countSchema = z.number().int().nonnegative();
 
 const onboardingDraftSchema = z
     .object({
@@ -22,7 +22,7 @@ const onboardingDraftSchema = z
         step: z.enum(ONBOARDING_STEP_KEYS),
         selectedBank: z.string().trim().max(128),
         selectedCategoryIndexes: z
-            .array(z.number().int().nonnegative().safe())
+            .array(z.number().int().nonnegative())
             .max(100),
         categoriesCreated: z.boolean(),
         importResult: z
@@ -31,7 +31,7 @@ const onboardingDraftSchema = z
             .nullable(),
         reviewBatch: z
             .object({
-                batchId: z.number().int().positive().safe(),
+                batchId: z.number().int().positive(),
                 rows: countSchema,
             })
             .strict()

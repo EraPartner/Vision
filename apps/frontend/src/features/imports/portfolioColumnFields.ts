@@ -6,8 +6,23 @@
 
 import type { PortfolioCustomConfig } from "@/lib/api/portfolioImports";
 
+/** Config keys that name a CSV column (as opposed to options and mappings). */
+export type PortfolioColumnKey =
+  | "dateColumn"
+  | "typeColumn"
+  | "symbolColumn"
+  | "nameColumn"
+  | "unitsColumn"
+  | "priceColumn"
+  | "amountColumn"
+  | "feesColumn"
+  | "taxesColumn"
+  | "currencyColumn"
+  | "fxRateColumn"
+  | "noteColumn";
+
 // (config key, i18n label key, required)
-export const PORTFOLIO_COLUMN_FIELDS: Array<[keyof PortfolioCustomConfig, string, boolean]> = [
+export const PORTFOLIO_COLUMN_FIELDS: Array<[PortfolioColumnKey, string, boolean]> = [
   ["dateColumn", "portfolioImport.col.date", true],
   ["typeColumn", "portfolioImport.col.type", false],
   ["symbolColumn", "portfolioImport.col.symbol", false],
@@ -22,8 +37,22 @@ export const PORTFOLIO_COLUMN_FIELDS: Array<[keyof PortfolioCustomConfig, string
   ["noteColumn", "portfolioImport.col.note", false],
 ];
 
+// Saved parser configs come from the server, so a column can be missing or null
+// at runtime even though the type promises a string.
+function columnText(value: string | null | undefined): string {
+  return value ?? "";
+}
+
+/** The CSV column `config` maps to `key`, or "" when unmapped. */
+export function portfolioColumnValue(
+  config: PortfolioCustomConfig,
+  key: PortfolioColumnKey,
+): string {
+  return columnText(config[key]);
+}
+
 /** The CSV columns currently mapped by `config` — used to highlight them in the
  * shared FileHeadersPanel. */
 export function portfolioMappedColumns(config: PortfolioCustomConfig): string[] {
-  return PORTFOLIO_COLUMN_FIELDS.map(([key]) => String(config[key] ?? "")).filter(Boolean);
+  return PORTFOLIO_COLUMN_FIELDS.map(([key]) => portfolioColumnValue(config, key)).filter(Boolean);
 }

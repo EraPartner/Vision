@@ -33,9 +33,10 @@ interface PortfolioTickerProps {
 interface TickerQuote {
     symbol: string;
     name: string;
-    price: number;
-    change: number;
-    changePercent: number;
+    // Market quotes are untyped JSON; a quote can come back without a price.
+    price?: number | null;
+    change?: number | null;
+    changePercent?: number | null;
     currency: string;
 }
 

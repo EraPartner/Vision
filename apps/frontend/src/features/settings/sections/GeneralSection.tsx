@@ -88,7 +88,7 @@ export const GeneralSection = memo(function GeneralSection() {
         {
             title: t("settings.general.language"),
             description: t("settings.general.languageHint"),
-            value: appSettings.language ?? "en",
+            value: appSettings.language,
             onValueChange: (v) =>
                 updateAppSettings({ language: v as "en" | "nl" }),
             options: [

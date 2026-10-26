@@ -324,11 +324,11 @@ export function CashFlowForecastChart({
             )}
             {data && !isLoading && (
                 <>
-                    {(data?.unconverted_count ?? 0) > 0 && (
+                    {(data.unconverted_count ?? 0) > 0 && (
                         <p className="mb-3 type-footnote text-warning">
                             {tc(
                                 "common.fxUnavailableTransactions",
-                                data?.unconverted_count ?? 0,
+                                data.unconverted_count ?? 0,
                             )}
                         </p>
                     )}

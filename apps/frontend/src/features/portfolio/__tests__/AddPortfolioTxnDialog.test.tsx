@@ -19,6 +19,7 @@ import {
     accountsBody,
 } from "@/test/msw/rowFixtures";
 import { asCurrencyCode, asInvestmentId } from "@vision/types/brands";
+import { must } from "@/features/testing/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -151,7 +152,7 @@ describe("AddPortfolioTxnDialog", () => {
         await user.click(
             await screen.findByRole("button", { name: /add transaction/i }),
         );
-        await user.click(screen.getAllByRole("combobox")[0]!);
+        await user.click(must(screen.getAllByRole("combobox")[0]));
         await user.click(
             await screen.findByRole("option", { name: /appreciation/i }),
         );
@@ -367,7 +368,7 @@ describe("AddPortfolioTxnDialog", () => {
         await screen.findByRole("dialog");
 
         // Change transaction type to dividend via Select
-        const typeTrigger = screen.getAllByRole("combobox")[0]!;
+        const typeTrigger = must(screen.getAllByRole("combobox")[0]);
         await user.click(typeTrigger);
         const dividendOption = await screen.findByRole("option", {
             name: /dividend/i,
@@ -501,9 +502,9 @@ describe("AddPortfolioTxnDialog", () => {
     function describedError(control: HTMLElement): HTMLElement {
         const describedBy = control.getAttribute("aria-describedby");
         expect(describedBy).toBeTruthy();
-        const message = document.getElementById(describedBy!);
+        const message = document.getElementById(must(describedBy));
         expect(message).toBeInTheDocument();
-        return message!;
+        return must(message);
     }
 
     it("renders an inline error on the amount field for a dividend with no amount, without a toast", async () => {
@@ -523,7 +524,7 @@ describe("AddPortfolioTxnDialog", () => {
         );
         await screen.findByRole("dialog");
 
-        const typeTrigger = screen.getAllByRole("combobox")[0]!;
+        const typeTrigger = must(screen.getAllByRole("combobox")[0]);
         await user.click(typeTrigger);
         await user.click(
             await screen.findByRole("option", { name: /dividend/i }),
@@ -583,7 +584,7 @@ describe("AddPortfolioTxnDialog", () => {
         const feesInput = screen.getByLabelText(/fees/i);
         fireEvent.change(feesInput, { target: { value: "-1" } });
         // fireEvent.submit bypasses JSDOM pattern constraint checking so handleSubmit runs
-        fireEvent.submit(screen.getByRole("dialog").querySelector("form")!);
+        fireEvent.submit(must(screen.getByRole("dialog").querySelector("form")));
 
         await waitFor(() =>
             expect(feesInput).toHaveAttribute("aria-invalid", "true"),
@@ -604,7 +605,7 @@ describe("AddPortfolioTxnDialog", () => {
         );
         await screen.findByRole("dialog");
 
-        const typeTrigger = screen.getAllByRole("combobox")[0]!;
+        const typeTrigger = must(screen.getAllByRole("combobox")[0]);
         await user.click(typeTrigger);
 
         // Assert — ETF allows buy, sell, gift, dividend, fee, tax
@@ -645,7 +646,7 @@ describe("AddPortfolioTxnDialog", () => {
         );
         await screen.findByRole("dialog");
 
-        const typeTrigger = screen.getAllByRole("combobox")[0]!;
+        const typeTrigger = must(screen.getAllByRole("combobox")[0]);
         await user.click(typeTrigger);
 
         // Assert — savings shows buy/sell/fee/tax but not gift/dividend
@@ -664,7 +665,7 @@ describe("AddPortfolioTxnDialog", () => {
 
     /** The Radix overlay — clicking it is the "stray click next to the dialog". */
     const overlay = () =>
-        document.querySelector<HTMLElement>(".fixed.inset-0.modal-overlay")!;
+        must(document.querySelector<HTMLElement>(".fixed.inset-0.modal-overlay"));
 
     it("keeps typed input when dismissed with Escape", async () => {
         // Arrange

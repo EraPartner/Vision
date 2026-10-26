@@ -55,7 +55,7 @@ function formatCell(value: unknown, locale: string): string {
     try {
         return JSON.stringify(value);
     } catch {
-        return String(value);
+        return Object.prototype.toString.call(value);
     }
 }
 
@@ -152,7 +152,7 @@ function TableView({
                     {rows.map((row, idx) => (
                         <TableRow
                             key={`${idx}-${cols
-                                .map((c) => String(row[c] ?? ""))
+                                .map((c) => formatCell(row[c], locale))
                                 .join("|")
                                 .slice(0, 80)}`}
                         >

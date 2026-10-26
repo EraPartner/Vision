@@ -44,6 +44,16 @@ interface CategoryPivotTableProps {
 
 const PERIOD_WINDOW_SIZE = 12;
 
+/** A single category drills by id; several drill by the whole id list. */
+function drillCategoryFilter(
+    categoryIds: CategoryId[],
+): { categoryId: CategoryId } | { categoryIds: CategoryId[] } {
+    const [only] = categoryIds;
+    return categoryIds.length === 1 && only !== undefined
+        ? { categoryId: only }
+        : { categoryIds };
+}
+
 /**
  * Pure period-value accessor — hoisted out of the component so it isn't
  * redefined each render and the useMemos below can list it as a real (stable)
@@ -127,6 +137,8 @@ export function CategoryPivotTable({
             end,
         );
     }, [effectivePeriodPage, filteredPeriods]);
+    const firstVisiblePeriod = visiblePeriods[0];
+    const lastVisiblePeriod = visiblePeriods[visiblePeriods.length - 1];
 
     const selectYear = useCallback((year: string) => {
         setYearFilter(year);
@@ -175,9 +187,8 @@ export function CategoryPivotTable({
         for (const cat of filteredCategories) {
             // New payloads carry canonical ordered paths. The legacy label
             // fallback only supports pre-upgrade cached pivot responses.
-            const fallback = String(
-                cat.categoryName || t("txPage.field.uncategorized"),
-            );
+            const fallback =
+                cat.categoryName || t("txPage.field.uncategorized");
             const colon = fallback.indexOf(":");
             const segments =
                 cat.categoryPathSegments != null &&
@@ -195,22 +206,27 @@ export function CategoryPivotTable({
             const general =
                 segments[0]?.trim() || t("txPage.field.uncategorized");
 
-            if (!grouped.has(general)) {
+            let group = grouped.get(general);
+            if (group === undefined) {
                 const initialMonths: Record<string, number> = {};
                 for (const period of filteredPeriods) {
                     initialMonths[period] = 0;
                 }
-                grouped.set(general, {
+                group = {
                     general,
                     total: 0,
                     months: initialMonths,
                     categoryIds: [],
                     children: [],
-                });
-                childMaps.set(general, new Map());
+                };
+                grouped.set(general, group);
+            }
+            let childMap = childMaps.get(general);
+            if (childMap === undefined) {
+                childMap = new Map();
+                childMaps.set(general, childMap);
             }
 
-            const group = grouped.get(general)!;
             if (
                 cat.categoryId != null &&
                 !group.categoryIds.includes(cat.categoryId)
@@ -222,7 +238,6 @@ export function CategoryPivotTable({
                     (group.months[period] ?? 0) +
                     getPeriodValue(cat, period, valueMode);
             }
-            const childMap = childMaps.get(general)!;
             for (let depth = 2; depth <= segments.length; depth += 1) {
                 const pathIds = ids.slice(0, depth);
                 const pathSegments = segments.slice(0, depth);
@@ -286,7 +301,7 @@ export function CategoryPivotTable({
             .map((group) => ({
                 ...group,
                 categoryIds: group.categoryIds.sort((a, b) => a - b),
-                children: Array.from(childMaps.get(group.general)!.values())
+                children: Array.from(childMaps.get(group.general)?.values() ?? [])
                     .map((row) => ({
                         ...row,
                         categoryIds: row.categoryIds.sort((a, b) => a - b),
@@ -299,7 +314,9 @@ export function CategoryPivotTable({
                             i < Math.min(left.length, right.length);
                             i += 1
                         ) {
-                            const order = left[i]!.localeCompare(right[i]!);
+                            const order = (left[i] ?? "").localeCompare(
+                                right[i] ?? "",
+                            );
                             if (order !== 0) return order;
                         }
                         return left.length - right.length;
@@ -453,8 +470,9 @@ export function CategoryPivotTable({
                             className="min-w-32 text-center type-footnote tabular-nums text-label-secondary"
                             aria-live="polite"
                         >
-                            {visiblePeriods.length > 0
-                                ? `${formatPeriodShort(visiblePeriods[0]!, monthLabelLocale)} – ${formatPeriodShort(visiblePeriods[visiblePeriods.length - 1]!, monthLabelLocale)}`
+                            {firstVisiblePeriod !== undefined &&
+                            lastVisiblePeriod !== undefined
+                                ? `${formatPeriodShort(firstVisiblePeriod, monthLabelLocale)} – ${formatPeriodShort(lastVisiblePeriod, monthLabelLocale)}`
                                 : "—"}
                         </span>
                         <Button
@@ -740,19 +758,7 @@ export function CategoryPivotTable({
                                                                         canClick
                                                                             ? buildTransactionDrillUrl(
                                                                                   {
-                                                                                      ...(cat
-                                                                                          .categoryIds
-                                                                                          .length ===
-                                                                                      1
-                                                                                          ? {
-                                                                                                categoryId:
-                                                                                                    cat
-                                                                                                        .categoryIds[0]!,
-                                                                                            }
-                                                                                          : {
-                                                                                                categoryIds:
-                                                                                                    cat.categoryIds,
-                                                                                            }),
+                                                                                      ...drillCategoryFilter(cat.categoryIds),
                                                                                       period: p,
                                                                                       valueMode,
                                                                                       label,
@@ -809,10 +815,8 @@ export function CategoryPivotTable({
                                                             )}
                                                             {(() => {
                                                                 const label =
-                                                                    String(
-                                                                        cat.categoryName ||
-                                                                            "",
-                                                                    );
+                                                                    cat.categoryName ||
+                                                                    "";
                                                                 const drillUrl =
                                                                     cat
                                                                         .categoryIds
@@ -820,19 +824,7 @@ export function CategoryPivotTable({
                                                                     0
                                                                         ? buildTransactionDrillUrl(
                                                                               {
-                                                                                  ...(cat
-                                                                                      .categoryIds
-                                                                                      .length ===
-                                                                                  1
-                                                                                      ? {
-                                                                                            categoryId:
-                                                                                                cat
-                                                                                                    .categoryIds[0]!,
-                                                                                        }
-                                                                                      : {
-                                                                                            categoryIds:
-                                                                                                cat.categoryIds,
-                                                                                        }),
+                                                                                  ...drillCategoryFilter(cat.categoryIds),
                                                                                   valueMode,
                                                                                   label,
                                                                               },

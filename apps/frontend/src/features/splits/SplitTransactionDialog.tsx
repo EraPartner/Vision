@@ -112,7 +112,10 @@ export function SplitTransactionDialog({
         );
     };
 
-    const validEntries = entries.filter((e) => e.recipient_id != null);
+    const validEntries = entries.filter(
+        (e): e is SplitEntry & { recipient_id: RecipientId } =>
+            e.recipient_id != null,
+    );
     const totalPeople = validEntries.length + 1; // +1 for "me"
 
     // Money math runs through Decimal and rounds to cents on emit so the
@@ -163,12 +166,10 @@ export function SplitTransactionDialog({
           ? validEntries.length > 0 && equalShare <= 0
           : splitType === "full"
             ? fullShares.some((share) => share <= 0)
-            : validEntries.some((entry) => {
-                  if (entry.recipient_id == null) return false;
-                  return (
-                      parseDecimal(entry.amount, appSettings.numberFormat) <= 0
-                  );
-              });
+            : validEntries.some(
+                  (entry) =>
+                      parseDecimal(entry.amount, appSettings.numberFormat) <= 0,
+              );
     const totalAfterSubmit = roundMoney(
         toDecimal(existingSplitTotal).plus(newSplitTotal),
     );
@@ -182,7 +183,7 @@ export function SplitTransactionDialog({
         ? toDecimal(totalAfterSubmit).gt(roundMoney(absAmount))
         : false;
 
-    const handleSubmit = (event: React.FormEvent) => {
+    const handleSubmit = (event: React.SubmitEvent) => {
         event.preventDefault();
         const splits: SplitCreateInput[] = [];
         for (const [index, e] of validEntries.entries()) {
@@ -196,7 +197,7 @@ export function SplitTransactionDialog({
             // is open, so a missing share means the form is not submittable.
             if (amount === undefined) return;
             splits.push({
-                recipient_id: e.recipient_id!,
+                recipient_id: e.recipient_id,
                 amount,
                 note: e.note || undefined,
             });
@@ -408,8 +409,10 @@ export function SplitTransactionDialog({
                                                         {t("splitDialog.owes", {
                                                             amount: formatCurrency(
                                                                 fullShares[
-                                                                    validEntries.indexOf(
-                                                                        entry,
+                                                                    validEntries.findIndex(
+                                                                        (valid) =>
+                                                                            valid ===
+                                                                            entry,
                                                                     )
                                                                 ] ?? 0,
                                                                 {

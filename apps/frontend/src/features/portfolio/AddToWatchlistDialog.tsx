@@ -139,7 +139,7 @@ export function AddToWatchlistDialog({
         addedPrice: null,
         points: [],
     }).preview;
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.SubmitEvent) => {
         e.preventDefault();
         if (!selectedAsset || !targetPrice) return;
 

@@ -6,9 +6,16 @@ export interface AnalysisChartSpec {
 }
 export function normalizeAnalysisChartSpec(value: unknown): AnalysisChartSpec {
     const v = value as Partial<AnalysisChartSpec> | undefined;
-    const kinds = ["bar", "line", "stacked-bar", "scatter", "waterfall"];
+    const kinds: AnalysisChartSpec["kind"][] = [
+        "bar",
+        "line",
+        "stacked-bar",
+        "scatter",
+        "waterfall",
+    ];
+    const kind = v?.kind;
     return {
-        kind: kinds.includes(v?.kind ?? "") ? v!.kind! : "bar",
+        kind: kind !== undefined && kinds.includes(kind) ? kind : "bar",
         x: typeof v?.x === "string" ? v.x : "",
         y:
             typeof v?.y === "string"
@@ -84,18 +91,16 @@ export function analysisChartData(
                     );
                     if (scope.size > 1) missingUnitScope = true;
                 }
+                const instrumentColumn = unit.instrumentColumn;
                 if (
-                    unit.instrumentColumn &&
-                    result.rows.some(
-                        (row) => row[unit.instrumentColumn!] == null,
-                    )
+                    instrumentColumn &&
+                    result.rows.some((row) => row[instrumentColumn] == null)
                 )
                     missingUnitScope = true;
                 if (
-                    unit.instrumentColumn &&
-                    new Set(
-                        result.rows.map((row) => row[unit.instrumentColumn!]),
-                    ).size > 1
+                    instrumentColumn &&
+                    new Set(result.rows.map((row) => row[instrumentColumn]))
+                        .size > 1
                 )
                     missingUnitScope = true;
                 return JSON.stringify([

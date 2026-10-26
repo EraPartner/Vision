@@ -52,7 +52,7 @@ export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
             : { general: "", detail: "", description: "" },
     );
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = (e: React.SubmitEvent) => {
         e.preventDefault();
         setSubmitted(true);
         if (!form.general.trim() || !form.detail.trim()) {

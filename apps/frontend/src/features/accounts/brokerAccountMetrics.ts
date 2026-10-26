@@ -23,7 +23,7 @@ export function getBrokerAccountMetrics(
             row.account_id === accountId &&
             row.contribution_kind === "position",
     );
-    const totals = summary.accountTotals?.find(
+    const totals = summary.accountTotals.find(
         (row) => row.account_id === accountId,
     );
     return {

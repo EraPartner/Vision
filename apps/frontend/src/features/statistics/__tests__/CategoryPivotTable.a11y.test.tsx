@@ -75,7 +75,7 @@ describe("CategoryPivotTable keyboard drill-down", () => {
         expect(cellLink).toHaveFocus();
         await user.keyboard("{Enter}");
 
-        const loc = screen.getByTestId("location").textContent ?? "";
+        const loc = screen.getByTestId("location").textContent;
         expect(loc).toContain("/transactions?");
         expect(loc).toContain("category_id=5");
         expect(loc).toContain("start_date=2026-01-01");
@@ -92,7 +92,7 @@ describe("CategoryPivotTable keyboard drill-down", () => {
         groupTotal.focus();
         await user.keyboard("{Enter}");
 
-        const loc = screen.getByTestId("location").textContent ?? "";
+        const loc = screen.getByTestId("location").textContent;
         expect(loc).toContain("/transactions?");
         expect(loc).toContain("category_ids=5");
     });

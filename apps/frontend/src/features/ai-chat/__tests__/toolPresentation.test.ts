@@ -5,6 +5,7 @@ import {
     toolResultPresentation,
     toolResultRows,
 } from "@vision/shared-utils/ai-chat/toolPresentation";
+import { must } from "@/features/testing/must";
 /**
  * Sectors recharts 3.10.1 computed for these inputs (computePieSectors with
  * cx/cy 50%, radii 40/80, 300x224) before recharts was removed (ADR-245). The
@@ -96,11 +97,13 @@ describe("Tool result source inference and pie composition", () => {
                 name: `r${index}`,
                 value,
             }));
-            const result = toolResultPresentation({
-                ok: true,
-                data,
-                meta: { renderAs: "pie" },
-            })!;
+            const result = must(
+                toolResultPresentation({
+                    ok: true,
+                    data,
+                    meta: { renderAs: "pie" },
+                }),
+            );
             expect(result.pieRenderable).toBe(sectors.length > 0);
             expect(result.pieRows).toEqual(
                 sectors.map(({ name, value, percent, startAngle, endAngle }) => ({
@@ -115,15 +118,17 @@ describe("Tool result source inference and pie composition", () => {
         },
     );
     it("uses JS label coercion and zero for explicit non-number pie values", () => {
-        const result = toolResultPresentation({
-            ok: true,
-            data: [
-                { label: { x: 1 }, value: 2 },
-                { label: ["a", "b"], value: "3" },
-                { label: null, value: 1 },
-            ],
-            meta: { renderAs: "pie", xKey: "label", yKeys: ["value"] },
-        })!;
+        const result = must(
+            toolResultPresentation({
+                ok: true,
+                data: [
+                    { label: { x: 1 }, value: 2 },
+                    { label: ["a", "b"], value: "3" },
+                    { label: null, value: 1 },
+                ],
+                meta: { renderAs: "pie", xKey: "label", yKeys: ["value"] },
+            }),
+        );
         expect(result.pieRows.map((r) => [r.name, r.value])).toEqual([
             ["[object Object]", 2],
             ["a,b", 0],

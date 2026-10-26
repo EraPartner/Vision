@@ -271,7 +271,7 @@ export function ResearchFundamentalsTab({
                             <List>
                                 {visible.map((m) => (
                                     <ListRow
-                                        key={String(m.key)}
+                                        key={m.key}
                                         className="min-h-10"
                                         title={
                                             <span className="text-label-secondary">

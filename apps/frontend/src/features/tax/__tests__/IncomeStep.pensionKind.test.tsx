@@ -8,6 +8,7 @@ import { upgradeProfileV1ToHousehold } from "@/lib/belgianTax/householdMigration
 import type { BelgianTaxHouseholdV2 } from "@/lib/belgianTax/householdTypes";
 import type { HouseholdUpdate } from "@/stores/belgianTaxStore";
 import { IncomeStep } from "../profile-steps/IncomeStep";
+import { must } from "@/features/testing/must";
 
 function renderStep(
     household: BelgianTaxHouseholdV2,
@@ -37,7 +38,7 @@ describe("IncomeStep pension type", () => {
             employmentType: "retired",
             grossAnnualIncome: 18_000,
         });
-        household.partners[0]!.activities[0]!.pensionKind = "survivor_or_transition";
+        must(must(household.partners[0]).activities[0]).pensionKind = "survivor_or_transition";
         renderStep(household);
         expect(screen.getByLabelText("Pension type")).toBeTruthy();
         expect(screen.getByText("Survivor's pension or transition allowance")).toBeTruthy();
@@ -61,16 +62,16 @@ describe("IncomeStep pension type", () => {
             employmentType: "retired",
             grossAnnualIncome: 18_000,
         });
-        household.partners[0]!.activities[0]!.pensionKind = "statutory_from_legal_age";
+        must(must(household.partners[0]).activities[0]).pensionKind = "statutory_from_legal_age";
         const updateHousehold = vi.fn<(update: HouseholdUpdate) => void>();
         renderStep(household, updateHousehold);
         const user = userEvent.setup();
         await user.click(screen.getByRole("combobox", { name: "Pension type" }));
         await user.click(await screen.findByRole("option", { name: "Not entered" }));
         expect(updateHousehold).toHaveBeenCalledTimes(1);
-        const update = updateHousehold.mock.calls[0]![0];
+        const update = must(updateHousehold.mock.calls[0])[0];
         expect(typeof update).toBe("function");
         const next = (update as (h: BelgianTaxHouseholdV2) => BelgianTaxHouseholdV2)(household);
-        expect(next.partners[0]!.activities[0]).not.toHaveProperty("pensionKind");
+        expect(must(next.partners[0]).activities[0]).not.toHaveProperty("pensionKind");
     });
 });

@@ -201,7 +201,7 @@ export function BankBalancesWidget() {
                 <CardContent {...loadingSurfaceProps} className="space-y-4">
                     <Skeleton className="h-24 w-full rounded-card" />
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        {[...Array(3)].map((_, i) => (
+                        {Array.from({ length: 3 }).map((_, i) => (
                             <Skeleton
                                 key={i}
                                 className="h-20 w-full rounded-card"
@@ -214,7 +214,7 @@ export function BankBalancesWidget() {
         );
     }
 
-    if (error || !data) {
+    if (error || !data || !chartBundle) {
         return (
             <Card>
                 <CardHeader>
@@ -262,7 +262,7 @@ export function BankBalancesWidget() {
         hasNegativeBalances,
         accountSeries,
         legendItems,
-    } = chartBundle!;
+    } = chartBundle;
 
     const isPositive = total_net_position >= 0;
 
@@ -289,7 +289,7 @@ export function BankBalancesWidget() {
                                 total_net_position,
                                 defaultCurrency,
                                 locale,
-                                appSettings.showDecimalPlaces ?? 2,
+                                appSettings.showDecimalPlaces,
                             );
                             return (
                                 <CompactValueDisclosure
@@ -386,8 +386,7 @@ export function BankBalancesWidget() {
                                                 balance,
                                                 a.currency,
                                                 locale,
-                                                appSettings.showDecimalPlaces ??
-                                                    2,
+                                                appSettings.showDecimalPlaces,
                                             );
                                             return (
                                                 <CompactValueDisclosure
@@ -476,7 +475,7 @@ export function BankBalancesWidget() {
                                     v,
                                     defaultCurrency,
                                     locale,
-                                    appSettings.showDecimalPlaces ?? 2,
+                                    appSettings.showDecimalPlaces,
                                 )
                             }
                             tooltipTitle={(d) =>
@@ -491,7 +490,7 @@ export function BankBalancesWidget() {
                                     v,
                                     defaultCurrency,
                                     locale,
-                                    appSettings.showDecimalPlaces ?? 2,
+                                    appSettings.showDecimalPlaces,
                                 )
                             }
                         />

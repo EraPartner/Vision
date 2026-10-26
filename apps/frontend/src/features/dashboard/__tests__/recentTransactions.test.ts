@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { fetchRecentDashboardTransactions } from "@/features/dashboard/recentTransactions";
 import { server } from "@/test/msw/server";
 import { ok, TRANSACTION_STUB } from "@/test/msw/handlers";
+import { must } from "@/features/testing/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -25,7 +26,7 @@ function servePages(pages: Array<(offset: number) => Response>) {
         http.get(`${API_BASE}/api/transactions`, ({ request }) => {
             const query = Object.fromEntries(new URL(request.url).searchParams);
             requests.push(query);
-            const respond = pages[requests.length - 1] ?? pages[pages.length - 1]!;
+            const respond = pages[requests.length - 1] ?? must(pages[pages.length - 1]);
             return respond(Number(query.offset ?? 0));
         }),
     );

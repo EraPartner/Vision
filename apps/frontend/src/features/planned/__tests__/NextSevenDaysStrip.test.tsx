@@ -64,7 +64,7 @@ describe("NextSevenDaysStrip currency totals", () => {
     expect(windowSummary).not.toHaveTextContent("99");
   });
 
-  it("keeps both aggregates pending while the server totals load", async () => {
+  it("keeps both aggregates pending while the server totals load", () => {
     const payments = [payment(1, -10, "EUR"), payment(2, -99, "GBP")];
 
     renderWithApp(

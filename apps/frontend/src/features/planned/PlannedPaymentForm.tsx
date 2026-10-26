@@ -288,7 +288,7 @@ export default function PlannedPaymentForm({
         FIELD_ORDER,
     );
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = (e: React.SubmitEvent) => {
         e.preventDefault();
         if (!checkValid()) return;
         // Narrowing only — `checkValid()` has already blocked a missing due date.
@@ -322,7 +322,7 @@ export default function PlannedPaymentForm({
             amount: signedAmount,
             currency,
             due_date: dueDateStr,
-            url: url?.trim() || undefined,
+            url: url.trim() || undefined,
             is_recurring: isLoan ? true : isRecurring,
             is_loan: isLoan,
             ...(isLoan && {

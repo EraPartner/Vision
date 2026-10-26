@@ -61,7 +61,7 @@ export function ResearchAnalystTab({
     const consensus = a?.consensus;
     const presentation = analystPresentation(consensus ?? null);
     const total = presentation?.total ?? 0;
-    if (!a || !presentation) {
+    if (!a || !presentation || !consensus) {
         return (
             <p className="py-4 text-center type-callout text-label-secondary">
                 {t("research.analyst.none")}
@@ -69,7 +69,7 @@ export function ResearchAnalystTab({
         );
     }
 
-    const { strongBuy, buy, hold, sell, strongSell } = consensus!;
+    const { strongBuy, buy, hold, sell, strongSell } = consensus;
     const verdict = t(presentation.verdictKey);
     const verdictColor =
         presentation.tone === "success"
@@ -81,7 +81,7 @@ export function ResearchAnalystTab({
     return (
         <div className="space-y-5">
             <div className="flex justify-end">
-                <ProvenanceBadge meta={result?.meta} />
+                <ProvenanceBadge meta={result.meta} />
             </div>
             <div className="flex items-start gap-6">
                 <div className="shrink-0 text-center">
@@ -175,7 +175,7 @@ export function ResearchAnalystTab({
                 </div>
             )}
 
-            {a.recentActions != null && a.recentActions.length > 0 && (
+            {a.recentActions.length > 0 && (
                 <section className="space-y-2">
                     <h3 className="type-headline text-foreground">
                         {t("market.recentActions")}

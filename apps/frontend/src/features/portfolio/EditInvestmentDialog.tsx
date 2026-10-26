@@ -129,7 +129,7 @@ export function EditInvestmentDialog({
             ? t("addInv.error.numberInvalid")
             : undefined;
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.SubmitEvent) => {
         e.preventDefault();
 
         // The input's `required` blocks a truly empty field, but a whitespace-only

@@ -384,7 +384,7 @@ export const AboutSection = memo(function AboutSection({
                 >
                     <Switch
                         id="admin-mode"
-                        checked={appSettings.adminMode ?? false}
+                        checked={appSettings.adminMode}
                         onCheckedChange={(v) =>
                             updateAppSettings({ adminMode: v })
                         }

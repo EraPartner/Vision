@@ -16,6 +16,7 @@ import {
 } from "@vision/shared-utils/belgian-tax/household";
 import type { BelgianTaxHouseholdV2 } from "@/lib/belgianTax/householdTypes";
 import { HouseholdBreakdownCard } from "./HouseholdBreakdownCard";
+import { must } from "@/features/testing/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -101,15 +102,15 @@ describe("HouseholdBreakdownCard", () => {
         const finalRow = within(table).getByRole("row", { name: /Income tax incl\. communal surcharge/ });
         const [a, b] = expected.partners;
         const cells = within(finalRow).getAllByRole("cell");
-        expect(amount(cells[1]?.textContent)).toBeCloseTo(a!.totalPIT, 1);
-        expect(amount(cells[2]?.textContent)).toBeCloseTo(b!.totalPIT, 1);
-        expect(amount(cells[3]?.textContent)).toBeCloseTo(a!.totalPIT + b!.totalPIT, 1);
+        expect(amount(cells[1]?.textContent)).toBeCloseTo(must(a).totalPIT, 1);
+        expect(amount(cells[2]?.textContent)).toBeCloseTo(must(b).totalPIT, 1);
+        expect(amount(cells[3]?.textContent)).toBeCloseTo(must(a).totalPIT + must(b).totalPIT, 1);
 
         const taxable = within(table).getByRole("row", { name: /Taxable income/ });
         // The quotient moves income to B, so B's taxable income is positive.
-        expect(b!.taxableIncome).toBeGreaterThan(0);
+        expect(must(b).taxableIncome).toBeGreaterThan(0);
         expect(amount(within(taxable).getAllByRole("cell")[2]?.textContent)).toBeCloseTo(
-            b!.taxableIncome,
+            must(b).taxableIncome,
             1,
         );
 
@@ -125,8 +126,8 @@ describe("HouseholdBreakdownCard", () => {
         const expected = computeHouseholdTax(household);
         expect(expected.assessment.mode).toBe("separate");
         const [a, b] = expected.partners;
-        expect(b!.exemption.total).toBeGreaterThan(0);
-        expect(b!.exemption.applied).toBe(0);
+        expect(must(b).exemption.total).toBeGreaterThan(0);
+        expect(must(b).exemption.applied).toBe(0);
         serve(household);
         const user = userEvent.setup();
         renderWithApp(<HouseholdBreakdownCard viewedYear={household.taxYear} />);
@@ -137,12 +138,12 @@ describe("HouseholdBreakdownCard", () => {
             within(within(table).getByRole("row", { name })).getAllByRole("cell");
 
         const taxFree = cellsOf(/^Tax-free sum/);
-        expect(amount(taxFree[1]?.textContent)).toBeCloseTo(a!.exemption.applied, 1);
+        expect(amount(taxFree[1]?.textContent)).toBeCloseTo(must(a).exemption.applied, 1);
         expect(amount(taxFree[2]?.textContent)).toBe(0);
-        expect(amount(taxFree[3]?.textContent)).toBeCloseTo(a!.exemption.applied, 1);
+        expect(amount(taxFree[3]?.textContent)).toBeCloseTo(must(a).exemption.applied, 1);
 
         const adjustment = cellsOf(/Regional factor and communal surcharge/);
-        const adjustmentA = a!.totalPIT - (a!.pitAfterExemption - a!.reductionsApplied);
+        const adjustmentA = must(a).totalPIT - (must(a).pitAfterExemption - must(a).reductionsApplied);
         expect(adjustmentA).not.toBe(0);
         expect(amount(adjustment[1]?.textContent)).toBeCloseTo(Math.abs(adjustmentA), 1);
 
@@ -256,9 +257,9 @@ describe("HouseholdBreakdownCard", () => {
         const final = within(
             within(table).getByRole("row", { name: /Income tax incl\. communal surcharge/ }),
         ).getAllByRole("cell");
-        expect(amount(final[2]?.textContent)).toBeCloseTo(frozen.partners[1]!.totalPIT, 1);
-        expect(frozen.partners[1]!.totalPIT).not.toBeCloseTo(
-            computeHouseholdTax(household).partners[1]!.totalPIT,
+        expect(amount(final[2]?.textContent)).toBeCloseTo(must(frozen.partners[1]).totalPIT, 1);
+        expect(must(frozen.partners[1]).totalPIT).not.toBeCloseTo(
+            must(computeHouseholdTax(household).partners[1]).totalPIT,
             0,
         );
     });

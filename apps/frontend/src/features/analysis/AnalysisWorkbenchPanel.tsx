@@ -13,6 +13,7 @@ import { isAnalysisResultComplete } from "./analysisChartModel";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import {
     analysisCatalogLabel,
+    analysisCellText,
     formatAnalysisValue,
 } from "./analysisPresentation";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -98,14 +99,15 @@ interface Props {
     attachments: ScenarioAttachment[];
     onResultChange: (result: AnalysisResult) => void;
 }
+interface OutputColumn {
+    id: string;
+    type: string;
+    label?: string;
+    unit?: AnalysisUnit;
+}
 interface ExtensionOutput {
     rows?: Array<Record<string, AnalysisValue>>;
-    columns?: Array<{
-        id: string;
-        type: string;
-        label?: string;
-        unit?: AnalysisUnit;
-    }>;
+    columns?: OutputColumn[];
     summaries?: Record<string, AnalysisValue>;
     errors?: Array<{ message?: string; formulaId?: string; rowIndex?: number }>;
     lineage?: Array<Record<string, unknown>>;
@@ -250,8 +252,8 @@ export function AnalysisWorkbenchPanel(props: Props) {
         columns,
         window: props.result?.window,
         coverage: props.result?.coverage,
-        complete: Boolean(complete),
-        inputComplete: Boolean(complete),
+        complete,
+        inputComplete: complete,
         formulas,
         workbench: props.config,
         assumptions,
@@ -271,6 +273,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
             setPreviewBusy(false);
             return;
         }
+        const { result } = props;
         setPreview(null);
         setPreviewError("");
         setPreviewBusy(true);
@@ -278,16 +281,16 @@ export function AnalysisWorkbenchPanel(props: Props) {
         const timer = setTimeout(() => {
             void evaluateAnalysisExtension({
                 operation: "formulas",
-                rows: props.result!.rows,
-                window: props.result!.window,
-                coverage: props.result!.coverage,
+                rows: result.rows,
+                window: result.window,
+                coverage: result.coverage,
                 columns:
-                    props.result!.declaredColumns != null &&
-                    props.result!.declaredColumns.length > 0
-                        ? props.result!.declaredColumns
-                        : props.result!.columns,
-                complete: Boolean(complete),
-                inputComplete: Boolean(complete),
+                    result.declaredColumns != null &&
+                    result.declaredColumns.length > 0
+                        ? result.declaredColumns
+                        : result.columns,
+                complete,
+                inputComplete: complete,
                 formulas: parse(props.formulasJson, []),
                 workbench: props.config,
                 assumptionUnits: Object.fromEntries(
@@ -311,7 +314,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                         setPreviewError("");
                     }
                 })
-                .catch((cause) => {
+                .catch((cause: unknown) => {
                     if (!cancelled)
                         setPreviewError(
                             cause instanceof Error
@@ -429,14 +432,18 @@ export function AnalysisWorkbenchPanel(props: Props) {
                         ...props.result.window,
                         returnedRows: response.rows.length,
                     },
-                    formulaErrors: response.errors
-                        ?.filter((e) => e.formulaId)
-                        .map((e) => ({
-                            formulaId: e.formulaId!,
-                            rowIndex: e.rowIndex,
-                            code: "FORMULA_ERROR",
-                            message: e.message ?? "",
-                        })),
+                    formulaErrors: response.errors?.flatMap((e) =>
+                        e.formulaId
+                            ? [
+                                  {
+                                      formulaId: e.formulaId,
+                                      rowIndex: e.rowIndex,
+                                      code: "FORMULA_ERROR",
+                                      message: e.message ?? "",
+                                  },
+                              ]
+                            : [],
+                    ),
                     formulaSummaries: response.summaries,
                 });
             }
@@ -631,15 +638,15 @@ export function AnalysisWorkbenchPanel(props: Props) {
             ? step.columnIds.map(String).map(fieldLabel).join(", ")
             : "";
         return [
-            tr(`option.${String(step.type)}`),
-            subject ? fieldLabel(String(subject)) : fields,
-            step.targetType ? tr(`option.${String(step.targetType)}`) : "",
+            tr(`option.${analysisCellText(step.type)}`),
+            subject ? fieldLabel(analysisCellText(subject)) : fields,
+            step.targetType
+                ? tr(`option.${analysisCellText(step.targetType)}`)
+                : "",
             step.formula
-                ? String(
-                      (step.formula as { label?: string; id?: string }).label ||
-                          (step.formula as { id?: string }).id ||
-                          "",
-                  )
+                ? (step.formula as { label?: string; id?: string }).label ||
+                  (step.formula as { id?: string }).id ||
+                  ""
                 : "",
         ]
             .filter(Boolean)
@@ -790,7 +797,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                                             "decimal",
                                                     })),
                                             ]
-                                        ).map((c) => (
+                                        ).map((c: OutputColumn) => (
                                             <TableHead
                                                 key={c.id}
                                                 className="whitespace-nowrap"
@@ -798,14 +805,10 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                                 {fieldLabel(c.id) !== c.id
                                                     ? fieldLabel(c.id)
                                                     : analysisCatalogLabel(
-                                                          "label" in c
-                                                              ? (c.label ??
-                                                                    c.id)
-                                                              : c.id,
+                                                          c.label ?? c.id,
                                                           t,
                                                       )}
-                                                {"unit" in c &&
-                                                    c.unit != null && (
+                                                {c.unit != null && (
                                                         <span className="block type-caption font-normal text-label-tertiary">
                                                             {unitLabel(c.unit)}
                                                         </span>
@@ -959,9 +962,9 @@ export function AnalysisWorkbenchPanel(props: Props) {
                 )}
                 {value.lineage?.map((l, i) => (
                     <p key={i} className="type-footnote text-label-secondary">
-                        {String(l.type)}: {String(l.inputRows ?? "")} /{" "}
-                        {String(l.outputRows ?? "")} {tr("unmatched")}:{" "}
-                        {String(l.unmatchedRows ?? 0)}
+                        {analysisCellText(l.type)}: {analysisCellText(l.inputRows)} /{" "}
+                        {analysisCellText(l.outputRows)} {tr("unmatched")}:{" "}
+                        {analysisCellText(l.unmatchedRows, "0")}
                     </p>
                 ))}
             </div>
@@ -1154,7 +1157,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                             {props.config.steps != null &&
                                 props.config.steps.length > 0 && (
                                     <List>
-                                        {props.config.steps?.map((s, i) => (
+                                        {props.config.steps.map((s, i) => (
                                             <li
                                                 key={i}
                                                 className="flex min-h-11 items-center justify-between gap-2 px-4 py-2 type-body"
@@ -1188,7 +1191,6 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                             busy ||
                                             props.sourceStale ||
                                             !props.result ||
-                                            props.config.steps == null ||
                                             props.config.steps.length === 0
                                         }
                                         onClick={() =>

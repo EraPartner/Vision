@@ -26,6 +26,7 @@ import {
 } from "@/test/msw/handlers";
 import { TransactionImportCard } from "@/features/imports/TransactionImportCard";
 import type { SavedParserConfig } from "@/lib/api/imports";
+import { must } from "@/features/testing/must";
 
 vi.mock("sonner", () => ({
     toast: {
@@ -86,7 +87,7 @@ async function runCustomImport(user: ReturnType<typeof userEvent.setup>) {
         document.querySelector<HTMLInputElement>('input[type="file"]');
     expect(input).not.toBeNull();
     await user.upload(
-        input!,
+        must(input),
         new File(["date,desc,amount\n"], "statement.csv", { type: "text/csv" }),
     );
 
@@ -117,7 +118,7 @@ describe("TransactionImportCard — custom-mapping import", () => {
         await waitFor(() => expect(toast.success).toHaveBeenCalled());
 
         // IMPORT_CSV_RESULT_STUB: total 3, imported 2, duplicates 1.
-        const message = vi.mocked(toast.success).mock.calls[0]![0] as string;
+        const message = must(vi.mocked(toast.success).mock.calls[0])[0] as string;
         expect(message).toBe(
             "Imported 2 transactions (1 duplicates skipped, 3 total processed)",
         );
@@ -267,9 +268,9 @@ describe("TransactionImportCard — custom-mapping import", () => {
             ...new TextEncoder().encode(";Amount\n2026-01-01;Shop;-12.99"),
         ]);
         await user.upload(
-            card.container.querySelector<HTMLInputElement>(
+            must(card.container.querySelector<HTMLInputElement>(
                 'input[type="file"]',
-            )!,
+            )),
             new File([bytes], "encoded.csv", { type: "text/csv" }),
         );
         expect(await screen.findByText("3 columns")).toBeInTheDocument();

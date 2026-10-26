@@ -113,7 +113,7 @@ export const BehaviorSection = memo(function BehaviorSection() {
                 <SelectSettingRow
                     title={t("settings.general.startupSection")}
                     description={t("settings.general.startupSectionHint")}
-                    value={appSettings.startupSection ?? "budgeting"}
+                    value={appSettings.startupSection}
                     onValueChange={(v) =>
                         updateAppSettings({
                             startupSection: v as StartupSection,
@@ -134,7 +134,7 @@ export const BehaviorSection = memo(function BehaviorSection() {
                 <SelectSettingRow
                     title={t("settings.general.costBasisMethod")}
                     description={t("settings.general.costBasisMethodHint")}
-                    value={appSettings.costBasisMethod ?? "weighted_avg"}
+                    value={appSettings.costBasisMethod}
                     onValueChange={(v) => {
                         void handleCostBasisMethodChange(v);
                     }}
@@ -164,7 +164,7 @@ export const BehaviorSection = memo(function BehaviorSection() {
                 >
                     <Switch
                         id="auto-clear-planned"
-                        checked={appSettings.autoClearPlannedOnMatch ?? true}
+                        checked={appSettings.autoClearPlannedOnMatch}
                         onCheckedChange={(v) =>
                             updateAppSettings({ autoClearPlannedOnMatch: v })
                         }

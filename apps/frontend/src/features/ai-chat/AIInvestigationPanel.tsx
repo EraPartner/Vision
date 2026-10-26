@@ -130,9 +130,7 @@ function EvidenceAnswer({ answer }: { answer: AiAnswer }) {
                                     {selectedEvidence.excerpt}
                                 </p>
                                 {selectedEvidence.kind === "web" &&
-                                /^https:\/\//.test(
-                                    selectedEvidence.locator ?? "",
-                                ) ? (
+                                /^https:\/\//.test(selectedEvidence.locator) ? (
                                     <a
                                         className="inline-block break-all text-primary underline underline-offset-4 decoration-primary/50 focus-ring rounded-chip"
                                         href={selectedEvidence.locator}
@@ -253,7 +251,7 @@ export function AIInvestigationPanel() {
         void apiClient
             .uploadResearchDocument(file)
             .then((document) => setDocuments((items) => [document, ...items]))
-            .catch((cause) => setError(failureMessage(cause)))
+            .catch((cause: unknown) => setError(failureMessage(cause)))
             .finally(() => setBusy(false));
     };
     const deleteDocument = async (document: ResearchDocument) => {
@@ -274,7 +272,7 @@ export function AIInvestigationPanel() {
                     items.filter((item) => item.id !== document.id),
                 ),
             )
-            .catch((cause) => setError(failureMessage(cause)));
+            .catch((cause: unknown) => setError(failureMessage(cause)));
     };
     const runDisabled =
         busy ||
@@ -584,7 +582,7 @@ export function AIInvestigationPanel() {
                                     input().scope,
                                 )
                                 .then(setJob)
-                                .catch((cause) =>
+                                .catch((cause: unknown) =>
                                     setError(failureMessage(cause)),
                                 )
                         }
@@ -602,7 +600,7 @@ export function AIInvestigationPanel() {
                             void apiClient
                                 .deleteInvestigation(job.id)
                                 .then(() => setJob(null))
-                                .catch((cause) =>
+                                .catch((cause: unknown) =>
                                     setError(failureMessage(cause)),
                                 )
                                 .finally(() => setBusy(false));

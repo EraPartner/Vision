@@ -78,8 +78,9 @@ describe("RecipientPatternsDialog", () => {
         expect(await screen.findByRole("status")).toHaveTextContent(
             "2 existing payees",
         );
-        await act(async () => {
+        await act(() => {
             finish({ matchCount: 99, recipientIds: [] });
+            return Promise.resolve();
         });
         expect(screen.getByRole("status")).toHaveTextContent(
             "2 existing payees",

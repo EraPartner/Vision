@@ -9,6 +9,16 @@ import { PlannedPaymentsTable } from "@/features/planned/PlannedPaymentsTable";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 import { asCurrencyCode, asPlannedTransactionId, asTransactionId } from "@vision/types/brands";
 
+const cellText = vi.hoisted(
+    () =>
+        (value: unknown): string =>
+            typeof value === "string" ||
+            typeof value === "number" ||
+            typeof value === "boolean"
+                ? String(value)
+                : "",
+);
+
 const translations = vi.hoisted<Record<string, string>>(() => ({
     "common.delete": "Delete",
     "common.edit": "Edit",
@@ -74,12 +84,19 @@ vi.mock("@/components/shared/VirtualDataTable", () => ({
     }) => (
         <div>
             {data.map((row, rowIndex) => (
-                <div key={String(row.id ?? rowIndex)}>
+                <div
+                    key={
+                        typeof row.id === "string" ||
+                        typeof row.id === "number"
+                            ? row.id
+                            : rowIndex
+                    }
+                >
                     {columns.map((column) => (
                         <div key={`${rowIndex}-${column.key}`}>
                             {column.render
                                 ? column.render(row)
-                                : String(row[column.key] ?? "")}
+                                : cellText(row[column.key])}
                         </div>
                     ))}
                 </div>

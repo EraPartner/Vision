@@ -131,7 +131,9 @@ describe("SavedChartsSection", () => {
         await waitFor(() =>
             expect(mutate).toHaveBeenCalledWith(
                 22,
-                expect.objectContaining({ onSuccess: expect.any(Function) }),
+                expect.objectContaining({
+                    onSuccess: expect.any(Function) as unknown,
+                }),
             ),
         );
         expect(mutate).toHaveBeenCalledTimes(1);

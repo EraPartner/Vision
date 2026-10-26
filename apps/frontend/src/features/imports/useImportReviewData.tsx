@@ -229,7 +229,7 @@ export function useImportReviewMutations(
         hasEditErrors,
         reviewSavedEdits: async () => {
             await queue.current;
-            await queryClient.fetchQuery({
+            await queryClient.query({
                 queryKey: importKeys.preview(batchId),
                 queryFn: () => apiClient.getImportPreview(batchId),
                 staleTime: 0,

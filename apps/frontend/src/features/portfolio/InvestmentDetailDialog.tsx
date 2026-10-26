@@ -364,11 +364,12 @@ function TransactionList({
         overscan: 6,
     });
     const items = virtualizer.getVirtualItems();
-    const paddingTop = items.length > 0 ? items[0]!.start : 0;
-    const paddingBottom =
-        items.length > 0
-            ? virtualizer.getTotalSize() - items[items.length - 1]!.end
-            : 0;
+    const firstItem = items[0];
+    const lastItem = items[items.length - 1];
+    const paddingTop = firstItem ? firstItem.start : 0;
+    const paddingBottom = lastItem
+        ? virtualizer.getTotalSize() - lastItem.end
+        : 0;
 
     return (
         <div ref={scrollRef} className="max-h-[400px] overflow-y-auto pr-2">
@@ -491,7 +492,7 @@ export function InvestmentDetailDialog({
     const unitBased = isUnitBased(investment.assetClass);
     const fixedIncome = isFixedIncome(investment.assetClass);
     const realEstate = isRealEstate(investment.assetClass);
-    const archived = investment.is_active === false;
+    const archived = !investment.is_active;
 
     // Anything FX-related is shown only when the holding is in a foreign currency;
     // for base-currency holdings the conversion is a no-op and the extra rows
@@ -1033,8 +1034,7 @@ export function InvestmentDetailDialog({
                                                     },
                                                 )}
                                                 value={fmt(
-                                                    fxSummary.nativeCurrentValue ??
-                                                        investment.currentValue,
+                                                    fxSummary.nativeCurrentValue,
                                                     {
                                                         currency:
                                                             nativeCurrency,
@@ -1060,13 +1060,12 @@ export function InvestmentDetailDialog({
                                             <FactRow
                                                 label={t("portfolio.assetGain")}
                                                 tone={toneClass(
-                                                    fxSummary.assetGain ?? 0,
+                                                    fxSummary.assetGain,
                                                 )}
                                                 value={
                                                     <Money
                                                         amount={
-                                                            fxSummary.assetGain ??
-                                                            0
+                                                            fxSummary.assetGain
                                                         }
                                                         currency={
                                                             targetCurrency

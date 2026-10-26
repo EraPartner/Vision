@@ -4,6 +4,7 @@ import {
     editPortfolioTxnSchema as createEditPortfolioTxnSchema,
     parseNonNegative as parseNonNegativeWithFormat,
 } from "../portfolioTxnSchema";
+import { must } from "@/features/testing/must";
 
 const addPortfolioTxnSchema = (
     flags: Parameters<typeof createAddPortfolioTxnSchema>[0],
@@ -29,7 +30,7 @@ function firstIssue(result: {
     success: boolean;
     error?: { issues: { message: string }[] };
 }) {
-    return result.success ? undefined : result.error!.issues[0]?.message;
+    return result.success ? undefined : must(result.error).issues[0]?.message;
 }
 
 describe("parseNonNegative", () => {

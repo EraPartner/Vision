@@ -155,28 +155,24 @@ function BatchRow({
                     <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
                         <span>{batch.adapter_name}</span>
                         <span>{started}</span>
-                        {batch.rows_imported != null && (
-                            <>
-                                <span className="text-success">
-                                    {t("importPage.imported", {
-                                        n: batch.rows_imported,
-                                    })}
-                                </span>
-                                {(batch.rows_duplicate ?? 0) > 0 && (
-                                    <span className="text-warning">
-                                        {t("importPage.duplicates", {
-                                            n: batch.rows_duplicate,
-                                        })}
-                                    </span>
-                                )}
-                                {(batch.rows_error ?? 0) > 0 && (
-                                    <span className="text-destructive">
-                                        {t("importPage.errors", {
-                                            n: batch.rows_error,
-                                        })}
-                                    </span>
-                                )}
-                            </>
+                        <span className="text-success">
+                            {t("importPage.imported", {
+                                n: batch.rows_imported,
+                            })}
+                        </span>
+                        {batch.rows_duplicate > 0 && (
+                            <span className="text-warning">
+                                {t("importPage.duplicates", {
+                                    n: batch.rows_duplicate,
+                                })}
+                            </span>
+                        )}
+                        {batch.rows_error > 0 && (
+                            <span className="text-destructive">
+                                {t("importPage.errors", {
+                                    n: batch.rows_error,
+                                })}
+                            </span>
                         )}
                         {batch.transactions_remaining > 0 && (
                             <span>

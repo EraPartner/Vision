@@ -261,7 +261,7 @@ describe("CloseAccountDialog portfolio lots", () => {
             expect(toastMocks.error).toHaveBeenCalledWith(
                 "Portfolio lots moved, but the account stayed open",
                 expect.objectContaining({
-                    description: expect.stringMatching(/2 lot transactions/i),
+                    description: expect.stringMatching(/2 lot transactions/i) as string,
                 }),
             ),
         );

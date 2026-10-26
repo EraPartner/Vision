@@ -285,7 +285,7 @@ export function AnalysisInterchangePanel({
                                     ],
                                 });
                             })
-                            .catch((cause) =>
+                            .catch((cause: unknown) =>
                                 setError(
                                     cause instanceof Error
                                         ? cause.message

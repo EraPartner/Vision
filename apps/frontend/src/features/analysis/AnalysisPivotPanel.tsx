@@ -32,7 +32,10 @@ import {
 } from "@/lib/api/analysis";
 import { Button } from "@/components/ui/button";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
-import { formatAnalysisValue } from "./analysisPresentation";
+import {
+    analysisCellText,
+    formatAnalysisValue,
+} from "./analysisPresentation";
 
 export function AnalysisPivotPanel({
     plan,
@@ -98,8 +101,8 @@ export function AnalysisPivotPanel({
         (ids: string[]) =>
         (a: Record<string, unknown>, b: Record<string, unknown>) => {
             for (const id of ids) {
-                const order = String(a[id] ?? "").localeCompare(
-                    String(b[id] ?? ""),
+                const order = analysisCellText(a[id]).localeCompare(
+                    analysisCellText(b[id]),
                     undefined,
                     { numeric: true },
                 );
@@ -641,12 +644,7 @@ export function AnalysisPivotPanel({
                                                                     )
                                                                     .map(
                                                                         (key) =>
-                                                                            String(
-                                                                                column[
-                                                                                    key
-                                                                                ] ??
-                                                                                    "—",
-                                                                            ),
+                                                                            analysisCellText(column[key], "—"),
                                                                     )
                                                                     .join(
                                                                         " / ",
@@ -700,9 +698,7 @@ export function AnalysisPivotPanel({
                                                 {config.columns
                                                     .slice(0, columnLevel)
                                                     .map((key) =>
-                                                        String(
-                                                            column[key] ?? "—",
-                                                        ),
+                                                        analysisCellText(column[key], "—"),
                                                     )
                                                     .join(" / ")}{" "}
                                                 ·{" "}
@@ -781,12 +777,7 @@ export function AnalysisPivotPanel({
                                                                     ? "analysis.ext.pivot.collapse"
                                                                     : "analysis.ext.pivot.expand",
                                                                 {
-                                                                    field: String(
-                                                                        row[
-                                                                            id
-                                                                        ] ??
-                                                                            "—",
-                                                                    ),
+                                                                    field: analysisCellText(row[id], "—"),
                                                                 },
                                                             )}
                                                             className="mr-1 h-6 w-6"
@@ -838,7 +829,7 @@ export function AnalysisPivotPanel({
                                                     ? t(
                                                           "analysis.ext.pivot.total",
                                                       )
-                                                    : String(row[id] ?? "—")}
+                                                    : analysisCellText(row[id], "—")}
                                             </TableHead>
                                         ))}
                                         {matrixColumns.flatMap(
@@ -880,12 +871,12 @@ export function AnalysisPivotPanel({
                                                                 )}
                                                                 disabled={!cell}
                                                                 onClick={() =>
+                                                                    source &&
                                                                     cell &&
                                                                     onDrill(
-                                                                        source!
-                                                                            .groups,
+                                                                        source.groups,
                                                                         Object.fromEntries(
-                                                                            source!.groups.map(
+                                                                            source.groups.map(
                                                                                 (
                                                                                     key,
                                                                                 ) => [

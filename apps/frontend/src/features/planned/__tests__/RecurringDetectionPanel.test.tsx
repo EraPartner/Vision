@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
+import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, PLANNED_TRANSACTION_STUB } from "@/test/msw/handlers";
@@ -20,7 +21,10 @@ const API_BASE = "http://localhost:3002";
  * that plannedMatchService can never auto-match against the real positive
  * transaction.
  */
-function patternFixture(direction: "income" | "expense") {
+function patternFixture(
+    direction: "income" | "expense",
+    accountId: number | null = 1,
+) {
     return {
         recipientId: direction === "income" ? 7 : 8,
         recipientName: direction === "income" ? "Employer NV" : "Landlord SA",
@@ -35,7 +39,7 @@ function patternFixture(direction: "income" | "expense") {
         categoryId: null,
         categoryName: null,
         bankAccount: "BE12",
-        accountId: 1,
+        accountId,
         firstSeen: "2025-01-28",
         lastSeen: "2025-06-28",
         predictedNext: "2025-07-28",
@@ -45,11 +49,17 @@ function patternFixture(direction: "income" | "expense") {
     };
 }
 
-function servePatternsAndCapturePost(direction: "income" | "expense") {
+function servePatternsAndCapturePost(
+    direction: "income" | "expense",
+    accountId: number | null = 1,
+) {
     const captured: { body: Record<string, unknown> | null } = { body: null };
     server.use(
         http.get(`${API_BASE}/api/info/recurring-patterns`, () =>
-            ok({ patterns: [patternFixture(direction)], total: 1 }),
+            ok({
+                patterns: [patternFixture(direction, accountId)],
+                total: 1,
+            }),
         ),
         http.post(
             `${API_BASE}/api/planned-transactions`,
@@ -79,7 +89,7 @@ async function clickTrack(user: ReturnType<typeof userEvent.setup>) {
 
 describe("RecurringDetectionPanel — detected sign carried into the planned payment", () => {
     beforeEach(() => {
-        window.localStorage?.clear();
+        window.localStorage.clear();
     });
 
     it("creates a POSITIVE planned amount for a detected income pattern", async () => {
@@ -129,6 +139,22 @@ describe("RecurringDetectionPanel — detected sign carried into the planned pay
             amount: -2500, // expense → negative, auto-matchable against the debit
             recipient_id: 8,
         });
+    });
+
+    it("does not post a planned payment for a pattern without an account", async () => {
+        const user = userEvent.setup();
+        const captured = servePatternsAndCapturePost("expense", null);
+        const toastError = vi.spyOn(toast, "error");
+
+        renderWithApp(<RecurringDetectionPanel />);
+
+        expect(
+            await screen.findByText(/recurring payments found/i),
+        ).toBeInTheDocument();
+        await clickTrack(user);
+
+        await waitFor(() => expect(toastError).toHaveBeenCalled());
+        expect(captured.body).toBeNull();
     });
 
     it("keeps amount changes collapsed until the user opens the disclosure", async () => {

@@ -105,7 +105,7 @@ export function MonthToDateHero({ currency, className }: MonthToDateHeroProps) {
         return t(diff < 0 ? "home.pace.under" : "home.pace.over", vars);
     })();
 
-    const showDecimals = appSettings.showDecimalPlaces ?? 2;
+    const showDecimals = appSettings.showDecimalPlaces;
     const trio = [
         { key: "income", label: t("home.incomeSoFar"), amount: incomeSoFar, tone: "text-gain" },
         {

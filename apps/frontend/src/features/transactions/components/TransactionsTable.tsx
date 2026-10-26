@@ -70,7 +70,7 @@ interface TransactionsTableProps {
         recipientId: RecipientId | null,
         recipientName: string | null,
     ) => void;
-    cancelEditingRef: React.MutableRefObject<(() => void) | null>;
+    cancelEditingRef: React.RefObject<(() => void) | null>;
     onEditingChange: (editing: boolean) => void;
     actions?: React.ReactNode;
     updatePending: boolean;
@@ -491,10 +491,8 @@ export function TransactionsTable({
                 ),
             });
         if (compact) {
-            const recipient = core.find(
-                (column) => column.key === "recipient",
-            )!;
-            const category = core.find((column) => column.key === "category")!;
+            const recipient = core.find((column) => column.key === "recipient");
+            const category = core.find((column) => column.key === "category");
             const summary: Column<TableTransaction> = {
                 key: "compactSummary",
                 header: t("txPage.col.recipient"),
@@ -511,7 +509,7 @@ export function TransactionsTable({
                             )}
                         </span>
                         {isEditing ? (
-                            recipient.render?.(row, true)
+                            recipient?.render?.(row, true)
                         ) : (
                             <span
                                 className={cn(
@@ -527,7 +525,7 @@ export function TransactionsTable({
                             {row.bankLabel || row.bank}
                         </span>
                         <div className="[&_.line-clamp-2]:line-clamp-none">
-                            {category.render?.(row, isEditing)}
+                            {category?.render?.(row, isEditing)}
                         </div>
                         {row.memo && (
                             <span className="type-footnote text-label-secondary">

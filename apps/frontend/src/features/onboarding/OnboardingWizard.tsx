@@ -87,13 +87,13 @@ const WELCOME_HEADING = `font-display type-title-1 text-foreground ${HEADING_FOC
  * with no letters at all falls back to the adapter key.
  */
 function bankMonogram(adapter: { key: string; name: string }): string {
-    const words = (adapter.name ?? "").split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+    const words = adapter.name.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
     const [first = "", second = ""] = words;
     const fromName =
         first.length >= 2 ? first.slice(0, 2) : first + second.slice(0, 1);
     const mono =
         fromName ||
-        (adapter.key ?? "").replace(/[^\p{L}\p{N}]/gu, "").slice(0, 2);
+        adapter.key.replace(/[^\p{L}\p{N}]/gu, "").slice(0, 2);
     return mono ? mono.charAt(0).toUpperCase() + mono.slice(1) : "?";
 }
 
@@ -567,9 +567,10 @@ export function OnboardingWizard({
             // happened. The batch is real and staged — it just needs the review page,
             // so this arm offers that instead of claiming a result.
             if (isReviewRequired(result)) {
-                const rows = Object.values(
-                    result.match_source_counts ?? {},
-                ).reduce((sum, n) => sum + (n ?? 0), 0);
+                const rows = Object.values(result.match_source_counts).reduce(
+                    (sum, n) => sum + n,
+                    0,
+                );
                 setReviewBatch({ batchId: result.batch_id, rows });
                 toast.info(
                     t("onboarding.toast.reviewRequired", { n: String(rows) }),

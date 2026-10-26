@@ -267,7 +267,7 @@ export default function PerformanceBreakdown({
                                             classInvested,
                                             defaultCurrency,
                                             locale,
-                                            appSettings.showDecimalPlaces ?? 2,
+                                            appSettings.showDecimalPlaces,
                                         ),
                                     })}
                                 </div>

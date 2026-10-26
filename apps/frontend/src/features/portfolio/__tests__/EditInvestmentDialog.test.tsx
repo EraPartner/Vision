@@ -15,6 +15,7 @@ import {
 import { EditInvestmentDialog } from "@/features/portfolio/EditInvestmentDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
 import { asCurrencyCode, asInvestmentId } from "@vision/types/brands";
+import { must } from "@/features/testing/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -281,7 +282,7 @@ describe("EditInvestmentDialog", () => {
 
     /** The Radix overlay — clicking it is the "stray click next to the dialog". */
     const overlay = () =>
-        document.querySelector<HTMLElement>(".fixed.inset-0.modal-overlay")!;
+        must(document.querySelector<HTMLElement>(".fixed.inset-0.modal-overlay"));
 
     it("keeps unsaved edits when dismissed by an outside click", async () => {
         // Arrange
@@ -371,7 +372,7 @@ describe("EditInvestmentDialog", () => {
 describe("manual price validation", () => {
     it("keeps invalid text for correction without saving zero and accepts an explicit zero", async () => {
         const update = vi.fn(async ({ request }: { request: Request }) => {
-            const body = await request.json();
+            const body = (await request.json()) as Record<string, unknown>;
             expect(body.current_price).toBe(0);
             return ok(investmentRow(body));
         });

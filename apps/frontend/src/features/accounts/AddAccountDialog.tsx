@@ -311,7 +311,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
         if (holdingsOnly) setOpeningBalance("");
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = (e: React.SubmitEvent) => {
         e.preventDefault();
         const holdingsOnly = isHoldingsOnlyPortfolioType(form.type);
         // Validation + string normalization live in accountFormSchema; the

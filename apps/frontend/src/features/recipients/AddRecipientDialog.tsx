@@ -23,7 +23,7 @@ export function AddRecipientDialog() {
     const createMutation = useCreateRecipient();
     const [form, setForm] = useState({ name: "", notes: "" });
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = (e: React.SubmitEvent) => {
         e.preventDefault();
         setSubmitted(true);
         if (!form.name.trim()) {

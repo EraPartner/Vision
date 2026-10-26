@@ -31,7 +31,7 @@ export function BulkRecipientDialog({
     const { t } = useLanguage();
     const [recipientId, setRecipientId] = useState<RecipientId | null>(null);
 
-    function handleApply(e: React.FormEvent) {
+    function handleApply(e: React.SubmitEvent) {
         e.preventDefault();
         if (recipientId == null) return;
         onApply(recipientId);

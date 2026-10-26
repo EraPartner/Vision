@@ -296,7 +296,7 @@ export function TransactionsToolbar({
                 <DropdownMenuContent align="end" className="w-56">
                     <DropdownMenuCheckboxItem
                         checked={showAll}
-                        onCheckedChange={(checked) => onShowAllChange(checked === true)}
+                        onCheckedChange={(checked) => onShowAllChange(checked)}
                     >
                         {t("txPage.view.showExcluded")}
                     </DropdownMenuCheckboxItem>
@@ -307,7 +307,7 @@ export function TransactionsToolbar({
                             key={column.id}
                             checked={isColumnVisible(column.id)}
                             onCheckedChange={(checked) =>
-                                setColumnVisible(column.id, checked === true)
+                                setColumnVisible(column.id, checked)
                             }
                         >
                             {column.labelKey ? t(column.labelKey) : column.label}

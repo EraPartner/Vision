@@ -48,10 +48,9 @@ export function toAccountPayload(
  */
 export function toAccountEditPayload(
     values: AccountFormValues,
-    originalCurrency: string,
+    _originalCurrency: string,
     numberFormat: NumberFormat,
 ): AccountUpdate {
-    void originalCurrency;
     return toAccountPayload(values, "update", numberFormat);
 }
 

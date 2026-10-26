@@ -40,8 +40,7 @@ function ForecastInnerRollingImpl({
     // Month abbreviations follow the app language, not the number-format locale
     // (numberFormatToLocale maps 'eu' -> 'de-DE', which would yield German months).
     const monthLabelLocale = appLanguageToLocale(language);
-    const actualLabel =
-        t("cashflow.actualToDate") ?? t("cashflow.actualThisMonth");
+    const actualLabel = t("cashflow.actualToDate");
 
     const { rows, series } = useMemo(
         () => mergeForViewRolling(data, view, visibleMethodIds, actualLabel),
@@ -54,7 +53,7 @@ function ForecastInnerRollingImpl({
                 v,
                 currency,
                 locale,
-                appSettings.showDecimalPlaces ?? 2,
+                appSettings.showDecimalPlaces,
             ),
         [currency, locale, appSettings.showDecimalPlaces],
     );

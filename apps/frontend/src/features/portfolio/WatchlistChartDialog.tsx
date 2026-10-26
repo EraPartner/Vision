@@ -133,7 +133,7 @@ export function WatchlistChartDialog({
 
     if (!item) return null;
 
-    const rawTargetPrice = Number(item.target_price);
+    const rawTargetPrice = item.target_price;
     const targetPrice = Number.isFinite(rawTargetPrice) ? rawTargetPrice : 0;
     const hasValidTarget =
         Number.isFinite(rawTargetPrice) && rawTargetPrice > 0;
@@ -153,7 +153,7 @@ export function WatchlistChartDialog({
 
     // Format chart data
     const formattedData =
-        chartData?.points?.map((p) => ({
+        chartData?.points.map((p) => ({
             date: formatDateWithAppSettings(
                 new Date(p.time),
                 appSettings.dateFormat,

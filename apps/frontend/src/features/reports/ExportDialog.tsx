@@ -214,7 +214,7 @@ export function ExportDialog({
         setSections(checked ? defaultSectionSet(sectionDefs) : new Set());
     }
 
-    async function handleDownload(e: React.FormEvent) {
+    async function handleDownload(e: React.SubmitEvent) {
         e.preventDefault();
         if (
             customRangeInvalid ||

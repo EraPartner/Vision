@@ -25,7 +25,10 @@ import {
 } from "@/components/ui/disclosure";
 import { MappedColumnField } from "./ColumnSelect";
 import { SELECT_NONE } from "@/lib/selectValue";
-import { PORTFOLIO_COLUMN_FIELDS } from "./portfolioColumnFields";
+import {
+    PORTFOLIO_COLUMN_FIELDS,
+    portfolioColumnValue,
+} from "./portfolioColumnFields";
 import { ASSET_CLASSES } from "@/utils/assetClass";
 import type { PortfolioCustomConfig } from "@/lib/api/portfolioImports";
 import type { AssetClass } from "@vision/types/assetClasses";
@@ -99,9 +102,11 @@ export function PortfolioCsvColumnMapper({
     }, [config.typeColumn, preview]);
 
     const setMapping = (raw: string, canonical: string) => {
-        const next = { ...config.typeMapping };
-        if (canonical === SELECT_NONE) delete next[raw];
-        else next[raw] = canonical;
+        const { [raw]: _previous, ...others } = { ...config.typeMapping };
+        const next =
+            canonical === SELECT_NONE
+                ? others
+                : { ...config.typeMapping, [raw]: canonical };
         onChange({ ...config, typeMapping: next });
     };
 
@@ -111,7 +116,7 @@ export function PortfolioCsvColumnMapper({
     const duplicateColumns = useMemo(() => {
         const counts = new Map<string, number>();
         for (const [key] of PORTFOLIO_COLUMN_FIELDS) {
-            const v = String(config[key] ?? "").trim();
+            const v = portfolioColumnValue(config, key).trim();
             if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
         }
         return [...counts.entries()]
@@ -128,7 +133,7 @@ export function PortfolioCsvColumnMapper({
             key={key}
             id={`pf-${key}`}
             label={t(labelKey)}
-            value={String(config[key] ?? "")}
+            value={portfolioColumnValue(config, key)}
             headers={headers}
             hasHeaders={hasHeaders}
             required={required}
@@ -226,7 +231,7 @@ export function PortfolioCsvColumnMapper({
                                 </span>
                                 <Select
                                     value={
-                                        config.typeMapping?.[raw] ?? SELECT_NONE
+                                        config.typeMapping[raw] ?? SELECT_NONE
                                     }
                                     onValueChange={(v) => setMapping(raw, v)}
                                 >

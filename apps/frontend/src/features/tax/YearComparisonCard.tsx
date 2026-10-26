@@ -67,7 +67,7 @@ function comparedFrom(
 ): ComparedCalculation {
     return {
         grossIncome: calculation.grossIncome ?? 0,
-        totalPIT: calculation.totalPIT ?? 0,
+        totalPIT: calculation.totalPIT,
         effectiveRate: calculation.effectiveRate ?? 0,
         netTakeHome: calculation.netTakeHome ?? 0,
     };

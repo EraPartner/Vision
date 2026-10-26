@@ -7,6 +7,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import { BulkTagDialog } from "@/features/transactions/components/bulk/BulkTagDialog";
+import { must } from "@/features/testing/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -239,7 +240,7 @@ describe("BulkTagDialog — form submit and combobox interference", () => {
         // Enter fires with the form's submit button as default).
         const applyButton = screen.getByRole("button", { name: /apply/i });
         expect(applyButton).toHaveAttribute("type", "submit");
-        fireEvent.submit(applyButton.closest("form")!);
+        fireEvent.submit(must(applyButton.closest("form")));
 
         await waitFor(() => expect(onApply).toHaveBeenCalledTimes(1));
         expect(onApply).toHaveBeenCalledWith(["groceries"], []);

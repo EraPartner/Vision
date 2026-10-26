@@ -52,7 +52,7 @@ export function CategoryPieChart({
                     v,
                     defaultCurrency,
                     locale,
-                    appSettings.showDecimalPlaces ?? 2,
+                    appSettings.showDecimalPlaces,
                 )),
         [formatValue, defaultCurrency, locale, appSettings.showDecimalPlaces],
     );

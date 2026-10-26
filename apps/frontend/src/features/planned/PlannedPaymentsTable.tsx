@@ -245,11 +245,7 @@ export function PlannedPaymentsTable({
                 minWidth: 140,
                 render: (row) => {
                     const categoryLabel =
-                        typeof row.category === "string"
-                            ? row.category
-                            : row.category != null
-                              ? String(row.category)
-                              : "";
+                        typeof row.category === "string" ? row.category : "";
                     return categoryLabel ? (
                         <Badge variant="outline">{categoryLabel}</Badge>
                     ) : (
@@ -277,7 +273,7 @@ export function PlannedPaymentsTable({
                                 </Link>
                             ) : (
                                 t("plannedPage.execute.linked", {
-                                    n: row.executed_transaction_id ?? 0,
+                                    n: 0,
                                 })
                             )}
                         </Badge>

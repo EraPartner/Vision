@@ -69,7 +69,10 @@ export function useMarketLookupData<Quote>({
     const quoteQuery = useQuery({
         queryKey: marketKeys.quote(symbol),
         queryFn: async () => {
-            const quotes = await apiClient.getMarketQuotes<Quote>(symbol!, {
+            if (symbol === null) {
+                throw new Error("A symbol is required to load a market quote");
+            }
+            const quotes = await apiClient.getMarketQuotes<Quote>(symbol, {
                 detail: "basic",
             });
             return quotes[0] ?? null;
@@ -80,15 +83,23 @@ export function useMarketLookupData<Quote>({
     });
     const chartQuery = useQuery({
         queryKey: marketKeys.chart(symbol, range, interval),
-        queryFn: () => apiClient.getMarketChart(symbol!, range, interval),
+        queryFn: () => {
+            if (symbol === null) {
+                throw new Error("A symbol is required to load a market chart");
+            }
+            return apiClient.getMarketChart(symbol, range, interval);
+        },
         enabled: useYahoo,
         staleTime: QUERY_STALE_TIME_MS.STANDARD,
     });
     const providerChartQuery = useQuery({
         queryKey: marketKeys.providerChart(providerInvestment?.id, range),
         queryFn: async () => {
+            if (providerInvestment === undefined) {
+                throw new Error("A provider investment is required");
+            }
             const response = await getInvestmentPriceHistory(
-                providerInvestment!.id,
+                providerInvestment.id,
                 {
                     from_ms: rangeToFromMs(range),
                     db_only: false,
@@ -102,8 +113,8 @@ export function useMarketLookupData<Quote>({
                 volume: 0,
             }));
             return {
-                symbol: providerInvestment!.symbol ?? symbol ?? "",
-                currency: providerInvestment!.currency,
+                symbol: providerInvestment.symbol ?? symbol ?? "",
+                currency: providerInvestment.currency,
                 points,
             };
         },

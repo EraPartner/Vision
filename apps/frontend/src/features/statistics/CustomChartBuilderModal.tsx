@@ -234,7 +234,7 @@ export function CustomChartBuilderModal({
             state.allRecipients ||
             state.allTags);
 
-    const handleSave = (e: React.FormEvent) => {
+    const handleSave = (e: React.SubmitEvent) => {
         e.preventDefault();
         if (!canSave || createChart.isPending || updateChart.isPending) return;
         const payload = {

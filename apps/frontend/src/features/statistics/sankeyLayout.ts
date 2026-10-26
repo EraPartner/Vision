@@ -250,8 +250,7 @@ export function sankeyLayout<N extends SankeyInputNode>(
             for (const link of node.sourceLinks) link.width = link.value * ky;
         }
         y = (y1 - y + py) / (column.length + 1);
-        for (let i = 0; i < column.length; ++i) {
-            const node = column[i]!;
+        for (const [i, node] of column.entries()) {
             node.y0 += y * (i + 1);
             node.y1 += y * (i + 1);
         }
@@ -290,8 +289,7 @@ export function sankeyLayout<N extends SankeyInputNode>(
         alpha: number,
     ) => {
         let y = start;
-        for (let i = from; i < column.length; ++i) {
-            const node = column[i]!;
+        for (const node of column.slice(Math.max(from, 0))) {
             const shift = (y - node.y0) * alpha;
             if (shift > 1e-6) {
                 node.y0 += shift;
@@ -307,8 +305,7 @@ export function sankeyLayout<N extends SankeyInputNode>(
         alpha: number,
     ) => {
         let y = start;
-        for (let i = from; i >= 0; --i) {
-            const node = column[i]!;
+        for (const node of column.slice(0, from + 1).reverse()) {
             const shift = (node.y1 - y) * alpha;
             if (shift > 1e-6) {
                 node.y0 -= shift;
@@ -319,7 +316,8 @@ export function sankeyLayout<N extends SankeyInputNode>(
     };
     const resolveCollisions = (column: LayoutNode<N>[], alpha: number) => {
         const i = column.length >> 1;
-        const subject = column[i]!;
+        const subject = column[i];
+        if (subject === undefined) return;
         collideUp(column, subject.y0 - py, i - 1, alpha);
         collideDown(column, subject.y1 + py, i + 1, alpha);
         collideUp(column, y1, column.length - 1, alpha);
@@ -331,7 +329,8 @@ export function sankeyLayout<N extends SankeyInputNode>(
         const beta = Math.max(1 - alpha, (iteration + 1) / ITERATIONS);
         // relaxRightToLeft
         for (let i = columns.length - 2; i >= 0; --i) {
-            const column = columns[i]!;
+            const column = columns[i];
+            if (column === undefined) continue;
             for (const source of column) {
                 let y = 0;
                 let w = 0;
@@ -351,7 +350,8 @@ export function sankeyLayout<N extends SankeyInputNode>(
         }
         // relaxLeftToRight
         for (let i = 1; i < columns.length; ++i) {
-            const column = columns[i]!;
+            const column = columns[i];
+            if (column === undefined) continue;
             for (const target of column) {
                 let y = 0;
                 let w = 0;

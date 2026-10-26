@@ -14,6 +14,7 @@ import { applyProfileV1PatchToHousehold } from "@/lib/belgianTax/householdRuntim
 import type { BelgianTaxHouseholdV2 } from "@/lib/belgianTax/householdTypes";
 import { TaxProfileDialog } from "@/features/tax/TaxProfileDialog";
 import { TAX_COMPUTE_DEBOUNCE_MS } from "@/hooks/useBelgianTaxComputation";
+import { must } from "@/features/testing/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -192,7 +193,7 @@ describe("TaxProfileDialog household editing", () => {
 
         const removeButtons = screen.getAllByRole("button", { name: "Remove Marriage" });
         expect(removeButtons).toHaveLength(2);
-        await user.click(removeButtons[1]!);
+        await user.click(must(removeButtons[1]));
         expect(storedHousehold()?.relationship.events.map((e) => e.id)).toEqual(["evt_1"]);
     });
 
@@ -285,7 +286,11 @@ describe("TaxProfileDialog household editing", () => {
         const user = userEvent.setup();
         renderWithApp(<TaxProfileDialog initialStep="home" />);
         await openSheet(user);
-        await waitFor(() => expect(storedHousehold()?.home.mortgageRegion).toBe("flanders"));
+        await waitFor(() =>
+            expect(storedHousehold()?.home).toMatchObject({
+                mortgageRegion: "flanders",
+            }),
+        );
 
         await user.type(await screen.findByLabelText(/first year the chèque habitat/i), "2019");
         expect(storedHousehold()?.home.firstQualifyingYear).toBe(2019);

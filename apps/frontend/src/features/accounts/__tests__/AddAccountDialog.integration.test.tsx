@@ -12,6 +12,7 @@ import {
     type AccountFormValues,
 } from "@/features/accounts/AddAccountDialog";
 import { asCurrencyCode } from "@vision/types/brands";
+import { must } from "@/features/testing/must";
 
 vi.mock("sonner", () => ({
     toast: {
@@ -195,8 +196,7 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
         );
 
         const form = screen.getByRole("dialog").querySelector("form");
-        expect(form).not.toBeNull();
-        fireEvent.submit(form!);
+        fireEvent.submit(must(form, "dialog form"));
 
         expect(screen.getByRole("alert")).toHaveTextContent(
             "Enter a valid opening balance",

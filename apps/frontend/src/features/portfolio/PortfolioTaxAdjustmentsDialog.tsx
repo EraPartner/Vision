@@ -193,7 +193,7 @@ export function PortfolioTaxAdjustmentsDialog({
             [id]: { ...(prev[id] ?? EMPTY_CLASS), ...patch },
         }));
 
-    async function handleSave(e: React.FormEvent) {
+    async function handleSave(e: React.SubmitEvent) {
         e.preventDefault();
         const payload: Record<number, { taxes: number; fees: number }> = {};
         const classPayload: Record<number, TaxClassificationEntry> = {};

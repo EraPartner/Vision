@@ -8,6 +8,7 @@ import type { BelgianTaxHouseholdV2 } from "@/lib/belgianTax/householdTypes";
 import type { HouseholdUpdate } from "@/stores/belgianTaxStore";
 import { addActivity } from "../profile-steps/householdEditing";
 import { IncomeStep } from "../profile-steps/IncomeStep";
+import { must } from "@/features/testing/must";
 
 describe("IncomeStep expense choices", () => {
     it("keeps both of two expense changes made before a re-render", () => {
@@ -31,15 +32,15 @@ describe("IncomeStep expense choices", () => {
             .getAllByRole("radio")
             .filter((radio) => radio.getAttribute("value") === "actual");
         expect(actual).toHaveLength(2);
-        fireEvent.click(actual[0]!);
-        fireEvent.click(actual[1]!);
+        fireEvent.click(must(actual[0]));
+        fireEvent.click(must(actual[1]));
         expect(updates).toHaveLength(2);
 
         const result = updates.reduce<BelgianTaxHouseholdV2>(
             (h, update) => (typeof update === "function" ? update(h) : { ...h, ...update }),
             household,
         );
-        expect(result.partners[0]!.professionalExpenses).toEqual({
+        expect(must(result.partners[0]).professionalExpenses).toEqual({
             remuneration: { method: "actual", actualAmount: 0 },
             profits: { method: "actual", actualAmount: 0 },
         });

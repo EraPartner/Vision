@@ -38,7 +38,7 @@ export function BulkTagDialog({
         setRemoveSlugs([]);
     }
 
-    function handleApply(e: React.FormEvent) {
+    function handleApply(e: React.SubmitEvent) {
         e.preventDefault();
         if (addSlugs.length === 0 && removeSlugs.length === 0) return;
         onApply(addSlugs, removeSlugs);

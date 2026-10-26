@@ -80,7 +80,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                 DISMISSED_PATTERNS_STORAGE_KEY,
             );
             if (!raw) return [];
-            const parsed = JSON.parse(raw);
+            const parsed: unknown = JSON.parse(raw);
             if (Array.isArray(parsed)) {
                 return parsed
                     .map((v) => Number(v))
@@ -124,7 +124,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                 const setting = await apiClient.getSetting(
                     DISMISSED_PATTERNS_STORAGE_KEY,
                 );
-                const settingValues = Array.isArray(setting?.value)
+                const settingValues = Array.isArray(setting.value)
                     ? setting.value
                           .map((v) => Number(v))
                           .filter((v) => Number.isInteger(v) && v > 0)
@@ -173,6 +173,11 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
         }
 
         try {
+            // The create endpoint requires an account; a pattern without one
+            // used to be sent as null and rejected by the server.
+            if (pattern.accountId === null) {
+                throw new Error("The detected pattern has no account");
+            }
             await apiClient.createPlannedTransaction({
                 planned_date: pattern.predictedNext,
                 recipient_id: pattern.recipientId,
@@ -191,7 +196,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                         : -Math.abs(pattern.latestAmount),
                 currency: pattern.currency,
                 category_id: pattern.categoryId ?? undefined,
-                account_id: pattern.accountId!,
+                account_id: pattern.accountId,
                 is_recurring: true,
                 recurrence_pattern:
                     pattern.detectedPattern === "custom"

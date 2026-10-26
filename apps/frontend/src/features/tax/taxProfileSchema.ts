@@ -51,7 +51,7 @@ export const householdIncomeStepSchema = z
         );
         if (!(incomeA > 0)) {
             ctx.addIssue({
-                code: z.ZodIssueCode.custom,
+                code: 'custom',
                 path: ['partners', 'A', 'activities'],
                 message: 'tax.profile.validation.grossIncomeRequired',
             });
@@ -67,7 +67,7 @@ export const householdIncomeStepSchema = z
                 const choice = partner.professionalExpenses[category];
                 if (choice?.method === 'actual' && !((choice.actualAmount ?? 0) > 0)) {
                     ctx.addIssue({
-                        code: z.ZodIssueCode.custom,
+                        code: 'custom',
                         path: ['partners', partner.id ?? '', 'professionalExpenses', category],
                         message: 'tax.profile.validation.actualExpensesRequired',
                     });
@@ -83,7 +83,7 @@ export const householdIncomeStepSchema = z
                     activity.endDate < activity.startDate
                 ) {
                     ctx.addIssue({
-                        code: z.ZodIssueCode.custom,
+                        code: 'custom',
                         path: ['partners', partner.id ?? '', 'activities'],
                         message: 'tax.profile.validation.activityDatesOrder',
                     });

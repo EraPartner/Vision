@@ -52,16 +52,20 @@ export const MonthlyChart = memo(function MonthlyChart({
             ROLLING_WINDOW,
         );
 
-        return raw.map((d, i) => ({
-            ...d,
-            incomeAvg:
-                incomeAvgs[i] !== null ? Math.round(incomeAvgs[i]!) : null,
-            spendingAvg:
-                spendingAvgs[i] !== null ? Math.round(spendingAvgs[i]!) : null,
-        }));
+        return raw.map((d, i) => {
+            const incomeAvg = incomeAvgs[i] ?? null;
+            const spendingAvg = spendingAvgs[i] ?? null;
+            return {
+                ...d,
+                incomeAvg: incomeAvg !== null ? Math.round(incomeAvg) : null,
+                spendingAvg:
+                    spendingAvg !== null ? Math.round(spendingAvg) : null,
+            };
+        });
     }, [data.monthlyData, monthLabelLocale]);
 
-    const series: BarSeries<IncomeSpendingDatum>[] = useMemo(
+    const series: (BarSeries<IncomeSpendingDatum> & { color: string })[] =
+        useMemo(
         () => [
             {
                 key: "income",
@@ -79,7 +83,8 @@ export const MonthlyChart = memo(function MonthlyChart({
         [t],
     );
 
-    const overlays: BarOverlay<IncomeSpendingDatum>[] = useMemo(() => {
+    const overlays: (BarOverlay<IncomeSpendingDatum> & { color: string })[] =
+        useMemo(() => {
         if (!showOverlay) return [];
         return [
             {
@@ -119,11 +124,11 @@ export const MonthlyChart = memo(function MonthlyChart({
                 items={[
                     ...series.map((item) => ({
                         label: item.label ?? item.key,
-                        color: item.color!,
+                        color: item.color,
                     })),
                     ...overlays.map((item) => ({
                         label: item.label ?? item.key,
-                        color: item.color!,
+                        color: item.color,
                         dashed: true,
                     })),
                 ]}

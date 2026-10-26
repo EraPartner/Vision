@@ -14,6 +14,7 @@ import {
     asInvestmentId,
     asPortfolioTransactionId,
 } from "@vision/types/brands";
+import { must } from "@/features/testing/must";
 
 const virtualWindow = vi.hoisted(() => ({ measured: true }));
 
@@ -358,7 +359,7 @@ describe("InvestmentDetailDialog", () => {
             await user.tab();
         expect(edit).toHaveFocus();
         expect(await screen.findByRole("tooltip")).toHaveTextContent(
-            edit.getAttribute("aria-label")!,
+            must(edit.getAttribute("aria-label")),
         );
         await user.tab();
         expect(await screen.findByRole("tooltip")).toHaveTextContent(

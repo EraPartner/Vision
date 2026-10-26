@@ -10,12 +10,9 @@ import {
 } from "../PriceProviderFields";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
+import { ok } from "@/test/msw/handlers";
 
 const API_BASE = "http://localhost:3002";
-
-function ok<T>(data: T) {
-    return HttpResponse.json({ ok: true, data });
-}
 
 function ProviderFieldsHarness() {
     const [form, setForm] = useState<PriceProviderFormShape>({

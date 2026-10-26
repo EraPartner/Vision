@@ -15,6 +15,7 @@ import type { DeductionCandidatesResponse } from "@/lib/api/info";
 import { DISMISSED_DEDUCTION_CANDIDATES_STORAGE_KEY } from "@/lib/deductionCandidatesDismiss";
 import DeductionCandidatesCard from "../DeductionCandidatesCard";
 import { asCurrencyCode } from "@vision/types/brands";
+import { must } from "@/features/testing/must";
 
 vi.mock("@/stores/hydration/LanguageHydration", () => ({
     LanguageProvider: ({ children }: { children: React.ReactNode }) => (
@@ -87,7 +88,7 @@ vi.mock("@/contexts/BelgianTaxProfileContext", () => ({
         }),
 }));
 
-const mockUseDeductionCandidates = vi.fn();
+const mockUseDeductionCandidates = vi.fn<(year: number) => unknown>();
 vi.mock("@/hooks/useDeductionCandidates", () => ({
     useDeductionCandidates: (year: number) => mockUseDeductionCandidates(year),
 }));
@@ -291,7 +292,7 @@ test("dismiss removes the group and persists the dismissal", () => {
         screen.queryByText("Life insurance premiums"),
     ).not.toBeInTheDocument();
     expect(screen.getByText("Alimony paid")).toBeInTheDocument();
-    const stored = JSON.parse(
+    const stored: unknown = JSON.parse(
         window.localStorage.getItem(
             DISMISSED_DEDUCTION_CANDIDATES_STORAGE_KEY,
         ) ?? "[]",
@@ -429,15 +430,15 @@ test("with two partners, shows each share and confirm writes it to that partner"
 
     expect(updateProfile).not.toHaveBeenCalled();
     expect(updateHousehold).toHaveBeenCalledTimes(1);
-    const updater = updateHousehold.mock.calls[0]![0] as (
+    const updater = must(updateHousehold.mock.calls[0])[0] as (
         h: BelgianTaxHouseholdV2,
     ) => BelgianTaxHouseholdV2;
     const next = updater(household);
-    expect(next.partners[0]!.reductions).toMatchObject({
+    expect(must(next.partners[0]).reductions).toMatchObject({
         lifeInsurancePremiums: 400,
         lifeInsuranceEligible: true,
     });
-    expect(next.partners[1]!.reductions).toMatchObject({
+    expect(must(next.partners[1]).reductions).toMatchObject({
         lifeInsurancePremiums: 800,
         lifeInsuranceEligible: true,
     });

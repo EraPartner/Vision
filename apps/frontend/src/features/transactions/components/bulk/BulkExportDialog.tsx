@@ -34,7 +34,7 @@ export function BulkExportDialog({
     const { t } = useLanguage();
     const [format, setFormat] = useState<ExportFormat>("csv");
 
-    function handleApply(e: React.FormEvent) {
+    function handleApply(e: React.SubmitEvent) {
         e.preventDefault();
         onApply(format);
     }

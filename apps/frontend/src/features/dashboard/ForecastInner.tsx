@@ -43,7 +43,7 @@ function ForecastInnerImpl({
                 v,
                 currency,
                 locale,
-                appSettings.showDecimalPlaces ?? 2,
+                appSettings.showDecimalPlaces,
             ),
         [currency, locale, appSettings.showDecimalPlaces],
     );

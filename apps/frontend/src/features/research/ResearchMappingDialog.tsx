@@ -207,15 +207,19 @@ export function ResearchMappingDialog({
     );
 
     const handleSave = () => {
-        const toSave: MappingSaveInput[] = proposals
-            .filter((p) => isConfirmable(p) && selected[p.provider])
-            .map((p) => ({
-                provider: p.provider,
-                providerSymbol: p.providerSymbol!,
-                resolvedName: p.resolvedName,
-                exchange: p.exchange,
-                currency: p.currency,
-            }));
+        const toSave: MappingSaveInput[] = proposals.flatMap((p) =>
+            isConfirmable(p) && selected[p.provider] && p.providerSymbol
+                ? [
+                      {
+                          provider: p.provider,
+                          providerSymbol: p.providerSymbol,
+                          resolvedName: p.resolvedName,
+                          exchange: p.exchange,
+                          currency: p.currency,
+                      },
+                  ]
+                : [],
+        );
         if (toSave.length === 0) return;
         saveMutation.mutate(toSave);
     };

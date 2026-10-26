@@ -185,7 +185,7 @@ export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
         setStep("type");
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.SubmitEvent) => {
         e.preventDefault();
         if (!form.assetClass) return;
         // The input's `required` blocks a truly empty field, but a whitespace-only
@@ -290,7 +290,6 @@ export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
                     notes: form.notes.trim() || undefined,
                     ...priceProviderPayload(form),
                 });
-                if (investment == null) return;
                 investmentId = investment.id;
                 createdInvestmentIdRef.current = investmentId;
             }

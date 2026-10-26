@@ -7,6 +7,7 @@ import { RestoreFromBackupCard } from "@/features/onboarding/RestoreFromBackupCa
 import type {
     ElectronBackupBridge,
 } from "@vision/types/electron";
+import { must } from "@/features/testing/must";
 
 // Mock sonner toasts so we can assert without polluting the DOM.
 vi.mock("sonner", () => ({
@@ -54,7 +55,7 @@ function uninstallElectronMocks() {
 }
 
 // Stub setTimeout for the page-reload schedule so tests do not actually reload.
-const originalSetTimeout = window.setTimeout;
+const originalSetTimeout = window.setTimeout.bind(window);
 
 beforeEach(() => {
     // Prevent the post-success reload from scheduling during tests.
@@ -243,8 +244,7 @@ describe("RestoreFromBackupCard", () => {
         await waitFor(() => {
             expect(toast.error).toHaveBeenCalled();
         });
-        const [, opts] = (toast.error as unknown as ReturnType<typeof vi.fn>)
-            .mock.calls[0]!;
+        const [, opts] = must(vi.mocked(toast.error).mock.calls[0]);
         expect(opts).toMatchObject({ description: "Disk write failure" });
     });
 

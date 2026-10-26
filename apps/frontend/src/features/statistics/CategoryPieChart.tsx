@@ -31,7 +31,7 @@ export const CategoryPieChart = memo(function CategoryPieChart({
         );
     }, [yearFilter, data.allPeriods]);
 
-    const pieData: PieDatum[] = useMemo(() => {
+    const pieData: (PieDatum & { color: string })[] = useMemo(() => {
         const totals = data.categoryPivot
             .map((category) => {
                 // "Spending by Category" — sum EXPENSE only. Using months (Σ|net|) let
@@ -87,7 +87,7 @@ export const CategoryPieChart = memo(function CategoryPieChart({
             <ChartLegend
                 items={pieData.map((item) => ({
                     label: `${item.name} · ${formatCurrency(item.value)}`,
-                    color: item.color!,
+                    color: item.color,
                 }))}
             />
         </div>

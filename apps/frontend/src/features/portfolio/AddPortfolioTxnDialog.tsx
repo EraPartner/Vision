@@ -189,7 +189,7 @@ export function AddPortfolioTxnDialog({
         setOpen(v);
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.SubmitEvent) => {
         e.preventDefault();
         if (!checkValid()) return;
         // Narrowing only — checkValid() mirrors the schema's rules field-by-field,

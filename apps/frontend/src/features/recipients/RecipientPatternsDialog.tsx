@@ -190,7 +190,7 @@ export function RecipientPatternsDialog({
         }
     };
 
-    const handleSave = (e: React.FormEvent) => {
+    const handleSave = (e: React.SubmitEvent) => {
         e.preventDefault();
         if (!form.pattern.trim()) return;
         const payload = {

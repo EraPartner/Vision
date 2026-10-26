@@ -9,6 +9,7 @@ import { ok, err } from "@/test/msw/handlers";
 import { PortfolioTaxAdjustmentsDialog } from "@/features/portfolio/PortfolioTaxAdjustmentsDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
 import { asCurrencyCode, asInvestmentId } from "@vision/types/brands";
+import { must } from "@/features/testing/must";
 
 const API_BASE = "http://localhost:3002";
 
@@ -146,7 +147,7 @@ describe("PortfolioTaxAdjustmentsDialog", () => {
             within(row).getByRole("textbox", { name: "Fees: MSCI World ETF" }),
         ).toBeVisible();
         const summary = within(row).getByText("Tax treatment");
-        const details = summary.closest("details")!;
+        const details = must(summary.closest("details"));
         expect(details).not.toHaveAttribute("open");
         // jsdom does not implement the native summary keyboard default action.
         await user.click(summary);
@@ -272,7 +273,7 @@ describe("PortfolioTaxAdjustmentsDialog", () => {
         // Taxes inputs come first (one per investment row); grab the first one.
         // The zero placeholder follows the default European number format.
         const taxInputs = screen.getAllByPlaceholderText("0,00");
-        const firstTaxInput = taxInputs[0]!;
+        const firstTaxInput = must(taxInputs[0]);
         await user.clear(firstTaxInput);
         await user.type(firstTaxInput, "12.50");
 

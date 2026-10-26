@@ -1,5 +1,5 @@
 import { PageError } from "@/components/shared/PageError";
-import { useId, useState, type FormEvent } from "react";
+import { useId, useState, type SubmitEvent } from "react";
 import {
     BanknoteCheck,
     Check,
@@ -100,7 +100,7 @@ export function RecipientOwesDetail({
     // without a stored rate are left out (and named in the description).
     const totalOutstanding = data?.summary.remaining ?? 0;
 
-    const handlePay = (event: FormEvent) => {
+    const handlePay = (event: SubmitEvent) => {
         event.preventDefault();
         if (!payDialog) return;
         const amount = parseDecimal(payAmount, appSettings.numberFormat);
@@ -129,7 +129,7 @@ export function RecipientOwesDetail({
                 totalOutstanding,
                 defaultCurrency,
                 locale,
-                appSettings.showDecimalPlaces ?? 2,
+                appSettings.showDecimalPlaces,
             ),
         });
         const shouldSettle = await confirm({
@@ -231,7 +231,7 @@ export function RecipientOwesDetail({
                 />
             ) : isLoading ? (
                 <div {...loadingSurfaceProps} className="space-y-2">
-                    {[...Array(3)].map((_, index) => (
+                    {Array.from({ length: 3 }).map((_, index) => (
                         <Skeleton
                             key={index}
                             className="h-16 rounded-card corner-continuous"
@@ -309,8 +309,7 @@ export function RecipientOwesDetail({
                                                             defaultCurrency,
                                                         ),
                                                         locale,
-                                                        appSettings.showDecimalPlaces ??
-                                                            2,
+                                                        appSettings.showDecimalPlaces,
                                                     ),
                                                 })}
                                                 {split.note &&
@@ -459,8 +458,7 @@ export function RecipientOwesDetail({
                                                 payDialog.remaining,
                                                 payDialog.currency,
                                                 locale,
-                                                appSettings.showDecimalPlaces ??
-                                                    2,
+                                                appSettings.showDecimalPlaces,
                                             ),
                                         })}
                                     </p>
