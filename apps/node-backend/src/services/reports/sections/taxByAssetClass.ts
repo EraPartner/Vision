@@ -13,6 +13,7 @@ import {
   svgGenericGroupedBarChart,
 } from "../sectionHelpers.ts";
 import type { TaxReportData } from '../dataFetcherTax.ts';
+import { addAll, toNumber } from "../../../lib/money.ts";
 
 export function renderTaxByAssetClass(
   data: TaxReportData | null,
@@ -22,12 +23,12 @@ export function renderTaxByAssetClass(
 
   const classes = byAssetClass
     .map((b) => ({
-      label: assetClassLabel(b.assetClass ?? "other", { plural: true }),
-      taxes: b.taxes ?? 0,
-      fees: b.fees ?? 0,
+      label: assetClassLabel(b.assetClass, { plural: true }),
+      taxes: b.taxes,
+      fees: b.fees,
     }))
     .filter((c) => c.taxes > 0 || c.fees > 0)
-    .sort((a, b) => b.taxes + b.fees - (a.taxes + a.fees));
+    .sort((a, b) => addAll([b.taxes, b.fees]).comparedTo(addAll([a.taxes, a.fees])));
 
   if (classes.length === 0) {
     return emptySection({
@@ -52,7 +53,7 @@ export function renderTaxByAssetClass(
 
   const tableRows = classes
     .map((c) => {
-      const total = c.taxes + c.fees;
+      const total = toNumber(addAll([c.taxes, c.fees]));
       return `<tr>
       <td>${escapeHtml(c.label)}</td>
       <td class="num neg">${fmtCurrency(c.taxes, currency)}</td>

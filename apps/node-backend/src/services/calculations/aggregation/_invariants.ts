@@ -60,9 +60,9 @@ export function assertMonthlyInvariants(
     | Array<{
         month: number;
         year: number;
-        total_income: number;
-        total_spending: number;
-        net_amount: number;
+        total_income: number | null | undefined;
+        total_spending: number | null | undefined;
+        net_amount: number | null | undefined;
       }>
     | undefined,
 ) {

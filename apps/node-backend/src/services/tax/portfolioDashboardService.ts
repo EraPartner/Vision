@@ -115,7 +115,10 @@ export async function getPortfolioTaxDashboard(
     const converted = convertCodeAtLatestRates(amount, from, target, rates);
     return converted === undefined ? undefined : converted.toNumber();
   };
-  const calculation = overview.calculation as { totalPIT?: unknown };
+  const calculation = overview.calculation as
+    | { totalPIT?: unknown }
+    | null
+    | undefined;
   if (
     typeof calculation?.totalPIT !== "number" ||
     !Number.isFinite(calculation.totalPIT)

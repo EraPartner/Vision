@@ -26,7 +26,7 @@ import {
 } from "../../../lib/unconvertedTally.ts";
 import { buildEnvelope } from "./_envelope.ts";
 import { assertNoNaN } from "./_invariants.ts";
-import { roundMoney } from "../../../lib/money.ts";
+import { addAll, divide, roundMoney, toNumber } from "../../../lib/money.ts";
 import { toAppTz } from "../../../lib/timezone.ts";
 import { nanToZero } from "../../../lib/math.ts";
 
@@ -155,9 +155,8 @@ export async function computeSankeyFlow({
     .map(({ id, label, value }) => ({ id, label, cents: toCents(value) }))
     .filter(({ cents }) => cents > 0);
   const incomeCents = toCents(totalIncome);
-  const spendingCents = categoriesInCents.reduce(
-    (acc, category) => acc + category.cents,
-    0,
+  const spendingCents = toNumber(
+    addAll(categoriesInCents.map((category) => category.cents)),
   );
   const savingsCents = Math.max(0, incomeCents - spendingCents);
   const fundingGapCents = Math.max(0, spendingCents - incomeCents);
@@ -245,5 +244,5 @@ function toCents(n: number) {
 }
 
 function fromCents(cents: number) {
-  return cents / 100;
+  return toNumber(divide(cents, 100));
 }

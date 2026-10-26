@@ -1307,7 +1307,6 @@ describe("portfolioPerformanceSnapshotService", () => {
 
 describe("computeMetrics", () => {
   it("returns null for empty or missing snapshots", () => {
-    // @ts-expect-error -- null input exercises the runtime guard
     expect(computeMetrics(null)).toBeNull();
     expect(computeMetrics([])).toBeNull();
   });
@@ -1435,7 +1434,6 @@ describe("computeMetrics", () => {
 
 describe("computeHeatmap", () => {
   it("returns empty structure for insufficient data", () => {
-    // @ts-expect-error -- null input exercises the runtime guard
     expect(computeHeatmap(null)).toEqual({ years: [], data: {}, maxAbsPct: 0 });
     expect(computeHeatmap([])).toEqual({ years: [], data: {}, maxAbsPct: 0 });
     expect(

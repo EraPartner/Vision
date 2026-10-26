@@ -153,8 +153,8 @@ function extractCategories(...rowGroups: CategoryHistoryRow[][]): CategoryKey[] 
       seen.set(k, {
         key: k,
         category_id: r.category_id ?? null,
-        general: r.general ?? "Uncategorized",
-        detail: r.detail ?? "Uncategorized",
+        general: r.general,
+        detail: r.detail,
         path_name:
           r.path_name ??
           ([r.general, r.detail].filter(Boolean).join(":") || "Uncategorized"),

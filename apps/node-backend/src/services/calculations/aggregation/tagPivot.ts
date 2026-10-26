@@ -14,9 +14,9 @@ import { withStatisticsCache, statsKeyPart } from './_statisticsCache.ts';
 export async function computeTagPivot({
   targetCurrency = 'EUR',
   bucket = 'monthly',
-  startDate = undefined,
-  endDate = undefined,
-  tagIds = undefined,
+  startDate,
+  endDate,
+  tagIds,
   allTags = false,
 }: TagPivotOptions = {}) {
   const key = `tag|${targetCurrency}|b:${bucket}|s:${startDate || ''}|e:${endDate || ''}`

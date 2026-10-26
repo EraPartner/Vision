@@ -136,7 +136,7 @@ export function validateBatchSplitAllocation({
   }
   const amounts: number[] = [];
   for (const split of splits) {
-    const amount = Number(split?.amount);
+    const amount = split.amount;
     if (!Number.isFinite(amount) || amount <= 0) {
       return { ok: false, error: "Split amount must be a positive number" };
     }
@@ -218,8 +218,8 @@ function computeSplitRemaining(split: {
   amount: number;
   amount_paid?: number;
 }): number {
-  const amount = nanToZero(Number(split?.amount));
-  const paid = nanToZero(Number(split?.amount_paid));
+  const amount = nanToZero(split.amount);
+  const paid = nanToZero(split.amount_paid);
   const remaining = toDecimal(amount).minus(toDecimal(paid));
   return roundToCents(remaining.lessThan(0) ? toDecimal(0) : remaining);
 }

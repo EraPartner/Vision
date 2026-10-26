@@ -198,8 +198,8 @@ export function buildAssetClassBuckets(
       bucket = { label: assetClassLabel(assetClass, { plural: true }), value: 0, invested: 0 };
       grouped.set(assetClass, bucket);
     }
-    bucket.value += Number(investment.currentValue ?? 0);
-    bucket.invested += Number(investment.totalInvested ?? 0);
+    bucket.value += investment.currentValue;
+    bucket.invested += investment.totalInvested;
   }
   return [...grouped.values()];
 }

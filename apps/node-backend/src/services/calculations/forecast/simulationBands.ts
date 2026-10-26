@@ -29,7 +29,7 @@ export function summarizeSimulationPaths(
   percentiles: number[],
 ): SimulationSummary {
   const pathCount = samples[0]?.length ?? 0;
-  const cumulativeByPath: number[] = new Array(pathCount).fill(0);
+  const cumulativeByPath: number[] = new Array<number>(pathCount).fill(0);
   const bands = percentiles.map((q) => ({
     key: `p${q}`,
     q,

@@ -18,7 +18,8 @@ import { ApiErrorCode } from "@vision/types/errors";
  * callback is invoked with.
  */
 export interface ImportProgressEvent {
-  phase: 'staging'|'validating'|'matching'|'committing'|'complete'|string;
+  /** 'staging' | 'validating' | 'matching' | 'committing' | 'complete', or a pipeline-specific phase. */
+  phase: string;
   current?: number;
   total?: number;
   imported?: number;

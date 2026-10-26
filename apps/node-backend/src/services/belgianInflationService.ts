@@ -8,6 +8,7 @@ import {
   recordError as recordProviderError,
 } from "./providerHealthService.ts";
 import { roundMoney } from "../lib/money.ts";
+import { looseString } from "../lib/looseString.ts";
 
 import type { BelgianInflationRate } from "../types/rows.ts";
 
@@ -105,7 +106,7 @@ function logStatbelFallbackWarning(error: unknown) {
 /** @returns 'YYYY-MM' */
 function normalizeMonthInput(value: unknown): string | undefined {
   if (!value) return undefined;
-  const text = String(value).trim();
+  const text = looseString(value).trim();
   const direct = text.match(/^(\d{4})-(\d{2})$/);
   if (direct) return `${direct[1]}-${direct[2]}`;
 
@@ -210,7 +211,7 @@ function monthNumberForName(name: string): number | undefined {
 
 function parseMonthName(value: unknown): number | undefined {
   if (!value) return undefined;
-  const normalized = String(value).trim().toLowerCase();
+  const normalized = looseString(value).trim().toLowerCase();
   return monthNumberForName(normalized);
 }
 
@@ -360,7 +361,7 @@ function normalizeRatesFromPayload(payload: unknown): BelgianInflationRate[] {
  */
 function parseStatbelMonthString(value: unknown): string | undefined {
   if (!value) return undefined;
-  const parts = String(value).trim().split(/\s+/);
+  const parts = looseString(value).trim().split(/\s+/);
   const [monthName] = parts;
   const yearPart = parts.at(-1);
   if (parts.length < 2 || monthName === undefined || yearPart === undefined)

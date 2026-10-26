@@ -188,7 +188,9 @@ export function walkForwardBacktest({
       }
       const s = stats(predicted, actual);
       // Every method id was seeded into `perMethod` above.
-      perMethod.get(method.id)!.perMonth.push({
+      const entry = perMethod.get(method.id);
+      if (!entry) continue;
+      entry.perMonth.push({
         month: targetMonth,
         mae: s.mae,
         rmse: s.rmse,
@@ -301,7 +303,9 @@ export function walkForwardBacktestRolling({
         predicted = forecastDates.map((date) => ({ date, value: 0 }));
       }
       const s = stats(predicted, actualSeries);
-      perMethod.get(method.id)!.perWindow.push({
+      const entry = perMethod.get(method.id);
+      if (!entry) continue;
+      entry.perWindow.push({
         window_end: anchorEnd,
         mae: s.mae,
         rmse: s.rmse,

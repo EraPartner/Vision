@@ -120,7 +120,9 @@ function contributionAdjustedMonthlyReturn(
  * Compute overall portfolio metrics from the full snapshot array.
  * Ported from PerformancePage.tsx overallMetrics useMemo.
  */
-export function computeMetrics(snapshots: MetricsSnapshot[]) {
+export function computeMetrics(
+  snapshots: MetricsSnapshot[] | null | undefined,
+) {
   if (snapshots == null || snapshots.length < 1) return null;
 
   const first = snapshots[0];
@@ -172,7 +174,9 @@ export function computeMetrics(snapshots: MetricsSnapshot[]) {
  * Compute monthly returns heatmap from the full snapshot array.
  * Uses contribution-adjusted formula to isolate performance from cash flows.
  */
-export function computeHeatmap(snapshots: HeatmapSnapshot[]): {
+export function computeHeatmap(
+  snapshots: HeatmapSnapshot[] | null | undefined,
+): {
   years: number[];
   data: Record<number, (number | null)[]>;
   maxAbsPct: number;
@@ -207,7 +211,7 @@ export function computeHeatmap(snapshots: HeatmapSnapshot[]): {
   const monthlyReturns: number[] = [];
 
   for (const year of years) {
-    data[year] = Array(12).fill(null);
+    data[year] = new Array<number | null>(12).fill(null);
   }
 
   for (let i = 1; i < monthKeys.length; i++) {
@@ -224,8 +228,9 @@ export function computeHeatmap(snapshots: HeatmapSnapshot[]): {
     if (cy * 12 + cm !== py * 12 + pm + 1) continue;
 
     // monthKeys are byMonth's own keys.
-    const prev = byMonth.get(prevKey)!;
-    const curr = byMonth.get(currKey)!;
+    const prev = byMonth.get(prevKey);
+    const curr = byMonth.get(currKey);
+    if (!prev || !curr) continue;
     const year = parseInt(currKey.slice(0, 4));
     const monthIdx = parseInt(currKey.slice(5, 7)) - 1;
 

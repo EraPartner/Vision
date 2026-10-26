@@ -92,8 +92,9 @@ const MIN_OCCURRENCES = 3; // Minimum transactions to consider a pattern
 
 /** `[items[i - 1], items[i]]` for every i >= 1, in order. */
 function consecutivePairs<T>(items: readonly T[]): Array<[T, T]> {
-  // i < items.length - 1, so items[i + 1] is in bounds.
-  return items.slice(0, -1).map((prev, i) => [prev, items[i + 1]!]);
+  // i < items.length - 1, so items[i + 1] is in bounds (and may legitimately
+  // hold `undefined` when T allows it).
+  return items.slice(0, -1).map((prev, i) => [prev, items[i + 1] as T]);
 }
 const INTERVAL_TOLERANCE = 0.25; // 25% tolerance for interval matching
 
@@ -181,15 +182,15 @@ function detectAmountChanges(
 
   const changes: RecurringAmountChange[] = [];
   const sorted = [...transactions].sort((a, b) => {
-    const aTime = new Date(a?.date).getTime();
-    const bTime = new Date(b?.date).getTime();
+    const aTime = new Date(a.date).getTime();
+    const bTime = new Date(b.date).getTime();
 
     if (Number.isNaN(aTime) && Number.isNaN(bTime)) {
-      return Number(a?.id ?? 0) - Number(b?.id ?? 0);
+      return a.id - b.id;
     }
     if (Number.isNaN(aTime)) return 1;
     if (Number.isNaN(bTime)) return -1;
-    return firstNonZero(aTime - bTime, Number(a?.id ?? 0) - Number(b?.id ?? 0));
+    return firstNonZero(aTime - bTime, a.id - b.id);
   });
 
   // Compare recent charges with the immediately preceding chronological

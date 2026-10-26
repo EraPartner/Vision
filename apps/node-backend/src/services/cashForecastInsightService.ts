@@ -87,7 +87,7 @@ function pickPrimaryMethod(
   methods: ForecastMethod[] | null | undefined,
 ): ForecastMethod | null {
   if (!Array.isArray(methods)) return null;
-  const usable = methods.filter((m) => m != null && m.error == null);
+  const usable = methods.filter((m) => m.error == null);
   return (
     usable.find((m) => MC_METHOD_IDS.has(m.id) && m.bands != null) ??
     usable.find((m) => m.id === ENSEMBLE_METHOD_ID) ??
@@ -125,7 +125,7 @@ export function buildCashForecastInsight(
   // P50 month-end net cash flow: last point of the cumulative (actuals folded
   // with the projection; for MC methods the projection is the median path).
   const monthEndNetCashflow = monthEndPoint.value;
-  const hasFuture = cumulative.slice(payload.current_day ?? 0).length > 0;
+  const hasFuture = cumulative.slice(payload.current_day).length > 0;
 
   let monthEndNetCashflowLow: number | null = null;
   let monthEndNetCashflowHigh: number | null = null;
@@ -182,7 +182,7 @@ export async function getCashForecastInsight(
   options: { previousMonthEndNetCashflow?: number | null } = {},
 ): Promise<CashForecastInsight | null> {
   const result = await computeCashflowForecast({ includeBreakdown: false });
-  const initial = buildCashForecastInsight(result?.data);
+  const initial = buildCashForecastInsight(result.data);
   if (!initial) return null;
 
   const hasInjectedPrevious = Object.hasOwn(
@@ -197,7 +197,7 @@ export async function getCashForecastInsight(
         initial.methodId,
       );
   const finding = buildCashForecastInsight(
-    result?.data,
+    result.data,
     previousMonthEndNetCashflow ?? null,
   );
   // Same payload as `initial`, so this never short-circuits.

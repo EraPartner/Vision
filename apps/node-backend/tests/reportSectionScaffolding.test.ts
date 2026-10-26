@@ -223,7 +223,7 @@ const POPULATED_RENDERERS = [
           categories: {
             categories: [{ id: 1, name: "Food", total: -40, count: 2 }],
           },
-          exclusions: { categoryIds: [] },
+          exclusions: { categoryIds: [], recipientIds: [] },
         }),
         { currency, period },
       ),
@@ -248,7 +248,7 @@ const POPULATED_RENDERERS = [
             ],
             monthOverMonth: [],
           },
-          exclusions: { recipientIds: [] },
+          exclusions: { categoryIds: [], recipientIds: [] },
         }),
         { currency },
       ),

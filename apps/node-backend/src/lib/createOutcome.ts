@@ -6,5 +6,5 @@ export function withCreateOutcome(
   created: boolean,
   extra: Record<string, unknown> = {},
 ): Record<string, unknown> & { created: boolean; links: unknown[] } {
-  return { ...resource, ...extra, created: Boolean(created), links: [] };
+  return { ...resource, ...extra, created, links: [] };
 }

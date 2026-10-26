@@ -455,7 +455,6 @@ describe("contributionAdjustedMonthlyReturn", () => {
 
 describe("computeMetrics", () => {
   it("returns null when snapshots missing or empty", () => {
-    // @ts-expect-error -- pins the runtime guard for missing snapshots
     expect(computeMetrics(null)).toBeNull();
     expect(computeMetrics([])).toBeNull();
   });

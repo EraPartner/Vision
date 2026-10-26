@@ -66,7 +66,7 @@ function isBlockedIpv4(ip: string): boolean {
  * @returns true when the address must not be reached by the server
  */
 function isBlockedIpv6(ip: string): boolean {
-  const [addr = ""] = String(ip).toLowerCase().split("%"); // drop zone id
+  const [addr = ""] = ip.toLowerCase().split("%"); // drop zone id
   if (addr === "::1" || addr === "::") return true; // loopback / unspecified
   const mapped = addr.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
   if (mapped?.[1] !== undefined) return isBlockedIpv4(mapped[1]); // IPv4-mapped ::ffff:a.b.c.d
@@ -109,7 +109,7 @@ export async function assertPublicHttpUrl(
 
   let url;
   try {
-    url = new URL(String(rawUrl));
+    url = new URL(rawUrl);
   } catch {
     throw new BlockedUrlError(`Invalid URL: ${rawUrl}`);
   }

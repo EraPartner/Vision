@@ -15,6 +15,7 @@ import { roundMoney } from "../../lib/money.ts";
 import { epochMsToUtcYmd } from "../../lib/dateFormat.ts";
 import { ValidationError } from "../../middleware/errorHandler.ts";
 import { nonZeroOr } from "../../lib/math.ts";
+import { looseString } from "../../lib/looseString.ts";
 
 const EPSILON = 0.0000001;
 
@@ -70,7 +71,7 @@ function addMonthsAtDay(
       0,
     ),
   ).getUTCDate();
-  const day = Math.max(1, Math.min(nonZeroOr(Number(preferredDay), 1), lastDay));
+  const day = Math.max(1, Math.min(nonZeroOr(preferredDay, 1), lastDay));
   const result = new Date(
     Date.UTC(
       firstOfTarget.getUTCFullYear(),
@@ -94,7 +95,7 @@ function validateLoanConfig(config: LoanConfig): {
   const annualRate = Number(config.loan_annual_interest_rate ?? 0);
   const termMonths = Number(config.loan_term_months);
   const paymentDay = Number(config.loan_payment_day);
-  const loanType = String(config.loan_type || "").trim();
+  const loanType = looseString(config.loan_type || "").trim();
 
   if (!loanType)
     errors.push("loan_type is required for loan planned transactions");
@@ -106,7 +107,7 @@ function validateLoanConfig(config: LoanConfig): {
     errors.push("loan_term_months must be an integer between 1 and 600");
   if (
     !config.loan_start_date ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(String(config.loan_start_date))
+    !/^\d{4}-\d{2}-\d{2}$/.test(looseString(config.loan_start_date))
   )
     errors.push("loan_start_date must be in YYYY-MM-DD format");
   if (!Number.isInteger(paymentDay) || paymentDay < 1 || paymentDay > 31)

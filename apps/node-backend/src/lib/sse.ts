@@ -77,7 +77,7 @@ export function createSseWriter(
   // body is consumed by upstream middleware (express.json()), which would
   // mark the writer closed before any event is emitted. res's 'close' event
   // covers both client disconnects and normal end-of-response.
-  if (typeof res?.on === 'function') res.on('close', onClose);
+  if (typeof res.on === 'function') res.on('close', onClose);
 
   // Commit the SSE headers, then flush them plus a padding comment so the
   // client starts seeing bytes immediately. SSE comments (lines starting
@@ -96,7 +96,7 @@ export function createSseWriter(
 
     async write(event: string, data: unknown) {
       if (closed) return;
-      const safeEvent = String(event).replace(/[\r\n]/g, '_');
+      const safeEvent = event.replace(/[\r\n]/g, '_');
       res.write(`event: ${safeEvent}\ndata: ${JSON.stringify(data)}\n\n`);
       await drainIfNeeded(res);
     },

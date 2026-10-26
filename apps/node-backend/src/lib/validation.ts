@@ -7,6 +7,7 @@
  */
 
 import { ValidationError } from "../middleware/errorHandler.ts";
+import { looseString } from "./looseString.ts";
 import { isCurrencyCode } from "@vision/types/brands";
 import type { CurrencyCode } from "@vision/types/brands";
 
@@ -189,7 +190,7 @@ export function assertCurrency(
   fieldName = "currency",
 ): CurrencyCode | undefined {
   if (value == null || value === "") return undefined;
-  const currency = String(value).toUpperCase().trim();
+  const currency = looseString(value).toUpperCase().trim();
   if (!isCurrencyCode(currency)) {
     throw new ValidationError(`${fieldName} must be a 3-letter ISO code`);
   }
@@ -233,7 +234,7 @@ export function validateIntArray(
     if (!element.valid) {
       return {
         valid: false,
-        error: `${fieldName} contains invalid value: ${value}`,
+        error: `${fieldName} contains invalid value: ${looseString(value)}`,
       };
     }
     result.push(element.value);
@@ -247,7 +248,9 @@ export function filterValidatedIdNumbers<T extends number>(
 export function filterValidatedIdNumbers(values: unknown): number[];
 export function filterValidatedIdNumbers(values: unknown): number[] {
   if (!Array.isArray(values)) return [];
-  return values.filter(
-    (value) => typeof value === "number" && validateId(value).valid,
+  const list: unknown[] = values;
+  return list.filter(
+    (value): value is number =>
+      typeof value === "number" && validateId(value).valid,
   );
 }

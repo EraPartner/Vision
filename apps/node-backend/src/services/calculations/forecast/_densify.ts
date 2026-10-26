@@ -22,7 +22,7 @@ export function densifyDailyHistory(
   if (!Array.isArray(history) || history.length === 0) return history;
   const byDate = new Map<string, number>();
   for (const r of history)
-    byDate.set(r.date, (byDate.get(r.date) ?? 0) + nanToZero(Number(r.net)));
+    byDate.set(r.date, (byDate.get(r.date) ?? 0) + nanToZero(r.net));
   const sortedDates = [...byDate.keys()].sort();
   const startIso = sortedDates[0];
   const lastObserved = sortedDates[sortedDates.length - 1];

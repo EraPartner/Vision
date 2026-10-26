@@ -22,7 +22,8 @@ import { getTaxTable } from "./belgianTaxTables.ts";
 import type { ResolvedTaxYearTable } from "./belgianTaxTables.ts";
 import { todayAppDateString, firstOfMonthYmd } from "../../lib/timezone.ts";
 import { logger } from "../../config/logger.ts";
-import { addAll, toNumber } from "../../lib/money.ts";
+import { addAll, toDecimal, toNumber } from "../../lib/money.ts";
+import type { HistoricalRateIndex } from "../../types/rows.ts";
 import { currencyOrEur } from "../../lib/currencyCode.ts";
 
 const addMoney = (...values: Array<number | string>) =>
@@ -205,10 +206,11 @@ export type TaxReportData = {
 /** Requested source failures abort export; only deliberately skipped sources are null. */
 function unwrap<T>(result: PromiseSettledResult<T>, label: string): T {
   if (result.status === "fulfilled") return result.value;
+  const reason: unknown = result.reason;
   logger.warn(`[dataFetcherTax] ${label} failed — report generation stopped`, {
-    reason: result.reason?.message,
+    reason: reason instanceof Error ? reason.message : undefined,
   });
-  throw result.reason;
+  throw reason;
 }
 
 /** Normalise a Period into a tax context (year-scoped). */
@@ -257,8 +259,8 @@ function periodToTaxContext(period: Period): {
     }
 
     case "custom": {
-      const fromYear = Number(String(period.from).slice(0, 4));
-      const toYear = Number(String(period.to).slice(0, 4));
+      const fromYear = Number(period.from.slice(0, 4));
+      const toYear = Number(period.to.slice(0, 4));
       const taxYear = fromYear;
       const note =
         fromYear !== toYear
@@ -347,7 +349,7 @@ async function fetchTaxTransactions(
   // before that date (e.g. a brand-new transaction before the FX backfill runs). See
   // ADR-085.
   const currentRates = await loadCurrentRates();
-  const toCur = String(targetCurrency || "EUR")
+  const toCur = (targetCurrency || "EUR")
     .toUpperCase()
     .trim();
 
@@ -362,7 +364,7 @@ async function fetchTaxTransactions(
 
   // Shared process-level index cache (see getHistoricalRateIndex) avoids
   // reloading the full exchange_rates history and rebuilding the index per call.
-  let historicalIndex = new Map();
+  let historicalIndex: HistoricalRateIndex = new Map();
   if (relevantCurrencies.length > 0) {
     historicalIndex = await getHistoricalRateIndex(relevantCurrencies);
   }
@@ -370,7 +372,7 @@ async function fetchTaxTransactions(
   // Rate-to-EUR for a currency on a given date: the stored historical rate on or
   // before the date when available, else the current rate. EUR is always 1.
   const rateToEurForDate = (code: string, dateStr: string) => {
-    const c = String(code || "EUR")
+    const c = (code || "EUR")
       .toUpperCase()
       .trim();
     if (c === "EUR") return 1;
@@ -475,7 +477,7 @@ async function fetchTaxTransactions(
     mo.other = addMoney(mo.other, otherAmt);
     mo.fees = addMoney(mo.fees, fees);
 
-    const ac = row.asset_class ?? "other";
+    const ac = row.asset_class;
     let acBucket = byAssetClass.get(ac);
     if (!acBucket) {
       acBucket = { assetClass: ac, taxes: 0, fees: 0 };
@@ -535,7 +537,7 @@ async function fetchTaxTransactions(
     byAssetClass: [...byAssetClass.values()].sort((a, b) =>
       addAll([b.taxes, b.fees]).comparedTo(addAll([a.taxes, a.fees])),
     ),
-    byInvestment: [...byInvestment.values()].sort((a, b) => b.total - a.total),
+    byInvestment: [...byInvestment.values()].sort((a, b) => toDecimal(b.total).comparedTo(a.total)),
     // Rows left out for want of a stored rate; zero when every row converted.
     unconvertedCount: unconverted.count,
     unconvertedCurrencies: [...unconverted.currencies].sort(),
@@ -588,21 +590,21 @@ export async function fetchTaxData(
     precomputedPIT: annualTaxApplies ? precomputedPIT : undefined,
     household: annualTaxApplies ? household : undefined,
     precomputedHousehold: annualTaxApplies ? precomputedHousehold : undefined,
-    tobTotal: txns?.tobTotal ?? 0,
-    dividendWHTTotal: txns?.dividendWHTTotal ?? 0,
-    sellTaxTotal: txns?.sellTaxTotal ?? 0,
-    otherTaxTotal: txns?.otherTaxTotal ?? 0,
-    feesTotal: txns?.feesTotal ?? 0,
-    dividendsReceived: txns?.dividendsReceived ?? 0,
-    totalInKindIncome: txns?.totalInKindIncome ?? 0,
-    inKindIncomeCount: txns?.inKindIncomeCount ?? 0,
-    grossDividendBase: txns?.grossDividendBase ?? null,
-    netDividendResult: txns?.netDividendResult ?? null,
-    unknownDividendConventionCount: txns?.unknownDividendConventionCount ?? 0,
-    byMonth: txns?.byMonth ?? [],
-    byAssetClass: txns?.byAssetClass ?? [],
-    byInvestment: txns?.byInvestment ?? [],
-    unconvertedCount: txns?.unconvertedCount ?? 0,
-    unconvertedCurrencies: txns?.unconvertedCurrencies ?? [],
+    tobTotal: txns.tobTotal,
+    dividendWHTTotal: txns.dividendWHTTotal,
+    sellTaxTotal: txns.sellTaxTotal,
+    otherTaxTotal: txns.otherTaxTotal,
+    feesTotal: txns.feesTotal,
+    dividendsReceived: txns.dividendsReceived,
+    totalInKindIncome: txns.totalInKindIncome,
+    inKindIncomeCount: txns.inKindIncomeCount,
+    grossDividendBase: txns.grossDividendBase,
+    netDividendResult: txns.netDividendResult,
+    unknownDividendConventionCount: txns.unknownDividendConventionCount,
+    byMonth: txns.byMonth,
+    byAssetClass: txns.byAssetClass,
+    byInvestment: txns.byInvestment,
+    unconvertedCount: txns.unconvertedCount,
+    unconvertedCurrencies: txns.unconvertedCurrencies,
   };
 }

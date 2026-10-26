@@ -50,10 +50,10 @@ export function renderBelgianRulesSummary(
           accumulatingFunds: "Accumulating Funds",
           distributingFunds: "Distributing Funds",
         }[key] ?? key;
-      const cap = t.cap != null ? fmtCurrency(t.cap, "EUR") : "—";
+      const cap = fmtCurrency(t.cap, "EUR");
       return `<tr>
       <td>${escapeHtml(label)}</td>
-      <td class="num">${t.rate != null ? fmtPct(t.rate, false, 2) : "—"}</td>
+      <td class="num">${fmtPct(t.rate, false, 2)}</td>
       <td class="num">${cap}</td>
     </tr>`;
     })
@@ -152,8 +152,6 @@ function renderPITBlock(
   profile: TaxProfile | null,
   currency: string,
 ): string {
-  if (pit == null) return "";
-
   // Unlike taxTables rates (fractions), the client sends bracket rates already in
   // percent units (pit.ts: `rate: br.rate * 100`) — hence isRaw.
   const rows = (pit.brackets ?? [])

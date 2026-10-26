@@ -51,7 +51,7 @@ const DEFAULT_MATCH_THRESHOLD = 0.7;
  * matches back to their source rows without a second normalization pass.
  */
 export async function findBestRecipientMatches(
-  names: string[],
+  names: Array<string | null | undefined>,
   { threshold = DEFAULT_MATCH_THRESHOLD }: { threshold?: number } = {},
 ): Promise<Map<string, RecipientMatch>> {
   const out = new Map<string, RecipientMatch>();
@@ -62,7 +62,7 @@ export async function findBestRecipientMatches(
   const normalizedByRaw = new Map<string, string>();
   for (const raw of names) {
     if (raw == null) continue;
-    const norm = normalizeForMatching(String(raw));
+    const norm = normalizeForMatching(raw);
     if (!norm) continue;
     normalizedByRaw.set(raw, norm);
   }
@@ -117,7 +117,7 @@ export async function findBestRecipientMatches(
       recipientId: row.recipient_id,
       normalizedName: row.normalized_name,
       similarity: parseFloat(String(row.sim)),
-      exact: !!row.is_exact,
+      exact: row.is_exact,
     });
   }
 

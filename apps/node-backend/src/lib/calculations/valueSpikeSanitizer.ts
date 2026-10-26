@@ -36,7 +36,7 @@ export function sanitizeIsolatedValueSpikes<T extends Record<string, unknown>>(
   const sumOf = (row: Record<string, unknown>, fields: string[]) => {
     const legs = [];
     for (const part of fields) {
-      const leg = Number(row?.[part]);
+      const leg = Number(row[part]);
       if (!Number.isFinite(leg)) return undefined;
       legs.push(leg);
     }
@@ -46,7 +46,7 @@ export function sanitizeIsolatedValueSpikes<T extends Record<string, unknown>>(
   const partsSum = (row: Record<string, unknown>) => sumOf(row, sumFields);
 
   const decomposes = (row: Record<string, unknown>) => {
-    const total = Number(row?.[field]);
+    const total = Number(row[field]);
     const parts = partsSum(row);
     if (parts === undefined || !Number.isFinite(total)) return false;
     return parts.minus(toDecimal(total)).abs().lte(decompositionTolerance);

@@ -33,7 +33,7 @@ export function renderExecutiveSummary(
       heading: "Data unavailable",
       message: "Monthly totals could not be loaded. Retry the report.",
     });
-  const months = filterMonthsByPeriod(data.monthly?.months ?? [], period);
+  const months = filterMonthsByPeriod(data.monthly.months, period);
 
   const totalIncome = months.reduce((s, m) => s + m.total_income, 0);
   const totalSpending = months.reduce((s, m) => s + m.total_spending, 0);
@@ -126,7 +126,7 @@ export function renderExecutiveSummary(
   let filterImpactHtml = "";
   if (data.filteredMonthly) {
     const fMonths = filterMonthsByPeriod(
-      data.filteredMonthly?.months ?? [],
+      data.filteredMonthly.months,
       period,
     );
     const fIncome = fMonths.reduce((s, m) => s + m.total_income, 0);

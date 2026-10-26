@@ -114,7 +114,7 @@ export function buildTaxDashboard(
   const transactionYears = new Set<number>();
   for (const [period, cells] of Object.entries(pivot.categoryPivot)) {
     for (const cell of cells) {
-      const path = cell.categoryPathIds?.length > 0
+      const path = cell.categoryPathIds.length > 0
         ? cell.categoryPathIds
         : cell.categoryId != null
           ? [cell.categoryId]
@@ -432,7 +432,7 @@ export async function getTaxDashboard(options: TaxDashboardOptions = {}) {
         amount: Number(t.amount),
         taxes: Number(t.taxes),
         fees: Number(t.fees),
-        currency: t.currency ?? "EUR",
+        currency: t.currency,
         fx_rate_to_eur: t.fx_rate_to_eur,
       })),
       currency,

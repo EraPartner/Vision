@@ -322,8 +322,10 @@ export async function readIbkrFundingWorkbook(
       throw new ValidationError(
         "IBKR funding workbook exceeds safe cell limits",
       );
-    for (const [coordinate, cell] of Object.entries(source)) {
+    for (const [coordinate, entry] of Object.entries(source)) {
       if (coordinate.startsWith("!")) continue;
+      // xlsx types non-"!" sheet keys as `any`; they are cell objects.
+      const cell = entry as XLSX.CellObject;
       const location = XLSX.utils.decode_cell(coordinate);
       if (
         !/^[A-Z]+[1-9]\d*$/.test(coordinate) ||
@@ -340,7 +342,9 @@ export async function readIbkrFundingWorkbook(
     for (let row = 0; row <= range.e.r; row++) {
       const values: FundingWorkbookCell[] = [];
       for (let column = 0; column <= range.e.c; column++) {
-        const cell = source[XLSX.utils.encode_cell({ r: row, c: column })];
+        const cell = source[XLSX.utils.encode_cell({ r: row, c: column })] as
+          | XLSX.CellObject
+          | undefined;
         if (cell?.f != null || cell?.F != null)
           throw new ValidationError(
             "IBKR funding workbook formulas are not supported",

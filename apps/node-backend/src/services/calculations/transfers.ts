@@ -36,10 +36,12 @@ export function resolveTransferMatches(candidatePairs: TransferPair[]): {
   const outToIns = new Map<number, number[]>();
   const inToOuts = new Map<number, number[]>();
   for (const { outId, inId } of candidatePairs) {
-    if (!outToIns.has(outId)) outToIns.set(outId, []);
-    if (!inToOuts.has(inId)) inToOuts.set(inId, []);
-    outToIns.get(outId)!.push(inId);
-    inToOuts.get(inId)!.push(outId);
+    const ins = outToIns.get(outId);
+    if (ins) ins.push(inId);
+    else outToIns.set(outId, [inId]);
+    const outs = inToOuts.get(inId);
+    if (outs) outs.push(outId);
+    else inToOuts.set(inId, [outId]);
   }
 
   const autoPairs: TransferPair[] = [];
@@ -50,7 +52,7 @@ export function resolveTransferMatches(candidatePairs: TransferPair[]): {
     if (
       ins.length === 1 &&
       onlyIn !== undefined &&
-      inToOuts.get(onlyIn)!.length === 1
+      inToOuts.get(onlyIn)?.length === 1
     ) {
       autoPairs.push({ outId, inId: onlyIn });
       usedIn.add(onlyIn);
@@ -85,7 +87,7 @@ function findTransferMatches(
 ) {
   const open = transactions.filter(
     (t) =>
-      t.is_active !== false &&
+      t.is_active &&
       !t.is_transfer &&
       t.transfer_source == null &&
       Number(t.amount) !== 0 &&

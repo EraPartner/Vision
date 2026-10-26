@@ -6,6 +6,7 @@
 
 import { assetClassLabel, emptySection, escapeHtml, fmtCurrency, fmtPct, sectionPage, signClass } from '../sectionHelpers.ts';
 import type { PortfolioReportData } from '../dataFetcherPortfolio.ts';
+import { addAll, toDecimal, toNumber } from "../../../lib/money.ts";
 
 export function renderTopHoldings(
   data: PortfolioReportData | null,
@@ -23,23 +24,23 @@ export function renderTopHoldings(
   }
 
   const sorted = [...breakdown]
-    .sort((a, b) => (Number(b.currentValue ?? 0)) - (Number(a.currentValue ?? 0)))
+    .sort((a, b) => toDecimal(b.currentValue).comparedTo(a.currentValue))
     .slice(0, 15);
 
-  const totalValue = breakdown.reduce((s, inv) => s + Number(inv.currentValue ?? 0), 0);
+  const totalValue = toNumber(addAll(breakdown.map((inv) => inv.currentValue)));
 
   const rows = sorted.map((inv, idx) => {
-    const val      = Number(inv.currentValue ?? 0);
-    const invested = Number(inv.totalInvested ?? 0);
-    const gl       = Number(inv.gainLoss ?? 0);
-    const glPct    = Number(inv.gainLossPercent ?? (invested > 0 ? (gl / invested) * 100 : 0));
+    const val      = inv.currentValue;
+    const invested = inv.totalInvested;
+    const gl       = inv.gainLoss;
+    const glPct    = inv.gainLossPercent;
     const share    = totalValue > 0 ? (val / totalValue) * 100 : 0;
     const ac       = inv.assetClass;
     const glCls    = signClass(gl);
 
     return `<tr>
       <td style="color:hsl(var(--muted));font-size:10px;">${idx + 1}</td>
-      <td>${escapeHtml(inv.name ?? '—')}</td>
+      <td>${escapeHtml(inv.name)}</td>
       <td>${escapeHtml(inv.symbol ?? '—')}</td>
       <td><span class="badge badge-neutral">${escapeHtml(assetClassLabel(ac))}</span></td>
       <td class="num">${fmtCurrency(invested, currency)}</td>

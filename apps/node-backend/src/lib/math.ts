@@ -5,13 +5,17 @@
 /**
  * Median of a numeric array. Returns `undefined` for empty / non-array input.
  */
-export function median(values: readonly number[]): number | undefined {
-  if (!Array.isArray(values) || values.length === 0) return undefined;
+export function median(
+  values: readonly number[] | null | undefined,
+): number | undefined {
+  if (!values || values.length === 0) return undefined;
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid];
+  const upper = sorted[mid];
+  if (upper === undefined) return undefined;
+  if (sorted.length % 2 === 1) return upper;
+  const lower = sorted[mid - 1];
+  return lower === undefined ? undefined : (lower + upper) / 2;
 }
 
 export interface MadReturnStats {
@@ -70,7 +74,7 @@ export function isRobustNeedle(
  * `Number(x) || 0` idiom for values where 0 itself is legitimate. A missing
  * value that slipped past its declared type also reads as 0, as `|| 0` did.
  */
-export function nanToZero(value: number): number {
+export function nanToZero(value: number | null | undefined): number {
   return typeof value === "number" && !Number.isNaN(value) ? value : 0;
 }
 
@@ -79,7 +83,10 @@ export function nanToZero(value: number): number {
  * `Number(x) || fallback` idiom for settings where 0 means "use the default"
  * (row limits, page sizes, counts that must be at least one).
  */
-export function nonZeroOr(value: number, fallback: number): number {
+export function nonZeroOr(
+  value: number | null | undefined,
+  fallback: number,
+): number {
   return typeof value !== "number" || value === 0 || Number.isNaN(value)
     ? fallback
     : value;

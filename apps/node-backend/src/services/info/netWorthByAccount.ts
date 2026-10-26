@@ -56,7 +56,7 @@ export async function getNetWorthByAccount(targetCurrency: CurrencyCode) {
       continue;
     }
     const converted = convertAtLatestRates(
-      money(account.computed_balance ?? 0, storedCurrencyCode(account.currency)),
+      money(account.computed_balance, storedCurrencyCode(account.currency)),
       target,
       rates,
     );
@@ -68,8 +68,7 @@ export async function getNetWorthByAccount(targetCurrency: CurrencyCode) {
 
   const holdingsById = new Map<number | null, number[]>();
   for (const partition of summary.byAccount) {
-    const id =
-      partition.account_id == null ? null : Number(partition.account_id);
+    const id = partition.account_id;
     const values = holdingsById.get(id) ?? [];
     values.push(partition.currentValue);
     holdingsById.set(id, values);

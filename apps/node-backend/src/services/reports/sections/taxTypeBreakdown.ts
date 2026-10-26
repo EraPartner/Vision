@@ -6,6 +6,7 @@
 
 import { emptySection, escapeHtml, fmtCurrency, fmtPct, sectionPage, svgHorizontalBars } from '../sectionHelpers.ts';
 import type { TaxReportData } from '../dataFetcherTax.ts';
+import { addAll, toDecimal, toNumber } from "../../../lib/money.ts";
 
 export function renderTaxTypeBreakdown(
   data: TaxReportData | null,
@@ -17,13 +18,13 @@ export function renderTaxTypeBreakdown(
     { label: 'Capital Gains / Sell Tax',   amount: data?.sellTaxTotal     ?? 0 },
     { label: 'Broker / Management Fees',   amount: data?.feesTotal        ?? 0 },
     { label: 'Other Taxes',                amount: data?.otherTaxTotal    ?? 0 },
-  ].filter(c => c.amount > 0).sort((a, b) => b.amount - a.amount);
+  ].filter(c => c.amount > 0).sort((a, b) => toDecimal(b.amount).comparedTo(a.amount));
 
   if (components.length === 0) {
     return emptySection({ title: 'Tax Type Breakdown', subtitle: 'Distribution of taxes and fees by type', heading: 'No tax data', message: 'No tax transactions found for the selected period.' });
   }
 
-  const total = components.reduce((s, c) => s + c.amount, 0);
+  const total = toNumber(addAll(components.map((c) => c.amount)));
 
   const barItems = components.map(c => ({
     label:    c.label,

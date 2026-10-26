@@ -16,9 +16,9 @@ export async function computeRecipientPivot({
   targetCurrency = 'EUR',
   excludedRecipientIds = [],
   bucket = 'monthly',
-  startDate = undefined,
-  endDate = undefined,
-  recipientIds = undefined,
+  startDate,
+  endDate,
+  recipientIds,
 }: RecipientPivotOptions = {}) {
   const key = `rpv|${targetCurrency}|b:${bucket}|s:${startDate || ''}|e:${endDate || ''}`
     + `|ri:${statsKeyPart(recipientIds)}|xr:${statsKeyPart(excludedRecipientIds)}`;

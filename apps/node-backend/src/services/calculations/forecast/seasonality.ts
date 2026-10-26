@@ -6,6 +6,8 @@
  * and standard deviation used by parametric-MC and Holt-Winters init.
  */
 
+import { addAll, divide, toNumber } from "../../../lib/money.ts";
+
 const MIN_BUCKET_SAMPLES = 3;
 
 export interface BucketStats {
@@ -36,10 +38,7 @@ export function dayOfMonth(isoDateStr: string) {
 function stats(values: number[]): BucketStats {
   const n = values.length;
   if (n === 0) return { mean: 0, variance: 0, std: 0, n: 0 };
-  let sum = 0;
-  for (const v of values) sum += v;
-  // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-  const mean = sum / n;
+  const mean = toNumber(divide(addAll(values), n));
   let sq = 0;
   for (const v of values) {
     const dv = v - mean;
@@ -60,10 +59,12 @@ export function buildSeasonalityBuckets(
     const dow = dayOfWeek(row.date);
     const dom = dayOfMonth(row.date);
     const key = `${dow}:${dom}`;
-    if (!byDowDom.has(key)) byDowDom.set(key, []);
-    byDowDom.get(key)!.push(row.net);
-    if (!byDow.has(dow)) byDow.set(dow, []);
-    byDow.get(dow)!.push(row.net);
+    const domBucket = byDowDom.get(key);
+    if (domBucket) domBucket.push(row.net);
+    else byDowDom.set(key, [row.net]);
+    const dowBucket = byDow.get(dow);
+    if (dowBucket) dowBucket.push(row.net);
+    else byDow.set(dow, [row.net]);
     all.push(row.net);
   }
 

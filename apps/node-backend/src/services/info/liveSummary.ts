@@ -40,8 +40,9 @@ export async function resolveLivePortfolioValue(
   try {
     // getPortfolioSummary builds `totals.totalPortfolioValue` as a rounded
     // number; the optional chaining guards a summary that resolved empty.
-    const summary: Partial<PortfolioSummary> | undefined =
-      await resolveLiveSummary(targetCurrency);
+    const summary = (await resolveLiveSummary(targetCurrency)) as
+      | Partial<PortfolioSummary>
+      | undefined;
     const value = summary?.totals?.totalPortfolioValue;
     return Number.isFinite(value) ? value : undefined;
   } catch (err) {

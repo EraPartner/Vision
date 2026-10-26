@@ -23,9 +23,8 @@ const MAX_TABLE_ROWS = 15;
 const MAX_MOM_ROWS = 8;
 
 export function renderTopRecipients(
-  data: Pick<
-    FinancialReportData,
-    "recipients" | "filteredRecipients" | "exclusions"
+  data: Partial<
+    Pick<FinancialReportData, "recipients" | "filteredRecipients" | "exclusions">
   >,
   { currency }: { currency: string },
 ): string {
@@ -33,7 +32,7 @@ export function renderTopRecipients(
   const excludedRecipientIds = data.exclusions?.recipientIds ?? [];
   const hasExclusions =
     excludedRecipientIds.length > 0 ||
-    (data.exclusions?.categoryIds?.length ?? 0) > 0;
+    (data.exclusions?.categoryIds.length ?? 0) > 0;
   const monthOverMonth =
     (hasExclusions ? data.filteredRecipients : data.recipients)
       ?.monthOverMonth ?? [];
@@ -56,14 +55,14 @@ export function renderTopRecipients(
   let chartHtml;
   if (hasExclusions && filteredMerchants) {
     const allItems = topMerchants.slice(0, MAX_CHART_ITEMS).map((m) => ({
-      label: m.name ?? `Recipient ${m.recipientId}`,
+      label: m.name,
       value: m.totalSpend,
       fmtValue: fmtCurrency(m.totalSpend, currency),
     }));
     const filteredItems = filteredMerchants
       .slice(0, MAX_CHART_ITEMS)
       .map((m) => ({
-        label: m.name ?? `Recipient ${m.recipientId}`,
+        label: m.name,
         value: m.totalSpend,
         fmtValue: fmtCurrency(m.totalSpend, currency),
       }));
@@ -75,7 +74,7 @@ export function renderTopRecipients(
     });
   } else {
     const chartItems = topMerchants.slice(0, MAX_CHART_ITEMS).map((m) => ({
-      label: m.name ?? `Recipient ${m.recipientId}`,
+      label: m.name,
       value: m.totalSpend,
       fmtValue: fmtCurrency(m.totalSpend, currency),
     }));
@@ -87,10 +86,8 @@ export function renderTopRecipients(
   const tableRows = tableSource
     .slice(0, MAX_TABLE_ROWS)
     .map((m, i) => {
-      const name = m.name ?? `Recipient ${m.recipientId}`;
-      const avg =
-        m.avgAmount ??
-        (m.transactionCount > 0 ? m.totalSpend / m.transactionCount : 0);
+      const name = m.name;
+      const avg = m.avgAmount;
       return `
       <tr>
         <td style="color:hsl(var(--muted));font-size:10px">${i + 1}</td>
@@ -123,7 +120,7 @@ export function renderTopRecipients(
     const momRows = monthOverMonth
       .slice(0, MAX_MOM_ROWS)
       .map((m) => {
-        const delta = m.changePercent ?? 0;
+        const delta = m.changePercent;
         const badgeCls =
           delta > 10
             ? "badge-neg"
@@ -133,7 +130,7 @@ export function renderTopRecipients(
         const arrow = delta > 0 ? "↑" : delta < 0 ? "↓" : "—";
         return `
         <tr>
-          <td>${escapeHtml(m.name ?? "")}</td>
+          <td>${escapeHtml(m.name)}</td>
           <td class="num neg">${escapeHtml(fmtCurrency(m.currentSpend, currency))}</td>
           <td class="num">${escapeHtml(fmtCurrency(m.previousSpend, currency))}</td>
           <td class="num"><span class="badge ${badgeCls}">${arrow} ${escapeHtml(fmtPct(delta, true))}</span></td>

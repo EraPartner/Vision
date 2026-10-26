@@ -14,6 +14,7 @@ import {
   svgHorizontalBars,
 } from "../sectionHelpers.ts";
 import type { TaxReportData } from '../dataFetcherTax.ts';
+import { divide, multiply, toDecimal, toNumber } from "../../../lib/money.ts";
 
 export function renderFeeBreakdown(
   data: TaxReportData | null,
@@ -23,12 +24,12 @@ export function renderFeeBreakdown(
 
   const rows = byAssetClass
     .map((b) => ({
-      label: assetClassLabel(b.assetClass ?? "other", { plural: true }),
-      fees: b.fees ?? 0,
-      taxes: b.taxes ?? 0,
+      label: assetClassLabel(b.assetClass, { plural: true }),
+      fees: b.fees,
+      taxes: b.taxes,
     }))
     .filter((r) => r.fees > 0)
-    .sort((a, b) => b.fees - a.fees);
+    .sort((a, b) => toDecimal(b.fees).comparedTo(a.fees));
 
   const totalFees = data?.feesTotal ?? 0;
 
@@ -49,7 +50,7 @@ export function renderFeeBreakdown(
 
   const tableRows = rows
     .map((r) => {
-      const share = totalFees > 0 ? (r.fees / totalFees) * 100 : 0;
+      const share = totalFees > 0 ? toNumber(multiply(divide(r.fees, totalFees), 100)) : 0;
       return `<tr>
       <td>${escapeHtml(r.label)}</td>
       <td class="num neg">${fmtCurrency(r.fees, currency)}</td>

@@ -1,4 +1,5 @@
 import { formatDateToYmd } from './dateFormat.ts';
+import { looseString } from './looseString.ts';
 
 /**
  * Convert a PostgreSQL DATE value to its YYYY-MM key.
@@ -9,7 +10,7 @@ import { formatDateToYmd } from './dateFormat.ts';
  */
 export function monthKeyFromDbDate(value: unknown): string | null {
   if (value == null) return null;
-  const ymd = value instanceof Date ? formatDateToYmd(value) : String(value).slice(0, 10);
+  const ymd = value instanceof Date ? formatDateToYmd(value) : looseString(value).slice(0, 10);
   return /^\d{4}-\d{2}/.test(ymd) ? ymd.slice(0, 7) : null;
 }
 

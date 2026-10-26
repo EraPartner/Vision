@@ -15,8 +15,8 @@ export async function computeRecipientByYear({
   targetCurrency = "EUR",
   excludedRecipientIds = [],
   excludedCategoryIds = [],
-  startDate = undefined,
-  endDate = undefined,
+  startDate,
+  endDate,
 }: RecipientByYearOptions = {}) {
   const key = `rby|${targetCurrency}|r:${statsKeyPart(excludedRecipientIds)}|c:${statsKeyPart(excludedCategoryIds)}|s:${startDate || ""}|e:${endDate || ""}`;
   return withStatisticsCache(key, async () => {

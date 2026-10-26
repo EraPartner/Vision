@@ -6,6 +6,7 @@
 
 import { emptySection, escapeHtml, fmtCurrency, fmtMonthLabel, sectionPage, svgGenericGroupedBarChart } from '../sectionHelpers.ts';
 import type { PortfolioReportData } from '../dataFetcherPortfolio.ts';
+import { addAll, toNumber } from '../../../lib/money.ts';
 
 export function renderDividendIncome(
   data: PortfolioReportData | null,
@@ -24,7 +25,7 @@ export function renderDividendIncome(
     return emptySection({ title: 'Dividend Income', subtitle: 'Dividend cash flows over the selected period', heading: 'No dividend data', message: 'No dividend transactions found for the selected period.' });
   }
 
-  const totalDividends = byMonth.reduce((s, m) => s + m.amount, 0);
+  const totalDividends = toNumber(addAll(byMonth.map((m) => m.amount)));
 
   const groups = byMonth.map(m => ({
     label:  fmtMonthLabel(m.year, m.month),
@@ -37,9 +38,9 @@ export function renderDividendIncome(
 
   const top10 = byInvestment.slice(0, 10);
   const tableRows = top10.map(inv => `<tr>
-    <td>${escapeHtml(inv.name ?? '—')}</td>
+    <td>${escapeHtml(inv.name)}</td>
     <td>${escapeHtml(inv.symbol ?? '—')}</td>
-    <td>${escapeHtml(inv.assetClass ?? '—')}</td>
+    <td>${escapeHtml(inv.assetClass)}</td>
     <td class="num">${fmtCurrency(inv.total, currency)}</td>
   </tr>`).join('');
 

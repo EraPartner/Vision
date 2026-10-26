@@ -15,7 +15,7 @@ export function fnv1aHash(str: string) {
 }
 
 export function makeRng(seedInput: number | string): () => number {
-  let state = typeof seedInput === 'number' ? seedInput >>> 0 : fnv1aHash(String(seedInput));
+  let state = typeof seedInput === 'number' ? seedInput >>> 0 : fnv1aHash(seedInput);
   if (state === 0) state = 1;
   return function next() {
     state ^= state << 13;
