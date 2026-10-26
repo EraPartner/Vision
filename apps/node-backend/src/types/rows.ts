@@ -421,9 +421,10 @@ export type PortfolioTransactionSummaryRow = {
   income_recognition_role?: "standard" | "included_in_units";
   type: string;
   total_amount: number;
-  total_units: number;
-  total_fees: number;
-  total_taxes: number;
+  /** SUM over a nullable column: null when every row's value is NULL. */
+  total_units: number | null;
+  total_fees: number | null;
+  total_taxes: number | null;
   count: number;
 };
 

@@ -19,7 +19,7 @@ import {
   portfolioUnitEventRowSchema,
 } from "../database/rows/portfolio.ts";
 import type { PortfolioUnitEventDbRow } from "../database/rows/portfolio.ts";
-import { coerceNumericFields } from "../lib/money.ts";
+import { coerceNumericFields, toNumber } from "../lib/money.ts";
 import { toYmd } from "../lib/dateFormat.ts";
 import { validateId } from "../lib/validation.ts";
 import { hasPortfolioTransactionImportBatchIdColumn } from "./portfolioTxRepo.common.ts";
@@ -458,12 +458,8 @@ export async function getRowsForPortfolioMath({
   );
 }
 
-const PORTFOLIO_SUMMARY_NUMERIC_FIELDS = [
-  "total_amount",
-  "total_units",
-  "total_fees",
-  "total_taxes",
-];
+const nullableNumber = (value: string | null) =>
+  value === null ? null : toNumber(value);
 
 export async function getSummary(
   investmentId: InvestmentId,
@@ -477,23 +473,22 @@ export async function getSummary(
         "type",
         "income_recognition_role",
         eb.fn.sum<string>("amount").as("total_amount"),
-        eb.fn.sum<string>("units").as("total_units"),
-        eb.fn.sum<string>("fees").as("total_fees"),
-        eb.fn.sum<string>("taxes").as("total_taxes"),
+        eb.fn.sum<string | null>("units").as("total_units"),
+        eb.fn.sum<string | null>("fees").as("total_fees"),
+        eb.fn.sum<string | null>("taxes").as("total_taxes"),
         eb.fn.countAll<string>().as("count"),
       ])
       .where("investment_id", "=", investmentId)
       .groupBy(["type", "income_recognition_role"]),
   );
-  return rows.map(
-    (row) =>
-      // coerceNumericFields converts the NUMERIC strings to numbers at runtime.
-      ({
-        ...coerceNumericFields<Record<string, unknown>>(
-          row,
-          PORTFOLIO_SUMMARY_NUMERIC_FIELDS,
-        ),
-        count: parseInt(row.count, 10),
-      }) as PortfolioTransactionSummaryRow,
-  );
+  // SUM over a nullable column is NULL when every row in the group is NULL.
+  return rows.map((row) => ({
+    type: row.type,
+    income_recognition_role: row.income_recognition_role,
+    total_amount: toNumber(row.total_amount),
+    total_units: nullableNumber(row.total_units),
+    total_fees: nullableNumber(row.total_fees),
+    total_taxes: nullableNumber(row.total_taxes),
+    count: parseInt(row.count, 10),
+  }));
 }
