@@ -17000,7 +17000,7 @@ export interface operations {
                      * @enum {boolean}
                      */
                     create_new?: true;
-                } & (unknown  );
+                } & (unknown | unknown);
             };
         };
         responses: {
