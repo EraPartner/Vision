@@ -21,6 +21,7 @@ import { logger } from "../config/logger.ts";
 import { addAll, roundMoney, toDecimal } from "../lib/money.ts";
 import { median } from "../lib/math.ts";
 import type Decimal from "decimal.js";
+import { errorMessage } from "../lib/errors.ts";
 
 export interface CategoryOutlierFinding {
   categoryId: number;
@@ -358,7 +359,7 @@ async function getRawFindings(): Promise<CategoryOutlierFinding[]> {
     return findings;
   } catch (err) {
     logger.error("Error detecting category spend outliers", {
-      error: (err as Error).message,
+      error: errorMessage(err),
     });
     throw err;
   }

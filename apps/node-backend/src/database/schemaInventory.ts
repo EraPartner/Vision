@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { z } from "zod";
+import { checkRows } from "./rowContracts.ts";
 
 /** One `db/schema-inventory.sql` row (`kind, name, definition`). */
 export interface SchemaInventoryObject {
@@ -8,6 +10,14 @@ export interface SchemaInventoryObject {
   name: string;
   definition: unknown[];
 }
+
+const schemaInventoryObjectSchema = z
+  .object({
+    kind: z.string(),
+    name: z.string(),
+    definition: z.array(z.unknown()),
+  })
+  .describe("schema inventory row");
 
 export type SchemaInventoryEntry = [
   kind: string,
@@ -66,5 +76,7 @@ export async function readSchemaInventory(
   repoRoot: string,
 ): Promise<SchemaInventoryEntry[]> {
   const result = await runQuery(readSchemaInventorySql(repoRoot));
-  return normalizeSchemaInventory(result.rows as SchemaInventoryObject[]);
+  return normalizeSchemaInventory(
+    checkRows(schemaInventoryObjectSchema, result.rows),
+  );
 }

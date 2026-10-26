@@ -15,9 +15,9 @@ import type {
 
 // `value?.[key]` for event targets, errors and rejection reasons of unknown shape.
 function property(value: unknown, key: string): unknown {
-  return typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)[key]
-    : undefined;
+  if (typeof value !== "object" || value === null) return undefined;
+  const field: unknown = Reflect.get(value, key);
+  return field;
 }
 
 function rendererFailureSource(event: ErrorEvent): string {

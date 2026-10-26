@@ -67,6 +67,7 @@ import type {
   UnlinkedTransactionRow,
 } from "../types/rows.ts";
 import { nanToZero } from "../lib/math.ts";
+import { isRecord } from "../lib/typeGuards.ts";
 
 /**
  * Validate canonical account identity before dynamic SET clauses are built.
@@ -830,7 +831,7 @@ export const transactionRepository = {
     const total = totalRow ? parseInt(String(totalRow.total_count), 10) : 0;
     const rows = checkRows(
       uncategorisedPageRowSchema,
-      pageRows.filter((row) => (row as { id: unknown }).id != null),
+      pageRows.filter((row) => isRecord(row) && row.id != null),
     ).map(({ total_count: _total_count, _row_order, ...row }) => row);
 
     return { rows: await attachTagsToRows(rows), total };

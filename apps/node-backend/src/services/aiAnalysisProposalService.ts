@@ -21,6 +21,7 @@ import { getOllamaClient } from "../integrations/ollama/client.ts";
 import { getContextTuner } from "../integrations/ollama/tuning.ts";
 import settings from "../config/config.ts";
 import { UpstreamError } from "../middleware/errorHandler.ts";
+import { isRecord } from "../lib/typeGuards.ts";
 
 function visualPlanFromSource(
   source: AnalysisVisualPlanSource,
@@ -118,9 +119,9 @@ function applyOperations<T>(
     // JSON value.
     let target: unknown = result;
     for (const part of parts.slice(0, -1)) {
-      if (!target || typeof target !== "object" || !Object.hasOwn(target, part))
+      if (!isRecord(target) || !Object.hasOwn(target, part))
         throw new Error(`Proposal path does not exist: ${operation.path}`);
-      target = (target as Record<string, unknown>)[part];
+      target = target[part];
     }
     const key = parts.at(-1);
     // `split` always yields at least one segment.

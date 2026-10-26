@@ -21,6 +21,11 @@ export function orZero(value: number | null | undefined): number {
     : value;
 }
 
+/** `Number.isFinite` as a type guard: `Number.isFinite(value)` itself leaves the type as it was. */
+export function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 /** `Number(value) || 0`: numeric text, decimals and junk (NaN) all collapse to 0. */
 export function numberOrZero(value: unknown): number {
   return orZero(Number(value));

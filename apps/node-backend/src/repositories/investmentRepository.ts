@@ -77,21 +77,22 @@ const INVESTMENT_NUMERIC_FIELDS = [
   "interest_rate",
   "cadastral_income",
   "municipality_tax_rate",
-];
+] as const;
 /**
  * Coerce an `investments` row to its emitted shape: the four NUMERIC columns
  * become numbers and the DATE `maturity_date` a calendar-day string.
  */
 const mapInvestmentRow = (row: InvestmentDbRow): InvestmentRow => {
-  const mapped = coerceNumericFields<Record<string, unknown>>(
-    row,
-    INVESTMENT_NUMERIC_FIELDS,
-  );
+  const coerced = coerceNumericFields(row, INVESTMENT_NUMERIC_FIELDS);
   // DATE column: calendar-day string, not a raw pg Date (previous-day ISO
   // timestamp east of UTC once JSON-serialized).
-  if (mapped.maturity_date instanceof Date)
-    mapped.maturity_date = toWireDate(mapped.maturity_date);
-  return mapped as InvestmentRow;
+  return {
+    ...coerced,
+    maturity_date:
+      coerced.maturity_date instanceof Date
+        ? toWireDate(coerced.maturity_date)
+        : coerced.maturity_date,
+  };
 };
 
 // Create stores an empty or zero price/rate as NULL ("not set").

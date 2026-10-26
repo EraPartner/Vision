@@ -23,6 +23,7 @@ import type { ResearchDocumentCitation } from "./aiResearchDocuments.ts";
 import type { PublicWebSearchResult } from "./webResearch.ts";
 import { nanToZero } from "../lib/math.ts";
 import { valueText } from "./valueText.ts";
+import { isUnknownArray } from "../lib/typeGuards.ts";
 
 type InvestigationOutcome = AiInvestigationJobRow | null | undefined;
 
@@ -58,8 +59,8 @@ function parseStepIds(text: string): unknown[] | null {
   const end = text.lastIndexOf("}");
   const parsed: unknown = JSON.parse(text.slice(start, end + 1));
   if (typeof parsed !== "object" || parsed === null) return null;
-  const stepIds = Reflect.get(parsed, "stepIds") as unknown;
-  return Array.isArray(stepIds) ? (stepIds as unknown[]) : null;
+  const stepIds: unknown = Reflect.get(parsed, "stepIds");
+  return isUnknownArray(stepIds) ? stepIds : null;
 }
 
 function planInvestigation(

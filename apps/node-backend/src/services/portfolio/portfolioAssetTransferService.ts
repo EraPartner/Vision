@@ -32,6 +32,7 @@ import { asAccountId, asInvestmentId } from "@vision/types/brands";
 import type { AccountId, InvestmentId } from "@vision/types/brands";
 import { storedConfigObject } from "./storedConfig.ts";
 import { requiredValue } from "../requiredValue.ts";
+import { errorMessage } from "../../lib/errors.ts";
 
 /**
  * The staging-row columns a custody preview reads (asset transfers and asset
@@ -251,7 +252,7 @@ export function validatePortfolioAssetTransferHistory(
       throw new Error("Custody history contains an oversell");
   } catch (error) {
     throw new ConflictError(
-      `Asset transfer custody history is invalid: ${(error as Error).message}`,
+      `Asset transfer custody history is invalid: ${errorMessage(error)}`,
     );
   }
 }

@@ -80,10 +80,12 @@ function errorCode(error: unknown): unknown {
 }
 
 // Property reads on a parsed JSON value: non-objects carry no fields.
+function isObjectValue(value: unknown): value is UnknownRecord {
+  return typeof value === "object" && value !== null;
+}
+
 function fieldsOf(value: unknown): UnknownRecord | undefined {
-  return typeof value === "object" && value !== null
-    ? (value as UnknownRecord)
-    : undefined;
+  return isObjectValue(value) ? value : undefined;
 }
 
 function isSha256(value: unknown): boolean {
@@ -91,10 +93,10 @@ function isSha256(value: unknown): boolean {
 }
 
 function hasDemoSeedManifestShape(value: unknown): value is DemoSeedManifest {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isObjectValue(value) || Array.isArray(value)) {
     return false;
   }
-  const manifest = value as UnknownRecord;
+  const manifest = value;
   if (
     manifest.version !== 1 ||
     !isSha256(manifest.logicalSha256) ||

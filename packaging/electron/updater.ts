@@ -135,10 +135,12 @@ let shellUpdateCheckInFlight = false;
 let pendingShellUpdate: ReadyUpdate | null = null;
 
 // Property reads on parsed JSON: non-objects carry no fields.
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null;
+}
+
 function fieldsOf(value: unknown): JsonRecord | undefined {
-  return typeof value === "object" && value !== null
-    ? (value as JsonRecord)
-    : undefined;
+  return isJsonRecord(value) ? value : undefined;
 }
 
 function errorMessage(error: unknown): unknown {
@@ -252,7 +254,9 @@ export async function launchPreparedNativeInstaller({
       try {
         await startRuntime();
       } catch (restartError) {
-        (error as { restartError?: unknown }).restartError = restartError;
+        // Attach the restart failure to a thrown object; a thrown primitive
+        // has nowhere to carry it.
+        if (isJsonRecord(error)) error.restartError = restartError;
       }
     }
     throw error;

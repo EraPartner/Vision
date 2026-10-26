@@ -38,6 +38,7 @@ import { toYmd } from "../../lib/dateFormat.ts";
 import { getTaxOverview } from "./overviewService.ts";
 import { buildDashboardSuggestions } from "./dashboardSuggestions.ts";
 import { restateAtTransactionDateRates } from "./transactionDateFx.ts";
+import { isRecord } from "../../lib/typeGuards.ts";
 
 type Overview = Awaited<ReturnType<typeof getTaxOverview>>;
 type Monthly = { year: number; month: number; total_income: number };
@@ -56,9 +57,7 @@ export interface TaxDashboardOptions {
   excludedRecipientIds?: number[] | undefined;
 }
 function object(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  return isRecord(value) && !Array.isArray(value) ? value : {};
 }
 export const TAX_DASHBOARD_RULES = [
   {

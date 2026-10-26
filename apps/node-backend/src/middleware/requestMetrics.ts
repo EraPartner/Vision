@@ -12,6 +12,7 @@ import type {
   ExpressRequest,
   ExpressResponse,
 } from '../types/express.ts';
+import { isRecord } from '../lib/typeGuards.ts';
 
 const WINDOW_MINUTES = 15;
 const BUCKET_MS = 60_000; // 1-minute buckets
@@ -124,7 +125,7 @@ function trackMatchedPath(req: ExpressRequest): () => string | undefined {
       get: () => route,
       set: (next: unknown) => {
         route = next;
-        const path = (next as { path?: unknown } | null | undefined)?.path;
+        const path = isRecord(next) ? next.path : undefined;
         matchedPath =
           typeof path === 'string' ? `${req.baseUrl}${path}` : undefined;
       },

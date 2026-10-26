@@ -59,10 +59,12 @@ function isPlainObject(value: unknown): value is UnknownRecord {
 
 // Property reads on any renderer value: non-objects carry none of the fields
 // these validators look at.
+function isObjectValue(value: unknown): value is UnknownRecord {
+  return typeof value === "object" && value !== null;
+}
+
 function fieldsOf(value: unknown): UnknownRecord | undefined {
-  return typeof value === "object" && value !== null
-    ? (value as UnknownRecord)
-    : undefined;
+  return isObjectValue(value) ? value : undefined;
 }
 
 function noArguments(args: IpcArguments): [] {

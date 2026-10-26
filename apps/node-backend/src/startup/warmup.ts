@@ -132,7 +132,7 @@ async function pruneOldImportBatches() {
       }
     } catch (err) {
       logger.error(`Failed to prune old ${table} on startup`, {
-        error: (err as Error).message,
+        error: errorMessage(err),
       });
     }
   }
@@ -164,7 +164,7 @@ function withInFlightGuard(
     fn()
       .catch((err: unknown) => {
         logger.error(`Scheduled "${name}" failed`, {
-          error: (err as Error).message,
+          error: errorMessage(err),
         });
       })
       .finally(() => {
@@ -326,7 +326,7 @@ export async function runWarmupTasks({
   } catch (err) {
     logger.warn(
       "Could not hydrate research provider API keys; using env fallback",
-      { error: (err as Error).message },
+      { error: errorMessage(err) },
     );
   }
 

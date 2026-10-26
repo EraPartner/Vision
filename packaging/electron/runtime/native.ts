@@ -903,7 +903,8 @@ export function lastStartupError(log: string): string | undefined {
   const json = line?.slice(line.indexOf("{"));
   if (!json?.startsWith("{")) return undefined;
   try {
-    const error = (JSON.parse(json) as { error?: unknown }).error;
+    const parsed: unknown = JSON.parse(json);
+    const error = isRecord(parsed) ? parsed.error : undefined;
     return typeof error === "string" && error ? error : undefined;
   } catch {
     return undefined;

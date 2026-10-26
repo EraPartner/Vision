@@ -150,7 +150,7 @@ const fmpAdapter = {
       price: q.price,
       change: q.change,
       changePercent: q.changePercentage,
-      currency: undefined as string | undefined, // FMP /quote omits currency
+      currency: undefined, // FMP /quote omits currency
       exchange: q.exchange,
       open: q.open,
       dayHigh: q.dayHigh,
@@ -173,7 +173,7 @@ const fmpAdapter = {
     // a bare "no fundamentals".
     // Widened up front: it is assigned inside the onCoreError closure, which
     // control-flow narrowing cannot see.
-    let coreError = undefined as Error | undefined;
+    let coreError: Error | undefined;
     const onCoreError = (err: Error): undefined => { coreError ??= err; return undefined; };
     const [profileRaw, ratiosRaw, keyMetricsRaw, growthRaw] = await Promise.all([
       getJson(`${BASE}/profile?symbol=${enc}&apikey=${k}`).then(first).catch(onCoreError),
@@ -195,7 +195,7 @@ const fmpAdapter = {
       sector: profile?.sector,
       marketCap: profile?.marketCap,
       pe: ratios?.priceToEarningsRatioTTM,
-      forwardPE: undefined as number | undefined,
+      forwardPE: undefined,
       pegRatio: ratios?.priceToEarningsGrowthRatioTTM,
       dividendYield: ratios?.dividendYieldTTM,
       payoutRatio: ratios?.dividendPayoutRatioTTM,
@@ -205,7 +205,7 @@ const fmpAdapter = {
       profitMargin: ratios?.netProfitMarginTTM,
       grossMargin: ratios?.grossProfitMarginTTM,
       operatingMargin: ratios?.operatingProfitMarginTTM,
-      revenue: undefined as number | undefined,
+      revenue: undefined,
       revenueGrowth: growth?.revenueGrowth,
       earningsGrowth: growth?.epsgrowth,
       returnOnEquity: keyMetrics?.returnOnEquityTTM,

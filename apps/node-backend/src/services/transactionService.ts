@@ -40,6 +40,7 @@ import type {
   RecipientId,
   TransactionId,
 } from "@vision/types/brands";
+import { errorMessage } from "../lib/errors.ts";
 
 /**
  * The zod-validated manual-create POST body — loose passthrough (see
@@ -163,7 +164,7 @@ async function createManualTransaction(data: ManualTransactionInput): Promise<{
   } catch (err) {
     logger.warn("Auto-link after manual create failed", {
       id: transaction.id,
-      error: (err as { message?: string } | null | undefined)?.message,
+      error: errorMessage(err),
     });
   }
 

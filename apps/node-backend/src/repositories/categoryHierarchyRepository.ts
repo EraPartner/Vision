@@ -14,6 +14,7 @@ import type { CategoryNodeRow } from "../database/rows/catalog.ts";
 import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
 import { asCategoryId } from "@vision/types/brands";
 import type { CategoryId } from "@vision/types/brands";
+import { errorCode } from "../lib/errors.ts";
 
 export interface CategoryNode {
   id: CategoryId;
@@ -44,7 +45,7 @@ export interface CategoryNodePatch {
 
 /** SQLSTATE of a pg error (`undefined` for anything else). */
 function pgErrorCode(error: unknown): unknown {
-  return (error as { code?: unknown } | null | undefined)?.code;
+  return errorCode(error);
 }
 
 function conflict(message: string, code = "CATEGORY_HIERARCHY_CONFLICT") {

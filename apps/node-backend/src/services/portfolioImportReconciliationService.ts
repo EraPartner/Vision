@@ -87,6 +87,7 @@ import { firstNonZero } from "../lib/math.ts";
 import { normalizeIdentityText } from "./importIdentity.ts";
 import { requiredValue } from "./requiredValue.ts";
 import type { IbkrCashEnvelope } from "../repositories/portfolioImportCashRepository.ts";
+import { isRecord } from "../lib/typeGuards.ts";
 
 /**
  * One reconciliation history event read by column name. Custody events
@@ -358,9 +359,7 @@ function formatOf(
     }
   }
   // Any parsed JSON value: only an object has a format key.
-  return typeof config === "object" && config !== null
-    ? (config as Record<string, unknown>).format
-    : undefined;
+  return isRecord(config) ? config.format : undefined;
 }
 
 const GROSS_DIVIDEND_FORMATS = new Set<unknown>([

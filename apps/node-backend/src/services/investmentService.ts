@@ -57,6 +57,7 @@ import { parseBooleanQueryParam } from "../lib/httpParams.ts";
 import type { ExpressRequest, ExpressResponse } from "../types/express.ts";
 import type { InvestmentRow } from "../types/rows.ts";
 import { requiredValue } from "./requiredValue.ts";
+import { errorCode, errorMessage } from "../lib/errors.ts";
 
 /** A response after middleware/envelope.ts has installed `res.ok`. */
 type EnvelopeResponse = ExpressResponse & Required<Pick<ExpressResponse, "ok">>;
@@ -81,7 +82,7 @@ async function validateProviderUrls(body: Record<string, unknown>) {
         resolveDns: false,
       });
     } catch (err) {
-      throw new ValidationError(`Invalid ${field}: ${(err as Error).message}`);
+      throw new ValidationError(`Invalid ${field}: ${errorMessage(err)}`);
     }
   }
 }
@@ -126,7 +127,7 @@ const maxLenField = (field: string, max: number) =>
       try {
         return assertMaxLength(value, max, field);
       } catch (err) {
-        ctx.addIssue({ code: "custom", message: (err as Error).message });
+        ctx.addIssue({ code: "custom", message: errorMessage(err) });
         return z.NEVER;
       }
     })
@@ -142,7 +143,7 @@ const currencyField = z
       const code = assertCurrency(value);
       if (code !== undefined) return code;
     } catch (err) {
-      ctx.addIssue({ code: "custom", message: (err as Error).message });
+      ctx.addIssue({ code: "custom", message: errorMessage(err) });
       return z.NEVER;
     }
     ctx.addIssue({
@@ -339,7 +340,7 @@ const portfolioDateField = (field: string, allowClear: boolean) =>
         }
         return date;
       } catch (err) {
-        ctx.addIssue({ code: "custom", message: (err as Error).message });
+        ctx.addIssue({ code: "custom", message: errorMessage(err) });
         return z.NEVER;
       }
     })
@@ -362,7 +363,7 @@ const portfolioCurrencyField = z
     try {
       return assertCurrency(value);
     } catch (err) {
-      ctx.addIssue({ code: "custom", message: (err as Error).message });
+      ctx.addIssue({ code: "custom", message: errorMessage(err) });
       return z.NEVER;
     }
   })
@@ -505,9 +506,8 @@ function parseAccountId(value: unknown): AccountId {
  *   can reject with.
  */
 function translateRepoError(err: unknown): never {
-  const repoError = err as { code?: unknown; message: string } | null;
-  if (repoError?.code === "VALIDATION_ERROR") {
-    throw new ValidationError(repoError.message);
+  if (errorCode(err) === "VALIDATION_ERROR") {
+    throw new ValidationError(errorMessage(err));
   }
   throw err;
 }

@@ -91,10 +91,10 @@ export function numericColumn(v: DecimalInput): number | null | undefined {
  * normalise every money/quantity column in one call instead of per-field.
  * A nullish row is returned unchanged.
  */
-export function coerceNumericFields<T extends object>(
+export function coerceNumericFields<T extends object, const K extends string>(
   row: T,
-  fields: readonly string[],
-): T;
+  fields: readonly K[],
+): NumericCoerced<T, K>;
 export function coerceNumericFields<T extends object>(
   row: T | null | undefined,
   fields: readonly string[],
@@ -104,12 +104,27 @@ export function coerceNumericFields<T extends object>(
   fields: readonly string[],
 ): T | null | undefined {
   if (!row) return row;
+  // Generic `T` has no index signature, so the computed-key rewrite below
+  // needs a record view of the copy.
   const out = { ...row } as Record<string, unknown>;
   for (const field of fields) {
     if (field in out) out[field] = numericColumn(out[field] as DecimalInput);
   }
+  // `out` is `row` with the named string columns replaced by numbers, which is
+  // what the first overload's `NumericCoerced<T, K>` return type spells out;
+  // TypeScript cannot follow a computed-key rewrite of a generic object.
   return out as T;
 }
+
+/**
+ * `T` with the string-valued properties named in `K` turned into numbers
+ * (`string | null` into `number | null`). A widened `K` (a plain `string[]`
+ * field list) cannot name the properties, so it leaves `T` as it was.
+ */
+export type NumericCoerced<T, K extends string> = string extends K
+  ? T
+  : { [P in keyof T]: P extends K ? StringToNumber<T[P]> : T[P] };
+type StringToNumber<V> = V extends string ? number : V;
 
 /**
  * An amount together with its currency (ADR-220). Totals that may span

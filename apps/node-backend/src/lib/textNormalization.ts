@@ -80,7 +80,7 @@ export function cleanKbcRecipientName(
 export function normalizeToUppercase(name: string): string;
 export function normalizeToUppercase(name: unknown): string | null | undefined;
 export function normalizeToUppercase(name: unknown): string | null | undefined {
-  if (!name) return name as string | null | undefined;
+  if (name === null || name === undefined || name === '') return name;
   if (typeof name !== 'string') throw new Error(`Name must be a string, got ${typeof name}`);
   return name.trim().toUpperCase();
 }

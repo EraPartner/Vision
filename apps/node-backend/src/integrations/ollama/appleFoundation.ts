@@ -16,6 +16,7 @@ import { execFile, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { isRecord, isUnknownArray } from "../../lib/typeGuards.ts";
 
 export const APPLE_FOUNDATION_MODEL = "apple-foundation";
 
@@ -175,13 +176,18 @@ async function runHelper(
   child.stdin.end(JSON.stringify(fitForAppleModel(body)));
 
   if (body.stream === true) {
+    // node:stream/web and the DOM-style global ReadableStream are the same
+    // runtime class with separate type declarations.
     return new Response(Readable.toWeb(child.stdout) as ReadableStream, {
       status: 200,
       headers: { "Content-Type": "application/x-ndjson" },
     });
   }
   const chunks: Buffer[] = [];
-  for await (const chunk of child.stdout) chunks.push(chunk as Buffer);
+  for await (const chunk of child.stdout) {
+    const piece: unknown = chunk;
+    chunks.push(Buffer.isBuffer(piece) ? piece : Buffer.from(String(piece)));
+  }
   const exitCode = await new Promise<number | null>((resolve) => {
     if (child.exitCode !== null) resolve(child.exitCode);
     else child.once("close", resolve);
@@ -224,8 +230,9 @@ export function withAppleFoundation(baseFetch: typeof fetch): typeof fetch {
     try {
       const response = await baseFetch(input, init);
       if (response.ok) {
-        const data = (await response.json()) as { models?: unknown[] } | null;
-        models = Array.isArray(data?.models) ? data.models : [];
+        const data: unknown = await response.json();
+        const listed = isRecord(data) ? data.models : undefined;
+        models = isUnknownArray(listed) ? listed : [];
       }
     } catch (error) {
       if (init?.signal?.aborted) throw error;

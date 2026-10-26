@@ -14,6 +14,7 @@ import { looseArray, looseString, numish, parseOr } from "./schemas.ts";
 import { makeChartRangeMap } from "@vision/types/chartRanges";
 import { lookup } from "../tableLookup.ts";
 import { valueText } from "../../valueText.ts";
+import { isRecord } from "../../../lib/typeGuards.ts";
 
 const BASE = "https://api.twelvedata.com";
 
@@ -73,8 +74,8 @@ const key = () => requireProviderKey("twelve_data");
  */
 function assertOk(payload: unknown): unknown {
   // Twelve Data signals failure with { status: 'error', code, message }.
-  if (payload && typeof payload === "object") {
-    const p = payload as Record<string, unknown>;
+  if (isRecord(payload)) {
+    const p = payload;
     if (p.status === "error")
       throw new Error(p.message ? valueText(p.message) : "twelve_data error");
   }

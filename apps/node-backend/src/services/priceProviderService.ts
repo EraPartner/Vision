@@ -48,6 +48,7 @@ import {
 
 import type { InvestmentRow, PricePoint } from "../types/rows.ts";
 import type { LivePriceQuote } from "./prices/priceProviderRegistry.ts";
+import { errorMessage } from "../lib/errors.ts";
 
 export type { InvestmentRow, PricePoint };
 
@@ -174,7 +175,7 @@ export async function fetchLivePricesDetailed(
       await task();
       void recordProviderSuccess(key);
     } catch (err) {
-      logger.error(`${label} failed`, { error: (err as Error).message });
+      logger.error(`${label} failed`, { error: errorMessage(err) });
       void recordProviderError(key, err);
     }
   };
@@ -309,7 +310,7 @@ export async function fetchLivePricesDetailed(
       // A contract violation is a data fault, not a transient failure: surface it.
       if (err instanceof RowContractError) throw err;
       logger.warn("Historical price fallback failed", {
-        error: (err as Error).message,
+        error: errorMessage(err),
       });
     }
   }
@@ -512,7 +513,7 @@ export async function fetchHistoricalPrices(
         cacheSet(cacheKey, { points, source: "live" });
       } catch (err) {
         logger.warn(
-          `Yahoo history fetch error for ${symbol}: ${(err as Error).message}`,
+          `Yahoo history fetch error for ${symbol}: ${errorMessage(err)}`,
         );
         return _filterHistoricalPoints(cachedDbPoints, from, to);
       }
@@ -563,7 +564,7 @@ export async function fetchHistoricalPrices(
         cacheSet(cacheKey, { points, source: "live" });
       } catch (err) {
         logger.warn(
-          `Binance history fetch error for ${symbol}: ${(err as Error).message}`,
+          `Binance history fetch error for ${symbol}: ${errorMessage(err)}`,
         );
         return _filterHistoricalPoints(cachedDbPoints, from, to);
       }
@@ -621,7 +622,7 @@ export async function fetchHistoricalPrices(
         cacheSet(cacheKey, { points, source: "live" });
       } catch (err) {
         logger.warn(
-          `Kinesis history fetch error for ${symbol}: ${(err as Error).message}`,
+          `Kinesis history fetch error for ${symbol}: ${errorMessage(err)}`,
         );
         return _filterHistoricalPoints(cachedDbPoints, from, to);
       }
@@ -718,7 +719,7 @@ export async function fetchHistoricalPrices(
       cacheSet(cacheKey, { points, source: "live" });
     } catch (err) {
       logger.warn(
-        `Custom history fetch error for investment ${investment.id}: ${(err as Error).message}`,
+        `Custom history fetch error for investment ${investment.id}: ${errorMessage(err)}`,
       );
       return _filterHistoricalPoints(cachedDbPoints, from, to);
     }
@@ -770,7 +771,7 @@ export async function sanitizePersistedKinesisHistory() {
       failed += 1;
       logger.warn("Kinesis history sanitization failed for investment", {
         investmentId: investment.id,
-        error: (error as Error | null | undefined)?.message,
+        error: errorMessage(error),
       });
     }
   }

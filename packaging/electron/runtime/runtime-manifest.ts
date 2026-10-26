@@ -202,9 +202,15 @@ function parseManifest(bytes: Buffer): ParsedManifest {
   };
 }
 
+/** The marker fields a later launch compares; `entries` and `verifiedAt` are informational. */
+type StoredMarker = Pick<
+  VerificationMarker,
+  "version" | "appVersion" | "manifestSha256" | "runtimeRoot"
+>;
+
 async function readMarker(
   markerPath: string,
-): Promise<VerificationMarker | undefined> {
+): Promise<StoredMarker | undefined> {
   try {
     const marker: unknown = JSON.parse(
       await fs.promises.readFile(markerPath, "utf8"),
@@ -216,7 +222,12 @@ async function readMarker(
       typeof marker.runtimeRoot === "string" &&
       (marker.appVersion === null || typeof marker.appVersion === "string")
     ) {
-      return marker as unknown as VerificationMarker;
+      return {
+        version: marker.version,
+        appVersion: marker.appVersion,
+        manifestSha256: marker.manifestSha256,
+        runtimeRoot: marker.runtimeRoot,
+      };
     }
   } catch {
     // A missing or unreadable marker means "not verified yet".

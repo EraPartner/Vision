@@ -4,8 +4,7 @@ import { sql } from "kysely";
 import type { RawBuilder } from "kysely";
 import { query } from "../database/connection.ts";
 import { compileQuery } from "../database/db.ts";
-import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
-import type { CostBasisMethod } from "@vision/shared-utils/portfolio";
+import { buildInvestmentSummaryCorePartitioned, isCostBasisMethod } from "@vision/shared-utils/portfolio";
 import { UNIT_BASED_ASSET_CLASSES } from "@vision/types/assetClasses";
 import type { AnalysisUnit } from "@vision/types/analysis";
 import { toDecimal } from "../lib/money.ts";
@@ -149,9 +148,6 @@ interface FinancialEventRow {
   fx_rate_to_eur: string | null;
 }
 
-const COST_BASIS_METHODS: readonly string[] = ["weighted_avg", "fifo", "lifo"];
-const isCostBasisMethod = (value: unknown): value is CostBasisMethod =>
-  COST_BASIS_METHODS.includes(value as string);
 
 /** Numeric source cells are pg NUMERIC strings or numbers. */
 const compareNumericCells = (value: unknown, target: unknown) =>

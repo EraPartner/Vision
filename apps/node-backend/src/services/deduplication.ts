@@ -13,6 +13,7 @@ import { transactionIdRowSchema } from "../database/rows/ledger.ts";
 import { epochMsToUtcYmd, toYmd } from "../lib/dateFormat.ts";
 import { checkRows } from "../database/rowContracts.ts";
 import type { TransactionId } from "@vision/types/brands";
+import { errorCode, errorMessage } from "../lib/errors.ts";
 
 // Match ECMAScript String.trim() exactly, including historical untrimmed rows.
 // PostgreSQL's default TRIM only removes ordinary spaces.
@@ -206,11 +207,11 @@ export async function isManualDuplicate({
       () => claimQuery.execute(),
     );
   } catch (err) {
-    const pgErr = err as { code?: string; message?: string };
-    if (pgErr.code !== "42P01") {
+    const code = errorCode(err);
+    if (code !== "42P01") {
       logger.warn("Unexpected error in manual dedup hash check", {
-        error: pgErr.message,
-        code: pgErr.code,
+        error: errorMessage(err),
+        code,
       });
     }
     // The expand migration may not exist yet — fall through to field matching.
@@ -284,11 +285,11 @@ export async function recordManualTransactionDedupClaim({
         .execute(),
     );
   } catch (err) {
-    const pgErr = err as { code?: string; message?: string };
-    if (pgErr.code !== "42P01") {
+    const code = errorCode(err);
+    if (code !== "42P01") {
       logger.warn("Unexpected error recording manual raw transaction", {
-        error: pgErr.message,
-        code: pgErr.code,
+        error: errorMessage(err),
+        code,
       });
       throw err;
     }

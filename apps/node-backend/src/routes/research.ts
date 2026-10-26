@@ -36,6 +36,7 @@ import {
   MACRO_PROVIDERS,
   isValidSeriesId,
 } from "../services/research/adapters/macroCatalog.ts";
+import { isRecord } from "../lib/typeGuards.ts";
 
 const router = Router();
 
@@ -52,9 +53,7 @@ const EMPTY_BY_TYPE: Record<string, unknown> = {
 
 /** The request body's fields; a missing or non-object body has none. */
 function bodyFields(body: unknown): Record<string, unknown> {
-  return typeof body === "object" && body !== null
-    ? (body as Record<string, unknown>)
-    : {};
+  return isRecord(body) ? body : {};
 }
 
 function single(value: unknown): string {

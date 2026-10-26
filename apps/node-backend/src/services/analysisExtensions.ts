@@ -9,6 +9,7 @@ import type {
   FormulaUnit,
   FormulaUnitInput,
 } from "./analysisFormulaEngine.ts";
+import { errorMessage } from "../lib/errors.ts";
 
 /** A result column as carried through analysis pipelines. */
 export interface AnalysisColumn {
@@ -161,7 +162,8 @@ export interface SeekAnalysisGoalInput extends FormulaModelInput {
 /** Untyped result cells go straight to Decimal, which rejects non-numeric input. */
 const cellDecimal = (value: unknown) => new Decimal(value as Decimal.Value);
 /** Callers first reject lists that contain a missing (null) contributor. */
-const presentDecimals = (values: Array<Decimal | null>) => values as Decimal[];
+const presentDecimals = (values: Array<Decimal | null>) =>
+  values.filter((value): value is Decimal => value !== null);
 
 const MAX_ROWS = 1000;
 const MAX_COLUMNS = 128;
@@ -425,7 +427,7 @@ export function prepareAnalysisData({
             rowIndex,
             columnId: step.columnId,
             // scalar() only throws Errors.
-            message: (error as Error).message,
+            message: errorMessage(error),
           });
           return { ...row, [step.columnId]: null };
         }
@@ -1291,7 +1293,7 @@ export function seekAnalysisGoal({
       value: null,
       outcome: null,
       // fail(), Decimal and the formula engine only throw Errors.
-      error: (error as Error).message,
+      error: errorMessage(error),
     };
   }
 }

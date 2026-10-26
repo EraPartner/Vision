@@ -217,6 +217,8 @@ export function mapRowsForAmountConversion<T extends Record<string, unknown>>(
   amountField = "amount",
   fallbackToZero = true,
 ): Array<Omit<T, "amount"> & { amount: number }> {
+  // `amountField` names a NUMERIC column, which node-postgres returns as a
+  // string; a generic row cannot say which of its fields that is.
   return rows.map((row) => ({
     ...row,
     amount: fallbackToZero

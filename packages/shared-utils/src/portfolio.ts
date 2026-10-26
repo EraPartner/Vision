@@ -32,6 +32,17 @@ const REAL_ESTATE_CLASS: string = REAL_ESTATE_ASSET_CLASS;
 
 export type CostBasisMethod = "weighted_avg" | "fifo" | "lifo";
 
+export const COST_BASIS_METHODS: readonly CostBasisMethod[] = [
+  "weighted_avg",
+  "fifo",
+  "lifo",
+];
+
+/** Narrow a stored or requested value (setting row, request body) to a cost-basis method. */
+export function isCostBasisMethod(value: unknown): value is CostBasisMethod {
+  return COST_BASIS_METHODS.some((method) => method === value);
+}
+
 /**
  * A transaction-row numeric field: raw DB/API values arrive as number or
  * numeric string; rows synthesized by partitioning/custody projection carry

@@ -27,6 +27,7 @@ import type {
 import { asRecipientId } from '@vision/types/brands';
 import { logger } from '../config/logger.ts';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.ts';
+import { errorMessage } from '../lib/errors.ts';
 export type { ActivePatternRow };
 
 const MIN_LCP_LENGTH = 8;
@@ -115,7 +116,7 @@ function compilePattern(row: {
   try {
     re = buildPatternRegExp(row);
   } catch (err) {
-    logger.warn('Skipping invalid regex pattern', { patternId: row.id, pattern: row.pattern, error: (err as Error).message });
+    logger.warn('Skipping invalid regex pattern', { patternId: row.id, pattern: row.pattern, error: errorMessage(err) });
     re = /(?!)/;
   }
 
@@ -164,7 +165,7 @@ function validatePattern(row: {
     buildPatternRegExp(row);
     return { valid: true };
   } catch (err) {
-    return { valid: false, error: `Invalid pattern: ${(err as Error).message}` };
+    return { valid: false, error: `Invalid pattern: ${errorMessage(err)}` };
   }
 }
 
@@ -225,7 +226,7 @@ export async function applyPatterns(
         try {
           re = compilePattern(prow);
         } catch (err) {
-          logger.warn('[recipientPatternService] bad pattern, skipping', { id: prow.id, err: (err as Error).message });
+          logger.warn('[recipientPatternService] bad pattern, skipping', { id: prow.id, err: errorMessage(err) });
           continue;
         }
         compiled[index] = re;
@@ -336,7 +337,7 @@ export async function previewPatternMatches(patternRow: {
   try {
     compilePattern({ id: 0, updated_at: '0', ...patternRow });
   } catch (err) {
-    throw new ValidationError(`Pattern compilation failed: ${(err as Error).message}`);
+    throw new ValidationError(`Pattern compilation failed: ${errorMessage(err)}`);
   }
 
   // For `regex` patterns use JS matching (same engine as runtime) because

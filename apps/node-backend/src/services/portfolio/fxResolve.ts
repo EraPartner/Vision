@@ -16,6 +16,7 @@ import {
 } from "../currency/rateFetcher.ts";
 import { logger } from "../../config/logger.ts";
 import { RowContractError } from "../../database/rowContracts.ts";
+import { errorMessage } from "../../lib/errors.ts";
 
 export async function autoResolveFxRateToEur(
   currency: string,
@@ -33,7 +34,7 @@ export async function autoResolveFxRateToEur(
     logger.warn("fx_rate_to_eur auto-resolution failed", {
       currency: code,
       date,
-      error: (err as Error).message,
+      error: errorMessage(err),
     });
     return undefined;
   }

@@ -70,6 +70,7 @@ import type {
   PortfolioImportProgressCallback,
 } from "./index.ts";
 import { requiredValue } from "../requiredValue.ts";
+import { isRecord } from "../../lib/typeGuards.ts";
 
 const COMMIT_CHUNK = 1000;
 
@@ -313,9 +314,7 @@ export async function commitBatch({
     const stored = await settingsRepository.get(CASH_CATEGORY_SETTING_KEY);
     // A user setting's JSON value: an object of kind → category id when set.
     const configured: Record<string, unknown> =
-      stored && typeof stored === "object" && !Array.isArray(stored)
-        ? (stored as Record<string, unknown>)
-        : {};
+      isRecord(stored) && !Array.isArray(stored) ? stored : {};
     const requestedIds = CASH_CATEGORY_KINDS.map(
       (kind) => configured[kind],
     )

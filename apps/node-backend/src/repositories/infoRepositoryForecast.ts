@@ -74,7 +74,7 @@ import { nanToZero } from "../lib/math.ts";
 
 /** Transactions behind one aggregated (date, currency) row. */
 function countOf(row: ConvertibleRow): number {
-  const cnt: unknown = (row as { cnt?: unknown }).cnt;
+  const cnt: unknown = "cnt" in row ? row.cnt : undefined;
   const text =
     cnt == null
       ? "1"

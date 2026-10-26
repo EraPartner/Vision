@@ -1,4 +1,5 @@
 import type { ResearchPoint } from "./types.ts";
+import { isFiniteNumber } from "../numeric.ts";
 export interface SymbolStats {
   symbol: string;
   totalReturn: number | null;
@@ -12,9 +13,9 @@ export function dailyReturnsByTime(
   const valid = points
     .filter(
       (p): p is ResearchPoint & { close: number } =>
-        Number.isFinite(p.close) &&
-        (p.close as number) > 0 &&
-        Number.isFinite(p.time),
+        isFiniteNumber(p.close) &&
+        p.close > 0 &&
+        isFiniteNumber(p.time),
     )
     .sort((a, b) => a.time - b.time);
   const out = new Map<number, number>();
@@ -33,7 +34,7 @@ export function computeStats(
 ): SymbolStats {
   const closes = points
     .map((p) => p.close)
-    .filter((c): c is number => Number.isFinite(c) && (c as number) > 0);
+    .filter((c): c is number => isFiniteNumber(c) && c > 0);
   const first = closes[0];
   const last = closes.at(-1);
   if (closes.length < 2 || first === undefined || last === undefined)
@@ -110,7 +111,7 @@ export function rebaseTo100(
 ): { time: number; value: number }[] {
   const valid = points.filter(
     (p): p is ResearchPoint & { close: number } =>
-      Number.isFinite(p.close) && (p.close as number) > 0,
+      isFiniteNumber(p.close) && p.close > 0,
   );
   const base = valid[0]?.close;
   if (base === undefined) return [];

@@ -2,6 +2,7 @@
 
 import { logger } from "../config/logger.ts";
 import { checkDueAnalysisMonitors } from "../services/analysisMonitorService.ts";
+import { errorMessage } from "../lib/errors.ts";
 
 export function startAnalysisMonitorScheduler() {
   let inFlight = false;
@@ -12,7 +13,7 @@ export function startAnalysisMonitorScheduler() {
       await checkDueAnalysisMonitors();
     } catch (error) {
       logger.error("Analysis monitor scheduler failed", {
-        error: (error as Error).message,
+        error: errorMessage(error),
       });
     } finally {
       inFlight = false;

@@ -24,6 +24,8 @@ export function currencyOrEur(
 export function storedCurrencyCode(
   value: CurrencyCode | null | undefined,
 ): CurrencyCode {
+  // Branded without asCurrencyCode on purpose: that one throws on a malformed
+  // legacy value, and this helper must keep reading such rows.
   return value ? (value.toUpperCase() as CurrencyCode) : EUR;
 }
 
@@ -34,6 +36,8 @@ export function storedCurrencyCode(
 export function trimmedCurrencyCode(
   value: CurrencyCode | null | undefined,
 ): CurrencyCode {
+  // Unvalidated on purpose (see above): a malformed cell must reach the
+  // column's CHECK constraint, not throw here.
   const trimmed = (value ?? "").trim() as CurrencyCode;
   return currencyOrEur(trimmed);
 }

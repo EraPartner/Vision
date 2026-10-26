@@ -11,7 +11,7 @@ import { env } from "./env.ts";
 function deepFreeze<T extends object>(object: T): T {
   Object.freeze(object);
   for (const key of Object.getOwnPropertyNames(object)) {
-    const value = (object as Record<string, unknown>)[key];
+    const value: unknown = Reflect.get(object, key);
     if (
       value &&
       (typeof value === "object" || typeof value === "function") &&

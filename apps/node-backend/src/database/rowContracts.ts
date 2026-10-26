@@ -101,6 +101,8 @@ export function checkRows<T>(
     logger.warn(message);
     break;
   }
+  // Every row passed the schema, except in `log` mode where a violation was
+  // reported and the rows pass through unchanged by design (see module doc).
   return rows as T[];
 }
 
@@ -115,7 +117,8 @@ export async function queryRows<T>(
   client?: QueryRunner,
 ): Promise<T[]> {
   const result = client
-    ? await client.query(text, params as unknown[] | undefined)
+    ? // pg's typings require a mutable array; pg only reads the values.
+      await client.query(text, params as unknown[] | undefined)
     : await query(text, params);
   return checkRows(schema, result.rows, { label: labelFor(schema, text) });
 }

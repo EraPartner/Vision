@@ -27,7 +27,7 @@ import {
   buildHistoricalRateIndex,
   findRateOnOrBeforeInIndex,
 } from "../currency/rateFetcher.ts";
-import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
+import { buildInvestmentSummaryCorePartitioned, isCostBasisMethod } from "@vision/shared-utils/portfolio";
 import { asPartitionedTxns } from "./portfolioTransactionRules.ts";
 import { settingsRepository } from "../../repositories/settingsRepository.ts";
 import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.ts";
@@ -67,8 +67,6 @@ export type Decimal = import("decimal.js").default;
 
 const round2 = (value: DecimalInput) => roundMoney(value, 2);
 const round8 = (value: DecimalInput) => roundMoney(value, 8);
-
-const COST_BASIS_METHODS = new Set(["weighted_avg", "fifo", "lifo"]);
 
 export type CostBasisMethod =
   import("@vision/shared-utils/portfolio").CostBasisMethod;
@@ -126,9 +124,7 @@ export interface PortfolioSummaryOptions {
 async function resolveCostBasisMethod(): Promise<CostBasisMethod> {
   try {
     const value = await settingsRepository.get("cost_basis_method");
-    return typeof value === "string" && COST_BASIS_METHODS.has(value)
-      ? (value as CostBasisMethod)
-      : "weighted_avg";
+    return isCostBasisMethod(value) ? value : "weighted_avg";
   } catch {
     return "weighted_avg";
   }

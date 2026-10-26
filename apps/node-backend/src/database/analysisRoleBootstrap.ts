@@ -2,6 +2,7 @@
 
 import pg from "pg";
 import { logger } from "../config/logger.ts";
+import { errorMessage } from "../lib/errors.ts";
 
 const ANALYSIS_ROLE = "vision_analysis_executor";
 
@@ -177,7 +178,7 @@ export async function ensureAnalysisRole({
     return { status: exists.rows.length > 0 ? "exists" : "created" };
   } catch (error) {
     log.warn(
-      `[analysis-role] bootstrap failed (${(error as Error).message}); executor disabled.`,
+      `[analysis-role] bootstrap failed (${errorMessage(error)}); executor disabled.`,
     );
     return { status: "degraded", reason: "bootstrap-failed" };
   } finally {

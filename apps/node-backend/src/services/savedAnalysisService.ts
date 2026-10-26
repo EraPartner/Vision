@@ -53,6 +53,7 @@ import type {
   FormulaUnitInput,
 } from "./analysisFormulaEngine.ts";
 import { nonZeroOr } from "../lib/math.ts";
+import { errorCode, errorMessage } from "../lib/errors.ts";
 
 interface StandardParameterValues {
   currency?: string;
@@ -150,6 +151,23 @@ const WORKSPACES = new Set([
   "research",
   "cross-workspace",
 ]);
+
+/** An execution failure re-thrown by `runSavedAnalysis`, tagged with its run id. */
+type MonitorRunError = Error & { monitorRunId?: string };
+
+/** Run id that `runSavedAnalysis` attached to a failure it re-threw, if any. */
+export function monitorRunIdOf(caught: unknown): string | undefined {
+  if (typeof caught !== "object" || caught === null) return undefined;
+  if (!("monitorRunId" in caught)) return undefined;
+  return typeof caught.monitorRunId === "string" ? caught.monitorRunId : undefined;
+}
+
+function tagWithMonitorRun(caught: unknown, runId: string): MonitorRunError {
+  const failure: MonitorRunError =
+    caught instanceof Error ? caught : new Error(errorMessage(caught));
+  failure.monitorRunId = runId;
+  return failure;
+}
 
 function standardParameters(values: StandardParameterValues = {}) {
   return [
@@ -894,11 +912,10 @@ export async function runSavedAnalysis(
     return options.includeRunId ? { saved: updated, runId } : updated;
   } catch (caught) {
     // Execution failures are pg or service Errors, optionally with a SQLSTATE.
-    const error = caught as Error & { code?: string; monitorRunId?: string };
-    const cancelled = error.code === "57014";
+    const cancelled = errorCode(caught) === "57014";
     const errorJson = {
       code: cancelled ? "cancelled" : "execution-failed",
-      message: error.message,
+      message: errorMessage(caught),
     };
     const failedStatus = cancelled ? "cancelled" : "failed";
     await withTransaction(async () => {
@@ -921,8 +938,7 @@ export async function runSavedAnalysis(
         .where("id", "=", id)
         .execute();
     });
-    error.monitorRunId = runId;
-    throw error;
+    throw tagWithMonitorRun(caught, runId);
   }
 }
 

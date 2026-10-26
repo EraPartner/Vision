@@ -1,4 +1,4 @@
-import { isNonZeroNumber } from "../numeric.ts";
+import { isFiniteNumber, isNonZeroNumber } from "../numeric.ts";
 import {
   computeStats,
   dailyReturnsByTime,
@@ -65,7 +65,7 @@ export function chartPresentation(input: {
   const factor = new Map(
     series.map((s) => {
       const firstClose = s.points.find(
-        (p) => Number.isFinite(p.close) && (p.close as number) > 0,
+        (p) => isFiniteNumber(p.close) && p.close > 0,
       )?.close;
       return [s.id, input.rebase && firstClose != null && firstClose !== 0 ? 100 / firstClose : 1];
     }),
@@ -84,13 +84,13 @@ export function chartPresentation(input: {
       if (s.field === "volume") row[s.id] = p ? (p.volume as number) : null;
       else {
         row[s.id] =
-          p && Number.isFinite(p.close) ? (p.close as number) * f : null;
+          p && isFiniteNumber(p.close) ? p.close * f : null;
         row[`${s.id}_o`] =
-          p && Number.isFinite(p.close) ? (p.close as number) * f : null;
+          p && isFiniteNumber(p.close) ? p.close * f : null;
         row[`${s.id}_h`] =
-          p && Number.isFinite(p.high) ? (p.high as number) * f : null;
+          p && isFiniteNumber(p.high) ? p.high * f : null;
         row[`${s.id}_l`] =
-          p && Number.isFinite(p.low) ? (p.low as number) * f : null;
+          p && isFiniteNumber(p.low) ? p.low * f : null;
       }
     }
     return row;
@@ -108,7 +108,7 @@ export function chartPresentation(input: {
     const pts = pointsBySeries.get(ind.seriesId) ?? [];
     const f = factor.get(ind.seriesId) ?? 1;
     const closes = pts.map((p) =>
-      Number.isFinite(p.close) ? (p.close as number) * f : NaN,
+      isFiniteNumber(p.close) ? p.close * f : NaN,
     );
     const assign = (key: string, values: (number | null)[]) => {
       const m = new Map(pts.map((p, i) => [p.time, values[i] ?? null]));
@@ -159,30 +159,30 @@ export function watchlistPresentation(input: {
 }) {
   const { targetPrice, currentPrice, addedPrice, points } = input;
   const hasValidTarget =
-    Number.isFinite(targetPrice) && (targetPrice as number) > 0;
+    isFiniteNumber(targetPrice) && targetPrice > 0;
   const chartDistance =
     currentPrice != null && hasValidTarget
-      ? ((currentPrice - (targetPrice as number)) / (targetPrice as number)) *
+      ? ((currentPrice - targetPrice) / targetPrice) *
         100
       : null;
   const prices = points
     .map((p) => p.close)
-    .filter((p): p is number => Number.isFinite(p) && (p as number) > 0);
-  if (hasValidTarget) prices.push(targetPrice as number);
+    .filter((p): p is number => isFiniteNumber(p) && p > 0);
+  if (hasValidTarget) prices.push(targetPrice);
   const domain: [number, number] = prices.length > 0
     ? [Math.min(...prices) * 0.98, Math.max(...prices) * 1.02]
     : [0, 1];
   const preview =
-    Number.isFinite(currentPrice) &&
-    (currentPrice as number) > 0 &&
+    isFiniteNumber(currentPrice) &&
+    currentPrice > 0 &&
     hasValidTarget
       ? {
           absolutePercent:
-            (targetPrice as number) < (currentPrice as number)
-              ? (1 - (targetPrice as number) / (currentPrice as number)) * 100
-              : ((targetPrice as number) / (currentPrice as number) - 1) * 100,
+            targetPrice < currentPrice
+              ? (1 - targetPrice / currentPrice) * 100
+              : (targetPrice / currentPrice - 1) * 100,
           direction:
-            (targetPrice as number) < (currentPrice as number)
+            targetPrice < currentPrice
               ? ("below" as const)
               : ("above" as const),
         }
@@ -200,7 +200,7 @@ export function watchlistPresentation(input: {
       isAtOrBelowTarget:
         currentPrice != null &&
         hasValidTarget &&
-        currentPrice <= (targetPrice as number),
+        currentPrice <= targetPrice,
       hasValidTarget,
       domain,
     },

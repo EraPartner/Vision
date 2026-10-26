@@ -6,6 +6,7 @@ import {
   foldTargetSleeves,
   normalizeWeights,
 } from "./allocationAnalytics.ts";
+import { isRecord } from "../../lib/typeGuards.ts";
 
 const MODEL_PORTFOLIOS: Readonly<
   Record<string, Readonly<Record<string, number>>>
@@ -17,9 +18,7 @@ const MODEL_PORTFOLIOS: Readonly<
 const targetWeightsSchema = z.unknown().transform((value, ctx) => {
   const weights: Record<string, number> = {};
   // Callers only parse values already checked to be objects.
-  for (const [sleeve, weight] of Object.entries(
-    value as Record<string, unknown>,
-  )) {
+  for (const [sleeve, weight] of Object.entries(isRecord(value) ? value : {})) {
     const number = Number(weight);
     if (!Number.isFinite(number) || number < 0) {
       ctx.addIssue({

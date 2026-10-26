@@ -27,6 +27,8 @@ export function memoizeAsync<T>(
 ): Promise<T> {
   if (!cache) return factory();
   if (!cache.has(key)) cache.set(key, factory());
+  // The cache is keyed by tool call, so one key always holds the promise of
+  // the factory registered under it; the map itself cannot express that.
   return cache.get(key) as Promise<T>;
 }
 

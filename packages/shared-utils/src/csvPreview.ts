@@ -46,7 +46,9 @@ function parseRecords(
   try {
     return parse(text, options);
   } catch (err) {
-    if ((err as { code?: string }).code !== "CSV_QUOTE_NOT_CLOSED") throw err;
+    const code: unknown =
+      typeof err === "object" && err !== null ? Reflect.get(err, "code") : undefined;
+    if (code !== "CSV_QUOTE_NOT_CLOSED") throw err;
     return parse(`${text}"`, options);
   }
 }

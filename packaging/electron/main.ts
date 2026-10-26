@@ -115,9 +115,8 @@ function readSettingsResponse(body: unknown): {
 
 // `error?.message` / `error?.code` for a caught value of unknown type.
 function errorField(error: unknown, key: "message" | "code"): unknown {
-  if (typeof error !== "object" || error === null || !(key in error))
-    return undefined;
-  return (error as Record<string, unknown>)[key];
+  if (!isObjectLike(error) || !(key in error)) return undefined;
+  return error[key];
 }
 
 // `err && err.message ? err.message : err`, the shape every log line uses.

@@ -20,6 +20,7 @@ import { ConflictError } from "../middleware/errorHandler.ts";
 
 import type { CategoryRow, EnrichedCategoryRow } from "../types/rows.ts";
 import type { CategoryId, RecipientId } from "@vision/types/brands";
+import { errorCode } from "../lib/errors.ts";
 
 export type { EnrichedCategoryRow };
 
@@ -206,7 +207,7 @@ export const categoryRepository = {
         .executeTakeFirst();
       return result.numDeletedRows > 0n;
     } catch (error) {
-      if ((error as { code?: unknown } | null | undefined)?.code === "23503")
+      if (errorCode(error) === "23503")
         throw new ConflictError(
           "Category is still referenced or has legacy merge redirects",
         );

@@ -11,10 +11,7 @@ import { Router } from "express";
 import { z } from "zod";
 import splitService from "../services/splitService.ts";
 import { rateLimiter } from "../middleware/rateLimiter.ts";
-import {
-  BULK_SPLIT_MODES,
-  type BulkSplitMode,
-} from "../lib/calculations/splits.ts";
+import { BULK_SPLIT_MODES } from "../lib/calculations/splits.ts";
 import { validateId } from "../middleware/validation.ts";
 import { NotFoundError } from "../middleware/errorHandler.ts";
 import { escapeCsvValue } from "../lib/csv.ts";
@@ -218,17 +215,15 @@ const bulkSplitSchema = z.object({
     }),
   recipient_id: idField("recipient_id").pipe(RecipientIdSchema),
   mode: z.unknown().transform((value, ctx) => {
-    if (
-      typeof value !== "string" ||
-      !(BULK_SPLIT_MODES as readonly string[]).includes(value)
-    ) {
+    const mode = BULK_SPLIT_MODES.find((candidate) => candidate === value);
+    if (mode === undefined) {
       ctx.addIssue({
         code: "custom",
         message: `mode must be one of: ${BULK_SPLIT_MODES.join(", ")}`,
       });
       return z.NEVER;
     }
-    return value as BulkSplitMode;
+    return mode;
   }),
   note: z.string().max(500).optional(),
 });

@@ -33,8 +33,8 @@ export function summarizeSimulationPaths(
   const bands = percentiles.map((q) => ({
     key: `p${q}`,
     q,
-    daily: [] as Array<{ date: string; value: number }>,
-    cumulative: [] as Array<{ date: string; value: number }>,
+    daily: new Array<{ date: string; value: number }>(),
+    cumulative: new Array<{ date: string; value: number }>(),
   }));
   const series: Array<{ date: string; value: number }> = [];
 

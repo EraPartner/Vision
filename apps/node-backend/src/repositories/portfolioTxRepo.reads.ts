@@ -18,7 +18,10 @@ import {
   portfolioTransactionSummaryDbRowSchema,
   portfolioUnitEventRowSchema,
 } from "../database/rows/portfolio.ts";
-import type { PortfolioUnitEventDbRow } from "../database/rows/portfolio.ts";
+import type {
+  PortfolioTransactionDbRow,
+  PortfolioUnitEventDbRow,
+} from "../database/rows/portfolio.ts";
 import { coerceNumericFields, toNumber } from "../lib/money.ts";
 import { toYmd } from "../lib/dateFormat.ts";
 import { validateId } from "../lib/validation.ts";
@@ -121,19 +124,18 @@ const PORTFOLIO_TX_NUMERIC_FIELDS = [
   "fees",
   "taxes",
   "fx_rate_to_eur",
-];
+] as const;
 // DATE columns node-postgres returns as local-midnight Date objects; emitted
 // raw they JSON-serialize to an ISO timestamp that is the PREVIOUS day east of
 // UTC. The frontend then T-splits that shifted value (edit dialogs wrote the
 // date back one day earlier per save) or NaNs on it (parseLocalDateFromYmd).
 // Emit calendar-day strings — the API/TS contract is `string` here.
-const PORTFOLIO_TX_DATE_FIELDS = ["date", "recurrence_end_date"];
 /**
  * Coerce a `portfolio_transactions` row to its emitted shape: NUMERIC columns
  * become numbers and both DATE columns 'YYYY-MM-DD' strings.
  */
 export const mapPortfolioTxRow = (
-  row: Record<string, unknown>,
+  row: PortfolioTransactionDbRow,
 ): PortfolioTransactionRow => {
   const {
     source_record_hash: _sourceRecordHash,
@@ -141,14 +143,15 @@ export const mapPortfolioTxRow = (
     dedup_fingerprint_version: _dedupFingerprintVersion,
     ...publicRow
   } = row;
-  const mapped = coerceNumericFields(publicRow, PORTFOLIO_TX_NUMERIC_FIELDS);
-  for (const field of PORTFOLIO_TX_DATE_FIELDS) {
-    const value = mapped[field];
-    if (value instanceof Date) mapped[field] = toYmd(value);
-  }
-  mapped["income_recognition_role"] ??= "standard";
-  // coerceNumericFields and the loop above convert the raw pg row in place.
-  return mapped as PortfolioTransactionRow;
+  const coerced = coerceNumericFields(publicRow, PORTFOLIO_TX_NUMERIC_FIELDS);
+  return {
+    ...coerced,
+    date: coerced.date instanceof Date ? toYmd(coerced.date) : coerced.date,
+    recurrence_end_date:
+      coerced.recurrence_end_date instanceof Date
+        ? toYmd(coerced.recurrence_end_date)
+        : coerced.recurrence_end_date,
+  };
 };
 
 /** Narrow a `portfolio_transactions as pt` query to one investment and/or type. */

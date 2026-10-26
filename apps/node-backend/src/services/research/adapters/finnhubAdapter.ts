@@ -139,7 +139,7 @@ const finnhubAdapter = {
     if (c?.s !== "ok") {
       return {
         symbol,
-        currency: undefined as string | undefined,
+        currency: undefined,
         points: [],
       };
     }
@@ -152,7 +152,7 @@ const finnhubAdapter = {
     }));
     return {
       symbol,
-      currency: undefined as string | undefined,
+      currency: undefined,
       points,
     };
   },
@@ -171,10 +171,10 @@ const finnhubAdapter = {
     return {
       symbol,
       name: symbol,
-      currency: undefined as string | undefined,
+      currency: undefined,
       marketCap: num(m.marketCapitalization), // reported in millions by Finnhub
       pe: num(m.peTTM ?? m.peBasicExclExtraTTM),
-      forwardPE: undefined as number | undefined,
+      forwardPE: undefined,
       pegRatio: num(m.pegTTM),
       dividendYield: pct(m.dividendYieldIndicatedAnnual),
       payoutRatio: pct(m.payoutRatioTTM ?? m.payoutRatioAnnual),
@@ -242,7 +242,7 @@ const finnhubAdapter = {
       targetHigh: targets.targetHigh,
       targetLow: targets.targetLow,
       numberOfAnalysts,
-      recentActions: [] as unknown[],
+      recentActions: new Array<unknown>(),
     };
   },
 

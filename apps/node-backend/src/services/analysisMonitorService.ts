@@ -31,8 +31,10 @@ import type {
   MonitorObservationRow,
   MonitorRunRow,
 } from "../database/rows/analysis.ts";
-import { runSavedAnalysis } from "./savedAnalysisService.ts";
+import { monitorRunIdOf, runSavedAnalysis } from "./savedAnalysisService.ts";
 import { valueText } from "./valueText.ts";
+import { errorMessage } from "../lib/errors.ts";
+import { isRecord } from "../lib/typeGuards.ts";
 
 /** A stored observation, or the latest one as `MONITOR_SELECT` embeds it. */
 type ObservationRow = MonitorObservationRow | MonitorObservationJson;
@@ -596,8 +598,8 @@ function evidenceId(entry: unknown): string {
 function evidenceHash(evidence: unknown[]) {
   const canonical = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(canonical);
-    if (value && typeof value === "object") {
-      const record = value as Record<string, unknown>;
+    if (isRecord(value)) {
+      const record = value;
       return Object.fromEntries(
         Object.keys(record)
           .sort()
@@ -690,21 +692,21 @@ async function inspectAnalysis(row: MonitorRow): Promise<MonitorFinding> {
     runId = response.runId;
   } catch (caught) {
     // runSavedAnalysis rethrows the execution Error tagged with its run id.
-    const error = caught as Error & { monitorRunId?: string };
-    const failedRun = error.monitorRunId
+    const monitorRunId = monitorRunIdOf(caught);
+    const failedRun = monitorRunId
       ? await checkedRow(
           runStatusRowSchema,
           db
             .selectFrom("saved_analysis_runs")
             .select("status")
-            .where("id", "=", error.monitorRunId),
+            .where("id", "=", monitorRunId),
         )
       : null;
     return {
       status: "failed",
       reasonCode: "analysis-execution-failed",
-      reason: `Analysis failed: ${error.message}`.slice(0, 1000),
-      runId: error.monitorRunId ?? null,
+      reason: `Analysis failed: ${errorMessage(caught)}`.slice(0, 1000),
+      runId: monitorRunId ?? null,
       runStatus: failedRun?.status ?? null,
     };
   }
@@ -1061,7 +1063,7 @@ export async function checkAnalysisMonitor(
     finding = {
       status: "failed",
       // Inspection failures are thrown Errors.
-      reason: `Monitor check failed: ${(error as Error).message}`.slice(
+      reason: `Monitor check failed: ${errorMessage(error)}`.slice(
         0,
         1000,
       ),

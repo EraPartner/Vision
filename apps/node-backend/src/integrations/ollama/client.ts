@@ -15,6 +15,7 @@ import { logger } from "../../config/logger.ts";
 import settings from "../../config/config.ts";
 import { withAppleFoundation } from "./appleFoundation.ts";
 import type { ProviderToolCall } from "./prompts.ts";
+import { errorMessage, isAbortError } from "../../lib/errors.ts";
 
 export interface OllamaErrorOptions {
   status?: number | null;
@@ -317,13 +318,13 @@ function normalizeFetchError(
   if (err instanceof OllamaError) return err;
   if (isTimeout)
     return new OllamaError(timeoutMessage, { code: "TIMEOUT", cause: err });
-  if ((err as Error | null | undefined)?.name === "AbortError" || aborted) {
+  if (isAbortError(err) || aborted) {
     return new OllamaError("Ollama request aborted", {
       code: "ABORTED",
       cause: err,
     });
   }
-  return new OllamaError(`${failurePrefix}: ${(err as Error).message}`, {
+  return new OllamaError(`${failurePrefix}: ${errorMessage(err)}`, {
     code: "NETWORK_ERROR",
     cause: err,
   });
@@ -405,16 +406,14 @@ function createOllamaClient({
       };
     } catch (err) {
       // request() normalizes every failure to an OllamaError.
-      const error = err as OllamaError;
-      logger.debug("[ollama] healthCheck failed", {
-        message: error.message,
-        code: error.code,
-      });
+      const message = errorMessage(err);
+      const code = err instanceof OllamaError ? err.code : null;
+      logger.debug("[ollama] healthCheck failed", { message, code });
       return {
         reachable: false,
         baseUrl,
-        error: error.message,
-        code: error.code || "UNKNOWN",
+        error: message,
+        code: code || "UNKNOWN",
       };
     }
   }
@@ -748,7 +747,7 @@ function createOllamaClient({
           await onToken?.(deltaContent);
         } catch (err) {
           logger.warn("[ollama] onToken handler threw", {
-            error: (err as Error | null | undefined)?.message,
+            error: errorMessage(err),
           });
         }
       }
@@ -797,7 +796,7 @@ function createOllamaClient({
         );
       }
       if (
-        (err as Error | null | undefined)?.name === "AbortError" ||
+        isAbortError(err) ||
         composedSignal.aborted
       ) {
         throw new OllamaError("Ollama stream aborted", {
@@ -806,7 +805,7 @@ function createOllamaClient({
         });
       }
       throw new OllamaError(
-        `Ollama stream read failed: ${(err as Error).message}`,
+        `Ollama stream read failed: ${errorMessage(err)}`,
         {
           cause: err,
           code: "STREAM_ERROR",

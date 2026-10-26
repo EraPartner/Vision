@@ -16,6 +16,7 @@ import { join, extname, resolve, sep } from 'path';
 import { randomUUID } from 'crypto';
 import { env } from '../config/env.ts';
 import { sniffMime, extensionMime } from '../lib/fileSniff.ts';
+import { errorCode } from '../lib/errors.ts';
 
 /** The slice of a multer memoryStorage upload this service reads. */
 export type MulterFile = { originalname: string, buffer: Buffer, mimetype: string };
@@ -107,7 +108,7 @@ export async function resolveAbsolutePath(storedPath: string): Promise<string> {
   }
   // Resolve symlinks — ENOENT is fine (file not yet written or already deleted)
   const real = await fsPromises.realpath(absolute).catch((err: unknown) => {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return absolute;
+    if (errorCode(err) === 'ENOENT') return absolute;
     throw err;
   });
   if (real !== root && !real.startsWith(root + sep)) {
@@ -122,6 +123,6 @@ export async function removeAttachmentFile(storedPath: string) {
   try {
     await fsPromises.unlink(absPath);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    if (errorCode(err) !== 'ENOENT') throw err;
   }
 }

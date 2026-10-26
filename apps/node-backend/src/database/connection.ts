@@ -9,6 +9,7 @@ import pg from "pg";
 import settings from "../config/config.ts";
 import { logger } from "../config/logger.ts";
 import { nonZeroOr } from "../lib/math.ts";
+import { errorCode, errorMessage } from "../lib/errors.ts";
 
 /**
  * The slice of a pg `PoolClient` this module and its JS callers rely on. Kept
@@ -37,12 +38,6 @@ export interface PgQueryResult<R = unknown> {
 
 export interface QueryOptions {
   retries?: number;
-}
-
-/** pg / Node errors carry a SQLSTATE or errno-style `code`. */
-interface DbError {
-  code?: string;
-  message?: string;
 }
 
 interface TransactionStore {
@@ -148,20 +143,21 @@ export async function query<R = unknown>(
       }
       return result;
     } catch (caught) {
-      const err = caught as DbError;
+      const code = errorCode(caught);
+      const message = errorMessage(caught);
       const duration = Date.now() - start;
       const isTransient =
-        err.code === "ECONNRESET" ||
-        err.code === "57P01" || // admin_shutdown
-        err.code === "08006" || // connection_failure
-        err.code === "08001" || // sqlclient_unable_to_establish_sqlconnection
-        err.message?.includes("Connection terminated");
+        code === "ECONNRESET" ||
+        code === "57P01" || // admin_shutdown
+        code === "08006" || // connection_failure
+        code === "08001" || // sqlclient_unable_to_establish_sqlconnection
+        message.includes("Connection terminated");
 
       if (isTransient && attempt < maxRetries) {
         attempt++;
         const backoff = Math.min(200 * attempt, 2000);
         logger.warn(
-          `Transient DB error (attempt ${attempt}/${maxRetries}), retrying in ${backoff}ms: ${err.message}`,
+          `Transient DB error (attempt ${attempt}/${maxRetries}), retrying in ${backoff}ms: ${message}`,
         );
         // Global setTimeout, not node:timers/promises: connection.test.ts
         // drives this backoff with vi.useFakeTimers(), which cannot fake
@@ -171,7 +167,7 @@ export async function query<R = unknown>(
       }
 
       logger.error(`Query failed after ${duration}ms: ${text.slice(0, 100)}`, {
-        error: err.message,
+        error: message,
       });
       throw caught;
     }
@@ -359,10 +355,10 @@ export async function checkConnection(): Promise<boolean> {
  * Get table count in the public schema.
  */
 export async function getTableCount(): Promise<number> {
-  const result = await pool.query(
+  const result = await pool.query<{ count: string }>(
     "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'",
   );
-  const row = result.rows[0] as { count: string } | undefined;
+  const row = result.rows[0];
   return parseInt(row?.count ?? "0", 10);
 }
 

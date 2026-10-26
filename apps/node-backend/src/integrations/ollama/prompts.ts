@@ -16,6 +16,7 @@
  */
 
 import type { AiMessageRow } from "../../types/rows.ts";
+import { isRecord } from "../../lib/typeGuards.ts";
 
 export type { AiMessageRow };
 
@@ -295,11 +296,8 @@ export function serializeToolResultForPrompt(
   const serialized = jsonText(payload);
   if (serialized.length <= limit) return serialized;
 
-  if (typeof payload === "object" && payload !== null) {
-    const bounded = boundedToolEnvelope(
-      payload as Record<string, unknown>,
-      limit,
-    );
+  if (isRecord(payload)) {
+    const bounded = boundedToolEnvelope(payload, limit);
     if (bounded !== null) return bounded;
   }
 

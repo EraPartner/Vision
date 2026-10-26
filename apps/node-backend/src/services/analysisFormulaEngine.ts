@@ -2,6 +2,7 @@
 
 import Decimal from "decimal.js";
 import { valueText } from "./valueText.ts";
+import { errorCode, errorMessage } from "../lib/errors.ts";
 
 /** One analysis result row; cells are untyped query or caller data. */
 export type FormulaRow = Record<string, unknown>;
@@ -817,12 +818,12 @@ export function evaluateAnalysisFormulas({
     rowIndex?: number,
   ) => {
     // Caught values are thrown Errors (AnalysisFormulaError or Decimal errors).
-    const failure = error as { code?: string; message: string };
+    const code = errorCode(error);
     errors.push({
       formulaId: formula.id,
       ...(rowIndex === undefined ? {} : { rowIndex }),
-      code: failure.code || "EVALUATION_ERROR",
-      message: failure.message,
+      code: typeof code === "string" && code ? code : "EVALUATION_ERROR",
+      message: errorMessage(error),
     });
   };
   for (const formula of sequence) {

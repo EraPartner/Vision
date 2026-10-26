@@ -15,6 +15,7 @@ import { parseOr } from "./schemas.ts";
 import { makeChartRangeMap } from "@vision/types/chartRanges";
 import { lookup } from "../tableLookup.ts";
 import { valueText } from "../../valueText.ts";
+import { isRecord } from "../../../lib/typeGuards.ts";
 
 const BASE = "https://www.alphavantage.co/query";
 
@@ -45,8 +46,8 @@ const key = () => requireProviderKey("alpha_vantage");
  *   the happy path, so it is checked defensively rather than typed.
  */
 function assertData(payload: unknown): unknown {
-  if (payload && typeof payload === "object") {
-    const p = payload as Record<string, unknown>;
+  if (isRecord(payload)) {
+    const p = payload;
     const message = p.Note || p.Information || p["Error Message"];
     if (message) throw new Error(valueText(message));
   }
@@ -104,7 +105,7 @@ const alphaVantageAdapter = {
       .sort((a, b) => a.time - b.time);
     return {
       symbol,
-      currency: undefined as string | undefined,
+      currency: undefined,
       points,
     };
   },

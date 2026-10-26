@@ -79,9 +79,9 @@ const eurostatAdapter = {
     const points = parseJsonStat(data).map((p) => ({
       time: p.time,
       close: p.value,
-      high: undefined as number | undefined,
-      low: undefined as number | undefined,
-      volume: undefined as number | undefined,
+      high: undefined,
+      low: undefined,
+      volume: undefined,
     }));
     const entry = catalogEntry('eurostat', seriesId);
     return {

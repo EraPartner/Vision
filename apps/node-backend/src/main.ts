@@ -557,7 +557,7 @@ async function start() {
           startupPriceRefreshTimer = intervals.startupPriceRefreshTimer;
         })
         .catch((err: unknown) => {
-          logger.error("Warmup tasks failed", { error: (err as Error).message });
+          logger.error("Warmup tasks failed", { error: errorMessage(err) });
         });
     });
 
@@ -569,7 +569,7 @@ async function start() {
     });
   } catch (err) {
     logger.error("Failed to start application", {
-      error: (err as Error).message,
+      error: errorMessage(err),
     });
     process.exit(1);
   }
@@ -666,7 +666,7 @@ process.on("uncaughtException", (err) => {
 
 start().catch((err: unknown) => {
   logger.error("Failed to start application", {
-    error: (err as Error).message,
+    error: errorMessage(err),
   });
   process.exit(1);
 });

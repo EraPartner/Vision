@@ -30,6 +30,7 @@ import type { AdapterMap, ResearchAdapter } from "./providerRegistry.ts";
 import type { QuotaReserver } from "./quotaGovernor.ts";
 import { MACRO_PROVIDERS } from "./adapters/macroCatalog.ts";
 import { lookup } from "./tableLookup.ts";
+import { isUnknownArray } from "../../lib/typeGuards.ts";
 
 /** One provider the aggregator tried (or skipped) for a request. */
 export interface ResearchAttempt {
@@ -294,7 +295,7 @@ function createResearchAggregator({
           const res = await adapter.macroSearch(q);
           Promise.resolve(recordSuccess(provider)).catch(() => {});
           const items = res.items;
-          return Array.isArray(items) ? (items as unknown[]) : [];
+          return isUnknownArray(items) ? items : [];
         } catch (err) {
           Promise.resolve(recordError(provider, err)).catch(() => {});
           attempted.push({

@@ -30,6 +30,7 @@ import type { BulkFilterInput } from "./bulkSelection.ts";
 import { EXPORT_JOINS_SQL } from "./transactionJoins.ts";
 import type { ExpressResponse } from "../types/express.ts";
 import type Decimal from "decimal.js";
+import { errorMessage } from "../lib/errors.ts";
 
 /**
  * Query runner for the export pipeline; the default is the pooled `query`,
@@ -248,9 +249,9 @@ async function streamExport(
   } catch (err) {
     if (res.headersSent) {
       logger.error(`${label} export failed mid-stream`, {
-        error: (err as Error).message,
+        error: errorMessage(err),
       });
-      if (res.destroy) res.destroy(err as Error);
+      if (res.destroy) res.destroy(err instanceof Error ? err : new Error(errorMessage(err)));
       else res.end();
       throw err;
     }

@@ -19,16 +19,13 @@ import type { CurrencyCode } from '@vision/types/brands';
 // target_price is NUMERIC (node-postgres returns it as a string); coerce on
 // emit so it matches the `number` API/TS type. current_price/price_change are
 // added later by the route from the price provider, not read from this table.
-const WATCHLIST_NUMERIC_FIELDS = ['target_price', 'added_price'];
+const WATCHLIST_NUMERIC_FIELDS = ['target_price', 'added_price'] as const;
 
 export type { FormattedWatchlistRow };
 
 /** @param row A raw {@link WatchlistRow}. */
 const mapWatchlistRow = (row: WatchlistRow): FormattedWatchlistRow =>
-  coerceNumericFields<Record<string, unknown>>(
-    row,
-    WATCHLIST_NUMERIC_FIELDS,
-  ) as FormattedWatchlistRow;
+  coerceNumericFields(row, WATCHLIST_NUMERIC_FIELDS);
 
 /** Filter a `watchlist as w` query by asset class. */
 function whereAssetClass<O>(

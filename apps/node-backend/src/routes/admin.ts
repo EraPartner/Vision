@@ -168,12 +168,13 @@ function buildUpdateCheckPayload(
 }
 
 function formatAdminStatusPayload(isConnected: boolean, tableCount: number) {
+  const links: unknown[] = [];
   return {
     is_initialised: isConnected && tableCount > 0,
     table_count: tableCount,
     accuracy_table_healthy: isAccuracyTableHealthy(),
     timestamp: new Date().toISOString(),
-    links: [] as unknown[],
+    links,
   };
 }
 
