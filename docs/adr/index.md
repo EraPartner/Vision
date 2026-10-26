@@ -303,6 +303,13 @@ included, with typescript-eslint's strict-type-checked rules, types translation 
 paths, checks raw SQL rows against their schemas at compile time, parses more API responses and
 all third-party JSON at the boundary, and audits type assertions. No new CI step.
 
+### 2026-10-26: Cheaper ledger scroll, squircle clips and page transitions (accepted)
+
+[[docs/adr/257-ledger-scroll-and-squircle-clips|ADR-257]] stops squircle boxes clipping composited
+content, cuts the ledger's per-scroll-frame React work (memoised header, one body context menu),
+keeps one layer for page transitions, and adds three diagnostic `mac-baseline` variants. Gains are
+unmeasured until the Mac run.
+
 ### 2026-10-26: Stop the Swift port and remove it from main (accepted)
 
 [[docs/adr/254-remove-swift-app|ADR-254]] closes the Swift port: `apps/native/`, its generators,

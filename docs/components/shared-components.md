@@ -2,7 +2,7 @@
 title: Shared Components Reference
 type: component
 status: active
-date: 2026-10-19
+date: 2026-10-26
 updated: 2026-10-19
 last_modified: 2026-08-27
 tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle, upcoming-payments-hook, june-2026, symbol-search, research, ui-consistency, glass-consistency, popover-glass-thick, trend-hue, gain-loss, design-system, card-sheen, corner-orb, adr-105]
@@ -107,6 +107,15 @@ columnsRef.current = columns; // keep live reference current
 // processedRows and the width-seed effect now depend on columnKeySignature
 // and read columnsRef.current instead of listing `columns` directly.
 ```
+
+### Performance: Scroll-Frame Work (2026-10-26)
+
+The virtualizer re-renders `VirtualDataTable` on every scroll frame ([[docs/adr/257-ledger-scroll-and-squircle-clips|ADR-257]]).
+
+- The header row (one filter `Popover` per column) is memoised on its inputs, and `SortIcon` is a module-level component, so neither rebuilds per frame.
+- One body-level Radix `ContextMenu` replaces the per-row roots; rows that mount while scrolling no longer create a menu root each.
+- `getRowLabel` runs once per row per render instead of four times.
+- The host `Card` has no `overflow-hidden`: a clipping squircle around the composited scroller is drawn through a mask layer every frame.
 
 ### Performance: Server-Search Row Memoization (2026-08-25)
 

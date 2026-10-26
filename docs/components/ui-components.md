@@ -2,7 +2,7 @@
 title: UI Components
 type: component
 status: active
-date: 2026-10-22
+date: 2026-10-26
 updated: 2026-10-19
 tags:
   [
@@ -913,7 +913,7 @@ rowContextMenu={(row, sourceIndex, helpers) => (
 `helpers.startEditing` begins the table's built-in inline edit for that row (equivalent to clicking the pencil icon).
 
 > [!warning] `modal={false}` on ContextMenu root
-> Each row's `ContextMenu` is mounted with `modal={false}`. A modal Radix menu locks `pointer-events` on the document body while open. When a menu item opens a page-level `Dialog`, the dialog's own pointer-event lock races the menu's lock and can leave the page in an inert state. `modal={false}` avoids this. The menu still closes on selection and on outside clicks — only the body pointer-event lock is skipped.
+> The table mounts one `ContextMenu` around its virtual rows (not one per row; ADR-257), with `modal={false}`. A right-click, Ctrl-click or the keyboard menu key resolves the row under it through `data-index`. A modal Radix menu locks `pointer-events` on the document body while open. When a menu item opens a page-level `Dialog`, the dialog's own pointer-event lock races the menu's lock and can leave the page in an inert state. `modal={false}` avoids this. The menu still closes on selection and on outside clicks — only the body pointer-event lock is skipped.
 
 ### TransactionQuickLook
 

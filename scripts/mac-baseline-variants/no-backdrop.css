@@ -1,0 +1,14 @@
+/*
+ * mac-baseline variant no-backdrop (diagnostic, LOOK CHANGE, never ship):
+ * removes every backdrop-filter in the app. On macOS a single backdrop-filter
+ * render pass makes viz drop the whole frame from the CoreAnimation overlay
+ * path to one Skia-drawn surface. If idle and scroll GPU power on the
+ * standard tier fall to enhanced level with this variant, backdrop filters
+ * are what break that path (phase G2).
+ */
+*,
+*::before,
+*::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}

@@ -1,0 +1,11 @@
+/*
+ * mac-baseline variant corner-round (diagnostic, LOOK CHANGE, never ship):
+ * swaps the squircle corners (corner-shape) for plain round ones app-wide.
+ * A clipping squircle around a composited layer is drawn through a mask
+ * layer and an extra surface every frame; this sizes what squircles still
+ * cost after the phase G1 clip moves.
+ */
+.corner-continuous,
+[class*="corner-continuous"] {
+  corner-shape: round !important;
+}

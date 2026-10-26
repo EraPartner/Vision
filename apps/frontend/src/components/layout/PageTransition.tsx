@@ -32,6 +32,13 @@ export function PageTransition({ children }: PageTransitionProps) {
             initial={{ opacity: 0, y: 14, scale: 0.995 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: durations.page, ease: easings.outExpo }}
+            // A permanent layer: without it Chromium promotes the page for
+            // the entrance and demotes it when the animation ends, rastering
+            // the whole page twice per navigation. Opacity, not transform: a
+            // transform hint would become the containing block of the
+            // position:fixed chart tooltips. will-change alone does not make
+            // the wrapper a backdrop root, so the glass blur is unchanged.
+            style={{ willChange: "opacity" }}
         >
             {children}
         </m.div>

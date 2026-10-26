@@ -26,6 +26,9 @@
       "project": [
         "scripts/**/*.{ts,mjs,js}"
       ],
+      "ignore": [
+        "scripts/mac-baseline-variants/*.js"
+      ],
       "ignoreDependencies": [
         "prettier"
       ]

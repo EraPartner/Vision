@@ -32,11 +32,12 @@ describe("loading surface a11y", () => {
 
         rerender(<ChartSkeleton />);
         const chart = must(container.firstElementChild);
-        expect(chart).toHaveClass("overflow-hidden");
-        expect(chart.querySelector(".animate-shimmer")).toHaveClass(
-            "absolute",
-            "pointer-events-none",
-        );
+        const chartSweep = must(chart.querySelector(".animate-shimmer"));
+        expect(chartSweep).toHaveClass("absolute", "pointer-events-none");
+        // The moving sweep is clipped by a plain rounded box, never by the
+        // squircle (a squircle clip around a composited layer needs a mask).
+        expect(chartSweep.parentElement).toHaveClass("overflow-hidden");
+        expect(chartSweep.parentElement).not.toHaveClass("corner-continuous");
 
         rerender(<PageLoader />);
         const routeLoader = must(container.firstElementChild);
