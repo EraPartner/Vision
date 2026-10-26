@@ -21,7 +21,6 @@ import type { AppSettings } from "@/stores/settingsStore";
 import { setSkinV2 } from "@/lib/skin";
 
 // Re-export the app-settings types alongside the hydration bridge.
-export type { AppSettings };
 
 interface AppSettingsHydrationValue {
     appSettings: AppSettings;

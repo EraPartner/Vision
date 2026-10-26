@@ -23,10 +23,11 @@
     "dist": "npm run build && cd packaging/electron && npm run dist",
     "build:dev": "bun run --filter 'vision-frontend' build:dev",
     "preview": "bun run --filter 'vision-frontend' preview",
-    "lint": "bun scripts/run-parallel.ts --group --kill-others-on-fail \"frontend=bun run --filter 'vision-frontend' lint\" \"deps=bun run lint:deps\" \"dead=bun run lint:dead\"",
+    "lint": "bun scripts/run-parallel.ts --group --kill-others-on-fail \"frontend=bun run --filter 'vision-frontend' lint\" \"deps=bun run lint:deps\" \"dead=bun run lint:dead\" \"backend=bun run lint:backend\" \"projects=bun run lint:projects\"",
     "lint:deps": "depcruise --config config/dependency-cruiser.cjs --output-type err apps/frontend/src apps/frontend/scripts apps/frontend/vite.config.ts apps/node-backend/src apps/node-backend/scripts apps/node-backend/tests packages/types/src packages/shared-utils/src packages/shared-utils/tests packaging/electron scripts",
     "lint:dead": "knip --config config/knip.json --no-progress",
     "lint:backend": "bun run --filter 'financial-transaction-manager-node' lint",
+    "lint:projects": "apps/node-backend/node_modules/.bin/eslint -c eslint.projects.config.mjs packages packaging/electron scripts",
     "typecheck": "bun run --filter 'vision-frontend' typecheck",
     "typecheck:backend": "bun run --filter 'financial-transaction-manager-node' typecheck",
     "typecheck:scripts": "tsc -p scripts/tsconfig.json",
@@ -70,7 +71,7 @@
     "check:workflow-supply-chain": "bun scripts/check-workflow-supply-chain.ts",
     "todo:list": "bun scripts/todo-report.ts",
     "todo:check": "bun scripts/todo-report.ts --check",
-    "check": "bun run lint && bun run lint:backend && bun run typecheck && bun run typecheck:backend && bun run typecheck:packages && bun run typecheck:scripts && bun run typecheck:electron && bun run validate-locales && bun run check-endpoint-matrix && bun run check-legacy-inventory && bun run check-test-only-exports && bun run check:package-boundaries && bun run check:agent-instructions && bun run check:workflow-supply-chain && bun run todo:check && bun run db:lint && bun run test:scripts && bun run test:packages && bun run test && bun run test:frontend && bun run test:electron"
+    "check": "bun run lint && bun run typecheck && bun run typecheck:backend && bun run typecheck:packages && bun run typecheck:scripts && bun run typecheck:electron && bun run validate-locales && bun run check-endpoint-matrix && bun run check-legacy-inventory && bun run check-test-only-exports && bun run check:package-boundaries && bun run check:agent-instructions && bun run check:workflow-supply-chain && bun run todo:check && bun run db:lint && bun run test:scripts && bun run test:packages && bun run test && bun run test:frontend && bun run test:electron"
   },
   "devDependencies": {
     "@ast-grep/cli": "0.51.0",
