@@ -30,7 +30,8 @@ public struct HomeView: View {
     public var body: some View {
         ScrollView {
             // PageShell rhythm="airy": 32 pt between the header, the cards and the charts.
-            VStack(alignment: .leading, spacing: 32) {
+            // Lazy: the charts below the fold are not built (or measured) for the first frame.
+            LazyVStack(alignment: .leading, spacing: 32) {
                 // The shared reminder banner is the first thing in the page, so it scrolls away
                 // with it (AppLayout renders it above the routed page inside `<main>`).
                 if let notifications = shell.shellNotifications, notifications.upcoming.shouldShow {
