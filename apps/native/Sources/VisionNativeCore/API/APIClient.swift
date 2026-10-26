@@ -57,7 +57,7 @@ public struct URLSessionAPITransport: APITransport {
     /// Every request already ignores the local cache (`reloadIgnoringLocalCacheData`) and the
     /// loopback backend sends no cache validators, so the session keeps no response cache: it
     /// would only hold a second in-memory copy of each answer.
-    static var configuration: URLSessionConfiguration {
+    public static var configuration: URLSessionConfiguration {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.urlCache = nil
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
