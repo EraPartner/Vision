@@ -10,6 +10,7 @@ import { logger } from '../src/config/logger.ts';
 import type { PgQueryResult } from '../src/database/connection.ts';
 import repo from '../src/repositories/customParserConfigRepository.ts';
 import { partial } from './helpers/partial.ts';
+import { must } from "./helpers/must.ts";
 
 const query = vi.mocked(rawQuery);
 
@@ -49,7 +50,7 @@ describe('customParserConfigRepository.getAll', () => {
   it('parses config_json when stored as a string', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow({ config_json: JSON.stringify(SAMPLE_CONFIG) })] }));
     const result = await repo.getAll();
-    expect(result[0]!.config).toEqual(SAMPLE_CONFIG);
+    expect(must(result[0], "result[0]").config).toEqual(SAMPLE_CONFIG);
   });
 });
 
@@ -75,10 +76,10 @@ describe('customParserConfigRepository.create', () => {
   it('inserts name + serialized config and returns the mapped row', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow()] }));
     const result = await repo.create({ name: 'My Bank', config: SAMPLE_CONFIG });
-    const [, params] = query.mock.calls[0]!;
-    expect(params![0]).toBe('My Bank');
-    expect(params![1]).toBe('transaction'); // kind
-    expect(JSON.parse(params![2] as string)).toEqual(SAMPLE_CONFIG);
+    const [, params] = must(query.mock.calls[0], "query.mock.calls[0]");
+    expect(must(params, "params")[0]).toBe('My Bank');
+    expect(must(params, "params")[1]).toBe('transaction'); // kind
+    expect(JSON.parse(must(params, "params")[2] as string)).toEqual(SAMPLE_CONFIG);
     expect(result.config).toEqual(SAMPLE_CONFIG);
   });
 });

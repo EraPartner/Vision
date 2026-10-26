@@ -19,6 +19,7 @@ import {
   reconcileTransfers,
   getTransferSuggestions,
 } from "../../src/services/transferReconciliationService.ts";
+import { must } from "../helpers/must.ts";
 
 /** Issued SQL without identifier quotes, lower-cased, with its params. */
 const issued = () =>
@@ -45,15 +46,15 @@ describe("unmarkTransfer — sticky per-pair dismissal (ADR-083, migration 0070)
     // (mirrors markTransfer) so a concurrent re-pair can't strand a third row.
     const locks = sqls.filter((s) => s.sql.includes("for update"));
     expect(locks).toHaveLength(1);
-    expect(locks[0]!.sql).toMatch(/order by id.*for update/s);
+    expect(must(locks[0], "locks[0]").sql).toMatch(/order by id.*for update/s);
     // The pairing is persisted in transfer_dismissals (ordered, idempotent)…
     const dismissal = sqls.find((s) =>
       s.sql.includes("insert into transfer_dismissals"),
     );
     expect(dismissal).toBeTruthy();
-    expect(dismissal!.sql).toContain("least");
-    expect(dismissal!.sql).toContain("greatest");
-    expect(dismissal!.sql).toContain("on conflict do nothing");
+    expect(must(dismissal, "dismissal").sql).toContain("least");
+    expect(must(dismissal, "dismissal").sql).toContain("greatest");
+    expect(must(dismissal, "dismissal").sql).toContain("on conflict do nothing");
     // …and the ROWS go back to open so each can still pair with OTHER candidates.
     const updates = sqls.filter((s) => s.sql.includes("update transactions"));
     expect(updates).toHaveLength(2); // the row + its peer
@@ -78,8 +79,8 @@ describe("unmarkTransfer — sticky per-pair dismissal (ADR-083, migration 0070)
     // so row 99 is never stranded as a phantom one-way transfer.
     const updates = sqls.filter((s) => s.sql.includes("update transactions"));
     expect(updates).toHaveLength(1);
-    expect(updates[0]!.params).toContain(10);
-    expect(updates[0]!.params).not.toContain(20);
+    expect(must(updates[0], "updates[0]").params).toContain(10);
+    expect(must(updates[0], "updates[0]").params).not.toContain(20);
   });
 
   it("a peerless (single-leg) row is just reset — no pair to dismiss", async () => {
@@ -91,7 +92,7 @@ describe("unmarkTransfer — sticky per-pair dismissal (ADR-083, migration 0070)
     expect(sqls.find((s) => s.sql.includes("transfer_dismissals"))).toBeUndefined();
     const updates = sqls.filter((s) => s.sql.includes("update transactions"));
     expect(updates).toHaveLength(1);
-    expect(updates[0]!.sql).toMatch(/transfer_source = (null|\$\d)/);
+    expect(must(updates[0], "updates[0]").sql).toMatch(/transfer_source = (null|\$\d)/);
   });
 });
 
@@ -146,7 +147,7 @@ describe("suggestion page input", () => {
     });
     const last = await getTransferSuggestions({
       limit: 1,
-      cursor: first.nextCursor!,
+      cursor: must(first.nextCursor, "first.nextCursor"),
     });
     expect(last).toMatchObject({
       hasMore: false,

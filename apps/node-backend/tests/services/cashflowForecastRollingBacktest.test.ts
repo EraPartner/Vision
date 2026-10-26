@@ -18,6 +18,7 @@ import type {
   DiagnosticsPayload,
 } from "../../src/services/calculations/forecast/index.ts";
 import type { AggregationEnvelope } from "../../src/services/calculations/aggregation/_envelope.ts";
+import { must } from "../helpers/must.ts";
 
 /** Rolling envelope `data` is typed `object` in src; these tests read diagnostics. */
 type DiagnosticsEnvelope = AggregationEnvelope<{
@@ -134,7 +135,7 @@ describe("walkForwardBacktestRolling", () => {
       daysForward: 7,
       windowCount: 3,
     });
-    const entry = result[0]!;
+    const entry = must(result[0], "result[0]");
     expect(entry.id).toBe("m1");
     expect(entry.label).toBe("m1");
     expect(entry.aggregate).toMatchObject({
@@ -154,7 +155,7 @@ describe("walkForwardBacktestRolling", () => {
       daysForward: 7,
       windowCount: 4,
     });
-    for (const w of result[0]!.perWindow) {
+    for (const w of must(result[0], "result[0]").perWindow) {
       expect(w.window_end).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(typeof w.mae).toBe("number");
       expect(typeof w.rmse).toBe("number");
@@ -171,7 +172,7 @@ describe("walkForwardBacktestRolling", () => {
       daysForward: 7,
       windowCount: 4,
     });
-    const entry = result[0]!;
+    const entry = must(result[0], "result[0]");
     expect(entry.aggregate.windows).toBe(entry.perWindow.length);
   });
 
@@ -183,7 +184,7 @@ describe("walkForwardBacktestRolling", () => {
       daysForward: 7,
       windowCount: 3,
     });
-    const entry = result[0]!;
+    const entry = must(result[0], "result[0]");
     if (entry.perWindow.length === 0) return;
     const expected =
       entry.perWindow.reduce((s, w) => s + w.mae, 0) / entry.perWindow.length;
@@ -198,13 +199,13 @@ describe("walkForwardBacktestRolling", () => {
       daysForward: 7,
       windowCount: 3,
     });
-    expect(result[0]!.aggregate).toMatchObject({
+    expect(must(result[0], "result[0]").aggregate).toMatchObject({
       mae: 0,
       rmse: 0,
       mape: null,
       windows: 0,
     });
-    expect(result[0]!.perWindow).toHaveLength(0);
+    expect(must(result[0], "result[0]").perWindow).toHaveLength(0);
   });
 
   it("window_end dates are strictly in the past relative to today", () => {
@@ -216,7 +217,7 @@ describe("walkForwardBacktestRolling", () => {
       windowCount: 4,
     });
     const today = todayIso();
-    for (const w of result[0]!.perWindow) {
+    for (const w of must(result[0], "result[0]").perWindow) {
       expect(w.window_end < today).toBe(true);
     }
   });
@@ -329,11 +330,11 @@ describe("computeCashflowForecastRolling — MC cache", () => {
 
     getIncludeTransfers.mockResolvedValue(false);
     await computeCashflowForecastRolling(args);
-    const hashOff = cacheGet.mock.calls.at(-1)![0].filterHash;
+    const hashOff = must(cacheGet.mock.calls.at(-1), "cacheGet.mock.calls.at(-1)")[0].filterHash;
 
     getIncludeTransfers.mockResolvedValue(true);
     await computeCashflowForecastRolling(args);
-    const hashOn = cacheGet.mock.calls.at(-1)![0].filterHash;
+    const hashOn = must(cacheGet.mock.calls.at(-1), "cacheGet.mock.calls.at(-1)")[0].filterHash;
 
     expect(hashOff).not.toBe(hashOn);
     // Every other input is identical, so the difference is the toggle alone.
@@ -414,9 +415,9 @@ describe("computeCashflowForecastRolling — diagnostics", () => {
     })) as DiagnosticsEnvelope;
     const diag = result.data.diagnostics;
     expect(diag).not.toBeNull();
-    expect(Array.isArray(diag!.backtest)).toBe(true);
-    expect(diag!.backtest.length).toBeGreaterThan(0);
-    for (const entry of diag!.backtest) {
+    expect(Array.isArray(must(diag, "diag").backtest)).toBe(true);
+    expect(must(diag, "diag").backtest.length).toBeGreaterThan(0);
+    for (const entry of must(diag, "diag").backtest) {
       expect(typeof entry.method_id).toBe("string");
       expect(typeof entry.label).toBe("string");
       expect(typeof entry.mae).toBe("number");
@@ -437,9 +438,9 @@ describe("computeCashflowForecastRolling — diagnostics", () => {
       includeBacktest: true,
       userId: "u_diag2",
     })) as DiagnosticsEnvelope;
-    const entry = result.data.diagnostics!.backtest[0]!;
+    const entry = must(must(result.data.diagnostics, "result.data.diagnostics").backtest[0], "result.data.diagnostics!.backtest[0]");
     if (entry.per_month.length === 0) return;
-    const w = entry.per_month[0]!;
+    const w = must(entry.per_month[0], "entry.per_month[0]");
     expect(w.month).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(typeof w.mae).toBe("number");
     expect(typeof w.sample_days).toBe("number");

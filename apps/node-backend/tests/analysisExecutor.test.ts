@@ -7,6 +7,7 @@ import {
   executeAnalysisSql,
 } from "../src/services/analysisExecutor.ts";
 import { loose } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 /**
  * spyOn types pg's overloaded connect by its callback form; the executor
@@ -68,9 +69,9 @@ describe("analysis result dates", () => {
     expect(parserSpy).not.toHaveBeenCalledWith(1082, "text");
     expect(parserSpy).toHaveBeenCalledWith(1184, "text");
     expect(parserSpy).toHaveBeenCalledWith(1700, "text");
-    const config = query.mock.calls.find(
+    const config = must(query.mock.calls.find(
       ([value]) => typeof value === "object",
-    )![0];
+    ), "query.mock.calls.find( ([value]) => typeof value === \"obj...")[0];
     expect(config.types.getTypeParser(1082, "binary")).toBe(
       pg.types.getTypeParser(1082, "binary"),
     );

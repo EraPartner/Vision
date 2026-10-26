@@ -19,6 +19,7 @@ import { closePool } from "../src/database/connection.ts";
 import accountsRouter from "../src/routes/accounts.ts";
 import { routeAgent } from "./helpers/routeApp.ts";
 import { bodyAt } from "./helpers/responseBody.ts";
+import { must } from "./helpers/must.ts";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const MARK = `account_money_wire_${process.pid}`;
@@ -29,7 +30,7 @@ describeDb("account statement and reconcile money are numbers (real DB)", () => 
 
   beforeAll(async () => {
     await acquireDbSuiteLock();
-    const pool = getTestPool()!;
+    const pool = must(getTestPool(), "getTestPool()");
     const { rows: accounts } = await pool.query(
       `INSERT INTO accounts (name, display_name, currency)
        VALUES ($1, $1, 'EUR') RETURNING id`,

@@ -10,6 +10,7 @@ import twelveData from '../../src/services/research/adapters/twelveDataAdapter.t
 import finnhub from '../../src/services/research/adapters/finnhubAdapter.ts';
 import fmp from '../../src/services/research/adapters/fmpAdapter.ts';
 import alphaVantage from '../../src/services/research/adapters/alphaVantageAdapter.ts';
+import { must } from "../helpers/must.ts";
 
 const ENV = {
   TWELVE_DATA_API_KEY: 'td',
@@ -125,7 +126,7 @@ describe('twelveDataAdapter', () => {
     }]]);
     const { points } = await twelveData.chart('AAPL');
     expect(points).toHaveLength(1);
-    expect(points[0]!.close).toBe(1.5);
+    expect(must(points[0], "points[0]").close).toBe(1.5);
   });
 });
 
@@ -209,7 +210,7 @@ describe('finnhubAdapter', () => {
     mockFetch([['/company-news', [null, 'junk', { headline: 'H1', url: 'http://x' }]]]);
     const { articles } = await finnhub.news('AAPL');
     expect(articles).toHaveLength(1);
-    expect(articles[0]!.title).toBe('H1');
+    expect(must(articles[0], "articles[0]").title).toBe('H1');
   });
 });
 
@@ -257,7 +258,7 @@ describe('fmpAdapter', () => {
     ]);
     const { items } = await fmp.search('apple');
     expect(items.map((i) => i.symbol)).toEqual(['AAPL', 'APC.DE']);
-    expect(items[1]!.exchange).toBe('XETRA');
+    expect(must(items[1], "items[1]").exchange).toBe('XETRA');
   });
 
   it('search degrades to no items when both endpoints return non-arrays', async () => {
@@ -346,7 +347,7 @@ describe('alphaVantageAdapter', () => {
     }]]);
     const { points } = await alphaVantage.chart('AAPL', { range: '1mo' });
     expect(points).toHaveLength(1);
-    expect(points[0]!.close).toBe(2.5);
+    expect(must(points[0], "points[0]").close).toBe(2.5);
   });
 
   // ── malformed-response pins (ZOD-12): degrade exactly like the old guards ──

@@ -19,6 +19,7 @@ import {
 } from "../src/services/aiResearchDocuments.ts";
 import type { getOllamaClient } from "../src/integrations/ollama/client.ts";
 import { partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 type OllamaClient = ReturnType<typeof getOllamaClient>;
 
@@ -73,7 +74,7 @@ describe("local research documents", () => {
     const stored = result as unknown as {
       passages: Array<{ embedding: { model: string } }>;
     };
-    expect(stored.passages[0]!.embedding.model).toBe("synthetic-embed");
+    expect(must(stored.passages[0], "stored.passages[0]").embedding.model).toBe("synthetic-embed");
   });
   it("falls back visibly to keyword retrieval when semantic search is unavailable", async () => {
     repository.keywordSearch.mockResolvedValue([

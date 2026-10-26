@@ -37,6 +37,7 @@ import type {
   AiConversationRow,
 } from "../src/services/aiChatService.ts";
 import type { AiChatServiceEvent } from "@vision/types/aiChat";
+import { mockOf } from "./helpers/mockOf.ts";
 const conversation = partial<AiConversationRow>({
   id: "conv-presentation",
   model: "synthetic",
@@ -44,12 +45,12 @@ const conversation = partial<AiConversationRow>({
 });
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(aiChatRepository.createConversation).mockResolvedValue(
+  vi.mocked(aiChatRepository).createConversation.mockResolvedValue(
     conversation,
   );
-  vi.mocked(aiChatRepository.getConversation).mockResolvedValue(conversation);
-  vi.mocked(aiChatRepository.getMessages).mockResolvedValue([]);
-  vi.mocked(aiChatRepository.appendMessage).mockImplementation(
+  vi.mocked(aiChatRepository).getConversation.mockResolvedValue(conversation);
+  vi.mocked(aiChatRepository).getMessages.mockResolvedValue([]);
+  vi.mocked(aiChatRepository).appendMessage.mockImplementation(
     async (input) => {
       const roles: AiMessageRow["role"][] = [
         "user",
@@ -128,7 +129,7 @@ describe("Outgoing AI tool presentation preserves stored data and prompt contrac
         meta: { renderAs: "bar" },
       },
     });
-    vi.mocked(aiChatRepository.getMessages).mockResolvedValue([row]);
+    vi.mocked(aiChatRepository).getMessages.mockResolvedValue([row]);
     const history = await getConversationWithMessages(conversation.id);
     expect(history?.messages[0]).toMatchObject({
       toolPresentation: {
@@ -170,7 +171,7 @@ describe("Outgoing AI tool presentation preserves stored data and prompt contrac
     });
     expect(
       vi
-        .mocked(aiChatRepository.appendMessage)
+        .mocked(mockOf(aiChatRepository, "appendMessage"))
         .mock.calls.find(([input]) => input.role === "tool")?.[0].toolResult,
     ).toBe(result);
     const request = chat.mock.calls[0]?.[0] as {

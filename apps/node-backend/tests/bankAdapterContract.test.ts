@@ -48,6 +48,7 @@ import {
   type ParsedBankTransaction,
   type ParsedBankTransactions,
 } from "../src/services/importPipeline/adapters/_shared.ts";
+import { must } from "./helpers/must.ts";
 
 const kbcParse = vi.mocked(kbc.parse);
 const genericParse = vi.mocked(generic.parse);
@@ -121,7 +122,7 @@ describe("adapter registry output contract", () => {
   it("returns a valid result unchanged, skipped counter included", async () => {
     const parsed = result([row()], 3);
     kbcParse.mockResolvedValue(parsed);
-    const out = await getAdapter("kbc")!.parse("/tmp/kbc.csv");
+    const out = await must(getAdapter("kbc"), "getAdapter(\"kbc\")").parse("/tmp/kbc.csv");
     expect(out).toBe(parsed);
     expect(out.skipped).toBe(3);
     expect(kbcParse).toHaveBeenCalledWith("/tmp/kbc.csv", undefined);
@@ -129,14 +130,14 @@ describe("adapter registry output contract", () => {
 
   it("throws on a bad adapter row in tests/development, naming the adapter and path", async () => {
     kbcParse.mockResolvedValue(result([row(), row({ amount: NaN })]));
-    await expect(getAdapter("kbc")!.parse("/tmp/kbc.csv")).rejects.toThrow(
+    await expect(must(getAdapter("kbc"), "getAdapter(\"kbc\")").parse("/tmp/kbc.csv")).rejects.toThrow(
       'Data contract violated: bank adapter "kbc" output at rows.1.amount (invalid_type)',
     );
   });
 
   it("checks the skipped counter riding on the array", async () => {
     kbcParse.mockResolvedValue(result([row()], -1));
-    await expect(getAdapter("kbc")!.parse("/tmp/kbc.csv")).rejects.toThrow(
+    await expect(must(getAdapter("kbc"), "getAdapter(\"kbc\")").parse("/tmp/kbc.csv")).rejects.toThrow(
       "at skipped (too_small)",
     );
   });
@@ -163,7 +164,7 @@ describe("adapter registry output contract", () => {
       result([row({ amount: NaN, recipient: "SECRET PAYEE" })]),
     );
 
-    const error = await getAdapter("kbc")!
+    const error = await must(getAdapter("kbc"), "getAdapter(\"kbc\")")
       .parse("/tmp/kbc.csv")
       .catch((err: unknown) => err);
     expect(String(error)).toContain(

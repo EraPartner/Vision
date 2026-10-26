@@ -50,6 +50,7 @@ import {
   readMonitorNotification,
 } from "../src/services/analysisMonitorService.ts";
 import adminRouter from "../src/routes/admin.ts";
+import { must } from "./helpers/must.ts";
 
 const HASH = "b".repeat(64);
 
@@ -68,7 +69,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(
           (
             await ensureAnalysisRole({
-              databaseUrl: process.env.DATABASE_URL!,
+              databaseUrl: must(process.env.DATABASE_URL, "process.env.DATABASE_URL"),
               analysisUrl: process.env.DATABASE_URL_ANALYSIS,
               migrationsUrl: process.env.DATABASE_URL,
             })
@@ -79,7 +80,7 @@ describe.skipIf(!hasTestDatabase())(
 
     afterEach(async () => {
       for (const { sql, params } of cleanup.splice(0))
-        await getTestPool()!.query(sql, params);
+        await must(getTestPool(), "getTestPool()").query(sql, params);
     });
 
     afterAll(async () => {
@@ -245,7 +246,7 @@ describe.skipIf(!hasTestDatabase())(
       );
       const [hit] = await documents.keywordSearch("zyxwvutsynthetic", 5);
       expect(hit).toMatchObject({ documentId: created.id, pageNumber: 1 });
-      expect(typeof hit!.score).toBe("number");
+      expect(typeof must(hit, "hit").score).toBe("number");
       expect(
         (await documents.semanticCandidates(500)).find(
           (row) => row.documentId === created.id,
@@ -295,7 +296,7 @@ describe.skipIf(!hasTestDatabase())(
         ],
         expectedVersion: 1,
       });
-      expect((await checkAnalysisMonitor(monitor.id))!.status).toBe(
+      expect(must((await checkAnalysisMonitor(monitor.id)), "(await checkAnalysisMonitor(monitor.id))").status).toBe(
         "triggered",
       );
 
@@ -309,8 +310,8 @@ describe.skipIf(!hasTestDatabase())(
         (item) => item.monitorId === monitor.id,
       );
       expect(notifications.unreadCount).toBeGreaterThanOrEqual(1);
-      expect(await readMonitorNotification(notification!.id)).toMatchObject({
-        id: notification!.id,
+      expect(await readMonitorNotification(must(notification, "notification").id)).toMatchObject({
+        id: must(notification, "notification").id,
         readAt: expect.any(Date),
       });
       expect(
@@ -338,7 +339,7 @@ describe.skipIf(!hasTestDatabase())(
           ),
           parameters: {},
         });
-        const id = analysis!.id;
+        const id = must(analysis, "analysis").id;
         onCleanup("DELETE FROM saved_analyses WHERE id=$1", id);
         expect(await runSavedAnalysis(id)).toMatchObject({ id });
         expect(
@@ -355,12 +356,12 @@ describe.skipIf(!hasTestDatabase())(
         });
         const versions = await listSavedAnalysisVersions(id);
         expect(versions.map((version) => version.version)).toEqual([2, 1]);
-        expect(versions[0]!.createdAt).toBeInstanceOf(Date);
+        expect(must(versions[0], "versions[0]").createdAt).toBeInstanceOf(Date);
         expect(await restoreSavedAnalysisVersion(id, 1, 2)).toMatchObject({
           id,
           version: 3,
         });
-        expect((await getSavedAnalysis(id))!.version).toBe(3);
+        expect(must((await getSavedAnalysis(id)), "(await getSavedAnalysis(id))").version).toBe(3);
         expect(await deleteSavedAnalysis(id)).toBe(true);
       },
     );

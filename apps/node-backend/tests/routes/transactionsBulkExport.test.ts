@@ -43,6 +43,7 @@ const { default: transactionsRouter } =
 
 import { getClient } from "../../src/database/connection.ts";
 import type { PgPoolClient } from "../../src/database/connection.ts";
+import { must } from "../helpers/must.ts";
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
 const bulkExport = (body: object) =>
@@ -109,10 +110,10 @@ describe("POST /bulk-export — CSV success", () => {
     expect(res.text).toMatch(/^Date,Bank Account,Recipient/);
     expect(res.text).toContain("Trader Joe");
     expect(res.text).toContain("weekly");
-    expect(query.mock.calls[0]![0]).toBe(
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toBe(
       "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
     );
-    expect(query.mock.calls.at(-1)![0]).toBe("COMMIT");
+    expect(must(query.mock.calls.at(-1), "query.mock.calls.at(-1)")[0]).toBe("COMMIT");
     expect(release).toHaveBeenCalledOnce();
   });
 
@@ -126,7 +127,7 @@ describe("POST /bulk-export — CSV success", () => {
 
     await bulkExport({ ids: [1], format: "csv" }).expect(404);
 
-    expect(query.mock.calls.at(-1)![0]).toBe("ROLLBACK");
+    expect(must(query.mock.calls.at(-1), "query.mock.calls.at(-1)")[0]).toBe("ROLLBACK");
     expect(release).toHaveBeenCalledOnce();
   });
 });
@@ -149,7 +150,7 @@ describe("POST /bulk-export — NDJSON success", () => {
     expect(res.headers["x-exported-count"]).toBe("1");
 
     const firstLine = res.text.split("\n").filter(Boolean)[0];
-    const parsed = JSON.parse(firstLine!);
+    const parsed = JSON.parse(must(firstLine, "firstLine"));
     expect(parsed.id).toBe(1);
     expect(parsed.recipient).toBe("Trader Joe");
     expect(parsed.tags).toEqual(["weekly"]);

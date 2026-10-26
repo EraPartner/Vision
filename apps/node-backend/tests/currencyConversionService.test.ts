@@ -36,7 +36,9 @@ import { logger } from "../src/config/logger.ts";
 import { partial } from "./helpers/partial.ts";
 import { pgLocalDate } from "./helpers/portfolioPgRows.ts";
 import { RowContractError } from "../src/database/rowContracts.ts";
+import { must } from "./helpers/must.ts";
 
+import { mockOf } from "./helpers/mockOf.ts";
 // The cases prime `query` with bare `{ rows }` results and never read
 // `rowCount`, so the mock is typed with a partial result.
 const query = vi.mocked(rawQuery) as unknown as Mock<
@@ -171,7 +173,7 @@ describe("Currency Conversion Service", () => {
     expect(typeof gbp).toBe("number");
     expect(typeof jpy).toBe("number");
     // GBP should be worth more than USD per unit
-    expect(gbp).toBeGreaterThan(usd!);
+    expect(gbp).toBeGreaterThan(must(usd, "usd"));
   });
 
   // ── convertRowsToEur ─────────────────────────────────────
@@ -183,8 +185,8 @@ describe("Currency Conversion Service", () => {
 
     const results = await convertRowsToEur(rows);
     expect(results).toHaveLength(2);
-    expect(results[0]!.amount_eur).toBe(100.0);
-    expect(results[1]!.amount_eur).toBe(-50.0);
+    expect(must(results[0], "results[0]").amount_eur).toBe(100.0);
+    expect(must(results[1], "results[1]").amount_eur).toBe(-50.0);
   });
 
   it("should return empty array for empty rows", async () => {
@@ -208,7 +210,7 @@ describe("Currency Conversion Service", () => {
     const rows = [{ amount: 100, currency: "USD" }];
     const results = await convertRowsToEur(rows, "HUF");
     // USD->EUR: 100 * 0.5 = 50; EUR->HUF divide by 0.0025 => 20000
-    expect(results[0]!.amount_eur).toBeCloseTo(20000, 6);
+    expect(must(results[0], "results[0]").amount_eur).toBeCloseTo(20000, 6);
   });
 
   it("should convert amount between arbitrary currencies", async () => {
@@ -238,7 +240,7 @@ describe("Currency Conversion Service", () => {
       [{ amount: 50, currency: "XYZ" }],
       "EUR",
     );
-    expect(row!.amount_eur).toBeUndefined();
+    expect(must(row, "row").amount_eur).toBeUndefined();
   });
 
   it("leaves a row unconverted when the target currency has no stored rate", async () => {
@@ -246,7 +248,7 @@ describe("Currency Conversion Service", () => {
       [{ amount: 50, currency: "USD" }],
       "ZZZ",
     );
-    expect(row!.amount_eur).toBeUndefined();
+    expect(must(row, "row").amount_eur).toBeUndefined();
   });
 
   it("uses an earlier historical rate even when a future rate is closer", async () => {
@@ -271,7 +273,7 @@ describe("Currency Conversion Service", () => {
       useHistoricalRatesByDate: true,
       dateField: "day",
     });
-    expect(converted[0]!.amount_eur).toBeCloseTo(80, 6);
+    expect(must(converted[0], "converted[0]").amount_eur).toBeCloseTo(80, 6);
   });
 
   it("prefetches history when the stored currency has only future rates", async () => {
@@ -294,8 +296,8 @@ describe("Currency Conversion Service", () => {
       "EUR",
       { useHistoricalRatesByDate: true },
     );
-    expect(row!.amount_eur).toBeCloseTo(80, 6);
-    expect(row!.used_fallback_rate).toBeUndefined();
+    expect(must(row, "row").amount_eur).toBeCloseTo(80, 6);
+    expect(must(row, "row").used_fallback_rate).toBeUndefined();
     expect(global.fetch).toHaveBeenCalled();
   });
 
@@ -315,9 +317,9 @@ describe("Currency Conversion Service", () => {
       "EUR",
       { useHistoricalRatesByDate: true },
     );
-    expect(row!.amount_eur).toBeCloseTo(90, 6);
-    expect(row!.used_fallback_rate).toBe(true);
-    expect(row!.fallback_reason).toBe("historical_rate_missing");
+    expect(must(row, "row").amount_eur).toBeCloseTo(90, 6);
+    expect(must(row, "row").used_fallback_rate).toBe(true);
+    expect(must(row, "row").fallback_reason).toBe("historical_rate_missing");
   });
 
   it("should batch repeated historical misses without point DB lookups", async () => {
@@ -345,8 +347,8 @@ describe("Currency Conversion Service", () => {
 
     expect(converted).toHaveLength(2);
     // No rate anywhere: both rows stay unconverted, never 1:1.
-    expect(converted[0]!.amount_eur).toBeUndefined();
-    expect(converted[1]!.amount_eur).toBeUndefined();
+    expect(must(converted[0], "converted[0]").amount_eur).toBeUndefined();
+    expect(must(converted[1], "converted[1]").amount_eur).toBeUndefined();
 
     const sqlCalls = query.mock.calls.map(([sql]) => sqlText(sql));
     const exactLookups = sqlCalls.filter((sql) =>
@@ -415,7 +417,7 @@ describe("Currency Conversion Service", () => {
       used_fallback_rate: true,
       fallback_reason: "historical_rate_missing",
     });
-    expect(logger.warn).toHaveBeenCalledWith(
+    expect(mockOf(logger, "warn")).toHaveBeenCalledWith(
       "Historical FX missing, falling back to current rate",
       { currency: "USD", date: "2020-01-15" },
     );
@@ -483,7 +485,7 @@ describe("Currency Conversion Service", () => {
       { useHistoricalRatesByDate: true, dateField: "day" },
     );
 
-    expect(converted[0]!.amount_eur).toBe(100);
+    expect(must(converted[0], "converted[0]").amount_eur).toBe(100);
     expect(global.fetch).not.toHaveBeenCalled();
     expect(
       query.mock.calls.some(([sql]) => sqlText(sql).includes("from unnest")),
@@ -514,7 +516,7 @@ describe("Currency Conversion Service", () => {
 
     clearHistoricalIndexCache();
     await getHistoricalRateIndex(["USD"]);
-    releaseFetch!();
+    must(releaseFetch, "releaseFetch")();
     await conversion;
 
     const indexLoadsBefore = query.mock.calls.filter(([sql]) =>
@@ -786,9 +788,9 @@ describe("Currency Conversion Service", () => {
     // saved under the transaction's own date. saveHistoricalRate binds
     // (currency, rate, date).
     expect(savedRates).toHaveLength(1);
-    expect(savedRates[0]![0]).toBe("USD");
-    expect(savedRates[0]![1]).toBeCloseTo(0.5, 10);
-    expect(savedRates[0]![2]).toBe("2020-03-07");
+    expect(must(savedRates[0], "savedRates[0]")[0]).toBe("USD");
+    expect(must(savedRates[0], "savedRates[0]")[1]).toBeCloseTo(0.5, 10);
+    expect(must(savedRates[0], "savedRates[0]")[2]).toBe("2020-03-07");
     expect(repairFlagSet).toBe(true);
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining("eurofxref-hist.xml"),
@@ -822,8 +824,8 @@ describe("Currency Conversion Service", () => {
     const [first] = await convertRowsToEur(rows, "EUR", opts);
     const [second] = await convertRowsToEur(rows, "EUR", opts);
 
-    expect(first!.amount_eur).toBeCloseTo(90, 6);
-    expect(second!.amount_eur).toBeCloseTo(90, 6);
+    expect(must(first, "first").amount_eur).toBeCloseTo(90, 6);
+    expect(must(second, "second").amount_eur).toBeCloseTo(90, 6);
 
     // The full-history index load runs once; the second call reuses the cache.
     const indexLoads = query.mock.calls.filter(([sql]) =>
@@ -919,7 +921,7 @@ describe("Currency Conversion Service", () => {
     await warmCache();
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
-    expect(logger.warn).toHaveBeenCalledWith(
+    expect(mockOf(logger, "warn")).toHaveBeenCalledWith(
       expect.stringContaining("all APIs unavailable"),
     );
   });

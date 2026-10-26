@@ -23,6 +23,7 @@ import {
 } from "../src/services/currency/currencyConversionService.ts";
 import { clearHistoricalCache } from "../src/services/currency/rateFetcher.ts";
 import { PORTFOLIO_TRANSACTION_SNAPSHOT_SQL } from "../src/repositories/portfolioImportReconciliationRepository.ts";
+import { must } from "./helpers/must.ts";
 
 // Isolate stamping and cache filling from the separate one-time repair job.
 vi.mock("../src/repositories/settingsRepository.ts", async (importOriginal) => {
@@ -39,7 +40,7 @@ vi.mock("../src/repositories/settingsRepository.ts", async (importOriginal) => {
   };
 });
 
-const pool = getTestPool()!;
+const pool = must(getTestPool(), "getTestPool()");
 const day = "1950-02-03";
 const hash = "a".repeat(64);
 let investmentId: number;
@@ -237,8 +238,8 @@ describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
         dateField: "date",
       },
     );
-    expect(converted[0]!.amount_eur).toBe(10);
-    expect(converted[0]!.used_fallback_rate).not.toBe(true);
+    expect(must(converted[0], "converted[0]").amount_eur).toBe(10);
+    expect(must(converted[0], "converted[0]").used_fallback_rate).not.toBe(true);
     expect((await snapshot(id)).fx_rate_to_eur).toBeNull();
   });
 

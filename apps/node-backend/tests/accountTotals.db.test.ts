@@ -19,6 +19,7 @@ import { clearMemoryCache } from "../src/services/currency/currencyConversionSer
 import accountsRouter from "../src/routes/accounts.ts";
 import { routeAgent } from "./helpers/routeApp.ts";
 import { bodyAt } from "./helpers/responseBody.ts";
+import { must } from "./helpers/must.ts";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
@@ -38,7 +39,7 @@ async function addAccount(
     isActive = true,
   }: AccountSeed = {},
 ): Promise<number> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO accounts (name, type, currency, in_net_worth, is_active)
      VALUES ($1, $2::account_type, $3, $4, $5) RETURNING id`,
     [name, type, currency, inNetWorth, isActive],
@@ -49,7 +50,7 @@ async function addAccount(
 const PAYEE = `account_totals_${process.pid}`;
 
 async function addTxn(accountId: number, amount: string, currency = "EUR") {
-  await getTestPool()!.query(
+  await must(getTestPool(), "getTestPool()").query(
     `WITH payee AS (
        INSERT INTO recipients (name, normalized_name) VALUES ($4, $4)
        ON CONFLICT (normalized_name) DO UPDATE SET name = EXCLUDED.name
@@ -70,7 +71,7 @@ describeDb("GET /api/accounts/totals (real DB)", () => {
   }, 180_000);
 
   async function seed() {
-    await getTestPool()!.query(
+    await must(getTestPool(), "getTestPool()").query(
       `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
        VALUES ('USD', '0.5', CURRENT_DATE, true)`,
     );
@@ -106,7 +107,7 @@ describeDb("GET /api/accounts/totals (real DB)", () => {
   }
 
   afterEach(async () => {
-    const pool = getTestPool()!;
+    const pool = must(getTestPool(), "getTestPool()");
     await pool.query("DELETE FROM transactions");
     await pool.query("DELETE FROM accounts");
     await pool.query("DELETE FROM recipients WHERE normalized_name = $1", [

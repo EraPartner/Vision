@@ -32,23 +32,25 @@ vi.mock('../src/services/attachmentService.ts', () => ({
 }));
 
 import { attachmentUpload } from '../src/middleware/attachmentUpload.ts';
+import { must } from "./helpers/must.ts";
 
+import { mockOf } from "./helpers/mockOf.ts";
 describe('attachment upload middleware', () => {
   it('uses memory storage and the configured byte ceiling', () => {
-    expect(attachmentUpload.single).toEqual(expect.any(Function));
-    expect(multerState.options!.storage).toEqual({ kind: 'memory' });
-    expect(multerState.options!.limits).toEqual({ fileSize: 10 * 1024 * 1024 });
+    expect(mockOf(attachmentUpload, "single")).toEqual(expect.any(Function));
+    expect(must(multerState.options, "multerState.options").storage).toEqual({ kind: 'memory' });
+    expect(must(multerState.options, "multerState.options").limits).toEqual({ fileSize: 10 * 1024 * 1024 });
   });
 
   it.each(['image/png', 'application/pdf'])('accepts declared MIME type %s', (mimetype) => {
     const cb = vi.fn();
-    multerState.options!.fileFilter({}, { mimetype }, cb);
+    must(multerState.options, "multerState.options").fileFilter({}, { mimetype }, cb);
     expect(cb).toHaveBeenCalledWith(null, true);
   });
 
   it('rejects a declared MIME type outside the attachment policy', () => {
     const cb = vi.fn();
-    multerState.options!.fileFilter({}, { mimetype: 'text/plain' }, cb);
+    must(multerState.options, "multerState.options").fileFilter({}, { mimetype: 'text/plain' }, cb);
     expect(cb).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'Unsupported file type: text/plain. Allowed: images and PDF.' }),
     );

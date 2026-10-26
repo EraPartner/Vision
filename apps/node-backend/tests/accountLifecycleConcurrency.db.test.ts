@@ -20,6 +20,7 @@ import {
   asAccountId,
   asTransactionId,
 } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
 
 const deferred = () => {
   let resolve!: () => void;
@@ -40,23 +41,23 @@ describe.skipIf(!hasTestDatabase())(
       await acquireDbSuiteLock();
     }, 180_000);
     afterEach(async () => {
-      await getTestPool()!.query(
+      await must(getTestPool(), "getTestPool()").query(
         "DELETE FROM transactions WHERE account_id = ANY($1::int[])",
         [accounts],
       );
-      await getTestPool()!.query(
+      await must(getTestPool(), "getTestPool()").query(
         "DELETE FROM import_staging_rows WHERE batch_id = ANY($1::bigint[])",
         [batches],
       );
-      await getTestPool()!.query(
+      await must(getTestPool(), "getTestPool()").query(
         "DELETE FROM import_batches WHERE id = ANY($1::bigint[])",
         [batches.splice(0)],
       );
-      await getTestPool()!.query(
+      await must(getTestPool(), "getTestPool()").query(
         "DELETE FROM recipients WHERE id = ANY($1::int[])",
         [recipients.splice(0)],
       );
-      await getTestPool()!.query(
+      await must(getTestPool(), "getTestPool()").query(
         "DELETE FROM accounts WHERE id = ANY($1::int[])",
         [accounts.splice(0)],
       );
@@ -67,7 +68,7 @@ describe.skipIf(!hasTestDatabase())(
       await closePool();
     });
     async function fixture() {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       const result = await pool.query(
         "INSERT INTO accounts (name) VALUES ($1) RETURNING id",
         [`lifecycle-${crypto.randomUUID()}`],
@@ -95,7 +96,7 @@ describe.skipIf(!hasTestDatabase())(
     async function waitForBlockedLedgerWrite() {
       const deadline = Date.now() + 5000;
       while (Date.now() < deadline) {
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(getTestPool(), "getTestPool()").query(
           "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%accounts%'",
         );
         if (rows[0].n > 0) return;
@@ -127,7 +128,7 @@ describe.skipIf(!hasTestDatabase())(
       }
       await closing;
       expect(await outcome).toContain("Reopen the account");
-      const { rows } = await getTestPool()!.query(
+      const { rows } = await must(getTestPool(), "getTestPool()").query(
         "SELECT SUM(amount)::numeric AS balance FROM transactions WHERE account_id=$1",
         [accountId],
       );
@@ -159,7 +160,7 @@ describe.skipIf(!hasTestDatabase())(
       }
       await writing;
       await closing;
-      const { rows } = await getTestPool()!.query(
+      const { rows } = await must(getTestPool(), "getTestPool()").query(
         "SELECT SUM(amount)::numeric AS balance FROM transactions WHERE account_id=$1",
         [accountId],
       );
@@ -167,7 +168,7 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     async function importFixture(accountId: number) {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       const batchId = Number(
         (
           await pool.query(
@@ -202,7 +203,7 @@ describe.skipIf(!hasTestDatabase())(
         const { accountId, transactionId } = await fixture();
         const batchId = await importFixture(accountId);
         if (operation === "rollback") {
-          await getTestPool()!.query(
+          await must(getTestPool(), "getTestPool()").query(
             "UPDATE transactions SET import_batch_id=$1 WHERE id=$2",
             [batchId, transactionId],
           );
@@ -234,14 +235,14 @@ describe.skipIf(!hasTestDatabase())(
         }
         await closing;
         expect(await observed).toMatchObject([{ status: "rejected" }]);
-        const persisted = await getTestPool()!.query(
+        const persisted = await must(getTestPool(), "getTestPool()").query(
           "SELECT a.is_active, COALESCE(SUM(t.amount) FILTER (WHERE t.is_active),0)::numeric AS balance, COUNT(t.id)::int AS count FROM accounts a LEFT JOIN transactions t ON t.account_id=a.id WHERE a.id=$1 GROUP BY a.id",
           [accountId],
         );
         expect(persisted.rows).toEqual([
           { is_active: false, balance: "0.0000", count: 2 },
         ]);
-        const original = await getTestPool()!.query(
+        const original = await must(getTestPool(), "getTestPool()").query(
           "SELECT is_active, amount FROM transactions WHERE id=$1",
           [transactionId],
         );
@@ -282,13 +283,13 @@ describe.skipIf(!hasTestDatabase())(
         }
         await writing;
         expect(await observed).toMatchObject([{ status: "fulfilled" }]);
-        const persisted = await getTestPool()!.query(
+        const persisted = await must(getTestPool(), "getTestPool()").query(
           "SELECT a.is_active, COALESCE(SUM(t.amount) FILTER (WHERE t.is_active),0)::numeric AS balance FROM accounts a LEFT JOIN transactions t ON t.account_id=a.id WHERE a.id=$1 GROUP BY a.id",
           [accountId],
         );
         expect(persisted.rows[0].is_active).toBe(false);
         expect(Number(persisted.rows[0].balance)).toBe(0);
-        const adjustments = await getTestPool()!.query(
+        const adjustments = await must(getTestPool(), "getTestPool()").query(
           "SELECT amount FROM transactions WHERE account_id=$1 AND transfer_source='adjustment'",
           [accountId],
         );

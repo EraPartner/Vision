@@ -9,6 +9,7 @@
 import { bodyAt } from "../helpers/responseBody.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routeAgent } from "../helpers/routeApp.ts";
+import { must } from "../helpers/must.ts";
 
 type CalcSpy = (
   options: Record<string, unknown>,
@@ -109,14 +110,14 @@ describe("aggregation query schemas — lenient knobs keep their defaults", () =
     expect(bankBalancesSpy).toHaveBeenCalledWith({ targetCurrency: "EUR" });
 
     await get("/sankey?year=1999").expect(200);
-    expect(sankeySpy.mock.calls[0]![0]).toMatchObject({ year: undefined });
+    expect(must(sankeySpy.mock.calls[0], "sankeySpy.mock.calls[0]")[0]).toMatchObject({ year: undefined });
   });
 
   it("clamps the forecast-method knobs and applies flag defaults", async () => {
     await get(
       "/cashflow-forecast-methods?mc_paths=99999&history_months=0&include_backtest=nope",
     ).expect(200);
-    expect(forecastMethodsSpy.mock.calls[0]![0]).toMatchObject({
+    expect(must(forecastMethodsSpy.mock.calls[0], "forecastMethodsSpy.mock.calls[0]")[0]).toMatchObject({
       mcPaths: 5000,
       historyMonths: 36,
       includeBacktest: true,
@@ -130,7 +131,7 @@ describe("aggregation query schemas — lenient knobs keep their defaults", () =
     await get(
       "/monthly-summary?all_time=1&start_date=2025-01-01&end_date=2025-02-01",
     ).expect(200);
-    expect(monthlySpy.mock.calls[0]![0]).toMatchObject({
+    expect(must(monthlySpy.mock.calls[0], "monthlySpy.mock.calls[0]")[0]).toMatchObject({
       allTime: true,
       startDate: undefined,
       endDate: undefined,

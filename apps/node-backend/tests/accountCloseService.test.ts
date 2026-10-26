@@ -24,6 +24,7 @@ import {
   __normalizeCloseAccount as normalizeCloseAccount,
   previewAccountPortfolioLots,
 } from "../src/services/accountCloseService.ts";
+import { must } from "./helpers/must.ts";
 
 // The ambient-transaction mock routes module-level `query` onto mockClient.
 const query = rawQuery as unknown as Mock<
@@ -73,7 +74,7 @@ describe("previewAccountPortfolioLots", () => {
       transaction_ids: [2, 7, 9],
       limit: 500,
     });
-    expect(query.mock.calls[1]![1]).toEqual(
+    expect(must(query.mock.calls[1], "query.mock.calls[1]")[1]).toEqual(
       expect.arrayContaining([5, "buy", "gift", "sell", 501]),
     );
   });
@@ -149,7 +150,7 @@ describe("closeAccount", () => {
       balance_handling: "adjustment",
     });
 
-    const insertParams = query.mock.calls[2]![1];
+    const insertParams = must(query.mock.calls[2], "query.mock.calls[2]")[1];
     expect(insertParams).toEqual(
       expect.arrayContaining([[-125.5, 20], ["EUR", "USD"]]),
     );

@@ -9,6 +9,7 @@ import {
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.ts";
+import { must } from "./helpers/must.ts";
 
 describe.skipIf(!hasTestDatabase())(
   "versioned analysis datasets (real DB)",
@@ -22,7 +23,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       await pool.query(
         "DELETE FROM user_settings WHERE key = 'includeTransfers'",
       );
@@ -41,7 +42,7 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     it("creates queryable typed views with stable grains and denied PUBLIC access", async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       const { rows: accountRows } = await pool.query(
         `INSERT INTO accounts (name, display_name, currency)
          VALUES ('Analysis DB Account', 'Analysis DB Account', 'EUR')
@@ -160,7 +161,7 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     it("reconciles transfer-safe cash-flow totals with the monthly report query", async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       await pool.query(
         `INSERT INTO user_settings (key, value)
          VALUES ('includeTransfers', 'false'::jsonb)
@@ -201,8 +202,8 @@ describe.skipIf(!hasTestDatabase())(
       const january = report.months.find(
         ({ year, month }) => year === 2026 && month === 1,
       );
-      expect(Number(viewRows[0].spending)).toBe(-january!.total_spending);
-      expect(Number(viewRows[0].positive_flow)).toBe(january!.total_income);
+      expect(Number(viewRows[0].spending)).toBe(-must(january, "january").total_spending);
+      expect(Number(viewRows[0].positive_flow)).toBe(must(january, "january").total_income);
       expect(january).toMatchObject({
         total_spending: -100,
         total_income: 25,

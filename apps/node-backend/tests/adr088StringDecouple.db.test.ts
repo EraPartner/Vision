@@ -37,6 +37,7 @@ import {
   asRecipientId,
   asTransactionId,
 } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const plannedTransactionRepository = {
@@ -58,7 +59,7 @@ const fx = {} as Record<
 >;
 
 async function seedCorpus() {
-  const pool = getTestPool()!;
+  const pool = must(getTestPool(), "getTestPool()");
   const { rows: rec } = await pool.query(
     `INSERT INTO recipients (name, normalized_name) VALUES ('Landlord', 'landlord') RETURNING id`,
   );
@@ -108,7 +109,7 @@ async function seedCorpus() {
 }
 
 async function renameKbc(name: string) {
-  await getTestPool()!.query(
+  await must(getTestPool(), "getTestPool()").query(
     "UPDATE accounts SET name = $1, display_name = $1 WHERE id = $2",
     [name, fx["KBC Current"]],
   );
@@ -143,7 +144,7 @@ describeDb(
     beforeEach(seedCorpus);
 
     afterEach(async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       await pool.query("DELETE FROM split_payments");
       await pool.query("DELETE FROM transaction_splits");
       await pool.query("DELETE FROM planned_transactions");
@@ -190,10 +191,10 @@ describeDb(
         await renameKbc("KBC Renamed");
         const { items } = await plannedTransactionRepository.getAll({});
         const byId = Object.fromEntries(items.map((r) => [r.id, r]));
-        expect(byId[fx.plannedKbc]!.bank_account).toBe("KBC Renamed");
-        expect(byId[fx.plannedWise]!.bank_account).toBe("Wise USD");
+        expect(must(byId[fx.plannedKbc], "byId[fx.plannedKbc]").bank_account).toBe("KBC Renamed");
+        expect(must(byId[fx.plannedWise], "byId[fx.plannedWise]").bank_account).toBe("Wise USD");
         expect(
-          (await plannedTransactionRepository.getById(asPlannedTransactionId(fx.plannedKbc)))!
+          must((await plannedTransactionRepository.getById(asPlannedTransactionId(fx.plannedKbc))), "(await plannedTransactionRepository.getById(asPlannedTran...")
             .bank_account,
         ).toBe("KBC Renamed");
         // Both rows are in the future relative to 2026-02 fixtures only when
@@ -210,7 +211,7 @@ describeDb(
           asPlannedTransactionId(fx.plannedKbc),
           { memo: "RENT FEB (EDITED)" },
         );
-        expect(updated!.bank_account).toBe("KBC Current");
+        expect(must(updated, "updated").bank_account).toBe("KBC Current");
 
         const created = await plannedTransactionRepository.create({
           planned_date: "2026-03-01",
@@ -220,11 +221,11 @@ describeDb(
           memo: "rent march",
           currency: "EUR",
         });
-        expect(created!.account_id).toBe(fx["KBC Current"]);
-        expect(created!.bank_account).toBe("KBC Current");
-        const { rows } = await getTestPool()!.query(
+        expect(must(created, "created").account_id).toBe(fx["KBC Current"]);
+        expect(must(created, "created").bank_account).toBe("KBC Current");
+        const { rows } = await must(getTestPool(), "getTestPool()").query(
           "SELECT account_id FROM planned_transactions WHERE id = $1",
-          [created!.id],
+          [must(created, "created").id],
         );
         expect(rows[0].account_id).toBe(fx["KBC Current"]);
       });
@@ -235,10 +236,10 @@ describeDb(
         const updated = await transactionRepository.update(asTransactionId(fx.txnKbc), {
           account_id: fx["Wise USD"],
         });
-        expect(updated!.account_id).toBe(fx["Wise USD"]);
-        expect(updated!.bank_account).toBe("Wise USD");
+        expect(must(updated, "updated").account_id).toBe(fx["Wise USD"]);
+        expect(must(updated, "updated").bank_account).toBe("Wise USD");
 
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(getTestPool(), "getTestPool()").query(
           `SELECT t.account_id, a.name
            FROM transactions t JOIN accounts a ON a.id = t.account_id WHERE t.id = $1`,
           [fx.txnKbc],
@@ -246,7 +247,7 @@ describeDb(
         expect(rows[0].account_id).toBe(fx["Wise USD"]);
         expect(rows[0].name).toBe("Wise USD");
         expect(
-          (await transactionRepository.getById(asTransactionId(fx.txnKbc)))!.bank_account,
+          must((await transactionRepository.getById(asTransactionId(fx.txnKbc))), "(await transactionRepository.getById(asTransactionId(fx.t...").bank_account,
         ).toBe("Wise USD");
         const filtered = await transactionRepository.getAll({
           bankAccount: "wise usd",
@@ -257,15 +258,15 @@ describeDb(
       });
 
       it("transaction update to an existing account_id does not mint an account", async () => {
-        const { rows: before } = await getTestPool()!.query(
+        const { rows: before } = await must(getTestPool(), "getTestPool()").query(
           "SELECT count(*)::int AS n FROM accounts",
         );
         const updated = await transactionRepository.update(asTransactionId(fx.txnKbc), {
           account_id: fx["Wise USD"],
         });
-        expect(updated!.account_id).toBe(fx["Wise USD"]);
-        expect(updated!.bank_account).toBe("Wise USD");
-        const { rows: after } = await getTestPool()!.query(
+        expect(must(updated, "updated").account_id).toBe(fx["Wise USD"]);
+        expect(must(updated, "updated").bank_account).toBe("Wise USD");
+        const { rows: after } = await must(getTestPool(), "getTestPool()").query(
           "SELECT count(*)::int AS n FROM accounts",
         );
         expect(after[0].n).toBe(before[0].n);
@@ -276,14 +277,14 @@ describeDb(
           asPlannedTransactionId(fx.plannedKbc),
           { account_id: fx["Wise USD"] },
         );
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(getTestPool(), "getTestPool()").query(
           `SELECT p.account_id, a.name FROM planned_transactions p
            JOIN accounts a ON a.id = p.account_id WHERE p.id = $1`,
           [fx.plannedKbc],
         );
         expect(rows[0].account_id).toBe(fx["Wise USD"]);
         expect(rows[0].name).toBe("Wise USD");
-        expect(updated!.bank_account).toBe("Wise USD");
+        expect(must(updated, "updated").bank_account).toBe("Wise USD");
         const filtered = await plannedTransactionRepository.getAll({
           bankAccount: "wise usd",
         });
@@ -297,9 +298,9 @@ describeDb(
             { account_id: fx["KBC Current"] },
             [],
           );
-        expect(viaSchedule!.account_id).toBe(fx["KBC Current"]);
-        expect(viaSchedule!.bank_account).toBe("KBC Current");
-        const { rows: sched } = await getTestPool()!.query(
+        expect(must(viaSchedule, "viaSchedule").account_id).toBe(fx["KBC Current"]);
+        expect(must(viaSchedule, "viaSchedule").bank_account).toBe("KBC Current");
+        const { rows: sched } = await must(getTestPool(), "getTestPool()").query(
           `SELECT p.account_id, a.name FROM planned_transactions p JOIN accounts a ON a.id = p.account_id WHERE p.id = $1`,
           [fx.plannedWise],
         );
@@ -314,14 +315,14 @@ describeDb(
         await plannedTransactionRepository.update(asPlannedTransactionId(fx.plannedKbc), {
           bank_account: "Ignored Label",
         });
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(getTestPool(), "getTestPool()").query(
           `SELECT (SELECT account_id FROM transactions WHERE id = $1) AS transaction_account_id,
                   (SELECT account_id FROM planned_transactions WHERE id = $2) AS planned_account_id`,
           [fx.txnKbc, fx.plannedKbc],
         );
         expect(rows[0].transaction_account_id).toBe(fx["KBC Current"]);
         expect(rows[0].planned_account_id).toBe(fx["KBC Current"]);
-        const { rows: n } = await getTestPool()!.query(
+        const { rows: n } = await must(getTestPool(), "getTestPool()").query(
           `SELECT count(*)::int AS n FROM accounts WHERE lower(btrim(name)) = 'ignored label'`,
         );
         expect(n[0].n).toBe(0);
@@ -333,13 +334,13 @@ describeDb(
         await renameKbc("KBC Renamed");
         const owed = await splitRepository.getOwedByRecipient(asRecipientId(fx.recipientId));
         expect(owed).toHaveLength(1);
-        expect(owed[0]!.bank_account).toBe("KBC Renamed");
+        expect(must(owed[0], "owed[0]").bank_account).toBe("KBC Renamed");
 
         const exportRows = await splitRepository.getOwedExportRowsByRecipient(
           asRecipientId(fx.recipientId),
         );
         expect(exportRows).toHaveLength(1);
-        expect(exportRows[0]!.bank_account).toBe("KBC Renamed");
+        expect(must(exportRows[0], "exportRows[0]").bank_account).toBe("KBC Renamed");
       });
     });
 
@@ -366,7 +367,7 @@ describeDb(
 
     describe("canonical identity invariant", () => {
       it("all fixture transactions and plans have valid account foreign keys", async () => {
-        const pool = getTestPool()!;
+        const pool = must(getTestPool(), "getTestPool()");
         const { rows: a } = await pool.query(
           `SELECT count(*)::int AS n FROM transactions t
            LEFT JOIN accounts a ON a.id = t.account_id

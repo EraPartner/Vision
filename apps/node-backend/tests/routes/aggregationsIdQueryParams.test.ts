@@ -23,6 +23,7 @@
 import { bodyAt } from '../helpers/responseBody.ts';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { routeAgent, errEnvelope } from '../helpers/routeApp.ts';
+import { must } from "../helpers/must.ts";
 
 /** The parsed options each calc module receives (only the fields pinned here). */
 interface CalcOptions {
@@ -159,7 +160,7 @@ describe('aggregation id query params — accept set', () => {
   for (const [raw, parsed] of ACCEPTED) {
     it(`accepts excluded_category_ids=${raw} and passes ${parsed} to the calc module`, async () => {
       await get('/monthly-summary', `excluded_category_ids=${encodeURIComponent(raw)}`).expect(200);
-      expect(monthlySpy.mock.calls[0]![0].excludedCategoryIds).toEqual([parsed]);
+      expect(must(monthlySpy.mock.calls[0], "monthlySpy.mock.calls[0]")[0].excludedCategoryIds).toEqual([parsed]);
     });
   }
 
@@ -175,8 +176,8 @@ describe('aggregation id query params — accept set', () => {
   it('parses a repeated param into the full list in order', async () => {
     await get('/monthly-summary', 'excluded_category_ids=5&excluded_category_ids=007&excluded_recipient_ids=9')
       .expect(200);
-    expect(monthlySpy.mock.calls[0]![0].excludedCategoryIds).toEqual([5, 7]);
-    expect(monthlySpy.mock.calls[0]![0].excludedRecipientIds).toEqual([9]);
+    expect(must(monthlySpy.mock.calls[0], "monthlySpy.mock.calls[0]")[0].excludedCategoryIds).toEqual([5, 7]);
+    expect(must(monthlySpy.mock.calls[0], "monthlySpy.mock.calls[0]")[0].excludedRecipientIds).toEqual([9]);
   });
 
   it('rejects the whole list when one of several elements is bad — no partial filter set', async () => {
@@ -193,8 +194,8 @@ describe('aggregation id query params — accept set', () => {
 
   it('absent params reach the calc module as empty lists, exactly as before', async () => {
     await get('/monthly-summary').expect(200);
-    expect(monthlySpy.mock.calls[0]![0].excludedCategoryIds).toEqual([]);
-    expect(monthlySpy.mock.calls[0]![0].excludedRecipientIds).toEqual([]);
+    expect(must(monthlySpy.mock.calls[0], "monthlySpy.mock.calls[0]")[0].excludedCategoryIds).toEqual([]);
+    expect(must(monthlySpy.mock.calls[0], "monthlySpy.mock.calls[0]")[0].excludedRecipientIds).toEqual([]);
   });
 });
 
@@ -205,9 +206,9 @@ describe('mc_percentiles keeps the lenient numeric parser', () => {
   // does not "converge" it onto the id parser.
   it('accepts fractional percentiles and drops unparseable ones', async () => {
     await get('/cashflow-forecast-methods', 'mc_percentiles=2.5&mc_percentiles=97.5').expect(200);
-    expect(forecastMethodsSpy.mock.calls[0]![0].mcPercentiles).toEqual([2.5, 97.5]);
+    expect(must(forecastMethodsSpy.mock.calls[0], "forecastMethodsSpy.mock.calls[0]")[0].mcPercentiles).toEqual([2.5, 97.5]);
 
     await get('/cashflow-forecast-rolling', 'mc_percentiles=abc').expect(200);
-    expect(forecastRollingSpy.mock.calls[0]![0].mcPercentiles).toEqual([10, 50, 90]);
+    expect(must(forecastRollingSpy.mock.calls[0], "forecastRollingSpy.mock.calls[0]")[0].mcPercentiles).toEqual([10, 50, 90]);
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { summarizeSimulationPaths } from "../../src/services/calculations/forecast/simulationBands.ts";
+import { must } from "../helpers/must.ts";
 
 describe("summarizeSimulationPaths", () => {
   it("takes cumulative quantiles across whole paths instead of summing daily quantiles", () => {
@@ -13,11 +14,11 @@ describe("summarizeSimulationPaths", () => {
       [10, 50, 90],
     );
 
-    expect(result.bands.p10!.map((point) => point.value)).toEqual([10, 10]);
-    expect(result.cumulative_bands.p10!.map((point) => point.value)).toEqual([
+    expect(must(result.bands.p10, "result.bands.p10").map((point) => point.value)).toEqual([10, 10]);
+    expect(must(result.cumulative_bands.p10, "result.cumulative_bands.p10").map((point) => point.value)).toEqual([
       10, 100,
     ]);
-    expect(result.cumulative_bands.p50!.at(-1)!.value).toBe(100);
-    expect(result.cumulative_bands.p90!.at(-1)!.value).toBe(100);
+    expect(must(must(result.cumulative_bands.p50, "result.cumulative_bands.p50").at(-1), "result.cumulative_bands.p50!.at(-1)").value).toBe(100);
+    expect(must(must(result.cumulative_bands.p90, "result.cumulative_bands.p90").at(-1), "result.cumulative_bands.p90!.at(-1)").value).toBe(100);
   });
 });

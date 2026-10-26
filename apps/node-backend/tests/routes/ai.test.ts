@@ -116,6 +116,7 @@ import type { ChatTurnResult } from "../../src/services/aiChatService.ts";
 import settings from "../../src/config/config.ts";
 import { OllamaError } from "../../src/integrations/ollama/client.ts";
 import { APPLE_FOUNDATION_MODEL } from "../../src/integrations/ollama/appleFoundation.ts";
+import { must } from "../helpers/must.ts";
 
 const createEmptyConversation = vi.mocked(rawCreateEmptyConversation);
 const getConversationWithMessages = vi.mocked(rawGetConversationWithMessages);
@@ -163,8 +164,8 @@ function parseSseFrames(rawText: string) {
     .map((frame) => {
       const [eventLine, dataLine] = frame.split("\n");
       return {
-        name: eventLine!.replace(/^event: /, ""),
-        data: JSON.parse(dataLine!.replace(/^data: /, "")),
+        name: must(eventLine, "eventLine").replace(/^event: /, ""),
+        data: JSON.parse(must(dataLine, "dataLine").replace(/^data: /, "")),
       };
     });
 }
@@ -266,15 +267,15 @@ describe("POST /api/ai/chat/stream", () => {
       "complete",
     ]);
 
-    expect(frames[0]!.data).toEqual({ message: userMsg });
-    expect(frames[1]!.data).toBe("Your ");
+    expect(must(frames[0], "frames[0]").data).toEqual({ message: userMsg });
+    expect(must(frames[1], "frames[1]").data).toBe("Your ");
 
-    expect(frames[4]!.data.name).toBe("getSpendByCategory");
-    expect(frames[4]!.data.args.from).toBe("2025-01-01");
+    expect(must(frames[4], "frames[4]").data.name).toBe("getSpendByCategory");
+    expect(must(frames[4], "frames[4]").data.args.from).toBe("2025-01-01");
 
-    expect(frames[5]!.data).toEqual({ message: toolMsg });
+    expect(must(frames[5], "frames[5]").data).toEqual({ message: toolMsg });
 
-    const completePayload = frames[6]!.data;
+    const completePayload = must(frames[6], "frames[6]").data;
     expect(completePayload.conversation).toEqual(conversation);
     expect(completePayload.assistantMessage).toEqual(assistantMsg);
     expect(completePayload.usage.evalCount).toBe(10);
@@ -296,7 +297,7 @@ describe("POST /api/ai/chat/stream", () => {
     await api.post(`${BASE}/chat/stream`).send({ message: "hi" }).expect(200);
 
     expect(runChatTurn).toHaveBeenCalledTimes(1);
-    const callArgs = runChatTurn.mock.calls[0]![0]!;
+    const callArgs = must(must(runChatTurn.mock.calls[0], "runChatTurn.mock.calls[0]")[0], "runChatTurn.mock.calls[0]![0]");
     expect(callArgs.streaming).toBe(true);
     expect(callArgs.signal).toBeInstanceOf(AbortSignal);
     expect(typeof callArgs.onEvent).toBe("function");
@@ -318,7 +319,7 @@ describe("POST /api/ai/chat/stream", () => {
 
     const frames = parseSseFrames(res.text);
     const errFrame = frames.find((f) => f.name === "error");
-    expect(errFrame!.data).toEqual({
+    expect(must(errFrame, "errFrame").data).toEqual({
       detail: "Model unavailable",
       code: "OLLAMA_UNREACHABLE",
     });
@@ -336,11 +337,11 @@ describe("POST /api/ai/chat/stream", () => {
     const frames = parseSseFrames(res.text);
     const errFrame = frames.find((f) => f.name === "error");
     expect(errFrame).toBeDefined();
-    expect(errFrame!.data).toEqual({
+    expect(must(errFrame, "errFrame").data).toEqual({
       detail: "Failed to stream AI chat message",
       code: "INTERNAL_SERVER_ERROR",
     });
-    expect(JSON.stringify(errFrame!.data)).not.toContain("db exploded");
+    expect(JSON.stringify(must(errFrame, "errFrame").data)).not.toContain("db exploded");
   });
 
   it("aborts runChatTurn and stops writing on client disconnect", async () => {
@@ -446,7 +447,7 @@ describe("POST /api/ai/chat", () => {
       .expect(200);
 
     expect(runChatTurn).toHaveBeenCalledTimes(1);
-    const callArgs = runChatTurn.mock.calls[0]![0]!;
+    const callArgs = must(must(runChatTurn.mock.calls[0], "runChatTurn.mock.calls[0]")[0], "runChatTurn.mock.calls[0]![0]");
     expect(callArgs.streaming).toBeUndefined();
     expect(callArgs.message).toBe("hi");
     expect(res.body).toEqual(

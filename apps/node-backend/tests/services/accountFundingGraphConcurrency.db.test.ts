@@ -24,12 +24,13 @@ import {
 import {
   asAccountId,
 } from "@vision/types/brands";
+import { must } from "../helpers/must.ts";
 
 async function insertAccount(
   name: string,
   fundingAccountId: number | null = null,
 ): Promise<number> {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO accounts (name, display_name, funding_account_id)
      VALUES ($1, $1, $2)
      RETURNING id`,
@@ -39,7 +40,7 @@ async function insertAccount(
 }
 
 async function expectAcyclic() {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query(
     "SELECT id, funding_account_id FROM accounts ORDER BY id",
   );
   const parentById = new Map(
@@ -69,7 +70,7 @@ function expectOneWinner(outcomes: PromiseSettledResult<unknown>[]) {
 }
 
 async function holdFundingGraphLock() {
-  const client = await getTestPool()!.connect();
+  const client = await must(getTestPool(), "getTestPool()").connect();
   await client.query("BEGIN");
   await client.query(ACCOUNT_FUNDING_GRAPH_LOCK_SQL, [
     ...ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS,
@@ -89,7 +90,7 @@ async function holdFundingGraphLock() {
 async function waitForFundingGraphWaiters(expected: number) {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
-    const { rows } = await getTestPool()!.query(
+    const { rows } = await must(getTestPool(), "getTestPool()").query(
       `SELECT count(*)::integer AS count
          FROM pg_stat_activity
         WHERE state = 'active'
@@ -137,7 +138,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       await pool.query("UPDATE accounts SET funding_account_id = NULL");
       await pool.query("DELETE FROM accounts");
     });
@@ -213,7 +214,7 @@ describe.skipIf(!hasTestDatabase())(
             outcomes[1].reason?.message,
           ),
       ).toBe(true);
-      const { rows } = await getTestPool()!.query(
+      const { rows } = await must(getTestPool(), "getTestPool()").query(
         "SELECT funding_account_id FROM accounts WHERE id = $1",
         [dependent],
       );

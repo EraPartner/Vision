@@ -165,7 +165,9 @@ import {
   clearForecastMcCaches as rawClearForecastMcCaches,
   scheduleMaterializedViewRefresh,
 } from "../../src/services/aggregationRefresh.ts";
+import { must } from "../helpers/must.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const runImportPipeline = vi.mocked(rawRunImportPipeline);
 const importRecipientsCSV = vi.mocked(rawImportRecipientsCSV);
 const importCategoriesCSV = vi.mocked(rawImportCategoriesCSV);
@@ -217,7 +219,7 @@ function routeHandler(method: string, path: string): DirectHandler {
       (candidate.route as RouteWithMethods).methods[method],
   );
   if (!layer) throw new Error(`Missing ${method.toUpperCase()} ${path}`);
-  return layer.route!.stack.at(-1)!.handle as unknown as DirectHandler;
+  return must(must(layer.route, "layer.route").stack.at(-1), "layer.route!.stack.at(-1)").handle as unknown as DirectHandler;
 }
 
 /** Split a buffered `text/event-stream` body into `{ name, data }` frames. */
@@ -228,8 +230,8 @@ function parseSseFrames(rawText: string) {
     .map((frame) => {
       const [eventLine, dataLine] = frame.split("\n");
       return {
-        name: eventLine!.replace(/^event: /, ""),
-        data: JSON.parse(dataLine!.replace(/^data: /, "")),
+        name: must(eventLine, "eventLine").replace(/^event: /, ""),
+        data: JSON.parse(must(dataLine, "dataLine").replace(/^data: /, "")),
       };
     });
 }
@@ -514,7 +516,7 @@ describe("Import Routes", () => {
   describe("POST /csv/stream", () => {
     it("should stream progress and complete SSE events on success", async () => {
       runImportPipeline.mockImplementation(async ({ onProgress }) => {
-        await onProgress!(
+        await must(onProgress, "onProgress")(
           loose({
             phase: "importing",
             current: 1,
@@ -540,7 +542,7 @@ describe("Import Routes", () => {
       expect(names).toContain("complete");
 
       const complete = frames.find((f) => f.name === "complete");
-      expect(complete!.data).toEqual(
+      expect(must(complete, "complete").data).toEqual(
         expect.objectContaining({
           total_processed: 2,
           imported: 2,
@@ -573,7 +575,7 @@ describe("Import Routes", () => {
       // the raw 'adapter failed' message is deliberately not echoed to the
       // client (importProgress.js's streamImport). The stable code lets clients
       // distinguish an unexpected failure without exposing that raw detail.
-      expect(errFrame!.data).toEqual({
+      expect(must(errFrame, "errFrame").data).toEqual({
         detail: "Import failed",
         code: "INTERNAL_SERVER_ERROR",
       });
@@ -588,7 +590,7 @@ describe("Import Routes", () => {
     it("does not hang or throw when the client disconnects mid-stream", async () => {
       let pipelineSettled = false;
       runImportPipeline.mockImplementation(async ({ onProgress }) => {
-        await onProgress!(
+        await must(onProgress, "onProgress")(
           loose({
             phase: "importing",
             current: 1,
@@ -1223,7 +1225,7 @@ describe("Saved custom parser routes", () => {
         .expect(201);
 
       expect(bodyAt(res, "data", "id")).toBe(7);
-      expect(customParserConfigRepository.create).toHaveBeenCalledWith({
+      expect(mockOf(customParserConfigRepository, "create")).toHaveBeenCalledWith({
         name: "My Bank",
         config: expect.objectContaining({
           dateColumn: "Date",
@@ -1304,7 +1306,7 @@ describe("Saved custom parser routes", () => {
           .expect(400);
         expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
       }
-      expect(customParserConfigRepository.update).not.toHaveBeenCalled();
+      expect(mockOf(customParserConfigRepository, "update")).not.toHaveBeenCalled();
     });
   });
 
@@ -1328,7 +1330,7 @@ describe("Saved custom parser routes", () => {
 
       const res = await api.delete(`${BASE}/parsers/12abc`).expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(customParserConfigRepository.delete).not.toHaveBeenCalled();
+      expect(mockOf(customParserConfigRepository, "delete")).not.toHaveBeenCalled();
     });
   });
 });

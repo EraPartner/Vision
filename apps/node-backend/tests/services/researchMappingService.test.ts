@@ -15,6 +15,7 @@ import type { upsert as repoUpsert } from '../../src/repositories/instrumentProv
 import {
   asInvestmentId,
 } from "@vision/types/brands";
+import { must } from "../helpers/must.ts";
 
 type ServiceDeps = NonNullable<Parameters<typeof createResearchMappingService>[0]>;
 type UpsertInput = Parameters<typeof repoUpsert>[0];
@@ -47,7 +48,7 @@ const makeRepo = (seed: FakeMapSeed[] = []) => {
         (r) => r.instrument_key === m.instrumentKey && r.key_type === m.keyType && r.provider === m.provider,
       );
       const row: FakeMapRow = {
-        id: idx >= 0 ? rows[idx]!.id : rows.length + 1,
+        id: idx >= 0 ? must(rows[idx], "rows[idx]").id : rows.length + 1,
         instrument_key: m.instrumentKey,
         key_type: m.keyType,
         provider: m.provider,
@@ -105,7 +106,7 @@ describe('researchMappingService.resolve', () => {
 
     const yahoo = proposals.find((p) => p.provider === 'yahoo');
     expect(yahoo).toMatchObject({ status: 'auto', providerSymbol: 'AAPL', resolvedName: 'Apple Inc.' });
-    expect(yahoo!.candidates).toHaveLength(1);
+    expect(must(yahoo, "yahoo").candidates).toHaveLength(1);
     expect(governor.spend).toHaveBeenCalledWith('yahoo');
     expect(recordSuccess).toHaveBeenCalledWith('yahoo');
   });

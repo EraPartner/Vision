@@ -90,6 +90,7 @@ import {
   fetchLivePricesDetailed as rawFetchLivePricesDetailed,
 } from "../../src/services/priceProviderService.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const investmentRepository = vi.mocked(rawInvestmentRepository);
 const portfolioTransactionService = vi.mocked(rawPortfolioTransactionService);
 const fetchHistoricalPrices = vi.mocked(rawFetchHistoricalPrices);
@@ -235,7 +236,7 @@ describe("Investment Routes", () => {
         })
         .expect(200);
 
-      expect(investmentRepository.getAllWithCount).toHaveBeenCalledWith(
+      expect(mockOf(investmentRepository, "getAllWithCount")).toHaveBeenCalledWith(
         expect.objectContaining({
           limit: 10,
           offset: 5,
@@ -338,8 +339,8 @@ describe("Investment Routes", () => {
       const data = bodyAt(res, "data");
       expect(valueAt(data, "updated")).toBe(1);
       expect(valueAt(data, "priceSources")).toEqual({ 1: "live" });
-      expect(investmentRepository.updatePricesBulk).toHaveBeenCalledTimes(1);
-      expect(investmentRepository.updatePricesBulk).toHaveBeenCalledWith([
+      expect(mockOf(investmentRepository, "updatePricesBulk")).toHaveBeenCalledTimes(1);
+      expect(mockOf(investmentRepository, "updatePricesBulk")).toHaveBeenCalledWith([
         expect.objectContaining({ id: 1, current_price: 50000 }),
       ]);
     });
@@ -369,7 +370,7 @@ describe("Investment Routes", () => {
       expect(valueAt(data, "prices")).toEqual({ 1: 123.45 });
       expect(valueAt(data, "priceSources")).toEqual({ 1: "cached" });
       // Cached fallback rows must not reach the DB write.
-      expect(investmentRepository.updatePricesBulk).toHaveBeenCalledWith([]);
+      expect(mockOf(investmentRepository, "updatePricesBulk")).toHaveBeenCalledWith([]);
     });
 
     it("should refresh yahoo investments when only symbol is configured", async () => {
@@ -395,7 +396,7 @@ describe("Investment Routes", () => {
       const data = bodyAt(res, "data");
       expect(valueAt(data, "total")).toBe(1);
       expect(valueAt(data, "updated")).toBe(1);
-      expect(investmentRepository.updatePricesBulk).toHaveBeenCalledTimes(1);
+      expect(mockOf(investmentRepository, "updatePricesBulk")).toHaveBeenCalledTimes(1);
     });
 
     it("should refresh kinesis investments when configured by mapped asset name", async () => {
@@ -423,7 +424,7 @@ describe("Investment Routes", () => {
       expect(valueAt(data, "updated")).toBe(1);
       expect(valueAt(data, "prices")).toEqual({ 1: 101.25 });
       expect(valueAt(data, "priceSources")).toEqual({ 1: "live" });
-      expect(investmentRepository.updatePricesBulk).toHaveBeenCalledTimes(1);
+      expect(mockOf(investmentRepository, "updatePricesBulk")).toHaveBeenCalledTimes(1);
     });
 
     it("should return 0 updated when no providers configured", async () => {
@@ -568,7 +569,7 @@ describe("Investment Routes", () => {
 
       await api.delete(`${BASE}/1`).expect(204);
 
-      expect(investmentRepository.hardDelete).toHaveBeenCalledWith(1);
+      expect(mockOf(investmentRepository, "hardDelete")).toHaveBeenCalledWith(1);
     });
 
     it("should throw NotFoundError for non-existent", async () => {

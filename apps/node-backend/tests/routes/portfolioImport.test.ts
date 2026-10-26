@@ -117,6 +117,7 @@ import {
 import { commitReviewedPortfolioImports as rawCommitReviewedPortfolioImports } from "../../src/services/portfolioImportCommitService.ts";
 import { previewPortfolioImportReconciliation as rawPreviewPortfolioImportReconciliation } from "../../src/services/portfolioImportReconciliationService.ts";
 import { ConflictError } from "../../src/middleware/errorHandler.ts";
+import { must } from "../helpers/must.ts";
 
 const getBatch = vi.mocked(rawGetBatch);
 const listBatches = vi.mocked(rawListBatches);
@@ -294,7 +295,7 @@ function routeHandler(method: string, path: string): DirectHandler {
       (candidate.route as RouteWithMethods).methods[method],
   );
   if (!layer) throw new Error(`Missing ${method.toUpperCase()} ${path}`);
-  return layer.route!.stack.at(-1)!.handle as unknown as DirectHandler;
+  return must(must(layer.route, "layer.route").stack.at(-1), "layer.route!.stack.at(-1)").handle as unknown as DirectHandler;
 }
 
 describe("Portfolio Import Routes — batch/row id guards", () => {

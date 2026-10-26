@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { runPortfolioForecast } from '../../src/services/research/projection/portfolioProjection.ts';
 import type { PortfolioForecastInput } from '../../src/services/research/projection/portfolioProjection.ts';
+import { must } from "../helpers/must.ts";
 
 type ForecastDeps = NonNullable<Parameters<typeof runPortfolioForecast>[1]>;
 type ForecastResult = Awaited<ReturnType<typeof runPortfolioForecast>>;
@@ -58,7 +59,7 @@ describe('runPortfolioForecast', () => {
 
   it('produces ordered percentile bands at the horizon', async () => {
     const r = await runAvailable({ horizonMonths: 24, paths: 500, seed: 't' }, deps());
-    const last = r.points.at(-1)!;
+    const last = must(r.points.at(-1), "r.points.at(-1)");
     expect(last.p10).toBeLessThanOrEqual(last.p25);
     expect(last.p25).toBeLessThanOrEqual(last.p50);
     expect(last.p50).toBeLessThanOrEqual(last.p75);
@@ -86,7 +87,7 @@ describe('runPortfolioForecast', () => {
       deps({ aggregator: forwardAggregator }),
     );
     expect(r.usedForward).toBe(true);
-    expect(r.forwardHoldings[0]!.symbol).toBe('AAA');
+    expect(must(r.forwardHoldings[0], "r.forwardHoldings[0]").symbol).toBe('AAA');
     // Single 100%-weight holding at blend=1 → portfolio expected return ≈ 20% growth + 2% yield.
     expect(r.expectedAnnualReturn).toBeCloseTo(0.22, 2);
   });
@@ -103,14 +104,14 @@ describe('runPortfolioForecast', () => {
   it('reflects monthly contributions in net invested', async () => {
     const r = await runAvailable({ horizonMonths: 12, paths: 200, monthlyContribution: 100, seed: 't' }, deps());
     expect(r.netInvested).toBe(2200); // 1000 start + 100 × 12
-    expect(r.points.at(-1)!.netInvested).toBe(2200);
+    expect(must(r.points.at(-1), "r.points.at(-1)").netInvested).toBe(2200);
   });
 
   it('supports the block bootstrap method with ordered bands', async () => {
     const r = await runAvailable({ horizonMonths: 12, paths: 400, method: 'block_bootstrap', seed: 't' }, deps());
     expect(r.available).toBe(true);
     expect(r.method).toBe('block_bootstrap');
-    const last = r.points.at(-1)!;
+    const last = must(r.points.at(-1), "r.points.at(-1)");
     expect(last.p10).toBeLessThanOrEqual(last.p90);
   });
 
@@ -149,7 +150,7 @@ describe('runPortfolioForecast', () => {
     // 1000 cost basis + 50×12 contributions = 1600 — NOT 1500 market value + 600.
     expect(r.startInvested).toBe(1000);
     expect(r.netInvested).toBe(1600);
-    expect(r.points.at(-1)!.netInvested).toBe(1600);
+    expect(must(r.points.at(-1), "r.points.at(-1)").netInvested).toBe(1600);
   });
 
   it('drops gross flow artifacts from the return series', async () => {

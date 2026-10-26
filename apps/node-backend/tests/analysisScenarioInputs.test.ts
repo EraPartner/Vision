@@ -5,6 +5,7 @@ import {
   validateScenarioBindings,
 } from "../src/services/analysisScenarioInputs.ts";
 import type { AnalysisScenarioModel } from "../src/services/analysisScenarioInputs.ts";
+import { must } from "./helpers/must.ts";
 
 const model: AnalysisScenarioModel = {
   attachments: [
@@ -43,12 +44,12 @@ describe("analysis scenario inputs", () => {
 
   it("rejects duplicate join keys and undeclared cells", () => {
     const duplicate = structuredClone(model);
-    duplicate.attachments[0]!.rows[1]!.plan = "A";
+    must(must(duplicate.attachments[0], "duplicate.attachments[0]").rows[1], "duplicate.attachments[0]!.rows[1]").plan = "A";
     expect(() => analysisScenarioModelSchema.parse(duplicate)).toThrow(
       /unique/,
     );
     const extra = structuredClone(model);
-    extra.attachments[0]!.rows[0]!.ledgerWrite = true;
+    must(must(extra.attachments[0], "extra.attachments[0]").rows[0], "extra.attachments[0]!.rows[0]").ledgerWrite = true;
     expect(() => analysisScenarioModelSchema.parse(extra)).toThrow(
       /exactly match/,
     );
@@ -56,8 +57,8 @@ describe("analysis scenario inputs", () => {
 
   it("rejects values that do not match their declared column type", () => {
     const invalid = structuredClone(model);
-    invalid.attachments[0]!.columns[1]!.type = "integer";
-    invalid.attachments[0]!.rows[0]!.monthly_cost = "40.5";
+    must(must(invalid.attachments[0], "invalid.attachments[0]").columns[1], "invalid.attachments[0]!.columns[1]").type = "integer";
+    must(must(invalid.attachments[0], "invalid.attachments[0]").rows[0], "invalid.attachments[0]!.rows[0]").monthly_cost = "40.5";
 
     expect(() => analysisScenarioModelSchema.parse(invalid)).toThrow(
       /Scenario value must match integer/,
@@ -66,9 +67,9 @@ describe("analysis scenario inputs", () => {
 
   it("rejects unsafe integer values", () => {
     const invalid = structuredClone(model);
-    invalid.attachments[0]!.columns[1]!.type = "integer";
-    invalid.attachments[0]!.rows[0]!.monthly_cost = 9007199254740992;
-    invalid.attachments[0]!.rows[1]!.monthly_cost = 2;
+    must(must(invalid.attachments[0], "invalid.attachments[0]").columns[1], "invalid.attachments[0]!.columns[1]").type = "integer";
+    must(must(invalid.attachments[0], "invalid.attachments[0]").rows[0], "invalid.attachments[0]!.rows[0]").monthly_cost = 9007199254740992;
+    must(must(invalid.attachments[0], "invalid.attachments[0]").rows[1], "invalid.attachments[0]!.rows[1]").monthly_cost = 2;
     expect(() => analysisScenarioModelSchema.parse(invalid)).toThrow(
       /Scenario value must match integer/,
     );
@@ -100,8 +101,8 @@ describe("analysis scenario inputs", () => {
 
   it("matches PostgreSQL integer strings to typed CSV integer keys", () => {
     const integerModel = structuredClone(model);
-    integerModel.attachments[0]!.columns[0]!.type = "integer";
-    integerModel.attachments[0]!.rows = [{ plan: 12, monthly_cost: "40.5" }];
+    must(must(integerModel.attachments[0], "integerModel.attachments[0]").columns[0], "integerModel.attachments[0]!.columns[0]").type = "integer";
+    must(integerModel.attachments[0], "integerModel.attachments[0]").rows = [{ plan: 12, monthly_cost: "40.5" }];
     expect(
       applyScenarioInputs([{ plan: "12" }], integerModel, [
         { id: "plan", type: "integer" },

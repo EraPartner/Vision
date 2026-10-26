@@ -123,7 +123,9 @@ import {
 import { query as rawQuery } from "../../src/database/connection.ts";
 import type { PgQueryResult } from "../../src/database/connection.ts";
 import rawCustomParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
+import { must } from "../helpers/must.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const runImportPipeline = vi.mocked(rawRunImportPipeline);
 const commitImport = vi.mocked(rawCommitImport);
 const importCategoriesCSV = vi.mocked(rawImportCategoriesCSV);
@@ -736,7 +738,7 @@ describe("normalizeParserConfig pins (POST /parsers)", () => {
       ["abc", 0],
     ]) {
       await create({ ...base, skipRows: input }).expect(201);
-      expect(customParserConfigRepository.create).toHaveBeenLastCalledWith(
+      expect(mockOf(customParserConfigRepository, "create")).toHaveBeenLastCalledWith(
         expect.objectContaining({
           config: expect.objectContaining({ skipRows: expected }),
         }),
@@ -746,7 +748,7 @@ describe("normalizeParserConfig pins (POST /parsers)", () => {
 
   it("does NOT enforce a single-char separator here — any non-empty string sticks", async () => {
     await create({ ...base, separator: ";;" }).expect(201);
-    expect(customParserConfigRepository.create).toHaveBeenLastCalledWith(
+    expect(mockOf(customParserConfigRepository, "create")).toHaveBeenLastCalledWith(
       expect.objectContaining({
         config: expect.objectContaining({ separator: ";;" }),
       }),
@@ -755,9 +757,9 @@ describe("normalizeParserConfig pins (POST /parsers)", () => {
 
   it("strips unknown keys and blanks a non-string memoColumn", async () => {
     await create({ ...base, foo: "bar", memoColumn: 123 }).expect(201);
-    const { config } = customParserConfigRepository.create.mock.calls.at(
+    const { config } = must(customParserConfigRepository.create.mock.calls.at(
       -1,
-    )![0] as {
+    ), "customParserConfigRepository.create.mock.calls.at( -1, )")[0] as {
       config: Record<string, unknown>;
     };
     expect("foo" in config).toBe(false);
@@ -826,7 +828,7 @@ describe("normalizeParserConfig pins (POST /parsers)", () => {
       .patch(`${BASE}/parsers/3`)
       .send({ name: " Renamed " })
       .expect(200);
-    expect(customParserConfigRepository.update).toHaveBeenLastCalledWith(3, {
+    expect(mockOf(customParserConfigRepository, "update")).toHaveBeenLastCalledWith(3, {
       name: "Renamed",
       config: undefined,
     });

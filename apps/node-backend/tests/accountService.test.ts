@@ -51,7 +51,9 @@ import {
   ConflictError,
 } from "../src/middleware/errorHandler.ts";
 import { loose, partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
+import { mockOf } from "./helpers/mockOf.ts";
 const accountRepository = vi.mocked(rawAccountRepository);
 
 const pgErr = (code: string) => Object.assign(new Error(code), { code });
@@ -74,7 +76,7 @@ beforeEach(() => vi.clearAllMocks());
 describe("accountService.create", () => {
   it("rejects a missing name", async () => {
     await expect(accountService.create({})).rejects.toThrow(ValidationError);
-    expect(accountRepository.create).not.toHaveBeenCalled();
+    expect(mockOf(accountRepository, "create")).not.toHaveBeenCalled();
   });
 
   it("rejects an unknown type enum", async () => {
@@ -107,7 +109,7 @@ describe("accountService.create", () => {
         statement_balance_date: "2026-07-01",
       }),
     ).rejects.toThrow(ValidationError);
-    expect(accountRepository.create).not.toHaveBeenCalled();
+    expect(mockOf(accountRepository, "create")).not.toHaveBeenCalled();
   });
 
   it("rejects a funding_account_id pointing at a nonexistent account with 400, not 500", async () => {
@@ -115,7 +117,7 @@ describe("accountService.create", () => {
     await expect(
       accountService.create({ name: "KBC", funding_account_id: 999 }),
     ).rejects.toThrow(ValidationError);
-    expect(accountRepository.create).not.toHaveBeenCalled();
+    expect(mockOf(accountRepository, "create")).not.toHaveBeenCalled();
   });
 
   it("maps a FK violation (23503) on create to a ValidationError (400)", async () => {
@@ -140,7 +142,7 @@ describe("accountService statement balances", () => {
         date: "04/09/2026",
       }),
     ).rejects.toThrow(ValidationError);
-    expect(accountRepository.upsertStatementBalance).not.toHaveBeenCalled();
+    expect(mockOf(accountRepository, "upsertStatementBalance")).not.toHaveBeenCalled();
   });
 
   it.each(["2026-02-29", "2026-02-31", "2026-13-01", "2026-00-10"])(
@@ -155,7 +157,7 @@ describe("accountService statement balances", () => {
           date,
         }),
       ).rejects.toThrow(ValidationError);
-      expect(accountRepository.upsertStatementBalance).not.toHaveBeenCalled();
+      expect(mockOf(accountRepository, "upsertStatementBalance")).not.toHaveBeenCalled();
     },
   );
 
@@ -188,7 +190,7 @@ describe("accountService.update", () => {
     await expect(
       accountService.update(asAccountId(5), { funding_account_id: 5 }),
     ).rejects.toThrow(ValidationError);
-    expect(accountRepository.update).not.toHaveBeenCalled();
+    expect(mockOf(accountRepository, "update")).not.toHaveBeenCalled();
   });
 
   it("rejects a funding_account_id pointing at a nonexistent account with 400, not 500", async () => {
@@ -196,7 +198,7 @@ describe("accountService.update", () => {
     await expect(
       accountService.update(asAccountId(1), { funding_account_id: 999 }),
     ).rejects.toThrow(ValidationError);
-    expect(accountRepository.update).not.toHaveBeenCalled();
+    expect(mockOf(accountRepository, "update")).not.toHaveBeenCalled();
   });
 
   it("drops the statistics cache when the owner changes (ADR-201)", async () => {
@@ -222,7 +224,7 @@ describe("accountService.update", () => {
     await expect(
       accountService.update(asAccountId(1), { statement_balance: 99 }),
     ).rejects.toThrow(ValidationError);
-    expect(accountRepository.update).not.toHaveBeenCalled();
+    expect(mockOf(accountRepository, "update")).not.toHaveBeenCalled();
     await expect(
       accountService.update(asAccountId(1), { statement_balance_date: null }),
     ).rejects.toThrow(ValidationError);
@@ -236,7 +238,7 @@ describe("accountService.update", () => {
       partial<AccountRow>({ id: 1 }),
     );
     await accountService.update(asAccountId(1), { is_active: false });
-    const fields = accountRepository.update.mock.calls[0]![1];
+    const fields = must(accountRepository.update.mock.calls[0], "accountRepository.update.mock.calls[0]")[1];
     expect(fields.is_active).toBe(false);
     expect(fields.closed_at).toBeInstanceOf(Date);
   });
@@ -253,7 +255,7 @@ describe("accountService.update", () => {
       partial<AccountRow>({ id: 1 }),
     );
     await accountService.update(asAccountId(1), { is_active: false });
-    const fields = accountRepository.update.mock.calls[0]![1];
+    const fields = must(accountRepository.update.mock.calls[0], "accountRepository.update.mock.calls[0]")[1];
     expect(fields.is_active).toBe(false);
     expect(fields.in_net_worth).toBe(false);
   });
@@ -270,7 +272,7 @@ describe("accountService.update", () => {
       partial<AccountRow>({ id: 1 }),
     );
     await accountService.update(asAccountId(1), { is_active: false, in_net_worth: true });
-    const fields = accountRepository.update.mock.calls[0]![1];
+    const fields = must(accountRepository.update.mock.calls[0], "accountRepository.update.mock.calls[0]")[1];
     expect(fields.in_net_worth).toBe(true); // explicit intent respected
   });
 
@@ -286,7 +288,7 @@ describe("accountService.update", () => {
       partial<AccountRow>({ id: 1 }),
     );
     await accountService.update(asAccountId(1), { is_active: true });
-    const fields = accountRepository.update.mock.calls[0]![1];
+    const fields = must(accountRepository.update.mock.calls[0], "accountRepository.update.mock.calls[0]")[1];
     expect("in_net_worth" in fields).toBe(false);
   });
 
@@ -303,7 +305,7 @@ describe("accountService.update", () => {
       partial<AccountRow>({ id: 1 }),
     );
     await accountService.update(asAccountId(1), { is_active: false });
-    const fields = accountRepository.update.mock.calls[0]![1];
+    const fields = must(accountRepository.update.mock.calls[0], "accountRepository.update.mock.calls[0]")[1];
     expect("closed_at" in fields).toBe(false);
   });
 
@@ -320,7 +322,7 @@ describe("accountService.update", () => {
       partial<AccountRow>({ id: 1 }),
     );
     await accountService.update(asAccountId(1), { is_active: true });
-    const fields = accountRepository.update.mock.calls[0]![1];
+    const fields = must(accountRepository.update.mock.calls[0], "accountRepository.update.mock.calls[0]")[1];
     expect(fields.closed_at).toBeNull();
   });
 
@@ -332,7 +334,7 @@ describe("accountService.update", () => {
       display_name: "X",
       closed_at: "2020-01-01T00:00:00Z",
     });
-    const fields = accountRepository.update.mock.calls[0]![1];
+    const fields = must(accountRepository.update.mock.calls[0], "accountRepository.update.mock.calls[0]")[1];
     expect("closed_at" in fields).toBe(false);
   });
 });
@@ -362,7 +364,7 @@ describe("accountService — funding chain cycles", () => {
     await expect(
       accountService.update(asAccountId(1), { funding_account_id: 2 }),
     ).rejects.toThrow(/funding cycle/);
-    expect(accountRepository.update).not.toHaveBeenCalled();
+    expect(mockOf(accountRepository, "update")).not.toHaveBeenCalled();
   });
 
   it("rejects a longer chain closing back on the edited account (A→B→C→D→A)", async () => {
@@ -370,7 +372,7 @@ describe("accountService — funding chain cycles", () => {
     await expect(
       accountService.update(asAccountId(1), { funding_account_id: 2 }),
     ).rejects.toThrow(/funding cycle/);
-    expect(accountRepository.update).not.toHaveBeenCalled();
+    expect(mockOf(accountRepository, "update")).not.toHaveBeenCalled();
   });
 
   it("accepts a funding chain that terminates without reaching the edited account", async () => {
@@ -379,15 +381,15 @@ describe("accountService — funding chain cycles", () => {
       partial<AccountRow>({ id: 1 }),
     );
     await accountService.update(asAccountId(1), { funding_account_id: 2 });
-    expect(accountRepository.update).toHaveBeenCalledWith(1, {
+    expect(mockOf(accountRepository, "update")).toHaveBeenCalledWith(1, {
       funding_account_id: 2,
     });
     expect(
       accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
-    ).toBeLessThan(accountRepository.getById.mock.invocationCallOrder[0]!);
+    ).toBeLessThan(must(accountRepository.getById.mock.invocationCallOrder[0], "accountRepository.getById.mock.invocationCallOrder[0]"));
     expect(
       accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
-    ).toBeLessThan(accountRepository.update.mock.invocationCallOrder[0]!);
+    ).toBeLessThan(must(accountRepository.update.mock.invocationCallOrder[0], "accountRepository.update.mock.invocationCallOrder[0]"));
   });
 
   // The pre-existing-cycle case: this guard did not exist before, so the stored
@@ -398,11 +400,11 @@ describe("accountService — funding chain cycles", () => {
       partial<AccountRow>({ id: 1 }),
     );
     await accountService.update(asAccountId(1), { funding_account_id: 2 });
-    expect(accountRepository.update).toHaveBeenCalledWith(1, {
+    expect(mockOf(accountRepository, "update")).toHaveBeenCalledWith(1, {
       funding_account_id: 2,
     });
     // Bounded by the visited set: id 2 (existence check) then id 3, then stop.
-    expect(accountRepository.getById).toHaveBeenCalledTimes(2);
+    expect(mockOf(accountRepository, "getById")).toHaveBeenCalledTimes(2);
   });
 
   it("does not walk on create — a not-yet-existing account cannot be an ancestor", async () => {
@@ -411,17 +413,17 @@ describe("accountService — funding chain cycles", () => {
       partial<AccountRow>({ id: 9 }),
     );
     await accountService.create({ name: "New", funding_account_id: 2 });
-    expect(accountRepository.create).toHaveBeenCalledWith({
+    expect(mockOf(accountRepository, "create")).toHaveBeenCalledWith({
       name: "New",
       funding_account_id: 2,
     });
     expect(
       accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
-    ).toBeLessThan(accountRepository.getById.mock.invocationCallOrder[0]!);
+    ).toBeLessThan(must(accountRepository.getById.mock.invocationCallOrder[0], "accountRepository.getById.mock.invocationCallOrder[0]"));
     expect(
       accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
-    ).toBeLessThan(accountRepository.create.mock.invocationCallOrder[0]!);
-    expect(accountRepository.getById).toHaveBeenCalledTimes(1); // existence check only
+    ).toBeLessThan(must(accountRepository.create.mock.invocationCallOrder[0], "accountRepository.create.mock.invocationCallOrder[0]"));
+    expect(mockOf(accountRepository, "getById")).toHaveBeenCalledTimes(1); // existence check only
   });
 });
 
@@ -438,7 +440,7 @@ describe("accountService — sanitize pins (create)", () => {
         }),
       ).rejects.toThrow(ValidationError);
     }
-    expect(accountRepository.create).not.toHaveBeenCalled();
+    expect(mockOf(accountRepository, "create")).not.toHaveBeenCalled();
   });
 
   // The reject half of this pin only listed values a `Number()` coercion fails
@@ -453,7 +455,7 @@ describe("accountService — sanitize pins (create)", () => {
       partial<AccountRow>({ id: 1 }),
     );
     await accountService.create({ name: "A", funding_account_id: "7" });
-    expect(accountRepository.create).toHaveBeenCalledWith(
+    expect(mockOf(accountRepository, "create")).toHaveBeenCalledWith(
       expect.objectContaining({ funding_account_id: 7 }),
     );
     for (const funding_account_id of [
@@ -503,7 +505,7 @@ describe("accountService — sanitize pins (create)", () => {
       display_name: "  Main  ",
       institution: " KBC ",
     });
-    expect(accountRepository.create).toHaveBeenCalledWith(
+    expect(mockOf(accountRepository, "create")).toHaveBeenCalledWith(
       expect.objectContaining({ display_name: "Main", institution: "KBC" }),
     );
   });
@@ -541,7 +543,7 @@ describe("accountService — sanitize pins (update)", () => {
     await expect(accountService.update(asAccountId(1), { name: null })).rejects.toThrow(
       ValidationError,
     );
-    expect(accountRepository.update).not.toHaveBeenCalled();
+    expect(mockOf(accountRepository, "update")).not.toHaveBeenCalled();
   });
 });
 
@@ -561,7 +563,7 @@ describe("accountService.remove", () => {
     await expect(accountService.remove(asAccountId(7))).resolves.toBe(7);
     expect(
       accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
-    ).toBeLessThan(accountRepository.remove.mock.invocationCallOrder[0]!);
+    ).toBeLessThan(must(accountRepository.remove.mock.invocationCallOrder[0], "accountRepository.remove.mock.invocationCallOrder[0]"));
   });
 });
 
@@ -577,7 +579,7 @@ describe("accountService.list / get", () => {
       items: [emptyBalanceAccount(1), emptyBalanceAccount(2)],
       total: 2,
     });
-    expect(accountRepository.getCount).not.toHaveBeenCalled();
+    expect(mockOf(accountRepository, "getCount")).not.toHaveBeenCalled();
   });
 
   it("counts separately when a page is requested, so total is the full match count", async () => {
@@ -590,12 +592,12 @@ describe("accountService.list / get", () => {
       limit: 1,
       offset: 2,
     });
-    expect(accountRepository.getAll).toHaveBeenCalledWith({
+    expect(mockOf(accountRepository, "getAll")).toHaveBeenCalledWith({
       active: true,
       limit: 1,
       offset: 2,
     });
-    expect(accountRepository.getCount).toHaveBeenCalledWith({ active: true });
+    expect(mockOf(accountRepository, "getCount")).toHaveBeenCalledWith({ active: true });
     expect(result).toEqual({ items: [emptyBalanceAccount(1)], total: 9 });
   });
 

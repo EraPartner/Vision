@@ -65,6 +65,7 @@ import {
 } from "../../src/database/connection.ts";
 import type { PgQueryResult } from "../../src/database/connection.ts";
 import { scheduleReconcile } from "../../src/services/transferReconciliationService.ts";
+import { must } from "../helpers/must.ts";
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
 const getClient = vi.mocked(rawGetClient);
@@ -145,7 +146,7 @@ describe("POST /bulk-delete — id-mode success", () => {
       /delete from "?transactions"?/i.test(sql),
     );
     expect(deleteCall).toBeDefined();
-    expect(deleteCall![1]).toEqual([[1, 2, 3]]);
+    expect(must(deleteCall, "deleteCall")[1]).toEqual([[1, 2, 3]]);
   });
 
   it("does not schedule a refresh when nothing was deleted", async () => {
@@ -206,7 +207,7 @@ describe("POST /bulk-delete — filter-mode", () => {
     const deleteCall = clientQuery.mock.calls.find(([sql]) =>
       /delete from "?transactions"?/i.test(sql),
     );
-    expect(deleteCall![1]).toEqual([[11, 22]]);
+    expect(must(deleteCall, "deleteCall")[1]).toEqual([[11, 22]]);
   });
 
   it("reports selection drift to zero without scheduling reconciliation", async () => {

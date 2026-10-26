@@ -9,6 +9,7 @@ import { mockConnection } from "../helpers/repoMocks.ts";
 vi.mock("../../src/database/connection.ts", () => mockConnection());
 
 import { buildMonthlySummary } from "../../src/repositories/infoRepositoryHelpers.ts";
+import { must } from "../helpers/must.ts";
 
 function seeded(seed: number) {
   let t = seed >>> 0;
@@ -64,8 +65,8 @@ describe("property: production monthly summary", () => {
       expect(summary.transaction_count).toBe(
         entries.reduce((total, entry) => total + entry.count, 0),
       );
-      expect(summary.period_start).toBe(months[0]!.period_start);
-      expect(summary.period_end).toBe(months.at(-1)!.period_end);
+      expect(summary.period_start).toBe(must(months[0], "months[0]").period_start);
+      expect(summary.period_end).toBe(must(months.at(-1), "months.at(-1)").period_end);
     }
   });
 

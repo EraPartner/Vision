@@ -33,6 +33,7 @@ import {
   listMonitorObservations,
   patchAnalysisMonitor,
 } from "../src/services/analysisMonitorService.ts";
+import { must } from "./helpers/must.ts";
 
 const content = {
   title: "Monitor fixture",
@@ -73,7 +74,7 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
       expect(
         (
           await ensureAnalysisRole({
-            databaseUrl: process.env.DATABASE_URL!,
+            databaseUrl: must(process.env.DATABASE_URL, "process.env.DATABASE_URL"),
             analysisUrl: process.env.DATABASE_URL_ANALYSIS,
             migrationsUrl: process.env.DATABASE_URL,
           })
@@ -84,23 +85,23 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
 
   afterEach(async () => {
     if (monitorId)
-      await getTestPool()!.query("DELETE FROM analysis_monitors WHERE id=$1", [
+      await must(getTestPool(), "getTestPool()").query("DELETE FROM analysis_monitors WHERE id=$1", [
         monitorId,
       ]);
     if (dossierId)
-      await getTestPool()!.query("DELETE FROM research_dossiers WHERE id=$1", [
+      await must(getTestPool(), "getTestPool()").query("DELETE FROM research_dossiers WHERE id=$1", [
         dossierId,
       ]);
     if (savedAnalysisId)
-      await getTestPool()!.query("DELETE FROM saved_analyses WHERE id=$1", [
+      await must(getTestPool(), "getTestPool()").query("DELETE FROM saved_analyses WHERE id=$1", [
         savedAnalysisId,
       ]);
     if (transactionId)
-      await getTestPool()!.query("DELETE FROM transactions WHERE id=$1", [
+      await must(getTestPool(), "getTestPool()").query("DELETE FROM transactions WHERE id=$1", [
         transactionId,
       ]);
     if (recipientId)
-      await getTestPool()!.query("DELETE FROM recipients WHERE id=$1", [
+      await must(getTestPool(), "getTestPool()").query("DELETE FROM recipients WHERE id=$1", [
         recipientId,
       ]);
     monitorId = undefined;
@@ -146,14 +147,14 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
         cooldownMinutes: 60,
       });
 
-      expect((await checkAnalysisMonitor(monitorId))!.status).toBe("baseline");
+      expect(must((await checkAnalysisMonitor(monitorId)), "(await checkAnalysisMonitor(monitorId))").status).toBe("baseline");
       const edited = await updateResearchDossier(dossierId, {
         ...content,
         evidence: [citation("First"), citation("Second")],
         expectedVersion: 1,
       });
-      expect((await checkAnalysisMonitor(monitorId))!.status).toBe("triggered");
-      expect((await checkAnalysisMonitor(monitorId))!.status).toBe("unchanged");
+      expect(must((await checkAnalysisMonitor(monitorId)), "(await checkAnalysisMonitor(monitorId))").status).toBe("triggered");
+      expect(must((await checkAnalysisMonitor(monitorId)), "(await checkAnalysisMonitor(monitorId))").status).toBe("unchanged");
       expect(
         (await listMonitorNotifications({})).items.filter(
           (item) => item.monitorId === monitorId,
@@ -164,17 +165,17 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
         evidence: [...edited.evidence].reverse(),
         expectedVersion: 2,
       });
-      expect((await checkAnalysisMonitor(monitorId))!.status).toBe("unchanged");
+      expect(must((await checkAnalysisMonitor(monitorId)), "(await checkAnalysisMonitor(monitorId))").status).toBe("unchanged");
 
       await updateResearchDossier(dossierId, {
         ...content,
         evidence: [...edited.evidence, citation("Third")],
         expectedVersion: 3,
       });
-      expect((await checkAnalysisMonitor(monitorId))!.status).toBe(
+      expect(must((await checkAnalysisMonitor(monitorId)), "(await checkAnalysisMonitor(monitorId))").status).toBe(
         "cooldown-pending",
       );
-      const aged = await getTestPool()!.query(
+      const aged = await must(getTestPool(), "getTestPool()").query(
         `UPDATE analysis_monitors SET last_notified_at=now()-interval '2 hours',
            next_due_at=now()-interval '1 hour' WHERE id=$1
          RETURNING cooldown_minutes,last_notified_at,
@@ -189,7 +190,7 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
       ).toBeGreaterThan(3_600_000);
       expect(await checkDueAnalysisMonitors()).toBe(1);
       const afterCatchUp = (
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           "SELECT last_status,pending_signature,lease_token FROM analysis_monitors WHERE id=$1",
           [monitorId],
         )
@@ -200,7 +201,7 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
         lease_token: null,
       });
       expect(
-        (await listMonitorObservations(monitorId, {})).items[0]!.status,
+        must((await listMonitorObservations(monitorId, {})).items[0], "(await listMonitorObservations(monitorId, {})).items[0]").status,
       ).toBe("triggered");
       expect(
         (await listMonitorNotifications({})).items.filter(
@@ -208,7 +209,7 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
         ),
       ).toHaveLength(2);
 
-      await getTestPool()!.query("DELETE FROM research_dossiers WHERE id=$1", [
+      await must(getTestPool(), "getTestPool()").query("DELETE FROM research_dossiers WHERE id=$1", [
         dossierId,
       ]);
       dossierId = undefined;
@@ -242,7 +243,7 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
         },
         parameters: {},
       });
-      savedAnalysisId = analysis!.id;
+      savedAnalysisId = must(analysis, "analysis").id;
       const monitor = await createAnalysisMonitor({
         kind: "analysis-threshold",
         title: "Count crossing",
@@ -261,16 +262,16 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
         analysisRunStatus: "completed",
         analysisWindow: { kind: "page", returnedRows: 1, hasMore: false },
       });
-      expect(baseline!.analysisRunId).toBeTruthy();
+      expect(must(baseline, "baseline").analysisRunId).toBeTruthy();
 
       recipientId = (
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           "INSERT INTO recipients (name,normalized_name) VALUES ($1,$2) RETURNING id",
           ["Monitor Fixture", "monitor fixture"],
         )
       ).rows[0].id;
       transactionId = (
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           `INSERT INTO transactions
       (date,amount,currency,recipient_id,account_id,is_active,is_transfer,memo)
       VALUES ('2026-09-19',1,'EUR',$1,NULL,true,false,$2) RETURNING id`,
@@ -286,8 +287,8 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
         reasonCode: "threshold-crossed",
         analysisRunStatus: "completed",
       });
-      expect(crossed!.analysisRunId).not.toBe(baseline!.analysisRunId);
-      expect((await checkAnalysisMonitor(monitorId))!.status).toBe("unchanged");
+      expect(must(crossed, "crossed").analysisRunId).not.toBe(must(baseline, "baseline").analysisRunId);
+      expect(must((await checkAnalysisMonitor(monitorId)), "(await checkAnalysisMonitor(monitorId))").status).toBe("unchanged");
       expect(
         (await listMonitorNotifications({})).items.filter(
           (item) => item.monitorId === monitorId,
@@ -325,7 +326,7 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
           columns,
         },
       });
-      expect((await checkAnalysisMonitor(monitorId))!.status).toBe("baseline");
+      expect(must((await checkAnalysisMonitor(monitorId)), "(await checkAnalysisMonitor(monitorId))").status).toBe("baseline");
       expect(
         (await listMonitorNotifications({})).items.filter(
           (item) => item.monitorId === monitorId,

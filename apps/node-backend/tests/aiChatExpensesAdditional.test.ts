@@ -30,7 +30,9 @@ import {
   getNetCashflow,
 } from '../src/services/aiChat/tools/expenses.ts';
 import { loose, partial } from './helpers/partial.ts';
+import { must } from "./helpers/must.ts";
 
+import { mockOf } from "./helpers/mockOf.ts";
 const transactionRepository = vi.mocked(rawTransactionRepository);
 const infoRepository = vi.mocked(rawInfoRepository);
 const getAiDisplayCurrency = vi.mocked(rawGetAiDisplayCurrency);
@@ -50,7 +52,7 @@ describe('fetchTransactionsInRange per-turn memoization', () => {
     const cache = new Map();
     await getSpendByCategory.run({ from: '2025-01-01', to: '2025-12-31' }, { cache });
     await getSpendByCategory.run({ from: '2025-01-01', to: '2025-12-31' }, { cache });
-    expect(transactionRepository.getAll).toHaveBeenCalledTimes(1);
+    expect(mockOf(transactionRepository, "getAll")).toHaveBeenCalledTimes(1);
   });
 
   it('shares one read across different tools with the same range/cache', async () => {
@@ -58,7 +60,7 @@ describe('fetchTransactionsInRange per-turn memoization', () => {
     const cache = new Map();
     await getSpendByCategory.run({ from: '2025-01-01', to: '2025-12-31' }, { cache });
     await getTopRecipients.run({ from: '2025-01-01', to: '2025-12-31' }, { cache });
-    expect(transactionRepository.getAll).toHaveBeenCalledTimes(1);
+    expect(mockOf(transactionRepository, "getAll")).toHaveBeenCalledTimes(1);
   });
 
   it('fetches separately for distinct ranges', async () => {
@@ -66,14 +68,14 @@ describe('fetchTransactionsInRange per-turn memoization', () => {
     const cache = new Map();
     await getSpendByCategory.run({ from: '2025-01-01', to: '2025-06-30' }, { cache });
     await getSpendByCategory.run({ from: '2025-07-01', to: '2025-12-31' }, { cache });
-    expect(transactionRepository.getAll).toHaveBeenCalledTimes(2);
+    expect(mockOf(transactionRepository, "getAll")).toHaveBeenCalledTimes(2);
   });
 
   it('does not memoize when no cache is supplied (standalone calls)', async () => {
     transactionRepository.getAll.mockResolvedValue([]);
     await getSpendByCategory.run({ from: '2025-01-01', to: '2025-12-31' });
     await getSpendByCategory.run({ from: '2025-01-01', to: '2025-12-31' });
-    expect(transactionRepository.getAll).toHaveBeenCalledTimes(2);
+    expect(mockOf(transactionRepository, "getAll")).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -102,8 +104,8 @@ describe('getMonthlyCategoryBreakdown', () => {
 
     const r = await getMonthlyCategoryBreakdown.run({ from: '2025-01-01', to: '2025-01-31', topN: 3 });
     expect(r.data).toHaveLength(3);
-    expect(r.data[0]!.category).toBe('C0');
-    expect(r.data[2]!.category).toBe('C2');
+    expect(must(r.data[0], "r.data[0]").category).toBe('C0');
+    expect(must(r.data[2], "r.data[2]").category).toBe('C2');
   });
 
   it('uses Uncategorised for null category names', async () => {
@@ -111,7 +113,7 @@ describe('getMonthlyCategoryBreakdown', () => {
       { amount: '-10', category_name: null, date: '2025-01-15' },
     ]));
     const r = await getMonthlyCategoryBreakdown.run({ from: '2025-01-01', to: '2025-01-31' });
-    expect(r.data[0]!.category).toBe('Uncategorised');
+    expect(must(r.data[0], "r.data[0]").category).toBe('Uncategorised');
   });
 
   it('rejects invalid date order', async () => {
@@ -123,7 +125,7 @@ describe('searchTransactions', () => {
   it('forwards trimmed query to repository search', async () => {
     transactionRepository.getAll.mockResolvedValueOnce([]);
     await searchTransactions.run({ query: '  Netflix  ' });
-    expect(transactionRepository.getAll).toHaveBeenCalledWith(expect.objectContaining({ search: 'Netflix', active: true }));
+    expect(mockOf(transactionRepository, "getAll")).toHaveBeenCalledWith(expect.objectContaining({ search: 'Netflix', active: true }));
   });
 
   it('rejects empty/whitespace query', async () => {
@@ -149,14 +151,14 @@ describe('searchTransactions', () => {
   it('respects limit parameter and caps at 200', async () => {
     transactionRepository.getAll.mockResolvedValueOnce([]);
     await searchTransactions.run({ query: 'x', limit: 5 });
-    expect(transactionRepository.getAll).toHaveBeenCalledWith(expect.objectContaining({ limit: 5 }));
+    expect(mockOf(transactionRepository, "getAll")).toHaveBeenCalledWith(expect.objectContaining({ limit: 5 }));
     await expect(searchTransactions.run({ query: 'x', limit: 999 })).rejects.toThrow(/limit/);
   });
 
   it('passes optional date filters', async () => {
     transactionRepository.getAll.mockResolvedValueOnce([]);
     await searchTransactions.run({ query: 'x', from: '2025-01-01', to: '2025-12-31' });
-    expect(transactionRepository.getAll).toHaveBeenCalledWith(expect.objectContaining({ startDate: '2025-01-01', endDate: '2025-12-31' }));
+    expect(mockOf(transactionRepository, "getAll")).toHaveBeenCalledWith(expect.objectContaining({ startDate: '2025-01-01', endDate: '2025-12-31' }));
   });
 
   it('uses fallback labels when recipient/category missing', async () => {
@@ -189,7 +191,7 @@ describe('getLargestTransactions', () => {
     transactionRepository.getAll.mockResolvedValueOnce(fixtureRows());
     const r = await getLargestTransactions.run({ from: '2025-04-01', to: '2025-04-30', direction: 'income' });
     expect(r.data).toHaveLength(1);
-    expect(r.data[0]!.id).toBe(3);
+    expect(must(r.data[0], "r.data[0]").id).toBe(3);
   });
 
   it('returns both directions when direction=both, sorted by abs amount', async () => {
@@ -220,7 +222,7 @@ describe('getSpendTrendForCategory', () => {
   it('passes categoryId filter to repository', async () => {
     transactionRepository.getAll.mockResolvedValueOnce([]);
     await getSpendTrendForCategory.run({ categoryId: 7, months: 6 });
-    expect(transactionRepository.getAll).toHaveBeenCalledWith(expect.objectContaining({ categoryId: 7 }));
+    expect(mockOf(transactionRepository, "getAll")).toHaveBeenCalledWith(expect.objectContaining({ categoryId: 7 }));
   });
 
   it('groups spending by month, ignoring income rows', async () => {
@@ -277,7 +279,7 @@ describe('getYearOverYearComparison', () => {
     transactionRepository.getAll.mockResolvedValueOnce(loose<Resolved<typeof rawTransactionRepository.getAll>>([{ amount: '-50', category_name: 'New', date: '2025-04-01' }]));
     transactionRepository.getAll.mockResolvedValueOnce([]);
     const r = await getYearOverYearComparison.run({ year: 2025 });
-    expect(r.data[0]!.pctChange).toBeNull();
+    expect(must(r.data[0], "r.data[0]").pctChange).toBeNull();
   });
 
   it('sorts categories by current-year spend descending', async () => {
@@ -297,14 +299,14 @@ describe('getUncategorisedTransactions', () => {
       { id: 1, amount: '-10', date: '2025-04-01', recipient_name: 'X', memo: 'm' },
     ]));
     const r = await getUncategorisedTransactions.run({});
-    expect(transactionRepository.getUncategorised).toHaveBeenCalledWith({ limit: 50, offset: 0 });
+    expect(mockOf(transactionRepository, "getUncategorised")).toHaveBeenCalledWith({ limit: 50, offset: 0 });
     expect(r.data[0]).toMatchObject({ id: 1, amount: -10, recipient: 'X' });
   });
 
   it('respects custom limit (max 200)', async () => {
     transactionRepository.getUncategorised.mockResolvedValueOnce([]);
     await getUncategorisedTransactions.run({ limit: 100 });
-    expect(transactionRepository.getUncategorised).toHaveBeenCalledWith({ limit: 100, offset: 0 });
+    expect(mockOf(transactionRepository, "getUncategorised")).toHaveBeenCalledWith({ limit: 100, offset: 0 });
     await expect(getUncategorisedTransactions.run({ limit: 999 })).rejects.toThrow(/limit/);
   });
 });

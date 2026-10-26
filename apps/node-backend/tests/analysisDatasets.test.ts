@@ -8,6 +8,7 @@ import {
 import { calculateCostBasis } from "@vision/shared-utils/portfolio";
 import type { CostBasisTxnLike } from "@vision/shared-utils/portfolio";
 import { loose } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 describe("versioned analysis datasets", () => {
   it("publishes four immutable, scoped version-1 datasets", () => {
@@ -19,7 +20,7 @@ describe("versioned analysis datasets", () => {
       "cash-flows",
     ]);
     expect(Object.isFrozen(ANALYSIS_DATASETS_V1)).toBe(true);
-    expect(Object.isFrozen(ANALYSIS_DATASETS_V1[0]!.joinPaths)).toBe(true);
+    expect(Object.isFrozen(must(ANALYSIS_DATASETS_V1[0], "ANALYSIS_DATASETS_V1[0]").joinPaths)).toBe(true);
     for (const dataset of ANALYSIS_DATASETS_V1) {
       expect(dataset.relation).toMatch(/^vision_analysis\.[a-z_]+_v1$/);
       expect(dataset.authorizationScope).toBe("local-user-database");
@@ -65,7 +66,7 @@ describe("versioned analysis datasets", () => {
     );
     expect(spending).toBe(100);
     expect(positiveFlow).toBe(25);
-    expect(getAnalysisDataset("cash-flows")!.signSemantics).toContain(
+    expect(must(getAnalysisDataset("cash-flows"), "getAnalysisDataset(\"cash-flows\")").signSemantics).toContain(
       "income and refunds",
     );
   });
@@ -100,7 +101,7 @@ describe("versioned analysis datasets", () => {
     );
     expect(result.totalUnits).toBe(6);
     expect(result.realizedGainConv).toBeCloseTo(118.4, 8);
-    expect(getAnalysisDataset("holdings")!.coverage).toContain(
+    expect(must(getAnalysisDataset("holdings"), "getAnalysisDataset(\"holdings\")").coverage).toContain(
       "canonical engine",
     );
   });

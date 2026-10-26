@@ -45,6 +45,7 @@ vi.mock("../../src/config/logger.ts", () => ({ logger: mockLogger() }));
 import { runPortfolioImportPipeline as rawRunPortfolioImportPipeline } from "../../src/services/portfolioImportPipeline/index.ts";
 import rawAccountService from "../../src/services/accountService.ts";
 import router from "../../src/routes/portfolioImportRoutes.ts";
+import { must } from "../helpers/must.ts";
 
 const runPortfolioImportPipeline = vi.mocked(rawRunPortfolioImportPipeline);
 const accountService = vi.mocked(rawAccountService);
@@ -123,7 +124,7 @@ describe("portfolio workbook multipart boundary", () => {
   );
   it("rejects incomplete financial joins before creating a batch", async () => {
     const sheets = syntheticSaxoWorkbook();
-    sheets[2]!.records.shift();
+    must(sheets[2], "sheets[2]").records.shift();
     await writeSyntheticWorkbook(file, sheets);
     const response = await request().expect(400);
     expect(bodyAt(response, "error", "message")).toContain("do not reconcile");

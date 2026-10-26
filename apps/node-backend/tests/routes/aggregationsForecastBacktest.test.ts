@@ -14,6 +14,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { routeAgent } from "../helpers/routeApp.ts";
 import { parseBooleanQueryParam } from "../../src/lib/httpParams.ts";
+import { must } from "../helpers/must.ts";
 
 describe("parseBooleanQueryParam — default-aware boolean query param", () => {
   it("returns the provided default when the param is absent/empty", () => {
@@ -79,27 +80,27 @@ describe("cashflow-forecast endpoints — include_backtest default drift", () =>
 
   it("methods defaults include_backtest ON when the param is omitted", async () => {
     await run("/cashflow-forecast-methods");
-    expect(methodsSpy.mock.calls[0]![0].includeBacktest).toBe(true);
+    expect(must(methodsSpy.mock.calls[0], "methodsSpy.mock.calls[0]")[0].includeBacktest).toBe(true);
   });
 
   it("rolling defaults include_backtest OFF when the param is omitted", async () => {
     await run("/cashflow-forecast-rolling");
-    expect(rollingSpy.mock.calls[0]![0].includeBacktest).toBe(false);
+    expect(must(rollingSpy.mock.calls[0], "rollingSpy.mock.calls[0]")[0].includeBacktest).toBe(false);
   });
 
   it('both endpoints accept the same spellings (methods "0" → false, rolling "1" → true)', async () => {
     await run("/cashflow-forecast-methods", { include_backtest: "0" });
-    expect(methodsSpy.mock.calls[0]![0].includeBacktest).toBe(false);
+    expect(must(methodsSpy.mock.calls[0], "methodsSpy.mock.calls[0]")[0].includeBacktest).toBe(false);
 
     await run("/cashflow-forecast-rolling", { include_backtest: "1" });
-    expect(rollingSpy.mock.calls[0]![0].includeBacktest).toBe(true);
+    expect(must(rollingSpy.mock.calls[0], "rollingSpy.mock.calls[0]")[0].includeBacktest).toBe(true);
   });
 
   it("explicit override flips each default", async () => {
     await run("/cashflow-forecast-methods", { include_backtest: "false" });
-    expect(methodsSpy.mock.calls[0]![0].includeBacktest).toBe(false);
+    expect(must(methodsSpy.mock.calls[0], "methodsSpy.mock.calls[0]")[0].includeBacktest).toBe(false);
 
     await run("/cashflow-forecast-rolling", { include_backtest: "true" });
-    expect(rollingSpy.mock.calls[0]![0].includeBacktest).toBe(true);
+    expect(must(rollingSpy.mock.calls[0], "rollingSpy.mock.calls[0]")[0].includeBacktest).toBe(true);
   });
 });

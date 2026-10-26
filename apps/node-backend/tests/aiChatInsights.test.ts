@@ -48,7 +48,9 @@ import {
   getRecurringDetected,
 } from "../src/services/aiChat/tools/insights.ts";
 import { loose, partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
+import { mockOf } from "./helpers/mockOf.ts";
 const infoRepository = vi.mocked(rawInfoRepository);
 const watchlistRepository = vi.mocked(rawWatchlistRepository);
 const categoryRepository = vi.mocked(rawCategoryRepository);
@@ -116,7 +118,7 @@ describe("getBankBalances", () => {
       }),
     );
     const r = await getBankBalances.run({});
-    expect(r.data[0]!.balance).toBe(100);
+    expect(must(r.data[0], "r.data[0]").balance).toBe(100);
     expect(r.meta.totalNetPosition).toBe(100);
   });
 
@@ -158,8 +160,8 @@ describe("getBankBalances", () => {
       }),
     );
     const r = await getBankBalances.run({});
-    expect(r.data[0]!.firstTransaction).toBe("2024-12-31");
-    expect(r.data[0]!.lastTransaction).toBe("2025-06-15");
+    expect(must(r.data[0], "r.data[0]").firstTransaction).toBe("2024-12-31");
+    expect(must(r.data[0], "r.data[0]").lastTransaction).toBe("2025-06-15");
   });
 
   it("handles missing accounts array", async () => {
@@ -218,11 +220,11 @@ describe("getSpendingPace", () => {
     );
     const r = await getSpendingPace.run({});
     expect(r.meta.period).toBe("monthly");
-    expect(r.data.find((d) => d.label.includes("Avg monthly"))!.value).toBe(
+    expect(must(r.data.find((d) => d.label.includes("Avg monthly")), "r.data.find((d) => d.label.includes(\"Avg monthly\"))").value).toBe(
       465,
     );
     expect(
-      r.data.find((d) => d.label.includes("Projected monthly"))!.value,
+      must(r.data.find((d) => d.label.includes("Projected monthly")), "r.data.find((d) => d.label.includes(\"Projected monthly\"))").value,
     ).toBe(428.57);
   });
 
@@ -231,11 +233,11 @@ describe("getSpendingPace", () => {
       fixturePayload(),
     );
     const r = await getSpendingPace.run({ period: "yearly" });
-    expect(r.data.find((d) => d.label.includes("Avg yearly"))!.value).toBe(
+    expect(must(r.data.find((d) => d.label.includes("Avg yearly")), "r.data.find((d) => d.label.includes(\"Avg yearly\"))").value).toBe(
       465 * 12,
     );
     expect(
-      r.data.find((d) => d.label.includes("Projected yearly"))!.value,
+      must(r.data.find((d) => d.label.includes("Projected yearly")), "r.data.find((d) => d.label.includes(\"Projected yearly\"))").value,
     ).toBe(428.57 * 12);
   });
 
@@ -332,13 +334,13 @@ describe("getRecipientInsights", () => {
     );
     const r = await getRecipientInsights.run({});
     expect(r.data).toHaveLength(1);
-    expect(r.data[0]!.recipient).toBe("Alice");
+    expect(must(r.data[0], "r.data[0]").recipient).toBe("Alice");
   });
 
   it("passes recipientId filter through to the repository", async () => {
     transactionRepository.getAll.mockResolvedValueOnce([]);
     await getRecipientInsights.run({ recipientId: 7 });
-    expect(transactionRepository.getAll).toHaveBeenCalledWith(
+    expect(mockOf(transactionRepository, "getAll")).toHaveBeenCalledWith(
       expect.objectContaining({ recipientId: 7, active: true }),
     );
   });
@@ -385,7 +387,7 @@ describe("getRecipientInsights", () => {
       ]),
     );
     const r = await getRecipientInsights.run({});
-    expect(r.data[0]!.lastDate).toBe("2025-05-08");
+    expect(must(r.data[0], "r.data[0]").lastDate).toBe("2025-05-08");
   });
 
   it("rejects invalid recipientId", async () => {
@@ -445,7 +447,7 @@ describe("getWatchlist", () => {
       }),
     );
     await getWatchlist.run({ assetClass: "crypto" });
-    expect(watchlistRepository.getAllWithCount).toHaveBeenCalledWith(
+    expect(mockOf(watchlistRepository, "getAllWithCount")).toHaveBeenCalledWith(
       expect.objectContaining({ assetClass: "crypto" }),
     );
   });
@@ -468,9 +470,9 @@ describe("getWatchlist", () => {
     );
     const r = await getWatchlist.run({});
     expect(getQuotes).not.toHaveBeenCalled();
-    expect(r.data[0]!.currentPrice).toBeNull();
-    expect(r.data[0]!.currency).toBe("EUR"); // fallback
-    expect(r.data[0]!.symbol).toBeNull();
+    expect(must(r.data[0], "r.data[0]").currentPrice).toBeNull();
+    expect(must(r.data[0], "r.data[0]").currency).toBe("EUR"); // fallback
+    expect(must(r.data[0], "r.data[0]").symbol).toBeNull();
   });
 
   it("degrades to null prices when the quote service fails", async () => {
@@ -493,7 +495,7 @@ describe("getWatchlist", () => {
 
     const r = await getWatchlist.run({});
     expect(r.ok).toBe(true);
-    expect(r.data[0]!.currentPrice).toBeNull();
+    expect(must(r.data[0], "r.data[0]").currentPrice).toBeNull();
   });
 
   it("reports null price for a symbol the quote batch dropped", async () => {
@@ -530,8 +532,8 @@ describe("getWatchlist", () => {
 
     const r = await getWatchlist.run({});
     expect(getQuotes).toHaveBeenCalledWith(["AAPL", "NOPE"], true);
-    expect(r.data[0]!.currentPrice).toBe(200.5);
-    expect(r.data[1]!.currentPrice).toBeNull();
+    expect(must(r.data[0], "r.data[0]").currentPrice).toBe(200.5);
+    expect(must(r.data[1], "r.data[1]").currentPrice).toBeNull();
   });
 
   it("rejects unknown asset class", async () => {
@@ -561,7 +563,7 @@ describe("getCategories", () => {
   it("passes search trimmed to the repository", async () => {
     categoryRepository.getAll.mockResolvedValueOnce([]);
     await getCategories.run({ search: "  Travel  " });
-    expect(categoryRepository.getAll).toHaveBeenCalledWith(
+    expect(mockOf(categoryRepository, "getAll")).toHaveBeenCalledWith(
       expect.objectContaining({ search: "Travel" }),
     );
   });
@@ -569,8 +571,8 @@ describe("getCategories", () => {
   it("omits search when empty", async () => {
     categoryRepository.getAll.mockResolvedValueOnce([]);
     await getCategories.run({});
-    const args = categoryRepository.getAll.mock.calls[0]![0];
-    expect(args!.search).toBeUndefined();
+    const args = must(categoryRepository.getAll.mock.calls[0], "categoryRepository.getAll.mock.calls[0]")[0];
+    expect(must(args, "args").search).toBeUndefined();
   });
 });
 
@@ -605,7 +607,7 @@ describe("getRecurringDetected", () => {
     );
     const r = await getRecurringDetected.run({});
     expect(r.data).toHaveLength(1);
-    expect(r.data[0]!.recipient).toBe("Netflix");
+    expect(must(r.data[0], "r.data[0]").recipient).toBe("Netflix");
     expect(r.meta.minOccurrences).toBe(3);
   });
 

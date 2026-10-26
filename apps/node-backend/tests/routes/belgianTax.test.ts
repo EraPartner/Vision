@@ -7,6 +7,7 @@ import {
 import { routeAgent } from "../helpers/routeApp.ts";
 import { bodyAt } from "../helpers/responseBody.ts";
 import router from "../../src/routes/belgianTax.ts";
+import { must } from "../helpers/must.ts";
 
 const api = routeAgent(router, { mountPath: "/api/belgian-tax" });
 const path = "/api/belgian-tax/compute";
@@ -99,7 +100,7 @@ describe("Belgian tax computation API", () => {
 
   it("computes a joint household and quotient with distinct partner output", async () => {
     const input = household();
-    const partner = structuredClone(input.partners[0]!);
+    const partner = structuredClone(must(input.partners[0], "input.partners[0]"));
     partner.id = "B";
     partner.activities = [
       { id: "act_B_1", kind: "employee", grossIncome: 10_000 },

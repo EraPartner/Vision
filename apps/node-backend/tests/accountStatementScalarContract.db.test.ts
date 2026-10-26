@@ -9,13 +9,14 @@ import { closeTestPool, getTestPool, hasTestDatabase } from "./setup/db.ts";
 import {
   asCurrencyCode,
 } from "@vision/types/brands";
+import { must } from "./helpers/must.ts";
 
 const describeDb =
   hasTestDatabase()
     ? describe
     : describe.skip;
 // Only dereferenced inside the database-gated suite.
-const pool = getTestPool()!;
+const pool = must(getTestPool(), "getTestPool()");
 
 describeDb("account statement scalar contract schema", () => {
   beforeAll(async () => {

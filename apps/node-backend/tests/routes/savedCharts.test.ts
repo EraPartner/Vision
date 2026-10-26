@@ -29,6 +29,7 @@ vi.mock("../../src/config/logger.ts", () => ({
 
 import rawSavedChartsRepository from "../../src/repositories/savedChartsRepository.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const savedChartsRepository = vi.mocked(rawSavedChartsRepository);
 
 type DeepPartial<T> = T extends readonly (infer U)[]
@@ -61,8 +62,8 @@ describe("Saved Charts Routes", () => {
 
       // No limit/offset on the request → unbounded query, canonical collection
       // shape { items, total } with total = row count and no COUNT round-trip.
-      expect(savedChartsRepository.getAll).toHaveBeenCalledWith({});
-      expect(savedChartsRepository.getCount).not.toHaveBeenCalled();
+      expect(mockOf(savedChartsRepository, "getAll")).toHaveBeenCalledWith({});
+      expect(mockOf(savedChartsRepository, "getCount")).not.toHaveBeenCalled();
       expect(res.body).toEqual(okEnvelope({ items: [{ id: 1 }], total: 1 }));
     });
 
@@ -75,7 +76,7 @@ describe("Saved Charts Routes", () => {
         .query({ limit: "1", offset: "1" })
         .expect(200);
 
-      expect(savedChartsRepository.getAll).toHaveBeenCalledWith({
+      expect(mockOf(savedChartsRepository, "getAll")).toHaveBeenCalledWith({
         limit: 1,
         offset: 1,
       });
@@ -143,7 +144,7 @@ describe("Saved Charts Routes", () => {
         .send({ name: "  Main  ", categoryIds: ["1", 2] })
         .expect(201);
 
-      expect(savedChartsRepository.create).toHaveBeenCalledWith({
+      expect(mockOf(savedChartsRepository, "create")).toHaveBeenCalledWith({
         name: "Main",
         chartType: "line",
         categoryIds: [1, 2],
@@ -180,7 +181,7 @@ describe("Saved Charts Routes", () => {
         .send({ name: "Tagged", categoryIds: [], tagIds: ["5", 6] })
         .expect(201);
 
-      expect(savedChartsRepository.create).toHaveBeenCalledWith(
+      expect(mockOf(savedChartsRepository, "create")).toHaveBeenCalledWith(
         expect.objectContaining({ tagIds: [5, 6] }),
       );
     });
@@ -205,7 +206,7 @@ describe("Saved Charts Routes", () => {
         .send({ name: "AllTags", categoryIds: [], allTags: true })
         .expect(201);
 
-      expect(savedChartsRepository.create).toHaveBeenCalledWith(
+      expect(mockOf(savedChartsRepository, "create")).toHaveBeenCalledWith(
         expect.objectContaining({
           allTags: true,
           allCategories: false,
@@ -236,7 +237,7 @@ describe("Saved Charts Routes", () => {
         })
         .expect(201);
 
-      expect(savedChartsRepository.create).toHaveBeenCalledWith(
+      expect(mockOf(savedChartsRepository, "create")).toHaveBeenCalledWith(
         expect.objectContaining({ chartType: "bar", chartVariant: "ranked" }),
       );
     });
@@ -258,7 +259,7 @@ describe("Saved Charts Routes", () => {
         .post(BASE)
         .send({ name: "   ", categoryIds: [1] })
         .expect(400);
-      expect(savedChartsRepository.create).not.toHaveBeenCalled();
+      expect(mockOf(savedChartsRepository, "create")).not.toHaveBeenCalled();
     });
 
     it("rejects a non-string name", async () => {
@@ -270,7 +271,7 @@ describe("Saved Charts Routes", () => {
 
     it("rejects a missing categoryIds field", async () => {
       await api.post(BASE).send({ name: "Main" }).expect(400);
-      expect(savedChartsRepository.create).not.toHaveBeenCalled();
+      expect(mockOf(savedChartsRepository, "create")).not.toHaveBeenCalled();
     });
 
     it("wraps a scalar categoryIds into a one-element int array", async () => {
@@ -281,7 +282,7 @@ describe("Saved Charts Routes", () => {
         .send({ name: "Scalar", categoryIds: "5" })
         .expect(201);
 
-      expect(savedChartsRepository.create).toHaveBeenCalledWith(
+      expect(mockOf(savedChartsRepository, "create")).toHaveBeenCalledWith(
         expect.objectContaining({ categoryIds: [5] }),
       );
     });
@@ -293,7 +294,7 @@ describe("Saved Charts Routes", () => {
         .post(BASE)
         .send({ name: "R", categoryIds: [], recipientIds: ["2", 3] })
         .expect(201);
-      expect(savedChartsRepository.create).toHaveBeenCalledWith(
+      expect(mockOf(savedChartsRepository, "create")).toHaveBeenCalledWith(
         expect.objectContaining({ recipientIds: [2, 3] }),
       );
 
@@ -332,7 +333,7 @@ describe("Saved Charts Routes", () => {
         .send({ name: "Yearly", categoryIds: [1], timeBucket: "yearly" })
         .expect(201);
 
-      expect(savedChartsRepository.create).toHaveBeenCalledWith(
+      expect(mockOf(savedChartsRepository, "create")).toHaveBeenCalledWith(
         expect.objectContaining({ timeBucket: "yearly" }),
       );
     });
@@ -352,7 +353,7 @@ describe("Saved Charts Routes", () => {
           .post(BASE)
           .send({ name: "Combo", categoryIds: [1], chartType, chartVariant })
           .expect(400);
-        expect(savedChartsRepository.create).not.toHaveBeenCalled();
+        expect(mockOf(savedChartsRepository, "create")).not.toHaveBeenCalled();
       },
     );
 
@@ -379,7 +380,7 @@ describe("Saved Charts Routes", () => {
           .send({ name: "Combo", categoryIds: [1], chartType, chartVariant })
           .expect(201);
 
-        expect(savedChartsRepository.create).toHaveBeenCalledWith(
+        expect(mockOf(savedChartsRepository, "create")).toHaveBeenCalledWith(
           expect.objectContaining({ chartType, chartVariant }),
         );
       },
@@ -405,7 +406,7 @@ describe("Saved Charts Routes", () => {
         })
         .expect(201);
 
-      expect(savedChartsRepository.create).toHaveBeenCalledWith(
+      expect(mockOf(savedChartsRepository, "create")).toHaveBeenCalledWith(
         expect.objectContaining({
           dateRangeStart: "2025-01-01",
           dateRangeEnd: null,
@@ -453,7 +454,7 @@ describe("Saved Charts Routes", () => {
         .send({ categoryIds: ["3", 4], chartType: "bar" })
         .expect(200);
 
-      expect(savedChartsRepository.update).toHaveBeenCalledWith(9, {
+      expect(mockOf(savedChartsRepository, "update")).toHaveBeenCalledWith(9, {
         name: undefined,
         chartType: "bar",
         categoryIds: [3, 4],
@@ -474,7 +475,7 @@ describe("Saved Charts Routes", () => {
         .send({ tagIds: ["7", 8] })
         .expect(200);
 
-      expect(savedChartsRepository.update).toHaveBeenCalledWith(
+      expect(mockOf(savedChartsRepository, "update")).toHaveBeenCalledWith(
         9,
         expect.objectContaining({ tagIds: [7, 8] }),
       );
@@ -492,7 +493,7 @@ describe("Saved Charts Routes", () => {
 
       await api.patch(`${BASE}/9`).send({ allRecipients: true }).expect(200);
 
-      expect(savedChartsRepository.update).toHaveBeenCalledWith(
+      expect(mockOf(savedChartsRepository, "update")).toHaveBeenCalledWith(
         9,
         expect.objectContaining({ allRecipients: true }),
       );
@@ -507,7 +508,7 @@ describe("Saved Charts Routes", () => {
 
       await api.patch(`${BASE}/9`).send({ name: "  Renamed  " }).expect(200);
 
-      expect(savedChartsRepository.update).toHaveBeenCalledWith(
+      expect(mockOf(savedChartsRepository, "update")).toHaveBeenCalledWith(
         9,
         expect.objectContaining({ name: "Renamed" }),
       );
@@ -530,7 +531,7 @@ describe("Saved Charts Routes", () => {
         .patch(`${BASE}/1`)
         .send({ chartType: "line", chartVariant: "stacked" })
         .expect(400);
-      expect(savedChartsRepository.update).not.toHaveBeenCalled();
+      expect(mockOf(savedChartsRepository, "update")).not.toHaveBeenCalled();
     });
 
     it("allows chartType alone without cross-checking the stored variant", async () => {
@@ -540,7 +541,7 @@ describe("Saved Charts Routes", () => {
 
       await api.patch(`${BASE}/9`).send({ chartType: "line" }).expect(200);
 
-      expect(savedChartsRepository.update).toHaveBeenCalledWith(
+      expect(mockOf(savedChartsRepository, "update")).toHaveBeenCalledWith(
         9,
         expect.objectContaining({ chartType: "line" }),
       );
@@ -551,7 +552,7 @@ describe("Saved Charts Routes", () => {
 
       await api.patch(`${BASE}/9`).send({ chartVariant: "ranked" }).expect(200);
 
-      expect(savedChartsRepository.update).toHaveBeenCalledWith(
+      expect(mockOf(savedChartsRepository, "update")).toHaveBeenCalledWith(
         9,
         expect.objectContaining({ chartVariant: "ranked" }),
       );
@@ -569,7 +570,7 @@ describe("Saved Charts Routes", () => {
 
       await api.patch(`${BASE}/9`).send({ dateRangeEnd: "" }).expect(200);
 
-      expect(savedChartsRepository.update).toHaveBeenCalledWith(
+      expect(mockOf(savedChartsRepository, "update")).toHaveBeenCalledWith(
         9,
         expect.objectContaining({ dateRangeEnd: null }),
       );
@@ -584,7 +585,7 @@ describe("Saved Charts Routes", () => {
 
       await api.patch(`${BASE}/9`).send({ dateRangeStart: null }).expect(200);
 
-      expect(savedChartsRepository.update).toHaveBeenCalledWith(
+      expect(mockOf(savedChartsRepository, "update")).toHaveBeenCalledWith(
         9,
         expect.objectContaining({ dateRangeStart: null }),
       );
@@ -598,7 +599,7 @@ describe("Saved Charts Routes", () => {
 
     it("throws ValidationError for a negative chart id (was accepted as -5)", async () => {
       await api.delete(`${BASE}/-5`).expect(400);
-      expect(savedChartsRepository.delete).not.toHaveBeenCalled();
+      expect(mockOf(savedChartsRepository, "delete")).not.toHaveBeenCalled();
     });
 
     it("throws NotFoundError when delete misses", async () => {

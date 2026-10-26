@@ -44,6 +44,7 @@ import {
   ValidationError,
   NotFoundError,
 } from "../src/middleware/errorHandler.ts";
+import { must } from "./helpers/must.ts";
 
 type SqlSpy = Mock<
   (
@@ -211,7 +212,7 @@ describe("mergeAccounts (ADR-088)", () => {
     );
     expect(batchRepointIndex).toBeGreaterThan(-1);
     expect(batchRepointIndex).toBeLessThan(deleteSourcesIndex);
-    const batchCall = mockClient.query.mock.calls[batchRepointIndex]!;
+    const batchCall = must(mockClient.query.mock.calls[batchRepointIndex], "mockClient.query.mock.calls[batchRepointIndex]");
     expect(batchCall[1]).toEqual([2, [1]]);
     expect(
       calls.some((s) => norm(s).includes("update accounts set funding_account_id")),
@@ -222,7 +223,7 @@ describe("mergeAccounts (ADR-088)", () => {
     const txCall = mockClient.query.mock.calls.find(([sql]) =>
       norm(sql).includes("update transactions"),
     );
-    expect(txCall![1]).toEqual([2, [1]]);
+    expect(must(txCall, "txCall")[1]).toEqual([2, [1]]);
   });
 
   it("rejects a merge that would turn the survivor's source reference into a self-cycle", async () => {
@@ -285,7 +286,7 @@ describe("mergeAccounts (ADR-088)", () => {
     const txCall = mockClient.query.mock.calls.find(([sql]) =>
       norm(sql).includes("update transactions"),
     );
-    expect(txCall![1]).toEqual([2, [1]]);
+    expect(must(txCall, "txCall")[1]).toEqual([2, [1]]);
   });
 
   // §1 F2 regression: two concurrently-imported accounts (survivor KBC stamped
@@ -305,8 +306,8 @@ describe("mergeAccounts (ADR-088)", () => {
     expect(result.stampsInterleaved).toBe(true);
     const clear = clearAnchorCall();
     expect(clear).toBeDefined();
-    expect(norm(clear![0])).toContain("where account_id = $1");
-    expect(clear![1]).toEqual([2]); // clears the SURVIVOR's anchor only
+    expect(norm(must(clear, "clear")[0])).toContain("where account_id = $1");
+    expect(must(clear, "clear")[1]).toEqual([2]); // clears the SURVIVOR's anchor only
 
     // Historical per-row stamps are never rewritten — no UPDATE touches
     // transactions.balance.
@@ -593,7 +594,7 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
       norm(sql).includes("balance_parts"),
     );
     expect(projectedCall).toBeDefined();
-    const [projectedSql] = projectedCall!;
+    const [projectedSql] = must(projectedCall, "projectedCall");
     // The shared hub builder (jsonb partitions), with the union substituted
     // for a single account — so preview and hub cannot compute the merged
     // balance differently.
@@ -608,7 +609,7 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
     );
     // Every bound id list is survivor + source; every other value is the
     // app-timezone as-of day.
-    const params = projectedCall![1] ?? [];
+    const params = must(projectedCall, "projectedCall")[1] ?? [];
     expect(params.length).toBeGreaterThan(0);
     for (const param of params) {
       if (Array.isArray(param)) expect(param).toEqual([2, 1]);
@@ -689,7 +690,7 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
     const portfolioSql = query.mock.calls
       .map(([sql]) => sql)
       .find((s) => norm(s).includes("portfolio_transactions") && norm(s).includes("count"));
-    expect(norm(portfolioSql!)).toContain(
+    expect(norm(must(portfolioSql, "portfolioSql"))).toContain(
       "from portfolio_transactions where account_id = $1",
     );
   });

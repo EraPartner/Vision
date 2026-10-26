@@ -16,6 +16,7 @@ import {
   migrateDatabase,
 } from "./setup/migratedDatabase.ts";
 import type { DisposableDatabase } from "./setup/migratedDatabase.ts";
+import { must } from "./helpers/must.ts";
 
 const OWNER = "vb_ar_owner";
 const APP = "vb_ar_app";
@@ -47,8 +48,8 @@ describe.skipIf(
   !hasIsolatedTestDatabase() || !process.env.DATABASE_URL_ANALYSIS,
 )("analysis role bootstrap (real Postgres, native roles)", () => {
   beforeAll(async () => {
-    const analysis = new URL(process.env.DATABASE_URL_ANALYSIS!);
-    await withClient(process.env.TEST_DATABASE_URL!, async (admin) => {
+    const analysis = new URL(must(process.env.DATABASE_URL_ANALYSIS, "process.env.DATABASE_URL_ANALYSIS"));
+    await withClient(must(process.env.TEST_DATABASE_URL, "process.env.TEST_DATABASE_URL"), async (admin) => {
       await admin.query(
         `CREATE ROLE ${OWNER} LOGIN PASSWORD '${OWNER_PASSWORD}' NOSUPERUSER NOCREATEDB NOCREATEROLE`,
       );
@@ -77,7 +78,7 @@ describe.skipIf(
       ),
     };
     await withClient(database.url, async (admin) => {
-      await admin.query(`ALTER DATABASE ${database!.name} OWNER TO ${OWNER}`);
+      await admin.query(`ALTER DATABASE ${must(database, "database").name} OWNER TO ${OWNER}`);
       for (const extension of ["pg_stat_statements", "pg_trgm", "pgcrypto"]) {
         await admin.query(`CREATE EXTENSION IF NOT EXISTS ${extension}`);
       }
@@ -92,7 +93,7 @@ describe.skipIf(
 
   afterAll(async () => {
     await database?.drop();
-    await withClient(process.env.TEST_DATABASE_URL!, async (admin) => {
+    await withClient(must(process.env.TEST_DATABASE_URL, "process.env.TEST_DATABASE_URL"), async (admin) => {
       await admin.query(`DROP ROLE IF EXISTS ${APP}`);
       await admin.query(`DROP ROLE IF EXISTS ${OWNER}`);
     });
@@ -105,7 +106,7 @@ describe.skipIf(
       ),
     );
     // A stray direct grant the bootstrap must still remove.
-    await withClient(database!.url, (admin) =>
+    await withClient(must(database, "database").url, (admin) =>
       admin.query(`GRANT SELECT ON public.transactions TO ${EXECUTOR}`),
     );
 
@@ -119,7 +120,7 @@ describe.skipIf(
 
     expect(warnings).toEqual([]);
     expect(result).toEqual({ status: "exists" });
-    const grants = await withClient(database!.url, async (admin) =>
+    const grants = await withClient(must(database, "database").url, async (admin) =>
       (
         await admin.query(
           `SELECT table_schema || '.' || table_name AS relation

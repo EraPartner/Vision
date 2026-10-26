@@ -6,6 +6,7 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.ts";
+import { must } from "./helpers/must.ts";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
@@ -21,7 +22,7 @@ describeDb("ADR-090 transaction schema retirement", () => {
   });
 
   it("removes the retired link and narrows transfer_source", async () => {
-    const pool = getTestPool()!;
+    const pool = must(getTestPool(), "getTestPool()");
     const column = await pool.query(
       `SELECT 1
          FROM information_schema.columns

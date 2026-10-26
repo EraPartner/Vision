@@ -47,6 +47,7 @@ const buildHistory = ({ days = 400 } = {}) => {
 // is deliberately NOT the UTC calendar day (they differ between local
 // midnight and 01:00/02:00 Brussels).
 import { todayAppDateString, addDaysYmd } from "../../src/lib/timezone.ts";
+import { must } from "../helpers/must.ts";
 const todayIso = () => todayAppDateString();
 const isoOffsetFromToday = (offsetDays: number) =>
   addDaysYmd(todayAppDateString(), offsetDays);
@@ -92,9 +93,9 @@ describe("computeCashflowForecastRolling", () => {
     })) as RollingEnvelope;
 
     expect(env.data.actual).toHaveLength(61);
-    expect(env.data.actual[0]!.date).toBe(isoOffsetFromToday(-30));
-    expect(env.data.actual[30]!.date).toBe(todayIso());
-    expect(env.data.actual[60]!.date).toBe(isoOffsetFromToday(30));
+    expect(must(env.data.actual[0], "env.data.actual[0]").date).toBe(isoOffsetFromToday(-30));
+    expect(must(env.data.actual[30], "env.data.actual[30]").date).toBe(todayIso());
+    expect(must(env.data.actual[60], "env.data.actual[60]").date).toBe(isoOffsetFromToday(30));
     expect(env.data.actual.slice(0, 31).every((r) => r.net !== null)).toBe(
       true,
     );
@@ -123,7 +124,7 @@ describe("computeCashflowForecastRolling", () => {
       userId: "u1",
     })) as RollingEnvelope;
     const first = env.data.actual[0];
-    expect(first!.cumulative).toBe(first!.net);
+    expect(must(first, "first").cumulative).toBe(must(first, "first").net);
   });
 
   it("actual entries past today have null net + cumulative", async () => {
@@ -159,7 +160,7 @@ describe("computeCashflowForecastRolling", () => {
     })) as RollingEnvelope;
     const aMc = a.data.methods.find((m) => m.id === "monte_carlo_parametric");
     const bMc = b.data.methods.find((m) => m.id === "monte_carlo_parametric");
-    expect(aMc!.bands).toEqual(bMc!.bands);
+    expect(must(aMc, "aMc").bands).toEqual(must(bMc, "bMc").bands);
   });
 
   it("different daysBack/daysForward changes seed → different MC bands", async () => {
@@ -180,7 +181,7 @@ describe("computeCashflowForecastRolling", () => {
     const aMc = a.data.methods.find((m) => m.id === "monte_carlo_parametric");
     const bMc = b.data.methods.find((m) => m.id === "monte_carlo_parametric");
     // p25 series will differ in length and values
-    expect(aMc!.bands!.p25!.length).not.toBe(bMc!.bands!.p25!.length);
+    expect(must(must(must(aMc, "aMc").bands, "aMc!.bands").p25, "aMc!.bands!.p25").length).not.toBe(must(must(must(bMc, "bMc").bands, "bMc!.bands").p25, "bMc!.bands!.p25").length);
   });
 
   it("include_planned=false leaves cumulative untouched by future planned", async () => {
@@ -205,9 +206,9 @@ describe("computeCashflowForecastRolling", () => {
     );
     const withMethod = withp.data.methods.find((m) => m.id === "simple_avg");
     const lastWithout =
-      withoutMethod!.cumulative[withoutMethod!.cumulative.length - 1]!.value;
+      must(must(withoutMethod, "withoutMethod").cumulative[must(withoutMethod, "withoutMethod").cumulative.length - 1], "withoutMethod!.cumulative[withoutMethod!.cumulative.lengt...").value;
     const lastWith =
-      withMethod!.cumulative[withMethod!.cumulative.length - 1]!.value;
+      must(must(withMethod, "withMethod").cumulative[must(withMethod, "withMethod").cumulative.length - 1], "withMethod!.cumulative[withMethod!.cumulative.length - 1]").value;
     // Mock plants a -200 planned at offset 5 inside the 10-day forecast window.
     expect(Math.round(lastWith - lastWithout)).toBe(-200);
   });
@@ -223,16 +224,16 @@ describe("computeCashflowForecastRolling", () => {
       userId: "u1",
     })) as RollingEnvelope;
     const method = env.data.methods.find((m) => m.id === "simple_avg");
-    const scheduledDay = method!.cumulative.find(
+    const scheduledDay = must(method, "method").cumulative.find(
       (point) => point.date === isoOffsetFromToday(3),
     );
-    const previousDay = method!.cumulative.find(
+    const previousDay = must(method, "method").cumulative.find(
       (point) => point.date === isoOffsetFromToday(2),
     );
-    const dailyForecast = method!.daily.find(
+    const dailyForecast = must(method, "method").daily.find(
       (point) => point.date === isoOffsetFromToday(3),
     )?.value;
 
-    expect(scheduledDay!.value - previousDay!.value - dailyForecast!).toBe(-75);
+    expect(must(scheduledDay, "scheduledDay").value - must(previousDay, "previousDay").value - must(dailyForecast, "dailyForecast")).toBe(-75);
   });
 });

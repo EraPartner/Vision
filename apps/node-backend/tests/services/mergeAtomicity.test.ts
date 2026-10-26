@@ -22,6 +22,7 @@ import {
   asRecipientId,
   asTransactionId,
 } from "@vision/types/brands";
+import { must } from "../helpers/must.ts";
 
 /**
  * Load the real connection module against a mocked pg pool, so `withTransaction`
@@ -328,7 +329,7 @@ describe("transfer mark atomicity (ADR-083)", () => {
     );
     expect(manualMarks).toHaveLength(2); // first succeeded, second threw
     // Leg 10 marked against peer 20.
-    expect(manualMarks[0]![1][3]).toBe(10);
-    expect(manualMarks[0]![1][1]).toBe(20);
+    expect(must(manualMarks[0], "manualMarks[0]")[1][3]).toBe(10);
+    expect(must(manualMarks[0], "manualMarks[0]")[1][1]).toBe(20);
   });
 });

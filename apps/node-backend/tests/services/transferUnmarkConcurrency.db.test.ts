@@ -16,6 +16,7 @@ import { transactionRepository } from "../../src/repositories/transactionReposit
 import {
   asTransactionId,
 } from "@vision/types/brands";
+import { must } from "../helpers/must.ts";
 
 // Synthetic disposable TEST_DATABASE_URL only; never the native personal stack.
 describe.skipIf(!hasTestDatabase())(
@@ -28,24 +29,24 @@ describe.skipIf(!hasTestDatabase())(
       await acquireDbSuiteLock();
       const name = `unmark-recipient-${crypto.randomUUID()}`;
       recipientId = (
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           "INSERT INTO recipients(name,normalized_name) VALUES ($1,$1) RETURNING id",
           [name],
         )
       ).rows[0].id as number;
     }, 180_000);
     afterEach(async () => {
-      await getTestPool()!.query(
+      await must(getTestPool(), "getTestPool()").query(
         "DELETE FROM transactions WHERE account_id = ANY($1::int[])",
         [accounts],
       );
-      await getTestPool()!.query(
+      await must(getTestPool(), "getTestPool()").query(
         "DELETE FROM accounts WHERE id = ANY($1::int[])",
         [accounts.splice(0)],
       );
     });
     afterAll(async () => {
-      await getTestPool()!.query("DELETE FROM recipients WHERE id = $1", [
+      await must(getTestPool(), "getTestPool()").query("DELETE FROM recipients WHERE id = $1", [
         recipientId,
       ]);
       await releaseDbSuiteLock();
@@ -53,7 +54,7 @@ describe.skipIf(!hasTestDatabase())(
       await closePool();
     });
     it("locks both endpoints in one order and returns a retry conflict for stale discovery", async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       for (let index = 0; index < 2; index++) {
         const result = await pool.query(
           "INSERT INTO accounts (name) VALUES ($1) RETURNING id",
@@ -116,7 +117,7 @@ describe.skipIf(!hasTestDatabase())(
       ]);
     }, 15_000);
     it("preserves a valid manual repair committed while invalid-pair cleanup waits", async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       for (let index = 0; index < 2; index++) {
         const result = await pool.query("INSERT INTO accounts (name) VALUES ($1) RETURNING id", [`cleanup-${crypto.randomUUID()}`]);
         accounts.push(result.rows[0].id as number);
@@ -161,7 +162,7 @@ describe.skipIf(!hasTestDatabase())(
       ]);
     }, 15_000);
     it("serializes crossed repairs by locking all four affected endpoints before release", async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       for (let index = 0; index < 4; index++) {
         const result = await pool.query(
           "INSERT INTO accounts (name) VALUES ($1) RETURNING id",

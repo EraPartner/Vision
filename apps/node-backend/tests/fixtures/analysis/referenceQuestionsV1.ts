@@ -17,6 +17,7 @@ import type {
   AnalysisWorkspace,
 } from "@vision/types/analysis";
 import type { CostBasisTxnLike } from "@vision/shared-utils/portfolio";
+import { must } from "../../helpers/must.ts";
 
 /** One acceptance question, before it is expanded into a definition and a result. */
 interface ReferenceCase {
@@ -731,7 +732,7 @@ function makeDefinition(item: ReferenceCase): AnalysisDefinition {
         dialect: "postgresql",
         text: customSql,
         datasetIds: item.datasets,
-        parameterBindings: item.sqlParameterIds!.map((parameterId) => {
+        parameterBindings: must(item.sqlParameterIds, "item.sqlParameterIds").map((parameterId) => {
           const start = customSql.indexOf(`:${parameterId}`);
           return {
             parameterId,
@@ -844,11 +845,11 @@ function makeResult(
       kind: calculation.kind,
       version:
         calculation.kind === "metric"
-          ? calculation.metricVersion!
+          ? must(calculation.metricVersion, "calculation.metricVersion")
           : calculation.languageVersion,
       type: calculation.resultType,
       ...(calculation.unit ? { unit: calculation.unit } : {}),
-      value: item.calculationValues![calculation.id]!,
+      value: must(must(item.calculationValues, "item.calculationValues")[calculation.id], "item.calculationValues![calculation.id]"),
     })),
     coverage: {
       status: partial ? "partial" : "complete",
@@ -863,7 +864,7 @@ function makeResult(
             {
               code: "incomplete-coverage",
               message: "Missing data remains explicit and is not renormalized",
-              affectedColumns: [item.columns.at(-1)!.id],
+              affectedColumns: [must(item.columns.at(-1), "item.columns.at(-1)").id],
             },
           ]
         : [],
@@ -873,7 +874,7 @@ function makeResult(
       rowGrain: {
         id: "fixture-row",
         description: "Acceptance-question result grain",
-        keys: [item.columns[0]!.id],
+        keys: [must(item.columns[0], "item.columns[0]").id],
       },
       columns: item.columns,
       rows: item.rows,
@@ -904,7 +905,7 @@ export const ANALYSIS_REFERENCE_QUESTIONS_V1: AnalysisReferenceQuestion[] =
     const visualDefinition: AnalysisDefinition = {
       ...structuredClone(definition),
       definitionVersion: 2,
-      source: structuredClone(sqlSource.visualOrigin!),
+      source: structuredClone(must(sqlSource.visualOrigin, "sqlSource.visualOrigin")),
     };
     const visualResult: CompletedResult = {
       ...structuredClone(result),

@@ -33,6 +33,7 @@ import { getPortfolioSummary } from "../../src/services/portfolio/portfolioSumma
 import { listLatestStoredRates } from "../../src/services/currency/currencyConversionService.ts";
 import router from "../../src/routes/belgianPortfolioTax.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const api = routeAgent(router, { mountPath: "/api/belgian-tax" });
 const path = "/api/belgian-tax/portfolio-dashboard";
 const live = defaultHousehold({
@@ -126,7 +127,7 @@ const txnRows = [
 ];
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(settingsService.getAllWithBaselines).mockResolvedValue({
+  vi.mocked(settingsService).getAllWithBaselines.mockResolvedValue({
     settings,
     expected: {
       portfolio_tax_adjustments_v1: {
@@ -139,7 +140,7 @@ beforeEach(() => {
       },
     },
   });
-  vi.mocked(investmentRepository.getAllWithCount).mockResolvedValue({
+  vi.mocked(investmentRepository).getAllWithCount.mockResolvedValue({
     rows,
     total: 502,
   } as unknown as Metadata);
@@ -259,7 +260,7 @@ describe("Portfolio Tax authoritative dashboard", () => {
       realizedGain: 777,
       currency: "EUR",
     });
-    expect(investmentRepository.getAllWithCount).toHaveBeenCalledWith({
+    expect(mockOf(investmentRepository, "getAllWithCount")).toHaveBeenCalledWith({
       limit: 500,
       offset: 0,
       active: false,
@@ -322,13 +323,13 @@ describe("Portfolio Tax authoritative dashboard", () => {
     );
   });
   it("returns empty holdings success without inventing a profile", async () => {
-    vi.mocked(settingsService.getAllWithBaselines).mockResolvedValue({
+    vi.mocked(settingsService).getAllWithBaselines.mockResolvedValue({
       settings: {
         belgian_tax_household_v2: defaultHousehold(DEFAULT_BELGIAN_TAX_PROFILE),
       },
       expected: {},
     });
-    vi.mocked(investmentRepository.getAllWithCount).mockResolvedValue({
+    vi.mocked(investmentRepository).getAllWithCount.mockResolvedValue({
       rows: [],
       total: 0,
     });
@@ -369,7 +370,7 @@ describe("Portfolio Tax authoritative dashboard", () => {
     expect((await api.get(path)).status).toBe(500);
   });
   it("rejects malformed frozen PIT instead of replacing filed numbers", async () => {
-    vi.mocked(settingsService.getAllWithBaselines).mockResolvedValue({
+    vi.mocked(settingsService).getAllWithBaselines.mockResolvedValue({
       settings: {
         ...settings,
         belgian_tax_profile_snapshot_meta_v1: {

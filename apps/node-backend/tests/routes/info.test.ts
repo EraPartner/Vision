@@ -123,6 +123,8 @@ import {
   invalidatePortfolioCaches,
   invalidateStatisticsCaches,
 } from "../../src/services/info/cache.ts";
+import { must } from "../helpers/must.ts";
+import { mockOf } from "../helpers/mockOf.ts";
 const infoRepository = vi.mocked(rawInfoRepository);
 
 /** Stand-in for a full result: the route reads only the fields given. */
@@ -582,7 +584,7 @@ describe("Info Routes", () => {
 
       const res = await api.get(`${BASE}/recurring-patterns`).expect(200);
 
-      expect(logger.error).toHaveBeenCalledWith(
+      expect(mockOf(logger, "error")).toHaveBeenCalledWith(
         "Error detecting recurring patterns; returning empty result",
         expect.objectContaining({ error: "detector failed" }),
       );
@@ -688,7 +690,7 @@ describe("Info Routes", () => {
         await Promise.resolve();
         await Promise.resolve();
 
-        expect(logger.warn).toHaveBeenCalledWith(
+        expect(mockOf(logger, "warn")).toHaveBeenCalledWith(
           "Background exchange rate refresh failed",
           expect.objectContaining({ error: "refresh failed" }),
         );
@@ -907,7 +909,7 @@ describe("Info Routes", () => {
           .query({ currency: "JPY" })
           .expect(200);
 
-        expect(infoRepository.getNetWorthFromSnapshots).toHaveBeenCalledTimes(
+        expect(mockOf(infoRepository, "getNetWorthFromSnapshots")).toHaveBeenCalledTimes(
           1,
         );
         expect(mockGetSnapshots).toHaveBeenCalledTimes(1);
@@ -937,7 +939,7 @@ describe("Info Routes", () => {
 
         await warmInfoCaches("CAD");
 
-        expect(logger.error).toHaveBeenCalledWith(
+        expect(mockOf(logger, "error")).toHaveBeenCalledWith(
           "Failed to warm net-worth cache",
           expect.objectContaining({ error: "net-worth warm failed" }),
         );
@@ -967,7 +969,7 @@ describe("Info Routes", () => {
 
         await warmInfoCaches("AUD");
 
-        expect(logger.error).toHaveBeenCalledWith(
+        expect(mockOf(logger, "error")).toHaveBeenCalledWith(
           "Failed to warm portfolio-performance cache",
           expect.objectContaining({ error: "portfolio warm failed" }),
         );
@@ -1199,7 +1201,7 @@ describe("Info Routes", () => {
           .query({ currency: "USD", from: "", to: "" })
           .expect(200);
         const [startDate, endDate, currency] =
-          mockGetBrokerSnapshots.mock.calls[0]!;
+          must(mockGetBrokerSnapshots.mock.calls[0], "mockGetBrokerSnapshots.mock.calls[0]");
         expect(startDate).toBe("2000-01-01");
         expect(endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
         expect(currency).toBe("USD");
@@ -1265,7 +1267,7 @@ describe("Info Routes", () => {
       expect(res.body).toEqual(
         validationError("account_id must be a positive integer"),
       );
-      expect(infoRepository.getTransactionCount).not.toHaveBeenCalled();
+      expect(mockOf(infoRepository, "getTransactionCount")).not.toHaveBeenCalled();
     });
 
     it("rejects a malformed year on /deduction-candidates", async () => {

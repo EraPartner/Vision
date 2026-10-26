@@ -21,6 +21,7 @@ import {
 } from "../src/services/aiChat/tools/portfolio.ts";
 import { getProjectedBalance } from "../src/services/aiChat/tools/planned.ts";
 import { loose, partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 const plannedTransactionRepository = vi.mocked(rawPlannedTransactionRepository);
 const infoRepository = vi.mocked(rawInfoRepository);
@@ -123,7 +124,7 @@ describe("getUnrealizedGains", () => {
       }),
     );
     const r = await getUnrealizedGains.run({});
-    expect(r.data[0]!.gainPercent).toBeNull();
+    expect(must(r.data[0], "r.data[0]").gainPercent).toBeNull();
   });
 
   it("reports a zero canonical basis without inventing a gain percentage", async () => {
@@ -221,7 +222,7 @@ describe("getUnrealizedGains", () => {
       }),
     );
     const r = await getUnrealizedGains.run({});
-    expect(r.data[0]!.id).toBe(2); // gain 200 > 50
+    expect(must(r.data[0], "r.data[0]").id).toBe(2); // gain 200 > 50
   });
 });
 
@@ -299,7 +300,7 @@ describe("getBestWorstPerformers", () => {
       from: "2025-01-01",
       to: "2025-12-31",
     });
-    expect(r.data[0]!.netIncome).toBe(50);
+    expect(must(r.data[0], "r.data[0]").netIncome).toBe(50);
   });
 
   it("does not double-list same investment as best and worst", async () => {
@@ -328,7 +329,7 @@ describe("getBestWorstPerformers", () => {
       topN: 5,
     });
     expect(r.data).toHaveLength(1);
-    expect(r.data[0]!.rank).toBe("best");
+    expect(must(r.data[0], "r.data[0]").rank).toBe("best");
   });
 
   it("rejects unknown assetClass", async () => {

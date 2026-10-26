@@ -43,6 +43,7 @@ import { closePool } from "../../src/database/connection.ts";
 import {
   asTransactionId,
 } from "@vision/types/brands";
+import { must } from "../helpers/must.ts";
 
 /** Fixed reference date — the suite asserts on ±windowDays, never on "today". */
 const DAY0 = "2024-03-10";
@@ -57,7 +58,7 @@ let recipientId: number;
 const accountIds: Record<string, number> = {};
 
 async function seedFixtures() {
-  const pool = getTestPool()!;
+  const pool = must(getTestPool(), "getTestPool()");
   const rec = await pool.query(
     `INSERT INTO recipients (name, normalized_name) VALUES ('Transfer Fixture', 'transfer fixture')
      RETURNING id`,
@@ -94,7 +95,7 @@ async function insertTxn({
   peerId = null,
   source = null,
 }: TxnSpec): Promise<number> {
-  const pool = getTestPool()!;
+  const pool = must(getTestPool(), "getTestPool()");
   const { rows } = await pool.query(
     `INSERT INTO transactions
        (date, amount, currency, recipient_id, account_id, is_active, is_transfer,
@@ -118,7 +119,7 @@ async function insertTxn({
 
 /** Read back the transfer-relevant columns of one row. */
 async function readTxn(id: number) {
-  const { rows } = await getTestPool()!.query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query(
     `SELECT id, is_transfer, transfer_peer_id, transfer_source
        FROM transactions WHERE id = $1`,
     [id],
@@ -155,7 +156,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       // Targeted DELETEs, deliberately NOT `TRUNCATE ... CASCADE`: the cascade off
       // `transactions` reaches a dozen unrelated tables (transaction_splits,
       // planned_transaction_tags, portfolio_import_staging_rows, ...) and costs
@@ -324,7 +325,7 @@ describe.skipIf(!hasTestDatabase())(
         await reconcileTransfers();
 
         // Edit one leg's amount: the pair is no longer equal-and-opposite.
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           "UPDATE transactions SET amount = $1 WHERE id = $2",
           [-999, outId],
         );
@@ -347,7 +348,7 @@ describe.skipIf(!hasTestDatabase())(
 
         // The FK is ON DELETE SET NULL, so deleting the peer leaves a phantom
         // one-way transfer that only releaseOrphanedTransfers can clean up.
-        await getTestPool()!.query("DELETE FROM transactions WHERE id = $1", [
+        await must(getTestPool(), "getTestPool()").query("DELETE FROM transactions WHERE id = $1", [
           inId,
         ]);
         expect(await readTxn(outId)).toMatchObject({
@@ -417,7 +418,7 @@ describe.skipIf(!hasTestDatabase())(
       async (change) => {
         await seedFixtures();
         const { outId, inId } = await seedMatchablePair();
-        const gate = await getTestPool()!.connect();
+        const gate = await must(getTestPool(), "getTestPool()").connect();
         let work: Promise<unknown> | undefined;
         try {
           await gate.query("BEGIN");
@@ -431,7 +432,7 @@ describe.skipIf(!hasTestDatabase())(
           let waiting = false;
           while (Date.now() < deadline) {
             waiting = (
-              await getTestPool()!.query(
+              await must(getTestPool(), "getTestPool()").query(
                 "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query ~* 'from \"?transactions\"?.*for update') AS waiting",
               )
             ).rows[0].waiting;
@@ -501,9 +502,9 @@ describe.skipIf(!hasTestDatabase())(
         const { items: suggestions } = await getTransferSuggestions();
 
         expect(suggestions).toHaveLength(1);
-        expect(suggestions[0]!.outflow!.id).toBe(outId);
+        expect(must(must(suggestions[0], "suggestions[0]").outflow, "suggestions[0]!.outflow").id).toBe(outId);
         expect(
-          suggestions[0]!.candidates.map((c) => c!.id).sort((a, b) => a - b),
+          must(suggestions[0], "suggestions[0]").candidates.map((c) => must(c, "c").id).sort((a, b) => a - b),
         ).toEqual([inA, inB].sort((a, b) => a - b));
       });
 
@@ -526,7 +527,7 @@ describe.skipIf(!hasTestDatabase())(
           ).toBeLessThanOrEqual(7);
           for (const item of page.items)
             for (const candidate of item.candidates) {
-              edges.push(`${item.outflow!.id}:${candidate!.id}`);
+              edges.push(`${must(item.outflow, "item.outflow").id}:${must(candidate, "candidate").id}`);
             }
           cursor = page.nextCursor ?? undefined;
         } while (cursor);
@@ -582,13 +583,13 @@ describe.skipIf(!hasTestDatabase())(
           await seedFixtures();
           const { outId, inId } = await seedMatchablePair();
           await markTransfer(asTransactionId(outId), asTransactionId(inId));
-          const update = {
+          const update = must({
             inactive: "is_active = false",
             "same-account": `account_id = ${accountIds.Checking}`,
             "same-sign": "amount = -50",
             zero: "amount = 0",
-          }[kind]!;
-          await getTestPool()!.query(
+          }[kind], "{ inactive: \"is_active = false\", \"same-account\": `account...");
+          await must(getTestPool(), "getTestPool()").query(
             `UPDATE transactions SET ${update} WHERE id = $1`,
             [inId],
           );
@@ -714,7 +715,7 @@ describe.skipIf(!hasTestDatabase())(
             transfer_source: null,
           });
         }
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(getTestPool(), "getTestPool()").query(
           "SELECT txn_a_id, txn_b_id FROM transfer_dismissals",
         );
         expect(rows).toEqual([
@@ -751,7 +752,7 @@ describe.skipIf(!hasTestDatabase())(
           date: daysAfter(2),
         });
         // Remove B from the pool so A↔C is the only unambiguous match.
-        await getTestPool()!.query(
+        await must(getTestPool(), "getTestPool()").query(
           "UPDATE transactions SET is_active = false WHERE id = $1",
           [inId],
         );
@@ -792,7 +793,7 @@ describe.skipIf(!hasTestDatabase())(
           pairsCreated: 1,
         });
 
-        const { rows } = await getTestPool()!.query(
+        const { rows } = await must(getTestPool(), "getTestPool()").query(
           `SELECT 1 FROM user_settings WHERE key = 'transfers_backfilled'`,
         );
         expect(rows).toHaveLength(1);

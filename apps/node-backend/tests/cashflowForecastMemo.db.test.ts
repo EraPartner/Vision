@@ -14,6 +14,7 @@ import {
 import { closePool } from "../src/database/connection.ts";
 import { computeCashflowForecast } from "../src/services/calculations/forecast/index.ts";
 import { todayAppDateString } from "../src/lib/timezone.ts";
+import { must } from "./helpers/must.ts";
 
 const USER = `forecast-memo-${process.pid}`;
 const DASHBOARD = {
@@ -33,7 +34,7 @@ describe.skipIf(!hasTestDatabase())(
       await acquireDbSuiteLock();
     }, 180_000);
     afterEach(async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       await pool.query(
         "DELETE FROM transactions WHERE account_id = ANY($1::int[])",
         [accounts],
@@ -56,7 +57,7 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     it("recomputes after a ledger change and matches a fresh compute", async () => {
-      const pool = getTestPool()!;
+      const pool = must(getTestPool(), "getTestPool()");
       const accountId = (
         await pool.query("INSERT INTO accounts (name) VALUES ($1) RETURNING id", [
           `forecast-memo-${crypto.randomUUID()}`,

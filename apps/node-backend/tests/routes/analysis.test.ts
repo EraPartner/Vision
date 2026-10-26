@@ -56,6 +56,7 @@ import {
 } from "../../src/services/aiAnalysisProposalService.ts";
 import { executeAnalysisPivot } from "../../src/services/analysisPivotService.ts";
 import { UpstreamError } from "../../src/middleware/errorHandler.ts";
+import { must } from "../helpers/must.ts";
 
 type SqlResult = Awaited<ReturnType<typeof executeAnalysisSql>>;
 
@@ -444,7 +445,7 @@ describe("Analysis routes request validation", () => {
           requestId: REQUEST_ID,
         })
         .expect(200);
-      const request = vi.mocked(executeAnalysisSql).mock.calls[0]![0];
+      const request = must(vi.mocked(executeAnalysisSql).mock.calls[0], "vi.mocked(executeAnalysisSql).mock.calls[0]")[0];
       expect(request.limit).toBe(100);
       expect(request.values).toContain("2026-09-01");
     });

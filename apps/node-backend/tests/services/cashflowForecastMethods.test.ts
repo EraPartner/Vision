@@ -42,6 +42,7 @@ import {
   monthKey,
   orderedMonthKeys,
 } from "../../src/services/calculations/forecast/months.ts";
+import { must } from "../helpers/must.ts";
 
 /** Category fixtures here omit `path_name`, which reconciliation never reads. */
 type CategoryForecastInput = Parameters<typeof reconcileCategoryForecasts>[0];
@@ -177,8 +178,8 @@ describe("simpleAverage", () => {
       forecastDates: ["2026-04-01", "2026-04-02"],
     });
     expect(out).toHaveLength(2);
-    expect(out[0]!.value).toBe(3);
-    expect(out[1]!.value).toBe(10);
+    expect(must(out[0], "out[0]").value).toBe(3);
+    expect(must(out[1], "out[1]").value).toBe(10);
   });
 
   it("falls back to 0 for missing DOM", () => {
@@ -186,7 +187,7 @@ describe("simpleAverage", () => {
       history: [{ date: "2024-01-01", net: 5 }],
       forecastDates: ["2026-04-15"],
     });
-    expect(out[0]!.value).toBe(0);
+    expect(must(out[0], "out[0]").value).toBe(0);
   });
 });
 
@@ -198,7 +199,7 @@ describe("forecast month helpers", () => {
       { date: "2025-03-19" },
       { date: "2025-01-02" },
     ];
-    expect(monthKey(history[0]!.date)).toBe("2025-03");
+    expect(monthKey(must(history[0], "history[0]").date)).toBe("2025-03");
     expect(orderedMonthKeys(history)).toEqual([
       "2024-12",
       "2025-01",
@@ -218,7 +219,7 @@ describe("weightedAverage", () => {
       forecastDates: ["2026-04-01"],
     });
     // w: month0=1, month1=2. (1*10 + 2*20) / 3 = 50/3 ≈ 16.67
-    expect(out[0]!.value).toBeCloseTo(50 / 3, 6);
+    expect(must(out[0], "out[0]").value).toBeCloseTo(50 / 3, 6);
   });
 });
 
@@ -230,9 +231,9 @@ describe("ewma", () => {
       { date: "2024-03-01", net: 30 },
     ];
     const out = ewma.forecast({ history: hist, forecastDates: ["2026-04-01"] });
-    expect(Number.isFinite(out[0]!.value)).toBe(true);
-    expect(out[0]!.value).toBeGreaterThan(10);
-    expect(out[0]!.value).toBeLessThan(30);
+    expect(Number.isFinite(must(out[0], "out[0]").value)).toBe(true);
+    expect(must(out[0], "out[0]").value).toBeGreaterThan(10);
+    expect(must(out[0], "out[0]").value).toBeLessThan(30);
   });
 });
 
@@ -263,7 +264,7 @@ describe("prophetLite", () => {
       history: [{ date: "2024-01-01", net: 1 }],
       forecastDates: ["2026-04-25"],
     });
-    expect(out[0]!.value).toBe(0);
+    expect(must(out[0], "out[0]").value).toBe(0);
   });
 
   it("produces finite values on adequate history", () => {
@@ -306,17 +307,17 @@ describe("monteCarloParametric", () => {
       seed: "s",
     });
     for (let i = 0; i < dates.length; i++) {
-      expect(out.bands.p10![i]!.value).toBeLessThanOrEqual(
-        out.bands.p50![i]!.value,
+      expect(must(must(out.bands.p10, "out.bands.p10")[i], "out.bands.p10![i]").value).toBeLessThanOrEqual(
+        must(must(out.bands.p50, "out.bands.p50")[i], "out.bands.p50![i]").value,
       );
-      expect(out.bands.p50![i]!.value).toBeLessThanOrEqual(
-        out.bands.p90![i]!.value,
+      expect(must(must(out.bands.p50, "out.bands.p50")[i], "out.bands.p50![i]").value).toBeLessThanOrEqual(
+        must(must(out.bands.p90, "out.bands.p90")[i], "out.bands.p90![i]").value,
       );
-      expect(out.cumulative_bands.p10![i]!.value).toBeLessThanOrEqual(
-        out.cumulative_bands.p50![i]!.value,
+      expect(must(must(out.cumulative_bands.p10, "out.cumulative_bands.p10")[i], "out.cumulative_bands.p10![i]").value).toBeLessThanOrEqual(
+        must(must(out.cumulative_bands.p50, "out.cumulative_bands.p50")[i], "out.cumulative_bands.p50![i]").value,
       );
-      expect(out.cumulative_bands.p50![i]!.value).toBeLessThanOrEqual(
-        out.cumulative_bands.p90![i]!.value,
+      expect(must(must(out.cumulative_bands.p50, "out.cumulative_bands.p50")[i], "out.cumulative_bands.p50![i]").value).toBeLessThanOrEqual(
+        must(must(out.cumulative_bands.p90, "out.cumulative_bands.p90")[i], "out.cumulative_bands.p90![i]").value,
       );
     }
   });
@@ -361,17 +362,17 @@ describe("monteCarloBlockBootstrap", () => {
       seed: "s",
     });
     for (let i = 0; i < dates.length; i++) {
-      expect(out.bands.p10![i]!.value).toBeLessThanOrEqual(
-        out.bands.p50![i]!.value,
+      expect(must(must(out.bands.p10, "out.bands.p10")[i], "out.bands.p10![i]").value).toBeLessThanOrEqual(
+        must(must(out.bands.p50, "out.bands.p50")[i], "out.bands.p50![i]").value,
       );
-      expect(out.bands.p50![i]!.value).toBeLessThanOrEqual(
-        out.bands.p90![i]!.value,
+      expect(must(must(out.bands.p50, "out.bands.p50")[i], "out.bands.p50![i]").value).toBeLessThanOrEqual(
+        must(must(out.bands.p90, "out.bands.p90")[i], "out.bands.p90![i]").value,
       );
-      expect(out.cumulative_bands.p10![i]!.value).toBeLessThanOrEqual(
-        out.cumulative_bands.p50![i]!.value,
+      expect(must(must(out.cumulative_bands.p10, "out.cumulative_bands.p10")[i], "out.cumulative_bands.p10![i]").value).toBeLessThanOrEqual(
+        must(must(out.cumulative_bands.p50, "out.cumulative_bands.p50")[i], "out.cumulative_bands.p50![i]").value,
       );
-      expect(out.cumulative_bands.p50![i]!.value).toBeLessThanOrEqual(
-        out.cumulative_bands.p90![i]!.value,
+      expect(must(must(out.cumulative_bands.p50, "out.cumulative_bands.p50")[i], "out.cumulative_bands.p50![i]").value).toBeLessThanOrEqual(
+        must(must(out.cumulative_bands.p90, "out.cumulative_bands.p90")[i], "out.cumulative_bands.p90![i]").value,
       );
     }
   });
@@ -404,10 +405,10 @@ describe("walkForwardBacktest", () => {
       windowMonths: 3,
     });
     expect(result).toHaveLength(1);
-    expect(result[0]!.aggregate.months).toBeGreaterThan(0);
-    expect(Number.isFinite(result[0]!.aggregate.mae)).toBe(true);
-    expect(Number.isFinite(result[0]!.aggregate.rmse)).toBe(true);
-    expect(Number.isFinite(result[0]!.aggregate.mape)).toBe(true);
+    expect(must(result[0], "result[0]").aggregate.months).toBeGreaterThan(0);
+    expect(Number.isFinite(must(result[0], "result[0]").aggregate.mae)).toBe(true);
+    expect(Number.isFinite(must(result[0], "result[0]").aggregate.rmse)).toBe(true);
+    expect(Number.isFinite(must(result[0], "result[0]").aggregate.mape)).toBe(true);
   });
 
   it("short-circuits methods with no training history", () => {
@@ -424,7 +425,7 @@ describe("walkForwardBacktest", () => {
       asOfMonth: "2025-02",
       windowMonths: 2,
     });
-    expect(result[0]!.aggregate).toEqual({
+    expect(must(result[0], "result[0]").aggregate).toEqual({
       mae: 0,
       rmse: 0,
       mape: null,
@@ -439,7 +440,7 @@ describe("ensemble", () => {
   const makeOutputs = (ids: string[], values: number[]) =>
     ids.map((id, i) => ({
       id,
-      series: dates.map((date) => ({ date, value: values[i]! })),
+      series: dates.map((date) => ({ date, value: must(values[i], "values[i]") })),
     }));
 
   it("computeWeights returns empty map when no accuracy rows", () => {
@@ -463,7 +464,7 @@ describe("ensemble", () => {
       { methodId: "ewma", rmse: 1 },
     ];
     const w = ensemble.computeWeights(rows, ["simple_avg", "ewma"]);
-    expect(w.get("ewma")).toBeGreaterThan(w.get("simple_avg")!);
+    expect(w.get("ewma")).toBeGreaterThan(must(w.get("simple_avg"), "w.get(\"simple_avg\")"));
   });
 
   it("computeWeights (v2) trusts a low-RMSE method less when it has few backtest samples", () => {
@@ -484,7 +485,7 @@ describe("ensemble", () => {
     );
     // 'a' has the better RMSE in both, but with only 2 sample days its low RMSE
     // is shrunk toward the mean, so it earns less weight than when well-sampled.
-    expect(manySamples.get("a")).toBeGreaterThan(fewSamples.get("a")!);
+    expect(manySamples.get("a")).toBeGreaterThan(must(fewSamples.get("a"), "fewSamples.get(\"a\")"));
   });
 
   it("computeWeights (v2) blends toward uniform so the best method never takes all the weight", () => {
@@ -509,7 +510,7 @@ describe("ensemble", () => {
       weights: new Map(),
     });
     expect(result).toHaveLength(3);
-    expect(result[0]!.value).toBeCloseTo(15, 5);
+    expect(must(result[0], "result[0]").value).toBeCloseTo(15, 5);
   });
 
   it("forecast applies explicit weights correctly", () => {
@@ -523,7 +524,7 @@ describe("ensemble", () => {
       methodOutputs: outputs,
       weights,
     });
-    expect(result[0]!.value).toBeCloseTo(75, 5);
+    expect(must(result[0], "result[0]").value).toBeCloseTo(75, 5);
   });
 
   it("forecast skips errored methods", () => {
@@ -540,7 +541,7 @@ describe("ensemble", () => {
       methodOutputs: outputs,
       weights: new Map(),
     });
-    expect(result[0]!.value).toBeCloseTo(10, 5);
+    expect(must(result[0], "result[0]").value).toBeCloseTo(10, 5);
   });
 
   it("forecast returns zeros when all methods errored", () => {
@@ -556,7 +557,7 @@ describe("ensemble", () => {
       methodOutputs: outputs,
       weights: new Map(),
     });
-    expect(result[0]!.value).toBe(0);
+    expect(must(result[0], "result[0]").value).toBe(0);
   });
 
   it("id and label are stable", () => {
@@ -590,7 +591,7 @@ describe("accuracyStore", () => {
     });
     const latest = await getLatestAccuracyByMethod({ userId: "u1" });
     expect(latest).toHaveLength(1);
-    expect(latest[0]!.asOfMonth).toBe("2026-04");
+    expect(must(latest[0], "latest[0]").asOfMonth).toBe("2026-04");
   });
 
   it("returns history sorted newest-first", async () => {
@@ -660,15 +661,15 @@ describe("orchestrator computeCashflowForecast", () => {
     expect(ids).toContain("monte_carlo_block_bootstrap");
     expect(ids).toContain("ensemble_imse");
 
-    const mc = env.data.methods.find((m) => m.id === "monte_carlo_parametric")!;
+    const mc = must(env.data.methods.find((m) => m.id === "monte_carlo_parametric"), "env.data.methods.find((m) => m.id === \"monte_carlo_parame...");
     expect(mc.bands).toBeTruthy();
-    expect(mc.bands!.p10).toBeDefined();
-    expect(mc.bands!.p90).toBeDefined();
-    expect(mc.cumulative_bands!.p10).toHaveLength(mc.daily.length);
-    expect(mc.cumulative_bands!.p90).toHaveLength(mc.daily.length);
+    expect(must(mc.bands, "mc.bands").p10).toBeDefined();
+    expect(must(mc.bands, "mc.bands").p90).toBeDefined();
+    expect(must(mc.cumulative_bands, "mc.cumulative_bands").p10).toHaveLength(mc.daily.length);
+    expect(must(mc.cumulative_bands, "mc.cumulative_bands").p90).toHaveLength(mc.daily.length);
 
     expect(env.data.diagnostics).toBeTruthy();
-    expect(env.data.diagnostics!.backtest.length).toBeGreaterThan(0);
+    expect(must(env.data.diagnostics, "env.data.diagnostics").backtest.length).toBeGreaterThan(0);
   });
 
   it("ensemble_imse present in methods output", async () => {
@@ -697,7 +698,7 @@ describe("orchestrator computeCashflowForecast", () => {
     });
     const ens = env.data.methods.find((m) => m.id === "ensemble_imse");
     expect(ens).toBeDefined();
-    expect(ens!.error).toBeNull();
+    expect(must(ens, "ens").error).toBeNull();
   });
 
   it("skips diagnostics when includeBacktest=false", async () => {
@@ -765,12 +766,12 @@ describe("reconcileCategoryForecasts", () => {
     );
 
     // sum for '2026-04-26' = 5, ref = 10 → scale = 2
-    expect(result[0]!.series[0]!.value).toBeCloseTo(4); // 2 * 2
-    expect(result[1]!.series[0]!.value).toBeCloseTo(6); // 3 * 2
+    expect(must(must(result[0], "result[0]").series[0], "result[0]!.series[0]").value).toBeCloseTo(4); // 2 * 2
+    expect(must(must(result[1], "result[1]").series[0], "result[1]!.series[0]").value).toBeCloseTo(6); // 3 * 2
 
     // sum for '2026-04-27' = 10, ref = 20 → scale = 2
-    expect(result[0]!.series[1]!.value).toBeCloseTo(8); // 4 * 2
-    expect(result[1]!.series[1]!.value).toBeCloseTo(12); // 6 * 2
+    expect(must(must(result[0], "result[0]").series[1], "result[0]!.series[1]").value).toBeCloseTo(8); // 4 * 2
+    expect(must(must(result[1], "result[1]").series[1], "result[1]!.series[1]").value).toBeCloseTo(12); // 6 * 2
   });
 
   it("splits the residual equally when all category magnitudes are zero", () => {
@@ -787,7 +788,7 @@ describe("reconcileCategoryForecasts", () => {
       refByDate,
     );
     // totalAbs=0 → split diff (5) equally → the single category absorbs it so Σ===ref.
-    expect(result[0]!.series[0]!.value).toBe(5);
+    expect(must(must(result[0], "result[0]").series[0], "result[0]!.series[0]").value).toBe(5);
   });
 
   it("does not explode when mixed-sign categories nearly cancel", () => {
@@ -820,8 +821,8 @@ describe("reconcileCategoryForecasts", () => {
       ["2026-04-26"],
       refByDate,
     );
-    const inc = result[0]!.series[0]!.value;
-    const exp = result[1]!.series[0]!.value;
+    const inc = must(must(result[0], "result[0]").series[0], "result[0]!.series[0]").value;
+    const exp = must(must(result[1], "result[1]").series[0], "result[1]!.series[0]").value;
 
     expect(inc + exp).toBeCloseTo(200); // Σ === ref
     expect(Math.abs(inc - 3000)).toBeLessThanOrEqual(190); // |adjustment| ≤ |diff|
@@ -846,7 +847,7 @@ describe("reconcileCategoryForecasts", () => {
       ["2026-04-26"],
       refByDate,
     );
-    expect(result[0]!.cat).toEqual(cat);
+    expect(must(result[0], "result[0]").cat).toEqual(cat);
   });
 });
 
@@ -959,9 +960,9 @@ describe("buildCategoryBreakdown", () => {
       referenceDaily,
     });
     expect(result).toHaveLength(1);
-    expect(result[0]!.category_id).toBe(7);
-    expect(result[0]!.path_name).toBe("New:Branch:Name");
-    expect(result[0]!.actual[0]!.net).toBe(-5);
+    expect(must(result[0], "result[0]").category_id).toBe(7);
+    expect(must(result[0], "result[0]").path_name).toBe("New:Branch:Name");
+    expect(must(must(result[0], "result[0]").actual[0], "result[0]!.actual[0]").net).toBe(-5);
   });
 
   it("actual rows null after todayDay", () => {
@@ -975,10 +976,10 @@ describe("buildCategoryBreakdown", () => {
     });
     for (const item of result) {
       // days 1 and 2 have actuals, day 3 is future
-      expect(item.actual[0]!.net).not.toBeNull();
-      expect(item.actual[1]!.net).not.toBeNull();
-      expect(item.actual[2]!.net).toBeNull();
-      expect(item.actual[2]!.cumulative).toBeNull();
+      expect(must(item.actual[0], "item.actual[0]").net).not.toBeNull();
+      expect(must(item.actual[1], "item.actual[1]").net).not.toBeNull();
+      expect(must(item.actual[2], "item.actual[2]").net).toBeNull();
+      expect(must(item.actual[2], "item.actual[2]").cumulative).toBeNull();
     }
   });
 
@@ -993,7 +994,7 @@ describe("buildCategoryBreakdown", () => {
     });
     for (const item of result) {
       expect(item.forecast).toHaveLength(1);
-      expect(item.forecast[0]!.date).toBe("2026-04-03");
+      expect(must(item.forecast[0], "item.forecast[0]").date).toBe("2026-04-03");
     }
   });
 
@@ -1024,9 +1025,9 @@ describe("buildCategoryBreakdown", () => {
     });
     const income = result.find((r) => r.general === "Income");
     // actual day1=120, day2=50 → cum after day2=170
-    expect(income!.actual[1]!.cumulative).toBe(170);
+    expect(must(must(income, "income").actual[1], "income!.actual[1]").cumulative).toBe(170);
     // cumulative[2] should be > 170 (actual_cum + forecast)
-    expect(income!.cumulative[2]!.value).toBeGreaterThanOrEqual(170);
+    expect(must(must(income, "income").cumulative[2], "income!.cumulative[2]").value).toBeGreaterThanOrEqual(170);
   });
 
   it("adds scheduled category rows on their effective date", () => {
@@ -1057,8 +1058,8 @@ describe("buildCategoryBreakdown", () => {
       referenceDaily,
     }).find((r) => r.general === "Expense");
 
-    expect(expense!.cumulative[2]!.value).toBe(
-      withoutScheduled!.cumulative[2]!.value - 40,
+    expect(must(must(expense, "expense").cumulative[2], "expense!.cumulative[2]").value).toBe(
+      must(must(withoutScheduled, "withoutScheduled").cumulative[2], "withoutScheduled!.cumulative[2]").value - 40,
     );
   });
 
@@ -1076,7 +1077,7 @@ describe("buildCategoryBreakdown", () => {
     // with no history, raw forecast = 0 before reconciliation
     // after reconciliation with ref=70: sum=0 → scale=1 → stays 0
     for (const item of result) {
-      expect(Number.isFinite(item.forecast[0]!.value)).toBe(true);
+      expect(Number.isFinite(must(item.forecast[0], "item.forecast[0]").value)).toBe(true);
     }
   });
 
@@ -1089,8 +1090,8 @@ describe("buildCategoryBreakdown", () => {
       todayDay,
       referenceDaily,
     });
-    expect(result[0]!.general).toBe("Expense");
-    expect(result[1]!.general).toBe("Income");
+    expect(must(result[0], "result[0]").general).toBe("Expense");
+    expect(must(result[1], "result[1]").general).toBe("Income");
   });
 });
 

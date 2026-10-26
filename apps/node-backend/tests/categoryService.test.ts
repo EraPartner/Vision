@@ -10,6 +10,7 @@ vi.mock("../src/database/connection.ts", () =>
 import { query as rawQuery } from "../src/database/connection.ts";
 import type { PgQueryResult } from "../src/database/connection.ts";
 import { resolveCategoryIdByName } from "../src/services/categoryService.ts";
+import { must } from "./helpers/must.ts";
 
 const query = vi.mocked(rawQuery);
 
@@ -22,7 +23,7 @@ describe("resolveCategoryIdByName", () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ id: 12 }] }));
 
     await expect(resolveCategoryIdByName("Income:Dividends")).resolves.toBe(12);
-    expect(query.mock.calls[0]![1]).toContain("INCOME:DIVIDENDS");
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toContain("INCOME:DIVIDENDS");
   });
 
   it("resolves a depth-four path without splitting display text", async () => {
@@ -56,6 +57,6 @@ describe("resolveCategoryIdByName", () => {
       .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [{ id: 42 }] }));
 
     await expect(resolveCategoryIdByName("Food:Groceries")).resolves.toBe(42);
-    expect(query.mock.calls[1]![0]).toContain("category_merge_aliases");
+    expect(must(query.mock.calls[1], "query.mock.calls[1]")[0]).toContain("category_merge_aliases");
   });
 });

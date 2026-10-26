@@ -41,6 +41,7 @@ import {
   updatePattern,
 } from "../src/services/recipientPatternService.ts";
 import { resolveRecipientIdByName } from "../src/services/recipientService.ts";
+import { must } from "./helpers/must.ts";
 
 const pool = getTestPool();
 const SUFFIX = `RC${process.pid}`;
@@ -64,7 +65,7 @@ describe.skipIf(!hasTestDatabase())(
 
     afterAll(async () => {
       try {
-        const db = pool!;
+        const db = must(pool, "pool");
         await db.query("DELETE FROM transactions WHERE id = ANY($1)", [
           created.transactionIds,
         ]);
@@ -122,7 +123,7 @@ describe.skipIf(!hasTestDatabase())(
         description: "first",
       });
       expect(first.created).toBe(true);
-      const one = first.category!;
+      const one = must(first.category, "first.category");
       created.categoryIds.push(one.id);
       expect(one.category_name).toBe(`${general}:ONE`);
       expect(one.created_at).toBeInstanceOf(Date);
@@ -137,12 +138,12 @@ describe.skipIf(!hasTestDatabase())(
         general,
         detail: "TWO",
       });
-      created.categoryIds.push(second.category!.id);
+      created.categoryIds.push(must(second.category, "second.category").id);
 
       const listed = await categoryRepository.getAll({ general, active: true });
       expect(listed.map((row) => row.id)).toEqual([
         one.id,
-        second.category!.id,
+        must(second.category, "second.category").id,
       ]);
       expect(await categoryRepository.getCount({ general })).toBe(2);
       expect(
@@ -160,9 +161,9 @@ describe.skipIf(!hasTestDatabase())(
 
       // Merging a legacy category leaves a (general, detail) redirect, which
       // both createOrGet's alias lookup and the legacy resolver follow.
-      await mergeCategoryNodes(second.category!.id, one.id);
+      await mergeCategoryNodes(must(second.category, "second.category").id, one.id);
       created.categoryIds.splice(
-        created.categoryIds.indexOf(second.category!.id),
+        created.categoryIds.indexOf(must(second.category, "second.category").id),
         1,
       );
       const redirected = await categoryRepository.createOrGet({
@@ -179,57 +180,57 @@ describe.skipIf(!hasTestDatabase())(
 
     it("checks the category hierarchy reads", async () => {
       const root = await createCategoryNode({ name: `ROOT${SUFFIX}` });
-      created.categoryIds.push(root!.id);
+      created.categoryIds.push(must(root, "root").id);
       const child = await createCategoryNode({
         name: "CHILD",
-        parentId: root!.id,
+        parentId: must(root, "root").id,
         description: "leaf",
       });
-      created.categoryIds.push(child!.id);
+      created.categoryIds.push(must(child, "child").id);
       const sibling = await createCategoryNode({
         name: "SIBLING",
-        parentId: root!.id,
+        parentId: must(root, "root").id,
       });
-      created.categoryIds.push(sibling!.id);
+      created.categoryIds.push(must(sibling, "sibling").id);
 
       expect(child).toMatchObject({
-        parentId: root!.id,
-        pathIds: [root!.id, child!.id],
+        parentId: must(root, "root").id,
+        pathIds: [must(root, "root").id, must(child, "child").id],
         depth: 2,
       });
       const nodes = await listCategoryNodes();
-      expect(nodes.some((node) => node.id === child!.id)).toBe(true);
-      expect((await getCategoryNode(child!.id))?.category_name).toBe(
+      expect(nodes.some((node) => node.id === must(child, "child").id)).toBe(true);
+      expect((await getCategoryNode(must(child, "child").id))?.category_name).toBe(
         `ROOT${SUFFIX}:CHILD`,
       );
 
-      const renamed = await updateCategoryNode(child!.id, { name: "LEAF" });
+      const renamed = await updateCategoryNode(must(child, "child").id, { name: "LEAF" });
       expect(renamed?.path).toEqual([`ROOT${SUFFIX}`, "LEAF"]);
 
-      const merged = await mergeCategoryNodes(sibling!.id, child!.id);
-      expect(merged?.id).toBe(child!.id);
-      created.categoryIds.splice(created.categoryIds.indexOf(sibling!.id), 1);
+      const merged = await mergeCategoryNodes(must(sibling, "sibling").id, must(child, "child").id);
+      expect(merged?.id).toBe(must(child, "child").id);
+      created.categoryIds.splice(created.categoryIds.indexOf(must(sibling, "sibling").id), 1);
 
-      expect(await deleteCategoryNode(child!.id)).toBe(true);
-      created.categoryIds.splice(created.categoryIds.indexOf(child!.id), 1);
+      expect(await deleteCategoryNode(must(child, "child").id)).toBe(true);
+      created.categoryIds.splice(created.categoryIds.indexOf(must(child, "child").id), 1);
     });
 
     it("checks the recipient repository and service reads", async () => {
       const name = `ZZCLUSTERPAYEE ${SUFFIX} ONE`;
       const first = await recipientRepository.createOrGet({ name });
       expect(first.created).toBe(true);
-      const one = first.recipient!;
+      const one = must(first.recipient, "first.recipient");
       created.recipientIds.push(one.id);
       expect(one.alias_count).toBe(0);
       expect((await recipientRepository.createOrGet({ name })).created).toBe(
         false,
       );
 
-      const two = (
+      const two = must((
         await recipientRepository.createOrGet({
           name: `ZZCLUSTERPAYEE ${SUFFIX} TWO`,
         })
-      ).recipient!;
+      ).recipient, "( await recipientRepository.createOrGet({ name: `ZZCLUSTE...");
       created.recipientIds.push(two.id);
 
       const page = await recipientRepository.getAll({
@@ -280,9 +281,9 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     it("checks the recipient bank account and pattern reads", async () => {
-      const recipient = (
+      const recipient = must((
         await recipientRepository.createOrGet({ name: `IBAN OWNER ${SUFFIX}` })
-      ).recipient!;
+      ).recipient, "( await recipientRepository.createOrGet({ name: `IBAN OWN...");
       created.recipientIds.push(recipient.id);
       const iban = `BE00${process.pid}`.slice(0, 34);
 
@@ -303,7 +304,7 @@ describe.skipIf(!hasTestDatabase())(
         created: false,
         bankAccount: { bank_name: "Test Bank" },
       });
-      const id = made.bankAccount!.id;
+      const id = must(made.bankAccount, "made.bankAccount").id;
       expect(
         (await recipientBankAccountRepository.getByRecipientId(recipient.id))
           .length,
@@ -391,47 +392,47 @@ describe.skipIf(!hasTestDatabase())(
         timeBucket: "monthly",
         dateRangeStart: "2026-01-01",
       });
-      created.chartIds.push(chart!.id);
+      created.chartIds.push(must(chart, "chart").id);
       expect(chart).toMatchObject({
         tag_ids: [tag.id],
         date_range_start: "2026-01-01",
         date_range_end: null,
       });
       expect(
-        (await savedChartsRepository.getAll()).some((c) => c.id === chart!.id),
+        (await savedChartsRepository.getAll()).some((c) => c.id === must(chart, "chart").id),
       ).toBe(true);
       expect(await savedChartsRepository.getCount()).toBeGreaterThan(0);
       expect(
-        (await savedChartsRepository.update(chart!.id, { name: "Renamed" }))
+        (await savedChartsRepository.update(must(chart, "chart").id, { name: "Renamed" }))
           ?.name,
       ).toBe("Renamed");
     });
 
     it("checks the attachment and category outlier reads", async () => {
-      const db = pool!;
-      const category = (
+      const db = must(pool, "pool");
+      const category = must((
         await categoryRepository.createOrGet({
           general: `OUTL${SUFFIX}`,
           detail: "SPEND",
         })
-      ).category!;
+      ).category, "( await categoryRepository.createOrGet({ general: `OUTL${...");
       created.categoryIds.push(category.id);
-      const recipient = (
+      const recipient = must((
         await recipientRepository.createOrGet({ name: `SHOP ${SUFFIX}` })
-      ).recipient!;
+      ).recipient, "( await recipientRepository.createOrGet({ name: `SHOP ${S...");
       created.recipientIds.push(recipient.id);
       const account = await db.query<{ id: number }>(
         "INSERT INTO accounts (name, display_name) VALUES ($1, $1) RETURNING id",
         [`Account ${SUFFIX}`],
       );
-      const accountId = account.rows[0]!.id;
+      const accountId = must(account.rows[0], "account.rows[0]").id;
       created.accountIds.push(accountId);
       const tx = await db.query<{ id: number }>(
         `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id)
          VALUES (CURRENT_DATE, -12.34, 'EUR', $1, $2, $3) RETURNING id`,
         [recipient.id, category.id, accountId],
       );
-      const transactionId = tx.rows[0]!.id;
+      const transactionId = must(tx.rows[0], "tx.rows[0]").id;
       created.transactionIds.push(transactionId);
 
       const attachment = await attachmentModule.create({

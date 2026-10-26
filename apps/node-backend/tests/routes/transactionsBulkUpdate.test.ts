@@ -51,6 +51,7 @@ import {
 } from "../../src/database/connection.ts";
 import type { PgQueryResult } from "../../src/database/connection.ts";
 import { scheduleReconcile } from "../../src/services/transferReconciliationService.ts";
+import { must } from "../helpers/must.ts";
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
 const getClient = vi.mocked(rawGetClient);
@@ -95,8 +96,8 @@ describe("POST /bulk-update — field validation", () => {
       /update "?transactions"?/i.test(sql),
     );
     expect(updateCalls).toHaveLength(1);
-    expect(updateCalls[0]![0]).toMatch(/category_id"? = \$\d/);
-    expect(updateCalls[0]![1]).toEqual(expect.arrayContaining([[1], null]));
+    expect(must(updateCalls[0], "updateCalls[0]")[0]).toMatch(/category_id"? = \$\d/);
+    expect(must(updateCalls[0], "updateCalls[0]")[1]).toEqual(expect.arrayContaining([[1], null]));
   });
 
   it("rejects null recipient_id (column is NOT NULL)", async () => {
@@ -177,7 +178,7 @@ describe("POST /bulk-update — success paths", () => {
       /update "?transactions"?/i.test(sql),
     );
     expect(updateCalls).toHaveLength(1);
-    expect(updateCalls[0]![1]).toEqual(
+    expect(must(updateCalls[0], "updateCalls[0]")[1]).toEqual(
       expect.arrayContaining([[5], 7, 99, false]),
     );
   });

@@ -7,6 +7,7 @@ import type {
 } from "../src/services/analysisExecutor.ts";
 import type { FinancialQuery } from "../src/services/analysisFinancialDatasets.ts";
 import { loose, partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 /** FinancialQuery is generic over its row type; each mock returns fixed rows. */
 const financialQuery = (
@@ -58,11 +59,11 @@ describe("complete-source pivots", () => {
       },
     );
     expect(queries).toHaveLength(1);
-    expect(queries[0]!.sql).toContain("UNION ALL");
-    expect(queries[0]!.sql).toContain('NULL::date AS "month"');
-    expect(queries[0]!.sql).toContain('NULL::text AS "category_general"');
+    expect(must(queries[0], "queries[0]").sql).toContain("UNION ALL");
+    expect(must(queries[0], "queries[0]").sql).toContain('NULL::date AS "month"');
+    expect(must(queries[0], "queries[0]").sql).toContain('NULL::text AS "category_general"');
     expect(() =>
-      __validateAnalysisSql(queries[0]!.sql, queries[0]!.datasetIds),
+      __validateAnalysisSql(must(queries[0], "queries[0]").sql, must(queries[0], "queries[0]").datasetIds),
     ).not.toThrow();
     expect(
       queries.every(
@@ -78,10 +79,10 @@ describe("complete-source pivots", () => {
       ),
     ).toBe(true);
     expect(
-      (result.levels[3]!.rows[0]!.__percentages as Record<string, unknown>)
+      (must(must(result.levels[3], "result.levels[3]").rows[0], "result.levels[3]!.rows[0]").__percentages as Record<string, unknown>)
         .sum_spending,
     ).toBe("0.25");
-    expect(result.levels[0]!.rowDepth).toBe(0);
+    expect(must(result.levels[0], "result.levels[0]").rowDepth).toBe(0);
     expect(result.coverage.complete).toBe(true);
   });
   it.each([
@@ -107,8 +108,8 @@ describe("complete-source pivots", () => {
           },
         },
       );
-      expect(result.levels[0]!.rows[0]!.sum_value).toBe(closing);
-      expect(result.levels[1]!.rows.map((row) => row.sum_value)).toEqual([
+      expect(must(must(result.levels[0], "result.levels[0]").rows[0], "result.levels[0]!.rows[0]").sum_value).toBe(closing);
+      expect(must(result.levels[1], "result.levels[1]").rows.map((row) => row.sum_value)).toEqual([
         "100",
         closing,
       ]);

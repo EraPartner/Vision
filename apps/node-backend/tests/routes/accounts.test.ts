@@ -67,7 +67,9 @@ import type { ReconcileResult } from "../../src/services/reconcileService.ts";
 import { closeAccount as rawCloseAccount } from "../../src/services/accountCloseService.ts";
 import { scheduleAggregationRefresh } from "../../src/services/aggregationRefresh.ts";
 import { invalidatePortfolioCaches } from "../../src/services/info/cache.ts";
+import { must } from "../helpers/must.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const accountService = vi.mocked(rawAccountService);
 const mergeAccounts = vi.mocked(rawMergeAccounts);
 const previewMerge = vi.mocked(rawPreviewMerge);
@@ -98,7 +100,7 @@ describe("per-currency statement balance routes (ADR-089 D2)", () => {
       .put(`${BASE}/7/statement-balances/USD`)
       .send({ balance: 120, date: "2026-09-04" })
       .expect(200);
-    expect(accountService.setStatementBalance).toHaveBeenCalledWith(7, "USD", {
+    expect(mockOf(accountService, "setStatementBalance")).toHaveBeenCalledWith(7, "USD", {
       balance: 120,
       date: "2026-09-04",
     });
@@ -111,7 +113,7 @@ describe("per-currency statement balance routes (ADR-089 D2)", () => {
       currency: asCurrencyCode("USD"),
     });
     await api.delete(`${BASE}/7/statement-balances/USD`).expect(200);
-    expect(accountService.removeStatementBalance).toHaveBeenCalledWith(
+    expect(mockOf(accountService, "removeStatementBalance")).toHaveBeenCalledWith(
       7,
       "USD",
     );
@@ -127,7 +129,7 @@ function mergeRouteHandler() {
       (entry.route as unknown as { methods: Record<string, boolean> }).methods
         .post,
   );
-  return layer!.route!.stack.at(-1)!.handle as unknown as (
+  return must(must(must(layer, "layer").route, "layer!.route").stack.at(-1), "layer!.route!.stack.at(-1)").handle as unknown as (
     req: unknown,
     res: unknown,
   ) => Promise<void>;
@@ -412,7 +414,7 @@ describe("Account Routes — GET / pagination is opt-in", () => {
     });
     const res = await api.get(BASE).expect(200);
 
-    expect(accountService.list).toHaveBeenCalledWith({ active: true });
+    expect(mockOf(accountService, "list")).toHaveBeenCalledWith({ active: true });
     expect(res.body).toEqual(
       okEnvelope({ items: [{ id: 1 }, { id: 2 }], total: 2, links: [] }),
     );
@@ -425,7 +427,7 @@ describe("Account Routes — GET / pagination is opt-in", () => {
     });
     const res = await api.get(`${BASE}?limit=`).expect(200);
 
-    expect(accountService.list).toHaveBeenCalledWith({ active: true });
+    expect(mockOf(accountService, "list")).toHaveBeenCalledWith({ active: true });
     expect(bodyAt(res, "data", "limit")).toBeUndefined();
   });
 
@@ -438,7 +440,7 @@ describe("Account Routes — GET / pagination is opt-in", () => {
       .get(`${BASE}?active=all&limit=1&offset=2`)
       .expect(200);
 
-    expect(accountService.list).toHaveBeenCalledWith({
+    expect(mockOf(accountService, "list")).toHaveBeenCalledWith({
       active: undefined,
       limit: 1,
       offset: 2,
@@ -458,7 +460,7 @@ describe("Account Routes — GET / pagination is opt-in", () => {
     accountService.list.mockResolvedValue({ items: [], total: 0 });
     await api.get(`${BASE}?limit=99999`).expect(200);
 
-    expect(accountService.list).toHaveBeenCalledWith({
+    expect(mockOf(accountService, "list")).toHaveBeenCalledWith({
       active: true,
       limit: 1000,
       offset: 0,
@@ -474,7 +476,7 @@ describe("GET /:id — real validateIdParam guard", () => {
     // validateIdParam with a pass-through, so this guard was never tested.
     const res = await api.get(`${BASE}/abc`).expect(400);
     expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-    expect(accountService.get).not.toHaveBeenCalled();
+    expect(mockOf(accountService, "get")).not.toHaveBeenCalled();
   });
 });
 
@@ -493,8 +495,8 @@ describe("Account Routes — params and query schemas (zod)", () => {
     async (method, path) => {
       const res = await api[method](path).send({}).expect(400);
       expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
-      expect(accountService.setStatementBalance).not.toHaveBeenCalled();
-      expect(accountService.removeStatementBalance).not.toHaveBeenCalled();
+      expect(mockOf(accountService, "setStatementBalance")).not.toHaveBeenCalled();
+      expect(mockOf(accountService, "removeStatementBalance")).not.toHaveBeenCalled();
       expect(closeAccount).not.toHaveBeenCalled();
       expect(setOpeningBalance).not.toHaveBeenCalled();
       expect(reconcileAccount).not.toHaveBeenCalled();
@@ -505,7 +507,7 @@ describe("Account Routes — params and query schemas (zod)", () => {
   it("keeps an unrecognised ?active= meaning the active-only default", async () => {
     accountService.list.mockResolvedValue({ items: [], total: 0 });
     await api.get(`${BASE}?active=maybe`).expect(200);
-    expect(accountService.list).toHaveBeenCalledWith({ active: true });
+    expect(mockOf(accountService, "list")).toHaveBeenCalledWith({ active: true });
   });
 
   it("keeps a bodiless merge as the service's empty source list", async () => {

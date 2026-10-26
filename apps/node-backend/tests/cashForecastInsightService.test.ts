@@ -16,6 +16,7 @@ vi.mock("../src/services/calculations/forecast/index.ts", () => ({
 import { computeCashflowForecast as rawComputeCashflowForecast } from "../src/services/calculations/forecast/index.ts";
 import { getCashForecastInsight } from "../src/services/cashForecastInsightService.ts";
 import { loose } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
 const computeCashflowForecast = vi.mocked(rawComputeCashflowForecast);
 type ForecastEnvelope = Awaited<ReturnType<typeof rawComputeCashflowForecast>>;
@@ -89,7 +90,7 @@ describe("getCashForecastInsight", () => {
     );
     projectionRepository.getProjection.mockResolvedValue(400);
 
-    const finding = (await getCashForecastInsight())!;
+    const finding = must((await getCashForecastInsight()), "(await getCashForecastInsight())");
 
     expect(finding.movedSignificantly).toBe(true);
     expect(projectionRepository.getProjection).toHaveBeenCalledWith(
@@ -110,7 +111,7 @@ describe("getCashForecastInsight", () => {
       envelope({ methods: [healthyMcMethod()] }),
     );
 
-    const finding = (await getCashForecastInsight())!;
+    const finding = must((await getCashForecastInsight()), "(await getCashForecastInsight())");
 
     expect(finding).toEqual({
       month: "2026-07",
@@ -134,7 +135,7 @@ describe("getCashForecastInsight", () => {
       }),
     );
 
-    const finding = (await getCashForecastInsight())!;
+    const finding = must((await getCashForecastInsight()), "(await getCashForecastInsight())");
 
     expect(finding.monthEndNetCashflow).toBe(40);
     expect(finding.prominence).toBe("standing");
@@ -150,7 +151,7 @@ describe("getCashForecastInsight", () => {
       }),
     );
 
-    const finding = (await getCashForecastInsight())!;
+    const finding = must((await getCashForecastInsight()), "(await getCashForecastInsight())");
 
     expect(finding.prominence).toBe("standing");
   });
@@ -161,9 +162,9 @@ describe("getCashForecastInsight", () => {
     );
 
     // |600 - 100| = 500 >= max(100, 0.15 * 100) = 100
-    const finding = (await getCashForecastInsight({
+    const finding = must((await getCashForecastInsight({
       previousMonthEndNetCashflow: 100,
-    }))!;
+    })), "(await getCashForecastInsight({ previousMonthEndNetCashfl...");
 
     expect(finding.movedSignificantly).toBe(true);
     expect(finding.prominence).toBe("alert");
@@ -175,9 +176,9 @@ describe("getCashForecastInsight", () => {
     );
 
     // |600 - 590| = 10 < 100 (absolute floor)
-    const smallAbs = (await getCashForecastInsight({
+    const smallAbs = must((await getCashForecastInsight({
       previousMonthEndNetCashflow: 590,
-    }))!;
+    })), "(await getCashForecastInsight({ previousMonthEndNetCashfl...");
     expect(smallAbs.movedSignificantly).toBe(false);
     expect(smallAbs.prominence).toBe("standing");
 
@@ -185,9 +186,9 @@ describe("getCashForecastInsight", () => {
     computeCashflowForecast.mockResolvedValue(
       envelope({ methods: [healthyMcMethod()] }),
     );
-    const smallPct = (await getCashForecastInsight({
+    const smallPct = must((await getCashForecastInsight({
       previousMonthEndNetCashflow: 700,
-    }))!;
+    })), "(await getCashForecastInsight({ previousMonthEndNetCashfl...");
     expect(smallPct.movedSignificantly).toBe(false);
     expect(smallPct.prominence).toBe("standing");
   });
@@ -209,7 +210,7 @@ describe("getCashForecastInsight", () => {
       }),
     );
 
-    const finding = (await getCashForecastInsight())!;
+    const finding = must((await getCashForecastInsight()), "(await getCashForecastInsight())");
 
     expect(finding.methodId).toBe("monte_carlo_parametric");
     expect(finding.monthEndNetCashflow).toBe(600);
@@ -232,7 +233,7 @@ describe("getCashForecastInsight", () => {
       }),
     );
 
-    const finding = (await getCashForecastInsight())!;
+    const finding = must((await getCashForecastInsight()), "(await getCashForecastInsight())");
 
     expect(finding.methodId).toBe("ensemble_imse");
     expect(finding.monthEndNetCashflow).toBe(60);
@@ -251,7 +252,7 @@ describe("getCashForecastInsight", () => {
       }),
     );
 
-    const finding = (await getCashForecastInsight())!;
+    const finding = must((await getCashForecastInsight()), "(await getCashForecastInsight())");
 
     expect(finding.methodId).toBe("ewma");
     expect(finding.monthEndNetCashflow).toBe(30);
@@ -295,7 +296,7 @@ describe("getCashForecastInsight", () => {
       }),
     );
 
-    const finding = (await getCashForecastInsight())!;
+    const finding = must((await getCashForecastInsight()), "(await getCashForecastInsight())");
 
     // Bounds come directly from cumulative simulated-path distributions.
     expect(finding.monthEndNetCashflowLow).toBe(20);
@@ -305,7 +306,7 @@ describe("getCashForecastInsight", () => {
       finding.monthEndNetCashflow,
     );
     expect(finding.monthEndNetCashflow).toBeLessThanOrEqual(
-      finding.monthEndNetCashflowHigh!,
+      must(finding.monthEndNetCashflowHigh, "finding.monthEndNetCashflowHigh"),
     );
   });
 
@@ -323,7 +324,7 @@ describe("getCashForecastInsight", () => {
       }),
     );
 
-    const finding = (await getCashForecastInsight())!;
+    const finding = must((await getCashForecastInsight()), "(await getCashForecastInsight())");
 
     // No future days: both bounds equal the final realized net-flow value.
     expect(finding.monthEndNetCashflow).toBe(600);

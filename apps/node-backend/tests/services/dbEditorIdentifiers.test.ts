@@ -26,6 +26,7 @@ import {
   readRows,
   applyMutations,
 } from "../../src/services/dbEditor.ts";
+import { must } from "../helpers/must.ts";
 
 /** The structural slice of pg's query surface these fakes implement. */
 type FakeQuery = (
@@ -227,7 +228,7 @@ describe("pagination", () => {
     clientSql = [];
     await readRows(CATALOG_TABLE, {
       limit: 2,
-      cursor: page.nextCursor!,
+      cursor: must(page.nextCursor, "page.nextCursor"),
       orderBy: "amount",
       dir: "desc",
       filters: [{ column: "memo", op: "contains", value: "shop" }],
@@ -241,7 +242,7 @@ describe("pagination", () => {
 
     await expect(
       readRows(CATALOG_TABLE, {
-        cursor: page.nextCursor!,
+        cursor: must(page.nextCursor, "page.nextCursor"),
         orderBy: "id",
         dir: "desc",
       }),
@@ -292,7 +293,7 @@ describe("pagination", () => {
     await readRows(CATALOG_TABLE, {
       limit: 1,
       orderBy: "amount",
-      cursor: timestampPage.nextCursor!,
+      cursor: must(timestampPage.nextCursor, "timestampPage.nextCursor"),
     });
     expect(selectParams).toContain("2026-09-08 10:11:12.123456+00");
     expect(selectParams).toContain("9");
@@ -338,7 +339,7 @@ describe("pagination", () => {
     await readRows(CATALOG_TABLE, {
       limit: 1,
       orderBy: "amount",
-      cursor: byteaPage.nextCursor!,
+      cursor: must(byteaPage.nextCursor, "byteaPage.nextCursor"),
     });
     expect(selectParams).toContain("\\x00ff10");
   });
@@ -387,14 +388,14 @@ describe("pagination", () => {
       release: vi.fn(),
     });
     const page = await readRows(CATALOG_TABLE, { limit: 1 });
-    expect(page.rows[0]!.__vision_cursor_value_1).toBe("user value");
+    expect(must(page.rows[0], "page.rows[0]").__vision_cursor_value_1).toBe("user value");
     expect(page.rows[0]).not.toHaveProperty("__vision_cursor_value_1_2");
     expect(clientSql.find((sql) => sql.startsWith("SELECT *"))).toContain(
       '(ctid)::text AS "__vision_cursor_value_1_2"',
     );
 
     clientSql = [];
-    await readRows(CATALOG_TABLE, { limit: 1, cursor: page.nextCursor! });
+    await readRows(CATALOG_TABLE, { limit: 1, cursor: must(page.nextCursor, "page.nextCursor") });
     expect(clientSql.find((sql) => sql.startsWith("SELECT *"))).toContain(
       "ctid > $1::tid",
     );
@@ -451,7 +452,7 @@ describe("pagination", () => {
     await readRows(CATALOG_TABLE, {
       limit: 1,
       orderBy: "amount",
-      cursor: page.nextCursor!,
+      cursor: must(page.nextCursor, "page.nextCursor"),
     });
     const cursorSql = clientSql.find((sql) => sql.startsWith("SELECT *"));
     expect(cursorSql).toContain(
@@ -470,10 +471,10 @@ describe("mutation identifiers", () => {
       { dryRun: true },
     );
     expect(res.dryRun).toBe(true);
-    expect(res.statements![0]!.preview).toContain(
+    expect(must(must(res.statements, "res.statements")[0], "res.statements![0]").preview).toContain(
       'INSERT INTO "transactions" ("memo")',
     );
-    expect(res.statements![0]!.preview).not.toContain("VALUES (1)--");
+    expect(must(must(res.statements, "res.statements")[0], "res.statements![0]").preview).not.toContain("VALUES (1)--");
   });
 
   it("rejects a batch whose columns are all unknown", async () => {
@@ -492,9 +493,9 @@ describe("mutation identifiers", () => {
       [{ op: "update", pk: { id: 1 }, set: { memo: "x" } }],
       { dryRun: true },
     );
-    expect(res.statements![0]!.preview).toContain(
+    expect(must(must(res.statements, "res.statements")[0], "res.statements![0]").preview).toContain(
       'UPDATE "transactions" SET "memo"',
     );
-    expect(res.statements![0]!.preview).toContain('WHERE "id"');
+    expect(must(must(res.statements, "res.statements")[0], "res.statements![0]").preview).toContain('WHERE "id"');
   });
 });

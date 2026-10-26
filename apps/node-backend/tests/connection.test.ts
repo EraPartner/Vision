@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { must } from "./helpers/must.ts";
 
 async function loadConnectionModule({
   settings = {
@@ -65,7 +66,7 @@ describe("database connection module", () => {
     expect(onErrorCall).toBeDefined();
 
     const err = new Error("idle client failure");
-    onErrorCall![1](err);
+    must(onErrorCall, "onErrorCall")[1](err);
 
     expect(logger.error).toHaveBeenCalledWith(
       "Unexpected error on idle database client",
@@ -241,7 +242,7 @@ describe("database connection module", () => {
       await module.withTransaction(async () => {
         leaked = () => module.query("SELECT after");
       });
-      await leaked!();
+      await must(leaked, "leaked")();
 
       // The leaked query ran after release — it must NOT hit the released client.
       expect(client.query.mock.calls.map((c) => c[0])).toEqual([
@@ -418,7 +419,7 @@ describe("database connection module", () => {
         })();
       });
 
-      releaseContinuation!();
+      must(releaseContinuation, "releaseContinuation")();
       await continuation;
 
       expect(client.query.mock.calls.map((call) => call[0])).toEqual([

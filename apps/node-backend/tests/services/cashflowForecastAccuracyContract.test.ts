@@ -14,6 +14,7 @@ import type {
   DailyNetPoint,
   MethodResult,
 } from "../../src/services/calculations/forecast/index.ts";
+import { must } from "../helpers/must.ts";
 
 const isoOffsetFromToday = (offsetDays: number) =>
   addDaysYmd(todayAppDateString(), offsetDays);
@@ -92,8 +93,8 @@ describe("forecast ensemble accuracy read", () => {
     const env = await run();
     const ensemble = env.data.methods.find((m) => m.id === "ensemble_imse");
     expect(ensemble).toBeDefined();
-    expect(ensemble!.error).toBeNull();
-    expect(ensemble!.daily).toHaveLength(30);
+    expect(must(ensemble, "ensemble").error).toBeNull();
+    expect(must(ensemble, "ensemble").daily).toHaveLength(30);
     expect(getLatestAccuracyByMethod).toHaveBeenCalledWith({ userId: "u1" });
   });
 });

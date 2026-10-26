@@ -65,7 +65,9 @@ import type {
 import type { ToolResult } from "../src/services/aiChat/tools/index.ts";
 import type { AiChatServiceEvent } from "@vision/types/aiChat";
 import { loose, partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
+import { mockOf } from "./helpers/mockOf.ts";
 const aiChatRepository = vi.mocked(rawAiChatRepository);
 const dispatchTool = vi.mocked(rawDispatchTool);
 type ServiceEvent = AiChatServiceEvent<AiMessageRow>;
@@ -140,7 +142,7 @@ describe("listConversations", () => {
       items: [{ id: "conv-1" }],
       total: 101,
     });
-    expect(aiChatRepository.listConversations).toHaveBeenCalledWith(page);
+    expect(mockOf(aiChatRepository, "listConversations")).toHaveBeenCalledWith(page);
   });
 });
 
@@ -239,7 +241,7 @@ describe("runChatTurn — conversation lifecycle", () => {
     expect(result.userMessage).toBe(priorUser);
     expect(events).toEqual([]);
     const modelUserMessages =
-      ollamaClient.chat.mock.calls[0]![0].messages.filter(
+      must(ollamaClient.chat.mock.calls[0], "ollamaClient.chat.mock.calls[0]")[0].messages.filter(
         (entry: OllamaMessage) => entry.role === "user",
       );
     expect(modelUserMessages).toEqual([
@@ -265,7 +267,7 @@ describe("runChatTurn — conversation lifecycle", () => {
         ollamaClient: makeMockOllama(),
       }),
     ).rejects.toMatchObject({ code: "TURN_ALREADY_COMPLETE", status: 409 });
-    expect(aiChatRepository.appendMessage).not.toHaveBeenCalled();
+    expect(mockOf(aiChatRepository, "appendMessage")).not.toHaveBeenCalled();
   });
 
   it("serializes a retry behind an in-flight turn and prevents two answers", async () => {
@@ -304,7 +306,7 @@ describe("runChatTurn — conversation lifecycle", () => {
       ollamaClient,
     });
     await Promise.resolve();
-    expect(aiChatRepository.getMessages).toHaveBeenCalledTimes(1);
+    expect(mockOf(aiChatRepository, "getMessages")).toHaveBeenCalledTimes(1);
 
     resolveOriginal({
       content: "only answer",
@@ -405,9 +407,9 @@ describe("runChatTurn — conversation lifecycle", () => {
 
     await runChatTurn({ message: longMessage, ollamaClient });
 
-    expect(aiChatRepository.createConversation).toHaveBeenCalledTimes(1);
+    expect(mockOf(aiChatRepository, "createConversation")).toHaveBeenCalledTimes(1);
     const { title, model } =
-      aiChatRepository.createConversation.mock.calls[0]![0];
+      must(aiChatRepository.createConversation.mock.calls[0], "aiChatRepository.createConversation.mock.calls[0]")[0];
     expect(title.length).toBeLessThanOrEqual(60);
     expect(title.endsWith("…")).toBe(true);
     expect(model).toBe(settings.ollama.defaultModel);
@@ -432,8 +434,8 @@ describe("runChatTurn — conversation lifecycle", () => {
       ollamaClient,
     });
 
-    expect(aiChatRepository.createConversation).not.toHaveBeenCalled();
-    expect(aiChatRepository.getConversation).toHaveBeenCalledWith("c-99");
+    expect(mockOf(aiChatRepository, "createConversation")).not.toHaveBeenCalled();
+    expect(mockOf(aiChatRepository, "getConversation")).toHaveBeenCalledWith("c-99");
     expect(result.conversation.id).toBe("c-99");
   });
 
@@ -474,11 +476,11 @@ describe("runChatTurn — conversation lifecycle", () => {
       ollamaClient,
     });
 
-    expect(aiChatRepository.updateConversationModel).toHaveBeenCalledWith(
+    expect(mockOf(aiChatRepository, "updateConversationModel")).toHaveBeenCalledWith(
       "c-1",
       "qwen2.5:7b",
     );
-    const chatCall = ollamaClient.chat.mock.calls[0]![0];
+    const chatCall = must(ollamaClient.chat.mock.calls[0], "ollamaClient.chat.mock.calls[0]")[0];
     expect(chatCall.model).toBe("qwen2.5:7b");
   });
 
@@ -502,7 +504,7 @@ describe("runChatTurn — conversation lifecycle", () => {
       ollamaClient,
     });
 
-    expect(aiChatRepository.updateConversationModel).not.toHaveBeenCalled();
+    expect(mockOf(aiChatRepository, "updateConversationModel")).not.toHaveBeenCalled();
   });
 });
 
@@ -523,12 +525,12 @@ describe("runChatTurn — single turn (no tool calls)", () => {
     });
 
     expect(ollamaClient.chat).toHaveBeenCalledTimes(1);
-    expect(aiChatRepository.appendMessage).toHaveBeenCalledTimes(2);
-    expect(aiChatRepository.appendMessage).toHaveBeenNthCalledWith(
+    expect(mockOf(aiChatRepository, "appendMessage")).toHaveBeenCalledTimes(2);
+    expect(mockOf(aiChatRepository, "appendMessage")).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ role: "user", content: "biggest category?" }),
     );
-    expect(aiChatRepository.appendMessage).toHaveBeenNthCalledWith(
+    expect(mockOf(aiChatRepository, "appendMessage")).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         role: "assistant",
@@ -623,7 +625,7 @@ describe("runChatTurn — tool-call loop", () => {
       { from: "2025-01-01", to: "2025-12-31" },
       { cache: expect.any(Map), maxRows: settings.aiChat.maxToolRows },
     );
-    expect(dispatchTool.mock.calls[0]![2]).not.toHaveProperty("conversationId");
+    expect(must(dispatchTool.mock.calls[0], "dispatchTool.mock.calls[0]")[2]).not.toHaveProperty("conversationId");
     expect(result.toolMessages).toHaveLength(1);
     expect(result.iterations).toBe(2);
     expect(result.assistantMessage.content).toBe("Rent was €3600.");
@@ -666,7 +668,7 @@ describe("runChatTurn — tool-call loop", () => {
     const toolAppend = aiChatRepository.appendMessage.mock.calls.find(
       ([arg]) => arg.role === "tool",
     );
-    expect(toolAppend![0]).toMatchObject({
+    expect(must(toolAppend, "toolAppend")[0]).toMatchObject({
       role: "tool",
       toolName: "getSpendByCategory",
       toolArgs: { from: "2025-01-01", to: "2025-12-31" },
@@ -724,7 +726,7 @@ describe("runChatTurn — tool-call loop", () => {
     const toolAppend = aiChatRepository.appendMessage.mock.calls.find(
       ([arg]) => arg.role === "tool",
     );
-    expect(toolAppend![0].toolArgs).toEqual(coerced);
+    expect(must(toolAppend, "toolAppend")[0].toolArgs).toEqual(coerced);
     // The pre-dispatch tool_call frame cannot know the coerced value yet:
     // string args ride as `{}` (the frame schema requires a record); the
     // tool_result frame that follows carries the coerced record.
@@ -784,8 +786,8 @@ describe("runChatTurn — tool-call loop", () => {
     const toolAppend = aiChatRepository.appendMessage.mock.calls.find(
       ([arg]) => arg.role === "tool",
     );
-    expect(toolAppend![0].toolArgs).toBe(rawArgs);
-    expect(toolAppend![0].toolResult).toBe(validationResult);
+    expect(must(toolAppend, "toolAppend")[0].toolArgs).toBe(rawArgs);
+    expect(must(toolAppend, "toolAppend")[0].toolResult).toBe(validationResult);
 
     // The SSE frame schema requires a plain object — a non-record falls
     // back to {} (the raw value rides in the following tool_result row).
@@ -800,7 +802,7 @@ describe("runChatTurn — tool-call loop", () => {
 
     // LLM retry contract: the second model call sees the byte-identical
     // stringified error payload as its role:'tool' message.
-    const secondCallMessages = ollamaClient.chat.mock.calls[1]![0].messages;
+    const secondCallMessages = must(ollamaClient.chat.mock.calls[1], "ollamaClient.chat.mock.calls[1]")[0].messages;
     const toolMsg = secondCallMessages.find(
       (m: OllamaMessage) => m.role === "tool",
     );
@@ -948,15 +950,15 @@ describe("runChatTurn — server-side pre-call (ADR-110 §4)", () => {
       {},
       { cache: expect.any(Map), maxRows: settings.aiChat.maxToolRows },
     );
-    expect(dispatchTool.mock.calls[0]![2]).not.toHaveProperty("conversationId");
+    expect(must(dispatchTool.mock.calls[0], "dispatchTool.mock.calls[0]")[2]).not.toHaveProperty("conversationId");
     expect(dispatchTool.mock.invocationCallOrder[0]).toBeLessThan(
-      ollamaClient.chat.mock.invocationCallOrder[0]!,
+      must(ollamaClient.chat.mock.invocationCallOrder[0], "ollamaClient.chat.mock.invocationCallOrder[0]"),
     );
     expect(events).toEqual(["user_message", "tool_call", "tool_result"]);
     const toolAppend = aiChatRepository.appendMessage.mock.calls.find(
       ([arg]) => arg.role === "tool",
     );
-    expect(toolAppend![0]).toMatchObject({
+    expect(must(toolAppend, "toolAppend")[0]).toMatchObject({
       role: "tool",
       toolName: "insightsDigest",
       toolArgs: {},
@@ -968,7 +970,7 @@ describe("runChatTurn — server-side pre-call (ADR-110 §4)", () => {
     // role:'tool' digest message before being asked to generate — with tool
     // schemas still enabled.
     expect(ollamaClient.chat).toHaveBeenCalledTimes(1);
-    const chatArgs = ollamaClient.chat.mock.calls[0]![0];
+    const chatArgs = must(ollamaClient.chat.mock.calls[0], "ollamaClient.chat.mock.calls[0]")[0];
     const syntheticIdx = chatArgs.messages.findIndex(
       (m: OllamaMessage) =>
         m.role === "assistant" && Array.isArray(m.tool_calls),
@@ -1013,7 +1015,7 @@ describe("runChatTurn — server-side pre-call (ADR-110 §4)", () => {
 
     expect(result.assistantMessage.content).toBe("plain reply");
     expect(result.toolMessages).toHaveLength(0);
-    const sentMessages = ollamaClient.chat.mock.calls[0]![0].messages;
+    const sentMessages = must(ollamaClient.chat.mock.calls[0], "ollamaClient.chat.mock.calls[0]")[0].messages;
     expect(sentMessages.some((m: OllamaMessage) => m.role === "tool")).toBe(
       false,
     );
@@ -1171,9 +1173,9 @@ describe("runChatTurn — streaming", () => {
     const ollamaClient = {
       chat: vi.fn(),
       chatStream: vi.fn(async ({ onToken }: StreamParams) => {
-        onToken!("Hel");
-        onToken!("lo ");
-        onToken!("world");
+        must(onToken, "onToken")("Hel");
+        must(onToken, "onToken")("lo ");
+        must(onToken, "onToken")("world");
         return {
           content: "Hello world",
           toolCalls: [],
@@ -1240,9 +1242,9 @@ describe("runChatTurn — streaming", () => {
     const ollamaClient = {
       chat: vi.fn(),
       chatStream: vi.fn(async ({ onToken }: StreamParams) => {
-        onToken!("A");
-        onToken!("");
-        onToken!("B");
+        must(onToken, "onToken")("A");
+        must(onToken, "onToken")("");
+        must(onToken, "onToken")("B");
         return {
           content: "AB",
           toolCalls: [],
@@ -1330,7 +1332,7 @@ describe("runChatTurn — streaming", () => {
     expect(toolMsgIdx).toBeGreaterThan(toolCallIdx);
     expect(dispatchCountAtToolCall).toBe(0);
 
-    const toolCallEvt = events[toolCallIdx]!;
+    const toolCallEvt = must(events[toolCallIdx], "events[toolCallIdx]");
     expect(toolCallEvt.data).toEqual({
       name: "getSpendByCategory",
       args: { from: "2025-01-01", to: "2025-12-31" },

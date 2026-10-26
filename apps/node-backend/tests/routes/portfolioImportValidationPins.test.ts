@@ -115,7 +115,9 @@ import {
 } from "../../src/services/portfolioImportBatchService.ts";
 import rawAccountService from "../../src/services/accountService.ts";
 import rawCustomParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
+import { must } from "../helpers/must.ts";
 
+import { mockOf } from "../helpers/mockOf.ts";
 const runPortfolioImportPipeline = vi.mocked(rawRunPortfolioImportPipeline);
 const dbQuery = vi.mocked(rawDbQuery);
 const commitReviewedPortfolioImport = vi.mocked(
@@ -371,7 +373,7 @@ describe("override/commit body id shape", () => {
         `expected ${JSON.stringify(account_id)} to be rejected`,
       ).toBe("VALIDATION_ERROR");
     }
-    expect(accountService.get).not.toHaveBeenCalled();
+    expect(mockOf(accountService, "get")).not.toHaveBeenCalled();
     expect(commitReviewedPortfolioImport).not.toHaveBeenCalled();
   });
 
@@ -629,7 +631,7 @@ describe("normalizePortfolioParserConfig pins (POST /parsers)", () => {
       custom_extra: { nested: true },
     };
     await create(config).expect(201);
-    expect(customParserConfigRepository.create).toHaveBeenCalledWith(
+    expect(mockOf(customParserConfigRepository, "create")).toHaveBeenCalledWith(
       expect.objectContaining({
         config: { ...config, number_format: "auto" },
         kind: "portfolio",
@@ -694,14 +696,14 @@ describe("parser :id shape (PATCH/DELETE /parsers/:id)", () => {
       await api.delete(`${BASE}/parsers/${id}`).expect(400);
       await api.patch(`${BASE}/parsers/${id}`).send({ name: "X" }).expect(400);
     }
-    expect(customParserConfigRepository.delete).not.toHaveBeenCalled();
-    expect(customParserConfigRepository.update).not.toHaveBeenCalled();
+    expect(mockOf(customParserConfigRepository, "delete")).not.toHaveBeenCalled();
+    expect(mockOf(customParserConfigRepository, "update")).not.toHaveBeenCalled();
   });
 
   it("still deletes on a real id", async () => {
     customParserConfigRepository.delete.mockResolvedValue(true);
     await api.delete(`${BASE}/parsers/22`).expect(204);
-    expect(customParserConfigRepository.delete).toHaveBeenCalledWith(22);
+    expect(mockOf(customParserConfigRepository, "delete")).toHaveBeenCalledWith(22);
   });
 });
 
@@ -807,7 +809,7 @@ describe("literal generic source identity HTTP mappings", () => {
       }),
     );
     expect(
-      runPortfolioImportPipeline.mock.lastCall![0].customConfig,
+      must(runPortfolioImportPipeline.mock.lastCall, "runPortfolioImportPipeline.mock.lastCall")[0].customConfig,
     ).not.toHaveProperty("format");
   });
   it("preserves the omitted mapping shape for old and blank requests", async () => {
@@ -817,7 +819,7 @@ describe("literal generic source identity HTTP mappings", () => {
     ]) {
       await runCustom({ ...minimalBody, ...optional }).expect(201);
       const mapping =
-        runPortfolioImportPipeline.mock.lastCall![0].customConfig
+        must(runPortfolioImportPipeline.mock.lastCall, "runPortfolioImportPipeline.mock.lastCall")[0].customConfig
           .column_mapping;
       expect(mapping).not.toHaveProperty("source_id");
       expect(mapping).not.toHaveProperty("source_account");

@@ -23,7 +23,9 @@ import {
   warmInflationCache,
 } from "../src/services/belgianInflationService.ts";
 import { loose, partial } from "./helpers/partial.ts";
+import { must } from "./helpers/must.ts";
 
+import { mockOf } from "./helpers/mockOf.ts";
 const query = vi.mocked(rawQuery);
 const getClient = vi.mocked(rawGetClient);
 
@@ -238,8 +240,8 @@ describe("belgianInflationService", () => {
     await vi.runAllTimersAsync();
     await second;
 
-    expect(logger.warn).toHaveBeenCalledTimes(1);
-    expect(logger.debug).toHaveBeenCalled();
+    expect(mockOf(logger, "warn")).toHaveBeenCalledTimes(1);
+    expect(mockOf(logger, "debug")).toHaveBeenCalled();
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
@@ -405,7 +407,7 @@ describe("belgianInflationService", () => {
     );
     expect(insertCalls).toHaveLength(1);
 
-    const [sql, params] = insertCalls[0]!;
+    const [sql, params] = must(insertCalls[0], "insertCalls[0]");
     // Three rows × three params per row = 9 params bound to the single query.
     expect(params).toHaveLength(9);
     // VALUES list contains three placeholder groups.
