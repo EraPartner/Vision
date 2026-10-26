@@ -4,14 +4,16 @@ set -euo pipefail
 # Build Vision Native (apps/native/, ADR-204) in Release, stage its runtime payload
 # (PostgreSQL 18, the compiled backend and its Kysely migrations, the Apple Foundation
 # Models helper, the frontend build and the synthetic Demo seed) into the app, and
-# install it to /Applications. Vision Native runs only on synthetic Demo data in its
-# own application-data directory.
+# install it to /Applications.
 #
-# VISION_NATIVE_VARIANT picks the build (phase 1e):
-#   demo (default) -> /Applications/Vision Native Demo.app, data in
-#                     ~/Library/Application Support/Vision Native Demo, PostgreSQL 54332
-#   standard       -> /Applications/Vision Native.app, data in
-#                     ~/Library/Application Support/Vision Native, PostgreSQL 54331
+# Pick the build (ADR-253):
+#   --own   -> /Applications/Vision Native.app with your own data, in
+#              ~/Library/Application Support/Vision Native, PostgreSQL 54331. It never seeds
+#              Demo data; restore an Electron Vision backup into it in Settings > Backup.
+#   --demo  -> /Applications/Vision Native Demo.app on the synthetic Demo data, in
+#              ~/Library/Application Support/Vision Native Demo, PostgreSQL 54332.
+# Without either, an interactive run asks; a non-interactive run builds the Demo.
+# VISION_NATIVE_VARIANT=standard|demo does the same as --own|--demo.
 #
 # VISION_NATIVE_SKIP_PAYLOAD=1 builds without a payload (the app then explains how to
 # provide one). The payload uses the same prepare scripts as install-demo.sh, so it holds
@@ -26,21 +28,41 @@ set -euo pipefail
 
 CONFIGURATION=Release
 MEASURE=0
+VARIANT="${VISION_NATIVE_VARIANT:-}"
 for arg in "$@"; do
   case "$arg" in
+    --own) VARIANT=standard ;;
+    --demo) VARIANT=demo ;;
     --debug) CONFIGURATION=Debug ;;
     --measure) CONFIGURATION=Debug; MEASURE=1 ;;
     *)
-      echo "ERROR: unknown option $arg (use --debug or --measure)."
+      echo "ERROR: unknown option $arg (use --own, --demo, --debug or --measure)."
       exit 1
       ;;
   esac
 done
+if [ -z "$VARIANT" ]; then
+  if [ -t 0 ] && [ -t 1 ]; then
+    echo "Which Vision Native do you want to install?"
+    echo "  1) Vision Native       your own data (restore an Electron backup into it)"
+    echo "  2) Vision Native Demo  synthetic Demo data"
+    read -r -p "Choose 1 or 2: " choice
+    case "$choice" in
+      1) VARIANT=standard ;;
+      2) VARIANT=demo ;;
+      *)
+        echo "ERROR: choose 1 or 2."
+        exit 1
+        ;;
+    esac
+  else
+    VARIANT=demo
+  fi
+fi
 
 REPO_PATH="$(cd "$(dirname "$0")" && pwd)"
 NATIVE_PATH="$REPO_PATH/apps/native"
 ELECTRON_DIR="$REPO_PATH/packaging/electron"
-VARIANT="${VISION_NATIVE_VARIANT:-demo}"
 case "$VARIANT" in
   demo) APP_NAME="Vision Native Demo" ;;
   standard) APP_NAME="Vision Native" ;;
@@ -185,8 +207,15 @@ echo "  $APP_NAME installed successfully."
 echo "  Open it with:"
 echo "    open \"$APP_DEST\""
 echo ""
-echo "  It starts its own PostgreSQL 18 cluster and backend on synthetic Demo data in"
-echo "  ~/Library/Application Support/$APP_NAME/. Your Vision and Vision Demo data are untouched."
+if [ "$VARIANT" = "standard" ]; then
+  echo "  It starts its own PostgreSQL 18 cluster and backend on your own data in"
+  echo "  ~/Library/Application Support/$APP_NAME/ (empty on first launch). To move your data:"
+  echo "  make a backup in Electron Vision, quit it, then restore that backup in"
+  echo "  Settings > Backup. Electron Vision's data is untouched."
+else
+  echo "  It starts its own PostgreSQL 18 cluster and backend on synthetic Demo data in"
+  echo "  ~/Library/Application Support/$APP_NAME/. Your Vision and Vision Demo data are untouched."
+fi
 if [ "$VARIANT" = "demo" ]; then
   echo "  Reset its synthetic dataset with: bun run demo:reset-vision-native (then reopen it)."
 fi

@@ -75,11 +75,14 @@ launch from `VisionNativeVariant` in `Info.plist`:
 | `demo` (install)       | `Vision Native Demo.app` | `Vision Native Demo/`, `vision_native_demo` | 54332      |
 | `standard` (Xcode, CI) | `Vision Native.app`      | `Vision Native/`, `vision_native`           | 54331      |
 
-`./install-native.sh` builds the Demo variant; `VISION_NATIVE_VARIANT=standard ./install-native.sh`
-builds the standard one, and `xcodebuild ... VISION_NATIVE_VARIANT=demo` picks the Demo variant in
-a manual build. Both run on the synthetic Demo dataset until the phase 4 switch-over (ADR-204). The
-bundle id, the Keychain service names and the iCloud backup folder follow the variant (for example
-`com.vaultvoyager.vision-native-demo.backup-passphrase` and `Vision Native Demo/Backups`).
+`./install-native.sh --own` builds the standard variant for your own data, `--demo` the Demo
+variant; without either it asks (a non-interactive run builds the Demo). `VISION_NATIVE_VARIANT`
+does the same, and `xcodebuild ... VISION_NATIVE_VARIANT=demo` picks the Demo variant in a manual
+build. Only the Demo variant seeds the synthetic dataset; the standard one starts empty and gets its
+data by restoring an Electron backup (ADR-253). The bundle id and the Keychain service names follow
+the variant (for example `com.vaultvoyager.vision-native-demo.backup-passphrase`). The iCloud backup
+folder is `Vision/Backups` for the standard variant, shared with Electron, and
+`Vision Native Demo/Backups` for the Demo.
 
 `bun run demo:reset-vision-native` asks Vision Native Demo to restore the canonical seed at its next
 launch (quit it first, then reopen it). `bun run demo:reset-native` still resets Electron's Vision

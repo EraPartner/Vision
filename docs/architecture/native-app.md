@@ -2,8 +2,8 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-10-25
-updated: 2026-10-25
+date: 2026-10-26
+updated: 2026-10-26
 tags:
   [
     architecture,
@@ -168,7 +168,8 @@ running, so Retry starts a fresh backend.
    `settings.json` is renamed to `settings.json.corrupt-<ms>`.
 3. Create the private directories and `runtime.env`, verify the payload and check that every
    PostgreSQL tool reports major 18.
-4. Prepare the Demo seed. A seed whose `logicalSha256` and `schemaRevision` match the marker is
+4. Demo variant only: prepare the Demo seed (the standard variant only recovers an interrupted
+   restore here). A seed whose `logicalSha256` and `schemaRevision` match the marker is
    kept. Otherwise the dump is restored into a staging database, its schema head and table counts
    are verified, and it is renamed into place while the previous database is kept for rollback.
    An interrupted restore from an earlier launch is recovered first (see
@@ -483,11 +484,14 @@ result.
 
 The Keychain service of the backup passphrase uses the runtime id with
 hyphens, for example `com.vaultvoyager.vision-native-demo.backup-passphrase`. The iCloud backup
-folder follows the app name (`Vision Native Demo/Backups`). Both variants seed the synthetic Demo
-dataset on first launch and when the seed changes, and neither has an updater, so the standard
-variant holds no real data until the phase 4 switch-over (ADR-204 decision 1).
-`install-native.sh` builds the Demo variant unless `VISION_NATIVE_VARIANT=standard`; a plain Xcode
-or swift-build build is the standard variant.
+folder is `Vision/Backups` for the standard variant (shared with Electron; retention only removes
+this device id's files) and `Vision Native Demo/Backups` for the Demo
+(`NativeVariant.backupFolderName`). Only the Demo variant seeds the synthetic dataset, on first
+launch and when the seed changes (`SupervisorConfiguration.seedsDemo`); the standard variant holds
+real data, restored from an Electron backup ([[docs/adr/253-swift-app-real-data-switch-over|ADR-253]]).
+`install-native.sh --own` builds the standard variant and `--demo` the Demo variant (without
+either it asks; a non-interactive run builds the Demo); a plain Xcode or swift-build build is the
+standard variant.
 
 The Demo reset follows `native-demo.ts`: a regular `demo-reset-request.json` (`version: 1`) in
 `Vision Native Demo/` makes the next launch restore the canonical seed. No script writes that file
@@ -1622,8 +1626,7 @@ frontend build and the synthetic Demo seed, with no Alembic and no Chrome Headle
 generates the project and builds Release into `apps/native/build/`. A "Stage runtime payload"
 build phase copies the payload to `Contents/Resources/runtime/` and `Contents/Resources/demo-seed/`
 before code signing. The script checks the staged files and `codesign --verify --strict`, then
-replaces `/Applications/Vision Native Demo.app` (with `VISION_NATIVE_VARIANT=standard`,
-`/Applications/Vision Native.app`). `VISION_NATIVE_SKIP_PAYLOAD=1` builds without a payload.
+replaces `/Applications/Vision Native Demo.app` (with `--own`, `/Applications/Vision Native.app`). `VISION_NATIVE_SKIP_PAYLOAD=1` builds without a payload.
 
 It signs automatically with the free personal team from `VISION_NATIVE_TEAM_ID`, or from
 `VISION_NATIVE_TEAM_ID = <id>` in `apps/native/Config/Local.xcconfig`, so the signature stays

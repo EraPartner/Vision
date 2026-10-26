@@ -60,7 +60,7 @@ Facts this builds on:
    before the next:
    1. In Electron Vision, make an encrypted backup and confirm it is listed; quit Electron with
       "Keep services running" off.
-   2. Build and install the standard build: `VISION_NATIVE_VARIANT=standard ./install-native.sh`.
+   2. Build and install the standard build: `./install-native.sh --own` (`--demo` installs the Demo build; without either it asks).
    3. Launch Vision Native, set the backup passphrase (the same one) in Settings > Backup, and
       restore the Electron backup there.
    4. Run the real-data checks (decision 4).
