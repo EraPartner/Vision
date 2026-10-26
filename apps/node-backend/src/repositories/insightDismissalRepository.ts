@@ -42,12 +42,15 @@ export async function listDismissals(): Promise<
 export async function recipientExists(recipientId: number): Promise<boolean> {
   const row = await checkedRow(
     existsRowSchema,
-    db.selectNoFrom(({ exists, selectFrom }) =>
-      exists(
-        selectFrom("recipients")
-          .select(sql<number>`1`.as("one"))
-          .where("id", "=", asRecipientId(recipientId)),
-      ).as("exists"),
+    db.selectNoFrom((eb) =>
+      eb
+        .exists(
+          eb
+            .selectFrom("recipients")
+            .select(sql<number>`1`.as("one"))
+            .where("id", "=", asRecipientId(recipientId)),
+        )
+        .as("exists"),
     ),
   );
   return row?.exists === true;

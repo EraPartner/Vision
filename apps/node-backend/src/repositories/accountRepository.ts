@@ -200,7 +200,7 @@ export const accountRepository = {
           ? sql` AND a.is_active = false`
           : sql``;
     const page =
-      limit == null ? sql`` : sql` LIMIT ${limit} OFFSET ${offset ?? 0}`;
+      limit == null ? sql`` : sql` LIMIT ${limit} OFFSET ${offset}`;
     return checkedRows(
       accountBalanceQueryRowSchema,
       sql`

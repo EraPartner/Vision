@@ -26,8 +26,8 @@ export function wrapResponse(
   next: ExpressNextFunction,
 ) {
   /** Send a success envelope. */
-  res.ok = function sendOk<T>(data: T, meta?: ResponseMeta): ExpressResponse {
-    const body: { ok: true; data: T; meta?: ResponseMeta } = { ok: true, data };
+  res.ok = function sendOk(data: unknown, meta?: ResponseMeta): ExpressResponse {
+    const body: { ok: true; data: unknown; meta?: ResponseMeta } = { ok: true, data };
     const mergedMeta = req.id ? { requestId: req.id, ...(meta ?? {}) } : meta;
     if (mergedMeta) body.meta = mergedMeta;
     return res.json(body);

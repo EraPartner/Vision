@@ -80,8 +80,8 @@ export async function getMonthlyFinancialSummary(
   targetCurrency = "EUR",
   excludedRecipientIds: number[] = [],
   allTime = false,
-  startDate: string | undefined = undefined,
-  endDate: string | undefined = undefined,
+  startDate?: string,
+  endDate?: string,
   accountIds: number[] = [],
 ) {
   const validIds = validateInt4Ids(excludedCategoryIds, "excludedCategoryIds");

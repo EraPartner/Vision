@@ -11,6 +11,7 @@
  *   - GET /deduction-candidates
  */
 
+import { looseText } from "../_inputBridges.ts";
 import { Router } from "express";
 import { z } from "zod";
 import infoService from "../../services/infoService.ts";
@@ -65,7 +66,7 @@ router.put("/insight-dismissals", async (req, res) => {
   res.ok(await dismissInsight(parseInput(insightDismissalSchema, req.body)));
 });
 
-router.get("/supported-adapters", async (req, res) => {
+router.get("/supported-adapters", (req, res) => {
   // Derived from the adapter registry (single source of truth) so a newly
   // registered adapter appears in the import card + onboarding wizard without a
   // second hardcoded list to update. (The old list also referenced
@@ -133,10 +134,10 @@ router.get("/insights-digest", async (req, res) => {
  */
 function assertOptionalYear(value: unknown): number | undefined {
   if (value == null || value === "") return undefined;
-  const year = Number.parseInt(String(value), 10);
+  const year = Number.parseInt(looseText(value), 10);
   if (
     !Number.isInteger(year) ||
-    String(year) !== String(value).trim() ||
+    String(year) !== looseText(value).trim() ||
     year < 1970 ||
     year > 3000
   ) {

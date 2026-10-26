@@ -9,6 +9,7 @@
  * stays imperative, running on the parsed body exactly as before.
  */
 
+import { looseText } from "./_inputBridges.ts";
 import { Router } from "express";
 import { z } from "zod";
 import plannedTransactionService from "../services/plannedTransactionService.ts";
@@ -130,7 +131,7 @@ async function resolveCategoryIdFromName(
   fields: PlannedPatchFields,
 ): Promise<unknown> {
   if (!fields.category_name || fields.category_id) return fields.category_id;
-  return resolveCategoryIdByName(fields.category_name as string);
+  return resolveCategoryIdByName(fields.category_name);
 }
 
 /* ── Zod schemas ─────────────────────────────────────────────────────────── */
@@ -317,7 +318,7 @@ const createPlannedSchema = z
     ) {
       ctx.addIssue({
         code: "custom",
-        message: `Invalid or missing recurrence_pattern: ${data.recurrence_pattern}`,
+        message: `Invalid or missing recurrence_pattern: ${looseText(data.recurrence_pattern)}`,
       });
     }
   })
@@ -375,7 +376,7 @@ const patchPlannedSchema = z.looseObject({
       if (value && !isValidPattern(value)) {
         ctx.addIssue({
           code: "custom",
-          message: `Invalid recurrence_pattern: ${value}`,
+          message: `Invalid recurrence_pattern: ${looseText(value)}`,
         });
         return z.NEVER;
       }
@@ -466,7 +467,7 @@ function applyLoanPatchDefaults(
     "loan_payment_day",
   ].some((k) => fields[k] !== undefined);
   const resultingIsLoan =
-    fields.is_loan !== undefined ? !!fields.is_loan : !!existing.is_loan;
+    fields.is_loan !== undefined ? fields.is_loan : existing.is_loan;
 
   if (resultingIsLoan && (loanFieldsChanged || fields.is_loan === true)) {
     generatedLoanSchedule = generateLoanScheduleOrThrow({
@@ -716,11 +717,11 @@ router.patch(
       fields.recurrence_pattern !== undefined
     ) {
       const resultingIsLoan =
-        fields.is_loan !== undefined ? !!fields.is_loan : !!existing.is_loan;
+        fields.is_loan !== undefined ? fields.is_loan : existing.is_loan;
       const resultingIsRecurring =
         fields.is_recurring !== undefined
-          ? !!fields.is_recurring
-          : !!existing.is_recurring;
+          ? fields.is_recurring
+          : existing.is_recurring;
       const resultingPattern =
         fields.recurrence_pattern !== undefined
           ? fields.recurrence_pattern
@@ -731,7 +732,7 @@ router.patch(
         !isValidPattern(resultingPattern)
       ) {
         throw new ValidationError(
-          `Invalid or missing recurrence_pattern: ${resultingPattern}`,
+          `Invalid or missing recurrence_pattern: ${looseText(resultingPattern)}`,
         );
       }
     }

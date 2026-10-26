@@ -19,7 +19,8 @@ function selectConfigs() {
 
 function mapRow(r: CustomParserConfigRow): FormattedCustomParserConfig {
   // pg returns JSONB already parsed; tolerate a string just in case.
-  const config = typeof r.config_json === 'string' ? JSON.parse(r.config_json) : r.config_json;
+  const config: unknown =
+    typeof r.config_json === 'string' ? JSON.parse(r.config_json) : r.config_json;
   // Stored configs were written through the save-path schema of their kind; a
   // row it rejects is a data-contract violation, passed through unchanged.
   checkDataContract(

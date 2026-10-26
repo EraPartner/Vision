@@ -2,6 +2,7 @@
  * Portfolio transaction repo — read operations (list, count, getById, summary).
  */
 
+import { requireRow } from "../database/rowContracts.ts";
 import { sql } from "kysely";
 import type { SelectQueryBuilder } from "kysely";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
@@ -354,7 +355,7 @@ export async function getCount({
   if (type) builder = builder.where(sql<string>`type`, "=", type);
 
   const row = await checkedRow(countRowSchema, builder);
-  return parseInt(row!.count, 10);
+  return parseInt(requireRow(row, "portfolio transaction count").count, 10);
 }
 
 export async function getById(

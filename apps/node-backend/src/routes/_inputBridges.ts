@@ -15,6 +15,8 @@ import { validateId } from "../lib/validation.ts";
 import { parseOptionalPagination, parsePagination } from "../lib/pagination.ts";
 import { parseBooleanQueryParam } from "../lib/httpParams.ts";
 
+export { looseText } from "../lib/looseText.ts";
+
 /** A positive int4 id with `validateId`'s accepted shapes (digit string or integer). */
 export function idField(field: string) {
   return z

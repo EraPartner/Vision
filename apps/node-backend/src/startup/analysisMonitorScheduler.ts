@@ -22,6 +22,6 @@ export function startAnalysisMonitorScheduler() {
   // not replayed as repeated alerts after a sleeping desktop resumes.
   void tick();
   const interval = setInterval(() => void tick(), 60_000);
-  interval.unref?.();
+  interval.unref();
   return interval;
 }

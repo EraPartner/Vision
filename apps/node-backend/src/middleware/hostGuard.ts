@@ -15,9 +15,7 @@ const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "::1"];
  * refuses to bind anything else (ADR-233).
  */
 export function isLoopbackHost(host: string | null | undefined): boolean {
-  const h = String(host ?? "")
-    .trim()
-    .toLowerCase();
+  const h = (host ?? "").trim().toLowerCase();
   if (!h) return false;
   if (h === "localhost" || h === "::1" || h === "[::1]") return true;
   return /^(::ffff:)?127(\.\d{1,3}){3}$/.test(h);

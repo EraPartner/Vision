@@ -74,7 +74,7 @@ function formatMessage(level: string, ...args: unknown[]): string {
   const safeMessage =
     typeof message === "string"
       ? message.replace(/[\r\n\u2028\u2029]+/g, " ")
-      : message;
+      : String(message);
   return `${timestamp} [${level}] ${safeMessage}${extraStr}`;
 }
 

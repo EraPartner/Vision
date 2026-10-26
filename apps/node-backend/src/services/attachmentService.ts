@@ -106,8 +106,8 @@ export async function resolveAbsolutePath(storedPath: string): Promise<string> {
     throw new Error('Invalid attachment path: outside attachments root');
   }
   // Resolve symlinks — ENOENT is fine (file not yet written or already deleted)
-  const real = await fsPromises.realpath(absolute).catch((err) => {
-    if (err.code === 'ENOENT') return absolute;
+  const real = await fsPromises.realpath(absolute).catch((err: unknown) => {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return absolute;
     throw err;
   });
   if (real !== root && !real.startsWith(root + sep)) {

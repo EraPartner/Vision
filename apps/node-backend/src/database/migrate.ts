@@ -193,7 +193,7 @@ export function loadMigrations(
 function createMigrator(db: Db): Migrator {
   return new Migrator({
     db,
-    provider: { getMigrations: async () => loadMigrations() },
+    provider: { getMigrations: () => Promise.resolve().then(() => loadMigrations()) },
   });
 }
 
@@ -210,7 +210,9 @@ function assertSucceeded(
     }
   }
   if (error) {
-    throw error instanceof Error ? error : new Error(String(error));
+    throw error instanceof Error
+      ? error
+      : new Error(typeof error === "string" ? error : JSON.stringify(error));
   }
   return (results ?? [])
     .filter((result) => result.status === "Success")

@@ -85,9 +85,11 @@ function writeWithBackpressure(
 ): Promise<void> {
   // `res.once` is missing on minimal/mocked response objects — in that case
   // there's no drain event to await, so just resolve.
-  const once = res.once;
-  if (res.write(chunk) || typeof once !== "function") return Promise.resolve();
-  return new Promise((resolve) => once.call(res, "drain", () => resolve()));
+  if (res.write(chunk) || typeof res.once !== "function")
+    return Promise.resolve();
+  return new Promise((resolve) => {
+    res.once?.("drain", () => resolve());
+  });
 }
 
 function buildExportChunkSql(
@@ -219,7 +221,7 @@ async function streamExport(
   let cursorId: number | null = null;
   let rowCount = 0;
   try {
-    while (true) {
+    for (;;) {
       const chunk: { rows: unknown[] } = await run(
         buildExportChunkSql(
           where,
@@ -300,7 +302,7 @@ export async function streamCsvExport(
       if (includeBalance) {
         const key = row.account_id ?? null;
         const next = (runningBalances.get(key) ?? toDecimal(0)).plus(
-          toDecimal(row.amount ?? 0),
+          toDecimal(row.amount),
         );
         runningBalances.set(key, next);
         return `${buildCsvRow({ ...row, running_balance: next.toString() }, { includeBalance })}\n`;

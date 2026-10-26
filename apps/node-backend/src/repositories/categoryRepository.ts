@@ -51,7 +51,7 @@ export const categoryRepository = {
       detail,
       search,
       active,
-    }).orderBy(["general", "detail"]);
+    }).orderBy("general").orderBy("detail");
     if (limit != null) builder = builder.limit(limit).offset(offset);
 
     const rows = await checkedRows(categoryRowSchema, builder);
@@ -269,7 +269,7 @@ function enrichCategory(
   if (!row) return null;
   return {
     ...row,
-    category_name: row.path_name ?? `${row.general}:${row.detail}`,
+    category_name: row.path_name,
   };
 }
 

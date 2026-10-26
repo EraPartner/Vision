@@ -128,7 +128,7 @@ export async function createDocument(
           source_name: input.sourceName,
           media_type: input.mediaType,
           content_sha256: input.contentSha256,
-          version: Number(next.version),
+          version: next.version,
           extraction_status: input.extractionStatus,
           extraction_error: input.extractionError ?? null,
         })

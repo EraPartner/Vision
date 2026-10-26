@@ -55,8 +55,8 @@ async function saveProjection(
       "<",
       sql<Date>`date_trunc('month', CURRENT_DATE) - INTERVAL '2 months'`,
     )
-    .where(({ exists, selectFrom }) =>
-      exists(selectFrom("saved").select(sql<number>`1`.as("one"))),
+    .where((eb) =>
+      eb.exists(eb.selectFrom("saved").select(sql<number>`1`.as("one"))),
     )
     .execute();
 }

@@ -57,7 +57,7 @@ const PORTFOLIO_TYPES = new Set(["brokerage", "crypto_exchange", "wallet"]);
 const HOLDINGS_ONLY_TYPES = new Set(["crypto_exchange", "wallet"]);
 
 function groupOf(row: AccountBalanceQueryRow): AccountGroupId {
-  if (row.is_active === false) return "archived";
+  if (!row.is_active) return "archived";
   if (row.type === "liability") return "liabilities";
   if (PORTFOLIO_TYPES.has(row.type)) return "portfolio";
   return "cash";
@@ -156,7 +156,7 @@ export async function computeAccountTotals({
   ]);
   const accounts = rows.map((row) => convertAccount(row, target, rates));
   const needsHoldings = accounts.some((a) => PORTFOLIO_TYPES.has(a.row.type));
-  const holdings = needsHoldings ? await holdingsByAccount(target) : new Map();
+  const holdings = needsHoldings ? await holdingsByAccount(target) : new Map<number, Money>();
 
   const groups = Object.fromEntries(
     ACCOUNT_GROUP_IDS.map((id) => {

@@ -62,7 +62,7 @@ interface PlannedDay {
 function plannedDateToYmd(value: Date | string): string {
   return value instanceof Date
     ? formatDateToYmd(value)
-    : String(value).slice(0, 10);
+    : value.slice(0, 10);
 }
 
 /**
@@ -240,8 +240,8 @@ export const plannedRepository = {
     }
 
     const dailyData = Object.values(dailyMap).sort((a, b) => {
-      const aTime = new Date(a?.date).getTime();
-      const bTime = new Date(b?.date).getTime();
+      const aTime = new Date(a.date).getTime();
+      const bTime = new Date(b.date).getTime();
       if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
       if (Number.isNaN(aTime)) return 1;
       if (Number.isNaN(bTime)) return -1;

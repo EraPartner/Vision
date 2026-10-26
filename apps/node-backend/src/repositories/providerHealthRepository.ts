@@ -81,7 +81,7 @@ async function recordError(
   kind: string,
   errorMessage: string,
 ): Promise<void> {
-  const lastError = String(errorMessage).slice(0, 1000);
+  const lastError = errorMessage.slice(0, 1000);
   await db
     .insertInto('provider_health')
     .values({

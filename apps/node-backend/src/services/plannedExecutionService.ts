@@ -96,7 +96,7 @@ export async function executePlanned({
     }
     if (
       !existing.currency ||
-      existing.currency.toUpperCase() !== transaction.currency?.toUpperCase()
+      existing.currency.toUpperCase() !== transaction.currency.toUpperCase()
     ) {
       throw new ConflictError(
         "Planned payment and transaction currencies must match",
@@ -126,12 +126,8 @@ export async function executePlanned({
     }
     if (
       existing.is_recurring &&
-      ((existing.max_occurrences != null &&
-        nanToZero(Number(existing.execution_count)) >=
-          Number(existing.max_occurrences)) ||
-        (existing.is_executed &&
-          (existing.max_occurrences != null ||
-            existing.recurrence_end_date != null)))
+      existing.max_occurrences != null &&
+      nanToZero(existing.execution_count) >= existing.max_occurrences
     ) {
       throw new ConflictError("Recurring planned transaction is complete");
     }
@@ -158,10 +154,10 @@ export async function executePlanned({
       // max_occurrences, or when the next occurrence would fall past
       // recurrence_end_date. These bounds were collected by the form but dropped
       // at every layer, so bounded recurrences generated due bills forever.
-      const priorExecutions = nanToZero(Number(existing.execution_count));
+      const priorExecutions = nanToZero(existing.execution_count);
       const reachedMaxOccurrences =
         existing.max_occurrences != null &&
-        priorExecutions + 1 >= Number(existing.max_occurrences);
+        priorExecutions + 1 >= existing.max_occurrences;
 
       // pg DATE values represent local calendar days, not instants in APP_TIMEZONE.
       // Preserve the stored day before applying the shared calendar recurrence.
@@ -183,7 +179,7 @@ export async function executePlanned({
       }
     }
 
-    const tagIdsToInherit = (existing.tags ?? []).map((t) => t.id);
+    const tagIdsToInherit = existing.tags.map((t) => t.id);
     const { duplicate } = await plannedTransactionService.executeAndAdvance(
       id,
       executedTransactionId,

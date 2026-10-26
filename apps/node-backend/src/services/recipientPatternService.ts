@@ -276,7 +276,7 @@ export function suggestPatternFromNames(
 } | null {
   if (!names || names.length < 2) return null;
 
-  const upper = names.map((n) => String(n).trim().toUpperCase());
+  const upper = names.map((n) => n.trim().toUpperCase());
   const lcp = longestCommonPrefix(upper);
 
   if (lcp.length < MIN_LCP_LENGTH) return null;

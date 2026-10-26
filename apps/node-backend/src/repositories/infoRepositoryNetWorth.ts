@@ -630,7 +630,7 @@ export const netWorthRepository = {
     return {
       current: {
         liquid: latest.liquid,
-        liabilities: latest.liabilities ?? 0,
+        liabilities: latest.liabilities,
         investments: latest.investments,
         netWorth: latest.netWorth,
         // The response currency (openapi NetWorthResponse.current.currency):

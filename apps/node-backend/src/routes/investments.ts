@@ -3,6 +3,7 @@
  * All business logic lives in services/investmentService.js.
  */
 
+import { looseText } from "./_inputBridges.ts";
 import { Router } from "express";
 import { z } from "zod";
 import { rateLimiter } from "../middleware/rateLimiter.ts";
@@ -83,7 +84,7 @@ const transactionsQuery = z.object({
 
 const exposureQuery = z.object({
   currency: optionalValue
-    .transform((raw) => String(raw || "EUR").toUpperCase())
+    .transform((raw) => looseText(raw || "EUR").toUpperCase())
     .pipe(z.string().regex(/^[A-Z]{3}$/, "must be an ISO 4217 code")),
 });
 

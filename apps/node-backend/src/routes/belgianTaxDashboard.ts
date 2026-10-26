@@ -22,7 +22,7 @@ const schema = z
       .transform((s) => s.toUpperCase())
       .default("EUR"),
   })
-  .passthrough();
+  .loose();
 function ids(raw: unknown, name: string) {
   if (raw === undefined || raw === "") return [];
   const parsed = validateIntArray(Array.isArray(raw) ? raw : [raw], name);

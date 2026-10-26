@@ -27,11 +27,12 @@ import { booleanQueryFlag } from "../_inputBridges.ts";
 
 // The pg row shape for `exchange_rates` as SELECTed above — NUMERIC columns
 // arrive as strings (see toDecimal/toNumber below), DATE as a Date at local
-// midnight (verified against the exchange_rates definition in db/migrations).
+// midnight (verified against the exchange_rates definition in db/migrations);
+// the string branch below stays as a guard if a driver returns the raw value.
 interface ExchangeRateRow {
   currency_code: string;
   rate_to_eur: string;
-  rate_date: Date;
+  rate_date: Date | string;
   fetched_at: Date;
 }
 
@@ -70,7 +71,7 @@ router.get(
       rate_date:
         row.rate_date instanceof Date
           ? formatDateToYmd(row.rate_date)
-          : String(row.rate_date),
+          : row.rate_date,
       fetched_at: row.fetched_at,
     }));
 
@@ -78,7 +79,7 @@ router.get(
     const storedDate = rates[0]?.rate_date ?? null;
     const isStale = !storedDate || storedDate < today;
     const lastFetchedAt = rates.reduce((latest: number, row) => {
-      const ts = row.fetched_at != null ? new Date(row.fetched_at).getTime() : NaN;
+      const ts = new Date(row.fetched_at).getTime();
       return Number.isFinite(ts) && ts > latest ? ts : latest;
     }, 0);
     // "fallback" means nothing is stored: only EUR amounts can be converted.
@@ -86,9 +87,9 @@ router.get(
 
     if (isStale && !dbOnly) {
       clearMemoryCache();
-      warmCache().catch((err) =>
+      warmCache().catch((err: unknown) =>
         logger.warn("Background exchange rate refresh failed", {
-          error: err.message,
+          error: err instanceof Error ? err.message : undefined,
         }),
       );
     }

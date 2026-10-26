@@ -103,7 +103,7 @@ export async function getTransferSuggestions({
   ) {
     throw new ValidationError("Invalid transfer suggestion cursor");
   }
-  const after: [number, number] = parts ? [parts[0]!, parts[1]!] : [0, 0];
+  const after: [number, number] = [parts?.[0] ?? 0, parts?.[1] ?? 0];
   const pairs = await transactionRepository.listTransferSuggestionPairs(
     windowDays,
     after,
@@ -265,9 +265,9 @@ export function scheduleReconcile() {
     reconcileTimer = undefined;
     reconcileDeadline = null;
     reconcileTransfers()
-      .catch((err) =>
+      .catch((err: unknown) =>
         logger.warn("[transfers] debounced reconcile failed", {
-          err: err?.message,
+          err: err instanceof Error ? err.message : undefined,
         }),
       )
       .finally(() => scheduleAggregationRefresh());

@@ -262,7 +262,7 @@ router.post("/database/init", async (req, res) => {
   });
 });
 
-router.post("/database/reset", adminMutateLimiter, async (req, res) => {
+router.post("/database/reset", adminMutateLimiter, (req, res) => {
   if (!settings.admin.enableResetDb) {
     throw new NotFoundError("Database reset endpoint disabled");
   }
@@ -317,14 +317,14 @@ router.get("/update/check", async (req, res) => {
   res.ok(payload);
 });
 
-router.post("/update/apply", async (req, res) => {
+router.post("/update/apply", (req, res) => {
   res.ok({
     success: true,
     note: "Updates are applied automatically by the desktop app. If an update is available, use the notification in the Vision app window to download and install it.",
   });
 });
 
-router.post("/update/apply-and-restart", async (req, res) => {
+router.post("/update/apply-and-restart", (req, res) => {
   res.ok({
     success: true,
     note: "Updates are managed by the Vision desktop app for the active runtime provider. No manual action is required.",

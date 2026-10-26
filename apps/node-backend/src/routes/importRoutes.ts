@@ -9,6 +9,7 @@
  * read-back check (lib/parserConfigSchema.ts).
  */
 
+import { looseText } from "./_inputBridges.ts";
 import { Router } from "express";
 import { z } from "zod";
 import {
@@ -146,7 +147,7 @@ const csvImportOptionsSchema = z.object({
     .unknown()
     .optional()
     .transform((value, ctx) => {
-      const separator = String(value || ",");
+      const separator = looseText(value || ",");
       if (separator.length !== 1) {
         ctx.addIssue({
           code: "custom",
@@ -224,7 +225,7 @@ const customCsvImportSchema = z
       .unknown()
       .optional()
       .transform((value, ctx) => {
-        const separator = value != null ? String(value) : "";
+        const separator = value != null ? looseText(value) : "";
         if (separator && separator.length !== 1) {
           ctx.addIssue({
             code: "custom",
@@ -274,7 +275,7 @@ const customCsvImportSchema = z
       customConfig: {
         bank_name: bank_name.trim(),
         date_format: date_format.trim(),
-        encoding: data.encoding || "utf-8",
+        encoding: data.encoding,
         number_format: data.number_format,
         separator: data.separator,
         skip_rows: data.skip_rows,

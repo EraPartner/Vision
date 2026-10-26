@@ -8,7 +8,11 @@ import { httpAgent as request } from "./helpers/httpAgent.ts";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../src/config/config.ts", () => ({
-  default: { isDevelopment: () => false },
+  default: {
+    isDevelopment: () => false,
+    security: { devBypass: false },
+    rateLimit: { globalMax: 1000, globalWindowMs: 60_000 },
+  },
 }));
 
 import {

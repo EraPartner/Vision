@@ -2,6 +2,7 @@
  * Watchlist Repository - data access for watchlist (prospective investments) table.
  */
 
+import { requireRow } from "../database/rowContracts.ts";
 import { sql } from 'kysely';
 import type { SelectQueryBuilder } from 'kysely';
 import { checkedRow, checkedRows, db } from '../database/db.ts';
@@ -99,7 +100,7 @@ export const watchlistRepository = {
         assetClass,
       ),
     );
-    return parseInt(row!.count, 10);
+    return parseInt(requireRow(row, "watchlist count").count, 10);
   },
 
   async getById(id: number): Promise<FormattedWatchlistRow | null> {

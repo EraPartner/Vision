@@ -44,8 +44,8 @@ function noTransactions(): never {
 
 const driver: Driver = {
   async init() {},
-  async acquireConnection() {
-    return connection;
+  acquireConnection() {
+    return Promise.resolve(connection);
   },
   beginTransaction: noTransactions,
   commitTransaction: noTransactions,

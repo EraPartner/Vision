@@ -37,6 +37,8 @@ vi.mock("../../src/database/connection.ts", () =>
 const settings = vi.hoisted(() => ({
   admin: { enableResetDb: false },
   isDevelopment: () => true,
+  security: { devBypass: false },
+  rateLimit: { globalMax: 1000, globalWindowMs: 60_000 },
 }));
 
 vi.mock("../../src/config/config.ts", () => ({ default: settings }));

@@ -172,6 +172,10 @@ app.get("/health", (req, res) => {
 // a hammering client (or an exposed port) can't turn health checks into a DB
 // DoS; 1s staleness is irrelevant for a liveness signal.
 const DB_PROBE_TTL_MS = 1000;
+
+function errorMessage(err: unknown): string | undefined {
+  return err instanceof Error ? err.message : undefined;
+}
 let dbProbeCache = { value: false, expiresAt: 0 };
 async function checkConnectionCached() {
   const now = Date.now();
@@ -291,7 +295,7 @@ mountRouter(
 
 // AI chat: dedicated per-minute limit on /chat (Ollama calls are expensive);
 // other /api/ai/* endpoints fall back to the global limiter.
-if (settings.aiChat?.enabled) {
+if (settings.aiChat.enabled) {
   const aiChatLimiter = rateLimiter({
     windowMs: 60_000,
     maxRequests: settings.aiChat.rateLimit,
@@ -473,11 +477,11 @@ async function start() {
             if (count > 0)
               logger.info("Resumed recoverable AI investigations", { count });
           })
-          .catch((err) =>
+          .catch((err: unknown) =>
             logger.warn(
               "AI investigation recovery failed; jobs remain resumable",
               {
-                error: err.message,
+                error: errorMessage(err),
               },
             ),
           );
@@ -492,9 +496,9 @@ async function start() {
         // table on every boot. On a boot that just migrated, the two big tables
         // are simply re-sampled here — harmless (ANALYZE is idempotent), and the
         // whole-DB sample is cheap on this dataset.
-        runDatabaseAnalyze().catch((err) =>
+        runDatabaseAnalyze().catch((err: unknown) =>
           logger.warn(
-            { err: err.message },
+            { err: errorMessage(err) },
             "boot-time ANALYZE failed; non-fatal",
           ),
         );
@@ -612,8 +616,8 @@ async function shutdown(signal?: string) {
       // close() alone leaves idle keep-alive sockets (browser tabs, the
       // Electron health watchdog's keepAlive agent) holding the server open
       // until the 10s force-exit. Drop them explicitly; in-flight requests
-      // are untouched. Optional-chained: not every runtime implements it.
-      server.closeIdleConnections?.();
+      // are untouched.
+      server.closeIdleConnections();
     });
   }
 

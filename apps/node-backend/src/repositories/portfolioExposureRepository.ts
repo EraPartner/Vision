@@ -68,7 +68,7 @@ export async function listExposureSources(): Promise<{
       db
         .selectFrom("portfolio_exposure_classifications")
         .select(classificationColumns)
-        .orderBy(["issuer_name", "id"]),
+        .orderBy("issuer_name").orderBy("id"),
     ),
     checkedRows(
       fundHoldingsDocumentRowSchema,

@@ -94,7 +94,7 @@ export const statisticsRepository = {
    */
   async getCategoryBreakdown(
     targetCurrency = "EUR",
-    ancestorCategoryId: number | undefined = undefined,
+    ancestorCategoryId?: number,
     filters: CategoryPivotOptions = {},
     unconverted: UnconvertedTally = createUnconvertedTally(),
   ): Promise<CategoryTotal[]> {
@@ -177,7 +177,7 @@ export const statisticsRepository = {
           mapRowsForAmountConversion(catRows, "total", true),
           targetCurrency,
         ),
-        (row) => nanToZero(parseInt(String(row.count), 10)),
+        (row) => nanToZero(parseInt(row.count, 10)),
         unconverted,
       );
       return buildCategoryFromConvertedRows(converted);
@@ -407,9 +407,9 @@ export const statisticsRepository = {
     const periodCatMap: Record<string, Record<string, CategoryPivotCell>> = {};
     for (const row of converted) {
       const period = row.period;
-      const catId = row.category_id != null && row.category_id !== 0
-        ? parseInt(String(row.category_id), 10)
-        : null;
+      // category_id is the effective-category COALESCE filtered IS NOT NULL.
+      const rawCatId: number = row.category_id;
+      const catId = rawCatId !== 0 ? rawCatId : null;
       const catName = row.category_name || "Uncategorised";
       const eur = row.amount_eur;
       const catKey = catId ?? "null";

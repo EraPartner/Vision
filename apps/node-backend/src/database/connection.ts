@@ -133,7 +133,7 @@ export async function query<R = unknown>(
   const maxRetries = retries > 0 && isRetryableStatement(text) ? retries : 0;
   let attempt = 0;
 
-  while (true) {
+  for (;;) {
     const start = Date.now();
     try {
       const result = await pool.query(text, values);
@@ -282,7 +282,8 @@ export async function withTransaction<T>(
     savepointCounter: { value: 0 },
     activeNested: null,
   };
-  let rollbackFailed = false;
+  // Widened so the `finally` below sees a boolean, not the narrowed literal.
+  let rollbackFailed = false as boolean;
   try {
     await client.query("BEGIN");
     const result = await txStorage.run(store, () => fn(client));
@@ -361,7 +362,8 @@ export async function getTableCount(): Promise<number> {
   const result = await pool.query(
     "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'",
   );
-  return parseInt(result.rows[0].count, 10);
+  const row = result.rows[0] as { count: string } | undefined;
+  return parseInt(row?.count ?? "0", 10);
 }
 
 /**

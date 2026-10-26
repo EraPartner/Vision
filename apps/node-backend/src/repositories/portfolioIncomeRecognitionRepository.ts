@@ -98,7 +98,7 @@ export async function insertIncludedInUnitsIncome(
       .onConflict((oc) => oc.doNothing())
       .returning("id"),
   );
-  return inserted ? Number(inserted.id) : undefined;
+  return inserted ? inserted.id : undefined;
 }
 
 /** Close a batch's paired income `record` receipts before its rows are removed. */

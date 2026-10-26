@@ -6,6 +6,7 @@
  * (ADR-109) before the backend starts listening, so no schema-shape probing is needed.
  */
 
+import { requireRow } from "../database/rowContracts.ts";
 import { sql } from "kysely";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
 import { countRowSchema } from "../database/rowSchemas.ts";
@@ -178,7 +179,7 @@ export function pickInvestmentCreateFields(
 ): InvestmentCreateFields {
   const picked: Record<string, unknown> = {};
   for (const column of INVESTMENT_CREATE_COLUMNS)
-    picked[column] = body?.[column];
+    picked[column] = body[column];
   return picked as unknown as InvestmentCreateFields;
 }
 
@@ -266,7 +267,7 @@ export const investmentRepository = {
       builder = builder.where(sql<string>`asset_class`, "=", assetClass);
 
     const row = await checkedRow(countRowSchema, builder);
-    return parseInt(row!.count, 10);
+    return parseInt(requireRow(row, "investment count").count, 10);
   },
 
   async getAllWithCount({

@@ -8,12 +8,12 @@ import { EUR } from "../../lib/currencyCode.ts";
 import { z } from "zod";
 import { todayAppDateString } from "../../lib/timezone.ts";
 import { bareMessages } from "../../lib/zodInput.ts";
-import { singleQueryValue } from "../_inputBridges.ts";
+import { looseText, singleQueryValue } from "../_inputBridges.ts";
 
 function normalizeTargetCurrency(raw: unknown): CurrencyCode {
   if (raw == null || raw === "") return EUR;
 
-  const value = String(raw).toUpperCase().trim();
+  const value = looseText(raw).toUpperCase().trim();
   return isCurrencyCode(value) ? value : EUR;
 }
 
@@ -28,7 +28,7 @@ export function getTargetCurrency(req: {
 
 export function getMonthParam(raw: unknown): string | undefined {
   if (raw == null || raw === "") return undefined;
-  const value = String(raw).trim();
+  const value = looseText(raw).trim();
   if (/^\d{4}-\d{2}$/.test(value)) return value;
   if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 7);
   return undefined;

@@ -11,6 +11,7 @@
  * filter-mode requests so a mistyped filter cannot delete the whole table.
  */
 
+import { looseText } from "../lib/looseText.ts";
 import { sql } from "kysely";
 import type { RawBuilder } from "kysely";
 import { query as dbQuery } from "../database/connection.ts";
@@ -179,7 +180,7 @@ function optionalStringArray(value: unknown, field: string): string[] | null {
   if (value.length === 0) return null;
   return value.map((entry: unknown) => {
     if (typeof entry !== "string" || entry.trim() === "") {
-      throw new ValidationError(`${field} contains invalid value: ${entry}`);
+      throw new ValidationError(`${field} contains invalid value: ${looseText(entry)}`);
     }
     return entry.trim();
   });
@@ -206,7 +207,7 @@ function optionalTagSlugs(value: unknown, field: string): string[] | null {
   if (list.length === 0) return null;
   return list.map((entry) => {
     if (typeof entry !== "string" || entry.trim() === "") {
-      throw new ValidationError(`${field} contains invalid value: ${entry}`);
+      throw new ValidationError(`${field} contains invalid value: ${looseText(entry)}`);
     }
     return entry;
   });

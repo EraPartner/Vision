@@ -122,13 +122,13 @@ export async function autoLinkTransactions(
   if (activePlanned.length === 0) return result;
 
   const clusterMap = await recipientRepository.getClusterRootMap(
-    txRows.map((t) => t?.recipient_id),
+    txRows.map((t) => t.recipient_id),
   );
 
   const txs = txRows
     .filter(
       (t): t is AutoLinkTxRow & { recipient_id: RecipientId } =>
-        Boolean(t) && t.id != null && t.recipient_id != null,
+        Boolean(t) && t.recipient_id != null,
     )
     .map((t) => ({
       id: t.id,

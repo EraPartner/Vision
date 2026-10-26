@@ -1,4 +1,5 @@
 /** Explicit history reads, compare-and-set adoption, and immutable receipts. */
+import { requireRow } from "../database/rowContracts.ts";
 import { sql } from "kysely";
 import type { ExpressionBuilder } from "kysely";
 import type { AccountId, InvestmentId } from "@vision/types/brands";
@@ -413,14 +414,14 @@ export async function readReconciledProImportAccounts(
         AND s.route = 'portfolio' AND s.type IN ('buy','sell') AND s.status IN ('committed','duplicate'))
     ORDER BY b.account_id`,
   );
-  return rows.map((row) => Number(row.account_id));
+  return rows.map((row) => row.account_id);
 }
 
 /** Caller holds the batch, account, and portfolio write locks. */
 export async function compareAndSetReconciledTransaction(
   before: PortfolioTransactionSnapshot,
   after: PortfolioTransactionSnapshot,
-  expectedUpdatedAt: Date | string | null | undefined = undefined,
+  expectedUpdatedAt?: Date | string | null,
 ): Promise<PortfolioTransactionSnapshot | undefined> {
   const image = jsonb(after);
   const updatedAt = expectedUpdatedAt ?? null;
@@ -456,7 +457,7 @@ export async function insertReconciliationReceipt({
   policy,
   before,
   after,
-  previousEntryId = undefined,
+  previousEntryId,
 }: {
   batchId: Id;
   stagingRowId: Id;
@@ -484,7 +485,7 @@ export async function insertReconciliationReceipt({
       .returning("id"),
   );
   // INSERT ... RETURNING without ON CONFLICT yields exactly one row.
-  return Number(inserted!.id);
+  return Number(requireRow(inserted, "reconciliation receipt insert").id);
 }
 
 export async function markAdoptedSourceDuplicate(

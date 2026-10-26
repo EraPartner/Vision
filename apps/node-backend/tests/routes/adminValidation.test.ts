@@ -22,6 +22,8 @@ vi.mock("../../src/config/config.ts", () => ({
   default: {
     admin: { enableResetDb: true },
     isDevelopment: () => true,
+    security: { devBypass: false },
+    rateLimit: { globalMax: 1000, globalWindowMs: 60_000 },
   },
 }));
 

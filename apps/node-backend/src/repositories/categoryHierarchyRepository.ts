@@ -137,7 +137,7 @@ async function upsertRootAlias(
 export async function listCategoryNodes(): Promise<CategoryNode[]> {
   const rows = await checkedRows(
     categoryNodeRowSchema,
-    selectNodes().orderBy(["p.names", "c.id"]),
+    selectNodes().orderBy("p.names").orderBy("c.id"),
   );
   return rows.map((row) => mapNode(row));
 }
@@ -342,7 +342,10 @@ export async function mergeCategoryNodes(
       throw invalid("Merge target must be active");
     // Two locked rows, the target among them and source !== target: the other
     // row is the source.
-    const source = nodes.find((node) => node.id === sourceId)!;
+    const source = requireRow(
+      nodes.find((node) => node.id === sourceId),
+      "merge source category",
+    );
     const targetBelowSource =
       (await db
         .selectFrom("category_ancestors")

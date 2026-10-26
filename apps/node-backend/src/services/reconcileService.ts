@@ -28,6 +28,7 @@
  * income/spending aggregations and out of the ADR-083 transfer reconciler.
  */
 
+import { looseText } from "../lib/looseText.ts";
 import { sql } from "kysely";
 import { asAccountId, asCurrencyCode } from "@vision/types/brands";
 import { withTransaction } from "../database/connection.ts";
@@ -70,17 +71,20 @@ export interface ReconcileResult {
  * Validate the reconcile payload.
  * Pure (no I/O) so it can be unit-tested directly.
  */
-function normalizeReconcile(
-  body: { mode?: unknown; currency?: unknown } | null | undefined,
-): { mode: ReconcileMode; currency: string | undefined } {
-  const mode = String(body?.mode ?? "");
+function normalizeReconcile(body: unknown): {
+  mode: ReconcileMode;
+  currency: string | undefined;
+} {
+  const fields: { mode?: unknown; currency?: unknown } =
+    typeof body === "object" && body !== null ? body : {};
+  const mode = looseText(fields.mode ?? "");
   if (!VALID_MODES.has(mode)) {
     throw new ValidationError(
       "mode is required and must be 'accept' or 'adjustment'",
     );
   }
   const currency =
-    body?.currency == null ? undefined : assertCurrency(body.currency);
+    fields.currency == null ? undefined : assertCurrency(fields.currency);
   return { mode: mode as ReconcileMode, currency };
 }
 
@@ -91,7 +95,7 @@ export { normalizeReconcile as __normalizeReconcile };
  */
 export async function reconcileAccount(
   accountId: number,
-  body: { mode?: unknown; currency?: unknown } | null | undefined,
+  body: unknown,
 ): Promise<ReconcileResult> {
   const { mode, currency: requestedCurrency } = normalizeReconcile(body);
   const today = todayAppDateString();
@@ -150,8 +154,8 @@ export async function reconcileAccount(
       row.balance_parts,
       row.account_currency,
     );
-    const reconcileCurrency = String(
-      requestedCurrency ?? fallbackBase.currency,
+    const reconcileCurrency = (
+      requestedCurrency ?? fallbackBase.currency
     ).toUpperCase();
     const exactPart = (row.balance_parts ?? []).find(
       (part) => String(part.currency).toUpperCase() === reconcileCurrency,

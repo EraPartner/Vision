@@ -69,7 +69,7 @@ router.get(
 
     const { limit, offset } = page;
 
-    const allSnapshots = Array.isArray(data?.snapshots) ? data.snapshots : [];
+    const allSnapshots = Array.isArray(data.snapshots) ? data.snapshots : [];
     // Page newest-first by indexing from the end — avoids copying and
     // reversing the entire snapshot array on every paginated request.
     const len = allSnapshots.length;

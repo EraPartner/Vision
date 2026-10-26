@@ -19,6 +19,7 @@ import {
 import { bareMessages, guardField, parseInput } from "../lib/zodInput.ts";
 import {
   idParamsSchema,
+  looseText,
   paginationQuery,
   singleQueryValue,
 } from "./_inputBridges.ts";
@@ -41,7 +42,7 @@ const MAX_PRICE = 999_999_999_999;
 // An empty / whitespace-only name is not a valid item label; VARCHAR(200)
 // (migration 0001) caps the width before the column raises a raw 22001 500.
 const nameField = guardField((value) => {
-  if (value === null || String(value).trim() === "") {
+  if (value === null || looseText(value).trim() === "") {
     throw new ValidationError("name cannot be empty");
   }
   // assertMaxLength's declared return is `unknown` (it's a generic length

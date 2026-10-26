@@ -41,26 +41,25 @@ export const pgDayString = z.string();
  * untouched, so these satisfy `RowSchema<T>` (input = output) while a real
  * transform still fails to compile. The tag matches `@vision/types/brands`.
  */
-const pgKey = <B extends string>() => z.int().brand<B, "inout">();
 
 /** `accounts.id` and every column referencing it. */
-export const pgAccountId = pgKey<"AccountId">();
+export const pgAccountId = z.int().brand<"AccountId", "inout">();
 /** `transactions.id` and every column referencing it. */
-export const pgTransactionId = pgKey<"TransactionId">();
+export const pgTransactionId = z.int().brand<"TransactionId", "inout">();
 /** `categories.id` and every column referencing it. */
-export const pgCategoryId = pgKey<"CategoryId">();
+export const pgCategoryId = z.int().brand<"CategoryId", "inout">();
 /** `recipients.id` and every column referencing it. */
-export const pgRecipientId = pgKey<"RecipientId">();
+export const pgRecipientId = z.int().brand<"RecipientId", "inout">();
 /** `tags.id` and every column referencing it. */
-export const pgTagId = pgKey<"TagId">();
+export const pgTagId = z.int().brand<"TagId", "inout">();
 /** `transaction_splits.id` and every column referencing it. */
-export const pgSplitId = pgKey<"SplitId">();
+export const pgSplitId = z.int().brand<"SplitId", "inout">();
 /** `planned_transactions.id` and every column referencing it. */
-export const pgPlannedTransactionId = pgKey<"PlannedTransactionId">();
+export const pgPlannedTransactionId = z.int().brand<"PlannedTransactionId", "inout">();
 /** `investments.id` and every column referencing it. */
-export const pgInvestmentId = pgKey<"InvestmentId">();
+export const pgInvestmentId = z.int().brand<"InvestmentId", "inout">();
 /** `portfolio_transactions.id` and every column referencing it. */
-export const pgPortfolioTransactionId = pgKey<"PortfolioTransactionId">();
+export const pgPortfolioTransactionId = z.int().brand<"PortfolioTransactionId", "inout">();
 
 /**
  * A currency column. The ISO shape is enforced by the tables' CHECK

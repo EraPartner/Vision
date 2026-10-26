@@ -4,7 +4,11 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../src/config/config.ts", () => ({
-  default: { isDevelopment: () => false },
+  default: {
+    isDevelopment: () => false,
+    security: { devBypass: false },
+    rateLimit: { globalMax: 1000, globalWindowMs: 60_000 },
+  },
 }));
 
 import {

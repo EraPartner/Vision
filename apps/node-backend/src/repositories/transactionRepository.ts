@@ -263,7 +263,7 @@ function getCachedTransactionCount(
       }
       return rows[0]?.total ?? 0;
     })
-    .catch((err) => {
+    .catch((err: unknown) => {
       if (transactionCountCache.get(key)?.promise === promise) {
         transactionCountCache.delete(key);
       }
@@ -1117,10 +1117,11 @@ export const transactionRepository = {
         .where("t.is_active", "=", true)
         .where("t.recipient_id", "is not", null)
         .where(sql<boolean>`t.date >= ${sinceDate}`)
-        .where(({ not, exists, selectFrom }) =>
-          not(
-            exists(
-              selectFrom("planned_transaction_executions as pte")
+        .where((eb) =>
+          eb.not(
+            eb.exists(
+              eb
+                .selectFrom("planned_transaction_executions as pte")
                 .select(sql<number>`1`.as("one"))
                 .whereRef("pte.executed_transaction_id", "=", "t.id"),
             ),

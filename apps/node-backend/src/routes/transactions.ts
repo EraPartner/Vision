@@ -43,11 +43,7 @@ import {
   guardField,
   parseInput,
 } from "../lib/zodInput.ts";
-import {
-  booleanQueryFlag,
-  entityIdParamsSchema,
-  singleQueryValue,
-} from "./_inputBridges.ts";
+import { booleanQueryFlag, entityIdParamsSchema, looseText, singleQueryValue } from "./_inputBridges.ts";
 import {
   asAccountId,
   asCategoryId,
@@ -76,7 +72,9 @@ const router = Router();
  * runtime by convertRowsToEur() when normalize_to_eur=true — not part of the
  * repository's own row shape.
  */
-type FormattableTransactionRow = EnrichedTransactionRow & {
+type FormattableTransactionRow = Omit<EnrichedTransactionRow, "tags"> & {
+  /** Rows from write paths may not carry the attached tag sub-collection. */
+  tags?: EnrichedTransactionRow["tags"] | undefined;
   amount_eur?: number | string | undefined;
   /** normalize_to_eur found no stored rate: `amount_eur` is the native amount. */
   amount_eur_unconverted?: true;
@@ -469,7 +467,7 @@ function parseIdListQueryParam<T extends number>(
   brand: (id: number) => T,
 ): T[] | undefined {
   if (raw == null) return undefined;
-  const joined = String(raw);
+  const joined = looseText(raw);
   if (joined === "") return undefined;
   const result = validateIntArray(joined.split(","), field);
   if (!result.valid) throw new ValidationError(result.error);
@@ -528,7 +526,7 @@ const transactionFilterQueryShape = {
     .optional()
     .transform((value) => {
       if (!value) return undefined;
-      const slugs = String(value)
+      const slugs = looseText(value)
         .split(",")
         .map((slug) => slug.trim().toLowerCase())
         .filter(Boolean);
@@ -633,7 +631,7 @@ const transactionExportQuerySchema = bareMessages(
       .optional()
       .transform((value) =>
         value
-          ? String(value)
+          ? looseText(value)
               .split(",")
               .map((account) => account.trim())
               .filter(Boolean)

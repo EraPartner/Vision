@@ -1,4 +1,5 @@
 import plannedTransactionRepository from "../repositories/plannedTransactionRepository.ts";
+import { requireRow } from "../database/rowContracts.ts";
 import type { PlannedCommitmentRow } from "../repositories/plannedTransactionRepository.ts";
 import {
   expandOccurrences,
@@ -177,7 +178,7 @@ function nextDaysTotals(
   ).amount;
   return {
     days: dates.map((date) => {
-      const day = days.get(date)!;
+      const day = requireRow(days.get(date), `planned totals day ${date}`);
       return {
         date,
         incoming: roundedSum(day.incoming, currency),

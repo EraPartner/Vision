@@ -43,6 +43,10 @@ async function runMaintenanceStatement(sql: string) {
 }
 
 /** All managed materialized view names */
+function errorMessage(err: unknown): string | undefined {
+  return err instanceof Error ? err.message : undefined;
+}
+
 const MATERIALIZED_VIEWS = ["mv_monthly_summary", "mv_category_totals"];
 
 /**
@@ -134,8 +138,8 @@ export async function createMaterializedViews() {
   // in migrate.js — the views are tiny, and stale stats must not fail warmup.
   await Promise.all(
     MATERIALIZED_VIEWS.map((view) =>
-      query(`ANALYZE ${view}`).catch((err) => {
-        logger.warn(`Could not ANALYZE ${view}`, { error: err.message });
+      query(`ANALYZE ${view}`).catch((err: unknown) => {
+        logger.warn(`Could not ANALYZE ${view}`, { error: errorMessage(err) });
       }),
     ),
   );
@@ -173,9 +177,9 @@ export async function ensureMaterializedViewIndexes() {
         .then(() =>
           runMaintenanceStatement(`DROP INDEX IF EXISTS ${legacyName}`),
         )
-        .catch((err) => {
+        .catch((err: unknown) => {
           logger.warn(`Could not create index ${name} on ${view}`, {
-            error: err.message,
+            error: errorMessage(err),
           });
         }),
     ),
@@ -206,13 +210,13 @@ export async function refreshMaterializedViews(): Promise<void> {
       MATERIALIZED_VIEWS.map((view) =>
         runMaintenanceStatement(
           `REFRESH MATERIALIZED VIEW CONCURRENTLY ${view}`,
-        ).catch((err) => {
+        ).catch((err: unknown) => {
           // Fall back to non-concurrent if the view has no unique index or was never
           // populated. Match case-insensitively: Postgres phrases the unpopulated case as
           // "CONCURRENTLY cannot be used when the materialized view is not populated"
           // (uppercase CONCURRENTLY, "is not populated") — a case-sensitive substring check
           // missed it, so the first refresh after an initdb-loaded dump kept failing.
-          const msg = (err.message || "").toLowerCase();
+          const msg = (errorMessage(err) ?? "").toLowerCase();
           if (
             msg.includes("not populated") ||
             msg.includes("has not been populated") ||
@@ -225,7 +229,7 @@ export async function refreshMaterializedViews(): Promise<void> {
           // Any other error is a real refresh failure — re-throw so the outer
           // catch logs it. Swallowing it here let refreshMaterializedViews
           // resolve "successfully" while leaving a stale view in place.
-          logger.warn(`Failed to refresh ${view}`, { error: err.message });
+          logger.warn(`Failed to refresh ${view}`, { error: errorMessage(err) });
           throw err;
         }),
       ),
@@ -251,9 +255,9 @@ export async function refreshMaterializedViews(): Promise<void> {
       refreshQueued = false;
       // Schedule deferred refresh; swallow rejection so unhandled promises do not crash the process.
       setTimeout(() => {
-        refreshMaterializedViews().catch((err) => {
+        refreshMaterializedViews().catch((err: unknown) => {
           logger.warn("Deferred materialized view refresh failed", {
-            error: err.message,
+            error: errorMessage(err),
           });
         });
       }, 500);
@@ -293,9 +297,9 @@ export function scheduleRefresh() {
   debounceTimer = setTimeout(() => {
     debounceTimer = null;
     debounceDeadline = null;
-    refreshMaterializedViews().catch((err) => {
+    refreshMaterializedViews().catch((err: unknown) => {
       logger.warn("Debounced materialized view refresh failed", {
-        error: err.message,
+        error: errorMessage(err),
       });
     });
   }, delay);

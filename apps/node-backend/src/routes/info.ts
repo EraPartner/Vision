@@ -61,7 +61,7 @@ async function warmNetWorthCache(targetCurrency: string) {
     );
     logger.info("Net-worth cache warmed", {
       targetCurrency,
-      snapshots: nwData?.snapshots?.length,
+      snapshots: nwData.snapshots.length,
     });
   } catch (err) {
     logger.error("Failed to warm net-worth cache", {

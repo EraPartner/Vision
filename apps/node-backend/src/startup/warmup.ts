@@ -138,6 +138,10 @@ async function pruneOldImportBatches() {
   }
 }
 
+function errorMessage(err: unknown): string | undefined {
+  return err instanceof Error ? err.message : undefined;
+}
+
 /**
  * Wrap a scheduled async task so a slow run can't overlap the next interval
  * tick — if the previous invocation is still running, this one is skipped.
@@ -170,30 +174,30 @@ function withInFlightGuard(
 }
 
 function hasLivePriceRefreshConfig(investment: InvestmentRow): boolean {
-  const provider = investment?.price_provider;
+  const provider = investment.price_provider;
   if (!provider || provider === "manual") return false;
 
   if (provider === "custom") {
     return Boolean(
-      investment?.price_provider_latest_url ||
-      investment?.price_provider_url ||
-      investment?.price_provider_history_url,
+      investment.price_provider_latest_url ||
+      investment.price_provider_url ||
+      investment.price_provider_history_url,
     );
   }
 
   if (provider === "yahoo") {
-    return Boolean(investment?.price_provider_id || investment?.symbol);
+    return Boolean(investment.price_provider_id || investment.symbol);
   }
 
   if (provider === "kinesis") {
-    if (investment?.price_provider_id) return true;
-    const assetName = (investment?.name || investment?.symbol || "")
+    if (investment.price_provider_id) return true;
+    const assetName = (investment.name || investment.symbol || "")
       .toLowerCase()
       .trim();
     return Boolean(assetName && getKinesisAssetConfig(assetName));
   }
 
-  return Boolean(investment?.price_provider_id);
+  return Boolean(investment.price_provider_id);
 }
 
 function isValidStoredPrice(value: unknown): boolean {
@@ -283,9 +287,9 @@ async function refreshInvestmentPricesOnStartup() {
             `Startup deferred Kinesis price refresh completed: ${updated}/${deferredKinesisRefresh.length}`,
           );
         })
-        .catch((err) => {
+        .catch((err: unknown) => {
           logger.error("Startup deferred Kinesis price refresh failed", {
-            error: err.message,
+            error: errorMessage(err),
           });
         });
     }, 0);
@@ -370,10 +374,10 @@ export async function runWarmupTasks({
     .then(() => {
       warmupStatus.materializedViews = "ready";
     })
-    .catch((err) => {
+    .catch((err: unknown) => {
       warmupStatus.materializedViews = "failed";
       logger.error("Failed to prepare materialized views on startup", {
-        error: err.message,
+        error: errorMessage(err),
       });
     });
 
@@ -394,10 +398,10 @@ export async function runWarmupTasks({
     .then(() => {
       warmupStatus.exchangeRates = "ready";
     })
-    .catch((err) => {
+    .catch((err: unknown) => {
       warmupStatus.exchangeRates = "failed";
       logger.error("Failed to warm exchange rate cache on startup", {
-        error: err.message,
+        error: errorMessage(err),
       });
     });
 
@@ -405,26 +409,26 @@ export async function runWarmupTasks({
     .then(() => {
       warmupStatus.inflation = "ready";
     })
-    .catch((err) => {
+    .catch((err: unknown) => {
       warmupStatus.inflation = "failed";
       logger.error("Failed to warm Belgian inflation cache on startup", {
-        error: err.message,
+        error: errorMessage(err),
       });
     });
 
   const fxBackfillPromise = (
     online ? backfillPortfolioHistoricalRates() : Promise.resolve()
-  ).catch((err) => {
+  ).catch((err: unknown) => {
     logger.error(
       "Failed to backfill portfolio historical exchange rates on startup",
-      { error: err.message },
+      { error: errorMessage(err) },
     );
   });
 
 
-  sanitizePersistedKinesisHistory().catch((err) => {
+  sanitizePersistedKinesisHistory().catch((err: unknown) => {
     logger.error("Failed to sanitize persisted Kinesis history on startup", {
-      error: err.message,
+      error: errorMessage(err),
     });
   });
 
@@ -439,19 +443,19 @@ export async function runWarmupTasks({
         .then(() => {
           warmupStatus.infoCaches = "ready";
         })
-        .catch((err) => {
+        .catch((err: unknown) => {
           warmupStatus.infoCaches = "failed";
           logger.error("Failed to warm info caches on startup", {
-            error: err.message,
+            error: errorMessage(err),
           });
         });
     })
-    .catch((err) => {
+    .catch((err: unknown) => {
       warmupStatus.portfolioSnapshots = "failed";
       warmupStatus.infoCaches = "failed";
       logger.error(
         "Failed to compute portfolio performance snapshots on startup",
-        { error: err.message },
+        { error: errorMessage(err) },
       );
     });
 
@@ -459,14 +463,14 @@ export async function runWarmupTasks({
   if (online) {
     startupPriceRefreshTimer = setTimeout(() => {
       startupPriceRefreshTimer = null;
-      backfillHistoricalAssetQuotes().catch((err) => {
+      backfillHistoricalAssetQuotes().catch((err: unknown) => {
         logger.error("Failed to backfill historical asset quotes on startup", {
-          error: err.message,
+          error: errorMessage(err),
         });
       });
-      refreshInvestmentPricesOnStartup().catch((err) => {
+      refreshInvestmentPricesOnStartup().catch((err: unknown) => {
         logger.error("Failed to refresh investment prices on startup", {
-          error: err.message,
+          error: errorMessage(err),
         });
       });
     }, STARTUP_PRICE_REFRESH_DELAY_MS);
@@ -484,16 +488,16 @@ export async function runWarmupTasks({
       }
       logger.info("Running scheduled exchange rate refresh...");
       clearExchangeRateCache();
-      await warmExchangeRateCache().catch((err) => {
+      await warmExchangeRateCache().catch((err: unknown) => {
         logger.error("Scheduled exchange rate refresh failed", {
-          error: err.message,
+          error: errorMessage(err),
         });
       });
 
       clearInflationMemoryCache();
-      await warmInflationCache().catch((err) => {
+      await warmInflationCache().catch((err: unknown) => {
         logger.error("Scheduled Belgian inflation refresh failed", {
-          error: err.message,
+          error: errorMessage(err),
         });
       });
     }),
@@ -506,8 +510,10 @@ export async function runWarmupTasks({
         logger.debug("Skipping periodic quote refresh — offline");
         return;
       }
-      await refreshActiveHoldingQuotes().catch((err) => {
-        logger.error("Periodic quote refresh failed", { error: err.message });
+      await refreshActiveHoldingQuotes().catch((err: unknown) => {
+        logger.error("Periodic quote refresh failed", {
+          error: errorMessage(err),
+        });
       });
     }),
     ONE_HOUR_MS,

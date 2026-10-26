@@ -267,6 +267,13 @@ function filterPlannedTransactions({
   return builder;
 }
 
+/** Append to the list under `key`, creating it on first use. */
+function pushTo<K, V>(map: Map<K, V[]>, key: K, value: V): void {
+  const list = map.get(key);
+  if (list) list.push(value);
+  else map.set(key, [value]);
+}
+
 /** One installment to write: a `LoanScheduleRow` or a computed `LoanInstallment`. */
 export type LoanScheduleEntryInput = {
   installment_number: unknown;
@@ -286,7 +293,7 @@ export async function insertLoanScheduleBatch(
   if (!Array.isArray(scheduleEntries) || scheduleEntries.length === 0) return;
 
   const values = scheduleEntries.map(
-    (installment) =>
+    (installment: LoanScheduleEntryInput) =>
       sql`(${plannedTransactionId}, ${installment.installment_number}, ${installment.due_date},
            ${installment.payment_amount}, ${installment.principal_amount},
            ${installment.interest_amount}, ${installment.remaining_principal})`,
@@ -583,19 +590,11 @@ export const plannedTransactionRepository = {
       );
 
       for (const execution of executionRows) {
-        if (
-          !executionsByPlannedTransactionId.has(
-            execution.planned_transaction_id,
-          )
-        ) {
-          executionsByPlannedTransactionId.set(
-            execution.planned_transaction_id,
-            [],
-          );
-        }
-        executionsByPlannedTransactionId
-          .get(execution.planned_transaction_id)!
-          .push(execution);
+        pushTo(
+          executionsByPlannedTransactionId,
+          execution.planned_transaction_id,
+          execution,
+        );
       }
     }
 
@@ -623,20 +622,12 @@ export const plannedTransactionRepository = {
       );
 
       for (const scheduleRow of scheduleRows) {
-        if (
-          !schedulesByPlannedTransactionId.has(
-            scheduleRow.planned_transaction_id,
-          )
-        ) {
-          schedulesByPlannedTransactionId.set(
-            scheduleRow.planned_transaction_id,
-            [],
-          );
-        }
         const { planned_transaction_id, ...loanScheduleEntry } = scheduleRow;
-        schedulesByPlannedTransactionId
-          .get(planned_transaction_id)!
-          .push(loanScheduleEntry);
+        pushTo(
+          schedulesByPlannedTransactionId,
+          planned_transaction_id,
+          loanScheduleEntry,
+        );
       }
     }
 
@@ -663,11 +654,8 @@ export const plannedTransactionRepository = {
           .orderBy("tg.slug", "asc"),
       );
       for (const tagRow of tagRows) {
-        if (!tagsByPlannedTransactionId.has(tagRow.planned_transaction_id)) {
-          tagsByPlannedTransactionId.set(tagRow.planned_transaction_id, []);
-        }
         const { planned_transaction_id, ...tag } = tagRow;
-        tagsByPlannedTransactionId.get(planned_transaction_id)!.push(tag);
+        pushTo(tagsByPlannedTransactionId, planned_transaction_id, tag);
       }
     }
 

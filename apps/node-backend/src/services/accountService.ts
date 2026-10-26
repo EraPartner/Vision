@@ -5,6 +5,7 @@
  * data-access layer directly (vision-local/no-repo-direct-from-route, ADR-067).
  */
 
+import { looseText } from "../lib/looseText.ts";
 import { z } from "zod";
 import accountRepository from "../repositories/accountRepository.ts";
 import {
@@ -162,7 +163,7 @@ const statementBalanceDateField = z
   .unknown()
   .transform((value, ctx) => {
     if (value === null) return null;
-    const d = String(value);
+    const d = looseText(value);
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
     const year = match ? Number(match[1]) : 0;
     const month = match ? Number(match[2]) : 0;

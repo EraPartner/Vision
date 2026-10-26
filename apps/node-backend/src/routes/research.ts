@@ -12,6 +12,7 @@
  * and a "not mapped / unavailable" state instead of a silent empty.
  */
 
+import { looseText } from "./_inputBridges.ts";
 import { Router } from "express";
 import type { ExpressResponse } from "../types/express.ts";
 import { z } from "zod";
@@ -49,10 +50,17 @@ const EMPTY_BY_TYPE: Record<string, unknown> = {
   news: { articles: [] },
 };
 
+/** The request body's fields; a missing or non-object body has none. */
+function bodyFields(body: unknown): Record<string, unknown> {
+  return typeof body === "object" && body !== null
+    ? (body as Record<string, unknown>)
+    : {};
+}
+
 function single(value: unknown): string {
-  if (Array.isArray(value)) return value.length > 0 ? String(value[0]).trim() : "";
+  if (Array.isArray(value)) return value.length > 0 ? looseText(value[0]).trim() : "";
   if (value == null) return "";
-  return String(value).trim();
+  return looseText(value).trim();
 }
 
 /* ── Zod schemas ─────────────────────────────────────────────────────────────
@@ -210,7 +218,7 @@ router.get("/macro/search", async (req, res) => {
     provider: null,
     source: result.source,
   };
-  res.ok({ items: result.items ?? [] }, meta);
+  res.ok({ items: result.items }, meta);
 });
 
 // GET /api/research/macro/series?provider=fred&series_id=CPIAUCSL&range=5y
@@ -300,7 +308,7 @@ const portfolioForecastSchema = z
     let schedule: number[] | undefined;
     if (body.monthly_contribution_schedule !== undefined) {
       const parsed = z
-        .array(z.number().finite().min(0))
+        .array(z.number().min(0))
         .max(600)
         .safeParse(body.monthly_contribution_schedule);
       if (!parsed.success || parsed.data.length > horizon) {
@@ -398,7 +406,7 @@ router.get("/mappings", async (req, res) => {
 // POST /api/research/mappings/resolve  { instrument_key, key_type, asset_class, query, investment_id }
 router.post("/mappings/resolve", async (req, res) => {
   const { instrument_key, key_type, asset_class, query, investment_id } =
-    req.body ?? {};
+    bodyFields(req.body);
   const q = parseInput(querySchema, query);
   const result = await researchMappingService.resolve({
     instrumentKey: requireInstrumentKey(instrument_key),
@@ -419,7 +427,7 @@ router.post("/mappings/resolve", async (req, res) => {
 // Answers the updated mapping set in the same canonical `{items, total}`
 // collection shape as GET /mappings (one response type for both).
 router.post("/mappings", async (req, res) => {
-  const { instrument_key, key_type, mappings } = req.body ?? {};
+  const { instrument_key, key_type, mappings } = bodyFields(req.body);
   const rows = await researchMappingService.save({
     instrumentKey: requireInstrumentKey(instrument_key),
     keyType: keyType(key_type),
@@ -439,7 +447,7 @@ router.delete("/mappings/:id", validateIdParam, async (req, res) => {
 
 // POST /api/research/mappings/audit  { instrument_key, key_type }
 router.post("/mappings/audit", async (req, res) => {
-  const { instrument_key, key_type } = req.body ?? {};
+  const { instrument_key, key_type } = bodyFields(req.body);
   const result = await researchMappingService.audit({
     instrumentKey: requireInstrumentKey(instrument_key),
     keyType: keyType(key_type),
@@ -463,7 +471,7 @@ router.get("/provider-keys", async (_req, res) => {
 // Answers the refreshed statuses in the same `{items, total}` shape as the GET.
 router.put("/provider-keys/:provider", async (req, res) => {
   const provider = parseInput(providerParamSchema, req.params.provider);
-  const apiKey = parseInput(apiKeySchema, req.body?.api_key);
+  const apiKey = parseInput(apiKeySchema, bodyFields(req.body).api_key);
   await researchProviderKeyService.setKey(provider, apiKey);
   const items = await researchProviderKeyService.listKeyStatuses();
   res.ok({ items, total: items.length });

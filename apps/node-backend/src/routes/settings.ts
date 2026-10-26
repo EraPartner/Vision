@@ -542,7 +542,7 @@ router.put("/:key", async (req, res) => {
 
 router.put("/", async (req, res) => {
   const { settings, expected } = parseInput(bulkSettingsBodySchema, req.body);
-  const validatedEntries = new Map();
+  const validatedEntries = new Map<string, unknown>();
   for (const [key, value] of Object.entries(settings)) {
     validatedEntries.set(key, validateSettingValue(key, value));
   }
@@ -555,8 +555,7 @@ router.put("/", async (req, res) => {
 router.delete("/:key", async (req, res) => {
   const { key } = parseInput(deleteKeyParamsSchema, req.params);
   const { expected } = parseInput(deleteSettingBodySchema, req.body);
-  const deleted = await settingsService.deleteExpected(key, expected);
-  if (!deleted) throw new NotFoundError(`Setting '${key}' not found`);
+  await settingsService.deleteExpected(key, expected);
   // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
   res.status(204).send();
 });
