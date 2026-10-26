@@ -56,7 +56,7 @@ export async function executeAnalysisPivot(
   const execute = dependencies.execute ?? executeAnalysisSql;
   const rows = [...new Set(config?.rows ?? [])];
   const columns = [...new Set(config?.columns ?? [])];
-  const measures = [...new Set(config?.values ?? plan?.measures ?? [])];
+  const measures = [...new Set(config?.values ?? plan.measures ?? [])];
   if (
     rows.length > 3 ||
     columns.length > 3 ||
@@ -134,15 +134,15 @@ export async function executeAnalysisPivot(
       if (
         result.window.kind !== "page" ||
         result.window.hasMore ||
-        (result.window.offset ?? 0) !== 0
+        result.window.offset !== 0
       )
         throw new Error(
           "Pivot exceeds the complete-output limit; narrow its filters",
         );
-      financialComplete &&= result.coverage?.status !== "partial";
+      financialComplete &&= result.coverage.status !== "partial";
       unavailableRows = Math.max(
         unavailableRows,
-        result.coverage?.unavailableRows ?? 0,
+        result.coverage.unavailableRows,
       );
       totalRows += result.rows.length;
       if (totalRows > 4000)
@@ -154,7 +154,7 @@ export async function executeAnalysisPivot(
         columnDepth: c,
         groups,
         rows: result.rows,
-        columns: result.declaredColumns ?? compiled.columns,
+        columns: result.declaredColumns,
       });
     }
   }
@@ -204,7 +204,7 @@ export async function executeAnalysisPivot(
     if (
       result.window.kind !== "page" ||
       result.window.hasMore ||
-      (result.window.offset ?? 0) !== 0
+      result.window.offset !== 0
     )
       throw new Error(
         "Pivot exceeds the complete-output limit; narrow its filters",

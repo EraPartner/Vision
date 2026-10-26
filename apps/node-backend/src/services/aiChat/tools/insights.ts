@@ -26,6 +26,22 @@ type AverageVsCurrentSpending = Awaited<
   ReturnType<typeof infoRepository.getAverageVsCurrentSpending>
 >;
 
+function ymdOrNull(value: Date | string | null | undefined): string | null {
+  return value === null || value === undefined || value === ""
+    ? null
+    : toYmd(value);
+}
+
+/** A bank balance row as the tool tolerates it (see getBankBalances). */
+interface LooseBankAccount {
+  account_id?: number | string | undefined;
+  bank_account?: string | undefined;
+  balance?: number | string | null | undefined;
+  transaction_count?: number | null | undefined;
+  first_transaction?: Date | string | null | undefined;
+  last_transaction?: Date | string | null | undefined;
+}
+
 /**
  * Current bank account balances + total net position.
  */
@@ -42,24 +58,32 @@ export const getBankBalances = {
     { maxRows = settings.aiChat.maxToolRows, scope = {} }: ToolContext = {},
   ) {
     const currency = scope.currency || "EUR";
-    const result = await infoRepository.getBankBalances(currency);
+    // The tool tolerates a loose payload: balances may be strings and the
+    // account list or its counts may be missing.
+    const result: { accounts?: LooseBankAccount[] | undefined } =
+      await infoRepository.getBankBalances(currency);
     const allowedAccountIds = new Set(scope.accountIds ?? []);
-    const scopedAccounts = result.accounts.filter(
+    const scopedAccounts = (result.accounts ?? []).filter(
       (account) =>
         allowedAccountIds.size === 0 ||
-        allowedAccountIds.has(account.account_id),
+        allowedAccountIds.has(Number(account.account_id)),
     );
 
     const accounts = scopedAccounts.map((a) => ({
-      ...(Number.isInteger(a.account_id) ? { accountId: a.account_id } : {}),
+      ...(Number.isInteger(Number(a.account_id))
+        ? { accountId: Number(a.account_id) }
+        : {}),
       account: a.bank_account,
-      balance: a.balance,
+      balance:
+        typeof a.balance === "number"
+          ? a.balance
+          : roundToCents(toDecimal(a.balance ?? 0)).toNumber(),
       currency,
-      transactionCount: a.transaction_count,
+      transactionCount: a.transaction_count ?? null,
       // toYmd uses local getters for pg's local-midnight DATE values —
       // toISOString() shifted these one day back on a UTC+ server.
-      firstTransaction: a.first_transaction ? toYmd(a.first_transaction) : null,
-      lastTransaction: a.last_transaction ? toYmd(a.last_transaction) : null,
+      firstTransaction: ymdOrNull(a.first_transaction),
+      lastTransaction: ymdOrNull(a.last_transaction),
     }));
 
     return {
@@ -105,12 +129,14 @@ export const getSpendingPace = {
     const mult = period === "yearly" ? 12 : 1;
 
     const result = await infoRepository.getAverageVsCurrentSpending("EUR");
+    // Sections may be missing from a loose payload; each field then defaults.
+    const loose: Partial<AverageVsCurrentSpending> = result;
     const p6: Partial<AverageVsCurrentSpending["past_6_months"]> =
-      result.past_6_months;
+      loose.past_6_months ?? {};
     const cm: Partial<AverageVsCurrentSpending["current_month"]> =
-      result.current_month;
+      loose.current_month ?? {};
     const cmp: Partial<AverageVsCurrentSpending["comparison"]> =
-      result.comparison;
+      loose.comparison ?? {};
 
     return {
       ok: true,

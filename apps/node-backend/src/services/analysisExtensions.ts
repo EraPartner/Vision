@@ -2,6 +2,7 @@
 import Decimal from "decimal.js";
 import { createHash } from "node:crypto";
 import { evaluateAnalysisFormulas } from "./analysisFormulaEngine.ts";
+import { valueText } from "./valueText.ts";
 import type {
   AnalysisFormulaInput,
   FormulaRow,
@@ -56,8 +57,20 @@ interface PreparationInputTable {
   columns: AnalysisColumn[];
 }
 
+// Steps arrive as arbitrary JSON from the route, so a table or formula a step
+// needs may be missing; the evaluator rejects that with an analysis error.
 interface PreparationStepBase {
-  input?: PreparationInputTable;
+  input?: PreparationInputTable | undefined;
+}
+
+interface PreparationLookupFields extends PreparationStepBase {
+  keys?: string[];
+  inputKeys?: string[];
+  resultColumn?: string;
+  inputColumn?: string;
+  columns?: Array<{ inputId: string; outputId: string }>;
+  prefix?: string;
+  requireMatch?: boolean;
 }
 
 export type PreparationStep =
@@ -67,21 +80,12 @@ export type PreparationStep =
       targetType: string;
       onError?: string;
     })
-  | (PreparationStepBase & {
-      type: "lookup" | "merge";
-      input: PreparationInputTable;
-      keys?: string[];
-      inputKeys?: string[];
-      resultColumn?: string;
-      inputColumn?: string;
-      columns?: Array<{ inputId: string; outputId: string }>;
-      prefix?: string;
-      requireMatch?: boolean;
-    })
-  | (PreparationStepBase & { type: "append"; input: PreparationInputTable })
+  | (PreparationLookupFields & { type: "lookup" })
+  | (PreparationLookupFields & { type: "merge" })
+  | (PreparationStepBase & { type: "append" })
   | (PreparationStepBase & {
       type: "calculate";
-      formula: AnalysisFormulaInput;
+      formula?: AnalysisFormulaInput | undefined;
       assumptions?: Record<string, unknown>;
     })
   | (PreparationStepBase & {
@@ -190,6 +194,13 @@ function bounded(rows: unknown, columns: AnalysisColumn[] = []) {
   if (Buffer.byteLength(JSON.stringify(rows)) > MAX_BYTES)
     fail("Analysis extension output exceeds 2 MiB");
 }
+/** `bounded` for a step's input table, which must be present. */
+function boundedInput(
+  input: PreparationInputTable | undefined,
+): PreparationInputTable {
+  bounded(input?.rows, input?.columns);
+  return present(input, "preparation input");
+}
 function population(complete: boolean) {
   if (!complete) fail("This operation requires the complete analysis result");
 }
@@ -207,17 +218,17 @@ function scalar(
   type: string,
 ): string | number | boolean | null {
   if (value === null || value === undefined || value === "") return null;
-  if (type === "string" || type === "currency") return String(value);
+  if (type === "string" || type === "currency") return valueText(value);
   if (type === "boolean") {
     if (value === true || value === "true" || value === 1) return true;
     if (value === false || value === "false" || value === 0) return false;
-    fail(`Cannot convert ${String(value)} to boolean`);
+    fail(`Cannot convert ${valueText(value)} to boolean`);
   }
   if (type === "date") {
-    const raw = String(value);
+    const raw = valueText(value);
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(raw) ||
-      new Date(`${raw}T00:00:00Z`).toISOString().slice(0, 10) !== raw
+      new Date(`${valueText(raw)}T00:00:00Z`).toISOString().slice(0, 10) !== raw
     )
       fail(`Cannot convert ${raw} to date`);
     return raw;
@@ -225,7 +236,7 @@ function scalar(
   if (numericTypes.has(type)) {
     const result = cellDecimal(value);
     if (!result.isFinite() || (type === "integer" && !result.isInteger()))
-      fail(`Cannot convert ${String(value)} to ${type}`);
+      fail(`Cannot convert ${valueText(value)} to ${type}`);
     if (type === "integer" && result.abs().gt(Number.MAX_SAFE_INTEGER))
       fail("Integer exceeds the safe integer range");
     return type === "integer" ? result.toNumber() : result.toFixed();
@@ -357,6 +368,16 @@ function result(
   };
 }
 
+const PREPARATION_STEP_TYPES = new Set([
+  "convert",
+  "lookup",
+  "merge",
+  "append",
+  "calculate",
+  "unpivot",
+  "pivot",
+]);
+
 /** Steps: convert, lookup/merge, append, calculate, pivot, unpivot. Input tables carry columns/rows. */
 export function prepareAnalysisData({
   rows,
@@ -374,6 +395,9 @@ export function prepareAnalysisData({
   for (const [index, step] of steps.entries()) {
     const before = data.length;
     const stepType: string = step.type;
+    // Steps are untrusted JSON; reject an unknown type before any step runs.
+    if (!PREPARATION_STEP_TYPES.has(stepType))
+      fail(`Unsupported preparation step: ${stepType}`);
     let unmatchedRows = 0;
     if (step.type === "convert") {
       field(schema, step.columnId);
@@ -417,8 +441,7 @@ export function prepareAnalysisData({
         };
       });
     } else if (step.type === "lookup" || step.type === "merge") {
-      const input = step.input;
-      bounded(input?.rows, input?.columns);
+      const input = boundedInput(step.input);
       // Single-key lookups name the columns; field() rejects a missing id.
       const left = step.keys ?? [step.resultColumn as string];
       const right = step.inputKeys ?? [step.inputColumn as string];
@@ -491,20 +514,20 @@ export function prepareAnalysisData({
         fail(`Lookup has ${unmatchedRows} unmatched rows`);
     } else if (step.type === "append") {
       population(complete);
-      bounded(step.input?.rows, step.input?.columns);
+      const input = boundedInput(step.input);
       if (
-        schema.length !== step.input.columns.length ||
+        schema.length !== input.columns.length ||
         schema.some(
           (column) =>
-            field(step.input.columns, column.id).type !== column.type ||
-            JSON.stringify(field(step.input.columns, column.id).unit) !==
+            field(input.columns, column.id).type !== column.type ||
+            JSON.stringify(field(input.columns, column.id).unit) !==
               JSON.stringify(column.unit),
         )
       )
         fail("Append requires matching column identifiers and types");
       data = [
         ...data,
-        ...step.input.rows.map((row) =>
+        ...input.rows.map((row) =>
           Object.fromEntries(
             schema.map((column) => [
               column.id,
@@ -514,13 +537,14 @@ export function prepareAnalysisData({
         ),
       ];
     } else if (step.type === "calculate") {
-      newField(schema, step.formula?.id);
-      if (step.formula?.scope !== "row")
+      const formula = step.formula;
+      newField(schema, formula?.id);
+      if (formula?.scope !== "row")
         fail("Preparation calculations must have row scope");
       const calculated = evaluateAnalysisFormulas({
         rows: data,
         columns: schema,
-        formulas: [step.formula],
+        formulas: [formula],
         assumptions: step.assumptions ?? {},
         inputComplete: complete,
       });
@@ -529,12 +553,12 @@ export function prepareAnalysisData({
         ...calculated.errors.map((error) => ({ stepIndex: index, ...error })),
       );
       schema.push({
-        id: step.formula.id,
-        label: step.formula.label || step.formula.id,
-        type: step.formula.resultType || "decimal",
+        id: formula.id,
+        label: formula.label || formula.id,
+        type: formula.resultType || "decimal",
         nullable: true,
-        ...(calculated.formulaUnits?.[step.formula.id]
-          ? { unit: calculated.formulaUnits[step.formula.id] }
+        ...(calculated.formulaUnits[formula.id]
+          ? { unit: calculated.formulaUnits[formula.id] }
           : {}),
       });
     } else if (step.type === "unpivot") {
@@ -574,7 +598,7 @@ export function prepareAnalysisData({
         },
         { ...valueSchema, id: step.valueColumn || "value", label: "Value" },
       ];
-    } else if (step.type === "pivot") {
+    } else {
       population(complete);
       const groups: string[] = step.groupColumns ?? [];
       groups.forEach((id) => field(schema, id));
@@ -601,7 +625,7 @@ export function prepareAnalysisData({
               categoryKey,
               {
                 key: categoryKey,
-                label: value === null ? "(missing)" : String(value),
+                label: value === null ? "(missing)" : valueText(value),
               },
             ];
           }),
@@ -679,7 +703,7 @@ export function prepareAnalysisData({
           nullable: true,
         })),
       ];
-    } else fail(`Unsupported preparation step: ${stepType}`);
+    }
     bounded(data, schema);
     lineage.push({
       sourceHash: step.input
@@ -716,7 +740,7 @@ function bucketDate(raw: unknown, bucket: string) {
   return d.toISOString().slice(0, 10);
 }
 function shift(raw: unknown, bucket: string, count: number) {
-  const d = new Date(`${raw}T00:00:00Z`);
+  const d = new Date(`${valueText(raw)}T00:00:00Z`);
   if (bucket === "day" || bucket === "week")
     d.setUTCDate(d.getUTCDate() + count * (bucket === "week" ? 7 : 1));
   else if (bucket === "year") d.setUTCFullYear(d.getUTCFullYear() + count);
@@ -724,7 +748,7 @@ function shift(raw: unknown, bucket: string, count: number) {
   return d.toISOString().slice(0, 10);
 }
 function previousYear(raw: unknown) {
-  const d = new Date(`${raw}T00:00:00Z`);
+  const d = new Date(`${valueText(raw)}T00:00:00Z`);
   const month = d.getUTCMonth();
   d.setUTCFullYear(d.getUTCFullYear() - 1);
   if (d.getUTCMonth() !== month) d.setUTCDate(0);

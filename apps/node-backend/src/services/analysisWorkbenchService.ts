@@ -63,8 +63,10 @@ export interface AnalysisResultLike {
 
 export interface AnalysisWorkbench {
   steps?: PreparationStep[];
+  /** Arrives as JSON from the route, so the required fields may be absent. */
   time?:
-    Omit<CompareAnalysisTimeInput, "rows" | "columns" | "complete"> | undefined;
+    | Partial<Omit<CompareAnalysisTimeInput, "rows" | "columns" | "complete">>
+    | undefined;
 }
 
 export interface AnalysisFormulaModel {
@@ -119,8 +121,8 @@ function formulaOutputColumns(
       label: formula.label || formula.id,
       type: formula.resultType || "decimal",
       nullable: true,
-      ...(evaluated.formulaUnits?.[formula.id] || formula.unit
-        ? { unit: evaluated.formulaUnits?.[formula.id] ?? formula.unit }
+      ...(evaluated.formulaUnits[formula.id] || formula.unit
+        ? { unit: evaluated.formulaUnits[formula.id] ?? formula.unit }
         : {}),
     }));
   const ids = new Set(additions.map((column) => column.id));
@@ -138,7 +140,7 @@ export function evaluateAnalysisExtension(input: AnalysisExtensionRequest) {
     goal: seekAnalysisGoal,
     formulas: evaluateAnalysisFormulas,
   };
-  const operation = input?.operation;
+  const operation = input.operation;
   const fn =
     typeof operation === "string" && Object.hasOwn(functions, operation)
       ? functions[operation]
@@ -152,7 +154,7 @@ export function evaluateAnalysisExtension(input: AnalysisExtensionRequest) {
       kind: "page",
       offset: 0,
       hasMore: input.complete === false,
-      returnedRows: input.rows?.length ?? 0,
+      returnedRows: input.rows.length,
     },
     coverage: input.coverage,
     complete: input.complete,
@@ -184,7 +186,7 @@ export function evaluateAnalysisExtension(input: AnalysisExtensionRequest) {
   });
   const columns = formulaOutputColumns(
     // Formula requests were rebuilt above with the prepared columns.
-    request.columns!,
+    request.columns ?? prepared.columns,
     request.formulas ?? [],
     evaluated,
   );
@@ -233,15 +235,18 @@ export function applyAnalysisWorkbench(
     errors.push(...prepared.errors);
     complete =
       complete &&
-      prepared.coverage.complete !== false &&
+      prepared.coverage.complete &&
       prepared.errors.length === 0;
   }
-  if (workbench.time?.dateColumn && workbench.time.valueColumns?.length > 0) {
+  const time = workbench.time;
+  if (time?.dateColumn && time.valueColumns && time.valueColumns.length > 0) {
     const compared = compareAnalysisTime({
       rows,
       columns,
       complete,
-      ...workbench.time,
+      ...time,
+      dateColumn: time.dateColumn,
+      valueColumns: time.valueColumns,
     });
     rows = compared.rows;
     columns = compared.columns;
@@ -250,7 +255,7 @@ export function applyAnalysisWorkbench(
     errors.push(...compared.errors);
     complete =
       complete &&
-      compared.coverage.complete !== false &&
+      compared.coverage.complete &&
       compared.errors.length === 0;
   }
   return {
@@ -307,7 +312,7 @@ export function applyAnalysisFormulaModel(
       label: f.label || f.id,
       type: f.resultType || "decimal",
       nullable: true,
-      ...(evaluated.formulaUnits?.[f.id]
+      ...(evaluated.formulaUnits[f.id]
         ? { unit: evaluated.formulaUnits[f.id] }
         : {}),
     }));
@@ -348,11 +353,15 @@ export function applyAnalysisScenarioModel(
     : result.columns;
   const validated = validateScenarioBindings(model, columns);
   const rows = applyScenarioInputs(result.rows, validated, columns);
+  // validateScenarioBindings rejected joins without an attached input.
+  const attachment = (id: string) => {
+    const found = validated.attachments.find((item) => item.id === id);
+    if (!found)
+      throw new Error(`Analysis invariant broken: attachment ${id} is missing`);
+    return found;
+  };
   const additions = validated.joins.flatMap((binding) => {
-    // validateScenarioBindings rejected joins without an attached input.
-    const input = validated.attachments.find(
-      (item) => item.id === binding.inputId,
-    )!;
+    const input = attachment(binding.inputId);
     return input.columns
       .filter((c) => c.id !== binding.inputColumn)
       .map((c) => ({ ...c, id: `${input.id}.${c.id}`, nullable: true }));
@@ -364,8 +373,7 @@ export function applyAnalysisScenarioModel(
     declaredColumns: [...columns, ...additions],
     inputLineage: validated.joins.map((binding) => ({
       inputId: binding.inputId,
-      sha256: validated.attachments.find((item) => item.id === binding.inputId)!
-        .sha256,
+      sha256: attachment(binding.inputId).sha256,
       cardinality: "many-to-one",
     })),
   };

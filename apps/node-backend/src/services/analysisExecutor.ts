@@ -51,11 +51,13 @@ export interface AnalysisSqlResult {
 
 const activeQueries = new Map<string, { pid: number }>();
 const resultTypes = {
-  getTypeParser(oid: number, format?: "text" | "binary") {
+  getTypeParser(
+    ...[oid, format]: Parameters<typeof pg.types.getTypeParser>
+  ): (value: string) => unknown {
     // Calendar dates have no timezone; converting them to Date shifts day boundaries.
-    if (oid === 1082 && (!format || format === "text"))
+    if (oid === pg.types.builtins.DATE && (!format || format === "text"))
       return (value: string) => value;
-    return pg.types.getTypeParser(oid, format);
+    return pg.types.getTypeParser(oid, format) as (value: string) => unknown;
   },
 };
 
@@ -290,13 +292,14 @@ export async function executeAnalysisSql({
   }
   const checkedSql = __validateAnalysisSql(sql, datasetIds);
   const pageLimit = Math.min(
-    Math.max(nonZeroOr(Number(limit), DEFAULT_ROWS), 1),
+    Math.max(nonZeroOr(limit, DEFAULT_ROWS), 1),
     MAX_ROWS,
   );
-  const pageOffset = Math.max(nanToZero(Number(offset)), 0);
+  const pageOffset = Math.max(nanToZero(offset), 0);
   const client = await pool.connect();
   const startedAt = new Date().toISOString();
-  let rollbackFailed = false;
+  // Widened: assigned in the catch block, which TS does not carry to `finally`.
+  let rollbackFailed = false as boolean;
   try {
     await client.query("BEGIN READ ONLY");
     await client.query("SET LOCAL statement_timeout = '5000ms'");

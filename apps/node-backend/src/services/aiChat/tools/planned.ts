@@ -268,6 +268,13 @@ export const getLoanSchedule = {
 /**
  * Projected bank balance after accounting for upcoming planned transactions.
  */
+/** The net position may arrive as a numeric string or be missing. */
+function netPositionNumber(value: number | string | null | undefined): number {
+  return typeof value === "number"
+    ? value
+    : roundToCents(toDecimal(value ?? 0)).toNumber();
+}
+
 export const getProjectedBalance = {
   name: "getProjectedBalance",
   description:
@@ -306,7 +313,7 @@ export const getProjectedBalance = {
       }),
     ]);
 
-    const currentBalance = bankResult.total_net_position;
+    const currentBalance = netPositionNumber(bankResult.total_net_position);
 
     let plannedNet = toDecimal(0);
     const plannedRows = items.map((row) => {
