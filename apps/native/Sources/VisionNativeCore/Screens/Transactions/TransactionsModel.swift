@@ -522,10 +522,12 @@ public final class TransactionsModel {
         // Nothing to load past the last page: skip the search for the row.
         guard hasMore else { return }
         let shown = visibleRows
-        guard let index = shown.firstIndex(where: { $0.id == id }) else { return }
         let threshold = ServerTablePaging.loadMoreThreshold(pageSize: query?.pageSize ?? 50)
+        // Only the last `threshold` rows can ask: scan that tail, not the whole list, for each drawn row.
+        let tailStart = max(0, shown.count - max(1, threshold))
+        guard let offset = shown[tailStart...].firstIndex(where: { $0.id == id }) else { return }
         if ServerTablePaging.shouldLoadMore(
-            rowIndex: index, shownCount: shown.count, threshold: threshold, hasMore: hasMore)
+            rowIndex: offset, shownCount: shown.count, threshold: threshold, hasMore: hasMore)
         {
             await loadMore()
         }

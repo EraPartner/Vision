@@ -378,11 +378,15 @@ struct TransactionsTableCard: View {
                 .padding(.vertical, 32)
         } else {
             let fitted = fittedWidths
+            // Resolved once per pass: each is rebuilt from the model on every read.
+            let columns = dataColumns
+            let labels = model.labels
+            let accountNames = model.accountNames
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(rows) { row in
                     TransactionRowView(
-                        model: model, shell: shell, row: row, columns: dataColumns, compact: isCompact,
-                        widths: fitted, focusedRow: $focusedRow)
+                        model: model, shell: shell, row: row, columns: columns, compact: isCompact,
+                        widths: fitted, labels: labels, accountNames: accountNames, focusedRow: $focusedRow)
                     Divider()
                 }
             }
@@ -425,12 +429,14 @@ struct TransactionRowView: View {
     let columns: [TransactionColumn]
     let compact: Bool
     let widths: [String: CGFloat]
+    /// The model's fallback labels and account names, shared by every row of a pass.
+    let labels: TransactionLabels
+    let accountNames: [AccountID: String]
     var focusedRow: FocusState<TransactionID?>.Binding
     @Environment(\.visionTheme) private var theme
 
     private var strings: any Localizing { shell.strings }
     private var settings: NativeAppSettings { shell.settings }
-    private var labels: TransactionLabels { model.labels }
     private var isEditing: Bool { model.rowEditor?.id == row.id }
     private var isSelected: Bool { model.selectedId == row.id }
 
@@ -539,7 +545,7 @@ struct TransactionRowView: View {
         case .recipient: recipientCell
         case .category: categoryCell
         case .bank:
-            Text(row.accountLabel(model.accountNames))
+            Text(row.accountLabel(accountNames))
                 .lineLimit(1)
                 .foregroundStyle(theme.secondaryLabel)
                 .strikethrough(!row.isActive)
@@ -672,7 +678,7 @@ struct TransactionRowView: View {
         let uncategorised = row.isUncategorised(labels)
         return VStack(alignment: .leading, spacing: 4) {
             Text(
-                verbatim: [VisionFormat.appDate(row.date, format: settings.dateFormat), row.accountLabel(model.accountNames)]
+                verbatim: [VisionFormat.appDate(row.date, format: settings.dateFormat), row.accountLabel(accountNames)]
                     .filter { !$0.isEmpty }
                     .joined(separator: " · ")
             )

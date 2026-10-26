@@ -206,7 +206,8 @@ struct AdminPage<Content: View>: View {
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
             max(0, geometry.contentSize.height - geometry.containerSize.height)
         } action: { _, maximum in
-            maximumOffset = maximum
+            // Only the restore reads it; a lazy list re-estimating its height must not rebuild the page.
+            if isRestoring { maximumOffset = maximum }
         }
         .task { await restore() }
         .foregroundStyle(theme.foreground)

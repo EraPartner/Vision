@@ -340,13 +340,15 @@ public struct PortfolioOverviewView: View {
     /// The web `<List>`: `divide-y divide-border/50 overflow-hidden rounded-card border
     /// border-border/60 bg-card/70`, rows flush and clipped by the group.
     @ViewBuilder private var holdingsList: some View {
-        if model.filteredHoldings.isEmpty {
+        // Filtered and sorted on every read: once per pass.
+        let rows = model.filteredHoldings
+        if rows.isEmpty {
             Text(strings.t("portfolio.brokerFilter.empty")).foregroundStyle(theme.secondaryLabel)
                 .frame(maxWidth: .infinity).padding(.vertical, 24)
         } else {
             let shape = RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
             VStack(spacing: 0) {
-                ForEach(Array(model.filteredHoldings.enumerated()), id: \.element.id) { index, holding in
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, holding in
                     if index > 0 { Rectangle().fill(theme.border.opacity(0.5)).frame(height: 1) }
                     holdingRow(holding)
                 }

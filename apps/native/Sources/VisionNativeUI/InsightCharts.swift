@@ -288,8 +288,10 @@ struct InsightTimelineChart: View {
                         .onContinuousHover { phase in
                             switch phase {
                             case .active(let location):
-                                selection = key(at: location.x, proxy: proxy, geometry: geometry)
-                            case .ended: if rangeStart == nil { selection = nil }
+                                // Scrolling re-reports a parked pointer every frame: write on change only.
+                                let hovered = key(at: location.x, proxy: proxy, geometry: geometry)
+                                if selection != hovered { selection = hovered }
+                            case .ended: if rangeStart == nil, selection != nil { selection = nil }
                             }
                         }
                         .gesture(
@@ -553,8 +555,10 @@ struct HomeCategoryChart: View {
                             .onContinuousHover { phase in
                                 switch phase {
                                 case .active(let location):
-                                    selectedId = slice(at: location, proxy: proxy, geometry: geometry)?.id
-                                case .ended: selectedId = nil
+                                    // Scrolling re-reports a parked pointer every frame: write on change only.
+                                    let hovered = slice(at: location, proxy: proxy, geometry: geometry)?.id
+                                    if selectedId != hovered { selectedId = hovered }
+                                case .ended: if selectedId != nil { selectedId = nil }
                                 }
                             }
                             .gesture(
