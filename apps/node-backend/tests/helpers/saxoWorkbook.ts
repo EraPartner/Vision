@@ -212,7 +212,11 @@ const escape = (value: unknown) =>
     .replaceAll('"', "&quot;");
 function columnName(index: number) {
   let name = "";
-  for (let number = index + 1; number; number = Math.floor((number - 1) / 26))
+  for (
+    let number = index + 1;
+    number > 0;
+    number = Math.floor((number - 1) / 26)
+  )
     name = String.fromCharCode(65 + ((number - 1) % 26)) + name;
   return name;
 }
@@ -220,10 +224,7 @@ function cellXml(value: SyntheticCellValue, address: string) {
   if (value == null) return "";
   if (value instanceof Date)
     return `<c r="${address}" s="1"><v>${(value.getTime() - Date.UTC(1899, 11, 30)) / 86400000}</v></c>`;
-  if (
-    typeof value === "number" ||
-    (typeof value === "object" && value.type === "number")
-  )
+  if (typeof value === "number" || typeof value === "object")
     return `<c r="${address}"><v>${typeof value === "number" ? value : value.raw}</v></c>`;
   return `<c r="${address}" t="inlineStr"><is><t xml:space="preserve">${escape(value)}</t></is></c>`;
 }

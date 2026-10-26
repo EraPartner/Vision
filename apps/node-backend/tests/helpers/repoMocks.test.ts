@@ -50,7 +50,7 @@ describe("connection mock surface", () => {
   );
 
   it("applies explicit inert overrides after the defaults", async () => {
-    const query = vi.fn(async (_sql: string) => ({ rows: [{ id: 7 }] }));
+    const query = vi.fn((_sql: string) => Promise.resolve({ rows: [{ id: 7 }] }));
     const conn = mockConnection({ query, checkConnection: vi.fn(() => true) });
 
     await expect(conn.query("SELECT 7")).resolves.toEqual({
@@ -64,14 +64,16 @@ describe("connection mock surface", () => {
 describe("mockTxConnection — ambient transaction routing", () => {
   it("routes module-level query onto the transaction client while a tx is open", async () => {
     const client = {
-      query: vi.fn(async () => ({ rows: [{ id: 1 }], rowCount: 1 })),
+      query: vi.fn(() => Promise.resolve({ rows: [{ id: 1 }], rowCount: 1 })),
     };
     const conn = mockTxConnection(client);
 
-    const result = await conn.withTransaction(async () => {
+    const result: unknown = await conn.withTransaction(() =>
       // A repository call: module-level query(), no client threaded through.
-      return conn.query("UPDATE transactions SET account_id = $1", [7]);
-    });
+      Promise.resolve(
+        conn.query("UPDATE transactions SET account_id = $1", [7]) as unknown,
+      ),
+    );
 
     // The statement landed on the transaction's client, not the pool.
     expect(client.query).toHaveBeenCalledWith(
@@ -86,22 +88,22 @@ describe("mockTxConnection — ambient transaction routing", () => {
   it("models ambient savepoint success and failure while preserving the original error", async () => {
     const original = new Error("insert failed");
     const client = {
-      query: vi.fn(async (sql) => {
-        if (sql === "ROLLBACK TO SAVEPOINT sp_fail")
-          throw new Error("rollback failed");
-        return { rows: [] };
-      }),
+      query: vi.fn((sql: string) =>
+        sql === "ROLLBACK TO SAVEPOINT sp_fail"
+          ? Promise.reject(new Error("rollback failed"))
+          : Promise.resolve({ rows: [] }),
+      ),
     };
     const conn = mockTxConnection(client);
 
     await conn.withTransaction(async () => {
       await expect(
-        conn.withSavepointIfInTransaction("sp_ok", async () => 42),
+        conn.withSavepointIfInTransaction("sp_ok", () => Promise.resolve(42)),
       ).resolves.toBe(42);
       await expect(
-        conn.withSavepointIfInTransaction("sp_fail", async () => {
-          throw original;
-        }),
+        conn.withSavepointIfInTransaction("sp_fail", () =>
+          Promise.reject(original),
+        ),
       ).rejects.toBe(original);
     });
 
@@ -114,7 +116,7 @@ describe("mockTxConnection — ambient transaction routing", () => {
   });
 
   it("models nested withTransaction calls on one client with unique savepoints", async () => {
-    const client = { query: vi.fn<ClientQuery>(async () => ({ rows: [] })) };
+    const client = { query: vi.fn<ClientQuery>(() => Promise.resolve({ rows: [] })) };
     const conn = mockTxConnection(client);
     const callbackClients: unknown[] = [];
 
@@ -144,14 +146,14 @@ describe("mockTxConnection — ambient transaction routing", () => {
   });
 
   it("rejects concurrent sibling nested transactions like production", async () => {
-    const client = { query: vi.fn<ClientQuery>(async () => ({ rows: [] })) };
+    const client = { query: vi.fn<ClientQuery>(() => Promise.resolve({ rows: [] })) };
     const conn = mockTxConnection(client);
 
     await expect(
-      conn.withTransaction(async () =>
+      conn.withTransaction(() =>
         Promise.all([
-          conn.withTransaction(async () => conn.query("UPDATE sibling one")),
-          conn.withTransaction(async () => conn.query("UPDATE sibling two")),
+          conn.withTransaction(() => Promise.resolve(conn.query("UPDATE sibling one") as unknown)),
+          conn.withTransaction(() => Promise.resolve(conn.query("UPDATE sibling two") as unknown)),
         ]),
       ),
     ).rejects.toThrow(
@@ -170,7 +172,7 @@ describe("mockTxConnection — ambient transaction routing", () => {
     const conn = mockTxConnection(client);
 
     await expect(
-      conn.withSavepointIfInTransaction("sp_outside", async () => "ok"),
+      conn.withSavepointIfInTransaction("sp_outside", () => Promise.resolve("ok")),
     ).resolves.toBe("ok");
     expect(client.query).not.toHaveBeenCalled();
   });
@@ -184,7 +186,7 @@ describe("mockTxConnection — ambient transaction routing", () => {
       });
     });
 
-    expect(conn.query.mock.calls.map(([sql]) => sql)).toEqual([
+    expect(conn.query.mock.calls.map(([sql]: unknown[]) => sql)).toEqual([
       "SAVEPOINT sp_shared",
       "UPDATE inside_savepoint",
       "RELEASE SAVEPOINT sp_shared",
@@ -206,20 +208,18 @@ describe("mockTxConnection — ambient transaction routing", () => {
     const conn = mockTxConnection(client);
 
     // Resolve path.
-    await conn.withTransaction(async () => {});
+    await conn.withTransaction(() => Promise.resolve());
     await conn.query("SELECT after_commit");
 
     // Reject path: the throw propagates (= rollback) and must still invalidate.
     await expect(
-      conn.withTransaction(async () => {
-        throw new Error("boom");
-      }),
+      conn.withTransaction(() => Promise.reject(new Error("boom"))),
     ).rejects.toThrow("boom");
     await conn.query("SELECT after_rollback");
 
     // Neither post-transaction statement leaked onto the released client.
     expect(client.query).not.toHaveBeenCalled();
-    expect(conn.poolQuery.mock.calls.map(([sql]) => sql)).toEqual([
+    expect(conn.poolQuery.mock.calls.map(([sql]: unknown[]) => sql)).toEqual([
       "SELECT after_commit",
       "SELECT after_rollback",
     ]);
@@ -230,10 +230,9 @@ describe("mockTxConnection — ambient transaction routing", () => {
     // client, repointing statements issued by a repository through module
     // query(), all observable in issue order on a single spy.
     const client = {
-      query: vi.fn<ClientQuery>(async () => ({
-        rows: [{ id: 2 }],
-        rowCount: 1,
-      })),
+      query: vi.fn<ClientQuery>(() =>
+        Promise.resolve({ rows: [{ id: 2 }], rowCount: 1 }),
+      ),
     };
     const conn = mockTxConnection(client);
 
@@ -264,11 +263,11 @@ describe("mockTxConnection — ambient transaction routing", () => {
   });
 
   it("routes queryPrepared onto the transaction client in pg object form", async () => {
-    const client = { query: vi.fn(async () => ({ rows: [] })) };
+    const client = { query: vi.fn(() => Promise.resolve({ rows: [] })) };
     const conn = mockTxConnection(client);
 
-    await conn.withTransaction(async () =>
-      conn.queryPrepared("tx_get_by_id", "SELECT 1", [5]),
+    await conn.withTransaction(() =>
+      Promise.resolve(conn.queryPrepared("tx_get_by_id", "SELECT 1", [5]) as unknown),
     );
 
     expect(client.query).toHaveBeenCalledWith({
@@ -287,25 +286,25 @@ describe("mockTxConnection — ambient transaction routing", () => {
       await conn.query("UPDATE c SET d = 2");
     });
 
-    expect(conn.query.mock.calls.map(([sql]) => sql)).toEqual([
+    expect(conn.query.mock.calls.map(([sql]: unknown[]) => sql)).toEqual([
       "UPDATE a SET b = 1",
       "UPDATE c SET d = 2",
     ]);
   });
 
   it("treats extra.query as the POOL implementation so routing survives it", async () => {
-    const client = { query: vi.fn(async () => ({ rows: ["tx"] })) };
-    const poolImpl = vi.fn(async () => ({ rows: ["pool"] }));
+    const client = { query: vi.fn(() => Promise.resolve({ rows: ["tx"] })) };
+    const poolImpl = vi.fn(() => Promise.resolve({ rows: ["pool"] }));
     const conn = mockTxConnection(client, { query: poolImpl });
 
     expect(await conn.query("SELECT outside")).toEqual({ rows: ["pool"] });
     expect(
-      await conn.withTransaction(async () => conn.query("SELECT inside")),
+      await conn.withTransaction(() => Promise.resolve(conn.query("SELECT inside") as unknown)),
     ).toEqual({ rows: ["tx"] });
 
     // The exported spy still records every call, so `query.mock.calls`
     // assertions in existing suites keep working.
-    expect(conn.query.mock.calls.map(([sql]) => sql)).toEqual([
+    expect(conn.query.mock.calls.map(([sql]: unknown[]) => sql)).toEqual([
       "SELECT outside",
       "SELECT inside",
     ]);
@@ -316,8 +315,9 @@ describe("mockTxConnection — ambient transaction routing", () => {
     const conn = mockTxConnection(client);
 
     expect(conn.getAmbientTransactionClient()).toBeNull();
-    await conn.withTransaction(async () => {
+    await conn.withTransaction(() => {
       expect(conn.getAmbientTransactionClient()).toBe(client);
+      return Promise.resolve();
     });
     expect(conn.getAmbientTransactionClient()).toBeNull();
   });

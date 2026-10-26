@@ -21,6 +21,8 @@ import {
   asPortfolioTransactionId,
 } from "@vision/types/brands";
 
+import { plainString } from "./plainString.ts";
+
 const CREATED = new Date("2026-01-01T00:00:00.000Z");
 
 /** An `investments` row (`SELECT *`). */
@@ -212,12 +214,12 @@ export function pgLocalDate(ymd: string): Date {
 
 /** A NUMERIC value as node-postgres returns it (a string), keeping NULL. */
 function pgNumericOf(value: unknown): string | null {
-  return value === null || value === undefined ? null : String(value);
+  return value === null || value === undefined ? null : plainString(value);
 }
 
 /** A timestamp value as node-postgres returns it (a `Date`). */
 function pgTimestampOf(value: unknown): Date {
-  return value instanceof Date ? value : new Date(String(value));
+  return value instanceof Date ? value : new Date(plainString(value));
 }
 
 /**
@@ -235,7 +237,7 @@ export function toPgSummaryInvestmentRow(
     cadastral_income: pgNumericOf(row.cadastral_income),
     municipality_tax_rate: pgNumericOf(row.municipality_tax_rate),
     maturity_date:
-      row.maturity_date == null ? null : pgLocalDate(String(row.maturity_date)),
+      row.maturity_date == null ? null : pgLocalDate(plainString(row.maturity_date)),
     price_provider:
       typeof row.price_provider === "string" ? row.price_provider : "manual",
     price_updated_at:
@@ -252,10 +254,10 @@ export function toPgSummaryInvestmentRow(
 export function toPgMathTxRow(
   row: Record<string, unknown>,
 ): PortfolioMathTxDbRow {
-  const date = String(row.date ?? row.day ?? "2026-01-15");
+  const date = plainString(row.date ?? row.day ?? "2026-01-15");
   return portfolioMathTxDbRow({
     ...(row as Partial<PortfolioMathTxDbRow>),
-    id: String(row.id ?? 1),
+    id: plainString(row.id ?? 1),
     amount: pgNumericOf(row.amount) ?? "0",
     units: pgNumericOf(row.units) ?? "0",
     fees: pgNumericOf(row.fees) ?? "0",

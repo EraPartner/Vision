@@ -26,7 +26,7 @@ describe("mockCurrencyConversion", () => {
   });
 
   it("applies explicit overrides without inventing conversion arithmetic", async () => {
-    const convertRowsToEur = vi.fn(async () => [{ amount_eur: 9 }]);
+    const convertRowsToEur = vi.fn(() => Promise.resolve([{ amount_eur: 9 }]));
     const fake = mockCurrencyConversion({ convertRowsToEur });
 
     await expect(fake.convertRowsToEur([])).resolves.toEqual([

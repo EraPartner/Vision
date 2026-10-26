@@ -23,6 +23,7 @@ import type { IncomingHttpHeaders, RequestListener, Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { inspect } from 'node:util';
 import zlib from 'node:zlib';
+import { plainString } from './plainString.ts';
 
 export interface Response {
   status: number;
@@ -227,10 +228,16 @@ export class Test implements PromiseLike<Response> {
     return this;
   }
 
-  expect(status: number, callback?: CallbackHandler): this;
+  expect(
+    statusOrCheckerOrBody:
+      | number
+      | ((res: Response) => unknown)
+      | string
+      | RegExp
+      | object,
+    callback?: CallbackHandler,
+  ): this;
   expect(status: number, body: unknown, callback?: CallbackHandler): this;
-  expect(checker: (res: Response) => unknown, callback?: CallbackHandler): this;
-  expect(body: string | RegExp | object, callback?: CallbackHandler): this;
   expect(field: string, value: string | RegExp, callback?: CallbackHandler): this;
   expect(a: unknown, b?: unknown, c?: unknown): this {
     if (typeof a === 'function') {
@@ -265,7 +272,7 @@ export class Test implements PromiseLike<Response> {
       a.every((entry) => typeof entry === 'number')
     ) {
       this.asserts.push((res) =>
-        (a as number[]).includes(res.status)
+        a.includes(res.status)
           ? undefined
           : new Error(
               `expected one of "${a.join(', ')}", got ${res.status} "${http.STATUS_CODES[res.status]}"`,
@@ -353,7 +360,7 @@ export class Test implements PromiseLike<Response> {
       return Buffer.from(stringifyQuery(this.data as Record<string, unknown>));
     if (type === undefined || isJson(type))
       return Buffer.from(JSON.stringify(this.data));
-    return Buffer.from(String(this.data));
+    return Buffer.from(plainString(this.data));
   }
 
   private url(port: number): string {
@@ -417,7 +424,7 @@ export class Test implements PromiseLike<Response> {
                   ),
                 );
               } catch (error) {
-                reject(error);
+                reject(error instanceof Error ? error : new Error(String(error)));
               }
             });
           },

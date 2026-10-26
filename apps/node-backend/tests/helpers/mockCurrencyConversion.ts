@@ -18,11 +18,13 @@ export interface ConvertibleRow {
  * boundary's numeric `amount_eur` field.
  */
 export function mockRowsAlreadyInTargetCurrency() {
-  return vi.fn(async <R extends ConvertibleRow>(rows: R[]) =>
-    rows.map((row) => ({
-      ...row,
-      amount_eur: Number(row.amount ?? 0),
-    })),
+  return vi.fn(<R extends ConvertibleRow>(rows: R[]) =>
+    Promise.resolve(
+      rows.map((row) => ({
+        ...row,
+        amount_eur: Number(row.amount ?? 0),
+      })),
+    ),
   );
 }
 
@@ -43,7 +45,7 @@ export function mockCurrencyConversion(
     getHistoricalRateIndex: vi.fn(),
     listLatestStoredRates: vi.fn(),
     warmCache: vi.fn(),
-    convertRowsToEur: vi.fn(async <R>(rows: R[]) => rows),
+    convertRowsToEur: vi.fn(<R>(rows: R[]) => Promise.resolve(rows)),
     convertToCurrency: vi.fn(),
     loadCurrentRates: vi.fn(),
     convertWithRates: vi.fn(),

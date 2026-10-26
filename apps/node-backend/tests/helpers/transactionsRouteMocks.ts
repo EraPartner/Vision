@@ -32,8 +32,8 @@ export function mockTransactionRepository() {
 /** `services/deduplication.js`: nothing is ever a duplicate. */
 export function mockDeduplication() {
   return {
-    isManualDuplicate: vi.fn(async () => ({ isDuplicate: false })),
-    recordManualTransactionDedupClaim: vi.fn(async () => undefined),
+    isManualDuplicate: vi.fn(() => Promise.resolve({ isDuplicate: false })),
+    recordManualTransactionDedupClaim: vi.fn(() => Promise.resolve(undefined)),
   };
 }
 
@@ -58,12 +58,12 @@ export { mockCurrencyConversion } from "./mockCurrencyConversion.ts";
 export function mockAttachmentRecordService() {
   return {
     attachmentRepository: {
-      listPathsByTransactionIds: vi.fn(async () => []),
+      listPathsByTransactionIds: vi.fn(() => Promise.resolve([])),
     },
   };
 }
 
 /** `services/attachmentService.js`: file removal is a resolved spy. */
 export function mockAttachmentService() {
-  return { removeAttachmentFile: vi.fn(async () => undefined) };
+  return { removeAttachmentFile: vi.fn(() => Promise.resolve(undefined)) };
 }
