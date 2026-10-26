@@ -18,6 +18,8 @@ import type {
   ParsedPortfolioRow,
   ParsedPortfolioRows,
 } from "./portfolioGenericAdapter.ts";
+import { cellText } from "../cellText.ts";
+import { requiredValue } from "../requiredValue.ts";
 
 /** A Nexo Pro Spot order record keyed by its (validated) column names. */
 type NexoProRecord = Record<string, string>;
@@ -84,7 +86,7 @@ export function nexoProSourceMoneyMatches(
 }
 
 function text(value: unknown): string {
-  return String(value ?? "").trim();
+  return cellText(value).trim();
 }
 function decimal(value: unknown): Decimal | undefined {
   const raw = text(value);
@@ -106,8 +108,10 @@ function exportedDate(record: NexoProRecord): Date | null {
     Number(match[4]) > 59
   )
     return null;
-  // Every group of the pattern is mandatory, so a match carries it.
-  return parseDateWithFormat(match[1]!, "%Y-%m-%d");
+  return parseDateWithFormat(
+    requiredValue(match[1], "every group of the pattern is mandatory"),
+    "%Y-%m-%d",
+  );
 }
 
 function pair(
@@ -116,8 +120,12 @@ function pair(
   const match = text(record.pair)
     .toUpperCase()
     .match(/^([A-Z0-9]{2,12})\/([A-Z0-9]{2,12})$/);
-  // Both groups are mandatory, so a match carries them.
-  return match ? { base: match[1]!, quote: match[2]! } : undefined;
+  return match
+    ? {
+        base: requiredValue(match[1], "both groups are mandatory"),
+        quote: requiredValue(match[2], "both groups are mandatory"),
+      }
+    : undefined;
 }
 
 function baseRow(
@@ -289,8 +297,10 @@ export function getNexoProSpotReconciliationEvidence(
   if (tuples.length !== 1 || !tuple || tuple.length !== REQUIRED_COLUMNS.length)
     return undefined;
   const record: NexoProRecord = Object.fromEntries(
-    // The length check above gives every column its cell.
-    REQUIRED_COLUMNS.map((column, index) => [column, tuple[index]!]),
+    REQUIRED_COLUMNS.map((column, index) => [
+      column,
+      requiredValue(tuple[index], "the length check gives every column its cell"),
+    ]),
   );
   if (!text(record.orderId) || !exportedDate(record)) return undefined;
   const parsed = parseRecord(record);
@@ -336,7 +346,7 @@ export async function parseNexoProSpotHistory(
   filePath: string,
   config: { encoding?: string } = {},
 ): Promise<ParsedPortfolioRows> {
-  let schemaFound = false;
+  const header = { found: false };
   const records: NexoProRecord[] = await parseCsvFile(
     filePath,
     {
@@ -361,14 +371,14 @@ export async function parseNexoProSpotHistory(
             "Nexo Pro Spot history has an unsupported column order or schema extension",
           );
         }
-        schemaFound = true;
+        header.found = true;
         return normalized;
       },
       skip_empty_lines: true,
     },
     config.encoding || "utf-8",
   );
-  if (!schemaFound)
+  if (!header.found)
     throw new ValidationError(
       "Nexo Pro Spot history is missing its CSV header",
     );

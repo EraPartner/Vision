@@ -69,6 +69,7 @@ import type {
   PortfolioImportBatchId,
   PortfolioImportProgressCallback,
 } from "./index.ts";
+import { requiredValue } from "../requiredValue.ts";
 
 const COMMIT_CHUNK = 1000;
 
@@ -346,7 +347,7 @@ export async function commitBatch({
     currency: string,
     date: string | null,
   ): Promise<number | undefined> {
-    const key = `${String(currency || "EUR").toUpperCase()}|${date}`;
+    const key = `${(currency || "EUR").toUpperCase()}|${date}`;
     if (fxCache.has(key)) return fxCache.get(key);
     const rate = await autoResolveFxRateToEur(currency, date);
     fxCache.set(key, rate);
@@ -474,7 +475,7 @@ export async function commitBatch({
             fingerprintExists ||
             (row.dedup_fingerprint &&
               row.dedup_occurrence != null &&
-              Number(row.dedup_occurrence) <= ledgerMatches) ||
+              row.dedup_occurrence <= ledgerMatches) ||
             (!row.dedup_fingerprint &&
               occurrence < ledgerMatches - insertedThisRun)
           ) {
@@ -492,11 +493,11 @@ export async function commitBatch({
             const memo =
               row.note ||
               (row.type_raw
-                ? String(row.type_raw).toUpperCase()
+                ? row.type_raw.toUpperCase()
                 : "BROKERAGE CASH");
             const categoryId =
               (row.type != null
-                ? cashCategoryIds.get(String(row.type))
+                ? cashCategoryIds.get(row.type)
                 : undefined) ?? null;
             // A template, not the builder: currency and recipient are not
             // checked here, so a bad value fails on the table's constraints
@@ -588,7 +589,7 @@ export async function commitBatch({
           fingerprintExists ||
           (row.dedup_fingerprint &&
             row.dedup_occurrence != null &&
-            Number(row.dedup_occurrence) <= destinationMatches) ||
+            row.dedup_occurrence <= destinationMatches) ||
           (!row.dedup_fingerprint &&
             occurrence < destinationMatches - insertedThisRun)
         ) {
@@ -608,7 +609,7 @@ export async function commitBatch({
             const incomeId = await insertIncludedInUnitsIncome(
               { ...row, investment_id: row.investment_id },
               batchAccountId,
-              Number(batchId),
+              batchId,
             );
             if (incomeId === undefined) {
               await client.query(`RELEASE SAVEPOINT ${sp}`);
@@ -653,8 +654,8 @@ export async function commitBatch({
             investment_id: row.investment_id,
             // Validate stamps a type on every non-error portfolio-route row
             // and rejects a missing date, so a matched trade carries both.
-            type: row.type!,
-            date: row.tx_date!,
+            type: requiredValue(row.type, "validate stamps a type on the row"),
+            date: requiredValue(row.tx_date, "validate rejects a missing date"),
             amount: canonical.amount,
             units: canonical.units,
             price_per_unit: canonical.price_per_unit,
@@ -690,7 +691,7 @@ export async function commitBatch({
             continue;
           }
 
-          await markCommitted(row.id, created?.id ?? null);
+          await markCommitted(row.id, created.id);
           await client.query(`RELEASE SAVEPOINT ${sp}`);
           chunkImported++;
           tradeInsertedByIdentity.set(identity, insertedThisRun + 1);
@@ -803,7 +804,7 @@ async function markCommitted(
 function cashIdentityKey(row: MatchedPortfolioStagingRow): string {
   const memo =
     row.note ||
-    (row.type_raw ? String(row.type_raw).toUpperCase() : "BROKERAGE CASH");
+    (row.type_raw ? row.type_raw.toUpperCase() : "BROKERAGE CASH");
   return `${row.tx_date}|${signedCashAmount(row)}|${row.currency || "EUR"}|${memo}`;
 }
 
@@ -823,7 +824,7 @@ async function countCashFieldMatches(
 ): Promise<number> {
   const memo =
     row.note ||
-    (row.type_raw ? String(row.type_raw).toUpperCase() : "BROKERAGE CASH");
+    (row.type_raw ? row.type_raw.toUpperCase() : "BROKERAGE CASH");
   const signed = signedCashAmount(row);
   // The legacy magnitude leg (`Math.abs(signed)`) exists ONLY for untyped external
   // cash rows (deposit/withdrawal): brokerage withdrawals committed before the

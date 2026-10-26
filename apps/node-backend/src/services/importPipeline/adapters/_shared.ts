@@ -16,6 +16,7 @@ import {
   normalizeCsvEncoding,
   normalizeCsvNumberFormat,
 } from "../../../lib/csvFormatOptions.ts";
+import { cellText, stringifyCell } from "../../cellText.ts";
 
 // The format options live in lib/ so lib/parserConfigSchema.ts can use them
 // without importing a service; re-exported for the adapters' callers.
@@ -146,7 +147,7 @@ export const parsedBankTransactionsSchema = z.object({
  * raw `parseFloat` so the imported amount has one well-defined interpretation.
  */
 export function parseDecimalSafe(value: unknown): number {
-  const s = String(value ?? "").trim();
+  const s = cellText(value).trim();
   if (!s) return NaN;
   try {
     return toDecimal(s).toNumber();
@@ -163,7 +164,7 @@ export function parseDecimalSafe(value: unknown): number {
  * falls back to the pipeline's EUR default at commit instead.
  */
 export function normalizeIsoCurrency(value: unknown): string | null {
-  const code = String(value ?? "")
+  const code = cellText(value)
     .trim()
     .toUpperCase();
   return /^[A-Z]{3}$/.test(code) ? code : null;
@@ -202,7 +203,7 @@ export function cellAt(parts: readonly string[], index: number): string {
  * components rather than letting Date.UTC roll them over.
  */
 export function parseDayMonthYear(dateStr: string): Date | null {
-  const dateParts = String(dateStr).split("/");
+  const dateParts = dateStr.split("/");
   const [dayStr, monthStr, yearStr] = dateParts;
   if (
     dateParts.length !== 3 ||
@@ -249,7 +250,7 @@ const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})(?:[T\s]|$)/;
 export function parseDateFlexibleUtc(
   dateStr: string | null | undefined,
 ): Date | null {
-  const s = String(dateStr ?? "").trim();
+  const s = (dateStr ?? "").trim();
   if (!s) return null;
   const iso = ISO_DATE_RE.exec(s);
   if (iso) {
@@ -360,7 +361,7 @@ export function parseCommaDecimal(value: unknown): number {
  * @returns NaN when the cell isn't numeric
  */
 export function parseAmountField(raw: unknown): number {
-  let s = String(raw || "").trim();
+  let s = stringifyCell(raw || "").trim();
   if (!s) return NaN;
   s = s.replace(/\s/g, "");
   s = s.replace(/[$€£¥]/g, "");
@@ -407,7 +408,7 @@ export function parseCustomAmount(
   context: { rowNumber?: number; column?: string } = {},
 ): number {
   const numberFormat = normalizeCsvNumberFormat(format);
-  let text = String(raw ?? "")
+  let text = cellText(raw)
     .trim()
     .replace(/\s/g, "")
     .replace(/[$€£¥]/g, "");
@@ -518,7 +519,7 @@ export function buildOptionalComment(commentParts: string[]): string | null {
  */
 export function canonicalIban(value: string | null | undefined): string {
   if (!value) return "";
-  return String(value).replace(/\s+/g, "").toUpperCase();
+  return value.replace(/\s+/g, "").toUpperCase();
 }
 
 /**
@@ -567,7 +568,7 @@ export type CsvSourceRecord = (Record<string, unknown> | unknown[]) & {
  * field whitespace, remain provenance.
  */
 export function stripTerminalRecordDelimiter(raw: unknown): string {
-  return String(raw ?? "").replace(/(?:\r\n|\r|\n)$/, "");
+  return cellText(raw).replace(/(?:\r\n|\r|\n)$/, "");
 }
 
 /**
@@ -585,7 +586,7 @@ export function parseCsvText<T extends CsvRecord = Record<string, string>>(
   content: string,
   options: CsvParseOptions,
 ): T[] {
-  const parsed: unknown[] = parse(String(content).replace(UTF8_BOM_RE, ""), {
+  const parsed: unknown[] = parse(content.replace(UTF8_BOM_RE, ""), {
     ...options,
     info: true,
     raw: true,
@@ -601,7 +602,7 @@ export function parseCsvText<T extends CsvRecord = Record<string, string>>(
       Object.defineProperty(record, RAW_CSV_RECORD, {
         configurable: false,
         enumerable: false,
-        value: stripTerminalRecordDelimiter(info?.raw),
+        value: stripTerminalRecordDelimiter(info.raw),
         writable: false,
       });
     }
@@ -616,7 +617,7 @@ export function parseCsvText<T extends CsvRecord = Record<string, string>>(
  * compatible, but production adapters all receive literal records.
  */
 export function rawDataForCsvRecord(record: CsvSourceRecord): string {
-  return record?.[RAW_CSV_RECORD] ?? buildRawRowString(record);
+  return record[RAW_CSV_RECORD] ?? buildRawRowString(record);
 }
 
 /**

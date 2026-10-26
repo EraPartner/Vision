@@ -193,7 +193,6 @@ describe("Currency Conversion Service", () => {
   });
 
   it("should return empty array for null rows", async () => {
-    // @ts-expect-error -- deliberately passes null to check the runtime guard
     const results = await convertRowsToEur(null);
     expect(results).toEqual([]);
   });

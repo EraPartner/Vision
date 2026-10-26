@@ -72,7 +72,7 @@ export interface RetagRequest {
 function buildRateIndex(rows: readonly HistoricalRateRow[]): RateIndex {
   const index: RateIndex = new Map();
   for (const row of rows) {
-    const currency = String(row.currency_code).toUpperCase();
+    const currency = row.currency_code.toUpperCase();
     const entries = index.get(currency) ?? [];
     entries.push({ date: row.rate_date, rate: Number(row.rate_to_eur) });
     index.set(currency, entries);

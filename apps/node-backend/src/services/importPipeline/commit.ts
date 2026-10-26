@@ -169,7 +169,7 @@ function deriveRow(row: CommitStagingRow): DerivedRow {
   // digits (or, defensively, a JS integer). Reject any other shape before it
   // reaches repository or staging-row writes, and make the batched and per-row
   // paths reject exactly the same rows.
-  const idStr = String(row.id);
+  const idStr = row.id;
 
   return {
     row,
@@ -231,7 +231,7 @@ async function commitChunkWithFingerprints({
         () =>
           commitFingerprintRows(
             derived.map((d) => ({
-              stagingId: String(d.row.id),
+              stagingId: d.row.id,
               date: d.dateStr,
               accountId: d.accountId,
               recipientId: d.recipientId,
@@ -252,13 +252,18 @@ async function commitChunkWithFingerprints({
             })),
           ),
       );
-      const byId = new Map(derived.map((d) => [String(d.row.id), d]));
+      const byId = new Map(derived.map((d) => [d.row.id, d]));
       for (const outcome of outcomes) {
         if (outcome.transactionId == null) {
           duplicates++;
           continue;
         }
-        const d = byId.get(outcome.stagingId)!;
+        const d = byId.get(outcome.stagingId);
+        if (!d) {
+          throw new Error(
+            `Committed staging row ${outcome.stagingId} is not part of the chunk`,
+          );
+        }
         inserted.push({
           id: outcome.transactionId,
           recipient_id: d.recipientId,
@@ -392,7 +397,7 @@ async function resolveChunkAccounts(
   // ON CONFLICT arbiter — rather than sharing a possibly-wrong cache slot.
   const idByLabel = new Map<string, AccountId | null>();
   for (const row of rows) {
-    const label = row.bank_account == null ? "" : String(row.bank_account);
+    const label = row.bank_account ?? "";
     const key = label.replace(/^ +| +$/g, ""); // SQL btrim — U+0020 only
     if (key === "") {
       row.resolved_account_id = null;
@@ -579,7 +584,7 @@ export async function commitBatch({
       chunkImported = res.imported;
       chunkDuplicates = res.duplicates;
       chunkErrors = res.errors;
-      chunkInserted = res.inserted ?? [];
+      chunkInserted = res.inserted;
     });
 
     // The chunk transaction is now committed. Clearing inside an individual

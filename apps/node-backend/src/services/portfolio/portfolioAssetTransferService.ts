@@ -30,6 +30,8 @@ import {
 } from "../../repositories/portfolioAssetTransferRepository.ts";
 import { asAccountId, asInvestmentId } from "@vision/types/brands";
 import type { AccountId, InvestmentId } from "@vision/types/brands";
+import { storedConfigObject } from "./storedConfig.ts";
+import { requiredValue } from "../requiredValue.ts";
 
 /**
  * The staging-row columns a custody preview reads (asset transfers and asset
@@ -69,8 +71,8 @@ export type AssetTransferDetails = {
 
 /** The import configuration keys a transfer preview reads. */
 type TransferImportConfig = {
-  transfer_origin_account_id?: number | string;
-  transfer_destination_account_id?: number | string;
+  transfer_origin_account_id?: unknown;
+  transfer_destination_account_id?: unknown;
 };
 
 /** One cost-basis method's allocation of the fee units' acquisition lots. */
@@ -128,12 +130,7 @@ function configOf(
   row: CustodyStagingRow,
   batch: CustodyBatch | undefined,
 ): TransferImportConfig {
-  const raw = batch?.custom_config ?? row.custom_config;
-  try {
-    return typeof raw === "string" ? JSON.parse(raw) : raw || {};
-  } catch {
-    return {};
-  }
+  return storedConfigObject(batch?.custom_config ?? row.custom_config);
 }
 
 /** Pure preparation, also used by the global reconciliation planner. */
@@ -206,7 +203,7 @@ export function previewPortfolioAssetTransfer(
       date:
         row.tx_date instanceof Date
           ? toYmd(row.tx_date)
-          : String(row.tx_date).slice(0, 10),
+          : row.tx_date.slice(0, 10),
       units: String(row.units),
       fee_units: String(details.feeUnits === "" ? 0 : (details.feeUnits ?? 0)),
       amount: "0",
@@ -331,17 +328,24 @@ export async function commitPortfolioAssetTransfer({
       );
       // The history just validated includes this event, so its source
       // partition holds the transfer_out leg with its fee lots.
-      const leg = projected
-        .get(event.source_account_id)!
-        .find(
+      const leg = requiredValue(
+        requiredValue(
+          projected.get(event.source_account_id),
+          "the validated history has a partition for the source account",
+        ).find(
           (row) =>
             row.type === "transfer_out" &&
             row.staging_row_id === event.staging_row_id,
-        )!;
+        ),
+        "the validated history holds the transfer_out leg",
+      );
       event.fee_basis_allocations[method] = {
         feeUnits: event.fee_units,
-        lots: leg
-          .assetFeeLots!.filter((lot) => lot.units.gt(0))
+        lots: requiredValue(
+          leg.assetFeeLots,
+          "the transfer_out leg carries its fee lots",
+        )
+          .filter((lot) => lot.units.gt(0))
           .map((lot) => ({
             acquisitionId: Number(lot.acquisitionId),
             acquisitionDate: lot.acquiredDate,
@@ -371,7 +375,7 @@ export async function rollbackPortfolioAssetTransfersForBatch(
   return withTransaction(async () => {
     await lockCustodyTables();
     const removed = await getAssetTransfersForBatch(batchId);
-    const transferIds = new Set(removed.map((event) => String(event.id)));
+    const transferIds = new Set(removed.map((event) => event.id));
     const omitted = new Set(omitTransactionIds.map(Number));
     for (const investmentId of new Set(
       removed.map((event) => event.investment_id),

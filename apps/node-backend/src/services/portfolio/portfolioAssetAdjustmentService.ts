@@ -31,6 +31,8 @@ import {
 } from "../../repositories/portfolioAssetAdjustmentRepository.ts";
 import { asAccountId, asInvestmentId } from "@vision/types/brands";
 import type { AccountId, InvestmentId } from "@vision/types/brands";
+import { storedConfigObject } from "./storedConfig.ts";
+import { requiredValue } from "../requiredValue.ts";
 
 /** `asset_adjustment_details` JSONB as staged by the importer. */
 export type AssetAdjustmentDetails = {
@@ -123,13 +125,7 @@ export function previewPortfolioAssetAdjustment(
     return { error: "unresolved_adjustment_kind" };
   const reversal = details.kind === "yield_reversal";
   const rawConfig = batch?.custom_config ?? row.custom_config;
-  let config: { yield_basis_policy?: unknown };
-  try {
-    config =
-      typeof rawConfig === "string" ? JSON.parse(rawConfig) : rawConfig || {};
-  } catch {
-    config = {};
-  }
+  const config = storedConfigObject(rawConfig);
   if (reversal && config.yield_basis_policy !== "zero")
     return { error: "unresolved_zero_yield_policy" };
   if (details.basisPolicy !== (reversal ? "zero_yield_only" : "carried"))
@@ -162,7 +158,7 @@ export function previewPortfolioAssetAdjustment(
               Number(source.investment_id ?? source.resolved_investment_id) ===
                 investment &&
               source.asset_adjustment_details?.kind === "yield_acquisition" &&
-              source.asset_adjustment_details?.basisPolicy === "zero",
+              source.asset_adjustment_details.basisPolicy === "zero",
           )
           .map((source) => source.source_record_hash),
       ].filter((hash): hash is string => /^[a-f0-9]{64}$/.test(String(hash))),
@@ -181,7 +177,7 @@ export function previewPortfolioAssetAdjustment(
       date:
         row.tx_date instanceof Date
           ? toYmd(row.tx_date)
-          : String(row.tx_date).slice(0, 10),
+          : row.tx_date.slice(0, 10),
       adjustment_kind: details.kind,
       basis_policy: details.basisPolicy,
       eligible_source_record_hashes: reversal ? eligibleHashes : [],
@@ -268,19 +264,26 @@ export async function commitPortfolioAssetAdjustment({
     ] satisfies CostBasisMethod[]) {
       // The history just validated includes this event, so its account
       // partition holds the unit_reversal / asset_fee leg with consumed lots.
-      const leg = projectAssetTransferPartitions(
-        asPartitionedTxns([...history, event]),
-        method,
-      )
-        .get(event.account_id)!
-        .find(
+      const leg = requiredValue(
+        requiredValue(
+          projectAssetTransferPartitions(
+            asPartitionedTxns([...history, event]),
+            method,
+          ).get(event.account_id),
+          "the validated history has a partition for the adjusted account",
+        ).find(
           (candidate) =>
             candidate.staging_row_id === event.staging_row_id &&
             ["unit_reversal", "asset_fee"].includes(candidate.type),
-        )!;
+        ),
+        "the validated history holds the adjustment leg",
+      );
       event.basis_allocations[method] = {
         units: event.units,
-        lots: leg.consumedLots!.map((lot) => ({
+        lots: requiredValue(
+          leg.consumedLots,
+          "the adjustment leg carries its consumed lots",
+        ).map((lot) => ({
           acquisitionId: Number(lot.acquisitionId),
           acquisitionDate: lot.acquiredDate,
           sourceRecordHash: lot.sourceRecordHash,

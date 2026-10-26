@@ -20,6 +20,7 @@ import type {
   ParsedPortfolioRow,
   ParsedPortfolioRows,
 } from "./portfolioGenericAdapter.ts";
+import { cellText } from "../cellText.ts";
 
 /** A `columns: true` csv-parse record of the Nexo export. */
 type NexoRecord = Record<string, string>;
@@ -179,7 +180,7 @@ function parseFiatWrapper(
 }
 
 function cleanCell(value: unknown): string {
-  return String(value ?? "").trim();
+  return cellText(value).trim();
 }
 
 function magnitude(value: unknown): number | null {

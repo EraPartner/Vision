@@ -85,6 +85,8 @@ import type { PortfolioAssetAdjustmentRow } from "../repositories/portfolioAsset
 import type { NexoProSpotReconciliationEvidence } from "./portfolioImportPipeline/nexoProTransactionHistoryAdapter.ts";
 import { firstNonZero } from "../lib/math.ts";
 import { normalizeIdentityText } from "./importIdentity.ts";
+import { requiredValue } from "./requiredValue.ts";
+import type { IbkrCashEnvelope } from "../repositories/portfolioImportCashRepository.ts";
 
 /**
  * One reconciliation history event read by column name. Custody events
@@ -387,8 +389,8 @@ function normalizedSource(row: NormalizedSourceInput): NormalizedSource {
     units: payload.units == null ? null : String(payload.units),
     price_per_unit:
       payload.price_per_unit == null ? null : String(payload.price_per_unit),
-    fees: String(payload.fees ?? 0),
-    taxes: String(payload.taxes ?? 0),
+    fees: String(payload.fees),
+    taxes: String(payload.taxes),
     currency: row.currency || row.investment_currency || "EUR",
     fx_rate_to_eur:
       payload.fx_rate_to_eur == null ? null : String(payload.fx_rate_to_eur),
@@ -573,20 +575,22 @@ function canonicalBatchPolicies(
       "batch_policies must contain at most one policy per selected batch",
     );
   const seen = new Set<number>();
-  const canonical = batchPolicies.map((override) => {
-    if (
-      override == null ||
-      !Number.isSafeInteger(override.batchId) ||
-      !selected.has(override.batchId) ||
-      seen.has(override.batchId) ||
-      !isPolicy(override.adoptPolicy)
-    )
-      throw new ValidationError(
-        "batch_policies must use unique selected batch IDs and supported adoption policies",
-      );
-    seen.add(override.batchId);
-    return { batchId: override.batchId, adoptPolicy: override.adoptPolicy };
-  });
+  const canonical = batchPolicies.map(
+    (override: BatchPolicy | null | undefined) => {
+      if (
+        override == null ||
+        !Number.isSafeInteger(override.batchId) ||
+        !selected.has(override.batchId) ||
+        seen.has(override.batchId) ||
+        !isPolicy(override.adoptPolicy)
+      )
+        throw new ValidationError(
+          "batch_policies must use unique selected batch IDs and supported adoption policies",
+        );
+      seen.add(override.batchId);
+      return { batchId: override.batchId, adoptPolicy: override.adoptPolicy };
+    },
+  );
   return canonical.sort((left, right) => left.batchId - right.batchId);
 }
 
@@ -603,7 +607,7 @@ function canonicalRowChoices(
   const seen = new Set<string>();
   if (!Array.isArray(rowChoices))
     throw new ValidationError("row_choices must be a list");
-  const canonical = rowChoices.map((item) => {
+  const canonical = rowChoices.map((item: RowChoice | null | undefined) => {
     const key = `${item?.batchId}:${item?.rowId}`;
     if (
       item == null ||
@@ -663,7 +667,7 @@ export function buildPortfolioImportReconciliationPlan({
   adoptPolicy,
   batchPolicies = [],
   priorProAccounts = [],
-  crossFormat = undefined,
+  crossFormat,
   historySourceIds = new Map(),
   rowChoices = [],
 }: ReconciliationPlanInput): ReconciliationPlanResult {
@@ -777,9 +781,9 @@ export function buildPortfolioImportReconciliationPlan({
     if (!historyByIdentity.has(identity)) historyByIdentity.set(identity, current);
   }
   /** A custody event: a ledger duplicate, an in-session duplicate, or new. */
-  const custodyAction = <E extends ColumnImage>(
+  const custodyAction = (
     row: ReconciliationSourceRow,
-    event: E & {
+    event: ColumnImage & {
       dedup_fingerprint: string | null;
       dedup_fingerprint_version: number | null;
     },
@@ -1276,17 +1280,26 @@ export function buildPortfolioImportReconciliationPlan({
   };
 }
 
+/** Matched rows carry their source date. */
+export function matchedSourceDate(row: { tx_date: string | null }): string {
+  return requiredValue(row.tx_date, "a matched row carries its source date");
+}
+
 function scopeIds(batchIds: unknown): number[] {
   if (
     !Array.isArray(batchIds) ||
     batchIds.length === 0 ||
     batchIds.length > 100 ||
-    batchIds.some((id) => !Number.isSafeInteger(id) || id <= 0)
+    !batchIds.every(isPositiveSafeInteger)
   )
     throw new ValidationError(
       "batch_ids must contain 1 to 100 positive import batch IDs",
     );
-  return [...new Set(batchIds)].sort((left, right) => left - right);
+  return [...new Set<number>(batchIds)].sort((left, right) => left - right);
+}
+
+function isPositiveSafeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 }
 
 async function loadPlan({
@@ -1310,8 +1323,12 @@ async function loadPlan({
       .map(async (row) => {
         const hashes = await getEligibleYieldSourceHashes(
           Number(row.investment_id),
-          // The filter above selected rows with adjustment details.
-          Number(row.asset_adjustment_details!.accountId ?? row.account_id),
+          Number(
+            requiredValue(
+              row.asset_adjustment_details,
+              "the filter above selected rows with adjustment details",
+            ).accountId ?? row.account_id,
+          ),
         );
         row.asset_adjustment_details = {
           ...row.asset_adjustment_details,
@@ -1334,9 +1351,9 @@ async function loadPlan({
   )) {
     const id = normalizeIdentityText(source.source_transaction_id);
     if (!id) continue;
-    const keys = historySourceIds.get(Number(source.id)) ?? [];
+    const keys = historySourceIds.get(source.id) ?? [];
     keys.push(`${source.format}\u0000${id}`);
-    historySourceIds.set(Number(source.id), keys);
+    historySourceIds.set(source.id, keys);
   }
   const accountIds = [
     ...new Set(
@@ -1345,9 +1362,12 @@ async function loadPlan({
   ];
   const priorProAccounts = await readReconciledProImportAccounts(accountIds);
   const cashRows = rows.filter(
-    (row) => row.route === "cash" && row.tx_date != null,
+    (row): row is (typeof rows)[number] & { tx_date: string } =>
+      row.route === "cash" && row.tx_date != null,
   );
-  const cashDates = cashRows.map((row) => row.tx_date!).sort();
+  const cashDates = cashRows.map((row) => row.tx_date).sort();
+  const firstCashDate = cashDates[0];
+  const lastCashDate = cashDates.at(-1);
   const shift = (date: string, days: number) =>
     new Date(Date.parse(`${date}T00:00:00Z`) + days * 86400000)
       .toISOString()
@@ -1360,19 +1380,23 @@ async function loadPlan({
     ),
     correctedAliases: new Set(
       (await readActiveIbkrCashReceipts())
-        .map((receipt) => receipt.before_data.snapshot)
-        .filter((snapshot) => snapshot?.dedup_fingerprint)
-        .map(
-          (snapshot) =>
-            `${snapshot.dedup_fingerprint_version}:${snapshot.dedup_fingerprint}`,
-        ),
+        .flatMap((receipt) => {
+          // The journal envelope is stored JSON: read its snapshot as possibly absent.
+          const before: Partial<IbkrCashEnvelope> = receipt.before_data;
+          const snapshot = before.snapshot;
+          return snapshot?.dedup_fingerprint
+            ? [
+                `${snapshot.dedup_fingerprint_version}:${snapshot.dedup_fingerprint}`,
+              ]
+            : [];
+        }),
     ),
     manualCash:
-      cashDates.length > 0
+      firstCashDate !== undefined && lastCashDate !== undefined
         ? await readManualCashCandidates(
             accountIds,
-            shift(cashDates[0]!, -7),
-            shift(cashDates.at(-1)!, 7),
+            shift(firstCashDate, -7),
+            shift(lastCashDate, 7),
           )
         : [],
   };
@@ -1421,7 +1445,7 @@ export async function previewPortfolioImportReconciliation({
         loaded.plan.blockers.push({
           batchId: Number(row?.batch_id ?? batchIds[0]),
           rowId: Number(row?.id ?? 0),
-          rowOrdinal: Number(row?.row_index ?? 0) + 1,
+          rowOrdinal: (row?.row_index ?? 0) + 1,
           reason: "projected_history_conflict",
           candidateTransactionIds: [],
         });
@@ -1480,12 +1504,14 @@ function projectedReconciliationHistory({
     )
     .map((action) => ({
       action,
-      // Insert, transfer and adjustment actions come from these matched rows.
-      row: rows.find((row) => Number(row.id) === action.rowId)!,
+      row: requiredValue(
+        rows.find((row) => Number(row.id) === action.rowId),
+        "insert, transfer and adjustment actions come from these matched rows",
+      ),
     }))
     .sort((left, right) =>
       firstNonZero(
-        left.row.tx_date!.localeCompare(right.row.tx_date!),
+        matchedSourceDate(left.row).localeCompare(matchedSourceDate(right.row)),
         Number(left.row.batch_id) - Number(right.row.batch_id),
         left.row.row_index - right.row.row_index,
       ),
@@ -1669,7 +1695,7 @@ export async function validatePortfolioImportAdoptionRollback(
   ]);
   for (const receipt of portfolioReceipts) {
     const current = history.find(
-      (row) => Number(row.id) === Number(receipt.transaction_id),
+      (row) => Number(row.id) === receipt.transaction_id,
     );
     if (!sameSnapshot(current, receipt.after_data))
       throw new ConflictError(
@@ -1680,11 +1706,11 @@ export async function validatePortfolioImportAdoptionRollback(
   const removed = new Set(removalRows.map((row) => Number(row.id)));
   const restored = new Map<number, ProjectedHistoryEvent>([
     ...portfolioReceipts.map((receipt): [number, ProjectedHistoryEvent] => [
-      Number(receipt.transaction_id),
+      receipt.transaction_id,
       receipt.before_data,
     ]),
     ...repairs.map((receipt): [number, ProjectedHistoryEvent] => [
-      Number(receipt.legacy_transaction_id),
+      receipt.legacy_transaction_id,
       financialRepairImage(receipt.before_data.legacy),
     ]),
   ]);
@@ -1698,7 +1724,12 @@ export async function validatePortfolioImportAdoptionRollback(
       .map((row) => restored.get(Number(row.id)) ?? row),
     // A repair receipt's before-image holds the imported copy it deleted.
     ...repairs.map((receipt) =>
-      financialRepairImage(receipt.before_data.imported!),
+      financialRepairImage(
+        requiredValue(
+          receipt.before_data.imported,
+          "a repair receipt's before-image holds the imported copy",
+        ),
+      ),
     ),
   ]);
   return receipts;
@@ -1743,7 +1774,7 @@ export async function restorePortfolioImportAdoptions(
     await insertReconciliationReceipt({
       batchId: Number(receipt.batch_id),
       stagingRowId: Number(receipt.staging_row_id),
-      transactionId: Number(receipt.transaction_id),
+      transactionId: receipt.transaction_id,
       action: "restore",
       policy: receipt.policy,
       before: receipt.after_data,

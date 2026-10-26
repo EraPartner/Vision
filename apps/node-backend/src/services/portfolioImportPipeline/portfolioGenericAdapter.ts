@@ -28,6 +28,7 @@ import { parseKinesisTransactionHistory } from "./kinesisTransactionHistoryAdapt
 import { parseNexoTransactionHistory } from "./nexoTransactionHistoryAdapter.ts";
 import { parseNexoProSpotHistory } from "./nexoProTransactionHistoryAdapter.ts";
 import { parseSaxoTransactionHistory } from "./saxoTransactionHistoryAdapter.ts";
+import { stringifyCell } from "../cellText.ts";
 
 /**
  * One raw row as this adapter extracts it — field names are the staging
@@ -201,7 +202,7 @@ function parseMagnitude(
   numberFormat: unknown,
   context: { rowNumber: number; column: string },
 ): number | null {
-  if (raw === undefined || raw === null || String(raw).trim() === "")
+  if (raw === undefined || raw === null || stringifyCell(raw).trim() === "")
     return null;
   const n = parseCustomAmount(raw, numberFormat, context);
   if (isNaN(n)) return null;
@@ -215,7 +216,7 @@ function parseMagnitude(
  */
 function cell(row: Record<string, string>, key: string | undefined): string {
   if (!key) return "";
-  return String(row[key] ?? "").trim();
+  return (row[key] ?? "").trim();
 }
 
 /**

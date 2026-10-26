@@ -451,7 +451,7 @@ async function importRecipientRowsBatched(
     categories: await resolveCategories([...distinctPairs.values()]),
   }));
 
-  const outcomes: RowOutcome[] = new Array(rows.length);
+  const outcomes: RowOutcome[] = new Array<RowOutcome>(rows.length);
   const notesUpdates: {
     rowIndex: number;
     name: string;

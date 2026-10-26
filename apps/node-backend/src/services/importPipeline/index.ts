@@ -167,16 +167,16 @@ export async function commitImport({
   // Detect internal transfers across the whole corpus (not just this batch) so
   // cross-bank pairs whose legs arrived in separate imports get matched (ADR-083).
   // Runs before the MV refresh so the views reflect the exclusion immediately.
-  await reconcileTransfers().catch((err) => {
+  await reconcileTransfers().catch((err: unknown) => {
     logger.warn("[pipeline] transfer reconcile failed (non-fatal)", {
-      err: err?.message,
+      err: err instanceof Error ? err.message : undefined,
     });
   });
 
   if (imported > 0) {
-    await clearForecastMcCaches().catch((err) => {
+    await clearForecastMcCaches().catch((err: unknown) => {
       logger.warn("[pipeline] forecast cache invalidation failed (non-fatal)", {
-        err: err?.message,
+        err: err instanceof Error ? err.message : undefined,
       });
     });
   }
@@ -294,10 +294,10 @@ export async function runImportPipeline({
         ).slice(0, 2000),
       })
       .execute()
-      .catch((updateErr) => {
+      .catch((updateErr: unknown) => {
         logger.error("[pipeline] failed to mark batch as failed", {
           batchId,
-          error: updateErr?.message,
+          error: updateErr instanceof Error ? updateErr.message : undefined,
         });
       });
     logger.error("[pipeline] failed", {

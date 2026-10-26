@@ -40,7 +40,11 @@ import {
   sanitizeKinesisIsolatedSpikes,
   parseCustomHistoryPoints,
 } from "./prices/priceProviderRegistry.ts";
-import { getYahooClient } from "./prices/yahooClient.ts";
+import {
+  getYahooClient,
+  parseYahooPayload,
+  yahooChartResultSchema,
+} from "./prices/yahooClient.ts";
 
 import type { InvestmentRow, PricePoint } from "../types/rows.ts";
 import type { LivePriceQuote } from "./prices/priceProviderRegistry.ts";
@@ -185,13 +189,13 @@ export async function fetchLivePricesDetailed(
     {
       key: "binance",
       resolveId: (inv) => (inv.price_provider_id || "").toUpperCase(),
-      batchFn: PROVIDERS.binance,
+      batchFn: (ids) => PROVIDERS.binance(ids),
       label: "Binance batch fetch",
     },
     {
       key: "yahoo",
       resolveId: resolveYahooSymbol,
-      batchFn: PROVIDERS.yahoo,
+      batchFn: (ids) => PROVIDERS.yahoo(ids),
       label: "Yahoo Finance batch fetch",
     },
   ];
@@ -203,10 +207,14 @@ export async function fetchLivePricesDetailed(
     ) => Promise<Record<string, LivePriceQuote>>;
     label: string;
   }[] = [
-    { key: "custom", batchFn: PROVIDERS.custom, label: "Custom price fetch" },
+    {
+      key: "custom",
+      batchFn: (investments) => PROVIDERS.custom(investments),
+      label: "Custom price fetch",
+    },
     {
       key: "kinesis",
-      batchFn: PROVIDERS.kinesis,
+      batchFn: (investments) => PROVIDERS.kinesis(investments),
       label: "Kinesis price fetch",
     },
   ];
@@ -316,7 +324,7 @@ const BINANCE_PAGE_LIMIT = 1000;
 const BINANCE_MAX_PAGES = 30; // 30 × 1000 daily candles ≈ 82 years — a runaway guard, not a real bound
 
 function _dayKey(ms: number): number {
-  return Math.floor(Number(ms) / BINANCE_DAY_MS);
+  return Math.floor(ms / BINANCE_DAY_MS);
 }
 
 /**
@@ -329,8 +337,8 @@ async function _fetchBinanceKlines(
   endMs: number,
 ): Promise<(number | string)[][]> {
   const collected: (number | string)[][] = [];
-  let cursor = Number(startMs);
-  const end = Number(endMs);
+  let cursor = startMs;
+  const end = endMs;
 
   for (let page = 0; page < BINANCE_MAX_PAGES; page += 1) {
     const url =
@@ -342,13 +350,14 @@ async function _fetchBinanceKlines(
       signal: AbortSignal.timeout(8_000),
     });
     if (!res.ok) throw new UpstreamError(`Binance API error: ${res.status}`);
-    const data = await res.json();
+    const data: unknown = await res.json();
     if (!Array.isArray(data) || data.length === 0) return collected;
 
-    collected.push(...data);
-    if (data.length < BINANCE_PAGE_LIMIT) return collected;
+    const rows = data as (number | string)[][];
+    collected.push(...rows);
+    if (rows.length < BINANCE_PAGE_LIMIT) return collected;
 
-    const lastOpen = Number(data[data.length - 1][0]);
+    const lastOpen = Number(rows[rows.length - 1]?.[0]);
     if (!Number.isFinite(lastOpen)) return collected;
     const next = lastOpen + BINANCE_DAY_MS;
     if (next > end) return collected;
@@ -394,8 +403,8 @@ async function _persistAndResolve(
     persisted.length > 0
       ? persisted
       : normalizeHistoryPoints([
-          ...(cachedDbPoints ?? []),
-          ...(pointsInRange ?? []),
+          ...cachedDbPoints,
+          ...pointsInRange,
         ]);
   return _filterHistoricalPoints(resolved, fromMs, toMs);
 }
@@ -480,19 +489,20 @@ export async function fetchHistoricalPrices(
     if (!points) {
       try {
         const yahooFinance = await getYahooClient();
-        const chart = await yahooFinance.chart(symbol, {
+        const payload: unknown = await yahooFinance.chart(symbol, {
           period1: new Date(startDay * BINANCE_DAY_MS),
           // Yahoo's end is exclusive; include the requested final calendar day.
           period2: new Date((endDay + 1) * BINANCE_DAY_MS),
           interval: "1d",
           includePrePost: false,
         });
+        const chart = parseYahooPayload(yahooChartResultSchema, payload);
 
         points = normalizeHistoryPoints(
           (chart?.quotes ?? [])
             .map((q) => ({
-              timestampMs: q?.date != null ? new Date(q.date).getTime() : Number.NaN,
-              price: toNumber(q?.close),
+              timestampMs: q.date != null ? new Date(q.date).getTime() : Number.NaN,
+              price: toNumber(q.close),
             }))
             .filter(
               (p) => Number.isFinite(p.timestampMs) && isValidPrice(p.price),
@@ -685,7 +695,7 @@ export async function fetchHistoricalPrices(
       // redirects manually, re-checking every hop — mirrors the guarded "latest"
       // path in priceProviderRegistry._fetchJson so a public host cannot 302 the
       // request onto an internal address.
-      let url = String(config.historyUrl);
+      let url = config.historyUrl;
       let res: Response;
       for (let hop = 0; ; hop += 1) {
         await assertPublicHttpUrl(url);

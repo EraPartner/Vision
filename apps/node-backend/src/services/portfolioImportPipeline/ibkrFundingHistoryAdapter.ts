@@ -13,6 +13,7 @@ import { ValidationError } from "../../middleware/errorHandler.ts";
 import { asCurrencyCode } from "@vision/types/brands";
 import type { CurrencyCode } from "@vision/types/brands";
 import type { ParsedPortfolioRows } from "./portfolioGenericAdapter.ts";
+import { requiredValue } from "../requiredValue.ts";
 
 type FundingSheet = "Deposit" | "Withdrawal";
 const COLUMNS: Record<FundingSheet, string[]> = {
@@ -97,15 +98,18 @@ function text(cell: FundingWorkbookCell | undefined): string {
   if (cell.type !== "text" || typeof cell.value !== "string")
     fail("requires text cells for its export fields");
   const value = cell.value;
-  if (
-    value.length > 10000 ||
-    [...value].some((character) => {
-      const code = character.codePointAt(0) ?? 0;
-      return code < 32 && ![9, 10, 13].includes(code);
-    })
-  )
+  if (value.length > 10000 || hasUnsupportedControlCharacter(value))
     fail("contains an unsupported literal value");
   return value.trim();
+}
+
+/** Any control character other than tab, line feed or carriage return. */
+function hasUnsupportedControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const code = character.codePointAt(0) ?? 0;
+    if (code < 32 && ![9, 10, 13].includes(code)) return true;
+  }
+  return false;
 }
 
 function date(value: string | undefined): string {
@@ -128,12 +132,17 @@ function nativeAmount(value: string | undefined): {
     /^([A-Z]{3}) ((?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,8})?)$/.exec(
       value ?? "",
     );
-  if (!match || !FUNDING_CURRENCIES.has(match[1]!))
+  const [, currency, digits] = match ?? [];
+  if (
+    currency === undefined ||
+    digits === undefined ||
+    !FUNDING_CURRENCIES.has(currency)
+  )
     return fail("requires an amount with its currency, such as USD 1,000.00");
-  const amount = toDecimal(match[2]!.replaceAll(",", ""));
+  const amount = toDecimal(digits.replaceAll(",", ""));
   if (!amount.gt(0) || amount.gt("999999999999"))
     fail("contains an unsupported funding amount");
-  return { currency: asCurrencyCode(match[1]!), amount: amount.toFixed() };
+  return { currency: asCurrencyCode(currency), amount: amount.toFixed() };
 }
 
 /**
@@ -141,7 +150,7 @@ function nativeAmount(value: string | undefined): {
  * money (pending, rejected, cancelled).
  */
 function movement(envelope: IbkrFundingEnvelope): IbkrFundingFacts | undefined {
-  const sheet = envelope?.sheet;
+  const sheet = envelope.sheet;
   if (!isFundingSheet(sheet) || !equal(envelope.columns, COLUMNS[sheet]))
     return fail("has an unsupported or changed header layout");
   if (
@@ -160,12 +169,18 @@ function movement(envelope: IbkrFundingEnvelope): IbkrFundingFacts | undefined {
     "Status",
   ])
     if (!record[key]) fail(`is missing ${key} on row ${envelope.row_number}`);
+  // The loop above rejected any missing or empty value of these keys.
+  const accountId = requiredValue(record["Account ID"], "Account ID is present");
+  const referenceNumber = requiredValue(
+    record["Reference Number"],
+    "Reference Number is present",
+  );
   if (
-    !/^[A-Z][A-Z0-9*-]{2,49}$/.test(record["Account ID"]!) ||
-    !/^[A-Za-z0-9-]{1,100}$/.test(record["Reference Number"]!)
+    !/^[A-Z][A-Z0-9*-]{2,49}$/.test(accountId) ||
+    !/^[A-Za-z0-9-]{1,100}$/.test(referenceNumber)
   )
     fail("contains an unsupported account or reference identity");
-  const status = record.Status!;
+  const status = requiredValue(record.Status, "Status is present");
   if (OPEN_STATUS.test(status)) return undefined;
   if (!COMPLETED_STATUS.test(status))
     fail(`contains an unknown funding status "${status}"`);
@@ -180,8 +195,8 @@ function movement(envelope: IbkrFundingEnvelope): IbkrFundingFacts | undefined {
     date: requestedDate,
     completedDate,
     ...nativeAmount(record.Amount),
-    sourceAccount: record["Account ID"]!,
-    sourceId: record["Reference Number"]!,
+    sourceAccount: accountId,
+    sourceId: referenceNumber,
     method: record.Method || "funding",
     status,
     institution:
@@ -201,9 +216,16 @@ export function ibkrFundingFactsFromRawData(
   try {
     if (typeof rawData !== "string" || rawData.length > 200000)
       return undefined;
-    const envelope = JSON.parse(rawData) as IbkrFundingEnvelope;
-    if (envelope?.schema !== "ibkr_funding_workbook_row") return undefined;
-    return movement(envelope);
+    const parsed: unknown = JSON.parse(rawData);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("schema" in parsed) ||
+      parsed.schema !== "ibkr_funding_workbook_row"
+    )
+      return undefined;
+    // movement() re-checks the header layout and cells it reads.
+    return movement(parsed as IbkrFundingEnvelope);
   } catch {
     return undefined;
   }
@@ -225,8 +247,8 @@ export async function parseIbkrFundingHistory(
       return fail(
         "requires the original Deposit or Withdrawal sheet with its complete header",
       );
-    for (let index = 1; index < source.data.length; index++) {
-      const cells = source.data[index]!;
+    for (const [index, cells] of source.data.entries()) {
+      if (index === 0) continue;
       if (
         cells.every(
           (cell) =>

@@ -20,7 +20,11 @@ vi.mock('../src/services/currency/currencyConversionService.ts', () => ({
 vi.mock('../src/lib/urlSafety.ts', () => ({ assertPublicHttpUrl: vi.fn() }));
 
 const yahoo = vi.hoisted(() => ({ quote: vi.fn(), chart: vi.fn() }));
-vi.mock("../src/services/prices/yahooClient.ts", () => ({
+// Keep the real payload schemas/helpers; only the client itself is faked.
+vi.mock("../src/services/prices/yahooClient.ts", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("../src/services/prices/yahooClient.ts")
+  >()),
   getYahooClient: vi.fn(async () => yahoo),
 }));
 

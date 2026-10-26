@@ -7,6 +7,8 @@
  * portfolioTxRepo (+ the ADR-090 cash leg) or to a plain cash transaction.
  */
 
+import { cellText } from "../cellText.ts";
+
 // Brokerage row kinds → routing target.
 //  - deposit/withdrawal: external cash in/out of the sleeve → a plain cash
 //    transaction (no trade, no leg).
@@ -79,13 +81,11 @@ export function classifyBrokerageRow(row: {
   kind?: string | null;
   hasInstrument?: boolean;
 }): BrokerageRouting {
-  const kind = String(row?.kind || "")
-    .toLowerCase()
-    .trim();
+  const kind = (row.kind || "").toLowerCase().trim();
   if (CASH_INFLOW_KINDS.has(kind)) return { target: "cash", direction: 1 };
   if (CASH_OUTFLOW_KINDS.has(kind)) return { target: "cash", direction: -1 };
   if (PORTFOLIO_KINDS.has(kind)) {
-    if (row?.hasInstrument === false) {
+    if (row.hasInstrument === false) {
       if (INSTRUMENT_LESS_CASH_INFLOW_KINDS.has(kind))
         return { target: "cash", direction: 1 };
       if (INSTRUMENT_LESS_CASH_OUTFLOW_KINDS.has(kind))
@@ -109,7 +109,7 @@ function tradeDedupKey(row: {
   units?: number | string;
   amount?: number | string;
 }): string {
-  const norm = (v: unknown) => (v == null ? "" : String(v).trim());
+  const norm = (v: unknown) => cellText(v).trim();
   return [
     norm(row.account_id),
     norm(row.investment_id),

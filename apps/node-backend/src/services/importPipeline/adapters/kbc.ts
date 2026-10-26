@@ -51,7 +51,7 @@ function classifyTransactionType(
  * @returns null when too short or unparseable
  */
 function parseLine(parts: string[]): ParsedBankTransaction | null {
-  if (parts == null || parts.length < MIN_FIELDS) return null;
+  if (parts.length < MIN_FIELDS) return null;
 
   const ownAccount = cellAt(parts, 0).trim(); // "Rekeningnummer" — the account holder's own IBAN
   const currency = normalizeIsoCurrency(parts[3]);

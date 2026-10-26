@@ -56,7 +56,7 @@ import { PORTFOLIO_RECURRENCE_INTERVALS } from "@vision/types/recurrence";
 import { parseBooleanQueryParam } from "../lib/httpParams.ts";
 import type { ExpressRequest, ExpressResponse } from "../types/express.ts";
 import type { InvestmentRow } from "../types/rows.ts";
-import type { ResolvedPrice } from "./priceProviderService.ts";
+import { requiredValue } from "./requiredValue.ts";
 
 /** A response after middleware/envelope.ts has installed `res.ok`. */
 type EnvelopeResponse = ExpressResponse & Required<Pick<ExpressResponse, "ok">>;
@@ -73,7 +73,7 @@ const PROVIDER_URL_FIELDS = [
 
 async function validateProviderUrls(body: Record<string, unknown>) {
   for (const field of PROVIDER_URL_FIELDS) {
-    const value = body?.[field];
+    const value = body[field];
     if (value === undefined || value === null || value === "") continue;
     try {
       // maxLenField already bounded it; assertPublicHttpUrl rejects non-URLs.
@@ -211,7 +211,7 @@ const brokerRetagBodySchema = z.strictObject({
     .max(2_147_483_647)
     .pipe(AccountIdSchema)
     .nullable(),
-  idempotency_key: z.string().uuid(),
+  idempotency_key: z.uuid(),
 });
 
 /** A validated broker re-tag body. */
@@ -321,7 +321,10 @@ const portfolioDateField = (field: string, allowClear: boolean) =>
       }
       try {
         // A non-empty string is returned as-is or rejected by a throw.
-        const date = assertYmd(value, field)!;
+        const date = requiredValue(
+          assertYmd(value, field),
+          "assertYmd returns a non-empty string or throws",
+        );
         // Date accepts and normalizes impossible calendar days such as February
         // 30. Round-trip the validated ISO value so those do not reach Postgres.
         if (
@@ -624,30 +627,30 @@ function parseInvestmentTransactionsOptions(
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function hasLivePriceRefreshConfig(investment: InvestmentRow): boolean {
-  const provider = investment?.price_provider;
+  const provider = investment.price_provider;
   if (!provider || provider === "manual") return false;
 
   if (provider === "custom") {
     return Boolean(
-      investment?.price_provider_latest_url ||
-      investment?.price_provider_url ||
-      investment?.price_provider_history_url,
+      investment.price_provider_latest_url ||
+      investment.price_provider_url ||
+      investment.price_provider_history_url,
     );
   }
 
   if (provider === "yahoo") {
-    return Boolean(investment?.price_provider_id || investment?.symbol);
+    return Boolean(investment.price_provider_id || investment.symbol);
   }
 
   if (provider === "kinesis") {
-    if (investment?.price_provider_id) return true;
-    const assetName = (investment?.name || investment?.symbol || "")
+    if (investment.price_provider_id) return true;
+    const assetName = (investment.name || investment.symbol || "")
       .toLowerCase()
       .trim();
     return Boolean(assetName && getKinesisAssetConfig(assetName));
   }
 
-  return Boolean(investment?.price_provider_id);
+  return Boolean(investment.price_provider_id);
 }
 
 // ── Handlers ─────────────────────────────────────────────────────────────────
@@ -750,8 +753,8 @@ export async function refreshPrices(
     price_updated_at: string;
   }[] = [];
   for (const [investmentId, priceData] of Object.entries(prices)) {
-    const { price, source }: Partial<ResolvedPrice> = priceData ?? {};
-    if (price == null || isNaN(price)) continue;
+    const { price, source } = priceData;
+    if (isNaN(price)) continue;
     priceSources[investmentId] = source || "live";
     if (source === "cached" || source === "historical_fallback") continue;
     priceUpdates.push({
@@ -966,10 +969,10 @@ export async function createTransaction(
   }
 
   clearInvestmentsCaches();
-  refreshQuotesForInvestment(investment_id).catch((err) => {
+  refreshQuotesForInvestment(investment_id).catch((err: unknown) => {
     logger.error("Transaction-triggered quote refresh failed", {
       investmentId: investment_id,
-      error: err.message,
+      error: err instanceof Error ? err.message : undefined,
     });
   });
   res.status(201);
@@ -989,10 +992,10 @@ export async function deleteTransaction(
   if (!ok) throw new NotFoundError("Portfolio transaction not found");
 
   clearInvestmentsCaches();
-  refreshQuotesForInvestment(existingTxn.investment_id).catch((err) => {
+  refreshQuotesForInvestment(existingTxn.investment_id).catch((err: unknown) => {
     logger.error("Transaction-triggered quote refresh failed", {
       investmentId: existingTxn.investment_id,
-      error: err.message,
+      error: err instanceof Error ? err.message : undefined,
     });
   });
   res.status(204).send();
@@ -1049,10 +1052,10 @@ export async function updateTransaction(
   if (!txn) throw new NotFoundError("Portfolio transaction not found");
 
   clearInvestmentsCaches();
-  refreshQuotesForInvestment(txn.investment_id).catch((err) => {
+  refreshQuotesForInvestment(txn.investment_id).catch((err: unknown) => {
     logger.error("Transaction-triggered quote refresh failed", {
       investmentId: txn.investment_id,
-      error: err.message,
+      error: err instanceof Error ? err.message : undefined,
     });
   });
   res.ok(txn);

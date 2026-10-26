@@ -42,6 +42,7 @@ import type { ProjectedCustodyTxn } from "@vision/shared-utils/portfolio";
 import type { DecimalInput } from "../../lib/money.ts";
 import { asPartitionedTxns } from "./portfolioTransactionRules.ts";
 import { nanToZero, nonZeroOr } from "../../lib/math.ts";
+import { requiredValue } from "../requiredValue.ts";
 
 export type Decimal = import("decimal.js").default;
 
@@ -190,7 +191,13 @@ function addToSleeve(
   const sleeve = SNAPSHOT_SLEEVE_BY_ASSET_CLASS[String(assetClass)];
   if (!sleeve) return;
   // Every sleeve is seeded by createSleeveAccumulator.
-  accumulator.set(sleeve, accumulator.get(sleeve)!.plus(amount));
+  accumulator.set(
+    sleeve,
+    requiredValue(
+      accumulator.get(sleeve),
+      "every sleeve is seeded by createSleeveAccumulator",
+    ).plus(amount),
+  );
 }
 
 /** The part of `value` before the first "T" (`value.split("T")[0]`). */
@@ -320,7 +327,8 @@ export async function computeDailySnapshots(
         ])
         .where("price_date", ">=", sql<Date>`${firstDateYmd}::date`)
         .where("price_date", "<=", sql<Date>`${todayYmd}::date`)
-        .orderBy(["investment_id", "price_date"]),
+        .orderBy("investment_id")
+        .orderBy("price_date"),
     ),
     checkedRows(
       snapshotInflationRowSchema,
@@ -352,7 +360,8 @@ export async function computeDailySnapshots(
         "rate_to_eur",
       ])
       .where("rate_date", ">=", sql<Date>`${firstDateYmd}::date`)
-      .orderBy(["currency_code", "rate_date"])
+      .orderBy("currency_code")
+      .orderBy("rate_date")
       .execute()
       .catch((): unknown[] => []),
   ]);
@@ -386,7 +395,7 @@ export async function computeDailySnapshots(
       currentPrice: nanToZero(Number(row.current_price)),
       interestRate: nanToZero(Number(row.interest_rate)),
       assetClass: row.asset_class,
-      activeFrom: dayPart(String(row.active_from)),
+      activeFrom: dayPart(row.active_from),
     }),
   );
   const nonUnitInvestmentsById = new Map(
@@ -464,7 +473,7 @@ export async function computeDailySnapshots(
   for (const row of allTxRows) {
     (txByDay[row.day] ??= []).push({
       investmentId: Number(row.investment_id),
-      id: Number(row.id ?? 0),
+      id: Number(row.id),
       type: row.type,
       amount: toDecimal(row.amount || 0),
       units: toDecimal(row.units || 0),
@@ -781,7 +790,10 @@ export async function computeDailySnapshots(
           // Live summary: fixed-income uses buy+gift; real_estate uses buy only.
           // nonUnitState is seeded from the same rows as nonUnitInvestmentsById.
           const includeForInvested =
-            nonUnitInv!.assetClass !== REAL_ESTATE_ASSET_CLASS ||
+            requiredValue(
+              nonUnitInv,
+              "nonUnitState is seeded from the same rows as nonUnitInvestmentsById",
+            ).assetClass !== REAL_ESTATE_ASSET_CLASS ||
             tx.type === "buy";
           if (includeForInvested)
             nonUnitS.runningInvested = nonUnitS.runningInvested.plus(converted);
@@ -846,10 +858,16 @@ export async function computeDailySnapshots(
           // principal at its original FX, without creating a capital flow.
           // Adjustment legs always carry the lots they consumed, and each lot
           // names an acquisition from this same replayed history.
-          for (const lot of leg.consumedLots!) {
-            const acquisition = allTxRows.find(
-              (row) => Number(row.id) === Number(lot.acquisitionId),
-            )!;
+          for (const lot of requiredValue(
+            leg.consumedLots,
+            "adjustment legs carry the lots they consumed",
+          )) {
+            const acquisition = requiredValue(
+              allTxRows.find(
+                (row) => Number(row.id) === Number(lot.acquisitionId),
+              ),
+              "each consumed lot names an acquisition from the replayed history",
+            );
             const originalCost = toDecimal(acquisition.amount || 0)
               .plus(acquisition.fees || 0)
               .plus(acquisition.taxes || 0);
@@ -1013,7 +1031,10 @@ export async function computeDailySnapshots(
     let fixedIncomeValue = toDecimal(0);
     for (const inv of nonUnitInvestments) {
       // Seeded for every non-unit investment before the walk.
-      const state = nonUnitState.get(inv.id)!;
+      const state = requiredValue(
+        nonUnitState.get(inv.id),
+        "nonUnitState is seeded for every non-unit investment",
+      );
       const isFixedIncome = FIXED_INCOME_ASSET_CLASSES.has(inv.assetClass);
       const isRealEstate = inv.assetClass === REAL_ESTATE_ASSET_CLASS;
 

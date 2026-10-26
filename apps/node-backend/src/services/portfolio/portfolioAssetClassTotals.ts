@@ -109,7 +109,7 @@ export function buildHoldingTotals(rows: readonly TotalsInput[]) {
     /** Σ of the rents that have a rate; see monthlyRentRateMissing. */
     estimatedMonthlyRent: sum(rows, (row) => row.monthlyRent ?? 0),
     monthlyRentRateMissing: rows.some((row) => row.monthlyRent === null),
-    usedFallbackRate: rows.some((row) => row.usedFallbackRate === true),
+    usedFallbackRate: rows.some((row) => row.usedFallbackRate),
   };
 }
 /** One entry per asset class present in `summaries`, in canonical class order. */

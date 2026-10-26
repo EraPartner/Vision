@@ -26,6 +26,8 @@ import type {
   ParsedPortfolioRow,
   ParsedPortfolioRows,
 } from "./portfolioGenericAdapter.ts";
+import { cellText } from "../cellText.ts";
+import { requiredValue } from "../requiredValue.ts";
 
 /** One Saxo record keyed by header: CSV text cells or typed workbook cells. */
 type SaxoRecord = Record<string, WorkbookCell>;
@@ -125,7 +127,7 @@ function isNonNegative(value: number | null): boolean {
 
 function cleanCell(value: unknown): string {
   if (isWorkbookNumber(value)) return value.raw.trim();
-  return String(value ?? "").trim();
+  return cellText(value).trim();
 }
 
 function normalizeHeader(value: unknown): string {
@@ -174,7 +176,12 @@ function csvNumberFormat(
     const action = TRADE_ACTION.exec(cleanCell(record.Acties));
     const texts = [
       ...NUMBER_COLUMNS.map((column) => cleanCell(record[column])),
-      ...(action ? [action[2]!, action[3]!] : []),
+      ...(action
+        ? [
+            requiredValue(action[2], "the trade action carries its quantity"),
+            requiredValue(action[3], "the trade action carries its price"),
+          ]
+        : []),
     ];
     for (const text of texts) {
       const evidence = text ? separatorEvidence(text) : undefined;
@@ -377,8 +384,11 @@ function parseTrade(
       : accountFees;
 
   return baseRow(record, {
-    // The action group is mandatory, so a match carries it.
-    typeRaw: /^(koop|buy)$/i.test(match[1]!) ? "Buy" : "Sell",
+    typeRaw: /^(koop|buy)$/i.test(
+      requiredValue(match[1], "the action group is mandatory"),
+    )
+      ? "Buy"
+      : "Sell",
     units,
     pricePerUnit: price,
     amount: null,
@@ -588,6 +598,8 @@ function workbookActionFormat(
   const match = TRADE_ACTION.exec(cleanCell(record.Acties));
   const [trade] = trades;
   if (!match || trades.length !== 1 || !trade) return undefined;
+  const quantityText = requiredValue(match[2], "the trade action carries its quantity");
+  const priceText = requiredValue(match[3], "the trade action carries its price");
   const units = magnitude(trade["Traded Quantity"]);
   const price = magnitude(trade.Prijs);
   return (["decimal_dot", "decimal_comma"] as const).find((format) => {
@@ -595,7 +607,7 @@ function workbookActionFormat(
       const value = parseCustomAmount(text, format);
       return Number.isFinite(value) ? Math.abs(value) : undefined;
     };
-    return read(match[2]!) === units && read(match[3]!) === price;
+    return read(quantityText) === units && read(priceText) === price;
   });
 }
 
@@ -674,8 +686,10 @@ function parseWorkbookRecord(
         "Saxo workbook trade details are missing or ambiguous",
       );
     }
-    // The check above admits exactly one trade.
-    const trade = trades[0]!;
+    const trade = requiredValue(
+      trades[0],
+      "the check above admits exactly one trade",
+    );
     if (
       DETAIL_COLUMNS.some(
         (column) => cleanCell(trade[column]) !== cleanCell(record[column]),
@@ -714,8 +728,12 @@ function parseWorkbookRecord(
       throw new ValidationError(
         "Saxo workbook trade is missing its exchange rate",
       );
-    // The trade check above admits exactly one principal entry.
-    const principal = number(entries("principal")[0]!.Boekingsbedrag);
+    const principal = number(
+      requiredValue(
+        entries("principal")[0],
+        "the trade check above admits exactly one principal entry",
+      ).Boekingsbedrag,
+    );
     if (
       (parsed.typeRaw === "Buy" && isNonNegative(principal)) ||
       (parsed.typeRaw === "Sell" && isNonPositive(principal)) ||
@@ -752,8 +770,14 @@ function parseWorkbookRecord(
       [...buckets.keys()].some(
         (key) => !["dividend", "tax", "fee"].includes(key),
       ) ||
-      // Reached only when exactly one dividend entry exists (checked above).
-      isNonPositive(number(entries("dividend")[0]!.Boekingsbedrag)) ||
+      isNonPositive(
+        number(
+          requiredValue(
+            entries("dividend")[0],
+            "reached only when exactly one dividend entry exists",
+          ).Boekingsbedrag,
+        ),
+      ) ||
       [...entries("tax"), ...entries("fee")].some((entry) =>
         isPositive(number(entry.Boekingsbedrag)),
       )
@@ -890,7 +914,7 @@ export async function parseSaxoTransactionHistory(
   const format = csvNumberFormat(records);
   for (const record of records) {
     const parsed = parseRecord(record, format);
-    if (!parsed?.date || Number.isNaN(parsed.date.getTime())) {
+    if (!parsed.date || Number.isNaN(parsed.date.getTime())) {
       skipped++;
       continue;
     }

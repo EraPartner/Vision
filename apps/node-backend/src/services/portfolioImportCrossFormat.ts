@@ -33,6 +33,8 @@ import type {
   ManualCashCandidateRow,
   ReconciliationSourceRow,
 } from "../repositories/portfolioImportReconciliationRepository.ts";
+import { cellText } from "./cellText.ts";
+import { requiredValue } from "./requiredValue.ts";
 
 /** The pre-read ledger evidence the decisions are pure over. */
 export interface CrossFormatContext {
@@ -110,7 +112,7 @@ const identityOf = (
     ? `${row.dedup_fingerprint_version}:${row.dedup_fingerprint}`
     : undefined;
 const text = (value: unknown) =>
-  String(value ?? "")
+  cellText(value)
     .trim()
     .replace(/^-$/, "")
     .toUpperCase();
@@ -147,22 +149,29 @@ function pairUnique<L, R>(
   right: readonly R[],
   match: (l: L, r: R) => boolean,
 ) {
-  const candidates = left.map((l) => right.filter((r) => match(l, r)));
+  const entries = left.map((l) => ({
+    row: l,
+    candidates: right.filter((r) => match(l, r)),
+  }));
   const back = new Map<R, L[]>(
-    right.map((r) => [r, left.filter((_l, index) => candidates[index]!.includes(r))]),
+    right.map((r) => [
+      r,
+      entries
+        .filter((entry) => entry.candidates.includes(r))
+        .map((entry) => entry.row),
+    ]),
   );
   const pairs: Array<[L, R]> = [];
   const ambiguous = new Set<L>();
   const ambiguousRight = new Set<R>();
   const groups = new Map<string, { rows: L[]; candidates: R[] }>();
-  left.forEach((l, index) => {
-    const set = candidates[index]!;
-    if (set.length === 0) return;
+  for (const { row: l, candidates: set } of entries) {
+    if (set.length === 0) continue;
     const key = set.map((r) => right.indexOf(r)).join(",");
     const group = groups.get(key) ?? { rows: [], candidates: set };
     group.rows.push(l);
     groups.set(key, group);
-  });
+  }
   for (const group of groups.values()) {
     const exact = group.candidates.every((r) => {
       const owners = back.get(r) ?? [];
@@ -178,7 +187,13 @@ function pairUnique<L, R>(
     }
     const count = Math.min(group.rows.length, group.candidates.length);
     for (let index = 0; index < count; index++)
-      pairs.push([group.rows[index]!, group.candidates[index]!]);
+      pairs.push([
+        requiredValue(group.rows[index], "a pairing group has `count` rows"),
+        requiredValue(
+          group.candidates[index],
+          "a pairing group has `count` candidates",
+        ),
+      ]);
   }
   return { pairs, ambiguous, ambiguousRight };
 }
@@ -209,7 +224,7 @@ function saxoBookingRecord(row: StagedRow | CrossFormatLedgerSourceRow) {
     });
     // \s covers the byte-order mark and the no-break spaces Saxo writes.
     const column = columns.findIndex(
-      (header) => String(header).replace(/\s/g, " ").trim() === "Bk Record Id",
+      (header) => header.replace(/\s/g, " ").trim() === "Bk Record Id",
     );
     if (records.length !== 1 || column < 0) return "";
     const record = text(records[0]?.[column]);
@@ -350,7 +365,7 @@ function ibkrCsvFunding(
     )
       return undefined;
     const field = (name: string) =>
-      String(values[columns.indexOf(name) + 2] ?? "")
+      (values[columns.indexOf(name) + 2] ?? "")
         .trim()
         .replace(/^-$/, "");
     const kind = field("Transaction Type");
@@ -582,7 +597,11 @@ export function planCrossFormatSources({
     decide(
       row,
       recorded.every((source) => saxoConsistent(row, source))
-        ? { kind: "duplicate", existingTransactionId: first!.transaction_id }
+        ? { kind: "duplicate", existingTransactionId: requiredValue(
+              first,
+              "a recorded source exists (empty sets continue above)",
+            ).transaction_id,
+          }
         : {
             kind: "blocked",
             reason: "cross_format_source_conflict",
@@ -951,7 +970,7 @@ export function planCrossFormatSources({
 
   // Manual cash: an unowned transaction with the same signed money.
   const cashRows = open.filter(
-    (row) =>
+    (row): row is (typeof open)[number] & { tx_date: string } =>
       row.route === "cash" &&
       row.status === "matched" &&
       row.amount != null &&
@@ -965,7 +984,7 @@ export function planCrossFormatSources({
     sameAccount(row, candidate) &&
     candidate.currency === row.currency &&
     sameNumber(candidate.amount, signedCashAmount(row), 4) &&
-    days(candidate.date, row.tx_date!) <= MANUAL_CASH_DAYS,
+    days(candidate.date, row.tx_date) <= MANUAL_CASH_DAYS,
   );
   for (const [row, candidate] of manual.pairs) {
     const existing = {
@@ -1002,7 +1021,7 @@ export function planCrossFormatSources({
             sameAccount(row, candidate) &&
             candidate.currency === row.currency &&
             sameNumber(candidate.amount, signedCashAmount(row), 4) &&
-            days(candidate.date, row.tx_date!) <= MANUAL_CASH_DAYS,
+            days(candidate.date, row.tx_date) <= MANUAL_CASH_DAYS,
         )
         .map((candidate) => candidate.id),
     });

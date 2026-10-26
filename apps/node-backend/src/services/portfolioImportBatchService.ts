@@ -64,6 +64,8 @@ import {
   resetCommittedRowsToMatched,
 } from "../repositories/portfolioImportBatchRepository.ts";
 import { batchConfigFields } from "../database/rows/portfolioImport.ts";
+import { storedConfigObject } from "./portfolio/storedConfig.ts";
+import { requiredValue } from "./requiredValue.ts";
 
 const KINESIS_METAL_SYMBOLS = new Set(["KAU", "KAG"]);
 const USD = asCurrencyCode("USD");
@@ -105,8 +107,9 @@ function buildPortfolioImportBatchPreview(rows: PortfolioImportPreviewRow[]) {
         : row.effective_investment_id != null
           ? `inv:${row.effective_investment_id}`
           : `raw:${(row.symbol_raw || row.name_raw || "?").toLowerCase()}`;
-    if (!groupMap.has(key)) {
-      groupMap.set(key, {
+    let group = groupMap.get(key);
+    if (!group) {
+      group = {
         is_cash: row.route === "cash",
         investment_id: row.effective_investment_id,
         investment_name: row.investment_name,
@@ -115,9 +118,10 @@ function buildPortfolioImportBatchPreview(rows: PortfolioImportPreviewRow[]) {
         raw_symbol: row.route === "cash" ? null : row.symbol_raw,
         raw_name: row.route === "cash" ? null : row.name_raw,
         rows: [],
-      });
+      };
+      groupMap.set(key, group);
     }
-    groupMap.get(key)!.rows.push({
+    group.rows.push({
       id: row.id,
       row_index: row.row_index,
       status: row.status,
@@ -198,7 +202,14 @@ export async function createInvestmentForRow({
     if (!locked) return undefined;
 
     const investment = await createInvestmentFromRow({ batchId, rowId });
-    await overrideInvestment({ batchId, rowId, investmentId: investment!.id });
+    await overrideInvestment({
+      batchId,
+      rowId,
+      investmentId: requiredValue(
+        investment,
+        "createInvestmentFromRow returns the holding it created",
+      ).id,
+    });
     return investment;
   });
 }
@@ -303,16 +314,9 @@ async function createInvestmentFromRow({
   const rawCurrency = String(row.currency || "")
     .trim()
     .toUpperCase();
-  let config: { format?: unknown } = {};
-  try {
-    config =
-      typeof row.custom_config === "string"
-        ? JSON.parse(row.custom_config)
-        : row.custom_config ?? {};
-  } catch {
-    // Malformed historical config falls back to the batch default, matching
-    // the generic create-new behavior instead of blocking review.
-  }
+  // Malformed historical config falls back to the batch default, matching the
+  // generic create-new behavior instead of blocking review.
+  const config = storedConfigObject(row.custom_config);
   const symbol = (row.symbol_raw || "").trim().toUpperCase();
   const assetClass =
     config.format === "kinesis_transaction_history" &&
@@ -373,7 +377,7 @@ export async function resolveInvestmentRows({
     }
 
     let investment: InvestmentRow | null;
-    let effectiveId = investmentId;
+    let effectiveId: InvestmentId;
 
     // create() returns the row it just inserted; without create_new the route
     // requires investment_id.
@@ -387,23 +391,32 @@ export async function resolveInvestmentRows({
         err.code = "NOT_FOUND";
         throw err;
       }
-      investment = (await createInvestmentFromRow({ batchId, rowId }))!;
+      investment = requiredValue(
+        await createInvestmentFromRow({ batchId, rowId }),
+        "createInvestmentFromRow returns the holding it created",
+      );
       effectiveId = investment.id;
     } else {
-      investment = await investmentRepository.getById(effectiveId!);
-      if (!investment) {
+      // Without create_new the route requires investment_id; a missing one
+      // reads as an unknown holding.
+      investment =
+        investmentId === undefined
+          ? null
+          : await investmentRepository.getById(investmentId);
+      if (!investment || investmentId === undefined) {
         const err: Error & { code?: string } = new Error(
-          `Investment ${effectiveId} not found`,
+          `Investment ${investmentId ?? "undefined"} not found`,
         );
         err.code = "NOT_FOUND";
         throw err;
       }
+      effectiveId = investmentId;
     }
 
     const result = await overrideInvestments({
       batchId,
       rowIds,
-      investmentId: effectiveId!,
+      investmentId: effectiveId,
     });
     if (result.updatedCount !== result.requestedCount) {
       const err: Error & { code?: string } = new Error(
@@ -414,7 +427,7 @@ export async function resolveInvestmentRows({
     }
 
     return {
-      investmentId: effectiveId!,
+      investmentId: effectiveId,
       created: createNew,
       resolved: result.updatedCount,
       ...(createNew ? { investment } : {}),
@@ -494,7 +507,7 @@ export async function rollbackBatch(batchId: number) {
         batchId,
         ...cashScope.flatMap((receipt) =>
           receipt.after_data.proof.sourceBindings.map((binding) =>
-            Number(binding.batch_id),
+            binding.batch_id,
           ),
         ),
         ...repairScope.map((receipt) =>
@@ -545,7 +558,7 @@ export async function rollbackBatch(batchId: number) {
         (receipt) =>
           isIbkrCashReceipt(receipt) &&
           receipt.after_data.proof.sourceBindings.some(
-            (binding) => !lockIds.includes(Number(binding.batch_id)),
+            (binding) => !lockIds.includes(binding.batch_id),
           ),
       )
     )
@@ -578,7 +591,10 @@ export async function rollbackBatch(batchId: number) {
               receipt.before_data.legacy.account_id,
               receipt.after_data.legacy.account_id,
               // A repair's before-image holds the imported copy it deleted.
-              receipt.before_data.imported!.account_id,
+              requiredValue(
+                receipt.before_data.imported,
+                "a repair's before-image holds the imported copy it deleted",
+              ).account_id,
             ]),
           ]
             .concat(
@@ -600,12 +616,12 @@ export async function rollbackBatch(batchId: number) {
     // can only exist on a brokerage batch (resolveAndCheck writes route='cash'
     // only when is_brokerage) — this re-check keeps a corrupted/hand-edited
     // staging row from crossing the transactions/portfolio id line.
-    const isBrokerage = lockedBatch.is_brokerage === true;
+    const isBrokerage = lockedBatch.is_brokerage;
 
     // committed_txn_id names a ledger transaction on cash rows and a
     // portfolio transaction otherwise; the route decides which.
     const portfolioRows = rows
-      .filter((r) => (!isBrokerage || r.route !== "cash") && r.id != null)
+      .filter((r) => !isBrokerage || r.route !== "cash")
       .map((r) => ({ ...r, id: asPortfolioTransactionId(r.id) }));
     // Approve the complete stamped + legacy removal set before deleting any
     // row. Per-row validation would reject a batch's buy before its dependent
@@ -654,7 +670,7 @@ export async function rollbackBatch(batchId: number) {
       ? [
           ...new Set([
             ...rows
-              .filter((r) => r.route === "cash" && r.id != null)
+              .filter((r) => r.route === "cash")
               .map((r) => r.id),
             ...ownedCashIds,
           ]),

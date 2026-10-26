@@ -21,7 +21,7 @@ export async function autoResolveFxRateToEur(
   currency: string,
   date: string | Date | null | undefined,
 ): Promise<number | undefined> {
-  const code = String(currency || "EUR")
+  const code = (currency || "EUR")
     .toUpperCase()
     .trim();
   if (code === "EUR") return undefined;

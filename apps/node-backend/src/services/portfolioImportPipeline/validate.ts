@@ -33,6 +33,7 @@ import type {
   PortfolioImportProgressCallback,
 } from "./index.ts";
 import type { PortfolioParserConfig } from "./portfolioGenericAdapter.ts";
+import { requiredValue } from "../requiredValue.ts";
 
 /**
  * The projection validate.js reads. `tx_date` is selected RAW here (unlike the
@@ -133,7 +134,7 @@ export async function validateBatch({
   const today = todayAppDateString();
 
   const pending = allRows.filter(
-    (row) => row.status == null || row.status === "pending",
+    (row) => row.status === "pending",
   );
   const total = pending.length;
   let seen = 0;
@@ -158,10 +159,10 @@ export async function validateBatch({
       }),
   );
   const resolutionById = new Map(
-    allRows.map((row, index) => [String(row.id), resolutions[index]]),
+    allRows.map((row, index) => [row.id, resolutions[index]]),
   );
   const identityById = new Map(
-    allRows.map((row, index) => [String(row.id), identities[index]]),
+    allRows.map((row, index) => [row.id, identities[index]]),
   );
 
   if (onProgress) onProgress({ phase: "validating", current: 0, total });
@@ -180,9 +181,15 @@ export async function validateBatch({
 
     for (const row of chunk) {
       // Both maps hold every staging row of the batch; `chunk` is a subset.
-      const identity = identityById.get(String(row.id))!;
+      const identity = requiredValue(
+        identityById.get(row.id),
+        "identityById holds every staging row of the batch",
+      );
       ids.push(row.id);
-      const { type, route, error } = resolutionById.get(String(row.id))!;
+      const { type, route, error } = requiredValue(
+        resolutionById.get(row.id),
+        "resolutionById holds every staging row of the batch",
+      );
       if (error) {
         errors++;
         statuses.push("error");
@@ -350,7 +357,7 @@ function resolveAndCheck(
     // canonical `type` is persisted alongside route='cash' so commit derives
     // the ledger sign and the auto-category from the kind.
     const hasInstrument = Boolean(
-      String(row.symbol_raw || "").trim() || String(row.name_raw || "").trim(),
+      (row.symbol_raw || "").trim() || (row.name_raw || "").trim(),
     );
     const { target } = classifyBrokerageRow({ kind: type, hasInstrument });
     if (target === "cash") return { type, route: "cash" };

@@ -15,7 +15,6 @@ describe('aggregateIncome (ADR-096)', () => {
   it('treats missing fields as zero and handles empty input', () => {
     expect(aggregateIncome([{}])).toEqual({ realizedIncome: 0, projectedAnnualIncome: 0 });
     expect(aggregateIncome([])).toEqual({ realizedIncome: 0, projectedAnnualIncome: 0 });
-    // @ts-expect-error -- pins the runtime guard for a missing summary list
     expect(aggregateIncome(undefined)).toEqual({ realizedIncome: 0, projectedAnnualIncome: 0 });
   });
 });

@@ -70,8 +70,8 @@ function financialImage(
 export function isIbkrCashReceipt<T extends CashReceiptLike>(
   receipt: T,
 ): receipt is IbkrCashReceiptOf<T> {
-  const before = receipt?.before_data as Partial<IbkrCashEnvelope> | undefined;
-  const after = receipt?.after_data as Partial<IbkrCashEnvelope> | undefined;
+  const before = receipt.before_data as Partial<IbkrCashEnvelope> | undefined;
+  const after = receipt.after_data as Partial<IbkrCashEnvelope> | undefined;
   return (
     before?.ledgerKind === "cash" &&
     after?.ledgerKind === "cash" &&
@@ -89,12 +89,12 @@ export async function validateIbkrCashCorrectionRollback<
   const cash = receipts.filter((receipt): receipt is IbkrCashReceiptOf<T> =>
     isIbkrCashReceipt(receipt),
   );
-  const ids = cash.map((receipt) => Number(receipt.transaction_id));
+  const ids = cash.map((receipt) => receipt.transaction_id);
   if (new Set(ids).size !== ids.length) throw stale();
   const current = await readIbkrCashImagesForUpdate(ids);
   for (const receipt of cash) {
     const row = current.find(
-      (item) => Number(item.id) === Number(receipt.transaction_id),
+      (item) => Number(item.id) === receipt.transaction_id,
     );
     if (
       receipt.action !== "adopt" ||
@@ -127,11 +127,14 @@ export async function findCorrectedIbkrCashAlias(row: {
 }): Promise<number | undefined> {
   if (!row.dedup_fingerprint || row.dedup_fingerprint_version == null)
     return undefined;
-  const receipt = (await readActiveIbkrCashReceipts()).find(
-    (item) =>
-      item.before_data.snapshot?.dedup_fingerprint === row.dedup_fingerprint &&
-      Number(item.before_data.snapshot?.dedup_fingerprint_version) ===
-        Number(row.dedup_fingerprint_version),
-  );
-  return receipt ? Number(receipt.transaction_id) : undefined;
+  const receipt = (await readActiveIbkrCashReceipts()).find((item) => {
+    // The envelope is stored JSON: read its snapshot as possibly absent.
+    const before: Partial<IbkrCashEnvelope> = item.before_data;
+    return (
+      before.snapshot?.dedup_fingerprint === row.dedup_fingerprint &&
+      Number(before.snapshot.dedup_fingerprint_version) ===
+        Number(row.dedup_fingerprint_version)
+    );
+  });
+  return receipt ? receipt.transaction_id : undefined;
 }

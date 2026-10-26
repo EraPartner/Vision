@@ -96,7 +96,9 @@ export function clearMvCache(): void {
 // repository layer is sanctioned to use.
 
 /** The columns `convertRowsToEur` reads; every other column passes through. */
-export type ConvertibleRow = Parameters<typeof convertRowsToEur>[0][number];
+export type ConvertibleRow = NonNullable<
+  Parameters<typeof convertRowsToEur>[0]
+>[number];
 
 /**
  * A converted row whose `amount_eur` is known: the caller's row plus

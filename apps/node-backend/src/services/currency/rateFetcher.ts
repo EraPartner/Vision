@@ -72,10 +72,7 @@ function scheduleHistoricalFullEviction() {
     historicalEcbFullCache = null;
     historicalEcbFullEvictTimer = null;
   }, HISTORICAL_FULL_CACHE_IDLE_MS);
-  if (
-    historicalEcbFullEvictTimer != null &&
-    typeof historicalEcbFullEvictTimer.unref === "function"
-  ) {
+  if (typeof historicalEcbFullEvictTimer.unref === "function") {
     historicalEcbFullEvictTimer.unref();
   }
 }
@@ -104,7 +101,7 @@ export function normalizeDateInput(
     if (isNaN(dateValue.getTime())) return null;
     return formatDateToYmd(dateValue);
   }
-  const str = String(dateValue);
+  const str = dateValue;
   const m = str.match(/^\d{4}-\d{2}-\d{2}/);
   return m ? m[0] : null;
 }
@@ -318,7 +315,7 @@ export function rateOnOrBeforeFromMap(
   dateStr: string,
   maxLookbackDays = 7,
 ): number | undefined {
-  if (byDate == null || byDate.size === 0) return undefined;
+  if (byDate.size === 0) return undefined;
   // A missing part stays NaN, as it was when read past the end of the split.
   const [y = NaN, m = NaN, d = NaN] = dateStr.split("-").map(Number);
   let ts = Date.UTC(y, m - 1, d);
@@ -464,12 +461,12 @@ export async function getUnindexedRatesToEurForDates(
   }: { saveFetchedHistoricalRates?: boolean } = {},
 ): Promise<Map<string, number>> {
   const pairs: Array<{ currency: string; date: string }> = [];
-  for (const [rawCurrency, rawDates] of datesByCurrency ?? []) {
-    const currency = String(rawCurrency || "")
+  for (const [rawCurrency, rawDates] of datesByCurrency) {
+    const currency = (rawCurrency || "")
       .toUpperCase()
       .trim();
     if (!currency || currency === "EUR") continue;
-    for (const rawDate of new Set(rawDates ?? [])) {
+    for (const rawDate of new Set(rawDates)) {
       const date = normalizeDateInput(rawDate);
       if (date) pairs.push({ currency, date });
     }
@@ -557,7 +554,7 @@ export async function getStoredRateToEurOnOrBefore(
   dateValue: string | Date | null | undefined,
   maxLookbackDays = 7,
 ): Promise<number | undefined> {
-  const code = String(currencyCode || "")
+  const code = (currencyCode || "")
     .toUpperCase()
     .trim();
   if (!code) return undefined;
@@ -603,14 +600,15 @@ export function buildHistoricalRateIndex(
 ): HistoricalRateIndex {
   const byCurrency: HistoricalRateIndex = new Map();
   for (const row of rows) {
-    const currency = String(row.currency_code || "")
+    const currency = (row.currency_code || "")
       .toUpperCase()
       .trim();
     const date = normalizeDateInput(row.rate_date);
     const rate = toNumber(toDecimal(row.rate_to_eur));
     if (!currency || !date || !Number.isFinite(rate)) continue;
-    if (!byCurrency.has(currency)) byCurrency.set(currency, []);
-    byCurrency.get(currency)!.push({ date, rate });
+    const entries = byCurrency.get(currency);
+    if (entries) entries.push({ date, rate });
+    else byCurrency.set(currency, [{ date, rate }]);
   }
   for (const entries of byCurrency.values()) {
     entries.sort((a, b) => a.date.localeCompare(b.date));
