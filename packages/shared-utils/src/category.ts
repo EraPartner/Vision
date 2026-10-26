@@ -27,8 +27,8 @@ export function formatCategoryName(
   general: string | null | undefined,
   detail: string | null | undefined,
 ): string {
-  const g = String(general ?? "").trim();
-  const d = String(detail ?? "").trim();
+  const g = (general ?? "").trim();
+  const d = (detail ?? "").trim();
   return d ? `${g}:${d}` : g;
 }
 
@@ -41,7 +41,7 @@ export function parseCategoryName(str: string | null | undefined): {
   general: string;
   detail: string;
 } {
-  const s = String(str ?? "");
+  const s = str ?? "";
   const idx = s.indexOf(":");
   if (idx === -1) return { general: s.trim(), detail: "" };
   return {

@@ -72,7 +72,7 @@ export interface AiAnalysisEditProposal {
   operations: Array<{
     op: "add" | "replace" | "remove";
     path: string;
-    value?: unknown | undefined;
+    value?: unknown;
   }>;
 }
 export const AI_INVESTIGATION_STATUSES = Object.freeze([

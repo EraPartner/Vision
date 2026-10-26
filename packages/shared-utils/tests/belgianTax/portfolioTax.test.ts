@@ -16,6 +16,7 @@ import {
     type PortfolioTaxInvestment,
     type ConvertFn,
 } from "../../src/belgianTax/portfolioTax.ts";
+import { must } from "../helpers/must.ts";
 
 // USD converts to target at 0.9; everything else is identity. Lets us assert the
 // currency-conversion path without depending on the live ECB rate table.
@@ -46,7 +47,7 @@ const table2026: BelgianTaxYearTable = {
     capitalGainsTaxRate: 0.1,
     capitalGainsTaxExemptionSingle: 10_000,
     capitalGainsTaxExemptionMarried: 20_000,
-} as unknown as BelgianTaxYearTable;
+};
 
 const investments: PortfolioTaxInvestment[] = [
     {
@@ -136,20 +137,20 @@ describe("yearOf", () => {
 describe("recorded taxes/fees for a year", () => {
     it("sums per-txn taxes + explicit tax txns, scoped to the year", () => {
         expect(
-            recordedTaxesForYear(investments[0]!, 2025, convert),
+            recordedTaxesForYear(must(investments[0], "investments[0]"), 2025, convert),
         ).toBeCloseTo(95, 8); // 35 + 60 + 0
-        expect(recordedFeesForYear(investments[0]!, 2025, convert)).toBeCloseTo(
+        expect(recordedFeesForYear(must(investments[0], "investments[0]"), 2025, convert)).toBeCloseTo(
             5,
             8,
         );
         // inv 4: 2024 buy excluded; only the 2025 dividend's 15 USD → 13.5 EUR counts.
         expect(
-            recordedTaxesForYear(investments[3]!, 2025, convert),
+            recordedTaxesForYear(must(investments[3], "investments[3]"), 2025, convert),
         ).toBeCloseTo(13.5, 8);
     });
 
     it("enriches with manual adjustments", () => {
-        const costs = enrichInvestmentCosts(investments[0]!, 2025, convert, {
+        const costs = enrichInvestmentCosts(must(investments[0], "investments[0]"), 2025, convert, {
             taxes: 10,
             fees: 5,
         });
@@ -212,7 +213,7 @@ describe("TOB", () => {
         const sold = traded(12_000, 1_042, "2026-09-01");
         expect(computeTobRecorded(sold, 2026, table2026, convert)).toBeCloseTo(42, 8);
         expect(
-            recordedSellTob(sold[0]!, sold[0]!.transactions[1]!, table2026, convert, true),
+            recordedSellTob(must(sold[0], "sold[0]"), must(must(sold[0], "sold[0]").transactions[1], "transactions[1]"), table2026, convert, true),
         ).toBeCloseTo(42, 8);
     });
 });
@@ -459,7 +460,7 @@ describe("in-kind income tax boundaries", () => {
             grossDividendBase: 10,
             unknownDividendConventionCount: 0,
         });
-        expect(recordedTaxesForYear(source[0]!, 2025, convert)).toBe(3.7);
-        expect(recordedFeesForYear(source[0]!, 2025, convert)).toBe(1.8);
+        expect(recordedTaxesForYear(must(source[0], "source[0]"), 2025, convert)).toBe(3.7);
+        expect(recordedFeesForYear(must(source[0], "source[0]"), 2025, convert)).toBe(1.8);
     });
 });

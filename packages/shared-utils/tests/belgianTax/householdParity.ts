@@ -49,13 +49,13 @@ export function parityExclusion(
     result: HouseholdTaxResult,
 ): ParityExclusion | undefined {
     const joint = profile.filingStatus === "married_joint";
-    if (joint && ((profile.otherTaxableIncome || 0) > 0 || (profile.alimonyPaid || 0) > 0))
+    if (joint && (profile.otherTaxableIncome > 0 || profile.alimonyPaid > 0))
         return "joint_other_income_or_alimony";
     if (profile.isSpouseDisabled) return "spouse_disabled";
-    if (joint && profile.isIsolatedParent && (profile.dependentChildren || 0) > 0)
+    if (joint && profile.isIsolatedParent && profile.dependentChildren > 0)
         return "joint_isolated_parent";
     if (
-        (profile.unionDues || 0) > 0 &&
+        profile.unionDues > 0 &&
         profile.professionalExpenseMethod === "actual" &&
         profile.employmentType !== "employee" &&
         profile.employmentType !== "civil_servant"

@@ -17,6 +17,7 @@
 import Decimal from "decimal.js";
 import type { BelgianTaxYearTable } from "./constants.ts";
 import type { PortfolioIncomeRecognitionRole } from "@vision/types/portfolioTxnTypes";
+import { isNonZeroNumber, numberOrZero } from "../numeric.ts";
 
 export type PortfolioTaxTxn = {
   type: string;
@@ -109,8 +110,8 @@ function recordedForYear(
   for (const txn of inv.transactions) {
     if (yearOf(txn.date) !== txYear) continue;
     if (txn.type === txnType)
-      terms.push(convert(Number(txn.amount) || 0, txn.currency));
-    terms.push(convert(Number(txn[field]) || 0, txn.currency));
+      terms.push(convert(numberOrZero(txn.amount), txn.currency));
+    terms.push(convert(numberOrZero(txn[field]), txn.currency));
   }
   return sumDecimal(terms).toNumber();
 }
@@ -200,7 +201,7 @@ function statutoryTob(
   txn: PortfolioTaxTxn,
   convert: ConvertFn,
 ): Decimal {
-  const amount = convert(Math.abs(Number(txn.amount) || 0), txn.currency);
+  const amount = convert(Math.abs(numberOrZero(txn.amount)), txn.currency);
   return Decimal.min(new Decimal(amount).times(params.rate), params.cap);
 }
 
@@ -223,7 +224,7 @@ export function recordedSellTob(
   if (txn.type !== "sell") return 0;
   const params = tobRateFor(inv, taxTable);
   if (!params) return 0;
-  const taxes = convert(Number(txn.taxes) || 0, txn.currency);
+  const taxes = convert(numberOrZero(txn.taxes), txn.currency);
   if (taxes <= 0) return 0;
   if (!cgtActive) return taxes;
   return Decimal.min(taxes, statutoryTob(params, txn, convert)).toNumber();
@@ -245,7 +246,7 @@ export function computeTobRecorded(
     for (const txn of inv.transactions) {
       if (yearOf(txn.date) !== txYear) continue;
       if (txn.type === "buy")
-        terms.push(convert(Number(txn.taxes) || 0, txn.currency));
+        terms.push(convert(numberOrZero(txn.taxes), txn.currency));
       else if (txn.type === "sell")
         terms.push(recordedSellTob(inv, txn, taxTable, convert, cgtActive));
     }
@@ -289,7 +290,7 @@ export function computeTacrEstimate(
 ): number {
   const aggregate = sumDecimal(
     investments.map((inv) =>
-      convert(Number(inv.currentValue) || 0, inv.currency),
+      convert(numberOrZero(inv.currentValue), inv.currency),
     ),
   );
   if (aggregate.lt(taxTable.securitiesAccountTaxThreshold)) return 0;
@@ -314,12 +315,12 @@ export function computeRealizedGainSplit(
   let reyndersInterest = new Decimal(0);
   let cgtGains = new Decimal(0);
   for (const inv of investments) {
-    const gainNum = convert(Number(inv.realizedGain) || 0, inv.currency);
+    const gainNum = convert(numberOrZero(inv.realizedGain), inv.currency);
     if (gainNum <= 0) continue;
     const gain = new Decimal(gainNum);
     const override = inv.subjectToReynders;
     const subjectToReynders =
-      override === undefined ? inv.assetClass === "bond" : override;
+      override ?? inv.assetClass === "bond";
     if (subjectToReynders) {
       const portionRaw = inv.reyndersInterestPortion;
       const portion =
@@ -345,7 +346,7 @@ export function computeReyndersEstimate(
   split: RealizedGainSplit,
   taxTable: BelgianTaxYearTable,
 ): number {
-  if (!taxTable.reyndersTaxRate) return 0;
+  if (!isNonZeroNumber(taxTable.reyndersTaxRate)) return 0;
   if (split.reyndersInterest <= 0) return 0;
   return new Decimal(split.reyndersInterest)
     .times(taxTable.reyndersTaxRate)
@@ -399,8 +400,8 @@ export function computeDividendWht(
         txn.income_recognition_role === "included_in_units"
       )
         continue;
-      const amount = convert(Number(txn.amount) || 0, txn.currency);
-      const taxes = convert(Number(txn.taxes) || 0, txn.currency);
+      const amount = convert(numberOrZero(txn.amount), txn.currency);
+      const taxes = convert(numberOrZero(txn.taxes), txn.currency);
       incomeTerms.push(amount);
       whtTerms.push(taxes);
       if (txn.dividend_amount_convention === "gross") grossTerms.push(amount);

@@ -1,3 +1,4 @@
+import { isNonZeroNumber } from "../numeric.ts";
 import {
   computeStats,
   dailyReturnsByTime,
@@ -66,7 +67,7 @@ export function chartPresentation(input: {
       const firstClose = s.points.find(
         (p) => Number.isFinite(p.close) && (p.close as number) > 0,
       )?.close;
-      return [s.id, input.rebase && firstClose ? 100 / firstClose : 1];
+      return [s.id, input.rebase && firstClose != null && firstClose !== 0 ? 100 / firstClose : 1];
     }),
   );
   const times = Array.from(
@@ -78,8 +79,8 @@ export function chartPresentation(input: {
   const rows: ResearchRow[] = times.map((time) => {
     const row: ResearchRow = { time };
     for (const s of series) {
-      const p = byTime.get(s.id)!.get(time);
-      const f = factor.get(s.id)!;
+      const p = byTime.get(s.id)?.get(time);
+      const f = factor.get(s.id) ?? 1;
       if (s.field === "volume") row[s.id] = p ? (p.volume as number) : null;
       else {
         row[s.id] =
@@ -168,7 +169,7 @@ export function watchlistPresentation(input: {
     .map((p) => p.close)
     .filter((p): p is number => Number.isFinite(p) && (p as number) > 0);
   if (hasValidTarget) prices.push(targetPrice as number);
-  const domain: [number, number] = prices.length
+  const domain: [number, number] = prices.length > 0
     ? [Math.min(...prices) * 0.98, Math.max(...prices) * 1.02]
     : [0, 1];
   const preview =
@@ -283,7 +284,7 @@ export function providerQuotePresentation(
     name: investment.name,
     price: last,
     change,
-    changePercent: first ? (change / first) * 100 : 0,
+    changePercent: isNonZeroNumber(first) ? (change / first) * 100 : 0,
     currency: investment.currency,
     exchange: "",
     type: (investment.priceProvider ?? "").toUpperCase(),

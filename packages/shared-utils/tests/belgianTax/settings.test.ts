@@ -19,7 +19,7 @@ function stored(
         profileV1: {
             ...DEFAULT_BELGIAN_TAX_PROFILE,
             ...(profileV1 ?? {}),
-        } as BelgianTaxProfile,
+        },
         hasProfileV1: profileV1 !== undefined,
         snapshotsV1: null,
         householdV2: null,

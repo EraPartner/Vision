@@ -52,8 +52,13 @@ export const DEFAULT_BELGIAN_TAX_PROFILE: BelgianTaxProfile = {
   taxYear: LATEST_TAX_YEAR,
 };
 
+/** A profile as it may have been stored: any field can be missing or null. */
+type StoredBelgianTaxProfile = {
+  [K in keyof BelgianTaxProfile]?: BelgianTaxProfile[K] | null | undefined;
+};
+
 export function hasMeaningfulBelgianTaxData(
-  profile: BelgianTaxProfile,
+  profile: StoredBelgianTaxProfile,
 ): boolean {
   return (
     profile.profileConfigured === true ||

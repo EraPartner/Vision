@@ -3,6 +3,7 @@ import { computeHouseholdTax } from "../../src/belgianTax/household.ts";
 import { computeMaritalQuotient, resolveMaritalQuotientCap } from "../../src/belgianTax/maritalQuotient.ts";
 import { getTaxTable } from "../../src/belgianTax/constants.ts";
 import { activity, married, partner, household, event } from "./testHousehold.ts";
+import { must } from "../helpers/must.ts";
 
 describe("marital quotient (arts 87-88)", () => {
     test("art. 88: A 80k / B 5k net professional income, IY 2025 → transfer 8,460", () => {
@@ -55,7 +56,7 @@ describe("marital quotient (arts 87-88)", () => {
             [activity("net_professional_amount", 40_000)],
             [activity("net_professional_amount", 0)],
         );
-        const withOther = { ...h, partners: [h.partners[0]!, { ...h.partners[1]!, otherTaxableIncome: 20_000 }] };
+        const withOther = { ...h, partners: [must(h.partners[0], "partners[0]"), { ...must(h.partners[1], "partners[1]"), otherTaxableIncome: 20_000 }] };
         const r = computeHouseholdTax(withOther);
         expect(r.quotient.transfer).toBeCloseTo(12_000, 9);
     });
@@ -69,8 +70,8 @@ describe("marital quotient (arts 87-88)", () => {
         const withBirthYears = (a: number, b: number) => ({
             ...base,
             partners: [
-                { ...base.partners[0]!, birthYear: a },
-                { ...base.partners[1]!, birthYear: b },
+                { ...must(base.partners[0], "partners[0]"), birthYear: a },
+                { ...must(base.partners[1], "partners[1]"), birthYear: b },
             ],
         });
         expect(computeHouseholdTax(withBirthYears(1950, 1960)).quotient.transfer).toBeCloseTo(12_790, 9);

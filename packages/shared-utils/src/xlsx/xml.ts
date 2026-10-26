@@ -161,18 +161,18 @@ export function parseXml(xml: string, handlers: XmlHandlers): void {
     while (j !== -1) {
         i = xml.charCodeAt(j) === 60 ? j : xml.indexOf("<", j);
         if (i === -1) {
-            if (stack.length) fail("unexpected end of file");
+            if (stack.length > 0) fail("unexpected end of file");
             if (!rootFound) fail("missing start tag");
             return;
         }
         rootFound = true;
-        if (j !== i && stack.length && handlers.onText) {
+        if (j !== i && stack.length > 0 && handlers.onText) {
             handlers.onText(decodeEntities(xml.substring(j, i)));
         }
         let w = xml.charCodeAt(i + 1);
         if (w === 33) {
             const q = xml.charCodeAt(i + 2);
-            if (q === 91 && xml.substr(i + 3, 6) === "CDATA[") {
+            if (q === 91 && xml.substring(i + 3, i + 9) === "CDATA[") {
                 j = xml.indexOf("]]>", i);
                 if (j === -1) fail("unclosed cdata");
                 j += 3;

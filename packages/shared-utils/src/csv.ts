@@ -8,6 +8,8 @@
  * with a single quote so it renders as a literal string.
  */
 
+import { stringifyUnknown } from "./stringify.ts";
+
 const DANGEROUS_CSV_FORMULA_PREFIXES = new Set([
   "=",
   "+",
@@ -54,7 +56,7 @@ export function escapeCsvValue(
   }: { treatNumericStringsAsSafe?: boolean } = {},
 ): string {
   if (value == null) return "";
-  const raw = String(value);
+  const raw = stringifyUnknown(value);
   const isSafeNumeric =
     typeof value === "number" ||
     typeof value === "boolean" ||

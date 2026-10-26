@@ -6,7 +6,6 @@ import {
     DEFAULT_BELGIAN_TAX_PROFILE,
     hasMeaningfulBelgianTaxData,
 } from "./profileDefaults.ts";
-import type { BelgianTaxProfile } from "./types.ts";
 import type { HouseholdTaxResult } from "./householdTypes.ts";
 
 /** Persisted baseline of one setting, as the settings CAS protocol carries it. */
@@ -42,7 +41,7 @@ export function buildTaxOverview(
     const mergedProfile = {
         ...DEFAULT_BELGIAN_TAX_PROFILE,
         ...record(settings.belgian_tax_profile),
-    } as BelgianTaxProfile;
+    };
     const loaded = loadHouseholdSettings({
         defaultsV1: DEFAULT_BELGIAN_TAX_PROFILE,
         profileV1: {

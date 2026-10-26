@@ -16,6 +16,7 @@ import {
   type MaybeConvertFn,
   type UnconvertedFigures,
 } from "./portfolioTax.ts";
+import { numberOrZero, orZero } from "../numeric.ts";
 
 export interface PortfolioDashboardInvestment extends PortfolioTaxInvestment {
   name: string;
@@ -73,8 +74,8 @@ export function buildPortfolioTaxDashboard(input: {
     return {
       ...inv,
       ...enrichInvestmentCosts(inv, year, convertCosts, {
-        taxes: Number(manual.taxes) || 0,
-        fees: Number(manual.fees) || 0,
+        taxes: numberOrZero(manual.taxes),
+        fees: numberOrZero(manual.fees),
       }),
     };
   });
@@ -86,11 +87,11 @@ export function buildPortfolioTaxDashboard(input: {
   const totalManualFees = enriched.reduce((s, i) => s + i.manualFees, 0);
   const convertTotals = convertFor("totals");
   const totalRealizedGain = summaries.reduce(
-    (s, i) => s + convertTotals(i.realizedGain || 0, i.currency),
+    (s, i) => s + convertTotals(orZero(i.realizedGain), i.currency),
     0,
   );
   const totalUnrealizedGain = summaries.reduce(
-    (s, i) => s + convertTotals(i.unrealizedGain || 0, i.currency),
+    (s, i) => s + convertTotals(orZero(i.unrealizedGain), i.currency),
     0,
   );
   const table = getTaxTable(year);
@@ -119,9 +120,9 @@ export function buildPortfolioTaxDashboard(input: {
   });
   const byAsset: Record<string, { taxes: number; fees: number }> = {};
   for (const inv of enriched) {
-    byAsset[inv.assetClass] ??= { taxes: 0, fees: 0 };
-    byAsset[inv.assetClass]!.taxes += inv.taxes;
-    byAsset[inv.assetClass]!.fees += inv.fees;
+    const bucket = (byAsset[inv.assetClass] ??= { taxes: 0, fees: 0 });
+    bucket.taxes += inv.taxes;
+    bucket.fees += inv.fees;
   }
   const months: Record<
     string,
@@ -134,11 +135,11 @@ export function buildPortfolioTaxDashboard(input: {
       const period = txn.date.slice(0, 7);
       const month = (months[period] ??= { period, taxes: 0, fees: 0 });
       if (txn.type === "tax")
-        month.taxes += convertTrend(Number(txn.amount) || 0, txn.currency);
-      month.taxes += convertTrend(Number(txn.taxes) || 0, txn.currency);
+        month.taxes += convertTrend(numberOrZero(txn.amount), txn.currency);
+      month.taxes += convertTrend(numberOrZero(txn.taxes), txn.currency);
       if (txn.type === "fee")
-        month.fees += convertTrend(Number(txn.amount) || 0, txn.currency);
-      month.fees += convertTrend(Number(txn.fees) || 0, txn.currency);
+        month.fees += convertTrend(numberOrZero(txn.amount), txn.currency);
+      month.fees += convertTrend(numberOrZero(txn.fees), txn.currency);
     }
   const split = computeRealizedGainSplit(
     summaries,
@@ -238,7 +239,7 @@ export function buildPortfolioTaxDashboard(input: {
         taxes: inv.taxes,
         fees: inv.fees,
         total: inv.total,
-        realizedGain: convertRealizedGain(inv.realizedGain || 0, inv.currency),
+        realizedGain: convertRealizedGain(orZero(inv.realizedGain), inv.currency),
         currency,
       }))
       .filter((row) => row.total > 0)

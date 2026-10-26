@@ -1,5 +1,6 @@
 import type { BelgianRegion, BelgianTaxProfile } from './types.ts';
 import type { BelgianTaxYearTable } from './constants.ts';
+import { orZero } from "../numeric.ts";
 
 /**
  * Estimate annual Belgian property tax (précompte immobilier / onroerende voorheffing).
@@ -44,14 +45,14 @@ export type PropertyTaxInputs = Pick<
 
 export function computePropertyTaxEstimate(profile: PropertyTaxInputs, table: BelgianTaxYearTable): number {
     const main = estimateForResidence(
-        profile.cadastralIncome || 0,
+        orZero(profile.cadastralIncome),
         profile.region,
         table,
         profile.cadastralCentimesOverride,
     );
-    const additional = (profile.additionalResidences || []).reduce((sum, r) => {
+    const additional = (profile.additionalResidences ?? []).reduce((sum, r) => {
         return sum + estimateForResidence(
-            r.cadastralIncome || 0,
+            orZero(r.cadastralIncome),
             r.region || profile.region,
             table,
             r.centimesOverride,

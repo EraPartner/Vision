@@ -1,3 +1,4 @@
+import { stringifyUnknown } from "../stringify.ts";
 import type {
   AnalysisInterchangeResult as AnalysisResult,
   AnalysisInterchangeValue as AnalysisValue,
@@ -26,7 +27,7 @@ export interface AnalysisWorkbookContext {
 }
 const encoder = new TextEncoder();
 const xml = (value: unknown) =>
-  String(value ?? "")
+  stringifyUnknown(value)
     .split("")
     .filter(
       (char) =>
@@ -42,7 +43,7 @@ const crc32 = (data: Uint8Array) => {
   let crc = 0xffffffff;
   for (const byte of data) {
     crc ^= byte;
-    for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+    for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ ((crc & 1) !== 0 ? 0xedb88320 : 0);
   }
   return (crc ^ 0xffffffff) >>> 0;
 };
@@ -102,7 +103,7 @@ function zip(files: Array<[string, string]>) {
 const columnName = (index: number) => {
   let name = "",
     n = index + 1;
-  while (n) {
+  while (n !== 0) {
     name = String.fromCharCode(65 + ((n - 1) % 26)) + name;
     n = Math.floor((n - 1) / 26);
   }
@@ -110,8 +111,8 @@ const columnName = (index: number) => {
 };
 function cell(value: unknown, reference: string, type?: string) {
   if (value === null || value === undefined) return `<c r="${reference}"/>`;
-  if (type === "date" && /^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
-    const date = Date.parse(`${value}T00:00:00Z`);
+  if (type === "date" && /^\d{4}-\d{2}-\d{2}$/.test(stringifyUnknown(value))) {
+    const date = Date.parse(`${stringifyUnknown(value)}T00:00:00Z`);
     if (
       Number.isFinite(date) &&
       new Date(date).toISOString().slice(0, 10) === value
@@ -123,7 +124,7 @@ function cell(value: unknown, reference: string, type?: string) {
   }
   if (typeof value === "boolean")
     return `<c r="${reference}" t="b"><v>${value ? 1 : 0}</v></c>`;
-  const text = String(value),
+  const text = stringifyUnknown(value),
     digits = text.replace(/[-+.eE]/g, "").replace(/^0+/, "");
   if (
     (typeof value === "number" ||
@@ -136,7 +137,7 @@ function cell(value: unknown, reference: string, type?: string) {
   return `<c r="${reference}" t="inlineStr"><is><t xml:space="preserve">${xml(typeof value === "object" ? JSON.stringify(value) : text)}</t></is></c>`;
 }
 function sheet(rows: unknown[][], types: string[] = []) {
-  return `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows.map((row, i) => `<row r="${i + 1}">${row.map((v, j) => cell(v, `${columnName(j)}${i + 1}`, i ? types[j] : undefined)).join("")}</row>`).join("")}</sheetData></worksheet>`;
+  return `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows.map((row, i) => `<row r="${i + 1}">${row.map((v, j) => cell(v, `${columnName(j)}${i + 1}`, i !== 0 ? types[j] : undefined)).join("")}</row>`).join("")}</sheetData></worksheet>`;
 }
 export function analysisResultWorkbook(
   result: AnalysisResult,
@@ -144,7 +145,8 @@ export function analysisResultWorkbook(
 ): Uint8Array {
   if (result.rows.length > 100000)
     throw new Error("Workbook exceeds 100,000 rows");
-  const columns = result.declaredColumns?.length
+  const columns =
+    result.declaredColumns !== undefined && result.declaredColumns.length > 0
     ? result.declaredColumns
     : result.columns;
   const names = [
@@ -312,7 +314,7 @@ export function importAnalysisWorkbook(
   let formulaCells = 0;
   const rows = Array.from(doc.getElementsByTagName("row")).map((row) =>
     Array.from(row.getElementsByTagName("c")).map((c) => {
-      if (c.getElementsByTagName("f").length) {
+      if (c.getElementsByTagName("f").length > 0) {
         formulaCells++;
         return null;
       }
@@ -353,7 +355,7 @@ export function importAnalysisWorkbook(
     }
   }
   if (
-    !columns.length ||
+    columns.length === 0 ||
     columns.length > 128 ||
     new Set(columns).size !== columns.length
   )

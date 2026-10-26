@@ -11,7 +11,7 @@
  *   'Café' → 'caf'
  */
 export function slugify(input: string): string {
-  return String(input)
+  return input
     .toLowerCase()
     .trim()
     .replace(/\s+/g, "-")

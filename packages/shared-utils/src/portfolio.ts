@@ -21,6 +21,8 @@ import {
   REAL_ESTATE_ASSET_CLASS,
 } from "@vision/types/assetClasses";
 import { toDecimal, roundToCents, toNumber } from "./money.ts";
+import { isNonZeroNumber } from "./numeric.ts";
+import { present } from "./invariant.ts";
 
 // Derived from the canonical subsets in @vision/types/assetClasses (widened to
 // Set<string>: .has() probes raw row values).
@@ -186,10 +188,10 @@ interface ReplayLot extends BasisLot {
  */
 export function daysBetweenYmd(fromYmd: string, toYmd: string): number {
   const parse = (s: string): number => {
-    const [y, m, d] = String(s).slice(0, 10).split("-").map(Number);
-    // split() always yields at least one element, so y is defined; a missing
-    // m stays undefined and yields NaN exactly as in plain arithmetic.
-    return Date.UTC(y!, (m as number) - 1, d);
+    const [y, m, d] = s.slice(0, 10).split("-").map(Number);
+    // split() always yields at least one element; a missing m stays undefined
+    // and yields NaN exactly as in plain arithmetic.
+    return Date.UTC(y ?? Number.NaN, (m as number) - 1, d);
   };
   return Math.round((parse(toYmd) - parse(fromYmd)) / 86_400_000);
 }
@@ -275,10 +277,10 @@ export function calculateCostBasis(
   let oversold = false;
 
   for (const txn of sorted) {
-    const units = toDecimal(txn.units || 0);
-    const amount = toDecimal(txn.amount || 0);
-    const fees = toDecimal(txn.fees || 0);
-    const taxes = toDecimal(txn.taxes || 0);
+    const units = toDecimal(txn.units);
+    const amount = toDecimal(txn.amount);
+    const fees = toDecimal(txn.fees);
+    const taxes = toDecimal(txn.taxes);
     const fx =
       txn.fxMultiplier !== undefined ? toDecimal(txn.fxMultiplier) : defaultFx;
     const nativeFx = toDecimal(txn.nativeFxMultiplier ?? 1);
@@ -293,16 +295,20 @@ export function calculateCostBasis(
     } else if (txn.type === "transfer_in") {
       totalUnits = totalUnits.plus(units);
       // Projected custody legs always carry their transferred basis.
-      totalCost = totalCost.plus(txn.transferredBasis!);
-      totalCostConv = totalCostConv.plus(txn.transferredBasisConv!);
+      totalCost = totalCost.plus(present(txn.transferredBasis, "transferredBasis"));
+      totalCostConv = totalCostConv.plus(
+        present(txn.transferredBasisConv, "transferredBasisConv"),
+      );
     } else if (
       ["transfer_out", "asset_fee", "unit_reversal"].includes(txn.type)
     ) {
       totalUnits = totalUnits.minus(units);
-      totalCost = totalCost.minus(txn.transferredBasis!);
-      totalCostConv = totalCostConv.minus(txn.transferredBasisConv!);
-      realizedGain = realizedGain.minus(txn.assetFeeBasis || 0);
-      realizedGainConv = realizedGainConv.minus(txn.assetFeeBasisConv || 0);
+      totalCost = totalCost.minus(present(txn.transferredBasis, "transferredBasis"));
+      totalCostConv = totalCostConv.minus(
+        present(txn.transferredBasisConv, "transferredBasisConv"),
+      );
+      realizedGain = realizedGain.minus(txn.assetFeeBasis ?? 0);
+      realizedGainConv = realizedGainConv.minus(txn.assetFeeBasisConv ?? 0);
     } else if (txn.type === "sell") {
       if (units.gt(totalUnits)) oversold = true;
       if (totalUnits.gt(0) && units.gt(0)) {
@@ -405,10 +411,10 @@ function calculateCostBasisLotBased(
   let oversold = false;
 
   for (const txn of sorted) {
-    const units = toDecimal(txn.units || 0);
-    const amount = toDecimal(txn.amount || 0);
-    const fees = toDecimal(txn.fees || 0);
-    const taxes = toDecimal(txn.taxes || 0);
+    const units = toDecimal(txn.units);
+    const amount = toDecimal(txn.amount);
+    const fees = toDecimal(txn.fees);
+    const taxes = toDecimal(txn.taxes);
     const fx =
       txn.fxMultiplier !== undefined ? toDecimal(txn.fxMultiplier) : defaultFx;
     const nativeFx = toDecimal(txn.nativeFxMultiplier ?? 1);
@@ -430,18 +436,23 @@ function calculateCostBasisLotBased(
       lots = lots.slice(head);
       head = 0;
       // Projected transfer_in legs always carry their lots.
-      lots.push(...txn.transferredLots!.map((lot) => ({ ...lot })));
-      lots.sort(
-        (a, b) =>
-          a.acquiredDate.localeCompare(b.acquiredDate) ||
-          Number(a.acquisitionId) - Number(b.acquisitionId),
+      lots.push(
+        ...present(txn.transferredLots, "transferredLots").map((lot) => ({
+          ...lot,
+        })),
       );
+      lots.sort((a, b) => {
+        const byDate = a.acquiredDate.localeCompare(b.acquiredDate);
+        return byDate !== 0
+          ? byDate
+          : Number(a.acquisitionId) - Number(b.acquisitionId);
+      });
       totalUnits = totalUnits.plus(units);
     } else if (txn.type === "unit_reversal") {
       lots = lots.slice(head);
       head = 0;
       // Projected unit_reversal legs always carry their consumed lots.
-      for (const consumed of txn.consumedLots!) {
+      for (const consumed of present(txn.consumedLots, "consumedLots")) {
         let remaining = toDecimal(consumed.units);
         for (const lot of lots) {
           if (remaining.lte(0)) break;
@@ -479,7 +490,7 @@ function calculateCostBasisLotBased(
       while (unitsToSell.gt(0) && head < lots.length) {
         const idx = fromEnd ? lots.length - 1 : head;
         // head <= idx < lots.length, guarded by the loop condition.
-        const lot = lots[idx]!;
+        const lot = present(lots[idx], "lot at idx");
         if (lot.units.lte(unitsToSell)) {
           costOfSold = costOfSold.plus(lot.costBasis);
           costOfSoldConv = costOfSoldConv.plus(lot.costBasisConv);
@@ -504,8 +515,8 @@ function calculateCostBasisLotBased(
 
       totalUnits = totalUnits.minus(sellUnits);
       if (txn.type === "transfer_out" || txn.type === "asset_fee") {
-        realizedGain = realizedGain.minus(txn.assetFeeBasis || 0);
-        realizedGainConv = realizedGainConv.minus(txn.assetFeeBasisConv || 0);
+        realizedGain = realizedGain.minus(txn.assetFeeBasis ?? 0);
+        realizedGainConv = realizedGainConv.minus(txn.assetFeeBasisConv ?? 0);
         continue;
       }
       realizedGain = realizedGain.plus(
@@ -637,9 +648,9 @@ export function calculateAccruedInterest(
   interestRate: number,
   todayYmd: string,
 ): number {
-  if (!interestRate || principal <= 0) return 0;
+  if (!isNonZeroNumber(interestRate) || principal <= 0) return 0;
 
-  const ymd = (date: string) => String(date).slice(0, 10);
+  const ymd = (date: string) => date.slice(0, 10);
   const sortedDesc = [...txns].sort((a, b) => b.date.localeCompare(a.date));
   const lastInterestTxn = sortedDesc.find((t) => t.type === "interest");
   const firstBuyTxn = [...txns]
@@ -695,7 +706,7 @@ export function projectedAnnualInterest(
   principal: number,
   ratePercent: number,
 ): number {
-  if (!ratePercent || principal <= 0) return 0;
+  if (!isNonZeroNumber(ratePercent) || principal <= 0) return 0;
   return toNumber(toDecimal(principal).times(toDecimal(ratePercent).div(100)));
 }
 
@@ -731,7 +742,7 @@ export function buildInvestmentSummaryCore(
   const isRealEstate = inv.asset_class === REAL_ESTATE_CLASS;
 
   const ZERO = toDecimal(0);
-  const mNow = toDecimal(fxMultiplierNow ?? 1);
+  const mNow = toDecimal(fxMultiplierNow);
   // Unannotated transactions convert at today's rate — with no per-txn rates
   // the converted track degrades exactly to the pre-FX-attribution behavior.
   const txnFx = (txn: PortfolioTxnLike): Decimal =>
@@ -906,7 +917,10 @@ export function buildInvestmentSummaryCore(
     totalBuyCostC = totalBuyOrGiftAmountC;
     totalSellProceedsC = totalSellAmountC;
 
-    const interestRate = Number(inv.interest_rate) || 0;
+    const parsedInterestRate = Number(inv.interest_rate);
+    const interestRate = isNonZeroNumber(parsedInterestRate)
+      ? parsedInterestRate
+      : 0;
     accruedInterest = toDecimal(
       calculateAccruedInterest(
         txns,
@@ -1197,23 +1211,23 @@ export function partitionTxnsByAccount(
   // The fee/tax-carrying residual of a rewritten corporate action; omitted when
   // there is nothing to carry, so rewriting cannot mint empty partitions.
   const carriesFeesOrTaxes = (txn: PortfolioTxnLike): boolean =>
-    !toDecimal(txn.fees || 0).eq(0) || !toDecimal(txn.taxes || 0).eq(0);
+    !toDecimal(txn.fees).eq(0) || !toDecimal(txn.taxes).eq(0);
 
   for (const txn of sorted) {
     const key = partitionKeyOf(txn);
 
     if (txn.type === "buy" || txn.type === "gift") {
       push(key, txn);
-      held.set(key, (held.get(key) ?? ZERO).plus(toDecimal(txn.units || 0)));
+      held.set(key, (held.get(key) ?? ZERO).plus(toDecimal(txn.units)));
     } else if (txn.type === "sell") {
       push(key, txn);
       const before = held.get(key) ?? ZERO;
       held.set(
         key,
-        before.minus(Decimal.min(toDecimal(txn.units || 0), before)),
+        before.minus(Decimal.min(toDecimal(txn.units), before)),
       );
     } else if (txn.type === "split") {
-      const newGlobalUnits = toDecimal(txn.units || 0);
+      const newGlobalUnits = toDecimal(txn.units);
       const before = totalHeld();
       if (before.gt(0) && newGlobalUnits.gt(0)) {
         const ratio = newGlobalUnits.dividedBy(before);
@@ -1236,7 +1250,7 @@ export function partitionTxnsByAccount(
       }
       if (carriesFeesOrTaxes(txn)) push(key, { ...txn, units: 0 });
     } else if (txn.type === "return_of_capital") {
-      const amount = toDecimal(txn.amount || 0);
+      const amount = toDecimal(txn.amount);
       const unitsNow = totalHeld();
       if (unitsNow.gt(0) && !amount.eq(0)) {
         const holders = [...held.entries()].filter(([, h]) => h.gt(0));
@@ -1341,7 +1355,7 @@ function aggregatePartitionCores(
   agg.converted.gainLossPercent = agg.converted.totalBuyCost.gt(0)
     ? agg.converted.gainLoss.div(agg.converted.totalBuyCost).times(100)
     : ZERO;
-  agg.oversold = cores.some((core) => core.oversold === true);
+  agg.oversold = cores.some((core) => core.oversold);
   // Every additive field was summed above and the remaining ratio/flag fields
   // were just assigned, so the object is a complete core.
   return agg as InvestmentSummaryCore;
@@ -1365,7 +1379,7 @@ export function partitionOversellDeficits(
     let held = toDecimal(0);
     let deficit = toDecimal(0);
     for (const row of rows) {
-      const units = toDecimal(row.units || 0);
+      const units = toDecimal(row.units);
       if (
         row.type === "buy" ||
         row.type === "gift" ||
@@ -1383,7 +1397,7 @@ export function partitionOversellDeficits(
         held = units;
       }
     }
-    if (deficit.gt(0)) deficits.set(Number(accountId), deficit.toNumber());
+    if (deficit.gt(0)) deficits.set(accountId, deficit.toNumber());
   }
   return deficits;
 }
@@ -1462,7 +1476,7 @@ export function buildInvestmentSummaryCorePartitioned(
     const projectedRows =
       streams.size === 1 && txns.some((row) => row.type === "asset_adjustment")
         ? // size === 1, so the iterator yields a value.
-          streams.values().next().value!
+          present(streams.values().next().value, "single partition stream")
         : txns;
     const core = buildInvestmentSummaryCore(inv, projectedRows, opts);
     const accountId =

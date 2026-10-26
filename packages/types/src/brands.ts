@@ -48,18 +48,18 @@ export const CurrencyCodeSchema = z
   .regex(CURRENCY_CODE)
   .brand<"CurrencyCode">();
 
-const idSchema = <B extends string>() => z.int().positive().brand<B>();
+const idSchema = () => z.int().positive();
 
-export const AccountIdSchema = idSchema<"AccountId">();
-export const TransactionIdSchema = idSchema<"TransactionId">();
-export const CategoryIdSchema = idSchema<"CategoryId">();
-export const RecipientIdSchema = idSchema<"RecipientId">();
-export const TagIdSchema = idSchema<"TagId">();
-export const SplitIdSchema = idSchema<"SplitId">();
-export const PlannedTransactionIdSchema = idSchema<"PlannedTransactionId">();
-export const InvestmentIdSchema = idSchema<"InvestmentId">();
+export const AccountIdSchema = idSchema().brand<"AccountId">();
+export const TransactionIdSchema = idSchema().brand<"TransactionId">();
+export const CategoryIdSchema = idSchema().brand<"CategoryId">();
+export const RecipientIdSchema = idSchema().brand<"RecipientId">();
+export const TagIdSchema = idSchema().brand<"TagId">();
+export const SplitIdSchema = idSchema().brand<"SplitId">();
+export const PlannedTransactionIdSchema = idSchema().brand<"PlannedTransactionId">();
+export const InvestmentIdSchema = idSchema().brand<"InvestmentId">();
 export const PortfolioTransactionIdSchema =
-  idSchema<"PortfolioTransactionId">();
+  idSchema().brand<"PortfolioTransactionId">();
 
 export function isCurrencyCode(value: unknown): value is CurrencyCode {
   return typeof value === "string" && CURRENCY_CODE.test(value);

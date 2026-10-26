@@ -1,6 +1,7 @@
 import type { BelgianTaxProfile } from './types.ts';
 import type { BelgianTaxYearTable, CSSSTier } from './constants.ts';
 import type { ActivityKind } from './householdTypes.ts';
+import { orZero } from "../numeric.ts";
 
 /**
  * Employee social security contribution (RSZ / ONSS).
@@ -64,7 +65,7 @@ export function evaluateCsssScale(
         if (netTaxableIncome > tier.to) continue;
 
         const flat = tier.flat ?? 0;
-        if (tier.rate && tier.subtractBase !== undefined) {
+        if (tier.rate !== undefined && tier.rate !== 0 && tier.subtractBase !== undefined) {
             const variable = Math.max(0, netTaxableIncome - tier.subtractBase) * tier.rate;
             const total = flat + variable;
             return tier.cap !== undefined ? Math.min(total, tier.cap) : total;
@@ -85,7 +86,7 @@ export function computeActivitySocialSecurity(
     grossIncome: number,
     table: BelgianTaxYearTable,
 ): number {
-    const gross = Math.max(grossIncome || 0, 0);
+    const gross = Math.max(orZero(grossIncome), 0);
     if (kind === 'employee') return gross * table.employeeSSRate;
     if (kind === 'civil_servant') return gross * table.civilServantSSRate;
     return 0;
