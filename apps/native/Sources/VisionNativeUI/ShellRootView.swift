@@ -278,7 +278,11 @@ public struct ShellRootView: View {
         .disabled(model.isReloadingGraph)
         .allowsHitTesting(!model.isReloadingGraph)
         // Outermost, so the chrome the dialog and alert modifiers add (scrim, glass panel and
-        // their materials) resolves in the app theme rather than the system appearance.
+        // their materials) resolves in the app theme and effects rather than the defaults and
+        // the system appearance: those modifiers sit outside the environment set above.
+        .environment(\.visionTheme, theme)
+        .environment(\.visionVisualEffects, model.nativeSettings?.effectiveVisualEffects ?? .standard)
+        .environment(\.visionFullEffects, model.nativeSettings?.fullEffects ?? false)
         .environment(\.colorScheme, theme.colorScheme)
     }
     private var shellBanners: some View {

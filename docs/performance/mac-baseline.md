@@ -168,7 +168,7 @@ dropped %, p95 and frames over 50 ms mean the same as for Electron. Results go t
 measured Electron apps, the table compares with those.
 
 **Profiling pass.** After the measured runs the script launches each native app once more and
-attaches `sample` while it idles (8 s) and while it scrolls and switches pages (25 s); the app
+attaches `sample` while it idles (8 s), scrolls (3 s) and switches pages (6 s); the app
 writes the running phase to `phase.txt` in its output folder. Sampling stops threads, so this run
 is not measured: it only lists the heaviest busy leaf frames and the app's own frames with their
 inclusive counts under "hot spots" in the app's part of `summary.md`, with the full reports beside them

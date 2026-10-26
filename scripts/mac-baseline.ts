@@ -1657,7 +1657,8 @@ async function profileNativeApp(
     exited = true;
   });
   const pid = child.pid ?? -1;
-  const plan: Record<string, number> = { idle: 8, scroll: 25 };
+  // Each sample covers about one phase of the quick run, so the hot spots are per phase.
+  const plan: Record<string, number> = { idle: 8, scroll: 3, pageSwitch: 6 };
   const samplers: Promise<void>[] = [];
   const files: { phase: string; file: string }[] = [];
   let postgresPid: number | undefined;
