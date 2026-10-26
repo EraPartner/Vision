@@ -588,6 +588,18 @@ extension TransactionPatch {
         #expect(!model.isFetchingMore)
     }
 
+    @Test func loadingMoreAppendsTheNextPageInOrder() async throws {
+        let service = FakeTransactionsService(rows: TxFixture.rows(120))
+        let (model, shell) = try await TxFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
+        let first = model.rows?.map(\.id) ?? []
+        await model.loadMore()
+        let all = model.rows?.map(\.id) ?? []
+        #expect(all.count == 100)
+        #expect(Array(all.prefix(first.count)) == first)
+        #expect(Set(all).count == all.count)
+    }
+
     @Test func theSearchSettlesIntoTheURLWithReplace() async throws {
         let service = FakeTransactionsService(rows: TxFixture.rows(6))
         let (model, shell) = try await TxFixture.opened(service)

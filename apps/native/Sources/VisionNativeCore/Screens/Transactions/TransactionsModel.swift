@@ -498,8 +498,10 @@ public final class TransactionsModel {
         do {
             let page = try await service.transactionPage(query, offset: loadedOffset)
             guard mine == listVersion else { return }
+            // Append in place: a new array per page would copy every loaded row.
             let existing = Set((rows ?? []).map(\.id))
-            rows = (rows ?? []) + page.items.filter { !existing.contains($0.id) }.map(TransactionRow.init)
+            let fresh = page.items.filter { !existing.contains($0.id) }.map(TransactionRow.init)
+            if rows == nil { rows = fresh } else { rows?.append(contentsOf: fresh) }
             loadedOffset += page.items.count
             total = page.total
         } catch is CancellationError {
