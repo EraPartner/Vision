@@ -89,4 +89,19 @@ private struct ScriptedTransport: APITransport {
         #expect(!String(describing: model.log).contains("secret"))
         #expect(model.mutationError == 1)
     }
+
+    @Test func theQueryTableIsCappedAndKeepsTheNewestEndpoints() {
+        let model = NativeAPIInspectorModel()
+        let total = NativeAPIInspectorModel.queryCapacity + 50
+        for index in 0..<total {
+            model.record(
+                .init(
+                    requestId: "q\(index)", method: .get, endpoint: "/api/page?offset=\(index)",
+                    startedAt: Date(timeIntervalSince1970: Double(index)), attempt: 0, phase: .success,
+                    durationMs: 1, status: 200))
+        }
+        #expect(model.queries.count == NativeAPIInspectorModel.queryCapacity)
+        #expect(model.queries["/api/page?offset=\(total - 1)"] != nil)
+        #expect(model.queries["/api/page?offset=0"] == nil)
+    }
 }

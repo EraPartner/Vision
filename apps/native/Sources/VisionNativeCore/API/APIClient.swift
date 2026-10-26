@@ -328,6 +328,8 @@ public struct APIClient: Sendable {
             }
             switch outcome {
             case .success(let value):
+                // The answer's buffers are free by now; relieve once the app goes quiet.
+                MemoryRelief.shared.request()
                 return value
             case .failure(let error):
                 lastError = error
