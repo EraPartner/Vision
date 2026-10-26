@@ -28,21 +28,51 @@ public enum ResearchReadKey {
     private struct Entry {
         let value: any Sendable
         let date: Date
+        var used: Int
     }
     private struct Pending {
         let id: UUID
         let task: Task<any Sendable, Error>
     }
+    /// The most answers kept at once. Search results, quotes and chart series are keyed by what
+    /// was asked, so without a bound every query typed would stay in memory for the session.
+    public static let defaultCapacity = 24
+
     private var entries: [String: Entry] = [:]
     private var pending: [String: Pending] = [:]
+    private var useCounter = 0
+    private let capacity: Int
     private let now: @Sendable () -> Date
-    public init(now: @escaping @Sendable () -> Date = { Date() }) { self.now = now }
+    public init(capacity: Int = ResearchReadCache.defaultCapacity, now: @escaping @Sendable () -> Date = { Date() }) {
+        self.capacity = max(1, capacity)
+        self.now = now
+    }
+
+    /// How many answers are kept, for tests.
+    public var count: Int { entries.count }
+
+    private func touch(_ key: String) {
+        guard var entry = entries[key] else { return }
+        useCounter += 1
+        entry.used = useCounter
+        entries[key] = entry
+    }
+
+    /// Drops the least recently used answers until `capacity` remain.
+    private func evictOverflow(keeping key: String) {
+        while entries.count > capacity {
+            let oldest = entries.filter { $0.key != key }.min { $0.value.used < $1.value.used }
+            guard let oldest else { return }
+            entries[oldest.key] = nil
+        }
+    }
     public func request<Value: Sendable>(
         key: String, freshFor: TimeInterval, force: Bool = false, fetch: @escaping @Sendable () async throws -> Value
     ) async throws -> Value {
         if !force, let entry = entries[key], now().timeIntervalSince(entry.date) < freshFor,
             let value = entry.value as? Value
         {
+            touch(key)
             return value
         }
         let current: Pending
@@ -56,7 +86,9 @@ public enum ResearchReadKey {
             let raw = try await current.task.value
             guard let value = raw as? Value else { throw ResearchDecode.failure("Research cache type mismatch") }
             if pending[key]?.id == current.id {
-                entries[key] = Entry(value: value, date: now())
+                useCounter += 1
+                entries[key] = Entry(value: value, date: now(), used: useCounter)
+                evictOverflow(keeping: key)
                 pending[key] = nil
             }
             return value
