@@ -66,6 +66,7 @@ import {
 import type { PgQueryResult } from "../../src/database/connection.ts";
 import { scheduleReconcile } from "../../src/services/transferReconciliationService.ts";
 import { must } from "../helpers/must.ts";
+import { loose } from "../helpers/partial.ts";
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
 const getClient = vi.mocked(rawGetClient);
@@ -128,12 +129,12 @@ describe("POST /bulk-delete — id-mode success", () => {
 
   it("hard-deletes the listed transactions and schedules a refresh", async () => {
     const clientQuery = vi
-      .fn()
+      .fn<(sql: string, params?: unknown[]) => unknown>()
       .mockResolvedValueOnce({}) // BEGIN
       .mockResolvedValueOnce({ rows: [{ id: 1 }, { id: 2 }, { id: 3 }] }) // DELETE RETURNING id
       .mockResolvedValueOnce({}); // COMMIT
     const release = vi.fn();
-    getClient.mockResolvedValue({ query: clientQuery, release });
+    getClient.mockResolvedValue(loose({ query: clientQuery, release }));
 
     const res = await bulkDelete({ ids: [1, 2, 3] }).expect(200);
 
@@ -151,12 +152,12 @@ describe("POST /bulk-delete — id-mode success", () => {
 
   it("does not schedule a refresh when nothing was deleted", async () => {
     const clientQuery = vi
-      .fn()
+      .fn<(sql: string, params?: unknown[]) => unknown>()
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({});
     const release = vi.fn();
-    getClient.mockResolvedValue({ query: clientQuery, release });
+    getClient.mockResolvedValue(loose({ query: clientQuery, release }));
 
     const res = await bulkDelete({ ids: [9999] }).expect(200);
 
@@ -189,12 +190,12 @@ describe("POST /bulk-delete — filter-mode", () => {
       } as PgQueryResult); // ids
 
     const clientQuery = vi
-      .fn()
+      .fn<(sql: string, params?: unknown[]) => unknown>()
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({ rows: [{ id: 11 }, { id: 22 }] })
       .mockResolvedValueOnce({});
     const release = vi.fn();
-    getClient.mockResolvedValue({ query: clientQuery, release });
+    getClient.mockResolvedValue(loose({ query: clientQuery, release }));
 
     const res = await bulkDelete({
       filter: { search: "cafe" },
@@ -215,11 +216,11 @@ describe("POST /bulk-delete — filter-mode", () => {
       .mockResolvedValueOnce({ rows: [{ n: 0 }] } as PgQueryResult)
       .mockResolvedValueOnce({ rows: [], rowCount: 0 });
     const clientQuery = vi
-      .fn()
+      .fn<(sql: string, params?: unknown[]) => unknown>()
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({});
-    getClient.mockResolvedValue({ query: clientQuery, release: vi.fn() });
+    getClient.mockResolvedValue(loose({ query: clientQuery, release: vi.fn() }));
 
     const res = await bulkDelete({
       filter: { search: "disappeared" },
@@ -240,12 +241,12 @@ describe("POST /bulk-delete — atomicity", () => {
 
   it("rolls back and skips refresh when DELETE fails", async () => {
     const clientQuery = vi
-      .fn()
+      .fn<(sql: string, params?: unknown[]) => unknown>()
       .mockResolvedValueOnce({})
       .mockRejectedValueOnce(new Error("boom"))
       .mockResolvedValueOnce({});
     const release = vi.fn();
-    getClient.mockResolvedValue({ query: clientQuery, release });
+    getClient.mockResolvedValue(loose({ query: clientQuery, release }));
 
     const res = await bulkDelete({ ids: [1] }).expect(500);
 

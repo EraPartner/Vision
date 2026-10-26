@@ -67,7 +67,8 @@ const mockWarmCache = vi.fn();
 const mockClearMemoryCache = vi.fn();
 const mockListLatestStoredRates = vi.fn();
 const mockGetSnapshots = vi.fn();
-const mockGetBrokerSnapshots = vi.fn();
+const mockGetBrokerSnapshots =
+  vi.fn<(startDate: string, endDate: string, currency: string) => Promise<unknown>>();
 const mockGetPortfolioSummary = vi.fn();
 const mockGetInsightsDigest = vi.fn();
 const mockGetInsightsCount = vi.fn();
@@ -125,15 +126,9 @@ import {
 } from "../../src/services/info/cache.ts";
 import { must } from "../helpers/must.ts";
 import { mockOf } from "../helpers/mockOf.ts";
+import { loose } from "../helpers/partial.ts";
+import { anyInstance } from "../helpers/matchers.ts";
 const infoRepository = vi.mocked(rawInfoRepository);
-
-/** Stand-in for a full result: the route reads only the fields given. */
-const partial = <T>(value: Partial<NoInfer<T>>) => value as T;
-/**
- * Stand-in whose shape the source has since outgrown (e.g. net-worth figures
- * without `liabilities`); the routes under test only forward it.
- */
-const loose = <T>(value: unknown) => value as T;
 
 const { default: infoRouter } = await import("../../src/routes/info.ts");
 const { warmInfoCaches } = await import("../../src/routes/info.ts");
@@ -741,7 +736,7 @@ describe("Info Routes", () => {
         okEnvelope(
           expect.objectContaining({
             message: "Materialized views refreshed",
-            duration_ms: expect.any(Number),
+            duration_ms: anyInstance(Number),
           }),
         ),
       );

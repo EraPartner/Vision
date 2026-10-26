@@ -2,16 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const client = {
   connect: vi.fn(),
-  query: vi.fn(),
+  query: vi.fn<(sql: string) => unknown>(),
   end: vi.fn(),
 };
 
 vi.mock("pg", () => ({
   default: {
-    Client: class MockClient {
-      constructor() {
-        return client;
-      }
+    Client: function MockClient() {
+      return client;
     },
   },
 }));

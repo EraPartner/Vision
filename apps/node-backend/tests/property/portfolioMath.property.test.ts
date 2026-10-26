@@ -114,7 +114,7 @@ describe("property: calculateCostBasis", () => {
         taxes: randBetween(rng, 0, 20),
       }));
       const expected = txns.reduce(
-        (sum, t) => sum + Number(t.amount) + Number(t.fees) + Number(t.taxes),
+        (sum, t) => sum + t.amount + t.fees + t.taxes,
         0,
       );
       const result = calculateCostBasis(txns);

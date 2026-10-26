@@ -155,7 +155,6 @@ import {
   getBatch as rawGetBatch,
   rollbackBatch as rawRollbackBatch,
   getPreviewRows as rawGetPreviewRows,
-  overrideRecipient,
   overrideCategory as rawOverrideCategory,
   categoryExists as rawCategoryExists,
 } from "../../src/repositories/importBatchRepository.ts";
@@ -168,6 +167,8 @@ import {
 import { must } from "../helpers/must.ts";
 
 import { mockOf } from "../helpers/mockOf.ts";
+import { loose } from "../helpers/partial.ts";
+import { objectContaining } from "../helpers/matchers.ts";
 const runImportPipeline = vi.mocked(rawRunImportPipeline);
 const importRecipientsCSV = vi.mocked(rawImportRecipientsCSV);
 const importCategoriesCSV = vi.mocked(rawImportCategoriesCSV);
@@ -179,15 +180,6 @@ const overrideCategory = vi.mocked(rawOverrideCategory);
 const categoryExists = vi.mocked(rawCategoryExists);
 const customParserConfigRepository = vi.mocked(rawCustomParserConfigRepository);
 const clearForecastMcCaches = vi.mocked(rawClearForecastMcCaches);
-
-/**
- * The routes forward service and repository results without reading most of
- * their columns, so fixtures carry only the fields a test asserts on. `loose`
- * casts one to the type the mocked function resolves with.
- */
-function loose<T>(value: unknown): T {
-  return value as T;
-}
 
 const { default: importRouter } =
   await import("../../src/routes/importRoutes.ts");
@@ -231,7 +223,9 @@ function parseSseFrames(rawText: string) {
       const [eventLine, dataLine] = frame.split("\n");
       return {
         name: must(eventLine, "eventLine").replace(/^event: /, ""),
-        data: JSON.parse(must(dataLine, "dataLine").replace(/^data: /, "")),
+        data: JSON.parse(
+            must(dataLine, "dataLine").replace(/^data: /, ""),
+          ) as unknown,
       };
     });
 }
@@ -515,8 +509,8 @@ describe("Import Routes", () => {
   // ──────────────────────────────────────────
   describe("POST /csv/stream", () => {
     it("should stream progress and complete SSE events on success", async () => {
-      runImportPipeline.mockImplementation(async ({ onProgress }) => {
-        await must(onProgress, "onProgress")(
+      runImportPipeline.mockImplementation(({ onProgress }) => {
+        must(onProgress, "onProgress")(
           loose({
             phase: "importing",
             current: 1,
@@ -527,7 +521,9 @@ describe("Import Routes", () => {
             percent: 50,
           }),
         );
-        return loose({ total: 2, imported: 2, duplicates: 0, errors: 0 });
+        return Promise.resolve(
+          loose({ total: 2, imported: 2, duplicates: 0, errors: 0 }),
+        );
       });
 
       const res = await api
@@ -590,7 +586,7 @@ describe("Import Routes", () => {
     it("does not hang or throw when the client disconnects mid-stream", async () => {
       let pipelineSettled = false;
       runImportPipeline.mockImplementation(async ({ onProgress }) => {
-        await must(onProgress, "onProgress")(
+        must(onProgress, "onProgress")(
           loose({
             phase: "importing",
             current: 1,
@@ -1227,7 +1223,7 @@ describe("Saved custom parser routes", () => {
       expect(bodyAt(res, "data", "id")).toBe(7);
       expect(mockOf(customParserConfigRepository, "create")).toHaveBeenCalledWith({
         name: "My Bank",
-        config: expect.objectContaining({
+        config: objectContaining({
           dateColumn: "Date",
           dateFormat: "%Y-%m-%d",
           separator: ",",

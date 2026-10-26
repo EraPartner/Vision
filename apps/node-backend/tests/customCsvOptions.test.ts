@@ -11,6 +11,7 @@ import { parseWithConfig as parsePortfolio } from "../src/services/portfolioImpo
 import type { PortfolioParserConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
 import { loose } from "./helpers/partial.ts";
 import { must } from "./helpers/must.ts";
+import { stringContaining, stringMatching } from "./helpers/matchers.ts";
 
 /** The fields these tests read from either adapter's parsed rows. */
 interface ParsedCsvRow {
@@ -107,7 +108,7 @@ for (const [name, parse] of adapters) {
         }),
       ).rejects.toMatchObject({
         status: 400,
-        message: expect.stringMatching(/Unsupported.*encoding/),
+        message: stringMatching(/Unsupported.*encoding/),
       });
     });
   });
@@ -185,10 +186,10 @@ describe("generic number formats", () => {
         });
         await expect(result).rejects.toMatchObject({
           status: 400,
-          message: expect.stringMatching(new RegExp(`row 2.*${column}`)),
+          message: stringMatching(new RegExp(`row 2.*${column}`)),
         });
-        await result.catch((error) =>
-          expect(error.message).not.toContain("1,234"),
+        await result.catch((error: unknown) =>
+          expect((error as Error).message).not.toContain("1,234"),
         );
       },
     );
@@ -229,7 +230,7 @@ describe("generic number formats", () => {
         }),
       ).rejects.toMatchObject({
         status: 400,
-        message: expect.stringContaining("Ambiguous number"),
+        message: stringContaining("Ambiguous number"),
       });
     });
   }

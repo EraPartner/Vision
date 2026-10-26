@@ -39,7 +39,6 @@ vi.mock("../src/services/aiChat/tools/_financialMetrics.ts", () => ({
 
 import { transactionRepository as rawTransactionRepository } from "../src/repositories/transactionRepository.ts";
 import { investmentRepository as rawInvestmentRepository } from "../src/repositories/investmentRepository.ts";
-import { portfolioTransactionRepository } from "../src/repositories/portfolioTransactionRepository.ts";
 import { plannedTransactionRepository as rawPlannedTransactionRepository } from "../src/repositories/plannedTransactionRepository.ts";
 import rawInfoRepository from "../src/repositories/infoRepository.ts";
 import {
@@ -85,6 +84,7 @@ import { loose, partial } from "./helpers/partial.ts";
 import { must } from "./helpers/must.ts";
 
 import { mockOf } from "./helpers/mockOf.ts";
+import { stringMatching } from "./helpers/matchers.ts";
 type Resolved<F extends (...args: never[]) => unknown> = Awaited<ReturnType<F>>;
 
 /** The error envelope dispatchTool builds; ToolResult types it as unknown. */
@@ -1275,7 +1275,7 @@ describe("dispatchTool", () => {
       error: {
         code: "VALIDATION_ERROR",
         field: null,
-        message: expect.stringMatching(/^arguments is not valid JSON: /),
+        message: stringMatching(/^arguments is not valid JSON: /),
       },
     });
   });

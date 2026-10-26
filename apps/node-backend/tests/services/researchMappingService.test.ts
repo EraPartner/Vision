@@ -17,7 +17,6 @@ import {
 } from "@vision/types/brands";
 import { must } from "../helpers/must.ts";
 
-type ServiceDeps = NonNullable<Parameters<typeof createResearchMappingService>[0]>;
 type UpsertInput = Parameters<typeof repoUpsert>[0];
 
 /** In-memory stand-in for an instrument_provider_map row. */
@@ -92,7 +91,7 @@ beforeEach(() => {
 
 // Fakes implement only what each case exercises, hence the single cast here.
 const build = (deps: Record<string, unknown>) =>
-  createResearchMappingService({ recordSuccess, recordError, ...deps } as ServiceDeps);
+  createResearchMappingService({ recordSuccess, recordError, ...deps });
 
 describe('researchMappingService.resolve', () => {
   it('auto-proposes the top search hit for a keyed, search-capable provider', async () => {

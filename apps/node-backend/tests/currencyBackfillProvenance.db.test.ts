@@ -23,7 +23,7 @@ import {
 } from "../src/services/currency/currencyConversionService.ts";
 import { clearHistoricalCache } from "../src/services/currency/rateFetcher.ts";
 import { PORTFOLIO_TRANSACTION_SNAPSHOT_SQL } from "../src/repositories/portfolioImportReconciliationRepository.ts";
-import { must } from "./helpers/must.ts";
+import { firstRow, must } from "./helpers/must.ts";
 
 // Isolate stamping and cache filling from the separate one-time repair job.
 vi.mock("../src/repositories/settingsRepository.ts", async (importOriginal) => {
@@ -56,7 +56,7 @@ async function transaction(
     accountId?: number;
   } = {},
 ) {
-  const { rows } = await pool.query(
+  const result = await pool.query<{ id: number }>(
     `INSERT INTO portfolio_transactions
        (investment_id,type,date,amount,units,price_per_unit,currency,
         fx_rate_to_eur,import_batch_id,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,account_id)
@@ -72,17 +72,20 @@ async function transaction(
       fields.accountId ?? null,
     ],
   );
-  return rows[0].id;
+  return firstRow(result).id;
 }
 
-async function snapshot(id: number) {
-  return (
-    await pool.query(
+/** The audit snapshot of a transaction row (jsonb). */
+type Snapshot = Record<string, unknown> & { fx_rate_to_eur: string | null };
+
+async function snapshot(id: number): Promise<Snapshot> {
+  return firstRow(
+    await pool.query<{ snapshot: Snapshot }>(
       `SELECT ${PORTFOLIO_TRANSACTION_SNAPSHOT_SQL} AS snapshot
        FROM portfolio_transactions pt WHERE pt.id=$1`,
       [id],
-    )
-  ).rows[0].snapshot;
+    ),
+  ).snapshot;
 }
 
 describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
@@ -98,22 +101,22 @@ describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
       "fetch",
       vi.fn().mockResolvedValue({ ok: false, status: 503 }),
     );
-    accountId = (
-      await pool.query(
+    accountId = firstRow(
+      await pool.query<{ id: number }>(
         "INSERT INTO accounts(name,type,currency) VALUES ('Synthetic FX broker','brokerage','EUR') RETURNING id",
-      )
-    ).rows[0].id;
-    investmentId = (
-      await pool.query(
+      ),
+    ).id;
+    investmentId = firstRow(
+      await pool.query<{ id: number }>(
         "INSERT INTO investments(name,symbol,asset_class,currency) VALUES ('Synthetic FX asset','FXPROOF','stock','EUR') RETURNING id",
-      )
-    ).rows[0].id;
-    batchId = (
-      await pool.query(
+      ),
+    ).id;
+    batchId = firstRow(
+      await pool.query<{ id: number }>(
         "INSERT INTO portfolio_import_batches(adapter_name,status,rows_total,account_id,is_brokerage) VALUES ('synthetic_fx','awaiting_review',1,$1,true) RETURNING id",
         [accountId],
-      )
-    ).rows[0].id;
+      ),
+    ).id;
     await pool.query(
       "INSERT INTO exchange_rates(currency_code,rate_to_eur,rate_date,is_latest) VALUES ('USD',0.5,$1,false)",
       [day],
@@ -160,12 +163,12 @@ describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
       [adopted, accountId, hash],
     );
     const after = await snapshot(adopted);
-    const stagingId = (
-      await pool.query(
+    const stagingId = firstRow(
+      await pool.query<{ id: number }>(
         "INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,raw_data) VALUES ($1,0,'duplicate','Synthetic FX source') RETURNING id",
         [batchId],
-      )
-    ).rows[0].id;
+      ),
+    ).id;
     await pool.query(
       "INSERT INTO portfolio_import_reconciliation_journal(batch_id,staging_row_id,transaction_id,action,policy,before_data,after_data) VALUES ($1,$2,$3,'adopt','prefer_source',$4::jsonb,$5::jsonb)",
       [
@@ -186,12 +189,12 @@ describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
       expect((await snapshot(id)).fx_rate_to_eur).toBeNull();
     expect(await snapshot(adopted)).toEqual(after);
     expect(
-      (
-        await pool.query(
+      firstRow(
+        await pool.query<{ after_data: unknown }>(
           "SELECT after_data FROM portfolio_import_reconciliation_journal WHERE transaction_id=$1",
           [adopted],
-        )
-      ).rows[0].after_data,
+        ),
+      ).after_data,
     ).toEqual(after);
   });
 
@@ -219,12 +222,12 @@ describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
     });
     expect((await snapshot(id)).fx_rate_to_eur).toBeNull();
     expect(
-      (
-        await pool.query(
+      firstRow(
+        await pool.query<{ rate: string }>(
           "SELECT rate_to_eur::text AS rate FROM exchange_rates WHERE currency_code='USD' AND rate_date=$1",
           [day],
-        )
-      ).rows[0].rate,
+        ),
+      ).rate,
     ).toBe("0.5000000000");
     vi.stubGlobal(
       "fetch",
@@ -256,8 +259,11 @@ describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
       let backfill;
       try {
         await holder.query("BEGIN");
-        const pid = (await holder.query("SELECT pg_backend_pid() AS pid"))
-          .rows[0].pid;
+        const pid = firstRow(
+          await holder.query<{ pid: number }>(
+            "SELECT pg_backend_pid() AS pid",
+          ),
+        ).pid;
         await holder.query(
           "SELECT id FROM portfolio_transactions WHERE id=$1 FOR UPDATE",
           [id],
@@ -265,11 +271,11 @@ describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
         backfill = backfillPortfolioHistoricalRates();
         await vi.waitFor(
           async () => {
-            const blocked = await pool.query(
+            const blocked = await pool.query<{ count: number }>(
               "SELECT count(*)::int AS count FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))",
               [pid],
             );
-            expect(blocked.rows[0].count).toBeGreaterThan(0);
+            expect(firstRow(blocked).count).toBeGreaterThan(0);
           },
           { interval: 10, timeout: 3000 },
         );

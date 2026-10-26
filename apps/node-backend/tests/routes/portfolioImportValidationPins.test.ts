@@ -118,6 +118,8 @@ import rawCustomParserConfigRepository from "../../src/repositories/customParser
 import { must } from "../helpers/must.ts";
 
 import { mockOf } from "../helpers/mockOf.ts";
+import { loose } from "../helpers/partial.ts";
+import { objectContaining } from "../helpers/matchers.ts";
 const runPortfolioImportPipeline = vi.mocked(rawRunPortfolioImportPipeline);
 const dbQuery = vi.mocked(rawDbQuery);
 const commitReviewedPortfolioImport = vi.mocked(
@@ -129,15 +131,6 @@ const createInvestmentForRow = vi.mocked(rawCreateInvestmentForRow);
 const resolveInvestmentRows = vi.mocked(rawResolveInvestmentRows);
 const accountService = vi.mocked(rawAccountService);
 const customParserConfigRepository = vi.mocked(rawCustomParserConfigRepository);
-
-/**
- * The routes forward service and repository results without reading most of
- * their fields, so fixtures carry only the fields a test asserts on. `loose`
- * casts one to the type the mocked function resolves with.
- */
-function loose<T>(value: unknown): T {
-  return value as T;
-}
 
 const { default: portfolioImportRouter } =
   await import("../../src/routes/portfolioImportRoutes.ts");
@@ -540,7 +533,7 @@ describe("buildPortfolioConfig pins (POST /csv/custom)", () => {
       expect.objectContaining({
         adapterName: "portfolio_generic",
         defaultType: "buy",
-        customConfig: expect.objectContaining({
+        customConfig: objectContaining({
           date_format: "%Y-%m-%d",
           separator: ",",
           encoding: "utf-8",
@@ -560,7 +553,7 @@ describe("buildPortfolioConfig pins (POST /csv/custom)", () => {
     }).expect(201);
     expect(runPortfolioImportPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
-        customConfig: expect.objectContaining({
+        customConfig: objectContaining({
           separator: ",",
           type_mapping: {},
         }),
@@ -797,8 +790,8 @@ describe("literal generic source identity HTTP mappings", () => {
     }).expect(201);
     expect(runPortfolioImportPipeline).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        customConfig: expect.objectContaining({
-          column_mapping: expect.objectContaining({
+        customConfig: objectContaining({
+          column_mapping: objectContaining({
             date: "D",
             name: "N",
             source_id: "Source_ID",
@@ -842,7 +835,7 @@ describe("literal generic source identity HTTP mappings", () => {
  */
 describe("review body schemas", () => {
   const bulk = (body: unknown) =>
-    api.post(`${BASE}/batches/5/rows/investment-override`).send(body as object);
+    api.post(`${BASE}/batches/5/rows/investment-override`).send(body);
 
   it.each([
     [{}, "row_ids must be a non-empty array"],

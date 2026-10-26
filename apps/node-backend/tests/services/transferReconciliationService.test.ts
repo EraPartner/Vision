@@ -4,7 +4,12 @@ import { mockTxConnection } from "../helpers/repoMocks.ts";
 import {
   asTransactionId,
 } from "@vision/types/brands";
-const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
+/** The transaction client `query`: SQL text plus optional params. */
+type ClientQuery = (sql: string, params?: readonly unknown[]) => unknown;
+
+const { mockClient } = vi.hoisted(() => ({
+  mockClient: { query: vi.fn<ClientQuery>() },
+}));
 
 vi.mock("../../src/database/connection.ts", () =>
   mockTxConnection(mockClient, {
@@ -24,8 +29,8 @@ import { must } from "../helpers/must.ts";
 /** Issued SQL without identifier quotes, lower-cased, with its params. */
 const issued = () =>
   mockClient.query.mock.calls.map(([sql, params]) => ({
-    sql: String(sql).replaceAll('"', "").toLowerCase(),
-    params: (params ?? []) as unknown[],
+    sql: sql.replaceAll('"', "").toLowerCase(),
+    params: params ?? [],
   }));
 
 beforeEach(() => {

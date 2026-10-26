@@ -11,6 +11,7 @@ import {
   __buildPortfolioConfig as buildPortfolioConfig,
   __normalizePortfolioParserConfig as normalizePortfolioParser,
 } from "../src/routes/portfolioImportRoutes.ts";
+import { stringContaining } from "./helpers/matchers.ts";
 
 const bankBody = {
   bank_name: "Custom",
@@ -86,7 +87,7 @@ for (const [name, parse, base] of schemas) {
       expect(() => parse({ ...base, encoding: "bogus" })).toThrow(
         expect.objectContaining({
           status: 400,
-          message: expect.stringContaining("Unsupported CSV encoding"),
+          message: stringContaining("Unsupported CSV encoding"),
         }),
       );
     });

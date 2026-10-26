@@ -97,7 +97,7 @@ function syntheticHistory({
     const dow = new Date(ms).getUTCDay();
     const base =
       amplitude * Math.sin((2 * Math.PI * i) / 7) + (dow === 0 ? -5 : 2);
-    const value = base + (noise ? (i % 7) * noise : 0);
+    const value = base + (noise !== 0 ? (i % 7) * noise : 0);
     out.push({ date: iso, net: value });
   }
   return out;

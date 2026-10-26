@@ -108,7 +108,7 @@ describe("bounded analysis extensions", () => {
     ).toThrow("complete");
     expect(() =>
       compareAnalysisTime({
-        rows: rows.map((row, i) => ({ ...row, currency: i ? "USD" : "EUR" })),
+        rows: rows.map((row, i) => ({ ...row, currency: i > 0 ? "USD" : "EUR" })),
         columns: [...columns, { id: "currency", type: "currency" }],
         dateColumn: "date",
         valueColumns: ["amount"],

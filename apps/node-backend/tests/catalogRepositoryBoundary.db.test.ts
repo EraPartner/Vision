@@ -42,26 +42,26 @@ async function insertRecipient(
   name: string,
   defaultCategoryId: number | null = null,
 ): Promise<number> {
-  const { rows } = await must(getTestPool(), "getTestPool()").query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: number }>(
     `INSERT INTO recipients (name, normalized_name, default_category_id)
      VALUES ($1, lower($1), $2) RETURNING id`,
     [name, defaultCategoryId],
   );
-  created.recipientIds.push(rows[0].id);
-  return rows[0].id;
+  created.recipientIds.push(must(rows[0], "row").id);
+  return must(rows[0], "row").id;
 }
 
 async function insertTransaction(
   recipientId: number,
   { isActive = true, isTransfer = false } = {},
 ): Promise<number> {
-  const { rows } = await must(getTestPool(), "getTestPool()").query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: number }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, memo, is_active, is_transfer)
      VALUES ('2026-02-01', '-10.0000', 'EUR', $1, $2, $3, $4) RETURNING id`,
     [recipientId, SUFFIX, isActive, isTransfer],
   );
-  created.transactionIds.push(rows[0].id);
-  return rows[0].id;
+  created.transactionIds.push(must(rows[0], "row").id);
+  return must(rows[0], "row").id;
 }
 
 describe.skipIf(!hasTestDatabase())(

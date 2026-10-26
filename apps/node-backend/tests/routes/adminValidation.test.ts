@@ -74,7 +74,7 @@ describe("Admin route request validation", () => {
     vi.mocked(query).mockResolvedValue({
       rows: [{ relname: "transactions" }],
     } as never);
-    vi.mocked(getClient).mockResolvedValue(client as never);
+    vi.mocked(getClient).mockResolvedValue(client);
     client.query.mockResolvedValue({ rows: [] });
     vi.mocked(readRows).mockResolvedValue({} as never);
     vi.mocked(applyMutations).mockResolvedValue({ dryRun: true } as never);

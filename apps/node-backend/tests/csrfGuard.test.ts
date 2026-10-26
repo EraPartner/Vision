@@ -10,7 +10,7 @@ const ALLOWED = ['http://localhost:3002', 'http://localhost:5173'];
 const guard = createCsrfGuard(() => ALLOWED);
 
 function run(req: DeepPartial<ExpressRequest>) {
-  const next = vi.fn();
+  const next = vi.fn<(error?: unknown) => void>();
   guard(partial<ExpressRequest>({ headers: {}, ...req }), partial<ExpressResponse>({}), next);
   return next;
 }

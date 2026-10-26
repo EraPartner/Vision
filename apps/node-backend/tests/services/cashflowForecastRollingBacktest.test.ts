@@ -19,6 +19,7 @@ import type {
 } from "../../src/services/calculations/forecast/index.ts";
 import type { AggregationEnvelope } from "../../src/services/calculations/aggregation/_envelope.ts";
 import { must } from "../helpers/must.ts";
+import { anyInstance } from "../helpers/matchers.ts";
 
 /** Rolling envelope `data` is typed `object` in src; these tests read diagnostics. */
 type DiagnosticsEnvelope = AggregationEnvelope<{
@@ -73,7 +74,7 @@ vi.mock("../../src/repositories/infoRepository.ts", () => ({
     // ADR-083 cache-key input (forecast/index.js filterHash).
     getIncludeTransfers: vi.fn(() => Promise.resolve(false)),
     getCashflowForecastDataRolling: vi.fn(
-      (historyMonths: number, daysBack: number, daysForward: number) => Promise.resolve(({
+      (historyMonths: number, daysBack: number, _daysForward: number) => Promise.resolve(({
         history: buildHistory({ days: 400 }),
         currentActual: Array.from({ length: daysBack + 1 }, (_, i) => ({
           date: isoOffset(-daysBack + i),
@@ -139,10 +140,10 @@ describe("walkForwardBacktestRolling", () => {
     expect(entry.id).toBe("m1");
     expect(entry.label).toBe("m1");
     expect(entry.aggregate).toMatchObject({
-      mae: expect.any(Number),
-      rmse: expect.any(Number),
+      mae: anyInstance(Number),
+      rmse: anyInstance(Number),
       mape: null,
-      windows: expect.any(Number),
+      windows: anyInstance(Number),
     });
     expect(Array.isArray(entry.perWindow)).toBe(true);
   });
@@ -232,7 +233,7 @@ describe("computeCashflowForecastRolling — MC cache", () => {
     cacheIsFresh.mockReturnValue(false);
     cacheUpsert.mockResolvedValue(undefined);
     getRollingData.mockImplementation(
-      (historyMonths: number, daysBack: number, daysForward: number) =>
+      (historyMonths: number, daysBack: number, _daysForward: number) =>
         Promise.resolve(({
         history: buildHistory({ days: 400 }),
         currentActual: Array.from({ length: daysBack + 1 }, (_, i) => ({
@@ -376,7 +377,7 @@ describe("computeCashflowForecastRolling — diagnostics", () => {
     cacheIsFresh.mockReturnValue(false);
     cacheUpsert.mockResolvedValue(undefined);
     getRollingData.mockImplementation(
-      (historyMonths: number, daysBack: number, daysForward: number) =>
+      (historyMonths: number, daysBack: number, _daysForward: number) =>
         Promise.resolve(({
         history: buildHistory({ days: 400 }),
         currentActual: Array.from({ length: daysBack + 1 }, (_, i) => ({

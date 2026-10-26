@@ -45,7 +45,7 @@ const query = rawQuery as unknown as Mock<
   (
     text: string,
     params?: readonly unknown[],
-  ) => Promise<Partial<PgQueryResult<unknown>>>
+  ) => Promise<Partial<PgQueryResult>>
 >;
 
 const listAccounts = async (

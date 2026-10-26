@@ -14,7 +14,7 @@ async function loadConnectionModule({
   vi.resetModules();
 
   const pool = {
-    on: vi.fn(),
+    on: vi.fn<(event: string, handler: (error: Error) => void) => unknown>(),
     query: vi.fn(),
     connect: vi.fn(),
     end: vi.fn(),
@@ -199,7 +199,7 @@ describe("database connection module", () => {
   describe("ambient transaction (AsyncLocalStorage reroute)", () => {
     function mockTxClient() {
       return {
-        query: vi.fn().mockResolvedValue({ rows: [] }),
+        query: vi.fn<(sql: unknown) => unknown>().mockResolvedValue({ rows: [] }),
         release: vi.fn(),
       };
     }
@@ -411,7 +411,7 @@ describe("database connection module", () => {
       const gate = new Promise((resolve) => {
         releaseContinuation = resolve;
       });
-      let continuation;
+      let continuation: Promise<unknown> | undefined;
 
       await module.withTransaction(() => {
         continuation = (async () => {

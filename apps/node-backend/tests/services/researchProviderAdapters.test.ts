@@ -23,8 +23,9 @@ const ENV = {
 function mockFetch(routes: Array<[string, unknown]>) {
   // Only `ok` and `text()` of a Response are read by the adapters.
   globalThis.fetch = vi.fn((url: string | URL | Request) => {
-    const match = routes.find(([needle]) => String(url).includes(needle));
-    if (!match) return Promise.reject(new Error(`unmocked URL: ${url}`));
+    const href = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
+    const match = routes.find(([needle]) => href.includes(needle));
+    if (!match) return Promise.reject(new Error(`unmocked URL: ${href}`));
     return Promise.resolve({ ok: true, text: () => Promise.resolve(JSON.stringify(match[1])) });
   }) as unknown as typeof fetch;
 }
@@ -43,7 +44,7 @@ it.each([
   ['FMP', fmp, 'FMP_API_KEY'],
   ['Alpha Vantage', alphaVantage, 'ALPHA_VANTAGE_API_KEY'],
 ])('%s adapter requires its own configured key', async (_name, adapter, variable) => {
-  delete process.env[variable];
+  Reflect.deleteProperty(process.env, variable);
   await expect(adapter.quote('AAPL')).rejects.toThrow(`${variable} not configured`);
 });
 

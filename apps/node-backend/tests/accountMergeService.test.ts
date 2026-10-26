@@ -10,7 +10,12 @@ import {
 } from "@vision/types/brands";
 import { loose } from "./helpers/partial.ts";
 
-const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
+/** The transaction client `query`: SQL text plus optional params. */
+type ClientQuery = (sql: string, params?: readonly unknown[]) => unknown;
+
+const { mockClient } = vi.hoisted(() => ({
+  mockClient: { query: vi.fn<ClientQuery>() },
+}));
 
 vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
 // Real conversion arithmetic, fixed latest stored rates: 1 USD = 0.5 EUR (the
@@ -50,7 +55,7 @@ type SqlSpy = Mock<
   (
     sql: string,
     params?: readonly unknown[],
-  ) => Promise<Partial<PgQueryResult<unknown>>>
+  ) => Promise<Partial<PgQueryResult>>
 >;
 // mockTxConnection adds the `poolQuery` sink, which the real module lacks.
 const { query, poolQuery } = connection as unknown as {
@@ -106,7 +111,9 @@ function happyPath({
       return Promise.resolve({ rows: [{ id: 1 }] });
     if (norm(sql).includes("from accounts where id = $1"))
       return Promise.resolve({
-        rows: fundingAccounts[params[0]] ? [fundingAccounts[params[0]]] : [],
+        rows: fundingAccounts[params[0] as number]
+            ? [fundingAccounts[params[0] as number]]
+            : [],
       });
     if (norm(sql).includes("group by account_id")) return Promise.resolve({ rows: stampRanges });
     if (norm(sql).includes("update transactions")) return Promise.resolve({ rowCount: 3 });

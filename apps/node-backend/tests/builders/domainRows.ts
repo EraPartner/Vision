@@ -25,7 +25,7 @@ import {
  */
 export type Built<Base, O> = Omit<Base, keyof O> & O;
 
-type Overrides = Record<string, unknown>;
+type Overrides = object;
 
 /** `transactions` row as the enriched list/detail reads return it, plus the legacy `tx_hash` column. */
 export type TransactionRowFixture = EnrichedTransactionRow & {
@@ -54,7 +54,7 @@ export type PortfolioImportStagingRowFixture = PortfolioImportStagingRow & {
 const date = (value: string) => new Date(`${value}T00:00:00.000Z`);
 const timestamp = (value: string) => new Date(value);
 
-export function makeTransactionRow<O extends Overrides = Record<never, never>>(
+export function makeTransactionRow<O extends Overrides = object>(
   overrides: O = {} as O,
 ): Built<TransactionRowFixture, O> {
   const base: TransactionRowFixture = {
@@ -87,7 +87,7 @@ export function makeTransactionRow<O extends Overrides = Record<never, never>>(
 }
 
 export function makePlannedTransactionRow<
-  O extends Overrides = Record<never, never>,
+  O extends Overrides = object,
 >(overrides: O = {} as O): Built<PlannedTransactionRowFixture, O> {
   const base: PlannedTransactionRowFixture = {
     id: asPlannedTransactionId(1),
@@ -131,7 +131,7 @@ export function makePlannedTransactionRow<
   return { ...base, ...overrides };
 }
 
-export function makeInvestmentRow<O extends Overrides = Record<never, never>>(
+export function makeInvestmentRow<O extends Overrides = object>(
   overrides: O = {} as O,
 ): Built<InvestmentRow, O> {
   const base: InvestmentRow = {
@@ -167,7 +167,7 @@ export function makeInvestmentRow<O extends Overrides = Record<never, never>>(
 }
 
 export function makePortfolioTransactionRow<
-  O extends Overrides = Record<never, never>,
+  O extends Overrides = object,
 >(overrides: O = {} as O): Built<PortfolioTransactionRowFixture, O> {
   const base: PortfolioTransactionRowFixture = {
     id: asPortfolioTransactionId(1),
@@ -194,7 +194,7 @@ export function makePortfolioTransactionRow<
 }
 
 export function makeImportStagingRow<
-  O extends Overrides = Record<never, never>,
+  O extends Overrides = object,
 >(overrides: O = {} as O): Built<ImportStagingRowFixture, O> {
   const base: ImportStagingRowFixture = {
     id: "1",
@@ -227,7 +227,7 @@ export function makeImportStagingRow<
 }
 
 export function makePortfolioImportStagingRow<
-  O extends Overrides = Record<never, never>,
+  O extends Overrides = object,
 >(overrides: O = {} as O): Built<PortfolioImportStagingRowFixture, O> {
   const base: PortfolioImportStagingRowFixture = {
     id: "1",

@@ -20,10 +20,12 @@ import { commitBatch } from "../src/services/importPipeline/commit.ts";
 import { isManualDuplicate } from "../src/services/deduplication.ts";
 import {
   asCurrencyCode,
+  asRecipientId,
   type CurrencyCode,
 } from "@vision/types/brands";
 import { loose } from "./helpers/partial.ts";
 import { must } from "./helpers/must.ts";
+import { anyInstance } from "./helpers/matchers.ts";
 
 vi.mock("../src/services/plannedMatchService.ts", () => ({
   autoLinkTransactions: vi.fn().mockResolvedValue({ autoLinkedCount: 0 }),
@@ -96,12 +98,12 @@ describeDb("ADR-088 contract schema", () => {
   });
 
   it("creates, updates, imports, renames, and repoints through account_id only", async () => {
-    const { rows: recipientRows } = await pool.query(
+    const { rows: recipientRows } = await pool.query<{ id: number }>(
       `INSERT INTO recipients (name, normalized_name)
        VALUES ('ADR088 CONTRACT RECIPIENT', 'adr088 contract recipient')
        RETURNING id`,
     );
-    const recipientId = recipientRows[0].id;
+    const recipientId = asRecipientId(must(recipientRows[0], "row").id);
     const cashId =
       await accountRepository.resolveOrCreateByName("Contract Cash");
     const movedId =
@@ -170,12 +172,12 @@ describeDb("ADR-088 contract schema", () => {
     })), "(await plannedTransactionService.update(planned.id, { acc...");
     expect(plannedMoved.bank_account).toBe("Contract Planned Moved");
 
-    const { rows: batchRows } = await pool.query(
+    const { rows: batchRows } = await pool.query<{ id: number }>(
       `INSERT INTO import_batches (adapter_name, status, rows_total)
        VALUES ('belfius', 'awaiting_review', 1)
        RETURNING id`,
     );
-    const batchId = batchRows[0].id;
+    const batchId = must(batchRows[0], "row").id;
     await pool.query(
       `INSERT INTO import_staging_rows
          (batch_id, row_index, status, tx_date, bank_account, recipient_raw,
@@ -198,7 +200,7 @@ describeDb("ADR-088 contract schema", () => {
     );
     expect(importedRows).toEqual([
       expect.objectContaining({
-        account_id: expect.any(Number),
+        account_id: anyInstance(Number),
         name: "Contract Imported",
       }),
     ]);

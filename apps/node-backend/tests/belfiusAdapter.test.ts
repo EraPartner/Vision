@@ -3,7 +3,7 @@
  * Mirrors: apps/backend/tests/test_belfius_adapter.py
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { createAdapter } from "../src/services/importPipeline/adapters/index.ts";
 
 import { useTempCSV } from "./helpers/tempFile.ts";

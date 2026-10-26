@@ -34,7 +34,6 @@ vi.mock(
   },
 );
 
-import { logger } from "../src/config/logger.ts";
 import kbc from "../src/services/importPipeline/adapters/kbc.ts";
 import generic from "../src/services/importPipeline/adapters/generic.ts";
 import type { CustomTransactionParserConfig } from "../src/services/importPipeline/adapters/generic.ts";
@@ -69,7 +68,7 @@ function row(overrides: Record<string, unknown> = {}): ParsedBankTransaction {
     rawData: "15/01/2024;-12,50;SHOP",
     sourceId: null,
     ...overrides,
-  } as ParsedBankTransaction;
+  };
 }
 
 function result(

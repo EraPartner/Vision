@@ -122,14 +122,14 @@ describe.skipIf(
     expect(result).toEqual({ status: "exists" });
     const grants = await withClient(must(database, "database").url, async (admin) =>
       (
-        await admin.query(
+        await admin.query<{ relation: string }>(
           `SELECT table_schema || '.' || table_name AS relation
              FROM information_schema.role_table_grants
             WHERE grantee = $1
             ORDER BY 1`,
           [EXECUTOR],
         )
-      ).rows.map((row) => row.relation as string),
+      ).rows.map((row) => row.relation),
     );
     expect(grants).toEqual([
       "vision_analysis.accounts_v1",

@@ -10,6 +10,7 @@ vi.mock("../../src/database/connection.ts", () => mockConnection());
 
 import { buildCategoryFromConvertedRows } from "../../src/repositories/infoRepositoryHelpers.ts";
 import { must } from "../helpers/must.ts";
+import { closeTo, objectContaining } from "../helpers/matchers.ts";
 
 function seeded(seed: number) {
   let t = seed >>> 0;
@@ -74,10 +75,10 @@ describe("property: production category totals", () => {
       expect(buildCategoryFromConvertedRows([...rows].reverse())).toEqual(
         expect.arrayContaining(
           result.map((entry) =>
-            expect.objectContaining({
+            objectContaining({
               id: entry.id,
               count: entry.count,
-              total: expect.closeTo(entry.total, 8),
+              total: closeTo(entry.total, 8),
             }),
           ),
         ),

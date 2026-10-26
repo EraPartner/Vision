@@ -20,7 +20,7 @@ import {
   asAccountId,
   asTransactionId,
 } from "@vision/types/brands";
-import { must } from "./helpers/must.ts";
+import { firstRow, must } from "./helpers/must.ts";
 
 const deferred = () => {
   let resolve!: () => void;
@@ -69,37 +69,37 @@ describe.skipIf(!hasTestDatabase())(
     });
     async function fixture() {
       const pool = must(getTestPool(), "getTestPool()");
-      const result = await pool.query(
+      const result = await pool.query<{ id: number }>(
         "INSERT INTO accounts (name) VALUES ($1) RETURNING id",
         [`lifecycle-${crypto.randomUUID()}`],
       );
-      const accountId = result.rows[0].id as number;
+      const accountId = must(result.rows[0], "row").id;
       accounts.push(accountId);
       const name = `lifecycle-recipient-${crypto.randomUUID()}`;
-      const recipientId = (
-        await pool.query(
+      const recipientId = firstRow(
+        await pool.query<{ id: number }>(
           "INSERT INTO recipients(name,normalized_name) VALUES ($1,$1) RETURNING id",
           [name],
-        )
-      ).rows[0].id as number;
+        ),
+      ).id;
       recipients.push(recipientId);
-      const transaction = await pool.query(
+      const transaction = await pool.query<{ id: number }>(
         "INSERT INTO transactions (date, amount, currency, account_id, recipient_id) VALUES ('2026-01-01', 100, 'EUR', $1, $2) RETURNING id",
         [accountId, recipientId],
       );
       return {
         accountId,
         recipientId,
-        transactionId: transaction.rows[0].id as number,
+        transactionId: must(transaction.rows[0], "row").id,
       };
     }
     async function waitForBlockedLedgerWrite() {
       const deadline = Date.now() + 5000;
       while (Date.now() < deadline) {
-        const { rows } = await must(getTestPool(), "getTestPool()").query(
+        const { rows } = await must(getTestPool(), "getTestPool()").query<{ n: number }>(
           "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%accounts%'",
         );
-        if (rows[0].n > 0) return;
+        if (must(rows[0], "row").n > 0) return;
         await new Promise((done) => setTimeout(done, 10));
       }
       throw new Error("Expected an account lock waiter");
@@ -119,7 +119,8 @@ describe.skipIf(!hasTestDatabase())(
       });
       const outcome = editing.then(
         () => "unexpected success",
-        (error: Error) => error.message,
+        (error: unknown) =>
+          error instanceof Error ? error.message : String(error),
       );
       try {
         await waitForBlockedLedgerWrite();
@@ -128,11 +129,11 @@ describe.skipIf(!hasTestDatabase())(
       }
       await closing;
       expect(await outcome).toContain("Reopen the account");
-      const { rows } = await must(getTestPool(), "getTestPool()").query(
+      const { rows } = await must(getTestPool(), "getTestPool()").query<{ balance: string }>(
         "SELECT SUM(amount)::numeric AS balance FROM transactions WHERE account_id=$1",
         [accountId],
       );
-      expect(Number(rows[0].balance)).toBe(0);
+      expect(Number(must(rows[0], "row").balance)).toBe(0);
     });
     it("holds a create eligibility lock until commit, so close includes the write", async () => {
       const { accountId, recipientId } = await fixture();
@@ -160,29 +161,27 @@ describe.skipIf(!hasTestDatabase())(
       }
       await writing;
       await closing;
-      const { rows } = await must(getTestPool(), "getTestPool()").query(
+      const { rows } = await must(getTestPool(), "getTestPool()").query<{ balance: string }>(
         "SELECT SUM(amount)::numeric AS balance FROM transactions WHERE account_id=$1",
         [accountId],
       );
-      expect(Number(rows[0].balance)).toBe(0);
+      expect(Number(must(rows[0], "row").balance)).toBe(0);
     });
 
     async function importFixture(accountId: number) {
       const pool = must(getTestPool(), "getTestPool()");
-      const batchId = Number(
-        (
-          await pool.query(
-            "INSERT INTO import_batches(adapter_name,status) VALUES ('belfius','awaiting_review') RETURNING id",
-          )
-        ).rows[0].id,
-      );
+      const batchId = firstRow(
+        await pool.query<{ id: number }>(
+          "INSERT INTO import_batches(adapter_name,status) VALUES ('belfius','awaiting_review') RETURNING id",
+        ),
+      ).id;
       batches.push(batchId);
-      const recipientId = (
-        await pool.query(
+      const recipientId = firstRow(
+        await pool.query<{ id: number }>(
           "INSERT INTO recipients(name,normalized_name) VALUES ($1,$1) RETURNING id",
           [`lifecycle-${crypto.randomUUID()}`],
-        )
-      ).rows[0].id as number;
+        ),
+      ).id;
       recipients.push(recipientId);
       await pool.query(
         `INSERT INTO import_staging_rows(batch_id,row_index,status,tx_date,bank_account,amount,currency,memo,resolved_recipient_id,dedup_fingerprint,dedup_fingerprint_version,dedup_occurrence)
@@ -283,12 +282,12 @@ describe.skipIf(!hasTestDatabase())(
         }
         await writing;
         expect(await observed).toMatchObject([{ status: "fulfilled" }]);
-        const persisted = await must(getTestPool(), "getTestPool()").query(
+        const persisted = await must(getTestPool(), "getTestPool()").query<{ is_active: boolean; balance: string }>(
           "SELECT a.is_active, COALESCE(SUM(t.amount) FILTER (WHERE t.is_active),0)::numeric AS balance FROM accounts a LEFT JOIN transactions t ON t.account_id=a.id WHERE a.id=$1 GROUP BY a.id",
           [accountId],
         );
-        expect(persisted.rows[0].is_active).toBe(false);
-        expect(Number(persisted.rows[0].balance)).toBe(0);
+        expect(must(persisted.rows[0], "row").is_active).toBe(false);
+        expect(Number(must(persisted.rows[0], "row").balance)).toBe(0);
         const adjustments = await must(getTestPool(), "getTestPool()").query(
           "SELECT amount FROM transactions WHERE account_id=$1 AND transfer_source='adjustment'",
           [accountId],

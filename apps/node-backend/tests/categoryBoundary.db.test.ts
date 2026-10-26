@@ -199,18 +199,18 @@ describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
   it("assigns a default category to recipients and reports the count", async () => {
     const category = await legacy(`ASSIGN${SUFFIX}`, "ONE");
     const db = must(getTestPool(), "getTestPool()");
-    const { rows } = await db.query(
+    const { rows } = await db.query<{ id: number }>(
       `INSERT INTO recipients (name, normalized_name)
        VALUES ($1, lower($1)), ($2, lower($2)) RETURNING id`,
       [`Assign A ${SUFFIX}`, `Assign B ${SUFFIX}`],
     );
-    const recipientIds = rows.map((row) => row.id as number);
+    const recipientIds = rows.map((row) => row.id);
     created.recipientIds.push(...recipientIds);
 
     expect(
       await categoryRepository.assignToRecipients(category.id, recipientIds.map(asRecipientId)),
     ).toBe(2);
-    const { rows: after } = await db.query(
+    const { rows: after } = await db.query<{ default_category_id: number | null }>(
       "SELECT default_category_id FROM recipients WHERE id = ANY($1::int[])",
       [recipientIds],
     );
@@ -256,24 +256,24 @@ describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
     const child = await node("CHILD", source.id);
 
     const db = must(getTestPool(), "getTestPool()");
-    const { rows: accountRows } = await db.query(
+    const { rows: accountRows } = await db.query<{ id: number }>(
       `INSERT INTO accounts (name, display_name, currency)
        VALUES ($1, $1, 'EUR') RETURNING id`,
       [`Merge Account ${SUFFIX}`],
     );
-    created.accountIds.push(accountRows[0].id);
-    const { rows: recipientRows } = await db.query(
+    created.accountIds.push(must(accountRows[0], "row").id);
+    const { rows: recipientRows } = await db.query<{ id: number }>(
       `INSERT INTO recipients (name, normalized_name)
        VALUES ($1, lower($1)) RETURNING id`,
       [`Merge Recipient ${SUFFIX}`],
     );
-    created.recipientIds.push(recipientRows[0].id);
-    const { rows: txRows } = await db.query(
+    created.recipientIds.push(must(recipientRows[0], "row").id);
+    const { rows: txRows } = await db.query<{ id: number }>(
       `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id)
        VALUES (CURRENT_DATE, -12.34, 'EUR', $1, $2, $3) RETURNING id`,
-      [recipientRows[0].id, source.id, accountRows[0].id],
+      [must(recipientRows[0], "row").id, source.id, must(accountRows[0], "row").id],
     );
-    created.transactionIds.push(txRows[0].id);
+    created.transactionIds.push(must(txRows[0], "row").id);
 
     const merged = await mergeCategoryNodes(source.id, target.id);
     expect(merged?.id).toBe(target.id);
@@ -281,11 +281,11 @@ describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
 
     expect(await categoryExists(source.id)).toBe(false);
     expect((await getCategoryNode(child.id))?.parentId).toBe(target.id);
-    const { rows: tx } = await db.query(
+    const { rows: tx } = await db.query<{ category_id: number | null }>(
       "SELECT category_id FROM transactions WHERE id = $1",
-      [txRows[0].id],
+      [must(txRows[0], "row").id],
     );
-    expect(tx[0].category_id).toBe(target.id);
+    expect(must(tx[0], "row").category_id).toBe(target.id);
     // Children are deleted before parents in cleanup: put the moved child last.
     created.categoryIds.splice(created.categoryIds.indexOf(child.id), 1);
     created.categoryIds.push(child.id);

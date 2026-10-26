@@ -14,7 +14,9 @@ const mocks = vi.hoisted(() => ({
   lockManualTransactionIdentity: vi.fn(),
   recordManualTransactionDedupClaim: vi.fn(),
   findActiveId: vi.fn(),
-  withTransaction: vi.fn((fn) => Promise.resolve(fn({ query: vi.fn() }))),
+  withTransaction: vi.fn((fn: (client: unknown) => unknown) =>
+    Promise.resolve(fn({ query: vi.fn() })),
+  ),
   autoLinkTransactions: vi.fn(),
   resolveRecipientIdByName: vi.fn(),
   resolveCategoryIdByName: vi.fn(),

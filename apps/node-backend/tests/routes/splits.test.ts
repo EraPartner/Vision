@@ -51,6 +51,7 @@ import {
 } from "../../src/middleware/errorHandler.ts";
 
 import { mockOf } from "../helpers/mockOf.ts";
+import { loose } from "../helpers/partial.ts";
 const splitService = vi.mocked(rawSplitService);
 
 type DeepPartial<T> = T extends readonly (infer U)[]
@@ -63,12 +64,6 @@ type DeepPartial<T> = T extends readonly (infer U)[]
 
 /** Stand-in for a full result: the route reads only the fields given. */
 const partial = <T>(value: NoInfer<DeepPartial<T>>) => value as unknown as T;
-/**
- * Stand-in whose fields do not match the declared result type (extra fields,
- * or numbers where pg returns NUMERIC strings); the route only forwards it.
- */
-const loose = <T>(value: unknown) => value as T;
-
 const { default: splitsRouter } = await import("../../src/routes/splits.ts");
 
 const BASE = "/api/splits";

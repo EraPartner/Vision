@@ -442,7 +442,12 @@ describe("Admin Routes", () => {
 
 function mockGitHubReleaseBody(body: string) {
   const httpsGet = https.get as unknown as Mock;
-  httpsGet.mockImplementation((url, options, callback) => {
+  httpsGet.mockImplementation(
+    (
+      url: string,
+      options: unknown,
+      callback: (res: unknown) => void,
+    ) => {
     expect(url).toContain("/releases/latest");
     expect(options).toMatchObject({
       headers: {
@@ -454,7 +459,8 @@ function mockGitHubReleaseBody(body: string) {
       on: vi.fn(),
     };
 
-    response.on.mockImplementation((event, handler) => {
+    response.on.mockImplementation(
+      (event: string, handler: (chunk?: string) => void) => {
       if (event === "data") {
         handler(body);
       }
@@ -462,12 +468,14 @@ function mockGitHubReleaseBody(body: string) {
         handler();
       }
       return response;
-    });
+      },
+    );
 
     callback(response);
 
     const request = { on: vi.fn() };
     request.on.mockImplementation(() => request);
     return request;
-  });
+    },
+  );
 }

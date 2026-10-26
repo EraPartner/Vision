@@ -49,7 +49,7 @@ afterEach(() => vi.useRealTimers());
 describe('fetchTransactionsInRange per-turn memoization', () => {
   it('reuses one DB read for two identical-range calls sharing a cache', async () => {
     transactionRepository.getAll.mockResolvedValue([]);
-    const cache = new Map();
+    const cache = new Map<string, Promise<unknown>>();
     await getSpendByCategory.run({ from: '2025-01-01', to: '2025-12-31' }, { cache });
     await getSpendByCategory.run({ from: '2025-01-01', to: '2025-12-31' }, { cache });
     expect(mockOf(transactionRepository, "getAll")).toHaveBeenCalledTimes(1);
@@ -57,7 +57,7 @@ describe('fetchTransactionsInRange per-turn memoization', () => {
 
   it('shares one read across different tools with the same range/cache', async () => {
     transactionRepository.getAll.mockResolvedValue([]);
-    const cache = new Map();
+    const cache = new Map<string, Promise<unknown>>();
     await getSpendByCategory.run({ from: '2025-01-01', to: '2025-12-31' }, { cache });
     await getTopRecipients.run({ from: '2025-01-01', to: '2025-12-31' }, { cache });
     expect(mockOf(transactionRepository, "getAll")).toHaveBeenCalledTimes(1);
@@ -65,7 +65,7 @@ describe('fetchTransactionsInRange per-turn memoization', () => {
 
   it('fetches separately for distinct ranges', async () => {
     transactionRepository.getAll.mockResolvedValue([]);
-    const cache = new Map();
+    const cache = new Map<string, Promise<unknown>>();
     await getSpendByCategory.run({ from: '2025-01-01', to: '2025-06-30' }, { cache });
     await getSpendByCategory.run({ from: '2025-07-01', to: '2025-12-31' }, { cache });
     expect(mockOf(transactionRepository, "getAll")).toHaveBeenCalledTimes(2);

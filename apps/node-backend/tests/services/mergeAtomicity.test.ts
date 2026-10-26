@@ -24,6 +24,9 @@ import {
 } from "@vision/types/brands";
 import { must } from "../helpers/must.ts";
 
+/** The transaction client `query`: SQL text plus optional params. */
+type ClientQuery = (sql: string, params?: unknown[]) => unknown;
+
 /**
  * Load the real connection module against a mocked pg pool, so `withTransaction`
  * performs its genuine ceremony and module-level query() genuinely reroutes.
@@ -32,7 +35,7 @@ function loadRealTransactionStack() {
   vi.resetModules();
 
   const client = {
-    query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+    query: vi.fn<ClientQuery>().mockResolvedValue({ rows: [], rowCount: 0 }),
     release: vi.fn(),
   };
   const pool = {
@@ -66,10 +69,10 @@ function loadRealTransactionStack() {
 
 /** BEGIN … ROLLBACK bracket + nothing on the pool: the rollback covered it all. */
 function expectRolledBackOnOneConnection(
-  client: { query: Mock; release: Mock },
+  client: { query: Mock<ClientQuery>; release: Mock },
   pool: { query: Mock },
 ): string[] {
-  const sqls: string[] = client.query.mock.calls.map(([sql]) => sql);
+  const sqls = client.query.mock.calls.map(([sql]) => sql);
   expect(sqls[0]).toBe("BEGIN");
   expect(sqls.at(-1)).toBe("ROLLBACK");
   expect(sqls).not.toContain("COMMIT");
@@ -323,13 +326,13 @@ describe("transfer mark atomicity (ADR-083)", () => {
     );
     // The legs being re-paired, and the locked graph the release may touch.
     expect(peerRelease?.[1]).toContainEqual([10, 20]);
-    expect(peerRelease?.[1].at(-1)).toEqual([10, 20, 30]);
+    expect(must(peerRelease?.[1], "peerRelease params").at(-1)).toEqual([10, 20, 30]);
     const manualMarks = client.query.mock.calls.filter(
       ([sql, params]) => typeof sql === "string" && isManualMark(sql, params),
     );
     expect(manualMarks).toHaveLength(2); // first succeeded, second threw
     // Leg 10 marked against peer 20.
-    expect(must(manualMarks[0], "manualMarks[0]")[1][3]).toBe(10);
-    expect(must(manualMarks[0], "manualMarks[0]")[1][1]).toBe(20);
+    expect(must(must(manualMarks[0], "manualMarks[0]")[1], "mark params")[3]).toBe(10);
+    expect(must(must(manualMarks[0], "manualMarks[0]")[1], "mark params")[1]).toBe(20);
   });
 });

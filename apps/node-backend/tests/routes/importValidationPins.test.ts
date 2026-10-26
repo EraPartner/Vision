@@ -126,6 +126,7 @@ import rawCustomParserConfigRepository from "../../src/repositories/customParser
 import { must } from "../helpers/must.ts";
 
 import { mockOf } from "../helpers/mockOf.ts";
+import { objectContaining, stringContaining } from "../helpers/matchers.ts";
 const runImportPipeline = vi.mocked(rawRunImportPipeline);
 const commitImport = vi.mocked(rawCommitImport);
 const importCategoriesCSV = vi.mocked(rawImportCategoriesCSV);
@@ -184,7 +185,7 @@ describe("multipart body parameters", () => {
     ).toThrow(
       expect.objectContaining({
         status: 400,
-        message: expect.stringContaining("Unsupported CSV encoding"),
+        message: stringContaining("Unsupported CSV encoding"),
       }),
     );
   });
@@ -689,11 +690,11 @@ describe("POST /csv/custom config-build pins", () => {
     await run(requiredBody).expect(201);
     expect(runImportPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
-        customConfig: expect.objectContaining({
+        customConfig: objectContaining({
           encoding: "utf-8",
           separator: ",",
           skip_rows: 0,
-          column_mapping: expect.objectContaining({ memo: "" }),
+          column_mapping: objectContaining({ memo: "" }),
         }),
       }),
     );
@@ -703,7 +704,7 @@ describe("POST /csv/custom config-build pins", () => {
     await run({ ...requiredBody, skip_rows: "abc", separator: "" }).expect(201);
     expect(runImportPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
-        customConfig: expect.objectContaining({ skip_rows: 0, separator: "," }),
+        customConfig: objectContaining({ skip_rows: 0, separator: "," }),
       }),
     );
   });
@@ -712,8 +713,8 @@ describe("POST /csv/custom config-build pins", () => {
     await run({ ...requiredBody, amount_column: "BodyAmt" }).expect(201);
     expect(runImportPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
-        customConfig: expect.objectContaining({
-          column_mapping: expect.objectContaining({ amount: "BodyAmt" }),
+        customConfig: objectContaining({
+          column_mapping: objectContaining({ amount: "BodyAmt" }),
         }),
       }),
     );
@@ -740,7 +741,7 @@ describe("normalizeParserConfig pins (POST /parsers)", () => {
       await create({ ...base, skipRows: input }).expect(201);
       expect(mockOf(customParserConfigRepository, "create")).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          config: expect.objectContaining({ skipRows: expected }),
+          config: objectContaining({ skipRows: expected }),
         }),
       );
     }
@@ -750,7 +751,7 @@ describe("normalizeParserConfig pins (POST /parsers)", () => {
     await create({ ...base, separator: ";;" }).expect(201);
     expect(mockOf(customParserConfigRepository, "create")).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        config: expect.objectContaining({ separator: ";;" }),
+        config: objectContaining({ separator: ";;" }),
       }),
     );
   });

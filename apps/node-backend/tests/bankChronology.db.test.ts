@@ -19,19 +19,19 @@ import {
   asCurrencyCode,
   asRecipientId,
 } from "@vision/types/brands";
-import { must } from "./helpers/must.ts";
+import { firstRow, must } from "./helpers/must.ts";
 
 describe.skipIf(!hasTestDatabase())("bank chronology (real PostgreSQL)", () => {
   let accountId: number;
   let recipientId: number;
   beforeAll(async () => {
     await acquireDbSuiteLock();
-    recipientId = (
-      await must(getTestPool(), "getTestPool()").query(
+    recipientId = firstRow(
+      await must(getTestPool(), "getTestPool()").query<{ id: number }>(
         "INSERT INTO recipients (name, normalized_name) VALUES ($1, $1) RETURNING id",
         [`chronology-recipient-${crypto.randomUUID()}`],
-      )
-    ).rows[0].id;
+      ),
+    ).id;
   });
   afterEach(async () => {
     await must(getTestPool(), "getTestPool()").query(
@@ -77,14 +77,14 @@ describe.skipIf(!hasTestDatabase())("bank chronology (real PostgreSQL)", () => {
     const series = compileQuery(
       sql`WITH account_list AS (SELECT ${accountId}::integer AS account_id), days AS (SELECT DATE '2026-07-01' AS day UNION ALL SELECT DATE '2026-07-02'), ${computedBalanceSeriesCtes({ byCurrency: true })} SELECT balance FROM balance_series ORDER BY day`,
     );
-    const currentRows = await must(getTestPool(), "getTestPool()").query(current.sql, [
+    const currentRows = await must(getTestPool(), "getTestPool()").query<{ balance: string }>(current.sql, [
       ...current.parameters,
     ]);
-    const seriesRows = await must(getTestPool(), "getTestPool()").query(series.sql, [
+    const seriesRows = await must(getTestPool(), "getTestPool()").query<{ balance: string }>(series.sql, [
       ...series.parameters,
     ]);
     return [
-      Number(currentRows.rows[0].balance),
+      Number(firstRow(currentRows).balance),
       ...seriesRows.rows.map((row) => Number(row.balance)),
     ];
   }
@@ -94,10 +94,10 @@ describe.skipIf(!hasTestDatabase())("bank chronology (real PostgreSQL)", () => {
   ] as const)(
     "selects the bank closing anchor for %s imports and later older rows",
     async (_label, order) => {
-      const account = await must(getTestPool(), "getTestPool()").query(
+      const account = await must(getTestPool(), "getTestPool()").query<{ id: number }>(
         "INSERT INTO accounts (name, type, currency) VALUES ('Chronology fixture', 'checking', 'EUR') RETURNING id",
       );
-      accountId = account.rows[0].id;
+      accountId = firstRow(account).id;
       const rows = [
         ["10000000050", 100, 1070],
         ["10000000051", -50, 1020],

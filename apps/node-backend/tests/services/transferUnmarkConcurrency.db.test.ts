@@ -16,7 +16,7 @@ import { transactionRepository } from "../../src/repositories/transactionReposit
 import {
   asTransactionId,
 } from "@vision/types/brands";
-import { must } from "../helpers/must.ts";
+import { firstRow, must } from "../helpers/must.ts";
 
 // Synthetic disposable TEST_DATABASE_URL only; never the native personal stack.
 describe.skipIf(!hasTestDatabase())(
@@ -28,12 +28,12 @@ describe.skipIf(!hasTestDatabase())(
       expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
       await acquireDbSuiteLock();
       const name = `unmark-recipient-${crypto.randomUUID()}`;
-      recipientId = (
-        await must(getTestPool(), "getTestPool()").query(
+      recipientId = firstRow(
+        await must(getTestPool(), "getTestPool()").query<{ id: number }>(
           "INSERT INTO recipients(name,normalized_name) VALUES ($1,$1) RETURNING id",
           [name],
-        )
-      ).rows[0].id as number;
+        ),
+      ).id;
     }, 180_000);
     afterEach(async () => {
       await must(getTestPool(), "getTestPool()").query(
@@ -56,19 +56,19 @@ describe.skipIf(!hasTestDatabase())(
     it("locks both endpoints in one order and returns a retry conflict for stale discovery", async () => {
       const pool = must(getTestPool(), "getTestPool()");
       for (let index = 0; index < 2; index++) {
-        const result = await pool.query(
+        const result = await pool.query<{ id: number }>(
           "INSERT INTO accounts (name) VALUES ($1) RETURNING id",
           [`unmark-${crypto.randomUUID()}`],
         );
-        accounts.push(result.rows[0].id as number);
+        accounts.push(must(result.rows[0], "row").id);
       }
-      const { rows } = await pool.query(
+      const { rows } = await pool.query<{ id: number }>(
         `INSERT INTO transactions (date, amount, currency, account_id, recipient_id)
       VALUES ('2026-01-01', -50, 'EUR', $1, $3), ('2026-01-01', 50, 'EUR', $2, $3) RETURNING id`,
         [...accounts, recipientId],
       );
-      const a = rows[0].id as number;
-      const b = rows[1].id as number;
+      const a = must(rows[0], "row").id;
+      const b = must(rows[1], "row").id;
       await markTransfer(asTransactionId(a), asTransactionId(b));
       const blocker = await pool.connect();
       await blocker.query("BEGIN");
@@ -85,10 +85,10 @@ describe.skipIf(!hasTestDatabase())(
         let blocked = false;
         while (Date.now() < deadline) {
           const waiting =
-            await pool.query(`SELECT count(*)::int AS n FROM pg_stat_activity
+            await pool.query<{ n: number }>(`SELECT count(*)::int AS n FROM pg_stat_activity
           WHERE datname=current_database() AND wait_event_type='Lock'
             AND query ~* '^\\s*select.*transfer_peer_id.*for update'`);
-          if (waiting.rows[0].n >= 2) {
+          if (must(waiting.rows[0], "row").n >= 2) {
             blocked = true;
             break;
           }
@@ -119,13 +119,13 @@ describe.skipIf(!hasTestDatabase())(
     it("preserves a valid manual repair committed while invalid-pair cleanup waits", async () => {
       const pool = must(getTestPool(), "getTestPool()");
       for (let index = 0; index < 2; index++) {
-        const result = await pool.query("INSERT INTO accounts (name) VALUES ($1) RETURNING id", [`cleanup-${crypto.randomUUID()}`]);
-        accounts.push(result.rows[0].id as number);
+        const result = await pool.query<{ id: number }>("INSERT INTO accounts (name) VALUES ($1) RETURNING id", [`cleanup-${crypto.randomUUID()}`]);
+        accounts.push(must(result.rows[0], "row").id);
       }
-      const { rows } = await pool.query(`INSERT INTO transactions (date, amount, currency, account_id, recipient_id)
+      const { rows } = await pool.query<{ id: number }>(`INSERT INTO transactions (date, amount, currency, account_id, recipient_id)
         VALUES ('2026-01-01', -50, 'EUR', $1, $3), ('2026-01-01', 60, 'EUR', $2, $3) RETURNING id`, [...accounts, recipientId]);
-      const a = rows[0].id as number;
-      const b = rows[1].id as number;
+      const a = must(rows[0], "row").id;
+      const b = must(rows[1], "row").id;
       await pool.query(`UPDATE transactions SET is_transfer=true, transfer_source='auto',
         transfer_peer_id=CASE WHEN id=$1 THEN $2 ELSE $1 END WHERE id=ANY($3::int[])`, [a, b, [a, b]]);
       let release!: () => void;
@@ -143,10 +143,10 @@ describe.skipIf(!hasTestDatabase())(
         let blocked = false;
         const deadline = Date.now() + 5000;
         while (Date.now() < deadline) {
-          const waiting = await pool.query(`SELECT count(*)::int AS n FROM pg_stat_activity
+          const waiting = await pool.query<{ n: number }>(`SELECT count(*)::int AS n FROM pg_stat_activity
             WHERE datname=current_database() AND wait_event_type='Lock'
               AND query ~* '^\\s*select "?id"? from "?transactions"?.*for update'`);
-          if (waiting.rows[0].n > 0) { blocked = true; break; }
+          if (must(waiting.rows[0], "row").n > 0) { blocked = true; break; }
           await new Promise((done) => setTimeout(done, 10));
         }
         expect(blocked).toBe(true);
@@ -164,19 +164,19 @@ describe.skipIf(!hasTestDatabase())(
     it("serializes crossed repairs by locking all four affected endpoints before release", async () => {
       const pool = must(getTestPool(), "getTestPool()");
       for (let index = 0; index < 4; index++) {
-        const result = await pool.query(
+        const result = await pool.query<{ id: number }>(
           "INSERT INTO accounts (name) VALUES ($1) RETURNING id",
           [`repair-${crypto.randomUUID()}`],
         );
-        accounts.push(result.rows[0].id as number);
+        accounts.push(must(result.rows[0], "row").id);
       }
-      const inserted = await pool.query(
+      const inserted = await pool.query<{ id: number }>(
         `INSERT INTO transactions (date, amount, currency, account_id, recipient_id)
       VALUES ('2026-01-01', -50, 'EUR', $1, $5), ('2026-01-01', 50, 'EUR', $2, $5),
              ('2026-01-01', 50, 'EUR', $3, $5), ('2026-01-01', -50, 'EUR', $4, $5) RETURNING id`,
         [...accounts, recipientId],
       );
-      const [a, x, b, y] = inserted.rows.map((row) => row.id as number) as [
+      const [a, x, b, y] = inserted.rows.map((row) => row.id) as [
         number,
         number,
         number,
@@ -199,10 +199,10 @@ describe.skipIf(!hasTestDatabase())(
         let blocked = false;
         while (Date.now() < deadline) {
           const waiting =
-            await pool.query(`SELECT count(*)::int AS n FROM pg_stat_activity
+            await pool.query<{ n: number }>(`SELECT count(*)::int AS n FROM pg_stat_activity
           WHERE datname=current_database() AND wait_event_type='Lock'
             AND query ~* '^\\s*select.*transfer_peer_id.*for update'`);
-          if (waiting.rows[0].n >= 2) {
+          if (must(waiting.rows[0], "row").n >= 2) {
             blocked = true;
             break;
           }

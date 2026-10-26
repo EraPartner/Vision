@@ -8,7 +8,7 @@
 import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
-import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
+import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
 import {
   asCategoryId,
 } from "@vision/types/brands";
@@ -41,6 +41,7 @@ import rawCategoryRepository from "../../src/repositories/categoryRepository.ts"
 import type { EnrichedCategoryRow } from "../../src/repositories/categoryRepository.ts";
 
 import { mockOf } from "../helpers/mockOf.ts";
+import { anything, objectContaining } from "../helpers/matchers.ts";
 const categoryRepository = vi.mocked(rawCategoryRepository);
 
 /** Category fixture carrying only the columns a test sets. */
@@ -65,7 +66,7 @@ describe("Category Routes", () => {
       expect(res.body).toEqual(
         expect.objectContaining({
           ok: true,
-          data: expect.objectContaining({ items: [], total: 0 }),
+          data: objectContaining({ items: [], total: 0 }),
         }),
       );
     });
@@ -109,7 +110,7 @@ describe("Category Routes", () => {
       const res = await api.get(BASE).expect(200);
 
       expect(mockOf(categoryRepository, "getAll")).toHaveBeenCalledWith(
-        expect.not.objectContaining({ limit: expect.anything() }),
+        expect.not.objectContaining({ limit: anything() }),
       );
       expect(mockOf(categoryRepository, "getCount")).not.toHaveBeenCalled();
       expect(bodyAt(res, "data", "items")).toHaveLength(60);

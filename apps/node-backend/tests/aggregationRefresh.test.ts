@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
+import { anyInstance } from "./helpers/matchers.ts";
 
 async function loadAggregationRefresh() {
   vi.resetModules();
 
-  const query = vi.fn();
+  const query = vi.fn<(sql: string, params?: unknown[]) => unknown>();
   const logger = {
     info: vi.fn(),
     warn: vi.fn(),
@@ -176,12 +177,12 @@ describe("aggregationRefresh", () => {
   it("default export exposes the public API", async () => {
     const mod = await loadAggregationRefresh();
     expect(mod.default).toMatchObject({
-      refreshAggregations: expect.any(Function),
-      clearForecastMcCaches: expect.any(Function),
-      scheduleAggregationRefresh: expect.any(Function),
-      scheduleMaterializedViewRefresh: expect.any(Function),
-      cancelPendingAggregationRefresh: expect.any(Function),
-      TRIGGER_MAINTAINED_TABLES: expect.any(Array),
+      refreshAggregations: anyInstance(Function),
+      clearForecastMcCaches: anyInstance(Function),
+      scheduleAggregationRefresh: anyInstance(Function),
+      scheduleMaterializedViewRefresh: anyInstance(Function),
+      cancelPendingAggregationRefresh: anyInstance(Function),
+      TRIGGER_MAINTAINED_TABLES: anyInstance(Array),
     });
   });
 });

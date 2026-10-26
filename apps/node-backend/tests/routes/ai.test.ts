@@ -41,7 +41,7 @@ vi.mock("../../src/services/aiChatService.ts", async () => {
     ) {
       super(message, {
         code: code || "AI_CHAT_ERROR",
-        status: status || 500,
+        status: status ?? 500,
         cause,
       });
       this.name = "AiChatServiceError";
@@ -118,20 +118,13 @@ import { OllamaError } from "../../src/integrations/ollama/client.ts";
 import { APPLE_FOUNDATION_MODEL } from "../../src/integrations/ollama/appleFoundation.ts";
 import { must } from "../helpers/must.ts";
 
+import { loose } from "../helpers/partial.ts";
+import { valueAt } from "../helpers/responseBody.ts";
 const createEmptyConversation = vi.mocked(rawCreateEmptyConversation);
 const getConversationWithMessages = vi.mocked(rawGetConversationWithMessages);
 const listConversations = vi.mocked(rawListConversations);
 const renameConversation = vi.mocked(rawRenameConversation);
 const runChatTurn = vi.mocked(rawRunChatTurn);
-
-/**
- * The route forwards service results and stream events verbatim, so fixtures
- * carry only the fields a test asserts on. `loose` casts one to the type the
- * mocked service resolves with.
- */
-function loose<T>(value: object): T {
-  return value as T;
-}
 
 /** The `runChatTurn` arguments the stream fixtures use. */
 interface StreamTurnArgs {
@@ -165,7 +158,9 @@ function parseSseFrames(rawText: string) {
       const [eventLine, dataLine] = frame.split("\n");
       return {
         name: must(eventLine, "eventLine").replace(/^event: /, ""),
-        data: JSON.parse(must(dataLine, "dataLine").replace(/^data: /, "")),
+        data: JSON.parse(
+            must(dataLine, "dataLine").replace(/^data: /, ""),
+          ) as unknown,
       };
     });
 }
@@ -270,16 +265,20 @@ describe("POST /api/ai/chat/stream", () => {
     expect(must(frames[0], "frames[0]").data).toEqual({ message: userMsg });
     expect(must(frames[1], "frames[1]").data).toBe("Your ");
 
-    expect(must(frames[4], "frames[4]").data.name).toBe("getSpendByCategory");
-    expect(must(frames[4], "frames[4]").data.args.from).toBe("2025-01-01");
+    expect(valueAt(must(frames[4], "frames[4]").data, "name")).toBe(
+      "getSpendByCategory",
+    );
+    expect(
+      valueAt(must(frames[4], "frames[4]").data, "args", "from"),
+    ).toBe("2025-01-01");
 
     expect(must(frames[5], "frames[5]").data).toEqual({ message: toolMsg });
 
     const completePayload = must(frames[6], "frames[6]").data;
-    expect(completePayload.conversation).toEqual(conversation);
-    expect(completePayload.assistantMessage).toEqual(assistantMsg);
-    expect(completePayload.usage.evalCount).toBe(10);
-    expect(completePayload.iterations).toBe(2);
+    expect(valueAt(completePayload, "conversation")).toEqual(conversation);
+    expect(valueAt(completePayload, "assistantMessage")).toEqual(assistantMsg);
+    expect(valueAt(completePayload, "usage", "evalCount")).toBe(10);
+    expect(valueAt(completePayload, "iterations")).toBe(2);
   });
 
   it("passes AbortSignal to runChatTurn and streams with streaming:true", async () => {

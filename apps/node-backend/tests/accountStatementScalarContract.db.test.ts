@@ -8,6 +8,7 @@ import { reconcileAccount } from "../src/services/reconcileService.ts";
 import { closeTestPool, getTestPool, hasTestDatabase } from "./setup/db.ts";
 import {
   asCurrencyCode,
+  asRecipientId,
 } from "@vision/types/brands";
 import { must } from "./helpers/must.ts";
 
@@ -48,7 +49,7 @@ describeDb("account statement scalar contract schema", () => {
       display_name: "Statement Contract Account",
       currency: "EUR",
     });
-    const { rows: recipients } = await pool.query(
+    const { rows: recipients } = await pool.query<{ id: number }>(
       `INSERT INTO recipients (name, normalized_name)
        VALUES ('Statement Contract Recipient', 'statement contract recipient')
        RETURNING id`,
@@ -56,7 +57,7 @@ describeDb("account statement scalar contract schema", () => {
     await transactionRepository.create({
       transaction_date: "2026-09-01",
       account_id: account.id,
-      recipient_id: recipients[0].id,
+      recipient_id: asRecipientId(must(recipients[0], "row").id),
       amount: 100,
       currency: asCurrencyCode("EUR"),
       memo: "STATEMENT CONTRACT",

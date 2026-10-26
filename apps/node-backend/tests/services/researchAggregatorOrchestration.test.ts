@@ -8,7 +8,6 @@ import type { Mock } from 'vitest';
 import { __createResearchAggregator as createResearchAggregator } from '../../src/services/research/researchAggregator.ts';
 import { createResearchCache } from '../../src/services/research/researchCache.ts';
 
-type AggregatorDeps = NonNullable<Parameters<typeof createResearchAggregator>[0]>;
 
 const makeGovernor = (canSpendImpl: (provider: string) => boolean = () => true) => ({
   canSpend: vi.fn((p: string) => Promise.resolve(canSpendImpl(p))),
@@ -41,7 +40,7 @@ const build = (deps: Record<string, unknown>) =>
     recordSuccess,
     recordError,
     ...deps,
-  } as AggregatorDeps);
+  });
 
 describe('researchAggregator.fetch', () => {
   it('returns the first usable provider in the chain and records the spend + health', async () => {

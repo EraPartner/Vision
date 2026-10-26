@@ -59,7 +59,7 @@ const query = rawQuery as unknown as Mock<
   (
     sql: string,
     params?: readonly unknown[],
-  ) => Promise<Partial<PgQueryResult<unknown>>>
+  ) => Promise<Partial<PgQueryResult>>
 >;
 
 /** Parsed rows as an adapter returns them: the array carries its skip count. */

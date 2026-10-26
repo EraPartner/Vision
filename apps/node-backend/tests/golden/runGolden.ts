@@ -44,9 +44,9 @@ const FIXTURE_ROOT = join(
  * @param fn function under test
  * @param fixtureRoot alternate root for harness self-tests
  */
-export async function runGolden<Input = unknown>(
+export async function runGolden(
   name: string,
-  fn: (input: Input) => unknown,
+  fn: (input: never) => unknown,
   fixtureRoot: string = FIXTURE_ROOT,
 ): Promise<void> {
   if (process.env.UPDATE_GOLDENS === "1" && process.env.CI) {
@@ -57,7 +57,7 @@ export async function runGolden<Input = unknown>(
   const inputPath = join(fixtureRoot, `${name}.input.json`);
   const expectedPath = join(fixtureRoot, `${name}.expected.json`);
 
-  const input = JSON.parse(await readFile(inputPath, "utf8")) as Input;
+  const input = JSON.parse(await readFile(inputPath, "utf8")) as never;
   const actual = await fn(input);
 
   if (process.env.UPDATE_GOLDENS === "1") {
@@ -83,6 +83,6 @@ export async function runGolden<Input = unknown>(
   }
 
   // Normalize via JSON round-trip so Date/undefined/Map don't cause false diffs
-  const normalizedActual = JSON.parse(JSON.stringify(actual));
+  const normalizedActual: unknown = JSON.parse(JSON.stringify(actual));
   expect(normalizedActual).toStrictEqual(expected);
 }

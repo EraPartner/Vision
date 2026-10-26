@@ -356,7 +356,7 @@ describe('Market Lookup Routes', () => {
         news: [{ title: 'One', link: 'l', publisher: 'p', providerPublishTime: 1, thumbnail: {} }],
       });
 
-      const res = await api.get(`${BASE}/news`).query({ count: '500' }).expect(200);
+      await api.get(`${BASE}/news`).query({ count: '500' }).expect(200);
 
       expect(mockYahooSearch).toHaveBeenCalledTimes(3);
       expect(mockYahooSearch).toHaveBeenCalledWith(

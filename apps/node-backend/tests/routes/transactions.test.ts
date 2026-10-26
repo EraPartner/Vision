@@ -8,7 +8,7 @@
  * ADR-026 envelope middleware and the centralized error handler are all on the
  * tested path. Repositories/services are still mocked.
  */
-import { bodyAt } from "../helpers/responseBody.ts";
+import { bodyAt, valueAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockTxConnection } from "../helpers/repoMocks.ts";
 import {
@@ -89,6 +89,7 @@ import { removeAttachmentFile } from "../../src/services/attachmentService.ts";
 import { must } from "../helpers/must.ts";
 
 import { mockOf } from "../helpers/mockOf.ts";
+import { anyInstance } from "../helpers/matchers.ts";
 const transactionRepository = vi.mocked(rawTransactionRepository);
 const dbQuery = vi.mocked(rawDbQuery);
 const isManualDuplicate = vi.mocked(rawIsManualDuplicate);
@@ -149,7 +150,7 @@ describe("Transaction Routes", () => {
         okEnvelope({
           items: [],
           total: 0,
-          limit: expect.any(Number),
+          limit: anyInstance(Number),
           offset: 0,
           links: [],
         }),
@@ -544,7 +545,7 @@ describe("Transaction Routes", () => {
 
       const lines = res.text.trim().split("\n").filter(Boolean);
       expect(lines).toHaveLength(2);
-      const parsed = lines.map((l) => JSON.parse(l));
+      const parsed = lines.map((l): unknown => JSON.parse(l));
       expect(parsed[0]).toMatchObject({
         id: 1,
         date: "2026-01-15",
@@ -552,7 +553,7 @@ describe("Transaction Routes", () => {
         amount: "-12.99",
         category: "ENTERTAINMENT:STREAMING",
       });
-      expect(parsed[1].id).toBe(2);
+      expect(valueAt(parsed[1], "id")).toBe(2);
     });
 
     it("should return 404 when no transactions match filters", async () => {
@@ -581,7 +582,9 @@ describe("Transaction Routes", () => {
 
       const res = await api.get("/api/transactions/export/json").expect(200);
 
-      const obj = JSON.parse(must(res.text.trim().split("\n")[0], "res.text.trim().split(\"\\n\")[0]"));
+      const obj = JSON.parse(
+          must(res.text.trim().split("\n")[0], "res.text.trim().split(\"\\n\")[0]"),
+        ) as Record<string, unknown>;
       expect(Object.keys(obj).sort()).toEqual(
         [
           "amount",

@@ -119,6 +119,7 @@ import { previewPortfolioImportReconciliation as rawPreviewPortfolioImportReconc
 import { ConflictError } from "../../src/middleware/errorHandler.ts";
 import { must } from "../helpers/must.ts";
 
+import { loose } from "../helpers/partial.ts";
 const getBatch = vi.mocked(rawGetBatch);
 const listBatches = vi.mocked(rawListBatches);
 const createInvestmentForRow = vi.mocked(rawCreateInvestmentForRow);
@@ -130,15 +131,6 @@ const commitReviewedPortfolioImports = vi.mocked(
 const previewPortfolioImportReconciliation = vi.mocked(
   rawPreviewPortfolioImportReconciliation,
 );
-
-/**
- * The routes forward service results without reading most of their fields,
- * so fixtures carry only the fields a test asserts on. `loose` casts one to
- * the type the mocked service resolves with.
- */
-function loose<T>(value: unknown): T {
-  return value as T;
-}
 
 const { default: portfolioImportRouter } =
   await import("../../src/routes/portfolioImportRoutes.ts");

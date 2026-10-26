@@ -51,7 +51,7 @@ type QueryHandler =
   | QueryResultFixture
   | ((params: readonly unknown[], sql: string) => QueryResultFixture);
 
-const originalFetch = global.fetch;
+const originalFetch = global.fetch as typeof fetch | undefined;
 
 /**
  * SQL text lower-cased with identifier quotes removed, so the routing below
@@ -871,7 +871,7 @@ describe("Currency Conversion Service", () => {
       const written = query.mock.calls
         .filter(([sql]) => sqlText(sql).includes("insert into exchange_rates"))
         .map(([, params]) => params?.[0]);
-      expect(written.sort()).toEqual(
+      expect(written.sort((a, b) => String(a).localeCompare(String(b)))).toEqual(
         provider === "ecb" ? ["USD"] : ["GBP", "USD"],
       );
     },

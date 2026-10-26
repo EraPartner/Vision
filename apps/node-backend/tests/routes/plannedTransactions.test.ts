@@ -36,7 +36,10 @@ vi.mock("../../src/services/plannedTransactionService.ts", () => {
     lockForExecution: vi.fn(),
     // Execution reads its locked state from the first queued getById row.
     getExecutionState: vi.fn(async (id: number) => {
-      const row = await service.getById(id);
+      const row = (await service.getById(id)) as
+          | Record<string, unknown>
+          | null
+          | undefined;
       return row
         ? {
             is_active: true,
@@ -54,7 +57,7 @@ vi.mock("../../src/services/plannedTransactionService.ts", () => {
 
 vi.mock("../../src/database/connection.ts", () => ({
   ...mockConnection(),
-  withTransaction: vi.fn((fn) => Promise.resolve(fn())),
+  withTransaction: vi.fn((fn: () => unknown) => Promise.resolve(fn())),
 }));
 
 // The per-route PATCH limiter (routes/plannedTransactions.js:417) is stubbed
@@ -97,6 +100,7 @@ import { generateLoanRepaymentSchedule as rawGenerateLoanRepaymentSchedule } fro
 import { must } from "../helpers/must.ts";
 
 import { mockOf } from "../helpers/mockOf.ts";
+import { loose } from "../helpers/partial.ts";
 const plannedTransactionService = vi.mocked(rawPlannedTransactionService);
 const dbQuery = vi.mocked(rawQuery);
 const generateLoanRepaymentSchedule = vi.mocked(
@@ -113,12 +117,6 @@ type DeepPartial<T> = T extends readonly (infer U)[]
 
 /** Stand-in for a full result: the route reads only the fields given. */
 const partial = <T>(value: NoInfer<DeepPartial<T>>) => value as unknown as T;
-/**
- * Stand-in typed the loose way the fixtures model pg values (numbers for
- * NUMERIC columns, strings for DATE columns); the route accepts both.
- */
-const loose = <T>(value: unknown) => value as T;
-
 const { default: plannedRouter } =
   await import("../../src/routes/plannedTransactions.ts");
 
@@ -149,7 +147,7 @@ const mockExecutedTransaction = () =>
       },
     ],
     rowCount: 1,
-  } as PgQueryResult);
+  });
 
 describe("Planned Transaction Routes", () => {
   beforeEach(() => vi.clearAllMocks());

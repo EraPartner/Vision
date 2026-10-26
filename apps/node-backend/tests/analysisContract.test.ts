@@ -81,7 +81,7 @@ function put(tree: unknown, path: TreePath, value: unknown): void {
 function remove(tree: unknown, path: TreePath): void {
   const key = path.at(-1);
   if (key === undefined) throw new Error("remove needs a non-empty path");
-  delete nodeAt(tree, path.slice(0, -1))[key];
+  Reflect.deleteProperty(nodeAt(tree, path.slice(0, -1)), key);
 }
 
 function messages(parsed: { error?: { issues: { message: string }[] } }) {
@@ -119,11 +119,11 @@ describe("shared analysis contract", () => {
       const result = analysisExecutionResultSchema.safeParse(fixture.result);
       expect(
         definition.success,
-        `${fixture.id}: ${definition.success ? "" : messages(definition)}`,
+        `${fixture.id}: ${definition.success ? "" : messages(definition).join(",")}`,
       ).toBe(true);
       expect(
         result.success,
-        `${fixture.id}: ${result.success ? "" : messages(result)}`,
+        `${fixture.id}: ${result.success ? "" : messages(result).join(",")}`,
       ).toBe(true);
       expect(
         checkAnalysisResultCompatibility(fixture.definition, fixture.result),

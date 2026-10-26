@@ -18,7 +18,7 @@ import {
   searchResearchDocuments,
 } from "../src/services/aiResearchDocuments.ts";
 import type { getOllamaClient } from "../src/integrations/ollama/client.ts";
-import { partial } from "./helpers/partial.ts";
+import { loose, partial } from "./helpers/partial.ts";
 import { must } from "./helpers/must.ts";
 
 type OllamaClient = ReturnType<typeof getOllamaClient>;
@@ -45,11 +45,11 @@ describe("local research documents", () => {
     ).toBe("AT&amp;T writes &lt;b&gt; for <b>");
   });
   it("batches optional local embeddings and stores only derived passages", async () => {
-    repository.createDocument.mockImplementation((doc, passages) => Promise.resolve(({
+    repository.createDocument.mockImplementation((doc: object, passages: unknown[]) => Promise.resolve(({
       ...doc,
       passages,
     })));
-    const embed = vi.fn(({ input }) => Promise.resolve(({
+    const embed = vi.fn(({ input }: { input: unknown[] }) => Promise.resolve(({
       model: "synthetic-embed",
       embeddings: input.map(() => [1, 0]),
     })));
@@ -64,7 +64,7 @@ describe("local research documents", () => {
         mediaType: "text/markdown",
         buffer: Buffer.from(text),
       },
-      { ollamaClient: partial<OllamaClient>({ embed }) },
+      { ollamaClient: loose<OllamaClient>({ embed }) },
     );
     expect(embed.mock.calls.length).toBeGreaterThan(1);
     expect(embed).toHaveBeenCalledWith(

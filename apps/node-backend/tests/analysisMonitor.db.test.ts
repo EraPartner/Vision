@@ -33,7 +33,7 @@ import {
   listMonitorObservations,
   patchAnalysisMonitor,
 } from "../src/services/analysisMonitorService.ts";
-import { must } from "./helpers/must.ts";
+import { firstRow, must } from "./helpers/must.ts";
 
 const content = {
   title: "Monitor fixture",
@@ -96,11 +96,11 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
       await must(getTestPool(), "getTestPool()").query("DELETE FROM saved_analyses WHERE id=$1", [
         savedAnalysisId,
       ]);
-    if (transactionId)
+    if (transactionId !== undefined)
       await must(getTestPool(), "getTestPool()").query("DELETE FROM transactions WHERE id=$1", [
         transactionId,
       ]);
-    if (recipientId)
+    if (recipientId !== undefined)
       await must(getTestPool(), "getTestPool()").query("DELETE FROM recipients WHERE id=$1", [
         recipientId,
       ]);
@@ -175,7 +175,7 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
       expect(must((await checkAnalysisMonitor(monitorId)), "(await checkAnalysisMonitor(monitorId))").status).toBe(
         "cooldown-pending",
       );
-      const aged = await must(getTestPool(), "getTestPool()").query(
+      const aged = await must(getTestPool(), "getTestPool()").query<{ cooldown_minutes: number; last_notified_at: Date; age_seconds: number }>(
         `UPDATE analysis_monitors SET last_notified_at=now()-interval '2 hours',
            next_due_at=now()-interval '1 hour' WHERE id=$1
          RETURNING cooldown_minutes,last_notified_at,
@@ -183,18 +183,22 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
         [monitorId],
       );
       expect(aged.rowCount).toBe(1);
-      expect(aged.rows[0].cooldown_minutes).toBe(60);
-      expect(aged.rows[0].age_seconds).toBeGreaterThan(3600);
+      expect(must(aged.rows[0], "row").cooldown_minutes).toBe(60);
+      expect(must(aged.rows[0], "row").age_seconds).toBeGreaterThan(3600);
       expect(
-        Date.now() - new Date(aged.rows[0].last_notified_at).getTime(),
+        Date.now() - new Date(must(aged.rows[0], "row").last_notified_at).getTime(),
       ).toBeGreaterThan(3_600_000);
       expect(await checkDueAnalysisMonitors()).toBe(1);
-      const afterCatchUp = (
-        await must(getTestPool(), "getTestPool()").query(
+      const afterCatchUp = firstRow(
+        await must(getTestPool(), "getTestPool()").query<{
+          last_status: string;
+          pending_signature: string | null;
+          lease_token: string | null;
+        }>(
           "SELECT last_status,pending_signature,lease_token FROM analysis_monitors WHERE id=$1",
           [monitorId],
-        )
-      ).rows[0];
+        ),
+      );
       expect(afterCatchUp).toMatchObject({
         last_status: "triggered",
         pending_signature: null,
@@ -264,20 +268,20 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
       });
       expect(must(baseline, "baseline").analysisRunId).toBeTruthy();
 
-      recipientId = (
-        await must(getTestPool(), "getTestPool()").query(
+      recipientId = firstRow(
+        await must(getTestPool(), "getTestPool()").query<{ id: number }>(
           "INSERT INTO recipients (name,normalized_name) VALUES ($1,$2) RETURNING id",
           ["Monitor Fixture", "monitor fixture"],
-        )
-      ).rows[0].id;
-      transactionId = (
-        await must(getTestPool(), "getTestPool()").query(
+        ),
+      ).id;
+      transactionId = firstRow(
+        await must(getTestPool(), "getTestPool()").query<{ id: number }>(
           `INSERT INTO transactions
       (date,amount,currency,recipient_id,account_id,is_active,is_transfer,memo)
       VALUES ('2026-09-19',1,'EUR',$1,NULL,true,false,$2) RETURNING id`,
           [recipientId, marker],
-        )
-      ).rows[0].id;
+        ),
+      ).id;
 
       const crossed = await checkAnalysisMonitor(monitorId);
       expect(crossed).toMatchObject({

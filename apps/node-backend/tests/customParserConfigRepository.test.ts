@@ -6,7 +6,6 @@ vi.mock('../src/database/connection.ts', () => mockConnection());
 vi.mock('../src/config/logger.ts', () => ({ logger: mockLogger() }));
 
 import { query as rawQuery } from '../src/database/connection.ts';
-import { logger } from '../src/config/logger.ts';
 import type { PgQueryResult } from '../src/database/connection.ts';
 import repo from '../src/repositories/customParserConfigRepository.ts';
 import { partial } from './helpers/partial.ts';

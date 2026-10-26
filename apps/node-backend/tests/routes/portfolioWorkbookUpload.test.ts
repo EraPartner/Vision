@@ -46,6 +46,7 @@ import { runPortfolioImportPipeline as rawRunPortfolioImportPipeline } from "../
 import rawAccountService from "../../src/services/accountService.ts";
 import router from "../../src/routes/portfolioImportRoutes.ts";
 import { must } from "../helpers/must.ts";
+import { objectContaining } from "../helpers/matchers.ts";
 
 const runPortfolioImportPipeline = vi.mocked(rawRunPortfolioImportPipeline);
 const accountService = vi.mocked(rawAccountService);
@@ -103,7 +104,7 @@ describe("portfolio workbook multipart boundary", () => {
     expect(runPortfolioImportPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
         filename: "history.xlsx",
-        customConfig: expect.objectContaining({
+        customConfig: objectContaining({
           format: "saxo_transaction_history",
         }),
         accountId: 7,

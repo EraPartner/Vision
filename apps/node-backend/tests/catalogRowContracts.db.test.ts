@@ -42,6 +42,7 @@ import {
 } from "../src/services/recipientPatternService.ts";
 import { resolveRecipientIdByName } from "../src/services/recipientService.ts";
 import { must } from "./helpers/must.ts";
+import { anyInstance } from "./helpers/matchers.ts";
 
 const pool = getTestPool();
 const SUFFIX = `RC${process.pid}`;
@@ -445,7 +446,7 @@ describe.skipIf(!hasTestDatabase())(
       expect(attachment).toMatchObject({
         transaction_id: transactionId,
         size_bytes: 1234,
-        id: expect.any(String),
+        id: anyInstance(String),
       });
       expect(
         await attachmentModule.listByTransaction(transactionId),

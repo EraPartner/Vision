@@ -206,7 +206,7 @@ describe.skipIf(!hasTestDatabase())("account repository (real DB)", () => {
       funding_account_id: null,
     });
     // An empty PATCH body changes nothing.
-    expect((await accountService.update(created.id, {}))?.name).toBe(
+    expect((await accountService.update(created.id, {})).name).toBe(
       `New ${SUFFIX}`,
     );
 

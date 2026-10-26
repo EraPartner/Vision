@@ -133,7 +133,7 @@ describe("POST / — validation pins", () => {
       "amount",
     ]) {
       const body = validPostBody();
-      delete body[missing];
+      Reflect.deleteProperty(body, missing);
       await expectValidationError(post(body));
     }
     expect(mockOf(transactionRepository, "create")).not.toHaveBeenCalled();

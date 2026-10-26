@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { MockInstance } from "vitest";
+import type { Mock, MockInstance } from "vitest";
 
 vi.mock("../src/config/config.ts", () => {
   const settings = {
@@ -68,6 +68,7 @@ import { loose, partial } from "./helpers/partial.ts";
 import { must } from "./helpers/must.ts";
 
 import { mockOf } from "./helpers/mockOf.ts";
+import { anyInstance, objectContaining } from "./helpers/matchers.ts";
 const aiChatRepository = vi.mocked(rawAiChatRepository);
 const dispatchTool = vi.mocked(rawDispatchTool);
 type ServiceEvent = AiChatServiceEvent<AiMessageRow>;
@@ -106,8 +107,23 @@ function makeMessage(overrides: Record<string, unknown> = {}) {
   });
 }
 
+// The fixtures reply with the fields the service reads rather than the whole
+// wire response, so the mock is typed by what the tests send and receive and
+// presented to the service as the client's `chat`.
+type MockChatParams = {
+  model?: string | undefined;
+  messages: OllamaMessage[];
+  tools?: unknown[] | undefined;
+};
+type MockChat = Mock<(params: MockChatParams) => Promise<unknown>> &
+  AiChatClient["chat"];
+
+function makeMockChat(): MockChat {
+  return loose<MockChat>(vi.fn<(params: MockChatParams) => Promise<unknown>>());
+}
+
 function makeMockOllama() {
-  return { chat: vi.fn() };
+  return { chat: makeMockChat() };
 }
 
 let originalEnabled: boolean;
@@ -569,7 +585,7 @@ describe("runChatTurn — single turn (no tool calls)", () => {
     expect(events[0]).toEqual({
       type: "user_message",
       data: {
-        message: expect.objectContaining({ role: "user", content: "hi" }),
+        message: objectContaining({ role: "user", content: "hi" }),
       },
     });
   });
@@ -623,7 +639,7 @@ describe("runChatTurn — tool-call loop", () => {
     expect(dispatchTool).toHaveBeenCalledWith(
       "getSpendByCategory",
       { from: "2025-01-01", to: "2025-12-31" },
-      { cache: expect.any(Map), maxRows: settings.aiChat.maxToolRows },
+      { cache: anyInstance(Map), maxRows: settings.aiChat.maxToolRows },
     );
     expect(must(dispatchTool.mock.calls[0], "dispatchTool.mock.calls[0]")[2]).not.toHaveProperty("conversationId");
     expect(result.toolMessages).toHaveLength(1);
@@ -806,7 +822,7 @@ describe("runChatTurn — tool-call loop", () => {
     const toolMsg = secondCallMessages.find(
       (m: OllamaMessage) => m.role === "tool",
     );
-    expect(toolMsg.content).toBe(JSON.stringify(validationResult));
+    expect(must(toolMsg, "toolMsg").content).toBe(JSON.stringify(validationResult));
   });
 
   it("handles multiple tool calls in one model response", async () => {
@@ -948,7 +964,7 @@ describe("runChatTurn — server-side pre-call (ADR-110 §4)", () => {
     expect(dispatchTool).toHaveBeenCalledWith(
       "insightsDigest",
       {},
-      { cache: expect.any(Map), maxRows: settings.aiChat.maxToolRows },
+      { cache: anyInstance(Map), maxRows: settings.aiChat.maxToolRows },
     );
     expect(must(dispatchTool.mock.calls[0], "dispatchTool.mock.calls[0]")[2]).not.toHaveProperty("conversationId");
     expect(dispatchTool.mock.invocationCallOrder[0]).toBeLessThan(
@@ -980,12 +996,12 @@ describe("runChatTurn — server-side pre-call (ADR-110 §4)", () => {
     );
     expect(syntheticIdx).toBeGreaterThanOrEqual(0);
     expect(toolMsgIdx).toBe(syntheticIdx + 1);
-    expect(chatArgs.messages[syntheticIdx].tool_calls).toEqual([
+    expect(must(chatArgs.messages[syntheticIdx], "synthetic message").tool_calls).toEqual([
       { function: { name: "insightsDigest", arguments: "{}" } },
     ]);
-    expect(chatArgs.messages[toolMsgIdx].content).toBe(JSON.stringify(digest));
+    expect(must(chatArgs.messages[toolMsgIdx], "tool message").content).toBe(JSON.stringify(digest));
     expect(chatArgs.tools).toBeDefined();
-    expect(chatArgs.tools.length).toBeGreaterThan(0);
+    expect(must(chatArgs.tools, "chatArgs.tools").length).toBeGreaterThan(0);
 
     // (c) the final assistant message is the narration.
     expect(result.assistantMessage.content).toBe(
@@ -1173,9 +1189,9 @@ describe("runChatTurn — streaming", () => {
     const ollamaClient = {
       chat: vi.fn(),
       chatStream: vi.fn(({ onToken }: StreamParams) => {
-        must(onToken, "onToken")("Hel");
-        must(onToken, "onToken")("lo ");
-        must(onToken, "onToken")("world");
+        void must(onToken, "onToken")("Hel");
+        void must(onToken, "onToken")("lo ");
+        void must(onToken, "onToken")("world");
         return Promise.resolve({
           content: "Hello world",
           toolCalls: [],
@@ -1242,9 +1258,9 @@ describe("runChatTurn — streaming", () => {
     const ollamaClient = {
       chat: vi.fn(),
       chatStream: vi.fn(({ onToken }: StreamParams) => {
-        must(onToken, "onToken")("A");
-        must(onToken, "onToken")("");
-        must(onToken, "onToken")("B");
+        void must(onToken, "onToken")("A");
+        void must(onToken, "onToken")("");
+        void must(onToken, "onToken")("B");
         return Promise.resolve({
           content: "AB",
           toolCalls: [],
@@ -1272,9 +1288,12 @@ describe("runChatTurn — streaming", () => {
 
   it("emits tool_call before dispatch (progress affordance) and tool_result after", async () => {
     const ollamaClient = {
-      chat: vi.fn(),
-      chatStream: vi
-        .fn()
+      chat: makeMockChat(),
+      chatStream: loose<
+        Mock<(params: StreamParams) => Promise<unknown>> &
+          NonNullable<AiChatClient["chatStream"]>
+      >(vi
+        .fn<(params: StreamParams) => Promise<unknown>>()
         .mockImplementationOnce(() => Promise.resolve(({
           content: "",
           toolCalls: [
@@ -1290,7 +1309,7 @@ describe("runChatTurn — streaming", () => {
           totalDurationMs: 10,
         })))
         .mockImplementationOnce(({ onToken }) => {
-          onToken("done");
+          void must(onToken, "onToken")("done");
           return Promise.resolve({
             content: "done",
             toolCalls: [],
@@ -1298,7 +1317,7 @@ describe("runChatTurn — streaming", () => {
             promptEvalCount: 1,
             totalDurationMs: 10,
           });
-        }),
+        })),
     };
 
     dispatchTool.mockResolvedValueOnce({

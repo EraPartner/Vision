@@ -30,7 +30,7 @@ const STORED_RATES: Record<string, string> = {
 vi.mock("../../src/database/connection.ts", () =>
   mockConnection({
     query: vi.fn((sql: string) =>
-      Promise.resolve(/"?is_latest"? =/.test(String(sql))
+      Promise.resolve(/"?is_latest"? =/.test(sql)
         ? {
             rows: Object.entries(STORED_RATES).map(
               ([currency_code, rate_to_eur]) => ({
@@ -50,7 +50,7 @@ vi.mock("../../src/config/logger.ts", () => ({
 const { convertToCurrency, clearMemoryCache } =
   await import("../../src/services/currency/currencyConversionService.ts");
 
-const originalFetch = global.fetch;
+const originalFetch = global.fetch as typeof fetch | undefined;
 const EPSILON_RATIO = 1e-9; // 1 part per billion
 
 function seeded(seed: number) {

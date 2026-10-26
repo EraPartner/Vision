@@ -138,7 +138,7 @@ export function createDbSkipBannerReporter(
   const write = options.write ?? ((text: string) => process.stdout.write(text));
   const color =
     options.color ??
-    (!env.NO_COLOR && (Boolean(env.FORCE_COLOR) || Boolean(process.stdout.isTTY)));
+    (!env.NO_COLOR && (Boolean(env.FORCE_COLOR) || process.stdout.isTTY));
 
   return {
     isDbSkipBanner: true,

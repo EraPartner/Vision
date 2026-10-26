@@ -9,3 +9,11 @@ export function must<T>(value: T | null | undefined, what = "value"): T {
   }
   return value;
 }
+
+/** The first row of a query result the test knows is non-empty. */
+export function firstRow<T>(
+  result: { rows: readonly T[] },
+  what = "first row",
+): T {
+  return must(result.rows[0], what);
+}

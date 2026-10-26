@@ -42,7 +42,6 @@ const { default: transactionsRouter } =
   await import("../../src/routes/transactions.ts");
 
 import { getClient } from "../../src/database/connection.ts";
-import type { PgPoolClient } from "../../src/database/connection.ts";
 import { must } from "../helpers/must.ts";
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
@@ -56,7 +55,7 @@ function useClientResults(...results: object[]) {
   vi.mocked(getClient).mockResolvedValue({
     query,
     release,
-  } as unknown as PgPoolClient);
+  });
   return { query, release };
 }
 
@@ -150,7 +149,10 @@ describe("POST /bulk-export — NDJSON success", () => {
     expect(res.headers["x-exported-count"]).toBe("1");
 
     const firstLine = res.text.split("\n").filter(Boolean)[0];
-    const parsed = JSON.parse(must(firstLine, "firstLine"));
+    const parsed = JSON.parse(must(firstLine, "firstLine")) as Record<
+      string,
+      unknown
+    >;
     expect(parsed.id).toBe(1);
     expect(parsed.recipient).toBe("Trader Joe");
     expect(parsed.tags).toEqual(["weekly"]);

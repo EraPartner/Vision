@@ -20,6 +20,7 @@ import accountsRouter from "../src/routes/accounts.ts";
 import { routeAgent } from "./helpers/routeApp.ts";
 import { bodyAt } from "./helpers/responseBody.ts";
 import { must } from "./helpers/must.ts";
+import { arrayContaining } from "./helpers/matchers.ts";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
@@ -39,12 +40,12 @@ async function addAccount(
     isActive = true,
   }: AccountSeed = {},
 ): Promise<number> {
-  const { rows } = await must(getTestPool(), "getTestPool()").query(
+  const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: number }>(
     `INSERT INTO accounts (name, type, currency, in_net_worth, is_active)
      VALUES ($1, $2::account_type, $3, $4, $5) RETURNING id`,
     [name, type, currency, inNetWorth, isActive],
   );
-  return rows[0].id;
+  return must(rows[0], "row").id;
 }
 
 const PAYEE = `account_totals_${process.pid}`;
@@ -238,7 +239,7 @@ describeDb("GET /api/accounts/totals (real DB)", () => {
       computed_balance: 100,
       balance_incomplete: true,
       unconverted_currencies: ["USD"],
-      balance_parts: expect.arrayContaining([
+      balance_parts: arrayContaining([
         { currency: "USD", balance: 100 },
       ]),
     });

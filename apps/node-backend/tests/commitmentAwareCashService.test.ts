@@ -16,7 +16,7 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () => ({
       },
     ],
   }),
-  convertWithRates: vi.fn((amount, from, to) =>
+  convertWithRates: vi.fn((amount: number, from: string, to: string) =>
     from === "USD" && to !== "USD" ? amount / 2 : amount,
   ),
 }));
@@ -29,7 +29,6 @@ import {
   listLatestStoredRates as rawListLatestStoredRates,
 } from "../src/services/currency/currencyConversionService.ts";
 import { computeCommitmentAwareCash } from "../src/services/commitmentAwareCashService.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
 import { loose, partial } from "./helpers/partial.ts";
 
 import { mockOf } from "./helpers/mockOf.ts";

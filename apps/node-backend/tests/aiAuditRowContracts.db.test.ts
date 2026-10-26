@@ -51,6 +51,7 @@ import {
 } from "../src/services/analysisMonitorService.ts";
 import adminRouter from "../src/routes/admin.ts";
 import { must } from "./helpers/must.ts";
+import { anyInstance } from "./helpers/matchers.ts";
 
 const HASH = "b".repeat(64);
 
@@ -312,7 +313,7 @@ describe.skipIf(!hasTestDatabase())(
       expect(notifications.unreadCount).toBeGreaterThanOrEqual(1);
       expect(await readMonitorNotification(must(notification, "notification").id)).toMatchObject({
         id: must(notification, "notification").id,
-        readAt: expect.any(Date),
+        readAt: anyInstance(Date),
       });
       expect(
         (await exportResearchDossiers()).dossiers.map((item) => item.id),
@@ -381,7 +382,7 @@ describe.skipIf(!hasTestDatabase())(
         });
         const outcome = running.then(
           () => "completed",
-          (error: { code?: string }) => error.code,
+          (error: unknown) => (error as { code?: string }).code,
         );
         let cancelled = { cancelled: false } as { cancelled: boolean };
         for (

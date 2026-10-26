@@ -19,9 +19,6 @@ import {
 import { __parseJsonStat as parseJsonStat } from "../../src/services/research/adapters/eurostatAdapter.ts";
 import { must } from "../helpers/must.ts";
 
-type AggregatorDeps = NonNullable<
-  Parameters<typeof createResearchAggregator>[0]
->;
 /** Macro search items and series payloads are provider-defined (`unknown`). */
 type MacroItem = { provider: string };
 
@@ -167,7 +164,7 @@ const build = (deps: Record<string, unknown>) =>
     recordSuccess: vi.fn(),
     recordError: vi.fn(),
     ...deps,
-  } as AggregatorDeps);
+  });
 
 const macroAdapters = (over = {}) => ({
   fred: {

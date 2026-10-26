@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, it, vi } from "vitest";
 import { mockConnection } from "../helpers/repoMocks.ts";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent } from "../helpers/routeApp.ts";

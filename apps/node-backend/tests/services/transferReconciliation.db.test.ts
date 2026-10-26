@@ -43,7 +43,7 @@ import { closePool } from "../../src/database/connection.ts";
 import {
   asTransactionId,
 } from "@vision/types/brands";
-import { must } from "../helpers/must.ts";
+import { firstRow, must } from "../helpers/must.ts";
 
 /** Fixed reference date — the suite asserts on ±windowDays, never on "today". */
 const DAY0 = "2024-03-10";
@@ -59,17 +59,17 @@ const accountIds: Record<string, number> = {};
 
 async function seedFixtures() {
   const pool = must(getTestPool(), "getTestPool()");
-  const rec = await pool.query(
+  const rec = await pool.query<{ id: number }>(
     `INSERT INTO recipients (name, normalized_name) VALUES ('Transfer Fixture', 'transfer fixture')
      RETURNING id`,
   );
-  recipientId = rec.rows[0].id;
+  recipientId = firstRow(rec).id;
   for (const name of ["Checking", "Savings", "Brokerage"]) {
-    const res = await pool.query(
+    const res = await pool.query<{ id: number }>(
       `INSERT INTO accounts (name, display_name) VALUES ($1, $1) RETURNING id`,
       [name],
     );
-    accountIds[name] = res.rows[0].id;
+    accountIds[name] = firstRow(res).id;
   }
 }
 
@@ -96,7 +96,7 @@ async function insertTxn({
   source = null,
 }: TxnSpec): Promise<number> {
   const pool = must(getTestPool(), "getTestPool()");
-  const { rows } = await pool.query(
+  const result = await pool.query<{ id: number }>(
     `INSERT INTO transactions
        (date, amount, currency, recipient_id, account_id, is_active, is_transfer,
         transfer_peer_id, transfer_source)
@@ -114,17 +114,24 @@ async function insertTxn({
       source,
     ],
   );
-  return rows[0].id;
+  return firstRow(result).id;
 }
 
 /** Read back the transfer-relevant columns of one row. */
 async function readTxn(id: number) {
-  const { rows } = await must(getTestPool(), "getTestPool()").query(
-    `SELECT id, is_transfer, transfer_peer_id, transfer_source
-       FROM transactions WHERE id = $1`,
-    [id],
+  return firstRow(
+    await must(getTestPool(), "getTestPool()").query<{
+      id: number;
+      is_transfer: boolean;
+      transfer_peer_id: number | null;
+      transfer_source: string | null;
+    }>(
+      `SELECT id, is_transfer, transfer_peer_id, transfer_source
+         FROM transactions WHERE id = $1`,
+      [id],
+    ),
+    "transaction row",
   );
-  return rows[0];
 }
 
 /** Insert an equal-and-opposite pair one day apart on two different accounts. */
@@ -431,11 +438,13 @@ describe.skipIf(!hasTestDatabase())(
           const deadline = Date.now() + 5000;
           let waiting = false;
           while (Date.now() < deadline) {
-            waiting = (
-              await must(getTestPool(), "getTestPool()").query(
+            waiting = firstRow(
+              await must(getTestPool(), "getTestPool()").query<{
+                waiting: boolean;
+              }>(
                 "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query ~* 'from \"?transactions\"?.*for update') AS waiting",
-              )
-            ).rows[0].waiting;
+              ),
+            ).waiting;
             if (waiting) break;
             await new Promise((resolve) => setTimeout(resolve, 20));
           }

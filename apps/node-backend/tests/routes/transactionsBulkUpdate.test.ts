@@ -52,6 +52,7 @@ import {
 import type { PgQueryResult } from "../../src/database/connection.ts";
 import { scheduleReconcile } from "../../src/services/transferReconciliationService.ts";
 import { must } from "../helpers/must.ts";
+import { loose } from "../helpers/partial.ts";
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
 const getClient = vi.mocked(rawGetClient);
@@ -77,12 +78,12 @@ describe("POST /bulk-update — field validation", () => {
 
   it("accepts category_id = null (uncategorize)", async () => {
     const clientQuery = vi
-      .fn()
+      .fn<(sql: string, params?: unknown[]) => unknown>()
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({ rows: [{ id: 1 }] })
       .mockResolvedValueOnce({});
     const release = vi.fn();
-    getClient.mockResolvedValue({ query: clientQuery, release });
+    getClient.mockResolvedValue(loose({ query: clientQuery, release }));
 
     const res = await bulkUpdate({
       ids: [1],
@@ -135,12 +136,12 @@ describe("POST /bulk-update — success paths", () => {
   it("updates a single field and schedules a refresh", async () => {
     dbQuery.mockResolvedValueOnce({ rows: [{ id: 7 }] } as PgQueryResult); // category exists
     const clientQuery = vi
-      .fn()
+      .fn<(sql: string, params?: unknown[]) => unknown>()
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({ rows: [{ id: 1 }, { id: 2 }] })
       .mockResolvedValueOnce({});
     const release = vi.fn();
-    getClient.mockResolvedValue({ query: clientQuery, release });
+    getClient.mockResolvedValue(loose({ query: clientQuery, release }));
 
     const res = await bulkUpdate({
       ids: [1, 2],
@@ -158,12 +159,12 @@ describe("POST /bulk-update — success paths", () => {
       .mockResolvedValueOnce({ rows: [{ id: 7 }] } as PgQueryResult) // category exists
       .mockResolvedValueOnce({ rows: [{ id: 99 }] } as PgQueryResult); // recipient exists
     const clientQuery = vi
-      .fn()
+      .fn<(sql: string, params?: unknown[]) => unknown>()
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({ rows: [{ id: 5 }] })
       .mockResolvedValueOnce({});
     const release = vi.fn();
-    getClient.mockResolvedValue({ query: clientQuery, release });
+    getClient.mockResolvedValue(loose({ query: clientQuery, release }));
 
     const res = await bulkUpdate({
       ids: [5],
@@ -185,12 +186,12 @@ describe("POST /bulk-update — success paths", () => {
 
   it("does not schedule a refresh when nothing was updated", async () => {
     const clientQuery = vi
-      .fn()
+      .fn<(sql: string, params?: unknown[]) => unknown>()
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({});
     const release = vi.fn();
-    getClient.mockResolvedValue({ query: clientQuery, release });
+    getClient.mockResolvedValue(loose({ query: clientQuery, release }));
 
     const res = await bulkUpdate({
       ids: [12345],
@@ -208,11 +209,11 @@ describe("POST /bulk-update — success paths", () => {
       .mockResolvedValueOnce({ rows: [{ n: 0 }] } as PgQueryResult)
       .mockResolvedValueOnce({ rows: [], rowCount: 0 });
     const clientQuery = vi
-      .fn()
+      .fn<(sql: string, params?: unknown[]) => unknown>()
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({});
-    getClient.mockResolvedValue({ query: clientQuery, release: vi.fn() });
+    getClient.mockResolvedValue(loose({ query: clientQuery, release: vi.fn() }));
 
     const res = await bulkUpdate({
       filter: { search: "disappeared" },
@@ -234,12 +235,12 @@ describe("POST /bulk-update — atomicity", () => {
 
   it("rolls back and skips refresh when UPDATE fails", async () => {
     const clientQuery = vi
-      .fn()
+      .fn<(sql: string, params?: unknown[]) => unknown>()
       .mockResolvedValueOnce({})
       .mockRejectedValueOnce(new Error("db down"))
       .mockResolvedValueOnce({});
     const release = vi.fn();
-    getClient.mockResolvedValue({ query: clientQuery, release });
+    getClient.mockResolvedValue(loose({ query: clientQuery, release }));
 
     await bulkUpdate({ ids: [1], fields: { is_active: false } }).expect(500);
 

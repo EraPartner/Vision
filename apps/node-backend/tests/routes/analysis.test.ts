@@ -57,6 +57,7 @@ import {
 import { executeAnalysisPivot } from "../../src/services/analysisPivotService.ts";
 import { UpstreamError } from "../../src/middleware/errorHandler.ts";
 import { must } from "../helpers/must.ts";
+import { anyInstance, objectContaining } from "../helpers/matchers.ts";
 
 type SqlResult = Awaited<ReturnType<typeof executeAnalysisSql>>;
 
@@ -336,7 +337,7 @@ describe("Analysis routes request validation", () => {
         .expect(200);
       expect(executeAnalysisPivot).toHaveBeenCalledWith(
         expect.objectContaining({ requestId: REQUEST_ID }),
-        expect.objectContaining({ catalog: expect.any(Object) }),
+        objectContaining({ catalog: anyInstance(Object) }),
       );
     });
 

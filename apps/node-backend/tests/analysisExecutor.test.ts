@@ -9,6 +9,18 @@ import {
 import { loose } from "./helpers/partial.ts";
 import { must } from "./helpers/must.ts";
 
+/** The query config object `executeAnalysisSql` hands to `client.query`. */
+interface QueryConfig {
+  text: string;
+  values: unknown[];
+  types: {
+    getTypeParser: (
+      id: number,
+      format: "text" | "binary",
+    ) => (raw: string) => unknown;
+  };
+}
+
 /**
  * spyOn types pg's overloaded connect by its callback form; the executor
  * awaits the promise form.
@@ -22,7 +34,10 @@ describe("analysis result dates", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("preserves calendar dates while retaining timestamp and numeric parsers", async () => {
-    const defaultDateParser = pg.types.getTypeParser(1082, "text");
+    const defaultDateParser: unknown = pg.types.getTypeParser(
+      pg.types.builtins.DATE,
+      "text",
+    );
     const parserSpy = vi.spyOn(pg.types, "getTypeParser");
     const release = vi.fn();
     const fields = [
@@ -30,7 +45,7 @@ describe("analysis result dates", () => {
       { name: "recorded_at", dataTypeID: 1184 },
       { name: "amount", dataTypeID: 1700 },
     ];
-    const query = vi.fn((config) => {
+    const query = vi.fn((config: string | QueryConfig) => {
       if (typeof config === "string") return Promise.resolve({ rows: [{ pid: 123 }] });
       const raw = ["2026-04-01", "2026-04-01 00:00:00+03", "123.45"];
       return Promise.resolve({
@@ -39,7 +54,10 @@ describe("analysis result dates", () => {
           Object.fromEntries(
             fields.map((field, index) => [
               field.name,
-              config.types.getTypeParser(field.dataTypeID, "text")(raw[index]),
+              config.types.getTypeParser(
+                  field.dataTypeID,
+                  "text",
+                )(must(raw[index], "raw value")),
             ]),
           ),
         ],
@@ -72,10 +90,11 @@ describe("analysis result dates", () => {
     const config = must(query.mock.calls.find(
       ([value]) => typeof value === "object",
     ), "query.mock.calls.find( ([value]) => typeof value === \"obj...")[0];
-    expect(config.types.getTypeParser(1082, "binary")).toBe(
-      pg.types.getTypeParser(1082, "binary"),
+    if (typeof config === "string") throw new Error("Expected a query config");
+    expect(config.types.getTypeParser(pg.types.builtins.DATE, "binary")).toBe(
+      pg.types.getTypeParser(pg.types.builtins.DATE, "binary"),
     );
-    expect(pg.types.getTypeParser(1082, "text")).toBe(defaultDateParser);
+    expect(pg.types.getTypeParser(pg.types.builtins.DATE, "text")).toBe(defaultDateParser);
     expect(release).toHaveBeenCalledWith(undefined);
   });
 });
@@ -99,7 +118,7 @@ describe("visual analysis pagination", () => {
       { month: "2026-03-01", sum_amount: "30" },
       { month: "2026-04-01", sum_amount: "40" },
     ];
-    const query = vi.fn((config) => {
+    const query = vi.fn((config: string | QueryConfig) => {
       if (typeof config === "string") return Promise.resolve({ rows: [{ pid: 123 }] });
       // Simulate PostgreSQL applying the executor's outer pagination only.
       expect(config.text).toBe(
@@ -107,7 +126,7 @@ describe("visual analysis pagination", () => {
       );
       expect(compiled.sql).not.toMatch(/\bLIMIT\b/i);
       expect(config.values[0]).toBe("EUR");
-      const [, fetchLimit, offset] = config.values;
+      const [, fetchLimit, offset] = config.values as [string, number, number];
       return Promise.resolve({
         fields: [
           { name: "month", dataTypeID: 1082 },
@@ -167,8 +186,9 @@ describe("visual analysis pagination", () => {
     });
     expect(
       query.mock.calls
-        .filter(([config]) => typeof config === "object")
-        .map(([config]) => config.values),
+        .flatMap(([config]) =>
+          typeof config === "string" ? [] : [config.values],
+        ),
     ).toEqual([
       ["EUR", 3, 0],
       ["EUR", 3, 2],

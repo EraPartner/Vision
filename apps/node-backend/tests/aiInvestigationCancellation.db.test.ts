@@ -24,13 +24,13 @@ describe("investigation cancellation at the database boundary", () => {
   it.skipIf(!pool)(
     "keeps a cancelled job cancelled when a provider answer arrives afterward",
     async () => {
-      const inserted = await must(pool, "pool").query(
+      const inserted = await must(pool, "pool").query<{ id: string }>(
         `INSERT INTO ai_investigation_jobs
            (question, route, depth, language, state, scope_json)
          VALUES ('Fictional question', 'local', 'quick', 'en', 'running', '{}'::jsonb)
          RETURNING id`,
       );
-      const id = inserted.rows[0].id;
+      const id = must(inserted.rows[0], "row").id;
       try {
         await setProviderResult(id, { summary: "Fictional provider answer" });
         await requestCancel(id);

@@ -16,10 +16,61 @@ import { promises as fsp, mkdtempSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { must } from "./helpers/must.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "../../..");
+
+// The compiled CommonJS modules are loaded at run time, so their shapes are
+// declared here (importing the sources' types would pull in the untyped
+// yauzl dependency). Keep in step with packaging/electron/backup/.
+interface BundleOptions {
+  destDir: string;
+  deviceId: string;
+  schemaHead?: string | null | undefined;
+  appVersion?: string | null;
+  dbSqlPath: string;
+  attachmentsDir?: string | null;
+  frontendState?: unknown;
+}
+interface OpenedBundle {
+  metadata: Readonly<Record<string, unknown>>;
+  dbSqlPath: string;
+  attachmentsDir: string | null;
+  frontendState: unknown;
+  cleanup: () => void;
+}
+interface BundleModule {
+  createBundle: (options: BundleOptions) => Promise<{ bundlePath: string }>;
+  encryptBundle: (
+    bundlePath: string,
+    passphrase: string,
+  ) => Promise<{ encPath: string }>;
+  openBundle: (
+    bundlePath: string,
+    options?: { passphrase?: string | null },
+  ) => Promise<OpenedBundle>;
+  isBundleEncrypted: (filePath: string) => Promise<boolean>;
+  BUNDLE_VERSION: number;
+}
+interface ZipWriter {
+  append(
+    name: string,
+    data: string | Uint8Array,
+    options?: { date?: Date; mode?: number },
+  ): Promise<void>;
+  file(sourcePath: string, name: string): Promise<void>;
+  directory(sourceDir: string, prefix: string): Promise<void>;
+  finalize(): Promise<void>;
+  abort(): Promise<void>;
+}
+interface ZipWriterModule {
+  createZipWriter: (
+    filePath: string,
+    options?: { level?: number; forceZip64?: boolean },
+  ) => Promise<ZipWriter>;
+}
 
 const require = createRequire(import.meta.url);
 const {
@@ -28,11 +79,13 @@ const {
   openBundle,
   isBundleEncrypted,
   BUNDLE_VERSION,
-} = require(join(REPO_ROOT, "packaging/electron/out/backup/bundle.js"));
+} = require(
+  join(REPO_ROOT, "packaging/electron/out/backup/bundle.js"),
+) as BundleModule;
 
 const { createZipWriter } = require(
   join(REPO_ROOT, "packaging/electron/out/backup/zip-writer.js"),
-);
+) as ZipWriterModule;
 
 describe("backup bundle dependency loading", () => {
   it("keeps archive libraries unloaded until a backup path uses them", () => {
@@ -151,10 +204,10 @@ describe("createBundle + openBundle (plain)", () => {
       // attachments tree preserved
       expect(result.attachmentsDir).not.toBeNull();
       const receipt = await fsp.readFile(
-        join(result.attachmentsDir, "tx-001", "receipt.jpg"),
+        join(must(result.attachmentsDir, "attachmentsDir"), "tx-001", "receipt.jpg"),
       );
       const invoice = await fsp.readFile(
-        join(result.attachmentsDir, "tx-001", "invoice.pdf"),
+        join(must(result.attachmentsDir, "attachmentsDir"), "tx-001", "invoice.pdf"),
       );
       expect(receipt.toString()).toBe("FAKEJPEG");
       expect(invoice.toString()).toBe("FAKEPDF");
@@ -300,7 +353,7 @@ describe("encryptBundle + openBundle (encrypted)", () => {
       expect(result.frontendState).toEqual(frontendState);
 
       const receipt = await fsp.readFile(
-        join(result.attachmentsDir, "tx-001", "receipt.jpg"),
+        join(must(result.attachmentsDir, "attachmentsDir"), "tx-001", "receipt.jpg"),
       );
       expect(receipt.toString()).toBe("FAKEJPEG");
     } finally {

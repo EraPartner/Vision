@@ -19,7 +19,7 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () => ({
 }));
 
 vi.mock("../src/database/connection.ts", () =>
-  mockConnection({ withTransaction: vi.fn((fn) => Promise.resolve(fn())) }),
+  mockConnection({ withTransaction: vi.fn((fn: () => unknown) => Promise.resolve(fn())) }),
 );
 
 vi.mock("../src/repositories/accountRepository.ts", () => {
