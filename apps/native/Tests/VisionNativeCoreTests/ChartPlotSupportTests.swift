@@ -63,4 +63,87 @@ import Testing
         #expect(kept == kept.sorted())
         #expect(Set(kept).count == kept.count)
     }
+
+    @Test func theBudgetIsOneBucketPairPerTwoPointsOfPlusTheEnds() {
+        #expect(ChartDecimation.budget(plotWidth: 960) == 962)
+        #expect(ChartDecimation.budget(plotWidth: 1) == 4)
+        #expect(ChartDecimation.lineBudget == 962)
+        let values = (0..<5_000).map { Double($0 % 11) }
+        #expect(ChartDecimation.indices(of: values, maxPoints: ChartDecimation.lineBudget).count <= 962)
+    }
+
+    private func daily(_ id: String, count: Int, spike: Int? = nil) -> InsightChartSeries {
+        InsightChartSeries(
+            id: id, label: id,
+            points: (0..<count).map { day in
+                InsightChartPoint(
+                    key: String(format: "%05d", day), value: day == spike ? Decimal(900) : Decimal(day % 7))
+            })
+    }
+
+    @Test func thePlotThinsLongLinesButKeepsTheFullKeysAndValues() {
+        let plot = ChartSeriesPlot(series: [daily("a", count: 5_000, spike: 2_500), daily("b", count: 50)])
+        #expect(plot.layout.keys.count == 5_000)
+        #expect(plot.values.count == 5_050)
+        #expect(plot.values.max() == 900)
+        #expect(plot.drawn[0].points.count <= ChartDecimation.lineBudget)
+        #expect(plot.drawn[0].points.first?.key == "00000")
+        #expect(plot.drawn[0].points.last?.key == "04999")
+        #expect(plot.drawn[0].points.contains { $0.key == "02500" })
+        #expect(plot.drawn[1] == daily("b", count: 50))
+    }
+
+    @Test func aShortSeriesIsDrawnAsIs() {
+        let lines = [daily("a", count: 300), daily("b", count: 300)]
+        #expect(ChartSeriesPlot(series: lines).drawn == lines)
+        #expect(ChartSeriesPlot(series: lines, shared: true).drawn == lines)
+    }
+
+    @Test func sharedThinningKeepsEveryLineOnTheSameKeys() {
+        let plot = ChartSeriesPlot(
+            series: [daily("a", count: 4_000, spike: 1_000), daily("b", count: 4_000, spike: 3_000)], shared: true)
+        let first = plot.drawn[0].points.map(\.key)
+        #expect(first == plot.drawn[1].points.map(\.key))
+        #expect(first.count < 4_000)
+        #expect(first.contains("01000"))
+        #expect(first.contains("03000"))
+    }
+
+    @Test func thePlotCacheBuildsOncePerSeriesValue() {
+        let cache = ChartSeriesPlotCache()
+        let lines = [daily("a", count: 10)]
+        _ = cache.plot(for: lines)
+        _ = cache.plot(for: lines)
+        #expect(cache.builds == 1)
+        _ = cache.plot(for: lines, shared: true)
+        #expect(cache.builds == 2)
+        _ = cache.plot(for: [daily("a", count: 11)], shared: true)
+        #expect(cache.builds == 3)
+    }
+
+    @Test func markLabelsAreFormattedOncePerLineAndContext() {
+        let cache = ChartMarkLabelCache()
+        let line = daily("a", count: 3)
+        var made = 0
+        let make: (InsightChartPoint) -> ChartMarkLabelCache.Mark = { point in
+            made += 1
+            return ChartMarkLabelCache.Mark(label: "a. " + point.key, value: point.value.description)
+        }
+        let first = cache.marks(for: line, context: "en|EUR", make: make)
+        _ = cache.marks(for: line, context: "en|EUR", make: make)
+        #expect(made == 3)
+        #expect(first[1].label == "a. 00001")
+        _ = cache.marks(for: line, context: "nl|EUR", make: make)
+        #expect(made == 6)
+        _ = cache.marks(for: daily("a", count: 4), context: "nl|EUR", make: make)
+        #expect(cache.builds == 3)
+    }
+
+    @Test func theDerivedMemoBuildsOncePerInput() {
+        let memo = ChartDerivedMemo<[Int], Int>()
+        #expect(memo.output(for: [1, 2]) { 3 } == 3)
+        #expect(memo.output(for: [1, 2]) { 99 } == 3)
+        #expect(memo.output(for: [1, 2, 3]) { 6 } == 6)
+        #expect(memo.builds == 2)
+    }
 }

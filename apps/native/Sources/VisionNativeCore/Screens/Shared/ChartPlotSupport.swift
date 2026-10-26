@@ -76,6 +76,47 @@ public enum ChartDecimation {
     /// Series up to this many points are never thinned (about two per pixel of a wide plot).
     public static let threshold = 1_600
 
+    /// The plot width, in points, a line chart is sized for: the widest a card plot gets in the
+    /// app window. A narrower plot only has more points than it can resolve.
+    public static let linePlotWidth = 960.0
+
+    /// Points per line a chart of `plotWidth` points keeps: one bucket pair (lowest and highest
+    /// value) per `bucketPairWidth` points of plot, plus the first and last point.
+    public static func budget(plotWidth: Double, bucketPairWidth: Double = 2) -> Int {
+        let pairs = max(1, Int((plotWidth / max(bucketPairWidth, 1)).rounded(.up)))
+        return pairs * 2 + 2
+    }
+
+    /// The per-line budget of the portfolio and home line charts.
+    public static let lineBudget = budget(plotWidth: linePlotWidth)
+
+    /// `series` with every line thinned to `maxPoints` (`indices(of:maxPoints:)` over the
+    /// matching `coordinates`). With `shared`, all lines keep the union of the x keys any line
+    /// kept, so lines that stack still sit on the same x positions. Lines that fit are untouched.
+    static func thin(
+        _ series: [InsightChartSeries], coordinates: [[Double]], shared: Bool, maxPoints: Int
+    ) -> [InsightChartSeries] {
+        let kept = coordinates.map { indices(of: $0, maxPoints: maxPoints) }
+        guard zip(kept, series).contains(where: { $0.count < $1.points.count }) else { return series }
+        if shared {
+            var keys = Set<String>()
+            for (line, positions) in zip(series, kept) {
+                for position in positions { keys.insert(line.points[position].key) }
+            }
+            return series.map { line in
+                let points = line.points.filter { keys.contains($0.key) }
+                return points.count == line.points.count
+                    ? line : InsightChartSeries(id: line.id, label: line.label, points: points, dashed: line.dashed)
+            }
+        }
+        return zip(series, kept).map { line, positions in
+            positions.count == line.points.count
+                ? line
+                : InsightChartSeries(
+                    id: line.id, label: line.label, points: positions.map { line.points[$0] }, dashed: line.dashed)
+        }
+    }
+
     /// The indices of `values` to draw, ascending.
     public static func indices(of values: [Double], maxPoints: Int = threshold) -> [Int] {
         let count = values.count
@@ -103,5 +144,102 @@ public enum ChartDecimation {
         }
         kept.append(count - 1)
         return kept
+    }
+}
+
+/// What a line chart needs from its series, built once per series value: the sorted keys, the
+/// lines thinned to `ChartDecimation.lineBudget` points for drawing, and every value as a plot
+/// coordinate. Selection, the readout, the x ticks and the y domain use the full `layout` and
+/// `values`; only the marks use `drawn`, so nothing a reader sees depends on the thinning.
+public struct ChartSeriesPlot: Sendable {
+    public let layout: ChartKeyLayout
+    public let drawn: [InsightChartSeries]
+    /// Every point of every line, for the value domain.
+    public let values: [Double]
+
+    public static let empty = ChartSeriesPlot(series: [])
+
+    public init(series: [InsightChartSeries], shared: Bool = false, maxPoints: Int = ChartDecimation.lineBudget) {
+        let coordinates = series.map { line in
+            line.points.map { NSDecimalNumber(decimal: $0.value).doubleValue }
+        }
+        layout = ChartKeyLayout(series: series)
+        values = coordinates.flatMap { $0 }
+        drawn = ChartDecimation.thin(series, coordinates: coordinates, shared: shared, maxPoints: maxPoints)
+    }
+}
+
+/// Remembers the `ChartSeriesPlot` of the last series it saw, like `ChartKeyLayoutCache`.
+public final class ChartSeriesPlotCache {
+    private var series: [InsightChartSeries]?
+    private var shared = false
+    private var plot = ChartSeriesPlot.empty
+    /// How often the plot was built, for tests.
+    public private(set) var builds = 0
+
+    public init() {}
+
+    public func plot(for series: [InsightChartSeries], shared: Bool = false) -> ChartSeriesPlot {
+        if let last = self.series, self.shared == shared, last == series { return plot }
+        self.series = series
+        self.shared = shared
+        plot = ChartSeriesPlot(series: series, shared: shared)
+        builds += 1
+        return plot
+    }
+}
+
+/// The accessibility label and value of each point of a line, kept while the line and the
+/// formatting context are unchanged so a hover does not format a thousand points again.
+public final class ChartMarkLabelCache {
+    public struct Mark: Equatable, Sendable {
+        public let label: String
+        public let value: String
+
+        public init(label: String, value: String) {
+            self.label = label
+            self.value = value
+        }
+    }
+
+    private struct Entry {
+        let context: String
+        let line: InsightChartSeries
+        let marks: [Mark]
+    }
+
+    private var entries: [String: Entry] = [:]
+    /// How often a line's marks were built, for tests.
+    public private(set) var builds = 0
+
+    public init() {}
+
+    /// One `Mark` per point of `line`, in order.
+    public func marks(for line: InsightChartSeries, context: String, make: (InsightChartPoint) -> Mark) -> [Mark] {
+        if let entry = entries[line.id], entry.context == context, entry.line == line { return entry.marks }
+        let marks = line.points.map(make)
+        entries[line.id] = Entry(context: context, line: line, marks: marks)
+        builds += 1
+        return marks
+    }
+}
+
+/// Remembers a value derived from an equatable input (a chart's series built from a
+/// snapshot list) so a body pass does not rebuild it while the input is unchanged.
+public final class ChartDerivedMemo<Input: Equatable, Output> {
+    private var input: Input?
+    private var output: Output?
+    /// How often the output was built, for tests.
+    public private(set) var builds = 0
+
+    public init() {}
+
+    public func output(for input: Input, make: () -> Output) -> Output {
+        if let output, let last = self.input, last == input { return output }
+        let made = make()
+        self.input = input
+        output = made
+        builds += 1
+        return made
     }
 }

@@ -44,16 +44,19 @@ struct InsightTimelineChart: View {
     @Binding var rangeStart: String?
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
-    /// The sorted keys and their positions, rebuilt only when the series change (a hover
-    /// re-renders this view with the same series, and every pointer move asks for the keys).
-    @State private var layoutCache = ChartKeyLayoutCache()
+    /// The sorted keys and their positions and the lines thinned for drawing, rebuilt only when
+    /// the series change (a hover re-renders this view with the same series, and every pointer
+    /// move asks for the keys).
+    @State private var plotCache = ChartSeriesPlotCache()
     /// Month names follow the app language (web `appLanguageToLocale`), never the environment
     /// locale, which several hosts set to the number-format locale for digits.
     private var locale: Locale {
         LanguageLocale.locale(NativeLanguage(rawValue: settings.language.rawValue) ?? .en)
     }
 
-    private var keys: [String] { layoutCache.layout(for: series).keys }
+    /// Stacked areas share their x positions after thinning, so they still stack.
+    private var plot: ChartSeriesPlot { plotCache.plot(for: series, shared: areas && stackedAreas) }
+    private var keys: [String] { plot.layout.keys }
     private var colors: [Color] {
         let palette = theme.palette
         return [
@@ -66,7 +69,7 @@ struct InsightTimelineChart: View {
     /// Each key's position on a quantitative x axis. A String-keyed (categorical) axis
     /// labels every category whatever tick values it is given, so 24 months or a daily
     /// forecast drew overlapping dates.
-    private var keyIndex: [String: Int] { layoutCache.layout(for: series).index }
+    private var keyIndex: [String: Int] { plot.layout.index }
     private var barSeries: [InsightChartSeries] { bars ? series.filter { !$0.dashed } : [] }
 
     /// One bar: drawn as a rectangle so grouped and stacked bars keep a band layout on the
@@ -206,7 +209,7 @@ struct InsightTimelineChart: View {
                     .foregroundStyle(by: .value(title, bar.label))
                     .cornerRadius(3)
                 }
-                ForEach(series) { line in
+                ForEach(plot.drawn) { line in
                     ForEach(line.points) { point in
                         // Bars are drawn above as BarRects.
                         if !(bars && !line.dashed), let x = index[point.key].map(Double.init) {

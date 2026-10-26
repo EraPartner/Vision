@@ -6,6 +6,12 @@ public struct PortfolioOverviewView: View {
     let editing: PortfolioEditingModel
     let shell: NativeShellModel
     @State private var customize = false
+    /// The hero chart's two lines, rebuilt only when the snapshots or the language change.
+    @State private var heroSeries = ChartDerivedMemo<HeroSeriesInput, [InsightChartSeries]>()
+    private struct HeroSeriesInput: Equatable {
+        let snapshots: [PortfolioPerformanceSnapshot]
+        let language: String
+    }
     @Environment(\.visionTheme) private var theme
     public init(model: PortfolioModel, editing: PortfolioEditingModel, shell: NativeShellModel) {
         self.model = model
@@ -174,15 +180,19 @@ public struct PortfolioOverviewView: View {
         if let data = performance, !data.snapshots.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 PortfolioSeriesChart(
-                    series: [
-                        InsightChartSeries(
-                            id: "value", label: strings.t("portfolio.hero.value"),
-                            points: data.snapshots.map { InsightChartPoint(key: $0.date, value: $0.value) }),
-                        InsightChartSeries(
-                            id: "invested", label: strings.t("portfolio.hero.invested"),
-                            points: data.snapshots.map { InsightChartPoint(key: $0.date, value: $0.invested) },
-                            dashed: true),
-                    ], title: strings.t("portfolio.hero.chartAria"), currency: currency, shell: shell, area: true,
+                    series: heroSeries.output(
+                        for: HeroSeriesInput(snapshots: data.snapshots, language: strings.language.rawValue)
+                    ) {
+                        [
+                            InsightChartSeries(
+                                id: "value", label: strings.t("portfolio.hero.value"),
+                                points: data.snapshots.map { InsightChartPoint(key: $0.date, value: $0.value) }),
+                            InsightChartSeries(
+                                id: "invested", label: strings.t("portfolio.hero.invested"),
+                                points: data.snapshots.map { InsightChartPoint(key: $0.date, value: $0.invested) },
+                                dashed: true),
+                        ]
+                    }, title: strings.t("portfolio.hero.chartAria"), currency: currency, shell: shell, area: true,
                     height: 200, dayTicks: PortfolioChartTicks.usesDayTicks(model.period),
                     colors: ["value": theme.primary, "invested": theme.secondaryLabel])
                 if data.snapshots.last?.isProvisional == true {

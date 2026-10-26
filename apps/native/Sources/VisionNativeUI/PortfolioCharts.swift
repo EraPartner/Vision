@@ -19,30 +19,37 @@ struct PortfolioSeriesChart: View {
     @State private var rangeStart: String?
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
-    /// The sorted keys and their positions, rebuilt only when the series change.
-    @State private var layoutCache = ChartKeyLayoutCache()
-    /// Date and value strings of the points' accessibility labels, formatted once per context.
+    /// The sorted keys and their positions, the thinned lines and the value coordinates,
+    /// rebuilt only when the series change.
+    @State private var plotCache = ChartSeriesPlotCache()
+    /// The accessibility strings of each drawn point, formatted once per series and context.
+    @State private var markLabels = ChartMarkLabelCache()
+    /// Date strings shared by the lines' marks, formatted once per context.
     @State private var labelMemo = ChartLabelMemo()
-    private var keys: [String] { layoutCache.layout(for: series).keys }
-    /// Each key's position: the x axis is quantitative over these indices, so it draws only
-    /// the requested ticks. A String-keyed (categorical) axis drew a grid line and a label
-    /// for every day of a long series.
-    private var keyIndex: [String: Int] { layoutCache.layout(for: series).index }
-    /// The web AreaChart's fitted domain: the data range plus an 8 % margin, niced, not
-    /// zero-based, so a slowly growing portfolio fills the plot instead of a flat line at the top.
-    private var yDomain: ClosedRange<Double> {
-        ChartAxisTicks.fittedDomain(series.flatMap { $0.points.map { coordinate($0.value) } })
-    }
+    private var keys: [String] { plotCache.plot(for: series).layout.keys }
 
     var body: some View {
-        let keys = self.keys
-        let index = keyIndex
-        let domain = yDomain
+        let plot = plotCache.plot(for: series)
+        let keys = plot.layout.keys
+        // Each key's position: the x axis is quantitative over these indices, so it draws only
+        // the requested ticks. A String-keyed (categorical) axis drew a grid line and a label
+        // for every day of a long series.
+        let index = plot.layout.index
+        // The web AreaChart's fitted domain: the data range plus an 8 % margin, niced, not
+        // zero-based, so a slowly growing portfolio fills the plot instead of a flat line at
+        // the top. It spans the full series, not only the drawn points.
+        let domain = ChartAxisTicks.fittedDomain(plot.values)
+        let context = labelContext
         VStack(alignment: .leading, spacing: 10) {
             Chart {
-                ForEach(series) { line in
+                ForEach(plot.drawn) { line in
                     let color = lineColor(line)
-                    ForEach(line.points) { point in
+                    let marks = markLabels.marks(for: line, context: context) { point in
+                        ChartMarkLabelCache.Mark(
+                            label: line.label + ". " + pointDate(point.key), value: format(point.value))
+                    }
+                    ForEach(line.points.indices, id: \.self) { position in
+                        let point = line.points[position]
                         if area && !line.dashed, let x = index[point.key] {
                             AreaMark(
                                 x: .value(title, x), yStart: .value(line.label, domain.lowerBound),
@@ -65,8 +72,8 @@ struct PortfolioSeriesChart: View {
                                     dash: line.dashed ? [4, 4] : [])
                             )
                             .interpolationMethod(.monotone)
-                            .accessibilityLabel(line.label + ". " + pointDate(point.key))
-                            .accessibilityValue(pointValue(point.value))
+                            .accessibilityLabel(marks[position].label)
+                            .accessibilityValue(marks[position].value)
                         }
                     }
                 }
@@ -162,10 +169,7 @@ struct PortfolioSeriesChart: View {
         return "\(language)|\(locale)|\(currency.rawValue)|\(percent)|\(shell.settings.showDecimalPlaces)"
     }
     private func pointDate(_ key: String) -> String {
-        labelMemo.label("d|" + key, context: labelContext) { dateLabel(key) }
-    }
-    private func pointValue(_ value: Decimal) -> String {
-        labelMemo.label("v|" + value.description, context: labelContext) { format(value) }
+        labelMemo.label(key, context: labelContext) { dateLabel(key) }
     }
     private func lineColor(_ line: InsightChartSeries) -> Color {
         let position = series.firstIndex { $0.id == line.id } ?? 0
