@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   lockManualTransactionIdentity: vi.fn(),
   recordManualTransactionDedupClaim: vi.fn(),
   findActiveId: vi.fn(),
-  withTransaction: vi.fn(async (fn) => fn({ query: vi.fn() })),
+  withTransaction: vi.fn((fn) => Promise.resolve(fn({ query: vi.fn() }))),
   autoLinkTransactions: vi.fn(),
   resolveRecipientIdByName: vi.fn(),
   resolveCategoryIdByName: vi.fn(),
@@ -70,7 +70,7 @@ const { default: transactionService } =
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.findActiveId.mockImplementation(async (id) => id);
+  mocks.findActiveId.mockImplementation((id) => Promise.resolve(id));
 });
 
 describe("transactionService route orchestration", () => {

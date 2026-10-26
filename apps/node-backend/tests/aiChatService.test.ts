@@ -118,11 +118,11 @@ beforeEach(() => {
   settings.aiChat.enabled = true;
 
   aiChatRepository.getMessages.mockResolvedValue([]);
-  aiChatRepository.appendMessage.mockImplementation(async (input) =>
-    makeMessage({ ...input, conversation_id: input.conversationId }),
+  aiChatRepository.appendMessage.mockImplementation((input) =>
+    Promise.resolve(makeMessage({ ...input, conversation_id: input.conversationId })),
   );
   aiChatRepository.createConversation.mockImplementation(
-    async ({ title, model }) => makeConversation({ title, model }),
+    ({ title, model }) => Promise.resolve(makeConversation({ title, model })),
   );
   aiChatRepository.getConversation.mockResolvedValue(makeConversation());
   aiChatRepository.updateConversationModel.mockResolvedValue(
@@ -272,14 +272,14 @@ describe("runChatTurn — conversation lifecycle", () => {
 
   it("serializes a retry behind an in-flight turn and prevents two answers", async () => {
     const persisted: AiMessageRow[] = [];
-    aiChatRepository.getMessages.mockImplementation(async () => [...persisted]);
-    aiChatRepository.appendMessage.mockImplementation(async (input) => {
+    aiChatRepository.getMessages.mockImplementation(() => Promise.resolve([...persisted]));
+    aiChatRepository.appendMessage.mockImplementation((input) => {
       const row = makeMessage({
         ...input,
         conversation_id: input.conversationId,
       });
       persisted.push(row);
-      return row;
+      return Promise.resolve(row);
     });
     let resolveOriginal!: (value: unknown) => void;
     const ollamaClient = makeMockOllama();
@@ -335,14 +335,14 @@ describe("runChatTurn — conversation lifecycle", () => {
 
   it("cancels a queued turn without persisting or calling the model", async () => {
     const persisted: AiMessageRow[] = [];
-    aiChatRepository.getMessages.mockImplementation(async () => [...persisted]);
-    aiChatRepository.appendMessage.mockImplementation(async (input) => {
+    aiChatRepository.getMessages.mockImplementation(() => Promise.resolve([...persisted]));
+    aiChatRepository.appendMessage.mockImplementation((input) => {
       const row = makeMessage({
         ...input,
         conversation_id: input.conversationId,
       });
       persisted.push(row);
-      return row;
+      return Promise.resolve(row);
     });
     let resolveOriginal!: (value: unknown) => void;
     const ollamaClient = makeMockOllama();
@@ -1172,17 +1172,17 @@ describe("runChatTurn — streaming", () => {
   it("emits token events for each delta and leaves the final assistant row to done", async () => {
     const ollamaClient = {
       chat: vi.fn(),
-      chatStream: vi.fn(async ({ onToken }: StreamParams) => {
+      chatStream: vi.fn(({ onToken }: StreamParams) => {
         must(onToken, "onToken")("Hel");
         must(onToken, "onToken")("lo ");
         must(onToken, "onToken")("world");
-        return {
+        return Promise.resolve({
           content: "Hello world",
           toolCalls: [],
           evalCount: 3,
           promptEvalCount: 2,
           totalDurationMs: 50,
-        };
+        });
       }),
     };
 
@@ -1217,13 +1217,13 @@ describe("runChatTurn — streaming", () => {
   it("sends the Apple Foundation model no keep_alive or num_predict", async () => {
     const ollamaClient = {
       chat: vi.fn(),
-      chatStream: vi.fn(async () => ({
+      chatStream: vi.fn(() => Promise.resolve(({
         content: "ok",
         toolCalls: [],
         evalCount: 1,
         promptEvalCount: 1,
         totalDurationMs: 1,
-      })),
+      }))),
     };
     await runChatTurn({
       message: "hi",
@@ -1241,17 +1241,17 @@ describe("runChatTurn — streaming", () => {
   it("skips empty-string delta tokens", async () => {
     const ollamaClient = {
       chat: vi.fn(),
-      chatStream: vi.fn(async ({ onToken }: StreamParams) => {
+      chatStream: vi.fn(({ onToken }: StreamParams) => {
         must(onToken, "onToken")("A");
         must(onToken, "onToken")("");
         must(onToken, "onToken")("B");
-        return {
+        return Promise.resolve({
           content: "AB",
           toolCalls: [],
           evalCount: 2,
           promptEvalCount: 1,
           totalDurationMs: 10,
-        };
+        });
       }),
     };
 
@@ -1275,7 +1275,7 @@ describe("runChatTurn — streaming", () => {
       chat: vi.fn(),
       chatStream: vi
         .fn()
-        .mockImplementationOnce(async () => ({
+        .mockImplementationOnce(() => Promise.resolve(({
           content: "",
           toolCalls: [
             {
@@ -1288,16 +1288,16 @@ describe("runChatTurn — streaming", () => {
           evalCount: 1,
           promptEvalCount: 1,
           totalDurationMs: 10,
-        }))
-        .mockImplementationOnce(async ({ onToken }) => {
+        })))
+        .mockImplementationOnce(({ onToken }) => {
           onToken("done");
-          return {
+          return Promise.resolve({
             content: "done",
             toolCalls: [],
             evalCount: 1,
             promptEvalCount: 1,
             totalDurationMs: 10,
-          };
+          });
         }),
     };
 

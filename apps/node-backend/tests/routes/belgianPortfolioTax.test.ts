@@ -24,7 +24,7 @@ vi.mock("../../src/services/currency/currencyConversionService.ts", () => ({
   FALLBACK_RATES: { EUR: 1, USD: 0.9 },
   listLatestStoredRates: vi.fn(),
   // No stored historical rates: only rates stamped on a transaction are dated.
-  getHistoricalRateIndex: vi.fn(async () => new Map()),
+  getHistoricalRateIndex: vi.fn(() => Promise.resolve(new Map())),
 }));
 import settingsService from "../../src/services/settingsService.ts";
 import { investmentRepository } from "../../src/repositories/investmentRepository.ts";
@@ -156,9 +156,9 @@ beforeEach(() => {
       : throughDate >= "2025-12-31"
         ? 1
         : 0;
-  vi.mocked(getPortfolioSummary).mockImplementation(async (_target, opts) => {
+  vi.mocked(getPortfolioSummary).mockImplementation((_target, opts) => {
     const years = realizedThrough(opts?.throughDate);
-    return {
+    return Promise.resolve({
       summaries: [
         {
           ...rows[0],
@@ -194,7 +194,7 @@ beforeEach(() => {
           unrealizedGain: 60,
         },
       ],
-    } as unknown as Holdings;
+    } as unknown as Holdings);
   });
   vi.mocked(listLatestStoredRates).mockResolvedValue({
     rows: [{ currency_code: "USD", rate_to_eur: 0.8 }],

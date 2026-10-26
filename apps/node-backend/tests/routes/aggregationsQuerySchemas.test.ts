@@ -14,7 +14,7 @@ import { must } from "../helpers/must.ts";
 type CalcSpy = (
   options: Record<string, unknown>,
 ) => Promise<{ data: object; meta: object }>;
-const envelope: CalcSpy = async () => ({ data: {}, meta: {} });
+const envelope: CalcSpy = () => Promise.resolve(({ data: {}, meta: {} }));
 
 const categoryBreakdownSpy = vi.fn(envelope);
 const sankeySpy = vi.fn(envelope);

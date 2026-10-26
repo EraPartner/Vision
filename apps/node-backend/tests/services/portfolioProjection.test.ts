@@ -30,20 +30,20 @@ const baseSummary = {
 
 /** Aggregator that gives AAA a 20% implied growth (120 target / 100 price) + 2% yield. */
 const forwardAggregator = {
-  fetch: async (type: string) => {
-    if (type === 'quote') return { source: 'live', provider: 'x', data: { price: 100 } };
-    if (type === 'analyst') return { source: 'live', provider: 'x', data: { targetMean: 120 } };
-    if (type === 'fundamentals') return { source: 'live', provider: 'x', data: { dividendYield: 0.02 } };
-    return { source: 'unavailable' };
+  fetch: (type: string) => {
+    if (type === 'quote') return Promise.resolve({ source: 'live', provider: 'x', data: { price: 100 } });
+    if (type === 'analyst') return Promise.resolve({ source: 'live', provider: 'x', data: { targetMean: 120 } });
+    if (type === 'fundamentals') return Promise.resolve({ source: 'live', provider: 'x', data: { dividendYield: 0.02 } });
+    return Promise.resolve({ source: 'unavailable' });
   },
 };
 
 function deps(overrides: Record<string, unknown> = {}): ForecastDeps {
   // Partial fixtures: only the fields the projection reads are provided.
   return {
-    getPortfolioSummary: async () => baseSummary,
-    getSnapshots: async () => buildSnapshots(),
-    aggregator: { fetch: async () => ({ source: 'unavailable' }) },
+    getPortfolioSummary: () => Promise.resolve(baseSummary),
+    getSnapshots: () => Promise.resolve(buildSnapshots()),
+    aggregator: { fetch: () => Promise.resolve(({ source: 'unavailable' })) },
     today: () => '2026-06-16',
     ...overrides,
   } as unknown as ForecastDeps;
@@ -70,13 +70,13 @@ describe('runPortfolioForecast', () => {
 
   it('guards on no holdings', async () => {
     const r = await runPortfolioForecast({}, deps({
-      getPortfolioSummary: async () => ({ totals: { totalPortfolioValue: 0 }, summaries: [] }),
+      getPortfolioSummary: () => Promise.resolve(({ totals: { totalPortfolioValue: 0 }, summaries: [] })),
     }));
     expect(r).toEqual({ available: false, reason: 'no_holdings' });
   });
 
   it('guards on insufficient history', async () => {
-    const r = await runPortfolioForecast({}, deps({ getSnapshots: async () => [{ value: 1000 }] }));
+    const r = await runPortfolioForecast({}, deps({ getSnapshots: () => Promise.resolve([{ value: 1000 }]) }));
     expect(r.available).toBe(false);
     expect(r.reason).toBe('insufficient_history');
   });
@@ -129,8 +129,8 @@ describe('runPortfolioForecast', () => {
     const r = await runAvailable(
       { horizonMonths: 12, paths: 200, seed: 't' },
       deps({
-        getSnapshots: async () => snaps,
-        getPortfolioSummary: async () => ({ totals: { totalPortfolioValue: v, totalInvested: v }, summaries: [] }),
+        getSnapshots: () => Promise.resolve(snaps),
+        getPortfolioSummary: () => Promise.resolve(({ totals: { totalPortfolioValue: v, totalInvested: v }, summaries: [] })),
       }),
     );
     expect(r.historicalAnnualReturn).toBeCloseTo(0, 6);
@@ -141,10 +141,10 @@ describe('runPortfolioForecast', () => {
     const r = await runAvailable(
       { horizonMonths: 12, paths: 100, monthlyContribution: 50, seed: 't' },
       deps({
-        getPortfolioSummary: async () => ({
+        getPortfolioSummary: () => Promise.resolve(({
           totals: { totalPortfolioValue: 1500, totalInvested: 1000 },
           summaries: [],
-        }),
+        })),
       }),
     );
     // 1000 cost basis + 50×12 contributions = 1600 — NOT 1500 market value + 600.
@@ -165,8 +165,8 @@ describe('runPortfolioForecast', () => {
     const r = await runAvailable(
       { horizonMonths: 6, paths: 100, seed: 't' },
       deps({
-        getSnapshots: async () => snaps,
-        getPortfolioSummary: async () => ({ totals: { totalPortfolioValue: 2040, totalInvested: 1000 }, summaries: [] }),
+        getSnapshots: () => Promise.resolve(snaps),
+        getPortfolioSummary: () => Promise.resolve(({ totals: { totalPortfolioValue: 2040, totalInvested: 1000 }, summaries: [] })),
       }),
     );
     expect(r.flowArtifactDays).toBe(1);
@@ -189,10 +189,10 @@ describe('runPortfolioForecast', () => {
 
   it('accounts for interrupted contributions each month and evaluates a dated goal', async () => {
     const stable = deps({
-      getSnapshots: async () => Array.from({ length: 100 }, () => ({ value: 1000, invested: 1000 })),
-      getPortfolioSummary: async () => ({
+      getSnapshots: () => Promise.resolve(Array.from({ length: 100 }, () => ({ value: 1000, invested: 1000 }))),
+      getPortfolioSummary: () => Promise.resolve(({
         totals: { totalPortfolioValue: 1000, totalInvested: 1000 }, summaries: [],
-      }),
+      })),
     });
     const input: PortfolioForecastInput = {
       horizonMonths: 6, paths: 100, monthlyContribution: 100,
@@ -227,8 +227,8 @@ describe('runPortfolioForecast', () => {
     const result = await runAvailable(
       { horizonMonths: 3, paths: 100, monthlyContribution: 1e308, seed: 'overflow-wire' },
       deps({
-        getPortfolioSummary: async () => ({ totals: { totalPortfolioValue: 1000 }, summaries: [] }),
-        getSnapshots: async () => snapshots,
+        getPortfolioSummary: () => Promise.resolve(({ totals: { totalPortfolioValue: 1000 }, summaries: [] })),
+        getSnapshots: () => Promise.resolve(snapshots),
         today: () => '2026-10-13',
       }),
     );

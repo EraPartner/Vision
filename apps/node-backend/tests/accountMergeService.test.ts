@@ -19,7 +19,7 @@ vi.mock(
   "../src/services/currency/currencyConversionService.ts",
   async (importOriginal) => ({
     ...(await importOriginal<object>()),
-    listLatestStoredRates: vi.fn(async () => ({
+    listLatestStoredRates: vi.fn(() => Promise.resolve(({
       rows: [
         {
           currency_code: "USD",
@@ -28,7 +28,7 @@ vi.mock(
           fetched_at: "2026-06-01T10:00:00Z",
         },
       ],
-    })),
+    }))),
   }),
 );
 
@@ -97,26 +97,26 @@ function happyPath({
     { id: number; funding_account_id: number | null }
   >;
 } = {}) {
-  mockClient.query.mockImplementation(async (sql, params = []) => {
+  mockClient.query.mockImplementation((sql, params = []) => {
     if (isOpeningAnchorRead(sql, params))
-      return { rows: openingAnchors };
+      return Promise.resolve({ rows: openingAnchors });
     if (norm(sql).includes("for update") && norm(sql).includes("where id = $1"))
-      return { rows: [{ id: 2, name: "TARGET" }] };
+      return Promise.resolve({ rows: [{ id: 2, name: "TARGET" }] });
     if (norm(sql).includes("for update") && norm(sql).includes("any"))
-      return { rows: [{ id: 1 }] };
+      return Promise.resolve({ rows: [{ id: 1 }] });
     if (norm(sql).includes("from accounts where id = $1"))
-      return {
+      return Promise.resolve({
         rows: fundingAccounts[params[0]] ? [fundingAccounts[params[0]]] : [],
-      };
-    if (norm(sql).includes("group by account_id")) return { rows: stampRanges };
-    if (norm(sql).includes("update transactions")) return { rowCount: 3 };
-    if (norm(sql).includes("update planned_transactions")) return { rowCount: 1 };
-    if (norm(sql).includes("update portfolio_transactions")) return { rowCount: 2 };
-    if (norm(sql).includes("update portfolio_import_batches")) return { rowCount: 1 };
+      });
+    if (norm(sql).includes("group by account_id")) return Promise.resolve({ rows: stampRanges });
+    if (norm(sql).includes("update transactions")) return Promise.resolve({ rowCount: 3 });
+    if (norm(sql).includes("update planned_transactions")) return Promise.resolve({ rowCount: 1 });
+    if (norm(sql).includes("update portfolio_transactions")) return Promise.resolve({ rowCount: 2 });
+    if (norm(sql).includes("update portfolio_import_batches")) return Promise.resolve({ rowCount: 1 });
     if (norm(sql).includes("update accounts set funding_account_id"))
-      return { rowCount: 0 };
-    if (norm(sql).includes("delete from accounts")) return { rowCount: 1 };
-    return { rows: [], rowCount: 0 };
+      return Promise.resolve({ rowCount: 0 });
+    if (norm(sql).includes("delete from accounts")) return Promise.resolve({ rowCount: 1 });
+    return Promise.resolve({ rows: [], rowCount: 0 });
   });
 }
 
@@ -152,18 +152,18 @@ describe("mergeAccounts (ADR-088)", () => {
   });
 
   it("throws NotFound when the survivor is missing", async () => {
-    mockClient.query.mockImplementation(async (sql) =>
-      norm(sql).includes("where id = $1") ? { rows: [] } : { rows: [], rowCount: 0 },
+    mockClient.query.mockImplementation((sql) =>
+      Promise.resolve(norm(sql).includes("where id = $1") ? { rows: [] } : { rows: [], rowCount: 0 }),
     );
     await expect(mergeAccounts(asAccountId(2), [asAccountId(1)])).rejects.toThrow(NotFoundError);
   });
 
   it("throws NotFound when a source is missing", async () => {
-    mockClient.query.mockImplementation(async (sql) => {
+    mockClient.query.mockImplementation((sql) => {
       if (norm(sql).includes("where id = $1"))
-        return { rows: [{ id: 2, name: "TARGET" }] };
-      if (norm(sql).includes("any")) return { rows: [] }; // no sources found
-      return { rows: [], rowCount: 0 };
+        return Promise.resolve({ rows: [{ id: 2, name: "TARGET" }] });
+      if (norm(sql).includes("any")) return Promise.resolve({ rows: [] }); // no sources found
+      return Promise.resolve({ rows: [], rowCount: 0 });
     });
     await expect(mergeAccounts(asAccountId(2), [asAccountId(1)])).rejects.toThrow(NotFoundError);
   });
@@ -506,23 +506,23 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
     stampRanges?: StampRange[];
     openingAnchors?: OpeningAnchor[];
   } = {}) {
-    poolQuery.mockImplementation(async (sql, params = []) => {
+    poolQuery.mockImplementation((sql, params = []) => {
       if (isOpeningAnchorRead(sql, params))
-        return { rows: openingAnchors };
-      if (norm(sql).includes("group by account_id")) return { rows: stampRanges };
+        return Promise.resolve({ rows: openingAnchors });
+      if (norm(sql).includes("group by account_id")) return Promise.resolve({ rows: stampRanges });
       if (norm(sql).includes("select id, currency from accounts"))
-        return { rows: accounts };
+        return Promise.resolve({ rows: accounts });
       if (norm(sql).includes("balance_parts"))
-        return { rows: [{ balance_parts: parts }] };
+        return Promise.resolve({ rows: [{ balance_parts: parts }] });
       if (norm(sql).includes("from transactions where account_id"))
-        return { rows: [{ n: counts.transactions }] };
+        return Promise.resolve({ rows: [{ n: counts.transactions }] });
       if (norm(sql).includes("from planned_transactions"))
-        return { rows: [{ n: counts.planned }] };
+        return Promise.resolve({ rows: [{ n: counts.planned }] });
       if (norm(sql).includes("portfolio_transactions"))
-        return { rows: [{ n: counts.portfolio }] };
+        return Promise.resolve({ rows: [{ n: counts.portfolio }] });
       if (norm(sql).includes("funding_account_id"))
-        return { rows: [{ n: counts.funding }] };
-      return { rows: [], rowCount: 0 };
+        return Promise.resolve({ rows: [{ n: counts.funding }] });
+      return Promise.resolve({ rows: [], rowCount: 0 });
     });
   }
 

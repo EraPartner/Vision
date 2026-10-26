@@ -109,12 +109,12 @@ describe("belgianInflationService", () => {
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
+      json: () => Promise.resolve(({
         data: [
           { year: 2024, month: 1, value: "0.30" },
           { year: 2024, month: 2, value: "0.20" },
         ],
-      }),
+      })),
     });
 
     vi.stubGlobal("fetch", fetchMock);
@@ -143,13 +143,13 @@ describe("belgianInflationService", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({
+        json: () => Promise.resolve(({
           facts: [
             fact("January 2024", "100"),
             fact("February 2024", "101"),
             fact("constructor 2024", "102"),
           ],
-        }),
+        })),
       }),
     );
 
@@ -198,9 +198,9 @@ describe("belgianInflationService", () => {
       .mockRejectedValueOnce(new Error("timeout"))
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
+        json: () => Promise.resolve(({
           data: [{ year: 2024, month: 1, value: "0.30" }],
-        }),
+        })),
       });
 
     vi.stubGlobal("fetch", fetchMock);
@@ -254,17 +254,17 @@ describe("belgianInflationService", () => {
       .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
       .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
 
-    const fetchMock = vi.fn(async (url) => {
+    const fetchMock = vi.fn((url) => {
       if (
         String(url).includes("bestat.statbel") ||
         String(url).includes("bestat.economie.fgov")
       ) {
-        throw new Error("statbel unreachable");
+        return Promise.reject(new Error("statbel unreachable"));
       }
 
-      return {
+      return Promise.resolve({
         ok: true,
-        json: async () => ({
+        json: () => Promise.resolve(({
           dimension: {
             time: {
               category: {
@@ -281,8 +281,8 @@ describe("belgianInflationService", () => {
             1: 100.5,
             2: 101,
           },
-        }),
-      };
+        })),
+      });
     });
 
     vi.stubGlobal("fetch", fetchMock);
@@ -320,12 +320,12 @@ describe("belgianInflationService", () => {
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
+      json: () => Promise.resolve(({
         data: [
           { year: 2024, month: 1, value: "0.30" },
           { year: 2024, month: 2, value: "0.20" },
         ],
-      }),
+      })),
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -388,13 +388,13 @@ describe("belgianInflationService", () => {
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
+      json: () => Promise.resolve(({
         data: [
           { year: 2024, month: 1, value: "0.30" },
           { year: 2024, month: 2, value: "0.20" },
           { year: 2024, month: 3, value: "0.10" },
         ],
-      }),
+      })),
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -447,9 +447,9 @@ describe("belgianInflationService", () => {
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
+      json: () => Promise.resolve(({
         data: [{ year: 2024, month: 1, value: "0.30" }],
-      }),
+      })),
     });
     vi.stubGlobal("fetch", fetchMock);
 

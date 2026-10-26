@@ -209,8 +209,8 @@ describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        text: async () =>
-          `<Cube><Cube time='${day}'><Cube currency='USD' rate='2'/></Cube></Cube>`,
+        text: () =>
+          Promise.resolve(`<Cube><Cube time='${day}'><Cube currency='USD' rate='2'/></Cube></Cube>`),
       }),
     );
     expect(await backfillPortfolioHistoricalRates()).toMatchObject({

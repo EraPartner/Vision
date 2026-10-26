@@ -11,15 +11,15 @@ import { createResearchCache } from '../../src/services/research/researchCache.t
 type AggregatorDeps = NonNullable<Parameters<typeof createResearchAggregator>[0]>;
 
 const makeGovernor = (canSpendImpl: (provider: string) => boolean = () => true) => ({
-  canSpend: vi.fn(async (p: string) => canSpendImpl(p)),
+  canSpend: vi.fn((p: string) => Promise.resolve(canSpendImpl(p))),
   spend: vi.fn(async () => {}),
 });
 
 // 'quote'/'stock' capability chain is [yahoo, twelve_data, finnhub, fmp, alpha_vantage]
 // — Yahoo (keyless) is preferred; paid providers are the fallback.
 const makeAdapters = (overrides = {}) => ({
-  yahoo: { quote: vi.fn(async () => ({ price: 2, src: 'yahoo' })) },
-  twelve_data: { quote: vi.fn(async () => ({ price: 1, src: 'twelve_data' })) },
+  yahoo: { quote: vi.fn(() => Promise.resolve(({ price: 2, src: 'yahoo' }))) },
+  twelve_data: { quote: vi.fn(() => Promise.resolve(({ price: 1, src: 'twelve_data' }))) },
   ...overrides,
 });
 
@@ -118,7 +118,7 @@ describe('researchAggregator.fetch', () => {
 
   it('falls through on a provider error and records the health error', async () => {
     const adapters = makeAdapters({
-      yahoo: { quote: vi.fn(async () => { throw new Error('upstream 502'); }) },
+      yahoo: { quote: vi.fn(() => { return Promise.reject(new Error('upstream 502')); }) },
     });
     const governor = makeGovernor();
     const agg = build({ adapters, governor });
@@ -160,14 +160,14 @@ describe('researchAggregator.fetch', () => {
 describe('researchAggregator.fetchFundamentals (FMP + Yahoo merge)', () => {
   const makeFundamentalsAdapters = (overrides = {}) => ({
     fmp: {
-      fundamentals: vi.fn(async () => ({
+      fundamentals: vi.fn(() => Promise.resolve(({
         symbol: 'AAPL', pe: 30, interestCoverage: 12, forwardPE: null, revenue: null,
-      })),
+      }))),
     },
     yahoo: {
-      fundamentals: vi.fn(async () => ({
+      fundamentals: vi.fn(() => Promise.resolve(({
         symbol: 'AAPL', pe: 28, forwardPE: 25, revenue: 1000, freeCashFlow: 500,
-      })),
+      }))),
     },
     ...overrides,
   });
@@ -204,7 +204,7 @@ describe('researchAggregator.fetchFundamentals (FMP + Yahoo merge)', () => {
 
   it('uses FMP alone when Yahoo throws, recording the health error', async () => {
     const adapters = makeFundamentalsAdapters({
-      yahoo: { fundamentals: vi.fn(async () => { throw new Error('yahoo 502'); }) },
+      yahoo: { fundamentals: vi.fn(() => { return Promise.reject(new Error('yahoo 502')); }) },
     });
     const agg = build({ adapters, governor: makeGovernor() });
 
@@ -217,8 +217,8 @@ describe('researchAggregator.fetchFundamentals (FMP + Yahoo merge)', () => {
 
   it('reports unavailable when both providers fail', async () => {
     const adapters = makeFundamentalsAdapters({
-      fmp: { fundamentals: vi.fn(async () => { throw new Error('fmp down'); }) },
-      yahoo: { fundamentals: vi.fn(async () => { throw new Error('yahoo down'); }) },
+      fmp: { fundamentals: vi.fn(() => { return Promise.reject(new Error('fmp down')); }) },
+      yahoo: { fundamentals: vi.fn(() => { return Promise.reject(new Error('yahoo down')); }) },
     });
     const agg = build({ adapters, governor: makeGovernor() });
 

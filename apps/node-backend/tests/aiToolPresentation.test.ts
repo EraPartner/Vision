@@ -51,7 +51,7 @@ beforeEach(() => {
   vi.mocked(aiChatRepository).getConversation.mockResolvedValue(conversation);
   vi.mocked(aiChatRepository).getMessages.mockResolvedValue([]);
   vi.mocked(aiChatRepository).appendMessage.mockImplementation(
-    async (input) => {
+    (input) => {
       const roles: AiMessageRow["role"][] = [
         "user",
         "assistant",
@@ -69,14 +69,14 @@ beforeEach(() => {
         (status) => status === (input.status ?? "complete"),
       );
       if (!role || !status)
-        throw new Error("Invalid synthetic message role/status");
-      return partial<AiMessageRow>({
+        return Promise.reject(new Error("Invalid synthetic message role/status"));
+      return Promise.resolve(partial<AiMessageRow>({
         ...input,
         role,
         status,
         id: `${role}-row`,
         createdAt: new Date("2026-10-13T00:00:00Z"),
-      });
+      }));
     },
   );
 });

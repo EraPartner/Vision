@@ -155,7 +155,7 @@ describe("eurostat parseJsonStat", () => {
 const makeGovernor = (
   canSpend: (provider: string) => boolean = () => true,
 ) => ({
-  canSpend: vi.fn(async (p: string) => canSpend(p)),
+  canSpend: vi.fn((p: string) => Promise.resolve(canSpend(p))),
   spend: vi.fn(async () => {}),
 });
 
@@ -171,32 +171,32 @@ const build = (deps: Record<string, unknown>) =>
 
 const macroAdapters = (over = {}) => ({
   fred: {
-    macroSearch: vi.fn(async () => ({
+    macroSearch: vi.fn(() => Promise.resolve(({
       items: [{ provider: "fred", seriesId: "CPIAUCSL", title: "US CPI" }],
-    })),
-    macroSeries: vi.fn(async () => ({
+    }))),
+    macroSeries: vi.fn(() => Promise.resolve(({
       provider: "fred",
       seriesId: "CPIAUCSL",
       points: [{ time: 1, close: 1 }],
-    })),
+    }))),
   },
   eurostat: {
-    macroSearch: vi.fn(async () => ({
+    macroSearch: vi.fn(() => Promise.resolve(({
       items: [{ provider: "eurostat", seriesId: "x?geo=BE", title: "BE HICP" }],
-    })),
-    macroSeries: vi.fn(async () => ({
+    }))),
+    macroSeries: vi.fn(() => Promise.resolve(({
       provider: "eurostat",
       seriesId: "x?geo=BE",
       points: [{ time: 2, close: 2 }],
-    })),
+    }))),
   },
   dbnomics: {
-    macroSearch: vi.fn(async () => ({ items: [] })),
-    macroSeries: vi.fn(async () => ({
+    macroSearch: vi.fn(() => Promise.resolve(({ items: [] }))),
+    macroSeries: vi.fn(() => Promise.resolve(({
       provider: "dbnomics",
       seriesId: "A/B/C",
       points: [],
-    })),
+    }))),
   },
   ...over,
 });
@@ -300,8 +300,8 @@ describe("researchAggregator.fetchMacroSeries", () => {
   it("reports unavailable with the error message when the adapter throws", async () => {
     const adapters = macroAdapters({
       eurostat: {
-        macroSeries: vi.fn(async () => {
-          throw new Error("boom");
+        macroSeries: vi.fn(() => {
+          return Promise.reject(new Error("boom"));
         }),
       },
     });

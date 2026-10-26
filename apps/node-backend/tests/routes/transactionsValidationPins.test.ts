@@ -30,7 +30,7 @@ vi.mock("../../src/repositories/transactionRepository.ts", () =>
 
 vi.mock("../../src/services/deduplication.ts", () => ({
   ...mockDeduplication(),
-  lockManualTransactionIdentity: vi.fn(async () => undefined),
+  lockManualTransactionIdentity: vi.fn(() => Promise.resolve(undefined)),
 }));
 
 vi.mock("../../src/config/logger.ts", () => ({
@@ -48,12 +48,12 @@ vi.mock("../../src/services/currency/currencyConversionService.ts", () =>
 vi.mock("../../src/database/connection.ts", () => mockTxConnection());
 
 vi.mock("../../src/repositories/accountRepository.ts", () => {
-  const accountRepository = { findActiveId: vi.fn(async () => 1) };
+  const accountRepository = { findActiveId: vi.fn(() => Promise.resolve(1)) };
   return { accountRepository, default: accountRepository };
 });
 
 vi.mock("../../src/services/plannedMatchService.ts", () => ({
-  autoLinkTransactions: vi.fn(async () => ({ autoLinkedCount: 0, links: [] })),
+  autoLinkTransactions: vi.fn(() => Promise.resolve(({ autoLinkedCount: 0, links: [] }))),
 }));
 
 import rawTransactionRepository from "../../src/repositories/transactionRepository.ts";

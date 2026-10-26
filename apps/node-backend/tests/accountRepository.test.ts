@@ -15,7 +15,7 @@ import {
 
 // Latest stored rates: 1 USD = 0.5 EUR; any other currency has no rate.
 const { mockListLatestStoredRates } = vi.hoisted(() => ({
-  mockListLatestStoredRates: vi.fn(async () => ({
+  mockListLatestStoredRates: vi.fn(() => Promise.resolve(({
     rows: [
       {
         currency_code: "USD",
@@ -24,7 +24,7 @@ const { mockListLatestStoredRates } = vi.hoisted(() => ({
         fetched_at: "2026-06-01T10:00:00Z",
       },
     ],
-  })),
+  }))),
 }));
 
 vi.mock("../src/database/connection.ts", () => mockTxConnection());

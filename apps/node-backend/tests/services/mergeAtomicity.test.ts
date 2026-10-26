@@ -28,7 +28,7 @@ import { must } from "../helpers/must.ts";
  * Load the real connection module against a mocked pg pool, so `withTransaction`
  * performs its genuine ceremony and module-level query() genuinely reroutes.
  */
-async function loadRealTransactionStack() {
+function loadRealTransactionStack() {
   vi.resetModules();
 
   const client = {
@@ -61,7 +61,7 @@ async function loadRealTransactionStack() {
     logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
   }));
 
-  return { client, pool };
+  return Promise.resolve({ client, pool });
 }
 
 /** BEGIN … ROLLBACK bracket + nothing on the pool: the rollback covered it all. */
@@ -103,14 +103,14 @@ afterEach(() => {
 describe("account merge atomicity (ADR-088)", () => {
   it("keeps hard-delete funding-edge cascades behind the graph lock", async () => {
     const { client, pool } = await loadRealTransactionStack();
-    client.query.mockImplementation(async (sql) => {
+    client.query.mockImplementation((sql) => {
       if (sql === "BEGIN" || sql === "ROLLBACK" || sql === "COMMIT") {
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       }
       if (norm(sql).startsWith("delete from accounts")) {
-        return { rows: [{ id: 7 }], rowCount: 1 };
+        return Promise.resolve({ rows: [{ id: 7 }], rowCount: 1 });
       }
-      return { rows: [], rowCount: 1 };
+      return Promise.resolve({ rows: [], rowCount: 1 });
     });
 
     const { accountService } =
@@ -128,17 +128,17 @@ describe("account merge atomicity (ADR-088)", () => {
 
   it("keeps a funding PATCH lock and write inside one real transaction stack", async () => {
     const { client, pool } = await loadRealTransactionStack();
-    client.query.mockImplementation(async (sql) => {
+    client.query.mockImplementation((sql) => {
       if (sql === "BEGIN" || sql === "ROLLBACK" || sql === "COMMIT") {
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       }
       if (norm(sql).includes("from accounts where id = $1")) {
-        return { rows: [accountRow({ id: asAccountId(2), funding_account_id: null })] };
+        return Promise.resolve({ rows: [accountRow({ id: asAccountId(2), funding_account_id: null })] });
       }
       if (norm(sql).startsWith("update accounts set")) {
-        throw new Error("late account update failure");
+        return Promise.reject(new Error("late account update failure"));
       }
-      return { rows: [], rowCount: 1 };
+      return Promise.resolve({ rows: [], rowCount: 1 });
     });
 
     const { accountService } =
@@ -164,21 +164,21 @@ describe("account merge atomicity (ADR-088)", () => {
 
   it("rolls back every repoint on one connection when the source DELETE fails", async () => {
     const { client, pool } = await loadRealTransactionStack();
-    client.query.mockImplementation(async (raw) => {
+    client.query.mockImplementation((raw) => {
       if (raw === "BEGIN" || raw === "ROLLBACK" || raw === "COMMIT")
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       const sql = norm(raw);
       if (sql.includes("for update") && sql.includes("where id = $1")) {
-        return { rows: [{ id: 2, name: "TARGET" }] };
+        return Promise.resolve({ rows: [{ id: 2, name: "TARGET" }] });
       }
       if (sql.includes("for update") && sql.includes("any"))
-        return { rows: [{ id: 1 }] };
-      if (sql.includes("group by account_id")) return { rows: [] };
+        return Promise.resolve({ rows: [{ id: 1 }] });
+      if (sql.includes("group by account_id")) return Promise.resolve({ rows: [] });
       // The realistic late failure: account_id FKs are ON DELETE RESTRICT, so a
       // missed reference makes the final DELETE raise after every repoint ran.
       if (sql.includes("delete from accounts"))
-        throw new Error("23503 foreign key violation");
-      return { rows: [], rowCount: 1 };
+        return Promise.reject(new Error("23503 foreign key violation"));
+      return Promise.resolve({ rows: [], rowCount: 1 });
     });
 
     const { mergeAccounts } =
@@ -219,19 +219,19 @@ describe("account merge atomicity (ADR-088)", () => {
 describe("recipient merge atomicity (ADR-014)", () => {
   it("rolls back the FK reassignments when the grandchild re-point fails", async () => {
     const { client, pool } = await loadRealTransactionStack();
-    client.query.mockImplementation(async (sql) => {
+    client.query.mockImplementation((sql) => {
       if (sql === "BEGIN" || sql === "ROLLBACK" || sql === "COMMIT")
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       if (norm(sql).includes("for update"))
-        return { rows: [{ id: 1, primary_recipient_id: null }] };
-      if (norm(sql).includes("information_schema")) return { rows: [] };
+        return Promise.resolve({ rows: [{ id: 1, primary_recipient_id: null }] });
+      if (norm(sql).includes("information_schema")) return Promise.resolve({ rows: [] });
       // Last statement of the merge — fails after every FK has been reassigned.
       if (norm(sql).includes("where primary_recipient_id = any")) {
-        throw new Error("deadlock detected");
+        return Promise.reject(new Error("deadlock detected"));
       }
       if (norm(sql).includes("returning id"))
-        return { rows: [{ id: 3 }], rowCount: 1 };
-      return { rows: [], rowCount: 1 };
+        return Promise.resolve({ rows: [{ id: 3 }], rowCount: 1 });
+      return Promise.resolve({ rows: [], rowCount: 1 });
     });
 
     const { mergeRecipients } =
@@ -263,15 +263,15 @@ describe("recipient merge atomicity (ADR-014)", () => {
 describe("transfer mark atomicity (ADR-083)", () => {
   it("rolls back the released peers and the first leg when the second leg fails", async () => {
     const { client, pool } = await loadRealTransactionStack();
-    client.query.mockImplementation(async (sql, params) => {
+    client.query.mockImplementation((sql, params) => {
       if (sql === "BEGIN" || sql === "ROLLBACK" || sql === "COMMIT")
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       if (
         norm(sql).startsWith(
           "select id, amount, account_id, is_active, transfer_source, transfer_peer_id",
         )
       ) {
-        return {
+        return Promise.resolve({
           rows: [
             {
               id: 10,
@@ -298,13 +298,13 @@ describe("transfer mark atomicity (ADR-083)", () => {
               transfer_peer_id: 10,
             },
           ],
-        };
+        });
       }
       // The SECOND manual leg fails, after the peer release and the first leg.
       if (isManualMark(sql, params) && params?.[3] === 20) {
-        throw new Error("serialization failure");
+        return Promise.reject(new Error("serialization failure"));
       }
-      return { rows: [], rowCount: 1 };
+      return Promise.resolve({ rows: [], rowCount: 1 });
     });
 
     const { markTransfer } =

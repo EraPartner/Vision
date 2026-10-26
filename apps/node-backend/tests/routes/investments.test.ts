@@ -331,7 +331,7 @@ describe("Investment Routes", () => {
       );
       // Faithful stand-in for the real bulk update: one statement, N rows.
       investmentRepository.updatePricesBulk.mockImplementation(
-        async (updates) => updates.length,
+        (updates) => Promise.resolve(updates.length),
       );
 
       const res = await api.post(`${BASE}/refresh-prices`).send({}).expect(200);
@@ -360,7 +360,7 @@ describe("Investment Routes", () => {
         }),
       );
       investmentRepository.updatePricesBulk.mockImplementation(
-        async (updates) => updates.length,
+        (updates) => Promise.resolve(updates.length),
       );
 
       const res = await api.post(`${BASE}/refresh-prices`).send({}).expect(200);
@@ -388,7 +388,7 @@ describe("Investment Routes", () => {
         }),
       );
       investmentRepository.updatePricesBulk.mockImplementation(
-        async (updates) => updates.length,
+        (updates) => Promise.resolve(updates.length),
       );
 
       const res = await api.post(`${BASE}/refresh-prices`).send({}).expect(200);
@@ -414,7 +414,7 @@ describe("Investment Routes", () => {
         }),
       );
       investmentRepository.updatePricesBulk.mockImplementation(
-        async (updates) => updates.length,
+        (updates) => Promise.resolve(updates.length),
       );
 
       const res = await api.post(`${BASE}/refresh-prices`).send({}).expect(200);

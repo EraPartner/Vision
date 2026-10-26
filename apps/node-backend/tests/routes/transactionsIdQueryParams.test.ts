@@ -64,7 +64,7 @@ vi.mock("../../src/services/attachmentService.ts", () =>
 );
 vi.mock("../../src/services/transferReconciliationService.ts", () => ({
   scheduleReconcile: vi.fn(),
-  getTransferSuggestions: vi.fn(async () => []),
+  getTransferSuggestions: vi.fn(() => Promise.resolve([])),
   markTransfer: vi.fn(),
   unmarkTransfer: vi.fn(),
 }));
@@ -109,7 +109,7 @@ const armExport = () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  convertRowsToEur.mockImplementation(async (rows) => rows as ConvertedRow[]);
+  convertRowsToEur.mockImplementation((rows) => Promise.resolve(rows as ConvertedRow[]));
   attachmentRepository.listPathsByTransactionIds.mockResolvedValue([]);
   transactionRepository.getAllWithCount.mockResolvedValue({
     rows: [],

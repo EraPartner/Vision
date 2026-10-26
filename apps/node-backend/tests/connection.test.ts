@@ -239,9 +239,10 @@ describe("database connection module", () => {
       pool.query.mockResolvedValue({ rows: [] });
 
       let leaked: (() => Promise<unknown>) | undefined;
-      await module.withTransaction(async () => {
+      await module.withTransaction(() => {
         leaked = () => module.query("SELECT after");
-      });
+      return Promise.resolve();
+});
       await must(leaked, "leaked")();
 
       // The leaked query ran after release — it must NOT hit the released client.
@@ -258,10 +259,10 @@ describe("database connection module", () => {
       pool.connect.mockResolvedValueOnce(client);
 
       await module.withTransaction(async () => {
-        await module.withSavepointIfInTransaction("sp_ok", async () => "fine");
+        await module.withSavepointIfInTransaction("sp_ok", () => Promise.resolve("fine"));
         await expect(
-          module.withSavepointIfInTransaction("sp_fail", async () => {
-            throw new Error("boom");
+          module.withSavepointIfInTransaction("sp_fail", () => {
+            return Promise.reject(new Error("boom"));
           }),
         ).rejects.toThrow("boom");
       });
@@ -371,18 +372,18 @@ describe("database connection module", () => {
       const original = new Error("original failure");
       const rollbackError = new Error("savepoint rollback failed");
       const client = mockTxClient();
-      client.query.mockImplementation(async (sql) => {
+      client.query.mockImplementation((sql) => {
         if (sql === "ROLLBACK TO SAVEPOINT vision_nested_tx_1") {
-          throw rollbackError;
+          return Promise.reject(rollbackError);
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       });
       pool.connect.mockResolvedValueOnce(client);
 
       await expect(
         module.withTransaction(async () => {
-          await module.withTransaction(async () => {
-            throw original;
+          await module.withTransaction(() => {
+            return Promise.reject(original);
           });
         }),
       ).rejects.toBe(original);
@@ -412,12 +413,13 @@ describe("database connection module", () => {
       });
       let continuation;
 
-      await module.withTransaction(async () => {
+      await module.withTransaction(() => {
         continuation = (async () => {
           await gate;
           return module.query("SELECT after inherited context");
         })();
-      });
+      return Promise.resolve();
+});
 
       must(releaseContinuation, "releaseContinuation")();
       await continuation;
@@ -435,7 +437,7 @@ describe("database connection module", () => {
     it("withSavepointIfInTransaction is a passthrough outside a transaction", async () => {
       const { module, pool } = await loadConnectionModule();
       await expect(
-        module.withSavepointIfInTransaction("sp", async () => 42),
+        module.withSavepointIfInTransaction("sp", () => Promise.resolve(42)),
       ).resolves.toBe(42);
       expect(pool.query).not.toHaveBeenCalled();
     });

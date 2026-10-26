@@ -24,7 +24,7 @@ vi.mock("../../src/repositories/portfolioTransactionRepository.ts", () => ({
 vi.mock("../../src/services/currency/currencyConversionService.ts", () => ({
   listLatestStoredRates: vi.fn(),
   // No stored historical rates: only rates stamped on a transaction are dated.
-  getHistoricalRateIndex: vi.fn(async () => new Map()),
+  getHistoricalRateIndex: vi.fn(() => Promise.resolve(new Map())),
 }));
 import settingsService from "../../src/services/settingsService.ts";
 import { computeMonthlySummary } from "../../src/services/calculations/aggregation/monthly.ts";

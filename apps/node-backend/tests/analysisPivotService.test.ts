@@ -41,9 +41,9 @@ describe("complete-source pivots", () => {
         },
       },
       {
-        execute: async (request) => {
+        execute: (request) => {
           queries.push(request);
-          return partial<AnalysisSqlResult>({
+          return Promise.resolve(partial<AnalysisSqlResult>({
             rows: [0, 1].flatMap((r) =>
               [0, 1].map((c) => ({
                 __row_depth: r,
@@ -54,7 +54,7 @@ describe("complete-source pivots", () => {
               })),
             ),
             window: { kind: "page", offset: 0, hasMore: false },
-          });
+          }));
         },
       },
     );
@@ -99,12 +99,12 @@ describe("complete-source pivots", () => {
         },
         {
           financialDeps: {
-            query: financialQuery(async () => ({
+            query: financialQuery(() => Promise.resolve(({
               rows: [
                 { date: "2026-01-01", currency: "EUR", value: "100" },
                 { date: "2026-01-02", currency: "EUR", value: closing },
               ],
-            })),
+            }))),
           },
         },
       );
@@ -129,11 +129,11 @@ describe("complete-source pivots", () => {
           config: { rows: [], columns: [], values: ["sum_spending"] },
         },
         {
-          execute: async () =>
-            partial<AnalysisSqlResult>({
+          execute: () =>
+            Promise.resolve(partial<AnalysisSqlResult>({
               rows: [],
               window: { kind: "page", offset: 0, hasMore: true },
-            }),
+            })),
         },
       ),
     ).rejects.toThrow("complete-output");
@@ -147,12 +147,12 @@ describe("complete-source pivots", () => {
         config: { rows: ["month"], columns: [], values: ["sum_units"] },
       },
       {
-        execute: async (request) => {
+        execute: (request) => {
           queries.push(request.sql);
-          return partial<AnalysisSqlResult>({
+          return Promise.resolve(partial<AnalysisSqlResult>({
             rows: [],
             window: { kind: "page", offset: 0, hasMore: false },
-          });
+          }));
         },
       },
     );

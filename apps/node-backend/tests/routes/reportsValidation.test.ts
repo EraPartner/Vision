@@ -10,7 +10,7 @@ describe('Report exclusion id validation', () => {
     }
   );
 
-  it('accepts exclusion ids at the PostgreSQL int4 ceiling', async () => {
+  it('accepts exclusion ids at the PostgreSQL int4 ceiling', () => {
     expect(__parseReportBody({
       excludedCategoryIds: [2147483647],
       excludedRecipientIds: [2147483647],

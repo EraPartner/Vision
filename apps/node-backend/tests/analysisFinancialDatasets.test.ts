@@ -19,7 +19,7 @@ const financialQuery = (impl: (sql: string) => Promise<{ rows: unknown[] }>) =>
 
 describe("canonical financial analysis", () => {
   it("withholds valuation for missing market quotes while retaining basis and quantity", async () => {
-    const query = financialQuery(async (sql) => ({
+    const query = financialQuery((sql) => Promise.resolve(({
       rows: sql.includes("FROM investments WHERE")
         ? [
             {
@@ -43,7 +43,7 @@ describe("canonical financial analysis", () => {
               },
             ]
           : [],
-    }));
+    })));
     const result = await executeFinancialAnalysis(
       {
         datasetId: "positions",
@@ -88,7 +88,7 @@ describe("canonical financial analysis", () => {
     expect(result.provenance.coverageReasons).toEqual(["market-quote-missing"]);
   });
   it("does not require market quotes for fixed income or closed market positions", async () => {
-    const query = financialQuery(async (sql) => ({
+    const query = financialQuery((sql) => Promise.resolve(({
       rows: sql.includes("FROM investments WHERE")
         ? [
             {
@@ -119,7 +119,7 @@ describe("canonical financial analysis", () => {
               },
             ]
           : [],
-    }));
+    })));
     const result = await executeFinancialAnalysis(
       { datasetId: "positions", fields: ["investment_id", "current_value"] },
       { deps: { query } },
@@ -233,7 +233,7 @@ describe("canonical financial analysis", () => {
     expect(query).toHaveBeenCalledTimes(2);
   });
   it("uses canonical partial-sale units and excludes unrelated private fields", async () => {
-    const query = financialQuery(async (sql) => ({
+    const query = financialQuery((sql) => Promise.resolve(({
       rows: sql.includes("FROM investments WHERE")
         ? [
             {
@@ -269,7 +269,7 @@ describe("canonical financial analysis", () => {
               },
             ]
           : [],
-    }));
+    })));
     const result = await executeFinancialAnalysis(
       {
         datasetId: "positions",
@@ -288,7 +288,7 @@ describe("canonical financial analysis", () => {
     ).rejects.toThrow("Unsupported");
   });
   it("withholds money when FX evidence is absent", async () => {
-    const query = financialQuery(async (sql) => ({
+    const query = financialQuery((sql) => Promise.resolve(({
       rows: sql.includes("FROM investments WHERE")
         ? [
             {
@@ -312,7 +312,7 @@ describe("canonical financial analysis", () => {
               },
             ]
           : [],
-    }));
+    })));
     const result = await executeFinancialAnalysis(
       {
         datasetId: "positions",
@@ -379,7 +379,7 @@ describe("canonical financial analysis", () => {
       },
       {
         deps: {
-          fetchBenchmark: async () => ({
+          fetchBenchmark: () => Promise.resolve(({
             data: {
               currency: "USD",
               points: [
@@ -389,7 +389,7 @@ describe("canonical financial analysis", () => {
                 { time: Date.UTC(2026, 0, 4), close: null },
               ],
             },
-          }),
+          })),
         },
       },
     );
@@ -401,7 +401,7 @@ describe("canonical financial analysis", () => {
     });
   });
   it("sums the latest broker value per account even when closing dates differ", async () => {
-    const query = financialQuery(async (sql) => ({
+    const query = financialQuery((sql) => Promise.resolve(({
       rows: sql.includes("to_regclass")
         ? [{ relation: "portfolio_broker_snapshots" }]
         : [
@@ -424,7 +424,7 @@ describe("canonical financial analysis", () => {
               value: "120",
             },
           ],
-    }));
+    })));
     const result = await executeFinancialAnalysis(
       {
         datasetId: "broker-history",
@@ -441,12 +441,12 @@ describe("canonical financial analysis", () => {
       { datasetId: "portfolio-history", measures: ["sum_value"] },
       {
         deps: {
-          query: loose<FinancialQuery>(async () => ({
+          query: loose<FinancialQuery>(() => Promise.resolve(({
             rows: [
               { date: "2026-01-01", currency: "EUR", value: "100" },
               { date: "2026-01-02", currency: "EUR", value: null },
             ],
-          })),
+          }))),
         },
       },
     );

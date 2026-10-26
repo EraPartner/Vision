@@ -101,7 +101,7 @@ vi.mock("../../src/services/portfolioPerformanceSnapshotService.ts", () => ({
     cumulativeInflation: 0,
   })),
   computeHeatmap: vi.fn(() => ({ years: [], data: {}, maxAbsPct: 0 })),
-  getBreakdownSummary: vi.fn(async () => []),
+  getBreakdownSummary: vi.fn(() => Promise.resolve([])),
 }));
 
 vi.mock("../../src/services/portfolio/portfolioSummaryService.ts", () => ({

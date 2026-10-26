@@ -32,7 +32,7 @@ vi.mock("../../src/services/plannedTransactionService.ts", () => {
     updateWithLoanSchedule: vi.fn(),
     hardDelete: vi.fn(),
     replaceLoanSchedule: vi.fn(),
-    executeAndAdvance: vi.fn(async () => ({ duplicate: false })),
+    executeAndAdvance: vi.fn(() => Promise.resolve(({ duplicate: false }))),
     lockForExecution: vi.fn(),
     // Execution reads its locked state from the first queued getById row.
     getExecutionState: vi.fn(async (id: number) => {
@@ -54,7 +54,7 @@ vi.mock("../../src/services/plannedTransactionService.ts", () => {
 
 vi.mock("../../src/database/connection.ts", () => ({
   ...mockConnection(),
-  withTransaction: vi.fn(async (fn) => fn()),
+  withTransaction: vi.fn((fn) => Promise.resolve(fn())),
 }));
 
 // The per-route PATCH limiter (routes/plannedTransactions.js:417) is stubbed

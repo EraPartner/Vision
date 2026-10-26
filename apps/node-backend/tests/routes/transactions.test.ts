@@ -37,7 +37,7 @@ vi.mock("../../src/config/logger.ts", () => ({
 
 vi.mock("../../src/services/deduplication.ts", () => ({
   ...mockDeduplication(),
-  lockManualTransactionIdentity: vi.fn(async () => undefined),
+  lockManualTransactionIdentity: vi.fn(() => Promise.resolve(undefined)),
 }));
 
 vi.mock("../../src/services/materializedViewService.ts", () =>
@@ -51,7 +51,7 @@ vi.mock("../../src/services/currency/currencyConversionService.ts", () =>
 vi.mock("../../src/database/connection.ts", () => mockTxConnection());
 
 vi.mock("../../src/repositories/accountRepository.ts", () => {
-  const accountRepository = { findActiveId: vi.fn(async () => 1) };
+  const accountRepository = { findActiveId: vi.fn(() => Promise.resolve(1)) };
   return { accountRepository, default: accountRepository };
 });
 
@@ -65,7 +65,7 @@ vi.mock("../../src/services/attachmentService.ts", () =>
 
 vi.mock("../../src/services/transferReconciliationService.ts", () => ({
   scheduleReconcile: vi.fn(),
-  getTransferSuggestions: vi.fn(async () => []),
+  getTransferSuggestions: vi.fn(() => Promise.resolve([])),
   markTransfer: vi.fn(),
   unmarkTransfer: vi.fn(),
 }));
@@ -131,7 +131,7 @@ describe("Transaction Routes", () => {
       isDuplicate: false,
     } as ManualDuplicateResult);
     convertRowsToEur.mockImplementation(
-      async (rows) => rows as ConvertedRow[],
+      (rows) => Promise.resolve(rows as ConvertedRow[]),
     );
     attachmentRepository.listPathsByTransactionIds.mockResolvedValue([]);
   });

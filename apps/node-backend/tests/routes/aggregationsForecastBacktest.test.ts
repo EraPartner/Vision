@@ -47,14 +47,14 @@ interface ForecastOptions {
   includeBacktest?: boolean;
 }
 
-const methodsSpy = vi.fn(async (_options: ForecastOptions) => ({
+const methodsSpy = vi.fn((_options: ForecastOptions) => Promise.resolve(({
   data: {},
   meta: {},
-}));
-const rollingSpy = vi.fn(async (_options: ForecastOptions) => ({
+})));
+const rollingSpy = vi.fn((_options: ForecastOptions) => Promise.resolve(({
   data: {},
   meta: {},
-}));
+})));
 
 vi.mock("../../src/services/calculations/forecast/index.ts", () => ({
   computeCashflowForecast: (options: ForecastOptions) => methodsSpy(options),

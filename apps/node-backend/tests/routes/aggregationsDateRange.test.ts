@@ -3,8 +3,8 @@ import { must } from "../helpers/must.ts";
 
 type PivotSpy = (...args: unknown[]) => Promise<{ data: object; meta: object }>;
 
-const recipientPivotSpy = vi.fn<PivotSpy>(async () => ({ data: {}, meta: {} }));
-const tagPivotSpy = vi.fn<PivotSpy>(async () => ({ data: {}, meta: {} }));
+const recipientPivotSpy = vi.fn<PivotSpy>(() => Promise.resolve(({ data: {}, meta: {} })));
+const tagPivotSpy = vi.fn<PivotSpy>(() => Promise.resolve(({ data: {}, meta: {} })));
 
 vi.mock(
   "../../src/services/calculations/aggregation/recipientPivot.ts",

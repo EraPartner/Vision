@@ -6,7 +6,7 @@ import {
 
 // Latest stored rates: 1 USD = 0.5 EUR.
 vi.mock("../src/services/currency/currencyConversionService.ts", () => ({
-  listLatestStoredRates: vi.fn(async () => ({
+  listLatestStoredRates: vi.fn(() => Promise.resolve(({
     rows: [
       {
         currency_code: "USD",
@@ -15,11 +15,11 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () => ({
         fetched_at: "2026-06-01T10:00:00Z",
       },
     ],
-  })),
+  }))),
 }));
 
 vi.mock("../src/database/connection.ts", () =>
-  mockConnection({ withTransaction: vi.fn(async (fn) => fn()) }),
+  mockConnection({ withTransaction: vi.fn((fn) => Promise.resolve(fn())) }),
 );
 
 vi.mock("../src/repositories/accountRepository.ts", () => {
@@ -345,13 +345,13 @@ describe("accountService.update", () => {
 describe("accountService — funding chain cycles", () => {
   // Mock the accounts graph: id → funding_account_id (undefined = chain ends).
   const graph = (edges: Record<number, number | undefined>) => {
-    accountRepository.getById.mockImplementation(async (id) =>
-      id in edges
+    accountRepository.getById.mockImplementation((id) =>
+      Promise.resolve(id in edges
         ? partial<AccountRow>({
             id: Number(id),
             funding_account_id: edges[id] ?? null,
           })
-        : undefined,
+        : undefined),
     );
   };
 

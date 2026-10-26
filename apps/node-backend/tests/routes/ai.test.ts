@@ -222,7 +222,7 @@ describe("POST /api/ai/chat/stream", () => {
     };
     const conversation = { id: UUID, title: "hi", model: "llama3.2:3b" };
 
-    mockTurn(async ({ onEvent }) => {
+    mockTurn(({ onEvent }) => {
       onEvent({ type: "user_message", data: { message: userMsg } });
       onEvent({ type: "token", data: "Your " });
       onEvent({ type: "token", data: "top " });
@@ -235,14 +235,14 @@ describe("POST /api/ai/chat/stream", () => {
         },
       });
       onEvent({ type: "tool_result", data: { message: toolMsg } });
-      return {
+      return Promise.resolve({
         conversation,
         userMessage: userMsg,
         toolMessages: [toolMsg],
         assistantMessage: assistantMsg,
         usage: { evalCount: 10, promptEvalCount: 5, totalDurationMs: 120 },
         iterations: 2,
-      };
+      });
     });
 
     const res = await api
@@ -383,19 +383,19 @@ describe("POST /api/ai/chat/stream", () => {
   });
 
   it("passes the service's public event name through without a rename layer", async () => {
-    mockTurn(async ({ onEvent }) => {
+    mockTurn(({ onEvent }) => {
       onEvent({
         type: "tool_result",
         data: { message: { id: "t1", role: "tool", content: "" } },
       });
-      return {
+      return Promise.resolve({
         conversation: { id: UUID },
         userMessage: { id: "u1" },
         toolMessages: [],
         assistantMessage: { id: "a1", content: "ok" },
         usage: {},
         iterations: 1,
-      };
+      });
     });
 
     const res = await api

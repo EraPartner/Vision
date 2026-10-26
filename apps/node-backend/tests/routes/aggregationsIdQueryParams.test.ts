@@ -33,7 +33,7 @@ interface CalcOptions {
 }
 type CalcArgs = [options: CalcOptions, ...rest: unknown[]];
 
-const envelope = async (..._args: CalcArgs) => ({ data: {}, meta: {} });
+const envelope = (..._args: CalcArgs) => Promise.resolve(({ data: {}, meta: {} }));
 
 const monthlySpy = vi.fn(envelope);
 const recipientInsightsSpy = vi.fn(envelope);

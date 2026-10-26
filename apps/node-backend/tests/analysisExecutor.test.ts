@@ -30,10 +30,10 @@ describe("analysis result dates", () => {
       { name: "recorded_at", dataTypeID: 1184 },
       { name: "amount", dataTypeID: 1700 },
     ];
-    const query = vi.fn(async (config) => {
-      if (typeof config === "string") return { rows: [{ pid: 123 }] };
+    const query = vi.fn((config) => {
+      if (typeof config === "string") return Promise.resolve({ rows: [{ pid: 123 }] });
       const raw = ["2026-04-01", "2026-04-01 00:00:00+03", "123.45"];
-      return {
+      return Promise.resolve({
         fields,
         rows: [
           Object.fromEntries(
@@ -43,7 +43,7 @@ describe("analysis result dates", () => {
             ]),
           ),
         ],
-      };
+      });
     });
     // executeAnalysisSql only calls query and release on the client.
     spyOnConnect().mockResolvedValue(loose<pg.PoolClient>({ query, release }));
@@ -99,8 +99,8 @@ describe("visual analysis pagination", () => {
       { month: "2026-03-01", sum_amount: "30" },
       { month: "2026-04-01", sum_amount: "40" },
     ];
-    const query = vi.fn(async (config) => {
-      if (typeof config === "string") return { rows: [{ pid: 123 }] };
+    const query = vi.fn((config) => {
+      if (typeof config === "string") return Promise.resolve({ rows: [{ pid: 123 }] });
       // Simulate PostgreSQL applying the executor's outer pagination only.
       expect(config.text).toBe(
         `SELECT * FROM (${compiled.sql}) AS vision_analysis_result LIMIT $2 OFFSET $3`,
@@ -108,13 +108,13 @@ describe("visual analysis pagination", () => {
       expect(compiled.sql).not.toMatch(/\bLIMIT\b/i);
       expect(config.values[0]).toBe("EUR");
       const [, fetchLimit, offset] = config.values;
-      return {
+      return Promise.resolve({
         fields: [
           { name: "month", dataTypeID: 1082 },
           { name: "sum_amount", dataTypeID: 1700 },
         ],
         rows: allRows.slice(offset, offset + fetchLimit),
-      };
+      });
     });
     const release = vi.fn();
     // executeAnalysisSql only calls query and release on the client.

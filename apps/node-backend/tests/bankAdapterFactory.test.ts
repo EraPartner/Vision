@@ -18,32 +18,32 @@ const writeTempCSV = useTempCSV("factory");
 describe("BankAdapterFactory", () => {
   let tmpPath;
 
-  it("creates belfius adapter", async () => {
+  it("creates belfius adapter", () => {
     const parser = createAdapter("belfius");
     expect(typeof parser).toBe("function");
   });
 
-  it("creates revolut adapter", async () => {
+  it("creates revolut adapter", () => {
     const parser = createAdapter("revolut");
     expect(typeof parser).toBe("function");
   });
 
-  it("creates kbc adapter", async () => {
+  it("creates kbc adapter", () => {
     const parser = createAdapter("kbc");
     expect(typeof parser).toBe("function");
   });
 
-  it("creates ing adapter", async () => {
+  it("creates ing adapter", () => {
     const parser = createAdapter("ing");
     expect(typeof parser).toBe("function");
   });
 
-  it("creates bnp adapter", async () => {
+  it("creates bnp adapter", () => {
     const parser = createAdapter("bnp");
     expect(typeof parser).toBe("function");
   });
 
-  it("is case-insensitive", async () => {
+  it("is case-insensitive", () => {
     expect(() => createAdapter("BELFIUS")).not.toThrow();
     expect(() => createAdapter("Revolut")).not.toThrow();
     expect(() => createAdapter("KBC")).not.toThrow();
@@ -51,13 +51,13 @@ describe("BankAdapterFactory", () => {
     expect(() => createAdapter("BNP")).not.toThrow();
   });
 
-  it("throws for unsupported bank", async () => {
+  it("throws for unsupported bank", () => {
     expect(() => createAdapter("UnknownBank")).toThrow(
       "No configuration found",
     );
   });
 
-  it("creates generic adapter with custom config", async () => {
+  it("creates generic adapter with custom config", () => {
     const config = {
       bank_name: "TestBank",
       date_format: "%Y-%m-%d",

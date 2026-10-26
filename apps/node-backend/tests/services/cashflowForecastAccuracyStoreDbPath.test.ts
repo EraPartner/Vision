@@ -51,11 +51,11 @@ const dbRows = vi.hoisted(() => [
 vi.mock("../../src/repositories/cashflowForecastAccuracyRepository.ts", () => ({
   default: {
     upsert: vi.fn(async () => {}),
-    getHistory: vi.fn(async ({ methodId }) =>
-      dbRows.filter((r) => r.method_id === methodId),
+    getHistory: vi.fn(({ methodId }) =>
+      Promise.resolve(dbRows.filter((r) => r.method_id === methodId)),
     ),
-    getLatestByMethod: vi.fn(async () => dbRows),
-    getAllHistory: vi.fn(async () => dbRows),
+    getLatestByMethod: vi.fn(() => Promise.resolve(dbRows)),
+    getAllHistory: vi.fn(() => Promise.resolve(dbRows)),
   },
 }));
 

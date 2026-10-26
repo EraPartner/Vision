@@ -33,8 +33,8 @@ const buildHistory = (days: number) => {
 
 vi.mock("../../src/repositories/infoRepository.ts", () => ({
   infoRepository: {
-    getIncludeTransfers: vi.fn(async () => false),
-    getCashflowForecastDataRolling: vi.fn(async (historyMonths: number) => ({
+    getIncludeTransfers: vi.fn(() => Promise.resolve(false)),
+    getCashflowForecastDataRolling: vi.fn((historyMonths: number) => Promise.resolve(({
       history: buildHistory(400),
       currentActual: Array.from({ length: 31 }, (_, i) => ({
         date: isoOffsetFromToday(-30 + i),
@@ -44,7 +44,7 @@ vi.mock("../../src/repositories/infoRepository.ts", () => ({
       plannedCurrent: [],
       historyMonths,
       unconverted: { count: 0, currencies: new Set<string>() },
-    })),
+    }))),
     getCashflowForecastData: vi.fn(),
     getCashflowForecastDataByCategory: vi.fn(),
   },

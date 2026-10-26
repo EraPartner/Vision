@@ -65,29 +65,29 @@ beforeEach(() => {
   __clearDbEditorMetadataCacheForTests();
   clientSql = [];
 
-  query.mockImplementation(async (sql: string) => {
+  query.mockImplementation((sql: string) => {
     if (sql.includes("pg_stat_user_tables")) {
-      return { rows: [{ relname: CATALOG_TABLE }] };
+      return Promise.resolve({ rows: [{ relname: CATALOG_TABLE }] });
     }
     if (sql.includes("information_schema.columns")) {
-      return {
+      return Promise.resolve({
         rows: CATALOG_COLUMNS.map((c, i) => catalogColumnRow(c, i + 1)),
-      };
+      });
     }
     if (sql.includes("indisprimary")) {
-      return { rows: [{ column_name: "id" }] };
+      return Promise.resolve({ rows: [{ column_name: "id" }] });
     }
-    throw new Error(`unexpected catalog query: ${sql}`);
+    return Promise.reject(new Error(`unexpected catalog query: ${sql}`));
   });
 
   getClient.mockResolvedValue({
-    query: vi.fn(async (sql: string, params: unknown[] = []) => {
+    query: vi.fn((sql: string, params: unknown[] = []) => {
       clientSql.push(sql);
-      if (sql.startsWith("SELECT count(")) return { rows: [{ total: "0" }] };
+      if (sql.startsWith("SELECT count(")) return Promise.resolve({ rows: [{ total: "0" }] });
       if (/^SELECT \$\d+::bigint AS total$/.test(sql)) {
-        return { rows: [{ total: params.at(-1) }] };
+        return Promise.resolve({ rows: [{ total: params.at(-1) }] });
       }
-      return { rows: [] };
+      return Promise.resolve({ rows: [] });
     }),
     release: vi.fn(),
   });
@@ -183,10 +183,10 @@ describe("pagination", () => {
 
   it("binds an opaque cursor to sort, filters, and a primary-key tie-breaker", async () => {
     getClient.mockResolvedValueOnce({
-      query: vi.fn(async (sql: string) => {
+      query: vi.fn((sql: string) => {
         clientSql.push(sql);
         if (sql.startsWith("SELECT *")) {
-          return {
+          return Promise.resolve({
             rows: [
               {
                 id: 1,
@@ -210,9 +210,9 @@ describe("pagination", () => {
                 __vision_cursor_value_2: "3",
               },
             ],
-          };
+          });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       }),
       release: vi.fn(),
     });
@@ -252,9 +252,9 @@ describe("pagination", () => {
   it("uses exact PostgreSQL text projections for typed cursor values", async () => {
     const timestamp = new Date("2026-09-08T10:11:12.123Z");
     getClient.mockResolvedValueOnce({
-      query: vi.fn(async (sql: string) => {
+      query: vi.fn((sql: string) => {
         if (sql.startsWith("SELECT *")) {
-          return {
+          return Promise.resolve({
             rows: [
               {
                 id: 9n,
@@ -271,9 +271,9 @@ describe("pagination", () => {
                 __vision_cursor_value_2: "10",
               },
             ],
-          };
+          });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       }),
       release: vi.fn(),
     });
@@ -284,9 +284,9 @@ describe("pagination", () => {
 
     let selectParams: unknown[] = [];
     getClient.mockResolvedValueOnce({
-      query: vi.fn(async (sql: string, params: unknown[] = []) => {
+      query: vi.fn((sql: string, params: unknown[] = []) => {
         if (sql.startsWith("SELECT *")) selectParams = params;
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       }),
       release: vi.fn(),
     });
@@ -299,9 +299,9 @@ describe("pagination", () => {
     expect(selectParams).toContain("9");
 
     getClient.mockResolvedValueOnce({
-      query: vi.fn(async (sql: string) => {
+      query: vi.fn((sql: string) => {
         if (sql.startsWith("SELECT *")) {
-          return {
+          return Promise.resolve({
             rows: [
               {
                 id: 1,
@@ -318,9 +318,9 @@ describe("pagination", () => {
                 __vision_cursor_value_2: "2",
               },
             ],
-          };
+          });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       }),
       release: vi.fn(),
     });
@@ -330,9 +330,9 @@ describe("pagination", () => {
     });
     selectParams = [];
     getClient.mockResolvedValueOnce({
-      query: vi.fn(async (sql: string, params: unknown[] = []) => {
+      query: vi.fn((sql: string, params: unknown[] = []) => {
         if (sql.startsWith("SELECT *")) selectParams = params;
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       }),
       release: vi.fn(),
     });
@@ -345,26 +345,26 @@ describe("pagination", () => {
   });
 
   it("uses a collision-free hidden ctid alias for a table without a primary key", async () => {
-    query.mockImplementation(async (sql: string) => {
+    query.mockImplementation((sql: string) => {
       if (sql.includes("pg_stat_user_tables")) {
-        return { rows: [{ relname: CATALOG_TABLE }] };
+        return Promise.resolve({ rows: [{ relname: CATALOG_TABLE }] });
       }
       if (sql.includes("information_schema.columns")) {
-        return {
+        return Promise.resolve({
           rows: [
             ...CATALOG_COLUMNS.map((c, i) => catalogColumnRow(c, i + 1)),
             catalogColumnRow("__vision_cursor_value_1", 4),
           ],
-        };
+        });
       }
-      if (sql.includes("indisprimary")) return { rows: [] };
-      throw new Error(`unexpected catalog query: ${sql}`);
+      if (sql.includes("indisprimary")) return Promise.resolve({ rows: [] });
+      return Promise.reject(new Error(`unexpected catalog query: ${sql}`));
     });
     getClient.mockResolvedValueOnce({
-      query: vi.fn(async (sql: string) => {
+      query: vi.fn((sql: string) => {
         clientSql.push(sql);
         if (sql.startsWith("SELECT *")) {
-          return {
+          return Promise.resolve({
             rows: [
               {
                 id: 1,
@@ -381,9 +381,9 @@ describe("pagination", () => {
                 __vision_cursor_value_1_2: "(0,2)",
               },
             ],
-          };
+          });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       }),
       release: vi.fn(),
     });
@@ -402,24 +402,24 @@ describe("pagination", () => {
   });
 
   it("continues from a null sort boundary through composite primary keys", async () => {
-    query.mockImplementation(async (sql: string) => {
+    query.mockImplementation((sql: string) => {
       if (sql.includes("pg_stat_user_tables")) {
-        return { rows: [{ relname: CATALOG_TABLE }] };
+        return Promise.resolve({ rows: [{ relname: CATALOG_TABLE }] });
       }
       if (sql.includes("information_schema.columns")) {
-        return {
+        return Promise.resolve({
           rows: CATALOG_COLUMNS.map((c, i) => catalogColumnRow(c, i + 1)),
-        };
+        });
       }
       if (sql.includes("indisprimary")) {
-        return { rows: [{ column_name: "id" }, { column_name: "memo" }] };
+        return Promise.resolve({ rows: [{ column_name: "id" }, { column_name: "memo" }] });
       }
-      throw new Error(`unexpected catalog query: ${sql}`);
+      return Promise.reject(new Error(`unexpected catalog query: ${sql}`));
     });
     getClient.mockResolvedValueOnce({
-      query: vi.fn(async (sql: string) => {
+      query: vi.fn((sql: string) => {
         if (sql.startsWith("SELECT *")) {
-          return {
+          return Promise.resolve({
             rows: [
               {
                 id: 1,
@@ -438,9 +438,9 @@ describe("pagination", () => {
                 __vision_cursor_value_3: "b",
               },
             ],
-          };
+          });
         }
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       }),
       release: vi.fn(),
     });

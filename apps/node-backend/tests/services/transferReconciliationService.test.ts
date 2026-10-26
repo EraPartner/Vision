@@ -8,7 +8,7 @@ const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
 
 vi.mock("../../src/database/connection.ts", () =>
   mockTxConnection(mockClient, {
-    query: vi.fn(async () => ({ rows: [], rowCount: 0 })),
+    query: vi.fn(() => Promise.resolve(({ rows: [], rowCount: 0 }))),
   }),
 );
 

@@ -45,14 +45,14 @@ describe("local research documents", () => {
     ).toBe("AT&amp;T writes &lt;b&gt; for <b>");
   });
   it("batches optional local embeddings and stores only derived passages", async () => {
-    repository.createDocument.mockImplementation(async (doc, passages) => ({
+    repository.createDocument.mockImplementation((doc, passages) => Promise.resolve(({
       ...doc,
       passages,
-    }));
-    const embed = vi.fn(async ({ input }) => ({
+    })));
+    const embed = vi.fn(({ input }) => Promise.resolve(({
       model: "synthetic-embed",
       embeddings: input.map(() => [1, 0]),
-    }));
+    })));
     const text = Array.from(
       { length: 70 },
       (_, index) => `# S${index}\n${"x".repeat(1000)}`,
@@ -96,8 +96,8 @@ describe("local research documents", () => {
       { query: "evidence", mode: "hybrid" },
       {
         ollamaClient: partial<OllamaClient>({
-          embed: async () => {
-            throw new Error("offline");
+          embed: () => {
+            return Promise.reject(new Error("offline"));
           },
         }),
       },

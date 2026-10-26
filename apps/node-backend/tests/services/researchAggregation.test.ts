@@ -65,12 +65,13 @@ const makeFakeStore = () => {
   const key = (p: string, dk: string) => `${p}:${dk}`;
   return {
     counts,
-    async getDayCount(p: string, dk: string) {
-      return counts.get(key(p, dk)) ?? 0;
+    getDayCount(p: string, dk: string) {
+      return Promise.resolve(counts.get(key(p, dk)) ?? 0);
     },
-    async addDayCount(p: string, dk: string, delta: number) {
+    addDayCount(p: string, dk: string, delta: number) {
       counts.set(key(p, dk), (counts.get(key(p, dk)) ?? 0) + delta);
-    },
+    return Promise.resolve();
+},
   };
 };
 

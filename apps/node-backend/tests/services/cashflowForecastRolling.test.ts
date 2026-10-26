@@ -55,9 +55,9 @@ const isoOffsetFromToday = (offsetDays: number) =>
 vi.mock("../../src/repositories/infoRepository.ts", () => ({
   infoRepository: {
     // ADR-083 cache-key input (forecast/index.js filterHash).
-    getIncludeTransfers: vi.fn(async () => false),
+    getIncludeTransfers: vi.fn(() => Promise.resolve(false)),
     getCashflowForecastDataRolling: vi.fn(
-      async (historyMonths: number, daysBack: number, daysForward: number) => ({
+      (historyMonths: number, daysBack: number, daysForward: number) => Promise.resolve(({
         history: buildHistory({ days: 400 }),
         currentActual: Array.from({ length: daysBack + 1 }, (_, i) => ({
           date: isoOffsetFromToday(-daysBack + i),
@@ -70,7 +70,7 @@ vi.mock("../../src/repositories/infoRepository.ts", () => ({
         ],
         historyMonths,
         unconverted: { count: 0, currencies: new Set<string>() },
-      }),
+      })),
     ),
     getCashflowForecastData: vi.fn(),
     getCashflowForecastDataByCategory: vi.fn(),
