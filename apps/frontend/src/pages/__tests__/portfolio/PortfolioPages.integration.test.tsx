@@ -425,7 +425,7 @@ describe("Portfolio pages (integration)", () => {
         const heading = await screen.findByRole("heading", {
             name: "By account",
         });
-        const card = heading.closest(".glass-thin") as HTMLElement;
+        const card = heading.closest(".glass-thin, .glass-regular") as HTMLElement;
         expect(card).toHaveTextContent(/Broker.*100,00.*900,00.*1\.000,00/s);
         expect(card).toHaveTextContent(/Daily cash.*900,00/s);
         expect(card).toHaveTextContent(/Unassigned.*50,00/s);

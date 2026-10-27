@@ -30,7 +30,7 @@ describe("page heading semantics", () => {
         expect(
             screen
                 .getByRole("heading", { name: "Panel title", level: 2 })
-                .closest(".glass-thin"),
+                .closest(".glass-thin, .glass-regular"),
         ).toBeInTheDocument();
     });
 

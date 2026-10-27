@@ -385,7 +385,7 @@ function useTwoHoldings(options: {
 
 async function findHoldingsCard() {
     const heading = await screen.findByRole("heading", { name: "Holdings" });
-    return heading.closest(".glass-thin") as HTMLElement;
+    return heading.closest(".glass-thin, .glass-regular") as HTMLElement;
 }
 
 describe("PortfolioPage (integration)", () => {
@@ -675,7 +675,7 @@ describe("PortfolioPage (integration)", () => {
         useTwoHoldings();
         renderWithApp(<PortfolioPage />);
         const figures = within(
-            (await screen.findByText("Per year")).closest(".glass-thin") as HTMLElement,
+            (await screen.findByText("Per year")).closest(".glass-thin, .glass-regular") as HTMLElement,
         );
         const figure = (label: string) =>
             must(figures.getByText(label).closest("div")).parentElement as HTMLElement;
@@ -707,7 +707,7 @@ describe("PortfolioPage (integration)", () => {
         });
         renderWithApp(<PortfolioPage />);
         const figures = within(
-            (await screen.findByText("Per year")).closest(".glass-thin") as HTMLElement,
+            (await screen.findByText("Per year")).closest(".glass-thin, .glass-regular") as HTMLElement,
         );
         const afterInflation = must(figures.getByText("After inflation").closest("div"))
             .parentElement as HTMLElement;
@@ -861,7 +861,7 @@ describe("PortfolioPage (integration)", () => {
         useTwoHoldings();
         renderWithApp(<PortfolioPage />);
         const card = (await screen.findByRole("heading", { name: "Asset allocation" })).closest(
-            ".glass-thin",
+            ".glass-thin, .glass-regular",
         ) as HTMLElement;
         expect(within(card).getByRole("img", { name: /allocation by asset class/i })).toBeInTheDocument();
         expect(card).toHaveTextContent(/Stocks & ETFs/);
@@ -882,12 +882,12 @@ describe("PortfolioPage (integration)", () => {
         } });
         renderWithApp(<PortfolioPage />);
         const card = (await screen.findByRole("heading", { name: "Gains, income and costs" })).closest(
-            ".glass-thin",
+            ".glass-thin, .glass-regular",
         ) as HTMLElement;
         expect(card).toHaveTextContent(/Broker account fees\s*-10,00/);
         expect(card).toHaveTextContent(/Gain after account fees\s*\+110,00/);
         const figures = within(
-            (await screen.findByText("Per year")).closest(".glass-thin") as HTMLElement,
+            (await screen.findByText("Per year")).closest(".glass-thin, .glass-regular") as HTMLElement,
         );
         const investmentReturn = must(figures.getByText("Investment return").closest("div"))
             .parentElement as HTMLElement;
@@ -899,7 +899,7 @@ describe("PortfolioPage (integration)", () => {
         useTwoHoldings();
         renderWithApp(<PortfolioPage />);
         const card = (await screen.findByRole("heading", { name: "Gains, income and costs" })).closest(
-            ".glass-thin",
+            ".glass-thin, .glass-regular",
         ) as HTMLElement;
         expect(card).toHaveTextContent(/Total invested\s*1[.\s]?080,00/);
         expect(card).toHaveTextContent(/Unrealized gains\s*\+120,00/);
