@@ -2,8 +2,10 @@
  * Result shapes and the human summary for the Mac performance baseline.
  */
 import type { FrameStats } from "./frames.ts";
+import type { GpuInfo } from "./gpuInfo.ts";
 import type { PowerSummary } from "./powermetrics.ts";
 import type { RoleSummary, ProcessRole } from "./processes.ts";
+import { WINDOW_SCROLL_PAGES } from "./segments.ts";
 import type { PresentedFps, TraceSegmentSummary } from "./trace.ts";
 import type { GlassCensus } from "./variants.ts";
 
@@ -35,6 +37,31 @@ export interface WindowMeasurement {
 export interface ActionMeasurement extends WindowMeasurement {
   frames: FrameStats;
   pageMetrics: Record<string, number>;
+}
+
+/** --segment window-scroll: one page's document scrolled down and back up. */
+export interface WindowScrollMeasurement extends ActionMeasurement {
+  page: string;
+  method: string;
+  requestedPx: number;
+  reachedScrollTop: number;
+  scrollHeight: number;
+}
+
+/** --segment chat-stream: one mocked AI chat answer streamed into /ai-chat. */
+export interface ChatStreamMeasurement extends ActionMeasurement {
+  tokens: number;
+  tokensPerSecond: number;
+  tokensSent: number;
+  /** First token → terminal event in the page, ms. */
+  streamMs: number | null;
+  /** "enter" (key press in the composer) or "button" (send button click). */
+  method: string;
+  completed: boolean;
+  /** The transcript showed the last streamed word afterwards. */
+  rendered: boolean;
+  /** AI requests the mock let through to the real backend. */
+  passedThrough: string[];
 }
 
 export interface PageSwitch {
@@ -95,7 +122,11 @@ export interface TierResult {
         rowsRendered: number;
       })
     | null;
-  pageSwitch: (ActionMeasurement & { passes: PageSwitch[][] }) | null;
+  /** --segment window-scroll; absent or null when not requested. */
+  windowScroll?: WindowScrollMeasurement[] | null;
+  /** --segment chat-stream; absent or null when not requested. */
+  chatStream?: ChatStreamMeasurement | null;
+  pageSwitch:(ActionMeasurement & { passes: PageSwitch[][] }) | null;
   trace: { file: string; segments: Record<string, TraceSegmentSummary> } | null;
   sustained:
     | (ActionMeasurement & {
@@ -113,6 +144,8 @@ export interface AppResult {
   app: AppInfo;
   originalTier: Tier | null;
   restored: boolean;
+  /** chrome://gpu readout from the setup launch; null when unavailable. */
+  gpuInfo?: GpuInfo | null;
   tiers: TierResult[];
   error: string | null;
 }
@@ -120,9 +153,11 @@ export interface AppResult {
 export interface BaselineResults {
   /**
    * 2 adds TierResult.fullEffects and TierResult.run; 3 adds
-   * RoleStats.sharedOnceMb; 4 adds TierResult.variant, idleFps and glass.
+   * RoleStats.sharedOnceMb; 4 adds TierResult.variant, idleFps and glass; 5
+   * adds TierResult.windowScroll and chatStream, trace segment compositor
+   * summaries, AppResult.gpuInfo and options.segments/chromiumSwitches.
    */
-  schemaVersion: 3 | 4;
+  schemaVersion: 3 | 4 | 5;
   startedAt: string;
   finishedAt: string;
   options: Record<string, unknown>;
@@ -294,6 +329,66 @@ export const SPREAD_METRICS: readonly {
     label: "Scroll GPU mW",
     digits: 0,
     read: (t) => t.scroll?.power?.gpuPowerMw,
+  },
+  {
+    key: "traceScrollDrawFrameMs",
+    label: "Traced ledger scroll viz DrawFrame ms",
+    digits: 0,
+    read: (t) => t.trace?.segments.scroll?.compositor.drawFrameMs,
+  },
+  {
+    key: "traceScrollRenderPasses",
+    label: "Traced ledger scroll render passes per frame",
+    digits: 1,
+    read: (t) => t.trace?.segments.scroll?.compositor.renderPassesPerFrame,
+  },
+  ...WINDOW_SCROLL_PAGES.flatMap((page) => {
+    const of = (t: TierResult) =>
+      t.windowScroll?.find((entry) => entry.page === page);
+    return [
+      {
+        key: `windowScrollFps:${page}`,
+        label: `Window scroll ${page} FPS`,
+        digits: 1,
+        read: (t: TierResult) => of(t)?.frames.fps,
+      },
+      {
+        key: `windowScrollGpuMw:${page}`,
+        label: `Window scroll ${page} GPU mW`,
+        digits: 0,
+        read: (t: TierResult) => of(t)?.power?.gpuPowerMw,
+      },
+      {
+        key: `windowScrollRendererCpu:${page}`,
+        label: `Window scroll ${page} renderer CPU %`,
+        digits: 1,
+        read: (t: TierResult) => of(t)?.cpu.renderer?.cpuPercent,
+      },
+    ];
+  }),
+  {
+    key: "chatStreamFps",
+    label: "Chat stream FPS",
+    digits: 1,
+    read: (t) => t.chatStream?.frames.fps,
+  },
+  {
+    key: "chatStreamGpuMw",
+    label: "Chat stream GPU mW",
+    digits: 0,
+    read: (t) => t.chatStream?.power?.gpuPowerMw,
+  },
+  {
+    key: "chatStreamRendererCpu",
+    label: "Chat stream renderer CPU %",
+    digits: 1,
+    read: (t) => t.chatStream?.cpu.renderer?.cpuPercent,
+  },
+  {
+    key: "chatStreamTaskMs",
+    label: "Chat stream renderer task ms",
+    digits: 0,
+    read: (t) => t.chatStream?.pageMetrics.TaskDurationMs,
   },
   {
     key: "switchGpuMw",
@@ -577,6 +672,41 @@ export function renderSummary(results: BaselineResults): string {
   );
   out.push("");
 
+  const gpuRows = results.apps
+    .filter((app) => app.gpuInfo)
+    .map(({ app, gpuInfo }) => {
+      const info = gpuInfo as GpuInfo;
+      const pairs = (entries: Record<string, unknown>) =>
+        Object.entries(entries)
+          .map(([key, value]) => `${key}: ${String(value)}`)
+          .join(", ") || dash;
+      return [
+        app.name,
+        info.devices
+          .map((device) => device.deviceString || device.vendorString)
+          .filter(Boolean)
+          .join(", ") || dash,
+        info.graphite ?? dash,
+        pairs(info.skia),
+        pairs(info.overlay),
+        pairs(info.featureStatus),
+      ];
+    });
+  if (gpuRows.length > 0) {
+    out.push("## GPU (chrome://gpu, SystemInfo.getInfo at the setup launch)");
+    out.push(
+      "The full readout, command line included, is in results.json (apps[].gpuInfo) and gpu-info/.",
+    );
+    out.push("");
+    out.push(
+      table(
+        ["App", "GPU", "Graphite", "Skia", "Overlay", "Feature status"],
+        gpuRows,
+      ),
+    );
+    out.push("");
+  }
+
   out.push("## Launch");
   out.push(
     table(
@@ -678,6 +808,74 @@ export function renderSummary(results: BaselineResults): string {
     ),
   );
   out.push("");
+
+  const windowRows: string[][] = [];
+  for (const app of results.apps) {
+    for (const tier of app.tiers) {
+      for (const entry of tier.windowScroll ?? []) {
+        windowRows.push([
+          app.app.name,
+          variantLabel(tier),
+          entry.page,
+          entry.method,
+          `${fmt(entry.reachedScrollTop)} / ${fmt(entry.scrollHeight)}`,
+          ...actionRow(entry),
+        ]);
+      }
+    }
+  }
+  if (windowRows.length > 0) {
+    out.push("## Window scroll (--segment window-scroll)");
+    out.push(
+      "The document itself scrolls (AppLayout's window scroller) under the sticky topbar. Reached is the scrollTop at the bottom of the down pass; a page shorter than the requested distance stops early while the gesture runs on.",
+    );
+    out.push("");
+    out.push(
+      table(
+        ["App", "Tier", "Page", "Method", "Reached / height px", ...actionHeader],
+        windowRows,
+      ),
+    );
+    out.push("");
+  }
+
+  const chatRows = rowsFor(results, (_app, tier) => {
+    const chat = tier.chatStream;
+    if (!chat) return null;
+    return [
+      `${chat.tokensSent}/${chat.tokens} at ${chat.tokensPerSecond}/s`,
+      fmt(chat.streamMs === null ? null : chat.streamMs / 1000, 1),
+      chat.method,
+      chat.completed && chat.rendered ? "yes" : "no",
+      ...actionRow(chat),
+      fmt(chat.pageMetrics.ScriptDurationMs),
+      fmt(chat.pageMetrics.TaskDurationMs),
+    ];
+  });
+  if (chatRows.length > 0) {
+    out.push("## Chat streaming (--segment chat-stream)");
+    out.push(
+      "A mocked answer (page-side fetch shim, no Ollama, nothing stored) streamed through the chat page's real send path and aiChatStreamStore. Rendered: the stream completed and the transcript showed its last word.",
+    );
+    out.push("");
+    out.push(
+      table(
+        [
+          "App",
+          "Tier",
+          "Tokens",
+          "Stream s",
+          "Method",
+          "Rendered",
+          ...actionHeader,
+          "Script ms",
+          "Task ms",
+        ],
+        chatRows,
+      ),
+    );
+    out.push("");
+  }
 
   out.push("## Page switches");
   out.push(
@@ -838,7 +1036,8 @@ export function renderSummary(results: BaselineResults): string {
         const gpu = Object.entries(summary.threadBusyMs)
           .filter(([key]) => /\/(CrGpuMain|VizCompositorThread)$/.test(key))
           .reduce((sum, [, value]) => sum + value, 0);
-        return `${segment} (${fmt(summary.durationMs)} ms): renderer main ${fmt(renderer)} ms, GPU/viz ${fmt(gpu)} ms; frames ${states || dash}`;
+        const cc = summary.compositor;
+        return `${segment} (${fmt(summary.durationMs)} ms): renderer main ${fmt(renderer)} ms, GPU/viz ${fmt(gpu)} ms; viz DrawFrame ${cc.drawFrames}× ${fmt(cc.drawFrameMs)} ms, render passes/frame ${fmt(cc.renderPassesPerFrame, 1)}, raster ${cc.rasterTasks}× ${fmt(cc.rasterTaskMs)} ms, GPU raster ${fmt(cc.gpuRasterMs)} ms; frames ${states || dash}`;
       },
     );
     return [lines.join("<br>")];

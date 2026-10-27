@@ -22,6 +22,13 @@
  * window also reports presented frames per second (from a short Chromium
  * trace, since requestAnimationFrame runs whether or not frames are composited)
  * and a census of backdrop-filter surfaces.
+ *
+ * --segment adds opt-in segments after the ledger scroll (and to the traced
+ * pass): window-scroll scrolls the document on / and /statistics, chat-stream
+ * streams a mocked AI answer through the chat page (a page-side fetch shim; no
+ * Ollama, nothing stored). Each app's chrome://gpu readout (SystemInfo) is
+ * recorded once per run, and --chromium-switch passes extra launch switches
+ * next to --remote-debugging-port for A/B runs such as Graphite vs Ganesh.
  */
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
@@ -68,6 +75,7 @@ import {
   renderSummary,
   type ActionMeasurement,
   type AppInfo,
+  type ChatStreamMeasurement,
   type AppResult,
   type BaselineResults,
   type LaunchTiming,
@@ -75,9 +83,30 @@ import {
   type Tier,
   type TierResult,
   type WindowMeasurement,
+  type WindowScrollMeasurement,
 } from "./lib/mac-baseline/report.ts";
+import { summarizeGpuInfo, type GpuInfo } from "./lib/mac-baseline/gpuInfo.ts";
+import {
+  CHAT_MOCK_DONE,
+  CHAT_MOCK_STATE,
+  CHAT_RENDERED,
+  CHAT_STREAM_PAGE,
+  CHAT_STREAM_TOKENS,
+  CHAT_STREAM_TOKENS_PER_SECOND,
+  CLICK_CHAT_SEND,
+  FIND_WINDOW_SCROLLER,
+  FOCUS_CHAT_COMPOSER,
+  RESTORE_CHAT_MOCK,
+  WINDOW_SCROLL_MAX_PX,
+  WINDOW_SCROLL_PAGES,
+  chatStreamMockExpression,
+  parseSegments,
+  type ChatMockState,
+  type ExtraSegment,
+} from "./lib/mac-baseline/segments.ts";
 import {
   MARK_PREFIX,
+  TRACED_PASS_CATEGORIES,
   TRACE_CATEGORIES,
   findSegments,
   presentedFps,
@@ -150,6 +179,27 @@ const USAGE = `Usage: bun scripts/mac-baseline.ts [options]
   --sustained <s>       Sustained scroll/switch run per tier (default 300)
   --cooldown <s>        Wait with the app closed before each measured launch (default 60)
   --scroll-px <px>      Ledger scroll distance each way (default 15000)
+  --segment <list>      Opt-in segments, comma list or repeated (default: none,
+                        so the default run is unchanged). They run after the
+                        ledger scroll and in the traced pass, and are skipped
+                        for variant runs with --variants-only-idle:
+                          window-scroll  scroll the document (window scroller)
+                                         on ${WINDOW_SCROLL_PAGES.join(" and ")}, ${WINDOW_SCROLL_MAX_PX} px each
+                                         way at 1500 px/s (capped by
+                                         --scroll-px); about 20 s
+                          chat-stream    open ${CHAT_STREAM_PAGE}, send one message and
+                                         stream a mocked answer of
+                                         ${CHAT_STREAM_TOKENS} tokens at ${CHAT_STREAM_TOKENS_PER_SECOND}/s through the
+                                         real chat page and aiChatStreamStore;
+                                         a page-side fetch shim answers the
+                                         /api/ai/ calls, so no Ollama is used
+                                         and nothing is stored; about 20 s
+  --chromium-switch=<switch>
+                        Extra Chromium/Electron launch switch, appended after
+                        --remote-debugging-port on every launch and recorded in
+                        results.json. Repeatable. Use the = form for values that
+                        start with a dash, e.g.
+                        --chromium-switch=--disable-features=SkiaGraphite
   --pages <list>        Page-switch sequence (default ${DEFAULT_PAGES.join(",")})
   --out <dir>           Results root (default perf-results/ in the checkout)
   --no-powermetrics     Skip sudo powermetrics (no GPU or power numbers)
@@ -187,6 +237,10 @@ export interface Options {
   sustainedSeconds: number;
   cooldownSeconds: number;
   scrollPx: number;
+  /** --segment: opt-in segments, in run order. */
+  segments: ExtraSegment[];
+  /** --chromium-switch: extra launch switches. */
+  chromiumSwitches: string[];
   pages: string[];
   outRoot: string;
   powermetrics: boolean;
@@ -213,6 +267,8 @@ export function parseOptions(argv: string[]): Options | null {
       sustained: { type: "string" },
       cooldown: { type: "string" },
       "scroll-px": { type: "string" },
+      segment: { type: "string", multiple: true },
+      "chromium-switch": { type: "string", multiple: true },
       pages: { type: "string" },
       out: { type: "string" },
       "no-powermetrics": { type: "boolean" },
@@ -260,6 +316,17 @@ export function parseOptions(argv: string[]): Options | null {
   if (!Number.isInteger(repeat) || repeat < 1)
     throw new Error("--repeat must be a whole number ≥ 1");
   const apps = values.app ?? DEFAULT_APPS.filter((app) => fs.existsSync(app));
+  const chromiumSwitches = (values["chromium-switch"] ?? []).map((value) =>
+    value.trim(),
+  );
+  for (const value of chromiumSwitches) {
+    if (!/^--[a-z0-9]/i.test(value))
+      throw new Error(
+        `--chromium-switch takes a switch like --disable-features=X, not "${value}" (write --chromium-switch=--name for dash values)`,
+      );
+    if (/^--remote-debugging-/.test(value))
+      throw new Error("--chromium-switch cannot change the remote debugging switches");
+  }
   return {
     apps: apps.map((app) => path.resolve(app)),
     tiers: tiers as Tier[],
@@ -272,6 +339,8 @@ export function parseOptions(argv: string[]): Options | null {
     sustainedSeconds: number(values.sustained, quick ? 30 : 300, "sustained"),
     cooldownSeconds: number(values.cooldown, quick ? 5 : 60, "cooldown"),
     scrollPx: number(values["scroll-px"], quick ? 4000 : 15_000, "scroll-px"),
+    segments: parseSegments(values.segment ?? []),
+    chromiumSwitches,
     pages: values.pages
       ? values.pages.split(",").map((page) => page.trim())
       : DEFAULT_PAGES,
@@ -470,15 +539,19 @@ function cleanEnv(): NodeJS.ProcessEnv {
 async function launchApp(
   info: ReturnType<typeof appInfo>,
   logPath: string,
+  chromiumSwitches: readonly string[],
 ): Promise<RunningApp> {
   checkAborted();
   const port = await freePort();
   const logFile = fs.createWriteStream(logPath, { flags: "a" });
-  logFile.write(`\n=== launch ${new Date().toISOString()} port ${port}\n`);
+  const args = [`--remote-debugging-port=${port}`, ...chromiumSwitches];
+  logFile.write(
+    `\n=== launch ${new Date().toISOString()} port ${port} args ${args.join(" ")}\n`,
+  );
   const started = performance.now();
   // detached: Ctrl-C in the terminal must not kill the app before the tier
   // setting is restored.
-  const child = spawn(info.executable, [`--remote-debugging-port=${port}`], {
+  const child = spawn(info.executable, args, {
     detached: true,
     stdio: ["ignore", "pipe", "pipe"],
     env: cleanEnv(),
@@ -762,8 +835,23 @@ const FIND_SCROLLER = `(() => {
 
 const SCROLLER_STATE = `(() => {
   const el = globalThis.__visionPerfScroller;
-  return el ? { scrollTop: Math.round(el.scrollTop), rows: el.querySelectorAll("[data-index]").length } : null;
+  return el
+    ? { scrollTop: Math.round(el.scrollTop), scrollHeight: el.scrollHeight, rows: el.querySelectorAll("[data-index]").length }
+    : null;
 })()`;
+
+interface ScrollerState {
+  scrollTop: number;
+  scrollHeight: number;
+  rows: number;
+}
+
+interface ScrollOutcome {
+  method: string;
+  reachedScrollTop: number;
+  rowsRendered: number;
+  scrollHeight: number;
+}
 
 function programmaticScroll(distance: number, speed: number): string {
   return `new Promise((resolve) => {
@@ -790,20 +878,51 @@ async function scrollLedger(
   distance: number,
   speed = 1500,
 ): Promise<{ method: string; reachedScrollTop: number; rowsRendered: number }> {
-  const target = await page<{ x: number; y: number } | null>(
+  const { method, reachedScrollTop, rowsRendered } = await scrollDownAndUp(
     app,
     FIND_SCROLLER,
+    "No scrollable ledger on /transactions (empty ledger?)",
+    distance,
+    speed,
   );
-  if (!target)
-    throw new Error("No scrollable ledger on /transactions (empty ledger?)");
+  return { method, reachedScrollTop, rowsRendered };
+}
+
+/** Scroll the document (AppLayout's window scroller) down then back up. */
+async function scrollWindow(
+  app: RunningApp,
+  distance: number,
+  speed = 1500,
+): Promise<ScrollOutcome> {
+  return scrollDownAndUp(
+    app,
+    FIND_WINDOW_SCROLLER,
+    "The page does not scroll (content shorter than the window?)",
+    distance,
+    speed,
+  );
+}
+
+function windowScrollPx(options: Options): number {
+  return Math.min(options.scrollPx, WINDOW_SCROLL_MAX_PX);
+}
+
+/** Scroll the element `find` picks down by `distance` and back up. */
+async function scrollDownAndUp(
+  app: RunningApp,
+  find: string,
+  missing: string,
+  distance: number,
+  speed: number,
+): Promise<ScrollOutcome> {
+  const target = await page<{ x: number; y: number } | null>(app, find);
+  if (!target) throw new Error(missing);
   let method = "gesture";
   let reached = 0;
   let rows = 0;
+  let height = 0;
   for (const direction of [-1, 1]) {
-    const before = await page<{ scrollTop: number; rows: number }>(
-      app,
-      SCROLLER_STATE,
-    );
+    const before = await page<ScrollerState>(app, SCROLLER_STATE);
     if (method === "gesture") {
       try {
         await app.cdp.send(
@@ -823,10 +942,7 @@ async function scrollLedger(
         method = "programmatic";
       }
     }
-    const afterGesture = await page<{ scrollTop: number; rows: number }>(
-      app,
-      SCROLLER_STATE,
-    );
+    const afterGesture = await page<ScrollerState>(app, SCROLLER_STATE);
     if (
       method === "gesture" &&
       direction === -1 &&
@@ -841,16 +957,103 @@ async function scrollLedger(
         (distance / speed) * 1000 + 30_000,
       );
     }
-    const after = await page<{ scrollTop: number; rows: number }>(
-      app,
-      SCROLLER_STATE,
-    );
+    const after = await page<ScrollerState>(app, SCROLLER_STATE);
     if (direction === -1) {
       reached = after.scrollTop;
       rows = after.rows;
+      height = after.scrollHeight;
     }
   }
-  return { method, reachedScrollTop: reached, rowsRendered: rows };
+  return {
+    method,
+    reachedScrollTop: reached,
+    rowsRendered: rows,
+    scrollHeight: height,
+  };
+}
+
+/**
+ * Install the chat mock, open the chat page, type a message into the composer
+ * and run `body` (the send and stream), restoring the real fetch even when it
+ * fails. See chatStreamMockExpression in segments.ts.
+ */
+async function withChatComposer<T>(
+  app: RunningApp,
+  body: () => Promise<T>,
+): Promise<T> {
+  await page(app, chatStreamMockExpression());
+  try {
+    await navigate(app, CHAT_STREAM_PAGE);
+    await sleep(1500);
+    const ready = await page<boolean>(app, FOCUS_CHAT_COMPOSER, 30_000);
+    if (!ready)
+      throw new Error(
+        `no enabled chat composer on ${CHAT_STREAM_PAGE} within 15 s (AI chat off in this build?)`,
+      );
+    await app.cdp.send(
+      "Input.insertText",
+      { text: "mac-baseline streaming segment" },
+      app.sessionId,
+    );
+    await sleep(500);
+    return await body();
+  } finally {
+    await page(app, RESTORE_CHAT_MOCK).catch(() => undefined);
+  }
+}
+
+/** Send the typed message and wait for the mocked stream to finish. */
+async function sendChat(
+  app: RunningApp,
+): Promise<Omit<ChatStreamMeasurement, keyof ActionMeasurement>> {
+  let method = "enter";
+  for (const type of ["rawKeyDown", "keyUp"]) {
+    await app.cdp.send(
+      "Input.dispatchKeyEvent",
+      {
+        type,
+        key: "Enter",
+        code: "Enter",
+        windowsVirtualKeyCode: 13,
+        nativeVirtualKeyCode: 13,
+      },
+      app.sessionId,
+    );
+  }
+  const streaming = async () => {
+    for (let poll = 0; poll < 15; poll += 1) {
+      if ((await page<ChatMockState>(app, CHAT_MOCK_STATE)).streams > 0)
+        return true;
+      await sleep(200);
+    }
+    return false;
+  };
+  if (!(await streaming())) {
+    method = "button";
+    if (!(await page<boolean>(app, CLICK_CHAT_SEND)))
+      throw new Error("the chat composer did not send (no send button)");
+  }
+  const streamSeconds = CHAT_STREAM_TOKENS / CHAT_STREAM_TOKENS_PER_SECOND;
+  const { completed } = await page<{ completed: boolean }>(
+    app,
+    CHAT_MOCK_DONE,
+    streamSeconds * 1000 + 30_000,
+  );
+  // Let the terminal event's cache merge and re-render land in the window.
+  await sleep(1000);
+  const state = await page<ChatMockState>(app, CHAT_MOCK_STATE);
+  if (state.streams === 0)
+    throw new Error("the chat page sent no stream request to the mock");
+  return {
+    tokens: CHAT_STREAM_TOKENS,
+    tokensPerSecond: CHAT_STREAM_TOKENS_PER_SECOND,
+    tokensSent: state.tokensSent,
+    streamMs: state.streamMs,
+    method,
+    completed,
+    rendered: await page<boolean>(app, CHAT_RENDERED),
+    passedThrough: state.passedThrough,
+  };
 }
 
 // ── Measurement windows ──────────────────────────────────────────────────────
@@ -1022,15 +1225,17 @@ async function tracedPass(
   ctx: Context,
   app: RunningApp,
   label: string,
+  warnings: string[],
 ): Promise<TierResult["trace"]> {
   const mark = (name: string) =>
     page(app, `console.timeStamp(${JSON.stringify(`${MARK_PREFIX}${name}`)})`);
+  const { segments: extra } = ctx.options;
   await app.cdp.send("Tracing.start", {
     transferMode: "ReturnAsStream",
     traceConfig: {
       recordMode: "recordAsMuchAsPossible",
       traceBufferSizeInKb: 300 * 1024,
-      includedCategories: TRACE_CATEGORIES,
+      includedCategories: TRACED_PASS_CATEGORIES,
     },
   });
   let text: string | undefined;
@@ -1043,6 +1248,34 @@ async function tracedPass(
     await mark("scroll:start");
     await scrollLedger(app, Math.min(ctx.options.scrollPx, 6000));
     await mark("scroll:end");
+    if (extra.includes("window-scroll")) {
+      for (const target of WINDOW_SCROLL_PAGES) {
+        try {
+          await navigate(app, target);
+          await sleep(1500);
+          await mark(`window-scroll:${target}:start`);
+          await scrollWindow(app, windowScrollPx(ctx.options));
+          await mark(`window-scroll:${target}:end`);
+        } catch (error) {
+          if (abort.signal.aborted) throw error;
+          warnings.push(
+            `traced window scroll on ${target} skipped: ${(error as Error).message}`,
+          );
+        }
+      }
+    }
+    if (extra.includes("chat-stream")) {
+      try {
+        await withChatComposer(app, async () => {
+          await mark("chat-stream:start");
+          await sendChat(app);
+          await mark("chat-stream:end");
+        });
+      } catch (error) {
+        if (abort.signal.aborted) throw error;
+        warnings.push(`traced chat stream skipped: ${(error as Error).message}`);
+      }
+    }
     await mark("switch:start");
     await pageSwitches(app, ctx.options.pages, 1);
     await mark("switch:end");
@@ -1327,6 +1560,59 @@ async function measureTier(
     await checkFocus(app, warnings, "scroll");
   }
 
+  let windowScroll: TierResult["windowScroll"] = null;
+  if (!idleOnly && options.segments.includes("window-scroll")) {
+    windowScroll = [];
+    const distance = windowScrollPx(options);
+    for (const target of WINDOW_SCROLL_PAGES) {
+      try {
+        log(`  window scroll on ${target}`);
+        await navigate(app, target);
+        await sleep(1500);
+        const measured = await measureAction(ctx, app, () =>
+          scrollWindow(app, distance),
+        );
+        const entry: WindowScrollMeasurement = {
+          ...measured.action,
+          page: target,
+          method: measured.result.method,
+          requestedPx: distance,
+          reachedScrollTop: measured.result.reachedScrollTop,
+          scrollHeight: measured.result.scrollHeight,
+        };
+        windowScroll.push(entry);
+      } catch (error) {
+        if (abort.signal.aborted) throw error;
+        warnings.push(
+          `window scroll on ${target} skipped: ${(error as Error).message}`,
+        );
+      }
+    }
+    await checkFocus(app, warnings, "window scroll");
+  }
+
+  let chatStream: TierResult["chatStream"] = null;
+  if (!idleOnly && options.segments.includes("chat-stream")) {
+    try {
+      log(
+        `  chat stream (${CHAT_STREAM_TOKENS} mocked tokens at ${CHAT_STREAM_TOKENS_PER_SECOND}/s)`,
+      );
+      const measured = await withChatComposer(app, () =>
+        measureAction(ctx, app, () => sendChat(app)),
+      );
+      chatStream = { ...measured.action, ...measured.result };
+      if (!chatStream.completed || !chatStream.rendered) {
+        warnings.push(
+          `chat stream: completed ${chatStream.completed}, last word rendered ${chatStream.rendered}`,
+        );
+      }
+    } catch (error) {
+      if (abort.signal.aborted) throw error;
+      warnings.push(`chat stream skipped: ${(error as Error).message}`);
+    }
+    await checkFocus(app, warnings, "chat stream");
+  }
+
   let switches: Awaited<ReturnType<typeof measureAction<PageSwitch[][]>>> | null =
     null;
   if (!idleOnly) {
@@ -1342,7 +1628,7 @@ async function measureTier(
   if (options.trace && !idleOnly) {
     try {
       log("  traced pass");
-      trace = await tracedPass(ctx, app, label);
+      trace = await tracedPass(ctx, app, label, warnings);
     } catch (error) {
       if (abort.signal.aborted) throw error;
       warnings.push(`trace skipped: ${(error as Error).message}`);
@@ -1414,6 +1700,8 @@ async function measureTier(
     idle: { ...idle, seconds: options.idleSeconds, page: "/" },
     background,
     scroll,
+    windowScroll,
+    chatStream,
     pageSwitch: switches
       ? { ...switches.action, passes: switches.result }
       : null,
@@ -1421,6 +1709,33 @@ async function measureTier(
     sustained,
     warnings,
   };
+}
+
+/**
+ * chrome://gpu equivalent, once per app and run: SystemInfo.getInfo on the
+ * browser target. The full answer goes to gpu-info/<app>.json, the summary
+ * into results.json.
+ */
+async function recordGpuInfo(
+  ctx: Context,
+  app: RunningApp,
+  slug: string,
+): Promise<GpuInfo | null> {
+  try {
+    const raw = await app.cdp.send("SystemInfo.getInfo", {}, undefined, 30_000);
+    const file = path.join(ctx.outDir, "gpu-info", `${slug}.json`);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, `${JSON.stringify(raw, null, 2)}\n`);
+    const info = summarizeGpuInfo(raw);
+    log(
+      `  GPU: ${info.devices.map((device) => device.deviceString).join(", ") || "?"}; graphite ${info.graphite ?? "?"}; gpu_compositing ${info.featureStatus.gpu_compositing ?? "?"}`,
+    );
+    return info;
+  } catch (error) {
+    if (abort.signal.aborted) throw error;
+    log(`  GPU info unavailable: ${(error as Error).message}`);
+    return null;
+  }
 }
 
 async function measureApp(ctx: Context, appPath: string): Promise<AppResult> {
@@ -1437,6 +1752,7 @@ async function measureApp(ctx: Context, appPath: string): Promise<AppResult> {
     },
     originalTier: null,
     restored: false,
+    gpuInfo: null,
     tiers: [],
     error: null,
   };
@@ -1453,13 +1769,14 @@ async function measureApp(ctx: Context, appPath: string): Promise<AppResult> {
   let dirty = false;
   try {
     log(`${info.name}: setup launch`);
-    running = await launchApp(info, logPath);
+    running = await launchApp(info, logPath, ctx.options.chromiumSwitches);
     original = await readSettings(running.origin);
     const originalTier = (original.value as { visualEffects?: unknown })
       .visualEffects;
     result.originalTier = TIERS.includes(originalTier as Tier)
       ? (originalTier as Tier)
       : null;
+    result.gpuInfo = await recordGpuInfo(ctx, running, slug);
     // Repeats are the outer loop so slow drift (heat, background work)
     // spreads over every combination instead of piling onto one.
     const { repeat } = ctx.options;
@@ -1485,7 +1802,7 @@ async function measureApp(ctx: Context, appPath: string): Promise<AppResult> {
               `${info.name} ${name}: cooldown ${ctx.options.cooldownSeconds} s`,
             );
             await sleep(ctx.options.cooldownSeconds * 1000);
-            running = await launchApp(info, logPath);
+            running = await launchApp(info, logPath, ctx.options.chromiumSwitches);
             const label = [
               slug,
               tier,
@@ -1515,7 +1832,7 @@ async function measureApp(ctx: Context, appPath: string): Promise<AppResult> {
   } finally {
     if (dirty && original) {
       try {
-        running ??= await launchApp(info, logPath);
+        running ??= await launchApp(info, logPath, ctx.options.chromiumSwitches);
         await restoreSettings(running.origin, original);
         dirty = false;
         log(`${info.name}: tier setting restored`);
@@ -1615,7 +1932,7 @@ async function measureLeak(
   let running: RunningApp | undefined;
   try {
     log(`${info.name}: leak check, ${minutes} min`);
-    running = await launchApp(info, logPath);
+    running = await launchApp(info, logPath, ctx.options.chromiumSwitches);
     await sleep(10_000);
     const app = running;
     const start = Date.now();
@@ -1734,7 +2051,15 @@ async function main(): Promise<number> {
     );
     fs.writeFileSync(
       path.join(outDir, "leak.json"),
-      `${JSON.stringify({ machine: machineInfo(), ...leak }, null, 2)}\n`,
+      `${JSON.stringify(
+        {
+          machine: machineInfo(),
+          chromiumSwitches: options.chromiumSwitches,
+          ...leak,
+        },
+        null,
+        2,
+      )}\n`,
     );
     fs.writeFileSync(
       path.join(outDir, "leak.csv"),
@@ -1789,7 +2114,7 @@ async function main(): Promise<number> {
   });
 
   const results: BaselineResults = {
-    schemaVersion: 4,
+    schemaVersion: 5,
     startedAt: new Date().toISOString(),
     finishedAt: "",
     options: {
@@ -1806,6 +2131,8 @@ async function main(): Promise<number> {
       sustainedSeconds: options.sustainedSeconds,
       cooldownSeconds: options.cooldownSeconds,
       scrollPx: options.scrollPx,
+      segments: options.segments,
+      chromiumSwitches: options.chromiumSwitches,
       pages: options.pages,
       powermetrics: options.powermetrics,
       trace: options.trace,

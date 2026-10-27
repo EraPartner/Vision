@@ -96,6 +96,16 @@ void test("presentedFps counts presented frames from the busiest process", () =>
     durationMs: 10_000,
     threadBusyMs: {},
     rendererTopEvents: [],
+    compositor: {
+      drawFrames: 0,
+      drawFrameMs: 0,
+      renderPasses: 0,
+      renderPassesPerFrame: null,
+      rasterTasks: 0,
+      rasterTaskMs: 0,
+      gpuRasterMs: 0,
+      topEvents: [],
+    },
     frameStates: {
       "Renderer 1": { STATE_PRESENTED_ALL: 90, STATE_PRESENTED_PARTIAL: 10, STATE_DROPPED: 5 },
       "GPU Process 2": { STATE_PRESENTED_ALL: 100 },
