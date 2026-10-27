@@ -2,9 +2,9 @@
 title: "ADR-255: Cheaper full effects (GPU phase D)"
 type: adr
 status: accepted
-date: 2026-10-26
+date: 2026-10-27
 tags: [adr, performance, gpu, macos, visual-effects-tiers, full-effects, shader-aurora, webgl, glass-materials, adr-075, adr-129, adr-244]
-description: "Accepted on 2026-10-26 by Tor (all items of the phase D proposal list). Keeps the Full effects look while cutting the work behind it: aurora drift on a 33 ms grid instead of every vsync, the WebGL aurora draws the blobs itself (one animator), cards and the desktop sidebar keep saturate but drop blur, the sidebar filters once, the aurora pauses under modals, ledger rows stop chasing hover while scrolling, plus smaller blob layers, opacity-only hover shadow, a capped bar stagger, transform-positioned chart pills and Mac measurement variants. Whether the WebGL aurora also runs on standard is decided from measurements."
+description: "Accepted on 2026-10-26 by Tor (all items of the phase D proposal list). Keeps the Full effects look while cutting the work behind it: aurora drift on a 33 ms grid instead of every vsync, the WebGL aurora draws the blobs itself (one animator), cards and the desktop sidebar keep saturate but drop blur, the sidebar filters once, the aurora pauses under modals, ledger rows stop chasing hover while scrolling, plus smaller blob layers, opacity-only hover shadow, a capped bar stagger, transform-positioned chart pills and Mac measurement variants. The WebGL aurora stays on enhanced only, because the Mac run measured it as more expensive than the CSS blobs on standard."
 aliases: [adr-255, cheaper full effects, phase d gpu]
 related_code:
   [
@@ -78,3 +78,20 @@ of the measured cost were inferred, not traced.
 - The aurora holds still behind dimmed modals and resumes in place.
 - Ledger hover does not follow rows mid-scroll; it returns once scrolling settles.
 - The win is claimed only after a Mac before/after run with 3 repeats and non-overlapping ranges.
+
+## Measured outcome (2026-10-27)
+
+Mac overnight run on the M1 Air with Vision Demo and 3 repeats. Main `bbaf122` against this
+change at `8d91c3a`. A gain counts only when the min–max ranges do not overlap.
+
+- With Full effects on: standard idle GPU 5825 → 417 mW, enhanced idle GPU 8786 → 1462 mW,
+  enhanced scroll 40.5 → 59.9 fps.
+- With Full effects off: reduced scroll GPU 5776 → 832 mW, standard idle 638 → 137 mW.
+- Compared with main with Full effects off, standard with Full effects on is cheaper. Enhanced is
+  about level at idle (+6%), while scroll is +16% and memory +24%.
+- `shader-standard` costs more than the CSS blobs on standard (off 137 → 602 mW, on 411 →
+  600 mW). The WebGL aurora therefore stays on enhanced only, and the variant remains available
+  for measurement.
+- The `glass-blur` variant (old card and sidebar filters) puts standard idle back up from 416 to
+  2514 mW, so the saturate-only glass is the largest single saving. The drift costs about
+  14 mW per frame per second.
