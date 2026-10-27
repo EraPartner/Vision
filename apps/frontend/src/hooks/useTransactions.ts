@@ -1,4 +1,4 @@
-import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
+import { QUERY_GC_TIME_MS, QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import {
     skipToken,
     useMutation,
@@ -58,6 +58,7 @@ export function useTransactions(params?: UseTransactionsParams, enabled = true) 
         enabled,
         queryFn: () => apiClient.getTransactions(params),
         staleTime: QUERY_STALE_TIME_MS.FREQUENT,
+        gcTime: QUERY_GC_TIME_MS.LARGE_LIST,
         placeholderData: (prev) => prev, // keep previous data while fetching (smooth pagination)
     });
     useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
@@ -84,6 +85,7 @@ export function useAccountLedger(
                       }),
         enabled,
         staleTime: QUERY_STALE_TIME_MS.FREQUENT,
+        gcTime: QUERY_GC_TIME_MS.LARGE_LIST,
         placeholderData: (previous) => previous,
     });
     useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);

@@ -284,6 +284,14 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-26: Lighter Electron memory, boot bundle and idle renderer work (accepted)
+
+[[docs/adr/256-electron-memory-and-idle-work|ADR-256]] (phases E and F of the Mac optimisation
+plan) shares one display probe that stops while hidden, slows the sidebar monitor badge to 5 min,
+pauses renderer polls while the user is away, collects large list caches after 2 min, caches V8
+code from the first run and moves lucide icons out of the boot chunk. zod/mini and an API client
+split were measured and declined.
+
 ### 2026-10-26: Strict type-checked TypeScript (accepted)
 
 [[docs/adr/253-strict-type-checked-typescript|ADR-253]] lints every TypeScript project, tests

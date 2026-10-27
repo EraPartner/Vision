@@ -115,7 +115,10 @@ export default defineConfig(({ mode }) => ({
          *  tanstack       — TanStack Table + Virtual
          *  radix-ui       — Radix primitives used by the shell/default route
          *  date-utils     — date-fns
-         *  icons          — lucide-react
+         *
+         * lucide-react has no named chunk: each icon ships with the chunk
+         * that uses it, so route-only icons stay out of the boot graph
+         * (ADR-256: boot preload -3.0 KB gz).
          */
         manualChunks(id: string) {
           // Normalise: strip bun cache hash suffix so we can match cleanly
@@ -162,12 +165,6 @@ export default defineConfig(({ mode }) => ({
           // into the boot graph through shared package dependencies.
           if (norm.includes("/date-fns") || norm.includes("+date-fns")) {
             return "date-utils";
-          }
-          if (
-            norm.includes("/lucide-react") ||
-            norm.includes("+lucide-react")
-          ) {
-            return "icons";
           }
           // decimal.js is imported by two independent lazy chunks (the
           // shared-utils money chunk and AIChatPage). resolve.dedupe

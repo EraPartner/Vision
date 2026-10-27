@@ -1,5 +1,6 @@
 import { listGuard } from "@/lib/enumGuard";
 import { useEffect, useRef } from "react";
+import { focusManager } from "@tanstack/react-query";
 import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useTheme } from "@/stores/hydration/ThemeHydration";
@@ -82,6 +83,14 @@ export function ElectronBridge({
             );
         });
 
+        // Away from the Mac (no input for 5 min, or screen locked): report the
+        // window as unfocused so React Query pauses its interval polls; back
+        // at the keyboard, hand focus tracking back to document visibility,
+        // which refetches the queries that opt into refetchOnWindowFocus.
+        const unsubIdle = api.onUserIdleChange?.((idle) => {
+            focusManager.setFocused(idle ? false : undefined);
+        });
+
         const unsubMenu = api.onMenuAction(
             ({ action, payload }: ElectronMenuAction) => {
                 const h = handlersRef.current;
@@ -151,6 +160,8 @@ export function ElectronBridge({
 
         return () => {
             unsubFullScreen();
+            unsubIdle?.();
+            focusManager.setFocused(undefined);
             unsubMenu();
             unsubCsv();
             window.removeEventListener("dragover", onDragOver);

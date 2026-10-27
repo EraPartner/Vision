@@ -173,6 +173,7 @@ export interface ElectronEventContract {
   "menu:action": ElectronMenuAction;
   "app:csv-opened": ElectronCsvFile;
   "window:fullscreen": boolean;
+  "app:user-idle": boolean;
   "backend:lost": { message: string };
   "backend:restored": undefined;
 }
@@ -219,6 +220,8 @@ export interface ElectronApiBridge {
   onMenuAction: ElectronSubscription<"menu:action">;
   onCsvOpen: ElectronSubscription<"app:csv-opened">;
   onFullScreenChange: ElectronSubscription<"window:fullscreen">;
+  /** Pauses renderer polls while the user is away (ADR-256). */
+  onUserIdleChange?: ElectronSubscription<"app:user-idle">;
 }
 
 export interface ElectronReportsBridge {

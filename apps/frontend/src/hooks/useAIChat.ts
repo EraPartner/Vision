@@ -1,4 +1,4 @@
-import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
+import { QUERY_GC_TIME_MS, QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useCallback, useSyncExternalStore } from "react";
 import {
     useInfiniteQuery,
@@ -31,6 +31,7 @@ export function useConversations() {
             return next < lastPage.total ? next : undefined;
         },
         staleTime: QUERY_STALE_TIME_MS.FREQUENT,
+        gcTime: QUERY_GC_TIME_MS.LARGE_LIST,
     });
     useBackgroundQueryCue(query.isFetching && !query.isFetchingNextPage);
     return query;
@@ -43,6 +44,7 @@ export function useConversation(id: string | null) {
             id ? apiClient.getConversation(id) : Promise.resolve(null),
         enabled: Boolean(id),
         staleTime: 10_000,
+        gcTime: QUERY_GC_TIME_MS.LARGE_LIST,
         placeholderData: (prev) => prev,
     });
     useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);

@@ -25,11 +25,27 @@ export function useMonitorObservations(id: string | null, offset = 0) {
     });
 }
 
+/** The monitors page polls its inbox every minute. */
 export function useMonitorNotifications(offset = 0) {
     return useQuery({
         queryKey: [...key, "notifications", offset],
         queryFn: () => apiClient.listMonitorNotifications(offset),
         refetchInterval: 60_000,
+    });
+}
+
+/**
+ * The always-mounted sidebar badge shares the page's first inbox page but
+ * polls every 5 min, and catches up whenever the window regains focus
+ * (ADR-256). Monitor mutations invalidate the whole key, so actions inside
+ * the app still update the badge at once.
+ */
+export function useMonitorInboxBadge() {
+    return useQuery({
+        queryKey: [...key, "notifications", 0],
+        queryFn: () => apiClient.listMonitorNotifications(0),
+        refetchInterval: 5 * 60_000,
+        refetchOnWindowFocus: true,
     });
 }
 

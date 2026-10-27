@@ -258,6 +258,16 @@ const electronAPI: ElectronApiBridge = {
     ipcRenderer.on("window:fullscreen", listener);
     return () => ipcRenderer.removeListener("window:fullscreen", listener);
   },
+
+  /** True after 5 min without user input or while the screen is locked. */
+  onUserIdleChange: (cb) => {
+    const listener = (
+      _event: IpcRendererEvent,
+      idle: ElectronEventContract["app:user-idle"],
+    ) => cb(idle);
+    ipcRenderer.on("app:user-idle", listener);
+    return () => ipcRenderer.removeListener("app:user-idle", listener);
+  },
 };
 contextBridge.exposeInMainWorld("electronAPI", electronAPI);
 

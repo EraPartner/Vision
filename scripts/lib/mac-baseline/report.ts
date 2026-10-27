@@ -64,7 +64,22 @@ export interface TierResult {
     afterIdle: RoleSummary;
     afterSustained: RoleSummary | null;
   };
-  idle: WindowMeasurement & { seconds: number; page: string };
+  idle: WindowMeasurement & {
+    seconds: number;
+    page: string;
+    /** Renderer work during the window (Performance.getMetrics delta). */
+    pageMetrics?: Record<string, number>;
+    /** Resource requests the page started during the window. */
+    requests?: number;
+  };
+  /** --background: the same idle page while another app is frontmost. */
+  background?:
+    | (WindowMeasurement & {
+        seconds: number;
+        pageMetrics: Record<string, number>;
+        requests: number;
+      })
+    | null;
   scroll:
     | (ActionMeasurement & {
         method: string;
@@ -196,6 +211,48 @@ export const SPREAD_METRICS: readonly {
     read: (t) => t.idle.power?.gpuPowerMw,
   },
   {
+    key: "idleRendererCpu",
+    label: "Idle renderer CPU %",
+    digits: 1,
+    read: (t) => t.idle.cpu.renderer?.cpuPercent,
+  },
+  {
+    key: "idleScriptMs",
+    label: "Idle renderer script ms",
+    digits: 0,
+    read: (t) => t.idle.pageMetrics?.ScriptDurationMs,
+  },
+  {
+    key: "idleTaskMs",
+    label: "Idle renderer task ms",
+    digits: 0,
+    read: (t) => t.idle.pageMetrics?.TaskDurationMs,
+  },
+  {
+    key: "idleRequests",
+    label: "Idle page requests",
+    digits: 0,
+    read: (t) => t.idle.requests,
+  },
+  {
+    key: "backgroundAppCpu",
+    label: "Background app CPU %",
+    digits: 1,
+    read: (t) => t.background?.cpu.appTotal?.cpuPercent,
+  },
+  {
+    key: "backgroundRendererCpu",
+    label: "Background renderer CPU %",
+    digits: 1,
+    read: (t) => t.background?.cpu.renderer?.cpuPercent,
+  },
+  {
+    key: "backgroundScriptMs",
+    label: "Background renderer script ms",
+    digits: 0,
+    read: (t) => t.background?.pageMetrics.ScriptDurationMs,
+  },
+  {
     key: "scrollFps",
     label: "Scroll FPS",
     digits: 1,
@@ -224,6 +281,30 @@ export const SPREAD_METRICS: readonly {
     label: "Sustained package mW",
     digits: 0,
     read: (t) => t.sustained?.power?.combinedPowerMw,
+  },
+  {
+    key: "rendererAfterSustainedMb",
+    label: "Renderer memory after sustained MB",
+    digits: 0,
+    read: (t) => t.memory.afterSustained?.renderer?.footprintMb,
+  },
+  {
+    key: "gpuAfterSustainedMb",
+    label: "GPU process memory after sustained MB",
+    digits: 0,
+    read: (t) => t.memory.afterSustained?.gpu?.footprintMb,
+  },
+  {
+    key: "heapAfterSustainedMb",
+    label: "JS heap used after sustained MB",
+    digits: 1,
+    read: (t) => t.sustained?.pageMetrics.JSHeapUsedSizeMb,
+  },
+  {
+    key: "nodesAfterSustained",
+    label: "DOM nodes after sustained",
+    digits: 0,
+    read: (t) => t.sustained?.pageMetrics.Nodes,
   },
   {
     key: "launchMs",

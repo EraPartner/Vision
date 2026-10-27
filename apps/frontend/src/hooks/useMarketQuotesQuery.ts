@@ -2,6 +2,7 @@ import { useQuery, type QueryKey } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import type { MarketQuote } from '@/lib/api/market';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { QUERY_STALE_TIME_MS } from '@/lib/queryPolicies';
 
 /**
  * Shared 60s online-gated batch-quote poll for the research pages: price-only
@@ -22,9 +23,9 @@ export function useMarketQuotesQuery<Q = MarketQuote>(
                 ? apiClient.getMarketQuotes<Q>(symbols, { detail: 'basic' })
                 : Promise.resolve<Q[]>([]),
         enabled: !!symbols && isOnline,
-        // An explicit staleTime always overrode the QueryClient default; 0 is
-        // what TanStack applies for the former explicit `undefined`.
-        staleTime: options?.staleTime ?? 0,
+        // Fresh for one poll period, so moving between research pages that
+        // share a key reuses the last poll instead of refetching (ADR-256).
+        staleTime: options?.staleTime ?? QUERY_STALE_TIME_MS.STANDARD,
         refetchInterval: isOnline ? 60_000 : false,
         refetchOnWindowFocus: false,
         retry: isOnline ? 1 : false,

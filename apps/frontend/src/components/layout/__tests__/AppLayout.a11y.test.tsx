@@ -7,6 +7,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { InspectorToggle } from "@/components/devtools/InspectorToggle";
 import { useLocation, useNavigate } from "react-router";
 
 const API_BASE = "http://localhost:3002";
@@ -189,5 +190,23 @@ describe("AppLayout a11y landmarks", () => {
                 "/?keep=1",
             ),
         );
+    });
+
+    // Regression guard for the launch burn fixed in #359: an infinite
+    // pulse/spin left on screen after the requests ended kept the GPU busy.
+    it("leaves no pulsing or spinning indicator once the shell is idle", async () => {
+        const { queryClient } = renderWithApp(
+            <AppLayout>
+                <div>page content</div>
+                <InspectorToggle />
+            </AppLayout>,
+        );
+        await screen.findByText("page content");
+        await waitFor(() => {
+            expect(queryClient.isFetching()).toBe(0);
+            expect(
+                document.querySelectorAll(".animate-pulse, .animate-spin"),
+            ).toHaveLength(0);
+        });
     });
 });

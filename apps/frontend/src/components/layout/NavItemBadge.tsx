@@ -2,7 +2,7 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useNeedsCategoryCount } from "@/hooks/useNeedsCategoryCount";
 import { useUpcomingPlannedPayments } from "@/hooks/useUpcomingPlannedPayments";
 import { useInsightsCount } from "@/hooks/useInsightsDigest";
-import { useMonitorNotifications } from "@/hooks/useMonitors";
+import { useMonitorInboxBadge } from "@/hooks/useMonitors";
 import { cn } from "@/lib/utils";
 import type { NavItem } from "@/lib/navigation";
 
@@ -98,7 +98,7 @@ function InsightsCount({ collapsed }: { collapsed: boolean }) {
 /** The persisted unread count is calculated server-side across all inbox pages. */
 function MonitorInboxCount({ collapsed }: { collapsed: boolean }) {
     const { t } = useLanguage();
-    const inbox = useMonitorNotifications(0);
+    const inbox = useMonitorInboxBadge();
     const unread = inbox.data?.unreadCount ?? 0;
     if (unread === 0) return null;
     return (

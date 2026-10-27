@@ -1,4 +1,4 @@
-import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
+import { QUERY_GC_TIME_MS, QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -87,7 +87,7 @@ const queryClient = new QueryClient({
     defaultOptions: {
         queries: {
             staleTime: QUERY_STALE_TIME_MS.DEFAULT, // 30s before data considered stale
-            gcTime: 5 * 60_000, // 5min garbage collection
+            gcTime: QUERY_GC_TIME_MS.DEFAULT, // 5min garbage collection
             refetchOnWindowFocus: false,
             retry: 1,
         },
