@@ -1652,8 +1652,8 @@
         .surface-glass,
         .glass-effect,
         .app-topbar {
-            backdrop-filter: none;
             -webkit-backdrop-filter: none;
+            backdrop-filter: none;
             background: hsl(var(--card));
         }
 
@@ -1673,6 +1673,10 @@
      * paint, before React mounts.
      * ------------------------------------------------------------------ */
 
+    /* Prefixed first, standard last: the CSS minifier treats the two as one
+       property and keeps only the last declaration, and Chromium ignores
+       -webkit-backdrop-filter, so the other order left every reduced-tier
+       card, rail and top bar filtering (ADR-259). */
     :root.fx-reduced .glass,
     :root.fx-reduced .glass-thin,
     :root.fx-reduced .glass-regular,
@@ -1685,8 +1689,8 @@
     :root.fx-reduced .surface-glass,
     :root.fx-reduced .glass-effect,
     :root.fx-reduced .app-topbar {
-        backdrop-filter: none;
         -webkit-backdrop-filter: none;
+        backdrop-filter: none;
         /* Fully opaque (was 0.97, a ≤2/255 difference): the compositor only
            culls what lies under layers it knows are opaque, so an opaque card
            and table body stop the body colour and card fill being drawn
@@ -1919,8 +1923,8 @@
         [data-print-page] .glass-elevated {
             background: #fff !important;
             box-shadow: none !important;
-            backdrop-filter: none !important;
             -webkit-backdrop-filter: none !important;
+            backdrop-filter: none !important;
         }
 
         [data-print-page] .premium-frame,

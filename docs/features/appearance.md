@@ -340,7 +340,7 @@ All theme transitions respect `prefers-reduced-motion`:
 
 | Tier       | Effect                                                                                                                                        |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `reduced`  | No backdrop-filter glass (opaque card surfaces since ADR-257), liquid canvas hidden. Mirrors the pre-existing `prefers-reduced-transparency` fallback look. |
+| `reduced`  | No backdrop-filter glass (opaque card surfaces since ADR-257; until ADR-259 the minified CSS kept the filters on), liquid canvas hidden. Mirrors the pre-existing `prefers-reduced-transparency` fallback look. |
 | `standard` | CSS aurora blobs + glass materials. Unchanged default look.                                                                                   |
 | `enhanced` | Adds WebGL `ShaderAurora` + Electron vibrancy. On macOS, native vibrancy substitutes for persistent web-surface blur.                         |
 

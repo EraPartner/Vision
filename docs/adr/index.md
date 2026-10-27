@@ -284,6 +284,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-27: Reduced tier really turns glass filters off (accepted)
+
+[[docs/adr/259-reduced-tier-backdrop-filter-order|ADR-259]] reorders the `backdrop-filter: none`
+pairs in the reduced-tier, reduced-transparency and print rules. The minifier kept only the
+prefixed declaration, which Chromium ignores, so those paths still filtered every card, the rail
+and the top bar under opaque fills.
+
 ### 2026-10-27: Chart entrances on the compositor and compositor diagnostics (accepted)
 
 [[docs/adr/258-chart-entrances-and-compositor-diagnostics|ADR-258]] runs the area, line and
