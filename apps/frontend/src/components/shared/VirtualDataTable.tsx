@@ -1080,9 +1080,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         count: processedRows.length,
         getScrollElement: () => parentRef.current,
         estimateSize: () => rowHeight,
-        // Six rows beyond each edge cover a fast trackpad fling at 60 fps
-        // while keeping fewer off-screen rows mounted (ADR-256; was 10).
-        overscan: 6,
+        overscan: 10,
     });
     const pendingRestoreRef = useRef<number | null>(
         tableScrollPositions.get(historyScrollKey) ?? null,

@@ -2,7 +2,7 @@
 title: "ADR-256: Lighter Electron memory, boot bundle and idle renderer work"
 type: adr
 status: accepted
-date: 2026-10-26
+date: 2026-10-27
 tags:
   [
     adr,
@@ -16,7 +16,7 @@ tags:
     adr-075,
     adr-244,
   ]
-description: "Accepted on 2026-10-26 by Tor (phases E and F of the Mac optimisation plan). One shared display probe replaces three 5 s polls and stops while hidden; the sidebar monitor badge polls every 5 min; research quotes stay fresh for one poll; renderer polls pause while the user is away; large list caches are collected after 2 min; V8 code cache from the first run; lucide icons leave the boot chunk; ledger overscan 10 to 6; a test guards against leftover pulse/spin; the Mac baseline measures idle renderer work and a background window. zod/mini and an API client split were measured and declined."
+description: "Accepted on 2026-10-26 by Tor (phases E and F of the Mac optimisation plan). One shared display probe replaces three 5 s polls and stops while hidden; the sidebar monitor badge polls every 5 min; research quotes stay fresh for one poll; renderer polls pause while the user is away; large list caches are collected after 2 min; V8 code cache from the first run; lucide icons leave the boot chunk; a test guards against leftover pulse/spin; the Mac baseline measures idle renderer work and a background window. zod/mini and an API client split were measured and declined; a smaller ledger overscan was measured on the Mac and reverted."
 aliases: [adr-256, phase e, phase f, electron memory, idle cpu]
 related_code:
   [
@@ -99,7 +99,11 @@ Memory and bundle (phase E):
 - **E4:** `lucide-react` no longer has a named chunk, so each icon ships with the chunk that uses
   it. Measured in the cloud build: boot preload graph 457.83 → 454.82 KB gz (−3.0 KB); all assets
   1259.09 → 1271.38 KB gz (+12.3 KB, spread over lazy route chunks) and 200 → 237 files.
-- **E6:** `VirtualDataTable` overscan 10 → 6 rows beyond each edge.
+- **E6, reverted:** `VirtualDataTable` keeps overscan 10. Overscan 6 was built and measured on
+  the Mac (2026-10-27, combined with ADR-255, standard tier, interleaved 6/10/6/10). With 6, ledger
+  scroll GPU power was 2594–2953 mW against 2167–2412 mW with 10 (+19–22%), and sustained GPU
+  power 2819–3223 against 2457–2738 mW (+15–17%). Fewer pre-mounted rows means more rows
+  rasterised under the glass while scrolling. Renderer memory showed no gain beyond noise.
 
 Measurement (`scripts/mac-baseline.ts`): the idle window also records renderer
 `Performance.getMetrics` deltas (script and task ms) and the number of page requests;
@@ -117,8 +121,12 @@ parse time that E2's code cache mostly covers from the second launch.
 
 ## Consequences
 
-- All gains except E4's bundle size are estimates until measured on the Mac with
-  `bun scripts/mac-baseline.ts --repeat 3 --background 60` before and after.
+- Measured on the Mac on 2026-10-27 (Vision Demo, `--repeat 3 --background 60`, against `main`
+  `bbaf122`). The idle page request is gone, idle renderer script time is 40–45% lower and
+  background renderer script time 88% lower on every tier. Whole-app idle CPU drops only on the
+  reduced tier, because the aurora dominates the others. E2 and E3 show no clear win except
+  lower renderer memory and JS heap after the sustained run on the enhanced tier. Details are in
+  the vault note `queries/2026-10-27-phase-ef-results.md`.
 - No functionality is removed. The visible behaviour changes are the slower display re-check while
   Vision is not frontmost (F2), the badge delay (F3), the loading state after 2 min (E3) and polls
   pausing while the user is away (F5).
