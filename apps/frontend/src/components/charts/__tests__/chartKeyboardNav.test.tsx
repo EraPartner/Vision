@@ -195,8 +195,10 @@ const SERIES = [
 ];
 const fmt = (v: number) => `VAL:${v}`;
 
+// The accessible chart frame: decorative grid/series layers are aria-hidden
+// <svg>s with no role, stacked under it.
 function getSvg(container: HTMLElement): SVGSVGElement {
-    const svg = container.querySelector("svg");
+    const svg = container.querySelector<SVGSVGElement>("svg[role]");
     if (!svg) throw new Error("chart svg not rendered");
     return svg;
 }

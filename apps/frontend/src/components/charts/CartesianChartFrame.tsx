@@ -109,6 +109,8 @@ interface CartesianChartFrameProps {
     readonly pointCount: number;
     readonly onKeyDown: KeyboardEventHandler<SVGSVGElement>;
     readonly onBlur: FocusEventHandler<SVGSVGElement>;
+    /** `relative` when decorative layers are stacked under the frame. */
+    readonly className?: string | undefined;
     readonly children: ReactNode;
 }
 
@@ -120,10 +122,12 @@ export function CartesianChartFrame({
     pointCount,
     onKeyDown,
     onBlur,
+    className,
     children,
 }: CartesianChartFrameProps) {
     return (
         <svg
+            className={className}
             width={width}
             height={height}
             role="img"
