@@ -14,7 +14,9 @@
  * `--ease-out-quint`, while Framer ran the real out-expo. That is the drift
  * the parity test now makes impossible.
  *
- * All consumers honor `prefers-reduced-motion` via useReducedMotion().
+ * All consumers honor `prefers-reduced-motion`: Framer consumers via
+ * useReducedMotion(), the CSS chart entrances (chartEntrance.tsx) via the
+ * same media query in index.css.
  */
 
 import type { Transition } from "framer-motion";
