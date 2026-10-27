@@ -3424,7 +3424,7 @@ const en: Record<string, string> = {
   'settings.appearance.autoAdaptDisplayHint': 'Automatically switches to Reduced while the window is on a high-resolution external display such as a 4K TV, and back when it leaves. The built-in screen never counts as large.',
   'settings.appearance.darkFrom': 'Dark from',
   'settings.appearance.fullEffects': 'Full effects',
-  'settings.appearance.fullEffectsHint': 'Brings back effects that were turned down to save power: smooth aurora drift, frosted dialog backdrops, glass chart tooltips and cards, animated card shadows and longer chart entrances. Uses more GPU and battery.',
+  'settings.appearance.fullEffectsHint': 'Brings back effects that were turned down to save power: smooth aurora drift, frosted dialog backdrops, glass chart tooltips and cards, animated card shadows and longer chart entrances. Uses more GPU and battery. On by default with Standard.',
   'settings.appearance.gainLossColors': 'Gain & loss colors',
   'settings.appearance.gainLossColors.classic': 'Classic (red loss)',
   'settings.appearance.gainLossColors.colorblind': 'Colorblind-safe (orange loss)',

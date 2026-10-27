@@ -9,7 +9,7 @@ import { themes, type ThemeVariant } from '@/styles/themes';
 import { isElectronMac } from '@/lib/api/electron';
 import { useOptionalSidebar } from '@/components/ui/sidebar';
 import { useSettingsStore, type VisualEffectsTier } from '@/stores/settingsStore';
-import { useLargeDisplay } from '@/hooks/useVisualEffectsTier';
+import { resolveFullEffects, useLargeDisplay } from '@/hooks/useVisualEffectsTier';
 import { SettingsSection, SettingsGroup, SettingRow, SelectSettingRow } from '../SettingsPrimitives';
 import { cn } from '@/lib/utils';
 import { gainLossPreviewStyle } from './gainLossPreview';
@@ -52,6 +52,7 @@ function VariantSwatch({ variant, mode }: { variant: ThemeVariant; mode: 'light'
 export const AppearanceSection = memo(function AppearanceSection() {
     const { t } = useLanguage();
     const { appSettings, updateAppSettings } = useAppSettings();
+    const fullEffects = resolveFullEffects(appSettings.fullEffects, appSettings.visualEffects);
     const { theme, mode, schedule, variant, systemAccent, setMode, setSchedule, setVariant, setSystemAccent } = useTheme();
 
     // The effects select shows the tier in use on THIS display: while the
@@ -231,8 +232,8 @@ export const AppearanceSection = memo(function AppearanceSection() {
                 >
                     <Switch
                         id="full-effects"
-                        checked={appSettings.fullEffects}
-                        onCheckedChange={(v) => updateAppSettings({ fullEffects: v })}
+                        checked={fullEffects}
+                        onCheckedChange={(v) => updateAppSettings({ fullEffects: v ? 'on' : 'off' })}
                     />
                 </SettingRow>
             </SettingsGroup>

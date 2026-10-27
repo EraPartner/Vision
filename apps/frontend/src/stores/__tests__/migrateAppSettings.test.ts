@@ -49,12 +49,20 @@ describe("migrateAppSettings — blob validation", () => {
             adminMode: true,
             visualEffects: "enhanced",
             autoAdaptDisplay: false,
-            fullEffects: true,
+            fullEffects: "on",
             startupSection: "portfolio",
             autoClearPlannedOnMatch: false,
             colorblindGainLoss: true,
         };
         expect(migrateAppSettings(blob)).toEqual(blob);
+    });
+
+    it("maps the old boolean Full effects switch onto the choice", () => {
+        // false was the untouched default, so it cannot mean a deliberate off.
+        expect(migrateAppSettings({ fullEffects: true }).fullEffects).toBe("on");
+        expect(migrateAppSettings({ fullEffects: false }).fullEffects).toBe("auto");
+        expect(migrateAppSettings({ fullEffects: "off" }).fullEffects).toBe("off");
+        expect(migrateAppSettings({ fullEffects: 1 }).fullEffects).toBe("auto");
     });
 
     it("falls back to the default currency for a malformed ISO code", () => {

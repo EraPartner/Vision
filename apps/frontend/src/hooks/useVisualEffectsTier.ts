@@ -1,9 +1,9 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useAppSettings } from '@/stores/hydration/AppSettingsHydration';
 import { resolveEffectiveTier } from '@/lib/visualEffects';
 import { getDisplayIsLargeSnapshot, subscribeDisplayProbe } from '@/lib/displayProbe';
 import { useSettingsStore } from '@/stores/settingsStore';
-import type { VisualEffectsTier } from '@/stores/settingsStore';
+import type { FullEffectsChoice, VisualEffectsTier } from '@/stores/settingsStore';
 
 /** Whether the window's display counts as large; one shared probe for all
  *  callers (lib/displayProbe.ts). */
@@ -23,12 +23,22 @@ export function useVisualEffectsTier(): { tier: VisualEffectsTier; largeDisplay:
 }
 
 /**
- * The "Full effects" switch (AppSettings.fullEffects). A narrow store
- * selector, so the components that read it (cards, chart tooltips) re-render
- * only when this one flag flips.
+ * Whether Full effects apply. `auto` follows the tier the user chose (not
+ * the display-capped one), so it needs no display check: on for standard
+ * only. On reduced the switch restores almost nothing (no glass, no aurora).
+ */
+export function resolveFullEffects(choice: FullEffectsChoice, chosenTier: VisualEffectsTier): boolean {
+    if (choice === 'auto') return chosenTier === 'standard';
+    return choice === 'on';
+}
+
+/**
+ * The "Full effects" switch (AppSettings.fullEffects, resolved). A narrow
+ * store selector, so the components that read it (cards, chart tooltips)
+ * re-render only when the resolved flag flips.
  */
 export function useFullEffects(): boolean {
-    return useSettingsStore((s) => s.appSettings.fullEffects);
+    return useSettingsStore((s) => resolveFullEffects(s.appSettings.fullEffects, s.appSettings.visualEffects));
 }
 
 /**

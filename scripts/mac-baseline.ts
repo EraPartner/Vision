@@ -687,7 +687,9 @@ async function writeTier(
   const value = {
     ...(current.value as Record<string, unknown>),
     visualEffects: tier,
-    fullEffects,
+    // An explicit choice: since ADR-255 a missing or false value means
+    // "auto", which is on for the standard tier.
+    fullEffects: fullEffects ? "on" : "off",
   };
   await settingsRequest(origin, "PUT", { value, expected: current.expected });
 }

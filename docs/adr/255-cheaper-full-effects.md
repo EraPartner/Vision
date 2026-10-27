@@ -95,3 +95,12 @@ change at `8d91c3a`. A gain counts only when the min–max ranges do not overlap
 - The `glass-blur` variant (old card and sidebar filters) puts standard idle back up from 416 to
   2514 mW, so the saturate-only glass is the largest single saving. The drift costs about
   14 mW per frame per second.
+
+## Default (Tor, 2026-10-27)
+
+Following these numbers, Tor chose "Default on standard only". `AppSettings.fullEffects` becomes
+`auto | on | off` with `auto` as the default. `auto` is on when the chosen tier is standard and off
+on reduced and enhanced. It follows the chosen tier, not the display-capped one, so no display
+check is needed. The Settings switch shows the resolved state, and flipping it stores an explicit
+`on` or `off`. A stored `true` from before becomes `on`. A stored `false` becomes `auto`, because
+it cannot be told apart from the old untouched default.

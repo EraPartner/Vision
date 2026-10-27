@@ -2,8 +2,8 @@
 title: Appearance Feature
 type: feature
 status: active
-date: 2026-10-26
-updated: 2026-10-26
+date: 2026-10-27
+updated: 2026-10-27
 tags: [feature, appearance, theming, personalization, frontend, settings, phase-1, visual-effects-tiers, auto-adapt-display, fx-reduced, shader-aurora, webgl, premium-v3, system-accent, vibrancy, electron-native, macos, june-2026, canvas-text, aurora-legibility, liquid-glass-sidebar, accessibility, colorblind, gain-loss, skin-v2]
 description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions. June 2026 (ADR-075): Visual-effects tier model (reduced/standard/enhanced) + autoAdaptDisplay replaces the ADR-071 enhancedEffects boolean; large-display heuristic auto-drops to reduced on 4K-class screens. June 2026 V12 (ADR-072): system accent color overlay (Electron/macOS only, persisted in theme_settings.systemAccent) and vibrancy gated on effective tier. 2026-06-24: colorblind gain/loss palette promoted to a persisted user setting (colorblindGainLoss, default false/classic); --gain/--loss CSS tokens unified app-wide; gain/loss Tailwind color utilities added. 2026-10-05 — the default light theme gives --gain its own WCAG AA gold (36 74% 33%); dark mode and the other variants keep the accent gain.
 aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode, system accent, vibrancy]
@@ -372,7 +372,7 @@ When the display is auto-capped, a note styled `text-primary` explains the situa
 
 ### Full effects switch (ADR-244, 2026-10-21)
 
-`AppSettings.fullEffects: boolean` (default `false`), Settings → Appearance → Visual effects → "Full effects". `VisualEffectsController` sets `fx-full` on `<html>`; components read it with `useFullEffects()`. On, it restores within each tier's own scope:
+`AppSettings.fullEffects: "auto" | "on" | "off"` (default `auto`, which is on for the chosen standard tier only and off for reduced and enhanced, ADR-255; a stored boolean from before maps `true` to `on` and `false` to `auto`), Settings → Appearance → Visual effects → "Full effects". `VisualEffectsController` sets `fx-full` on `<html>`; components read it with `useFullEffects()`. On, it restores within each tier's own scope:
 
 | Effect | Removed by | Restored as |
 | --- | --- | --- |
