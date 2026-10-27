@@ -6,11 +6,11 @@ import { summarizeSparkline } from "./chartAria";
 import { ParentSize } from "@visx/responsive";
 import { scaleLinear } from "@visx/scale";
 import { Area, LinePath } from "@visx/shape";
-import { m, useReducedMotion } from "framer-motion";
 import { useMemo } from "react";
 
 import { CHART_NEUTRAL } from "./palette";
-import { durations, easings } from "@/lib/motion";
+import { ChartEntrance } from "./chartEntrance";
+import { durations } from "@/lib/motion";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 export interface SparklineProps {
@@ -48,7 +48,6 @@ function Inner({
     activeIndex,
 }: SparklineProps & { width: number; height: number }) {
     const { t } = useLanguage();
-    const reduce = useReducedMotion();
 
     const xScale = useMemo(
         () => scaleLinear({ range: [0, width], domain: [0, Math.max(1, data.length - 1)] }),
@@ -68,69 +67,89 @@ function Inner({
     const activeValue = activeIndex === undefined ? undefined : data[activeIndex];
 
     return (
-        <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSparkline(t, data)}>
+        <div style={{ position: "relative", width, height }}>
+            {/* Area and line fade in as separate layers (chartEntrance.tsx);
+                the labelled frame on top carries the scrub indicator. */}
             {fillArea ? (
-                <m.g
-                    initial={reduce ? { opacity: 1 } : { opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{
-                        duration: reduce ? 0 : durations.slow,
-                        ease: easings.outExpo,
-                    }}
+                <ChartEntrance
+                    effect="fade"
+                    duration={durations.slow}
+                    width={width}
+                    height={height}
                 >
-                    <Area<number>
+                    <svg
+                        width={width}
+                        height={height}
+                        aria-hidden="true"
+                        focusable="false"
+                    >
+                        <Area<number>
+                            // visx takes a mutable array; the prop is a ReadonlyArray that visx never writes to.
+                            data={data as number[]}
+                            x={(_, i) => xScale(i)}
+                            y0={height}
+                            y1={(v) => yScale(v)}
+                            curve={curveMonotoneX}
+                            fill={color}
+                            fillOpacity={0.15}
+                        />
+                    </svg>
+                </ChartEntrance>
+            ) : null}
+            <ChartEntrance
+                effect="fade"
+                duration={durations.normal}
+                width={width}
+                height={height}
+            >
+                <svg
+                    width={width}
+                    height={height}
+                    aria-hidden="true"
+                    focusable="false"
+                >
+                    <LinePath<number>
                         // visx takes a mutable array; the prop is a ReadonlyArray that visx never writes to.
                         data={data as number[]}
                         x={(_, i) => xScale(i)}
-                        y0={height}
-                        y1={(v) => yScale(v)}
+                        y={(v) => yScale(v)}
                         curve={curveMonotoneX}
-                        fill={color}
-                        fillOpacity={0.15}
-                    />
-                </m.g>
-            ) : null}
-            <m.g
-                initial={reduce ? { opacity: 1 } : { opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{
-                    duration: reduce ? 0 : durations.normal,
-                    ease: easings.outExpo,
-                }}
-            >
-                <LinePath<number>
-                    // visx takes a mutable array; the prop is a ReadonlyArray that visx never writes to.
-                    data={data as number[]}
-                    x={(_, i) => xScale(i)}
-                    y={(v) => yScale(v)}
-                    curve={curveMonotoneX}
-                    stroke={color}
-                    strokeWidth={strokeWidth}
-                    fill="none"
-                />
-            </m.g>
-            {activeIndex !== undefined && activeValue !== undefined && (
-                <g aria-hidden="true">
-                    <line
-                        x1={xScale(activeIndex)}
-                        x2={xScale(activeIndex)}
-                        y1={0}
-                        y2={height}
                         stroke={color}
-                        strokeOpacity={0.35}
-                        strokeWidth={1}
+                        strokeWidth={strokeWidth}
+                        fill="none"
                     />
-                    <circle
-                        cx={xScale(activeIndex)}
-                        cy={yScale(activeValue)}
-                        r={3.5}
-                        fill={color}
-                        stroke="hsl(var(--background))"
-                        strokeWidth={1.5}
-                    />
-                </g>
-            )}
-        </svg>
+                </svg>
+            </ChartEntrance>
+            <svg
+                className="relative"
+                width={width}
+                height={height}
+                role="img"
+                aria-label={ariaLabel ?? summarizeSparkline(t, data)}
+            >
+                {activeIndex !== undefined && activeValue !== undefined && (
+                    <g aria-hidden="true">
+                        <line
+                            x1={xScale(activeIndex)}
+                            x2={xScale(activeIndex)}
+                            y1={0}
+                            y2={height}
+                            stroke={color}
+                            strokeOpacity={0.35}
+                            strokeWidth={1}
+                        />
+                        <circle
+                            cx={xScale(activeIndex)}
+                            cy={yScale(activeValue)}
+                            r={3.5}
+                            fill={color}
+                            stroke="hsl(var(--background))"
+                            strokeWidth={1.5}
+                        />
+                    </g>
+                )}
+            </svg>
+        </div>
     );
 }
 

@@ -2,8 +2,8 @@
 title: Mac Performance Baseline
 type: performance
 status: active
-date: 2026-10-26
-last_modified: 2026-10-26
+date: 2026-10-27
+last_modified: 2026-10-27
 tags: [performance, macos, gpu, energy, measurement, electron]
 description: Repeatable before/after measurement of the installed Vision apps on a Mac (memory, CPU, GPU, power, launch, frames) across the three UI tiers
 aliases: [mac baseline, performance baseline, powermetrics run]
@@ -57,7 +57,7 @@ Results land in `perf-results/<timestamp>/` (git-ignored): `results.json`, `summ
 `bun scripts/mac-baseline.ts --help` lists the options (`--app`, `--tiers`, `--idle`,
 `--sustained`, `--cooldown`, `--pages`, `--full-effects`, `--repeat`, `--no-powermetrics`,
 `--no-trace`, `--idle-trace`, `--variant`, `--variants-only-idle`, `--launch-probe`,
-`--background`, `--leak`, `--leak-window`).
+`--background`, `--leak`, `--leak-window`, `--segment`, `--chromium-switch`).
 
 ## Idle renderer work and background windows
 
@@ -134,6 +134,23 @@ Every run now also reports the idle frame rate (presented frames per second from
 the end of the idle window; on by default, `--no-trace` skips it unless `--idle-trace` is given)
 and a glass census (`glass area %` and `glass surfaces`: elements with a backdrop filter, clipped
 to the viewport; nested surfaces add up, so area can exceed 100%).
+
+## Extra segments and compositor readout (phase G, ADR-258)
+
+- `--segment window-scroll` scrolls the window (`document.scrollingElement`; `AppLayout` scrolls
+  the window) on `/` and `/statistics` 6000 px each way at 1500 px/s, capped by `--scroll-px`,
+  and reports it like the ledger scroll. `--segment chat-stream` opens `/ai-chat`, sends a message
+  and streams 300 tokens at 20 per second through the real send path, with `window.fetch` swapped
+  over CDP for a mock (no Ollama, nothing written to the database, the real `fetch` restored
+  afterwards). Both are opt-in, repeatable or comma-separated, and about 20 s each.
+- `--chromium-switch=<switch>` (repeatable, `=` form needed for values starting with `--`, e.g.
+  `--chromium-switch=--disable-features=SkiaGraphite`) adds a launch switch for diagnostics only;
+  it is stored in `results.json` `options.chromiumSwitches`.
+- Every run stores the GPU readout from CDP `SystemInfo.getInfo` in `gpu-info/<app>.json`, with a
+  summary (feature status, Graphite, Skia, overlays) in `apps[].gpuInfo` and a "GPU" table.
+- The traced pass adds the `cc` category and reports per segment the viz `DrawFrame` count and ms,
+  render passes per frame, raster task count and ms, and the largest cc/viz events. Event names
+  are taken from Chromium sources and not yet checked against an Electron 44 trace.
 
 > [!warning] Side effects
 > Each app is launched once per tier plus once for setup. If backup-on-quit is enabled, every

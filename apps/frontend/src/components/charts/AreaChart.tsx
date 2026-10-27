@@ -1,11 +1,11 @@
 /**
- * AreaChart — visx + framer-motion area chart primitive.
+ * AreaChart — visx area chart primitive.
  *
  * Features:
  *  - Single or multi series
  *  - Optional stacking
  *  - Token-only gradient fills
- *  - Motion-driven draw-in (respects prefers-reduced-motion)
+ *  - Compositor draw-in (respects prefers-reduced-motion)
  *  - Optional horizontal ReferenceLine
  *  - Crosshair tooltip powered by ChartTooltip
  */
@@ -16,8 +16,15 @@ import { Group } from "@visx/group";
 import { scaleLinear } from "@visx/scale";
 import { AreaClosed, AreaStack, Line, LinePath } from "@visx/shape";
 import { bisector, max, min, sum } from "d3-array";
-import { m, useReducedMotion } from "framer-motion";
-import { memo, useCallback, useId, useMemo, useRef, useState } from "react";
+import {
+    memo,
+    type ReactNode,
+    useCallback,
+    useId,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 
 import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
 import {
@@ -31,7 +38,8 @@ import { useChartKeyboardNav } from "./keyboardNav";
 import { formatScrubDelta, useChartScrub } from "./scrub";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
-import { durations, easings } from "@/lib/motion";
+import { ChartEntrance, ChartLayerSvg, ChartReveal } from "./chartEntrance";
+import { durations } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -101,7 +109,11 @@ interface AreaSeriesLayerProps<Datum> {
     readonly xAccessor: (d: Datum) => Date | number;
     readonly xScale: AreaXScale;
     readonly yScale: AreaYScale;
-    readonly reduce: boolean | null;
+    readonly width: number;
+    readonly height: number;
+    readonly marginLeft: number;
+    readonly marginTop: number;
+    readonly innerWidth: number;
     readonly gradId: string;
     readonly revealId: string;
 }
@@ -113,6 +125,11 @@ interface AreaSeriesLayerProps<Datum> {
  * crosshair/tooltip overlays, never the paths. All props are referentially
  * stable across those renders (scales are memoized, xAccessor is the stable
  * wrapper), so pointermove renders hit the memo cache.
+ *
+ * Each series is its own `<svg>` inside an HTML entrance wrapper, all inside
+ * one sweep reveal (see chartEntrance.tsx), stacked between the grid layer
+ * and the accessible frame. The static `<clipPath>` keeps the plot-area clip
+ * the reveal rect used to leave behind once it reached full width.
  */
 function AreaSeriesLayerInner<Datum>({
     data,
@@ -121,12 +138,40 @@ function AreaSeriesLayerInner<Datum>({
     xAccessor,
     xScale,
     yScale,
-    reduce,
+    width,
+    height,
+    marginLeft,
+    marginTop,
+    innerWidth,
     gradId,
     revealId,
 }: AreaSeriesLayerProps<Datum>) {
+    const seriesSvg = (clipId: string, defs: ReactNode, mark: ReactNode) => (
+        <svg width={width} height={height} aria-hidden="true" focusable="false">
+            <Group left={marginLeft} top={marginTop}>
+                <defs>
+                    <clipPath id={clipId}>
+                        <rect
+                            x={0}
+                            y={-marginTop}
+                            width={innerWidth}
+                            height={height}
+                        />
+                    </clipPath>
+                    {defs}
+                </defs>
+                <g clipPath={`url(#${clipId})`}>{mark}</g>
+            </Group>
+        </svg>
+    );
+
     return (
-        <g clipPath={`url(#${revealId})`}>
+        <ChartReveal
+            width={width}
+            height={height}
+            plotLeft={marginLeft}
+            plotWidth={innerWidth}
+        >
             {stacked ? (
                 <AreaStack<Datum>
                     keys={series.map((s) => s.key)}
@@ -145,26 +190,27 @@ function AreaSeriesLayerInner<Datum>({
                         stacks.map((stack, i) => {
                             const color = series[i]?.color ?? getChartColor(i);
                             return (
-                                <m.path
+                                <ChartEntrance
                                     key={`stack-${stack.key}`}
-                                    d={path(stack) || ""}
-                                    fill={color}
-                                    fillOpacity={0.55}
-                                    stroke={color}
-                                    strokeOpacity={0.95}
-                                    strokeWidth={1.5}
-                                    initial={
-                                        reduce
-                                            ? { opacity: 1 }
-                                            : { opacity: 0, y: 12 }
-                                    }
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{
-                                        duration: reduce ? 0 : durations.slow,
-                                        ease: easings.outExpo,
-                                        delay: i * 0.04,
-                                    }}
-                                />
+                                    effect="rise"
+                                    duration={durations.slow}
+                                    delay={i * 0.04}
+                                    width={width}
+                                    height={height}
+                                >
+                                    {seriesSvg(
+                                        `${revealId}-stack-${stack.key}`,
+                                        null,
+                                        <path
+                                            d={path(stack) || ""}
+                                            fill={color}
+                                            fillOpacity={0.55}
+                                            stroke={color}
+                                            strokeOpacity={0.95}
+                                            strokeWidth={1.5}
+                                        />,
+                                    )}
+                                </ChartEntrance>
                             );
                         })
                     }
@@ -173,51 +219,61 @@ function AreaSeriesLayerInner<Datum>({
                 series.map((s, i) => {
                     const color = s.color ?? getChartColor(i);
                     return (
-                        <g key={s.key}>
-                            <m.g
-                                initial={
-                                    reduce ? { opacity: 1 } : { opacity: 0 }
-                                }
-                                animate={{ opacity: 1 }}
-                                transition={{
-                                    duration: reduce ? 0 : durations.slow,
-                                    ease: easings.outExpo,
-                                    delay: i * 0.04,
-                                }}
-                            >
-                                {s.fillOpacity !== 0 && (
-                                    <AreaClosed<Datum>
+                        <ChartEntrance
+                            key={s.key}
+                            effect="fade"
+                            duration={durations.slow}
+                            delay={i * 0.04}
+                            width={width}
+                            height={height}
+                        >
+                            {seriesSvg(
+                                `${revealId}-${s.key}`,
+                                <linearGradient
+                                    id={`${gradId}-${s.key}`}
+                                    x1="0"
+                                    y1="0"
+                                    x2="0"
+                                    y2="1"
+                                >
+                                    <stop offset="0%" stopColor={color} stopOpacity={0.22} />
+                                    <stop offset="100%" stopColor={color} stopOpacity={0} />
+                                </linearGradient>,
+                                <>
+                                    {s.fillOpacity !== 0 && (
+                                        <AreaClosed<Datum>
+                                            // visx takes a mutable array; the prop is a ReadonlyArray that visx never writes to.
+                                            data={data as Datum[]}
+                                            x={(d) => xScale(xAccessor(d))}
+                                            y={(d) =>
+                                                yScale(s.accessor(d) ?? 0)
+                                            }
+                                            yScale={yScale}
+                                            curve={curveMonotoneX}
+                                            fill={`url(#${gradId}-${s.key})`}
+                                            fillOpacity={s.fillOpacity ?? 1}
+                                        />
+                                    )}
+                                    <LinePath<Datum>
                                         // visx takes a mutable array; the prop is a ReadonlyArray that visx never writes to.
                                         data={data as Datum[]}
                                         x={(d) => xScale(xAccessor(d))}
-                                        y={(d) =>
-                                            yScale(s.accessor(d) ?? 0)
-                                        }
-                                        yScale={yScale}
+                                        y={(d) => yScale(s.accessor(d) ?? 0)}
                                         curve={curveMonotoneX}
-                                        fill={`url(#${gradId}-${s.key})`}
-                                        fillOpacity={s.fillOpacity ?? 1}
+                                        stroke={color}
+                                        strokeWidth={s.strokeWidth ?? 2}
+                                        strokeDasharray={
+                                            s.dashed ? "5 4" : undefined
+                                        }
+                                        fill="none"
                                     />
-                                )}
-                                <LinePath<Datum>
-                                    // visx takes a mutable array; the prop is a ReadonlyArray that visx never writes to.
-                                    data={data as Datum[]}
-                                    x={(d) => xScale(xAccessor(d))}
-                                    y={(d) => yScale(s.accessor(d) ?? 0)}
-                                    curve={curveMonotoneX}
-                                    stroke={color}
-                                    strokeWidth={s.strokeWidth ?? 2}
-                                    strokeDasharray={
-                                        s.dashed ? "5 4" : undefined
-                                    }
-                                    fill="none"
-                                />
-                            </m.g>
-                        </g>
+                                </>,
+                            )}
+                        </ChartEntrance>
                     );
                 })
             )}
-        </g>
+        </ChartReveal>
     );
 }
 
@@ -265,7 +321,6 @@ function AreaChartInner<Datum>({
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const formatPercent = usePercentFormatter();
-    const reduce = useReducedMotion();
     const fullEffects = useFullEffects();
 
     const { innerWidth, innerHeight, stableXAccessor, xScale } =
@@ -464,7 +519,44 @@ function AreaChartInner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
+            {/* Grid, under the series layer. */}
+            <ChartLayerSvg width={width} height={height}>
+                <Group left={margin.left} top={margin.top}>
+                    {yScale.ticks(numYTicks).map((tick) => (
+                        <line
+                            key={`grid-${tick}`}
+                            x1={0}
+                            x2={innerWidth}
+                            y1={yScale(tick)}
+                            y2={yScale(tick)}
+                            stroke={CHART_NEUTRAL.grid}
+                            strokeOpacity={0.35}
+                            strokeDasharray="2 4"
+                        />
+                    ))}
+                </Group>
+            </ChartLayerSvg>
+
+            {/* Stacked or unstacked series paths — memoized so pointermove
+                renders never regenerate them (see AreaSeriesLayer). */}
+            <AreaSeriesLayer
+                data={data}
+                series={series}
+                stacked={stacked}
+                xAccessor={stableXAccessor}
+                xScale={xScale}
+                yScale={yScale}
+                width={width}
+                height={height}
+                marginLeft={margin.left}
+                marginTop={margin.top}
+                innerWidth={innerWidth}
+                gradId={gradId}
+                revealId={revealId}
+            />
+
             <CartesianChartFrame
+                className="relative"
                 width={width}
                 height={height}
                 ariaLabel={
@@ -481,72 +573,6 @@ function AreaChartInner<Datum>({
                 onBlur={handleBlur}
             >
                 <Group left={margin.left} top={margin.top}>
-                    {/* Draw-in: horizontal sweep reveal (skipped under reduced motion) */}
-                    <defs>
-                        <clipPath id={revealId}>
-                            <m.rect
-                                x={0}
-                                y={-margin.top}
-                                height={height}
-                                initial={
-                                    reduce
-                                        ? { width: innerWidth }
-                                        : { width: 0 }
-                                }
-                                animate={{ width: innerWidth }}
-                                transition={{
-                                    duration: reduce ? 0 : durations.page,
-                                    ease: easings.outExpo,
-                                }}
-                            />
-                        </clipPath>
-                    </defs>
-                    {series.map((s, i) => {
-                        const color = s.color ?? getChartColor(i);
-                        return (
-                            <defs key={`${gradId}-${s.key}`}>
-                                <linearGradient
-                                    id={`${gradId}-${s.key}`}
-                                    x1="0"
-                                    y1="0"
-                                    x2="0"
-                                    y2="1"
-                                >
-                                    <stop offset="0%" stopColor={color} stopOpacity={0.22} />
-                                    <stop offset="100%" stopColor={color} stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                        );
-                    })}
-
-                    {/* Grid */}
-                    {yScale.ticks(numYTicks).map((tick) => (
-                        <line
-                            key={`grid-${tick}`}
-                            x1={0}
-                            x2={innerWidth}
-                            y1={yScale(tick)}
-                            y2={yScale(tick)}
-                            stroke={CHART_NEUTRAL.grid}
-                            strokeOpacity={0.35}
-                            strokeDasharray="2 4"
-                        />
-                    ))}
-
-                    {/* Stacked or unstacked series paths — memoized so pointermove
-                        renders never regenerate them (see AreaSeriesLayer). */}
-                    <AreaSeriesLayer
-                        data={data}
-                        series={series}
-                        stacked={stacked}
-                        xAccessor={stableXAccessor}
-                        xScale={xScale}
-                        yScale={yScale}
-                        reduce={reduce}
-                        gradId={gradId}
-                        revealId={revealId}
-                    />
-
                     {/* Reference lines */}
                     {referenceLines?.map((r, i) => {
                         const y = yScale(r.y);

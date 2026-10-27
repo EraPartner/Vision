@@ -1,5 +1,5 @@
 /**
- * LineChart — visx + framer-motion multi-series line chart.
+ * LineChart — visx multi-series line chart.
  */
 import { axisDateOrNumber, axisNumber } from "./axisValue";
 import { curveMonotoneX } from "@visx/curve";
@@ -8,7 +8,6 @@ import { Group } from "@visx/group";
 import { scaleLinear } from "@visx/scale";
 import { Line, LinePath } from "@visx/shape";
 import { bisector, max, min } from "d3-array";
-import { m, useReducedMotion } from "framer-motion";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
@@ -23,7 +22,8 @@ import { useChartKeyboardNav } from "./keyboardNav";
 import { formatScrubDelta, useChartScrub } from "./scrub";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
-import { durations, easings } from "@/lib/motion";
+import { ChartEntrance, ChartLayerSvg } from "./chartEntrance";
+import { durations } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -90,13 +90,19 @@ interface LineSeriesLayerProps<Datum> {
     readonly xAccessor: (d: Datum) => Date | number;
     readonly xScale: LineXScale;
     readonly yScale: LineYScale;
-    readonly reduce: boolean | null;
+    readonly width: number;
+    readonly height: number;
+    readonly marginLeft: number;
+    readonly marginTop: number;
 }
 
 /**
  * Series paths behind React.memo: hover state changes in Inner fire per
  * pointermove and must not re-run the per-series filtering + monotone curve
  * fits below. All props are referentially stable across those renders.
+ *
+ * Each series is its own `<svg>` in an HTML fade wrapper (chartEntrance.tsx),
+ * stacked between the grid layer and the accessible frame.
  */
 function LineSeriesLayerInner<Datum>({
     data,
@@ -104,7 +110,10 @@ function LineSeriesLayerInner<Datum>({
     xAccessor,
     xScale,
     yScale,
-    reduce,
+    width,
+    height,
+    marginLeft,
+    marginTop,
 }: LineSeriesLayerProps<Datum>) {
     return (
         <>
@@ -123,31 +132,40 @@ function LineSeriesLayerInner<Datum>({
                     // visx takes a mutable array; the prop is a ReadonlyArray that visx never writes to.
                     : (data as Datum[]);
                 return (
-                    <m.g
+                    <ChartEntrance
                         key={s.key}
-                        initial={reduce ? { opacity: 1 } : { opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{
-                            duration: reduce ? 0 : durations.slow,
-                            ease: easings.outExpo,
-                            delay: i * 0.05,
-                        }}
+                        effect="fade"
+                        duration={durations.slow}
+                        delay={i * 0.05}
+                        width={width}
+                        height={height}
                     >
-                        <LinePath<Datum>
-                            data={filtered}
-                            x={(d) => xScale(xAccessor(d))}
-                            y={(d) => yScale(s.accessor(d) ?? 0)}
-                            curve={curveMonotoneX}
-                            stroke={color}
-                            strokeWidth={s.strokeWidth ?? 2}
-                            strokeDasharray={s.dashed ? "5 4" : undefined}
-                            fill="none"
-                            defined={(d) => {
-                                const v = s.accessor(d);
-                                return v != null && Number.isFinite(v);
-                            }}
-                        />
-                    </m.g>
+                        <svg
+                            width={width}
+                            height={height}
+                            aria-hidden="true"
+                            focusable="false"
+                        >
+                            <Group left={marginLeft} top={marginTop}>
+                                <LinePath<Datum>
+                                    data={filtered}
+                                    x={(d) => xScale(xAccessor(d))}
+                                    y={(d) => yScale(s.accessor(d) ?? 0)}
+                                    curve={curveMonotoneX}
+                                    stroke={color}
+                                    strokeWidth={s.strokeWidth ?? 2}
+                                    strokeDasharray={
+                                        s.dashed ? "5 4" : undefined
+                                    }
+                                    fill="none"
+                                    defined={(d) => {
+                                        const v = s.accessor(d);
+                                        return v != null && Number.isFinite(v);
+                                    }}
+                                />
+                            </Group>
+                        </svg>
+                    </ChartEntrance>
                 );
             })}
         </>
@@ -191,7 +209,6 @@ function Inner<Datum>({
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const formatPercent = usePercentFormatter();
-    const reduce = useReducedMotion();
     const fullEffects = useFullEffects();
 
     const { innerWidth, innerHeight, stableXAccessor, xScale } =
@@ -371,7 +388,40 @@ function Inner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
+            {/* Grid, under the series layer. */}
+            <ChartLayerSvg width={width} height={height}>
+                <Group left={margin.left} top={margin.top}>
+                    {yScale.ticks(numYTicks).map((tick) => (
+                        <line
+                            key={`grid-${tick}`}
+                            x1={0}
+                            x2={innerWidth}
+                            y1={yScale(tick)}
+                            y2={yScale(tick)}
+                            stroke={CHART_NEUTRAL.grid}
+                            strokeOpacity={0.35}
+                            strokeDasharray="2 4"
+                        />
+                    ))}
+                </Group>
+            </ChartLayerSvg>
+
+            {/* Series paths — memoized so pointermove renders never
+                regenerate them (see LineSeriesLayer). */}
+            <LineSeriesLayer
+                data={data}
+                series={series}
+                xAccessor={stableXAccessor}
+                xScale={xScale}
+                yScale={yScale}
+                width={width}
+                height={height}
+                marginLeft={margin.left}
+                marginTop={margin.top}
+            />
+
             <CartesianChartFrame
+                className="relative"
                 width={width}
                 height={height}
                 ariaLabel={
@@ -388,30 +438,6 @@ function Inner<Datum>({
                 onBlur={handleBlur}
             >
                 <Group left={margin.left} top={margin.top}>
-                    {yScale.ticks(numYTicks).map((tick) => (
-                        <line
-                            key={`grid-${tick}`}
-                            x1={0}
-                            x2={innerWidth}
-                            y1={yScale(tick)}
-                            y2={yScale(tick)}
-                            stroke={CHART_NEUTRAL.grid}
-                            strokeOpacity={0.35}
-                            strokeDasharray="2 4"
-                        />
-                    ))}
-
-                    {/* Series paths — memoized so pointermove renders never
-                        regenerate them (see LineSeriesLayer). */}
-                    <LineSeriesLayer
-                        data={data}
-                        series={series}
-                        xAccessor={stableXAccessor}
-                        xScale={xScale}
-                        yScale={yScale}
-                        reduce={reduce}
-                    />
-
                     {referenceLines?.map((r, i) => {
                         const color = r.color ?? CHART_NEUTRAL.label;
                         const dashAttr = r.dashed === false ? undefined : "4 4";

@@ -14,7 +14,7 @@ export interface TraceEvent {
   args?: Record<string, unknown>;
 }
 
-/** Categories recorded for the traced pass. */
+/** Categories recorded for the idle fps trace. */
 export const TRACE_CATEGORIES = [
   "toplevel",
   "devtools.timeline",
@@ -24,6 +24,14 @@ export const TRACE_CATEGORIES = [
   "viz",
   "gpu",
 ];
+
+/**
+ * Categories of the separate traced pass: the idle ones plus `cc` for raster
+ * tasks and compositor frame production. The per-quad viz categories
+ * (disabled-by-default-viz.quads) are left out: they log every quad of every
+ * frame and would perturb the frames being measured.
+ */
+export const TRACED_PASS_CATEGORIES = [...TRACE_CATEGORIES, "cc"];
 
 export const MARK_PREFIX = "vision-perf:";
 
@@ -64,6 +72,29 @@ export interface TraceSegmentSummary {
   frameStates: Record<string, Record<string, number>>;
   /** Largest renderer timeline events by total duration. */
   rendererTopEvents: { name: string; count: number; totalMs: number }[];
+  /** Compositor attribution: viz frames, render passes and raster work. */
+  compositor: CompositorSummary;
+}
+
+/**
+ * Event names follow Chromium's viz DirectRenderer and cc tile-raster trace
+ * points (not yet checked against an Electron 44 trace); topEvents keeps the
+ * largest cc and viz events either way, so a renamed event still shows up.
+ */
+export interface CompositorSummary {
+  /** DirectRenderer::DrawFrame on VizCompositorThread (one per drawn frame). */
+  drawFrames: number;
+  drawFrameMs: number;
+  /** DirectRenderer::DrawRenderPass events (all threads). */
+  renderPasses: number;
+  renderPassesPerFrame: number | null;
+  /** cc RasterTask events (renderer raster workers). */
+  rasterTasks: number;
+  rasterTaskMs: number;
+  /** GPU-process raster (RasterDecoderImpl::DoRasterCHROMIUM). */
+  gpuRasterMs: number;
+  /** Largest cc and viz events by total duration, any thread. */
+  topEvents: { name: string; count: number; totalMs: number }[];
 }
 
 const TOP_LEVEL_TASKS = new Set([
@@ -136,6 +167,15 @@ export function summarizeTrace(
   const threadBusy = new Map<string, number>();
   const frameStates: Record<string, Record<string, number>> = {};
   const rendererEvents = new Map<string, { count: number; total: number }>();
+  const compositorEvents = new Map<string, { count: number; total: number }>();
+  const compositor = {
+    drawFrames: 0,
+    drawFrameUs: 0,
+    renderPasses: 0,
+    rasterTasks: 0,
+    rasterTaskUs: 0,
+    gpuRasterUs: 0,
+  };
 
   for (const event of events) {
     if (event.ph === "M" || !inside(event)) continue;
@@ -195,9 +235,48 @@ export function summarizeTrace(
       entry.total += event.dur;
       rendererEvents.set(event.name, entry);
     }
+
+    if (event.ph === "X" && event.dur !== undefined && event.name !== undefined) {
+      if (
+        event.name === "DirectRenderer::DrawFrame" &&
+        threadName === "VizCompositorThread"
+      ) {
+        compositor.drawFrames += 1;
+        compositor.drawFrameUs += event.dur;
+      } else if (event.name === "DirectRenderer::DrawRenderPass") {
+        compositor.renderPasses += 1;
+      } else if (event.name === "RasterTask") {
+        compositor.rasterTasks += 1;
+        compositor.rasterTaskUs += event.dur;
+      } else if (event.name === "RasterDecoderImpl::DoRasterCHROMIUM") {
+        compositor.gpuRasterUs += event.dur;
+      }
+      const categories = (event.cat ?? "").split(",");
+      if (
+        !WRAPPER_EVENTS.has(event.name) &&
+        (categories.includes("cc") || categories.includes("viz"))
+      ) {
+        const entry = compositorEvents.get(event.name) ?? {
+          count: 0,
+          total: 0,
+        };
+        entry.count += 1;
+        entry.total += event.dur;
+        compositorEvents.set(event.name, entry);
+      }
+    }
   }
 
   const ms = (us: number) => Math.round(us / 100) / 10;
+  const topEvents = (map: Map<string, { count: number; total: number }>) =>
+    [...map]
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 12)
+      .map(([name, entry]) => ({
+        name,
+        count: entry.count,
+        totalMs: ms(entry.total),
+      }));
   return {
     durationMs: window
       ? ms(window.end - window.start)
@@ -210,13 +289,20 @@ export function summarizeTrace(
         .map(([key, value]) => [key, ms(value)]),
     ),
     frameStates,
-    rendererTopEvents: [...rendererEvents]
-      .sort((a, b) => b[1].total - a[1].total)
-      .slice(0, 12)
-      .map(([name, entry]) => ({
-        name,
-        count: entry.count,
-        totalMs: ms(entry.total),
-      })),
+    rendererTopEvents: topEvents(rendererEvents),
+    compositor: {
+      drawFrames: compositor.drawFrames,
+      drawFrameMs: ms(compositor.drawFrameUs),
+      renderPasses: compositor.renderPasses,
+      renderPassesPerFrame:
+        compositor.drawFrames > 0
+          ? Math.round((compositor.renderPasses / compositor.drawFrames) * 10) /
+            10
+          : null,
+      rasterTasks: compositor.rasterTasks,
+      rasterTaskMs: ms(compositor.rasterTaskUs),
+      gpuRasterMs: ms(compositor.gpuRasterUs),
+      topEvents: topEvents(compositorEvents),
+    },
   };
 }

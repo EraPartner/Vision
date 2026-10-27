@@ -1428,6 +1428,107 @@
     }
 
     /* ------------------------------------------------------------------
+     * Chart entrance (components/charts/chartEntrance.tsx)
+     *
+     * Series marks fade, rise and sweep in on HTML wrappers around their own
+     * <svg>, animating only opacity/transform so the compositor runs them and
+     * the SVG rasters once. Duration and delay are set inline from
+     * lib/motion.ts (no duration here, so a wrapper without one stays
+     * still); `backwards` holds the first keyframe through the delay
+     * and leaves no style behind once the animation ends.
+     * ------------------------------------------------------------------ */
+    .chart-entrance-fade {
+        animation: chart-entrance-fade var(--ease-out-expo) backwards;
+    }
+
+    @keyframes chart-entrance-fade {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    .chart-entrance-rise {
+        animation: chart-entrance-rise var(--ease-out-expo) backwards;
+    }
+
+    @keyframes chart-entrance-rise {
+        from {
+            opacity: 0;
+            transform: translateY(12px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Sweep reveal: the clip box slides left by the unrevealed width while its
+       content slides back by the same amount, so the box's right edge sweeps
+       across content that stays put. --chart-reveal-from/-to are set by
+       ChartReveal; switching data-sweep between a/b restarts the sweep. */
+    .chart-reveal {
+        overflow: hidden;
+        animation: chart-reveal-clip-a var(--ease-out-expo) backwards;
+    }
+
+    .chart-reveal-content {
+        animation: chart-reveal-content-a var(--ease-out-expo) backwards;
+    }
+
+    .chart-reveal[data-sweep="b"] {
+        animation-name: chart-reveal-clip-b;
+    }
+
+    .chart-reveal[data-sweep="b"] > .chart-reveal-content {
+        animation-name: chart-reveal-content-b;
+    }
+
+    @keyframes chart-reveal-clip-a {
+        from {
+            transform: translateX(var(--chart-reveal-from));
+        }
+
+        to {
+            transform: translateX(var(--chart-reveal-to));
+        }
+    }
+
+    @keyframes chart-reveal-clip-b {
+        from {
+            transform: translateX(var(--chart-reveal-from));
+        }
+
+        to {
+            transform: translateX(var(--chart-reveal-to));
+        }
+    }
+
+    @keyframes chart-reveal-content-a {
+        from {
+            transform: translateX(calc(-1 * var(--chart-reveal-from)));
+        }
+
+        to {
+            transform: translateX(calc(-1 * var(--chart-reveal-to)));
+        }
+    }
+
+    @keyframes chart-reveal-content-b {
+        from {
+            transform: translateX(calc(-1 * var(--chart-reveal-from)));
+        }
+
+        to {
+            transform: translateX(calc(-1 * var(--chart-reveal-to)));
+        }
+    }
+
+    /* ------------------------------------------------------------------
      * Reduced motion
      * ------------------------------------------------------------------ */
 
@@ -1441,7 +1542,13 @@
         .animate-shimmer,
         .animate-accordion-up,
         .animate-accordion-down,
-        [data-sonner-toast][data-type="success"] [data-icon] {
+        [data-sonner-toast][data-type="success"] [data-icon],
+        .chart-entrance-fade,
+        .chart-entrance-rise,
+        .chart-reveal,
+        .chart-reveal-content,
+        .chart-reveal[data-sweep="b"],
+        .chart-reveal[data-sweep="b"] > .chart-reveal-content {
             animation: none;
         }
 

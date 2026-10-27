@@ -2,8 +2,8 @@
 title: Chart Primitives
 type: component
 status: active
-date: 2026-10-22
-updated: 2026-10-19
+date: 2026-10-27
+updated: 2026-10-27
 tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader, i18n, localization, premium-v3, chart-scrub, chart-sync, chart-skeleton, sweep-reveal, sparkline-scrub, keyboard-navigation, june-2026]
 description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts generators now accept t()/kindKey for fully localized chart screen-reader summaries across all 7 chart types and both supported languages. June 2026 Premium v3 (ADR-071): scrubbable prop + useChartScrub (scrub-to-compare), syncId prop + ChartSyncContext (synced crosshairs), sweep reveal on AreaChart, ChartSkeleton ghost waveform. V9: Sparkline activeIndex prop (hairline + dot indicator for stat-card scrub). 2026-08-27: keyboardNav.ts provides shared keyboard access to per-point values across all interactive visx primitives and the NetSummaryCard sparkline scrub. 2026-08-23: ChartPeriodSelector uses native toggle-button semantics with aria-pressed instead of incomplete ARIA tab semantics.
 aliases: [charts, chart-components, visx-charts, charting, visualization]
@@ -500,9 +500,9 @@ Charts sharing the same `syncId` string under a `ChartSyncProvider` mirror hover
 
 ### Sweep Reveal (AreaChart)
 
-`AreaChart` animates a `clipPath` on mount: a `motion.rect` inside a `<defs>` clipPath starts at `width=0` and expands to the full chart width. The series group is clipped to this rect, producing a left-to-right sweep reveal. Skipped when `useReducedMotion()` is true.
+`AreaChart` sweeps its series in from left to right on mount, and again when the plot grows wider. Since [[docs/adr/258-chart-entrances-and-compositor-diagnostics|ADR-258]] the sweep runs in CSS on HTML wrappers (`ChartReveal` in [[apps/frontend/src/components/charts/chartEntrance.tsx]]): an `overflow: hidden` wrapper and its child slide in opposite directions with transforms, so the edge moves while the series stays still. Each series is its own `<svg>` (`ChartLayerSvg`, `aria-hidden`), the grid is a layer underneath, and the frame `<svg>` on top keeps the role, label, keyboard handling, hover rect and axes. Skipped under `prefers-reduced-motion: reduce` by the CSS media query.
 
-`LineChart` retains its per-series fade-in; sweep is area-only.
+`LineChart` and `Sparkline` keep their per-series fade-in, and stacked areas their fade and 12 px rise, through `ChartEntrance` (CSS keyframes, same durations and delays from `lib/motion.ts`). Sweep is area-only. `BarChart`, `DonutChart`, `PieChart` and `StackedBarChart` still animate with Framer.
 
 ### ChartSkeleton
 
