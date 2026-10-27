@@ -35,7 +35,10 @@ export function parseSegments(values: readonly string[]): ExtraSegment[] {
  * cards under the sticky topbar's backdrop instead of an inner scroller.
  */
 export const WINDOW_SCROLL_PAGES = ["/", "/statistics"] as const;
-/** Distance each way; capped by --scroll-px (so --quick scrolls less). */
+/**
+ * Distance each way, so 2 × this in all; capped by --scroll-px (so --quick
+ * scrolls less). A shorter page bounces until it has travelled that far.
+ */
 export const WINDOW_SCROLL_MAX_PX = 6000;
 
 /**
@@ -53,6 +56,58 @@ export const FIND_WINDOW_SCROLLER = `(() => {
   const right = Math.min(rect.right, innerWidth);
   return { x: (left + right) / 2, y: innerHeight / 2 };
 })()`;
+
+/** Position of the scroller FIND_WINDOW_SCROLLER picked. */
+export const WINDOW_SCROLLER_STATE = `(() => {
+  const el = globalThis.__visionPerfScroller;
+  return el
+    ? {
+        scrollTop: Math.round(el.scrollTop),
+        maxScrollTop: Math.max(0, el.scrollHeight - el.clientHeight),
+        scrollHeight: el.scrollHeight,
+      }
+    : null;
+})()`;
+
+export interface WindowScrollerState {
+  scrollTop: number;
+  maxScrollTop: number;
+  scrollHeight: number;
+}
+
+/** 1 scrolls down (scrollTop grows), -1 up. */
+export type ScrollDirection = 1 | -1;
+
+export interface BounceLeg {
+  direction: ScrollDirection;
+  px: number;
+}
+
+/**
+ * The next leg of a window scroll that travels `totalPx` in all. A leg runs
+ * in `direction` up to the end of the page, then the scroll turns, so a page
+ * shorter than the distance is scrolled top to bottom and back until the
+ * whole distance (and so the whole duration) is covered, instead of resting
+ * at an end while the gesture runs on. Null when the distance is covered or
+ * the page cannot scroll.
+ */
+export function nextBounceLeg(state: {
+  travelledPx: number;
+  totalPx: number;
+  scrollTop: number;
+  maxScrollTop: number;
+  direction: ScrollDirection;
+}): BounceLeg | null {
+  const left = state.totalPx - state.travelledPx;
+  if (left < 1 || state.maxScrollTop < 1) return null;
+  const room = (direction: ScrollDirection) =>
+    direction === 1 ? state.maxScrollTop - state.scrollTop : state.scrollTop;
+  let direction = state.direction;
+  if (room(direction) < 1) direction = direction === 1 ? -1 : 1;
+  const available = room(direction);
+  if (available < 1) return null;
+  return { direction, px: Math.min(available, left) };
+}
 
 // ── Chat stream ──────────────────────────────────────────────────────────────
 

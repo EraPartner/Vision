@@ -97,12 +97,16 @@ import {
   FIND_WINDOW_SCROLLER,
   FOCUS_CHAT_COMPOSER,
   RESTORE_CHAT_MOCK,
+  WINDOW_SCROLLER_STATE,
   WINDOW_SCROLL_MAX_PX,
   WINDOW_SCROLL_PAGES,
   chatStreamMockExpression,
+  nextBounceLeg,
   parseSegments,
   type ChatMockState,
   type ExtraSegment,
+  type ScrollDirection,
+  type WindowScrollerState,
 } from "./lib/mac-baseline/segments.ts";
 import {
   MARK_PREFIX,
@@ -186,7 +190,11 @@ const USAGE = `Usage: bun scripts/mac-baseline.ts [options]
                           window-scroll  scroll the document (window scroller)
                                          on ${WINDOW_SCROLL_PAGES.join(" and ")}, ${WINDOW_SCROLL_MAX_PX} px each
                                          way at 1500 px/s (capped by
-                                         --scroll-px); about 20 s
+                                         --scroll-px); a page shorter than
+                                         that bounces between bottom and
+                                         top until it has scrolled the
+                                         whole distance; about 8 s of
+                                         scrolling a page, 20 s in all
                           chat-stream    open ${CHAT_STREAM_PAGE}, send one message and
                                          stream a mocked answer of
                                          ${CHAT_STREAM_TOKENS} tokens at ${CHAT_STREAM_TOKENS_PER_SECOND}/s through the
@@ -888,19 +896,108 @@ async function scrollLedger(
   return { method, reachedScrollTop, rowsRendered };
 }
 
-/** Scroll the document (AppLayout's window scroller) down then back up. */
+interface WindowScrollOutcome {
+  method: string;
+  /** Deepest scrollTop reached. */
+  reachedScrollTop: number;
+  scrollHeight: number;
+  travelledPx: number;
+  /** Turns at the bottom or top before the distance was covered. */
+  bounces: number;
+}
+
+/**
+ * Scroll the document (AppLayout's window scroller) `distance` down and
+ * `distance` back up, 2 × distance in all at `speed`. A page shorter than
+ * `distance` bounces between bottom and top until it has travelled that far
+ * (nextBounceLeg), so the segment scrolls for its whole duration instead of
+ * resting at an end while the gesture runs on.
+ */
 async function scrollWindow(
   app: RunningApp,
   distance: number,
   speed = 1500,
-): Promise<ScrollOutcome> {
-  return scrollDownAndUp(
+): Promise<WindowScrollOutcome> {
+  const target = await page<{ x: number; y: number } | null>(
     app,
     FIND_WINDOW_SCROLLER,
-    "The page does not scroll (content shorter than the window?)",
-    distance,
-    speed,
   );
+  if (!target)
+    throw new Error(
+      "The page does not scroll (content shorter than the window?)",
+    );
+  const state = () => page<WindowScrollerState>(app, WINDOW_SCROLLER_STATE);
+  const totalPx = 2 * distance;
+  let method = "gesture";
+  let direction: ScrollDirection = 1;
+  let travelled = 0;
+  let reached = 0;
+  let bounces = 0;
+  let stalls = 0;
+  let height = 0;
+  // A leg ends at an end of the page or of the distance; the bound only
+  // guards against a scroller that keeps moving less than asked.
+  for (let legs = 0; legs < 200; legs += 1) {
+    const before = await state();
+    height = before.scrollHeight;
+    const leg = nextBounceLeg({
+      travelledPx: travelled,
+      totalPx,
+      scrollTop: before.scrollTop,
+      maxScrollTop: before.maxScrollTop,
+      direction,
+    });
+    if (!leg) break;
+    if (leg.direction !== direction && travelled > 0) bounces += 1;
+    direction = leg.direction;
+    let after = before;
+    if (method === "gesture") {
+      try {
+        await app.cdp.send(
+          "Input.synthesizeScrollGesture",
+          {
+            x: target.x,
+            y: target.y,
+            yDistance: -direction * leg.px,
+            speed,
+            gestureSourceType: "mouse",
+            preventFling: true,
+          },
+          app.sessionId,
+          (leg.px / speed) * 1000 + 30_000,
+        );
+      } catch {
+        method = "programmatic";
+      }
+      after = await state();
+      if (after.scrollTop === before.scrollTop) method = "programmatic";
+    }
+    if (method === "programmatic" && after.scrollTop === before.scrollTop) {
+      await page(
+        app,
+        programmaticScroll(direction * leg.px, speed),
+        (leg.px / speed) * 1000 + 30_000,
+      );
+      after = await state();
+    }
+    const moved = Math.abs(after.scrollTop - before.scrollTop);
+    travelled += moved;
+    reached = Math.max(reached, after.scrollTop);
+    if (moved >= 1) {
+      stalls = 0;
+    } else {
+      stalls += 1;
+      if (stalls >= 3) break;
+      direction = direction === 1 ? -1 : 1;
+    }
+  }
+  return {
+    method,
+    reachedScrollTop: reached,
+    scrollHeight: height,
+    travelledPx: Math.round(travelled),
+    bounces,
+  };
 }
 
 function windowScrollPx(options: Options): number {
@@ -1579,6 +1676,8 @@ async function measureTier(
           requestedPx: distance,
           reachedScrollTop: measured.result.reachedScrollTop,
           scrollHeight: measured.result.scrollHeight,
+          travelledPx: measured.result.travelledPx,
+          bounces: measured.result.bounces,
         };
         windowScroll.push(entry);
       } catch (error) {

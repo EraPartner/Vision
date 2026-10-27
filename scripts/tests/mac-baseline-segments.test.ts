@@ -9,8 +9,11 @@ import {
   CHAT_MOCK_STATE,
   RESTORE_CHAT_MOCK,
   chatStreamMockExpression,
+  nextBounceLeg,
   parseSegments,
+  type BounceLeg,
   type ChatMockState,
+  type ScrollDirection,
 } from "../lib/mac-baseline/segments.ts";
 import { summarizeTrace } from "../lib/mac-baseline/trace.ts";
 
@@ -238,4 +241,76 @@ void test("GPU info keeps feature status, Skia and overlay attributes", () => {
   assert.equal(info.modelVersion, null);
   assert.ok(info.commandLine?.includes("SkiaGraphite"));
   assert.deepEqual(summarizeGpuInfo(null).featureStatus, {});
+});
+
+/** Runs nextBounceLeg against a scroller that moves exactly as asked. */
+function simulateBounce(totalPx: number, maxScrollTop: number): BounceLeg[] {
+  const legs: BounceLeg[] = [];
+  let scrollTop = 0;
+  let travelledPx = 0;
+  let direction: ScrollDirection = 1;
+  for (;;) {
+    const leg = nextBounceLeg({
+      travelledPx,
+      totalPx,
+      scrollTop,
+      maxScrollTop,
+      direction,
+    });
+    if (!leg) return legs;
+    legs.push(leg);
+    direction = leg.direction;
+    scrollTop += leg.direction * leg.px;
+    travelledPx += leg.px;
+    assert.ok(scrollTop >= 0 && scrollTop <= maxScrollTop);
+    assert.ok(legs.length < 100, "the bounce terminates");
+  }
+}
+
+void test("the window scroll goes down and up on a tall page", () => {
+  assert.deepEqual(simulateBounce(12_000, 20_000), [
+    { direction: 1, px: 12_000 },
+  ]);
+  // 6000 px each way: the first leg stops at the page end, then turns.
+  assert.deepEqual(simulateBounce(12_000, 6000), [
+    { direction: 1, px: 6000 },
+    { direction: -1, px: 6000 },
+  ]);
+});
+
+void test("the window scroll bounces on a page shorter than the distance", () => {
+  // `/` in the Mac run: 2644 px tall, 1595 px of it below the window.
+  const legs = simulateBounce(12_000, 1595);
+  assert.equal(
+    legs.reduce((sum, leg) => sum + leg.px, 0),
+    12_000,
+  );
+  assert.deepEqual(
+    legs.map((leg) => leg.direction),
+    [1, -1, 1, -1, 1, -1, 1, -1],
+  );
+  assert.ok(legs.slice(0, -1).every((leg) => leg.px === 1595));
+});
+
+void test("the window scroll stops when the page cannot scroll", () => {
+  assert.equal(
+    nextBounceLeg({
+      travelledPx: 0,
+      totalPx: 12_000,
+      scrollTop: 0,
+      maxScrollTop: 0,
+      direction: 1,
+    }),
+    null,
+  );
+  assert.deepEqual(
+    nextBounceLeg({
+      travelledPx: 100,
+      totalPx: 12_000,
+      scrollTop: 1744,
+      maxScrollTop: 1744,
+      direction: 1,
+    }),
+    { direction: -1, px: 1744 },
+  );
 });
