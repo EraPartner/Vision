@@ -716,7 +716,7 @@ function AreaChartInner<Datum>({
                       return (
                           <div
                               className={cn(
-                                  "pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-1 type-footnote font-medium tabular-nums",
+                                  "pointer-events-none absolute left-0 top-0 z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-1 type-footnote font-medium tabular-nums",
                                   fullEffects
                                       ? "glass-thick"
                                       : "border border-border/60 bg-card shadow-elevation-1",
@@ -726,7 +726,11 @@ function AreaChartInner<Datum>({
                                         ? "text-loss"
                                         : "text-foreground",
                               )}
-                              style={{ left: mid, top: 2 }}
+                              // transform, not left/top: the pill follows the pointer, and
+                              // a transform moves it without relayout per move.
+                              style={{
+                                  transform: `translate(${mid}px, 2px)`,
+                              }}
                           >
                               {formatScrubDelta(a, b, fmt, formatPercent)}
                           </div>

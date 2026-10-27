@@ -1,0 +1,30 @@
+/*
+ * mac-baseline variant drift-10: aurora blob drift at 10 fps under Full effects.
+ *
+ * Forces the sampled keyframes aurora-drift-a / aurora-drift-b (apps/frontend/
+ * src/index.css) with steps(40) on the Full-effects selector. The math:
+ *   - aurora-drift-a has 16 keyframe segments over 64 s, aurora-drift-b has 19
+ *     over 76 s, so both are 4 s per segment (the sampled ease-in-out-quart
+ *     curve).
+ *   - steps(N) applies per keyframe segment, so a frame is produced every
+ *     4000 ms / N. N = 40 gives 100 ms per step = 10 fps.
+ * Specificity matches the app's own Full-effects rule; !important on the
+ * longhands makes the variant win regardless of source order or app branch.
+ * The idle pause (animation-play-state) and the large-display freeze
+ * (:not(.fx-static-atmosphere)) are left intact.
+ */
+:root.fx-full:not(.fx-static-atmosphere) .liquid-canvas::before {
+  animation-name: aurora-drift-a !important;
+  animation-duration: 64s !important;
+  animation-timing-function: steps(40) !important;
+  animation-iteration-count: infinite !important;
+  animation-direction: alternate !important;
+}
+
+:root.fx-full:not(.fx-static-atmosphere) .liquid-canvas::after {
+  animation-name: aurora-drift-b !important;
+  animation-duration: 76s !important;
+  animation-timing-function: steps(40) !important;
+  animation-iteration-count: infinite !important;
+  animation-direction: alternate !important;
+}

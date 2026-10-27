@@ -292,6 +292,10 @@ pauses renderer polls while the user is away, collects large list caches after 2
 code from the first run and moves lucide icons out of the boot chunk. zod/mini and an API client
 split were measured and declined.
 
+### 2026-10-26: Cheaper full effects (accepted)
+
+[[docs/adr/255-cheaper-full-effects|ADR-255]] keeps the Full effects look while cutting its GPU work: 30 fps aurora drift, the WebGL aurora drawing its own blobs, saturate-only glass on cards and the sidebar, a single sidebar pass, the aurora paused under modals and no ledger hover chase while scrolling, plus Mac measurement variants.
+
 ### 2026-10-26: Strict type-checked TypeScript (accepted)
 
 [[docs/adr/253-strict-type-checked-typescript|ADR-253]] lints every TypeScript project, tests

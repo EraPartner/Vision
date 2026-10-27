@@ -16,6 +16,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { useFullEffects } from "@/hooks/useVisualEffectsTier";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { numberFormatToLocale } from "@/utils/currency";
 import type { ToolRenderAs, ToolResultPayload } from "@/types/aiChat";
@@ -126,6 +127,7 @@ function TableView({
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
+    const fullEffects = useFullEffects();
     const cols = inferColumns(rows, columns);
     if (cols.length === 0 || rows.length === 0) {
         return (
@@ -140,7 +142,7 @@ function TableView({
                 <TableHeader
                     className={cn(
                         "sticky top-0",
-                        appSettings.fullEffects ? "glass-thin" : "bg-card",
+                        fullEffects ? "glass-thin" : "bg-card",
                     )}
                 >
                     <TableRow>

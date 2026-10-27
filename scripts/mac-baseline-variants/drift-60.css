@@ -1,0 +1,45 @@
+/*
+ * mac-baseline variant drift-60: continuous (every vsync, 60 fps on a 60 Hz
+ * display) aurora blob drift under Full effects.
+ *
+ * The app branch removes the aurora-drift-a-smooth / -b-smooth keyframes, so
+ * this file defines its own continuous from/to keyframes under new names
+ * (copied from the former -smooth keyframes in apps/frontend/src/index.css) and
+ * uses the eased timing function instead of steps(). With no steps() the
+ * compositor produces a new frame every vsync, the worst case for the
+ * backdrop-filter surfaces in front of the blobs.
+ * Durations stay 64 s / 76 s, alternate, infinite.
+ */
+@keyframes mac-baseline-drift-a-smooth {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(14vw, 9vh, 0) scale(1.18);
+  }
+}
+
+@keyframes mac-baseline-drift-b-smooth {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.12);
+  }
+  to {
+    transform: translate3d(-11vw, -7vh, 0) scale(0.96);
+  }
+}
+
+:root.fx-full:not(.fx-static-atmosphere) .liquid-canvas::before {
+  animation-name: mac-baseline-drift-a-smooth !important;
+  animation-duration: 64s !important;
+  animation-timing-function: var(--ease-in-out-quart) !important;
+  animation-iteration-count: infinite !important;
+  animation-direction: alternate !important;
+}
+
+:root.fx-full:not(.fx-static-atmosphere) .liquid-canvas::after {
+  animation-name: mac-baseline-drift-b-smooth !important;
+  animation-duration: 76s !important;
+  animation-timing-function: var(--ease-in-out-quart) !important;
+  animation-iteration-count: infinite !important;
+  animation-direction: alternate !important;
+}

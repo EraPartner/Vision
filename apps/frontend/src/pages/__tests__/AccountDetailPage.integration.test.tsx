@@ -656,7 +656,7 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         await screen.findByRole("heading", { name: "Degiro", level: 1 });
         const holdingsCard = screen
             .getByRole("heading", { name: "Holdings" })
-            .closest(".glass-thin") as HTMLElement;
+            .closest(".glass-thin, .glass-regular") as HTMLElement;
         expect(within(holdingsCard).getByRole("status")).toHaveAttribute(
             "aria-busy",
             "true",
@@ -684,7 +684,7 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
 
         const holdingsCard = (
             await screen.findByRole("heading", { name: "Holdings" })
-        ).closest(".glass-thin") as HTMLElement;
+        ).closest(".glass-thin, .glass-regular") as HTMLElement;
         await waitFor(() =>
             expect(
                 within(holdingsCard).queryByRole("status"),

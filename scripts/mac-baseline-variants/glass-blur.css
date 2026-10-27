@@ -1,0 +1,36 @@
+/*
+ * mac-baseline variant glass-blur: put back the blur that phase D took off
+ * cards and the desktop sidebar (index.css, "Cards and the desktop sidebar
+ * rail only ever sit over the canvas"), for an A/B against saturate-only.
+ *
+ * Restores exactly the pre-phase-D filters:
+ *   - cards: the material's own blur + saturate (glass-thin 12px, or
+ *     glass-regular 20px with Full effects, glass-elevated 32px on the hero);
+ *   - sidebar: blur + saturate on BOTH stacked glass-chrome layers.
+ * :where() keeps specificity at or below the app's own rules, so the reduced
+ * tier, prefers-reduced-transparency and the enhanced-tier vibrancy rule
+ * (backdrop-filter: none without Full effects) still win as they did before;
+ * the injected <style> comes last, so it wins the ties.
+ */
+@media (prefers-reduced-transparency: no-preference) {
+  :where(:root:not(.fx-reduced)) .card-material.glass-thin {
+    -webkit-backdrop-filter: blur(var(--glass-thin-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-thin-blur)) saturate(var(--glass-saturate));
+  }
+
+  :where(:root:not(.fx-reduced)) .card-material.glass-regular {
+    -webkit-backdrop-filter: blur(var(--glass-regular-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-regular-blur)) saturate(var(--glass-saturate));
+  }
+
+  :where(:root:not(.fx-reduced)) .card-material.glass-elevated {
+    -webkit-backdrop-filter: blur(var(--glass-elevated-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-elevated-blur)) saturate(var(--glass-saturate));
+  }
+
+  :where(:root:not(.fx-reduced)) .app-sidebar.glass-chrome,
+  :where(:root:not(.fx-reduced)) .app-sidebar.glass-chrome [data-sidebar="sidebar"].glass-chrome {
+    -webkit-backdrop-filter: blur(var(--glass-chrome-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-chrome-blur)) saturate(var(--glass-saturate));
+  }
+}

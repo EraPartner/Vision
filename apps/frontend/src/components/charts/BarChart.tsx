@@ -13,6 +13,7 @@ import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis } from "./ChartAxis";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
+import { barStaggerDelay } from "./barStagger";
 import { useChartKeyboardNav } from "./keyboardNav";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
@@ -147,6 +148,8 @@ function BarLayerInner<Datum>({
 }: BarLayerProps<Datum>) {
     // "Full effects" restores the uncapped stagger tail.
     const staggerCap = useFullEffects() ? Infinity : 0.4;
+    // The 1.2s wave cap applies to the total bar count across series.
+    const barCount = data.length * series.length;
     return (
         <>
             {data.map((d, di) => {
@@ -187,7 +190,7 @@ function BarLayerInner<Datum>({
                                     // Clamp the stagger tail so a decade of months
                                 // doesn't run ~4s of entrance animation; past
                                 // ~0.4s the stagger is already imperceptible.
-                                delay: Math.min((di * series.length + si) * 0.015, staggerCap),
+                                delay: Math.min(barStaggerDelay(di * series.length + si, barCount), staggerCap),
                                 }}
                                 onPointerEnter={() =>
                                     onEnter(d, x + bw / 2, yTop, di)
@@ -226,7 +229,7 @@ function BarLayerInner<Datum>({
                                 // Clamp the stagger tail so a decade of months
                                 // doesn't run ~4s of entrance animation; past
                                 // ~0.4s the stagger is already imperceptible.
-                                delay: Math.min((di * series.length + si) * 0.015, staggerCap),
+                                delay: Math.min(barStaggerDelay(di * series.length + si, barCount), staggerCap),
                             }}
                             onPointerEnter={() =>
                                 onEnter(d, xStart + w, y + bh / 2, di)

@@ -2,8 +2,8 @@
 title: Appearance Feature
 type: feature
 status: active
-date: 2026-10-26
-updated: 2026-10-26
+date: 2026-10-27
+updated: 2026-10-27
 tags: [feature, appearance, theming, personalization, frontend, settings, phase-1, visual-effects-tiers, auto-adapt-display, fx-reduced, shader-aurora, webgl, premium-v3, system-accent, vibrancy, electron-native, macos, june-2026, canvas-text, aurora-legibility, liquid-glass-sidebar, accessibility, colorblind, gain-loss, skin-v2]
 description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions. June 2026 (ADR-075): Visual-effects tier model (reduced/standard/enhanced) + autoAdaptDisplay replaces the ADR-071 enhancedEffects boolean; large-display heuristic auto-drops to reduced on 4K-class screens. June 2026 V12 (ADR-072): system accent color overlay (Electron/macOS only, persisted in theme_settings.systemAccent) and vibrancy gated on effective tier. 2026-06-24: colorblind gain/loss palette promoted to a persisted user setting (colorblindGainLoss, default false/classic); --gain/--loss CSS tokens unified app-wide; gain/loss Tailwind color utilities added. 2026-10-05 — the default light theme gives --gain its own WCAG AA gold (36 74% 33%); dark mode and the other variants keep the accent gain.
 aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode, system accent, vibrancy]
@@ -372,23 +372,29 @@ When the display is auto-capped, a note styled `text-primary` explains the situa
 
 ### Full effects switch (ADR-244, 2026-10-21)
 
-`AppSettings.fullEffects: boolean` (default `false`), Settings → Appearance → Visual effects → "Full effects". `VisualEffectsController` sets `fx-full` on `<html>`; components read it with `useFullEffects()`. On, it restores within each tier's own scope:
+`AppSettings.fullEffects: "auto" | "on" | "off"` (default `auto`, which is on for the chosen standard tier only and off for reduced and enhanced, ADR-255; a stored boolean from before maps `true` to `on` and `false` to `auto`), Settings → Appearance → Visual effects → "Full effects". `VisualEffectsController` sets `fx-full` on `<html>`; components read it with `useFullEffects()`. On, it restores within each tier's own scope:
 
 | Effect | Removed by | Restored as |
 | --- | --- | --- |
-| Smooth aurora drift | #329 (100ms steps) | `aurora-drift-*-smooth`, `--ease-in-out-quart`, every frame |
-| CSS blobs drifting under the WebGL aurora | 21775a26 | Same smooth drift under `fx-webgl-live` |
+| Smooth aurora drift | #329 (100ms steps) | Same sampled keyframes on a 33ms grid (`steps(120)`, 30 fps; ADR-255) |
+| Blobs drifting under the WebGL aurora | 21775a26 | `ShaderAurora` drifts the blobs it draws itself (ADR-255) |
 | Frosted modal overlay below enhanced | f80ccd18 | 12px blur over `background / 0.4` (`/0.5` alert dialogs), all tiers |
 | Glass chart tooltip and scrub delta pills | 21775a26 | `glass-thick` (+ `shadow-glass-elevated` on the tooltip) |
 | Frosted pivot frozen column | 21775a26 | 12px blur over `card / 0.72`; enhanced 16px over `card / 0.55`; reduced opaque |
 | Nested glass in AI chat | 21775a26 | `glass-thin` composer and tool-table header |
-| Dark-mode double halo on headings and canvas text | 21775a26 | 2px + 14px text-shadow |
-| 20px card material | 023f27a5 (ADR-132) | Card `glass-regular` |
-| Web blur under native vibrancy | ADR-129 | Vibrancy blur-removal rule skipped |
-| Animated card hover shadow and border | 8461b2c0 | 260ms `box-shadow` + `border-color` transition on interactive cards |
-| Bar chart stagger cap (0.4s) | fab7a771 | Uncapped stagger |
+| Dark-mode double halo on headings and canvas text | 21775a26 | 2px + 14px text-shadow on headings; canvas body text 8px (ADR-255) |
+| 20px card material | 023f27a5 (ADR-132) | Card `glass-regular` fill (cards filter with saturate only, ADR-255) |
+| Web blur under native vibrancy | ADR-129 | Vibrancy filter-removal rule skipped |
+| Animated card hover shadow and border | 8461b2c0 | 260ms `border-color` transition; inset highlight + shadow fade on the pre-rendered `::after` (ADR-255) |
+| Bar chart stagger cap (0.4s) | fab7a771 | 15ms per bar, whole wave at most 1.2s (ADR-255) |
 
-Reduced motion, reduced transparency, the reduced tier, `fx-static-atmosphere` and `fx-idle-atmosphere` still apply. The WebGL aurora and native vibrancy stay enhanced-only.
+Reduced motion, reduced transparency, the reduced tier, `fx-static-atmosphere`, `fx-idle-atmosphere` and `fx-modal-open` still apply. The WebGL aurora and native vibrancy stay enhanced-only (the `shader-standard` measurement variant can mount the aurora on standard; ADR-255 decides from its numbers).
+
+### Cheaper full effects (ADR-255, 2026-10-26)
+
+- Cards (`.card-material`) and the desktop sidebar (`.app-sidebar`) filter with `saturate()` only: they sit over the canvas, whose blurred gradients look the same unblurred. The sidebar applies saturate twice on its wrapper instead of stacking two filtered `glass-chrome` layers. Surfaces over content (top bar, dialogs, popovers, tooltips, sheets, chat composer, sticky table parts) keep their blur.
+- Each CSS blob box is cut to its visible 72% (same pixels, half the damage area), and `.liquid-canvas` is `contain: strict`.
+- `VirtualDataTable` sets `data-scrolling` on its scroller while scrolling (120ms tail); rows ignore the pointer meanwhile.
 
 ### Application points
 
@@ -396,15 +402,16 @@ Reduced motion, reduced transparency, the reduced tier, `fx-static-atmosphere` a
 
 - `fx-reduced` — effective tier is `reduced`. `index.css` carries a class-selector mirror of the `prefers-reduced-transparency` block (both blocks are deliberately duplicated; the media block must work before React mounts).
 - `fx-full` — the Full effects switch is on (see above).
+- `fx-modal-open` — a `.modal-overlay` (dialog, alert dialog, sheet) is mounted; the aurora drift pauses and `ShaderAurora` holds its frame (ADR-255).
 - `fx-static-atmosphere` — large display but user kept a higher tier: aurora blobs stop drifting (`animation: none`) so the compositor can idle. Since 2026-08-09 the WebGL `ShaderAurora` participates too: `AppLayout` passes the same condition as a `staticAtmosphere` prop and the canvas holds a single static frame instead of looping (before this, its ~30 fps redraw kept forcing the full-backdrop recomposite the class exists to avoid).
 
 **Aurora drift cadence** — The CSS aurora blobs advance in 100ms `steps()` (keyframes sample `--ease-in-out-quart` every 4s; both drifts share the 100ms grid), so at rest the window redraws, and every glass surface re-blurs, 10 times a second instead of on every vsync. The sub-pixel per-frame motion it drops was below one 8-bit colour step (2026-10-20).
 
-**`AppLayout`** — mounts `ShaderAurora` only when effective tier is `enhanced`, passing `staticAtmosphere={largeDisplay}` (equivalent to the `fx-static-atmosphere` condition while mounted, since the tier is then `enhanced`).
+**`AppLayout`** — mounts `ShaderAurora` when the effective tier is `enhanced` (or `standard` under the `shader-standard` measurement variant), passing `staticAtmosphere={largeDisplay}` (equivalent to the `fx-static-atmosphere` condition while mounted, since the tier is then never `reduced`) and `blobDrift` (Full effects, or the standard tier).
 
 **`ElectronBridge`** — gates both the `vibrancy` html class and the native Electron window material on the _effective_ tier (so vibrancy also drops on large displays when auto-adapt is on).
 
-**`ShaderAurora`** — backing store additionally capped at 640px wide (`MAX_CANVAS_WIDTH`) on top of the 0.25× resolution factor. Draw-loop decisions are centralised in the pure `resolveAuroraMode` (`components/layout/shaderAuroraMode.ts`): lost context → stopped (CSS blobs are the fallback and keep animating); reduced-motion or `staticAtmosphere` → single held frame (static outranks the idle pause); window blurred / tab hidden → stopped keeping the last frame; otherwise loop. A `staticAtmosphere` prop change re-runs the decision without tearing down the GL context, so dragging the window between displays freezes/resumes the canvas in place.
+**`ShaderAurora`** — backing store additionally capped at 640px wide (`MAX_CANVAS_WIDTH`) on top of the 0.25× resolution factor. Since ADR-255 it also draws the two aurora blobs (`components/layout/auroraBlobs.ts` mirrors the CSS geometry and drift) and `fx-webgl-live` removes the CSS blob layers, so one animator drives the whole aurora; the noise opacity (0.6, dark 0.5) is a shader uniform and the clock advances only while looping. Draw-loop decisions are centralised in the pure `resolveAuroraMode` (`components/layout/shaderAuroraMode.ts`): lost context → stopped (CSS blobs are the fallback and keep animating); reduced-motion or `staticAtmosphere` → single held frame with the blobs at rest (static outranks the pauses); window blurred / tab hidden / modal open → stopped keeping the last frame; otherwise loop. A `staticAtmosphere` prop change re-runs the decision without tearing down the GL context, so dragging the window between displays freezes/resumes the canvas in place.
 
 ### Key files
 

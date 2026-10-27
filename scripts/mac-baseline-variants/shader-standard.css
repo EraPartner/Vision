@@ -1,0 +1,7 @@
+/*
+ * mac-baseline variant shader-standard: intentionally empty.
+ *
+ * The app reads data-fx-variant="shader-standard" on <html> itself (set by the
+ * runner from the variant name) to mount the WebGL aurora on the standard
+ * tier (apps/frontend useFxVariant, AppLayout). Pair it with --tiers standard.
+ */

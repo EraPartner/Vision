@@ -1,0 +1,8 @@
+/*
+ * mac-baseline variant no-hover-fade: drop the row hover colour fade.
+ * Isolates the cost of per-row transitions on ledger rows.
+ */
+[role="row"],
+tr {
+  transition: none !important;
+}

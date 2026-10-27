@@ -3422,7 +3422,7 @@
   "settings.appearance.autoAdaptDisplayHint": "Schakelt automatisch naar Verminderd zolang het venster op een extern scherm met hoge resolutie staat, zoals een 4K-tv, en weer terug zodra het dat verlaat. Het ingebouwde scherm telt nooit als groot.",
   "settings.appearance.darkFrom": "Donker vanaf",
   "settings.appearance.fullEffects": "Volledige effecten",
-  "settings.appearance.fullEffectsHint": "Brengt effecten terug die zijn afgezwakt om energie te besparen: vloeiend bewegende aurora, matglazen achtergrond achter dialogen, glazen grafiektooltips en kaarten, geanimeerde kaartschaduwen en langere grafiekanimaties. Gebruikt meer GPU en batterij.",
+  "settings.appearance.fullEffectsHint": "Brengt effecten terug die zijn afgezwakt om energie te besparen: vloeiend bewegende aurora, matglazen achtergrond achter dialogen, glazen grafiektooltips en kaarten, geanimeerde kaartschaduwen en langere grafiekanimaties. Gebruikt meer GPU en batterij. Staat bij Standaard vanzelf aan.",
   "settings.appearance.gainLossColors": "Winst- & verlieskleuren",
   "settings.appearance.gainLossColors.classic": "Klassiek (rood verlies)",
   "settings.appearance.gainLossColors.colorblind": "Kleurenblindveilig (oranje verlies)",

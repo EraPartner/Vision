@@ -1,11 +1,18 @@
 import { useEffect, useRef } from "react";
 import { resolveAuroraMode } from "@/components/layout/shaderAuroraMode";
+import { auroraBlobs } from "@/components/layout/auroraBlobs";
 
 /**
  * WebGL aurora — the "enhanced visual effects" layer (ADR-071).
  *
  * One fullscreen quad running 4-octave value-noise fbm, tinted with the
- * theme's --primary/--accent. Budgeted deliberately (ADR-020 history):
+ * theme's --primary/--accent, plus the two aurora blobs the CSS draws on the
+ * other tiers (auroraBlobs.ts mirrors their geometry and drift). Drawing the
+ * blobs here keeps one animator: the noise and the blobs change in the same
+ * frame, so the window redraws at the shader's cadence instead of at the
+ * union of two unsynchronised ones (phase D, 2026-10-26). While the program
+ * is live, fx-webgl-live drops the CSS blob layers; they return as the
+ * fallback when the context is lost. Budgeted deliberately (ADR-020 history):
  * renders at 0.25× resolution upscaled by CSS, capped at ~30 fps, pauses
  * whenever the window is blurred or the document hidden (rAF alone only
  * pauses for hidden tabs) and draws a single static frame under
@@ -28,6 +35,14 @@ uniform vec2 u_res;
 uniform float u_time;
 uniform vec3 u_c1;
 uniform vec3 u_c2;
+// Blobs in canvas pixels, y up: (centre x, centre y, fade-out radius, alpha).
+uniform vec4 u_blob_a;
+uniform vec4 u_blob_b;
+uniform vec3 u_blob_a_col;
+uniform vec3 u_blob_b_col;
+// The noise layer's opacity (the canvas element itself was 0.6 / 0.5 dark
+// before it drew the blobs too).
+uniform float u_noise_alpha;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
 
@@ -64,8 +79,15 @@ void main() {
     float m1 = smoothstep(0.34, 0.68, n1);
     float m2 = smoothstep(0.38, 0.72, n2);
     vec3 col = u_c1 * m1 + u_c2 * m2;
-    float a = clamp(max(m1, m2), 0.0, 1.0) * 0.65;
-    gl_FragColor = vec4(col * a, a);
+    float a = clamp(max(m1, m2), 0.0, 1.0) * 0.65 * u_noise_alpha;
+    vec4 noiseLayer = vec4(col * a, a);
+    // Same stacking as the CSS: ::before blob, then the canvas, then the
+    // ::after blob. Gradients are linear in alpha (premultiplied), from the
+    // colour at the centre to transparent at the radius.
+    float aa = u_blob_a.w * clamp(1.0 - distance(gl_FragCoord.xy, u_blob_a.xy) / u_blob_a.z, 0.0, 1.0);
+    float ab = u_blob_b.w * clamp(1.0 - distance(gl_FragCoord.xy, u_blob_b.xy) / u_blob_b.z, 0.0, 1.0);
+    vec4 under = noiseLayer + vec4(u_blob_a_col * aa, aa) * (1.0 - noiseLayer.a);
+    gl_FragColor = vec4(u_blob_b_col * ab, ab) + under * (1.0 - ab);
 }
 `;
 
@@ -103,26 +125,43 @@ function resolveThemeColor(
     return hsl ? hslToRgb(hsl[0], hsl[1], hsl[2]) : fallback;
 }
 
+function readAlpha(style: CSSStyleDeclaration, varName: string, fallback: number): number {
+    const value = Number.parseFloat(style.getPropertyValue(varName));
+    return Number.isFinite(value) ? value : fallback;
+}
+
 interface ShaderAuroraProps {
     /** fx-static-atmosphere state (ADR-075): large display while the user
      * kept a higher tier — hold a static frame instead of looping. */
     staticAtmosphere: boolean;
+    /** Whether the blobs drift, as the CSS blobs would on this tier: with
+     * Full effects, or on the standard tier. Enhanced without Full effects
+     * keeps them at rest (21775a26). */
+    blobDrift: boolean;
 }
 
 const RESOLUTION_SCALE = 0.25;
 // Backing-store width cap (ADR-075): on 1×-scaled large outputs (4K TV at
 // native resolution) innerWidth is huge and 0.25× alone would still be a
-// half-megapixel canvas. The content is blurry noise — capping is invisible.
+// half-megapixel canvas. The content is blurry noise and soft radial
+// gradients — capping is invisible.
 const MAX_CANVAS_WIDTH = 640;
 const FRAME_MIN_MS = 33; // ~30 fps cap
+// The animation clock advances only while the loop runs, so a pause (window
+// blurred, modal open) resumes where it stopped instead of jumping ahead. A
+// long gap between two frames (a stalled main thread) counts as one frame.
+const MAX_FRAME_STEP_MS = 100;
+const NOISE_ALPHA_LIGHT = 0.6;
+const NOISE_ALPHA_DARK = 0.5;
 
-export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
+export function ShaderAurora({ staticAtmosphere, blobDrift }: ShaderAuroraProps) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     // The GL lifecycle effect mounts once ([] deps — rebuilding the context on
     // every display move would be far costlier than the loop it manages), so
     // the live prop value flows in through a ref and prop changes re-run the
     // effect's mode decision via the callback it registers.
     const staticAtmosphereRef = useRef(staticAtmosphere);
+    const blobDriftRef = useRef(blobDrift);
     const syncRef = useRef<(() => void) | undefined>(undefined);
 
     useEffect(() => {
@@ -162,6 +201,11 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
         let uTime: WebGLUniformLocation | null = null;
         let uC1: WebGLUniformLocation | null = null;
         let uC2: WebGLUniformLocation | null = null;
+        let uBlobA: WebGLUniformLocation | null = null;
+        let uBlobB: WebGLUniformLocation | null = null;
+        let uBlobACol: WebGLUniformLocation | null = null;
+        let uBlobBCol: WebGLUniformLocation | null = null;
+        let uNoiseAlpha: WebGLUniformLocation | null = null;
 
         // Compile + link the program and set up the fullscreen-triangle geometry.
         // Returns false if any step fails (e.g. the context is still recovering),
@@ -196,6 +240,11 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
             uTime = gl.getUniformLocation(program, "u_time");
             uC1 = gl.getUniformLocation(program, "u_c1");
             uC2 = gl.getUniformLocation(program, "u_c2");
+            uBlobA = gl.getUniformLocation(program, "u_blob_a");
+            uBlobB = gl.getUniformLocation(program, "u_blob_b");
+            uBlobACol = gl.getUniformLocation(program, "u_blob_a_col");
+            uBlobBCol = gl.getUniformLocation(program, "u_blob_b_col");
+            uNoiseAlpha = gl.getUniformLocation(program, "u_noise_alpha");
             return true;
         };
 
@@ -207,35 +256,99 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
 
         let c1 = resolveThemeColor("--primary", [0.18, 0.65, 0.45]);
         let c2 = resolveThemeColor("--accent", [0.85, 0.7, 0.4]);
+        // The blob tint follows .liquid-canvas: alphas from the theme tokens
+        // (light/dark), hues swapped on the Wealth pages (data-tint).
+        const host = canvas.parentElement ?? document.documentElement;
+        let blobAlphaA = 0.1;
+        let blobAlphaB = 0.08;
+        let wealthTint = false;
+        let noiseAlpha = NOISE_ALPHA_LIGHT;
+        let rem = 16;
+        const readTint = () => {
+            const style = getComputedStyle(host);
+            blobAlphaA = readAlpha(style, "--aurora-primary-alpha", blobAlphaA);
+            blobAlphaB = readAlpha(style, "--aurora-accent-alpha", blobAlphaB);
+            wealthTint = host.getAttribute("data-tint") === "wealth";
+            noiseAlpha = document.documentElement.classList.contains("dark")
+                ? NOISE_ALPHA_DARK
+                : NOISE_ALPHA_LIGHT;
+            const rootFontSize = Number.parseFloat(
+                getComputedStyle(document.documentElement).fontSize,
+            );
+            rem = Number.isFinite(rootFontSize) && rootFontSize > 0 ? rootFontSize : 16;
+        };
+        readTint();
 
         const motionQuery = window.matchMedia(
             "(prefers-reduced-motion: reduce)",
         );
         let reducedMotion = motionQuery.matches;
 
-        const draw = (timeSec: number) => {
+        // Active animation time (see MAX_FRAME_STEP_MS).
+        let clockMs = 0;
+        let lastFrameAt: number | null = null;
+        let held = false;
+
+        const draw = () => {
+            const timeSec = clockMs / 1000;
+            const cssWidth = Math.max(1, window.innerWidth);
+            const cssHeight = Math.max(1, window.innerHeight);
+            const scale = canvas.width / cssWidth;
+            const blobs = auroraBlobs(
+                { width: cssWidth, height: cssHeight, rem },
+                timeSec,
+                blobDriftRef.current && !held,
+            );
+            const blobA = wealthTint ? c2 : c1;
+            const blobB = wealthTint ? c1 : c2;
             gl.uniform2f(uRes, canvas.width, canvas.height);
             gl.uniform1f(uTime, timeSec);
             gl.uniform3f(uC1, c1[0], c1[1], c1[2]);
             gl.uniform3f(uC2, c2[0], c2[1], c2[2]);
+            // gl_FragCoord runs bottom-up; the CSS geometry runs top-down.
+            gl.uniform4f(
+                uBlobA,
+                blobs.a.x * scale,
+                canvas.height - blobs.a.y * scale,
+                blobs.a.radius * scale,
+                blobAlphaA,
+            );
+            gl.uniform4f(
+                uBlobB,
+                blobs.b.x * scale,
+                canvas.height - blobs.b.y * scale,
+                blobs.b.radius * scale,
+                blobAlphaB,
+            );
+            gl.uniform3f(uBlobACol, blobA[0], blobA[1], blobA[2]);
+            gl.uniform3f(uBlobBCol, blobB[0], blobB[1], blobB[2]);
+            gl.uniform1f(uNoiseAlpha, noiseAlpha);
             gl.clearColor(0, 0, 0, 0);
             gl.clear(gl.COLOR_BUFFER_BIT);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
         };
 
-        const refreshColors = () => {
+        // Theme, tint and fx-modal-open all arrive as attribute changes on
+        // <html> or the canvas host. The animated loop repaints on its own; a
+        // held frame is redrawn here or it would keep the old colours.
+        const onAttributesChange = () => {
             c1 = resolveThemeColor("--primary", c1);
             c2 = resolveThemeColor("--accent", c2);
-            // The animated loop repaints on its own; a static (reduced-motion
-            // or static-atmosphere) frame would otherwise keep the old colors
-            // after a theme switch.
-            if (reducedMotion || staticAtmosphereRef.current) draw(0);
+            readTint();
+            syncRef.current?.();
+            if (!running && !contextLost) draw();
         };
-        const themeObserver = new MutationObserver(refreshColors);
+        const themeObserver = new MutationObserver(onAttributesChange);
         themeObserver.observe(document.documentElement, {
             attributes: true,
             attributeFilter: ["class", "style"],
         });
+        if (host !== document.documentElement) {
+            themeObserver.observe(host, {
+                attributes: true,
+                attributeFilter: ["data-tint"],
+            });
+        }
 
         const resize = () => {
             const scale = Math.min(
@@ -248,28 +361,33 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
             canvas.height = h;
             gl.viewport(0, 0, w, h);
             // Setting canvas.width wipes the backing store; the animated loop
-            // repaints next frame, but a static frame (reduced-motion or
-            // static-atmosphere) must be redrawn here or the aurora blanks
-            // permanently after the first resize.
-            if (reducedMotion || staticAtmosphereRef.current) draw(0);
+            // repaints next frame, but a held frame (static, or paused while
+            // blurred or under a modal) must be redrawn here or the aurora
+            // blanks until the loop resumes.
+            if (!running && !contextLost) draw();
         };
-        resize();
-        window.addEventListener("resize", resize);
 
         let raf = 0;
-        let last = 0;
         let running = false;
         let contextLost = false;
 
+        resize();
+        window.addEventListener("resize", resize);
+
         const frame = (now: number) => {
             raf = requestAnimationFrame(frame);
-            if (now - last < FRAME_MIN_MS) return;
-            last = now;
-            draw(now / 1000);
+            if (lastFrameAt !== null) {
+                const step = now - lastFrameAt;
+                if (step < FRAME_MIN_MS) return;
+                clockMs += Math.min(step, MAX_FRAME_STEP_MS);
+            }
+            lastFrameAt = now;
+            draw();
         };
         const startLoop = () => {
             if (running || contextLost) return;
             running = true;
+            lastFrameAt = null;
             raf = requestAnimationFrame(frame);
         };
         const stopLoop = () => {
@@ -290,12 +408,20 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
                 staticAtmosphere: staticAtmosphereRef.current,
                 hidden: document.hidden,
                 focused: document.hasFocus(),
+                modalOpen:
+                    document.documentElement.classList.contains("fx-modal-open"),
             });
             if (mode === "loop") {
+                held = false;
                 startLoop();
             } else {
                 stopLoop();
-                if (mode === "static") draw(0);
+                // A static frame puts the blobs at rest, like the CSS
+                // `animation: none`; a stopped one keeps the last frame.
+                if (mode === "static" && !held) {
+                    held = true;
+                    draw();
+                }
             }
         };
         syncRef.current = syncLoop;
@@ -324,8 +450,8 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
             contextLost = false;
             document.documentElement.classList.add("fx-webgl-live");
             resize();
-            if (reducedMotion) draw(0);
-            else syncLoop();
+            held = false;
+            syncLoop();
         };
         canvas.addEventListener("webglcontextlost", onContextLost);
         canvas.addEventListener("webglcontextrestored", onContextRestored);
@@ -359,16 +485,24 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
         syncRef.current?.();
     }, [staticAtmosphere]);
 
+    // Full effects toggled: the loop picks the new drift up on its next
+    // frame; nothing to do while it is stopped (the held frame stays).
+    useEffect(() => {
+        blobDriftRef.current = blobDrift;
+    }, [blobDrift]);
+
     return (
         <canvas
             ref={canvasRef}
             aria-hidden="true"
-            // Dark mode capped well below the old 0.8: shader peaks (0.65 in
-            // the fragment) × 0.8 pushed bright primary washes behind light
-            // foreground text — "Good afternoon" went light-on-light. 0.5
-            // keeps the ambiance while the canvas-text halo (index.css)
-            // guarantees legibility at the peaks.
-            className="absolute inset-0 h-full w-full opacity-60 dark:opacity-50"
+            // The noise opacity (0.6, dark 0.5) lives in the shader now
+            // (u_noise_alpha), so the blobs it also draws keep their CSS
+            // alphas. Dark mode stays capped well below the old 0.8: shader
+            // peaks (0.65 in the fragment) × 0.8 pushed bright primary washes
+            // behind light foreground text — "Good afternoon" went
+            // light-on-light. 0.5 keeps the ambiance while the canvas-text
+            // halo (index.css) guarantees legibility at the peaks.
+            className="absolute inset-0 h-full w-full"
         />
     );
 }

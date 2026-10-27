@@ -4,7 +4,8 @@
 import type { FrameStats } from "./frames.ts";
 import type { PowerSummary } from "./powermetrics.ts";
 import type { RoleSummary, ProcessRole } from "./processes.ts";
-import type { TraceSegmentSummary } from "./trace.ts";
+import type { PresentedFps, TraceSegmentSummary } from "./trace.ts";
+import type { GlassCensus } from "./variants.ts";
 
 export type Tier = "reduced" | "standard" | "enhanced";
 
@@ -49,6 +50,12 @@ export interface TierResult {
   fullEffects: boolean;
   /** 1-based repeat number (--repeat). */
   run: number;
+  /** --variant name; absent or "base" means nothing was injected. */
+  variant?: string;
+  /** Presented frames/s of the idle window's 10 s trace; null without one. */
+  idleFps?: PresentedFps | null;
+  /** Backdrop-filter surface census after the idle window. */
+  glass?: GlassCensus | null;
   /** Effective tier from <html> classes, plus atmosphere and fx-full flags. */
   effective: { tier: Tier; classes: string[] };
   page: {
@@ -111,8 +118,11 @@ export interface AppResult {
 }
 
 export interface BaselineResults {
-  /** 2 adds TierResult.fullEffects and TierResult.run; 3 adds RoleStats.sharedOnceMb. */
-  schemaVersion: 3;
+  /**
+   * 2 adds TierResult.fullEffects and TierResult.run; 3 adds
+   * RoleStats.sharedOnceMb; 4 adds TierResult.variant, idleFps and glass.
+   */
+  schemaVersion: 3 | 4;
   startedAt: string;
   finishedAt: string;
   options: Record<string, unknown>;
@@ -160,11 +170,14 @@ export function median(values: number[]): number | null {
     : ((sorted[middle - 1] as number) + (sorted[middle] as number)) / 2;
 }
 
-/** "standard", "standard full", "standard full #2". */
+export const BASE = "base";
+
+/** "standard", "standard full", "standard full drift-20 #2". */
 export function variantLabel(tier: TierResult): string {
   return [
     tier.tier,
     tier.fullEffects ? "full" : null,
+    tier.variant && tier.variant !== BASE ? tier.variant : null,
     tier.run > 1 ? `#${tier.run}` : null,
   ]
     .filter(Boolean)
@@ -251,6 +264,24 @@ export const SPREAD_METRICS: readonly {
     label: "Background renderer script ms",
     digits: 0,
     read: (t) => t.background?.pageMetrics.ScriptDurationMs,
+  },
+  {
+    key: "idleFps",
+    label: "Idle fps (presented)",
+    digits: 1,
+    read: (t) => t.idleFps?.fps,
+  },
+  {
+    key: "glassArea",
+    label: "Glass area %",
+    digits: 1,
+    read: (t) => t.glass?.areaPercent,
+  },
+  {
+    key: "glassSurfaces",
+    label: "Glass surfaces",
+    digits: 0,
+    read: (t) => t.glass?.surfaces,
   },
   {
     key: "scrollFps",
@@ -380,6 +411,7 @@ function groupVariants(results: BaselineResults): VariantGroup[] {
   const groups = new Map<string, VariantGroup>();
   for (const app of results.apps) {
     for (const tier of app.tiers) {
+      if (tier.variant && tier.variant !== BASE) continue;
       const key = `${app.app.name}|${tier.tier}`;
       let group = groups.get(key);
       if (!group) {
@@ -418,6 +450,56 @@ export function comparisonRows(results: BaselineResults): string[][] {
   return rows;
 }
 
+/**
+ * Rows of: app, tier, Full effects, variant, metric, base, variant, delta of
+ * medians, beyond noise. Each variant is compared with the base runs of the
+ * same app, tier and switch state.
+ */
+export function variantComparisonRows(results: BaselineResults): string[][] {
+  const rows: string[][] = [];
+  for (const app of results.apps) {
+    const groups = new Map<string, TierResult[]>();
+    for (const tier of app.tiers) {
+      const key = `${tier.tier}|${tier.fullEffects}|${tier.variant ?? BASE}`;
+      groups.set(key, [...(groups.get(key) ?? []), tier]);
+    }
+    for (const [key, runs] of groups) {
+      const [tierName, full, variant] = key.split("|") as [
+        string,
+        string,
+        string,
+      ];
+      if (variant === BASE) continue;
+      const base = groups.get(`${tierName}|${full}|${BASE}`) ?? [];
+      for (const metric of SPREAD_METRICS) {
+        const baseSpread = spreadOf(base.map(metric.read));
+        const variantSpread = spreadOf(runs.map(metric.read));
+        if (!baseSpread && !variantSpread) continue;
+        const delta =
+          baseSpread && variantSpread && baseSpread.median !== 0
+            ? `${variantSpread.median - baseSpread.median >= 0 ? "+" : ""}${fmt(((variantSpread.median - baseSpread.median) / Math.abs(baseSpread.median)) * 100, 0)}%`
+            : dash;
+        rows.push([
+          app.app.name,
+          tierName,
+          full === "true" ? "on" : "off",
+          variant,
+          metric.label,
+          formatSpread(baseSpread, metric.digits),
+          formatSpread(variantSpread, metric.digits),
+          delta,
+          baseSpread && variantSpread
+            ? beyondNoise(baseSpread, variantSpread)
+              ? "yes"
+              : "no"
+            : dash,
+        ]);
+      }
+    }
+  }
+  return rows;
+}
+
 export function renderSummary(results: BaselineResults): string {
   const out: string[] = [];
   const m = results.machine;
@@ -445,6 +527,32 @@ export function renderSummary(results: BaselineResults): string {
       table(
         ["App", "Tier", "Metric", "Off", "On", "Delta", "Beyond noise"],
         comparison,
+      ),
+    );
+    out.push("");
+  }
+
+  const variantComparison = variantComparisonRows(results);
+  if (variantComparison.length > 0) {
+    out.push("## Variants vs base (median, min–max over repeats)");
+    out.push(
+      "Each variant against the base runs with the same tier and Full effects state. Beyond noise needs non-overlapping ranges (--repeat 2 or more). Variant runs with --variants-only-idle only have idle metrics.",
+    );
+    out.push("");
+    out.push(
+      table(
+        [
+          "App",
+          "Tier",
+          "Full effects",
+          "Variant",
+          "Metric",
+          "Base",
+          "Variant value",
+          "Delta",
+          "Beyond noise",
+        ],
+        variantComparison,
       ),
     );
     out.push("");
@@ -492,7 +600,7 @@ export function renderSummary(results: BaselineResults): string {
 
   out.push("## Idle");
   out.push(
-    "CPU in % of one core. GPU and power from powermetrics (whole machine).",
+    "CPU in % of one core. GPU and power from powermetrics (whole machine). Idle fps is presented frames/s from a 10 s Chromium trace at the end of the idle window (needs the trace pass or --idle-trace); glass columns count elements with a backdrop-filter, clipped to the viewport (nested surfaces add up).",
   );
   out.push("");
   out.push(
@@ -511,6 +619,9 @@ export function renderSummary(results: BaselineResults): string {
         "GPU active %",
         "GPU mW",
         "Package mW",
+        "Idle fps",
+        "Glass area %",
+        "Glass surfaces",
       ],
       rowsFor(results, (_app, tier) => [
         tier.effective.tier,
@@ -524,6 +635,9 @@ export function renderSummary(results: BaselineResults): string {
         fmt(tier.idle.power?.gpuActivePercent, 1),
         fmt(tier.idle.power?.gpuPowerMw),
         fmt(tier.idle.power?.combinedPowerMw),
+        fmt(tier.idleFps?.fps, 1),
+        fmt(tier.glass?.areaPercent, 1),
+        fmt(tier.glass?.surfaces),
       ]),
     ),
   );

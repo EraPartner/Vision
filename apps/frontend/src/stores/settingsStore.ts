@@ -61,6 +61,12 @@ export type StartupSection =
  * - enhanced: adds the WebGL shader aurora and Electron vibrancy.
  */
 export type VisualEffectsTier = "reduced" | "standard" | "enhanced";
+/**
+ * The "Full effects" choice. `auto` follows the chosen tier: on for
+ * standard, off for reduced and enhanced (ADR-255, measured cheaper than the
+ * old switch-off level on standard only).
+ */
+export type FullEffectsChoice = "auto" | "on" | "off";
 export const APP_DATE_FORMATS = [
     "DD/MM/YYYY",
     "MM/DD/YYYY",
@@ -90,11 +96,12 @@ export interface AppSettings {
     autoAdaptDisplay: boolean;
     /**
      * Restore the effects that were removed or reduced to save GPU work
-     * (docs/features/appearance.md, "Full effects"). Off by default, so the
-     * everyday look is unchanged; on, each tier gets those effects back within
-     * its own scope (reduced still has no backdrop glass or aurora).
+     * (docs/features/appearance.md, "Full effects"). `auto` by default, which
+     * is on for the standard tier only (resolveFullEffects); on, each tier
+     * gets those effects back within its own scope (reduced still has no
+     * backdrop glass or aurora).
      */
-    fullEffects: boolean;
+    fullEffects: FullEffectsChoice;
     /** Section whose main page the app opens on at launch. */
     startupSection: StartupSection;
     /** Auto-clear a planned payment when an imported/created transaction unambiguously matches it. */
@@ -150,7 +157,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     adminMode: false,
     visualEffects: "standard",
     autoAdaptDisplay: true,
-    fullEffects: false,
+    fullEffects: "auto",
     startupSection: "budgeting",
     autoClearPlannedOnMatch: true,
     colorblindGainLoss: false,
@@ -230,7 +237,14 @@ const storedAppSettingsSchema = z.looseObject({
         ] as const satisfies readonly VisualEffectsTier[])
         .catch(DEFAULT_APP_SETTINGS.visualEffects),
     autoAdaptDisplay: z.boolean().catch(DEFAULT_APP_SETTINGS.autoAdaptDisplay),
-    fullEffects: z.boolean().catch(DEFAULT_APP_SETTINGS.fullEffects),
+    // Before ADR-255 this was a boolean defaulting to false. A stored false
+    // cannot be told apart from the untouched default, so it becomes auto.
+    fullEffects: z
+        .union([
+            z.enum(["auto", "on", "off"] as const satisfies readonly FullEffectsChoice[]),
+            z.boolean().transform((on): FullEffectsChoice => (on ? "on" : "auto")),
+        ])
+        .catch(DEFAULT_APP_SETTINGS.fullEffects),
     startupSection: z
         .enum([
             "budgeting",
