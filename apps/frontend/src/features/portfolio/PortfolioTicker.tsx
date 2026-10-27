@@ -252,7 +252,10 @@ export function PortfolioTicker({ items }: PortfolioTickerProps) {
             : undefined;
 
     return (
-        <div className="relative flex w-full items-stretch overflow-hidden rounded-card corner-continuous border border-border/60 liquid-glass">
+        // The animating track is clipped by the rectangular .ticker-mask, not
+        // this squircle: a clipping corner-shape box around a composited layer
+        // costs a mask layer and an extra surface on every frame.
+        <div className="relative flex w-full items-stretch rounded-card corner-continuous border border-border/60 liquid-glass">
             <div
                 ref={containerRef}
                 data-active={active}

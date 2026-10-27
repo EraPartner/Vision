@@ -284,6 +284,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-26: Cheaper ledger scroll, squircle clips and page transitions (accepted)
+
+[[docs/adr/257-ledger-scroll-and-squircle-clips|ADR-257]] stops squircle boxes clipping composited
+content, cuts the ledger's per-scroll-frame React work (memoised header, one body context menu),
+keeps one layer for page transitions, renders only the AI chat transcript per streamed token, memoises the analysis panels, fixes the ledger row-height estimate, pauses the ticker when unseen, makes reduced-tier cards opaque, and adds three diagnostic `mac-baseline` variants. Gains are
+unmeasured until the Mac run.
+
 ### 2026-10-26: Lighter Electron memory, boot bundle and idle renderer work (accepted)
 
 [[docs/adr/256-electron-memory-and-idle-work|ADR-256]] (phases E and F of the Mac optimisation

@@ -14,7 +14,10 @@ import {
     parseLocaleNumber,
     type NumberFormat,
 } from "@/utils/currency";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import {
+    measureElement as measureVirtualElement,
+    useVirtualizer,
+} from "@tanstack/react-virtual";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -246,7 +249,6 @@ interface VirtualizedTableRowProps<T extends Record<string, unknown>> {
     onRowQuickLook?: ((row: T, index: number) => void) | undefined;
     onRowSelect?: ((row: T, index: number) => void) | undefined;
     isSelected: boolean;
-    rowContextMenu?: VirtualDataTableProps<T>["rowContextMenu"] | undefined;
     renderRowActions?: VirtualDataTableProps<T>["renderRowActions"] | undefined;
     startEditing: (sourceIndex: number, row: T) => void;
     saveEditing?: ((sourceIndex: number, row: T) => void) | undefined;
@@ -280,7 +282,6 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
     onRowQuickLook,
     onRowSelect,
     isSelected,
-    rowContextMenu,
     renderRowActions,
     startEditing,
     saveEditing,
@@ -330,7 +331,7 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
         !!target.closest(
             'button, a, input, select, textarea, label, [role="button"], [role="menuitem"], [role="checkbox"], [role="combobox"], [contenteditable="true"]',
         );
-    const rowEl = (
+    return (
         <div
             data-index={virtualIndex}
             ref={attachRow}
@@ -585,16 +586,63 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
             )}
         </div>
     );
+}
 
-    if (!rowContextMenu) return rowEl;
+/**
+ * Single Radix ContextMenu around the virtual rows. A contextmenu event (right
+ * click, ctrl-click, or the keyboard menu key on a focused row) is resolved to
+ * the row under it via `data-index`; anywhere else the event is swallowed, as
+ * Radix's trigger already does for the area it covers.
+ */
+function RowContextMenuHost({
+    enabled,
+    onOpenRow,
+    menu,
+    children,
+}: {
+    enabled: boolean;
+    onOpenRow: (virtualIndex: number) => boolean;
+    menu: React.ReactNode;
+    children: React.ReactElement;
+}) {
+    if (!enabled) return children;
+    const openFor = (target: EventTarget | null) => {
+        const rowEl =
+            target instanceof Element
+                ? target.closest<HTMLElement>("[data-index]")
+                : null;
+        const index = rowEl ? Number(rowEl.dataset.index) : NaN;
+        return Number.isInteger(index) && onOpenRow(index);
+    };
     return (
         <ContextMenu modal={false}>
-            <ContextMenuTrigger asChild>{rowEl}</ContextMenuTrigger>
-            {rowContextMenu(row, sourceIndex, {
-                startEditing: () => startEditing(sourceIndex, row),
-            })}
+            <ContextMenuTrigger
+                asChild
+                onContextMenu={(event) => {
+                    if (!openFor(event.target)) event.preventDefault();
+                }}
+                // Radix opens on a touch/pen long-press without a contextmenu
+                // event; resolve the row when that press starts.
+                onPointerDown={(event) => {
+                    if (event.pointerType !== "mouse") openFor(event.target);
+                }}
+            >
+                {children}
+            </ContextMenuTrigger>
+            {menu}
         </ContextMenu>
     );
+}
+
+/**
+ * Module-level so the icon is not remounted on every table render (a
+ * component defined inside the render body gets a new identity each time,
+ * and the table renders on every scroll frame).
+ */
+function SortIcon({ active, dir }: { active: boolean; dir: SortDirection }) {
+    if (!active) return <ArrowUpDown className="h-3 w-3 opacity-40" />;
+    if (dir === "asc") return <ArrowUp className="h-3 w-3 text-primary" />;
+    return <ArrowDown className="h-3 w-3 text-primary" />;
 }
 
 // React.memo erases the row component's generic parameter; re-asserted so call sites stay generic.
@@ -937,48 +985,58 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         [columns],
     );
 
-    const handleSort = (key: string) => {
-        if (isServerSort) {
-            // Cycle: null -> asc -> desc -> null; dispatch to parent
-            let newDir: SortDirection;
-            let newKey: string | null;
-            if (sortKey === key) {
-                if (sortDir === "asc") {
-                    newKey = key;
-                    newDir = "desc";
-                } else if (sortDir === "desc") {
-                    newKey = null;
-                    newDir = null;
+    const handleSort = useCallback(
+        (key: string) => {
+            if (isServerSort) {
+                // Cycle: null -> asc -> desc -> null; dispatch to parent
+                let newDir: SortDirection;
+                let newKey: string | null;
+                if (sortKey === key) {
+                    if (sortDir === "asc") {
+                        newKey = key;
+                        newDir = "desc";
+                    } else if (sortDir === "desc") {
+                        newKey = null;
+                        newDir = null;
+                    } else {
+                        newKey = key;
+                        newDir = "asc";
+                    }
                 } else {
                     newKey = key;
                     newDir = "asc";
                 }
+                onSortChange(newKey, newDir);
             } else {
-                newKey = key;
-                newDir = "asc";
+                if (localSortKey === key) {
+                    if (localSortDir === "asc") setLocalSortDir("desc");
+                    else if (localSortDir === "desc") {
+                        setLocalSortKey(null);
+                        setLocalSortDir(null);
+                    } else setLocalSortDir("asc");
+                } else {
+                    setLocalSortKey(key);
+                    setLocalSortDir("asc");
+                }
             }
-            onSortChange(newKey, newDir);
-        } else {
-            if (localSortKey === key) {
-                if (localSortDir === "asc") setLocalSortDir("desc");
-                else if (localSortDir === "desc") {
-                    setLocalSortKey(null);
-                    setLocalSortDir(null);
-                } else setLocalSortDir("asc");
-            } else {
-                setLocalSortKey(key);
-                setLocalSortDir("asc");
-            }
-        }
-    };
+        },
+        [
+            isServerSort,
+            localSortDir,
+            localSortKey,
+            onSortChange,
+            sortDir,
+            sortKey,
+        ],
+    );
 
-    const setColumnFilter = (key: string, value: string) => {
+    const setColumnFilter = useCallback((key: string, value: string) => {
         setColumnFilters((prev) => {
             if (value) return { ...prev, [key]: value };
             const { [key]: _removed, ...next } = prev;
             return next;
         });
-    };
+    }, []);
 
     const activeFilterCount = Object.keys(columnFilters).length;
 
@@ -1033,7 +1091,9 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
             result = result.filter(({ row }) =>
                 columnsRef.current.some((col) => {
                     const val = row[col.key];
-                    return val != null && cellText(val).toLowerCase().includes(q);
+                    return (
+                        val != null && cellText(val).toLowerCase().includes(q)
+                    );
                 }),
             );
         }
@@ -1101,10 +1161,26 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         },
         [],
     );
+    // The estimate follows the first row the browser actually measured. A
+    // wrong constant (the ledger's 52 vs ~57 px rows) makes every newly
+    // mounted row shift all later rows, re-render the overscan band and grow
+    // the scroll extent on each scroll frame.
+    const measuredRowHeightRef = useRef<{ for: number; px: number } | null>(
+        null,
+    );
     const virtualizer = useVirtualizer({
         count: processedRows.length,
         getScrollElement: () => parentRef.current,
-        estimateSize: () => rowHeight,
+        estimateSize: () =>
+            measuredRowHeightRef.current?.for === rowHeight
+                ? measuredRowHeightRef.current.px
+                : rowHeight,
+        measureElement: (element, entry, instance) => {
+            const px = measureVirtualElement(element, entry, instance);
+            if (px > 0 && measuredRowHeightRef.current?.for !== rowHeight)
+                measuredRowHeightRef.current = { for: rowHeight, px };
+            return px;
+        },
         overscan: 10,
     });
     const pendingRestoreRef = useRef<number | null>(
@@ -1271,7 +1347,8 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                         continue;
                     const raw = values[col.key];
                     if (typeof raw === "string") {
-                        if (raw.trim() === "") Reflect.deleteProperty(values, col.key);
+                        if (raw.trim() === "")
+                            Reflect.deleteProperty(values, col.key);
                         else {
                             const parsed = parseDecimal(
                                 raw,
@@ -1308,16 +1385,289 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     const hasEditableColumns = columns.some((c) => c.editable);
     const displayTotal = totalItems ?? data.length;
 
-    const SortIcon = ({ colKey }: { colKey: string }) => {
-        if (sortKey !== colKey)
-            return <ArrowUpDown className="h-3 w-3 opacity-40" />;
-        if (sortDir === "asc")
-            return <ArrowUp className="h-3 w-3 text-primary" />;
-        return <ArrowDown className="h-3 w-3 text-primary" />;
-    };
+    // One context menu for the whole body instead of a Radix root per row:
+    // rows mount and unmount on every scroll frame, and each root cost a
+    // mount. The host reports which row the menu opened on (pointer or
+    // keyboard contextmenu both target the row), by its stable key.
+    const [menuRowKey, setMenuRowKey] = useState<string | number | null>(null);
+    const openRowContextMenu = useCallback(
+        (virtualIndex: number) => {
+            const indexed = processedRows[virtualIndex];
+            if (!indexed) return false;
+            setMenuRowKey(getRowKey(indexed.row, indexed.sourceIndex));
+            return true;
+        },
+        [processedRows],
+    );
+    const menuRow = useMemo(
+        () =>
+            menuRowKey === null
+                ? undefined
+                : processedRows.find(
+                      (r) => getRowKey(r.row, r.sourceIndex) === menuRowKey,
+                  ),
+        [menuRowKey, processedRows],
+    );
+    const rowContextMenuContent =
+        rowContextMenu && menuRow
+            ? rowContextMenu(menuRow.row, menuRow.sourceIndex, {
+                  startEditing: () =>
+                      startEditing(menuRow.sourceIndex, menuRow.row),
+              })
+            : null;
+
+    // The virtualizer re-renders the table on every scroll frame; the header
+    // (a Popover root per filterable column) only depends on the values below,
+    // so it is built once per change of those instead of once per frame.
+    const headerRow = useMemo(
+        () => (
+            <div
+                ref={headerScrollRef}
+                className="overflow-x-hidden border-b border-border"
+                role="rowgroup"
+            >
+                <div
+                    className="flex items-center bg-muted/50 min-h-[40px]"
+                    role="row"
+                >
+                    {columns.map((col) => {
+                        const width = columnWidths[col.key];
+                        const isSortable =
+                            col.sortable !== false && Boolean(col.header);
+                        const isFilterable =
+                            col.filterable !== false && Boolean(col.header);
+                        const hasFilter = !!columnFilters[col.key];
+
+                        const ariaSort =
+                            sortKey === col.key
+                                ? sortDir === "asc"
+                                    ? "ascending"
+                                    : sortDir === "desc"
+                                      ? "descending"
+                                      : "none"
+                                : undefined;
+
+                        return (
+                            <div
+                                key={col.key}
+                                role="columnheader"
+                                aria-sort={ariaSort}
+                                className={cn(
+                                    "group relative min-w-0 flex-1 select-none whitespace-nowrap px-4 py-2 type-footnote font-medium text-label-secondary",
+                                    col.className || "",
+                                )}
+                                style={
+                                    width !== undefined
+                                        ? {
+                                              width: `${width}px`,
+                                              flex: "none",
+                                          }
+                                        : undefined
+                                }
+                            >
+                                <div className="flex min-w-0 items-center gap-1">
+                                    {isSortable ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSort(col.key)}
+                                            className="flex min-w-0 items-center gap-1 rounded-chip text-left transition-colors duration-fast hover:text-foreground focus-ring"
+                                        >
+                                            <span
+                                                className="truncate pr-0.5"
+                                                title={
+                                                    typeof col.header ===
+                                                    "string"
+                                                        ? col.header
+                                                        : undefined
+                                                }
+                                            >
+                                                {col.header}
+                                            </span>
+                                            <SortIcon
+                                                active={sortKey === col.key}
+                                                dir={sortDir}
+                                            />
+                                        </button>
+                                    ) : (
+                                        <span
+                                            className="min-w-0 truncate pr-2"
+                                            title={
+                                                typeof col.header === "string"
+                                                    ? col.header
+                                                    : undefined
+                                            }
+                                        >
+                                            {col.header}
+                                        </span>
+                                    )}
+
+                                    {isFilterable && Boolean(col.header) && (
+                                        <Popover
+                                            open={openFilter === col.key}
+                                            onOpenChange={(open) =>
+                                                setOpenFilter(
+                                                    open ? col.key : null,
+                                                )
+                                            }
+                                        >
+                                            <PopoverTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    aria-label={t(
+                                                        "aria.filterColumn",
+                                                        {
+                                                            header:
+                                                                typeof col.header ===
+                                                                "string"
+                                                                    ? col.header
+                                                                    : "",
+                                                        },
+                                                    )}
+                                                    className={cn(
+                                                        "icon-touch-target shrink-0 rounded-chip transition-colors duration-fast focus-ring",
+                                                        hasFilter
+                                                            ? "text-primary"
+                                                            : "text-label-tertiary opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 hover:text-foreground",
+                                                    )}
+                                                >
+                                                    <Filter className="h-3 w-3" />
+                                                </button>
+                                            </PopoverTrigger>
+                                            <PopoverContent
+                                                className="w-56 p-2"
+                                                align="start"
+                                            >
+                                                <ColumnFilter
+                                                    header={
+                                                        typeof col.header ===
+                                                        "string"
+                                                            ? col.header
+                                                            : ""
+                                                    }
+                                                    value={
+                                                        columnFilters[
+                                                            col.key
+                                                        ] || ""
+                                                    }
+                                                    onChange={(v) =>
+                                                        setColumnFilter(
+                                                            col.key,
+                                                            v,
+                                                        )
+                                                    }
+                                                    uniqueValues={
+                                                        openFilter === col.key
+                                                            ? openFilterUniqueValues
+                                                            : []
+                                                    }
+                                                    onClose={() =>
+                                                        setOpenFilter(null)
+                                                    }
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                    )}
+                                </div>
+
+                                {Boolean(col.header) && (
+                                    <div
+                                        role="separator"
+                                        aria-orientation="vertical"
+                                        aria-label={
+                                            typeof col.header === "string"
+                                                ? col.header
+                                                : col.key
+                                        }
+                                        aria-valuemin={col.minWidth ?? 60}
+                                        aria-valuemax={MAX_COLUMN_WIDTH}
+                                        aria-valuenow={Math.min(
+                                            MAX_COLUMN_WIDTH,
+                                            Math.max(
+                                                col.minWidth ?? 60,
+                                                columnWidths[col.key] ??
+                                                    col.defaultWidth ??
+                                                    120,
+                                            ),
+                                        )}
+                                        tabIndex={0}
+                                        className="absolute -right-3 bottom-0 top-0 z-10 w-6 touch-none cursor-col-resize before:absolute before:inset-y-2 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-border before:transition-[width,background-color] hover:before:w-0.5 hover:before:bg-primary/50 focus-visible:outline-none focus-ring focus-visible:before:w-0.5 focus-visible:before:bg-primary/70 active:before:bg-primary"
+                                        onFocus={(e) =>
+                                            syncRenderedColumnWidth(
+                                                e.currentTarget,
+                                                col.key,
+                                                columnWidths[col.key] ??
+                                                    col.defaultWidth ??
+                                                    120,
+                                            )
+                                        }
+                                        onPointerDown={(e) =>
+                                            handleResizeStart(
+                                                e,
+                                                col.key,
+                                                syncRenderedColumnWidth(
+                                                    e.currentTarget,
+                                                    col.key,
+                                                    columnWidths[col.key] ??
+                                                        col.defaultWidth ??
+                                                        120,
+                                                ),
+                                            )
+                                        }
+                                        onKeyDown={(e) =>
+                                            handleResizeKeyDown(
+                                                e,
+                                                col.key,
+                                                syncRenderedColumnWidth(
+                                                    e.currentTarget,
+                                                    col.key,
+                                                    columnWidths[col.key] ??
+                                                        col.defaultWidth ??
+                                                        120,
+                                                ),
+                                            )
+                                        }
+                                    />
+                                )}
+                            </div>
+                        );
+                    })}
+                    {hasEditableColumns && (
+                        <div
+                            role="columnheader"
+                            className="px-2 py-2 text-right type-footnote font-medium text-label-secondary"
+                            style={{ width: "40px", flex: "none" }}
+                        >
+                            {t("table.edit")}
+                        </div>
+                    )}
+                </div>
+            </div>
+        ),
+        [
+            columnFilters,
+            columnWidths,
+            columns,
+            handleResizeKeyDown,
+            handleResizeStart,
+            handleSort,
+            hasEditableColumns,
+            openFilter,
+            openFilterUniqueValues,
+            setColumnFilter,
+            sortDir,
+            sortKey,
+            syncRenderedColumnWidth,
+            t,
+        ],
+    );
 
     return (
-        <Card className="relative overflow-hidden">
+        // No overflow clip on this Card: a clipping squircle (corner-shape)
+        // around the composited scroller makes Chromium draw the whole card
+        // through a mask layer on every scroll frame. Nothing inside reaches
+        // the corners (the footer and search row have no fill) and the body
+        // scroller clips itself.
+        <Card className="relative">
             {(title || subtitle || Boolean(actions)) && (
                 <CardHeader
                     className={cn(
@@ -1453,240 +1803,12 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                 aria-colcount={columns.length + (hasEditableColumns ? 1 : 0)}
             >
                 {/* Sticky header */}
-                <div
-                    ref={headerScrollRef}
-                    className="overflow-x-hidden border-b border-border"
-                    role="rowgroup"
-                >
-                    <div
-                        className="flex items-center bg-muted/50 min-h-[40px]"
-                        role="row"
-                    >
-                        {columns.map((col) => {
-                            const width = columnWidths[col.key];
-                            const isSortable =
-                                col.sortable !== false && Boolean(col.header);
-                            const isFilterable =
-                                col.filterable !== false && Boolean(col.header);
-                            const hasFilter = !!columnFilters[col.key];
-
-                            const ariaSort =
-                                sortKey === col.key
-                                    ? sortDir === "asc"
-                                        ? "ascending"
-                                        : sortDir === "desc"
-                                          ? "descending"
-                                          : "none"
-                                    : undefined;
-
-                            return (
-                                <div
-                                    key={col.key}
-                                    role="columnheader"
-                                    aria-sort={ariaSort}
-                                    className={cn(
-                                        "group relative min-w-0 flex-1 select-none whitespace-nowrap px-4 py-2 type-footnote font-medium text-label-secondary",
-                                        col.className || "",
-                                    )}
-                                    style={
-                                        width !== undefined
-                                            ? {
-                                                  width: `${width}px`,
-                                                  flex: "none",
-                                              }
-                                            : undefined
-                                    }
-                                >
-                                    <div className="flex min-w-0 items-center gap-1">
-                                        {isSortable ? (
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    handleSort(col.key)
-                                                }
-                                                className="flex min-w-0 items-center gap-1 rounded-chip text-left transition-colors duration-fast hover:text-foreground focus-ring"
-                                            >
-                                                <span
-                                                    className="truncate pr-0.5"
-                                                    title={
-                                                        typeof col.header ===
-                                                        "string"
-                                                            ? col.header
-                                                            : undefined
-                                                    }
-                                                >
-                                                    {col.header}
-                                                </span>
-                                                <SortIcon colKey={col.key} />
-                                            </button>
-                                        ) : (
-                                            <span
-                                                className="min-w-0 truncate pr-2"
-                                                title={
-                                                    typeof col.header ===
-                                                    "string"
-                                                        ? col.header
-                                                        : undefined
-                                                }
-                                            >
-                                                {col.header}
-                                            </span>
-                                        )}
-
-                                        {isFilterable &&
-                                            Boolean(col.header) && (
-                                                <Popover
-                                                    open={
-                                                        openFilter === col.key
-                                                    }
-                                                    onOpenChange={(open) =>
-                                                        setOpenFilter(
-                                                            open
-                                                                ? col.key
-                                                                : null,
-                                                        )
-                                                    }
-                                                >
-                                                    <PopoverTrigger asChild>
-                                                        <button
-                                                            type="button"
-                                                            aria-label={t(
-                                                                "aria.filterColumn",
-                                                                {
-                                                                    header:
-                                                                        typeof col.header ===
-                                                                        "string"
-                                                                            ? col.header
-                                                                            : "",
-                                                                },
-                                                            )}
-                                                            className={cn(
-                                                                "icon-touch-target shrink-0 rounded-chip transition-colors duration-fast focus-ring",
-                                                                hasFilter
-                                                                    ? "text-primary"
-                                                                    : "text-label-tertiary opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 hover:text-foreground",
-                                                            )}
-                                                        >
-                                                            <Filter className="h-3 w-3" />
-                                                        </button>
-                                                    </PopoverTrigger>
-                                                    <PopoverContent
-                                                        className="w-56 p-2"
-                                                        align="start"
-                                                    >
-                                                        <ColumnFilter
-                                                            header={
-                                                                typeof col.header ===
-                                                                "string"
-                                                                    ? col.header
-                                                                    : ""
-                                                            }
-                                                            value={
-                                                                columnFilters[
-                                                                    col.key
-                                                                ] || ""
-                                                            }
-                                                            onChange={(v) =>
-                                                                setColumnFilter(
-                                                                    col.key,
-                                                                    v,
-                                                                )
-                                                            }
-                                                            uniqueValues={
-                                                                openFilter ===
-                                                                col.key
-                                                                    ? openFilterUniqueValues
-                                                                    : []
-                                                            }
-                                                            onClose={() =>
-                                                                setOpenFilter(
-                                                                    null,
-                                                                )
-                                                            }
-                                                        />
-                                                    </PopoverContent>
-                                                </Popover>
-                                            )}
-                                    </div>
-
-                                    {Boolean(col.header) && (
-                                        <div
-                                            role="separator"
-                                            aria-orientation="vertical"
-                                            aria-label={
-                                                typeof col.header === "string"
-                                                    ? col.header
-                                                    : col.key
-                                            }
-                                            aria-valuemin={col.minWidth ?? 60}
-                                            aria-valuemax={MAX_COLUMN_WIDTH}
-                                            aria-valuenow={Math.min(
-                                                MAX_COLUMN_WIDTH,
-                                                Math.max(
-                                                    col.minWidth ?? 60,
-                                                    columnWidths[col.key] ??
-                                                        col.defaultWidth ??
-                                                        120,
-                                                ),
-                                            )}
-                                            tabIndex={0}
-                                            className="absolute -right-3 bottom-0 top-0 z-10 w-6 touch-none cursor-col-resize before:absolute before:inset-y-2 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-border before:transition-[width,background-color] hover:before:w-0.5 hover:before:bg-primary/50 focus-visible:outline-none focus-ring focus-visible:before:w-0.5 focus-visible:before:bg-primary/70 active:before:bg-primary"
-                                            onFocus={(e) =>
-                                                syncRenderedColumnWidth(
-                                                    e.currentTarget,
-                                                    col.key,
-                                                    columnWidths[col.key] ??
-                                                        col.defaultWidth ??
-                                                        120,
-                                                )
-                                            }
-                                            onPointerDown={(e) =>
-                                                handleResizeStart(
-                                                    e,
-                                                    col.key,
-                                                    syncRenderedColumnWidth(
-                                                        e.currentTarget,
-                                                        col.key,
-                                                        columnWidths[col.key] ??
-                                                            col.defaultWidth ??
-                                                            120,
-                                                    ),
-                                                )
-                                            }
-                                            onKeyDown={(e) =>
-                                                handleResizeKeyDown(
-                                                    e,
-                                                    col.key,
-                                                    syncRenderedColumnWidth(
-                                                        e.currentTarget,
-                                                        col.key,
-                                                        columnWidths[col.key] ??
-                                                            col.defaultWidth ??
-                                                            120,
-                                                    ),
-                                                )
-                                            }
-                                        />
-                                    )}
-                                </div>
-                            );
-                        })}
-                        {hasEditableColumns && (
-                            <div
-                                role="columnheader"
-                                className="px-2 py-2 text-right type-footnote font-medium text-label-secondary"
-                                style={{ width: "40px", flex: "none" }}
-                            >
-                                {t("table.edit")}
-                            </div>
-                        )}
-                    </div>
-                </div>
+                {headerRow}
 
                 {/* Virtualised scrollable body */}
                 <div
                     ref={parentRef}
-                    className="overflow-auto overscroll-x-contain [&[data-scrolling]_[role=row]]:pointer-events-none"
+                    className="virtual-table-body overflow-auto overscroll-x-contain [&[data-scrolling]_[role=row]]:pointer-events-none"
                     style={{ maxHeight: `${maxHeight}px` }}
                     role="rowgroup"
                     onScroll={(e) => {
@@ -1736,101 +1858,119 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                             </div>
                         </div>
                     ) : (
-                        <div
-                            role="presentation"
-                            style={{
-                                height: `${virtualizer.getTotalSize()}px`,
-                                width: "100%",
-                                position: "relative",
-                            }}
+                        <RowContextMenuHost
+                            enabled={Boolean(rowContextMenu)}
+                            onOpenRow={openRowContextMenu}
+                            menu={rowContextMenuContent}
                         >
-                            {virtualizer
-                                .getVirtualItems()
-                                .map((virtualRow, visibleIndex) => {
-                                    const indexedRow =
-                                        processedRows[virtualRow.index];
-                                    if (!indexedRow) return null;
-                                    const row = indexedRow.row;
-                                    const sourceIndex = indexedRow.sourceIndex;
-                                    const isEditing =
-                                        editingRow === sourceIndex;
-                                    // Key by the row's stable id, not the virtualizer's
-                                    // index-based key — on a sort/filter reorder an index
-                                    // key would re-attach in-progress inline edits and
-                                    // row transitions to the wrong row.
-                                    const rowKey = getRowKey(row, sourceIndex);
-                                    return (
-                                        <MemoizedVirtualizedTableRow
-                                            key={rowKey}
-                                            row={row}
-                                            sourceIndex={sourceIndex}
-                                            virtualIndex={virtualRow.index}
-                                            virtualStart={virtualRow.start}
-                                            isFirstVisible={visibleIndex === 0}
-                                            isEditing={isEditing}
-                                            isCoarsePointer={isCoarsePointer}
-                                            columns={columns}
-                                            columnWidths={columnWidths}
-                                            editValues={
-                                                isEditing
-                                                    ? editValues
-                                                    : undefined
-                                            }
-                                            hasEditableColumns={
-                                                hasEditableColumns
-                                            }
-                                            measureElement={
-                                                virtualizer.measureElement
-                                            }
-                                            onRowDoubleClick={onRowDoubleClick}
-                                            onRowOpen={onRowOpen}
-                                            onRowQuickLook={onRowQuickLook}
-                                            onRowSelect={onRowSelect}
-                                            isSelected={
-                                                selectedRowKey != null &&
-                                                rowKey === selectedRowKey
-                                            }
-                                            rowContextMenu={rowContextMenu}
-                                            renderRowActions={renderRowActions}
-                                            startEditing={startEditing}
-                                            saveEditing={
-                                                isEditing
-                                                    ? saveEditing
-                                                    : undefined
-                                            }
-                                            cancelEditing={cancelEditing}
-                                            setEditValues={setEditValues}
-                                            focusRowByIndex={
-                                                onRowDoubleClick ||
-                                                onRowOpen ||
-                                                onRowQuickLook ||
-                                                onRowSelect
-                                                    ? focusRowByIndex
-                                                    : undefined
-                                            }
-                                            saveLabel={
-                                                getRowLabel
-                                                    ? `${t("aria.save")}: ${getRowLabel(row)}`
-                                                    : t("aria.save")
-                                            }
-                                            cancelLabel={
-                                                getRowLabel
-                                                    ? `${t("aria.cancel")}: ${getRowLabel(row)}`
-                                                    : t("aria.cancel")
-                                            }
-                                            rowLabel={getRowLabel?.(row)}
-                                            editLabel={
-                                                getRowLabel
-                                                    ? `${t("aria.edit")}: ${getRowLabel(row)}`
-                                                    : t("aria.edit")
-                                            }
-                                            numberFormat={
-                                                appSettings.numberFormat
-                                            }
-                                        />
-                                    );
-                                })}
-                        </div>
+                            <div
+                                role="presentation"
+                                style={{
+                                    height: `${virtualizer.getTotalSize()}px`,
+                                    width: "100%",
+                                    position: "relative",
+                                }}
+                            >
+                                {virtualizer
+                                    .getVirtualItems()
+                                    .map((virtualRow, visibleIndex) => {
+                                        const indexedRow =
+                                            processedRows[virtualRow.index];
+                                        if (!indexedRow) return null;
+                                        const row = indexedRow.row;
+                                        const sourceIndex =
+                                            indexedRow.sourceIndex;
+                                        const isEditing =
+                                            editingRow === sourceIndex;
+                                        // Key by the row's stable id, not the virtualizer's
+                                        // index-based key — on a sort/filter reorder an index
+                                        // key would re-attach in-progress inline edits and
+                                        // row transitions to the wrong row.
+                                        const rowKey = getRowKey(
+                                            row,
+                                            sourceIndex,
+                                        );
+                                        const rowLabel = getRowLabel?.(row);
+                                        return (
+                                            <MemoizedVirtualizedTableRow
+                                                key={rowKey}
+                                                row={row}
+                                                sourceIndex={sourceIndex}
+                                                virtualIndex={virtualRow.index}
+                                                virtualStart={virtualRow.start}
+                                                isFirstVisible={
+                                                    visibleIndex === 0
+                                                }
+                                                isEditing={isEditing}
+                                                isCoarsePointer={
+                                                    isCoarsePointer
+                                                }
+                                                columns={columns}
+                                                columnWidths={columnWidths}
+                                                editValues={
+                                                    isEditing
+                                                        ? editValues
+                                                        : undefined
+                                                }
+                                                hasEditableColumns={
+                                                    hasEditableColumns
+                                                }
+                                                measureElement={
+                                                    virtualizer.measureElement
+                                                }
+                                                onRowDoubleClick={
+                                                    onRowDoubleClick
+                                                }
+                                                onRowOpen={onRowOpen}
+                                                onRowQuickLook={onRowQuickLook}
+                                                onRowSelect={onRowSelect}
+                                                isSelected={
+                                                    selectedRowKey != null &&
+                                                    rowKey === selectedRowKey
+                                                }
+                                                renderRowActions={
+                                                    renderRowActions
+                                                }
+                                                startEditing={startEditing}
+                                                saveEditing={
+                                                    isEditing
+                                                        ? saveEditing
+                                                        : undefined
+                                                }
+                                                cancelEditing={cancelEditing}
+                                                setEditValues={setEditValues}
+                                                focusRowByIndex={
+                                                    onRowDoubleClick ||
+                                                    onRowOpen ||
+                                                    onRowQuickLook ||
+                                                    onRowSelect
+                                                        ? focusRowByIndex
+                                                        : undefined
+                                                }
+                                                saveLabel={
+                                                    getRowLabel
+                                                        ? `${t("aria.save")}: ${rowLabel}`
+                                                        : t("aria.save")
+                                                }
+                                                cancelLabel={
+                                                    getRowLabel
+                                                        ? `${t("aria.cancel")}: ${rowLabel}`
+                                                        : t("aria.cancel")
+                                                }
+                                                rowLabel={rowLabel}
+                                                editLabel={
+                                                    getRowLabel
+                                                        ? `${t("aria.edit")}: ${rowLabel}`
+                                                        : t("aria.edit")
+                                                }
+                                                numberFormat={
+                                                    appSettings.numberFormat
+                                                }
+                                            />
+                                        );
+                                    })}
+                            </div>
+                        </RowContextMenuHost>
                     )}
 
                     {/* Loading more indicator */}

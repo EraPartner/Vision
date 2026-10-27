@@ -21,11 +21,15 @@ export interface InspectorProps extends React.HTMLAttributes<HTMLElement> {
 
 const Inspector = React.forwardRef<HTMLElement, InspectorProps>(
     ({ className, onClose, onKeyDown, ...props }, ref) => (
+        // No overflow clip: header and footer carry no fill and the body
+        // scroller clips itself, so nothing reaches the corners. A clipping
+        // squircle (corner-shape) around that composited scroller would draw
+        // the whole panel through a mask layer on every frame it is open.
         <aside
             ref={ref}
             role="complementary"
             className={cn(
-                "glass-regular flex min-h-0 w-80 shrink-0 flex-col overflow-hidden rounded-card corner-continuous",
+                "glass-regular flex min-h-0 w-80 shrink-0 flex-col rounded-card corner-continuous",
                 className,
             )}
             onKeyDown={(event) => {

@@ -1,5 +1,5 @@
 import { Input } from "@/components/ui/input";
-import { useId, useRef, useState } from "react";
+import { memo, useId, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Minus, Plus, X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Disclosure, DisclosureSummary } from "@/components/ui/disclosure";
@@ -43,7 +43,7 @@ import {
 const cellGroupValue = (value: unknown): AnalysisValue =>
     isAnalysisValue(value) ? value : null;
 
-export function AnalysisPivotPanel({
+export const AnalysisPivotPanel = memo(function AnalysisPivotPanel({
     plan,
     dataset,
     config,
@@ -933,4 +933,4 @@ export function AnalysisPivotPanel({
             )}
         </div>
     );
-}
+});

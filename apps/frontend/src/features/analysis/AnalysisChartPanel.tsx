@@ -1,5 +1,5 @@
 import { listGuard, onGuarded } from "@/lib/enumGuard";
-import { useId } from "react";
+import { memo, useId } from "react";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { getChartColor } from "@/components/charts";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -55,7 +55,7 @@ const CHART_KINDS = [
 ] as const satisfies readonly AnalysisChartSpec["kind"][];
 const isChartKind = listGuard(CHART_KINDS);
 
-export function AnalysisChartPanel({
+export const AnalysisChartPanel = memo(function AnalysisChartPanel({
     result,
     spec,
     onChange,
@@ -523,4 +523,4 @@ export function AnalysisChartPanel({
             )}
         </div>
     );
-}
+});

@@ -1,4 +1,11 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import {
+    memo,
+    useEffect,
+    useId,
+    useRef,
+    useState,
+    type KeyboardEvent,
+} from "react";
 import { Send, Square } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -28,7 +35,9 @@ interface ChatComposerProps {
 
 const MAX_LEN = 4000;
 
-export function ChatComposer({
+// Memoized: the page passes stable callbacks, so the Radix Select/Switch tree
+// only re-renders when its own props change.
+export const ChatComposer = memo(function ChatComposer({
     onSend,
     onCancel,
     isStreaming,
@@ -180,4 +189,4 @@ export function ChatComposer({
             </div>
         </div>
     );
-}
+});

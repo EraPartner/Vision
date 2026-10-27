@@ -965,6 +965,25 @@ describe("VirtualDataTable — row context menu", () => {
         await waitFor(() => expect(onAction).toHaveBeenCalledWith(3));
     });
 
+    it("one body menu follows the row under the event, including a cell inside it", async () => {
+        const onAction = vi.fn<(id: number) => void>();
+        renderTable({
+            rowContextMenu: (row) => (
+                <ContextMenuContent>
+                    <ContextMenuItem onSelect={() => onAction(row.id)}>
+                        Row action
+                    </ContextMenuItem>
+                </ContextMenuContent>
+            ),
+        });
+        fireEvent.contextMenu(getRow("Gamma"));
+        await screen.findByText("Row action");
+        fireEvent.contextMenu(screen.getByText("Alpha"));
+        fireEvent.click(await screen.findByText("Row action"));
+        await waitFor(() => expect(onAction).toHaveBeenCalledWith(1));
+        expect(onAction).toHaveBeenCalledTimes(1);
+    });
+
     it("startEditing helper begins the inline edit for that row", async () => {
         renderTable({
             columns: EDITABLE_COLUMNS,

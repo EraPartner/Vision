@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, useRef } from "react";
+import { memo, useEffect, useId, useState, useRef } from "react";
 import type {
     AnalysisExtensionOperation,
     AnalysisResult,
@@ -200,7 +200,7 @@ const functions = [
 ];
 type WorkbenchKey = TranslationKeySuffix<"analysis.ext.workbench.">;
 
-export function AnalysisWorkbenchPanel(props: Props) {
+export const AnalysisWorkbenchPanel = memo(function AnalysisWorkbenchPanel(props: Props) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const baseId = useId();
@@ -2334,4 +2334,4 @@ export function AnalysisWorkbenchPanel(props: Props) {
             {report(output)}
         </div>
     );
-}
+});

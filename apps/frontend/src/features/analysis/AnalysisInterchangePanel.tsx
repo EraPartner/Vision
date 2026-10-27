@@ -2,7 +2,7 @@ import {
     analysisResultWorkbook,
     importAnalysisWorkbook,
 } from "./analysisWorkbook";
-import { useId, useMemo, useRef, useState } from "react";
+import { memo, useId, useMemo, useRef, useState } from "react";
 import {
     Download,
     FileSpreadsheet,
@@ -39,7 +39,7 @@ import {
     type AnalysisScenarioModel,
 } from "./analysisInterchange";
 
-export function AnalysisInterchangePanel({
+export const AnalysisInterchangePanel = memo(function AnalysisInterchangePanel({
     result,
     name,
     timezone,
@@ -504,4 +504,4 @@ export function AnalysisInterchangePanel({
             })}
         </div>
     );
-}
+});

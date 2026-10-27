@@ -126,6 +126,25 @@ const EMPTY_ACTIVE_IDS: readonly string[] = Object.freeze([]);
 
 type Listener = () => void;
 
+// Fallback frame for environments without rAF (node tests, some jsdom setups).
+const FALLBACK_FRAME_MS = 16;
+
+type FrameHandle =
+    | { kind: "raf"; id: number }
+    | { kind: "timeout"; id: ReturnType<typeof setTimeout> };
+
+function requestFrame(callback: () => void): FrameHandle {
+    if (typeof requestAnimationFrame === "function") {
+        return { kind: "raf", id: requestAnimationFrame(callback) };
+    }
+    return { kind: "timeout", id: setTimeout(callback, FALLBACK_FRAME_MS) };
+}
+
+function cancelFrame(handle: FrameHandle): void {
+    if (handle.kind === "raf") cancelAnimationFrame(handle.id);
+    else clearTimeout(handle.id);
+}
+
 export type SendBody = Omit<SendChatBody, "conversationId"> & {
     conversationId: string;
 };
@@ -137,6 +156,7 @@ class AiChatStreamStore {
     private activeIdsCache: readonly string[] = EMPTY_ACTIVE_IDS;
     private activeIdsDirty = false;
     private generations = new Map<string, number>();
+    private pendingFrame: FrameHandle | null = null;
 
     subscribe(listener: Listener): () => void {
         this.listeners.add(listener);
@@ -146,8 +166,28 @@ class AiChatStreamStore {
     }
 
     private emit(): void {
+        // Any synchronous emit also delivers whatever a pending token frame
+        // would have, so drop the frame rather than notifying twice.
+        if (this.pendingFrame) {
+            cancelFrame(this.pendingFrame);
+            this.pendingFrame = null;
+        }
         this.activeIdsDirty = true;
         for (const listener of this.listeners) listener();
+    }
+
+    /**
+     * Coalesce token notifications to one per frame. Ollama streams one SSE
+     * frame per token; notifying React for each re-rendered the transcript
+     * several times per painted frame. State is still written immediately, so
+     * `getState` never lags — only the listener call is deferred.
+     */
+    private scheduleEmit(): void {
+        if (this.pendingFrame) return;
+        this.pendingFrame = requestFrame(() => {
+            this.pendingFrame = null;
+            this.emit();
+        });
     }
 
     getState(conversationId: string | null): StreamState {
@@ -325,7 +365,10 @@ class AiChatStreamStore {
                     return;
             }
             this.streams.set(id, next);
-            this.emit();
+            // Tokens only grow the draft; every other event (and the terminal
+            // paths above/below) emits synchronously, flushing any pending frame.
+            if (event.type === "token") this.scheduleEmit();
+            else this.emit();
         };
 
         const { abort, result } = apiClient.streamChat(body, handleEvent);

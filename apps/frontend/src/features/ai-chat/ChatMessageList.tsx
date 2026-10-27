@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import type { ChatMessage } from "@/types/aiChat";
 import { Avatar, ChatBubble } from "./ChatBubble";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { StreamState } from "@/lib/aiChatStreamStore";
 import { isOptimisticUserId } from "@/lib/aiChatStreamStore";
+import { useChatStream } from "@/hooks/useAIChat";
 
 interface ChatMessageListProps {
     messages: ChatMessage[];
@@ -41,6 +42,13 @@ const PIN_TOLERANCE_PX = 8;
 function isScrolledToBottom(el: HTMLElement): boolean {
     return el.scrollHeight - el.scrollTop - el.clientHeight <= PIN_TOLERANCE_PX;
 }
+
+/**
+ * Tighter than `PIN_TOLERANCE_PX`: the auto-scroll only skips its write when
+ * the view is genuinely flush (sub-pixel rounding aside), so a view a few px
+ * short of the bottom is still pulled all the way down.
+ */
+const FLUSH_TOLERANCE_PX = 1;
 
 export function ChatMessageList({
     messages,
@@ -167,6 +175,14 @@ export function ChatMessageList({
         // synchronously right after React mutated the container (forced reflow
         // per streamed chunk); by rAF time the layout is already up to date.
         const raf = requestAnimationFrame(() => {
+            // Already flush: skip the no-op scroll write (and the compositor
+            // scroll it would schedule) that most streamed frames would cost.
+            if (
+                el.scrollHeight - el.scrollTop - el.clientHeight <=
+                FLUSH_TOLERANCE_PX
+            ) {
+                return;
+            }
             el.scrollTo({ top: el.scrollHeight });
         });
         return () => cancelAnimationFrame(raf);
@@ -298,3 +314,35 @@ export function ChatMessageList({
         </div>
     );
 }
+
+type LiveChatMessageListProps = Omit<
+    ChatMessageListProps,
+    | "streamingUserMessage"
+    | "streamingToolMessages"
+    | "assistantDraft"
+    | "isStreaming"
+    | "streamStatus"
+> & { conversationId: string | null };
+
+/**
+ * The transcript wired to the live stream. The per-token subscription lives
+ * here rather than on the page, so a streamed token re-renders only the
+ * message list — not the rail, composer or hidden investigation panel.
+ */
+export const LiveChatMessageList = memo(function LiveChatMessageList({
+    conversationId,
+    ...props
+}: LiveChatMessageListProps) {
+    const stream = useChatStream(conversationId);
+    return (
+        <ChatMessageList
+            {...props}
+            conversationId={conversationId}
+            streamingUserMessage={stream.userMessage}
+            streamingToolMessages={stream.toolMessages}
+            assistantDraft={stream.assistantDraft}
+            isStreaming={stream.isStreaming}
+            streamStatus={stream.status}
+        />
+    );
+});

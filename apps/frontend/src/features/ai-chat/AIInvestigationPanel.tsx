@@ -1,7 +1,7 @@
 import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import { InvestigationPrivacySummary } from "./InvestigationPrivacySummary";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { AppLink } from "@/lib/appNavigation";
 import { FileText, Paperclip, Trash2 } from "lucide-react";
 import { apiClient } from "@/lib/api";
@@ -163,7 +163,9 @@ function EvidenceAnswer({ answer }: { answer: AiAnswer }) {
     );
 }
 
-export function AIInvestigationPanel() {
+// Memoized: always mounted (hidden) beside the chat, so it must not re-render
+// with the chat page.
+export const AIInvestigationPanel = memo(function AIInvestigationPanel() {
     const { t, language } = useLanguage();
     const { appSettings } = useAppSettings();
     const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -663,4 +665,4 @@ export function AIInvestigationPanel() {
             <ConfirmDialog />
         </section>
     );
-}
+});

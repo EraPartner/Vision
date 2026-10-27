@@ -2,7 +2,7 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-10-24
+date: 2026-10-26
 updated: 2026-10-24
 last_modified: 2026-10-24
 tags:
@@ -164,7 +164,7 @@ Shared contract
 - **cancel(conversationId)** — aborts the in-flight fetch, marks the retained draft as stopped, and suppresses an error toast for this user-requested action.
 - **clear(conversationId)** — removes stream from store (called after completion when cache is hydrated).
 
-**useSendChatMessage(conversationId)** — thin subscriber on top of `aiChatStreamStore` via `useSyncExternalStore`; returns `{send, cancel, ...state}`.
+**useSendChatMessage(conversationId)** — returns `{send, cancel, isStreaming, lastRequest}`; these do not change between tokens, so the page does not re-render per token. **useChatStream(conversationId)** returns the full stream state and is used only by `LiveChatMessageList`. The store coalesces `token` notifications to one per animation frame (state is written immediately); every other event notifies synchronously ([[docs/adr/257-ledger-scroll-and-squircle-clips|ADR-257]]).
 
 **useStreamingConversationIds()** — subscribes to active stream set; used by `ChatConversationList` to render pulsing indicator on conversations with active responses.
 
@@ -181,8 +181,8 @@ Shared contract
 | `ToolResultChart`             | Frontend Component    | Recharts-backed line/bar/pie renderer behind a nested lazy boundary, so ordinary chat and non-chart tool results do not download Recharts                                                                                                                                                                                                |
 | `OllamaStatusBanner`          | Frontend Component    | Unreachable warning + setup guide link                                                                                                                                                                                                                                                                                                   |
 | `aiChatStreamStore`           | Frontend Store        | Module-level singleton holding in-flight streams keyed by conversation ID; survives component unmount                                                                                                                                                                                                                                    |
-| `useAIChat`                   | Frontend Hooks        | `useConversations`, `useConversation`, `useCreateConversation`, `useRenameConversation`, `useDeleteConversation`, `useSendChatMessage`, `useStreamingConversationIds`                                                                                                                                                                    |
-| `useSendChatMessage`          | Frontend Hook         | Subscribes to stream state via `useSyncExternalStore`; returns `{send, cancel, isStreaming, status, assistantDraft, userMessage, toolMessages, error, lastRequest}`                                                                                                                                                                      |
+| `useAIChat`                   | Frontend Hooks        | `useConversations`, `useConversation`, `useCreateConversation`, `useRenameConversation`, `useDeleteConversation`, `useSendChatMessage`, `useChatStream`, `useStreamingConversationIds`                                                                                                                                                                    |
+| `useSendChatMessage`          | Frontend Hook         | Returns `{send, cancel, isStreaming, lastRequest}`; full stream state comes from `useChatStream` (transcript only)                                                                                                                                                                                                                                                          |
 | `useStreamingConversationIds` | Frontend Hook         | Returns readonly list of conversation IDs with active streams; used by sidebar indicator                                                                                                                                                                                                                                                 |
 | `useOllamaStatus`             | Frontend Hook         | Health + model list                                                                                                                                                                                                                                                                                                                      |
 | `/api/ai/chat`                | API Endpoint          | SSE stream for chat exchanges; accepts optional `useTools` in body                                                                                                                                                                                                                                                                       |
