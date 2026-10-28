@@ -2,7 +2,7 @@
 title: Recipients
 type: feature
 status: active
-date: 2026-10-11
+date: 2026-10-28
 tags: [feature, recipients, transactions, payees, payers, merge, atomic]
 description: Recipient (payee/payer) management with atomic merge, normalization-based fuzzy matching, and UNIQUE constraints
 aliases:
@@ -56,7 +56,7 @@ normalizeForMatching("ABC Supermarket") → "abc supermarket"
 // Both match the same recipient via fuzzy similarity (threshold: 0.7)
 ```
 
-**Service:** [[apps/node-backend/src/services/calculations/normalization.ts|normalization.js]]
+**Service:** [[apps/node-backend/src/services/calculations/normalization.ts|normalization.ts]]
 
 ### Atomic Merge (Phase 6)
 
@@ -78,7 +78,7 @@ If any step fails, the entire merge rolls back.
   This prevents a waiting merge from recreating a two-level alias chain.
 - Bank account deduplication is race-safe via `INSERT ... ON CONFLICT` and `RETURNING id` for exact-one semantics.
 
-**Service:** [[apps/node-backend/src/services/recipientMergeService.ts|recipientMergeService.js]]
+**Service:** [[apps/node-backend/src/services/recipientMergeService.ts|recipientMergeService.ts]]
 
 ### Default Category Assignment (ADR-046)
 

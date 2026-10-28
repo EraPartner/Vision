@@ -2,8 +2,8 @@
 title: PDF Report Export
 type: feature
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     feature,
@@ -90,11 +90,11 @@ Phase 7 adds category and recipient filter exclusion support to PDF reports with
 
 **Backend (Node.js):**
 
-- `dataFetcher.js` fetches `filteredMonthly` and `exclusions` metadata when exclusion arrays are non-empty
+- `dataFetcher.ts` fetches `filteredMonthly` and `exclusions` metadata when exclusion arrays are non-empty
 - `generateReport()` passes `excludedCategoryIds` and `excludedRecipientIds` through the pipeline
-- `index.js` (`buildCoverHtml`) renders exclusion metadata ("X categories excluded, Y recipients excluded") on cover
-- `executiveSummary.js` renders "Filter Impact" comparison table when `data.filteredMonthly` is present
-- `categoryBreakdown.js` and `topRecipients.js` now render dual charts using `.chart-pair` layout when exclusions are present
+- `index.ts` (`buildCoverHtml`) renders exclusion metadata ("X categories excluded, Y recipients excluded") on cover
+- `executiveSummary.ts` renders "Filter Impact" comparison table when `data.filteredMonthly` is present
+- `categoryBreakdown.ts` and `topRecipients.ts` now render dual charts using `.chart-pair` layout when exclusions are present
 
 **Frontend (React):**
 
@@ -490,7 +490,7 @@ The PDF report system is a three-layer architecture:
 1. **Report dispatcher** — `apps/node-backend/src/services/reports/index.ts` — routes by report type, assembles cover + content and the footer template into a `ReportDocument`; `packaging/electron/report-pdf.ts` prints it
 2. **Modular sections** — `apps/node-backend/src/services/reports/sections/` — seven financial section renderers (executiveSummary, cashflowTrend, categoryBreakdown, topRecipients, bankBalances, plannedOutlook, rollingAverages)
 3. **Data fetcher** — `apps/node-backend/src/services/reports/dataFetcher.ts` — parallel selected-source loading; requested source failures abort the export
-4. **Theme integration** — `apps/node-backend/src/services/reports/themeCss.ts` + `sectionHelpers.js` — CSS custom properties, shared formatting utilities (currency, date, percentages), SVG chart builders
+4. **Theme integration** — `apps/node-backend/src/services/reports/themeCss.ts` + `sectionHelpers.ts` — CSS custom properties, shared formatting utilities (currency, date, percentages), SVG chart builders
 
 The PDF contains:
 
@@ -671,7 +671,7 @@ const pdf = await renderHtmlToPdf(html, {
    - Default sections list: all except plannedOutlook (customizable)
    - Each section uses shared helpers (formatters, SVG chart builders)
 
-5. **Theme System** (`apps/node-backend/src/services/reports/themeCss.ts` + `sectionHelpers.js`)
+5. **Theme System** (`apps/node-backend/src/services/reports/themeCss.ts` + `sectionHelpers.ts`)
    - CSS custom properties (HSL) resolved from frontend theme tokens
    - Missing or invalid tokens fall back to the shared `@vision/types/reportThemeDefaults` light or dark palette
    - Built-in CSS classes: `.kpi-grid`, `.data-table`, `.account-grid`, etc.
@@ -998,7 +998,7 @@ remain recorded facts. See [[docs/adr/188-proved-in-kind-income-recognition|ADR-
 ## Architecture Patterns
 
 - **Modular sections**: Add new report section by creating a renderer in `sections/`, exporting it, and adding to `FINANCIAL_SECTION_RENDERERS` map
-- **Data separation**: Section renderers are pure functions; all state fetched once in `dataFetcher.js`
+- **Data separation**: Section renderers are pure functions; all state fetched once in `dataFetcher.ts`
 - **Period filtering**: `filterMonthsByPeriod()` is reusable utility; applies to any months array
 - **Failure semantics**: Requested source failures stop the export; skipped sources remain null
 

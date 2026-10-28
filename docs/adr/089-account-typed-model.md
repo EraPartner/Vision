@@ -1,6 +1,7 @@
 ---
 title: ADR-089 Account-Typed Model & Owner Dimension
 type: adr
+status: accepted
 date: 2026-06-18
 tags:
   [
@@ -24,6 +25,8 @@ aliases:
 ## Status
 
 Proposed
+
+> [!note] Status corrected on 2026-10-28: the frontmatter status is `accepted`; treated as accepted; ADR-093 and ADR-107 build on it (inference, not checked against every flag).
 
 ## Date
 

@@ -62,8 +62,8 @@ partition "commitImport() / commitBatch()" {
 stop
 
 legend bottom
-  Sources: routes/importRoutes.js; services/importPipeline/index.js;
-  stage.js; validate.js; match.js; commit.js; services/importIdentity.js.
+  Sources: routes/importRoutes.ts; services/importPipeline/index.ts;
+  stage.ts; validate.ts; match.ts; commit.ts; services/importIdentity.ts.
   Recipient/category corrections use POST row override endpoints.
 endlegend
 

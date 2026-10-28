@@ -2584,21 +2584,21 @@
                 "from": "be.routes",
                 "to": "sv.analysis",
                 "payload": "validated SQL or canonical service plan; bounded preparation and scenarios",
-                "annotation": "apps/node-backend/src/routes/analysis.ts selects restricted SQL, analysisFinancialDatasets.js or analysisWorkbenchService.js. No arbitrary application-table access.",
+                "annotation": "apps/node-backend/src/routes/analysis.ts selects restricted SQL, analysisFinancialDatasets.ts or analysisWorkbenchService.ts. No arbitrary application-table access.",
                 "title": "Validate and select the execution path"
               },
               {
                 "from": "sv.analysis",
                 "to": "db.postgres",
                 "payload": "restricted-view SELECT or enumerated read-only financial adapter",
-                "annotation": "analysisPivotService.js uses one SQL statement or cached canonical source for every hierarchy level; analysisFinancialDatasets.js projects approved portfolio/history/rate fields without writes.",
+                "annotation": "analysisPivotService.ts uses one SQL statement or cached canonical source for every hierarchy level; analysisFinancialDatasets.ts projects approved portfolio/history/rate fields without writes.",
                 "title": "Read approved views or financial adapters"
               },
               {
                 "from": "be.routes",
                 "to": "sv.analysis",
                 "payload": "POST /api/analysis/saved or /saved/:id/run",
-                "annotation": "savedAnalysisService.js snapshots workbench, pivot, financial options and chart bindings, applies the same pipeline, and records partial coverage/errors without clearing the last usable run.",
+                "annotation": "savedAnalysisService.ts snapshots workbench, pivot, financial options and chart bindings, applies the same pipeline, and records partial coverage/errors without clearing the last usable run.",
                 "title": "Save an immutable analysis version"
               }
             ],
@@ -2649,7 +2649,7 @@
                 "from": "be.routes",
                 "to": "fe.apiclient",
                 "payload": "GET /api/research-dossiers/:id/versions or /:id/export",
-                "annotation": "researchDossierService.js returns history and portable JSON; old versions are not changed by restore."
+                "annotation": "researchDossierService.ts returns history and portable JSON; old versions are not changed by restore."
               }
             ],
             "docs": [
@@ -2693,7 +2693,7 @@
                 "from": "sv.monitors",
                 "to": "sv.analysis",
                 "payload": "one newly recorded saved-analysis run when rule targets analysis",
-                "annotation": "savedAnalysisService.js uses the restricted local executor; monitor accepts only completed, current, single-row finite numeric results. Dossier rules read local evidence instead."
+                "annotation": "savedAnalysisService.ts uses the restricted local executor; monitor accepts only completed, current, single-row finite numeric results. Dossier rules read local evidence instead."
               },
               {
                 "from": "sv.monitors",
@@ -2705,7 +2705,7 @@
                 "from": "db.postgres",
                 "to": "fe.apiclient",
                 "payload": "paged history and server-owned unread count",
-                "annotation": "analysisMonitorService.js returns persisted status and coverage unknown; it never reports an unverified source-coverage guarantee."
+                "annotation": "analysisMonitorService.ts returns persisted status and coverage unknown; it never reports an unverified source-coverage guarantee."
               }
             ],
             "docs": [
@@ -2737,7 +2737,7 @@
                 "from": "be.routes",
                 "to": "sv.portfolioexposure",
                 "payload": "explicit classifications, exact share-class identifiers, validated fund documents",
-                "annotation": "portfolioExposureService.js rejects duplicate targets and share-class mismatches before persistence."
+                "annotation": "portfolioExposureService.ts rejects duplicate targets and share-class mismatches before persistence."
               },
               {
                 "from": "sv.portfolioexposure",
@@ -2769,7 +2769,7 @@
                 "from": "be.jobs",
                 "to": "sv.snapshot",
                 "payload": "computeAndStoreSnapshots(currency)",
-                "annotation": "portfolioPerformanceSnapshotService.js runs the canonical aggregate builder before requesting the current byAccount summary."
+                "annotation": "portfolioPerformanceSnapshotService.ts runs the canonical aggregate builder before requesting the current byAccount summary."
               },
               {
                 "from": "sv.snapshot",
@@ -3808,7 +3808,7 @@
               {
                 "from": "build.release",
                 "to": "build.native",
-                "payload": "isolated VISION_FRONTEND_DIST · bun build.ts · node out/scripts/build-native-package.js --demo",
+                "payload": "isolated VISION_FRONTEND_DIST · bun build.ts · node scripts/build-native-package.ts --demo",
                 "annotation": "scripts/lib/native-mac-build.sh stages the frontend in a private temporary directory; install-demo.sh compiles the TypeScript shell in packaging/electron into its git-ignored out folder (ADR-196), then the compiled build-native-package.ts prepares the normal native payload from it and invokes build-demo-seed.ts before Electron Builder."
               },
               {
@@ -4049,7 +4049,7 @@
                 "from": "sv.portfolioimport",
                 "to": "db.postgres",
                 "payload": "INSERT INTO portfolio_import_batches; INSERT INTO portfolio_import_staging_rows (migration 0040)",
-                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/stage.ts retains literal CSV records or typed Saxo workbook provenance with joined sheet rows and source-byte hash. A zero yield-basis Kinesis distribution stages a :income dividend and a :units gift. Explicit included_symbols excludes unselected parsed assets and unrelated cash, records scope_excluded_rows, and retains parsing errors. validate.js uses apps/node-backend/src/services/importIdentity.ts for provenance hashes and versioned account/currency/route-aware occurrence fingerprints."
+                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/stage.ts retains literal CSV records or typed Saxo workbook provenance with joined sheet rows and source-byte hash. A zero yield-basis Kinesis distribution stages a :income dividend and a :units gift. Explicit included_symbols excludes unselected parsed assets and unrelated cash, records scope_excluded_rows, and retains parsing errors. validate.ts uses apps/node-backend/src/services/importIdentity.ts for provenance hashes and versioned account/currency/route-aware occurrence fingerprints."
               },
               {
                 "from": "sv.portfolioimport",
@@ -4194,13 +4194,13 @@
                 "from": "be.routes",
                 "to": "sv.research",
                 "payload": "researchAggregator.searchMacro('cpi')",
-                "annotation": "Fan-out: fires fredAdapter.macroSearch() + keyless Eurostat catalog (macroCatalog.js) in parallel. A provider that errors or is unkeyed is absent from the union. Cached 1 h (macro_search TTL)."
+                "annotation": "Fan-out: fires fredAdapter.macroSearch() + keyless Eurostat catalog (macroCatalog.ts) in parallel. A provider that errors or is unkeyed is absent from the union. Cached 1 h (macro_search TTL)."
               },
               {
                 "from": "sv.research",
                 "to": "ex.fred",
                 "payload": "GET https://api.stlouisfed.org/fred/series/search?search_text=cpi&api_key=...&file_type=json",
-                "annotation": "fredAdapter.js. Quota-governed at 120 req/min. Returns MacroSeriesItem[] with provider='fred'. Skipped when FRED_API_KEY is absent."
+                "annotation": "fredAdapter.ts. Quota-governed at 120 req/min. Returns MacroSeriesItem[] with provider='fred'. Skipped when FRED_API_KEY is absent."
               },
               {
                 "from": "be.routes",
@@ -4230,7 +4230,7 @@
                 "from": "sv.research",
                 "to": "ex.fred",
                 "payload": "GET .../fred/series/observations?series_id=CPIAUCSL&observation_start=...&api_key=...&file_type=json",
-                "annotation": "fredAdapter.js macroSeries(). FRED returns value as string; '.' = missing observation, skipped. Result cached 12 h (macro_series TTL). Never written to asset_price_history."
+                "annotation": "fredAdapter.ts macroSeries(). FRED returns value as string; '.' = missing observation, skipped. Result cached 12 h (macro_series TTL). Never written to asset_price_history."
               },
               {
                 "from": "be.routes",
@@ -4336,7 +4336,7 @@
                 "from": "be.routes",
                 "to": "sv.dbeditor",
                 "payload": "getTableSchema(table)",
-                "annotation": "dbEditor.js validates table name against pg_stat_user_tables, then queries information_schema.columns for column metadata and pg_index for primary key composition."
+                "annotation": "dbEditor.ts validates table name against pg_stat_user_tables, then queries information_schema.columns for column metadata and pg_index for primary key composition."
               },
               {
                 "from": "sv.dbeditor",
@@ -4360,7 +4360,7 @@
                 "from": "be.routes",
                 "to": "sv.dbeditor",
                 "payload": "getTableRows(table, { limit, offset, orderBy, dir, filters, where })",
-                "annotation": "dbEditor.js builds parameterized SELECT inside BEGIN; SET TRANSACTION READ ONLY; SET LOCAL statement_timeout='10s'. Rows include __xmin column (PostgreSQL row version)."
+                "annotation": "dbEditor.ts builds parameterized SELECT inside BEGIN; SET TRANSACTION READ ONLY; SET LOCAL statement_timeout='10s'. Rows include __xmin column (PostgreSQL row version)."
               },
               {
                 "from": "sv.dbeditor",
@@ -4384,7 +4384,7 @@
                 "from": "be.routes",
                 "to": "sv.dbeditor",
                 "payload": "mutateTable(table, changes, dryRun=false)",
-                "annotation": "dbEditor.js generates parameterized INSERT/UPDATE/DELETE statements. For updates/deletes with xmin supplied: locks row FOR UPDATE, compares xmin → 409 Conflict on mismatch. Constraint SQLSTATEs (23502/23503/23505/23514/22P02) mapped to friendly 400/409 messages."
+                "annotation": "dbEditor.ts generates parameterized INSERT/UPDATE/DELETE statements. For updates/deletes with xmin supplied: locks row FOR UPDATE, compares xmin → 409 Conflict on mismatch. Constraint SQLSTATEs (23502/23503/23505/23514/22P02) mapped to friendly 400/409 messages."
               },
               {
                 "from": "sv.dbeditor",
@@ -4574,19 +4574,19 @@
                 "from": "sv.cashplanning",
                 "to": "be.repos",
                 "payload": "active unexecuted plans and spendable balances",
-                "annotation": "plannedTransactionRepository.ts reads bill occurrences; crossWorkspaceDataService.js reads computed cash balances."
+                "annotation": "plannedTransactionRepository.ts reads bill occurrences; crossWorkspaceDataService.ts reads computed cash balances."
               },
               {
                 "from": "sv.cashplanning",
                 "to": "sv.currency",
                 "payload": "latest stored rates, no older than seven days",
-                "annotation": "commitmentAwareCashService.js uses the same checked rates for cash and bills, or rejects the estimate."
+                "annotation": "commitmentAwareCashService.ts uses the same checked rates for cash and bills, or rejects the estimate."
               },
               {
                 "from": "sv.cashplanning",
                 "to": "fe.apiclient",
                 "payload": "minimumProjectedBalance and candidateCashCap",
-                "annotation": "commitmentAwareCash.js subtracts the floor from the lowest projected end-of-day balance."
+                "annotation": "commitmentAwareCash.ts subtracts the floor from the lowest projected end-of-day balance."
               },
               {
                 "from": "fe.apiclient",

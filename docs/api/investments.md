@@ -4,9 +4,9 @@ type: endpoint
 method: GET, POST, PUT, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
-date: 2026-10-20
-last_modified: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-28
+last_modified: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     api,
@@ -479,7 +479,7 @@ concurrent close from invalidating eligibility, avoids reversed-order deadlocks,
 phantoms while the full-history invariant and compare-and-set update run in one transaction.
 
 > [!warning] `investment_ids` contract (2026-08-11 — breaking for malformed ids)
-> A malformed element is now a `400 VALIDATION_ERROR` (`"investment_ids contains invalid value: <value>"`). It used to be `parseInt` + `filter(Number.isInteger)`, which took the leading digits of anything: `?investment_ids=12abc` returned **investment 12**'s transactions, `5,12abc` returned 5 **and** 12, and `1e3` returned investment 1 — a `200` describing a holding the caller never named. The identical parse ran again inside `portfolioTxRepo.reads.js`; that layer now delegates to `validateId` too, but keeps dropping rather than throwing. Absent or empty is unchanged: this param is required, so it is still `400 investment_ids is required`.
+> A malformed element is now a `400 VALIDATION_ERROR` (`"investment_ids contains invalid value: <value>"`). It used to be `parseInt` + `filter(Number.isInteger)`, which took the leading digits of anything: `?investment_ids=12abc` returned **investment 12**'s transactions, `5,12abc` returned 5 **and** 12, and `1e3` returned investment 1 — a `200` describing a holding the caller never named. The identical parse ran again inside `portfolioTxRepo.reads.ts`; that layer now delegates to `validateId` too, but keeps dropping rather than throwing. Absent or empty is unchanged: this param is required, so it is still `400 investment_ids is required`.
 >
 > `openapi.yaml` documented this filter as `investment_id` (singular, optional) until 2026-08-11; the route has only ever read `investment_ids`. The spec now matches the implementation. `useInvestments.ts` already sent the plural form. Full accept set: [[docs/security/input-validation#Comma-separated ID Query Params (transactions list + export)|Input Validation]].
 

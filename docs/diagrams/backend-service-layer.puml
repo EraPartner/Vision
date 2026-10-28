@@ -58,14 +58,14 @@ package "Business Logic Services" {
     +generateOccurrences(startDate, pattern, endDate): Date[]
     +getNextOccurrence(date, pattern): Date
     +parseRecurrencePattern(patternStr): RecurrenceConfig
-    note bottom: formerly recurrenceService.js
+    note bottom: formerly recurrenceService (now lib/calculations/recurrence.ts)
   }
 
   class "calculations/loanSchedule" as LoanScheduleCalc {
     +generateLoanRepaymentSchedule(config): LoanSchedule
     +validateLoanConfig(config): ValidationResult
     +calculateMonthlyPayment(principal, rate, months): number
-    note bottom: formerly loanRepaymentService.js
+    note bottom: formerly loanRepaymentService
   }
 
   class "calculations/forecast/*" as ForecastCalc {

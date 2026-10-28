@@ -63,7 +63,7 @@ but not holdings per account.
 - [[docs/adr/index|All ADRs]]
 - [[docs/adr/093-net-worth-sum-of-accounts|ADR-093: Net worth = Σ accounts]] (this realizes its follow-on)
 - [[docs/adr/091-per-account-positioning|ADR-091: Per-account positioning]]
-- [[docs/adr/064-net-worth-snapshots|ADR-064]] (composition superseded)
+- [[docs/adr/064-net-worth-current-value-live-overlay|ADR-064]] (composition superseded)
 - [[docs/adr/061-snapshot-valuation-parity|ADR-061: Snapshot valuation parity]] (parity-test approach)
 
 > [!note] 2026-06-20 — UI scope narrowed by ADR-103

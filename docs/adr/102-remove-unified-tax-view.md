@@ -1,6 +1,7 @@
 ---
 title: ADR-102 Remove the Unified Tax View
 type: adr
+status: accepted
 date: 2026-06-19
 tags: [adr, tax, cross-workspace, marital-quotient, removal, supersession, adr-098]
 description: Retires the Unified Tax view shipped in ADR-098. The standalone cross-workspace tax surface (owner-allocated earned income + dividends + realized gains for the marital quotient) had no clear use case beyond what the two existing tax pages already cover, so it is removed end-to-end. Cash-aware rebalancing and the net-worth/FI projection cone from ADR-098 are unaffected.

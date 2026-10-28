@@ -2,9 +2,9 @@
 title: Cash Flow Forecast
 type: feature
 status: active
-date: 2026-10-20
-updated: 2026-10-20
-last_modified: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
+last_modified: 2026-10-28
 tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, ensemble-v2, empirical-bayes, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
 aliases: [cashflow-forecast, forward-projections, cash-flow-planning, income-expense-forecast, budget-projection, multi-method-forecast, ensemble-forecast, category-breakdown]
 description: Project income and expenses forward using 8 statistical methods including 7 base methods + Ensemble (v2) (Phase 10, F). Phase C adds frontend dashboard visualization with controls, MC confidence bands, and diagnostics panel. Phase E adds nightly cache materialization. Phase G adds per-category breakdown with hierarchical reconciliation. June 2026: ensemble weighting upgraded from plain inverse-MSE to sample-size-shrunk RMSE + uniform-blend floor (empirical Bayes).
@@ -104,7 +104,7 @@ The multi-method forecast endpoint returns daily predictions from 8 statistical 
 | **Ensemble (v2)** | Combination | Weighted average of 5 point-forecast methods. Weights use sample-size-shrunk inverse-MSE (empirical Bayes) blended toward a uniform 5% floor. Falls back to equal weights on first run. Method id: `ensemble_imse`. | Shrunk inverse-MSE + uniform floor (dynamic) | O(methods) |
 
 > [!info] v2 Weighting Rationale (June 2026)
-> The original Phase F ensemble weighted purely by inverse-MSE (1/RMSE²). A method whose low RMSE came from a tiny backtest window was over-trusted. v2 addresses this with two adjustments applied in `ensemble.js`:
+> The original Phase F ensemble weighted purely by inverse-MSE (1/RMSE²). A method whose low RMSE came from a tiny backtest window was over-trusted. v2 addresses this with two adjustments applied in `ensemble.ts`:
 >
 > 1. **Empirical-Bayes shrinkage**: `shrunkRmse = (n·rmse + K·meanRmse) / (n + K)` where `n = sampleDays` from the accuracy row and `K = 30` days. Methods with fewer sample days are pulled toward the cross-method mean RMSE.
 > 2. **Uniform-blend floor (5%)**: Final weight = `(1 - 0.05) × (inverseMSE_share) + 0.05 / m`. No single method can consume the entire weight budget; every eligible method contributes at least `0.05 / m`.
@@ -139,7 +139,7 @@ All cash flow forecast calculations now route through Decimal.js to eliminate IE
 
 **Implementation:**
 
-- `cashflowForecast.js`: All date bucketing via APP_TIMEZONE helpers; cumulative net flows accumulated via Decimal `addAll()`
+- `cashflowForecast.js` (removed; forecast math now lives under `apps/node-backend/src/services/calculations/forecast/`): All date bucketing via APP_TIMEZONE helpers; cumulative net flows accumulated via Decimal `addAll()`
 - Frontend `forecastMerge.ts`: Reuses `buildBandMaps()` and `buildSeries()` helpers to avoid redundant accumulation passes
 
 **Benefit:** Forecasts with many categories or long histories no longer accumulate ±0.01 rounding errors. Cumulative net cash flow matches database NUMERIC precision exactly.
@@ -413,7 +413,7 @@ than a fixed nightly time. It records success only after cache persistence compl
 ## Related Features
 
 - [[docs/features/plannedTransactions|Planned Transactions]] — Core planned transaction management
-- [[docs/features/aggregations|Aggregations]] — Server-computed stats and metrics
+- [[docs/api/aggregations|Aggregations]] — Server-computed stats and metrics
 - [[docs/api/aggregations|Aggregations API]] — Technical endpoint reference (includes Phase 10 endpoint schema)
 - [[docs/features/exchange-rates|Exchange Rates]] — FX conversion for multi-currency scenarios
 - [[docs/reference/data-model#cashflow_forecast_accuracy (migration 0012)|Data Model — cashflow_forecast_accuracy/_mc/_mc_rolling]] — schema reference for the three persistence tables
@@ -440,9 +440,9 @@ than a fixed nightly time. It records success only after cache persistence compl
 
 Modular forecast orchestrator with 7 pluggable methods:
 
-- **Methods:** `simpleAverage.js`, `weightedAverage.js`, `ewma.js`, `holtWinters.js`, `prophetLite.js`, `monteCarloParametric.js`, `monteCarloBlockBootstrap.js`
-- **Utilities:** `seasonality.js` (hierarchical bucketization), `prng.js` (seeded RNG), `backtest.js` (walk-forward validation), `accuracyStore.js` (in-memory accuracy tracking), `be.js` (Belgian holidays)
-- **Orchestrator:** `index.js` (`computeCashflowForecast()`) — Routes requests, invokes all methods, runs optional backtest, wraps with envelope
+- **Methods:** `simpleAverage.ts`, `weightedAverage.ts`, `ewma.ts`, `holtWinters.ts`, `prophetLite.ts`, `monteCarloParametric.ts`, `monteCarloBlockBootstrap.ts`
+- **Utilities:** `seasonality.ts` (hierarchical bucketization), `prng.ts` (seeded RNG), `backtest.ts` (walk-forward validation), `accuracyStore.ts` (in-memory accuracy tracking), `be.ts` (Belgian holidays)
+- **Orchestrator:** `index.ts` (`computeCashflowForecast()`) — Routes requests, invokes all methods, runs optional backtest, wraps with envelope
 
 **Data flow:**
 
@@ -644,7 +644,7 @@ Additionally, when `include_backtest=true` the diagnostics section includes the 
 
 ### Phase G: Category Breakdown with Reconciliation
 
-**New Module:** `categoryBreakdown.js` — Per-category forecast breakdown computation.
+**New Module:** `categoryBreakdown.ts` — Per-category forecast breakdown computation.
 
 **Public API:**
 
@@ -777,7 +777,7 @@ only, the rolling view shows a continuous date timeline centred on today.
 
 - The 8 method modules in `apps/node-backend/src/services/calculations/forecast/methods/` are date-agnostic — they accept any `forecastDates: string[]`. No method-file changes were needed.
 - `runForecastEngine(...)` is the shared orchestration helper extracted from `computeCashflowForecast`. Both the month and rolling entry points feed it different anchor + forecast date arrays.
-- Repository helper `getCashflowForecastDataRolling(historyMonths, daysBack, daysForward, ...)` lives in `apps/node-backend/src/repositories/infoRepo.forecast.js`. History SQL ends at `today - daysBack` to avoid overlap with `currentActual`.
+- Repository helper `getCashflowForecastDataRolling(historyMonths, daysBack, daysForward, ...)` lives in `apps/node-backend/src/repositories/infoRepositoryForecast.ts`. History SQL ends at `today - daysBack` to avoid overlap with `currentActual`.
 
 ### Cumulative anchor
 

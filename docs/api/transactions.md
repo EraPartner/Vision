@@ -4,9 +4,9 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions, including CSV and NDJSON export, bulk operations
-date: 2026-10-19
-updated: 2026-10-19
-last_modified: 2026-10-19
+date: 2026-10-28
+updated: 2026-10-28
+last_modified: 2026-10-28
 tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups, bulk-actions, amount-filter, date-search, tag-search]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
@@ -180,13 +180,13 @@ Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Runnin
 
 Implementation note:
 
-- Route-owned CSV/JSON request parsing (`buildExportFilters`) returns a validated domain filter model. `transactionExport.js` converts that model with the shared `buildTransactionWhere` and owns SQL construction and streaming. Both export endpoints therefore accept the same filter set as `GET /api/transactions` without putting database access in the route (Phase 13) ([[apps/node-backend/src/routes/transactions.ts]], [[apps/node-backend/src/services/transactionExport.ts]]).
+- Route-owned CSV/JSON request parsing (`buildExportFilters`) returns a validated domain filter model. `transactionExport.ts` converts that model with the shared `buildTransactionWhere` and owns SQL construction and streaming. Both export endpoints therefore accept the same filter set as `GET /api/transactions` without putting database access in the route (Phase 13) ([[apps/node-backend/src/routes/transactions.ts]], [[apps/node-backend/src/services/transactionExport.ts]]).
 - Export filters include newly supported params: `transaction_id`, `recipient_id`, `recipient_name`, `search`, `transaction_type` (Phase 13). Existing params (`start_date`, `end_date`, `bank_account`, `bank_accounts`, `category_id`, `category_ids`) continue to work as before.
 - CSV/JSON export request parsing supports both singular (`bank_account`, `category_id`) and plural (`bank_accounts`, `category_ids`) parameters. Plural parameters take precedence when both are provided (Phase 13) ([[apps/node-backend/src/routes/transactions.ts]]).
 - `openapi.yaml` declares `bank_accounts` and `category_ids` on both export operations since 2026-10-13 (a non-breaking spec catch-up: the routes always read them, and the web Export card sends them).
 - Since 2026-10-13 `openapi.yaml` also declares `transaction_id`, `recipient_id`, `category_id`, `search`, `transaction_type`, `amount_min`, `amount_max` and `amount_signed` on both export operations, and `is_active` on the `Transaction` schema (non-breaking spec catch-ups: the routes already accept and return them, and the web Transactions filter banner sends them).
-- Shared SQL and streaming helpers in `transactionExport.js` ensure existence probes and chunk queries use the same recipient/category joins, preventing `recipient_name` and `search` filters from drifting. The join clause `EXPORT_JOINS_SQL` lives in `transactionJoins.ts`, which bulk selection also imports ([[apps/node-backend/src/services/transactionExport.ts]], [[apps/node-backend/src/services/transactionJoins.ts]]).
-- CSV escaping, row assembly, filename creation, and database streaming are owned by `transactionExport.js`; the route validates the request and passes the response stream to that service ([[apps/node-backend/src/services/transactionExport.ts]]).
+- Shared SQL and streaming helpers in `transactionExport.ts` ensure existence probes and chunk queries use the same recipient/category joins, preventing `recipient_name` and `search` filters from drifting. The join clause `EXPORT_JOINS_SQL` lives in `transactionJoins.ts`, which bulk selection also imports ([[apps/node-backend/src/services/transactionExport.ts]], [[apps/node-backend/src/services/transactionJoins.ts]]).
+- CSV escaping, row assembly, filename creation, and database streaming are owned by `transactionExport.ts`; the route validates the request and passes the response stream to that service ([[apps/node-backend/src/services/transactionExport.ts]]).
 - CSV export neutralizes formula-like cell prefixes (`=`, `+`, `-`, `@`) before writing values to reduce spreadsheet formula-injection risk when opening exports in Excel/Sheets ([[apps/node-backend/src/services/transactionExport.ts]]).
 - Export route errors are sanitized to generic error details (no internal exception leakage) while preserving status semantics; if headers have already been sent, connection is closed cleanly ([[apps/node-backend/src/routes/transactions.ts]]).
 
@@ -242,7 +242,7 @@ Both export endpoints share `buildExportFilters`, so the strict id-param contrac
 
 Implementation note:
 
-- JSON export uses route-level filter parsing plus the shared SQL/streaming pipeline in `transactionExport.js`, including the 50-entry list cap and whitespace trimming on `bank_accounts` (Phase 13) ([[apps/node-backend/src/routes/transactions.ts]], [[apps/node-backend/src/services/transactionExport.ts]]).
+- JSON export uses route-level filter parsing plus the shared SQL/streaming pipeline in `transactionExport.ts`, including the 50-entry list cap and whitespace trimming on `bank_accounts` (Phase 13) ([[apps/node-backend/src/routes/transactions.ts]], [[apps/node-backend/src/services/transactionExport.ts]]).
 - Export route errors are sanitized to generic error details (no internal exception leakage) while preserving status semantics; if headers have already been sent, connection is closed cleanly ([[apps/node-backend/src/routes/transactions.ts]]).
 
 ### GET /api/transactions/:id

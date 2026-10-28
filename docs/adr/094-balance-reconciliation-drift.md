@@ -1,8 +1,9 @@
 ---
 title: ADR-094 Balance Reconciliation & Drift Detection
 type: adr
+status: accepted
 date: 2026-09-04
-updated: 2026-09-13
+updated: 2026-10-28
 tags: [adr, accounts, reconciliation, drift, statement-balance, adr-088, balance-write-protection, import-pipeline-only]
 description: Store an authoritative statement balance per account and diff it against the computed ledger balance to surface drift ("drifted €12.40 — missing a transaction"), now that accounts have identity. 2026-06-25 addendum: transactions.balance is now write-protected — only the import pipeline may stamp it.
 aliases: [reconciliation, drift detection, statement balance]
@@ -13,6 +14,8 @@ aliases: [reconciliation, drift detection, statement balance]
 ## Status
 
 Proposed
+
+> [!note] Status corrected on 2026-10-28: the frontmatter status is `accepted`; the drift badge and reconcile dialog are implemented (apps/node-backend/src/services/reconcileService.ts).
 
 ## Date
 

@@ -2,8 +2,8 @@
 title: Security Documentation Index
 type: security-index
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     security,
@@ -71,7 +71,7 @@ SORT title ASC
 
 ## Hardening — 2026-05-29
 
-- **Admin auth: token-or-open + CSRF guard** — [[docs/adr/063-admin-auth-csrf-guard|ADR-063]] replaces the RFC1918 IP-allowlist admin fallback (ADR-037) with two co-operating guards: `adminAuth.js` is now token-or-open (no IP check; timing-safe Bearer when `ADMIN_AUTH_TOKEN` is set, open otherwise), and new `csrfGuard.js` blocks cross-site state-changing browser requests via `Sec-Fetch-Site` (allow `same-origin`/`none`, reject `same-site`/`cross-site`) with an `Origin` allowlist fallback. Mounted before `adminAuthMiddleware` on `/api/admin`. See [[docs/security/data-protection#admin-auth-token-or-open--csrf-guard-2026-05-29|Data Protection — Admin Auth]].
+- **Admin auth: token-or-open + CSRF guard** — [[docs/adr/063-admin-auth-csrf-guard|ADR-063]] replaces the RFC1918 IP-allowlist admin fallback (ADR-037) with two co-operating guards: `adminAuth.js` became token-or-open (no IP check; timing-safe Bearer when `ADMIN_AUTH_TOKEN` was set, open otherwise), and new `csrfGuard.ts` blocks cross-site state-changing browser requests via `Sec-Fetch-Site` (allow `same-origin`/`none`, reject `same-site`/`cross-site`) with an `Origin` allowlist fallback. `adminAuth.ts` was removed 2026-10-21; admin routes now rely on the loopback-only bind, Host guard and CSRF guard ([[docs/adr/233-loopback-only-backend|ADR-233]]). See [[docs/security/data-protection#admin-auth-token-or-open--csrf-guard-2026-05-29|Data Protection — Admin Auth]].
 - **SSRF guard for outbound price-provider URLs** — New `lib/urlSafety.ts` module (`assertPublicHttpUrl`, `isBlockedIpv4`, `isBlockedIpv6`, `BlockedUrlError`) blocks private/loopback/link-local/CGNAT/unspecified addresses at both the write boundary (investment create/update → 400) and the fetch boundary (custom provider `_fetchJson` + redirect hops, 5 MB response cap). See [[docs/security/input-validation#outbound-request-guard-ssrf-2026-05-29|Input Validation — SSRF guard]] and [[docs/integrations/price-providers#custom-provider-url-constraints-2026-05-29|Price Providers — Custom URL constraints]].
 - **Electron release build `--ignore-scripts`** — `release.yml` packaging resolves the separate Electron lockfile with `bun install --frozen-lockfile --ignore-scripts`, blocking dependency lifecycle scripts during `.dmg` signing. Source: `.github/workflows/release.yml` (`package-mac` job).
 

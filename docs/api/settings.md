@@ -4,8 +4,8 @@ type: endpoint
 method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
 tags: [api, settings, preferences, phase-3, auto-link, planned-match, june-2026]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
@@ -214,7 +214,7 @@ Array of saved custom portfolio rebalancing plans. Stored and retrieved via `GET
 
 - **`id`** (string, required): Unique plan identifier.
 - **`name`** (string, 1–80 chars, required): Human-readable label.
-- **`targetWeights`** (object, required): Sleeve → non-negative target percentage. Values need not sum to 100%; the server's `normalizeWeights` function normalises them before deployment math runs. Valid sleeve keys match `crossWorkspaceDataService.js` `SLEEVE_ROLLUP`: `stocks`, `intl_stocks`, `bonds`, `gold`, `commodities`, `crypto`, `real_estate`, `savings`.
+- **`targetWeights`** (object, required): Sleeve → non-negative target percentage. Values need not sum to 100%; the server's `normalizeWeights` function normalises them before deployment math runs. Valid sleeve keys match `crossWorkspaceDataService.ts` `SLEEVE_ROLLUP`: `stocks`, `intl_stocks`, `bonds`, `gold`, `commodities`, `crypto`, `real_estate`, `savings`.
 - **`cashCap`** (number ≥ 0, optional): Maximum spendable cash to deploy in a single rebalance run. Omit or pass `undefined` to deploy all available liquid cash.
 
 **Validation errors** (`PUT /api/settings/rebalance_plans`):

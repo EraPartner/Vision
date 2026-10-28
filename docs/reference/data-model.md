@@ -2,9 +2,9 @@
 title: Data Model Reference
 type: reference
 status: active
-date: 2026-10-20
-updated: 2026-10-20
-last_modified: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
+last_modified: 2026-10-28
 tags:
   [
     reference,
@@ -115,7 +115,7 @@ whose result the baseline contains; the files exist only in Git history. Generat
 | `date`                      | DATE          | NOT NULL                                                             | Transaction date                                                                                                                                                                                                                                                                                                                                                           |
 | `amount`                    | NUMERIC(18,4) | NOT NULL                                                             | Amount (negative=expense, positive=income). Widened from `NUMERIC(15,2)` in migration 0025 (`fix_numeric_precision`).                                                                                                                                                                                                                                                      |
 | `currency`                  | VARCHAR(3)    | NOT NULL, DEFAULT 'EUR', CHECK (`currency ~ '^[A-Z]{3}$'`) NOT VALID | Currency code (migration 0046 — see note below)                                                                                                                                                                                                                                                                                                                            |
-| `balance`                   | NUMERIC(18,4) | NULLABLE                                                             | Running balance after transaction; widened by migration 0088. **Written exclusively by the import pipeline** (`importPipeline/commit.js`). `NULL` on manually-created rows. `PATCH /api/transactions/:id` and `POST /api/transactions` (create) no longer accept this field. `TransactionInspector` (formerly `TransactionInfoDialog`) renders it read-only. See [[docs/adr/094-balance-reconciliation-drift | ADR-094 addendum (2026-06-25)]]. |
+| `balance`                   | NUMERIC(18,4) | NULLABLE                                                             | Running balance after transaction; widened by migration 0088. **Written exclusively by the import pipeline** (`importPipeline/commit.ts`). `NULL` on manually-created rows. `PATCH /api/transactions/:id` and `POST /api/transactions` (create) no longer accept this field. `TransactionInspector` (formerly `TransactionInfoDialog`) renders it read-only. See [[docs/adr/094-balance-reconciliation-drift | ADR-094 addendum (2026-06-25)]]. |
 | `bank_sequence` | NUMERIC(18,0) | NULLABLE, nonnegative | Bank-provided within-day chronology; also retained on import staging rows. See [[docs/adr/206-bank-chronology]]. |
 | `memo`                      | TEXT          | NULLABLE                                                             | Original bank description                                                                                                                                                                                                                                                                                                                                                  |
 | `comment`                   | TEXT          | NULLABLE                                                             | User-added note                                                                                                                                                                                                                                                                                                                                                            |
@@ -130,7 +130,7 @@ whose result the baseline contains; the files exist only in Git history. Generat
 | `tx_hash`                   | TEXT          | UNIQUE (partial, WHERE NOT NULL), NULLABLE                           | Import-pipeline deduplication hash; NULL for manually-entered transactions; enables race-safe `ON CONFLICT (tx_hash) DO NOTHING` (migration 0036)                                                                                                                                                                                                                          |
 | `source_record_hash`        | CHAR(64)      | NULLABLE                                                             | Byte-sensitive SHA-256 provenance for the retained logical CSV record; deliberately non-unique (migration 0103, ADR-134)                                                                                                                                                                                                                                                   |
 | `dedup_fingerprint`         | CHAR(64)      | UNIQUE with version when non-null                                    | Provider-neutral occurrence fingerprint for new imports (migration 0103, ADR-134)                                                                                                                                                                                                                                                                                          |
-| `dedup_fingerprint_version` | SMALLINT      | NULLABLE, paired with fingerprint                                    | Fingerprint algorithm version; version 1 is defined by `importIdentity.js`                                                                                                                                                                                                                                                                                                 |
+| `dedup_fingerprint_version` | SMALLINT      | NULLABLE, paired with fingerprint                                    | Fingerprint algorithm version; version 1 is defined by `importIdentity.ts`                                                                                                                                                                                                                                                                                                 |
 | `is_transfer`               | BOOLEAN       | NOT NULL, DEFAULT false                                              | Internal transfer between own accounts — excluded from cash-flow aggregates by default (ADR-083, migration 0044)                                                                                                                                                                                                                                                           |
 | `transfer_peer_id`          | INTEGER       | FK → transactions ON DELETE SET NULL, NULLABLE                       | The matched transfer leg (self-referential pairing)                                                                                                                                                                                                                                                                                                                        |
 | `transfer_source`           | TEXT          | NULLABLE, CHECK `auto` \| `manual` \| `opening` \| `adjustment` \| `brokerage`      | Provenance for reconciled pairs and system balance rows; ADR-090's retired `trade` value was removed by migration 0102                                                                                                                                                                                                                                                     |
@@ -1079,7 +1079,7 @@ are in `.visionbak` coverage; the 0116 downgrade refuses when monitor data remai
 ### mv_recipient_monthly (Materialized View — DROPPED in 0038)
 
 > [!warning] Removed
-> Dropped in migration `0038_drop_mv_recipient_monthly`: the MV was refreshed on every mutation but never read (the recipient-insight endpoints run live scans with per-transaction-date FX that its monthly granularity cannot reproduce). `aggregationRefresh.js` no longer refreshes it. The columns below are retained only to describe the historical shape (downgrading past 0038 recreates them).
+> Dropped in migration `0038_drop_mv_recipient_monthly`: the MV was refreshed on every mutation but never read (the recipient-insight endpoints run live scans with per-transaction-date FX that its monthly granularity cannot reproduce). `aggregationRefresh.ts` no longer refreshes it. The columns below are retained only to describe the historical shape (downgrading past 0038 recreates them).
 
 **Purpose:** Pre-computed monthly aggregates per recipient per currency, with rollup to primary recipient.
 
@@ -1146,7 +1146,7 @@ ADR-119 records this as the explicit exception to the shared timestamp-trigger p
 
 ### mv_monthly_summary (Materialized View — live)
 
-**Purpose:** Monthly income/spending/net totals per currency and effective category, backing the fast path in `getMonthlyFinancialSummary()`. Not created by a migration — created (`CREATE MATERIALIZED VIEW IF NOT EXISTS`) and refreshed by `materializedViewService.js` from the post-`listen` startup warmup; migrations 0045/0084/0085 instead drop it (forcing a same-boot rebuild) whenever its SQL definition changes.
+**Purpose:** Monthly income/spending/net totals per currency and effective category, backing the fast path in `getMonthlyFinancialSummary()`. Not created by a migration — created (`CREATE MATERIALIZED VIEW IF NOT EXISTS`) and refreshed by `materializedViewService.ts` from the post-`listen` startup warmup; migrations 0045/0084/0085 instead drop it (forcing a same-boot rebuild) whenever its SQL definition changes.
 
 **Scope:** Last 12 months
 
@@ -1168,7 +1168,7 @@ ADR-119 records this as the explicit exception to the shared timestamp-trigger p
 
 **Indexes:** Unique `idx_mv_monthly_summary` on `(month_start, currency, category_id_key)` — required for `REFRESH ... CONCURRENTLY`. Runtime startup maintenance creates the canonical name before removing the legacy `mv_monthly_summary_idx` duplicate.
 
-**Maintenance:** Debounced refresh (5s / 10s max wait) via `materializedViewService.scheduleRefresh()`, orchestrated by `aggregationRefresh.js`. The 3-level effective-category definition dates from migration 0085 (drop-and-rebuild).
+**Maintenance:** Debounced refresh (5s / 10s max wait) via `materializedViewService.scheduleRefresh()`, orchestrated by `aggregationRefresh.ts`. The 3-level effective-category definition dates from migration 0085 (drop-and-rebuild).
 
 **Related:** [[docs/performance/materialized-views|Materialized Views]], [[apps/node-backend/src/services/materializedViewService.ts]]
 

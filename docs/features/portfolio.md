@@ -2,9 +2,9 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-10-20
-last_modified: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-28
+last_modified: 2026-10-28
+updated: 2026-10-28
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: "Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail."
@@ -413,10 +413,10 @@ All portfolio aggregation now uses Decimal.js to eliminate IEEE 754 floating-poi
 
 **Monetary calculation paths:**
 
-- `portfolioSummaryService.js`: Per-investment accumulators, FX multiplier aggregation, `aggregateTotals()` all use `multiply()` and Decimal accumulation
-- `portfolio/snapshotBuilder.js`: `cumulativeInvested`, per-class totals, `totalValue`, `cumulativeInflation` computed via Decimal; `convertAmount()` returns Decimal for safe FX composition
+- `portfolioSummaryService.ts`: Per-investment accumulators, FX multiplier aggregation, `aggregateTotals()` all use `multiply()` and Decimal accumulation
+- `portfolio/snapshotBuilder.ts`: `cumulativeInvested`, per-class totals, `totalValue`, `cumulativeInflation` computed via Decimal; `convertAmount()` returns Decimal for safe FX composition
 - Frontend hooks: `usePortfolioSummaries.ts`, `usePortfolioCalculations.ts` (fixed gross/net bug: `totalSellProceeds` now scales by `sellRatio` via Decimal division)
-- `portfolioMath.js`: `calculateAccruedInterest()`, `computeMetrics()` use `calendarDaysBetween` helper for precise day counts (not floating-point averages)
+- `portfolioMath.ts`: `calculateAccruedInterest()`, `computeMetrics()` use `calendarDaysBetween` helper for precise day counts (not floating-point averages)
 
 **Benefits:**
 
@@ -526,7 +526,7 @@ Current behavior:
 - **Snapshot atomicity (2026-04-29)**: `computeAndStoreSnapshots()` now wraps DELETE + batched INSERTs in a single PostgreSQL transaction. This guarantees concurrent readers (e.g., `/api/info/net-worth` requests during startup warmup) see either fully-old or fully-new snapshots via MVCC, never a torn/partial table. Fixes a race condition where concurrent reads could trigger cache of zero portfolio value. See [[docs/adr/043-portfolio-snapshot-atomicity|ADR-043]].
 - **Snapshot valuation parity (2026-05-18)**: `snapshotBuilder` non-unit asset formulas were rewritten to mirror `portfolioSummaryService` exactly, eliminating a 2,142.24 € divergence between Net Worth "Investments" and Portfolio Overview / Performance "Portfolio Value". Fixed-income (savings/bond): `value = runningInvested + accruedInterest` where accrual walks `interest`/`buy`/`gift`/`sell` transactions day-by-day. Real-estate: `value = runningInvested + cumulativeAppreciation` via explicit `appreciation` transactions. Unit-based assets: the latest-day snapshot uses `investments.current_price` directly, so Net Worth always reconciles with the live summary even after a price refresh. All three pages (Dashboard, Performance, Net Worth) now show the same value for the same day. Historical chart will redraw on next snapshot run as accrued interest and appreciation are applied retroactively. See [[docs/adr/061-snapshot-valuation-parity|ADR-061]].
 
-- **Historical FX in snapshots (2026-05-29)**: `snapshotBuilder.js` now loads a full historical `exchange_rates` index (per currency, sorted day arrays) alongside the existing `is_latest` rates. A binary-search `rateToEurOnOrBefore(currency, day)` lookup finds the most recent stored rate on or before each day. `convertAmount(amount, currency, fxRateToEur, asOfDay)` uses this to convert values at the rate that applied at the time:
+- **Historical FX in snapshots (2026-05-29)**: `snapshotBuilder.ts` now loads a full historical `exchange_rates` index (per currency, sorted day arrays) alongside the existing `is_latest` rates. A binary-search `rateToEurOnOrBefore(currency, day)` lookup finds the most recent stored rate on or before each day. `convertAmount(amount, currency, fxRateToEur, asOfDay)` uses this to convert values at the rate that applied at the time:
   - **Market value** (unit-based assets): converted at the rate on the snapshot day, not today's.
   - **Invested capital** (transaction amounts): converted at the rate on the transaction date, or at the stored `fx_rate_to_eur` when present.
   - **Latest day**: always uses the `is_latest` rate so the headline snapshot value reconciles with `/portfolio-summary` (and the Net Worth "Investments" total remains consistent with Portfolio Overview).
@@ -714,7 +714,7 @@ New realtime endpoint serves portfolio totals (currentValue, totalInvested, tota
 
 **Backend:**
 
-- New service `portfolioSummaryService.js` with `getPortfolioSummary(targetCurrency)` function
+- New service `portfolioSummaryService.ts` with `getPortfolioSummary(targetCurrency)` function
 - Computes totals server-side with FX conversion applied pre-serialization
 - Returns both aggregate `totals` object and per-asset-class `summaries` array
 - 60-second in-memory cache with invalidation on any investment/transaction write
@@ -767,9 +767,9 @@ Code links: [[apps/node-backend/src/services/belgianInflationService.ts]], [[app
 
 ### Performance Improvements (2026-05-08 Bug Hunt)
 
-**Batch INSERT for Inflation Data:** `belgianInflationService.js` now chunks inflation rate inserts into 1000-row batches using multi-row `INSERT ... VALUES` instead of per-row INSERTs, eliminating N+1 round-trips and reducing import time by ~10x for full Statbel refreshes (400+ rates).
+**Batch INSERT for Inflation Data:** `belgianInflationService.ts` now chunks inflation rate inserts into 1000-row batches using multi-row `INSERT ... VALUES` instead of per-row INSERTs, eliminating N+1 round-trips and reducing import time by ~10x for full Statbel refreshes (400+ rates).
 
-**UTC Date Handling in Quote Backfill:** `quoteBackfillService.js` now uses `getDayKeyUtc()` helper instead of local-time `new Date().getFullYear/Month/Date()` to compute day keys, avoiding off-by-one errors near UTC midnight. Ensures consistent key format regardless of server timezone.
+**UTC Date Handling in Quote Backfill:** `quoteBackfillService.ts` now uses `getDayKeyUtc()` helper instead of local-time `new Date().getFullYear/Month/Date()` to compute day keys, avoiding off-by-one errors near UTC midnight. Ensures consistent key format regardless of server timezone.
 
 ## Historical Asset Quote Persistence
 
@@ -1135,7 +1135,7 @@ Before ADR-074, `totalInvested` was restated at today's FX on every request. Aft
 - **`gainLoss`** includes the FX component. A USD holding that gained 0% in USD terms but whose currency strengthened 5% vs EUR will show a positive `gainLoss` driven entirely by `fxGain`.
 - The live portfolio totals and the snapshot series now agree on semantics (both use purchase-date rates for invested capital), closing the contradiction that existed before.
 
-Code links: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.ts]], [[apps/node-backend/src/routes/info/_performanceHelpers.js]], [[apps/node-backend/src/services/investmentService.ts]], [[packages/shared-utils/src/portfolio.ts]], [[docs/adr/074-fx-attribution-historical-rates|ADR-074]]
+Code links: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.ts]], [[apps/node-backend/src/services/info/performanceHelpers.ts]], [[apps/node-backend/src/services/investmentService.ts]], [[packages/shared-utils/src/portfolio.ts]], [[docs/adr/074-fx-attribution-historical-rates|ADR-074]]
 
 ### Unified FX-Aware P&L in InvestmentDetailDialog (2026-06-28)
 
@@ -1206,7 +1206,7 @@ The page offers three mutually exclusive source modes:
 
 ### Sleeve vocabulary
 
-Sleeve names match the `SLEEVE_ROLLUP` grouping in `crossWorkspaceDataService.js`:
+Sleeve names match the `SLEEVE_ROLLUP` grouping in `crossWorkspaceDataService.ts`:
 
 `stocks` · `intl_stocks` · `bonds` · `gold` · `commodities` · `crypto` · `real_estate` · `savings`
 

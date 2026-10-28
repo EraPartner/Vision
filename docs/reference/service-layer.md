@@ -2,8 +2,8 @@
 title: Service Layer Reference
 type: reference
 status: active
-date: 2026-10-19
-last_modified: 2026-10-19
+date: 2026-10-28
+last_modified: 2026-10-28
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
 description: Reference for backend service responsibilities and route/repository boundaries enforced by the local architecture lint rules.
 aliases: [services, service layer, business logic, backend services]
@@ -36,7 +36,7 @@ Repository Layer (SQL queries)
 - Services are pure functions or function modules — no classes
 - External I/O (DB, HTTP) is encapsulated within services
 - Pure computation services have zero dependencies
-- Side-effect services depend on `connection.js` (PostgreSQL)
+- Side-effect services depend on `connection.ts` (PostgreSQL)
 
 ### Service directory placement
 
@@ -52,8 +52,8 @@ Top-level modules such as `priceProviderService`, `providerHealthService`, `quot
 > Upstream failures have typed classes (2026-08-09): `UpstreamError` (502 `BAD_GATEWAY`) and
 > `UpstreamTimeoutError` (504 `GATEWAY_TIMEOUT`) in `middleware/errorHandler.ts`. As 5xx errors,
 > their messages are masked in production (they routinely embed provider URLs/upstream statuses);
-> the stable `code` still reaches the client. Price-provider throws (`prices/priceProviderRegistry.js`,
-> `priceProviderService.js`) use them; research adapters and import still `throw new Error(...)`
+> the stable `code` still reaches the client. Price-provider throws (`prices/priceProviderRegistry.ts`,
+> `priceProviderService.ts`) use them; research adapters and import still `throw new Error(...)`
 > in places — convert as you touch them.
 >
 > `AiChatServiceError` extends `AppError` and passes through `routes/ai.ts` to the middleware
@@ -104,11 +104,11 @@ directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Bank
 
 - `lib/textNormalization.ts`
 - `lib/dataContract.ts`
-- `logger.js`
+- `logger.ts`
 
 ---
 
-## 2. belgianInflationService.js
+## 2. belgianInflationService.ts
 
 **File:** [[apps/node-backend/src/services/belgianInflationService.ts]]  
 **Purpose:** Fetches, caches, and persists Belgian monthly inflation rates from Statbel (primary) and Eurostat HICP (fallback).
@@ -152,12 +152,12 @@ directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Bank
 
 ### Dependencies
 
-- `connection.js` (PostgreSQL)
-- `logger.js`
+- `connection.ts` (PostgreSQL)
+- `logger.ts`
 
 ---
 
-## 3. currency/currencyConversionService.js
+## 3. currency/currencyConversionService.ts
 
 **File:** [[apps/node-backend/src/services/currency/currencyConversionService.ts]]  
 **Purpose:** Converts amounts between currencies using ECB (primary), open.er-api.com (supplementary) and the stored database rates. Since 2026-10-19 there is no hard-coded tier: a currency without a stored rate is unavailable (ADR-216).
@@ -199,12 +199,12 @@ the Belgian tax dashboards use `services/currency/latestRateConversion.ts`
 
 ### Dependencies
 
-- `connection.js` (PostgreSQL)
-- `logger.js`
+- `connection.ts` (PostgreSQL)
+- `logger.ts`
 
 ---
 
-## 4. dataImportService.js
+## 4. dataImportService.ts
 
 **File:** [[apps/node-backend/src/services/dataImportService.ts]]  
 **Purpose:** Handles bulk CSV import for reference data (recipients and categories), not transactions.
@@ -224,12 +224,12 @@ the Belgian tax dashboards use `services/currency/latestRateConversion.ts`
 
 ### Dependencies
 
-- `recipientRepository.js`, `categoryRepository.js`, `recipientBankAccountRepository.js`
-- `connection.js`, `logger.js`
+- `recipientRepository.ts`, `categoryRepository.ts`, `recipientBankAccountRepository.ts`
+- `connection.ts`, `logger.ts`
 
 ---
 
-## 5. deduplication.js
+## 5. deduplication.ts
 
 **File:** [[apps/node-backend/src/services/deduplication.ts]]  
 **Purpose:** Prevents duplicate transactions during import using SHA-256 hashing and field-based matching.
@@ -253,7 +253,7 @@ the Belgian tax dashboards use `services/currency/latestRateConversion.ts`
 
 ### Dependencies
 
-- `connection.js` (PostgreSQL)
+- `connection.ts` (PostgreSQL)
 - Node.js `crypto` module
 
 ---
@@ -307,20 +307,20 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 
 | Module        | Export            | Purpose                               |
 | ------------- | ----------------- | ------------------------------------- |
-| `stage.js`    | `stageBatch()`    | CSV parsing and row staging           |
-| `validate.js` | `validateBatch()` | Field validation and dedup detection  |
-| `match.js`    | `matchBatch()`    | Recipient/category lookup or creation |
-| `commit.js`   | `commitBatch()`   | Transaction insertion and accounting  |
+| `stage.ts`    | `stageBatch()`    | CSV parsing and row staging           |
+| `validate.ts` | `validateBatch()` | Field validation and dedup detection  |
+| `match.ts`    | `matchBatch()`    | Recipient/category lookup or creation |
+| `commit.ts`   | `commitBatch()`   | Transaction insertion and accounting  |
 
-`importStageLifecycle.js` owns the staging transition, 500-row chunk loop, progress events, and
+`importStageLifecycle.ts` owns the staging transition, 500-row chunk loop, progress events, and
 created-batch ID normalization shared by the bank and portfolio import pipelines. Each pipeline
 retains its adapter selection and domain-specific staging INSERT.
 
 ### Dependencies
 
-- `importPipeline/adapters/index.js`, `deduplication.js`, `lib/textNormalization.ts`
-- `materializedViewService.js` (post-pipeline refresh)
-- `importBatchRepository.js`, `connection.js`, `logger.js`
+- `importPipeline/adapters/index.ts`, `deduplication.ts`, `lib/textNormalization.ts`
+- `materializedViewService.ts` (post-pipeline refresh)
+- `importBatchRepository.ts`, `connection.ts`, `logger.ts`
 
 ### Related Services (Removed)
 
@@ -337,7 +337,7 @@ retains its adapter selection and domain-specific staging INSERT.
 
 ---
 
-## 8. calculations/loanSchedule.js _(formerly loanRepaymentService.js)_
+## 8. calculations/loanSchedule.ts _(formerly loanRepaymentService.js)_
 
 **File:** [[apps/node-backend/src/services/calculations/loanSchedule.ts]]  
 **Purpose:** Generates loan repayment schedules for planned transactions.
@@ -368,7 +368,7 @@ retains its adapter selection and domain-specific staging INSERT.
 
 ---
 
-## 9. materializedViewService.js
+## 9. materializedViewService.ts
 
 **File:** [[apps/node-backend/src/services/materializedViewService.ts]]  
 **Purpose:** Creates and refreshes PostgreSQL materialized views for pre-computed dashboard aggregations.
@@ -398,11 +398,11 @@ retains its adapter selection and domain-specific staging INSERT.
 
 ### Dependencies
 
-- `connection.js`, `logger.js`
+- `connection.ts`, `logger.ts`
 
 ---
 
-## 10. portfolioPerformanceSnapshotService.js
+## 10. portfolioPerformanceSnapshotService.ts
 
 **File:** [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts]]  
 **Purpose:** Computes aggregate daily portfolio performance and a separate forward-only per-broker history, including an explicit unassigned series.
@@ -453,12 +453,12 @@ not supply the internal parity evidence.
 
 ### Dependencies
 
-- `currencyConversionService.js`
-- `connection.js`, `logger.js`
+- `currencyConversionService.ts`
+- `connection.ts`, `logger.ts`
 
 ---
 
-## 11. priceProviderService.js
+## 11. priceProviderService.ts
 
 **File:** [[apps/node-backend/src/services/priceProviderService.ts]]  
 **Purpose:** Fetches live and historical asset prices from multiple providers with caching and spike sanitization.
@@ -475,7 +475,7 @@ not supply the internal parity evidence.
 | `sanitizePersistedKinesisHistory` | `() => Promise<void>`                                           | Re-sanitizes stored Kinesis history |
 | `__resetPriceCache`               | `() => void`                                                    | Test-only: clears in-process cache  |
 
-> **Note:** `backfillHistoricalAssetQuotes()` moved to [[apps/node-backend/src/services/quoteBackfillService.ts|quoteBackfillService.js]] (2026-04-16)
+> **Note:** `backfillHistoricalAssetQuotes()` moved to [[apps/node-backend/src/services/quoteBackfillService.ts|quoteBackfillService.ts]] (2026-04-16)
 
 ### Providers
 
@@ -499,12 +499,12 @@ not supply the internal parity evidence.
 ### Dependencies
 
 - `yahoo-finance2` (npm package)
-- `kinesisConfig.js`
-- `connection.js`, `logger.js`
+- `kinesisConfig.ts`
+- `connection.ts`, `logger.ts`
 
 ---
 
-## 12. quoteBackfillService.js
+## 12. quoteBackfillService.ts
 
 **File:** [[apps/node-backend/src/services/quoteBackfillService.ts]]  
 **Purpose:** Orchestrates historical quote backfill and maintenance for investments with holding window awareness.
@@ -557,16 +557,16 @@ Uses **MAD-based statistical detection** (Median Absolute Deviation):
 
 ### Dependencies
 
-- `priceProviderService.js` — Delegates `fetchHistoricalPrices()` and `fetchLivePricesDetailed()`
-- `investmentRepository.js` — Reads investment + transaction history
-- `connection.js`, `logger.js`
+- `priceProviderService.ts` — Delegates `fetchHistoricalPrices()` and `fetchLivePricesDetailed()`
+- `investmentRepository.ts` — Reads investment + transaction history
+- `connection.ts`, `logger.ts`
 
 ---
 
 ## 13. rawTransactionImportService.js (Removed — 2026-05-29)
 
 > [!warning] Deleted
-> **Status:** File deleted. Superseded by `importPipeline` (Phase C). Functionality consolidated into `importPipeline/commit.js`.
+> **Status:** File deleted. Superseded by `importPipeline` (Phase C). Functionality consolidated into `importPipeline/commit.ts`.
 
 **Previous Purpose:** Imported CSV transactions while preserving raw data in bank-specific tables for audit trail.
 
@@ -609,7 +609,7 @@ See [[docs/features/import#import-pipeline-orchestrator|Import Feature — Pipel
 
 ---
 
-## 15. recurringDetectionService.js
+## 15. recurringDetectionService.ts
 
 **File:** [[apps/node-backend/src/services/recurringDetectionService.ts]]  
 **Purpose:** Analyzes transaction history to automatically detect recurring payment patterns.
@@ -637,7 +637,7 @@ See [[docs/features/import#import-pipeline-orchestrator|Import Feature — Pipel
 
 ### Dependencies
 
-- `connection.js`, `logger.js`
+- `connection.ts`, `logger.ts`
 
 ---
 
@@ -689,7 +689,7 @@ See [[docs/features/import#streaming-import-with-server-sent-events-sse|Import F
 
 ---
 
-## 18. aiChatService.js
+## 18. aiChatService.ts
 
 **File:** [[apps/node-backend/src/services/aiChatService.ts]]  
 **Purpose:** Orchestrates natural-language financial queries using a local Ollama LLM with tool-calling. Implements the agentic loop: user message → LLM → tool dispatch → result → assistant narrative.
@@ -712,7 +712,7 @@ See [[docs/features/import#streaming-import-with-server-sent-events-sse|Import F
 ### Key Algorithms
 
 - **Agentic Loop:** Tool-calling pattern — LLM receives tool registry as JSON Schema, selects by name + args, backend validates + executes, result fed back as `role: "tool"` message
-- **Tool Dispatch:** `aiChat/tools/index.js` dispatcher validates args against Zod schema, rejects unknown tool names with structured error
+- **Tool Dispatch:** `aiChat/tools/index.ts` dispatcher validates args against Zod schema, rejects unknown tool names with structured error
 - **Context Trimming:** Message history trimmed from oldest to newest; tool-result payloads pruned to summaries only
 - **Abort Handling:** `AbortSignal` passed through Ollama client; on abort, in-flight assistant message marked aborted
 
@@ -721,7 +721,7 @@ See [[docs/features/import#streaming-import-with-server-sent-events-sse|Import F
 - `ollamaClient` (HTTP wrapper for Ollama)
 - `aiChatRepository` (conversation + message CRUD)
 - `aiChat/tools/*` (expense, portfolio, planned, tax tools)
-- `logger.js`
+- `logger.ts`
 
 ### Configuration
 
@@ -735,7 +735,7 @@ See [[docs/features/import#streaming-import-with-server-sent-events-sse|Import F
 
 ### Error Handling
 
-Maps Ollama errors to `AiChatServiceError` with HTTP status (aiChatService.js: `ABORTED` → 499,
+Maps Ollama errors to `AiChatServiceError` with HTTP status (aiChatService.ts: `ABORTED` → 499,
 every other `OllamaError` incl. `TIMEOUT`/`NETWORK_ERROR` → 502; a 504 remap of `TIMEOUT` onto
 `UpstreamTimeoutError` semantics is a possible follow-up, not current behavior):
 
@@ -748,9 +748,9 @@ every other `OllamaError` incl. `TIMEOUT`/`NETWORK_ERROR` → 502; a 504 remap o
 
 ## 19. Manual analysis services
 
-**Files:** [[apps/node-backend/src/services/analysisCatalog.ts|analysisCatalog.js]],
-[[apps/node-backend/src/services/analysisExecutor.ts|analysisExecutor.js]], and
-[[apps/node-backend/src/services/savedAnalysisService.ts|savedAnalysisService.js]]
+**Files:** [[apps/node-backend/src/services/analysisCatalog.ts|analysisCatalog.ts]],
+[[apps/node-backend/src/services/analysisExecutor.ts|analysisExecutor.ts]], and
+[[apps/node-backend/src/services/savedAnalysisService.ts|savedAnalysisService.ts]]
 
 **Purpose:** Compile allowlisted visual plans, execute bounded read-only SQL, and preserve reusable
 analysis definitions and run state.
@@ -808,7 +808,7 @@ framework-free and do not depend on repositories or external APIs.
 
 ## Info Repository Refactor (Net Worth)
 
-**Note (2026-04-16):** The `infoRepository.js` underwent a major refactor for net worth computation:
+**Note (2026-04-16):** The `infoRepository.ts` underwent a major refactor for net worth computation:
 
 - **Removed:** Old `getNetWorth()` function (~580 lines, involved network calls to price providers for real-time portfolio valuation)
 - **Added:** New `getNetWorthFromSnapshots()` function (350 lines, reads pre-computed investment values from `portfolio_performance_snapshots`)
@@ -819,7 +819,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ---
 
-## aggregationRefresh.js (2026-04-29)
+## aggregationRefresh.ts (2026-04-29)
 
 **File:** [[apps/node-backend/src/services/aggregationRefresh.ts]]  
 **Purpose:** Manages debounced and deferred refresh scheduling for aggregation materialized views without blocking server shutdown.
@@ -843,11 +843,11 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ### Dependencies
 
-- `materializedViewService.js`, `connection.js`, `logger.js`
+- `materializedViewService.ts`, `connection.ts`, `logger.ts`
 
 ---
 
-## attachmentService.js
+## attachmentService.ts
 
 **File:** [[apps/node-backend/src/services/attachmentService.ts]]
 **Purpose:** Owns the on-disk lifecycle of receipt attachments — validation, hashed-path layout, mime detection, and cleanup on transaction delete.
@@ -858,11 +858,11 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 | `streamAttachment(attachmentId)`    | Readable stream + content-type for downloads |
 | `removeAttachment(attachmentId)`    | Deletes row + file (idempotent)              |
 
-**Dependencies:** `attachmentRepository.js`, `connection.js`, `node:fs/promises`, `crypto`. Lives behind `attachmentRateLimiter` (60 req/min, ADR-042).
+**Dependencies:** `attachmentRepository.ts`, `connection.ts`, `node:fs/promises`, `crypto`. Lives behind `attachmentRateLimiter` (60 req/min, ADR-042).
 
 ---
 
-## providerHealthService.js
+## providerHealthService.ts
 
 **File:** [[apps/node-backend/src/services/providerHealthService.ts]]
 **Purpose:** Records success/error metrics for every external data source call and exposes on-demand probe endpoints for the admin observability hub (ADR-034).
@@ -873,11 +873,11 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 | `probe(providerKey)`                                                      | `{ ok, latencyMs, statusCode }`          |
 | `getSummary()`                                                            | rolling-window stats grouped by provider |
 
-**Dependencies:** `providerHealthRepository.js`, `connection.js`, the price/inflation provider modules it instruments.
+**Dependencies:** `providerHealthRepository.ts`, `connection.ts`, the price/inflation provider modules it instruments.
 
 ---
 
-## recipientMergeService.js
+## recipientMergeService.ts
 
 **File:** [[apps/node-backend/src/services/recipientMergeService.ts]]
 **Purpose:** Transactional merge of duplicate recipients into a primary; rewrites transaction FKs, transfers bank-account ownership, and warms aggregations.
@@ -887,11 +887,11 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 | `mergeRecipients(primaryId, duplicateIds[])` | `{ mergedInto, affectedRows }` |
 | `unmergeRecipient(id)`                       | boolean                        |
 
-**Dependencies:** `recipientRepository.js`, `recipientBankAccountRepository.js`, `transactionRepository.js`, `aggregationRefresh.js`.
+**Dependencies:** `recipientRepository.ts`, `recipientBankAccountRepository.ts`, `transactionRepository.ts`, `aggregationRefresh.ts`.
 
 ---
 
-## recipientClusterService.js
+## recipientClusterService.ts
 
 **File:** [[apps/node-backend/src/services/recipientClusterService.ts]]
 **Purpose:** Identifies merge-candidate clusters from the recipient list using normalized-name similarity + alias overlap; powers `GET /api/recipients/clusters` and the Recipients page suggestions UI.
@@ -900,11 +900,11 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 | -------------------- | ------------------------------------------- |
 | `findClusters(opts)` | `Array<{ primary, members[], confidence }>` |
 
-**Dependencies:** `recipientRepository.js`, `lib/textNormalization.ts`.
+**Dependencies:** `recipientRepository.ts`, `lib/textNormalization.ts`.
 
 ---
 
-## recipientPatternService.js
+## recipientPatternService.ts
 
 **File:** [[apps/node-backend/src/services/recipientPatternService.ts]]
 **Purpose:** Creates, previews, caches, and applies literal-prefix, glob, and regex recipient match patterns for the import pipeline.
@@ -918,11 +918,11 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 | `createPattern` / `updatePattern` / `deletePattern` | Pattern lifecycle                    |
 | `listPatternsForRecipient(recipientId)`             | Recipient pattern list               |
 
-**Dependencies:** `connection.js`, `logger.js`, typed error classes.
+**Dependencies:** `connection.ts`, `logger.ts`, typed error classes.
 
 ---
 
-## transactionExport.js
+## transactionExport.ts
 
 **File:** [[apps/node-backend/src/services/transactionExport.ts]]
 **Purpose:** Builds export SQL from route-validated filter models and streams transaction exports (CSV + NDJSON), including ownership of the repeatable-read, read-only snapshot used by `POST /api/transactions/bulk-export`. It resolves the fixed selection, counts it, paginates the source query, applies `escapeCsvValue` / formula-injection protection, and commits or rolls back before releasing the database client.
@@ -934,11 +934,11 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 | `buildIdListWhere(ids)`                       | `{ where }`: fixed-id export predicate (`sql` fragment)     |
 | `streamBulkTransactionExport(res, selection)` | resolves and streams a bulk export in one database snapshot |
 
-**Dependencies:** `database/connection.ts`, `bulkSelection.js`, `lib/filterBuilder.ts`, `lib/csv.ts`, `lib/money.ts`, `calculations/portfolioMath.js`, logger and typed errors.
+**Dependencies:** `database/connection.ts`, `bulkSelection.ts`, `lib/filterBuilder.ts`, `lib/csv.ts`, `lib/money.ts`, `calculations/portfolioMath.ts`, logger and typed errors.
 
 ---
 
-## routeManifest.js
+## routeManifest.ts
 
 **File:** [[apps/node-backend/src/services/routeManifest.ts]]
 **Purpose:** Scans the live Express router stack and emits a static manifest of every registered route (method + path + description). Drives the admin `/admin/endpoints` page and the dev observability inspector's "top endpoints" view.
@@ -951,7 +951,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ---
 
-## filterBuilder.js
+## filterBuilder.ts
 
 **File:** [[apps/node-backend/src/lib/filterBuilder.ts]]
 **Purpose:** Builds parameterised `WHERE` clauses for transaction queries from a normalised filter object. Single source of truth shared by list, export, bulk and aggregation paths to keep filter semantics consistent.
@@ -965,7 +965,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ---
 
-## bulkSelection.js
+## bulkSelection.ts
 
 **File:** [[apps/node-backend/src/services/bulkSelection.ts]]
 **Purpose:** Resolves either an explicit `ids[]` (≤500) or a `filter` object (capped at 5000 matches) into a concrete transaction id set for the bulk endpoints (`bulk-update`, `bulk-delete`, `bulk-export`, `bulk-tag`).
@@ -974,7 +974,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 | ------------------------------------------- | ----------------------------- |
 | `resolveSelection({ ids?, filter? }, opts)` | `{ ids[], count, truncated }` |
 
-**Dependencies:** `transactionRepository.js`, `filterBuilder.js`. See [[docs/features/bulk-actions|Bulk Actions Feature]].
+**Dependencies:** `transactionRepository.ts`, `filterBuilder.ts`. See [[docs/features/bulk-actions|Bulk Actions Feature]].
 
 ---
 
@@ -984,7 +984,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 **ADR:** [[docs/adr/067-enforce-route-service-boundary|ADR-067]]
 
-All 15 Express route files now import **only** from `services/<domain>Service.js` — never directly from repository modules. The ESLint rule `vision-local/no-repo-direct-from-route` is now an **ERROR** (previously `warn`).
+All 15 Express route files now import **only** from `services/<domain>Service.ts` — never directly from repository modules. The ESLint rule `vision-local/no-repo-direct-from-route` is now an **ERROR** (previously `warn`).
 
 ### New Thin Seam Service Modules
 
@@ -992,27 +992,27 @@ All 15 Express route files now import **only** from `services/<domain>Service.js
 
 | Service Module                             | Route it covers                                  | Scope                                                                                                           |
 | ------------------------------------------ | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `categoryService.js`                       | `categories.js`                                  | CRUD + merge delegation                                                                                         |
-| `transactionService.js`                    | `transactions.js`                                | Create/update/delete orchestration, PATCH name resolution, transfer marking, and reconciliation scheduling      |
-| `recipientService.js`                      | `recipients.js`                                  | CRUD + cluster/merge delegation                                                                                 |
-| `recipientBankAccountService.js`           | `recipientBankAccounts.js`                       | Bank account CRUD                                                                                               |
-| `savedChartsService.js`                    | `savedCharts.js`                                 | Chart config persistence                                                                                        |
-| `infoService.js`                           | `info/` route group                              | Summary/net-worth/monthly delegation                                                                            |
-| `plannedTransactionService.js`             | `plannedTransactions.js`                         | Planned CRUD delegation plus atomic parent/tag/loan-schedule update orchestration                               |
-| `settingsService.js`                       | `settings.js`                                    | Settings read/write                                                                                             |
-| `splitService.js`                          | `splits.js`                                      | Split allocation/payment validation, owed projections, lifecycle transactions, and atomic audit orchestration   |
-| `watchlistService.js`                      | `watchlist.js`                                   | Watchlist CRUD                                                                                                  |
-| `attachmentRecordService.js`               | `attachments.js`                                 | Attachment metadata (complements `attachmentService.js`)                                                        |
-| `importBatchService.js`                    | `importRoutes.js`                                | Batch management plus transaction-preview grouping and totals                                                   |
-| `portfolioImportBatchService.js`           | `portfolioImportRoutes.js`                       | Portfolio batch coordination plus investment/raw/cash preview grouping and totals                               |
+| `categoryService.ts`                       | `categories.ts`                                  | CRUD + merge delegation                                                                                         |
+| `transactionService.ts`                    | `transactions.ts`                                | Create/update/delete orchestration, PATCH name resolution, transfer marking, and reconciliation scheduling      |
+| `recipientService.ts`                      | `recipients.ts`                                  | CRUD + cluster/merge delegation                                                                                 |
+| `recipientBankAccountService.ts`           | `recipientBankAccounts.ts`                       | Bank account CRUD                                                                                               |
+| `savedChartsService.ts`                    | `savedCharts.ts`                                 | Chart config persistence                                                                                        |
+| `infoService.ts`                           | `info/` route group                              | Summary/net-worth/monthly delegation                                                                            |
+| `plannedTransactionService.ts`             | `plannedTransactions.ts`                         | Planned CRUD delegation plus atomic parent/tag/loan-schedule update orchestration                               |
+| `settingsService.ts`                       | `settings.ts`                                    | Settings read/write                                                                                             |
+| `splitService.ts`                          | `splits.ts`                                      | Split allocation/payment validation, owed projections, lifecycle transactions, and atomic audit orchestration   |
+| `watchlistService.ts`                      | `watchlist.ts`                                   | Watchlist CRUD                                                                                                  |
+| `attachmentRecordService.ts`               | `attachments.ts`                                 | Attachment metadata (complements `attachmentService.ts`)                                                        |
+| `importBatchService.ts`                    | `importRoutes.ts`                                | Batch management plus transaction-preview grouping and totals                                                   |
+| `portfolioImportBatchService.ts`           | `portfolioImportRoutes.ts`                       | Portfolio batch coordination plus investment/raw/cash preview grouping and totals                               |
 | `routes/importBatchRoutes.ts`              | Both import routers                              | Shared batch list/detail/status-guard/rollback route registration; each router supplies its own rollback policy |
-| `customParserConfigService.js`             | `importRoutes.js`                                | Named parser CRUD                                                                                               |
-| `investmentService.js`                     | `investments.js` route                           | Investment endpoint validation, response shaping, caching, and repository coordination                          |
-| `portfolio/portfolioTransactionService.js` | Investment service and portfolio import pipeline | Portfolio transaction create/update orchestration; delegates normalized persistence to the repository           |
+| `customParserConfigService.ts`             | `importRoutes.ts`                                | Named parser CRUD                                                                                               |
+| `investmentService.ts`                     | `investments.ts` route                           | Investment endpoint validation, response shaping, caching, and repository coordination                          |
+| `portfolio/portfolioTransactionService.ts` | Investment service and portfolio import pipeline | Portfolio transaction create/update orchestration; delegates normalized persistence to the repository           |
 
 **Pre-existing substantial services** (not newly added) remain unchanged: `portfolioPerformanceSnapshotService`, `recipientMergeService`, `aiChatService`, `importPipeline`, `bankAdapters`, `priceProviderService`, `quoteBackfillService`, `currencyConversionService`, `aggregationRefresh`, `attachmentService`, `transactionExport`, `bulkSelection`, etc.
 
-Portfolio transaction domain rules are kept beside the orchestrator in [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.ts|portfolioTransactionRules.js]]. This module owns payload normalization, buy/sell unit math, recurrence validation, and account-aware unit-history policy. One ordered unit-event read supplies assignment state, sell availability, and before/after partition-deficit comparison. New or worsened oversells are rejected; unchanged or improving legacy-invalid histories remain editable for repair. Repository modules expose only parameterized reads and writes needed to apply those rules.
+Portfolio transaction domain rules are kept beside the orchestrator in [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.ts|portfolioTransactionRules.ts]]. This module owns payload normalization, buy/sell unit math, recurrence validation, and account-aware unit-history policy. One ordered unit-event read supplies assignment state, sell availability, and before/after partition-deficit comparison. New or worsened oversells are rejected; unchanged or improving legacy-invalid histories remain editable for repair. Repository modules expose only parameterized reads and writes needed to apply those rules.
 
 `plannedTransactionService` owns input normalization and the transaction boundaries for create-with-tags/schedule, update-with-tags, loan schedule replacement, and idempotent execute-and-advance. `splitService` owns split allocation and payment policy, maps raw owed rows to API projections, and writes each lifecycle audit record in the same transaction as its mutation. The corresponding repositories expose parameterized reads/writes and transaction-client primitives only.
 

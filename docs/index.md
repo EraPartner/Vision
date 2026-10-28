@@ -2,9 +2,9 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-10-21
-updated: 2026-10-21
-last_modified: 2026-10-21
+date: 2026-10-28
+updated: 2026-10-28
+last_modified: 2026-10-28
 tags:
   [
     knowledge-base,
@@ -135,10 +135,10 @@ LIMIT 5
 | [[docs/reference/database-query-patterns    | Database Query Patterns]]           | PostgreSQL CTEs, window functions, materialized views            | Index analysis            |
 | [[docs/reference/data-model                 | Data Model]]                        | Entity relationships and schema design                           | Schema patterns           |
 | [[docs/performance/chart-downsampling       | Chart Downsampling]]                | LTTB implementation for time-series                              | O(n) time, O(k) space     |
-| [[docs/adr/005-materialized-views           | ADR-005: Materialized Views]]       | Pre-computed aggregation strategy                                | Query vs view trade-offs  |
-| [[docs/adr/004-postgresql-table-inheritance | ADR-004: Table Inheritance]]        | PostgreSQL inheritance for investments                           | Schema design patterns    |
-| [[docs/adr/006-three-layer-architecture     | ADR-006: Three-Layer Architecture]] | Routes → Services → Repositories                                 | Layer separation patterns |
-| [[docs/adr/007-streaming-imports            | ADR-007: Streaming Imports]]        | SSE progress + parallel batch processing                         | Pipeline architecture     |
+| [[docs/adr/005-materialized-views| ADR-005: Materialized Views]]       | Pre-computed aggregation strategy                                | Query vs view trade-offs  |
+| [[docs/adr/004-postgresql-table-inheritance| ADR-004: Table Inheritance]]        | PostgreSQL inheritance for investments                           | Schema design patterns    |
+| [[docs/adr/006-three-layer-architecture| ADR-006: Three-Layer Architecture]] | Routes → Services → Repositories                                 | Layer separation patterns |
+| [[docs/adr/007-streaming-imports| ADR-007: Streaming Imports]]        | SSE progress + parallel batch processing                         | Pipeline architecture     |
 
 ## Knowledge Areas
 
@@ -214,6 +214,29 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-10-28 — Mac optimisation phases E to I (ADR-255 to ADR-260)
+
+Performance work from the Mac optimisation plan, all accepted 2026-10-26 to 2026-10-28:
+
+- [[docs/adr/255-cheaper-full-effects|ADR-255]]: cheaper Full effects (aurora drift on a 33 ms grid, cards and sidebar drop blur and keep saturate).
+- [[docs/adr/256-electron-memory-and-idle-work|ADR-256]]: lighter Electron memory, boot bundle and idle renderer work (one shared display probe, paused renderer polls, V8 code cache).
+- [[docs/adr/257-ledger-scroll-and-squircle-clips|ADR-257]]: cheaper ledger scroll, squircle clips and page transitions.
+- [[docs/adr/258-chart-entrances-and-compositor-diagnostics|ADR-258]]: chart entrances on the compositor, plus new compositor diagnostics in `mac-baseline`.
+- [[docs/adr/259-reduced-tier-backdrop-filter-order|ADR-259]]: the reduced tier now really turns glass filters off (declaration order fix, guarded by a contract test).
+- [[docs/adr/260-ledger-card-material-on-a-pseudo|ADR-260]]: ledger card material drawn on a childless `::before`.
+
+### 2026-10-26 — Swift app removed (ADR-254)
+
+The revived Swift app is stopped and removed from main with its generators, lint, build workflow and docs. Electron with the React/TypeScript frontend and TypeScript backend stays the only desktop app; the Swift code stays in Git history. See [[docs/adr/254-remove-swift-app|ADR-254]]; the Apple Foundation Models helper ([[docs/adr/246-apple-foundation-models-helper|ADR-246]]) and exhaustive API enums ([[docs/adr/251-exhaustive-api-enums-in-typescript|ADR-251]]) stay.
+
+### 2026-10-22 — Apple Foundation Models helper (ADR-246)
+
+Apple's on-device Foundation Models become one more model next to Ollama through a small Swift helper (`vision-apple-ai`) that speaks an Ollama-shaped `/api/chat` over stdin/stdout; the helper is built at release time on the Mac, not in CI. See [[docs/adr/246-apple-foundation-models-helper|ADR-246]].
+
+### 2026-10-20 — Cloud AI routes removed (ADR-229)
+
+The OpenAI API investigation route, the experimental Codex/ChatGPT subscription route and AgentCloak are removed; investigations run only on the configured Ollama endpoint. See [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]].
 
 ### 2026-10-19 — Static Checks for Agents (ADR-225)
 
@@ -375,11 +398,11 @@ See [[apps/frontend/src/lib/api/client.ts|API Client]], [[apps/frontend/src/App.
 
 **Phase D (Low Severity):**
 
-- **planned.js** — Added clarifying comment on ISO string lexicographic date comparison safety
+- **planned.ts** — Added clarifying comment on ISO string lexicographic date comparison safety
 - **usePortfolio** — Introduced module-level `EMPTY_TRANSACTIONS` constant to prevent fresh array ref per render, improving memoization stability
 - **VirtualDataTable** — Wrapped `cancelEditing` in `useCallback` and added to useEffect dependencies for proper cleanup
 - **MarketLookupPage** — Changed analyst actions list key from array index to `date+firm` composite for stable reconciliation
-- **snapshotBuilder.js** — Added defensive sort on `priceHistorySortedDays` after building lookup map for deterministic ordering
+- **snapshotBuilder.ts** — Added defensive sort on `priceHistorySortedDays` after building lookup map for deterministic ordering
 
 **i18n Sync:** All 14 new translation keys (`txPage.deleteAttachment`, `upcoming.dismissAll`, etc.) synced across `i18n/source/`, `packaging/electron/i18n/`, and `apps/frontend/src/locales/` (en, nl)
 
@@ -624,8 +647,9 @@ See [[docs/components/export-dialog|ExportDialog]], [[docs/components/shared-com
 - CI image scanning via Trivy on every push/PR (CRITICAL/HIGH, exit-code 1, ignore-unfixed)
 
 > [!history]
-> The container image and its Trivy scan were later retired (ADR-133, then
-> [[docs/adr/221-proportional-ci|ADR-221]] for the remaining Trivy filesystem scan).
+> Docker is no longer part of Vision: active Docker and Compose support was retired by
+> [[docs/adr/133-native-only-runtime-and-delivery|ADR-133]] (2026-09-08), which superseded ADR-039; the Trivy
+> scan later became a filesystem scan ([[docs/adr/221-proportional-ci|ADR-221]]). This entry is kept as history.
 
 Surfaces accidental writes; prevents RCE-to-root escalation; attachments persist across rebuilds; CI blocks releases on critical CVEs.
 
@@ -702,7 +726,7 @@ See [[docs/features/pdf-report-export|PDF Report Feature]] (Phase 3-8), [[docs/a
 **Database Maintenance, Sankey Flow, Rolling Averages, PDF Reports:**
 
 - **Database Maintenance UI** (`GET /api/admin/db/stats`, `POST /api/admin/db/vacuum`): Real-time table statistics display and per-table/bulk VACUUM ANALYZE operations. Uses raw database client (not pool) because VACUUM cannot run in transactions. Frontend page at `/admin/db`.
-- **Sankey Flow Visualization** (`GET /api/aggregations/sankey`): Interactive income→category flow diagram via d3-sankey showing top 12 categories + Savings node. New "Flow" tab in Statistics page with year selector. Backend service in `aggregation/sankey.js` with top-12 category aggregation and savings calculation.
+- **Sankey Flow Visualization** (`GET /api/aggregations/sankey`): Interactive income→category flow diagram via d3-sankey showing top 12 categories + Savings node. New "Flow" tab in Statistics page with year selector. Backend service in `aggregation/sankey.ts` with top-12 category aggregation and savings calculation.
 - **Rolling Average Overlays**: New utility `computeRollingAverage()` (window-based moving average with null-handling) + BarChart overlay support. MonthlyChart toggle displays 3-month rolling average line overlay. Helps identify trends beneath seasonal noise.
 - **PDF Financial Report Export** (`POST /api/reports/financial`): Server-side report generation, originally rendered via Puppeteer (headless Chrome); since ADR-234 the Electron shell prints the returned document. `pdfkit` removed (ADR-038). Supports theme-aware styling, modular sections, period filtering, and filter-exclusion dual-chart comparison. "Export PDF" button in StatisticsPage header. API client method `downloadFinancialReport()` handles browser download flow.
 - **Endpoint Matrix Updated**: All 150 endpoints now documented including Phase 7 additions.
@@ -760,15 +784,15 @@ See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]]
 
 ### 2026-04-23 Phase 3.1 - Backend Repository Split + Batch FX Optimization (infoRepository)
 
-- **infoRepository.js Monolith → Composite Module**: Original 1445-line monolithic `infoRepository.js` split into 7 domain-specific sub-modules for improved maintainability and clarity:
-  - `infoRepositoryHelpers.js` (194 lines) — Shared utilities: mvCache, rounding, date/aggregation/category/currency helpers, spike sanitization, `batchConvertGroupsWithHistoricalRateFallback()`
-  - `infoRepositoryStatistics.js` (186 lines) — Statistics: `getStatistics`, `getCategoryBreakdown`, `getBanks`, `getTransactionCount`, `getTransactionSummary`
-  - `infoRepositoryMonthly.js` (484 lines) — Monthly aggregations: `getMonthlyFinancialSummary`, `getAverageVsCurrentSpending`, `getCashflowComparison` (now with parallel queries + batch FX)
-  - `infoRepositoryBanks.js` (145 lines) — Bank operations: `getBankBalances` (now with parallel queries + batch FX)
-  - `infoRepositoryNetWorth.js` (233 lines) — Net worth: `getNetWorthFromSnapshots` with snapshot-based calculation and spike sanitization
-  - `infoRepositoryPlanned.js` (94 lines) — Planned operations: `getPlannedExpensesNextMonth`
-  - `infoRepositoryRecipients.js` (124 lines) — Recipient analytics: `getRecipientInsights`
-- **Backward Compatibility**: Barrel re-export in main `infoRepository.js` (37 lines) maintains API transparency; all 9 consumer files import unchanged
+- **infoRepository.ts Monolith → Composite Module**: Original 1445-line monolithic `infoRepository.ts` split into 7 domain-specific sub-modules for improved maintainability and clarity:
+  - `infoRepositoryHelpers.ts` (194 lines) — Shared utilities: mvCache, rounding, date/aggregation/category/currency helpers, spike sanitization, `batchConvertGroupsWithHistoricalRateFallback()`
+  - `infoRepositoryStatistics.ts` (186 lines) — Statistics: `getStatistics`, `getCategoryBreakdown`, `getBanks`, `getTransactionCount`, `getTransactionSummary`
+  - `infoRepositoryMonthly.ts` (484 lines) — Monthly aggregations: `getMonthlyFinancialSummary`, `getAverageVsCurrentSpending`, `getCashflowComparison` (now with parallel queries + batch FX)
+  - `infoRepositoryBanks.ts` (145 lines) — Bank operations: `getBankBalances` (now with parallel queries + batch FX)
+  - `infoRepositoryNetWorth.ts` (233 lines) — Net worth: `getNetWorthFromSnapshots` with snapshot-based calculation and spike sanitization
+  - `infoRepositoryPlanned.ts` (94 lines) — Planned operations: `getPlannedExpensesNextMonth`
+  - `infoRepositoryRecipients.ts` (124 lines) — Recipient analytics: `getRecipientInsights`
+- **Backward Compatibility**: Barrel re-export in main `infoRepository.ts` (37 lines) maintains API transparency; all 9 consumer files import unchanged
 - **Shared Utility Consolidation**: Helpers eliminate duplicated patterns across aggregation endpoints (FX conversion fallback, date formatting, category merging, rounding, row mapping)
 - **Batch FX Conversion**: New `batchConvertGroupsWithHistoricalRateFallback()` helper combines N row groups into 1 `convertRowsToEur` query, eliminating redundant exchange_rates lookups:
   - `getCashflowComparison`: 4 sequential queries → `Promise.all` + 1 batch FX call (saved 3 exchange_rates queries)
@@ -798,7 +822,7 @@ See [[docs/adr/016-aggregation-shadow-mode|ADR-016]], [[docs/testing/testing#pro
 
 - **ADR-010**: Postgres-backed aggregations strategy (MVs + trigger-maintained tables) replaces Redis/in-process caches
 - **Migration 0026**: Adds `mv_recipient_monthly`, `agg_recipient_totals`, `agg_split_outstanding` with full trigger maintenance and concurrent refresh support
-- **Orchestrator**: `aggregationRefresh.js` service with `refreshAggregations()` (bulk) and `scheduleAggregationRefresh()` (debounced single-row) entry points
+- **Orchestrator**: `aggregationRefresh.ts` service with `refreshAggregations()` (bulk) and `scheduleAggregationRefresh()` (debounced single-row) entry points
 - **Data Model**: Phase 1 aggregation entities documented (3 new entities, 5 supporting functions, 4 triggers)
 - **Testing**: Module surface + migration artifact smoke tests, golden-fixture harness for Phase 2+ calc modules
 - **Fixture Scaffold**: 9-variant test matrix (empty, currencies, exclusions, boundaries, leap-day, DST) documented per aggregate
@@ -827,7 +851,7 @@ See [[docs/adr/009-timezone-policy|ADR-009]], [[docs/reference/code-patterns|Cod
 ### 2026-04-16 Performance Page Rewrite
 
 - **API Enhancement**: `/api/info/portfolio-performance` now returns pre-computed metrics, heatmap, and per-investment breakdown with new `period` query param (1m/3m/6m/1y/3y/all)
-- **Backend Services**: New `portfolioPerformanceSnapshotService.js` with `computeMetrics()`, `computeHeatmap()`, `getBreakdownSummary()` functions
+- **Backend Services**: New `portfolioPerformanceSnapshotService.ts` with `computeMetrics()`, `computeHeatmap()`, `getBreakdownSummary()` functions
 - **Downsampling**: LTTB algorithm ported to backend for server-side snapshot reduction to ~400 points
 - **Heatmap Fix**: Contribution-adjusted formula now correctly isolates investment returns from cash flow effects
 - **Frontend Simplification**: Eliminated 4 heavy useMemo chains; page now makes 1 API call instead of 4 sequential requests
@@ -860,7 +884,7 @@ See [[docs/adr/009-timezone-policy|ADR-009]], [[docs/reference/code-patterns|Cod
 
 ### 2026-03-31 Updates
 
-- **Portfolio Performance Snapshots**: New service (`portfolioPerformanceSnapshotService.js`) computes and stores daily portfolio performance snapshots in `portfolio_performance_snapshots` table. Includes per-class invested/value breakdowns (stocks+ETFs, crypto, metals), inflation-adjusted values, and spike sanitization. Migrations: `0023_portfolio_performance_snapshots`, `0024_per_class_invested_columns`.
+- **Portfolio Performance Snapshots**: New service (`portfolioPerformanceSnapshotService.ts`) computes and stores daily portfolio performance snapshots in `portfolio_performance_snapshots` table. Includes per-class invested/value breakdowns (stocks+ETFs, crypto, metals), inflation-adjusted values, and spike sanitization. Migrations: `0023_portfolio_performance_snapshots`, `0024_per_class_invested_columns`.
 - **Chart Data Downsampling**: LTTB (Largest-Triangle-Three-Buckets) algorithm added to `apps/frontend/src/utils/downsample.ts` for efficient rendering of large time-series charts. Reduces thousands of data points to a configurable threshold while preserving visual shape.
 - **Database Schema Updates**: Added `metals_investments` and `metals_transactions` inheritance tables, `portfolio_performance_snapshots`, and `belgian_inflation_rates` to database schema diagrams.
 - **System Architecture**: Updated to reflect new services (BelgianInflationService, PortfolioPerformanceSnapshotService) and external data sources (Statbel, Eurostat HICP).

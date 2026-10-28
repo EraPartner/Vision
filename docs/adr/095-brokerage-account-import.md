@@ -1,6 +1,7 @@
 ---
 title: ADR-095 Brokerage Account Import
 type: adr
+status: implemented
 date: 2026-06-18
 tags:
   [
@@ -140,7 +141,7 @@ no user-facing override to flip a row's route. That would be a separate, optiona
 - [[docs/adr/078-portfolio-csv-import|ADR-078: Portfolio CSV Import]] (pipeline reused)
 - [[docs/adr/090-cash-sleeve-trades-as-transfers|ADR-090: Trade cash legs]]
 - [[docs/adr/091-per-account-positioning|ADR-091: Per-account lots]]
-- [[docs/adr/066-saved-custom-csv-parsers|ADR-066: Custom parsers]]
+- [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066: Custom parsers]]
 
 > [!note] 2026-06-20 — Brokerage UI gated by ADR-103
 > The brokerage-routing **frontend surfaces** introduced by this ADR (brokerage toggle + sleeve-account picker on `PortfolioImportPage`; per-row cash/trade routing display + account picker on `PortfolioImportReviewPage`) are hidden by default behind `VITE_ENABLE_PER_ACCOUNT_HOLDINGS=false` (ADR-103). Standard portfolio CSV import (non-brokerage) is unaffected. The `brokerageFanout` service and `tradeCashLegService` backend code are retained and go dormant. See [[docs/adr/103-per-account-holdings-ui-flag|ADR-103]] for the flag details.

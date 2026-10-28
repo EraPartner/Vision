@@ -1,6 +1,7 @@
 ---
 title: ADR-090 Cash Sleeve & Trades = Transfers
 type: adr
+status: superseded
 date: 2026-06-18
 tags:
   [

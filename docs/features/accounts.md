@@ -2,8 +2,8 @@
 title: Accounts
 type: feature
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     feature,
@@ -35,7 +35,7 @@ related_code:
     "apps/node-backend/src/services/accountTotalsService.ts",
     "apps/node-backend/src/routes/transactions.ts",
     "apps/node-backend/src/repositories/transactionRepository.ts",
-    "apps/node-backend/src/lib/accountBalanceSql.js",
+    "apps/node-backend/src/repositories/accountBalanceSql.ts",
   ]
 ---
 
@@ -63,7 +63,7 @@ related_code:
 > Accounts surface first. The maintained live database completed the out-of-band drop on
 > 2026-09-08; the manual contract scripts were deleted with the Alembic tree.
 
-The budgeting accounts surface: every bank/cash/liability entity ([[docs/adr/088-accounts-entity|ADR-088]]), its computed balance, and the workflows for keeping those balances trustworthy. Rebuilt under [[docs/adr/107-accounts-budgeting-ux-remake|ADR-107]] around three questions — _what do I have_ (hub), _is it right_ (ledger + provenance), _how do I fix it_ (reconcile).
+The budgeting accounts surface: every bank/cash/liability entity ([[docs/adr/088-account-entity|ADR-088]]), its computed balance, and the workflows for keeping those balances trustworthy. Rebuilt under [[docs/adr/107-accounts-budgeting-ux-remake|ADR-107]] around three questions — _what do I have_ (hub), _is it right_ (ledger + provenance), _how do I fix it_ (reconcile).
 
 ## Ledger ordering and lifecycle
 
@@ -86,7 +86,7 @@ are authored but remain unexecuted pending disposable PostgreSQL availability.
 | Overview | Grouped accounts hub                                                      | `/accounts`     |
 | Ledger   | Per-account detail with running-balance ledger                            | `/accounts/:id` |
 
-All three render the **same balance definition** for cash-bearing accounts: the ADR-094 anchor+delta computed balance (most recent stamped statement balance + active entries after it; plain sum when unstamped). Numeric balances come from `accountBalanceSql.js`'s per-currency lateral helpers; `BALANCE_PROVENANCE_LATERAL` separately supplies the shared statement anchor and post-anchor row count (ADR-118). Holdings-only `crypto_exchange` and `wallet` accounts retain imported ledger history but do not enter Dashboard cash cards, bank balance totals, or balance history. Their portfolio holdings remain visible in Accounts and Net Worth (ADR-108).
+All three render the **same balance definition** for cash-bearing accounts: the ADR-094 anchor+delta computed balance (most recent stamped statement balance + active entries after it; plain sum when unstamped). Numeric balances come from `accountBalanceSql.ts`'s per-currency lateral helpers; `BALANCE_PROVENANCE_LATERAL` separately supplies the shared statement anchor and post-anchor row count (ADR-118). Holdings-only `crypto_exchange` and `wallet` accounts retain imported ledger history but do not enter Dashboard cash cards, bank balance totals, or balance history. Their portfolio holdings remain visible in Accounts and Net Worth (ADR-108).
 
 The definition is also date-bounded ([[docs/adr/123-effective-date-current-balances|ADR-123]]).
 A future-dated transaction stays visible in the ledger, but it does not affect the current balance,

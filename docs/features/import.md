@@ -2,9 +2,9 @@
 title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
-date: 2026-10-20
-updated: 2026-10-20
-last_modified: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
+last_modified: 2026-10-28
 tags:
   [
     feature,
@@ -364,7 +364,7 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
   terminal record delimiter.
 - Emit progress events: `{ phase: 'staging', current, total }`
 
-The transaction and portfolio pipelines share `importStageLifecycle.js` for the staging status
+The transaction and portfolio pipelines share `importStageLifecycle.ts` for the staging status
 transition, BIGSERIAL batch-id normalization, 500-row chunk loop, persisted total, and progress
 sequence. Their adapters and staging INSERT schemas remain domain-specific.
 
@@ -372,7 +372,7 @@ sequence. Their adapters and staging INSERT schemas remain domain-specific.
 
 - Check required fields (date, recipient, amount)
 - Parse amounts and dates to canonical form
-- Compute separate provenance and duplicate identities through `importIdentity.js`:
+- Compute separate provenance and duplicate identities through `importIdentity.ts`:
   `source_record_hash` hashes literal `raw_data`, while the versioned `dedup_fingerprint` prefers an
   immutable source transaction ID and otherwise uses normalized financial fields plus an
   occurrence ordinal. Identical legitimate rows therefore remain distinct.
@@ -419,7 +419,7 @@ sequence. Their adapters and staging INSERT schemas remain domain-specific.
 
 #### 6. **Auto-Link Planned Payments** (post-commit, June 2026)
 
-After committed rows are inserted, `commit.js` calls `autoLinkTransactions(insertedRows)` from [[apps/node-backend/src/services/plannedMatchService.ts]]. Transfer reconciliation and the asynchronous materialized-view refresh follow at the orchestrator boundary:
+After committed rows are inserted, `commit.ts` calls `autoLinkTransactions(insertedRows)` from [[apps/node-backend/src/services/plannedMatchService.ts]]. Transfer reconciliation and the asynchronous materialized-view refresh follow at the orchestrator boundary:
 
 - Runs only when `app_settings.autoClearPlannedOnMatch` is `true` (default).
 - Checks each newly committed transaction against active, unexecuted planned payments using the moderate tolerance rule (same recipient cluster, same sign, ±5 % amount, ±5 calendar days). See [[docs/features/plannedTransactions#auto-link--auto-clear-on-ingest-june-2026|Auto-Link on Ingest]] for the full matching spec.
@@ -480,7 +480,7 @@ Text processing utilities for import and recipient matching:
 | `formatAmountString()`    | Handles European decimal formats (comma as decimal separator)                                                                               |
 | `extractCurrencyCode()`   | Extracts 3-letter currency code from strings                                                                                                |
 
-### `deduplication.js`
+### `deduplication.ts`
 
 **File:** [[apps/node-backend/src/services/deduplication.ts]]
 
@@ -554,7 +554,7 @@ Duplicate detection checks:
 
 The review page (`ImportReviewPage`) discloses, before commit, which accounts the batch will write to:
 
-- The preview endpoint (`GET /api/import/batches/:id/preview`) now returns each staged row's `bank_account` label (the account label parsed from the CSV; already stored by `stage.js`, previously not exposed).
+- The preview endpoint (`GET /api/import/batches/:id/preview`) now returns each staged row's `bank_account` label (the account label parsed from the CSV; already stored by `stage.ts`, previously not exposed).
 - The page groups staged rows by that label and renders a per-account summary line — "{n} transactions → **{account}**" — near the match-source totals. Rows without a label are bucketed under a muted "unspecified account" line.
 - Each distinct label is cross-referenced against the existing accounts list (`GET /api/accounts?active=all`) under the D1 normalized identity (`lower(btrim(name))`). A label matching no existing account gets a "new account will be created" badge — committing such rows auto-creates the account via the DB trigger from migration `0056`.
 - **Read-only**: the disclosure has no account override/picker; it only states where the batch will land.
@@ -579,7 +579,7 @@ CREATE UNIQUE INDEX uq_transactions_dedup_fingerprint
   WHERE dedup_fingerprint IS NOT NULL;
 ```
 
-The canonical input is owned by `importIdentity.js`, not by individual adapters. Legacy
+The canonical input is owned by `importIdentity.ts`, not by individual adapters. Legacy
 `transactions.tx_hash` values are deliberately not rewritten or backfilled because older adapters
 mixed literal and reconstructed inputs. The maintained import runtime no longer depends on that
 column; the versioned fingerprint index is authoritative.
@@ -608,7 +608,7 @@ provided bank-specific duplicate detection:
 > [!warning] These tables are no longer written by the import pipeline
 > The current pipeline stages into `import_staging_rows` and dedups via the canonical
 > versioned fingerprint fields (above); it never inserts into the `*_raw_transactions` tables. Their
-> repository (`repositories/rawTransactionRepository.js`) has **zero importers** in `src/`, and only
+> repository (`repositories/rawTransactionRepository`, since removed) had **zero importers** in `src/`, and only
 > historical rows remain in the tables that still exist. `custom_raw_transactions` was dropped by
 > the historical Alembic migration `0008_drop_custom_raw_transactions.py` (now folded into
 > `db/migrations/0001_baseline.sql`).
@@ -999,7 +999,7 @@ See [[docs/api/attachments|Attachments API]] for endpoint contracts and examples
 ### Phase C (April 2026)
 
 - [[apps/node-backend/tests/routes/import.test.ts]]: Updated to mock `runImportPipeline` from the new orchestrator. Covers SSE stream behavior, recipients/categories route handling, multer middleware error paths, and backpressure scenarios.
-- Removed: `importService.test.js`, `streamingImportService.test.js`, `rawTransactionImportService.test.js` — superseded by pipeline integration tests.
+- Removed: `importService.test`, `streamingImportService.test`, `rawTransactionImportService.test` (deleted) — superseded by pipeline integration tests.
 
 ### Phase 5A (April 2026)
 

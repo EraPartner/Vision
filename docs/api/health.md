@@ -2,8 +2,8 @@
 title: Health API
 type: api
 status: active
-date: 2026-10-24
-updated: 2026-10-24
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     api,
@@ -60,8 +60,6 @@ GET /health
 
 - **Electron runtime watchdog** — polls every 30s while healthy and every 10s after a failed probe ([[docs/adr/247-launch-background-work-bounds|ADR-247]]), and skips probes while the Mac sleeps (the failure count resets on wake); 3 consecutive failures trigger the `backend:lost` IPC event, and the next healthy probe sends `backend:restored`. The renderer's `BackendConnectionBanner` shows a reconnecting warning between the two and refetches all queries on restore. See [[docs/architecture/electron#Runtime Watchdog|Electron runtime watchdog]] and [[docs/adr/219-minimal-electron-shell-hardening|ADR-219]].
 - **Electron restart/update/dev-rebuild flows** — uses `pollHealth` (shallow liveness) because these flows only need to know when Express is back up
-- **Load balancer / reverse proxy readiness checks**
-- **Kubernetes liveness probes**
 
 > [!note]
 > The Electron shell does **not** use `GET /health` for initial navigation. It uses `GET /health/detailed` via `pollReady()` to wait for materialized-view warmup. See below.
@@ -117,7 +115,7 @@ GET /health/detailed
 
 At startup, the backend initializes several caches:
 
-1. **Materialized Views** — Creates any missing view, ensures its unique index, then refreshes (`materializedViewService.js`). Deliberately _not_ pre-`listen`: a missing view means a full aggregation scan of `transactions`, and reads fall back to live queries while it is absent
+1. **Materialized Views** — Creates any missing view, ensures its unique index, then refreshes (`materializedViewService.ts`). Deliberately _not_ pre-`listen`: a missing view means a full aggregation scan of `transactions`, and reads fall back to live queries while it is absent
 2. **Exchange Rates** — Fetches from price provider (e.g., Fixer, ECB), populates in-memory cache
 3. **Inflation Rates** — Loads historical inflation data for tax calculations
 4. **Portfolio Snapshots** — Computes portfolio snapshots for all users
@@ -183,7 +181,7 @@ General database or initialization errors return HTTP 500.
 - Warmup flags are set module-level; checked synchronously at request time
 - No rate limiting on health endpoints
 - Suitable for high-frequency polling (Electron: 200 attempts in 60s = ~3/sec)
-- `GET /health` returns 200 as soon as Express's `listen()` callback fires — **before** any `warmup.js` tasks complete
+- `GET /health` returns 200 as soon as Express's `listen()` callback fires — **before** any `warmup.ts` tasks complete
 - `GET /health/detailed` reflects live warmup state; once all flags are `true`, `status` transitions from `"warming"` to `"ready"` permanently until the process restarts
 
 ## Related

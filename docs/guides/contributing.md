@@ -2,7 +2,7 @@
 title: Contributing Guide
 type: guide
 status: active
-date: 2026-10-22
+date: 2026-10-28
 tags:
   [
     guide,
@@ -125,6 +125,9 @@ Use conventional commits:
 - `chore`: Maintenance
 
 ### Pull Request Process
+
+> [!note] Two workflows
+> External contributors branch from `main` and open a pull request, as below. Repository agents follow `AGENTS.md` and `REVIEW.md`: when a task authorizes a local commit they commit directly to `main` unless asked for a branch.
 
 1. **Update branch**: Rebase onto latest main
 2. **Run tests**: Ensure all tests pass
@@ -256,8 +259,11 @@ bun run test
 # Watch all backend tests with disposable PostgreSQL 18 during development
 bun run test:watch
 
-# Run specific test file
-bun vitest run tests/services/transactionService.test.ts
+# Run specific test file (Vitest config lives in apps/node-backend)
+(cd apps/node-backend && bun vitest run tests/services/transactionService.test.ts)
+
+# Same, against a disposable PostgreSQL 18 database (arguments are forwarded to Vitest)
+bun run test:db tests/services/transactionService.test.ts
 ```
 
 #### Test Structure

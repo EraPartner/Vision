@@ -2,8 +2,8 @@
 title: AI Data Access Policy
 type: security
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     security,
@@ -45,7 +45,7 @@ Security policies governing the AI chat feature introduced by [[docs/adr/024-loc
    experiment and AgentCloak were removed in
    [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]].
 2. **No raw SQL from LLM output.** The LLM cannot emit SQL. It selects from a fixed tool registry; every tool is backed by existing parameterized repository queries.
-3. **Parameterized queries only.** Tools call repository and service methods only. Their SQL runs through `query(text, params)` / `queryPrepared()` in [apps/node-backend/src/database/connection.ts](apps/node-backend/src/database/connection.ts), including Kysely-built queries, whose driver routes through `query()` ([[docs/adr/226-kysely-query-builder|ADR-226]]). No string concatenation.
+3. **Parameterized queries only.** Tools call repository and service methods only. Their SQL runs through `query(text, params)` / `queryPrepared()` in [[apps/node-backend/src/database/connection.ts]], including Kysely-built queries, whose driver routes through `query()` ([[docs/adr/226-kysely-query-builder|ADR-226]]). No string concatenation.
 4. **Audit trail.** Every `tool_call` and `tool_result` persists in `ai_messages` (role `tool`, with `tool_name`, `tool_args`, `tool_result` JSONB columns). Forensic review is possible per-conversation.
 5. **Local mode stays local.** Data flows from repository → tool → local persistence → Ollama →
    browser. Only the separately enabled public research modes below reach another service.

@@ -4,9 +4,9 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/import
 description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
-date: 2026-10-21
-updated: 2026-10-21
-last_modified: 2026-10-21
+date: 2026-10-28
+updated: 2026-10-28
+last_modified: 2026-10-28
 tags:
   [
     api,
@@ -611,7 +611,7 @@ belong to its one upload request and are not counted separately. See
 ## Test Coverage
 
 - **Phase C (April 2026)**: [[apps/node-backend/tests/routes/import.test.ts]] covers orchestrator integration, SSE backpressure scenarios, recipients/categories bulk import, and multer error handling.
-- **Removed (Phase C)**: Old service unit tests (`importService.test.js`, `streamingImportService.test.js`, `rawTransactionImportService.test.js`) superseded by pipeline integration tests.
+- **Removed (Phase C)**: Old service unit tests (`importService.test`, `streamingImportService.test`, `rawTransactionImportService.test`; deleted) superseded by pipeline integration tests.
 
 ## Related
 

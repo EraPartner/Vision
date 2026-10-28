@@ -2,8 +2,8 @@
 title: Analysis Workspace
 type: feature
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     feature,
@@ -256,7 +256,7 @@ Native startup provisions the login and its password through the private cluster
 default, timeouts, and `vision_analysis, pg_catalog` search path. The migration owner remains
 `NOCREATEROLE`; it does not administer executor credentials.
 
-After migrations succeed, backend startup calls `analysisRoleBootstrap.js` through
+After migrations succeed, backend startup calls `analysisRoleBootstrap.ts` through
 `DATABASE_URL_MIGRATIONS` when available. A restricted owner checks the existing login's attributes
 before resetting relation grants: it revokes only grants the executor actually holds in `public`
 and `vision_analysis`, so runtime materialized views owned by the application role do not fail the

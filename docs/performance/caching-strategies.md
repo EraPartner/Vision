@@ -2,8 +2,8 @@
 title: Caching Strategies
 type: performance
 status: active
-date: 2026-10-20
-last_modified: 2026-10-20
+date: 2026-10-28
+last_modified: 2026-10-28
 tags: [performance, caching, optimization, startup, dependency-ordering]
 description: In-memory caching implementation for exchange rates and price feeds
 aliases: [caching, cache layers, in-memory cache, ttl, cache invalidation]
@@ -49,7 +49,7 @@ Vision implements multi-layer caching to minimize external API calls and improve
 
 ### 1. Exchange Rate Cache
 
-**Service:** `currencyConversionService.js`  
+**Service:** `currencyConversionService.ts`  
 **TTL:** 24 hours  
 **Storage:** In-memory
 
@@ -74,7 +74,7 @@ Vision implements multi-layer caching to minimize external API calls and improve
 
 ### 2. Price Provider Cache
 
-**Service:** `priceProviderService.js`  
+**Service:** `priceProviderService.ts`  
 **TTL:** 5 minutes  
 **Storage:** In-memory (Map) + PostgreSQL historical cache (`asset_price_history`)
 
@@ -101,7 +101,7 @@ Vision implements multi-layer caching to minimize external API calls and improve
 
 ### 3. Materialized View Cache
 
-**Repository:** `infoRepository.js`  
+**Repository:** `infoRepository.ts`  
 **Storage:** In-memory (Map)
 
 Caches materialized view availability checks to avoid repeated database queries.
@@ -151,7 +151,7 @@ Code link: [[apps/node-backend/src/routes/investments.ts]]
 
 ### 6. Portfolio Performance Snapshots
 
-**Service:** `portfolioPerformanceSnapshotService.js`  
+**Service:** `portfolioPerformanceSnapshotService.ts`  
 **Storage:** PostgreSQL (`portfolio_performance_snapshots` table)
 
 **Features:**
@@ -207,7 +207,7 @@ res.setHeader('Cache-Control', 'no-cache');
 
 ```javascript
 // Clear exchange rate cache
-import { clearMemoryCache } from './services/currencyConversionService.js';
+import { clearMemoryCache } from './services/currency/currencyConversionService.ts';
 clearMemoryCache();
 
 // Clear materialized view cache

@@ -2,8 +2,8 @@
 title: Materialized Views & Aggregation Strategy
 type: performance
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     performance,
@@ -77,7 +77,7 @@ GROUP BY month_start, month, year, t.currency, c.id
 
 **Fast Path (Recent Months Only):**
 
-`getMonthlyFinancialSummary()` in `infoRepositoryMonthly.js` uses a fast-path optimization to read from `mv_monthly_summary` when all of the following conditions are met:
+`getMonthlyFinancialSummary()` in `infoRepositoryMonthly.ts` uses a fast-path optimization to read from `mv_monthly_summary` when all of the following conditions are met:
 
 - `allTime=false` (default; requesting recent months only, not full history)
 - No category exclusions (`excluded_category_ids` is empty)
@@ -113,7 +113,7 @@ The seven-month daily projection had no application readers, but was still creat
 > [!warning] Removed
 > `mv_bank_balances` was dropped by migration `0082_drop_mv_bank_balances.py`. **Do not reference this view in new code.**
 
-The view held all-time totals per account and currency, but application code had no readers while every transaction mutation paid to refresh it. Its simple `SUM(amount)` also omitted opening-balance anchors and could not represent the live account-balance contract. Current account balances are computed from the ledger and anchors through `accountBalanceSql.js`.
+The view held all-time totals per account and currency, but application code had no readers while every transaction mutation paid to refresh it. Its simple `SUM(amount)` also omitted opening-balance anchors and could not represent the live account-balance contract. Current account balances are computed from the ledger and anchors through `accountBalanceSql.ts`.
 
 The migration downgrade recreates the historical `(account_id, currency)` view with no data for rollback only; it does not make the view part of the current runtime.
 
@@ -126,7 +126,7 @@ The migration downgrade recreates the historical `(account_id, currency)` view w
 > [!warning] Removed
 > `mv_recipient_monthly` was dropped by migration `0038_drop_mv_recipient_monthly.py`. **Do not reference this view in new code.**
 
-**Reason:** The view was never read by application code after the trigger-maintained `agg_recipient_totals` table was introduced. It added write-amplification (every transaction mutation triggered a concurrent MV refresh) with no query serving it. The `aggregationRefresh.js` service no longer refreshes it.
+**Reason:** The view was never read by application code after the trigger-maintained `agg_recipient_totals` table was introduced. It added write-amplification (every transaction mutation triggered a concurrent MV refresh) with no query serving it. The `aggregationRefresh.ts` service no longer refreshes it.
 
 **Downgrade path:** The `downgrade()` function in `0038` recreates the 24-month version of the view for safe rollback.
 
@@ -176,7 +176,7 @@ await db.insertInto("split_payments").values({ split_id, amount /* ... */ }).exe
 
 ## Refresh Strategy
 
-Application mutation refreshes are orchestrated through **`aggregationRefresh.js`**. Startup and explicit maintenance may call `materializedViewService` directly.
+Application mutation refreshes are orchestrated through **`aggregationRefresh.ts`**. Startup and explicit maintenance may call `materializedViewService` directly.
 
 ### Explicit Full Refresh (Maintenance)
 
@@ -382,7 +382,7 @@ date_trunc('month', t.date)
 - [[docs/reference/data-model|Data Model Reference]] — Aggregation entity definitions
 - [[docs/performance/index]] — Performance Documentation Index
 - [[docs/reference/database-triggers|Database Triggers]] — All trigger definitions
-- [[apps/node-backend/src/services/aggregationRefresh.ts|aggregationRefresh.js]] — Orchestrator source
+- [[apps/node-backend/src/services/aggregationRefresh.ts|aggregationRefresh.ts]] — Orchestrator source
 - **Migrations:**
   - `0026_finance_aggregations` (legacy, archived)
   - `0035_add_recipient_aggregations` (historical Phase 1 baseline)

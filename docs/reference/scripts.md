@@ -1,7 +1,7 @@
 ---
 title: Scripts Reference
 type: reference
-date: 2026-10-26
+date: 2026-10-28
 tags:
   [
     reference,
@@ -43,7 +43,7 @@ The Electron shell in `packaging/electron/` is strict TypeScript compiled into
 `packaging/electron/out/` ([[docs/adr/196-electron-shell-typescript|ADR-196]]). The `dev`,
 `electron:dev`, `electron:prod`, `native:prepare`, `native:*smoke`, `demo:reset-native`
 and `test:electron` scripts run `bun packaging/electron/build.ts` first and then run the compiled JavaScript, for example
-`node packaging/electron/out/scripts/native-development.js`. The Electron package's own `start`,
+`node packaging/electron/out/scripts/native-development.js` (compiled from `packaging/electron/scripts/native-development.ts`). The Electron package's own `start`,
 `prepare:*` and `dist*` scripts run `bun build.ts` first in the same way.
 
 `demo:reset-native` asks Electron's Vision Demo to restore its canonical seed at the next launch.

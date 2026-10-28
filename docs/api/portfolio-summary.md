@@ -2,8 +2,8 @@
 title: Portfolio Summary API
 type: endpoint
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     endpoint,
@@ -31,8 +31,8 @@ related_code:
   [
     "apps/node-backend/src/services/portfolio/portfolioSummaryService.ts",
     "apps/node-backend/src/routes/info/portfolioSummary.ts",
-    "apps/node-backend/src/routes/info/_cache.js",
-    "apps/node-backend/src/routes/info/_liveSummary.js",
+    "apps/node-backend/src/services/info/cache.ts",
+    "apps/node-backend/src/services/info/liveSummary.ts",
     "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts",
     "apps/node-backend/src/services/portfolio/portfolioAssetClassTotals.ts",
     "apps/node-backend/src/services/currency/latestRateConversion.ts",
@@ -514,7 +514,7 @@ const metricsBlock = {
 
 ### Net Worth Current-Point Overlay (2026-05-31)
 
-The `GET /api/info/net-worth` endpoint now overlays its _current_ investments value with the live summary from this endpoint, via the shared `portfolioSummaryCache`. The new shared helper `resolveLivePortfolioValue(targetCurrency)` in `apps/node-backend/src/routes/info/_liveSummary.js` reads `totals.totalPortfolioValue` from the cache and passes it to `infoRepositoryNetWorth.getNetWorthFromSnapshots`. This means Dashboard, Performance, and Net Worth all derive their "current portfolio value" from the same source — a true single source of truth across all three surfaces. Historical Net Worth snapshot days are unaffected. See [[docs/adr/064-net-worth-current-value-live-overlay|ADR-064]].
+The `GET /api/info/net-worth` endpoint now overlays its _current_ investments value with the live summary from this endpoint, via the shared `portfolioSummaryCache`. The new shared helper `resolveLivePortfolioValue(targetCurrency)` in `apps/node-backend/src/services/info/liveSummary.ts` reads `totals.totalPortfolioValue` from the cache and passes it to `infoRepositoryNetWorth.getNetWorthFromSnapshots`. This means Dashboard, Performance, and Net Worth all derive their "current portfolio value" from the same source — a true single source of truth across all three surfaces. Historical Net Worth snapshot days are unaffected. See [[docs/adr/064-net-worth-current-value-live-overlay|ADR-064]].
 
 ### Per-Asset-Group Breakdown
 
@@ -611,7 +611,7 @@ return <div>Total: {data.totals.currentValue}</div>;
 ### 2026-05-31 — Net Worth overlay extended single source of truth
 
 - The Net Worth endpoint (`GET /api/info/net-worth`) now reads `totals.totalPortfolioValue` from `portfolioSummaryCache` (this endpoint's cache) and overlays it onto the latest snapshot before computing the headline `current` value, last chart point, and latest table row.
-- New shared helper `apps/node-backend/src/routes/info/_liveSummary.js` exposes `resolveLiveSummary` and `resolveLivePortfolioValue` for use by both `netWorth.ts` and the startup warmup path.
+- New shared helper `apps/node-backend/src/services/info/liveSummary.ts` exposes `resolveLiveSummary` and `resolveLivePortfolioValue` for use by both `netWorth.ts` and the startup warmup path.
 - API response shape of `/api/info/net-worth` is UNCHANGED. No frontend changes.
 - This extends the "single source of truth" guarantee from Dashboard + Performance to all three portfolio pages. See [[docs/adr/064-net-worth-current-value-live-overlay|ADR-064]].
 

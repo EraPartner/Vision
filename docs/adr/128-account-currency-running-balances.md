@@ -1,6 +1,7 @@
 ---
 title: ADR-128 Account-Currency Running Balances
 type: adr
+status: accepted
 date: 2026-09-04
 tags: [adr, accounts, transactions, currency, running-balance, data-integrity]
 description: Compute and display transaction running balances independently per account and currency, with explicit currency labels and a single-currency account sparkline.
@@ -43,4 +44,4 @@ warranted for the compact header visualization.
 - [[docs/features/accounts|Accounts]]
 - [[docs/features/transactions|Transactions]]
 - [[docs/api/transactions|Transactions API]]
-- [[docs/adr/088-normalized-account-model|ADR-088]]
+- [[docs/adr/088-account-entity|ADR-088]]

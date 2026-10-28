@@ -16,7 +16,7 @@ related_code:
 # ADR-033: Runtime-Toggleable Feature Flags
 
 ## Status
-Superseded by [[035-remove-feature-flags]]
+Superseded by [[docs/adr/035-remove-feature-flags]]
 
 ## Date
 2026-04-23

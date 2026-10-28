@@ -358,7 +358,6 @@ Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/son
 | Switch     | Toggle switch                | [[apps/frontend/src/components/ui/switch.tsx\|switch.tsx]]           |
 | Slider     | Range slider                 | [[apps/frontend/src/components/ui/slider.tsx\|slider.tsx]]           |
 | Label      | Form label                   | [[apps/frontend/src/components/ui/label.tsx\|label.tsx]]             |
-| Form       | Form wrapper with validation | [[apps/frontend/src/components/ui/form.tsx\|form.tsx]]               |
 
 ### Feedback
 
@@ -380,7 +379,6 @@ Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/son
 | Accordion   | Collapsible sections    | [[apps/frontend/src/components/ui/accordion.tsx\|accordion.tsx]]       |
 | Collapsible | Collapsible content     | [[apps/frontend/src/components/ui/collapsible.tsx\|collapsible.tsx]]   |
 | Disclosure  | Styled native details   | [[apps/frontend/src/components/ui/disclosure.tsx\|disclosure.tsx]]     |
-| AspectRatio | Fixed aspect ratio      | [[apps/frontend/src/components/ui/aspect-ratio.tsx\|aspect-ratio.tsx]] |
 
 ### Navigation
 
@@ -388,11 +386,8 @@ Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/son
 | -------------- | ------------------- | ---------------------------------------------------------------------------- |
 | Sidebar        | Collapsible sidebar | [[apps/frontend/src/components/ui/sidebar.tsx\|sidebar.tsx]]                 |
 | Tabs           | Tabbed content      | [[apps/frontend/src/components/ui/tabs.tsx\|tabs.tsx]]                       |
-| NavigationMenu | Navigation menu     | [[apps/frontend/src/components/ui/navigation-menu.tsx\|navigation-menu.tsx]] |
-| Breadcrumb     | Breadcrumb trail    | [[apps/frontend/src/components/ui/breadcrumb.tsx\|breadcrumb.tsx]]           |
 | DropdownMenu   | Dropdown menu       | [[apps/frontend/src/components/ui/dropdown-menu.tsx\|dropdown-menu.tsx]]     |
 | ContextMenu    | Right-click menu    | [[apps/frontend/src/components/ui/context-menu.tsx\|context-menu.tsx]]       |
-| MenuBar        | Menu bar            | [[apps/frontend/src/components/ui/menubar.tsx\|menubar.tsx]]                 |
 
 ### Data Display
 
@@ -400,8 +395,6 @@ Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/son
 | --------- | --------------- | ------------------------------------------------------------------ |
 | Table     | Data table      | [[apps/frontend/src/components/ui/table.tsx\|table.tsx]]           |
 | Badge     | Status badge    | [[apps/frontend/src/components/ui/badge.tsx\|badge.tsx]]           |
-| Avatar    | User avatar     | [[apps/frontend/src/components/ui/avatar.tsx\|avatar.tsx]]         |
-| HoverCard | Popup info card | [[apps/frontend/src/components/ui/hover-card.tsx\|hover-card.tsx]] |
 | Tooltip   | Hover tooltip   | [[apps/frontend/src/components/ui/tooltip.tsx\|tooltip.tsx]]       |
 | Popover   | Popup content   | [[apps/frontend/src/components/ui/popover.tsx\|popover.tsx]]       |
 
@@ -415,11 +408,9 @@ Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/son
 
 | Component   | Description             | File                                                                   |
 | ----------- | ----------------------- | ---------------------------------------------------------------------- |
-| Pagination  | Page navigation         | [[apps/frontend/src/components/ui/pagination.tsx\|pagination.tsx]]     |
 | ScrollArea  | Scrollable container    | [[apps/frontend/src/components/ui/scroll-area.tsx\|scroll-area.tsx]]   |
 | Calendar    | Date picker calendar    | [[apps/frontend/src/components/ui/calendar.tsx\|calendar.tsx]]         |
 | Toggle      | Binary toggle           | [[apps/frontend/src/components/ui/toggle.tsx\|toggle.tsx]]             |
-| InputOTP    | One-time password input | [[apps/frontend/src/components/ui/input-otp.tsx\|input-otp.tsx]]       |
 
 ---
 

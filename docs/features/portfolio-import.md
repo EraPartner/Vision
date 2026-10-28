@@ -2,9 +2,9 @@
 title: Feature - Portfolio Import
 type: feature
 status: active
-date: 2026-10-22
-updated: 2026-10-21
-last_modified: 2026-10-21
+date: 2026-10-28
+updated: 2026-10-28
+last_modified: 2026-10-28
 tags:
   [
     feature,
@@ -411,7 +411,7 @@ rolling back their batch. A CSV batch cannot be rolled back while a funding corr
 its transaction. Settled companion rows clear their error counters, and commit applies these
 settlements before the readiness check.
 
-The transaction and portfolio pipelines share `importStageLifecycle.js` for the staging status
+The transaction and portfolio pipelines share `importStageLifecycle.ts` for the staging status
 transition, BIGSERIAL batch-id normalization, 500-row chunk loop, persisted total, and progress
 sequence. Portfolio parsing and its INSERT column set stay in this module.
 
@@ -654,7 +654,7 @@ Progress event: `{ phase: 'committing', current, total, imported, duplicates, er
 
 ## Brokerage cash routing and the double-count rule (WP-C2, Aug 2026)
 
-On an `is_brokerage` batch, `validate.js` stamps each row's `route` via
+On an `is_brokerage` batch, `validate.ts` stamps each row's `route` via
 `classifyBrokerageRow` ([[apps/node-backend/src/services/importPipeline/brokerageRouting.ts]]):
 
 - **`route='cash'`** — external deposits/withdrawals, **and (D6, [[docs/adr/095-brokerage-account-import|ADR-095 addendum 2026-07-10]]) dividend/interest/fee/tax rows that carry no instrument reference at all** (no symbol, no name — sleeve interest, custody fees, account-level distributions). Each commits as ONE signed row in `transactions` on the batch's sleeve account: staging magnitudes are absolute, the sign comes from the row's canonical type (dividend/interest → `+`, fee/tax → `−`; deposits `+`, withdrawals `−`). The Behavior setting `brokerage_cash_category_ids` optionally maps each D6 kind to an active category ID. Import reads one mapping snapshot per commit, resolves active IDs only, and never creates or reactivates a category. An unset, missing, or inactive mapping commits the row uncategorized. External deposits/withdrawals always stay uncategorized because they are transfers, not income or expense. The payee is the broker (sleeve account `institution`, falling back to `name`).
@@ -666,7 +666,7 @@ The routing is deterministic from the row and decided at validate time; a statem
 
 ### The double-count rule
 
-**Ledger cash is the only cash truth.** Cash from a brokerage statement enters net worth exclusively through the `transactions` rows the import creates (the per-currency anchor+delta balance SQL, ADR-094/WP-A1). Portfolio-side `dividend`/`interest`/`fee`/`tax` rows in `portfolio_transactions` remain the **current per-instrument and Belgian-tax statistics source** and **never enter net worth**: snapshot valuation is `units × price` plus the non-unit formulas, and income/dividend/fee/tax rows explicitly do not alter invested capital or value (`snapshotBuilder.js`, "income / dividends / fees / taxes: don't alter invested capital"). The portfolio-level income and FIRE coverage surface proposed by [[docs/adr/096-dividend-income-fire|ADR-096]] is deferred and is not a current consumer. So an instrument-attached dividend is counted once (portfolio stats, not cash), an instrument-less one is counted once (ledger cash, not portfolio stats) — they can never both enter net worth.
+**Ledger cash is the only cash truth.** Cash from a brokerage statement enters net worth exclusively through the `transactions` rows the import creates (the per-currency anchor+delta balance SQL, ADR-094/WP-A1). Portfolio-side `dividend`/`interest`/`fee`/`tax` rows in `portfolio_transactions` remain the **current per-instrument and Belgian-tax statistics source** and **never enter net worth**: snapshot valuation is `units × price` plus the non-unit formulas, and income/dividend/fee/tax rows explicitly do not alter invested capital or value (`snapshotBuilder.ts`, "income / dividends / fees / taxes: don't alter invested capital"). The portfolio-level income and FIRE coverage surface proposed by [[docs/adr/096-dividend-income-fire|ADR-096]] is deferred and is not a current consumer. So an instrument-attached dividend is counted once (portfolio stats, not cash), an instrument-less one is counted once (ledger cash, not portfolio stats) — they can never both enter net worth.
 
 **Accepted trade-off** (per the ADR-095 addendum): D6 cash rows live in the ledger, not in portfolio analytics — an account-level distribution does not count toward current per-instrument income statistics or the portfolio-side tax figures; category-based ledger reporting covers it. Conversely, an instrument-attached dividend's cash does not appear in the ledger (ADR-090 synthetic legs were deleted per ADR-108) — reconciliation of the sleeve's true cash balance for trade-driven flows is WP-C4 territory.
 
@@ -708,7 +708,7 @@ Converts raw CSV type strings → canonical `portfolio_txn_type` values:
 
 ## Deduplication
 
-Portfolio and budgeting imports now share `importIdentity.js`; see
+Portfolio and budgeting imports now share `importIdentity.ts`; see
 [[docs/adr/134-versioned-import-identity-and-exact-provenance|ADR-134]]. Every row stores a
 byte-sensitive, non-unique `source_record_hash` separately from its versioned
 `dedup_fingerprint`. The fingerprint prefers an immutable provider transaction ID. Otherwise it

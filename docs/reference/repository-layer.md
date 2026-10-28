@@ -2,8 +2,8 @@
 title: Repository Layer Reference
 type: reference
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-28
+updated: 2026-10-28
 tags: [backend, repositories, reference, data-access, postgresql, phase-0, phase-1, phase-3, phase-3-1, phase-9, phase-q, decimal, money, recipient-groups]
 aliases: [repositories, repository layer, data access, DAL, database access]
 description: Complete reference for all 21 backend repository domains (plus infoRepository's 7 sub-modules and portfolioTransactionRepository's 3 split files). Phase 3.1: infoRepository split into 7 domain sub-modules with batch FX optimization. Phase Q: transactionRepository supports recipientGroupId filtering via filterBuilder.
@@ -54,25 +54,24 @@ Service Layer (business logic)
 
 **Phase 0+ Note:** A few hot-path queries compile their Kysely query and run it through `queryPrepared()` for plan caching, for example `transactionRepository.getById` (statement name `'tx_get_by_id'`) and the statistics queries in `infoRepositoryStatistics.ts`. See `apps/node-backend/src/database/connection.ts` for the implementation and [[docs/reference/database-query-patterns|Database Query Patterns]] for usage guidelines.
 
-**Phase 9+ Note — Decimal Enforcement (Mandatory):** All repositories returning monetary values must coerce NUMERIC/DECIMAL columns on emit to eliminate IEEE 754 floating-point drift (node-postgres returns NUMERIC as JS strings; no global type parser is set deliberately to avoid loss in the decimal.js pipeline). Two helpers in `packages/shared-utils/src/money.ts` (re-exported via `apps/node-backend/src/lib/money.ts`) cover the boundary:
+**Phase 9+ Note — Decimal Enforcement (Mandatory):** All repositories returning monetary values must coerce NUMERIC/DECIMAL columns on emit to eliminate IEEE 754 floating-point drift (node-postgres returns NUMERIC as JS strings; no global type parser is set deliberately to avoid loss in the decimal.ts pipeline). Two helpers in `packages/shared-utils/src/money.ts` (re-exported via `apps/node-backend/src/lib/money.ts`) cover the boundary:
 
 - `numericColumn(v)` — converts a single NUMERIC value to number; `null`/`undefined` pass through unchanged; `''` → `undefined`
 - `coerceNumericFields(row, fields)` — shallow-copy coercion of named columns via `numericColumn`; no-op on nullish rows
 
 Enforced across all monetary API output paths (Phase 9 + June 2026 stragglers):
 
-- `splitRepository.js` — split amounts, outstanding balance
-- `infoRepositoryBanks.js`, `infoRepositoryHelpers.js`, `infoRepositoryMonthly.js` — balance, total, running sums
-- `portfolioTransactionRepository.js` / `portfolioTxRepo.reads.js` + `portfolioTxRepo.writes.js` — amounts, units, fees, taxes, fx_rate_to_eur, getSummary totals
-- `rawTransactionRepository.js` — amounts, valuations
-- `investmentRepository.js` — current_price, interest_rate, cadastral_income, municipality_tax_rate (all read paths + create/update/updatePrice return through getById)
-- `watchlistRepository.js` — target_price
+- `splitRepository.ts` — split amounts, outstanding balance
+- `infoRepositoryBanks.ts`, `infoRepositoryHelpers.ts`, `infoRepositoryMonthly.ts` — balance, total, running sums
+- `portfolioTransactionRepository.ts` / `portfolioTxRepo.reads.ts` + `portfolioTxRepo.writes.ts` — amounts, units, fees, taxes, fx_rate_to_eur, getSummary totals
+- `investmentRepository.ts` — current_price, interest_rate, cadastral_income, municipality_tax_rate (all read paths + create/update/updatePrice return through getById)
+- `watchlistRepository.ts` — target_price
 
 See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/reference/code-patterns#money-utility-pattern-phase-9--june-2026|Money Utility Pattern]] for guidance.
 
 ---
 
-## 1. transactionRepository.js
+## 1. transactionRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/transactionRepository.ts]]  
 **Purpose:** CRUD operations for the `transactions` table with filtering, pagination, and virtual table support.
@@ -100,13 +99,13 @@ See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/r
 
 ### Dependencies
 
-- `connection.js`
-- `filterBuilder.js` (Phase Q)
+- `connection.ts`
+- `filterBuilder.ts` (Phase Q)
 - `rowContracts.ts` + `rowSchemas.ts` (ADR-193 row checks)
 
 ---
 
-## 2. recipientRepository.js
+## 2. recipientRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/recipientRepository.ts]]  
 **Purpose:** CRUD for `recipients` table with merge/unmerge, alias management, and name-based matching.
@@ -134,12 +133,12 @@ See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/r
 
 ### Dependencies
 
-- `connection.js`
-- `textNormalization.js`
+- `connection.ts`
+- `textNormalization.ts`
 
 ---
 
-## 3. categoryRepository.js
+## 3. categoryRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/categoryRepository.ts]]  
 **Purpose:** CRUD for `categories` table with hierarchical `GENERAL:DETAIL` structure and recipient assignment.
@@ -164,14 +163,14 @@ See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/r
 
 ### Dependencies
 
-- `connection.js`
+- `connection.ts`
 
 ---
 
-## 4. plannedTransactionRepository.js
+## 4. plannedTransactionRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]  
-**Purpose:** Parameterized persistence for `planned_transactions`, recurrence records, tags, executions, and loan schedules. Cross-entity update orchestration lives in `plannedTransactionService.js`.
+**Purpose:** Parameterized persistence for `planned_transactions`, recurrence records, tags, executions, and loan schedules. Cross-entity update orchestration lives in `plannedTransactionService.ts`.
 
 ### Exported Methods
 
@@ -197,12 +196,12 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 
 ### Dependencies
 
-- `connection.js`
+- `connection.ts`
 - `rowContracts.ts` + `rowSchemas.ts` (ADR-193 row checks)
 
 ---
 
-## 5. recipientBankAccountRepository.js
+## 5. recipientBankAccountRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/recipientBankAccountRepository.ts]]  
 **Purpose:** CRUD for `recipient_bank_accounts` table with IBAN validation and primary account management.
@@ -225,12 +224,12 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 
 ### Dependencies
 
-- `connection.js`
+- `connection.ts`
 - ~~`iban.js`~~ (deleted 2026-05-29; IBAN validation now handled inline)
 
 ---
 
-## 6. investmentRepository.js
+## 6. investmentRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/investmentRepository.ts]]  
 **Purpose:** CRUD for the canonical flat `investments` table after ADR-109 conversion.
@@ -253,12 +252,12 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 
 ### Dependencies
 
-- `connection.js`
+- `connection.ts`
 - `../lib/money.ts` (`coerceNumericFields`)
 
 ---
 
-## 7. portfolioTransactionRepository.js
+## 7. portfolioTransactionRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]]  
 **Purpose:** Parameterized persistence for the flat `portfolio_transactions` table. Portfolio transaction normalization, buy/sell math, recurrence hygiene, and sell-availability policy live in the portfolio transaction service.
@@ -277,16 +276,16 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 
 - **Flat table:** Migration 0087 converted legacy inheritance installs; reads and writes target `portfolio_transactions` directly.
 - **Units Tracking:** `units`, `price_per_unit`, `total_amount` for unit-based assets
-- **NUMERIC Coercion (June 2026):** `mapPortfolioTxRow` (exported from `portfolioTxRepo.reads.js`) coerces `['amount', 'units', 'price_per_unit', 'fees', 'taxes', 'fx_rate_to_eur']` on every row; reused in `portfolioTxRepo.writes.js` so write paths are also coerced. `getSummary` additionally coerces totals (`total_amount`, `total_units`, `total_fees`, `total_taxes`) and applies `parseInt` to `count`.
+- **NUMERIC Coercion (June 2026):** `mapPortfolioTxRow` (exported from `portfolioTxRepo.reads.ts`) coerces `['amount', 'units', 'price_per_unit', 'fees', 'taxes', 'fx_rate_to_eur']` on every row; reused in `portfolioTxRepo.writes.ts` so write paths are also coerced. `getSummary` additionally coerces totals (`total_amount`, `total_units`, `total_fees`, `total_taxes`) and applies `parseInt` to `count`.
 
 ### Dependencies
 
-- `connection.js`
+- `connection.ts`
 - `../lib/money.ts` (`coerceNumericFields`)
 
 ---
 
-## 8. watchlistRepository.js
+## 8. watchlistRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/watchlistRepository.ts]]  
 **Purpose:** CRUD for `watchlist` table — track symbols without owning them.
@@ -309,15 +308,15 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 
 ### Dependencies
 
-- `connection.js`
+- `connection.ts`
 - `../lib/money.ts` (`coerceNumericFields`)
 
 ---
 
-## 9. splitRepository.js
+## 9. splitRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/splitRepository.ts]]  
-**Purpose:** Parameterized persistence and row mapping for transaction splits, payments, outstanding rows, settlements, exports, and audit records. `splitService.js` owns lifecycle policy and orchestration.
+**Purpose:** Parameterized persistence and row mapping for transaction splits, payments, outstanding rows, settlements, exports, and audit records. `splitService.ts` owns lifecycle policy and orchestration.
 
 ### Exported Methods
 
@@ -342,12 +341,12 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 
 ### Dependencies
 
-- `connection.js`
+- `connection.ts`
 - `rowContracts.ts` + `rowSchemas.ts` (ADR-193 row checks)
 
 ---
 
-## 10. settingsRepository.js
+## 10. settingsRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/settingsRepository.ts]]  
 **Purpose:** Key-value settings storage with JSON serialization.
@@ -369,11 +368,11 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 
 ### Dependencies
 
-- `connection.js`
+- `connection.ts`
 
 ---
 
-## 11. savedChartsRepository.js
+## 11. savedChartsRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/savedChartsRepository.ts]]  
 **Purpose:** CRUD for `saved_charts` table — user-configurable chart configurations.
@@ -395,13 +394,16 @@ the patch. Foreign keys provide deletion cleanup and reject stale concurrent sel
 
 ### Dependencies
 
-- `connection.js`
+- `connection.ts`
 
 ---
 
-## 12. rawTransactionRepository.js
+## 12. rawTransactionRepository (Removed)
 
-**File:** [[apps/node-backend/src/repositories/rawTransactionRepository.js]]  
+> [!note] Removed
+> `rawTransactionRepository` no longer exists in `apps/node-backend/src/repositories/`; the description below is historical.
+
+**File:** `apps/node-backend/src/repositories/rawTransactionRepository.js` (removed)  
 **Purpose:** Manages raw transaction data in bank-specific tables for audit trail and deduplication.
 
 ### Exported Methods
@@ -421,18 +423,18 @@ the patch. Foreign keys provide deletion cleanup and reject stale concurrent sel
 
 ### Dependencies
 
-- `connection.js`
+- `connection.ts`
 
 ---
 
-## 13. infoRepository.js (Composite Module — Phase 3.1)
+## 13. infoRepository.ts (Composite Module — Phase 3.1)
 
 **File:** [[apps/node-backend/src/repositories/infoRepository.ts]]  
 **Purpose:** Barrel module (37 lines) that re-exports analytics and statistics repositories organized by domain. Originally 1445-line monolithic repository; refactored in Phase 3.1 into 7 domain-specific sub-repositories for improved maintainability and separation of concerns.
 
 **Phase 3.1 Refactoring (2026-04-23):**
 
-- Monolithic 1445-line `infoRepository.js` split into domain-organized sub-modules
+- Monolithic 1445-line `infoRepository.ts` split into domain-organized sub-modules
 - Batch FX conversion optimization: combined N-row groups into single `convertRowsToEur` call with one `exchange_rates` query, eliminating redundant per-group lookups
 - `getCashflowComparison`: 4 sequential queries → `Promise.all` + 1 batch FX call (saved 3 `exchange_rates` queries)
 - `getAverageVsCurrentSpending`: 2 sequential queries → `Promise.all` (FX already cached)
@@ -443,7 +445,7 @@ the patch. Foreign keys provide deletion cleanup and reject stale concurrent sel
 
 | Sub-Module                    | File                                                                 | Lines | Purpose                                                                                                                                                                     |
 | ----------------------------- | -------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `infoRepositoryHelpers.js`    | `[[apps/node-backend/src/repositories/infoRepositoryHelpers.ts]]`    | 268   | Repository-specific MV cache, aggregation, category, row-mapping, and currency-conversion helpers; compatibility re-exports point generic helpers to their canonical owners |
+| `infoRepositoryHelpers.ts`    | `[[apps/node-backend/src/repositories/infoRepositoryHelpers.ts]]`    | 268   | Repository-specific MV cache, aggregation, category, row-mapping, and currency-conversion helpers; compatibility re-exports point generic helpers to their canonical owners |
 | `statisticsRepository`        | `[[apps/node-backend/src/repositories/infoRepositoryStatistics.ts]]` | 186   | `getStatistics`, `getCategoryBreakdown`, `getBanks`, `getTransactionCount`, `getTransactionSummary`                                                                         |
 | `monthlyRepository`           | `[[apps/node-backend/src/repositories/infoRepositoryMonthly.ts]]`    | 484   | `getMonthlyFinancialSummary`, `getAverageVsCurrentSpending`, `getCashflowComparison`; uses batch FX conversion and parallel queries                                         |
 | `banksRepository`             | `[[apps/node-backend/src/repositories/infoRepositoryBanks.ts]]`      | 145   | `getBankBalances`; uses batch FX conversion and parallel queries                                                                                                            |
@@ -453,12 +455,12 @@ the patch. Foreign keys provide deletion cleanup and reject stale concurrent sel
 
 ### Barrel Module Exports
 
-The main `infoRepository.js` file:
+The main `infoRepository.ts` file:
 
 - Re-exports `clearMvCache` from helpers for cache invalidation
 - Assembles all sub-repos into a single `infoRepository` object with all methods
 - Supports both `export default infoRepository` and `export const infoRepository` for backward compatibility
-- All 9 existing consumer files import unchanged from `infoRepository.js`; internal organization is transparent
+- All 9 existing consumer files import unchanged from `infoRepository.ts`; internal organization is transparent
 
 ### Original Exported Methods (Now Delegated)
 
@@ -481,17 +483,17 @@ The main `infoRepository.js` file:
 
 - **Materialized Views:** All sub-repos read from `monthly_summaries_mv`, `category_totals_mv`, `daily_cashflow_mv`, `bank_balances_mv`
 - **FX Conversion:** Multi-currency endpoints support `targetCurrency` parameter with date-aware historical rate fallback
-- **Batch FX Optimization (Phase 3.1):** `batchConvertGroupsWithHistoricalRateFallback()` helper in `infoRepositoryHelpers.js` combines N row groups into 1 `convertRowsToEur` call, eliminating redundant `exchange_rates` queries per group
+- **Batch FX Optimization (Phase 3.1):** `batchConvertGroupsWithHistoricalRateFallback()` helper in `infoRepositoryHelpers.ts` combines N row groups into 1 `convertRowsToEur` call, eliminating redundant `exchange_rates` queries per group
 - **Parallel Query Execution:** `Promise.all` for independent queries (`getMonthlyFinancialSummary`, `getCashflowComparison`, `getBankBalances`, `getAverageVsCurrentSpending`)
 - **Spike Sanitization:** `getNetWorthFromSnapshots` applies `sanitizeIsolatedDailyInvestmentSpikes()` from `lib/calculations/netWorthSanitizer.ts`; the wrapper delegates needle detection and numeric smoothing to `lib/calculations/valueSpikeSanitizer.ts`, then recomputes the corrected row's net worth with liabilities included
 - **Complex Aggregations:** CTEs with window functions for recipient insights and category breakdowns
-- **Shared Utilities:** `infoRepositoryHelpers.js` centralizes repository-specific MV caching, aggregation, category merging, row mapping, and currency conversion fallback. Generic date keys live in `lib/dateKeys.ts`; date serialization in `lib/dateFormat.ts`; numeric rounding in `lib/money.ts`.
+- **Shared Utilities:** `infoRepositoryHelpers.ts` centralizes repository-specific MV caching, aggregation, category merging, row mapping, and currency conversion fallback. Generic date keys live in `lib/dateKeys.ts`; date serialization in `lib/dateFormat.ts`; numeric rounding in `lib/money.ts`.
 
 ### Dependencies (All Sub-Modules)
 
-- `connection.js`
-- `currencyConversionService.js` (for FX conversions)
-- `infoRepositoryHelpers.js` (repository aggregation helpers and MV cache)
+- `connection.ts`
+- `currencyConversionService.ts` (for FX conversions)
+- `infoRepositoryHelpers.ts` (repository aggregation helpers and MV cache)
 - `lib/dateKeys.ts`, `lib/dateFormat.ts`, and `lib/money.ts` (generic formatting and rounding)
 - `lib/calculations/valueSpikeSanitizer.ts` (shared numeric needle rule) and `lib/calculations/netWorthSanitizer.ts` (net-worth recomputation wrapper)
 
@@ -523,24 +525,24 @@ database/db.ts (Kysely builder) ──→ connection.ts query() (PostgreSQL pool
             ├─→ lib/calculations/netWorthSanitizer ──→ valueSpikeSanitizer (shared needle rule)
             │
             ├─→ infoRepositoryStatistics (getStatistics, getCategoryBreakdown, getBanks, getTransactionCount, getTransactionSummary)
-            │       └→ connection.js
+            │       └→ connection.ts
             │
             ├─→ infoRepositoryMonthly (getMonthlyFinancialSummary, getAverageVsCurrentSpending, getCashflowComparison)
-            │       ├→ connection.js
+            │       ├→ connection.ts
             │       └→ batchConvertGroupsWithHistoricalRateFallback (batch FX + parallel queries)
             │
             ├─→ infoRepositoryBanks (getBankBalances)
-            │       ├→ connection.js
+            │       ├→ connection.ts
             │       └→ batchConvertGroupsWithHistoricalRateFallback (batch FX + parallel queries)
             │
             ├─→ infoRepositoryNetWorth (getNetWorthFromSnapshots)
-            │       └→ connection.js
+            │       └→ connection.ts
             │
             ├─→ infoRepositoryPlanned (getPlannedExpensesNextMonth)
-            │       └→ connection.js
+            │       └→ connection.ts
             │
             └─→ infoRepositoryRecipients (getRecipientInsights)
-                    └→ connection.js
+                    └→ connection.ts
 ```
 
 ## Common Patterns
@@ -578,7 +580,7 @@ Uses the `is_active` flag instead of `DELETE`:
 UPDATE transactions SET is_active = false WHERE id = $1
 ```
 
-## 14. tagRepository.js
+## 14. tagRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/tagRepository.ts]]
 **Purpose:** CRUD for the `tags` table (orthogonal labelling dimension, ADR-052). Soft-delete via `is_active=false`.
@@ -593,10 +595,10 @@ UPDATE transactions SET is_active = false WHERE id = $1
 
 ---
 
-## 15. attachmentRepository.js
+## 15. attachmentRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/attachmentRepository.ts]]
-**Purpose:** Persists receipt attachment metadata (stored path, mime type, size). The on-disk file lifecycle lives in [[apps/node-backend/src/services/attachmentService.ts|attachmentService.js]].
+**Purpose:** Persists receipt attachment metadata (stored path, mime type, size). The on-disk file lifecycle lives in [[apps/node-backend/src/services/attachmentService.ts|attachmentService.ts]].
 
 | Method                                    | Returns     |
 | ----------------------------------------- | ----------- |
@@ -606,7 +608,7 @@ UPDATE transactions SET is_active = false WHERE id = $1
 
 ---
 
-## 16. importBatchRepository.js
+## 16. importBatchRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/importBatchRepository.ts]]
 **Purpose:** Persists `import_batches` + `import_rows` for the import pipeline (stage / validate / match / commit phases).
@@ -622,7 +624,7 @@ UPDATE transactions SET is_active = false WHERE id = $1
 
 ---
 
-## 17. aiChatRepository.js
+## 17. aiChatRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/aiChatRepository.ts]]
 **Purpose:** Persists Ollama chat conversations and per-turn tool transcripts for the AI Chat feature (ADR-024).
@@ -636,7 +638,7 @@ UPDATE transactions SET is_active = false WHERE id = $1
 
 ---
 
-## 18. providerHealthRepository.js
+## 18. providerHealthRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/providerHealthRepository.ts]]
 **Purpose:** Rolling-window health metrics per external provider (latency, success/error counts). Drives the admin observability hub (ADR-034).
@@ -649,7 +651,7 @@ UPDATE transactions SET is_active = false WHERE id = $1
 
 ---
 
-## 19. cashflowForecastMcRepository.js
+## 19. cashflowForecastMcRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/cashflowForecastMcRepository.ts]]
 **Purpose:** Stores Monte-Carlo cashflow forecast snapshots (P25/P50/P75 paths) — the materialised cache for Phase 10 + Phase E forecast endpoints.
@@ -661,14 +663,14 @@ UPDATE transactions SET is_active = false WHERE id = $1
 
 ---
 
-## 20. cashflowForecastMcRollingRepository.js
+## 20. cashflowForecastMcRollingRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.ts]]
-**Purpose:** Same shape as `cashflowForecastMcRepository.js` but specialised for the Phase H rolling-window forecast (500 paths, P25/P75 defaults).
+**Purpose:** Same shape as `cashflowForecastMcRepository.ts` but specialised for the Phase H rolling-window forecast (500 paths, P25/P75 defaults).
 
 ---
 
-## 21. cashflowForecastAccuracyRepository.js
+## 21. cashflowForecastAccuracyRepository.ts
 
 **File:** [[apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.ts]]
 **Purpose:** Persists realised-vs-forecast accuracy metrics per snapshot. Powers the Phase D accuracy endpoint and dashboard widget.
@@ -682,13 +684,13 @@ UPDATE transactions SET is_active = false WHERE id = $1
 
 ## portfolioTransactionRepository sub-modules
 
-`portfolioTransactionRepository.js` composes three persistence files:
+`portfolioTransactionRepository.ts` composes three persistence files:
 
-- [[apps/node-backend/src/repositories/portfolioTxRepo.common.ts|portfolioTxRepo.common.js]] — the migration-window column probe and list-query clause builder.
-- [[apps/node-backend/src/repositories/portfolioTxRepo.reads.ts|portfolioTxRepo.reads.js]] — parameterized read paths and the small query primitives used by portfolio transaction policy. Exports `mapPortfolioTxRow` so write paths can reuse the NUMERIC/DATE coercion.
-- [[apps/node-backend/src/repositories/portfolioTxRepo.writes.ts|portfolioTxRepo.writes.js]] — parameterized insert, field update, delete, and account-repoint operations. It does not own portfolio transaction rules.
+- [[apps/node-backend/src/repositories/portfolioTxRepo.common.ts|portfolioTxRepo.common.ts]] — the migration-window column probe and list-query clause builder.
+- [[apps/node-backend/src/repositories/portfolioTxRepo.reads.ts|portfolioTxRepo.reads.ts]] — parameterized read paths and the small query primitives used by portfolio transaction policy. Exports `mapPortfolioTxRow` so write paths can reuse the NUMERIC/DATE coercion.
+- [[apps/node-backend/src/repositories/portfolioTxRepo.writes.ts|portfolioTxRepo.writes.ts]] — parameterized insert, field update, delete, and account-repoint operations. It does not own portfolio transaction rules.
 
-[[apps/node-backend/src/services/portfolio/portfolioTransactionService.ts|portfolioTransactionService.js]] owns create/update orchestration. [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.ts|portfolioTransactionRules.js]] owns normalization, buy/sell unit math, recurrence values, and projected account-partition validation. The repository returns the investment's complete ordered unit-event history in one query; the service derives both current availability and downstream oversell effects from it. Both use [[apps/node-backend/src/lib/repositoryErrors.ts|repositoryErrors.js]] for the stable `VALIDATION_ERROR` contract.
+[[apps/node-backend/src/services/portfolio/portfolioTransactionService.ts|portfolioTransactionService.ts]] owns create/update orchestration. [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.ts|portfolioTransactionRules.ts]] owns normalization, buy/sell unit math, recurrence values, and projected account-partition validation. The repository returns the investment's complete ordered unit-event history in one query; the service derives both current availability and downstream oversell effects from it. Both use [[apps/node-backend/src/lib/repositoryErrors.ts|repositoryErrors.ts]] for the stable `VALIDATION_ERROR` contract.
 
 ---
 
@@ -707,4 +709,4 @@ remain explicit replacements. See [[docs/adr/173-conditional-settings-replacemen
 - [[docs/reference/service-layer|Service Layer Reference]]
 - [[docs/adr/004-postgresql-table-inheritance|ADR-004: PostgreSQL Table Inheritance]]
 - [[docs/reference/data-model|Data Model Reference]]
-- [[docs/diagrams/backend-repository-layer|Repository Layer Diagram]]
+- [[docs/diagrams/backend-repository-layer.puml|Repository Layer Diagram]]

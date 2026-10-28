@@ -1,6 +1,7 @@
 ---
 title: ADR-091 Per-Account Positioning (account_id on lots)
 type: adr
+status: Partially superseded by ADR-108
 date: 2026-06-18
 tags: [adr, accounts, portfolio, cost-basis, lots, positions, adr-088, adr-073, adr-044]
 description: Give portfolio_transactions (the lots) an account_id FK so a position is derived per (investment, account), enabling per-account cost basis and a real close-account workflow, without duplicating the security definition.
@@ -87,7 +88,7 @@ Frontend hooks added: `useAccountPositions.ts` (per-account holdings breakdown),
 - [[docs/adr/index|All ADRs]]
 - [[docs/adr/088-account-entity|ADR-088: Account Entity]]
 - [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] (realizes the per-account parity step)
-- [[docs/adr/073-shared-portfolio-math|ADR-073: Shared Portfolio Math]] (cost-basis calculators, unchanged)
+- [[docs/adr/073-shared-portfolio-math-package|ADR-073: Shared Portfolio Math]] (cost-basis calculators, unchanged)
 - [[docs/adr/044-portfolio-summary-single-source-of-truth|ADR-044: Portfolio Summary]] (extended, not replaced)
 - [[docs/adr/090-cash-sleeve-trades-as-transfers|ADR-090: Cash Sleeve & Trades = Transfers]] (depends on this)
 

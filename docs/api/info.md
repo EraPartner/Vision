@@ -2,8 +2,8 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-10-24
-updated: 2026-10-24
+date: 2026-10-28
+updated: 2026-10-28
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
@@ -143,7 +143,7 @@ Notes:
 
 - Historical currency conversion is date-aware for this endpoint: each transaction/month row is converted using its own row date (instead of latest FX rates).
 - This makes month-over-month values stable across restarts and exchange-rate cache refreshes.
-- Phase 3.1 refactoring: monolithic 1445-line repository split into 7 domain modules; monthly summary logic now lives in `monthlyRepository` (`infoRepositoryMonthly.js`). Repository-specific aggregation and conversion helpers remain in `infoRepositoryHelpers.js`; generic date formatting and UTC keys are owned by `lib/dateFormat.ts` and `lib/dateKeys.ts` ([[apps/node-backend/src/repositories/infoRepositoryMonthly.ts]]).
+- Phase 3.1 refactoring: monolithic 1445-line repository split into 7 domain modules; monthly summary logic now lives in `monthlyRepository` (`infoRepositoryMonthly.ts`). Repository-specific aggregation and conversion helpers remain in `infoRepositoryHelpers.ts`; generic date formatting and UTC keys are owned by `lib/dateFormat.ts` and `lib/dateKeys.ts` ([[apps/node-backend/src/repositories/infoRepositoryMonthly.ts]]).
 - Phase 3.1 optimization: income/spending rows batch-converted in 1 `convertRowsToEur` call via `batchConvertGroupsWithHistoricalRateFallback()` instead of separate conversions per month.
 - Monthly-summary MV fast path removed a redundant unused conversion pass (`mvConverted`) while keeping the merged income/spending conversion output path unchanged.
 

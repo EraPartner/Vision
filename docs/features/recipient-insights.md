@@ -2,9 +2,9 @@
 title: Recipient Insights Feature
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-08
-last_modified: 2026-08-26
+date: 2026-10-28
+updated: 2026-10-28
+last_modified: 2026-10-28
 tags: [feature, recipients, analytics, insights, frontend, merchant, exclusion-filters]
 description: Merchant/recipient spending analytics with KPI cards, month-over-month change alerts, and detailed spending tables. June 2026: the all-years Top Recipients chart now honours category/recipient exclusion filters via new optional params on GET /api/aggregations/recipient-insights.
 aliases: [merchant insights, spending insights, recipient analytics]
@@ -142,7 +142,7 @@ useQuery({
 > [!info] Phase G Migration (April 2026)
 > The legacy `/api/info/recipient-insights` endpoint was removed. This feature now uses `GET /api/aggregations/recipient-insights` via [[docs/api/aggregations|Aggregations API]].
 
-The endpoint `GET /api/aggregations/recipient-insights` in `[[apps/node-backend/src/routes/aggregations.ts]]` delegates to `infoRepositoryRecipients.getRecipientInsights(targetCurrency, { excludedCategoryIds, excludedRecipientIds })` (via `aggregation/recipient.js` `computeRecipientInsights`), which performs SQL aggregations to compute:
+The endpoint `GET /api/aggregations/recipient-insights` in `[[apps/node-backend/src/routes/aggregations.ts]]` delegates to `infoRepositoryRecipients.getRecipientInsights(targetCurrency, { excludedCategoryIds, excludedRecipientIds })` (via `aggregation/recipient.ts` `computeRecipientInsights`), which performs SQL aggregations to compute:
 
 1. **Top merchants**: SUM of expenses grouped by recipient, ordered by total spend descending
 2. **Month-over-month changes**: Compares current month vs previous month spending per recipient

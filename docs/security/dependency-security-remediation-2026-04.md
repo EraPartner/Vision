@@ -2,7 +2,7 @@
 title: Dependency Security Remediation (2026-04)
 type: security
 status: active
-date: 2026-10-08
+date: 2026-10-28
 tags: [security, dependencies, remediation, toolchain, vite, vitest]
 description: Workspace-level dependency hardening with overrides/resolutions, toolchain upgrades, and validation outcomes
 aliases: [dependency remediation april 2026, security hardening dependencies, bun audit remediation]
@@ -86,16 +86,16 @@ All 6 `tar@6.2.1` CVEs (race condition Unicode APFS, hardlink/symlink path trave
 
 | Finding | File | Fix |
 |---------|------|-----|
-| CORS + credentials with wildcard | `main.js` | Wildcard dev-only, no credentials; credentials only with explicit origin allowlist |
-| Missing rate limiter — attachments | `main.js`, `rateLimiter.js` | `attachmentRateLimiter` (60 req/min) added and mounted |
-| Missing rate limiter — SPA fallback | `main.js`, `rateLimiter.js` | `spaRateLimiter` (600 req/min) added and mounted |
-| Type confusion on `separator` | `importRoutes.js` | `String()` coercion before length check in both import routes |
-| Path injection — tmpdir (cleanup) | `importRoutes.js` | `TMP_ROOTS` allowlist guard before `unlink` |
-| Path injection — tmpdir (readFile) | `dataImportService.js` | `safeReadCsv()` helper validates path + allowlists encoding |
-| ReDoS in locale parser | `scripts/validate-locales.js` | Line-by-line split + anchored single-line regex |
+| CORS + credentials with wildcard | `main.ts` | Wildcard dev-only, no credentials; credentials only with explicit origin allowlist |
+| Missing rate limiter — attachments | `main.ts`, `rateLimiter.ts` | `attachmentRateLimiter` (60 req/min) added and mounted |
+| Missing rate limiter — SPA fallback | `main.ts`, `rateLimiter.ts` | `spaRateLimiter` (600 req/min) added and mounted |
+| Type confusion on `separator` | `importRoutes.ts` | `String()` coercion before length check in both import routes |
+| Path injection — tmpdir (cleanup) | `importRoutes.ts` | `TMP_ROOTS` allowlist guard before `unlink` |
+| Path injection — tmpdir (readFile) | `dataImportService.ts` | `safeReadCsv()` helper validates path + allowlists encoding |
+| ReDoS in locale parser | `scripts/validate-locales.ts` | Line-by-line split + anchored single-line regex |
 | Incomplete HTML strip | `sanitize.ts` | `stripHtml` loops until stable |
-| SQL injection false positive (vacuum) | `admin.js` | `// codeql[js/sql-injection]` inline suppression with justification |
-| Missing rate-limit false positive (vacuum) | `admin.js` | `// codeql[js/missing-rate-limiting]` inline suppression with justification |
+| SQL injection false positive (vacuum) | `admin.ts` | `// codeql[js/sql-injection]` inline suppression with justification |
+| Missing rate-limit false positive (vacuum) | `admin.ts` | `// codeql[js/missing-rate-limiting]` inline suppression with justification |
 
 ### Trivy pip alerts
 

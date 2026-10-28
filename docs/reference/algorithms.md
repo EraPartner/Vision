@@ -2,8 +2,8 @@
 title: Algorithms & Data Structures
 type: algorithm-doc
 status: active
-date: 2026-10-21
-updated: 2026-10-21
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     algorithms,
@@ -523,7 +523,7 @@ This invariant is verified by regression tests in `portfolioPerformanceSnapshotS
 
 #### Live Overlay at Read Time (2026-05-31, ADR-064)
 
-Because `computeAndStoreSnapshots` runs only at startup, the stored snapshot's investments value drifts from the live summary after each hourly price refresh. To close this freshness gap, `infoRepositoryNetWorth.getNetWorthFromSnapshots` accepts an optional `liveInvestments` argument. When finite, it overwrites the latest snapshot row's `investments` and recomputes `netWorth = liquid + liveInvestments` before deriving `current` and `monthlyChange`. The caller (`netWorth.js` and the startup warmup path in `info.js`) resolves this value from `portfolioSummaryService` via the shared `portfolioSummaryCache` (60s TTL) using `resolveLivePortfolioValue(targetCurrency)` in `_liveSummary.js`. Historical snapshot rows are not modified. If the live resolution fails, `liveInvestments` is `undefined` and the algorithm falls back to the stored snapshot value.
+Because `computeAndStoreSnapshots` runs only at startup, the stored snapshot's investments value drifts from the live summary after each hourly price refresh. To close this freshness gap, `infoRepositoryNetWorth.getNetWorthFromSnapshots` accepts an optional `liveInvestments` argument. When finite, it overwrites the latest snapshot row's `investments` and recomputes `netWorth = liquid + liveInvestments` before deriving `current` and `monthlyChange`. The caller (`netWorth.ts` and the startup warmup path in `info.ts`) resolves this value from `portfolioSummaryService` via the shared `portfolioSummaryCache` (60s TTL) using `resolveLivePortfolioValue(targetCurrency)` in `services/info/liveSummary.ts`. Historical snapshot rows are not modified. If the live resolution fails, `liveInvestments` is `undefined` and the algorithm falls back to the stored snapshot value.
 
 #### Dense Input via Daily Gap-Fill (2026-05-31, ADR-065)
 

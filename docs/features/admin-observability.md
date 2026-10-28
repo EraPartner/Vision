@@ -2,14 +2,14 @@
 title: Admin Observability Dashboard
 type: feature
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
 tags: [feature, admin, observability, provider-health, endpoint-liveness, shadow-divergences, aggregation, migration, phase-f, phase-9-complete, rate-limiting, admin-guard, route-gating]
 description: Unified admin hub — DB maintenance, provider health, endpoint liveness, and request metrics — gated via Settings toggle.
 aliases: [admin dashboard, system observability, admin monitoring, admin hub]
 related_code:
   - apps/node-backend/src/routes/admin.ts
-  - apps/node-backend/src/services/providerHealth/providerHealthService.js
+  - apps/node-backend/src/services/providerHealthService.ts
   - apps/node-backend/src/middleware/requestMetrics.ts
   - apps/frontend/src/pages/admin/AdminOverviewPage.tsx
   - apps/frontend/src/pages/admin/ProviderHealthPage.tsx
@@ -164,7 +164,7 @@ Example response (historical):
 **Phase 9 (Cutover) — COMPLETE**
 
 Removal completed (2026-04-25):
-1. Removed `createAggregationShadow` middleware (`aggregationShadow.js`, `aggregationShadowWiring.js`)
+1. Removed `createAggregationShadow` middleware (`aggregationShadow`, `aggregationShadowWiring`; both deleted)
 2. Removed `/api/info/*` aggregation fallback routes from wiring
 3. Decommissioned `agg_shadow_divergences` table (dropped via migration 0009)
 4. Removed `/api/admin/shadow-divergences*` endpoints

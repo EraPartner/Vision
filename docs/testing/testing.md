@@ -2,8 +2,8 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-10-22
-updated: 2026-10-22
+date: 2026-10-28
+updated: 2026-10-28
 last-updated: 2026-10-10
 last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
@@ -99,7 +99,7 @@ bun test
 bun run test:watch
 
 # Run specific test file
-bun vitest run src/path/to/test.test.js
+bun vitest run tests/path/to/test.test.ts
 
 # Run tests matching pattern
 bun vitest run --test-name-pattern="testName"
@@ -388,7 +388,7 @@ See [[docs/testing/frontend-component-integration|Component-Integration Tests]] 
 
 ```javascript
 import { describe, it, expect } from "vitest";
-import { myFunction } from "../src/module.js";
+import { myFunction } from "../src/module.ts";
 
 describe("myFunction", () => {
   it("should do something", () => {
@@ -608,8 +608,8 @@ describe("API Endpoints", () => {
 
 ```javascript
 import { vi } from "vitest";
-import { mockConnection } from "./helpers/repoMocks.js";
-import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
+import { mockConnection } from "./helpers/repoMocks.ts";
+import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.ts";
 
 vi.mock("../src/database/connection.ts", () => mockConnection());
 vi.mock("../src/services/currency/currencyConversionService.ts", () =>
@@ -618,7 +618,7 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () =>
 ```
 
 `tests/helpers/repoMocks.ts` is the canonical database seam. Its variants share the complete
-`connection.js` export surface and model inert, ambient-client, or pooled transaction behavior.
+`connection.ts` export surface and model inert, ambient-client, or pooled transaction behavior.
 Only the two real-PostgreSQL instrumentation suites use an explicit partial-real connection mock.
 `tests/helpers/mockCurrencyConversion.ts` keeps named and default exports on the same spies. Its
 default conversion is identity; tests that need converted values prime explicit output rows or use
@@ -845,7 +845,7 @@ tests/golden/__fixtures__/
 
 ```javascript
 import { describe, it } from "vitest";
-import { runGolden } from "../golden/runGolden.js";
+import { runGolden } from "../golden/runGolden.ts";
 import { generateLoanSchedule } from "../../src/services/calculations/loanSchedule.ts";
 
 describe("loanSchedule golden", () => {
@@ -860,7 +860,7 @@ describe("loanSchedule golden", () => {
 **Updating fixtures:**
 
 ```bash
-UPDATE_GOLDENS=1 bun vitest run loanSchedule.test.js
+UPDATE_GOLDENS=1 bun vitest run tests/golden/runGolden.test.ts
 ```
 
 This pattern isolates test expectations from implementation details, making it easier to verify business logic regressions without brittle assertions.
@@ -875,7 +875,7 @@ Opt-in shared Postgres pool for tests that need a real database. Resolved via `T
 
 ```javascript
 import { describe, it, beforeAll, afterAll } from "vitest";
-import { getTestPool, closeTestPool, hasTestDatabase } from "../setup/db.js";
+import { getTestPool, closeTestPool, hasTestDatabase } from "../setup/db.ts";
 
 describe("transactionRepository", () => {
   let pool;
@@ -972,12 +972,12 @@ describe("loanSchedule principal invariant", () => {
 
 | Module                     | Invariant                                                                               | Test                                                                    |
 | -------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `loanSchedule.js`          | `sum(principal_amount) ≈ principal ±1¢`; 0% APR; final remaining == 0                   | [[apps/node-backend/tests/property/loanSchedule.property.test.ts]]      |
-| `recurrence.js`            | Strict monotonic advance + `iterate(n) == iterate(n-1) + step`; Jan-31 clamp            | [[apps/node-backend/tests/property/recurrence.property.test.ts]]        |
-| `splits.js`                | `split.amount == sum(payments) + remaining`; overpayment blocked; zero-balance filtered | [[apps/node-backend/tests/property/splits.property.test.ts]]            |
-| `aggregation/monthly.js`   | `sum(monthly income/expense/net) == yearly ±1¢`; net identity                           | [[apps/node-backend/tests/property/monthlyYearly.property.test.ts]]     |
-| `aggregation/category.js`  | `sum(by_category) + excluded_total == grand_total ±1¢`                                  | [[apps/node-backend/tests/property/categoryTotal.property.test.ts]]     |
-| `calculations/currency.js` | `convert(convert(x, A, B), B, A) ≈ x`; EUR→EUR identity; triangulation                  | [[apps/node-backend/tests/property/currencyRoundTrip.property.test.ts]] |
+| `loanSchedule.ts`          | `sum(principal_amount) ≈ principal ±1¢`; 0% APR; final remaining == 0                   | [[apps/node-backend/tests/property/loanSchedule.property.test.ts]]      |
+| `recurrence.ts`            | Strict monotonic advance + `iterate(n) == iterate(n-1) + step`; Jan-31 clamp            | [[apps/node-backend/tests/property/recurrence.property.test.ts]]        |
+| `splits.ts`                | `split.amount == sum(payments) + remaining`; overpayment blocked; zero-balance filtered | [[apps/node-backend/tests/property/splits.property.test.ts]]            |
+| `aggregation/monthly.ts`   | `sum(monthly income/expense/net) == yearly ±1¢`; net identity                           | [[apps/node-backend/tests/property/monthlyYearly.property.test.ts]]     |
+| `aggregation/category.ts`  | `sum(by_category) + excluded_total == grand_total ±1¢`                                  | [[apps/node-backend/tests/property/categoryTotal.property.test.ts]]     |
+| `services/currency/currencyConversionService.ts` | `convert(convert(x, A, B), B, A) ≈ x`; EUR→EUR identity; triangulation                  | [[apps/node-backend/tests/property/currencyRoundTrip.property.test.ts]] |
 
 **When to add a property test vs. a golden fixture:**
 
@@ -1308,7 +1308,7 @@ See [[docs/testing/test-inventory#phase-f6--mutation-testing-stryker-2026-05-02|
 - Coverage expansion beyond 17% statements (Phase E goal: 25%+)
 - Additional component-integration tests for complex pages (Settings, Analytics, etc.)
 
-Reference: [[docs/testing/frontend-component-integration|Component-Integration Test Guide]], [[docs/testing/test-inventory|Test Inventory]], [[docs/reference/scripts|Scripts Reference]], [[apps/frontend/src/test-setup.ts]], [[apps/frontend/src/test/msw/handlers.ts]], [[apps/frontend/src/test/msw/contracts.test.ts]], [[apps/frontend/stryker.config.json]]
+Reference: [[docs/testing/frontend-component-integration|Component-Integration Test Guide]], [[docs/testing/test-inventory|Test Inventory]], [[docs/reference/scripts|Scripts Reference]], [[apps/frontend/src/test-setup.ts]], [[apps/frontend/src/test/msw/handlers.ts]], [[apps/frontend/src/test/msw/contracts.test.ts]]
 
 ## Test Examples
 

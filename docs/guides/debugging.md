@@ -2,7 +2,7 @@
 title: Error Handling & Debugging Guide
 type: guide
 status: active
-date: 2026-10-19
+date: 2026-10-28
 tags: [debugging, error-handling, troubleshooting, developer-guide]
 description: Comprehensive guide to error handling patterns, debugging techniques, and common failure modes in Vision
 aliases:
@@ -157,7 +157,8 @@ logger.error("Database error", { error: err.message });
 #### 3. Test Individual Services
 
 ```bash
-# Run specific service tests
+# Run specific service tests (from the backend package, where the Vitest config lives)
+cd apps/node-backend
 bun vitest run tests/currencyConversionService.test.ts
 bun vitest run tests/deduplication.test.ts
 ```

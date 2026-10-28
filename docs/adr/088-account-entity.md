@@ -1,8 +1,9 @@
 ---
 title: ADR-088 Account Entity (replace the bank_account string)
 type: adr
+status: accepted
 date: 2026-06-18
-updated: 2026-09-12
+updated: 2026-10-28
 tags: [adr, accounts, account-entity, data-model, migration, expand-contract, running-balance, transfers, import, net-worth, portfolio, trigger-lookup-only, phantom-account, split-guard, rename-propagation, migration-0062]
 description: Replace the implicit free-text bank_account column with a real accounts table via an expand/contract migration, giving accounts a stable identity that cash, holdings, liabilities, reconciliation, and owner/tax allocation can all hang off. 2026-06-25 addendum: migration 0062 hardens the dual-write trigger (lookup-only on UPDATE), adds a split-total guard trigger, and wires account rename propagation. 2026-09-08 addendum: the guarded contract drop was activated on the maintained live database.
 aliases: [account entity, accounts table, account_id, bank_account replacement]
@@ -13,6 +14,8 @@ aliases: [account entity, accounts table, account_id, bank_account replacement]
 ## Status
 
 Proposed
+
+> [!note] Status corrected on 2026-10-28: the frontmatter status is `accepted`; accounts are implemented (db/migrations/0001_baseline.sql, apps/node-backend/src/services/accountService.ts).
 
 ## Date
 

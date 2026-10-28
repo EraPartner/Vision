@@ -2,8 +2,8 @@
 title: Integration - Kinesis Price Provider
 type: integration
 status: active
-date: 2026-10-08
-last_modified: 2026-05-14
+date: 2026-10-28
+last_modified: 2026-10-28
 tags: [integration, kinesis, price-provider, metals, commodities, eur-to-usd-mapping, data-sanitization, currency-conversion, historical-fx]
 description: Kinesis market data provider for metals and commodity price feeds with EUR-to-USD symbol remapping, currency conversion, and misconfiguration detection
 aliases: [kinesis, kinesis price provider, metals prices, commodity data, kinesis eur conversion]
@@ -69,12 +69,12 @@ The Kinesis API only provides USD-denominated symbols. When an investment has a 
 When an investment has a EUR-denominated symbol (e.g., `KAU_EUR`) remapped to USD (`KAU_USD`), Vision now converts the fetched USD price back to the investment's currency:
 
 **Live Price Path:**
-- `PROVIDERS.kinesis` in `priceProviderRegistry.js` returns `needsUsdToEur` flag if the symbol was remapped
+- `PROVIDERS.kinesis` in `priceProviderRegistry.ts` returns `needsUsdToEur` flag if the symbol was remapped
 - When `needsUsdToEur=true` and investment currency ≠ USD, live USD price is converted to investment currency using current FX rate
 - Returns `{ price, currency: <investment currency>, source }`
 
 **Historical Series Path:**
-- `fetchHistoricalPrices()` in `priceProviderService.js` converts fetched USD points to investment currency via `convertRowsToEur(..., { useHistoricalRatesByDate: true })`
+- `fetchHistoricalPrices()` in `priceProviderService.ts` converts fetched USD points to investment currency via `convertRowsToEur(..., { useHistoricalRatesByDate: true })`
 - Each point is converted at its own historical FX rate (bulk-loaded from `currency_rates` in a single query)
 - No per-date DB round-trips; efficient single-query rate-index load
 - Persists currency-native prices to `asset_price_history`
@@ -104,7 +104,7 @@ GET {base_url}/history?symbol={symbol}&from={date}&to={date}&interval={interval}
 
 ### Price Provider Service
 
-Kinesis is integrated into `priceProviderService.js` alongside other providers (Binance, Yahoo, Custom).
+Kinesis is integrated into `priceProviderService.ts` alongside other providers (Binance, Yahoo, Custom).
 
 #### Provider Resolution
 
@@ -142,7 +142,7 @@ Kinesis also contains isolated one-day needles (up/down spikes) detected via MAD
 
 #### Implementation
 
-The function `sanitizeKinesisIsolatedSpikes(points)` (in `priceProviderRegistry.js`):
+The function `sanitizeKinesisIsolatedSpikes(points)` (in `priceProviderRegistry.ts`):
 1. Removes stale runs (≥ 8 identical prices)
 2. Checks and corrects edge points (first/last)
 3. Detects middle-point isolated spikes using MAD thresholds

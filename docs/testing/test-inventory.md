@@ -2,9 +2,9 @@
 title: Test Inventory
 type: testing
 status: active
-date: 2026-10-20
-last_modified: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-28
+last_modified: 2026-10-28
+updated: 2026-10-28
 last-updated: 2026-10-08
 last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_tax_pure_module_tests: 2026-05-29
@@ -928,7 +928,7 @@ The backend test coverage should be inventoried by running:
 bun run test
 ```
 
-Backend tests are located in `apps/node-backend/src/` alongside source files as `*.test.js` files.
+Backend tests are located in `apps/node-backend/tests/` (including subfolders) as `*.test.ts` files.
 
 - `apps/node-backend/tests/connection.test.ts` covers pool and retry utilities plus ambient transaction routing, unique nested savepoints, caught-inner rollback, rollback-error preservation, and released-client invalidation.
 - `apps/node-backend/tests/helpers/repoMocks.test.ts` pins parity for the shared ambient transaction mock used by repository and service tests.
@@ -1006,13 +1006,13 @@ The Transaction Tags feature test suite is now **complete and passing**. All tes
 | ---------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Bank adapters**            | `importPipeline/adapters/` (Wise, SABB, Vision, others) | Core data ingestion — each bank adapter needs format-specific parsing tests                                                                                       |
 | ~~**Import pipeline**~~      | ~~`importPipeline/*.js`~~                               | ✓ **COVERED** (2026-05-05) — 11 tests (`importPipeline.test.ts`) covering validateBatch, stageBatch, matchBatch, commitBatch phases with full error path coverage |
-| **Portfolio math utilities** | ~~`portfolioMath.js`~~                                  | ✓ **COVERED** (2026-05-05) — 21 tests covering FIFO/LIFO cost basis, accrued interest, spike sanitization with DST safety                                         |
-| **Deduplication**            | `deduplication.js`                                      | SHA-256 hashing and field-based matching logic                                                                                                                    |
-| **Recurring detection**      | `recurringDetectionService.js`                          | Complex interval detection algorithm                                                                                                                              |
-| **Currency conversion**      | `currencyConversionService.js`                          | Multi-source rate resolution, historical rates                                                                                                                    |
-| **Materialized views**       | `materializedViewService.js`                            | Call coalescing, concurrent refresh                                                                                                                               |
-| **Loan repayment**           | `loanRepaymentService.js`                               | Amortization calculations for 3 loan types                                                                                                                        |
-| **Text normalization**       | `textNormalization.js`                                  | Recipient name cleaning, European number parsing                                                                                                                  |
+| **Portfolio math utilities** | ~~`portfolioMath.ts`~~                                  | ✓ **COVERED** (2026-05-05) — 21 tests covering FIFO/LIFO cost basis, accrued interest, spike sanitization with DST safety                                         |
+| **Deduplication**            | `deduplication.ts`                                      | SHA-256 hashing and field-based matching logic                                                                                                                    |
+| **Recurring detection**      | `recurringDetectionService.ts`                          | Complex interval detection algorithm                                                                                                                              |
+| **Currency conversion**      | `currencyConversionService.ts`                          | Multi-source rate resolution, historical rates                                                                                                                    |
+| **Materialized views**       | `materializedViewService.ts`                            | Call coalescing, concurrent refresh                                                                                                                               |
+| **Loan repayment**           | `loanSchedule.ts` (formerly `loanRepaymentService.js`)                             | Amortization calculations for 3 loan types                                                                                                                        |
+| **Text normalization**       | `textNormalization.ts`                                  | Recipient name cleaning, European number parsing                                                                                                                  |
 
 ### Medium-Priority Missing Tests
 
@@ -1020,9 +1020,9 @@ The Transaction Tags feature test suite is now **complete and passing**. All tes
 | ----------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Repository layer**          | All 13 repositories                          | SQL query correctness, edge cases                                                                                                                         |
 | **Route handlers**            | All 14 route files                           | Request validation, error responses                                                                                                                       |
-| ~~**Portfolio performance**~~ | ~~`portfolioPerformanceSnapshotService.js`~~ | ✓ **COVERED** (2026-05-18) — parity regression tests: savings accrual, real-estate appreciation, bond interest-payment clock reset, latest-day unit price |
+| ~~**Portfolio performance**~~ | ~~`portfolioPerformanceSnapshotService.ts`~~ | ✓ **COVERED** (2026-05-18) — parity regression tests: savings accrual, real-estate appreciation, bond interest-payment clock reset, latest-day unit price |
 | ~~**IBAN validation**~~       | ~~`iban.js`~~                                | Deleted 2026-05-29 (`iban.js` and `iban.test.js` removed)                                                                                                 |
-| **Recurrence service**        | `recurrenceService.js`                       | Date calculation for patterns                                                                                                                             |
+| **Recurrence service**        | `recurrence.ts` (formerly `recurrenceService.js`)                     | Date calculation for patterns                                                                                                                             |
 
 ### Frontend Missing Tests
 
@@ -1045,7 +1045,7 @@ bun run test
 bun run test:watch
 
 # Single test file
-bun vitest run src/path/to/test.test.js
+bun vitest run tests/path/to/test.test.ts
 
 # Test name pattern
 bun vitest run --test-name-pattern="testName"
@@ -1053,7 +1053,7 @@ bun vitest run --test-name-pattern="testName"
 
 ## Testing Conventions
 
-- Test files are colocated with source files (`*.test.ts` / `*.test.tsx` / `*.test.js`)
+- Test file locations: backend in `apps/node-backend/tests/` (`*.test.ts`); frontend colocated with source (`*.test.ts` / `*.test.tsx`)
 - Component tests use `__tests__/` subdirectory for multiple test files
 - Hook tests test the hook's return values and side effects
 - Unit tests test pure functions with various input/output combinations

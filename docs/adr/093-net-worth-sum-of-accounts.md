@@ -1,6 +1,7 @@
 ---
 title: ADR-093 Net Worth = Σ Accounts
 type: adr
+status: accepted
 date: 2026-06-18
 tags: [adr, net-worth, accounts, liabilities, cash-sleeve, adr-064, adr-061, adr-088]
 description: Redefine net worth as the sum over in-net-worth accounts (cash ledger + holdings − debt), superseding ADR-064's bank-balances-plus-portfolio composition. The aggregate is realized by the account foundation; the per-account breakdown and snapshot-engine supersession are the analytics follow-on.

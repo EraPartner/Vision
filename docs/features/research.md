@@ -2,8 +2,8 @@
 title: Research Feature
 type: feature
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   - url-state
   - feature
@@ -133,7 +133,7 @@ The aggregation layer sits in `apps/node-backend/src/services/research/` and is 
 
 ### 1. Capability Map
 
-`capabilityMap.js` is a static, pure routing table: `(dataType, assetClass) → ordered provider preference`. The aggregator walks this chain and skips any provider that is unkeyed, quota-exhausted, or `providerHealthService`-unhealthy. Example chains:
+`capabilityMap.ts` is a static, pure routing table: `(dataType, assetClass) → ordered provider preference`. The aggregator walks this chain and skips any provider that is unkeyed, quota-exhausted, or `providerHealthService`-unhealthy. Example chains:
 
 | Data type      | Default chain                                       | Crypto override               | Metals override               |
 | -------------- | --------------------------------------------------- | ----------------------------- | ----------------------------- |
@@ -146,7 +146,7 @@ The aggregation layer sits in `apps/node-backend/src/services/research/` and is 
 > The `quote`, `chart`, and `news` default chains were reordered to place Yahoo first, demoting paid providers (Twelve Data, Finnhub, FMP, Alpha Vantage) to fallback positions. Yahoo is keyless and unmetered, so it does not consume any paid-tier daily quota. The fall-through semantics are unchanged — a Yahoo failure still routes to the next provider in the chain. `fundamentals.default` deliberately remains FMP-first (Yahoo's fundamentals depth is shallower). See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--yahoo-first-provider-ordering-for-quote--chart--news-2026-06-16|ADR-079 follow-up note (2026-06-16)]] for the full rationale.
 
 > [!info] Fundamentals: merged FMP + Yahoo, not raced (2026-06-16)
-> `GET /api/research/fundamentals` and `GET /api/research/scorecard` do **not** race through the `fundamentals.default` chain. They call `researchAggregator.fetchFundamentals()`, which fetches **FMP and Yahoo in parallel** and merges results **field-by-field** (FMP preferred; Yahoo fills gaps). This gives the union of both providers: FMP-only fields (e.g. `interestCoverage`) and Yahoo-only fields (e.g. `forwardPE`, `revenue`, `freeCashFlow`) both appear in every response. Finnhub is retained in `fundamentals.default` in `capabilityMap.js` for documentation and the generic `fetch('fundamentals')` path, but is not called by these routes. `meta.provider` is `"fmp+yahoo"` when both contribute, or the single provider name when only one responds. Cache key `fundamentals:merged:<assetClass>:<symbol>`, TTL 12 h. See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--fundamentals-merged-across-fmp--yahoo-2026-06-16|ADR-079 follow-up note (2026-06-16)]].
+> `GET /api/research/fundamentals` and `GET /api/research/scorecard` do **not** race through the `fundamentals.default` chain. They call `researchAggregator.fetchFundamentals()`, which fetches **FMP and Yahoo in parallel** and merges results **field-by-field** (FMP preferred; Yahoo fills gaps). This gives the union of both providers: FMP-only fields (e.g. `interestCoverage`) and Yahoo-only fields (e.g. `forwardPE`, `revenue`, `freeCashFlow`) both appear in every response. Finnhub is retained in `fundamentals.default` in `capabilityMap.ts` for documentation and the generic `fetch('fundamentals')` path, but is not called by these routes. `meta.provider` is `"fmp+yahoo"` when both contribute, or the single provider name when only one responds. Cache key `fundamentals:merged:<assetClass>:<symbol>`, TTL 12 h. See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--fundamentals-merged-across-fmp--yahoo-2026-06-16|ADR-079 follow-up note (2026-06-16)]].
 >
 > **Surfaces that render merged fundamentals:** Market Lookup (`MarketLookupPage.tsx` tabbed Details card — `ResearchFundamentalsTab` pulls the graded scorecard + grouped fundamentals via `/scorecard`; per-field fallback to Yahoo quote for indices/ETFs FMP does not cover), Compare page (Fundamentals tab). Both surfaces show the same merged composite.
 
@@ -154,10 +154,10 @@ The map is unit-testable in isolation (no I/O, no env reads; `isUsable` is injec
 
 ### 2. Quota Governor
 
-`quotaGovernor.js` tracks two token-bucket windows per provider:
+`quotaGovernor.ts` tracks two token-bucket windows per provider:
 
 - **Per-minute (in-memory):** self-healing on restart.
-- **Per-day (persisted):** mirrored in memory, backed by the `provider_quota` PostgreSQL table via `providerQuotaRepository.js`. Per-day persistence prevents a frequently-restarted backend from blowing a small daily cap (e.g. Alpha Vantage's ~25/day).
+- **Per-day (persisted):** mirrored in memory, backed by the `provider_quota` PostgreSQL table via `providerQuotaRepository.ts`. Per-day persistence prevents a frequently-restarted backend from blowing a small daily cap (e.g. Alpha Vantage's ~25/day).
 
 `PROVIDER_LIMITS` (as shipped):
 
@@ -171,7 +171,7 @@ The map is unit-testable in isolation (no I/O, no env reads; `isUsable` is injec
 
 `canSpend(provider)` is checked before every outbound call; `false` routes to the next provider in the chain rather than issuing a 429.
 
-### 3. Type-Aware Cache (`researchCache.js`)
+### 3. Type-Aware Cache (`researchCache.ts`)
 
 In-memory TTL cache with type-specific expiry. Caching — not scheduling — is the primary rate-limit defence (research tolerates staleness). A cache hit returns `source: 'cache'` with zero quota spend. The cache sweeps expired entries every 5 minutes.
 
@@ -185,7 +185,7 @@ In-memory TTL cache with type-specific expiry. Caching — not scheduling — is
 | `macro_search`    | 1 h                                                                 |
 | `macro_series`    | 12 h                                                                |
 
-### 4. Provider Key Gating (`providerKeys.js`)
+### 4. Provider Key Gating (`providerKeys.ts`)
 
 Providers requiring an API key are dropped from every capability chain when their key is absent from `.env.local`. Yahoo, Binance, and Kinesis are keyless and always available if their adapter exists.
 
@@ -223,7 +223,7 @@ International ticker reuse is rampant (the same string is a different instrument
 
 ## Provider Adapters
 
-All five adapters live in `apps/node-backend/src/services/research/adapters/`: `yahooAdapter` (no key) plus `twelveDataAdapter`, `finnhubAdapter`, `fmpAdapter`, and `alphaVantageAdapter`. The keyed four read their key via `providerKeys.js` and self-throw when it is absent, so the aggregator's `isProviderKeyed` gate drops them from the capability chain until their key is set in the root `.env` (ADR-080) — at which point they activate automatically. Each adapter is implemented against its provider's documented API and normalized to the shared response shapes; the normalization is unit-tested with mocked responses, but **live verification per provider/tier is still required** (some endpoints — e.g. Finnhub candles — are tier-gated and fall through gracefully when unavailable).
+All five adapters live in `apps/node-backend/src/services/research/adapters/`: `yahooAdapter` (no key) plus `twelveDataAdapter`, `finnhubAdapter`, `fmpAdapter`, and `alphaVantageAdapter`. The keyed four read their key via `providerKeys.ts` and self-throw when it is absent, so the aggregator's `isProviderKeyed` gate drops them from the capability chain until their key is set in the root `.env` (ADR-080) — at which point they activate automatically. Each adapter is implemented against its provider's documented API and normalized to the shared response shapes; the normalization is unit-tested with mocked responses, but **live verification per provider/tier is still required** (some endpoints — e.g. Finnhub candles — are tier-gated and fall through gracefully when unavailable).
 
 ### FMP adapter — stable API migration (2026-06-16)
 
@@ -251,21 +251,21 @@ Three new adapters live alongside the existing five in `apps/node-backend/src/se
 
 | Adapter              | Key?                                                                                                         | Coverage                                                                                                                                                                                                                                                                                       |
 | -------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fredAdapter.js`     | **Keyed** (`FRED_API_KEY`; free at [fredaccount.stlouisfed.org](https://fredaccount.stlouisfed.org/apikeys)) | 800k+ US and OECD-sourced series: CPI (`CPIAUCSL`), Fed Funds rate (`FEDFUNDS`), GDP (`GDPC1`), unemployment (`UNRATE`), ECB policy rates via FRED codes (`ECBMRRFR`, `ECBDFR`), regional-Fed manufacturing surveys (Philly, NY Empire State, Richmond, Dallas) as PMI proxies                 |
-| `eurostatAdapter.js` | **Keyless** (first-party EU data)                                                                            | Eurostat dissemination API; `parseJsonStat` modeled on `belgianInflationService`'s proven JSON-stat handling but kept in a **separate module** — the inflation service's fetch/persist path is not touched (ADR-082 firewall). Curated via `macroCatalog.js`: BE/EA HICP, BE/EU27 unemployment |
-| `dbnomicsAdapter.js` | **Keyless**                                                                                                  | Fetch-by-id for ECB, OECD, and IMF SDMX series via `api.db.nomics.world`; open-ended search is FRED's role in v1 — DBnomics is used when a specific 3-part series path (`provider/dataset/series`) is known                                                                                    |
+| `fredAdapter.ts`     | **Keyed** (`FRED_API_KEY`; free at [fredaccount.stlouisfed.org](https://fredaccount.stlouisfed.org/apikeys)) | 800k+ US and OECD-sourced series: CPI (`CPIAUCSL`), Fed Funds rate (`FEDFUNDS`), GDP (`GDPC1`), unemployment (`UNRATE`), ECB policy rates via FRED codes (`ECBMRRFR`, `ECBDFR`), regional-Fed manufacturing surveys (Philly, NY Empire State, Richmond, Dallas) as PMI proxies                 |
+| `eurostatAdapter.ts` | **Keyless** (first-party EU data)                                                                            | Eurostat dissemination API; `parseJsonStat` modeled on `belgianInflationService`'s proven JSON-stat handling but kept in a **separate module** — the inflation service's fetch/persist path is not touched (ADR-082 firewall). Curated via `macroCatalog.ts`: BE/EA HICP, BE/EU27 unemployment |
+| `dbnomicsAdapter.ts` | **Keyless**                                                                                                  | Fetch-by-id for ECB, OECD, and IMF SDMX series via `api.db.nomics.world`; open-ended search is FRED's role in v1 — DBnomics is used when a specific 3-part series path (`provider/dataset/series`) is known                                                                                    |
 
 Two helpers support these adapters:
 
-- `macroRange.js` — `periodToMs(period, range)` + `trimToRange(points, range)`. Range anchoring is on the **last available observation, not the wall clock** — macro data lags publication, so anchoring on "now" produced empty charts for short ranges.
-- `macroCatalog.js` — curated keyless EU catalog (BE/EA HICP, BE/EU27 unemployment) with per-provider `isValidSeriesId` shape guards; makes common EU indicators discoverable without a FRED key.
+- `macroRange.ts` — `periodToMs(period, range)` + `trimToRange(points, range)`. Range anchoring is on the **last available observation, not the wall clock** — macro data lags publication, so anchoring on "now" produced empty charts for short ranges.
+- `macroCatalog.ts` — curated keyless EU catalog (BE/EA HICP, BE/EU27 unemployment) with per-provider `isValidSeriesId` shape guards; makes common EU indicators discoverable without a FRED key.
 
 > [!warning] PMI is out of scope
 > Real PMI is proprietary (S&P Global / ISM). Free proxies reachable through this surface: **OECD Composite Leading Indicators** (via DBnomics) and **regional-Fed manufacturing surveys** (Philly Fed, NY Empire State, Richmond, Dallas) on FRED. The Chart Builder UI copy explains the gap.
 
 ### Aggregator Path
 
-`researchAggregator.js` gained two new functions (distinct from the capability-map race):
+`researchAggregator.ts` gained two new functions (distinct from the capability-map race):
 
 - **`searchMacro(query)`** — fan-out across all usable macro adapters in parallel; UNIONs results into one `MacroSeriesItem[]` list tagged by provider. A provider that errors or is unkeyed is simply absent. Cached 1 h (`macro_search`).
 - **`fetchMacroSeries({ provider, seriesId, range })`** — routes to **exactly one provider's** adapter. No fallback chain (a series exists at exactly one provider). Cached 12 h (`macro_series`). FRED is quota-governed (`{ perMinute: 120 }`); Eurostat and DBnomics are unmetered.
@@ -278,7 +278,7 @@ Macro observations are **never persisted to `asset_price_history`** (ADR-079 sto
 
 ### Keyless Degradation
 
-With no `FRED_API_KEY`, the macro surface degrades gracefully to the keyless **Eurostat catalog** (curated via `macroCatalog.js`) plus DBnomics fetch-by-id. FRED is absent; common EU indicators (HICP, unemployment) remain available. This mirrors how the keyed equity providers degrade when their keys are absent.
+With no `FRED_API_KEY`, the macro surface degrades gracefully to the keyless **Eurostat catalog** (curated via `macroCatalog.ts`) plus DBnomics fetch-by-id. FRED is absent; common EU indicators (HICP, unemployment) remain available. This mirrors how the keyed equity providers degrade when their keys are absent.
 
 ### Chart Builder Integration
 

@@ -1,6 +1,7 @@
 ---
 title: ADR-097 Portfolio × Research — Watchlist Backtest & Allocation Drift
 type: adr
+status: partially implemented
 date: 2026-06-18
 tags: [adr, portfolio, research, watchlist, backtest, allocation, drift, benchmarks, adr-065, adr-079]
 description: Two Portfolio×Research statistics — a watchlist "what-if I'd bought when I added it" backtest using add-date vs current price, and allocation drift (target vs actual weights) compared against canonical portfolios (60/40, all-weather, three-fund).

@@ -2,12 +2,12 @@
 title: Planned Transactions
 type: feature
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-28
+updated: 2026-10-28
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match, exchange-rates, fx]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: "Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders its dashboard reminder without duplicating the planned-payments page, while native badge synchronization remains active throughout AppLayout. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load. August 2026: Planned aggregates omit payments whose exchange rate is unavailable and visibly report the omission instead of blending currencies."
-related_code: ["apps/node-backend/src/routes/plannedTransactions.ts", "apps/node-backend/src/services/plannedTransactionService.ts", "apps/node-backend/src/repositories/plannedTransactionRepository.ts", "apps/node-backend/src/services/plannedExecutionService.ts", "apps/node-backend/src/services/plannedMatchService.ts", "apps/node-backend/src/services/calculations/loanSchedule.ts", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.ts", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/features/planned/PlannedPaymentsTable.tsx", "apps/frontend/src/features/planned/PlannedDueBadge.tsx", "apps/frontend/src/features/planned/plannedDueDate.ts", "apps/frontend/src/features/planned/NextSevenDaysStrip.tsx", "apps/frontend/src/features/planned/nextSevenDays.ts", "apps/frontend/src/features/planned/usePlannedTotals.ts", "apps/node-backend/src/services/plannedTotalsService.ts", "apps/frontend/src/features/planned/PlannedPaymentForm.tsx", "apps/frontend/src/features/planned/LinkTransactionDialog.tsx", "apps/frontend/src/features/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/features/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/lib/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts", "apps/frontend/src/components/layout/AppLayout.tsx"]
+related_code: ["apps/node-backend/src/routes/plannedTransactions.ts", "apps/node-backend/src/services/plannedTransactionService.ts", "apps/node-backend/src/repositories/plannedTransactionRepository.ts", "apps/node-backend/src/services/plannedExecutionService.ts", "apps/node-backend/src/services/plannedMatchService.ts", "apps/node-backend/src/services/calculations/loanSchedule.ts", "apps/node-backend/src/lib/calculations/recurrence.ts", "apps/node-backend/src/services/recurringDetectionService.ts", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/features/planned/PlannedPaymentsTable.tsx", "apps/frontend/src/features/planned/PlannedDueBadge.tsx", "apps/frontend/src/features/planned/plannedDueDate.ts", "apps/frontend/src/features/planned/NextSevenDaysStrip.tsx", "apps/frontend/src/features/planned/nextSevenDays.ts", "apps/frontend/src/features/planned/usePlannedTotals.ts", "apps/node-backend/src/services/plannedTotalsService.ts", "apps/frontend/src/features/planned/PlannedPaymentForm.tsx", "apps/frontend/src/features/planned/LinkTransactionDialog.tsx", "apps/frontend/src/features/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/features/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/lib/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts", "apps/frontend/src/components/layout/AppLayout.tsx"]
 ---
 
 # Planned Transactions
@@ -94,7 +94,7 @@ Special handling for loans with amortization:
 month on the remaining principal — installment 1 carries a full month of
 interest even when the loan starts mid-month (e.g. start on the 5th, payment
 day on the 20th). There is no day-count proration; this is the standard
-simplification used by `loanSchedule.js` and matches how most consumer loan
+simplification used by `loanSchedule.ts` and matches how most consumer loan
 tables are quoted.
 
 ---
@@ -369,11 +369,11 @@ This refactor reduced handler duplication and improved maintainability without c
 
 ### Calculation Services (Phase 3 — Canonical Paths)
 
-**Note:** Calculation services have been relocated to `apps/node-backend/src/services/calculations/` as part of Phase 3 of the non-portfolio refactor. Back-compat re-export shims are maintained at the old paths (`loanRepaymentService.js`, `recurrenceService.js`) but new code should use the canonical paths below.
+**Note:** Calculation services have been relocated to `apps/node-backend/src/services/calculations/` as part of Phase 3 of the non-portfolio refactor. The old `loanRepaymentService` and `recurrenceService` paths no longer exist; use the canonical paths below.
 
-### `services/calculations/recurrence.js`
+### `lib/calculations/recurrence.ts`
 
-**File:** [[apps/node-backend/src/services/calculations/recurrence.js]]
+**File:** [[apps/node-backend/src/lib/calculations/recurrence.ts]]
 
 Calculates next occurrence dates for recurring planned transactions. Pure calculation function with no I/O side effects.
 
@@ -401,7 +401,7 @@ Feb 28  --[+1 month]--> Mar 28   (advance chains from 28, not from the original 
 Mar 28  --[+1 month]--> Apr 28   (stays at 28 forever)
 ```
 
-**This "sticky clamp" is intentional, documented behavior.** The alternative — storing the user's original day-of-month as a `preferred_day` anchor and restoring it each cycle (the pattern used in `loanSchedule.js#addMonthsAtDay`) — was considered and deliberately not implemented. Reasons:
+**This "sticky clamp" is intentional, documented behavior.** The alternative — storing the user's original day-of-month as a `preferred_day` anchor and restoring it each cycle (the pattern used in `loanSchedule.ts#addMonthsAtDay`) — was considered and deliberately not implemented. Reasons:
 
 - Planned transactions are created with a single `planned_date` field; there is no separate anchor column.
 - The sticky behavior is transparent and deterministic: the stored `planned_date` is always the actual next due date, with no hidden state.
@@ -438,7 +438,7 @@ Generates amortization schedules for loan-type planned transactions. Pure calcul
 > [!info] Locked contracts (Phase 8)
 > Amortization and recurrence invariants are pinned by property tests in [[apps/node-backend/tests/property/loanSchedule.property.test.ts]] and [[apps/node-backend/tests/property/recurrence.property.test.ts]]. Locked invariants include: sum of principal rows = original principal (amortizing), remaining principal monotonically decreases, recurrence `calculateNextDate` is strictly forward-moving and cadence-consistent. See [[docs/testing/testing#property-test-pattern-phase-8|Property Test Pattern]] and [[apps/node-backend/tests/golden/INVENTORY.md|Calculation Inventory]].
 
-### `recurringDetectionService.js`
+### `recurringDetectionService.ts`
 
 **File:** [[apps/node-backend/src/services/recurringDetectionService.ts]]
 
@@ -643,7 +643,7 @@ Extracted dialog component that manages linking a transaction execution to a pla
 - When user manually edits the recipient text input, `recipient_id` is cleared and search falls back to text-based matching
 - Debounced transaction fetch on filter changes
 - Shows matching transactions with amount, date, recipient
-- **Execution date = linked transaction's date (2026-06-25):** When the user confirms a link, the `execution_date` passed to `POST /:id/execute` is always the selected transaction's own `transaction_date` (i.e. when the money actually moved). There is no separate editable execution-date field — the `DatePicker` for execution date was removed. This makes the manual-link path consistent with the auto-match path in `plannedMatchService.js`, which already used `toYmd(tx.transaction_date)`. The backend still falls back to `todayAppDateString()` when `execution_date` is absent, but the dialog always supplies it.
+- **Execution date = linked transaction's date (2026-06-25):** When the user confirms a link, the `execution_date` passed to `POST /:id/execute` is always the selected transaction's own `transaction_date` (i.e. when the money actually moved). There is no separate editable execution-date field — the `DatePicker` for execution date was removed. This makes the manual-link path consistent with the auto-match path in `plannedMatchService.ts`, which already used `toYmd(tx.transaction_date)`. The backend still falls back to `todayAppDateString()` when `execution_date` is absent, but the dialog always supplies it.
 - When a transaction is selected, a "Recorded as paid on {date}" read-out is shown below the list (i18n key `plannedPage.link.recordedOn`). This is read-only; it reflects the transaction's `transaction_date`.
 - **Error feedback (2026-04-26):** Uses `toast.error(...)` from sonner instead of native `alert()` for consistent project convention
 - **i18n (2026-04-26):** New key `plannedPage.link.includesLinked` for linked-recipient helper text

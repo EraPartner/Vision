@@ -2,15 +2,15 @@
 title: Provider Health Tracking
 type: feature
 status: active
-date: 2026-10-19
-updated: 2026-10-19
-last_modified: 2026-06-16
+date: 2026-10-28
+updated: 2026-10-28
+last_modified: 2026-10-28
 tags: [feature, admin, provider-health, observability, research-providers, twelve-data, finnhub, fmp, alpha-vantage]
 description: Passive health tracking and active probing for all price, FX, inflation, and research data providers
 aliases: [provider health, data source health, provider monitoring]
 related_code:
-  - apps/node-backend/src/services/providerHealth/providerHealthService.js
-  - apps/node-backend/src/services/providerHealth/providerHealthRepo.js
+  - apps/node-backend/src/services/providerHealthService.ts
+  - apps/node-backend/src/repositories/providerHealthRepository.ts
   - apps/node-backend/src/routes/admin.ts
   - apps/frontend/src/pages/admin/ProviderHealthPage.tsx
   - apps/frontend/src/lib/api/admin.ts
@@ -67,9 +67,9 @@ Created by the historical Alembic migration `0010_add_provider_health.py`; now p
 
 `recordSuccess(provider)` and `recordError(provider, err)` are called from existing service files:
 
-- `priceProviderService.js` — Binance, Yahoo, Kinesis
-- `currencyConversionService.js` — ECB, open.er-api
-- `belgianInflationService.js` — Statbel, Eurostat
+- `priceProviderService.ts` — Binance, Yahoo, Kinesis
+- `currencyConversionService.ts` — ECB, open.er-api
+- `belgianInflationService.ts` — Statbel, Eurostat
 
 On success: resets `consecutive_failures` to 0, updates `last_success_at`.  
 On error: increments `consecutive_failures`, records `last_error` and `last_error_at`.
