@@ -17,4 +17,8 @@ regexTarget = "match"
 regexes = [
     '''YOUR_TOKEN''',
     '''replace-with-''',
+    # Test and API-doc fixtures: a UUID idempotency key is a request id, not a credential.
+    '''^idempotency_key"?: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"$''',
+    # An import list in apps/node-backend/tests/rateFetcher.test.ts (fetchFromErApi, ...).
+    '''^fetchFromErApi,\s+__fetchHistoricalFromEcb90d''',
 ]
