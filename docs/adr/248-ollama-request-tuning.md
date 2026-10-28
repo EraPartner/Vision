@@ -42,7 +42,7 @@ What Vision sent before (read from code on main at 68d4bdf):
 - A 24,000-character history budget that did not count the schemas or the tool results added
   during a turn. One tool call could therefore push the prompt past 8192 tokens, and Ollama then
   drops the oldest messages without telling anyone. This is an estimate from the code (~3.5
-  characters per token); `scripts/bench-ollama-tuning.ts` measures it.
+  characters per token); `apps/node-backend/scripts/bench-ollama-tuning.ts` measures it.
 - No `keep_alive`, so Ollama's default (5 minutes) applied. Nothing preloaded the model when the
   chat opened.
 

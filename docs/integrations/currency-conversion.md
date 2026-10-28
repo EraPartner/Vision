@@ -2,8 +2,8 @@
 title: Currency Conversion
 type: integration
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-28
+updated: 2026-10-28
 tags: [integration, currency, exchange-rates, phase-0, phase-1, phase-3-1, offline-resilience, network-reachability, startup-optimization, historical-rates, ecb-full-history, purchase-date-rates, fx-attribution, adr-074]
 description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion and batch grouped conversion (Phase 3.1+). Startup FX warmup is skipped when offline (2026-05-03). 2026-06-11 (ADR-074): ECB full-history tier (daily since 1999), on-or-before weekend convention, one-time repair of fabricated old rates, and bulk-stamp of fx_rate_to_eur on non-EUR portfolio transactions.
 related_code: ["apps/node-backend/src/services/currency/rateFetcher.ts", "apps/node-backend/src/services/currency/currencyConversionService.ts", "apps/node-backend/src/lib/unconvertedTally.ts", "apps/node-backend/src/services/currency/latestRateConversion.ts", "apps/node-backend/src/repositories/infoRepositoryHelpers.ts", "apps/node-backend/src/lib/network.ts"]
@@ -270,7 +270,7 @@ This is the canonical direct path (moved from `services/calculations/currency.js
 
 ```javascript
 // This path has been removed — use direct import above
-import { convertToCurrency } from "./services/calculations/currency.js";
+import { convertToCurrency } from "./services/currency/currencyConversionService.ts";
 ```
 
 ### Cache Management
@@ -467,7 +467,7 @@ Scheduled 12h exchange rate refreshes also skip themselves when `isInternetReach
 
 ## Historical FX in Portfolio Snapshots (2026-05-29)
 
-The portfolio snapshot builder (`snapshotBuilder.js`) owns a separate, lightweight historical FX lookup that it loads in bulk directly from the `exchange_rates` table (not through `currencyConversionService`). This is intentional: the snapshot builder walks every day from first transaction to today in a single pass, so it pre-loads the full rate history once per snapshot run rather than making per-row service calls.
+The portfolio snapshot builder (`snapshotBuilder.ts`) owns a separate, lightweight historical FX lookup that it loads in bulk directly from the `exchange_rates` table (not through `currencyConversionService`). This is intentional: the snapshot builder walks every day from first transaction to today in a single pass, so it pre-loads the full rate history once per snapshot run rather than making per-row service calls.
 
 Key differences from `currencyConversionService`:
 

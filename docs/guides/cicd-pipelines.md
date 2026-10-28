@@ -2,8 +2,8 @@
 title: CI/CD Pipelines
 type: guide
 status: active
-date: 2026-10-22
-updated: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     guide,
@@ -240,8 +240,8 @@ claims still require their focused jobs.
 There is no local pre-push gate. Run the relevant lint, typecheck, build, and test commands
 explicitly before publication, scaled to the change as described in `AGENTS.md`. GitHub Actions
 runs the required checks after a push; a successful local push does not establish that they passed.
-Database-backed and live API checks use disposable PostgreSQL 18 clusters. The native stack finds
-PostgreSQL 18 on Linux or macOS; `VISION_CI_POSTGRES_BIN` can select another installation.
+Database-backed and live API checks use disposable PostgreSQL 18 clusters. In CI the native stack finds
+PostgreSQL 18 on Linux or macOS (the shipped desktop app itself is macOS-only); `VISION_CI_POSTGRES_BIN` can select another installation.
 It refuses an occupied backend port before starting, then tracks the backend process directly so
 cleanup cannot leave a server for the next run to mistake as its own.
 

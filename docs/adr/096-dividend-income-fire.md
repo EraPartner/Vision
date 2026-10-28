@@ -1,8 +1,9 @@
 ---
 title: ADR-096 Dividend/Coupon Income & FIRE Coverage (descriptive)
 type: adr
+status: deferred
 date: 2026-06-18
-updated: 2026-08-27
+updated: 2026-10-28
 tags: [adr, portfolio, dividend, coupon, income, fire, coverage-ratio, statistics, descriptive, adr-044, adr-073]
 description: Surface projected + realized investment income and a FIRE coverage ratio (passive yield vs spending run-rate) as portfolio-workspace statistics that READ budgeting numbers but never feed Planned Transactions or the cash-flow forecast.
 aliases: [dividend income, coupon income, FIRE, coverage ratio, passive yield]
@@ -65,5 +66,5 @@ cash-flow forecast inputs (ADR-081/forecast), or any write path. Budgeting is re
 ## Related
 - [[docs/adr/index|All ADRs]]
 - [[docs/adr/044-portfolio-summary-single-source-of-truth|ADR-044: Portfolio Summary]]
-- [[docs/adr/073-shared-portfolio-math|ADR-073: Shared Portfolio Math]] (income + projectedAnnualInterest)
+- [[docs/adr/073-shared-portfolio-math-package|ADR-073: Shared Portfolio Math]] (income + projectedAnnualInterest)
 - [[docs/adr/081-research-analytics-forecasting|ADR-081]] (forecast — deliberately NOT fed by this)

@@ -2,8 +2,8 @@
 title: Integration - Bank Adapters
 type: integration
 description: Bank API integrations for CSV imports
-date: 2026-10-10
-updated: 2026-10-08
+date: 2026-10-28
+updated: 2026-10-28
 tags: [integration, bank, csv, import, ing, bnp]
 status: active
 related_code:
@@ -101,8 +101,8 @@ The adapter registry in `apps/node-backend/src/services/importPipeline/adapters/
 every adapter module, so adding a bank is two touchpoints:
 
 1. Create `apps/node-backend/src/services/importPipeline/adapters/<bank>.js` whose **default export**
-   is `{ name, bankName, detect, parse }` (see `adapters/wise.js` for a full example; shared CSV
-   helpers — line splitting, amount/date parsing — live in `adapters/_shared.js`). Handle the
+   is `{ name, bankName, detect, parse }` (see `adapters/wise.ts` for a full example; shared CSV
+   helpers — line splitting, amount/date parsing — live in `adapters/_shared.ts`). Handle the
    edge cases here: missing fields, date formats, decimal separators. Every row `parse` returns
    must satisfy `parsedBankTransactionSchema` ([[#Output contract (ADR-193)|Output contract]]);
    count a row you cannot read as `skipped` instead of emitting a partial one.
@@ -116,7 +116,7 @@ hash/dedup — so no other files (and no i18n keys) need editing.
 
 > [!note] Canonical registry
 > The former `services/bankAdapters.js` compatibility entrypoint has been removed. New adapters
-> live in `importPipeline/adapters/` and are registered in `adapters/index.js` as described above.
+> live in `importPipeline/adapters/` and are registered in `adapters/index.ts` as described above.
 
 ## Field Mapping
 
@@ -160,7 +160,7 @@ schema and the registry seam. See [[docs/adr/193-zod-runtime-contracts|ADR-193]]
 ## Account Identification (ADR-088)
 
 `bankAccount` is the parsed string that becomes the transaction's **owning account**: at import,
-`importPipeline/commit.js` writes it to `transactions.bank_account`, and the dual-write trigger
+`importPipeline/commit.ts` writes it to `transactions.bank_account`, and the dual-write trigger
 (migration 0051) resolves it to `account_id` (resolve-or-create an `accounts` row whose `name` is
 the trimmed string). So the value each adapter emits _is_ the account identity.
 
@@ -177,7 +177,7 @@ the trimmed string). So the value each adapter emits _is_ the account identity.
 | Vision             | the `Bank Account` column, UPPER+trim                 | `MAIN`             |
 | Generic/Custom     | `bank_name` (+ ` <ACCOUNT_TYPE>`), UPPER+trim         | `MYBANK CHECKING`  |
 
-**IBAN canonicalization (`canonicalIban` in `adapters/_shared.js`):** IBAN-based adapters (Belfius,
+**IBAN canonicalization (`canonicalIban` in `adapters/_shared.ts`):** IBAN-based adapters (Belfius,
 KBC, BNP, ING) strip all whitespace and uppercase the account number, so a Belgian IBAN exported
 space-grouped (`BE81 0637 5694 4024`) and one entered without spaces resolve to the **same** account
 — no duplicate accounts from spacing/case. A CSV that spans multiple of your own accounts therefore

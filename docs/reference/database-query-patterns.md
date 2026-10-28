@@ -2,8 +2,8 @@
 title: Database Query Patterns & Optimization
 type: reference
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     database,
@@ -380,7 +380,7 @@ ALTER TABLE "transactions" DROP COLUMN "memo";
 
 ## Multi-Currency GROUP BY Aggregation Pattern (June 2026)
 
-When summarizing data that spans multiple currencies, push the aggregation fully into SQL rather than fetching all rows and summing in JavaScript. The canonical example is `getTransactionSummary` in `infoRepositoryStatistics.js`:
+When summarizing data that spans multiple currencies, push the aggregation fully into SQL rather than fetching all rows and summing in JavaScript. The canonical example is `getTransactionSummary` in `infoRepositoryStatistics.ts`:
 
 ```sql
 SELECT
@@ -397,7 +397,7 @@ GROUP BY currency
 
 The route/service layer then receives one row per currency and combines them in JS (applying FX conversion). This eliminates N+1 per-currency queries and reduces the result set from O(transactions) to O(currencies).
 
-The same pattern is applied in `infoRepo.monthly.js` for the all-time live path: aggregates `(date, currency)` pairs in SQL with sign-split sums, converts at per-date historical FX rates, then buckets into months in JavaScript.
+The same pattern is applied in `infoRepositoryMonthly.ts` for the all-time live path: aggregates `(date, currency)` pairs in SQL with sign-split sums, converts at per-date historical FX rates, then buckets into months in JavaScript.
 
 > [!info] Validation status (June 2026)
 > These rewrites are present in the codebase but validation against a live multi-currency database is still pending (tracked in `TODO.md`). Verify on a dataset with non-EUR transactions before treating aggregate numbers as confirmed correct.

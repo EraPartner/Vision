@@ -3,8 +3,8 @@ title: Backend Architecture
 type: architecture
 status: active
 description: "Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069). September 2026: transaction ownership uses the ADR-088 Account entity and canonical account_id foreign keys."
-date: 2026-10-21
-last_modified: 2026-10-21
+date: 2026-10-28
+last_modified: 2026-10-28
 tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension, route-service-boundary, thin-seams, global-rate-limiter, trusted-proxies, vision-dev, mv-recipient-monthly-drop, shared-utils, banker-rounding]
 aliases: [backend architecture, node architecture, server design]
 ---
@@ -20,17 +20,17 @@ This document contains UML diagrams for the Node.js backend application.
 The portfolio router uses `lib/portfolioUpload.ts` for CSV, detailed Saxo XLSX and IBKR funding
 XLS/XLSX uploads. Workbook preflight (`assertPortfolioUploadSupported` in
 `services/portfolioImportPipeline/uploadSupport.ts`) validates archive bounds and joined
-accounting detail before batch creation or SSE headers. Maintained statements stage first, then `portfolioImportReconciliationService.js` builds
+accounting detail before batch creation or SSE headers. Maintained statements stage first, then `portfolioImportReconciliationService.ts` builds
 one reviewed source/history plan; `portfolioImportCrossFormat.ts` pairs rows that another export
 of the same broker history records, so a Saxo CSV and XLSX or an IBKR CSV and funding workbook
-import without double counting. `portfolioImportCommitService.js` locks the scope and applies
+import without double counting. `portfolioImportCommitService.ts` locks the scope and applies
 adoption, canonical rows, and custody events atomically. Immutable receipt repositories retain
 before/after financial images. The separate duplicate-repair service retains both manual/imported
 images plus original staging/batch counters; since ADR-236 it only restores repairs applied
 earlier. Custody
 repositories store dated gross units and asset fees.
-`portfolioAssetAdjustmentService.js` adds immutable dated yield reversals/asset fees with original
-lot allocation receipts and restrictive links to yield evidence. `portfolioHistoryWriteService.js`
+`portfolioAssetAdjustmentService.ts` adds immutable dated yield reversals/asset fees with original
+lot allocation receipts and restrictive links to yield evidence. `portfolioHistoryWriteService.ts`
 serializes manual mutations against trade, custody, and adjustment tables.
 Public XML reference upload/application is unavailable. Previously retained original-document
 proof remains read-only for strict historical matching, repeat and rollback checks.
@@ -515,10 +515,10 @@ RecipientsRepo <.. Helpers
 
 **Phase 3 Refactoring Note (2026-04-23):**
 
-- Original `infoRepository.js` monolith (1445 lines) was split into 7 domain-specific sub-modules
-- Barrel re-export in main `infoRepository.js` (37 lines) maintains backward compatibility
+- Original `infoRepository.ts` monolith (1445 lines) was split into 7 domain-specific sub-modules
+- Barrel re-export in main `infoRepository.ts` (37 lines) maintains backward compatibility
 - All 9 consumer files import unchanged; internal organization is transparent to callers
-- Repository-specific cache, aggregation, category, and FX helpers in `infoRepositoryHelpers.js` reduce duplication across the sub-modules. Generic UTC keys live in `lib/dateKeys.ts`; money rounding stays in `lib/money.ts`; the shared needle algorithm lives in `lib/calculations/valueSpikeSanitizer.ts`; and `lib/calculations/netWorthSanitizer.ts` is the net-worth-specific recomputation wrapper.
+- Repository-specific cache, aggregation, category, and FX helpers in `infoRepositoryHelpers.ts` reduce duplication across the sub-modules. Generic UTC keys live in `lib/dateKeys.ts`; money rounding stays in `lib/money.ts`; the shared needle algorithm lives in `lib/calculations/valueSpikeSanitizer.ts`; and `lib/calculations/netWorthSanitizer.ts` is the net-worth-specific recomputation wrapper.
 
 ## Service Layer
 
@@ -665,13 +665,13 @@ All aggregation endpoints return:
 
 | Module                | Function                                                                                   | Endpoint                            |
 | --------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------- |
-| `_envelope.js`        | `buildEnvelope(data, { source, computedAt })`                                              | All endpoints                       |
-| `monthly.js`          | `computeMonthlySummary({ targetCurrency, excludedCategoryIds, excludedRecipientIds })`     | `/monthly-summary`                  |
-| `category.js`         | `computeCategoryBreakdown({ targetCurrency })`                                             | `/category-breakdown`               |
-| `recipient.js`        | `computeRecipientInsights({ targetCurrency })`                                             | `/recipient-insights`               |
-| `cashflow.js`         | `computeCashflowComparison({ targetCurrency, excludedCategoryIds, excludedRecipientIds })` | `/cashflow-comparison`              |
-| `averageVsCurrent.js` | `computeAverageVsCurrent({ targetCurrency })`                                              | `/average-vs-current` (always live) |
-| `bankBalances.js`     | `computeBankBalances({ targetCurrency })`                                                  | `/bank-balances`                    |
+| `_envelope.ts`        | `buildEnvelope(data, { source, computedAt })`                                              | All endpoints                       |
+| `monthly.ts`          | `computeMonthlySummary({ targetCurrency, excludedCategoryIds, excludedRecipientIds })`     | `/monthly-summary`                  |
+| `category.ts`         | `computeCategoryBreakdown({ targetCurrency })`                                             | `/category-breakdown`               |
+| `recipient.ts`        | `computeRecipientInsights({ targetCurrency })`                                             | `/recipient-insights`               |
+| `cashflow.ts`         | `computeCashflowComparison({ targetCurrency, excludedCategoryIds, excludedRecipientIds })` | `/cashflow-comparison`              |
+| `averageVsCurrent.ts` | `computeAverageVsCurrent({ targetCurrency })`                                              | `/average-vs-current` (always live) |
+| `bankBalances.ts`     | `computeBankBalances({ targetCurrency })`                                                  | `/bank-balances`                    |
 
 **Repository Integration:**
 

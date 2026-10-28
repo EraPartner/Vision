@@ -2,9 +2,9 @@
 title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
-date: 2026-10-24
-last_modified: 2026-10-24
-updated: 2026-10-24
+date: 2026-10-28
+last_modified: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     integration,
@@ -98,7 +98,7 @@ Price providers fetch live and historical market prices for investments, support
   - Isolated needle-spike sanitization (up/down) replaces only confirmed single-point anomalies using geometric interpolation from neighboring points, preserving non-spike detail; thresholds are tuned for moderate one-day needles (robust `6σ`, bridge `4σ`, min jump `18%`, local needle ratio `1.8x`)
 
 > [!warning] Kinesis `timeFrame` unit ambiguity (open follow-up)
-> The Kinesis provider's default `timeFrame=60` parameter has an unresolved unit ambiguity: `kinesisConfig.js` comments say "minutes"; `docs/reference/environment-variables.md` says "days"; `providerHealthService` probes using 60. The value was deliberately **not changed** in the 2026-05-31 daily gap-fill work. Changing it without first running an empirical diagnostic (fetching with different values and inspecting returned point density) risks breaking Kinesis history coverage. Resolve via a targeted diagnostic before any change. Tracked in `TODO.md`.
+> The Kinesis provider's default `timeFrame=60` parameter has an unresolved unit ambiguity: `kinesisConfig.ts` comments say "minutes"; `docs/reference/environment-variables.md` says "days"; `providerHealthService` probes using 60. The value was deliberately **not changed** in the 2026-05-31 daily gap-fill work. Changing it without first running an empirical diagnostic (fetching with different values and inspecting returned point density) risks breaking Kinesis history coverage. Resolve via a targeted diagnostic before any change. Tracked in `TODO.md`.
 > Note: `normalizeHistoryPoints` deduplicates by date, so finer-than-daily provider cadence does not itself cause sparsity — only missing date rows do.
 
 ### Yahoo Finance
@@ -107,7 +107,7 @@ Price providers fetch live and historical market prices for investments, support
 - **Implementation**: Web scraping / Yahoo Finance API
 - **Features**:
   - Real-time quotes
-  - **Batched quote requests (2026-05-29):** `PROVIDERS.yahoo` in `priceProviderRegistry.js` now issues a single `yahooFinance.quote([symbols])` call for all Yahoo-backed investments, normalizing the result to an array. A portfolio of ~30 holdings drops from ~30 outbound requests to 1. The per-symbol chart-close fallback (`_fetchYahooLatestClose`) is retained for symbols unresolved by the batch and for whole-batch failure.
+  - **Batched quote requests (2026-05-29):** `PROVIDERS.yahoo` in `priceProviderRegistry.ts` now issues a single `yahooFinance.quote([symbols])` call for all Yahoo-backed investments, normalizing the result to an array. A portfolio of ~30 holdings drops from ~30 outbound requests to 1. The per-symbol chart-close fallback (`_fetchYahooLatestClose`) is retained for symbols unresolved by the batch and for whole-batch failure.
   - Previous close fallback when real-time quote is unavailable/zero
   - Historical data
   - Wide coverage
@@ -123,8 +123,8 @@ Price providers fetch live and historical market prices for investments, support
 
 Custom provider URLs (`price_provider_url`, `price_provider_latest_url`, `price_provider_history_url`) are validated at two points to prevent SSRF:
 
-1. **Write time** (`investmentService.js`): scheme and IP-literal check (no DNS resolution) — rejects non-http(s) schemes and IP-literal private/loopback/link-local addresses with a 400 before the row is stored.
-2. **Fetch time** (`priceProviderRegistry.js`): full DNS resolution via `assertPublicHttpUrl` (with `resolveDns: true`), repeated for every redirect hop. Responses are capped at 5 MB.
+1. **Write time** (`investmentService.ts`): scheme and IP-literal check (no DNS resolution) — rejects non-http(s) schemes and IP-literal private/loopback/link-local addresses with a 400 before the row is stored.
+2. **Fetch time** (`priceProviderRegistry.ts`): full DNS resolution via `assertPublicHttpUrl` (with `resolveDns: true`), repeated for every redirect hop. Responses are capped at 5 MB.
 
 URLs that target private networks (RFC 1918, loopback, CGNAT `100.64/10`, cloud metadata `169.254.169.254`, IPv6 ULA/link-local) are blocked at both boundaries. See [[docs/security/input-validation#outbound-request-guard-ssrf-2026-05-29|Input Validation — SSRF guard]] for the full range list and module reference.
 
@@ -150,7 +150,7 @@ process-wide traffic limits are separate concerns.
   - Cleans up stale quotes outside windows after backfill
   - Ignores `is_active` flag — all investments with transaction history get quotes
 - Lightweight hourly refresh via `refreshActiveHoldingQuotes()` updates currently-held investments (7-day lookback, open windows only)
-- **Daily gap-detecting backfill (2026-05-31, ADR-065):** `backfillHoldingGaps({ thresholdDays })` runs on a daily `setInterval` in `warmup.js` (wrapped in `withInFlightGuard` + offline guard). It detects interior gaps in `asset_price_history` that `needsHistoryRefresh` cannot catch (endpoint-only check), then re-fetches with `force=true` to bypass the short-circuit:
+- **Daily gap-detecting backfill (2026-05-31, ADR-065):** `backfillHoldingGaps({ thresholdDays })` runs on a daily `setInterval` in `warmup.ts` (wrapped in `withInFlightGuard` + offline guard). It detects interior gaps in `asset_price_history` that `needsHistoryRefresh` cannot catch (endpoint-only check), then re-fetches with `force=true` to bypass the short-circuit:
   - `holdingWindowsNeedBackfill(holdingWindows, storedDates, { thresholdDays=9, todayUtc })` — pure fn; walks `[windowStart, ...storedDatesInWindow, windowEnd]` per holding window; returns `true` if any consecutive-date gap exceeds the threshold (`GAP_THRESHOLD_DAYS=9` — above weekend/holiday gaps, below ~14-day biweekly cadence).
   - Covers **all** holding windows including closed positions, unlike the hourly refresh.
   - If `result.filled > 0`, `computeAndStoreSnapshots()` is called so Performance and Net Worth charts reflect the denser history.
@@ -327,7 +327,7 @@ All five adapters are wired (Yahoo needs no key; Twelve Data, Finnhub, FMP, and 
 > FMP retired its legacy `/api/v3` base URL for accounts not subscribed before 2025-08-31. The FMP adapter now uses the current **stable API** at `https://financialmodelingprep.com/stable` with symbol passed as a query param. `FMP_API_KEY` is unchanged. See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--fmp-stable-api-migration-2026-06-16|ADR-079 follow-up note]] for details.
 
 > [!info] Quote / chart / news provider ordering — Yahoo-first (2026-06-16)
-> The capability map (`capabilityMap.js`) was reordered so that **Yahoo leads the `quote`, `chart`, and `news` default chains**, with paid providers (Twelve Data, Finnhub, FMP, Alpha Vantage) as fallbacks. Yahoo is keyless and carries no contractual per-day cap, so routing it first avoids burning paid-tier quota on the highest-frequency data types. The aggregator's fall-through semantics are unchanged — a Yahoo failure still routes to Twelve Data → Finnhub → …. `fundamentals.default` remains FMP-first (Yahoo's fundamentals depth is shallower). See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--yahoo-first-provider-ordering-for-quote--chart--news-2026-06-16|ADR-079 follow-up note (2026-06-16)]] for the full change table and rationale.
+> The capability map (`capabilityMap.ts`) was reordered so that **Yahoo leads the `quote`, `chart`, and `news` default chains**, with paid providers (Twelve Data, Finnhub, FMP, Alpha Vantage) as fallbacks. Yahoo is keyless and carries no contractual per-day cap, so routing it first avoids burning paid-tier quota on the highest-frequency data types. The aggregator's fall-through semantics are unchanged — a Yahoo failure still routes to Twelve Data → Finnhub → …. `fundamentals.default` remains FMP-first (Yahoo's fundamentals depth is shallower). See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--yahoo-first-provider-ordering-for-quote--chart--news-2026-06-16|ADR-079 follow-up note (2026-06-16)]] for the full change table and rationale.
 
 > [!info] Fundamentals: one composed data type, not raced (2026-06-16)
 > **Fundamentals is the only data type that is composed rather than raced.** `GET /api/research/scorecard` and the AI chat research tool call `researchAggregator.fetchFundamentals()`, which fetches **FMP and Yahoo in parallel** and merges their fields with FMP preferred. FMP-only fields (e.g. `interestCoverage`) and Yahoo-only fields (e.g. `forwardPE`, `freeCashFlow`) both appear in every response — the result is the union. `meta.provider` is `"fmp+yahoo"` when both contribute, or the single provider name when only one responds. All other research data types (quote, chart, news, analyst, search) continue to use the race-to-first capability-map chain unchanged. See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--fundamentals-merged-across-fmp--yahoo-2026-06-16|ADR-079 follow-up note (2026-06-16)]].

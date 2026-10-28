@@ -2,8 +2,8 @@
 title: Net Worth Feature
 type: feature
 status: active
-date: 2026-10-21
-updated: 2026-10-21
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     feature,
@@ -43,7 +43,7 @@ related_code:
   - apps/frontend/src/components/charts/chartPeriods.ts
   - apps/node-backend/src/routes/info.ts
   - apps/node-backend/src/routes/info/netWorth.ts
-  - apps/node-backend/src/routes/info/_liveSummary.js
+  - apps/node-backend/src/services/info/liveSummary.ts
   - apps/node-backend/src/repositories/infoRepositoryNetWorth.ts
   - apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts
   - apps/node-backend/src/services/portfolio/snapshotBuilder.ts
@@ -143,7 +143,7 @@ const data = await resolveCacheWithInflight(netWorthResponseCache, cacheKey, {
 
 `computeAndStoreSnapshots()` runs only at startup warmup. After the hourly `refreshActiveHoldingQuotes` mutates `investments.current_price`, the stored snapshots do not change — but Dashboard and Performance recompute from the live service immediately. Before this fix, Net Worth froze at the boot-time price.
 
-The fix mirrors the pattern already used by the Performance route (`_performanceHelpers.js:84-95`): a new shared helper `resolveLivePortfolioValue(targetCurrency)` (in [[apps/node-backend/src/routes/info/_liveSummary.js]]) reads `portfolioSummaryService.getPortfolioSummary().totals.totalPortfolioValue` from the shared 60-second `portfolioSummaryCache`. The repository overlays this value onto the latest snapshot row before computing `current` and `monthlyChange`. Historical rows are untouched.
+The fix mirrors the pattern already used by the Performance route (`services/info/performanceHelpers.ts`): a new shared helper `resolveLivePortfolioValue(targetCurrency)` (in [[apps/node-backend/src/services/info/liveSummary.ts]]) reads `portfolioSummaryService.getPortfolioSummary().totals.totalPortfolioValue` from the shared 60-second `portfolioSummaryCache`. The repository overlays this value onto the latest snapshot row before computing `current` and `monthlyChange`. Historical rows are untouched.
 
 Staleness budget: the overlay is baked into the 5-minute net-worth cache; the live value refreshes ~hourly. Net Worth therefore tracks Dashboard within ≤5 min vs. the previous "frozen since startup" behaviour.
 
@@ -166,7 +166,7 @@ The historical price series that feeds snapshot computation is now kept dense at
 
 - Binance paginates with `startTime`/`endTime`/`limit=1000` across the full holding window (30-page guard).
 - `fetchHistoricalPrices` accepts a `force=true` option that bypasses the `needsHistoryRefresh` short-circuit.
-- A checkpointed daily job in `warmup.js` calls `backfillHoldingGaps()` from `quoteBackfillService`, which uses `holdingWindowsNeedBackfill` (gap threshold: 9 days) to detect interior holes across all holding windows (including closed positions) and re-fetches with `force=true`.
+- A checkpointed daily job in `warmup.ts` calls `backfillHoldingGaps()` from `quoteBackfillService`, which uses `holdingWindowsNeedBackfill` (gap threshold: 9 days) to detect interior holes across all holding windows (including closed positions) and re-fetches with `force=true`.
 - The daily job always calls `computeAndStoreSnapshots()` after backfill, including retries with no new rows so the Net Worth chart reflects the denser history in the same daily job cycle.
 - A one-time `bun run quotes:densify` script (see [[docs/reference/scripts|Scripts Reference]]) heals existing sparse deployments without requiring a restart.
 
@@ -230,7 +230,7 @@ On the most recent snapshot day, `investments.current_price` is used directly in
 Implementation notes:
 
 - Route-level cache behavior in `info` routes is centralized through shared helpers (`getFreshCachedData`, `setCachedData`, `setInflightCache`, `resolveCacheWithInflight`) and reused by both `GET /api/info/net-worth` and `GET /api/info/portfolio-performance`, preserving TTL and concurrent-request deduplication behavior while reducing duplicate logic ([[apps/node-backend/src/routes/info.ts]]).
-- The live-overlay helper `resolveLivePortfolioValue` (and the broader `resolveLiveSummary`) live in [[apps/node-backend/src/routes/info/_liveSummary.js]] so they can be imported by both `netWorth.js` and the warmup pre-warm path in `info.js` without circular dependencies.
+- The live-overlay helper `resolveLivePortfolioValue` (and the broader `resolveLiveSummary`) live in [[apps/node-backend/src/services/info/liveSummary.ts]] so they can be imported by both `netWorth.ts` and the warmup pre-warm path in `info.ts` without circular dependencies.
 - `GET /api/info/category-breakdown` uses a dedicated repository path (`getCategoryBreakdown`) instead of full `getStatistics`, and hot-path info route imports (exchange-rates + portfolio-performance snapshot service) are module-scoped to remove repeated dynamic import overhead without changing API responses ([[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/repositories/infoRepositoryNetWorth.ts]]).
 - Info-route response caches opportunistically prune expired entries and enforce a bounded maximum entry count to prevent long-lived unbounded memory growth while keeping inflight dedupe semantics intact ([[apps/node-backend/src/routes/info.ts]]).
 

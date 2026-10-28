@@ -2,7 +2,7 @@
 title: Setup Guide
 type: guide
 status: active
-date: 2026-10-22
+date: 2026-10-28
 tags:
   [
     guide,
@@ -43,7 +43,7 @@ bun run install:electron
 ```
 
 There is no root `.env.local`. Shared provider keys may live in the root `.env`; local backend
-overrides belong in `apps/node-backend/.env.local`, and frontend `VITE_*` values belong in
+overrides belong in `apps/node-backend/.env.local` (optional and not shipped as an example file: create it yourself; the loader reads it first, then the root `.env`, and a real process environment value always wins), and frontend `VITE_*` values belong in
 `apps/frontend/.env.local`. See [[docs/reference/environment-variables|Environment Variables]].
 Never commit credentials.
 

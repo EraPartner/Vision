@@ -2,8 +2,8 @@
 title: Testing Documentation Index
 type: testing-index
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
 last-updated: 2026-10-06
 modified: 2026-10-06
 last_updated_timestamp: 2026-10-06T00:00:00Z
@@ -110,7 +110,7 @@ bun test
 bun test:watch
 
 # Specific file
-bun vitest run src/path/to/test.test.js
+bun vitest run tests/path/to/test.test.ts
 ```
 
 ## Coverage Goals
@@ -209,17 +209,17 @@ bun vitest run src/path/to/test.test.js
 
 ## Phase F6: Mutation Testing Harness (2026-05-02)
 
-**Status: COMPLETE** — Wire Stryker mutation testing framework to measure test _quality_ (do tests catch realistic faults?) beyond _coverage_.
+**Status: REMOVED 2026-10-19** (historical record below) — Wired Stryker mutation testing framework to measure test _quality_ (do tests catch realistic faults?) beyond _coverage_.
 
-**What's new:**
+**What was added (all since removed):**
 
 - `stryker.config.json` — Vitest runner, TypeScript checker, `coverageAnalysis: perTest`; scope: `src/utils/currency.ts` + `src/lib/api/client.ts`; HTML report to `reports/mutation/mutation.html`
-- `package.json` script: `"test:mutation": "stryker run"` (opt-in, not in CI yet)
+- `package.json` script: `"test:mutation": "stryker run"` (was opt-in, never in CI)
 - Dev deps: `@stryker-mutator/core`, `@stryker-mutator/vitest-runner`, `@stryker-mutator/typescript-checker`
 
 **Why scoped:** Full-codebase mutation testing takes hours. Seed baseline on two highest-leverage pure-logic modules (currency formatting + API client envelope/error parsing) to identify tests with low semantic value (kill rate < 60%).
 
-**Run locally:** `bun run test:mutation` from `apps/frontend`
+**Run locally (no longer possible):** `bun run test:mutation` from `apps/frontend`
 
 **Details:** [[docs/testing/test-inventory#phase-f6--mutation-testing-stryker-2026-05-02|Phase F6 in Test Inventory]]
 
@@ -257,12 +257,12 @@ bun vitest run src/path/to/test.test.js
 - Added targeted backend coverage for info-route dependency orchestration, stale FX refresh branching, recurring-pattern fallback semantics, and cache prewarm failure isolation.
 - Tests: [[apps/node-backend/tests/routes/info.test.ts]]
 - Related source: [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/database/connection.ts]], [[apps/node-backend/src/services/recurringDetectionService.ts]], [[apps/node-backend/src/services/materializedViewService.ts]], [[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts]]
-- Validation + coverage snapshot: `bun vitest run tests/routes/info.test.ts`; `npm test -- --coverage`; overall `81.12/66.86/84.49/84.53`, `info.js` `93.62/78.72/100/94.58` (statements/branches/functions/lines).
+- Validation + coverage snapshot: `bun vitest run tests/routes/info.test.ts`; `npm test -- --coverage`; overall `81.12/66.86/84.49/84.53`, `info.ts` `93.62/78.72/100/94.58` (statements/branches/functions/lines).
 - Details: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]]
 
 ### 2026-04-17 Phase 8 — Property tests + Calculation Inventory lock
 
-- Six property-test suites under `apps/node-backend/tests/property/*.property.test.js` lock invariants for loan-schedule amortization, recurrence cadence, split allocation, monthly aggregation, category totals, and currency round-trip. All use deterministic `mulberry32` seeded PRNG and bounded 50–500 iterations.
+- Six property-test suites under `apps/node-backend/tests/property/*.property.test.ts` lock invariants for loan-schedule amortization, recurrence cadence, split allocation, monthly aggregation, category totals, and currency round-trip. All use deterministic `mulberry32` seeded PRNG and bounded 50–500 iterations.
 - `apps/node-backend/tests/golden/INVENTORY.md` becomes the merge-gate source-of-truth — every pure-calc function carries a G (golden) / P (property) / S (smoke) marker. New calc code must update the inventory before landing.
 - Aggregation shadow-mode middleware (see [[docs/adr/016-aggregation-shadow-mode|ADR-016]]) is exercised by dedicated unit tests covering `diffPayloads`, envelope unwrap, Postgres NUMERIC coercion, threshold edges, and legacy-failure isolation.
 - See [[docs/testing/testing#property-test-pattern-phase-8|Property Test Pattern]] for the convention.
@@ -272,7 +272,7 @@ bun vitest run src/path/to/test.test.js
 - Added targeted backend repository coverage for portfolio transaction query/filter branches and grouped summary return paths.
 - Test: [[apps/node-backend/tests/portfolioTransactionRepository.test.ts]]
 - Related source: [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]]
-- Validation + coverage snapshot: `bun vitest run tests/portfolioTransactionRepository.test.ts` (25 tests); `npm test -- --coverage` (827 tests); overall `81.81/67.61/85.42/85.25`; repositories bucket `68.47/63.45/67.02/72.66`; `portfolioTransactionRepository.js` `78.73/71.5/84.84/82.95` (statements/branches/functions/lines).
+- Validation + coverage snapshot: `bun vitest run tests/portfolioTransactionRepository.test.ts` (25 tests); `npm test -- --coverage` (827 tests); overall `81.81/67.61/85.42/85.25`; repositories bucket `68.47/63.45/67.02/72.66`; `portfolioTransactionRepository.ts` `78.73/71.5/84.84/82.95` (statements/branches/functions/lines).
 - Details: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]]
 
 ## Mock Isolation Fix (2026-04-25)

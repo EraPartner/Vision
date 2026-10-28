@@ -135,7 +135,7 @@ bun run dev              # private PostgreSQL + watched backend + Vite
 
 | Service     | URL                                                    |
 | ----------- | ------------------------------------------------------ |
-| Frontend    | `http://localhost:8080` (picks the next port if taken) |
+| Frontend    | `http://127.0.0.1:8080` (picks the next port if taken) |
 | Backend API | `http://localhost:3002`                                |
 
 More setup detail: [`docs/getting-started.md`](docs/getting-started.md).
@@ -191,7 +191,7 @@ Vision/
 | Layer    | Technology                                                                    |
 | -------- | ----------------------------------------------------------------------------- |
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS, Radix UI, shadcn/ui, TanStack Query |
-| Backend  | Express on Bun, Zod, decimal.js                                               |
+| Backend  | Express on Bun, Zod, decimal.ts                                               |
 | Database | PostgreSQL 18.6 with Kysely                                                   |
 | Desktop  | Electron, Apple Silicon DMG and ZIP                                           |
 | AI       | Ollama (local)                                                                |
@@ -210,7 +210,7 @@ bun run dev                  # private PostgreSQL + watched backend + Vite
 bun run electron:dev         # desktop shell with isolated development data
 
 # Check
-bun run lint                 # frontend ESLint + import boundaries (depcruise) + dead code (knip)
+bun run lint                 # frontend, backend and projects ESLint + import boundaries (depcruise) + dead code (knip)
 bun run lint:backend         # backend ESLint
 bun run typecheck            # frontend; typecheck:backend, typecheck:packages, typecheck:electron for the rest
 bun run check                # every lint, typecheck and test gate in sequence

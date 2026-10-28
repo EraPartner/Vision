@@ -2,8 +2,8 @@
 title: Bulk Transaction Actions
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-13
+date: 2026-10-28
+updated: 2026-10-28
 tags: [feature, transactions, bulk, productivity]
 description: Multi-row checkbox selection drives delete, recategorize, recipient reassignment, activate/deactivate, export, tag, and split operations across many transactions in one atomic call.
 aliases: [bulk-actions, bulk-delete, bulk-update, bulk-export]
@@ -52,7 +52,7 @@ related_code:
 | `ids`    | `{ ids: number[] }`                                         | 500                  | Explicit checkbox selection from the visible/loaded rows                                                                                                                                                                                                                                         |
 | `filter` | `{ filter: BulkTransactionFilter, expected_count: number }` | 5000 (matched count) | Promoted from ids-mode via "Select all N matching"; `expected_count` preserves the count the user confirmed so the response can report selection drift. The filter mirrors a subset of the list endpoint's fields, and every field is validated (see [Request body shape](#request-body-shape)). |
 
-Resolver: [`apps/node-backend/src/services/bulkSelection.ts`](apps/node-backend/src/services/bulkSelection.ts) → `resolveBulkSelection({ ids, filter })`. Filter mode runs a `COUNT(*)` precheck and rejects when the match count exceeds `filterCap`.
+Resolver: [[apps/node-backend/src/services/bulkSelection.ts]] → `resolveBulkSelection({ ids, filter })`. Filter mode runs a `COUNT(*)` precheck and rejects when the match count exceeds `filterCap`.
 
 ### Backend
 

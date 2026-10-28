@@ -2,8 +2,8 @@
 title: Input Validation
 type: security
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     security,
@@ -93,7 +93,7 @@ values are personal financial data.
 
 ### ID Validation
 
-Validates that an ID parameter is a positive integer. **The single definition of a valid id** — `validateIntArray`, `assertOptionalId`, `assertIdParam`, `validateIdParam`/`validateIntParam`, the zod fields `idSchema`/`optionalIdFilter`/`nullableId` (`routes/_requestSchemas.ts`) and `idField` (`routes/_inputBridges.ts`), `importBatchIds.js`'s `coercedIdSchema`, `aggregations.js`'s `parseIdArrayQueryParam` and the AI-chat tools' `parsePositiveInt` all delegate to it rather than re-deriving a shape rule. If you need an id check, add a call — not another parser.
+Validates that an ID parameter is a positive integer. **The single definition of a valid id** — `validateIntArray`, `assertOptionalId`, `assertIdParam`, `validateIdParam`/`validateIntParam`, the zod fields `idSchema`/`optionalIdFilter`/`nullableId` (`routes/_requestSchemas.ts`) and `idField` (`routes/_inputBridges.ts`), `importBatchIds.ts`'s `coercedIdSchema`, `aggregations.ts`'s `parseIdArrayQueryParam` and the AI-chat tools' `parsePositiveInt` all delegate to it rather than re-deriving a shape rule. If you need an id check, add a call — not another parser.
 
 ```javascript
 validateId(value, (fieldName = "id"), (max = MAX_INT32_ID));
@@ -110,7 +110,7 @@ validateId(value, (fieldName = "id"), (max = MAX_INT32_ID));
 >
 > Note that a bare `Number()` would _not_ have been a correct fix: it accepts `"0x10"` as 16, turns `"1e3"` into 1000 (a _different_ wrong record) and leaves `"12.5"` a non-integer that reaches Postgres.
 >
-> This tightens **every** route behind `validateIdParam` / `validateIntParam` / `assertOptionalId` and the `validatedIdField` zod adapter in `splits.js`. It only narrows what is accepted: every id that a well-behaved client sends (a plain integer) behaves exactly as before, and `openapi.yaml` already typed these params `integer` — the implementation now conforms to the published contract rather than deviating from it.
+> This tightens **every** route behind `validateIdParam` / `validateIntParam` / `assertOptionalId` and the `validatedIdField` zod adapter in `splits.ts`. It only narrows what is accepted: every id that a well-behaved client sends (a plain integer) behaves exactly as before, and `openapi.yaml` already typed these params `integer` — the implementation now conforms to the published contract rather than deviating from it.
 
 Route handlers read numeric path parameters at the point of use. Most routers call
 `parseInput(idParams, req.params)` or parse an object of `idSchema()` fields, which returns
@@ -273,10 +273,10 @@ The four scalar id filters on the same endpoints — `transaction_id`, `category
 **Params:** `category_ids` (`GET /api/transactions`, `GET /api/transactions/export/csv|json`),
 `account_ids` (both export endpoints), `investment_ids` (`GET /api/investments/transactions`).
 
-`investment_ids` uses the same wrapper shape in `investmentService.js`, with one deliberate
+`investment_ids` uses the same wrapper shape in `investmentService.ts`, with one deliberate
 difference: it is **required**, not optional, so absent/empty is the endpoint's pre-existing
 `400 investment_ids is required` rather than "no filter". Its repository-side twin in
-`portfolioTxRepo.reads.js` (`normalizeInvestmentIds`, feeding both `= ANY($1::int[])` predicates)
+`portfolioTxRepo.reads.ts` (`normalizeInvestmentIds`, feeding both `= ANY($1::int[])` predicates)
 also delegates to `validateId` now, but keeps dropping rather than throwing — that layer has
 always been a silent filter, and the throwing guard belongs where a 400 can reach the caller.
 
@@ -310,7 +310,7 @@ always been a silent filter, and the throwing guard belongs where a 400 can reac
 > implementation moves **onto** the published contract rather than away from it.
 
 > [!warning] Breaking change (2026-08-11) — `investment_ids` joins them
-> Missed by the pass above because it lived in `investmentController.js`, not `routes/`. Same
+> Missed by the pass above because it lived in `investmentController.js` (since removed), not `routes/`. Same
 > `parseInt` + `filter(Number.isInteger)` shape and the same retarget: `?investment_ids=12abc`
 > returned investment **12**'s transactions, `5,12abc` returned 5 **and** 12, and `1e3` returned
 > investment 1 — all `200`. Read-only, hence the lowest severity in the set. The identical parse ran
@@ -671,7 +671,7 @@ The id **route params** above are only half of what a write addresses. The other
 | `POST /api/portfolio/import/csv/custom` (+ `/csv/custom/stream`)                       | `account_id`                  | `validateId`, in `brokerageParamsSchema`                           |
 | `POST /api/transactions`, `PATCH /api/transactions/:id`                                | `recipient_id`, `category_id` | `validateId`, in the zod body schemas                              |
 | `POST /api/accounts`, `PATCH /api/accounts/:id`                                        | `funding_account_id`          | `validateId`, in `accountService`'s zod schema                     |
-| `POST /api/investments/:id/transactions`, `PATCH /api/investments/transactions/:txnId` | `account_id`                  | `validateId`, via `parseAccountId` (`investmentService.js`)        |
+| `POST /api/investments/:id/transactions`, `PATCH /api/investments/transactions/:txnId` | `account_id`                  | `validateId`, via `parseAccountId` (`investmentService.ts`)        |
 
 **Absent and `null` keep their meaning.** On the three override endpoints and the two nullable transaction FKs, `null` — and, on the override endpoints, an absent field — means _clear the override / clear the FK_ and answers **200**, unchanged. Only a **present but malformed** value rejects. On the commit and upload `account_id`, absent/`null` still means _no account for this batch_.
 
@@ -804,13 +804,13 @@ Non-`http`/`https` schemes (e.g. `file:`, `gopher:`, `data:`) are always rejecte
 
 ### Application Points
 
-**Write boundary** (`investmentService.js` — `createInvestment` / `updateInvestment`):
+**Write boundary** (`investmentService.ts` — `createInvestment` / `updateInvestment`):
 
 - All three URL fields validated via `assertPublicHttpUrl(value, { resolveDns: false })` before the row is persisted.
 - DNS is deliberately _not_ resolved at write time — that would couple investment writes to DNS availability. The scheme + IP-literal check is sufficient at the boundary.
 - A failed check throws `ValidationError` → 400 response.
 
-**Fetch boundary** (`priceProviderRegistry.js` — custom provider `_fetchJson`):
+**Fetch boundary** (`priceProviderRegistry.ts` — custom provider `_fetchJson`):
 
 - `assertPublicHttpUrl` is called with full DNS resolution (`resolveDns: true`) before each fetch and again for every redirect hop (`redirect: 'manual'`).
 - Response bodies are capped at **5 MB** to prevent memory exhaustion from a malicious server.
@@ -818,7 +818,7 @@ Non-`http`/`https` schemes (e.g. `file:`, `gopher:`, `data:`) are always rejecte
 
 ### Residual Risk
 
-TOCTOU DNS rebinding (address changes between our lookup and Node's own TCP connection) is not fully closed by this guard. Pinning to a resolved IP via a custom `undici` dispatcher is the planned follow-up hardening if the custom-URL surface grows. See the module comment in `urlSafety.js` for details.
+TOCTOU DNS rebinding (address changes between our lookup and Node's own TCP connection) is not fully closed by this guard. Pinning to a resolved IP via a custom `undici` dispatcher is the planned follow-up hardening if the custom-URL surface grows. See the module comment in `urlSafety.ts` for details.
 
 ### Related
 
@@ -831,7 +831,7 @@ TOCTOU DNS rebinding (address changes between our lookup and Node's own TCP conn
 
 Report theme tokens are interpolated into the report document's `:root {}` CSS block, which Electron's Chromium prints (ADR-234). Without constraints, a crafted value could inject arbitrary CSS or trigger a `url()`-based request. The print window also denies all network access and serves the document with `default-src 'none'`.
 
-**Protection:** Each theme token is validated against `HSL_COMPONENT_RE` at both the Zod route boundary and the `themeCss.js` sink (defense-in-depth). Invalid tokens fall back to the mode default; the raw value is never interpolated.
+**Protection:** Each theme token is validated against `HSL_COMPONENT_RE` at both the Zod route boundary and the `themeCss.ts` sink (defense-in-depth). Invalid tokens fall back to the mode default; the raw value is never interpolated.
 
 ```
 HSL_COMPONENT_RE = /^\d{1,3}(?:\.\d+)?\s+\d{1,3}(?:\.\d+)?%\s+\d{1,3}(?:\.\d+)?%$/

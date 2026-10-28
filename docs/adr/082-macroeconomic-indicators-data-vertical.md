@@ -1,10 +1,10 @@
 ---
 title: "ADR-082: Macroeconomic Indicators Data Vertical (FRED + DBnomics)"
 type: adr
-status: Proposed
+status: accepted
 date: 2026-06-17
-last_modified: 2026-06-17
-updated: 2026-06-17
+last_modified: 2026-10-28
+updated: 2026-10-28
 tags: [adr, research, macro, macroeconomic, cpi, pmi, indices, fred, dbnomics, eurostat, ecb, oecd, capability-map, provider-pinned, chart-builder, adr-079, adr-081, free-data-provider]
 description: Add a macroeconomic-indicator data vertical (CPI, rates, GDP, business surveys) to the Research aggregation layer using FRED (keyed) + DBnomics (keyless). Macro series are provider-pinned, not raced like tickers — a dedicated path parallel to the fundamentals-merge precedent. Reuses the chart-point model + Chart Builder; storage boundary preserved (in-memory cache only). Proposed.
 aliases: [macro data, economic indicators, CPI provider, FRED, DBnomics, macro vertical]

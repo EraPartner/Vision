@@ -1,6 +1,7 @@
 ---
 title: ADR-092 Liabilities as Negative Accounts
 type: adr
+status: accepted
 date: 2026-06-18
 tags: [adr, accounts, liabilities, mortgage, loan, net-worth, adr-088, adr-093]
 description: Model a mortgage/loan as an account of type=liability whose value is its negative ledger balance, so net worth nets debt with no special-casing, and unify the existing loan amortization schedule into the account model via the loan's account_id.
@@ -11,6 +12,8 @@ aliases: [liabilities, negative accounts, mortgage account, debt accounts]
 
 ## Status
 Proposed
+
+> [!note] Status corrected on 2026-10-28: the frontmatter status is `accepted`; treated as accepted; ADR-093 and ADR-107 build on it (inference, not checked against every flag).
 
 ## Date
 2026-06-18

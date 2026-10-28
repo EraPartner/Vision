@@ -8,7 +8,7 @@ skinparam sequenceMessageAlign center
 
 actor User
 participant "RecurringDetectionPanel\nuseRecurringPatterns" as Panel
-participant "Express routes\ninfo/statistics.js + plannedTransactions.js" as Routes
+participant "Express routes\ninfo/statistics.ts + plannedTransactions.ts" as Routes
 participant "recurringDetectionService" as Detection
 participant "plannedTransactionService" as Planned
 database PostgreSQL as DB
@@ -51,8 +51,8 @@ end
 
 legend bottom
   Sources: features/planned/RecurringDetectionPanel.tsx;
-  routes/info/statistics.js; services/recurringDetectionService.js;
-  routes/plannedTransactions.js; services/plannedTransactionService.js.
+  routes/info/statistics.ts; services/recurringDetectionService.ts;
+  routes/plannedTransactions.ts; services/plannedTransactionService.ts.
 endlegend
 
 @enduml

@@ -3,7 +3,7 @@ title: "ADR-104: Dense-fintech visual skin (skin-v2) behind a flag"
 type: adr
 status: accepted
 date: 2026-06-23
-updated: 2026-06-24
+updated: 2026-10-28
 tags: [adr, design-system, css, feature-flag, skin-v2, visual-redesign, tailwind, theming, accessibility, adr-030, adr-075, adr-103, june-2026, gain-loss, css-tokens, tailwind-colors]
 description: Ships a "dense-fintech" visual redesign (Monarch/Copilot spirit) as CSS scoped entirely under a `.skin-v2` root class on <html>, toggled by a build-time env flag VITE_SKIN_V2 (default OFF). Legacy skin renders byte-for-byte unchanged when the class is absent. The flattening redesign (atmosphere/glass/typography/motion/hover) was implemented behind the flag, then reverted at the user's direction; only the colorblind-safe gain/loss recoloring remains behind VITE_SKIN_V2. The aurora, WebGL shader, glass, and hover are retained in the base design. Documents the critical inline-token constraint: applyThemePalette() in themes.ts writes all color tokens as inline styles, defeating any stylesheet override — only structural tokens (radius, blur, motion, aurora alphas) are freely changed from CSS. Addendum 2026-06-24 (initial): colorblind palette promoted to persisted user setting (colorblindGainLoss). Addendum 2026-06-24 (follow-up): default changed to OFF/classic (colorblindGainLoss false, VITE_SKIN_V2 false); --gain/--loss tokens unified app-wide via tokens.css + skin-v2.css overrides; gain/loss Tailwind color utilities added; glass-trend classes re-pointed then deleted in gain/loss consistency pass; ~35 components swept to use gain/loss tokens. Addendum 2026-06-24 (gain/loss consistency pass): .glass-trend-up/.glass-trend-down/.liquid-glass-trend-* deleted from index.css; TrendHue shared component introduced as sole card-hue delivery mechanism.
 aliases: [skin-v2, dense fintech skin, visual redesign, fintech skin flag]
@@ -105,7 +105,7 @@ Phase 3 is the first phase that touches component code. Each skin-v2 branch must
 ## Related
 
 - [[docs/adr/index|All ADRs]]
-- [[docs/adr/030-frontend-env-schema|ADR-030: Frontend env schema]] — `booleanEnv` helper and `VITE_SKIN_V2` registration
+- [[docs/adr/030-frontend-environment-schema|ADR-030: Frontend env schema]] — `booleanEnv` helper and `VITE_SKIN_V2` registration
 - [[docs/adr/103-per-account-holdings-ui-flag|ADR-103: Per-account holdings UI flag]] — precedent for `booleanEnv` build-time flag pattern
 - [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075: Visual-effects tiers]] — reduced-transparency fallbacks that compose with skin-v2
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]] — the legacy skin being selectively overridden

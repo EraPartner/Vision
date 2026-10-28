@@ -2,7 +2,7 @@
 title: Performance - Chart Data Downsampling
 type: performance
 status: removed
-date: 2026-10-22
+date: 2026-10-28
 tags: [performance, charts, downsampling, lttb, optimization, historical]
 description: LTTB downsampling algorithm for large time-series chart data (removed 2026-07)
 aliases: [lttb, largest-triangle-three-buckets, downsampling, data reduction, chart optimization]
@@ -16,7 +16,7 @@ related_code: []
 > re-export was deleted; Net Worth and Performance charts render full daily
 > resolution deliberately, so scrubbing stays day-granular) and the
 > **backend** `/api/info/portfolio-performance` path (see
-> `apps/node-backend/src/routes/info/_performanceHelpers.js` — at daily
+> `apps/node-backend/src/services/info/performanceHelpers.ts` — at daily
 > granularity even ~10 years (~3.6k points) renders fine at full resolution, and
 > removing the shared downsampler also closed a correctness bug). This page is
 > retained only as a historical description of the algorithm; do not treat it as
@@ -28,8 +28,8 @@ Vision **previously** used the **Largest-Triangle-Three-Buckets (LTTB)** algorit
 
 ## Algorithm
 
-**Frontend:** [[apps/frontend/src/utils/downsample.ts]]
-**Backend (ported):** [[apps/node-backend/src/utils/downsample.js]]
+**Frontend:** `apps/frontend/src/utils/downsample.ts` (removed)  
+**Backend (ported):** `apps/node-backend/src/utils/downsample.js` (removed)
 
 ```typescript
 function downsampleLTTB<T>(
@@ -100,7 +100,7 @@ used server-side LTTB to downsample period-filtered snapshots to ~400 points
 before response. **This has been removed** — at daily granularity even ~10 years
 (~3.6k points) renders fine at full resolution, and dropping the shared
 downsampler also closed a correctness bug (see
-`apps/node-backend/src/routes/info/_performanceHelpers.js`). Metrics and heatmap
+`apps/node-backend/src/services/info/performanceHelpers.ts`). Metrics and heatmap
 always used full historical data regardless.
 
 See [[docs/adr/008-performance-page-server-computed-response|ADR-008]] for the

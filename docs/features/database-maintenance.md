@@ -2,8 +2,8 @@
 title: Database Maintenance UI
 type: feature
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     feature,
@@ -33,7 +33,6 @@ related_code:
   - apps/frontend/src/pages/DbMaintenancePage.tsx
   - apps/frontend/src/pages/admin/TableDataEditorPage.tsx
   - apps/frontend/src/features/admin/useTableDataEditorData.ts
-  - apps/node-backend/src/services/databaseMaintenanceService.js
 ---
 
 # Database Maintenance UI (Phase 7 + ADR-101)

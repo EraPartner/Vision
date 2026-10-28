@@ -24,7 +24,7 @@ related_code:
     ".github/workflows/ci.yml",
     ".github/workflows/release.yml",
     ".github/dependabot.yml",
-    "scripts/ci-classify.py",
+    "scripts/ci-classify.ts",
     "scripts/ci-cancellation-policy.ts",
     "scripts/audit-js.sh",
   ]
@@ -72,7 +72,7 @@ time to `CI Complete` was 13 minutes.
 
 | Job               | Runs on    | Contents                                                                                                                                                                                                             |
 | ----------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Detect Changes`  | every diff | `scripts/ci-classify.py`; fails safe to a code diff                                                                                                                                                                  |
+| `Detect Changes`  | every diff | `scripts/ci-classify.ts`; fails safe to a code diff                                                                                                                                                                  |
 | `Repo Checks`     | every diff | PR dependency review, gitleaks, agent-instruction and CI-classification checks, package boundaries, workflow supply-chain policy, commitlint, branch-protection verifier                                             |
 | `Lint`            | code diffs | `bun audit`, frontend and backend ESLint, locale and OpenAPI-type drift, endpoint matrix, repository script tests, destructive-migration gate, pip-audit, `mypy --strict`, Alembic audit callback test               |
 | `Type Check`      | code diffs | every strict TypeScript program (frontend, shared packages, backend, backend tests, scripts, Electron shell), shared package tests, production frontend build and bundle-size check                                  |

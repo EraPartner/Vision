@@ -1,6 +1,7 @@
 ---
 title: ADR-099 Sidebar / Navigation Information Architecture
 type: adr
+status: Partially superseded by ADR-180
 date: 2026-10-06
 tags:
   [

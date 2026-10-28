@@ -2,8 +2,8 @@
 title: Rate Limiting
 type: security
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   - security
   - rate-limiting
@@ -329,10 +329,10 @@ The dev-only rate-limit bypass is gated on the **explicit** env var `VISION_DEV=
 Previously, these bypasses activated whenever `ENVIRONMENT=development`, which could silently fire in any deployment that happened to set `NODE_ENV=development`. The new check is fail-safe: the default is disabled, and the backend `dev` npm script sets `VISION_DEV=true` automatically.
 
 ```javascript
-// config.js
+// config.ts
 isDev: process.env.VISION_DEV === 'true',
 
-// rateLimiter.js — skip check
+// rateLimiter.ts — skip check
 if (config.isDev) return next();
 ```
 

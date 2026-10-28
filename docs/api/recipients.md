@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/recipients
 description: Recipient (payee/payer) management with atomic merge and normalization-based matching
-date: 2026-10-21
-updated: 2026-10-21
+date: 2026-10-28
+updated: 2026-10-28
 tags: [api, recipients, payees, merge, atomic, phase-6, recipient-clusters]
 status: active
 aliases: [recipients-api, payee, payer, counterparty, recipient-management]
@@ -312,7 +312,7 @@ Identify recipient clusters for bulk merge operations. The service scans at most
 
 ## Recipient Patterns
 
-Recipients can have matching patterns used for automatic categorization during CSV import. These endpoints are handled inline in `recipients.js`.
+Recipients can have matching patterns used for automatic categorization during CSV import. These endpoints are handled inline in `recipients.ts`.
 
 ### GET /api/recipients/:id/patterns
 
@@ -497,7 +497,7 @@ Delete a pattern.
 
 ## Recipient Bank Accounts
 
-Recipients can have associated bank accounts. These endpoints are handled by `recipientBankAccounts.js`.
+Recipients can have associated bank accounts. These endpoints are handled by `recipientBankAccounts.ts`.
 
 ### GET /api/recipients/:id/bank-accounts
 

@@ -2,8 +2,8 @@
 title: AI Agent Codebase Navigation Map
 type: reference
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     ai-agent,
@@ -86,7 +86,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Recurring Detection | [[apps/frontend/src/features/planned/RecurringDetectionPanel.tsx]]                                                             |
 | Backend Route       | [[apps/node-backend/src/routes/plannedTransactions.ts]]                                                                        |
 | Backend Repository  | [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]                                                         |
-| Backend Service     | [[apps/node-backend/src/services/calculations/recurrence.js]], [[apps/node-backend/src/services/recurringDetectionService.ts]] |
+| Backend Service     | [[apps/node-backend/src/lib/calculations/recurrence.ts]], [[apps/node-backend/src/services/recurringDetectionService.ts]] |
 | API Doc             | [[docs/api/plannedTransactions]]                                                                                               |
 | Feature Doc         | [[docs/features/plannedTransactions]]                                                                                          |
 
@@ -280,7 +280,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Portfolio Transaction  | [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]] |
 | Watchlist              | [[apps/node-backend/src/repositories/watchlistRepository.ts]]            |
 | Split                  | [[apps/node-backend/src/repositories/splitRepository.ts]]                |
-| Raw Transaction        | [[apps/node-backend/src/repositories/rawTransactionRepository.js]]       |
+| Raw Transaction        | ~~`apps/node-backend/src/repositories/rawTransactionRepository.js`~~ (removed) |
 | Recipient Bank Account | [[apps/node-backend/src/repositories/recipientBankAccountRepository.ts]] |
 | Saved Charts           | [[apps/node-backend/src/repositories/savedChartsRepository.ts]]          |
 | Settings               | [[apps/node-backend/src/repositories/settingsRepository.ts]]             |
@@ -298,14 +298,14 @@ Full reference: [[docs/reference/service-layer|Service Layer Reference]]
 | Currency Conversion   | [[apps/node-backend/src/services/currency/currencyConversionService.ts]]                   |
 | Data Import           | [[apps/node-backend/src/services/dataImportService.ts]]                                    |
 | Deduplication         | [[apps/node-backend/src/services/deduplication.ts]]                                        |
-| IBAN                  | ~~[[apps/node-backend/src/services/iban.js]]~~ (deleted 2026-05-29; validation now inline) |
+| IBAN                  | ~~`apps/node-backend/src/services/iban.js`~~ (deleted 2026-05-29; validation now inline) |
 | Import Pipeline       | [[apps/node-backend/src/services/importPipeline/index.ts]] (Phase C)                       |
 | Loan Repayment        | [[apps/node-backend/src/services/calculations/loanSchedule.ts]]                            |
 | Materialized Views    | [[apps/node-backend/src/services/materializedViewService.ts]]                              |
 | Portfolio Performance | [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts]]                  |
 | Price Provider        | [[apps/node-backend/src/services/priceProviderService.ts]]                                 |
 | Quote Backfill        | [[apps/node-backend/src/services/quoteBackfillService.ts]]                                 |
-| Recurrence            | [[apps/node-backend/src/services/calculations/recurrence.js]]                              |
+| Recurrence            | [[apps/node-backend/src/lib/calculations/recurrence.ts]]                              |
 | Recurring Detection   | [[apps/node-backend/src/services/recurringDetectionService.ts]]                            |
 | Text Normalization    | [[apps/node-backend/src/lib/textNormalization.ts]]                                         |
 
@@ -368,13 +368,13 @@ files and optional `.down.sql` rollbacks, applied in name order. Generated types
 
 1. Read [[docs/features/import|Import Feature]]
 2. Read [[docs/integrations/bank-adapters|Bank Adapters]]
-3. Trace: `importRoutes.js` → `importPipeline/index.js` (orchestrator) → stages: stage/validate/match/commit → `importPipeline/adapters/index.js` → `deduplication.js`
+3. Trace: `importRoutes.ts` → `importPipeline/index.ts` (orchestrator) → stages: stage/validate/match/commit → `importPipeline/adapters/index.ts` → `deduplication.ts`
 4. See [[docs/api/imports|Imports API]] for endpoint contracts (standard, custom, streaming)
 
 ### "I want to understand how prices are fetched"
 
 1. Read [[docs/integrations/price-providers|Price Providers]]
-2. Trace: `investments.js` route → `priceProviderService.js` → Yahoo/Binance/Kinesis APIs
+2. Trace: `investments.ts` route → `priceProviderService.ts` → Yahoo/Binance/Kinesis APIs
 3. Read [[docs/integrations/kinesis-price-provider|Kinesis Price Provider]] for metals
 
 ---

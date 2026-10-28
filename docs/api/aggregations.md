@@ -2,9 +2,9 @@
 title: Aggregations API
 type: endpoint
 status: active
-date: 2026-10-22
-updated: 2026-10-20
-last_modified: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
+last_modified: 2026-10-28
 recipient_pivot_added: 2026-04-28
 tag_pivot_added: 2026-06-26
 tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, tag-pivot, saved-charts, exclusion-filters, ensemble-v2, tags]
@@ -23,7 +23,7 @@ related_code:
   - apps/frontend/src/hooks/useTagPivot.ts
   - apps/node-backend/src/repositories/infoRepositoryRecipients.ts
   - apps/node-backend/src/repositories/infoRepositoryMonthly.ts
-  - apps/node-backend/src/repositories/infoRepo.forecast.js
+  - apps/node-backend/src/repositories/infoRepositoryForecast.ts
   - apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.ts
   - apps/node-backend/src/repositories/cashflowForecastMcRepository.ts
   - apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.ts
@@ -574,7 +574,7 @@ The canonical parameters are `start_date` and `end_date`. Retired `start` or `en
 
 - Expenses only (`amount < 0`); income transactions are excluded.
 - Only tags with `is_active = true` are included.
-- Internal transfers (see [[docs/adr/083-transfer-detection|ADR-083]]) are always excluded, consistent with all other spending aggregations.
+- Internal transfers (see [[docs/adr/083-internal-transfer-detection|ADR-083]]) are always excluded, consistent with all other spending aggregations.
 - Historical FX conversion is applied per transaction date.
 
 > [!warning] Multi-tag overlap

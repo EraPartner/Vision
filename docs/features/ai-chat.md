@@ -2,9 +2,9 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-10-26
-updated: 2026-10-24
-last_modified: 2026-10-24
+date: 2026-10-28
+updated: 2026-10-28
+last_modified: 2026-10-28
 tags:
   [
     feature,
@@ -376,7 +376,7 @@ Enable via browser DevTools (Console tab) or server-side log aggregation.
 - **Read-only tool registry** — enforced by **CI denylist check** verifying no tool calls write methods (`create()`, `update()`, `delete()`, etc.) or imports the Postgres pool directly.
 - **Parameterized queries only** — tools go through existing repositories; no dynamic SQL built from LLM output.
 - **Audit log** — every `tool_call` + `tool_result` persisted in `ai_messages`.
-- **Input validation** — Zod on the chat message body; `tools/_validate.js` on tool args, with ids on the shared `validateId` accept set.
+- **Input validation** — Zod on the chat message body; `tools/_validate.ts` on tool args, with ids on the shared `validateId` accept set.
 - **Rate limiting** — 30 req/min on `/api/ai/chat`.
 - **Message length limit** — 4000 characters enforced both in frontend (`ChatComposer.tsx`) and backend (routes/ai.ts).
 - **Tools opt-out** — frontend `useTools` toggle allows users to disable tool-calling per-message; when `false`, backend skips tool schemas and returns text-only responses.

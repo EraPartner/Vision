@@ -2,8 +2,8 @@
 title: Feature - Belgian Tax
 type: feature
 status: active
-date: 2026-10-21
-updated: 2026-10-21
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     feature,
@@ -187,16 +187,16 @@ Modules are split by concern:
 
 **Currency injection:** all functions accept a `ConvertFn = (amount: number, fromCurrency?: string) => number` parameter rather than accessing exchange-rate state directly. This keeps the module dependency-free and fully testable without React context.
 
-**Decimal accumulation:** monetary sums and products inside these functions accumulate via `decimal.js` internally and return `number`. This eliminates float-accumulation drift across many transactions while leaving the public API type-stable (`number` in, `number` out).
+**Decimal accumulation:** monetary sums and products inside these functions accumulate via `decimal.ts` internally and return `number`. This eliminates float-accumulation drift across many transactions while leaving the public API type-stable (`number` in, `number` out).
 
 **Server-side use (ADR-217):** the pages no longer call these functions. `buildPortfolioTaxDashboard` (`packages/shared-utils/src/belgianTax/portfolioDashboard.ts`, served by `GET /api/belgian-tax/portfolio-dashboard`) runs the estimators for the Portfolio Tax page, and `buildTaxDashboard` (`apps/node-backend/src/services/tax/dashboardService.ts`, served by `GET /api/belgian-tax/dashboard`) calls `recordedTaxesForYear` for the tax overview.
 
 **Tests:** `packages/shared-utils/tests/belgianTax/portfolioTax.test.ts` — 13 golden-output cases locking all estimators to 8 decimal places. Run by `bun run test:packages` since ADR-217 (previously part of the frontend Vitest suite (94 tax-unit + 88 portfolio-integration tests pass; see [[docs/testing/test-inventory|Test Inventory]]).
 
-The Belgian-tax slice in [[apps/frontend/src/stores/belgianTaxStore]] owns household, snapshot,
+The Belgian-tax slice in [[apps/frontend/src/stores/belgianTaxStore.ts]] owns household, snapshot,
 audit and viewed-year state; `profile` and `snapshots` are v1 projections of the household (see
 [Household taxation](#household-taxation)). It holds no calculation: figures come from the server.
-The compatibility provider in [[apps/frontend/src/contexts/BelgianTaxProfileContext]] hydrates
+The compatibility provider in [[apps/frontend/src/contexts/BelgianTaxProfileContext.tsx]] hydrates
 the slice from `GET /api/belgian-tax/overview` (which runs the v1→v2 upgrade), adopts the
 overview's CAS baselines for later saves, writes the v2 keys once when the overview reports a
 pending upgrade, and persists edits. Freezing, filing (`persistTaxFiling`), the year CSV and the
@@ -267,7 +267,7 @@ New years are added by appending a `BelgianTaxYearTable` entry — no calculator
 
 ### Employment type → professional expense forfait
 
-WIB 92 art. 51 (amounts from the FPS Finance indexation notice per assessment year, see [[docs/reference/belgian-tax-rule-matrix]]): employees, civil servants and self-employed **trading profits** (winsten) get the 30% forfait (cap €5,930 IY 2025, €6,070 IY 2026). Remunerated company directors get the 3% forfait (cap €3,130 IY 2025). Self-employed **fees** (baten, liberal professions) get the degressive 28.7% / 10% / 5% / 3% scale with its own cap (€5,210 IY 2025). The optional profile field `selfEmployedIncomeKind` (`profits` by default, `fees`) selects the scale; pensions and other replacement income get no forfait. Per art. 51 al. 1 the percentages apply to the gross income after the employee social-security contribution, so for employees and civil servants the 13.07% / 11.05% contribution comes off before the 30% (this matters below the cap, about €22,700 gross in IY 2025). This is enforced in `computeProfessionalExpenses` in [pit.ts](packages/shared-utils/src/belgianTax/pit.ts). (Until 2026-10-11 the engine gave self-employed taxpayers no forfait at all.)
+WIB 92 art. 51 (amounts from the FPS Finance indexation notice per assessment year, see [[docs/reference/belgian-tax-rule-matrix]]): employees, civil servants and self-employed **trading profits** (winsten) get the 30% forfait (cap €5,930 IY 2025, €6,070 IY 2026). Remunerated company directors get the 3% forfait (cap €3,130 IY 2025). Self-employed **fees** (baten, liberal professions) get the degressive 28.7% / 10% / 5% / 3% scale with its own cap (€5,210 IY 2025). The optional profile field `selfEmployedIncomeKind` (`profits` by default, `fees`) selects the scale; pensions and other replacement income get no forfait. Per art. 51 al. 1 the percentages apply to the gross income after the employee social-security contribution, so for employees and civil servants the 13.07% / 11.05% contribution comes off before the 30% (this matters below the cap, about €22,700 gross in IY 2025). This is enforced in `computeProfessionalExpenses` in [[packages/shared-utils/src/belgianTax/pit.ts|pit.ts]]. (Until 2026-10-11 the engine gave self-employed taxpayers no forfait at all.)
 
 ### Taxable Income Sources
 
@@ -342,7 +342,7 @@ The `BelgianTaxCalculation` result object includes:
 
 > **Compatibility cutoff (2026-09-11):** `federalPITTotal` is no longer emitted or accepted in frozen calculations. Migration 0106 removes it only when its numeric value equals `federalPITBeforeExemption`; alias-only, malformed, or divergent stored values stop the migration for operator review. The affected `user_settings` row is included in normal database backups. See [[docs/adr/135-compatibility-cutoff-for-september-retirements|ADR-135]].
 >
-> **Regression note (2026-04-26):** an earlier implementation added the communal surcharge twice into `totalTaxBurden`. Covered now by [`pit.test.ts`](packages/shared-utils/tests/belgianTax/pit.test.ts).
+> **Regression note (2026-04-26):** an earlier implementation added the communal surcharge twice into `totalTaxBurden`. Covered now by [[packages/shared-utils/tests/belgianTax/pit.test.ts|pit.test.ts]].
 
 ## Portfolio Tax Page (`/portfolio/tax`)
 
@@ -774,7 +774,7 @@ Both components are pure presentation over `useTaxOverviewData`'s output: every 
 ### Known limits
 
 - **Engine drift.** When no calculation is frozen for a year (see ADR-059), past displayed numbers reflect today's `computeBelgianPIT` — engine bug fixes propagate retroactively. Freezing or filing a year captures the calculation verbatim and blocks drift for that year.
-- **Exchange rates.** The tax report (`dataFetcherTax.js`) converts foreign-currency tax, fee, and dividend amounts at the exchange rate **on each transaction's date** (point-in-time), not today's rate — matching the Belgian rules for the TOB ("ECB rate of the day the transaction took place") and for foreign movable income (taxable at its date of collection). See ADR-085. The frontend tax-overview's live portfolio figures still display at current rates (a current-value concern, not the tax computation).
+- **Exchange rates.** The tax report (`dataFetcherTax.ts`) converts foreign-currency tax, fee, and dividend amounts at the exchange rate **on each transaction's date** (point-in-time), not today's rate — matching the Belgian rules for the TOB ("ECB rate of the day the transaction took place") and for foreign movable income (taxable at its date of collection). See ADR-085. The frontend tax-overview's live portfolio figures still display at current rates (a current-value concern, not the tax computation).
 - **Soft lock.** Past snapshots remain editable behind a warning banner; filing upgrades the warning to an explicit "Amend this filed year" confirmation (ADR-059) but does not hard-freeze.
 
 ## Historical Year Extensions (ADR-059)

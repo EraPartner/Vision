@@ -2,7 +2,7 @@
 title: Analysis Definition and Result Contract Reference
 type: reference
 status: active
-date: 2026-10-08
+date: 2026-10-28
 tags: [reference, analysis, contract, lineage, versioning, datasets, money]
 description: Exact version-1 shapes, invariants, compatibility rules, and acceptance fixtures for shared Vision financial analyses.
 aliases:
@@ -189,9 +189,9 @@ their focused tests and database lifecycle checks are separate evidence.
 
 - `@vision/types/analysis` owns vocabulary, runtime validation, and compatibility.
 - Dataset owners define and test financial meaning.
-- `analysisExecutor.js` and the `vision_analysis_executor` role own authorization, resource limits,
+- `analysisExecutor.ts` and the `vision_analysis_executor` role own authorization, resource limits,
   cancellation, and query execution.
-- `savedAnalysisService.js` owns immutable definition versions, run persistence, and last-usable-result state.
+- `savedAnalysisService.ts` owns immutable definition versions, run persistence, and last-usable-result state.
 - Presentations own rendering but cannot weaken completeness or compatibility checks.
 - AI can propose inspectable definitions but receives no privileged execution path.
 

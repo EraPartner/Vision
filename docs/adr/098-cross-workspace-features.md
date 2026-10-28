@@ -1,8 +1,9 @@
 ---
 title: ADR-098 Cross-Workspace Features — NW Projection, Cash-Aware Rebalancing, Unified Tax
 type: adr
+status: Partially superseded by ADR-102
 date: 2026-06-19
-updated: 2026-10-20
+updated: 2026-10-28
 tags: [adr, net-worth, projection, rebalancing, tax, marital-quotient, cross-workspace, adr-081, adr-085, adr-089, saved-plans, rebalance-plans]
 description: Three features that compose all three workspaces — a net-worth/FI projection cone (cash-flow forecast + holdings + research forecast), cash-aware rebalancing (research targets + actual weights + available budgeting cash), and a unified tax view (earned income + realized gains + dividend income, owner-allocated for the marital quotient).
 aliases: [net worth projection, FI projection, cash-aware rebalancing, unified tax view]

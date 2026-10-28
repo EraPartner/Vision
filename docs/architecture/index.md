@@ -2,8 +2,8 @@
 title: Architecture Diagrams
 type: architecture-index
 status: active
-date: 2026-10-22
-updated: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     architecture,
@@ -249,7 +249,7 @@ Documentation:
 
 The backend repository layer completed a major refactoring in Phase 3.1:
 
-- **Monolith Split**: Original 1445-line `infoRepository.js` refactored into 7 domain-specific sub-modules (`statisticsRepository`, `monthlyRepository`, `banksRepository`, `netWorthRepository`, `plannedRepository`, `recipientInsightsRepository`) plus shared helpers
+- **Monolith Split**: Original 1445-line `infoRepository.ts` refactored into 7 domain-specific sub-modules (`statisticsRepository`, `monthlyRepository`, `banksRepository`, `netWorthRepository`, `plannedRepository`, `recipientInsightsRepository`) plus shared helpers
 - **Batch FX Optimization**: New `batchConvertGroupsWithHistoricalRateFallback()` helper combines N row groups into 1 `convertRowsToEur()` database query, eliminating 4 redundant exchange_rates lookups
 - **Parallel Query Execution**: Sequential queries converted to `Promise.all()` for independent operations
 - **Shared Utilities**: Helpers consolidate duplicated patterns (date formatting, rounding, category merging, row mapping)
@@ -288,9 +288,9 @@ ImportPage component refactored from monolithic 1019 lines to modular architectu
 
 **Resolution:**
 
-- New shared utility: [[apps/node-backend/src/lib/csv.ts|csv.js]] with `escapeCsvValue()` and `neutralizeCsvFormula()`
+- New shared utility: [[apps/node-backend/src/lib/csv.ts|csv.ts]] with `escapeCsvValue()` and `neutralizeCsvFormula()`
 - Centralizes CWE-1236 protection: prefixes dangerous leading chars (`=`, `+`, `-`, `@`) with `'`
-- Updated routes: `transactions.js` (GET `/api/transactions/export/csv`) and `splits.js` (GET `/api/splits/owed/:id/export/csv`)
+- Updated routes: `transactions.ts` (GET `/api/transactions/export/csv`) and `splits.ts` (GET `/api/splits/owed/:id/export/csv`)
 - All exports now use the shared utility, eliminating duplication and ensuring consistent security
 
 Documentation:
@@ -302,12 +302,12 @@ Documentation:
 
 **Changes:**
 
-- `transactions.js` (PATCH): Recipient/category resolution now uses `Promise.all` instead of sequential awaits
-- `splits.js`: Batch audit-trail writes parallelized via `Promise.all`
+- `transactions.ts` (PATCH): Recipient/category resolution now uses `Promise.all` instead of sequential awaits
+- `splits.ts`: Batch audit-trail writes parallelized via `Promise.all`
 
 ### Bug Fixes
 
-**admin.js:** Fixed VACUUM error handler returning 500 instead of 403
+**admin.ts:** Fixed VACUUM error handler returning 500 instead of 403
 
 - Error: `throw new AppError(msg, 403)` was dropping the status code because `AppError` constructor expects `(msg, opts)` shape
 - Fix: Changed to `throw new ForbiddenError(msg)` for proper 403 response
@@ -477,11 +477,11 @@ Documentation:
 
 ### Enforced Route → Service Boundary (ADR-067)
 
-[[docs/adr/067-enforce-route-service-boundary|ADR-067]] — All 15 route files now import exclusively from thin `services/<domain>Service.js` seams. ESLint rule `vision-local/no-repo-direct-from-route` promoted to ERROR. 14 new service modules added. Diagram updated: `backend-service-layer.puml` has a new "Thin Route Seams" package.
+[[docs/adr/067-enforce-route-service-boundary|ADR-067]] — All 15 route files now import exclusively from thin `services/<domain>Service.ts` seams. ESLint rule `vision-local/no-repo-direct-from-route` promoted to ERROR. 14 new service modules added. Diagram updated: `backend-service-layer.puml` has a new "Thin Route Seams" package.
 
 ### Drop mv_recipient_monthly (ADR-068)
 
-[[docs/adr/068-drop-mv-recipient-monthly|ADR-068]] — The `mv_recipient_monthly` materialized view was never read after `agg_recipient_totals` became the live source. Migration `0038` drops it. `aggregationRefresh.js` no longer schedules its refresh. See [[docs/performance/materialized-views|Materialized Views]] for updated strategy.
+[[docs/adr/068-drop-mv-recipient-monthly|ADR-068]] — The `mv_recipient_monthly` materialized view was never read after `agg_recipient_totals` became the live source. Migration `0038` drops it. `aggregationRefresh.ts` no longer schedules its refresh. See [[docs/performance/materialized-views|Materialized Views]] for updated strategy.
 
 ### @vision/shared-utils Cross-Workspace Package (ADR-069 and ADR-073)
 

@@ -22,7 +22,7 @@ related_code:
 ## Status
 
 Accepted on 2026-10-21. Amends [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075]]
-(large-display detection).
+(large-display detection). Amended by [[docs/adr/255-cheaper-full-effects|ADR-255]]: the switch is now `auto|on|off` with default `auto`; a stored `false` maps to `auto`.
 
 ## Date
 

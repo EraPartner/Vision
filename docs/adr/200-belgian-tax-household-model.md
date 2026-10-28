@@ -83,7 +83,7 @@ while preserving single-person results.
 - Joint households are taxed per spouse: the second partner's exemption, disability supplement,
   reductions and the art. 134 balance transfer are now applied, so a `married_joint` v1 profile
   can show a different (legally closer) result after the upgrade. The documented differences are
-  listed in `apps/frontend/src/lib/belgianTax/__tests__/householdParity.ts`.
+  listed in `packages/shared-utils/tests/belgianTax/householdParity.ts`.
 - Open rules are visible as `needs_source` issues and in the matrix's open items instead of being
   silently assumed.
 - The backend rejects malformed household values; unknown setting keys stay rejected.

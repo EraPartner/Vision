@@ -2,8 +2,8 @@
 title: Security - Data Protection & CSP
 type: security
 status: active
-date: 2026-10-21
-updated: 2026-10-21
+date: 2026-10-28
+updated: 2026-10-28
 tags: [security, csp, same-origin, loopback, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization, safe-storage, keychain, lazy-safeStorage, csrf-guard, sec-fetch-site, host-guard, dns-rebinding, zip-bomb, response-cap, content-length]
 description: Content Security Policy, the loopback-only network boundary, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions. safeStorage is now accessed lazily to avoid macOS Keychain prompts when no passphrase is configured. 2026-05-29: admin auth replaced with token-or-open + CSRF guard (ADR-063). 2026-10-20: CORS, the admin token and proxy support removed; the backend is loopback-only (ADR-233). June 2026: zip-bomb guard on restore, 5 MB Content-Length response cap on external fetches.
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
@@ -200,7 +200,7 @@ All use of React's `dangerouslySetInnerHTML` has been removed from the frontend.
 The attachment service protects against directory traversal attacks via explicit path validation:
 
 ```javascript
-// In attachmentService.js resolveAbsolutePath()
+// In attachmentService.ts resolveAbsolutePath()
 const root = getAttachmentsRoot();
 const absolute = resolve(root, storedPath);
 if (absolute !== root && !absolute.startsWith(root + sep)) {

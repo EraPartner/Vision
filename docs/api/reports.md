@@ -2,8 +2,8 @@
 title: Reports API
 type: endpoint
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   - api
   - reports
@@ -85,10 +85,10 @@ print dialog on the document; the user saves it as PDF there, without the page-n
 
 ### Phase 8 — Portfolio & Tax Report Implementation (2026-04-27)
 
-- **Portfolio report**: 6 data-backed sections replacing "Coming soon" stub. New `dataFetcherPortfolio.js` fetches portfolio snapshots, investment summaries, dividends, and asset-class aggregations in parallel. New `svgLineChart` helper added to `sectionHelpers.js` for performance trend overlay (value vs invested vs inflation-adjusted).
-- **Tax report**: 7 data-backed sections replacing "Coming soon" stub. New `dataFetcherTax.js` aggregates `portfolio_transactions` filtered to tax-year window, producing `totals`, `byMonth`, `byAssetClass`, and `byInvestment` payloads.
-- **Belgian tax pass-through**: `/api/reports/tax` now accepts optional `taxProfile` (`filingStatus`, `region`, `taxYear`) and `precomputedPIT` (`taxableIncome`, `totalTax`, `brackets[]`) in the POST body. `belgianTaxTables.js` provides static bracket/rate data; no server-side PIT computation.
-- **`svgGenericGroupedBarChart`**: New flexible chart helper in `sectionHelpers.js` accepting configurable `seriesDefs: { key, color, label }[]`; used by tax and portfolio section renderers.
+- **Portfolio report**: 6 data-backed sections replacing "Coming soon" stub. New `dataFetcherPortfolio.ts` fetches portfolio snapshots, investment summaries, dividends, and asset-class aggregations in parallel. New `svgLineChart` helper added to `sectionHelpers.ts` for performance trend overlay (value vs invested vs inflation-adjusted).
+- **Tax report**: 7 data-backed sections replacing "Coming soon" stub. New `dataFetcherTax.ts` aggregates `portfolio_transactions` filtered to tax-year window, producing `totals`, `byMonth`, `byAssetClass`, and `byInvestment` payloads.
+- **Belgian tax pass-through**: `/api/reports/tax` now accepts optional `taxProfile` (`filingStatus`, `region`, `taxYear`) and `precomputedPIT` (`taxableIncome`, `totalTax`, `brackets[]`) in the POST body. `belgianTaxTables.ts` provides static bracket/rate data; no server-side PIT computation.
+- **`svgGenericGroupedBarChart`**: New flexible chart helper in `sectionHelpers.ts` accepting configurable `seriesDefs: { key, color, label }[]`; used by tax and portfolio section renderers.
 - **ExportDialog**: Removed `isImplemented` guard and "coming soon" notice. All 3 report types are now fully operational. Portfolio section list expanded from 2 → 6 entries; tax from 1 → 7 entries. Tax download resolves `taxProfile` + `precomputedPIT` from `BelgianTaxProfileContext` before sending.
 - **PortfolioOverviewPage**: `<ExportDialog defaultType="portfolio" />` added to PageHeader actions.
 - **i18n**: 11 new `export.section.*` keys added to all 6 locale files (`en.ts`, `nl.ts`, `i18n/source/en.json`, `i18n/source/nl.json`, `packaging/electron/i18n/en.json`, `packaging/electron/i18n/nl.json`).
@@ -177,7 +177,7 @@ Report theme tokens (e.g. `primary`, `surface`, `text`) are passed from the fron
 
    Example of a valid value: `"250 84% 60%"` (hue degrees, saturation %, lightness %).
 
-2. **Sink-level guard (`themeCss.js`):** The same regex is re-applied in `buildThemeCss()` before interpolation. Invalid tokens silently fall back to the mode default (light or dark) rather than propagating the raw value. The fallback palette comes from `@vision/types/reportThemeDefaults`, which is also used by the frontend's default theme. This keeps a partial or rejected report palette aligned with the application's default light and dark palettes.
+2. **Sink-level guard (`themeCss.ts`):** The same regex is re-applied in `buildThemeCss()` before interpolation. Invalid tokens silently fall back to the mode default (light or dark) rather than propagating the raw value. The fallback palette comes from `@vision/types/reportThemeDefaults`, which is also used by the frontend's default theme. This keeps a partial or rejected report palette aligned with the application's default light and dark palettes.
 
 Both guards are exported (`HSL_COMPONENT_RE`) and covered by [[apps/node-backend/tests/themeCss.test.ts]].
 
@@ -376,7 +376,7 @@ Generate a tax PDF report with 7 data-backed sections (Phase 8).
 | `taxProfile`     | object (optional) | `{ filingStatus?, region?, taxYear? }` — Belgian filing context; echoed into `belgianRulesSummary`                                                                                                                                                                                                                                                                            |
 | `household`      | object (optional) | The year's Belgian tax household (2026-10-11, additive), validated by `belgianTaxHouseholdV2Schema` (`routes/belgianTaxSettingsSchemas.ts`); only partner display names are rendered                                                                                                                                                                                         |
 | `precomputedHousehold` | object (optional) | `{ assessmentMode, legalBasis?, quotient?, partners[] }` (2026-10-11, additive) — per-partner `grossIncome`, `taxableIncome`, `totalPIT` from the frontend household engine; partner ids must be unique (400 otherwise). With two partners, `belgianRulesSummary` adds a Per Partner table with the household total, the assessment and the marital quotient; with one partner nothing changes                         |
-| `precomputedPIT` | object (optional) | `{ taxableIncome?, totalTax?, brackets? }` — PIT calculation from the frontend Belgian tax engine; rendered as a bracket table in `belgianRulesSummary`. If omitted, the section renders only the static bracket/rate tables. **`brackets[].rate` is in PERCENT units** (`25` = 25%), unlike the server-side `belgianTaxTables.js` rates, which are fractions (`0.30` = 30%). |
+| `precomputedPIT` | object (optional) | `{ taxableIncome?, totalTax?, brackets? }` — PIT calculation from the frontend Belgian tax engine; rendered as a bracket table in `belgianRulesSummary`. If omitted, the section renders only the static bracket/rate tables. **`brackets[].rate` is in PERCENT units** (`25` = 25%), unlike the server-side `belgianTaxTables.ts` rates, which are fractions (`0.30` = 30%). |
 
 **Available Sections:**
 
@@ -439,7 +439,7 @@ queued report.
 - **HTTP route** (`apps/node-backend/src/routes/reports.ts`): Receives `{ filename, html, footerTemplate }` from the dispatcher and sends it with `res.ok`
 - **Data fetcher** (`apps/node-backend/src/services/reports/dataFetcher.ts`): Parallel Promise.allSettled loads selected sources; requested source failures reject the export
 - **Section renderers** (`apps/node-backend/src/services/reports/sections/`): Pure functions; each section independent
-- **Theme system** (`themeCss.js` + `sectionHelpers.js`): CSS tokens, formatters, SVG chart builders
+- **Theme system** (`themeCss.ts` + `sectionHelpers.ts`): CSS tokens, formatters, SVG chart builders
 - **Electron printer** (`packaging/electron/report-pdf.ts`): Hidden, sandboxed, script-free window on an in-memory session → `webContents.printToPDF` (A4, backgrounds, 28px footer margin); one print at a time with a 60 s timeout
 
 ### Data Sources

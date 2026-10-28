@@ -1,6 +1,7 @@
 ---
 title: ADR-083 Internal Transfer Detection and Exclusion
 type: adr
+status: accepted
 date: 2026-06-18
 tags: [adr, transfers, internal-transfer, cash-flow, statistics, aggregations, import-pipeline, transfer-detection, migration, reconciliation, mark-transfer-validation, release-orphans]
 description: Auto-detect transfers between a user's own accounts via a windowed, cross-batch reconciliation pass, persist the pairing as transfer_peer_id, and exclude marked transfers from cash-flow aggregates by default with a global toggle. 2026-06-25 addendum: markTransfer() pre-flight validation; releaseOrphans() now covers MANUAL transfers.
@@ -11,6 +12,8 @@ aliases: [internal transfers, transfer detection, transfer exclusion, transfer_p
 
 ## Status
 Proposed
+
+> [!note] Status corrected on 2026-10-28: the frontmatter status is `accepted`; transfer_peer_id and the reconciliation service are in the code (db/migrations/0001_baseline.sql, apps/node-backend/src/services/transferReconciliationService.ts).
 
 ## Date
 2026-06-18

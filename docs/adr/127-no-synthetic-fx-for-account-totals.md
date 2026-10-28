@@ -1,6 +1,7 @@
 ---
 title: ADR-127 No Synthetic FX for Account Totals
 type: adr
+status: accepted
 date: 2026-09-04
 tags: [adr, accounts, foreign-exchange, balances, merge-preview, data-integrity]
 description: Exclude native account balance partitions from converted totals when a required exchange rate is unavailable, expose the native amounts, and mark every affected total incomplete.

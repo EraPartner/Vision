@@ -2,8 +2,8 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-10-24
-updated: 2026-10-24
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     architecture,
@@ -962,7 +962,7 @@ const mainWindow = new BrowserWindow({
     sandbox: true, // Layer 1: Renderer sandbox (OS-level)
     contextIsolation: true, // Layer 2: Isolate preload from renderer context
     nodeIntegration: false, // Layer 3: No Node.js in renderer
-    preload: path.join(__dirname, "preload.js"),
+    preload: path.join(__dirname, "preload.ts"),
   },
 });
 ```
@@ -1221,7 +1221,7 @@ The Demo uses only this isolated native path. See
 **Open logs** → Opens app logs directory (`recovery:open-logs` IPC)
 
 > [!info] Localization status
-> The error page has been fully localized since 2026-06-11. Prior to that date, `packaging/electron/main.js` passed the i18n key names as the query-param values (e.g. `?title=app.errorPageTitle`) because the keys were absent from `i18n/source/` — see the correction note in [[docs/adr/022-electron-sandbox-hardening-and-recovery|ADR-022]] and the batch entry in [[docs/i18n/translations|translations]] for details.
+> The error page has been fully localized since 2026-06-11. Prior to that date, `packaging/electron/main.ts` passed the i18n key names as the query-param values (e.g. `?title=app.errorPageTitle`) because the keys were absent from `i18n/source/` — see the correction note in [[docs/adr/022-electron-sandbox-hardening-and-recovery|ADR-022]] and the batch entry in [[docs/i18n/translations|translations]] for details.
 
 ### Runtime Watchdog
 

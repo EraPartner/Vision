@@ -2,9 +2,9 @@
 title: Backup Coverage Audit
 type: feature
 status: active
-date: 2026-10-21
-updated: 2026-10-21
-last_modified: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
+last_modified: 2026-10-28
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
 description: "Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-GCM encryption (v2, 2026-04-28; the AES-256-CBC v1 format was retired and is refused since 2026-10-19, ADR-219), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes \"backup path keeps reverting to default\" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope."
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
@@ -191,7 +191,7 @@ backend through `ATTACHMENTS_DIR`.
 
 **Restore safety:** Files extracted to a staging directory (`$ATTACHMENTS_DIR.staging/`) and atomically swapped on success. Rolled back on failure — original files preserved until swap completes.
 
-**Supported types:** Images (PNG, JPEG, GIF, WEBP) and PDF (enforced by `attachmentService.js` magic-byte sniff).
+**Supported types:** Images (PNG, JPEG, GIF, WEBP) and PDF (enforced by `attachmentService.ts` magic-byte sniff).
 
 ---
 
@@ -222,7 +222,7 @@ Captured as `frontend-state.json` in the bundle. Restored after DB load triggers
 
 | Surface                                            | Backup      | Notes                                                                                                                                                                                                         |
 | -------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Materialised views                                 | ❌ Excluded | Re-built at runtime by `materializedViewService.js`                                                                                                                                                           |
+| Materialised views                                 | ❌ Excluded | Re-built at runtime by `materializedViewService.ts`                                                                                                                                                           |
 | Price provider caches (HTTP)                       | ❌ Excluded | Re-fetched on demand                                                                                                                                                                                          |
 | Electron `safeStorage` passphrase                  | ❌ Excluded | User re-enters passphrase post-restore. safeStorage is accessed lazily — only when a passphrase blob is already stored — to avoid macOS Keychain prompts for users who have not configured backup encryption. |
 | `settings.json` (Electron-local)                   | ❌ Excluded | Contains backup dir config + deviceId; meaningless on new machine                                                                                                                                             |
@@ -436,7 +436,7 @@ after success; it cannot address the user's real Vision data.
 
 `apps/node-backend/tests/backup-release-compat.test.ts` also opens the immutable, sanitized
 `packaging/electron/backup/fixtures/vision-1.0.2-sanitized.visionbak.enc` artifact through the
-compiled `packaging/electron/out/backup/bundle.js`; the backend Vitest global setup
+compiled build output of `packaging/electron/backup/bundle.ts` (`out/backup/bundle.js`); the backend Vitest global setup
 (`apps/node-backend/tests/setup/electronBuild.ts`) rebuilds `out/` when an Electron source is newer
 than the last build ([[docs/adr/196-electron-shell-typescript|ADR-196]]). The artifact was
 written and encrypted by the bundle implementation from Git tag `v1.0.2` and includes synthetic
@@ -458,13 +458,13 @@ covered by the focused Electron backup tests (`packaging/electron/backup/restore
 
 1. **Settings dialog clobber.** `DashboardSettingsDialog.tsx` persisted the Backup tab's values (path, schedule, enabled flag) on every Save click, even when the Backup tab had never been opened in that dialog session. The tab's default React state (empty string / false) overwrote the saved settings.
 
-2. **Electron IPC envelope unwrap.** The `backup:load-settings` and `will-quit` IPC handlers in `packaging/electron/main.js` read the backup settings from the API response as `data.value`, but the API returns the standard `{ ok: true, data: { key, value } }` envelope — so the handlers were reading `undefined` instead of the actual stored value. This meant the in-memory settings object was never populated from the DB, and the DB branch of the load path was effectively a no-op.
+2. **Electron IPC envelope unwrap.** The `backup:load-settings` and `will-quit` IPC handlers in `packaging/electron/main.ts` read the backup settings from the API response as `data.value`, but the API returns the standard `{ ok: true, data: { key, value } }` envelope — so the handlers were reading `undefined` instead of the actual stored value. This meant the in-memory settings object was never populated from the DB, and the DB branch of the load path was effectively a no-op.
 
 **Fix:**
 
 - `DashboardSettingsDialog.tsx` now loads backup settings from the backend when the dialog opens, using a `trusted` flag to prevent a stale in-flight response from overwriting user edits made after open.
 - `BackupTab.tsx` initialises from the loaded values rather than empty state.
-- `packaging/electron/main.js` IPC handlers unwrap `response.data.value` correctly (matching the `{ ok, data: { key, value } }` envelope shape).
+- `packaging/electron/main.ts` IPC handlers unwrap `response.data.value` correctly (matching the `{ ok, data: { key, value } }` envelope shape).
 - `settings.json` (Electron-local) mirrors the raw stored values rather than the unwrapped result, so the file accurately reflects what the backend returned.
 
 **Sources:** [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/features/settings/sections/BackupSection.tsx]], [[packaging/electron/main.ts]]

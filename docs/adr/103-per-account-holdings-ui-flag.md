@@ -81,7 +81,7 @@ data model. Flip the flag default to `true` (or set the env var) to restore the 
 - [[docs/adr/091-per-account-positioning|ADR-091: Per-account positioning]] (UI scope narrowed here)
 - [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] (by-account holdings UI gated here)
 - [[docs/adr/090-cash-sleeve-trades-as-transfers|ADR-090]] · [[docs/adr/095-brokerage-account-import|ADR-095]]
-- [[docs/adr/030-frontend-env-schema|ADR-030: Frontend env schema]] (flag mechanism)
+- [[docs/adr/030-frontend-environment-schema|ADR-030: Frontend env schema]] (flag mechanism)
 
 ---
 

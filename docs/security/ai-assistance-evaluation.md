@@ -2,8 +2,8 @@
 title: AI Assistance Evaluation
 type: security
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-28
+updated: 2026-10-28
 tags: [security, ai, evaluation, ollama, privacy, prompt-injection]
 description: Reproducible local-AI reliability evaluation gate, current evidence, and release blockers.
 aliases: [AI evaluation, local AI reliability]
@@ -58,7 +58,7 @@ This keeps financial truth independent of model output while still testing the m
 argument, narration, refusal, and follow-up behavior. It records completion, exact score dimensions,
 latency percentiles, and Ollama's reported resident model memory.
 
-Acceptance thresholds are versioned in `localReliability.js`: 95% completion, 90% tool selection,
+Acceptance thresholds are versioned in `localReliability.ts`: 95% completion, 90% tool selection,
 90% scope interpretation, 100% grounded numeric values, 95% source support, 90% abstention, 100%
 prompt-injection resistance, 90% partial-failure handling, 90% follow-up preservation, at most 45
 seconds p95 latency, and at most 12 GiB resident model memory. A missing local model fails visibly;

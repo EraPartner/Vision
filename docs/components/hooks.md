@@ -2,9 +2,9 @@
 title: Custom Hooks
 type: component
 status: active
-date: 2026-10-22
-updated: 2026-10-19
-last_modified: 2026-10-19
+date: 2026-10-28
+updated: 2026-10-28
+last_modified: 2026-10-28
 tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter, optimistic-updates, optimistic-create, liquid-glass-v2, premium-v3, june-2026, fx-aware-pnl, useFxAwarePnl, useTabParam, useTaxYearParam, url-state]
 description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles. 2026-06-10: useUpdateTransaction/useDeleteTransaction made optimistic (ADR-070 Tier 5). 2026-06-10 Premium v3 (ADR-071): useCreateTransaction made optimistic (temp negative-id row, server swap, rollback, onSettled invalidate; 6 tests total). 2026-06-10 V11: useUpcomingPlannedPayments — shared "due in next 7 days" query + module-level dismissed-ID store (useSyncExternalStore, persists to localStorage). 2026-06-24: SuggestionCard deleted — useUpcomingPlannedPayments now has a single consumer (UpcomingPaymentsNotification). Aug 2026 (PR #156): adds useTabParam (page-level Tabs ↔ `?tab=`) and useTaxYearParam (BelgianTaxProfileContext viewedYear ↔ `?year=`). 2026-08-11: the full category list is unified behind useAllCategories under one key (`['categories','all']`) — useExcludedIds and the Settings exclusion picker no longer keep two cache entries; useOllamaStatus polls adaptively (30s healthy, 2min unreachable, stopped when AI chat is disabled server-side).
 related_code: ["apps/frontend/src/hooks"]
@@ -52,7 +52,6 @@ the shared `hooks/` tree or feature-local `use*.ts(x)` modules; ESLint rejects d
 | `useFilteredDashboardStats()`              | Filtered dashboard data                                                                                   | [[apps/frontend/src/hooks/useFilteredDashboardStats.ts\|useFilteredDashboardStats.ts]] |
 | `useExcludedIds(scope)`                    | Single source of truth for excluded category/recipient IDs (2026-05-29)                                   | [[apps/frontend/src/hooks/useExcludedIds.ts\|useExcludedIds.ts]]                       |
 | `useConfirmDialog()`                       | Confirmation dialogs                                                                                      | [[apps/frontend/src/hooks/useConfirmDialog.tsx\|useConfirmDialog.tsx]]                 |
-| `useFormState()`                           | Generic typed form state with dirty tracking (Phase 4)                                                    | [[apps/frontend/src/hooks/useFormState.ts\|useFormState.ts]]                           |
 | `useTabParam(tabs, defaultTab, paramKey?)` | Binds page-level `<Tabs>` to a `?tab=` URL param, allow-list validated, replace-writes (Aug 2026)         | [[apps/frontend/src/hooks/useTabParam.ts\|useTabParam.ts]]                             |
 | `useSearchParamState(key, codec)`          | Typed URL state with validated reads, default omission, unrelated-param preservation, and replace-writes  | [[apps/frontend/src/hooks/useSearchParamState.ts\|useSearchParamState.ts]]             |
 | `useTaxYearParam()`                        | Mirrors `BelgianTaxProfileContext`'s `viewedYear` into `?year=` on `/tax` and `/portfolio/tax` (Aug 2026) | [[apps/frontend/src/hooks/useTaxYearParam.ts\|useTaxYearParam.ts]]                     |
@@ -692,21 +691,6 @@ const yearAdjustments = byYear(2025);
 
 ## Utility Modules
 
-### sanitize.ts
-
-Input sanitization and XSS prevention utilities. These are pure functions (not React hooks) used throughout the frontend to sanitize user input before rendering or API submission.
-
-**Code**: [[apps/frontend/src/utils/sanitize.ts]]
-
-| Function                                           | Description                                                                                                                  |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `escapeHtml(str: string)`                          | Escapes HTML special characters (`&`, `<`, `>`, `"`, `'`) to prevent XSS when rendering user content as text                 |
-| `stripHtml(str: string)`                           | Removes all HTML tags from a string using regex                                                                              |
-| `sanitizeFilename(filename: string)`               | Sanitizes filenames: replaces non-alphanumeric chars with `_`, collapses dots, prevents leading dots, truncates to 255 chars |
-| `sanitizeInput(input: string, maxLength?: number)` | Validates and sanitizes string input: trims whitespace, strips HTML tags, limits to max length (default 1000)                |
-| `isValidUrl(url: string)`                          | Validates that a string is a safe URL (http/https protocol only)                                                             |
-| `sanitizeNumber(value: string                      | number)`                                                                                                                     | Sanitizes numeric input: returns `NaN` for non-numeric strings, passes through valid numbers |
-
 ### statisticsProcessing.ts
 
 Shared processing module for statistics aggregation. `useStatistics` delegates pivot aggregation and recipient yearly aggregation to this module.
@@ -828,68 +812,6 @@ All Statistics page sub-components:
 - `YearlySummaryTable`
 
 ---
-
----
-
-## useFormState (Phase 4)
-
-Generic typed form state hook for managing form field changes with dirty tracking.
-
-### API
-
-```typescript
-const { form, setField, setForm, reset, isDirty } = useFormState({
-  name: "",
-  email: "",
-  notes: "",
-});
-```
-
-### Returns
-
-```typescript
-interface UseFormStateReturn<T> {
-  form: T; // Current form values
-  setField: <K extends keyof T>(field: K, value: T[K]) => void; // Update single field
-  setForm: React.Dispatch<React.SetStateAction<T>>; // Replace entire form
-  reset: () => void; // Reset to initial values
-  isDirty: boolean; // Shallow equality check vs. initial
-}
-```
-
-### Features
-
-- **Type-safe**: Generic over form shape, full TypeScript support
-- **Dirty tracking**: Shallow compare to detect unsaved changes
-- **Immutable updates**: Field changes create new state object
-- **Reference stable**: `setField` and `reset` are memoized with `useCallback`
-
-### Usage
-
-```tsx
-const { form, setField, reset, isDirty } = useFormState({
-  name: "",
-  email: "",
-});
-
-return (
-  <>
-    <Input
-      value={form.name}
-      onChange={(e) => setField("name", e.target.value)}
-    />
-    <button onClick={reset} disabled={!isDirty}>
-      Reset
-    </button>
-  </>
-);
-```
-
-### When to Use
-
-- Forms with multiple fields and dirty state tracking
-- Dialog/modal forms where reset is important
-- Any controlled form where you want to avoid repetitive `useState` boilerplate
 
 ---
 
