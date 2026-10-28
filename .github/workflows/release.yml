@@ -205,6 +205,9 @@ jobs:
           hdiutil attach -nobrowse -readonly -mountpoint "$PG_MOUNT" "$PG_DMG"
           trap 'hdiutil detach "$PG_MOUNT" >/dev/null' EXIT
           export VISION_POSTGRES_SOURCE_BIN="$PG_MOUNT/Postgres.app/Contents/Versions/18/bin"
+          # setup-bun installs to ~/.bun/bin; prepare-native-runtime only probes Homebrew paths.
+          VISION_BUN_BIN="$(command -v bun)"
+          export VISION_BUN_BIN
           cd packaging/electron
           # Hardened install for the shipped artifact: pin to the committed
           # lockfile (--frozen-lockfile) and block transitive lifecycle scripts
