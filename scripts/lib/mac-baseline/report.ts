@@ -39,13 +39,22 @@ export interface ActionMeasurement extends WindowMeasurement {
   pageMetrics: Record<string, number>;
 }
 
-/** --segment window-scroll: one page's document scrolled down and back up. */
+/**
+ * --segment window-scroll: one page's document scrolled requestedPx down and
+ * back up, bouncing between bottom and top on a shorter page.
+ */
 export interface WindowScrollMeasurement extends ActionMeasurement {
   page: string;
   method: string;
   requestedPx: number;
+  /** Deepest scrollTop reached. */
   reachedScrollTop: number;
   scrollHeight: number;
+  /** Distance scrolled in all (2 × requestedPx when it completed); absent in
+   *  results from before the bounce. */
+  travelledPx?: number;
+  /** Turns at the bottom or top; absent in results from before the bounce. */
+  bounces?: number;
 }
 
 /** --segment chat-stream: one mocked AI chat answer streamed into /ai-chat. */
@@ -819,6 +828,8 @@ export function renderSummary(results: BaselineResults): string {
           entry.page,
           entry.method,
           `${fmt(entry.reachedScrollTop)} / ${fmt(entry.scrollHeight)}`,
+          `${fmt(entry.travelledPx)} / ${fmt(2 * entry.requestedPx)}`,
+          fmt(entry.bounces),
           ...actionRow(entry),
         ]);
       }
@@ -827,12 +838,21 @@ export function renderSummary(results: BaselineResults): string {
   if (windowRows.length > 0) {
     out.push("## Window scroll (--segment window-scroll)");
     out.push(
-      "The document itself scrolls (AppLayout's window scroller) under the sticky topbar. Reached is the scrollTop at the bottom of the down pass; a page shorter than the requested distance stops early while the gesture runs on.",
+      "The document itself scrolls (AppLayout's window scroller) under the sticky topbar, the requested distance down and back up. Reached is the deepest scrollTop; a page shorter than the requested distance bounces between bottom and top until it has travelled the whole distance, so Travelled matches Requested and the window holds scrolling throughout (results from before the bounce show a dash).",
     );
     out.push("");
     out.push(
       table(
-        ["App", "Tier", "Page", "Method", "Reached / height px", ...actionHeader],
+        [
+          "App",
+          "Tier",
+          "Page",
+          "Method",
+          "Reached / height px",
+          "Travelled / requested px",
+          "Bounces",
+          ...actionHeader,
+        ],
         windowRows,
       ),
     );

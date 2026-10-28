@@ -1666,8 +1666,10 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         // around the composited scroller makes Chromium draw the whole card
         // through a mask layer on every scroll frame. Nothing inside reaches
         // the corners (the footer and search row have no fill) and the body
-        // scroller clips itself.
-        <Card className="relative">
+        // scroller clips itself. material-host: the glass is drawn under the
+        // rows (index.css, "Material hosts"), so a scroll does not re-filter
+        // the card.
+        <Card className="material-host relative">
             {(title || subtitle || Boolean(actions)) && (
                 <CardHeader
                     className={cn(

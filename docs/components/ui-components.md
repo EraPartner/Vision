@@ -2,8 +2,8 @@
 title: UI Components
 type: component
 status: active
-date: 2026-10-26
-updated: 2026-10-19
+date: 2026-10-28
+updated: 2026-10-28
 tags:
   [
     components,
@@ -500,7 +500,7 @@ Content container with header, content, and footer sections.
 - `CardContent` - Main content
 - `CardFooter` - Footer/actions
 
-`Card` has `card-material`, `glass-thin`, and the resting `premium-frame` baked into its base class. The semantic marker lets macOS native vibrancy suppress persistent Card blur without suppressing small transient thin controls. Static cards do not lift or glow on hover. Use `variant="interactive"` only for activatable cards; that variant adds `premium-frame-interactive`, hover lift, press feedback, and reduced-motion handling without changing material depth. Deliberately promoted hero/summary cards use explicit `glass-elevated`, while administrative chrome cards may use `glass-chrome`. Dense tables and other opaque exceptions use a plain opaque container. Do not add `card-material`, `glass-thin`, `glass-regular`, `premium-frame`, or `micro-lift` manually to a Card.
+`Card` has `card-material`, `glass-thin`, and the resting `premium-frame` baked into its base class. The semantic marker lets macOS native vibrancy suppress persistent Card blur without suppressing small transient thin controls. Static cards do not lift or glow on hover. Use `variant="interactive"` only for activatable cards; that variant adds `premium-frame-interactive`, hover lift, press feedback, and reduced-motion handling without changing material depth. Deliberately promoted hero/summary cards use explicit `glass-elevated`, while administrative chrome cards may use `glass-chrome`. Dense tables and other opaque exceptions use a plain opaque container. Do not add `card-material`, `glass-thin`, `glass-regular`, `premium-frame`, or `micro-lift` manually to a Card. A Card with `material-host` draws its material on a childless `::before` under its content ([[docs/adr/260-ledger-card-material-on-a-pseudo|ADR-260]]); only the `VirtualDataTable` Card uses it, because each host adds compositor layers.
 
 `CardContent` owns repeated padding shapes through named roles. Use `default` after a header or when nested content owns its vertical inset, `headerless` for ordinary first-child content needing the full 24px inset, `flush` for edge-to-edge tables or media, `compact` for dense controls, `row` for vertically compact rows and summaries, and `state` for short centered empty/error states. Keep `className` for layout and one-off spacing only; do not restate a named role's padding classes at the call site. Component-owned exceptions are the compact `p-1` search result shell, the one-off `py-3` match banner, the investment dialog's asymmetric `pt-4` sections, large empty canvases, and `StatCard`'s size-coupled padding.
 

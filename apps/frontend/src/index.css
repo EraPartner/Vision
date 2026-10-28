@@ -185,6 +185,11 @@
      * shares one shadow model (contact + ambient) and theme variants keep
      * their own shadow hue through --glass-shadow. Fills, borders and blur
      * are unchanged.
+     *
+     * Each material also publishes its fill as --material-fill (and, below,
+     * its filter as --material-backdrop) in the same rule that sets the
+     * property, so a material host (see "Material hosts") can draw exactly
+     * the winning fill and filter on its ::before.
      * ------------------------------------------------------------------ */
 
     .glass {
@@ -249,22 +254,24 @@
     /* Thin — default Cards and subtle standalone controls */
     .glass-thin,
     .liquid-glass-soft {
-        background: linear-gradient(
+        --material-fill: linear-gradient(
             180deg,
             hsl(var(--glass-surface) / 0.72) 0%,
             hsl(var(--glass-surface) / 0.56) 100%
         );
+        background: var(--material-fill);
         border: 1px solid hsl(var(--glass-border) / 0.08);
         box-shadow: var(--elevation-1);
     }
 
     .dark .glass-thin,
     .dark .liquid-glass-soft {
-        background: linear-gradient(
+        --material-fill: linear-gradient(
             180deg,
             hsl(var(--glass-surface) / 0.64) 0%,
             hsl(var(--glass-surface-deep) / 0.78) 100%
         );
+        background: var(--material-fill);
         box-shadow: var(--elevation-1);
     }
 
@@ -273,12 +280,13 @@
     .liquid-glass,
     .surface-glass,
     .glass-effect {
-        background: linear-gradient(
+        --material-fill: linear-gradient(
             135deg,
             hsl(var(--glass-highlight) / 0.38) 0%,
             hsl(var(--glass-surface) / 0.7) 42%,
             hsl(var(--glass-surface) / 0.52) 100%
         );
+        background: var(--material-fill);
         border: 1px solid hsl(var(--glass-border) / 0.1);
         box-shadow: var(--elevation-2);
     }
@@ -287,35 +295,38 @@
     .dark .liquid-glass,
     .dark .surface-glass,
     .dark .glass-effect {
-        background: linear-gradient(
+        --material-fill: linear-gradient(
             135deg,
             hsl(var(--glass-highlight) / 0.04) 0%,
             hsl(var(--glass-surface) / 0.78) 42%,
             hsl(var(--glass-surface-deep) / 0.9) 100%
         );
+        background: var(--material-fill);
         border: 1px solid hsl(var(--glass-border) / 0.08);
         box-shadow: var(--elevation-2);
     }
 
     /* Thick — dialogs, popovers, important overlays */
     .glass-thick {
-        background: linear-gradient(
+        --material-fill: linear-gradient(
             135deg,
             hsl(var(--glass-highlight) / 0.5) 0%,
             hsl(var(--glass-surface) / 0.82) 40%,
             hsl(var(--glass-surface-deep) / 0.7) 100%
         );
+        background: var(--material-fill);
         border: 1px solid hsl(var(--glass-border) / 0.14);
         box-shadow: var(--elevation-4);
     }
 
     .dark .glass-thick {
-        background: linear-gradient(
+        --material-fill: linear-gradient(
             135deg,
             hsl(var(--glass-highlight) / 0.06) 0%,
             hsl(var(--glass-surface) / 0.86) 42%,
             hsl(var(--glass-surface-deep) / 0.94) 100%
         );
+        background: var(--material-fill);
         border: 1px solid hsl(var(--glass-border) / 0.1);
         box-shadow: var(--elevation-4);
     }
@@ -367,24 +378,26 @@
     /* Elevated — hero tiles and featured KPIs */
     .glass-elevated,
     .liquid-glass-hero {
-        background: linear-gradient(
+        --material-fill: linear-gradient(
             138deg,
             hsl(var(--glass-highlight) / 0.62) 0%,
             hsl(var(--glass-surface) / 0.78) 38%,
             hsl(var(--glass-tint) / 0.08) 100%
         );
+        background: var(--material-fill);
         border: 1px solid hsl(var(--glass-border) / 0.16);
         box-shadow: var(--elevation-3);
     }
 
     .dark .glass-elevated,
     .dark .liquid-glass-hero {
-        background: linear-gradient(
+        --material-fill: linear-gradient(
             138deg,
             hsl(var(--glass-highlight) / 0.1) 0%,
             hsl(var(--glass-surface) / 0.84) 36%,
             hsl(var(--glass-tint) / 0.22) 100%
         );
+        background: var(--material-fill);
         border: 1px solid hsl(var(--glass-border) / 0.12);
         box-shadow: var(--elevation-3);
     }
@@ -408,25 +421,25 @@
         .liquid-glass,
         .surface-glass,
         .glass-effect {
-            -webkit-backdrop-filter: blur(var(--glass-regular-blur))
+            --material-backdrop: blur(var(--glass-regular-blur))
                 saturate(var(--glass-saturate));
-            backdrop-filter: blur(var(--glass-regular-blur))
-                saturate(var(--glass-saturate));
+            -webkit-backdrop-filter: var(--material-backdrop);
+            backdrop-filter: var(--material-backdrop);
         }
 
         .glass-thin,
         .liquid-glass-soft {
-            -webkit-backdrop-filter: blur(var(--glass-thin-blur))
+            --material-backdrop: blur(var(--glass-thin-blur))
                 saturate(var(--glass-saturate));
-            backdrop-filter: blur(var(--glass-thin-blur))
-                saturate(var(--glass-saturate));
+            -webkit-backdrop-filter: var(--material-backdrop);
+            backdrop-filter: var(--material-backdrop);
         }
 
         .glass-thick {
-            -webkit-backdrop-filter: blur(var(--glass-thick-blur))
+            --material-backdrop: blur(var(--glass-thick-blur))
                 saturate(var(--glass-saturate));
-            backdrop-filter: blur(var(--glass-thick-blur))
-                saturate(var(--glass-saturate));
+            -webkit-backdrop-filter: var(--material-backdrop);
+            backdrop-filter: var(--material-backdrop);
         }
 
         .glass-chrome {
@@ -438,10 +451,10 @@
 
         .glass-elevated,
         .liquid-glass-hero {
-            -webkit-backdrop-filter: blur(var(--glass-elevated-blur))
+            --material-backdrop: blur(var(--glass-elevated-blur))
                 saturate(var(--glass-saturate));
-            backdrop-filter: blur(var(--glass-elevated-blur))
-                saturate(var(--glass-saturate));
+            -webkit-backdrop-filter: var(--material-backdrop);
+            backdrop-filter: var(--material-backdrop);
         }
 
         /* Cards and the desktop sidebar rail only ever sit over the canvas:
@@ -458,8 +471,9 @@
            `none` below still applies. */
         @media (prefers-reduced-transparency: no-preference) {
             .card-material {
-                -webkit-backdrop-filter: saturate(var(--glass-saturate));
-                backdrop-filter: saturate(var(--glass-saturate));
+                --material-backdrop: saturate(var(--glass-saturate));
+                -webkit-backdrop-filter: var(--material-backdrop);
+                backdrop-filter: var(--material-backdrop);
             }
 
             /* The desktop rail stacked two glass-chrome layers with the same
@@ -487,6 +501,7 @@
        difference. Fill, border and shadow stay; on every tier. Two classes to
        outrank the single-class materials above. */
     .card-material.chat-bubble-flat {
+        --material-backdrop: none;
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
     }
@@ -663,6 +678,7 @@
                 .app-topbar,
                 .modal-overlay
             ) {
+            --material-backdrop: none;
             -webkit-backdrop-filter: none;
             backdrop-filter: none;
         }
@@ -878,11 +894,15 @@
        the remaining premium-frame consumers all declare it alongside. */
     .premium-frame {
         border: 1px solid hsl(var(--border) / 0.7);
-        /* Light mode reads as embossed paper: top highlight + bottom hairline. */
-        box-shadow:
+        /* Light mode reads as embossed paper: top highlight + bottom hairline.
+           Split into inset and outer halves for the material hosts below. */
+        --material-inset-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.16) inset,
-            0 -1px 0 hsl(var(--glass-shadow) / 0.05) inset,
-            0 4px 12px hsl(var(--glass-shadow) / 0.04);
+            0 -1px 0 hsl(var(--glass-shadow) / 0.05) inset;
+        --material-outer-shadow: 0 4px 12px hsl(var(--glass-shadow) / 0.04);
+        box-shadow:
+            var(--material-inset-shadow),
+            var(--material-outer-shadow);
     }
 
     /* Icon tiles inherit their glow from their semantic text colour. A loss,
@@ -956,9 +976,12 @@
     }
 
     .dark .premium-frame {
+        --material-inset-shadow: 0 1px 0 hsl(var(--glass-highlight) / 0.06)
+            inset;
+        --material-outer-shadow: 0 5px 16px hsl(var(--glass-shadow) / 0.2);
         box-shadow:
-            0 1px 0 hsl(var(--glass-highlight) / 0.06) inset,
-            0 5px 16px hsl(var(--glass-shadow) / 0.2);
+            var(--material-inset-shadow),
+            var(--material-outer-shadow);
     }
 
     .dark .premium-frame-interactive::after {
@@ -967,6 +990,71 @@
 
     .dark .premium-frame-interactive:hover {
         border-color: hsl(var(--primary) / 0.5);
+    }
+
+    /* ------------------------------------------------------------------
+     * Material hosts: Cards whose content changes all the time.
+     *
+     * An element with a backdrop-filter renders itself AND its whole subtree
+     * into one intermediate surface, so every scrolled ledger row inside a
+     * glass card re-rendered and re-filtered the card-sized surface. A Card marked `material-host` draws its
+     * material (fill, inset highlight and backdrop filter) on a childless
+     * ::before under the content instead, so the filtered surface never
+     * changes when the content does. The box keeps its border, outer shadow
+     * and layout.
+     *
+     * Opt-in, not every Card: a host costs compositor layers (the ::before,
+     * and the content painted over it gets its own layers), which every
+     * frame then walks, draws and, on a window scroll, moves. On a page of
+     * static cards that is more work for the aurora at idle and for a window
+     * scroll than the one card surface it replaces, so only the ledger card
+     * (VirtualDataTable) is a host. A host must not contain another glass
+     * layer: a filtered box is the backdrop root of the glass inside it, and
+     * without it the nested layer would filter the page behind the card too.
+     * That keeps the chat transcript on the box material: it holds the
+     * composer and tool results, glass with Full effects, and the thinking
+     * card.
+     *
+     * Parity: the ::before reads the fill, filter and inset shadow that won
+     * on the box through --material-fill, --material-backdrop and
+     * --material-inset-shadow, which every material, tier and fallback rule
+     * sets next to the property it sets, so the theme, tier, Full effects,
+     * vibrancy, reduced transparency and print cascades are unchanged. The
+     * reduced tiers keep the opaque card fill on the box too (ADR-257
+     * occlusion); the ::before paints the same opaque fill over it.
+     * `isolation` + `z-index: -1` keep the ::before above the box's own
+     * background but under in-flow content. The ::before covers the padding
+     * box (an overflow-clipping card would clip anything larger), so the
+     * border ring composites over the bare backdrop instead of over the
+     * fill, and the corners use the outer radius on the padding box: the
+     * only pixel differences of this layout (ring up to ~15/255 in dark
+     * mode, ≤9 in light, where the border is near-opaque).
+     *
+     * Three classes outrank `.dark .glass-*` and `.dark .premium-frame`;
+     * declared after them. The ::before is free on a Card: `.glass` (with
+     * its own ::before) is never a Card, and the interactive hover shadow
+     * uses ::after.
+     * ------------------------------------------------------------------ */
+    .card-material.premium-frame.material-host {
+        isolation: isolate;
+        background-image: none;
+        box-shadow: var(--material-outer-shadow);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
+    .card-material.premium-frame.material-host::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        border-radius: inherit;
+        corner-shape: inherit;
+        pointer-events: none;
+        background: var(--material-fill);
+        box-shadow: var(--material-inset-shadow);
+        -webkit-backdrop-filter: var(--material-backdrop, none);
+        backdrop-filter: var(--material-backdrop, none);
     }
 
     .micro-lift {
@@ -1652,6 +1740,8 @@
         .surface-glass,
         .glass-effect,
         .app-topbar {
+            --material-fill: hsl(var(--card));
+            --material-backdrop: none;
             -webkit-backdrop-filter: none;
             backdrop-filter: none;
             background: hsl(var(--card));
@@ -1689,6 +1779,8 @@
     :root.fx-reduced .surface-glass,
     :root.fx-reduced .glass-effect,
     :root.fx-reduced .app-topbar {
+        --material-fill: hsl(var(--card));
+        --material-backdrop: none;
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
         /* Fully opaque (was 0.97, a ≤2/255 difference): the compositor only
@@ -1921,6 +2013,9 @@
         [data-print-page] .glass-regular,
         [data-print-page] .glass-thick,
         [data-print-page] .glass-elevated {
+            --material-fill: #fff !important;
+            --material-inset-shadow: none !important;
+            --material-backdrop: none !important;
             background: #fff !important;
             box-shadow: none !important;
             -webkit-backdrop-filter: none !important;

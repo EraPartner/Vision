@@ -2,8 +2,8 @@
 title: Mac Performance Baseline
 type: performance
 status: active
-date: 2026-10-27
-last_modified: 2026-10-27
+date: 2026-10-28
+last_modified: 2026-10-28
 tags: [performance, macos, gpu, energy, measurement, electron]
 description: Repeatable before/after measurement of the installed Vision apps on a Mac (memory, CPU, GPU, power, launch, frames) across the three UI tiers
 aliases: [mac baseline, performance baseline, powermetrics run]
@@ -139,7 +139,8 @@ to the viewport; nested surfaces add up, so area can exceed 100%).
 
 - `--segment window-scroll` scrolls the window (`document.scrollingElement`; `AppLayout` scrolls
   the window) on `/` and `/statistics` 6000 px each way at 1500 px/s, capped by `--scroll-px`,
-  and reports it like the ledger scroll. `--segment chat-stream` opens `/ai-chat`, sends a message
+  and reports it like the ledger scroll. A page shorter than that is scrolled back and forth until
+  the full distance is travelled (ADR-260); the summary shows travelled px and bounces. `--segment chat-stream` opens `/ai-chat`, sends a message
   and streams 300 tokens at 20 per second through the real send path, with `window.fetch` swapped
   over CDP for a mock (no Ollama, nothing written to the database, the real `fetch` restored
   afterwards). Both are opt-in, repeatable or comma-separated, and about 20 s each.
