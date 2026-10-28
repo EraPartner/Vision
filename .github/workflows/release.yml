@@ -189,6 +189,9 @@ jobs:
       - name: Install electron deps and build .app + DMG
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          # vision-apple-ai imports FoundationModels, which needs the macOS 26 SDK (ADR-246).
+          # The macos-15 image defaults to Xcode 16.4 (macOS 15.5 SDK); select Xcode 26.
+          DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
           POSTGRES_APP_URL: https://github.com/PostgresApp/PostgresApp/releases/download/v2.9.6/Postgres-2.9.6-14-15-16-17-18.dmg
           POSTGRES_APP_SHA256: ee67776540fb0d29cbd119ea4db4cac3c182349ed53048fdf79766a588ac86b3
         run: |
