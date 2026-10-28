@@ -28,6 +28,12 @@ describe("DashboardSettingsDialog", () => {
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
     });
 
+    it("moves its glass to the material host once the entrance settles", async () => {
+        renderDialog(true);
+        const dialog = await screen.findByRole("dialog");
+        await waitFor(() => expect(dialog).toHaveClass("material-host"));
+    });
+
     it("does not render dialog when open=false", () => {
         renderDialog(false);
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

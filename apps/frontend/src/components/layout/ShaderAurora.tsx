@@ -13,12 +13,12 @@ import { auroraBlobs } from "@/components/layout/auroraBlobs";
  * union of two unsynchronised ones (phase D, 2026-10-26). While the program
  * is live, fx-webgl-live drops the CSS blob layers; they return as the
  * fallback when the context is lost. Budgeted deliberately (ADR-020 history):
- * renders at 0.25× resolution upscaled by CSS, capped at ~30 fps, pauses
+ * renders at 0.25× resolution upscaled by CSS, capped at ~20 fps, pauses
  * whenever the window is blurred or the document hidden (rAF alone only
  * pauses for hidden tabs) and draws a single static frame under
  * prefers-reduced-motion or while `staticAtmosphere` is set (ADR-075
  * large-display mitigation — the CSS side freezes the blobs via
- * fx-static-atmosphere; the canvas must hold a frame too or its ~30fps
+ * fx-static-atmosphere; the canvas must hold a frame too or its ~20fps
  * redraw keeps forcing the full-backdrop recomposite the class exists to
  * avoid). Any WebGL failure leaves the CSS aurora blobs (always rendered
  * underneath) as the silent fallback.
@@ -146,7 +146,11 @@ const RESOLUTION_SCALE = 0.25;
 // half-megapixel canvas. The content is blurry noise and soft radial
 // gradients — capping is invisible.
 const MAX_CANVAS_WIDTH = 640;
-const FRAME_MIN_MS = 33; // ~30 fps cap
+// ~20 fps cap: every shader frame damages the whole window, so the enhanced
+// idle cost is per frame, not per pixel. The clock runs on elapsed time, so
+// the motion keeps its speed; the blobs drift <=15 px/s, <=0.75 px a step.
+// 48, not 50: three 60 Hz vsyncs (50.0 ms) must pass the check despite jitter.
+const FRAME_MIN_MS = 48;
 // The animation clock advances only while the loop runs, so a pause (window
 // blurred, modal open) resumes where it stopped instead of jumping ahead. A
 // long gap between two frames (a stalled main thread) counts as one frame.
@@ -396,7 +400,7 @@ export function ShaderAurora({ staticAtmosphere, blobDrift }: ShaderAuroraProps)
         };
         // rAF's implicit throttling only covers hidden tabs (and, in Electron,
         // fully occluded windows) — a desktop window left visible behind
-        // another keeps drawing at ~30fps forever. Gate the loop on window
+        // another keeps drawing at ~20fps forever. Gate the loop on window
         // focus + document visibility (mirroring the CSS blobs'
         // fx-idle-atmosphere pause; the last rendered frame stays on screen)
         // and on static-atmosphere (ADR-075: hold a frame, mirroring the CSS
