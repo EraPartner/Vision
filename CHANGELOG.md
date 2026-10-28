@@ -12,14 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.1.0] — 2026-10-28
+## [2.0.0] — 2026-10-28
 
 > [!IMPORTANT]
 > **No in-place upgrade from 1.0.x.** Vision 1.0.x ran its database in Docker and migrated it
-> with Alembic. Vision 1.1.0 is a native macOS app with its own private PostgreSQL 18 cluster
+> with Alembic. Vision 2.0.0 is a native macOS app with its own private PostgreSQL 18 cluster
 > ([ADR-113], [ADR-133]) and a Kysely migration baseline ([ADR-222]). It refuses a database that
 > still carries Alembic metadata and refuses backups taken before the baseline
-> (`BACKUP_PRE_BASELINE`) ([ADR-224]). Install 1.1.0 from the DMG and start with a new database.
+> (`BACKUP_PRE_BASELINE`) ([ADR-224]). Install 2.0.0 from the DMG and start with a new database.
 > The app is unsigned: macOS asks for confirmation on first launch (see the release README).
 
 ### Added
@@ -166,8 +166,8 @@ First tagged release of Vision: self-hosted financial transaction manager with t
 CRUD and categorization, multi-adapter bank CSV import, portfolio tracking, Belgian tax,
 planned/recurring transactions, en/nl i18n, and an Electron desktop build.
 
-[Unreleased]: https://github.com/EraPartner/Vision/compare/v1.1.0...HEAD
-[1.1.0]: https://github.com/EraPartner/Vision/compare/v1.0.2...v1.1.0
+[Unreleased]: https://github.com/EraPartner/Vision/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/EraPartner/Vision/compare/v1.0.2...v2.0.0
 [1.0.2]: https://github.com/EraPartner/Vision/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/EraPartner/Vision/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/EraPartner/Vision/releases/tag/v1.0.0
