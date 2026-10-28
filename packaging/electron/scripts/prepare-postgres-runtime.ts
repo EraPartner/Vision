@@ -379,9 +379,23 @@ function relinkDistribution(
         continue;
       }
       if (dependency.startsWith("@")) continue;
-      let destination = mappedDestination(dependency, mappings);
+      // ICU's own build records bare install names such as libicuuc.77.dylib.
+      // Resolve those beside the source image, never against the working
+      // directory.
+      const dependencyPath = path.isAbsolute(dependency)
+        ? dependency
+        : path.resolve(
+            path.dirname(origins.get(filePath) ?? filePath),
+            dependency,
+          );
+      if (!fs.existsSync(dependencyPath)) {
+        throw new Error(
+          `PostgreSQL dependency is missing: ${path.basename(dependency)}`,
+        );
+      }
+      let destination = mappedDestination(dependencyPath, mappings);
       if (!destination) {
-        const source = fs.realpathSync(dependency);
+        const source = fs.realpathSync(dependencyPath);
         // Preserve the filename used by the Mach-O load command. Homebrew
         // commonly exposes a compatibility symlink such as
         // libicudata.78.dylib whose real file has a longer versioned name.
@@ -389,7 +403,7 @@ function relinkDistribution(
         if (!fs.existsSync(destination)) {
           fs.copyFileSync(source, destination);
           fs.chmodSync(destination, 0o755);
-          origins.set(destination, dependency);
+          origins.set(destination, dependencyPath);
           if (isMachO(destination)) queue.push(destination);
         }
         copyLicenseFiles(source, licensesRoot, copiedLicenses);
