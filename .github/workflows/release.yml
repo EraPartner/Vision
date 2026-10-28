@@ -373,7 +373,18 @@ jobs:
           set -euo pipefail
           # The release tag must still name the reviewed commit when the draft
           # becomes public. `gh release edit` is the final publication step.
-          ACTUAL_COMMIT=$(gh api "repos/${GITHUB_REPOSITORY}/commits/tags/${TAG}" --jq '.sha')
+          # The commits API rejects tags/<name> for annotated tags (HTTP 422);
+          # peel the tag ref to its commit instead.
+          tag_commit() {
+            local object
+            object=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq '.object.type + " " + .object.sha')
+            while [ "${object%% *}" = tag ]; do
+              object=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${object#* }" --jq '.object.type + " " + .object.sha')
+            done
+            [ "${object%% *}" = commit ] || return 1
+            echo "${object#* }"
+          }
+          ACTUAL_COMMIT=$(tag_commit)
           if [ "$ACTUAL_COMMIT" != "$EXPECTED_COMMIT" ]; then
             echo "ERROR: release tag changed after verification"
             exit 1
@@ -451,7 +462,7 @@ jobs:
             echo "ERROR: published release is not immutable"
             exit 1
           fi
-          if [ "$(gh api "repos/${GITHUB_REPOSITORY}/commits/tags/${TAG}" --jq '.sha')" != "$EXPECTED_COMMIT" ]; then
+          if [ "$(tag_commit)" != "$EXPECTED_COMMIT" ]; then
             retract_if_mutable
             echo "ERROR: published release tag does not point to the verified commit"
             exit 1
