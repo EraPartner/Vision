@@ -188,6 +188,16 @@ export function assertNoSymlinks(root: string): void {
   visit(root);
 }
 
+// Static archives are link-time only. PL/Python links the python.org
+// framework (Postgres.app), which Vision neither uses nor ships; dropping it
+// keeps the relinker from trying to vendor a Python runtime.
+export function removeUnshippedFiles(root: string): void {
+  for (const filePath of walkFiles(root)) {
+    const name = path.basename(filePath);
+    if (name.endsWith(".a") || /plpython/i.test(name)) fs.rmSync(filePath);
+  }
+}
+
 function walkFiles(root: string): string[] {
   const files: string[] = [];
   function visit(current: string): void {
@@ -242,6 +252,23 @@ function dynamicLibraryId(filePath: string): string | undefined {
     .slice(1)
     .map((line) => line.trim())
     .find(Boolean);
+}
+
+// Postgres.app ships universal binaries. otool prints one block per slice,
+// which the parsers above do not expect, and Vision ships one architecture.
+function thinToBuildArchitecture(filePath: string): void {
+  const architectures = run("/usr/bin/lipo", ["-archs", filePath]).split(/\s+/);
+  if (architectures.length < 2) return;
+  const architecture = process.arch === "arm64" ? "arm64" : "x86_64";
+  if (!architectures.includes(architecture)) {
+    throw new Error(
+      `PostgreSQL file has no ${architecture} slice: ${path.basename(filePath)}`,
+    );
+  }
+  const thinned = `${filePath}.thin`;
+  run("/usr/bin/lipo", [filePath, "-thin", architecture, "-output", thinned]);
+  fs.chmodSync(thinned, fs.statSync(filePath).mode & 0o777);
+  fs.renameSync(thinned, filePath);
 }
 
 function systemLibrary(dependency: string): boolean {
@@ -349,6 +376,7 @@ function relinkDistribution(
   ) {
     if (visited.has(filePath)) continue;
     visited.add(filePath);
+    thinToBuildArchitecture(filePath);
     const libraryId = dynamicLibraryId(filePath);
     for (const dependency of linkedLibraries(filePath)) {
       if (dependency === libraryId || systemLibrary(dependency)) continue;
@@ -482,6 +510,7 @@ export function preparePostgresRuntime({
       copyDirectory(source, targetDirectory);
     materializeSymlinks(root);
     assertNoSymlinks(root);
+    removeUnshippedFiles(root);
     normalizePermissions(root);
 
     const mappings = [...uniqueDirectories].map(([source, destination_]) => ({

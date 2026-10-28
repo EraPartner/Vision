@@ -11,6 +11,7 @@ import {
   commonDirectory,
   inspectDistribution,
   materializeSymlinks,
+  removeUnshippedFiles,
 } from "./prepare-postgres-runtime";
 
 void test("packaged PostgreSQL paths retain their build-time relative layout", () => {
@@ -100,6 +101,27 @@ esac
       { mode: 0o755 },
     );
     assert.throws(() => inspectDistribution(bin), /must be 18\.6/);
+  } finally {
+    await fs.promises.rm(temp, { recursive: true, force: true });
+  }
+});
+
+void test("static archives and PL/Python are left out of the packaged runtime", async () => {
+  const temp = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-postgres-plpython-"),
+  );
+  const pkglib = path.join(temp, "lib", "postgresql");
+  const extension = path.join(temp, "share", "postgresql", "extension");
+  try {
+    await fs.promises.mkdir(pkglib, { recursive: true });
+    await fs.promises.mkdir(extension, { recursive: true });
+    for (const name of ["plpython3.dylib", "libpgport.a", "pg_trgm.dylib"])
+      await fs.promises.writeFile(path.join(pkglib, name), "");
+    for (const name of ["jsonb_plpython3u.control", "pg_trgm.control"])
+      await fs.promises.writeFile(path.join(extension, name), "");
+    removeUnshippedFiles(temp);
+    assert.deepEqual(await fs.promises.readdir(pkglib), ["pg_trgm.dylib"]);
+    assert.deepEqual(await fs.promises.readdir(extension), ["pg_trgm.control"]);
   } finally {
     await fs.promises.rm(temp, { recursive: true, force: true });
   }
