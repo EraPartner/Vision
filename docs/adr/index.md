@@ -287,6 +287,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-28: Ticker and Settings material hosts, 20 fps WebGL aurora (accepted)
+
+[[docs/adr/261-ticker-and-settings-material-hosts-and-20-fps-aurora|ADR-261]] makes the portfolio
+ticker box and the Settings dialog material hosts, gives the ticker the cards' saturate-only filter,
+clips the Settings pane with a rounded-rect wrapper and caps the enhanced WebGL aurora at ~20 fps.
+Checked in headless Chromium only.
+
 ### 2026-10-28: Ledger card material on a childless pseudo-element (accepted)
 
 [[docs/adr/260-ledger-card-material-on-a-pseudo|ADR-260]] draws the ledger card's glass on a
