@@ -993,7 +993,7 @@
     }
 
     /* ------------------------------------------------------------------
-     * Material hosts: Cards whose content changes all the time.
+     * Material hosts: glass boxes whose content changes all the time.
      *
      * An element with a backdrop-filter renders itself AND its whole subtree
      * into one intermediate surface, so every scrolled ledger row inside a
@@ -1034,8 +1034,27 @@
      * declared after them. The ::before is free on a Card: `.glass` (with
      * its own ::before) is never a Card, and the interactive hover shadow
      * uses ::after.
+     *
+     * ADR-261 adds two non-Card hosts. The portfolio ticker box
+     * (liquid-glass) moves its tape every frame while the page is open; the
+     * Settings dialog (glass-thick) scrolls a pane inside it. They publish
+     * their inset and outer shadow halves below. `:is()` takes its most
+     * specific argument, so every host keeps the three-class weight. Glass
+     * Cards inside a host (the Settings groups) drop their own filter, as
+     * the flat chat bubbles do: the host's box is no longer their backdrop
+     * root, and over the near-opaque host fill the filter was a no-op.
      * ------------------------------------------------------------------ */
-    .card-material.premium-frame.material-host {
+    .liquid-glass.material-host {
+        --material-inset-shadow: var(--elevation-2-inset);
+        --material-outer-shadow: var(--elevation-2-outer);
+    }
+
+    .glass-thick.material-host {
+        --material-inset-shadow: var(--elevation-4-inset);
+        --material-outer-shadow: var(--elevation-4-outer);
+    }
+
+    :is(.card-material.premium-frame, .liquid-glass, .glass-thick).material-host {
         isolation: isolate;
         background-image: none;
         box-shadow: var(--material-outer-shadow);
@@ -1043,7 +1062,17 @@
         backdrop-filter: none;
     }
 
-    .card-material.premium-frame.material-host::before {
+    .material-host .card-material {
+        --material-backdrop: none;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
+    :is(
+            .card-material.premium-frame,
+            .liquid-glass,
+            .glass-thick
+        ).material-host::before {
         content: "";
         position: absolute;
         inset: 0;

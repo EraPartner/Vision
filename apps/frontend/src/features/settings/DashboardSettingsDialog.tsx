@@ -20,6 +20,7 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { List, ListRow } from "@/components/ui/list";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 const GeneralSection = lazy(() =>
     import("./sections/GeneralSection").then((module) => ({
         default: module.GeneralSection,
@@ -118,6 +119,30 @@ export function DashboardSettingsDialog({
             setActiveSection(resolveSettingsSection(defaultTab) ?? "general");
     }, [open, defaultTab]);
 
+    // The box fades in and out; while its opacity is below 1 it is the
+    // backdrop root of a ::before, which would then frost nothing. So the
+    // glass moves to the ::before only once the entrance has finished, and
+    // back to the box as soon as the dialog starts closing (ADR-261).
+    // State, not a ref: the portalled content mounts after this component.
+    const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null);
+    const [settled, setSettled] = useState(false);
+    useEffect(() => {
+        const el = contentEl;
+        if (!open || !el) {
+            setSettled(false);
+            return;
+        }
+        let cancelled = false;
+        // jsdom has no Web Animations API; settle at once there.
+        const animations = "getAnimations" in el ? el.getAnimations() : [];
+        void Promise.allSettled(animations.map((a) => a.finished)).then(() => {
+            if (!cancelled) setSettled(true);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [open, contentEl]);
+
     const selectSection = (id: SettingsSectionId) => {
         setActiveSection(id);
         onSectionChange?.(id);
@@ -173,9 +198,18 @@ export function DashboardSettingsDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
+            {/* The pane scrolls inside the dialog, so the glass is drawn on a
+                ::before (material-host) and the rounded-rect wrapper clips,
+                not the squircle box: a clipping corner-shape box around a
+                scroller costs a mask layer, and a filtered box re-renders and
+                re-filters with every scrolled frame (ADR-261). */}
             <DialogContent
+                ref={setContentEl}
                 aria-describedby={undefined}
-                className="flex h-[82vh] w-full max-w-4xl flex-col gap-0 overflow-hidden p-0 md:flex-row"
+                className={cn(
+                    "flex h-[82vh] w-full max-w-4xl gap-0 overflow-visible p-0",
+                    settled && "material-host",
+                )}
             >
                 {/* The window is named "Settings" for assistive technology; the
                     visible title bar shows the current section instead, as a
@@ -184,72 +218,83 @@ export function DashboardSettingsDialog({
                     {t("settings.title")}
                 </DialogTitle>
 
-                {/* Sidebar: a 256px rail from md up, a horizontally scrolling
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[inherit] md:flex-row">
+                    {/* Sidebar: a 256px rail from md up, a horizontally scrolling
                     row of sections below it (a fixed rail would leave ~120px
                     for every control at phone widths). */}
-                <aside className="flex shrink-0 flex-col border-b border-border/60 bg-foreground/[0.025] md:w-64 md:border-b-0 md:border-r">
-                    <List
-                        ref={tablistRef}
-                        role="tablist"
-                        aria-label={t("settings.title")}
-                        aria-orientation="vertical"
-                        className="flex flex-row gap-1 divide-y-0 overflow-x-auto rounded-none border-0 bg-transparent p-2 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden md:flex-col md:gap-0.5 md:overflow-y-auto md:px-3 md:pt-10"
-                    >
-                        {SECTIONS.map(({ id, labelKey, icon: Icon }, index) => {
-                            const active = activeSection === id;
-                            return (
-                                <ListRow
-                                    key={id}
-                                    asChild
-                                    leading={<Icon aria-hidden="true" />}
-                                    title={t(labelKey)}
-                                    className="min-h-0 shrink-0 md:[&_.truncate]:whitespace-normal md:[&_.truncate]:overflow-visible"
-                                >
-                                    <button
-                                        type="button"
-                                        id={`settings-tab-${id}`}
-                                        role="tab"
-                                        aria-selected={active}
-                                        aria-controls={`settings-panel-${id}`}
-                                        tabIndex={active ? 0 : -1}
-                                        onClick={() => selectSection(id)}
-                                        onKeyDown={(event) =>
-                                            handleSectionKeyDown(event, index)
-                                        }
-                                        className="rounded-control corner-continuous whitespace-nowrap aria-selected:bg-primary/10 aria-selected:text-foreground aria-selected:hover:bg-primary/15 aria-selected:focus-visible:bg-primary/15 aria-selected:[&_span]:text-foreground"
-                                    />
-                                </ListRow>
-                            );
-                        })}
-                    </List>
-                    <p className="mt-auto hidden px-5 pb-4 type-caption text-label-tertiary md:block">
-                        {t("settings.autosaveHint")}
-                    </p>
-                </aside>
-
-                {/* Content: title bar with the section name, then the pane */}
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                    <header className="flex h-12 shrink-0 items-center border-b border-border/60 px-6 pr-14">
-                        <h2
-                            id="settings-section-heading"
-                            className="type-title-3 truncate text-foreground"
+                    <aside className="flex shrink-0 flex-col border-b border-border/60 bg-foreground/[0.025] md:w-64 md:border-b-0 md:border-r">
+                        <List
+                            ref={tablistRef}
+                            role="tablist"
+                            aria-label={t("settings.title")}
+                            aria-orientation="vertical"
+                            className="flex flex-row gap-1 divide-y-0 overflow-x-auto rounded-none border-0 bg-transparent p-2 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden md:flex-col md:gap-0.5 md:overflow-y-auto md:px-3 md:pt-10"
                         >
-                            {t(current.labelKey)}
-                        </h2>
-                    </header>
-                    <ScrollArea
-                        id={`settings-panel-${activeSection}`}
-                        role="tabpanel"
-                        aria-labelledby={`settings-tab-${activeSection}`}
-                        tabIndex={0}
-                        className="min-h-0 flex-1 focus-ring"
-                    >
-                        <div className="px-6 py-6">
-                            <Suspense fallback={<SectionLoader />}>
-                                {renderSection()}
-                            </Suspense>
-                        </div>
-                    </ScrollArea>
+                            {SECTIONS.map(
+                                ({ id, labelKey, icon: Icon }, index) => {
+                                    const active = activeSection === id;
+                                    return (
+                                        <ListRow
+                                            key={id}
+                                            asChild
+                                            leading={
+                                                <Icon aria-hidden="true" />
+                                            }
+                                            title={t(labelKey)}
+                                            className="min-h-0 shrink-0 md:[&_.truncate]:whitespace-normal md:[&_.truncate]:overflow-visible"
+                                        >
+                                            <button
+                                                type="button"
+                                                id={`settings-tab-${id}`}
+                                                role="tab"
+                                                aria-selected={active}
+                                                aria-controls={`settings-panel-${id}`}
+                                                tabIndex={active ? 0 : -1}
+                                                onClick={() =>
+                                                    selectSection(id)
+                                                }
+                                                onKeyDown={(event) =>
+                                                    handleSectionKeyDown(
+                                                        event,
+                                                        index,
+                                                    )
+                                                }
+                                                className="rounded-control corner-continuous whitespace-nowrap aria-selected:bg-primary/10 aria-selected:text-foreground aria-selected:hover:bg-primary/15 aria-selected:focus-visible:bg-primary/15 aria-selected:[&_span]:text-foreground"
+                                            />
+                                        </ListRow>
+                                    );
+                                },
+                            )}
+                        </List>
+                        <p className="mt-auto hidden px-5 pb-4 type-caption text-label-tertiary md:block">
+                            {t("settings.autosaveHint")}
+                        </p>
+                    </aside>
+
+                    {/* Content: title bar with the section name, then the pane */}
+                    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                        <header className="flex h-12 shrink-0 items-center border-b border-border/60 px-6 pr-14">
+                            <h2
+                                id="settings-section-heading"
+                                className="type-title-3 truncate text-foreground"
+                            >
+                                {t(current.labelKey)}
+                            </h2>
+                        </header>
+                        <ScrollArea
+                            id={`settings-panel-${activeSection}`}
+                            role="tabpanel"
+                            aria-labelledby={`settings-tab-${activeSection}`}
+                            tabIndex={0}
+                            className="min-h-0 flex-1 focus-ring"
+                        >
+                            <div className="px-6 py-6">
+                                <Suspense fallback={<SectionLoader />}>
+                                    {renderSection()}
+                                </Suspense>
+                            </div>
+                        </ScrollArea>
+                    </div>
                 </div>
             </DialogContent>
         </Dialog>

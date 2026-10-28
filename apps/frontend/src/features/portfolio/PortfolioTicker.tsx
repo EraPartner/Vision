@@ -254,8 +254,12 @@ export function PortfolioTicker({ items }: PortfolioTickerProps) {
     return (
         // The animating track is clipped by the rectangular .ticker-mask, not
         // this squircle: a clipping corner-shape box around a composited layer
-        // costs a mask layer and an extra surface on every frame.
-        <div className="relative flex w-full items-stretch rounded-card corner-continuous border border-border/60 liquid-glass">
+        // costs a mask layer and an extra surface on every frame. The box sits
+        // on the canvas like a Card, so it takes the card's saturate-only
+        // filter (card-material), and draws its glass on a ::before under the
+        // moving tape (material-host) so the filter does not re-run every
+        // frame (ADR-261).
+        <div className="card-material material-host relative flex w-full items-stretch rounded-card corner-continuous border border-border/60 liquid-glass">
             <div
                 ref={containerRef}
                 data-active={active}

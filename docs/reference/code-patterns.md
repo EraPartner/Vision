@@ -3259,7 +3259,7 @@ Warning and neutral-information UI use the semantic `warning` and `info` tokens;
 | `glass-chrome`              | Sidebar/topbar navigation — 24px blur + saturate                                                            |
 | `glass-thin`                | Base Card and subtle elements — 12px blur + saturate                                                        |
 | `card-material`             | Persistent Card marker used by native vibrancy to suppress duplicate web blur                               |
-| `material-host`             | Card draws its material on a childless `::before` (ADR-260); ledger Card only                               |
+| `material-host`             | Box draws its material on a childless `::before` (ADR-260, ADR-261); ledger Card, ticker, Settings dialog   |
 | `premium-frame`             | Resting frame baked into the Card base                                                                      |
 | `premium-frame-interactive` | Interactive Card hover outline and pre-rendered elevated-shadow crossfade; added by `variant="interactive"` |
 | `micro-lift`                | Hover transform for non-Card interactive surfaces                                                           |
