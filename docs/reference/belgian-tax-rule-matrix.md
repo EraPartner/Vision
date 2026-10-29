@@ -29,9 +29,9 @@ fin.belgium.be explain the rules; the laws give the rule text.
 
 | Id  | Source                                                                                                                         | Covers                                                             |
 | --- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
-| N25 | FPS Finance, *Avis relatif à l'indexation automatique — exercice d'imposition 2025* (Fisconetplus `15618a3b-1ef1-4baa-a454-bdc34e1c5586`, 2024-02-28) | Every indexed amount for IY 2024                                   |
+| N25 | FPS Finance, *Avis relatif à l'indexation automatique — exercice d'imposition 2025* (Fisconetplus `15618a3b-1ef1-4baa-a454-bdc34e1c5586`, 2024-02-28; also Belgisch Staatsblad 23-02-2024 p. 26928, numac 2024001745) | Every indexed amount for IY 2024                                   |
 | N26 | FPS Finance, *Avis … exercice d'imposition 2026* (Fisconetplus `934106e5-36bd-4f61-8928-ba9ca100727f`, 2025-01-21, updated 2026-01-19 for the freeze) | Every indexed amount for IY 2025, with "après gel" values          |
-| N27 | FPS Finance, *Avis … exercice d'imposition 2027* (Fisconetplus `042cb526-403e-4f40-9a45-dbccd0a12583`, 2026-08-03)            | Every indexed amount for IY 2026, after the law of 15 July 2026    |
+| N27 | FPS Finance, *Avis … exercice d'imposition 2027* (Fisconetplus `042cb526-403e-4f40-9a45-dbccd0a12583`, 2026-08-03; also Belgisch Staatsblad 12-08-2026, numac 2026006085) | Every indexed amount for IY 2026, after the law of 15 July 2026    |
 | F1  | fin.belgium.be › Belastingtarieven                                                                                              | Brackets and basic exemption IY 2025/2026 (pre-reform IY 2026)     |
 | F2  | fin.belgium.be › Huwelijk en samenwonen                                                                                         | Joint vs separate assessment, marital quotient cap (pre-reform IY 2026) |
 | F3  | fin.belgium.be › Kinderen ten laste; › Andere personen ten laste; › Zware handicap                                             | Dependent and disability supplements, child tax credit             |
