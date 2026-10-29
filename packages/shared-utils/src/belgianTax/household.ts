@@ -112,8 +112,7 @@ interface PartnerIncome {
     netProfessionalIncome: number;
     /** Part of the net professional income given as an already-net amount. */
     netAmountIncome: number;
-    /** Net professional income without pensions (art. 107, 2° of the CSSS law). */
-    csssBase: number;
+    /** Falls under art. 106 of the CSSS law (employee or civil servant activity). */
     csssSubject: boolean;
     otherTaxableIncome: number;
     alimonyDeduction: number;
@@ -201,7 +200,6 @@ function computePartnerIncome(
     let professionalExpenses = 0;
     let unionDuesApplied = 0;
     let categoryNetTotal = 0;
-    let csssBase = netAmountIncome;
     for (const category of FORFAIT_CATEGORIES) {
         const members = activities.filter(
             (a) => a.forfaitCategory === category && a.kind !== "net_professional_amount",
@@ -246,15 +244,12 @@ function computePartnerIncome(
         unionDuesApplied += unionDues;
         categoryNetTotal += netIncome;
 
-        let pensionShare = 0;
         for (const m of members) {
             const share =
                 base > 0 ? (grossAfter.get(m.activityId) ?? 0) / base : 1 / members.length;
             m.professionalExpenses = expenses * share;
             m.netProfessionalIncome = netIncome * share;
-            if (m.kind === "pension") pensionShare += share;
         }
-        csssBase += pensionShare > 0 ? netIncome * (1 - pensionShare) : netIncome;
     }
 
     if (
@@ -358,7 +353,6 @@ function computePartnerIncome(
         unionDuesApplied,
         netProfessionalIncome,
         netAmountIncome,
-        csssBase,
         csssSubject,
         otherTaxableIncome,
         alimonyDeduction,
@@ -863,17 +857,28 @@ export function computeHouseholdTax(
         issues.push({ code: "joint_reduction_allocation_unverified", severity: "needs_source" });
     }
 
-    // CSSS (law of 30 March 1994): the household owes it when a member falls under art. 106;
-    // under a joint assessment the joint scale applies to the household income (art. 107, 2°).
+    // CSSS (law of 30 March 1994): the household owes it when a member falls under art. 106.
+    // Base (art. 107, 2°): each person's "totale netto-inkomen" of WIB 92 arts 7-116, i.e. every
+    // income category after the arts 104-116 deductions (alimony, allocated by art. 105, 3° under
+    // a joint assessment), without the separately taxed income of art. 171 (not modelled), less
+    // the art. 34 pensions. The quotient of arts 87-88 moves nothing between the spouses here.
+    // Under a joint assessment the joint scale applies to the sum.
+    const csssNetIncomes = taxableIncomes(incomes, mode === "joint", undefined);
+    const csssBases = incomes.map((inc, i) =>
+        clampAtZero((csssNetIncomes[i] as number) - inc.pensionIncome),
+    );
     let csss: HouseholdTaxResult["csss"] = { scale: "none", base: 0, total: 0 };
     if (mode === "joint" && incomes.length === 2) {
         if (incomes.some((inc) => inc.csssSubject)) {
-            const base = (incomes[0] as PartnerIncome).csssBase + (incomes[1] as PartnerIncome).csssBase;
+            const base = clampAtZero(
+                sum(csssNetIncomes, (n) => n) - sum(incomes, (inc) => inc.pensionIncome),
+            );
             const total = evaluateCsssScale(base, table.csssTableJoint);
+            const weight = sum(csssBases, (b) => b);
             csss = { scale: "joint", base, total };
-            incomes.forEach((inc, i) => {
+            incomes.forEach((_inc, i) => {
                 (partnerResults[i] as PartnerTaxResult).specialSocialSecurityContribution =
-                    base > 0 ? (total * inc.csssBase) / base : 0;
+                    weight > 0 ? (total * (csssBases[i] as number)) / weight : 0;
             });
         }
     } else {
@@ -881,9 +886,9 @@ export function computeHouseholdTax(
         let total = 0;
         incomes.forEach((inc, i) => {
             if (!inc.csssSubject) return;
-            const own = evaluateCsssScale(inc.csssBase, table.csssTable);
+            const own = evaluateCsssScale(csssBases[i] as number, table.csssTable);
             (partnerResults[i] as PartnerTaxResult).specialSocialSecurityContribution = own;
-            base += inc.csssBase;
+            base += csssBases[i] as number;
             total += own;
         });
         if (incomes.some((inc) => inc.csssSubject)) csss = { scale: "single", base, total };

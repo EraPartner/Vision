@@ -3,7 +3,7 @@ title: Feature - Belgian Tax
 type: feature
 status: active
 date: 2026-10-28
-updated: 2026-10-28
+updated: 2026-10-29
 tags:
   [
     feature,
@@ -319,7 +319,7 @@ Investments of type `real_estate` include Belgian-specific fields:
    - **Service vouchers** (regional art. 145/21): reduction = rate × min(spend, cap per taxpayer). Flanders 20% up to €1,790 (IY 2024), abolished from IY 2025; Wallonia 30% up to €1,790 / €1,850 / €1,890; Brussels 15% up to €1,790 / €1,850, abolished from IY 2026. The spend is the optional `serviceVoucherSpend` field; when it is absent the legacy `serviceVoucherCount` is converted with the year table's voucher price (€9 or €10). Until 2026-10-11 the engine used voucher counts (€0.90 × 150 in Wallonia, 15% × 172 × €10 in Brussels).
 8. **State + regional factor**: federal PIT after credits × (reduced state tax 75.043%) × (1 + regional opcentiemen) = 1.0000 for Flanders and Wallonia (33.257%) and 0.9950 for Brussels (32.591%), for IY 2024-2026. Until 2026-10-11 the engine used 0.9951 / 0.9951 / 0.9945, calibrated on a PwC sample whose factor matches Brussels; no Flemish 2% reduction exists in the sources read.
 9. Communal surcharge applied to federal PIT after the state + regional factor.
-10. Special social security contribution (law of 30 March 1994 arts 106-109): a step function of the household income (€0 up to €18,592.02, then the single or joint scale, cap €731.28). Under a joint assessment the base is the earner's net professional income plus the spouse's professional income (art. 107, 2°), and the joint scale applies.
+10. Special social security contribution (law of 30 March 1994 arts 106-109): a step function of the household income (€0 up to €18,592.02, then the single or joint scale, cap €731.28). The base (art. 107, 2°) is each member's total net income of WIB 92 arts 7-116, every income category after the alimony deduction, less the art. 34 pensions; under a joint assessment the spouses' bases are summed and the joint scale applies.
 11. Property tax (informational, not part of PIT): `nominalCI × indexationCoefficient × regionalBaseRate × (1 + centimes/100)`, summed across main + additional residences. **May 2026 audit:** centimes reductions calibrated to Belgium-wide commune medians (Flanders 1450→1100, Wallonia 4000→3300, Brussels 4500→4200) to align estimates with typical 20–50%-of-indexed-CI range.
 12. Investment side calc:
     - `dividendWhtReclaim = min(recordedWHT, min(grossDividendBase, exemption) × WHT_rate)` — Belgian dividend withholding is taken at source; reclaim is capped by both the recorded WHT and the exemption. Gross base = dividend amount + recorded WHT, which handles both net and gross recording conventions. The €833 exemption (IY 2024-2026, frozen by the law of 18 December 2025) applies to the gross base and is reclaimed via the tax return.
@@ -491,8 +491,10 @@ cohabitation and its end, factual cohabitation, factual separation, divorce, dea
    combined net income, and apportioned on each spouse's taxed income (art. 145/33 §1 al. 5;
    `donation_joint_ceiling_unverified` when a per-spouse ceiling would give less). Other
    reductions stay with the payer.
-8. **CSSS**: under a joint assessment the joint scale applies to both partners' net professional
-   income (pensions excluded); otherwise the single scale per partner who is an employee.
+8. **CSSS**: the base per partner is the total net income after the alimony deduction (allocated
+   by art. 105, 3° under a joint assessment) less pensions (law of 30 March 1994 art. 107, 2°).
+   Under a joint assessment the joint scale applies to the sum; otherwise the single scale per
+   partner who is an employee.
 9. Property tax for the home and the investment side calculation per partner.
 
 The own-home credit goes to `mortgageCreditPartnerId`, unless both partners borrowed:
