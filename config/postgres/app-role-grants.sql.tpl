@@ -10,10 +10,17 @@ GRANT USAGE, CREATE ON SCHEMA public TO :"app_role";
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO :"app_role";
 
+-- MAINTAIN (PostgreSQL 17+) lets the admin page run VACUUM ANALYZE. Without
+-- it PostgreSQL skips each table with only a warning and reports success.
+GRANT MAINTAIN ON ALL TABLES IN SCHEMA public TO :"app_role";
+
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO :"app_role";
 
 ALTER DEFAULT PRIVILEGES FOR ROLE :"owner_role" IN SCHEMA public
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"app_role";
+
+ALTER DEFAULT PRIVILEGES FOR ROLE :"owner_role" IN SCHEMA public
+  GRANT MAINTAIN ON TABLES TO :"app_role";
 
 ALTER DEFAULT PRIVILEGES FOR ROLE :"owner_role" IN SCHEMA public
   GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO :"app_role";

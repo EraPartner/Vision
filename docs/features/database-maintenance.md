@@ -2,8 +2,8 @@
 title: Database Maintenance UI
 type: feature
 status: active
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-10-29
+updated: 2026-10-29
 tags:
   [
     feature,
@@ -16,6 +16,7 @@ tags:
     db-data-editor,
     adr-101,
     adr-231,
+    adr-262,
   ]
 description: Administrative interface for monitoring database statistics, running VACUUM ANALYZE operations, and (ADR-101) browsing/editing raw table data with optimistic concurrency, dry-run preview, and a log line per committed change.
 aliases:
@@ -145,15 +146,20 @@ The VACUUM operation uses a **raw database client** (not the connection pool) be
 const client = await getClient(); // Raw client, not pool
 try {
   await client.query("SET statement_timeout = 120000");
-  // `table` is checked against pg_stat_user_tables first and quoted as an identifier.
+  // Targets come from pg_stat_user_tables and are quoted as identifiers.
   const vacuum = compileQuery(
-    table ? sql`VACUUM ANALYZE ${sql.id(table)}` : sql`VACUUM ANALYZE`,
+    sql`VACUUM ANALYZE ${sql.join(targets.map((r) => sql.id(r.relname)))}`,
   );
   await client.query(vacuum.sql);
 } finally {
   client.release();
 }
 ```
+
+The backend runs as the least-privilege app role, which owns no tables. PostgreSQL skips a table
+the role may not maintain with only a warning, so the route checks the `MAINTAIN` privilege first
+and returns `403` instead of a false success. The app role holds `MAINTAIN` on public tables
+([[docs/adr/262-app-role-maintain-for-admin-vacuum|ADR-262]]).
 
 **Why raw client?**
 
@@ -171,8 +177,8 @@ The page consists of:
    - Live row count
    - Dead row count (indicator of vacuum pressure)
    - Estimated size in MB
-   - Last vacuum timestamp
-   - Last analyze timestamp
+   - Last vacuum timestamp (the later of manual and automatic)
+   - Last analyze timestamp (the later of manual and automatic)
 
 Timestamp and size columns keep their values on one line with reserved minimum widths. The table scrolls horizontally within its container when the window cannot fit all columns.
 
@@ -300,6 +306,7 @@ Full endpoint documentation: [[docs/api/admin|Admin API]].
 - [[docs/features/settings|Settings & Administration]]
 - [[docs/performance/index|Performance Optimization]]
 - [[docs/adr/231-remove-audit-history|ADR-231: Remove audit history]] — why `db_editor_audit` was dropped
+- [[docs/adr/262-app-role-maintain-for-admin-vacuum|ADR-262: App role gets MAINTAIN so admin VACUUM runs]]
 
 ## Related Code
 

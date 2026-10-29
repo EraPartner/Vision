@@ -143,7 +143,7 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
       ownerRole: "own",
       dbName: "db",
     });
-    expect(stmts).toHaveLength(6);
+    expect(stmts).toHaveLength(8);
     const joined = stmts.join(";\n");
     expect(joined).not.toContain(':"');
     expect(joined).toContain('"a""pp"');
@@ -223,6 +223,13 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
       "INSERT INTO categories (general, detail) VALUES ('vb_rb', 'probe') RETURNING id, detail",
     );
     expect(must(inserted[0], "inserted[0]").detail).toBe("probe");
+    // MAINTAIN lets the admin page VACUUM; without it PostgreSQL only warns.
+    const maintain = await queryAs(
+      APP_ROLE,
+      APP_PASS,
+      "SELECT has_table_privilege('categories', 'MAINTAIN') AS ok",
+    );
+    expect(must(maintain[0], "maintain[0]").ok).toBe(true);
     const read = await queryAs(
       APP_ROLE,
       APP_PASS,
@@ -257,6 +264,12 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
       "INSERT INTO vb_rb_future_table (v) VALUES ('later') RETURNING id, v",
     );
     expect(rows[0]).toMatchObject({ id: 1, v: "later" });
+    const maintain = await queryAs(
+      APP_ROLE,
+      APP_PASS,
+      "SELECT has_table_privilege('vb_rb_future_table', 'MAINTAIN') AS ok",
+    );
+    expect(must(maintain[0], "maintain[0]").ok).toBe(true);
     await db().query("DROP TABLE vb_rb_future_table");
   });
 

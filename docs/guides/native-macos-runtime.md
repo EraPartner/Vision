@@ -2,7 +2,7 @@
 title: Native macOS Runtime Guide
 type: guide
 status: active
-date: 2026-10-21
+date: 2026-10-29
 tags:
   [guide, native-runtime, macos, electron, postgresql-18, backup, restore, demo]
 description: Build, operate, diagnose, back up, and restore Vision's bundled native macOS runtime.
@@ -49,7 +49,8 @@ The generated database roles are separate:
 - the cluster administrator creates databases, required extensions, and the fixed
   `vision_analysis_executor` login;
 - the migration owner owns application schema objects and remains `NOCREATEROLE`;
-- the application role has only runtime data privileges; and
+- the application role has only runtime data privileges plus `MAINTAIN` on public tables, so the
+  admin page can run `VACUUM ANALYZE` ([[docs/adr/262-app-role-maintain-for-admin-vacuum|ADR-262]]); and
 - the Analysis executor has no role inheritance or administrative attributes and reads only the
   approved Analysis views.
 

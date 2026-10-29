@@ -2,8 +2,8 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-10-24
-updated: 2026-10-24
+date: 2026-10-29
+updated: 2026-10-29
 last_modified: 2026-10-24
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
@@ -602,8 +602,8 @@ desktop app, which never set a token).
 | POST   | `/api/admin/update/apply`                         | Acknowledge update                                                                                                                           | —                  | [[docs/api/admin\|Admin]] |
 | POST   | `/api/admin/update/apply-and-restart`             | Apply and restart                                                                                                                            | —                  | [[docs/api/admin\|Admin]] |
 | POST   | `/api/admin/investments/kinesis/sanitize-history` | Sanitize Kinesis spikes                                                                                                                      | —                  | [[docs/api/admin\|Admin]] |
-| GET    | `/api/admin/database/stats`                       | Per-table live/dead row counts and size (Phase 7)                                                                                            | admin              | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/database/vacuum`                      | Run VACUUM ANALYZE on one or all tables (Phase 7)                                                                                            | admin              | [[docs/api/admin\|Admin]] |
+| GET    | `/api/admin/database/stats`                       | Per-table live/dead row counts, size, manual and auto vacuum/analyze times (Phase 7, ADR-262)                                                | admin              | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/database/vacuum`                      | Run VACUUM ANALYZE on one or all tables; 403 when the role lacks MAINTAIN (Phase 7, ADR-262)                                                 | admin              | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/database/tables/:table/schema`        | Table column schema + primary key discovery; composite-PK aware (ADR-101)                                                                    | adminRateLimiter   | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/database/tables/:table/rows`          | Keyset-paginated, filtered, sorted table read without an unbounded count; runs inside READ ONLY transaction with statement timeout (ADR-101) | adminRateLimiter   | [[docs/api/admin\|Admin]] |
 | POST   | `/api/admin/database/tables/:table/mutate`        | Batch insert/update/delete with xmin optimistic concurrency, dry-run preview, change log, matview auto-refresh (ADR-101)                     | adminMutateLimiter | [[docs/api/admin\|Admin]] |

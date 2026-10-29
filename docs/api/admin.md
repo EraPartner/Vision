@@ -2,8 +2,8 @@
 title: Admin API
 type: endpoint
 status: active
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-10-29
+updated: 2026-10-29
 tags:
   - api
   - admin
@@ -204,7 +204,9 @@ Retrieve current database table statistics from `pg_stat_user_tables`, largest t
       "table_name": "transactions",
       "live_rows": "2453",
       "dead_rows": "127",
+      "last_vacuum": null,
       "last_autovacuum": "2026-04-24 10:15:32.123456+00",
+      "last_analyze": null,
       "last_autoanalyze": null,
       "size": "3200 kB",
       "size_bytes": "3276800"
@@ -215,7 +217,7 @@ Retrieve current database table statistics from `pg_stat_user_tables`, largest t
 ```
 
 - `live_rows`, `dead_rows` and `size_bytes` are BIGINT values, so they arrive as decimal strings.
-- `last_autovacuum` and `last_autoanalyze` are `::text` casts, `null` for a table never vacuumed or analyzed.
+- `last_vacuum`, `last_autovacuum`, `last_analyze` and `last_autoanalyze` are `::text` casts, `null` for a table never vacuumed or analyzed. `last_vacuum` and `last_analyze` are manual runs, such as this page's VACUUM ([[docs/adr/262-app-role-maintain-for-admin-vacuum|ADR-262]]).
 - `size` and `db_size` are `pg_size_pretty` text.
 - Contract change (October 2026, non-breaking): `openapi.yaml` now types the responses of `GET /api/admin/database/stats` (`DbStats`), `GET /api/admin/providers/health` (`ProviderHealthList`), `POST /api/admin/providers/{provider}/probe` (`ProbeResult`), `GET /api/admin/metrics/requests` (`RouteMetricList`) and `GET /api/admin/endpoints` (`EndpointList`) with the shapes the routes already returned and `packages/types/src/contracts/admin.ts` already checked. This page previously described a `table` query parameter and a different stats body that the route never had.
 
@@ -262,7 +264,10 @@ The route always runs `VACUUM ANALYZE`.
 { "ok": true, "data": { "vacuumed": "transactions" } }
 ```
 
-`vacuumed` is `"all"` when no table was given. Insufficient database privileges return `403`.
+`vacuumed` is `"all"` when no table was given; "all" names every public table explicitly.
+The route first checks `has_table_privilege(..., 'MAINTAIN')` for each requested table. If one
+lacks it, the route returns `403` and vacuums nothing, because PostgreSQL itself would only warn
+and skip the table ([[docs/adr/262-app-role-maintain-for-admin-vacuum|ADR-262]]).
 
 **Response:** `409 Conflict` (VACUUM already running)
 

@@ -72,7 +72,10 @@ describe("Admin route request validation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(query).mockResolvedValue({
-      rows: [{ relname: "transactions" }],
+      rows: [
+        { relname: "accounts", can_maintain: true },
+        { relname: "transactions", can_maintain: true },
+      ],
     } as never);
     vi.mocked(getClient).mockResolvedValue(client);
     client.query.mockResolvedValue({ rows: [] });
@@ -93,7 +96,32 @@ describe("Admin route request validation", () => {
         .post(`${BASE}/database/vacuum`)
         .send({ table: null })
         .expect(200);
+      expect(client.query).toHaveBeenLastCalledWith(
+        'VACUUM ANALYZE "accounts", "transactions"',
+      );
       expect(bodyAt(all, "data")).toEqual({ vacuumed: "all" });
+    });
+
+    it("refuses with 403 instead of a skipped VACUUM when MAINTAIN is missing", async () => {
+      vi.mocked(query).mockResolvedValue({
+        rows: [
+          { relname: "accounts", can_maintain: true },
+          { relname: "transactions", can_maintain: false },
+        ],
+      } as never);
+      for (const table of ["transactions", null]) {
+        const res = await api
+          .post(`${BASE}/database/vacuum`)
+          .send({ table })
+          .expect(403);
+        expect(res.body).toEqual(
+          errEnvelope({
+            code: "FORBIDDEN",
+            message: "Insufficient database privileges to VACUUM transactions",
+          }),
+        );
+      }
+      expect(getClient).not.toHaveBeenCalled();
     });
 
     it("rejects a non-string table and keeps the unknown-table message", async () => {

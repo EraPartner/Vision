@@ -8,14 +8,17 @@ const PgBigintTextSchema = z.string().regex(/^\d+$/);
 /**
  * One row of `GET /api/admin/database/stats` (routes/admin.ts). The counters
  * and `size_bytes` are BIGINT, so they arrive as strings; the vacuum/analyze
- * times are `::text` casts and NULL for a table never vacuumed.
+ * times are `::text` casts and NULL for a table never vacuumed. `last_vacuum`
+ * and `last_analyze` are manual runs, the `auto` pair autovacuum runs.
  */
 export const DbTableStatSchema = z.looseObject({
   schemaname: z.string(),
   table_name: z.string(),
   live_rows: PgBigintTextSchema,
   dead_rows: PgBigintTextSchema,
+  last_vacuum: z.string().nullable(),
   last_autovacuum: z.string().nullable(),
+  last_analyze: z.string().nullable(),
   last_autoanalyze: z.string().nullable(),
   size: z.string(),
   size_bytes: PgBigintTextSchema,
