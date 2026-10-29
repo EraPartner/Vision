@@ -5186,7 +5186,11 @@ export interface components {
             live_rows: string;
             /** @description BIGINT estimate from pg_stat_user_tables, as decimal text */
             dead_rows: string;
+            /** @description Last manual VACUUM (pg_stat_user_tables.last_vacuum as text) */
+            last_vacuum: string | null;
             last_autovacuum: string | null;
+            /** @description Last manual ANALYZE (pg_stat_user_tables.last_analyze as text) */
+            last_analyze: string | null;
             last_autoanalyze: string | null;
             /** @description pg_size_pretty of the total relation size */
             size: string;
@@ -17312,7 +17316,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Insufficient database privileges to VACUUM */
+            /** @description The database role lacks MAINTAIN on a requested table; nothing is vacuumed */
             403: {
                 headers: {
                     [name: string]: unknown;

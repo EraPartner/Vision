@@ -2086,7 +2086,9 @@ components:
           table_name,
           live_rows,
           dead_rows,
+          last_vacuum,
           last_autovacuum,
+          last_analyze,
           last_autoanalyze,
           size,
           size_bytes,
@@ -2104,7 +2106,19 @@ components:
             type: string,
             description: "BIGINT estimate from pg_stat_user_tables, as decimal text",
           }
+        last_vacuum:
+          {
+            type: string,
+            nullable: true,
+            description: Last manual VACUUM (pg_stat_user_tables.last_vacuum as text),
+          }
         last_autovacuum: { type: string, nullable: true }
+        last_analyze:
+          {
+            type: string,
+            nullable: true,
+            description: Last manual ANALYZE (pg_stat_user_tables.last_analyze as text),
+          }
         last_autoanalyze: { type: string, nullable: true }
         size:
           {
@@ -16668,7 +16682,7 @@ paths:
         "400":
           description: VALIDATION_ERROR — `table` is not a non-empty string, or names an unknown table
         "403":
-          description: Insufficient database privileges to VACUUM
+          description: The database role lacks MAINTAIN on a requested table; nothing is vacuumed
 
   /api/admin/database/tables/{table}/schema:
     parameters:

@@ -155,7 +155,9 @@ function renderGrantStatements({
  * role can no longer grant privileges on those views and PostgreSQL rejects the
  * entire broad GRANT before granting ordinary tables. Expanding the statement
  * lets app-owned objects be skipped and isolates any third-party ownership
- * failure to that one relation.
+ * failure to that one relation. Each relation gets only the template
+ * privileges that apply to its kind: a materialized view takes SELECT and
+ * MAINTAIN, and a view or foreign table cannot be maintained.
  *
  * @returns number of relation-specific grant failures
  */
@@ -178,6 +180,7 @@ const canCreateRowSchema = z
 async function grantCurrentRelations(
   client: PgOneShotClient,
   appRole: string,
+  templatePrivileges: readonly string[],
   log: BootstrapLogger,
 ): Promise<number> {
   const result = await client.query(`
@@ -196,8 +199,16 @@ async function grantCurrentRelations(
   let failures = 0;
   for (const row of checkRows(relationGrantRowSchema, result.rows)) {
     if (row.owner_name === appRole) continue;
-    const privileges =
-      row.relkind === "m" ? "SELECT" : "SELECT, INSERT, UPDATE, DELETE";
+    const applicable =
+      row.relkind === "m"
+        ? ["SELECT", "MAINTAIN"]
+        : row.relkind === "v" || row.relkind === "f"
+          ? ["SELECT", "INSERT", "UPDATE", "DELETE"]
+          : templatePrivileges;
+    const privileges = templatePrivileges
+      .filter((privilege) => applicable.includes(privilege))
+      .join(", ");
+    if (!privileges) continue;
     const relation = `${quoteIdent(row.schema_name)}.${quoteIdent(row.relation_name)}`;
     try {
       await client.query(
@@ -216,8 +227,15 @@ async function grantCurrentRelations(
 /** undefined_table, undefined_function, invalid_schema_name */
 const UNDEFINED_OBJECT_CODES = new Set(["42P01", "42883", "3F000"]);
 
-function isAllTablesGrant(statement: string): boolean {
-  return /\bON\s+ALL\s+TABLES\s+IN\s+SCHEMA\s+public\b/i.test(statement);
+/** The privilege list of a `GRANT ... ON ALL TABLES IN SCHEMA public`, else null. */
+function allTablesGrantPrivileges(statement: string): string[] | null {
+  const match =
+    /^GRANT\s+(.+?)\s+ON\s+ALL\s+TABLES\s+IN\s+SCHEMA\s+public\b/i.exec(
+      statement,
+    );
+  return match?.[1]
+    ? match[1].split(",").map((privilege) => privilege.trim().toUpperCase())
+    : null;
 }
 
 /**
@@ -386,10 +404,12 @@ export async function ensureAppRole({
       let grantFailures = 0;
       for (const stmt of grantStatements) {
         try {
-          if (isAllTablesGrant(stmt)) {
+          const tablePrivileges = allTablesGrantPrivileges(stmt);
+          if (tablePrivileges) {
             grantFailures += await grantCurrentRelations(
               client,
               appConn.user,
+              tablePrivileges,
               log,
             );
             continue;

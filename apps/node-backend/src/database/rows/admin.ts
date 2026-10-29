@@ -15,8 +15,11 @@ export const tableStatsRowSchema = z
     table_name: z.string(),
     live_rows: pgBigint,
     dead_rows: pgBigint,
+    /** `last_vacuum::text`: NULL until the first manual VACUUM. */
+    last_vacuum: z.string().nullable(),
     /** `last_autovacuum::text`: NULL until the first autovacuum. */
     last_autovacuum: z.string().nullable(),
+    last_analyze: z.string().nullable(),
     last_autoanalyze: z.string().nullable(),
     /** `pg_size_pretty(...)` */
     size: z.string(),
@@ -30,7 +33,7 @@ export const databaseSizeRowSchema = z
   .object({ db_size: z.string() })
   .describe("database size row");
 
-/** `SELECT relname FROM pg_stat_user_tables`. */
+/** `pg_stat_user_tables` names with the role's MAINTAIN privilege. */
 export const userTableNameRowSchema = z
-  .object({ relname: z.string() })
+  .object({ relname: z.string(), can_maintain: z.boolean() })
   .describe("user table name row");

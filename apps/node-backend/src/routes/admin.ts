@@ -358,7 +358,9 @@ router.get("/database/stats", async (_req, res) => {
         relname AS table_name,
         n_live_tup AS live_rows,
         n_dead_tup AS dead_rows,
+        last_vacuum::text,
         last_autovacuum::text,
+        last_analyze::text,
         last_autoanalyze::text,
         pg_size_pretty(pg_total_relation_size(relid)) AS size,
         pg_total_relation_size(relid) AS size_bytes
@@ -383,10 +385,19 @@ router.get("/database/stats", async (_req, res) => {
 router.post("/database/vacuum", adminMutateLimiter, async (req, res) => {
   const { table } = parseInput(vacuumBodySchema, req.body ?? {});
 
-  // Validate table name against actual user tables to prevent injection
+  // Validate table name against actual user tables to prevent injection.
+  // PostgreSQL does not fail a VACUUM the role may not run: it logs
+  // "permission denied to vacuum ..., skipping it" as a WARNING and reports
+  // success. Check the MAINTAIN privilege (PostgreSQL 17+) up front so a
+  // skipped table is a 403, never a false success.
   const allowed = await checkedRows(
     userTableNameRowSchema,
-    sql`SELECT relname FROM pg_stat_user_tables WHERE schemaname = 'public'`,
+    sql`
+      SELECT relname, has_table_privilege(relid, 'MAINTAIN') AS can_maintain
+      FROM pg_stat_user_tables
+      WHERE schemaname = 'public'
+      ORDER BY relname
+    `,
   );
   const allowedNames = new Set(allowed.map((r) => r.relname));
 
@@ -394,17 +405,29 @@ router.post("/database/vacuum", adminMutateLimiter, async (req, res) => {
     throw new ValidationError(`Unknown table: ${table}`);
   }
 
+  const targets = allowed.filter((r) => table == null || r.relname === table);
+  const denied = targets.filter((r) => !r.can_maintain).map((r) => r.relname);
+  if (denied.length > 0) {
+    throw new ForbiddenError(
+      `Insufficient database privileges to VACUUM ${denied.join(", ")}`,
+    );
+  }
+
   // VACUUM cannot run inside a transaction block — use raw client
   const client = await getClient();
   try {
     await client.query("SET statement_timeout = 120000");
-    // `table` is validated against the allowlist populated from
-    // pg_stat_user_tables above and quoted as an identifier. VACUUM rejects
-    // parameterized identifiers, so it cannot be a bound parameter.
-    const vacuum = compileQuery(
-      table ? sql`VACUUM ANALYZE ${sql.id(table)}` : sql`VACUUM ANALYZE`,
-    );
-    await client.query(vacuum.sql);
+    // Table names come from pg_stat_user_tables above and are quoted as
+    // identifiers. VACUUM rejects parameterized identifiers, so they cannot
+    // be bound parameters. "All" names every public table explicitly: a bare
+    // VACUUM would also try the system catalogs, which only their owner may
+    // vacuum.
+    if (targets.length > 0) {
+      const vacuum = compileQuery(
+        sql`VACUUM ANALYZE ${sql.join(targets.map((r) => sql.id(r.relname)))}`,
+      );
+      await client.query(vacuum.sql);
+    }
   } catch (err) {
     if (err instanceof Error && "code" in err && err.code === "42501") {
       // insufficient_privilege

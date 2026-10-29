@@ -140,10 +140,10 @@ function TableStatRow({
                 </span>
             </TableCell>
             <TableCell className="min-w-40 whitespace-nowrap type-footnote tabular-nums text-label-secondary">
-                {fmt(row.last_autovacuum)}
+                {fmt(latest(row.last_vacuum, row.last_autovacuum))}
             </TableCell>
             <TableCell className="min-w-40 whitespace-nowrap type-footnote tabular-nums text-label-secondary">
-                {fmt(row.last_autoanalyze)}
+                {fmt(latest(row.last_analyze, row.last_autoanalyze))}
             </TableCell>
             <TableCell className="min-w-24 whitespace-nowrap text-right font-medium tabular-nums">
                 {row.size}
@@ -175,6 +175,12 @@ function TableStatRow({
             </TableCell>
         </TableRow>
     );
+}
+
+/** The later of a manual and an automatic run; either may be NULL. */
+function latest(manual: string | null, auto: string | null): string | null {
+    if (!manual || !auto) return manual ?? auto;
+    return Date.parse(manual) >= Date.parse(auto) ? manual : auto;
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────

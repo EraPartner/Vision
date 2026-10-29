@@ -409,6 +409,18 @@ describe.skipIf(!hasTestDatabase())(
         .post("/database/vacuum")
         .send({ table: "no_such_table_row_contracts" });
       expect(rejected.status).toBe(400);
+      const vacuumed = await agent
+        .post("/database/vacuum")
+        .send({ table: "categories" });
+      expect(vacuumed.status).toBe(200);
+      const after = await agent.get("/database/stats");
+      const tables = bodyAt(after, "data", "tables") as {
+        table_name: string;
+        last_vacuum: string | null;
+      }[];
+      expect(
+        tables.find((row) => row.table_name === "categories")?.last_vacuum,
+      ).toEqual(expect.any(String));
     });
   },
 );

@@ -21,7 +21,9 @@ export interface DbTableStat {
     table_name: string;
     live_rows: string;
     dead_rows: string;
+    last_vacuum: string | null;
     last_autovacuum: string | null;
+    last_analyze: string | null;
     last_autoanalyze: string | null;
     size: string;
     size_bytes: string;
