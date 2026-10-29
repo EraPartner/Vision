@@ -55,3 +55,11 @@ migration owner's credentials or only reporting the failure.
 - MAINTAIN exists from PostgreSQL 17. Vision packages only PostgreSQL 18; on an older external
   server the MAINTAIN grants fail per statement with a logged warning and the route returns 403.
 - Not verified on the Mac. PostgreSQL 18 DB tests run in CI.
+
+## Related
+
+- [[docs/adr/index|All ADRs]]
+- [[docs/features/database-maintenance|Database Maintenance UI]]
+- [[docs/api/admin|Admin API]]
+- [[docs/guides/native-macos-runtime|Native macOS runtime]]
+- [[docs/adr/113-native-macos-runtime|ADR-113: Native macOS runtime]]
