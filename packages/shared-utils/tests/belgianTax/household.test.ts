@@ -126,6 +126,50 @@ describe("special social security contribution", () => {
         expect(r.csss.scale).toBe("single");
         expect(must(r.partners[1], "partners[1]").specialSocialSecurityContribution).toBe(0);
     });
+
+    test("art. 107, 2°: other taxable income enters the base, the alimony deduction leaves it", () => {
+        // Employee 50,000 → net professional 37,535 (single tier 4: 335.50 + 4.009% × 191).
+        const plain = computeHouseholdTax(household([partner("A", [activity("employee", 50_000)])]));
+        expect(plain.csss.base).toBeCloseTo(37_535, 9);
+        expect(plain.csss.total).toBeCloseTo(335.5 + 0.04009 * (37_535 - 37_344), 9);
+        // + 10,000 rental: base 47,535 → tier 5: 481.96 + 1.2996% × (47,535 − 40,997.26).
+        const rental = computeHouseholdTax(
+            household([partner("A", [activity("employee", 50_000)], { otherTaxableIncome: 10_000 })]),
+        );
+        expect(rental.csss.base).toBeCloseTo(47_535, 9);
+        expect(rental.csss.total).toBeCloseTo(481.96 + 0.012996 * (47_535 - 40_997.26), 9);
+        // Alimony 10,000 × 70% (IY 2025): base 30,535 → tier 3: 123.95 + 1.3% × (30,535 − 21,070.96).
+        const alimony = computeHouseholdTax(
+            household([partner("A", [activity("employee", 50_000)], { alimonyPaid: 10_000 })]),
+        );
+        expect(alimony.csss.base).toBeCloseTo(30_535, 9);
+        expect(alimony.csss.total).toBeCloseTo(123.95 + 0.013 * (30_535 - 21_070.96), 9);
+    });
+
+    test("joint: the alimony balance charged on the other spouse (art. 105, 3°) lowers the household base", () => {
+        // A employee 20,000 → 20,000 − 2,614 − 5,215.80 = 12,170.20; alimony 20,000 × 70% = 14,000
+        // exhausts A's income and 1,829.80 moves to B. B employee 50,000 → 37,535.
+        // Household base 12,170.20 + 37,535 − 14,000 = 35,705.20, all attributed to B.
+        const h = married([activity("employee", 20_000)], [activity("employee", 50_000)]);
+        must(h.partners[0], "partners[0]").alimonyPaid = 20_000;
+        const r = computeHouseholdTax(h);
+        expect(r.assessment.mode).toBe("joint");
+        expect(r.csss.base).toBeCloseTo(35_705.2, 6);
+        expect(r.csss.total).toBeCloseTo(123.95 + 0.013 * (35_705.2 - 21_070.96), 6);
+        expect(must(r.partners[0], "partners[0]").specialSocialSecurityContribution).toBe(0);
+        expect(must(r.partners[1], "partners[1]").specialSocialSecurityContribution).toBeCloseTo(r.csss.total, 9);
+    });
+
+    test("joint: pensions leave the base even when the pensioner's own alimony exceeds the rest", () => {
+        // A pension 20,000 (net 20,000, no forfait) with alimony 10,000 × 70% = 7,000 → 13,000;
+        // B employee 50,000 → 37,535. Household: 13,000 + 37,535 − 20,000 pensions = 30,535.
+        const h = married([activity("pension", 20_000)], [activity("employee", 50_000)]);
+        must(h.partners[0], "partners[0]").alimonyPaid = 10_000;
+        const r = computeHouseholdTax(h);
+        expect(r.csss.scale).toBe("joint");
+        expect(r.csss.base).toBeCloseTo(30_535, 9);
+        expect(must(r.partners[1], "partners[1]").specialSocialSecurityContribution).toBeCloseTo(r.csss.total, 9);
+    });
 });
 
 describe("household assembly", () => {

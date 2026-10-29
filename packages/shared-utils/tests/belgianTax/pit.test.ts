@@ -1251,29 +1251,26 @@ describe("special SS basis", () => {
         ]);
     });
 
-    test("uses professional income only, not other taxable income", () => {
-        // Tiny salary + large rental income. Professional net (after SS + forfait) is well below
-        // the €18,592 CSSS floor, so the contribution must be 0 even though `taxableIncome` is huge.
+    test("art. 107, 2°: other taxable income enters the base (total net income of arts 7-116)", () => {
+        // Tiny salary + large rental income. The professional net alone is below the €18,592.02
+        // floor, but the base is the total net income, so the cap of €731.28 is reached.
         const result = computeWithParity(
             profile({ grossAnnualIncome: 10_000, otherTaxableIncome: 80_000 }),
         );
-        expect(result.taxableIncome).toBeGreaterThan(18_592);
-        expect(result.specialSocialSecurityContribution).toBe(0);
+        expect(result.taxableIncome).toBeGreaterThan(60_181.95);
+        expect(result.specialSocialSecurityContribution).toBeCloseTo(731.28, 2);
     });
 
-    test("uses professional income only — CSSS reached on salary alone is unchanged by rental", () => {
-        const noRental = computeWithParity(
-            profile({ grossAnnualIncome: 100_000 }),
+    test("art. 107, 2°: the alimony deduction (art. 104) lowers the base", () => {
+        // 50,000 gross → net professional 37,535: single tier 4 → 335.50 + 4.009% × 191 = 343.16.
+        // Alimony 10,000 × 70% = 7,000 → base 30,535: tier 3 → 123.95 + 1.3% × 9,464.04.
+        const noAlimony = computeWithParity(profile({ grossAnnualIncome: 50_000 }));
+        const withAlimony = computeWithParity(
+            profile({ grossAnnualIncome: 50_000, alimonyPaid: 10_000 }),
         );
-        const withRental = computeWithParity(
-            profile({ grossAnnualIncome: 100_000, otherTaxableIncome: 50_000 }),
-        );
-        expect(noRental.specialSocialSecurityContribution).toBeCloseTo(
-            731.28,
-            2,
-        );
-        expect(withRental.specialSocialSecurityContribution).toBeCloseTo(
-            731.28,
+        expect(noAlimony.specialSocialSecurityContribution).toBeCloseTo(343.16, 2);
+        expect(withAlimony.specialSocialSecurityContribution).toBeCloseTo(
+            123.95 + 0.013 * (30_535 - 21_070.96),
             2,
         );
     });

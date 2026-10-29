@@ -310,9 +310,7 @@ export function computeBelgianPIT(
         netAfterSS - profExpenses - otherDeductions,
     );
 
-    // Net taxable PROFESSIONAL income — used as the basis for the special social security
-    // contribution (CSSS). Statutorily this excludes non-professional income (rental,
-    // dividends, etc.), even though those items enter `taxableIncome` for PIT bracket purposes.
+    // Net taxable PROFESSIONAL income: the earner's pension base for the art. 147 reduction below.
     const netTaxableProfessional = clampAtZero(
         grossSalary - employeeSS - profExpenses,
     );
@@ -443,16 +441,15 @@ export function computeBelgianPIT(
     const communalSurcharge =
         federalPITAfterReductions * (profile.communalSurchargePercent / 100);
 
-    // 10. Special social security contribution. Law of 30 March 1994 art. 107, 2°: under a
-    //     joint assessment the base is the HOUSEHOLD income (sum of both spouses' net income,
-    //     before the marital quotient). Non-professional income (rental, dividends) is excluded
-    //     from this base in the current single-profile model; the spouse's professional income
-    //     is the only spouse figure the profile carries.
+    // 10. Special social security contribution. Law of 30 March 1994 art. 107, 2°: the base is
+    //     each person's total net income of WIB 92 arts 7-116 (every category, after the alimony
+    //     deduction) less the art. 34 pensions, i.e. `taxableIncome` before the marital quotient
+    //     for a non-pensioner. Under a joint assessment the base is the HOUSEHOLD income; the
+    //     spouse's professional income is the only spouse figure the profile carries.
     const csssBase =
         profile.filingStatus === "married_joint"
-            ? netTaxableProfessional +
-              Math.max(orZero(profile.spouseProfessionalIncome), 0)
-            : netTaxableProfessional;
+            ? taxableIncome + Math.max(orZero(profile.spouseProfessionalIncome), 0)
+            : taxableIncome;
     const specialSS = computeSpecialSocialSecurityContribution(
         profile,
         csssBase,

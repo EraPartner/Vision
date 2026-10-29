@@ -24,8 +24,10 @@ export function computeEmployeeSocialSecurity(profile: BelgianTaxProfile, table:
  * Special social security contribution ("CSSS" / "bijzondere bijdrage voor de sociale zekerheid").
  *
  * Law of 30 March 1994 art. 108 §1 (as amended by the laws of 28 March 2022 and
- * 20 November 2022): a step function on the **household income** of art. 107, 2°. Two annual
- * scales exist:
+ * 20 November 2022): a step function on the **household income** of art. 107, 2°: each member's
+ * total net income of WIB 92 arts 7-116 (every income category, after the arts 104-116
+ * deductions), without the separately taxed income of art. 171, less the art. 34 pensions. Two
+ * annual scales exist:
  *  - `csssTable` for taxpayers assessed alone, cap €731.28;
  *  - `csssTableJoint` for a joint assessment (`gemeenschappelijke aanslag`), applied to the sum
  *    of both spouses' income, same household cap €731.28.
