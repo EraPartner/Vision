@@ -653,10 +653,29 @@ async function repickAppPort(): Promise<number> {
   return port;
 }
 
-function notify(body: string): void {
-  if (Notification.isSupported()) {
-    new Notification({ title: APP_NAME, body }).show();
-  }
+function notify(body: string): Notification | undefined {
+  if (!Notification.isSupported()) return undefined;
+  const notification = new Notification({ title: APP_NAME, body });
+  notification.show();
+  return notification;
+}
+
+// Electron removes this process's delivered notifications from Notification
+// Center when the app exits, so a notification posted during quit vanishes
+// before it is seen. Resolves once `notification` has been on screen for
+// `visibleMs`, or `visibleMs` after the call if macOS never reports 'show'.
+function whenNotificationSeen(
+  notification: Notification | undefined,
+  visibleMs: number,
+): Promise<void> {
+  if (!notification) return Promise.resolve();
+  return new Promise((resolve) => {
+    const fallback = setTimeout(resolve, visibleMs);
+    notification.once("show", () => {
+      clearTimeout(fallback);
+      setTimeout(resolve, visibleMs);
+    });
+  });
 }
 
 // Reused keep-alive agent so successive /health probes share a TCP socket
@@ -2778,6 +2797,9 @@ app.on("before-quit", () => {
   isAppQuitting = true;
 });
 
+// How long a backup-on-quit result stays on screen before the app exits.
+const QUIT_NOTICE_VISIBLE_MS = 4000;
+
 app.on("will-quit", (e) => {
   if (isQuitting || !workDir) return;
   e.preventDefault();
@@ -2837,16 +2859,25 @@ app.on("will-quit", (e) => {
       effective.backupOnQuit && !systemShuttingDown;
     const backupDir = effective.backupDir || "";
 
+    // Holds app.exit until the backup result has been readable on screen; the
+    // runtime shutdown below overlaps this wait.
+    let backupNoticeSeen: Promise<void> = Promise.resolve();
     const doBackup =
       backupOnQuit && backupDir
         ? runBundleBackup(backupDir, null) // frontendState unavailable at quit time
             .then((result) => {
               if (result.warning) console.warn(result.warning);
-              notify(t("backup.done"));
+              backupNoticeSeen = whenNotificationSeen(
+                notify(t("backup.done")),
+                QUIT_NOTICE_VISIBLE_MS,
+              );
             })
             .catch((err: unknown) => {
               console.error("Backup on quit failed:", err);
-              notify(t("backup.failed"));
+              backupNoticeSeen = whenNotificationSeen(
+                notify(t("backup.failed")),
+                QUIT_NOTICE_VISIBLE_MS,
+              );
             })
         : Promise.resolve();
 
@@ -2867,9 +2898,11 @@ app.on("will-quit", (e) => {
       })
       .catch((err: unknown) => console.error("runtime shutdown failed:", err))
       .finally(() => {
-        clearTimeout(forceQuitTimer);
-        notify(t("app.stopped"));
-        app.exit(0);
+        void backupNoticeSeen.then(() => {
+          clearTimeout(forceQuitTimer);
+          notify(t("app.stopped"));
+          app.exit(0);
+        });
       });
   });
 });
