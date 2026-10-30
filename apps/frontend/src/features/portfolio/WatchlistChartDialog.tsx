@@ -337,6 +337,7 @@ export function WatchlistChartDialog({
                             />
                         ) : formattedData.length > 0 ? (
                             <AreaChart
+                                scrubbable
                                 data={formattedData}
                                 height={320}
                                 xAccessor={(d) => d.time}

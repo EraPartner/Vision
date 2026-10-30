@@ -938,6 +938,7 @@ export default function ChartBuilderPage() {
                             />
                         ) : rows.length > 0 ? (
                             <ComposedChart<Row>
+                                scrubbable
                                 data={rows}
                                 xAccessor={(d) => new Date(d.time)}
                                 xIsDate

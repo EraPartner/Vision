@@ -3,8 +3,8 @@ title: Frontend Architecture
 type: architecture
 status: active
 description: "React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic."
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-10-30
+updated: 2026-10-30
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
@@ -693,7 +693,7 @@ A second June 2026 batch with 18 items. See [[docs/adr/071-premium-v3-effects-to
 
 #### Chart Interactions (new)
 
-- **Scrub-to-compare**: `scrub.tsx` exports `useChartScrub` + `formatScrubDelta`. AreaChart/LineChart accept a `scrubbable` prop. Pointer-drag selects a range, shows an opaque Δ pill (abs + %), and suppresses the tooltip while scrubbing. Moving chart tooltips and delta pills avoid backdrop blur so pointer movement does not re-rasterize a thick glass surface. Enabled on: CashFlowComparisonChart, ForecastInner(+Rolling), BankBalancesWidget, PortfolioPage (value hero and relative performance), NetWorthChart.
+- **Scrub-to-compare**: `scrub.ts` exports `useChartScrub` + `formatScrubDelta`; `ScrubOverlay.tsx` draws the band and readout. AreaChart/LineChart/ComposedChart accept a `scrubbable` prop. Drag (either direction) or click-move-click selects a range that stays until a click, Escape or leave, shows a Δ readout (abs + %) per series, and suppresses the tooltip meanwhile. Moving chart tooltips and delta pills avoid backdrop blur so pointer movement does not re-rasterize a thick glass surface. Enabled on every price/value-over-time chart; list in [[docs/components/charts#scrub-to-compare-scrubbable-prop]].
 - **Synced crosshairs**: `ChartSyncContext.tsx` exports `ChartSyncProvider` + `useChartSync`. Charts sharing a `syncId` under one provider mirror hover (nearest point, with a domain guard so disjoint timelines don't pin to edges). Dashboard time-series share `syncId="dashboard-timeline"`. `ChartSyncProvider` wraps `DashboardPage`. BarChart (MonthlyTrends) excluded — categorical band scale.
 - **Sweep reveal**: AreaChart animates a clipPath on mount.
 

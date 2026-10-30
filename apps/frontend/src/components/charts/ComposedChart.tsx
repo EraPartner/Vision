@@ -26,6 +26,10 @@ import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { useChartKeyboardNav } from "./keyboardNav";
 import { summarizeSeriesChart } from "./chartAria";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { ScrubBand, ScrubReadout, type ScrubMarker } from "./ScrubOverlay";
+import { scrubView, useChartScrub, type ScrubSeries } from "./scrub";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
+import { useFullEffects } from "@/hooks/useVisualEffectsTier";
 
 const isFiniteNumber = (value: number | null | undefined): value is number =>
     value != null && Number.isFinite(value);
@@ -65,6 +69,8 @@ export interface ComposedChartProps<Datum> {
     readonly tooltipValueFormat?:
         ((v: number, seriesKey: string) => string) | undefined;
     readonly ariaLabel?: string | undefined;
+    /** Enable range compare (Δ + % per series): drag across the chart, or click a point and move. */
+    readonly scrubbable?: boolean | undefined;
 }
 
 const MARGIN = { top: 16, right: 64, bottom: 28, left: 72 };
@@ -276,10 +282,13 @@ function Inner<Datum>({
     tooltipTitle,
     tooltipValueFormat,
     ariaLabel,
+    scrubbable = false,
     width,
     height,
 }: ComposedChartProps<Datum> & { width: number; height: number }) {
     const { t } = useLanguage();
+    const formatPercent = usePercentFormatter();
+    const fullEffects = useFullEffects();
     const { innerWidth, innerHeight, stableXAccessor, xScale } =
         useCartesianFrame({
             data,
@@ -347,13 +356,14 @@ function Inner<Datum>({
             bisectX.center(array, x);
     }, [stableXAccessor]);
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+    const scrub = useChartScrub();
 
     // Cache the overlay rect for the duration of a hover session instead of
     // calling getBoundingClientRect on every pointermove (forced layout per
     // frame). Cleared on pointerleave so the next hover re-measures.
     const overlayRectRef = useRef<DOMRect | null>(null);
 
-    const handleMove = useCallback(
+    const indexAtClientX = useCallback(
         (event: React.PointerEvent<SVGRectElement>) => {
             let rect = overlayRectRef.current;
             if (!rect) {
@@ -362,15 +372,39 @@ function Inner<Datum>({
             }
             const x0 = xScale.invert(event.clientX - rect.left);
             const idx = bisect(data, x0);
-            setHoverIdx(idx >= 0 && idx < data.length ? idx : null);
+            return idx >= 0 && idx < data.length ? idx : null;
         },
         [bisect, data, xScale],
+    );
+
+    const handleMove = useCallback(
+        (event: React.PointerEvent<SVGRectElement>) => {
+            const idx = indexAtClientX(event);
+            setHoverIdx(idx);
+            if (idx != null) scrub.hover(idx);
+        },
+        [indexAtClientX, scrub],
     );
 
     const handleLeave = useCallback(() => {
         overlayRectRef.current = null;
         setHoverIdx(null);
-    }, []);
+        scrub.end();
+    }, [scrub]);
+
+    const handleDown = useCallback(
+        (event: React.PointerEvent<SVGRectElement>) => {
+            if (!scrubbable) return;
+            const idx = indexAtClientX(event);
+            if (idx == null) return;
+            // Keep receiving moves while the button is held outside the plot.
+            event.currentTarget.setPointerCapture(event.pointerId);
+            scrub.press(idx);
+        },
+        [scrubbable, indexAtClientX, scrub],
+    );
+
+    const handleUp = useCallback(() => scrub.release(), [scrub]);
     const safeHoverIdx =
         hoverIdx != null && hoverIdx < data.length ? hoverIdx : null;
     const keyboardNav = useChartKeyboardNav({
@@ -378,6 +412,7 @@ function Inner<Datum>({
         index: safeHoverIdx,
         onIndexChange: setHoverIdx,
         onClear: handleLeave,
+        scrub: scrubbable ? scrub : undefined,
     });
 
     const hoverDatum = safeHoverIdx != null ? data[safeHoverIdx] : null;
@@ -399,6 +434,44 @@ function Inner<Datum>({
     }, [hoverDatum, series, tooltipValueFormat]);
 
     const cx = (d: Datum) => xScale(stableXAccessor(d));
+
+    const titleOf = (datum: Datum) => {
+        if (tooltipTitle) return tooltipTitle(datum);
+        // App date format, not the browser locale, for the fallback title
+        const x = xAccessor(datum);
+        return x instanceof Date
+            ? formatDateWithAppSettings(x, appSettings.dateFormat)
+            : String(x);
+    };
+
+    const scrubSeries = useMemo<ScrubSeries<Datum>[]>(
+        () =>
+            series.map((s, i) => ({
+                key: s.key,
+                label: s.label,
+                color: s.color ?? getChartColor(i),
+                value: (d: Datum) => repValue(s, d),
+            })),
+        [series],
+    );
+    const scrubbed = scrubbable ? scrubView(scrub, data, scrubSeries) : null;
+    // Dots on line/area/candle marks, on the axis each series is drawn against.
+    const scrubMarkers = (which: "start" | "end"): ScrubMarker[] => {
+        if (!scrubbed) return [];
+        const markers: ScrubMarker[] = [];
+        for (const row of scrubbed.rows) {
+            const s = series.find((x) => x.key === row.key);
+            if (!s || s.type === "bar") continue;
+            const scale =
+                s.axis === "right" && rightScale ? rightScale : leftScale;
+            markers.push({
+                key: row.key,
+                y: scale(which === "start" ? row.start : row.end),
+                color: row.color,
+            });
+        }
+        return markers;
+    };
 
     return (
         <div style={{ position: "relative", width, height }}>
@@ -444,6 +517,17 @@ function Inner<Datum>({
                         innerHeight={innerHeight}
                         barWidth={barWidth}
                     />
+
+                    {scrubbed ? (
+                        <ScrubBand
+                            xStart={cx(scrubbed.startDatum)}
+                            xEnd={cx(scrubbed.endDatum)}
+                            innerHeight={innerHeight}
+                            rows={scrubbed.rows}
+                            startMarkers={scrubMarkers("start")}
+                            endMarkers={scrubMarkers("end")}
+                        />
+                    ) : null}
 
                     {hoverDatum != null && (
                         <Line
@@ -494,34 +578,44 @@ function Inner<Datum>({
                         width={innerWidth}
                         height={innerHeight}
                         fill="transparent"
+                        style={
+                            scrubbable
+                                ? { touchAction: "pan-y", cursor: "crosshair" }
+                                : undefined
+                        }
                         onPointerMove={handleMove}
                         onPointerLeave={handleLeave}
+                        onPointerDown={handleDown}
+                        onPointerUp={handleUp}
+                        onPointerCancel={handleLeave}
                     />
                 </Group>
             </CartesianChartFrame>
 
+            {scrubbed?.isRange ? (
+                <ScrubReadout
+                    xStart={MARGIN.left + cx(scrubbed.startDatum)}
+                    xEnd={MARGIN.left + cx(scrubbed.endDatum)}
+                    width={width}
+                    top={2}
+                    startTitle={titleOf(scrubbed.startDatum)}
+                    endTitle={titleOf(scrubbed.endDatum)}
+                    rows={scrubbed.rows}
+                    formatValue={(v, key) =>
+                        tooltipValueFormat
+                            ? tooltipValueFormat(v, key)
+                            : String(Math.round(v * 100) / 100)
+                    }
+                    formatPercent={formatPercent}
+                    fullEffects={fullEffects}
+                />
+            ) : null}
+
             <ChartTooltip
-                open={hoverDatum != null}
+                open={hoverDatum != null && !scrub.range}
                 left={hoverDatum != null ? MARGIN.left + cx(hoverDatum) : 0}
                 top={MARGIN.top}
-                title={
-                    hoverDatum != null && tooltipTitle
-                        ? tooltipTitle(hoverDatum)
-                        : hoverDatum != null
-                          ? // App date format, not the browser locale, for the fallback title
-                            String(
-                                (() => {
-                                    const x = xAccessor(hoverDatum);
-                                    return x instanceof Date
-                                        ? formatDateWithAppSettings(
-                                              x,
-                                              appSettings.dateFormat,
-                                          )
-                                        : x;
-                                })(),
-                            )
-                          : undefined
-                }
+                title={hoverDatum != null ? titleOf(hoverDatum) : undefined}
                 items={tooltipItems}
             />
         </div>

@@ -561,6 +561,7 @@ export default function ResearchComparePage() {
                                     />
                                 ) : chartData.length > 0 ? (
                                     <LineChart
+                                        scrubbable
                                         data={chartData}
                                         xAccessor={(d) => new Date(d.time)}
                                         xIsDate

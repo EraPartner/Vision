@@ -75,7 +75,7 @@ export function useChartKeyboardNav({
                 if (!scrub.scrubbing) scrub.begin(index ?? (key === "ArrowRight" ? 0 : last));
                 scrub.move(next);
             } else if (scrub?.scrubbing) {
-                // Plain navigation ends a keyboard scrub, like pointerup ends a drag.
+                // Plain navigation ends a scrub (keyboard-extended or pointer-pinned).
                 scrub.end();
             }
             onIndexChange(next);
