@@ -10,6 +10,8 @@ import {
     useRef,
 } from "react";
 
+import { cn } from "@/lib/utils";
+
 export interface CartesianChartMargin {
     readonly top: number;
     readonly right: number;
@@ -127,7 +129,12 @@ export function CartesianChartFrame({
 }: CartesianChartFrameProps) {
     return (
         <svg
-            className={className}
+            // A click focuses the chart (it is a tab stop); only keyboard
+            // focus draws the ring, not the browser's default outline.
+            className={cn(
+                "[&:focus:not(:focus-visible)]:outline-none",
+                className,
+            )}
             width={width}
             height={height}
             role="img"

@@ -3611,7 +3611,7 @@ const nl: Record<string, string> = {
   'settings.tab.backup': 'Back-up',
   'settings.tab.general': 'Algemeen',
   'settings.title': 'Instellingen',
-  'shortcuts.chartScrub': 'Tip: sleep over een grafiek om een periode te vergelijken, of focus een grafiek en stap door punten met ←/→ (Shift+←/→ om te vergelijken).',
+  'shortcuts.chartScrub': 'Tip: sleep over een grafiek, of klik op een punt en beweeg, om een periode te vergelijken; dat blijft staan tot je klikt of op Esc drukt. Of focus een grafiek en stap door punten met ←/→ (Shift+←/→ om te vergelijken).',
   'shortcuts.closeDialog': 'Dialoogvensters en menu\'s sluiten',
   'shortcuts.cycleSections': 'Tussen secties wisselen',
   'shortcuts.desktopSection': 'Bureaubladmenu',

@@ -19,12 +19,12 @@ import {
 } from "./CartesianChartFrame";
 import { useChartSync } from "./ChartSyncContext";
 import { useChartKeyboardNav } from "./keyboardNav";
-import { formatScrubDelta, useChartScrub } from "./scrub";
+import { ScrubBand, ScrubReadout } from "./ScrubOverlay";
+import { scrubView, useChartScrub, type ScrubSeries } from "./scrub";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { ChartEntrance, ChartLayerSvg } from "./chartEntrance";
 import { durations } from "@/lib/motion";
-import { cn } from "@/lib/utils";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatDateWithAppSettings } from "@/lib/dateUtils";
@@ -75,7 +75,7 @@ export interface LineChartProps<Datum> {
     readonly ariaLabel?: string | undefined;
     /** Opt into synced crosshairs with sibling charts sharing this id (needs ChartSyncProvider). */
     readonly syncId?: string | undefined;
-    /** Enable pointer-drag range compare (Δ + %) on the primary series. */
+    /** Enable range compare (Δ + % per series): drag across the chart, or click a point and move. */
     readonly scrubbable?: boolean | undefined;
 }
 
@@ -293,7 +293,7 @@ function Inner<Datum>({
             if (datum === undefined) return;
             setHoverIdx(idx);
             publishHover(Number(stableXAccessor(datum)));
-            if (scrub.scrubbing) scrub.move(idx);
+            scrub.hover(idx);
         },
         [indexAtClientX, publishHover, stableXAccessor, data, scrub],
     );
@@ -310,13 +310,14 @@ function Inner<Datum>({
             if (!scrubbable) return;
             const idx = indexAtClientX(event);
             if (idx == null) return;
+            // Keep receiving moves while the button is held outside the plot.
             event.currentTarget.setPointerCapture(event.pointerId);
-            scrub.begin(idx);
+            scrub.press(idx);
         },
         [scrubbable, indexAtClientX, scrub],
     );
 
-    const handleUp = useCallback(() => scrub.end(), [scrub]);
+    const handleUp = useCallback(() => scrub.release(), [scrub]);
 
     // Keyboard path (←/→, Home/End, Shift+←/→, Escape) — drives the same
     // hover/scrub state as the pointer, so tooltip/crosshair render unchanged.
@@ -385,6 +386,27 @@ function Inner<Datum>({
         hoverDatum != null
             ? margin.left + (xScale(xAccessor(hoverDatum)))
             : 0;
+
+    const titleOf = (datum: Datum) =>
+        tooltipTitle
+            ? tooltipTitle(datum)
+            : formatTitle(xAccessor(datum), appSettings.dateFormat);
+
+    const scrubSeries = useMemo<ScrubSeries<Datum>[]>(
+        () =>
+            series.map((s, i) => ({
+                key: s.key,
+                label: s.label,
+                color: s.color ?? getChartColor(i),
+                value: s.accessor,
+            })),
+        [series],
+    );
+    const scrubbed = scrubbable ? scrubView(scrub, data, scrubSeries) : null;
+    const formatScrubValue = (v: number, key: string) =>
+        tooltipValueFormat
+            ? tooltipValueFormat(v, key)
+            : String(Math.round(v * 100) / 100);
 
     return (
         <div style={{ position: "relative", width, height }}>
@@ -561,32 +583,24 @@ function Inner<Datum>({
                         />
                     )}
 
-                    {scrub.range
-                        ? (() => {
-                              const startDatum = data[scrub.range.startIndex];
-                              const endDatum = data[scrub.range.endIndex];
-                              if (
-                                  startDatum === undefined ||
-                                  endDatum === undefined
-                              )
-                                  return null;
-                              const xA = xScale(xAccessor(startDatum));
-                              const xB = xScale(xAccessor(endDatum));
-                              return (
-                                  <rect
-                                      x={Math.min(xA, xB)}
-                                      y={0}
-                                      width={Math.abs(xB - xA)}
-                                      height={innerHeight}
-                                      fill={CHART_NEUTRAL.label}
-                                      fillOpacity={0.08}
-                                      stroke={CHART_NEUTRAL.label}
-                                      strokeOpacity={0.25}
-                                      pointerEvents="none"
-                                  />
-                              );
-                          })()
-                        : null}
+                    {scrubbed ? (
+                        <ScrubBand
+                            xStart={xScale(xAccessor(scrubbed.startDatum))}
+                            xEnd={xScale(xAccessor(scrubbed.endDatum))}
+                            innerHeight={innerHeight}
+                            rows={scrubbed.rows}
+                            startMarkers={scrubbed.rows.map((r) => ({
+                                key: r.key,
+                                y: yScale(r.start),
+                                color: r.color,
+                            }))}
+                            endMarkers={scrubbed.rows.map((r) => ({
+                                key: r.key,
+                                y: yScale(r.end),
+                                color: r.color,
+                            }))}
+                        />
+                    ) : null}
 
                     <rect
                         x={0}
@@ -603,80 +617,31 @@ function Inner<Datum>({
                         onPointerLeave={handleLeave}
                         onPointerDown={handleDown}
                         onPointerUp={handleUp}
-                        onPointerCancel={handleUp}
+                        onPointerCancel={handleLeave}
                     />
                 </Group>
             </CartesianChartFrame>
 
-            {scrub.range
-                ? (() => {
-                      const first = series[0];
-                      const startDatum = data[scrub.range.startIndex];
-                      const endDatum = data[scrub.range.endIndex];
-                      if (
-                          !first ||
-                          startDatum === undefined ||
-                          endDatum === undefined
-                      )
-                          return null;
-                      const a = first.accessor(startDatum);
-                      const b = first.accessor(endDatum);
-                      if (
-                          a == null ||
-                          b == null ||
-                          !Number.isFinite(a) ||
-                          !Number.isFinite(b)
-                      )
-                          return null;
-                      const fmt = (v: number) =>
-                          tooltipValueFormat
-                              ? tooltipValueFormat(v, first.key)
-                              : String(Math.round(v * 100) / 100);
-                      const xA =
-                          margin.left + (xScale(xAccessor(startDatum)));
-                      const xB =
-                          margin.left + (xScale(xAccessor(endDatum)));
-                      const mid = (xA + xB) / 2;
-                      const rising = b - a > 0;
-                      return (
-                          <div
-                              className={cn(
-                                  "pointer-events-none absolute left-0 top-0 z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-1 type-footnote font-medium tabular-nums",
-                                  fullEffects
-                                      ? "glass-thick"
-                                      : "border border-border/60 bg-card shadow-elevation-1",
-                                  rising
-                                      ? "text-gain"
-                                      : b - a < 0
-                                        ? "text-loss"
-                                        : "text-foreground",
-                              )}
-                              // transform, not left/top: the pill follows the pointer, and
-                              // a transform moves it without relayout per move.
-                              style={{
-                                  transform: `translate(${mid}px, 2px)`,
-                              }}
-                          >
-                              {formatScrubDelta(a, b, fmt, formatPercent)}
-                          </div>
-                      );
-                  })()
-                : null}
+            {scrubbed?.isRange ? (
+                <ScrubReadout
+                    xStart={margin.left + xScale(xAccessor(scrubbed.startDatum))}
+                    xEnd={margin.left + xScale(xAccessor(scrubbed.endDatum))}
+                    width={width}
+                    top={2}
+                    startTitle={titleOf(scrubbed.startDatum)}
+                    endTitle={titleOf(scrubbed.endDatum)}
+                    rows={scrubbed.rows}
+                    formatValue={formatScrubValue}
+                    formatPercent={formatPercent}
+                    fullEffects={fullEffects}
+                />
+            ) : null}
 
             <ChartTooltip
                 open={hoverDatum != null && !scrub.range}
                 left={tooltipLeft}
                 top={margin.top}
-                title={
-                    hoverDatum != null && tooltipTitle
-                        ? tooltipTitle(hoverDatum)
-                        : hoverDatum != null
-                          ? formatTitle(
-                                xAccessor(hoverDatum),
-                                appSettings.dateFormat,
-                            )
-                          : undefined
-                }
+                title={hoverDatum != null ? titleOf(hoverDatum) : undefined}
                 items={tooltipItems}
             />
         </div>

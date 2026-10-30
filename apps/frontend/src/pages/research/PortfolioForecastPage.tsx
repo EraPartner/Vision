@@ -568,6 +568,7 @@ export default function PortfolioForecastPage() {
                                 />
                             ) : rows.length > 0 ? (
                                 <LineChart<ForecastRow>
+                                    scrubbable
                                     data={rows}
                                     xAccessor={(d) => new Date(d.ts)}
                                     xIsDate

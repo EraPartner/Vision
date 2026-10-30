@@ -558,6 +558,7 @@ export default function MarketLookupPage() {
                               displayChart.points.length > 0 ? (
                                 <div className="space-y-4">
                                     <AreaChart
+                                        scrubbable
                                         data={displayChart.points}
                                         xAccessor={(d) => new Date(d.time)}
                                         xIsDate
