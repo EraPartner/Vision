@@ -34,11 +34,11 @@
     "csv-parse": "^7.0.3",
     "decimal.js": "10.6.0",
     "express": "^5.3.0",
-    "kysely": "0.29.6",
+    "kysely": "0.29.7",
     "multer": "^2.5.0",
     "pg": "8.23.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
-    "yahoo-finance2": "^4.0.3",
+    "yahoo-finance2": "^4.0.5",
     "zod": "^4.6.7"
   }
 }
