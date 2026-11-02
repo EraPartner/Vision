@@ -9,8 +9,8 @@ import { curveMonotoneX } from "@visx/curve";
 import { Group } from "@visx/group";
 import { scaleLinear, scaleLog } from "@visx/scale";
 import { AreaClosed, Line, LinePath } from "@visx/shape";
-import { bisector, max, min } from "d3-array";
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { max, min } from "d3-array";
+import { memo, useCallback, useMemo, useState } from "react";
 
 import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
 import {
@@ -26,8 +26,15 @@ import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { useChartKeyboardNav } from "./keyboardNav";
 import { summarizeSeriesChart } from "./chartAria";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import { ScrubBand, ScrubReadout, type ScrubMarker } from "./ScrubOverlay";
-import { scrubView, useChartScrub, type ScrubSeries } from "./scrub";
+import { ScrubBand, ScrubReadout } from "./ScrubOverlay";
+import {
+    scrubMarkers,
+    scrubView,
+    useChartPointer,
+    useChartScrub,
+    type ScrubRow,
+    type ScrubSeries,
+} from "./scrub";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { useFullEffects } from "@/hooks/useVisualEffectsTier";
 
@@ -52,6 +59,8 @@ export interface ComposedSeries<Datum> {
     readonly high?: ((d: Datum) => number | null | undefined) | undefined;
     readonly low?: ((d: Datum) => number | null | undefined) | undefined;
     readonly close?: ((d: Datum) => number | null | undefined) | undefined;
+    /** The chart's main series: it leads the range readout and tints the band. */
+    readonly primary?: boolean | undefined;
 }
 
 export interface ComposedChartProps<Datum> {
@@ -348,70 +357,32 @@ function Inner<Datum>({
     const step = innerWidth / Math.max(1, data.length);
     const barWidth = Math.max(1, step * 0.6);
 
-    const bisect = useMemo(() => {
-        const bisectX = bisector<Datum, Date | number>((d) =>
-            stableXAccessor(d),
-        );
-        return (array: ArrayLike<Datum>, x: Date | number) =>
-            bisectX.center(array, x);
-    }, [stableXAccessor]);
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-    const scrub = useChartScrub();
+    const scrub = useChartScrub(data, stableXAccessor);
 
-    // Cache the overlay rect for the duration of a hover session instead of
-    // calling getBoundingClientRect on every pointermove (forced layout per
-    // frame). Cleared on pointerleave so the next hover re-measures.
-    const overlayRectRef = useRef<DOMRect | null>(null);
-
-    const indexAtClientX = useCallback(
-        (event: React.PointerEvent<SVGRectElement>) => {
-            let rect = overlayRectRef.current;
-            if (!rect) {
-                rect = event.currentTarget.getBoundingClientRect();
-                overlayRectRef.current = rect;
-            }
-            const x0 = xScale.invert(event.clientX - rect.left);
-            const idx = bisect(data, x0);
-            return idx >= 0 && idx < data.length ? idx : null;
-        },
-        [bisect, data, xScale],
-    );
-
-    const handleMove = useCallback(
-        (event: React.PointerEvent<SVGRectElement>) => {
-            const idx = indexAtClientX(event);
-            setHoverIdx(idx);
-            if (idx != null) scrub.hover(idx);
-        },
-        [indexAtClientX, scrub],
-    );
-
-    const handleLeave = useCallback(() => {
-        overlayRectRef.current = null;
-        setHoverIdx(null);
+    const hideHover = useCallback(() => setHoverIdx(null), []);
+    const clearAll = useCallback(() => {
+        hideHover();
         scrub.end();
-    }, [scrub]);
+    }, [hideHover, scrub]);
 
-    const handleDown = useCallback(
-        (event: React.PointerEvent<SVGRectElement>) => {
-            if (!scrubbable) return;
-            const idx = indexAtClientX(event);
-            if (idx == null) return;
-            // Keep receiving moves while the button is held outside the plot.
-            event.currentTarget.setPointerCapture(event.pointerId);
-            scrub.press(idx);
-        },
-        [scrubbable, indexAtClientX, scrub],
-    );
+    const pointer = useChartPointer({
+        data,
+        xAccessor: stableXAccessor,
+        xScale,
+        scrub,
+        scrubbable,
+        onHover: setHoverIdx,
+        onHoverEnd: hideHover,
+    });
 
-    const handleUp = useCallback(() => scrub.release(), [scrub]);
     const safeHoverIdx =
         hoverIdx != null && hoverIdx < data.length ? hoverIdx : null;
     const keyboardNav = useChartKeyboardNav({
         pointCount: data.length,
         index: safeHoverIdx,
         onIndexChange: setHoverIdx,
-        onClear: handleLeave,
+        onClear: clearAll,
         scrub: scrubbable ? scrub : undefined,
     });
 
@@ -451,26 +422,17 @@ function Inner<Datum>({
                 label: s.label,
                 color: s.color ?? getChartColor(i),
                 value: (d: Datum) => repValue(s, d),
+                primary: s.primary,
             })),
         [series],
     );
     const scrubbed = scrubbable ? scrubView(scrub, data, scrubSeries) : null;
     // Dots on line/area/candle marks, on the axis each series is drawn against.
-    const scrubMarkers = (which: "start" | "end"): ScrubMarker[] => {
-        if (!scrubbed) return [];
-        const markers: ScrubMarker[] = [];
-        for (const row of scrubbed.rows) {
-            const s = series.find((x) => x.key === row.key);
-            if (!s || s.type === "bar") continue;
-            const scale =
-                s.axis === "right" && rightScale ? rightScale : leftScale;
-            markers.push({
-                key: row.key,
-                y: scale(which === "start" ? row.start : row.end),
-                color: row.color,
-            });
-        }
-        return markers;
+    const scrubMarkerY = (value: number, row: ScrubRow<Datum>) => {
+        const s = series.find((x) => x.key === row.key);
+        if (!s || s.type === "bar") return undefined;
+        const scale = s.axis === "right" && rightScale ? rightScale : leftScale;
+        return scale(value);
     };
 
     return (
@@ -490,6 +452,7 @@ function Inner<Datum>({
                 pointCount={data.length}
                 onKeyDown={keyboardNav.onKeyDown}
                 onBlur={keyboardNav.onBlur}
+                frameRef={keyboardNav.frameRef}
             >
                 <Group left={MARGIN.left} top={MARGIN.top}>
                     {leftScale.ticks(5).map((tick: number) => (
@@ -523,9 +486,19 @@ function Inner<Datum>({
                             xStart={cx(scrubbed.startDatum)}
                             xEnd={cx(scrubbed.endDatum)}
                             innerHeight={innerHeight}
-                            rows={scrubbed.rows}
-                            startMarkers={scrubMarkers("start")}
-                            endMarkers={scrubMarkers("end")}
+                            lead={scrubbed.lead}
+                            startMarkers={scrubMarkers(
+                                scrubbed.rows,
+                                "start",
+                                cx,
+                                scrubMarkerY,
+                            )}
+                            endMarkers={scrubMarkers(
+                                scrubbed.rows,
+                                "end",
+                                cx,
+                                scrubMarkerY,
+                            )}
                         />
                     ) : null}
 
@@ -583,24 +556,19 @@ function Inner<Datum>({
                                 ? { touchAction: "pan-y", cursor: "crosshair" }
                                 : undefined
                         }
-                        onPointerMove={handleMove}
-                        onPointerLeave={handleLeave}
-                        onPointerDown={handleDown}
-                        onPointerUp={handleUp}
-                        onPointerCancel={handleLeave}
+                        {...pointer}
                     />
                 </Group>
             </CartesianChartFrame>
 
             {scrubbed?.isRange ? (
                 <ScrubReadout
+                    view={scrubbed}
+                    titleOf={titleOf}
                     xStart={MARGIN.left + cx(scrubbed.startDatum)}
                     xEnd={MARGIN.left + cx(scrubbed.endDatum)}
                     width={width}
                     top={2}
-                    startTitle={titleOf(scrubbed.startDatum)}
-                    endTitle={titleOf(scrubbed.endDatum)}
-                    rows={scrubbed.rows}
                     formatValue={(v, key) =>
                         tooltipValueFormat
                             ? tooltipValueFormat(v, key)

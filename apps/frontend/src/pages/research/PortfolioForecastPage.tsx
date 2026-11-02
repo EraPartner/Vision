@@ -195,6 +195,7 @@ export default function PortfolioForecastPage() {
                 accessor: (d) => d.p50,
                 color: "hsl(var(--primary))",
                 strokeWidth: 2.5,
+                primary: true,
             },
             {
                 key: "p25",

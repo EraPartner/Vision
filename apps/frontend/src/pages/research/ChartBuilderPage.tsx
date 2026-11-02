@@ -506,6 +506,8 @@ export default function ChartBuilderPage() {
             oscillatorSeriesId: null,
         });
         const composed: ComposedSeries<Row>[] = [];
+        // Overlaid securities are peers; one security with indicators has a main line.
+        const primary = series.length === 1;
         series.forEach((s, i) => {
             const color = getChartColor(i);
             if (s.type === "candlestick" && s.field === "price") {
@@ -514,6 +516,7 @@ export default function ChartBuilderPage() {
                     label: seriesLabel(s),
                     type: "candlestick",
                     axis: s.axis,
+                    primary,
                     open: (d) => d[`${s.id}_o`],
                     high: (d) => d[`${s.id}_h`],
                     low: (d) => d[`${s.id}_l`],
@@ -531,6 +534,7 @@ export default function ChartBuilderPage() {
                     color,
                     fillOpacity: s.field === "volume" ? 0.4 : undefined,
                     accessor: (d) => d[s.id],
+                    primary,
                 });
             }
         });

@@ -145,6 +145,7 @@ describe("useChartKeyboardNav (shared key map)", () => {
     it("Shift+arrow anchors then extends a scrub; a plain arrow ends it", () => {
         const scrub = {
             scrubbing: false,
+            headIndex: null,
             begin: vi.fn(),
             move: vi.fn(),
             end: vi.fn(),
@@ -158,6 +159,7 @@ describe("useChartKeyboardNav (shared key map)", () => {
         const active = {
             ...scrub,
             scrubbing: true,
+            headIndex: 2,
             begin: vi.fn(),
             move: vi.fn(),
             end: vi.fn(),

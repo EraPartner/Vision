@@ -64,6 +64,7 @@ function buildSeries<T extends MergedDay | MergedDayDate>(
             color: ACTUAL_COLOR,
             strokeWidth: 2.5,
             connectNulls: false,
+            primary: true,
         },
     ];
 

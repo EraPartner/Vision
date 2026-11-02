@@ -14,15 +14,17 @@
  * Losing focus (blur) also clears, so no tooltip lingers on an unfocused
  * chart. Purely additive: pointer paths are untouched, and the handler calls
  * preventDefault only on keys it actually consumes (arrows/Home/End would
- * otherwise scroll the page; Escape is consumed only when there is something
- * to clear, so an enclosing dialog still receives it otherwise).
+ * otherwise scroll the page). A range or anchor claims Escape ahead of an
+ * enclosing dialog, so the next Escape closes the dialog.
  */
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { KeyboardEvent } from "react";
 
 /** The subset of `useChartScrub` needed for Shift+arrow range compare. */
 export interface ChartKeyboardScrub {
     readonly scrubbing: boolean;
+    /** The moving end of the range, which Shift+arrow extends from. */
+    readonly headIndex: number | null;
     readonly begin: (index: number) => void;
     readonly move: (index: number) => void;
     readonly end: () => void;
@@ -48,6 +50,30 @@ export function useChartKeyboardNav({
     onClear,
     scrub,
 }: ChartKeyboardNavOptions) {
+    const frameRef = useRef<SVGSVGElement>(null);
+    const scrubbing = scrub?.scrubbing ?? false;
+
+    useEffect(() => {
+        if (!scrubbing) return;
+        // Radix dismisses from a document capture listener, before onKeyDown
+        // runs, and skips it when the event is already defaultPrevented.
+        const claimEscape = (event: globalThis.KeyboardEvent) => {
+            if (
+                event.key === "Escape" &&
+                event.target instanceof Node &&
+                frameRef.current?.contains(event.target)
+            ) {
+                event.preventDefault();
+            }
+        };
+        window.addEventListener("keydown", claimEscape, { capture: true });
+        return () => {
+            window.removeEventListener("keydown", claimEscape, {
+                capture: true,
+            });
+        };
+    }, [scrubbing]);
+
     const onKeyDown = useCallback(
         (event: KeyboardEvent) => {
             if (pointCount <= 0) return;
@@ -62,15 +88,21 @@ export function useChartKeyboardNav({
                 return;
             }
 
+            const extending =
+                event.shiftKey &&
+                scrub !== undefined &&
+                (key === "ArrowRight" || key === "ArrowLeft");
+            const from = extending && scrub.scrubbing ? scrub.headIndex : index;
+
             let next: number;
-            if (key === "ArrowRight") next = index === null ? 0 : Math.min(last, index + 1);
-            else if (key === "ArrowLeft") next = index === null ? last : Math.max(0, index - 1);
+            if (key === "ArrowRight") next = from === null ? 0 : Math.min(last, from + 1);
+            else if (key === "ArrowLeft") next = from === null ? last : Math.max(0, from - 1);
             else if (key === "Home") next = 0;
             else if (key === "End") next = last;
             else return;
 
             event.preventDefault();
-            if (event.shiftKey && scrub && (key === "ArrowRight" || key === "ArrowLeft")) {
+            if (extending) {
                 // Shift+arrow = keyboard scrub: anchor on the first press, extend after.
                 if (!scrub.scrubbing) scrub.begin(index ?? (key === "ArrowRight" ? 0 : last));
                 scrub.move(next);
@@ -87,5 +119,5 @@ export function useChartKeyboardNav({
         onClear();
     }, [onClear]);
 
-    return { onKeyDown, onBlur };
+    return { onKeyDown, onBlur, frameRef };
 }

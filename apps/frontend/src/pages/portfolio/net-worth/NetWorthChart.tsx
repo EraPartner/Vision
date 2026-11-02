@@ -90,6 +90,7 @@ export function NetWorthChart({
                 accessor: (d) => d.netWorth,
                 color: TOTAL_COLOR,
                 strokeWidth: 2.5,
+                primary: true,
             },
         ],
         [t, hasLiabilities],

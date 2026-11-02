@@ -15,14 +15,13 @@ import { summarizeSeriesChart } from "./chartAria";
 import { Group } from "@visx/group";
 import { scaleLinear } from "@visx/scale";
 import { AreaClosed, AreaStack, Line, LinePath } from "@visx/shape";
-import { bisector, max, min, sum } from "d3-array";
+import { max, min, sum } from "d3-array";
 import {
     memo,
     type ReactNode,
     useCallback,
     useId,
     useMemo,
-    useRef,
     useState,
 } from "react";
 
@@ -36,7 +35,13 @@ import {
 import { useChartSync } from "./ChartSyncContext";
 import { useChartKeyboardNav } from "./keyboardNav";
 import { ScrubBand, ScrubReadout } from "./ScrubOverlay";
-import { scrubView, useChartScrub, type ScrubSeries } from "./scrub";
+import {
+    scrubMarkers,
+    scrubView,
+    useChartPointer,
+    useChartScrub,
+    type ScrubSeries,
+} from "./scrub";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { ChartEntrance, ChartLayerSvg, ChartReveal } from "./chartEntrance";
@@ -55,6 +60,8 @@ export interface AreaSeries<Datum> {
     readonly dashed?: boolean | undefined;
     readonly strokeWidth?: number | undefined;
     readonly fillOpacity?: number | undefined;
+    /** The chart's main series: it leads the range readout and tints the band. */
+    readonly primary?: boolean | undefined;
 }
 
 export interface AreaReferenceLine {
@@ -95,6 +102,8 @@ export interface AreaChartProps<Datum> {
     readonly syncId?: string | undefined;
     /** Enable range compare (Δ + % per series): drag across the chart, or click a point and move. */
     readonly scrubbable?: boolean | undefined;
+    /** Show the percent change in the range readout. Turn off for values that are percentages themselves. */
+    readonly scrubPercent?: boolean | undefined;
 }
 
 const DEFAULT_MARGIN = { top: 16, right: 24, bottom: 28, left: 90 };
@@ -317,6 +326,7 @@ function AreaChartInner<Datum>({
     ariaLabel,
     syncId,
     scrubbable = false,
+    scrubPercent = true,
 }: InnerProps<Datum>) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
@@ -376,75 +386,11 @@ function AreaChartInner<Datum>({
         });
     }, [data, innerHeight, referenceLines, series, stacked, yDomain]);
 
-    const bisect = useMemo(() => {
-        const bisectX = bisector<Datum, Date | number>((d) =>
-            stableXAccessor(d),
-        );
-        return (array: ArrayLike<Datum>, x: Date | number) =>
-            bisectX.center(array, x);
-    }, [stableXAccessor]);
-
     const [hoverIndex, setHoverIndex] = useState<number | null>(null);
     const { syncedX, publishHover } = useChartSync(syncId);
-    const scrub = useChartScrub();
+    const scrub = useChartScrub(data, stableXAccessor);
 
-    // Cache the overlay rect for the duration of a hover session instead of
-    // calling getBoundingClientRect on every pointermove (forced layout per
-    // frame). Cleared on pointerleave so the next hover re-measures.
-    const overlayRectRef = useRef<DOMRect | null>(null);
-
-    const indexAtClientX = useCallback(
-        (event: React.PointerEvent<SVGRectElement>) => {
-            let rect = overlayRectRef.current;
-            if (!rect) {
-                rect = event.currentTarget.getBoundingClientRect();
-                overlayRectRef.current = rect;
-            }
-            const x = event.clientX - rect.left;
-            const x0 = xScale.invert(x);
-            const idx = bisect(data, x0);
-            return idx >= 0 && idx < data.length ? idx : null;
-        },
-        [bisect, data, xScale],
-    );
-
-    const handleMove = useCallback(
-        (event: React.PointerEvent<SVGRectElement>) => {
-            const idx = indexAtClientX(event);
-            if (idx == null) return;
-            const datum = data[idx];
-            if (datum === undefined) return;
-            setHoverIndex(idx);
-            publishHover(Number(stableXAccessor(datum)));
-            scrub.hover(idx);
-        },
-        [indexAtClientX, publishHover, stableXAccessor, data, scrub],
-    );
-
-    const handleLeave = useCallback(() => {
-        overlayRectRef.current = null;
-        setHoverIndex(null);
-        publishHover(null);
-        scrub.end();
-    }, [publishHover, scrub]);
-
-    const handleDown = useCallback(
-        (event: React.PointerEvent<SVGRectElement>) => {
-            if (!scrubbable) return;
-            const idx = indexAtClientX(event);
-            if (idx == null) return;
-            // Keep receiving moves while the button is held outside the plot.
-            event.currentTarget.setPointerCapture(event.pointerId);
-            scrub.press(idx);
-        },
-        [scrubbable, indexAtClientX, scrub],
-    );
-
-    const handleUp = useCallback(() => scrub.release(), [scrub]);
-
-    // Keyboard path (←/→, Home/End, Shift+←/→, Escape) — drives the same
-    // hover/scrub state as the pointer, so tooltip/crosshair render unchanged.
-    const stepToIndex = useCallback(
+    const showHover = useCallback(
         (idx: number) => {
             const datum = data[idx];
             if (datum === undefined) return;
@@ -453,14 +399,34 @@ function AreaChartInner<Datum>({
         },
         [publishHover, stableXAccessor, data],
     );
-    const { onKeyDown: handleKeyDown, onBlur: handleBlur } =
-        useChartKeyboardNav({
-            pointCount: data.length,
-            index: hoverIndex,
-            onIndexChange: stepToIndex,
-            onClear: handleLeave,
-            scrub: scrubbable ? scrub : undefined,
-        });
+    const hideHover = useCallback(() => {
+        setHoverIndex(null);
+        publishHover(null);
+    }, [publishHover]);
+    const clearAll = useCallback(() => {
+        hideHover();
+        scrub.end();
+    }, [hideHover, scrub]);
+
+    const pointer = useChartPointer({
+        data,
+        xAccessor: stableXAccessor,
+        xScale,
+        scrub,
+        scrubbable,
+        onHover: showHover,
+        onHoverEnd: hideHover,
+    });
+
+    // Keyboard path (←/→, Home/End, Shift+←/→, Escape) — drives the same
+    // hover/scrub state as the pointer, so tooltip/crosshair render unchanged.
+    const keyboardNav = useChartKeyboardNav({
+        pointCount: data.length,
+        index: hoverIndex,
+        onIndexChange: showHover,
+        onClear: clearAll,
+        scrub: scrubbable ? scrub : undefined,
+    });
 
     // Mirror a sibling chart's hover when not hovered locally (nearest point).
     const syncedIndex = useMemo(() => {
@@ -524,10 +490,12 @@ function AreaChartInner<Datum>({
                 label: s.label,
                 color: s.color ?? getChartColor(i),
                 value: s.accessor,
+                primary: s.primary,
             })),
         [series],
     );
     const scrubbed = scrubbable ? scrubView(scrub, data, scrubSeries) : null;
+    const xOf = (datum: Datum) => xScale(stableXAccessor(datum));
     const formatScrubValue = (v: number, key: string) =>
         tooltipValueFormat
             ? tooltipValueFormat(v, key)
@@ -591,8 +559,9 @@ function AreaChartInner<Datum>({
                     )
                 }
                 pointCount={data.length}
-                onKeyDown={handleKeyDown}
-                onBlur={handleBlur}
+                onKeyDown={keyboardNav.onKeyDown}
+                onBlur={keyboardNav.onBlur}
+                frameRef={keyboardNav.frameRef}
             >
                 <Group left={margin.left} top={margin.top}>
                     {/* Reference lines */}
@@ -628,29 +597,31 @@ function AreaChartInner<Datum>({
                     {/* Scrub range band */}
                     {scrubbed ? (
                         <ScrubBand
-                            xStart={xScale(stableXAccessor(scrubbed.startDatum))}
-                            xEnd={xScale(stableXAccessor(scrubbed.endDatum))}
+                            xStart={xOf(scrubbed.startDatum)}
+                            xEnd={xOf(scrubbed.endDatum)}
                             innerHeight={innerHeight}
-                            rows={scrubbed.rows}
+                            lead={scrubbed.lead}
                             // Stacked bands sit on cumulative values; dots on
                             // the raw values would float off the marks.
                             startMarkers={
                                 stacked
                                     ? undefined
-                                    : scrubbed.rows.map((r) => ({
-                                          key: r.key,
-                                          y: yScale(r.start),
-                                          color: r.color,
-                                      }))
+                                    : scrubMarkers(
+                                          scrubbed.rows,
+                                          "start",
+                                          xOf,
+                                          yScale,
+                                      )
                             }
                             endMarkers={
                                 stacked
                                     ? undefined
-                                    : scrubbed.rows.map((r) => ({
-                                          key: r.key,
-                                          y: yScale(r.end),
-                                          color: r.color,
-                                      }))
+                                    : scrubMarkers(
+                                          scrubbed.rows,
+                                          "end",
+                                          xOf,
+                                          yScale,
+                                      )
                             }
                         />
                     ) : null}
@@ -721,28 +692,21 @@ function AreaChartInner<Datum>({
                                 ? { touchAction: "pan-y", cursor: "crosshair" }
                                 : undefined
                         }
-                        onPointerMove={handleMove}
-                        onPointerLeave={handleLeave}
-                        onPointerDown={handleDown}
-                        onPointerUp={handleUp}
-                        onPointerCancel={handleLeave}
+                        {...pointer}
                     />
                 </Group>
             </CartesianChartFrame>
 
             {scrubbed?.isRange ? (
                 <ScrubReadout
-                    xStart={
-                        margin.left + xScale(stableXAccessor(scrubbed.startDatum))
-                    }
-                    xEnd={margin.left + xScale(stableXAccessor(scrubbed.endDatum))}
+                    view={scrubbed}
+                    titleOf={titleOf}
+                    xStart={margin.left + xOf(scrubbed.startDatum)}
+                    xEnd={margin.left + xOf(scrubbed.endDatum)}
                     width={width}
                     top={2}
-                    startTitle={titleOf(scrubbed.startDatum)}
-                    endTitle={titleOf(scrubbed.endDatum)}
-                    rows={scrubbed.rows}
                     formatValue={formatScrubValue}
-                    formatPercent={formatPercent}
+                    formatPercent={scrubPercent ? formatPercent : undefined}
                     fullEffects={fullEffects}
                 />
             ) : null}

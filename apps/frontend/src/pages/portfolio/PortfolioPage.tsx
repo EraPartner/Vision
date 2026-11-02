@@ -985,6 +985,7 @@ export default function PortfolioPage() {
                                                     accessor: (d) => d.value,
                                                     color: SERIES_COLOR.value,
                                                     strokeWidth: 2.5,
+                                                    primary: true,
                                                 },
                                             ]}
                                             xIsDate
@@ -1767,6 +1768,7 @@ export default function PortfolioPage() {
                                         accessor: (d) => d.value,
                                         color: SERIES_COLOR.value,
                                         strokeWidth: 2.5,
+                                        primary: true,
                                     },
                                 ]}
                                 xIsDate
@@ -1866,6 +1868,7 @@ export default function PortfolioPage() {
                         >
                             <AreaChart
                                 scrubbable
+                                scrubPercent={false}
                                 data={relativeData}
                                 xAccessor={(d) => d.chartDate}
                                 series={[
@@ -1877,6 +1880,7 @@ export default function PortfolioPage() {
                                         accessor: (d) => d.portfolio,
                                         color: SERIES_COLOR.value,
                                         strokeWidth: 2.5,
+                                        primary: true,
                                     },
                                     {
                                         key: "stocksEtfs",

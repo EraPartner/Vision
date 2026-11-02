@@ -2,8 +2,8 @@
 title: Chart Primitives
 type: component
 status: active
-date: 2026-10-30
-updated: 2026-10-30
+date: 2026-11-02
+updated: 2026-11-02
 tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader, i18n, localization, premium-v3, chart-scrub, chart-sync, chart-skeleton, sweep-reveal, sparkline-scrub, keyboard-navigation, june-2026]
 description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts generators now accept t()/kindKey for fully localized chart screen-reader summaries across all 7 chart types and both supported languages. June 2026 Premium v3 (ADR-071): scrubbable prop + useChartScrub (scrub-to-compare), syncId prop + ChartSyncContext (synced crosshairs), sweep reveal on AreaChart, ChartSkeleton ghost waveform. V9: Sparkline activeIndex prop (hairline + dot indicator for stat-card scrub). 2026-08-27: keyboardNav.ts provides shared keyboard access to per-point values across all interactive visx primitives and the NetSummaryCard sparkline scrub. 2026-08-23: ChartPeriodSelector uses native toggle-button semantics with aria-pressed instead of incomplete ARIA tab semantics.
 aliases: [charts, chart-components, visx-charts, charting, visualization]
@@ -74,7 +74,7 @@ See [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]] fo
 
 | Module                    | Exports                             | Purpose                                                                                                                            |
 | ------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `scrub.ts`                | `useChartScrub`, `formatScrubDelta`, `scrubView` | Range compare state: drag or click-anchor gesture, pinned range, per-series start/end values                         |
+| `scrub.ts`                | `useChartScrub`, `useChartPointer`, `formatScrubDelta`, `scrubView`, `scrubMarkers` | Range compare state: drag or click-anchor gesture, pinned range, per-series start/end values; pointer handlers for the hover-capture rect |
 | `ScrubOverlay.tsx`        | `ScrubBand`, `ScrubReadout`         | Range compare overlay: tinted band with edge hairlines and value dots, Δ readout per series                                        |
 | `ChartSyncContext.tsx`    | `ChartSyncProvider`, `useChartSync` | Synced crosshairs across charts sharing a `syncId`                                                                                 |
 | `keyboardNav.ts`          | `useChartKeyboardNav`               | Keyboard access to per-point values: shared ←/→ · Home/End · Shift+←/→ · Escape map (2026-08)                                      |
@@ -395,8 +395,8 @@ Per-point values are reachable without a pointer. `useChartKeyboardNav` provides
 - **Tab** focuses the chart (`:focus-visible` shows the app's global focus ring; mouse clicks don't).
 - **←/→** step one data point, clamped at the ends; from an empty state → starts at the first point, ← starts at the last. Reuses the exact hover state the pointer drives, so the existing `ChartTooltip`/readout renders — no new visual affordance.
 - **Home/End** jump to the first/last point.
-- **Shift+←/→** extend a range-compare scrub on `scrubbable` charts (`LineChart`/`AreaChart`), showing the same glass Δ pill as a pointer drag; a plain arrow ends the scrub, including a range pinned by the pointer.
-- **Escape** clears hover + scrub; it is only consumed (`preventDefault`) when there is something to clear, so enclosing dialogs still receive it. Arrows/Home/End are always consumed when handled (else the page would scroll).
+- **Shift+←/→** extend a range-compare scrub on `scrubbable` charts (`LineChart`/`AreaChart`/`ComposedChart`), showing the same glass Δ pill as a pointer drag. On a range pinned by the pointer they move its head, not the hover position. A plain arrow ends the scrub.
+- **Escape** clears hover + scrub. While a range or anchor is active on the focused chart, a window capture listener claims the key before Radix's document capture listener, so the first Escape clears the range and the next closes an enclosing dialog. With only a hover, the dialog closes straight away. Arrows/Home/End are always consumed when handled (else the page would scroll).
 - **Blur** clears everything — no tooltip lingers on an unfocused chart.
 
 ARIA: the SVG keeps `role="img"` + the generated `aria-label` summary (above); focusable images are valid and keep the SR overview intact. `role="application"` was deliberately avoided (would drop virtual-cursor semantics), and no `aria-live` was added to the tooltip (it re-renders at pointermove rate — live announcement would be SR spam).
@@ -471,15 +471,19 @@ function FlowTab() {
 
 **Files:** [[apps/frontend/src/components/charts/scrub.ts]], [[apps/frontend/src/components/charts/ScrubOverlay.tsx]]
 
-`AreaChart`, `LineChart` and `ComposedChart` accept a `scrubbable?: boolean` prop. When enabled (2026-10-30 rework):
+`AreaChart`, `LineChart` and `ComposedChart` accept a `scrubbable?: boolean` prop. When enabled (2026-10-30 rework, hardened 2026-11-02):
 
 - **Drag:** press on a point and drag either way. The range always reads earlier → later. It stays on screen after release.
-- **Click, move, click:** a click anchors a point (an edge hairline with value dots marks it), the range follows the pointer, and a second click pins it. A second click on the anchor cancels it.
-- **Clearing:** a click on a pinned range, Escape, a plain arrow key, blur, or the pointer leaving the chart clears it.
-- The band is tinted gain/loss by the first series' change and has hairlines and value dots at both ends. Stacked areas show no dots because the stack offsets them.
-- The readout shows the period (tooltip titles of both ends) and `formatScrubDelta` (absolute change and %) for every series with values at both ends. It shows up to 4 rows, then "+N". It stays inside the chart box.
+- **Click, move, click:** a click anchors a point (an edge hairline with value dots marks it), the range follows the pointer, and a second click pins it. A second click on the anchor cancels it. A press that moves up to 4px is a click, however dense the data.
+- **Clearing:** a click on a pinned range, Escape, a plain arrow key or blur clears it. Moving the data to another timeline (a refetch that adds a day, another period) also clears it, because the range is held as indices.
+- **Leaving keeps the range:** the pointer leaving the chart clears only the hover. A drag may end outside the plot, a touch leaves on every lift, and an anchor survives brushing past the edge. A press the browser takes over for a scroll (`pointercancel`) clears the scrub.
+- **Pointers:** only the primary pointer's main button starts a gesture. Other pointers cannot steer or end it.
+- The band is tinted gain/loss by the lead row: the series flagged `primary`, or the only series. With several peer series and no `primary`, it stays neutral. It has hairlines and value dots at both ends. Stacked areas show no dots because the stack offsets them.
+- The readout shows the period (tooltip titles of both ends) and `formatScrubDelta` (absolute change and %) per series, with the `primary` series first. It shows up to 4 rows, then "+N". It stays inside the chart box. `AreaChart`'s `scrubPercent={false}` drops the percent for values that are percentages themselves (relative performance).
+- A series without a value at a range end reads its nearest value inside the range, and its row shows that shorter span. A series with fewer than two values inside the range is left out.
 - The standard `ChartTooltip` is suppressed while a range is shown.
 - Pointer capture keeps a drag going when the pointer leaves the plot.
+- `useChartPointer` holds the hit-testing and gesture handlers, so the three charts spread one set onto their hover-capture rect.
 - Clicking a chart no longer draws the browser's default focus outline. Keyboard focus still shows the ring (`CartesianChartFrame`).
 
 **Enabled on:** `BankBalancesWidget`, `ForecastInner`, `ForecastInnerRolling`, `PortfolioPage` (value hero, by broker and relative performance), `NetWorthChart`, `WatchlistChartDialog` (price), `MarketLookupPage` (price), `ResearchComparePage`, `ChartBuilderPage` (main `ComposedChart`) and `PortfolioForecastPage`. Statistics flow charts (monthly net, category trends, custom charts), the chart builder oscillator and AI chat tool charts stay off.

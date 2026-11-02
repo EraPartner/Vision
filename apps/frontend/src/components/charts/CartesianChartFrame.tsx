@@ -5,6 +5,7 @@ import {
     type FocusEventHandler,
     type KeyboardEventHandler,
     type ReactNode,
+    type Ref,
     useCallback,
     useMemo,
     useRef,
@@ -111,6 +112,7 @@ interface CartesianChartFrameProps {
     readonly pointCount: number;
     readonly onKeyDown: KeyboardEventHandler<SVGSVGElement>;
     readonly onBlur: FocusEventHandler<SVGSVGElement>;
+    readonly frameRef?: Ref<SVGSVGElement> | undefined;
     /** `relative` when decorative layers are stacked under the frame. */
     readonly className?: string | undefined;
     readonly children: ReactNode;
@@ -124,11 +126,13 @@ export function CartesianChartFrame({
     pointCount,
     onKeyDown,
     onBlur,
+    frameRef,
     className,
     children,
 }: CartesianChartFrameProps) {
     return (
         <svg
+            ref={frameRef}
             // A click focuses the chart (it is a tab stop); only keyboard
             // focus draws the ring, not the browser's default outline.
             className={cn(

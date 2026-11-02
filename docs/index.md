@@ -2,9 +2,9 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-10-28
-updated: 2026-10-28
-last_modified: 2026-10-28
+date: 2026-11-02
+updated: 2026-11-02
+last_modified: 2026-11-02
 tags:
   [
     knowledge-base,
@@ -314,7 +314,7 @@ See [[docs/adr/072-electron-native-desktop-integration|ADR-072]], [[docs/archite
 **18-item Premium v3 batch** adding hero numbers, chart interactivity, and a GPU effects gate:
 
 - **Numbers as hero**: `RollingNumber` (odometer digit reels, reduced-motion → plain span) replaces count-up in StatCard/NetSummaryCard. `Money` micro-typography (raised symbol, de-emphasized decimals) in transactions table + dashboard. `DeltaPill` standardized tinted chip in StatCard.
-- **Chart interactions**: `scrubbable` prop + `scrub.tsx` (`useChartScrub`) — pointer-drag range shows glass Δ pill, suppresses tooltip. `syncId` prop + `ChartSyncContext.tsx` — dashboard time-series share `syncId="dashboard-timeline"`. Sweep reveal on AreaChart clipPath. `ChartSkeleton` ghost waveform replaces rectangle skeletons.
+- **Chart interactions**: `scrubbable` prop + `scrub.ts` (`useChartScrub`) — pointer-drag range shows glass Δ pill, suppresses tooltip. `syncId` prop + `ChartSyncContext.tsx` — dashboard time-series share `syncId="dashboard-timeline"`. Sweep reveal on AreaChart clipPath. `ChartSkeleton` ghost waveform replaces rectangle skeletons.
 - **Navigation**: `PageTitleContext` large-title collapse (topbar shows page title past 96px scroll). Palette v2 — recents (`vision.palette.recents`, excluded from backups), debounced recipient search deep-link, "search transactions for X". `ShortcutsOverlay` (`?` key). Animated `tabs.tsx` framer `layoutId` pill indicator.
 - **Materials**: Workspace-aware aurora (`data-workspace` hue swap). Light-mode paper & ink token pass. (A cursor-specular sheen was tried and removed same-day at user request.)
 - **Visual-effects gate** (originally an `enhancedEffects` boolean; superseded by the ADR-075 tier model on 2026-06-12): `AppSettings.visualEffects: 'reduced' | 'standard' | 'enhanced'` + `autoAdaptDisplay: boolean` in **Settings → Appearance**. Gates `ShaderAurora` at `enhanced`; auto-adapt drops to `reduced` on large displays. See [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075]].
