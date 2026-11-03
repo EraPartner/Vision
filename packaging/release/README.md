@@ -20,7 +20,7 @@ replace user data.
 
 ## Requirements
 
-- macOS 12 Monterey or newer
+- macOS 13 Ventura or newer
 - Apple Silicon
 - Enough free disk space for the application, private PostgreSQL cluster, attachments, and backups
 - An internet connection only when downloading Vision or using an integration that itself needs it
@@ -49,10 +49,23 @@ is the offline integrity check; the attestation binds an artifact to Vision's re
 1. Open `Vision-__VERSION__-arm64.dmg`.
 2. Drag `Vision.app` to `/Applications`.
 3. Eject the disk image.
-4. Right-click `/Applications/Vision.app`, select **Open**, then confirm **Open**.
+4. Open `/Applications/Vision.app` once, as described below.
 
-The one-time right-click is expected while releases use an ad-hoc signature instead of an Apple
-Developer ID. Later launches can use a normal double-click.
+Releases use an ad-hoc signature instead of an Apple Developer ID, so macOS blocks the first
+launch. Allow it once; later launches can use a normal double-click.
+
+**macOS 15 Sequoia and newer**
+
+1. Double-click `/Applications/Vision.app`. macOS reports that it could not verify Vision. Click
+   **Done**.
+2. Open **System Settings → Privacy & Security** and scroll to **Security**.
+3. Next to the message that Vision was blocked, click **Open Anyway** and confirm with your password
+   or Touch ID.
+4. Click **Open Anyway** in the dialog that follows.
+
+**macOS 13 Ventura and macOS 14 Sonoma**
+
+Right-click `/Applications/Vision.app`, select **Open**, then confirm **Open**.
 
 ### 3. First launch
 
@@ -113,12 +126,12 @@ performing a rollback.
 
 ## Troubleshooting
 
-| Symptom                                                              | Action                                                                                             |
-| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| **Vision cannot be opened because the developer cannot be verified** | Right-click `Vision.app`, select **Open**, then confirm **Open**.                                  |
-| **Vision reports a corrupt or wrong-version native runtime**         | Reinstall the same Vision release. Do not bypass the check with an unknown PostgreSQL server.      |
-| **Native PostgreSQL port is in use**                                 | Stop the unrelated listener on port `54329`, or use the documented development-only port override. |
-| **Backend does not become ready**                                    | Open Vision logs from the recovery screen and inspect `postgres.log` and `backend.log`.            |
+| Symptom                                                      | Action                                                                                             |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| **macOS could not verify Vision**                            | Allow the first launch once, as described in [Install the app](#2-install-the-app).                |
+| **Vision reports a corrupt or wrong-version native runtime** | Reinstall the same Vision release. Do not bypass the check with an unknown PostgreSQL server.      |
+| **Native PostgreSQL port is in use**                         | Stop the unrelated listener on port `54329`, or use the documented development-only port override. |
+| **Backend does not become ready**                            | Open Vision logs from the recovery screen and inspect `postgres.log` and `backend.log`.            |
 
 ## Uninstall
 

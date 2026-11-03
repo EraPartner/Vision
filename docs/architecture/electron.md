@@ -556,8 +556,10 @@ If updating the icon, regenerate `.icns` from `.svg` using an asset pipeline too
 
 - **Current**: Ad-hoc unsigned (no Developer ID certificate)
 - **Suitable for**: Personal/local use, internal distribution
-- **First launch**: macOS Gatekeeper prompts "Cannot be verified"; user can:
-  - Right-click → "Open"
+- **Minimum macOS**: 13 Ventura (`LSMinimumSystemVersion` 13.0 in the packaged `Info.plist`)
+- **First launch**: macOS Gatekeeper blocks the unverified app once; user can:
+  - macOS 15 and newer: System Settings → Privacy & Security → "Open Anyway" (right-click → "Open" no longer bypasses Gatekeeper)
+  - macOS 13 and 14: Right-click → "Open"
   - Or: `xattr -dr com.apple.quarantine /Applications/Vision.app`
 - **For production**: Acquire Developer ID, set `mac.signingIdentity` + `mac.notarize` in electron-builder config
 
