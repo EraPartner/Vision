@@ -404,7 +404,8 @@ describe("loadLatestHistoricalPointByInvestmentIds", () => {
 
     const byId = await loadLatestHistoricalPointByInvestmentIds([7, 7, 9]);
 
-    expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([[7, 9]]);
+    // The ids bind as one JSON array (json_each); 1 is the newest-row rank.
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual(["[7,9]", 1]);
     expect(byId.get(7)).toMatchObject({ price: 12.5 });
   });
 

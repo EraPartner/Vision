@@ -45,8 +45,6 @@ const PS = `
   102   100  307200   2:00.00 /Applications/Vision.app/Contents/Frameworks/Vision Helper (Renderer).app/Contents/MacOS/Vision Helper (Renderer) --type=renderer
   103   100   51200   0:01.00 /Applications/Vision.app/Contents/Frameworks/Vision Helper.app/Contents/MacOS/Vision Helper --type=utility --utility-sub-type=network.mojom.NetworkService
   104   100   81920   0:10.00 /Applications/Vision.app/Contents/Resources/resources/native-runtime/vision-backend
-  105   100   40960   0:05.00 /Applications/Vision.app/Contents/Resources/resources/native-runtime/postgres/bin/postgres -D /x -p 5433
-  106   105   10240   0:01.00 postgres: checkpointer
   200     1  512000   5:00.00 /Applications/Ollama.app/Contents/Resources/ollama serve
   201   200 4096000  10:00.00 /Applications/Ollama.app/Contents/Resources/ollama runner --model x
   300     1   20480  50:00.00 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
@@ -55,28 +53,35 @@ const PS = `
 
 void test("classifies Vision, runtime, Ollama and WindowServer processes", () => {
   const rows = parsePsOutput(PS);
-  assert.equal(rows.length, 11);
-  const roles = classifyProcesses(rows, {
-    mainPid: 100,
-    backendPid: 104,
-    postgresPid: 105,
-  });
+  assert.equal(rows.length, 9);
+  const roles = classifyProcesses(rows, { mainPid: 100, backendPid: 104 });
   assert.deepEqual(Object.fromEntries([...roles].sort((a, b) => a[0] - b[0])), {
     100: "main",
     101: "gpu",
     102: "renderer",
     103: "network",
     104: "backend",
-    105: "postgres",
-    106: "postgres",
     200: "ollama",
     201: "ollama",
     300: "windowserver",
   });
-  // Without pid files the runtime children are recognised by executable name.
+  // Without the pid file the backend is recognised by its executable name.
   const fallback = classifyProcesses(rows, { mainPid: 100 });
   assert.equal(fallback.get(104), "backend");
-  assert.equal(fallback.get(105), "postgres");
+  // PostgreSQL has no role of its own: under the app it is "other" like any
+  // unknown child, and outside the app it is left out like any unrelated one.
+  const stray = parsePsOutput(`${PS}
+  500   100   40960   0:05.00 /Applications/Vision.app/Contents/Resources/resources/native-runtime/postgres/bin/postgres -D /x
+  501     1   40960   0:05.00 /opt/homebrew/opt/postgresql@18/bin/postgres -D /y
+`);
+  const strayRoles = classifyProcesses(stray, {
+    mainPid: 100,
+    backendPid: 104,
+  });
+  assert.deepEqual(
+    [strayRoles.get(500), strayRoles.get(501)],
+    ["other", undefined],
+  );
 });
 
 void test("computes CPU % from CPU-time deltas and sums app roles", () => {
@@ -88,18 +93,14 @@ void test("computes CPU % from CPU-time deltas and sums app roles", () => {
         ? { ...row, cpuSeconds: row.cpuSeconds + 1 }
         : row,
   );
-  const roles = classifyProcesses(after, {
-    mainPid: 100,
-    backendPid: 104,
-    postgresPid: 105,
-  });
+  const roles = classifyProcesses(after, { mainPid: 100, backendPid: 104 });
   const summary = summarizeRoles(after, roles, { before, wallSeconds: 10 });
   assert.equal(summary.renderer?.cpuPercent, 50);
   assert.equal(summary.gpu?.cpuPercent, 10);
   assert.equal(summary.appTotal?.cpuPercent, 60);
-  assert.equal(summary.appTotal.processes, 7);
-  assert.equal(summary.postgres?.rssMb, 50);
+  assert.equal(summary.appTotal.processes, 5);
   assert.equal(summary.ollama?.processes, 2);
+  assert.equal(summary.ollama.rssMb, 4500);
 });
 
 void test("reads top's MEM footprint column", () => {
@@ -350,9 +351,9 @@ void test("spread and off/on comparison only claim differences beyond noise", ()
 void test("footprint output gives per-process and shared-once totals", () => {
   const text = `
 ======================================================================
-postgres [200]: 64-bit    Footprint: 140 MB (16384 bytes per page)
+vision-backend [200]: 64-bit    Footprint: 140 MB (16384 bytes per page)
 ======================================================================
-postgres [201]: 64-bit    Footprint: 12.5 MB (16384 bytes per page)
+vision-apple-ai [201]: 64-bit    Footprint: 12.5 MB (16384 bytes per page)
 ======================================================================
 Summary Footprint: 145 MB
 `;

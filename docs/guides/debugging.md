@@ -2,7 +2,7 @@
 title: Error Handling & Debugging Guide
 type: guide
 status: active
-date: 2026-10-28
+date: 2026-11-03
 tags: [debugging, error-handling, troubleshooting, developer-guide]
 description: Comprehensive guide to error handling patterns, debugging techniques, and common failure modes in Vision
 aliases:
@@ -27,7 +27,7 @@ related_code:
 ### Backend Error Flow
 
 ```
-Request → Validation Middleware → Route Handler → Service → Repository → PostgreSQL
+Request → Validation Middleware → Route Handler → Service → Repository → SQLite
               ↓                      ↓               ↓          ↓
          ValidationError        Route Error     Service Error  DB Error
               ↓                      ↓               ↓          ↓
@@ -163,26 +163,20 @@ bun vitest run tests/currencyConversionService.test.ts
 bun vitest run tests/deduplication.test.ts
 ```
 
-#### 4. Check PostgreSQL Connection
+#### 4. Check the Database
 
 ```bash
-# Create an isolated migrated database and run the migrator suite
-bun run test:db tests/migrate.db.test.ts
+# The migration runner suite, on its own copy of the migrated SQLite template
+cd apps/node-backend
+bun vitest run tests/database/migrations.test.ts
 ```
 
-Managed native PostgreSQL runtimes preload and install `pg_stat_statements`. For a query-level
-performance sample, run this as a
-database owner or another role allowed to inspect the statistics view:
-
-```sql
-SELECT calls, total_exec_time, mean_exec_time, rows, query
-FROM pg_stat_statements
-ORDER BY total_exec_time DESC
-LIMIT 20;
-```
-
-The view contains normalized statement text and aggregate timings since the
-last statistics reset. Treat it as diagnostic evidence, not application data.
+There is no database server to check: the backend opens the SQLite file itself
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). For query performance, the backend logs
+every statement that takes longer than 1 s as `Slow query (<ms>ms): <sql>`. Set `DB_ECHO=true` to
+log every statement with its time at debug level. `getStatementStats()` in
+`database/connection.ts` keeps per-statement call counts and timings since the backend started.
+Treat them as diagnostic evidence, not application data.
 
 ### Frontend Debugging
 
@@ -247,19 +241,19 @@ ipcMain.on("channel-name", (event, data) => {
 **Symptoms:**
 
 - Backend fails to start
-- "Connection refused" errors in logs
+- `Failed to open the database at <path>` in the log
 
 **Causes:**
 
-- PostgreSQL not running
-- Wrong connection credentials in `.env.local`
-- Port conflict
+- `VISION_DATABASE_PATH` names a file or directory the backend cannot open or create
+- The system SQLite is older than 3.39.0 (the backend refuses to start)
+- The migration runner refused the database (no ledger, migrated by a newer Vision, or a changed
+  migration checksum)
 
 **Resolution:**
 
-```bash
-bun run test:db
-```
+- Read the first error in the backend log
+- Run `bun run db:status` with the same `VISION_DATABASE_PATH`
 
 ### 2. Import Failures
 
@@ -308,8 +302,8 @@ bun run test:db
 
 **Causes:**
 
-- View refresh failed or was skipped
-- CONCURRENTLY refresh blocked
+- The summary-table refresh failed or was skipped (the tables keep their previous contents)
+- A long write transaction held the single writer
 
 **Resolution:**
 

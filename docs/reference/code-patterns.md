@@ -2,9 +2,9 @@
 title: Code Patterns Reference
 type: reference
 status: active
-date: 2026-11-02
-updated: 2026-11-02
-tags: [reference, patterns, conventions, code-style, backend, frontend, delete-responses, http-204, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026, skin-v2, feature-flag, css-scoping, unlayered-css, visual-skin, theming, inline-token-constraint, adr-104, wire-casing, snake-case, api-casing, database-naming, enum-discipline, check-constraints, chk-uq-idx]
+date: 2026-11-03
+updated: 2026-11-03
+tags: [reference, patterns, conventions, code-style, backend, frontend, delete-responses, http-204, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, sqlite, single-writer, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026, skin-v2, feature-flag, css-scoping, unlayered-css, visual-skin, theming, inline-token-constraint, adr-104, wire-casing, snake-case, api-casing, database-naming, enum-discipline, check-constraints, chk-uq-idx]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via an indexable semi-join (Phase Q; rewritten from the original scalar-subquery OR shape), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils cross-workspace package (@vision/shared-utils) consolidates money, slugify, and shared portfolio calculations; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards, including current table/form/callout/dialog-nested Card instances; old ~6-surface-per-viewport limit superseded; an explicit opaque exception uses a plain bordered bg-card container instead of Card. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule. July 2026: wire casing convention — snake_case is the request/response body contract, translated to camelCase at the route edge; ai/savedCharts/crossWorkspace/admin-dbEditor requests plus marketLookup and import-rollback responses are grandfathered camelCase; dual-accept (`x_y ?? xY`) is banned.
 aliases: [code patterns, coding patterns, conventions, patterns, delete response pattern, 204 no content, delete convention, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection, shared-utils, workspace, plural, tc, scoped-skin-behind-a-flag-pattern-adr-104, skin-v2 pattern, visual skin flag, unlayered css pattern, inline token constraint, wire casing convention, snake_case bodies, api casing, camelCase grandfathered routers, database naming, enum discipline, text plus check, constraint naming, index naming, chk prefix, uq prefix, idx prefix]
 ---
@@ -131,7 +131,7 @@ This eliminates the prior frontend/backend money-rounding drift that was caused 
 
 For rendered frontend values, use `components/shared/Money.tsx` after calculation. Pass raw negative/positive deltas with `signed`; pass an explicit currency when the amount is native or already converted. Keep `useCurrencyFormatter` for APIs that require a string, such as translated interpolation, chart ticks/tooltips, input placeholders, titles, and ARIA text.
 
-All monetary calculations must use Decimal.js to eliminate IEEE 754 floating-point drift. JavaScript's native `number` type cannot exactly represent 0.1 + 0.2 (results in 0.30000000000000004). Vision's calculation helper uses banker's rounding (HALF_EVEN). PostgreSQL `NUMERIC` rounds ties away from zero when reducing scale; this is a different boundary contract.
+All monetary calculations must use Decimal.js to eliminate IEEE 754 floating-point drift. JavaScript's native `number` type cannot exactly represent 0.1 + 0.2 (results in 0.30000000000000004). Vision's calculation helper uses banker's rounding (HALF_EVEN). The database's decimal functions (`vision_numeric`, `dec_round`) round ties away from zero when reducing scale ([[docs/reference/sqlite-sql-dialect|SQLite dialect]]); this is a different boundary contract.
 
 > [!note] Banker's Rounding is Now Canonical (June 2026)
 > `roundMoney` uses `ROUND_HALF_EVEN` (banker's rounding). This was `ROUND_HALF_UP` prior to June 2026. Preserve that calculation contract. When comparing identity against a stored `NUMERIC(18,4)` ledger amount, normalize to four places with ties away from zero, as manual deduplication does. Do not assume the helper's rounding mode matches database scale coercion. The historical ADR-069 statement about the database default is superseded by this correction.
@@ -647,7 +647,7 @@ complete entity repository in this shape.
 
 `query<R>()` trusts its generic, and without one its rows are `unknown`. A new read whose rows are
 used runs through `queryRows` or `queryOne` with a row schema instead, so the rows are checked
-against what node-postgres really returns ([[docs/adr/193-zod-runtime-contracts|ADR-193]],
+against what the SQLite driver really returns ([[docs/adr/193-zod-runtime-contracts|ADR-193]],
 [[docs/adr/194-runtime-contracts-completion|ADR-194]]):
 
 ```ts
@@ -663,7 +663,8 @@ const account = await checkedRow( // first row or undefined
 );
 const row = await checkedRow(
   countRowSchema,
-  db.selectFrom("accounts").select(sql<string>`COUNT(*)`.as("count")),
+  // An expression column has no declared type: the alias hint makes the driver read it as BIGINT.
+  db.selectFrom("accounts").select(sql<string>`COUNT(*)`.as("count::bigint")),
 );
 return parseInt(requireRow(row, "account count").count, 10);
 ```
@@ -674,9 +675,9 @@ SQL uses the `sql` tag, and `queryRows`/`queryOne` remain for SQL strings that s
 | Rule             | Detail                                                                                                                                                                              |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Schema location  | Add the schema to the area module `database/rows/<area>.ts` (`admin`, `ai`, `analysis`, `catalog`, `imports`, `info`, `ledger`, `portfolio`, `portfolioImport`), importing the `pg*` primitives from `database/rowSchemas.ts`. Export the row type as `z.output<typeof schema>` next to it (re-export it from `types/rows.ts` when other layers use it), so the type and the check cannot drift. |
-| pg default types | Use the `pg*` primitives: `pgNumeric`/`pgBigint` are strings, `pgDate`/`pgTimestamptz` are `Date`, `pgInt` is a number. No global type parsers are installed.                        |
+| Driver types     | Use the `pg*` primitives: `pgNumeric`/`pgBigint` are strings, `pgDate`/`pgTimestamptz` are `Date`, `pgInt` is a number. The SQLite driver converts a column by its declared type and an expression by its alias hint (`AS "n::bigint"`, `::bool`, `::json`, `::timestamptz`, `::date`), so rows keep the shapes node-postgres returned ([[docs/reference/sqlite-sql-dialect#Expression columns\|dialect]]). |
 | Branded columns  | Entity ids and currency columns use the branded keys (`pgAccountId`, `pgCategoryId`, …, `pgCurrency`), which brand input and output alike so the schema stays check-only ([[docs/adr/220-branded-ids-currency-codes-and-money|ADR-220]]). |
-| Check only       | A `RowSchema<T>` has the same input and output type, so coercions and transforms do not compile. Callers get the exact objects pg returned, extra columns included.                   |
+| Check only       | A `RowSchema<T>` has the same input and output type, so coercions and transforms do not compile. Callers get the exact objects the driver returned, extra columns included.          |
 | Columns          | Plain `z.object` ignores unlisted columns, so `SELECT t.*` keeps working after a migration adds one. `.optional()` marks a column only some projections select; `.nullable()` marks SQL NULL. |
 | Transactions     | Pass the `client` as the fourth argument inside `withTransaction`.                                                                                                                  |
 | Mismatch         | Never a 400. Tests and development throw `RowContractError` (a 500). Other environments follow `PRODUCTION_DATA_CONTRACT_MODE` in `lib/dataContract.ts`, which is `"throw"`: the owner chose to block (2026-10-09), so production fails the request too. Messages carry column paths and type names, never values. |
@@ -1612,7 +1613,7 @@ Centralized error-handling middleware with typed error classes. Routes throw typ
 
 ### Handling Missing Tables (Schema Evolution, 2026-04-26)
 
-When a table or column may not exist in older schema versions, use PostgreSQL error code `42P01` (undefined_table) to gracefully handle the missing table:
+When a table or column may not exist in older schema versions, use SQLSTATE `42P01` (undefined_table) to gracefully handle the missing table. The SQLite driver translates SQLite's `no such table` error into this code ([[docs/reference/sqlite-sql-dialect#Errors|SQLite dialect: errors]]):
 
 ```js
 try {
@@ -1641,7 +1642,7 @@ try {
 **Rationale:**
 
 - Services must work across multiple schema versions during gradual migrations
-- PostgreSQL error code 42P01 = "undefined table"
+- SQLSTATE 42P01 = "undefined table" (SQLite: `no such table`)
 - Only this error is expected and silenced; other errors are logged for visibility
 - Fallback logic is executed when table is missing
 
@@ -1785,7 +1786,7 @@ const where = buildTransactionWhere({
   startDate: "2026-01-01",
   endDate: "2026-12-31",
   categoryId: 5,
-  bankAccount: "CH93", // ILIKE substring
+  bankAccount: "CH93", // case-insensitive substring, ilike()
   active: true,
 });
 const excl = exclusionClauses({ excludedCategoryIds: [10, 11], excludedRecipientIds: [20] });
@@ -1823,7 +1824,7 @@ bookkeeping:
 
 | Function                           | Purpose                                                                                                                                                                                                                    |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `validateInt4Ids(ids, fieldName?)` | Validate a list of PostgreSQL INT4 IDs. **Rejects, does not filter** — throws `ValidationError` if any element is not a plain digit string or integer number in `1..2^31-1`. Nullish input means "no ids" and returns `[]` |
+| `validateInt4Ids(ids, fieldName?)` | Validate a list of INT4-range IDs. **Rejects, does not filter** — throws `ValidationError` if any element is not a plain digit string or integer number in `1..2^31-1`. Nullish input means "no ids" and returns `[]` |
 | `buildTransactionWhere(opts)`      | Build full transaction WHERE clause with all filters; includes `recipientGroupId` support (Phase Q)                                                                                                                        |
 | `exclusionClauses(opts)`           | Dashboard/info exclusion predicates (category descendants under the effective category, primary-recipient groups) with their `r`/`pr` joins                                                                                 |
 
@@ -2066,13 +2067,13 @@ router.get('/monthly-summary', async (req, res) => {
 
 ### Source Heuristic
 
-The `meta.source` field indicates whether the response was served from a materialized view or computed live.
+The `meta.source` field indicates whether the response was served from a summary table (the former materialized view) or computed live.
 
 **Rules:**
 
 1. **Unfiltered request** → `'mv'`
    - No `excluded_category_ids[]`, no `excluded_recipient_ids[]`
-   - Fast, from materialized view (stale by ~15 min)
+   - Fast, from the summary table (stale until its next refill)
    - Safe for dashboard-level aggregations
 
 2. **Filtered request** → `'live'`
@@ -2147,7 +2148,7 @@ function DashboardStatCards() {
 
 **Source:** [[apps/node-backend/src/services/aggregationRefresh.ts|aggregationRefresh.ts]]
 
-Single entrypoint for refreshing PostgreSQL aggregations (materialized views + trigger-maintained tables).
+Single entrypoint for refreshing the aggregation layer: the two summary tables that replaced the PostgreSQL materialized views (`mv_monthly_summary`, `mv_category_totals`), plus a record of the trigger-maintained table.
 
 ### Bulk Import Tail
 
@@ -2169,7 +2170,7 @@ scheduleMaterializedViewRefresh(); // Five-second trailing debounce, ten-second 
 **What it does:**
 
 - Keeps forecast cache invalidation synchronous with import completion
-- Schedules the two managed MVs without blocking the response
+- Schedules the refill of the two summary tables without blocking the response
 - No-op for trigger-maintained tables (automatic updates)
 
 ### Debounced Refresh (Single-Row Mutations)
@@ -2192,7 +2193,7 @@ app.patch("/api/transactions/:id", async (req, res) => {
 
 **Behavior:**
 
-- Coalesces rapid changes into one MV refresh (five-second trailing debounce, ten-second cap)
+- Coalesces rapid changes into one summary-table refill (five-second trailing debounce, ten-second cap)
 - Fire-and-forget (doesn't block response)
 - Triggers maintain `agg_split_outstanding` automatically
 
@@ -2211,50 +2212,28 @@ aggregationService.scheduleAggregationRefresh();
 
 ## Trigger-Maintained Aggregation Tables
 
-**Source:** `0035_add_recipient_aggregations` (consolidated baseline; originally introduced in legacy 0026)
+**Source:** `db/migrations/0001_baseline.sql` (the SQLite baseline,
+[[docs/adr/263-sqlite-replaces-postgresql|ADR-263]])
 
-Two tables kept in sync via row-level PostgreSQL triggers. Never require refresh from application code.
-
-### agg_recipient_totals
-
-Running all-time totals per recipient per currency.
-
-**PK:** `(recipient_id, currency)`
-
-**Automatic Updates:** Via `fn_agg_recipient_totals_sync()` trigger on `transactions` (AFTER INSERT/UPDATE/DELETE)
-
-**Important:** Do NOT query inside transaction handlers before triggers fire. If you need fresh totals within the same request, refetch after the transaction commits or read from the MV instead.
-
-```js
-// ❌ WRONG: Trigger hasn't fired yet
-const txn = await query("INSERT INTO transactions (...) RETURNING *");
-const totals = await query(
-  "SELECT * FROM agg_recipient_totals WHERE recipient_id = $1",
-  [txn.recipient_id],
-);
-// totals is stale
-
-// ✓ CORRECT: Read after transaction commits or fetch in separate query
-const txn = await query("INSERT INTO transactions (...) RETURNING *");
-// Now (after transaction commit) the trigger has fired
-const totals = await query(
-  "SELECT * FROM agg_recipient_totals WHERE recipient_id = $1",
-  [txn.recipient_id],
-);
-```
+One table, `agg_split_outstanding`, is kept in sync by SQLite `AFTER ... FOR EACH ROW` triggers. It
+never needs a refresh from application code. (`agg_recipient_totals` was dropped in migration 0080,
+before the SQLite baseline.)
 
 ### agg_split_outstanding
 
-Outstanding balance per split (original minus paid).
+Outstanding balance per split (original minus paid), in `DECIMAL_TEXT(18,4)` columns computed with
+`dec_sub` and `dec_sum`.
 
 **PK:** `split_id`
 
-**Automatic Updates:** Via two triggers:
+**Automatic Updates:** Via two trigger families:
 
-- `fn_trg_split_sync()` on `transaction_splits`
-- `fn_trg_split_payment_sync()` on `split_payments`
+- `trg_split_outstanding_sync__insert`, `__update` and `__delete` on `transaction_splits`
+- `trg_split_payment_outstanding_sync__insert`, `__update` and `__delete` on `split_payments`
 
-**Same caveat:** Triggers fire at transaction commit. If you need immediately-fresh outstanding balances within the request, compute manually instead of reading the aggregate.
+**Timing:** A SQLite trigger runs inside the statement that fires it. A read after that statement,
+in the same transaction or later, sees the updated row. `RETURNING` does not see what an `AFTER`
+trigger writes ([[docs/reference/sqlite-sql-dialect#Statements|SQLite dialect: statements]]).
 
 ```js
 // After split_payments insert:
@@ -2262,7 +2241,7 @@ const payment = await query(
   "INSERT INTO split_payments (split_id, amount) VALUES (...) RETURNING *",
 );
 
-// The trigger has now fired. Safe to read:
+// The trigger ran inside the INSERT. Safe to read:
 const outstanding = await query(
   "SELECT outstanding_amount FROM agg_split_outstanding WHERE split_id = $1",
   [payment.split_id],
@@ -2274,28 +2253,31 @@ const outstanding = await query(
 1. **Document trigger-maintained aggregates** — Add a comment in code that reads them:
 
    ```js
-   // Reads agg_recipient_totals; maintained by fn_agg_recipient_totals_sync trigger
-   const result = await query("SELECT * FROM agg_recipient_totals WHERE ...");
+   // Reads agg_split_outstanding; maintained by the trg_split_*_outstanding_sync triggers
+   const result = await query("SELECT * FROM agg_split_outstanding WHERE ...");
    ```
 
 2. **Never manually INSERT/UPDATE trigger tables** — Writes bypass triggers and create inconsistency. The triggers are the source of truth.
 
-3. **Verify triggers are enabled** — If aggregates look stale:
+3. **Verify triggers exist** — If aggregates look stale, list them (SQLite has no per-trigger
+   enable flag; a trigger exists or it does not):
 
    ```sql
-   SELECT tgname, tgenabled FROM pg_trigger
-   WHERE tgrelid = 'transactions'::regclass
-   AND NOT tgisinternal;
+   SELECT name FROM sqlite_schema
+    WHERE type = 'trigger' AND tbl_name IN ('transaction_splits', 'split_payments')
+    ORDER BY name;
    ```
 
-4. **Test trigger firing in DB-backed tests** — Use the `hasTestDatabase()` gate:
+4. **Test trigger firing in DB-backed tests** — every test file has its own migrated SQLite
+   database, so these tests always run:
    ```js
-   import { hasTestDatabase, getTestPool } from "./setup/db.ts";
+   import { getTestPool, resetTestDatabase } from "./setup/db.ts";
 
-   describe.skipIf(!hasTestDatabase())("trigger-maintained tables", () => {
-     it("syncs agg_recipient_totals on insert", async () => {
+   describe("trigger-maintained tables", () => {
+     beforeEach(() => resetTestDatabase());
+     it("syncs agg_split_outstanding on payment insert", async () => {
        const pool = getTestPool();
-       // Insert transaction, verify agg_recipient_totals updated
+       // Insert split and payment, verify agg_split_outstanding updated
      });
    });
    ```
@@ -2306,11 +2288,11 @@ const outstanding = await query(
 
 **Source:** [[apps/node-backend/src/repositories/infoRepositoryHelpers.ts|infoRepositoryHelpers.ts]]
 
-When querying PostgreSQL materialized views that may not exist or may be empty (e.g., during post-listen creation or after migrations), use the `mvAvailable(viewName)` helper with allowlist validation and a short cache for both outcomes.
+When querying the summary tables `mv_monthly_summary` and `mv_category_totals` (the former PostgreSQL materialized views), use the `mvAvailable(viewName)` helper with allowlist validation and a short cache for both outcomes. The tables exist from the SQLite baseline but stay empty until the post-listen refill, and the helper also returns `false` when the query fails ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]).
 
 ### Problem
 
-Without caching, checking view existence on every request produces N+1 round-trips under load. Schema migrations may create views asynchronously, and fresh deployments need time to build the first view. Without negative caching, missing views trigger repeated DB queries.
+Without caching, checking the tables on every request produces N+1 round-trips under load. A fresh database needs time for the first refill. Without negative caching, empty tables trigger repeated DB queries.
 
 ### Solution
 
@@ -2333,11 +2315,11 @@ if (isCategoryTotalsAvailable) {
 
 ### Key Features
 
-1. **Allowlist validation:** View names are pinned in `ALLOWED_MV_NAMES` set (e.g., `'mv_category_totals'`, `'mv_monthly_summary'`) to prevent SQL injection if names ever come from user input.
+1. **Allowlist validation:** Table names are pinned in the `ALLOWED_MVS` map (e.g., `'mv_category_totals'`, `'mv_monthly_summary'`) to prevent SQL injection if names ever come from user input.
 
-2. **Positive caching (60s TTL):** If a view exists and has rows, the result is cached briefly. Expiry lets a runtime drop self-heal instead of routing every later request to a missing relation.
+2. **Positive caching (60s TTL):** If a table has rows, the result is cached briefly. Expiry lets a later empty or failing read self-heal instead of routing every later request to an unusable table.
 
-3. **Negative caching (60s TTL):** If a view is missing or empty, the result is cached for 60 seconds. This avoids DB round-trips for missing views on every request, but recovers quickly when a view is created.
+3. **Negative caching (60s TTL):** If a table is empty or the query fails, the result is cached for 60 seconds. This avoids DB round-trips on every request, but recovers quickly after the first refill.
 
 4. **Cache clearing:** `clearMvCache()` is a test-reset seam. Production callers rely on the bounded TTL; mutation refreshes clear statistics result caches, not the availability probe.
 
@@ -2500,8 +2482,9 @@ writeHeader?.(res);
 
 let cursor: { date: string; id: number } | undefined;
 while (true) {
+  // `t.date` is DATE_TEXT ('YYYY-MM-DD'), so the bound day string compares correctly as text.
   const keyset = cursor
-    ? sql`AND (t.date, t.id) > (${cursor.date}::date, ${cursor.id}::bigint)`
+    ? sql`AND (t.date, t.id) > (${cursor.date}, ${cursor.id})`
     : sql``;
   const chunk = await run(sql`
     SELECT t.id, t.date, ... ${EXPORT_JOINS_SQL}
@@ -2727,86 +2710,30 @@ const query = buildQuery({
 
 **Source:** [[apps/node-backend/src/services/importPipeline/index.ts|importPipeline/index.ts]], [[apps/node-backend/src/services/importPipeline/validate.ts|validate.ts]], [[apps/node-backend/src/services/importPipeline/commit.ts|commit.ts]]
 
-> [!info] Phase C Refactor
-> Import batch concurrency was consolidated into the unified `importPipeline` orchestrator (Phase C, April 2026). The pattern remains unchanged; the three legacy services are deprecated.
+> [!note] No pool-derived concurrency since ADR-263
+> The backend has one writer connection and one reader connection, not a connection pool
+> ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` and the
+> pool-derived `IMPORT_BATCH_SIZE` no longer exist.
 
-For bulk CSV imports, rows are processed in adaptive concurrent batches to balance throughput against database pool constraints. Concurrency is derived from the pool configuration, not hardcoded, to remain safe across different deployment pool sizes.
-
-### Pattern
-
-```js
-// At module scope (import time, not per-request)
-// Derive from DB pool config: ensure at least half the pool remains available for other requests
-const _poolMax = Math.max(
-  parseInt(process.env.DB_POOL_SIZE, 10) || 5,      // Default: 5
-  parseInt(process.env.DB_MAX_OVERFLOW, 10) || 10,  // Default: 10
-);
-const IMPORT_BATCH_SIZE = Math.max(2, Math.floor(_poolMax / 2));
-// With stock settings (poolMax=10): IMPORT_BATCH_SIZE=5
-// With custom pool (poolMax=50): IMPORT_BATCH_SIZE=25
-
-// In import processing loop
-for (let i = 0; i < rows.length; i += IMPORT_BATCH_SIZE) {
-  const batch = rows.slice(i, i + IMPORT_BATCH_SIZE);
-
-  // Process batch rows in parallel (up to IMPORT_BATCH_SIZE concurrent queries)
-  const settled = await Promise.allSettled(
-    batch.map(async (row) => {
-      // Dedup check
-      const isDup = await isDuplicateByFields(row.date, row.amount, row.recipient, row.memo);
-      if (isDup) return { dup: true };
-
-      // Recipient upsert (single round-trip via INSERT ... ON CONFLICT)
-      const recipientId = await getOrCreateRecipient(row.recipient, row.account, row.address, row.bank);
-
-      return { dup: false, row: [row.date, row.amount, recipientId, ...] };
-    })
-  );
-
-  // Aggregate results
-  for (const outcome of settled) {
-    if (outcome.status === 'rejected') {
-      results.errors++;
-    } else if (outcome.value.dup) {
-      results.duplicates++;
-    } else {
-      results.imported++;
-      pendingInserts.push(outcome.value.row);
-    }
-  }
-}
-```
+The import pipeline processes staging rows one after another, in chunks. The commit stage drains
+`matched` staging rows in chunks of 1000 (`COMMIT_CHUNK` in `commit.ts`). Each chunk runs in one
+`withTransaction()` call, which is a `BEGIN IMMEDIATE` transaction on the single writer.
 
 ### Key Rules
 
-| Rule                                       | Rationale                                              |
-| ------------------------------------------ | ------------------------------------------------------ |
-| Compute concurrency from pool ceiling      | Adapts to deployment config (local dev vs. production) |
-| Use `Math.max(2, Math.floor(poolMax / 2))` | Always keep ≥50% of pool for other requests            |
-| Read env vars at module init               | Avoid per-request resolution overhead                  |
-| Default: 5 (for poolMax=10)                | Safe for single-user self-hosted deployments           |
-| Use `Promise.allSettled()` per batch       | One bad row doesn't stall the entire batch             |
-| Preserve insertion order                   | `pendingInserts` array maintains order across batches  |
+| Rule                                       | Rationale                                                         |
+| ------------------------------------------ | ----------------------------------------------------------------- |
+| One write transaction per chunk            | A failure rolls back that chunk and keeps the chunks already committed |
+| One savepoint per row                      | A bad row does not poison its valid siblings                      |
+| Do the deciding reads inside the chunk     | No other writer can run between the check and the write           |
+| Keep the unique fingerprint index          | It is the guard against two imports of the same rows              |
 
 ### When to Use
 
-- **Large CSV imports** (100+ rows) — batching prevents connection pool exhaustion
-- **Streaming imports** — backpressure from concurrent batch processing limits memory growth
-- **Multi-bank imports** — handles raw data preservation and dedup across multiple tables
-
-### Configuration
-
-```bash
-# Stock settings (recommended for local/small deployments)
-DB_POOL_SIZE=5           # Min pool size
-DB_MAX_OVERFLOW=10       # Max overflow; total poolMax=10
-# Result: IMPORT_BATCH_SIZE = Math.max(2, floor(10/2)) = 5
-
-# Production (larger pool)
-DB_POOL_SIZE=20
-DB_MAX_OVERFLOW=30       # poolMax=30
-# Result: IMPORT_BATCH_SIZE = 15 (up to 15 concurrent dedup/recipient checks)
-```
+- **Large CSV imports** (100+ rows): chunks keep each write transaction short, so other writers
+  wait less
+- **Streaming imports**: chunked processing limits memory growth
+- **Multi-bank imports**: handles raw data preservation and dedup across multiple tables
 
 ---
 
@@ -2986,9 +2913,9 @@ test("createSseWriter tracks client close", (done) => {
 
 **Source:** [[apps/node-backend/src/database/connection.ts|connection.ts]], [[apps/node-backend/src/services/recipientMergeService.ts|recipientMergeService.ts]], [[apps/node-backend/src/repositories/splitRepository.ts|splitRepository.ts]] (Phase 12 Bugfix Sweep)
 
-For complex operations spanning multiple tables (e.g., merging recipients across transactions, splits, planned transactions, and bank accounts), or for race-sensitive single-table operations (e.g., recording payments against a split with overpayment risk), use explicit transaction control with row-level locking to ensure atomicity and serialize concurrent access.
+For complex operations spanning multiple tables (e.g., merging recipients across transactions, splits, planned transactions, and bank accounts), or for race-sensitive single-table operations (e.g., recording payments against a split with overpayment risk), run every step, including the reads that decide what to write, inside one `withTransaction`. It ensures atomicity, and the single writer connection serializes concurrent access ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]).
 
-Vision is a single-user application, but the HTTP process can overlap user requests, import workers, scheduled refreshes, and other background jobs. “Single user” therefore does not mean “one database writer.” Protect cross-table invariants, entity merges, ledger pairs, and read-then-write decisions against those concurrent jobs.
+Vision is a single-user application, but the HTTP process can overlap user requests, import workers, scheduled refreshes, and other background jobs. Their transactions run one at a time on the one writer connection, but a read-then-write decision is safe only when the read and the write are in the same transaction. Protect cross-table invariants, entity merges, ledger pairs, and read-then-write decisions that way.
 
 ### Pattern
 
@@ -3004,11 +2931,11 @@ export async function complexMultiStepOperation(primaryId, aliasIds) {
 
   // Built queries run through query(), so they join the ambient transaction.
   return withTransaction(async () => {
+    // BEGIN IMMEDIATE on the single writer: no other write can interleave, so no FOR UPDATE.
     const primary = await db
       .selectFrom("primary_table")
       .select("id")
       .where("id", "=", primaryId)
-      .forUpdate()
       .executeTakeFirst();
     if (!primary) {
       throw new Error("Primary not found");
@@ -3017,7 +2944,8 @@ export async function complexMultiStepOperation(primaryId, aliasIds) {
     const step1 = await db
       .updateTable("table1")
       .set({ primary_id: primaryId })
-      .where(sql<boolean>`primary_id = ANY(${aliasIds}::int[])`)
+      // An array binds as JSON text; json_each() replaces PostgreSQL's = ANY(array).
+      .where(sql<boolean>`primary_id IN (SELECT value FROM json_each(${aliasIds}))`)
       .executeTakeFirst();
 
     await db
@@ -3027,7 +2955,7 @@ export async function complexMultiStepOperation(primaryId, aliasIds) {
         db
           .selectFrom("source_table")
           .select([sql.lit(primaryId).as("primary_id"), "unique_field", "data"])
-          .where(sql<boolean>`id = ANY(${aliasIds}::int[])`),
+          .where(sql<boolean>`id IN (SELECT value FROM json_each(${aliasIds}))`),
       )
       .onConflict((oc) => oc.columns(["primary_id", "unique_field"]).doNothing())
       .execute();
@@ -3041,14 +2969,14 @@ export async function complexMultiStepOperation(primaryId, aliasIds) {
 }
 ```
 
-`withTransaction` owns `BEGIN`, `COMMIT`, rollback, and client release. Its ambient transaction context also makes module-level `query()` calls inside the callback join the same client. A nested `withTransaction` reuses that client and receives a unique savepoint, so an inner failure can be caught without opening an independent transaction or poisoning the outer one. Nested calls must be awaited sequentially: concurrent siblings are rejected after the active savepoint settles because one PostgreSQL client cannot safely interleave savepoint lifetimes. Deeper nesting remains lexical. Pass the callback client explicitly when that makes the boundary clearer. Open transactions with `withTransaction`, never Kysely's `db.transaction()` ([[docs/adr/226-kysely-query-builder|ADR-226]]). Do not hand-roll transaction lifecycle code unless the operation needs a deliberately different protocol such as the database editor.
+`withTransaction` takes the write lock, runs `BEGIN IMMEDIATE`, and owns `COMMIT`, rollback, and lock release. Its ambient transaction context also makes module-level `query()` calls inside the callback join the same client. A nested `withTransaction` reuses that client and receives a unique savepoint, so an inner failure can be caught without opening an independent transaction or poisoning the outer one. Nested calls must be awaited sequentially: concurrent siblings are rejected after the active savepoint settles because one connection cannot safely interleave savepoint lifetimes. Deeper nesting remains lexical. Pass the callback client explicitly when that makes the boundary clearer. Open transactions with `withTransaction`, never Kysely's `db.transaction()` ([[docs/adr/226-kysely-query-builder|ADR-226]]). Do not hand-roll transaction lifecycle code unless the operation needs a deliberately different protocol such as the database editor.
 
 ### Key Conventions
 
 | Pattern            | Rule                                                                                                                                                      |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Transaction helper | Use `withTransaction`; it owns `BEGIN` / `COMMIT` / `ROLLBACK` and client release                                                                         |
-| Row locking        | Lock primary row with `FOR UPDATE` before updates to serialize concurrent access                                                                          |
+| Transaction helper | Use `withTransaction`; it owns `BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK` and the write lock                                                               |
+| Serialization      | Do the deciding reads inside the transaction. The single writer and `BEGIN IMMEDIATE` replace `FOR UPDATE` and advisory locks, which SQLite does not have; a write waits up to `VISION_DB_LOCK_TIMEOUT_MS` (60 s) for the lock, then fails with `55P03` |
 | Dependency order   | Update tables in FK dependency order (parents before children or children before parents, as FK constraints dictate)                                      |
 | Conflict dedup     | Use `INSERT ... ON CONFLICT (uk_fields) DO NOTHING` for race-safe deduplication                                                                           |
 | Error handling     | `ROLLBACK` on any error; caller receives clear error message                                                                                              |
@@ -3075,40 +3003,16 @@ Large imports may use **chunk-atomic, row-isolated, chunk-resumable** processing
 
 The alternative is not permission for arbitrary partial writes: every chunk must preserve invariants, row failures must roll back to a savepoint, and persisted counters/checkpoints must advance only after commit.
 
-### PostgreSQL Limitation: FOR UPDATE with GROUP BY
+### Locking without FOR UPDATE
 
-**Problem:** PostgreSQL does not allow combining `SELECT ... GROUP BY ... FOR UPDATE OF table_name` in a single query. Attempting this raises: `ERROR: FOR UPDATE is not allowed with GROUP BY`.
-
-**Solution:** Split into two separate queries within the same transaction:
-
-```ts
-// WRONG: PostgreSQL rejects FOR UPDATE combined with GROUP BY
-//   SELECT id FROM transactions WHERE id = $1 GROUP BY id, amount FOR UPDATE OF t
-
-// CORRECT: separate the lock from the aggregate (splitRepository.lockAndGetTotals)
-const locked = await db
-  .selectFrom("transactions")
-  .select("id")
-  .where("id", "=", transactionId)
-  .forUpdate()
-  .executeTakeFirst();
-if (!locked) throw new NotFoundError("Transaction not found");
-
-const [totals] = await checkedRows(
-  splitTotalsRowSchema,
-  sql`
-    SELECT ABS(t.amount) AS transaction_total,
-           COALESCE(SUM(ts.amount), 0) AS current_split_total
-      FROM transactions t
-      LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
-     WHERE t.id = ${transactionId}
-     GROUP BY t.id, t.amount`,
-);
-```
-
-Both queries execute within the same transaction, so atomicity is preserved: the lock acquired on the first query holds until `COMMIT`.
-
-**Used in:** [[apps/node-backend/src/services/splitService.ts]] for `createSplitAtomic()` and `createSplitsBatchAtomic()` — service orchestration asks the repository to lock the transaction row, then reads its split totals to validate allocation before insert.
+SQLite has no `SELECT ... FOR UPDATE` and no advisory locks, and Vision does not use them. Every
+transaction is `BEGIN IMMEDIATE` on the single writer connection, behind an async write lock, so a
+read inside `withTransaction` already sees the latest committed state and no other write can land
+before the transaction commits. This is what the former row locks and advisory locks protected
+([[docs/reference/sqlite-sql-dialect#Transactions and connections|SQLite dialect: transactions]]).
+The PostgreSQL rule that `FOR UPDATE` cannot be combined with `GROUP BY` therefore no longer
+applies. Aggregates over money columns inside such reads use `dec_sum`, `dec_abs` and the other
+`dec_*` functions, never native `SUM` or `ABS`.
 
 ---
 
@@ -4686,25 +4590,24 @@ timestamp. `agg_split_outstanding` follows that model; application code cannot u
 
 ### Enum-like columns: TEXT + named CHECK
 
-Every **new** enum-like column is `TEXT` with a **named** CHECK constraint listing the vocabulary. Do not create new PostgreSQL native enum types.
+Every enum-like column is `TEXT` with a **named** CHECK constraint listing the vocabulary. SQLite
+has no enum types; the SQLite baseline turned each former PostgreSQL enum (`asset_class`,
+`portfolio_txn_type`, `price_provider`, `revolut_state`, the `account_*` types) into `TEXT` with a
+`<table>_<column>__vtype` CHECK ([[docs/reference/sqlite-sql-dialect#Storage types|SQLite dialect:
+storage types]]). Ordering on such a column is text ordering; use an explicit `CASE` when the order
+matters.
 
 ```sql
--- Right
-ALTER TABLE things ADD COLUMN kind TEXT NOT NULL,
-    ADD CONSTRAINT chk_things_kind CHECK (kind IN ('alpha','beta'));
-
--- Wrong (new work)
-CREATE TYPE thing_kind AS ENUM ('alpha', 'beta');
+-- A new column with its vocabulary (ADD COLUMN may carry a column CHECK)
+ALTER TABLE things ADD COLUMN kind TEXT NOT NULL DEFAULT 'alpha'
+  CONSTRAINT chk_things_kind CHECK (kind IN ('alpha', 'beta'));
 ```
 
-Why: PG enums require `ALTER TYPE ... ADD VALUE` ceremony (non-transactional before PG 12, still awkward in migrations), **cannot drop values**, and this schema already carries dead enum values as permanent residue (`revolut_state`: 3 of its 5 values are unreachable because the Revolut adapter drops non-COMPLETED rows before insert). A named CHECK is changed with a two-statement `DROP CONSTRAINT` / `ADD CONSTRAINT` — see 0053/0068/0073/0075/0081 for the idiom.
-
-Eight active PostgreSQL enums (`asset_class`, `portfolio_txn_type`, `price_provider`,
-`revolut_state`, `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `account_owner`)
-remain. Migration 0099 is the deliberate exception that retires `recurrence_interval` from the
-active table while leaving the type itself available for legacy relations and downgrade.
-
-**Adding a CHECK to an existing table** (retrofitting a vocabulary): add it `NOT VALID`, then `VALIDATE CONSTRAINT` tolerantly inside a `DO` block that catches `check_violation` and logs a WARNING with the audit/cleanup recipe instead of bricking boot (migrations run fail-fast on app start). Precedent: 0046 → 0049, and 0089.
+Changing the vocabulary of an existing CHECK, or adding a CHECK to an existing column, needs the
+table rebuild in [[docs/guides/migrations#What ALTER TABLE can and cannot do|the migration guide]]:
+SQLite's `ALTER TABLE` cannot add, drop or change a constraint. The rebuild copies the rows into the
+new table, so a row that violates the new CHECK fails the migration, and the runner rolls the whole
+run back.
 
 **Recurrence vocabulary:** both `planned_transactions.recurrence_pattern` and active
 `portfolio_transactions.recurrence_interval` use `'biweekly'` (no hyphen). Migration 0099 rewrites
@@ -4715,7 +4618,7 @@ explicit cutoff in [[docs/adr/135-compatibility-cutoff-for-september-retirements
 
 ### Constraint & index naming
 
-Name **every** constraint and index explicitly — an anonymous inline CHECK/FK gets an auto-generated name that later migrations must discover at runtime via `pg_constraint` (this bit twice: 0015 and 0048). Canonical prefixes, aligned across the whole schema by 0090:
+Name **every** constraint and index explicitly — an anonymous inline CHECK/FK has no name an error or a later migration can refer to (in the PostgreSQL era this bit twice: 0015 and 0048). Canonical prefixes, aligned across the whole schema by 0090:
 
 | Object                            | Prefix | Example                             |
 | --------------------------------- | ------ | ----------------------------------- |
@@ -4724,7 +4627,7 @@ Name **every** constraint and index explicitly — an anonymous inline CHECK/FK 
 | Index (plain or partial)          | `idx_` | `idx_attachments_transaction_id`    |
 | Named foreign key                 | `fk_`  | `fk_asset_price_history_investment` |
 
-Not canonical (renamed away by 0090; do not reintroduce): `ck_`, `uniq_`, `ux_`, `ix_`, and suffix-style `*_idx`. Prefer `chk_<table>_<column-or-rule>` / `uq_<table>_<columns>` / `idx_<table>_<columns>`; keep names ≤ 63 chars (PostgreSQL truncates silently beyond that).
+Not canonical (renamed away by 0090; do not reintroduce): `ck_`, `uniq_`, `ux_`, `ix_`, and suffix-style `*_idx`. Prefer `chk_<table>_<column-or-rule>` / `uq_<table>_<columns>` / `idx_<table>_<columns>`; keep names ≤ 63 chars (the limit the schema kept from PostgreSQL).
 
 Known residue (pre-existing, not worth a rename until touched): the auto-named `*_key` UNIQUE constraints from 0001's inline `UNIQUE` columns (e.g. `*_deduplication_hash_key`), the explicitly-named `*_check`-suffix CHECKs (0015/0040/0059/0081), and 0001's unnamed FKs — rename any of these to the canonical prefix in the same migration that next alters them.
 

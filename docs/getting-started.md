@@ -2,7 +2,7 @@
 title: Getting Started
 type: map-of-content
 status: active
-date: 2026-10-22
+date: 2026-11-03
 tags: [getting-started, onboarding, moc, new-developer]
 description: Map of Content for new developers and AI agents to quickly navigate the Vision knowledge base
 aliases: [start here, onboarding, new dev, beginner]
@@ -21,7 +21,7 @@ Start with the [[docs/guides/setup\|Setup Guide]] to get the project running loc
 
 ```
 Setup Guide
-├── Prerequisites (Bun, Node.js, PostgreSQL 18)
+├── Prerequisites (Bun, Node.js, macOS 13+ for SQLite 3.39)
 ├── Clone & Install
 ├── Environment Variables
 ├── Database Setup
@@ -123,8 +123,7 @@ When creating new docs, use the templates:
 
 ```bash
 bun install --frozen-lockfile   # Install dependencies from the lockfile
-bun run native:prepare # Prepare the native runtime payload
-bun run dev           # Start private PostgreSQL, backend and Vite
+bun run dev           # Start the backend (SQLite file) and Vite
 bun run build         # Production build
 bun run test          # Backend Vitest suite
 bun run db:migrate    # Run database migrations

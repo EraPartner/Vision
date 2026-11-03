@@ -2,10 +2,10 @@
 title: Native macOS Runtime Guide
 type: guide
 status: active
-date: 2026-10-29
+date: 2026-11-03
 tags:
-  [guide, native-runtime, macos, electron, postgresql-18, backup, restore, demo]
-description: Build, operate, diagnose, back up, and restore Vision's bundled native macOS runtime.
+  [guide, native-runtime, macos, electron, sqlite, backup, restore, demo, transition]
+description: Build, operate, diagnose, back up, and restore Vision's bundled native macOS runtime and its SQLite database.
 aliases: [native Vision, macOS runtime]
 related_code:
   ["packaging/electron/runtime/native.ts", "packaging/electron/main.ts"]
@@ -16,53 +16,74 @@ related_code:
 > [!tip] Desktop startup and readiness
 > [Open the journey](../flow-visualizer.html#native-startup). See [[docs/guides/visual-learning|Understand Vision Visually]] for the reading paths and conceptual diagrams.
 
-Vision for macOS bundles PostgreSQL 18.6 and the compiled Bun backend with its `db/` migration
-files. Electron owns their lifecycle and prints report PDFs with its own Chromium
-([[docs/adr/234-electron-report-pdf-printing|ADR-234]]). A host database service is neither used
-nor required.
+Vision for macOS bundles the compiled Bun backend, the database tool `tools/db-file.js`, the
+analysis SQL sandbox `tools/analysis-sandbox.js`, the production frontend and the `db/` migration files. The backend opens one SQLite database file
+in-process through the system SQLite library (3.39.0 or later, so macOS 13 or later). There is no
+database server, no database port and no database credentials
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). Electron owns the backend's lifecycle and
+prints report PDFs with its own Chromium
+([[docs/adr/234-electron-report-pdf-printing|ADR-234]]).
 
 ## Build inputs
 
-The native payload builder requires:
+The native payload builder (`packaging/electron/scripts/prepare-native-runtime.ts`) requires:
 
-- the reviewed PostgreSQL 18.6 build source; and
-- the Bun runtime and production frontend.
+- Bun, which compiles the backend into `vision-backend`, bundles
+  `apps/node-backend/scripts/db-file.ts` into `tools/db-file.js` and
+  `apps/node-backend/src/services/analysisSandbox.ts` into `tools/analysis-sandbox.js`; and
+- the production frontend (`bun run build`).
 
-Prepare development payloads with:
+It copies the frontend to `dist/` and the whole `db/` folder, builds the `vision-apple-ai` helper on
+macOS, and writes `manifest.json` with the size and SHA-256 of every file. No database payload is
+downloaded or bundled. The Electron package script `prepare:native` runs it on its own:
 
 ```bash
 bun run install:electron
-bun run native:prepare
+bun run build
+cd packaging/electron && bun run prepare:native
 ```
 
-Release CI rebuilds the same payload rather than depending on a host service.
+Release CI builds the same payload.
 
 ## Runtime data
 
-Production state lives below `~/Library/Application Support/Vision/native/vision`; the Demo uses
-`~/Library/Application Support/Vision Demo/native/vision_demo`; and source development uses its own
-`Vision Development` profile. Each runtime keeps a private cluster, logs, runtime state, generated
-credentials, and attachment storage under its own application-data boundary.
+Each runtime keeps its database and its runtime files under its own application-data directory
+(`<userData>`): `~/Library/Application Support/Vision` for Vision,
+`~/Library/Application Support/Vision Demo` for the Demo, and
+`~/Library/Application Support/Vision Development` for source development
+(`VISION_DEV_USER_DATA` overrides it).
 
-The generated database roles are separate:
+| Path | Contents |
+| --- | --- |
+| `<userData>/database/vision.sqlite3` | The SQLite database, the backend's `VISION_DATABASE_PATH` |
+| `<userData>/database/vision.sqlite3-wal`, `-shm` | SQLite's write-ahead log and shared-memory files |
+| `<userData>/database/pre-migration-backups/` | `VACUUM INTO` copies the backend writes before it migrates a database that holds data; the newest three are kept |
+| `<userData>/database.previous-*` | Earlier database directories kept after a committed restore; the newest three are kept |
+| `<userData>/native/<runtime id>/runtime.env` | Provider API keys and other runtime settings, mode `0600` |
+| `<userData>/native/<runtime id>/runtime-state.json` | Runtime state, including the journal of an unfinished database switch |
+| `<userData>/native/<runtime id>/attachments/` | Receipt attachments, the backend's `ATTACHMENTS_DIR` |
+| `<userData>/native/<runtime id>/logs/backend.log` | Backend log |
+| `<userData>/native/<runtime id>/cache/` | Runtime cache |
 
-- the cluster administrator creates databases, required extensions, and the fixed
-  `vision_analysis_executor` login;
-- the migration owner owns application schema objects and remains `NOCREATEROLE`;
-- the application role has only runtime data privileges plus `MAINTAIN` on public tables, so the
-  admin page can run `VACUUM ANALYZE` ([[docs/adr/262-app-role-maintain-for-admin-vacuum|ADR-262]]); and
-- the Analysis executor has no role inheritance or administrative attributes and reads only the
-  approved Analysis views.
+The runtime id is `vision`, `vision_demo` or `vision_dev`. The whole `database/` directory is one
+generation: the database file, its `-wal` and `-shm` files and `pre-migration-backups/` move
+together when a restore swaps generations, so a write-ahead log never ends up beside the wrong
+database. Directories are created with mode `0700`.
 
-Native bootstrap resets the Analysis login password and read-only defaults with the cluster
-administrator. After migrations succeed, the backend uses the migration owner to validate the
-existing executor and reset grants to the six approved views. This order covers newly introduced
-view versions without giving the migration owner role-administration privileges. An explicit
-`DATABASE_URL_ANALYSIS` must use the fixed executor and the same native host, port, and database.
-See [[docs/features/analysis-workspace#Operational boundary|Analysis operational boundary]].
+### Vision 2.0 data
 
-The grant template is `config/postgres/app-role-grants.sql.tpl`. Credentials are restricted to the
-application-data directory and are never logged.
+Vision 2.0 kept its data in a private PostgreSQL cluster in
+`<userData>/native/vision/postgres/data`. When that directory has contents and no
+`database/vision.sqlite3` exists, Vision refuses to start, so that a first launch never creates an
+empty database over real data. The dialog says "Vision found data from Vision 2.0 on this Mac and
+did not start", names the untouched data directory and `<userData>/pre-update-backups`, and gives
+the transition command (`bun run transition:v2 -- <backup file>`). Vision only checks whether the
+directory has contents; it never changes or deletes it.
+
+A `runtime.env` written by Vision 2.0 may still hold its PostgreSQL credentials. They stay in the
+file for Vision 2.0, and no child process receives them. Follow
+[[docs/guides/sqlite-transition|Moving Vision 2.0 data to SQLite]] to convert a Vision 2.0 backup
+once.
 
 ## Start development
 
@@ -71,22 +92,24 @@ bun run electron:dev
 ```
 
 `bun run electron:dev` opens the Electron shell on the `Vision Development` profile.
-`bun run dev` bootstraps the same `vision_dev` cluster without Electron, then runs the watched
-backend (which applies pending migrations on boot) and the Vite frontend (`packaging/electron/scripts/native-development.ts`).
+`bun run dev` prepares the same `vision_dev` layout without Electron, then runs the watched
+backend (which creates and migrates the SQLite database on boot) and the Vite frontend
+(`packaging/electron/scripts/native-development.ts`).
 
-Electron startup initializes or opens the private cluster, starts the backend (which applies
-pending migrations before it listens) on a random loopback port when appropriate, and waits for detailed readiness before showing
-the application. `runtime-state.json` records the active native database identity so a stale or
-partially switched database cannot become the writer by accident.
+Electron startup prepares the layout, finishes or rolls back an interrupted restore, checks for
+Vision 2.0 data, starts the backend (which applies pending migrations before it listens) on a
+random loopback port when appropriate, and waits for detailed readiness before showing the
+application. `runtime-state.json` records an unfinished database switch so a stale or partially
+switched database cannot become the live one by accident.
 
-The backend applies migrations in-process with Kysely's migrator; no separate migration executable
-is spawned. An empty PostgreSQL 18 cluster installs `db/migrations/0001_baseline.sql` atomically
-and verifies its catalog fingerprint, then applies later numbered files. A cluster with
-application objects but no migration ledger is refused and left unchanged. If the backend exits during startup,
-Electron stops waiting and shows the error from `backend.log`. The package ships the whole `db/`
-folder (`migrations/` and `schema-inventory.sql`). See
-[[docs/guides/migrations|Database Migration Guide]] and
-[[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]].
+The backend applies migrations in-process with its own runner
+(`apps/node-backend/src/database/migrate.ts`); no separate migration process is spawned. A new
+database gets `db/migrations/0001_baseline.sql` and every later numbered file in one
+`BEGIN IMMEDIATE` transaction, recorded with a SHA-256 in `vision_migrations`. The runner refuses a
+database that has tables but no migration ledger, a migration this build does not know (a newer
+Vision wrote it) or a migration whose checksum changed, and leaves it unchanged. If the backend
+exits during startup, Electron stops waiting and shows the error from `backend.log`. See
+[[docs/guides/migrations|Database Migration Guide]].
 
 ## Native Vision Demo
 
@@ -95,16 +118,16 @@ folder (`migrations/` and `schema-inventory.sql`). See
 open "/Applications/Vision Demo.app"
 ```
 
-The Demo seed is synthetic and deterministic. When the seed changes or reset is requested, the
-runtime creates required extensions as the private cluster administrator, restores application
-objects as the restricted migration owner, and compares schema and all table counts before the
-atomic switch. Generated seed dumps omit extension definitions and comments because those are
-runtime bootstrap state, not application data.
+The Demo seed is synthetic and deterministic. The package carries `vision-demo.sqlite3`, a database
+the database tool built from the migrations and loaded with the seed, and a manifest with its
+SHA-256, schema version and row count per table. When the seed changes or a reset is requested, the
+runtime copies that file into a staged database directory, verifies it (`integrity_check`,
+`foreign_key_check`, the migration ledger and the schema), refuses it unless its checksum and schema
+version match the manifest, and then swaps database generations.
 
-The previous Demo database remains available until detailed readiness and stable row-count checks
-pass. The post-start comparison excludes only the documented runtime-owned
-`transfers_backfilled` and `fx_full_history_repair_done` maintenance markers and the
-`daily_job_*` last-run markers that warmup writes after the backend reports ready.
+The previous Demo database remains available until detailed readiness passes and the row counts of
+the stable user-data tables still match the manifest. The post-start comparison skips
+`user_settings`, which the backend writes on its own after start (daily-job and repair markers).
 
 Reset only the isolated Demo data with:
 
@@ -114,18 +137,17 @@ bun run demo:reset-native
 
 ## Lifecycle and diagnostics
 
-Electron owns PostgreSQL and backend start, health, restart, and shutdown. It writes bounded logs
-under the application-data directory. Useful checks are:
+Electron owns backend start, health, restart, and shutdown. It writes bounded logs under the
+application-data directory. Useful checks are:
 
 ```bash
-bun run native:db-smoke
 bun run native:isolated-smoke
 bun run native:smoke
 ```
 
-`native:smoke` runs its backend with external refreshes disabled. It uses a
-disposable synthetic PostgreSQL cluster and checks package startup, backup,
-restore (also into a second fresh cluster, as for a device move), and runtime-role writes without
+`native:smoke` runs its backend with external refreshes disabled. It uses a disposable synthetic
+runtime with its own temporary SQLite database and checks package startup, an encrypted backup,
+restore (also into a second fresh runtime, as for a device move), and API writes without
 contacting data providers.
 
 For an installed app, read the persisted `appPort` from settings and probe `GET /health` and
@@ -134,19 +156,29 @@ native logs, runtime marker, payload manifest, and seed activation state first.
 
 ## Backup and restore
 
-The desktop backup path uses the native database transport. A `.visionbak` bundle contains the
-database dump, attachments, settings, metadata, and checksums. Restore extracts into staging,
-validates paths and checksums, restores into a fresh database, verifies it, and only then switches
-the active database. Only backups taken after the switch to the Kysely baseline restore; older
-dumps without that ledger are refused with `BACKUP_PRE_BASELINE`. The schema revision a backup records is
-the highest name in `public.kysely_migration`.
+The desktop backup path uses the native database transport. To back up, Electron stops the
+backend, writes a verified `VACUUM INTO` copy of the database with the database tool, copies the
+attachments, and starts the backend again, so both halves describe the same moment. A
+`.visionbak` bundle contains `metadata.json` (bundle format, schema version, app version, device id,
+timestamps and the database SHA-256), `db.sqlite3`, `attachments/` and `frontend-state.json`.
 
-`bun run native:isolated-smoke` exercises that complete encrypted-bundle journey in a temporary
-application-data directory and disposable PostgreSQL 18 cluster. It verifies exact synthetic
-account, transaction, setting, and attachment values plus schema, frontend-state, API-readiness,
-and packaged-frontend restoration without reading or writing the user's Vision instance. The
-focused bundle suite retains an immutable sanitized encrypted bundle written by Vision 1.0.2 (read
-only; it is pre-baseline and not restorable) alongside the current AES-256-GCM path, and fixed v1 AES-256-CBC vectors that must be refused.
+Restore extracts into staging and validates paths and checksums. It copies `db.sqlite3` into a
+staged database directory, verifies it with the database tool (`integrity_check`,
+`foreign_key_check`, a ledger this build can open, and a schema equal to a fresh install at the same
+version), and refuses it unless its SHA-256 and schema version match the metadata. Only then does
+it journal the switch in `runtime-state.json`, stop the backend and swap the database directories.
+The schema version a backup records is the latest version in the database's `vision_migrations`
+ledger.
+
+A Vision 2.0 bundle carries a PostgreSQL `db.sql` instead of `db.sqlite3`. The app never reads it:
+restore refuses it with `BACKUP_POSTGRESQL_V2` and names the transition command. Convert such a
+backup with `bun run transition:v2 -- <backup> --to-backup <new.visionbak>` first
+([[docs/guides/sqlite-transition|Moving Vision 2.0 data to SQLite]]).
+
+`bun run native:isolated-smoke` exercises the complete encrypted-bundle journey in a temporary
+application-data directory with its own SQLite database. It verifies exact synthetic account,
+transaction, setting, and attachment values plus schema, frontend-state, API-readiness, and
+packaged-frontend restoration without reading or writing the user's Vision instance.
 
 Encrypted backup primitives live in `packaging/electron/backup/encrypted-file.ts`. Restore reads
 only AES-256-GCM files (`VISIONENC2` and `VISIONBAK2`), the format new encrypted files use. Retired
@@ -166,29 +198,35 @@ check on the next launch. The `[startup]` log shows `runtime_manifest_full` or
 
 ## Updates and reports
 
-Native updates create a backup, verify the selected release artifact and checksum, install it, and
-retain rollback state until the updated app opens successfully. Independently of how the app was
-updated, a launch whose packaged migrations are ahead of the database first writes a `.visionbak`
-to `~/Library/Application Support/Vision/pre-update-backups` and does not start the backend if
-that backup fails ([[docs/adr/242-backup-before-boot-migrations|ADR-242]]). Report PDFs print in a hidden,
-sandboxed, script-free Electron window with no network access (ADR-234). Ollama remains an
-optional host integration and defaults to its loopback endpoint;
-see [[docs/integrations/ollama|Ollama Integration]].
+Native updates create a backup in `~/Library/Application Support/Vision/pre-update-backups`,
+verify the selected release artifact and checksum, install it, and retain rollback state until the
+updated app opens successfully. Independently of how the app was updated, a backend that finds
+pending migrations for a database that holds data first writes a `VACUUM INTO` copy to
+`<userData>/database/pre-migration-backups/`. If that copy fails, nothing is migrated, the backend
+does not start, and the launch dialog says that Vision could not back up the data before updating
+the database (`PRE_MIGRATION_BACKUP_FAILED`). Report PDFs print in a hidden, sandboxed,
+script-free Electron window with no network access (ADR-234). Ollama remains an optional host
+integration and defaults to its loopback endpoint; see
+[[docs/integrations/ollama|Ollama Integration]].
 
 ## Recovery boundary
 
 Normal startup and Demo seed preparation share `recoverInterruptedRestore` in
 `packaging/electron/runtime/native.ts`. They resolve interrupted database and attachment switches
-before ordinary bootstrap or checking whether the Demo seed is current. An unfinished database
+before ordinary startup or checking whether the Demo seed is current. An unfinished database
 switch restores the previous attachment tree first; a committed database leaves an attachment-only
-journal for cleanup. Demo startup must not roll back only the database generation.
+journal for cleanup. Demo startup must not roll back only the database generation. A switch journal
+written by Vision 2.0 names PostgreSQL databases; only Vision 2.0 can resolve it, so neither
+generation is touched.
 
-Do not hand-edit generated credentials, change the runtime marker to select another database, or
-delete the previous database during a failed switch. Recovery must preserve one writer and verify a
-staged restore before activation. Reintroducing another runtime requires a new architecture decision.
+Do not hand-edit `runtime-state.json` to select another database, and do not delete the previous
+database directory during a failed switch. Recovery must preserve one writer and verify a staged
+restore before activation. Reintroducing another runtime requires a new architecture decision.
 
 ## Related
 
+- [[docs/adr/263-sqlite-replaces-postgresql|ADR-263: SQLite replaces PostgreSQL]]
+- [[docs/guides/sqlite-transition|Moving Vision 2.0 data to SQLite]]
 - [[docs/adr/133-native-only-runtime-and-delivery|ADR-133: Native-only runtime and delivery]]
 - [[docs/adr/113-native-macos-runtime|ADR-113: Native macOS runtime]]
 - [[docs/adr/114-native-deterministic-demo-runtime|ADR-114: Native deterministic Demo runtime]]

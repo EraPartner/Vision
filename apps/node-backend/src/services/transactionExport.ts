@@ -7,7 +7,7 @@
 
 import { sql } from "kysely";
 import type { RawBuilder } from "kysely";
-import { getClient, query as dbQuery } from "../database/connection.ts";
+import { query as dbQuery, withReadSnapshot } from "../database/connection.ts";
 import { compileQuery, db } from "../database/db.ts";
 import { logger } from "../config/logger.ts";
 import { checkRows } from "../database/rowContracts.ts";
@@ -33,7 +33,7 @@ import type Decimal from "decimal.js";
 import { errorMessage } from "../lib/errors.ts";
 
 /**
- * Query runner for the export pipeline; the default is the pooled `query`,
+ * Query runner for the export pipeline; the default is the shared `query`,
  * the bulk export passes its snapshot client. Rows are checked against
  * `exportTransactionRowSchema` at the read site.
  */
@@ -101,9 +101,10 @@ function buildExportChunkSql(
   // last (date, id) instead of OFFSET. OFFSET across separate pool queries (new
   // snapshot each time) silently dropped/duplicated rows when a concurrent
   // insert/delete shifted the result set mid-export. (date, id) is unique
-  // (t.id) so the cursor is exact and the scan is index-friendly.
+  // (t.id) so the cursor is exact and the scan is index-friendly. `t.date` is
+  // 'YYYY-MM-DD' text, so the cursor day compares as a calendar day.
   const keyset = cursor
-    ? sql`AND (t.date, t.id) > (${cursor.date}::date, ${cursor.id}::bigint)`
+    ? sql`AND (t.date, t.id) > (${cursor.date}, ${cursor.id})`
     : sql``;
   return sql`
     SELECT t.id, t.date, acct.name AS bank_account, t.account_id,
@@ -123,15 +124,16 @@ function buildExportChunkSql(
              ELSE ''
            END AS category_name,
            t.comment,
-           COALESCE(tag_agg.tags, '{}'::text[]) AS tags
+           -- Active tag slugs in slug order; json_group_array gives '[]' for
+           -- an untagged row, as COALESCE(array_agg(...), '{}') did.
+           (SELECT json_group_array(tag_slugs.slug) FROM (
+              SELECT tg.slug
+              FROM transaction_tags tt
+              JOIN tags tg ON tg.id = tt.tag_id
+              WHERE tt.transaction_id = t.id AND tg.is_active = 1
+              ORDER BY tg.slug
+           ) tag_slugs) AS "tags::json"
     ${EXPORT_JOINS_SQL}
-    LEFT JOIN (
-      SELECT tt.transaction_id, array_agg(tg.slug ORDER BY tg.slug) AS tags
-      FROM transaction_tags tt
-      JOIN tags tg ON tg.id = tt.tag_id
-      WHERE tg.is_active = true
-      GROUP BY tt.transaction_id
-    ) tag_agg ON tag_agg.transaction_id = t.id
     WHERE ${where}
       ${keyset}
     ORDER BY t.date ASC, t.id ASC
@@ -144,7 +146,7 @@ function buildCsvRow(
   { includeBalance = false }: { includeBalance?: boolean } = {},
 ): string {
   const cols = [
-    // toYmd, not the raw pg Date: String() of it is "Wed Jul 01 2026 …" —
+    // toYmd, not the raw Date: String() of it is "Wed Jul 01 2026 …" —
     // unusable in Excel and a day off on cross-TZ re-import.
     escapeCsvValue(toYmd(row.date)),
     escapeCsvValue(row.bank_account),
@@ -164,7 +166,7 @@ function buildCsvRow(
 function buildNdjsonRow(row: ExportTransactionRow): string {
   return JSON.stringify({
     id: row.id,
-    // toYmd, not the raw pg Date: JSON.stringify would toISOString it into
+    // toYmd, not the raw Date: JSON.stringify would toISOString it into
     // the PREVIOUS day's timestamp on any backend east of UTC.
     date: toYmd(row.date),
     bank_account: row.bank_account,
@@ -238,8 +240,8 @@ async function streamExport(
         await writeWithBackpressure(res, formatRow(row, rowCount));
         rowCount++;
       }
-      // toYmd recovers the local calendar day from pg's local-midnight Date so
-      // the ::date cursor never shifts a day in a UTC+ zone.
+      // toYmd recovers the local calendar day from the driver's local-midnight
+      // Date so the day cursor never shifts a day in a UTC+ zone.
       cursorDate = toYmd(last.date);
       cursorId = last.id;
       if (rows.length < EXPORT_CHUNK_SIZE) break;
@@ -338,11 +340,12 @@ export async function streamNdjsonExport(
  * fixed list of ids.
  */
 function buildIdListWhere(ids: number[]): { where: RawBuilder<unknown> } {
-  return { where: sql`t.id = ANY(${ids}::int[])` };
+  return { where: sql`t.id IN (SELECT value FROM json_each(${JSON.stringify(ids)}))` };
 }
 
 /**
- * Resolve and stream one bulk export inside a repeatable-read snapshot. The
+ * Resolve and stream one bulk export inside one read snapshot
+ * (withReadSnapshot, PostgreSQL's REPEATABLE READ READ ONLY). The
  * route owns request validation only; the database transaction belongs at the
  * service boundary with the selection and streaming orchestration (ADR-067).
  */
@@ -360,20 +363,21 @@ export async function streamBulkTransactionExport(
     includeBalance?: boolean | undefined;
   },
 ): Promise<void> {
-  // Reject malformed selectors before reserving a pool connection. The same
-  // shared validator is used again by resolveBulkSelection inside the snapshot,
-  // so validation behavior cannot drift between export and the other actions.
+  // Reject malformed selectors before opening the snapshot connection. The
+  // same shared validator is used again by resolveBulkSelection inside the
+  // snapshot, so validation behavior cannot drift between export and the
+  // other actions.
   validateBulkSelection({ ids, filter });
-  const client = await getClient();
-  try {
-    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+  await withReadSnapshot(async (client) => {
     const query: ExportQuery = (sql, params) => client.query(sql, params);
     const txIds = await resolveBulkSelection({ ids, filter }, { query });
     const count = compileQuery(
       db
         .selectFrom("transactions")
-        .select(sql<number>`COUNT(*)::int`.as("n"))
-        .where(sql<boolean>`id = ANY(${txIds}::int[])`),
+        .select(sql<number>`COUNT(*)`.as("n"))
+        .where(
+          sql<boolean>`id IN (SELECT value FROM json_each(${JSON.stringify(txIds)}))`,
+        ),
     );
     const countResult = await query(count.sql, [...count.parameters]);
     const [countRow] = checkRows(intCountRowSchema, countResult.rows);
@@ -389,13 +393,7 @@ export async function streamBulkTransactionExport(
     } else {
       await streamNdjsonExport(res, { ...where, query });
     }
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => {});
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 export { buildIdListWhere as __buildIdListWhere };

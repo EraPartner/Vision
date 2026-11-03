@@ -129,12 +129,19 @@ describe("Settings storage and retrieval", () => {
         typeof sql === "string" && /insert into "?user_settings"?/i.test(sql),
     );
     expect(upsertCall).toBeTruthy();
-    expect(must(upsertCall, "upsertCall")[1][0]).toEqual(["dashboard_settings"]);
-    expect(must(upsertCall, "upsertCall")[1][1]).toEqual([
-      JSON.stringify({
-        excludedCategoryIds: [1, 2],
-        excludedRecipientIds: [10],
-      }),
+    // One JSON array of [key, value-as-JSON-text] pairs; vision_jsonb() stores
+    // each value's canonical jsonb text.
+    const [upsertSql, upsertParams] = must(upsertCall, "upsertCall");
+    expect(upsertSql).toContain("vision_jsonb(u.value ->> 1)");
+    expect(upsertParams).toHaveLength(1);
+    expect(JSON.parse(String(upsertParams[0]))).toEqual([
+      [
+        "dashboard_settings",
+        JSON.stringify({
+          excludedCategoryIds: [1, 2],
+          excludedRecipientIds: [10],
+        }),
+      ],
     ]);
   });
 

@@ -1,5 +1,5 @@
 /**
- * GET /api/info/net-worth/by-account against real PostgreSQL: each account's
+ * GET /api/info/net-worth/by-account against the real database: each account's
  * cash balance converted at the latest stored rate, live holdings partitions
  * per account and unassigned, and the displayed total (ADR-093, ADR-216).
  */
@@ -42,7 +42,7 @@ async function account(
 ) {
   const { rows } = await pool().query<{ id: number }>(
     `INSERT INTO accounts (name, display_name, type, currency, in_net_worth)
-     VALUES ($1, $1, $2::account_type, $3, $4) RETURNING id`,
+     VALUES ($1, $1, $2, $3, $4) RETURNING id`,
     [name, type, currency, inNetWorth],
   );
   return must(rows[0], "rows[0]").id;
@@ -51,7 +51,7 @@ async function account(
 async function cash(accountId: number, amount: string, currency = "EUR") {
   await pool().query(
     `INSERT INTO transactions (date, amount, currency, recipient_id, account_id)
-     VALUES (CURRENT_DATE - 1, $1, $2, $3, $4)`,
+     VALUES (add_days(today(), -1), vision_numeric($1, 18, 4), $2, $3, $4)`,
     [amount, currency, recipientId, accountId],
   );
 }
@@ -64,13 +64,13 @@ async function holding(
 ) {
   const { rows } = await pool().query<{ id: number }>(
     `INSERT INTO investments (name, symbol, asset_class, currency, current_price)
-     VALUES ($1, $1, 'stock', 'EUR', $2) RETURNING id`,
-    [name, price],
+     VALUES ($1, $1, 'stock', 'EUR', vision_numeric($2, 18, 6)) RETURNING id`,
+    [name, String(price)],
   );
   await pool().query(
     `INSERT INTO portfolio_transactions (investment_id, type, date, amount, units, currency, account_id)
-     VALUES ($1, 'buy', '2026-01-02', $2, $3, 'EUR', $4)`,
-    [must(rows[0], "rows[0]").id, cost, units, accountId],
+     VALUES ($1, 'buy', '2026-01-02', vision_numeric($2, 18, 4), vision_numeric($3, 18, 8), 'EUR', $4)`,
+    [must(rows[0], "rows[0]").id, String(cost), String(units), accountId],
   );
 }
 
@@ -91,7 +91,7 @@ describeDb("GET /api/info/net-worth/by-account (real DB)", () => {
     recipientId = must(rows[0], "rows[0]").id;
     await pool().query(
       `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-       VALUES ('USD', 0.9, CURRENT_DATE, true)`,
+       VALUES ('USD', vision_numeric('0.9', 20, 10), today(), 1)`,
     );
   });
 

@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
 
+/**
+ * The materialized-view tables are ordinary SQLite tables (ADR-263) refilled
+ * with DELETE + INSERT ... SELECT inside one withTransaction(). The mock logs
+ * every statement and the transaction boundaries ("BEGIN", "COMMIT",
+ * "ROLLBACK") into one ordered list, so the tests can assert what ran inside
+ * the write transaction. The DB-backed reader guarantee (old or new contents,
+ * never empty) is tested in tests/startupMaterializedViews.db.test.ts.
+ */
 async function loadMaterializedViewService() {
   vi.resetModules();
 
@@ -12,26 +20,25 @@ async function loadMaterializedViewService() {
     debug: vi.fn(),
   };
 
-  // Refresh statements run on a dedicated client with the pool-wide
-  // statement_timeout lifted. Record every client statement in clientSql, but
-  // delegate the actual REFRESH statements to the same `query` spy so the
-  // in-flight/debounce tests keep asserting one call per refresh statement.
-  const clientSql: string[] = [];
-  const release = vi.fn();
-  const getClient = vi.fn(() =>
-    Promise.resolve({
-      query: (sql: string) => {
-        clientSql.push(sql);
-        if (/statement_timeout/i.test(sql))
-          return Promise.resolve({ rows: [] });
-        return query(sql);
-      },
-      release,
-    }),
-  );
+  const statements: string[] = [];
+  const loggedQuery = (sql: string) => {
+    statements.push(sql.replace(/\s+/g, " ").trim());
+    return query(sql);
+  };
+  const withTransaction = vi.fn(async (fn: () => Promise<unknown>) => {
+    statements.push("BEGIN");
+    try {
+      const result = await fn();
+      statements.push("COMMIT");
+      return result;
+    } catch (err) {
+      statements.push("ROLLBACK");
+      throw err;
+    }
+  });
 
   vi.doMock("../src/database/connection.ts", () =>
-    mockConnection({ query, getClient }),
+    mockConnection({ query: loggedQuery, withTransaction }),
   );
   vi.doMock("../src/config/logger.ts", () => ({ logger }));
   const invalidateStatisticsCaches = vi.fn();
@@ -44,12 +51,26 @@ async function loadMaterializedViewService() {
     ...service,
     query,
     logger,
-    getClient,
-    clientSql,
-    release,
+    statements,
+    withTransaction,
     invalidateStatisticsCaches,
   };
 }
+
+/** A statement's leading words, e.g. "DELETE FROM mv_monthly_summary". */
+function head(sql: string): string {
+  const m = /^(BEGIN|COMMIT|ROLLBACK|DELETE FROM \w+|INSERT INTO \w+|SELECT 1 FROM \w+|ANALYZE \w+|CREATE UNIQUE INDEX IF NOT EXISTS \w+)/.exec(sql);
+  return m?.[1] ?? sql;
+}
+
+const REFILL_BOTH = [
+  "BEGIN",
+  "DELETE FROM mv_monthly_summary",
+  "INSERT INTO mv_monthly_summary",
+  "DELETE FROM mv_category_totals",
+  "INSERT INTO mv_category_totals",
+  "COMMIT",
+];
 
 describe("materializedViewService", () => {
   afterEach(() => {
@@ -59,53 +80,62 @@ describe("materializedViewService", () => {
     vi.resetModules();
   });
 
-  it("falls back to non-concurrent refresh when concurrent refresh fails", async () => {
-    const { refreshMaterializedViews, query, logger } =
-      await loadMaterializedViewService();
-
-    query.mockImplementation((sql) => {
-      if (sql.includes("REFRESH MATERIALIZED VIEW CONCURRENTLY")) {
-        return Promise.reject(
-          new Error("cannot refresh materialized view concurrently"),
-        );
-      }
-      return Promise.resolve({ rows: [] });
-    });
-
-    await refreshMaterializedViews();
-
-    const sqlCalls = query.mock.calls.map(([sql]) => sql);
-    expect(sqlCalls).toContain(
-      "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_monthly_summary",
-    );
-    expect(sqlCalls).toContain("REFRESH MATERIALIZED VIEW mv_monthly_summary");
-    expect(logger.warn).toHaveBeenCalledWith(
-      "Falling back to non-concurrent refresh for mv_monthly_summary",
-    );
-  });
-
-  it("lifts the pool statement_timeout around each refresh and restores it after", async () => {
-    const { refreshMaterializedViews, query, clientSql, release } =
+  // Replaces the PostgreSQL REFRESH ... CONCURRENTLY (and its non-concurrent
+  // fallback) tests: readers never see an empty table because the DELETE and
+  // the refill commit together.
+  it("refills both tables with DELETE + INSERT ... SELECT inside one transaction", async () => {
+    const { refreshMaterializedViews, query, statements, withTransaction } =
       await loadMaterializedViewService();
     query.mockResolvedValue({ rows: [] });
 
     await refreshMaterializedViews();
 
-    // Each view's refresh is bracketed by SET 0 / RESET on its dedicated client.
-    const firstRefreshIdx = clientSql.findIndex((sql) =>
-      sql.includes("REFRESH MATERIALIZED VIEW"),
+    expect(withTransaction).toHaveBeenCalledTimes(1);
+    expect(statements.map(head)).toEqual(REFILL_BOTH);
+    expect(statements.some((sql) => /REFRESH|MATERIALIZED VIEW/i.test(sql))).toBe(false);
+  });
+
+  // Replaces the statement_timeout test: SQLite has no statement timeout to
+  // lift, so a long refill can no longer be cancelled half-way.
+  it("does not touch a statement timeout or a dedicated client", async () => {
+    const { refreshMaterializedViews, query, statements } =
+      await loadMaterializedViewService();
+    query.mockResolvedValue({ rows: [] });
+
+    await refreshMaterializedViews();
+
+    expect(statements.some((sql) => /statement_timeout/i.test(sql))).toBe(false);
+  });
+
+  it("rolls the whole refresh back when one refill fails, keeping the previous contents", async () => {
+    const { refreshMaterializedViews, query, statements, logger } =
+      await loadMaterializedViewService();
+    query.mockImplementation((sql) =>
+      /INSERT INTO mv_category_totals/.test(sql)
+        ? Promise.reject(new Error("disk I/O error"))
+        : Promise.resolve({ rows: [] }),
     );
-    expect(firstRefreshIdx).toBeGreaterThan(-1);
-    expect(
-      clientSql.filter((sql) => sql === "SET statement_timeout = 0"),
-    ).toHaveLength(2);
-    expect(
-      clientSql.filter((sql) => sql === "RESET statement_timeout"),
-    ).toHaveLength(2);
-    expect(clientSql[firstRefreshIdx - 1]).toBe("SET statement_timeout = 0");
-    // Clients go back to the pool healthy (no destructive release).
-    expect(release).toHaveBeenCalledTimes(2);
-    expect(release).not.toHaveBeenCalledWith(true);
+
+    await expect(refreshMaterializedViews()).rejects.toThrow("disk I/O error");
+
+    // mv_monthly_summary's refill ran in the same transaction, so the
+    // rollback restores both tables: they always describe one ledger state.
+    expect(statements.map(head)).toEqual([
+      "BEGIN",
+      "DELETE FROM mv_monthly_summary",
+      "INSERT INTO mv_monthly_summary",
+      "DELETE FROM mv_category_totals",
+      "INSERT INTO mv_category_totals",
+      "ROLLBACK",
+    ]);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Failed to refresh mv_category_totals",
+      { error: "disk I/O error" },
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      "Materialized view refresh failed",
+      { error: "disk I/O error" },
+    );
   });
 
   it("invalidates statistics caches before and after a successful refresh", async () => {
@@ -123,46 +153,47 @@ describe("materializedViewService", () => {
 
     const { refreshMaterializedViews, query } =
       await loadMaterializedViewService();
-    const pendingResolvers: ((result: { rows: unknown[] }) => void)[] = [];
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     let callCount = 0;
 
-    query.mockImplementation(() => {
+    query.mockImplementation(async () => {
       callCount += 1;
-      if (callCount <= 2) {
-        return new Promise((resolve) => {
-          pendingResolvers.push(resolve);
-        });
-      }
-      return Promise.resolve({ rows: [] });
+      // The first refresh's first statement waits until released.
+      if (callCount === 1) await gate;
+      return { rows: [] };
     });
 
     const firstRefresh = refreshMaterializedViews();
     const coalescedRefresh = refreshMaterializedViews();
-    // Flush the microtask hops (getClient + SET statement_timeout) that now
-    // precede each REFRESH statement.
+    const anotherCoalescedRefresh = refreshMaterializedViews();
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(query).toHaveBeenCalledTimes(2);
+    // Only the first refresh is running; the others joined it.
+    expect(query).toHaveBeenCalledTimes(1);
 
-    pendingResolvers.forEach((resolve) => resolve({ rows: [] }));
-    await Promise.all([firstRefresh, coalescedRefresh]);
-
-    await vi.advanceTimersByTimeAsync(500);
-
+    release?.();
+    await Promise.all([firstRefresh, coalescedRefresh, anotherCoalescedRefresh]);
     expect(query).toHaveBeenCalledTimes(4);
+
+    // One deferred refresh for all the coalesced calls.
+    await vi.advanceTimersByTimeAsync(500);
+    expect(query).toHaveBeenCalledTimes(8);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(query).toHaveBeenCalledTimes(8);
   });
 
-  it("rejects when a view is still missing during post-listen creation", async () => {
+  it("rejects when a table is missing", async () => {
     const { refreshMaterializedViews, query, logger } =
       await loadMaterializedViewService();
-    query.mockRejectedValue(
-      new Error('relation "mv_monthly_summary" does not exist'),
-    );
+    query.mockRejectedValue(new Error("no such table: mv_monthly_summary"));
 
-    await expect(refreshMaterializedViews()).rejects.toThrow("does not exist");
+    await expect(refreshMaterializedViews()).rejects.toThrow("no such table");
     expect(logger.error).toHaveBeenCalledWith(
       "Materialized view refresh failed",
-      { error: 'relation "mv_monthly_summary" does not exist' },
+      { error: "no such table: mv_monthly_summary" },
     );
   });
 
@@ -180,7 +211,8 @@ describe("materializedViewService", () => {
     expect(query).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
-    expect(query).toHaveBeenCalledTimes(2);
+    // One refresh: DELETE + INSERT per table.
+    expect(query).toHaveBeenCalledTimes(4);
   });
 
   // TODO E20: trailing-only debounce let a steady mutation stream (< debounce
@@ -207,46 +239,39 @@ describe("materializedViewService", () => {
 
     // Crossing the 10s deadline flushes even though the last call was < 5s ago.
     await vi.advanceTimersByTimeAsync(step);
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenCalledTimes(4);
 
     // The burst state resets: the next lone call waits the full trailing window again.
     scheduleRefresh();
     await vi.advanceTimersByTimeAsync(REFRESH_DEBOUNCE_MS - 1);
-    expect(query).toHaveBeenCalledTimes(2);
-    await vi.advanceTimersByTimeAsync(1);
     expect(query).toHaveBeenCalledTimes(4);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(query).toHaveBeenCalledTimes(8);
   });
 
-  it("creates materialized views and indexes in expected order", async () => {
-    const { createMaterializedViews, query, logger } =
+  // CREATE MATERIALIZED VIEW IF NOT EXISTS populated a missing view and left
+  // an existing one alone: the tables exist from the baseline, so creation
+  // fills an empty table and keeps a populated one.
+  it("fills empty tables in one transaction, then analyzes them", async () => {
+    const { createMaterializedViews, query, statements, logger } =
       await loadMaterializedViewService();
     query.mockResolvedValue({ rows: [] });
 
     await createMaterializedViews();
 
-    const sqlCalls = query.mock.calls.map(([sql]) => sql);
-    expect(
-      sqlCalls.some((sql) =>
-        sql.includes(
-          "CREATE MATERIALIZED VIEW IF NOT EXISTS mv_monthly_summary AS",
-        ),
-      ),
-    ).toBe(true);
-    expect(
-      sqlCalls.some((sql) =>
-        sql.includes(
-          "CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_monthly_summary",
-        ),
-      ),
-    ).toBe(true);
-    expect(
-      sqlCalls.some((sql) =>
-        sql.includes(
-          "CREATE MATERIALIZED VIEW IF NOT EXISTS mv_category_totals",
-        ),
-      ),
-    ).toBe(true);
-    expect(sqlCalls.some((sql) => sql.includes("mv_cashflow_daily"))).toBe(
+    expect(statements.map(head)).toEqual([
+      "BEGIN",
+      "SELECT 1 FROM mv_monthly_summary",
+      "DELETE FROM mv_monthly_summary",
+      "INSERT INTO mv_monthly_summary",
+      "SELECT 1 FROM mv_category_totals",
+      "DELETE FROM mv_category_totals",
+      "INSERT INTO mv_category_totals",
+      "COMMIT",
+      "ANALYZE mv_monthly_summary",
+      "ANALYZE mv_category_totals",
+    ]);
+    expect(statements.some((sql) => sql.includes("mv_cashflow_daily"))).toBe(
       false,
     );
     expect(logger.info).toHaveBeenCalledWith(
@@ -254,86 +279,98 @@ describe("materializedViewService", () => {
     );
   });
 
-  // Creation is the same full aggregation scan the refresh is, so it must not run
-  // under the pool's 30s statement_timeout either: on a large install the CREATE
-  // would be cancelled and — now that creation is deferred past listen and no
-  // longer aborts boot — the views would silently never get built.
-  it("builds the views with the pool statement_timeout lifted", async () => {
-    const { createMaterializedViews, query, clientSql } =
+  it("keeps a populated table as it is", async () => {
+    const { createMaterializedViews, query, statements } =
       await loadMaterializedViewService();
-    query.mockResolvedValue({ rows: [] });
+    query.mockImplementation((sql) =>
+      Promise.resolve({
+        rows: /SELECT 1 FROM mv_category_totals/.test(sql) ? [{ "1": 1 }] : [],
+      }),
+    );
 
     await createMaterializedViews();
 
-    expect(clientSql).toContain("SET statement_timeout = 0");
-    expect(
-      clientSql.some((sql) =>
-        sql.includes(
-          "CREATE MATERIALIZED VIEW IF NOT EXISTS mv_monthly_summary AS",
-        ),
-      ),
-    ).toBe(true);
-    expect(
-      clientSql.filter((sql) => sql === "RESET statement_timeout"),
-    ).not.toHaveLength(0);
+    const heads = statements.map(head);
+    expect(heads).toContain("INSERT INTO mv_monthly_summary");
+    expect(heads).not.toContain("DELETE FROM mv_category_totals");
+    expect(heads).not.toContain("INSERT INTO mv_category_totals");
   });
 
-  // The boot-wide ANALYZE in main.ts runs pre-listen, so it no longer covers
-  // views created afterwards — and a matview is never auto-analyzed.
-  it("analyzes each view after creating it", async () => {
-    const { createMaterializedViews, query } =
+  it("does not fail creation when ANALYZE fails", async () => {
+    const { createMaterializedViews, query, logger } =
       await loadMaterializedViewService();
-    query.mockResolvedValue({ rows: [] });
+    query.mockImplementation((sql) =>
+      /^ANALYZE mv_category_totals/.test(sql)
+        ? Promise.reject(new Error("database is locked"))
+        : Promise.resolve({ rows: [] }),
+    );
 
     await createMaterializedViews();
 
-    const sqlCalls = query.mock.calls.map(([sql]) => sql);
-    expect(sqlCalls).toContain("ANALYZE mv_monthly_summary");
-    expect(sqlCalls).toContain("ANALYZE mv_category_totals");
-    expect(sqlCalls).not.toContain("ANALYZE mv_cashflow_daily");
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Could not ANALYZE mv_category_totals",
+      { error: "database is locked" },
+    );
   });
 
   // Guard for the canonical 3-level effective-category resolution (own →
   // recipient default → PRIMARY recipient's default). Both category-bearing MVs
   // used to resolve only two levels, so a row recorded under an alias whose
   // PRIMARY carries the default category was counted as UNCATEGORISED here
-  // while the transactions list showed it categorised. Changing either
-  // definition needs a DROP migration (0084 / 0085) — see the DB-backed
+  // while the transactions list showed it categorised. See the DB-backed
   // assertion in tests/aliasCategoryResolution.db.test.ts.
-  it("resolves the effective category over three levels in both category-bearing views", async () => {
-    const { createMaterializedViews, query } =
+  it("resolves the effective category over three levels in both category-bearing tables", async () => {
+    const { refreshMaterializedViews, query, statements } =
       await loadMaterializedViewService();
     query.mockResolvedValue({ rows: [] });
 
-    await createMaterializedViews();
+    await refreshMaterializedViews();
 
-    const sqlCalls = query.mock.calls.map(([sql]) => sql);
     for (const view of ["mv_monthly_summary", "mv_category_totals"]) {
-      const ddl = sqlCalls.find((sql) =>
-        sql.includes(`CREATE MATERIALIZED VIEW IF NOT EXISTS ${view}`),
-      );
-      expect(ddl, `${view} DDL`).toContain(
+      const fill = statements.find((sql) => sql.startsWith(`INSERT INTO ${view}`));
+      expect(fill, `${view} fill`).toContain(
         "LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id",
       );
-      expect(ddl, `${view} category join`).toContain(
+      expect(fill, `${view} category join`).toContain(
         "COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id",
       );
     }
   });
 
+  // Money totals are exact decimal aggregates and the month grain is the local
+  // calendar month of the DATE column.
+  it("aggregates with exact decimal sums over local calendar months", async () => {
+    const { refreshMaterializedViews, query, statements } =
+      await loadMaterializedViewService();
+    query.mockResolvedValue({ rows: [] });
+
+    await refreshMaterializedViews();
+
+    const monthly = statements.find((sql) => sql.startsWith("INSERT INTO mv_monthly_summary"));
+    expect(monthly).toContain("date_trunc('month', t.date) AS month_start");
+    expect(monthly).toContain("dec_sum(t.amount) AS net_amount");
+    expect(monthly).toContain("add_months(date_trunc('month', today()), -12)");
+    expect(monthly).not.toMatch(/\bSUM\(|CURRENT_DATE|interval/i);
+    const totals = statements.find((sql) => sql.startsWith("INSERT INTO mv_category_totals"));
+    expect(totals).toContain("dec_sum(t.amount) AS total");
+    expect(totals).not.toMatch(/\bSUM\(/);
+  });
+
   it("no longer creates the dead mv_bank_balances view (dropped — zero readers)", async () => {
-    const { createMaterializedViews, query } =
+    const { createMaterializedViews, query, statements } =
       await loadMaterializedViewService();
     query.mockResolvedValue({ rows: [] });
 
     await createMaterializedViews();
 
-    const sqlCalls = query.mock.calls.map(([sql]) => sql);
-    expect(sqlCalls.some((sql) => sql.includes("mv_bank_balances"))).toBe(
+    expect(statements.some((sql) => sql.includes("mv_bank_balances"))).toBe(
       false,
     );
   });
 
+  // The PostgreSQL build also dropped the pre-rename indexes
+  // (mv_*_idx); the SQLite baseline never had them, so only the unique
+  // indexes are ensured.
   it("ensures indexes and warns when one creation fails", async () => {
     const { ensureMaterializedViewIndexes, query, logger } =
       await loadMaterializedViewService();
@@ -346,12 +383,11 @@ describe("materializedViewService", () => {
 
     await ensureMaterializedViewIndexes();
 
-    expect(query).toHaveBeenCalledTimes(3);
-    expect(
-      query.mock.calls.some(([sql]) =>
-        sql.includes("DROP INDEX IF EXISTS mv_monthly_summary_idx"),
-      ),
-    ).toBe(true);
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query.mock.calls.map(([sql]) => sql)).toEqual([
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_monthly_summary ON mv_monthly_summary (month_start, currency, category_id_key)",
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_category_totals ON mv_category_totals (category_id, currency)",
+    ]);
     expect(logger.warn).toHaveBeenCalledWith(
       "Could not create index idx_mv_category_totals on mv_category_totals",
       { error: "index create denied" },

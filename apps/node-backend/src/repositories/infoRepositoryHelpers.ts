@@ -46,7 +46,8 @@ const ALLOWED_MVS = new Map<string, RawBuilder<unknown>>([
 ]);
 
 /**
- * Check if a materialized view exists and has rows.
+ * Check if a materialized-view table exists and has rows (ADR-263: the views
+ * are ordinary tables, empty until the warmup fills them).
  * Results are cached for {@link MV_CACHE_TTL_MS}, then re-probed so runtime
  * creation and removal both self-heal without a process restart.
  *

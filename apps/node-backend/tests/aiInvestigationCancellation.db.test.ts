@@ -21,13 +21,14 @@ afterAll(async () => {
 });
 
 describe("investigation cancellation at the database boundary", () => {
-  it.skipIf(!pool)(
+  // Every test file has its own database (ADR-263), so this always runs.
+  it(
     "keeps a cancelled job cancelled when a provider answer arrives afterward",
     async () => {
       const inserted = await must(pool, "pool").query<{ id: string }>(
         `INSERT INTO ai_investigation_jobs
            (question, route, depth, language, state, scope_json)
-         VALUES ('Fictional question', 'local', 'quick', 'en', 'running', '{}'::jsonb)
+         VALUES ('Fictional question', 'local', 'quick', 'en', 'running', '{}')
          RETURNING id`,
       );
       const id = must(inserted.rows[0], "row").id;

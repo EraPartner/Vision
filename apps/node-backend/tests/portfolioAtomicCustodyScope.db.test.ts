@@ -27,7 +27,7 @@ import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryS
 import { must } from "./helpers/must.ts";
 import { asAccountId, asInvestmentId } from "@vision/types/brands";
 import type { PortfolioParserConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
-import type { Pool } from "pg";
+import type { TestPool } from "./setup/db.ts";
 
 interface IdRow {
   id: number;
@@ -38,7 +38,7 @@ type BasisAllocations = Record<
 >;
 type StagedRow = Parameters<typeof commitPortfolioAssetTransfer>[0]["row"];
 
-let pool: Pool;
+let pool: TestPool;
 const owned: { accounts: number[]; investments: number[]; batches: number[] } =
   { accounts: [], investments: [], batches: [] };
 const hash = (value: string) =>
@@ -62,8 +62,8 @@ async function seed() {
   const originals = (
     await pool.query<IdRow>(
       `INSERT INTO portfolio_transactions(investment_id,account_id,type,date,units,amount,price_per_unit,currency,note)
-      VALUES ($1,$2,'buy','2020-01-01',10,100,10,'EUR','Original acquisition'),
-             ($1,$2,'sell','2022-01-01',8,160,20,'EUR','Original later sale') RETURNING id`,
+      VALUES ($1,$2,'buy','2020-01-01','10.00000000','100.0000','10.000000','EUR','Original acquisition'),
+             ($1,$2,'sell','2022-01-01','8.00000000','160.0000','20.000000','EUR','Original later sale') RETURNING id`,
       [investment, source],
     )
   ).rows.map((row) => row.id);
@@ -88,7 +88,7 @@ async function stage(
   const created = must((
     await pool.query<{ id: string; account_id: number }>(
       `INSERT INTO portfolio_import_batches(adapter_name,custom_config,status,rows_total,account_id,is_brokerage)
-      VALUES ('nexo_transaction_history',$1::jsonb,'awaiting_review',$2,$3,true) RETURNING *`,
+      VALUES ('nexo_transaction_history',vision_jsonb($1),'awaiting_review',$2,$3,true) RETURNING *`,
       [
         JSON.stringify(config),
         1 + Number(includeReturn) + Number(includeFee),
@@ -151,7 +151,7 @@ async function stage(
       must((
         await pool.query<StagedRow>(
           `INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,tx_date,type_raw,route,units,amount,fees,taxes,currency,resolved_investment_id,raw_data,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,asset_transfer_details,asset_adjustment_details)
-      VALUES ($1,$2,'matched',$3,$4,$5,$6,0,0,0,'EUR',$7,$8,$9,$10,1,$11::jsonb,$12::jsonb)
+      VALUES ($1,$2,'matched',$3,$4,$5,vision_numeric($6,18,8),'0.0000','0.0000','0.0000','EUR',$7,$8,$9,$10,1,vision_jsonb($11),vision_jsonb($12))
       RETURNING *,to_char(tx_date,'YYYY-MM-DD') AS tx_date`,
           [
             batch.id,
@@ -193,34 +193,33 @@ async function cleanup() {
     "portfolio_transactions",
   ])
     await pool.query(
-      `DELETE FROM ${table} WHERE investment_id=ANY($1::int[])`,
+      `DELETE FROM ${table} WHERE investment_id IN (SELECT value FROM json_each($1))`,
       [owned.investments],
     );
   await pool.query(
-    "DELETE FROM portfolio_import_staging_rows WHERE batch_id=ANY($1::bigint[])",
+    "DELETE FROM portfolio_import_staging_rows WHERE batch_id IN (SELECT value FROM json_each($1))",
     [owned.batches],
   );
   await pool.query(
-    "DELETE FROM portfolio_import_batches WHERE id=ANY($1::bigint[])",
+    "DELETE FROM portfolio_import_batches WHERE id IN (SELECT value FROM json_each($1))",
     [owned.batches],
   );
-  await pool.query("DELETE FROM investments WHERE id=ANY($1::int[])", [
+  await pool.query("DELETE FROM investments WHERE id IN (SELECT value FROM json_each($1))", [
     owned.investments,
   ]);
-  await pool.query("DELETE FROM accounts WHERE id=ANY($1::int[])", [
+  await pool.query("DELETE FROM accounts WHERE id IN (SELECT value FROM json_each($1))", [
     owned.accounts,
   ]);
   owned.accounts.length = owned.investments.length = owned.batches.length = 0;
 }
 
 describe.skipIf(!hasTestDatabase())(
-  "reviewed atomic custody prefixes (real PostgreSQL)",
+  "reviewed atomic custody prefixes (real database)",
   () => {
     beforeAll(() => {
       pool = must(getTestPool(), "test pool");
     });
     beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
       await acquireDbSuiteLock();
     }, 180000);
     afterEach(cleanup);
@@ -309,9 +308,9 @@ describe.skipIf(!hasTestDatabase())(
       );
       await pool.query(
         `INSERT INTO portfolio_transactions(investment_id,account_id,type,date,units,amount,price_per_unit,currency)
-        VALUES ($1,$2,'buy','2020-01-01',0.21739,100,460.00276,'EUR'),
-               ($1,$2,'buy','2020-01-02',0.19377,100,516.07576,'EUR'),
-               ($1,$2,'buy','2020-01-03',0.17267,100,579.13939,'EUR')`,
+        VALUES ($1,$2,'buy','2020-01-01','0.21739000','100.0000','460.002760','EUR'),
+               ($1,$2,'buy','2020-01-02','0.19377000','100.0000','516.075760','EUR'),
+               ($1,$2,'buy','2020-01-03','0.17267000','100.0000','579.139390','EUR')`,
         [position.investment, position.source],
       );
       const { batch } = await stage(position, {

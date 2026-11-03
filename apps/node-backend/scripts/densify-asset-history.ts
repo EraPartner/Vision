@@ -27,16 +27,10 @@ import { closePool } from "../src/database/connection.ts";
 const args = new Set(process.argv.slice(2));
 const ASSUME_YES = args.has("--yes") || args.has("-y") || args.has("--force");
 
-/** Host:port/dbname of the target DB, credentials stripped, for the prompt. */
+/** The target database file, for the prompt. */
 function describeTargetDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) return "the default local database (DATABASE_URL unset)";
-  try {
-    const u = new URL(url);
-    return `${u.host}${u.pathname}`;
-  } catch {
-    return "the configured database";
-  }
+  const file = process.env.VISION_DATABASE_PATH;
+  return file ? file : "the default development database (VISION_DATABASE_PATH unset)";
 }
 
 /** Interactive y/N confirmation; false when there is no TTY to prompt on. */

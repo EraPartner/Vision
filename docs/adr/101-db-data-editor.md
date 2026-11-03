@@ -10,6 +10,11 @@ aliases: [db data editor, raw table editor, admin sql data grid]
 
 # ADR-101: Admin DB data editor (raw table view/edit)
 
+> [!note] Superseded in part by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> the editor reads SQLite (`pragma_table_xinfo`, a read snapshot), its concurrency token is a
+> digest of the row's stored values instead of `xmin` with `FOR UPDATE`, and there is no statement
+> timeout. The raw table view and edit, optimistic concurrency and dry-run preview stay.
+
 > [!note] Superseded in part by [[docs/adr/231-remove-audit-history|ADR-231]] on 2026-10-20:
 > migration 0004 drops `db_editor_audit`; committed edits are logged only. The editor, its
 > optimistic concurrency and dry-run preview stay in force.

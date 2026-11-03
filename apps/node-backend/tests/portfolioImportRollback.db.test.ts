@@ -1,5 +1,5 @@
 /**
- * Real-Postgres tests for portfolio import ROLLBACK.
+ * Real-database tests for portfolio import ROLLBACK.
  *
  * Rollback hard-deletes real trades, so the property under test is not "it is
  * fast" but "it deletes EXACTLY the rows this batch created, and nothing else".
@@ -14,7 +14,7 @@
  *     shows up as collateral damage rather than passing;
  *   - a manually-created lot with NO batch stamp, interleaved in the same id
  *     range;
- *   - a ledger `transactions` row whose id is FORCED (via setval) to equal a
+ *   - a ledger `transactions` row whose id is FORCED (via sqlite_sequence) to equal a
  *     portfolio lot id of the OTHER batch — the exact shape of the pre-ffb13d7
  *     cross-table id-confusion bug, where rolling back a brokerage batch
  *     hard-deleted an unrelated trade that happened to share a cash row's number.
@@ -55,19 +55,19 @@ import { commitPortfolioImport } from '../src/services/portfolioImportPipeline/i
 import { rollbackBatch } from '../src/services/portfolioImportBatchService.ts';
 import { __resetPortfolioTransactionSchemaCache } from '../src/repositories/portfolioTransactionRepository.ts';
 import { must } from "./helpers/must.ts";
-import type { Pool } from "pg";
+import type { TestPool } from "./setup/db.ts";
 
 /** A row from an ad-hoc SQL read: column values are narrowed where used. */
 type DbRow = Record<string, unknown>;
 interface IdRow {
   id: number;
 }
-/** BIGINT ids arrive from node-postgres as strings. */
+/** BIGINT ids arrive from the driver as strings. */
 interface BigIdRow {
   id: string;
 }
 
-let pool: Pool;
+let pool: TestPool;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const query = vi.mocked(rawQuery);
 
@@ -136,10 +136,11 @@ async function stageTrade(batchId: number, rowIndex: number, over: Record<string
     `INSERT INTO portfolio_import_staging_rows
        (batch_id, row_index, status, tx_date, type, type_raw, route, units, price_per_unit,
         amount, currency, resolved_investment_id)
-     VALUES ($1, $2, 'matched', $3, $4::portfolio_txn_type, $5, $6, $7, $8, $9, $10, $11)
+     VALUES ($1, $2, 'matched', $3, $4, $5, $6, vision_numeric($7, 18, 8),
+             vision_numeric($8, 18, 6), vision_numeric($9, 18, 4), $10, $11)
      RETURNING id`,
-    [batchId, rowIndex, r.tx_date, r.type, r.type_raw, r.route, r.units, r.price_per_unit,
-      r.amount, r.currency, fx.investmentId],
+    [batchId, rowIndex, r.tx_date, r.type, r.type_raw, r.route, String(r.units),
+      String(r.price_per_unit), String(r.amount), r.currency, fx.investmentId],
   );
   return must(rows[0], "rows[0]").id;
 }
@@ -150,7 +151,7 @@ async function stageTrade(batchId: number, rowIndex: number, over: Record<string
  * `route='cash'` and whose `committed_txn_id` is that TRANSACTIONS id.
  *
  * Seeded rather than driven through `commitPortfolioImport` on purpose: these
- * fixtures FORCE the ledger id (setval) to collide with a portfolio lot id, which the
+ * fixtures FORCE the ledger id (sqlite_sequence) to collide with a portfolio lot id, which the
  * real commit path can never do, and the routing invariant under test is about
  * the ID SHAPE, not about who wrote it. The commit path itself (which now
  * supplies `recipient_id` — NOT NULL since migration 0001) is exercised
@@ -162,22 +163,39 @@ async function stageTrade(batchId: number, rowIndex: number, over: Record<string
  * @param {number} [ledgerId] force this transactions.id (collision fixtures)
  */
 async function commitCashRow(batchId: number, rowIndex: number, ledgerId?: number) {
-  if (ledgerId != null) {
-    await pool.query(`SELECT setval(pg_get_serial_sequence('transactions', 'id'), $1, false)`, [ledgerId]);
-  }
+  if (ledgerId != null) await forceNextLedgerId(ledgerId);
   const { rows: tx } = await pool.query<IdRow>(
     `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, is_active)
-     VALUES ('2026-02-01', 1000, 'EUR', $1, $2, $3, true) RETURNING id`,
+     VALUES ('2026-02-01', '1000.0000', 'EUR', $1, $2, $3, true) RETURNING id`,
     [`CASH ROW ${rowIndex}`, fx.accountId, fx.recipientId],
   );
   const committedId = must(tx[0], "tx[0]").id;
   await pool.query(
     `INSERT INTO portfolio_import_staging_rows
        (batch_id, row_index, status, tx_date, type_raw, route, amount, currency, note, committed_txn_id)
-     VALUES ($1, $2, 'committed', '2026-02-01', 'deposit', 'cash', 1000, 'EUR', $3, $4)`,
+     VALUES ($1, $2, 'committed', '2026-02-01', 'deposit', 'cash', '1000.0000', 'EUR', $3, $4)`,
     [batchId, rowIndex, `CASH ROW ${rowIndex}`, committedId],
   );
   return committedId;
+}
+
+/**
+ * Make `id` the next `transactions` id, as PostgreSQL's
+ * `setval(pg_get_serial_sequence('transactions', 'id'), id, false)` did.
+ * `transactions.id` is AUTOINCREMENT, so SQLite allocates
+ * max(sqlite_sequence.seq, max(id)) + 1; the fixtures call this while the
+ * ledger holds no row at or above `id`.
+ */
+async function forceNextLedgerId(id: number) {
+  await pool.query(
+    `INSERT INTO sqlite_sequence (name, seq)
+     SELECT 'transactions', 0
+      WHERE NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = 'transactions')`,
+  );
+  await pool.query(
+    `UPDATE sqlite_sequence SET seq = CAST($1 AS INTEGER) - 1 WHERE name = 'transactions'`,
+    [id],
+  );
 }
 
 /** A lot created outside any import — the "someone else's trade" decoy. */
@@ -185,7 +203,7 @@ async function manualLot(date: string) {
   const { rows } = await pool.query<IdRow>(
     `INSERT INTO portfolio_transactions
        (investment_id, type, date, amount, units, price_per_unit, currency, account_id)
-     VALUES ($1, 'buy', $2, 500, 5, 100, 'EUR', $3) RETURNING id`,
+     VALUES ($1, 'buy', $2, '500.0000', '5.00000000', '100.000000', 'EUR', $3) RETURNING id`,
     [fx.investmentId, date, fx.accountId],
   );
   return must(rows[0], "rows[0]").id;
@@ -215,7 +233,7 @@ function statementsMatching(re: RegExp) {
   return query.mock.calls.map((c) => c[0]).filter((sql) => re.test(sql));
 }
 
-describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
+describeDb('portfolio import rollback — exact scope (real database)', () => {
   beforeAll(() => {
     pool = must(getTestPool(), "test pool");
   });
@@ -243,14 +261,14 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
     expect(res.imported).toBe(4);
 
     const { rows } = await pool.query<DbRow>(
-      `SELECT COUNT(*)::int AS n FROM portfolio_transactions WHERE import_batch_id = $1`,
+      `SELECT COUNT(*) AS n FROM portfolio_transactions WHERE import_batch_id = $1`,
       [batchId],
     );
     expect(must(rows[0], "rows[0]").n).toBe(4);
     // Manual lots stay unstamped — the stamp means "this import made it".
     await manualLot('2026-05-05');
     const { rows: nulls } = await pool.query<DbRow>(
-      `SELECT COUNT(*)::int AS n FROM portfolio_transactions WHERE import_batch_id IS NULL`,
+      `SELECT COUNT(*) AS n FROM portfolio_transactions WHERE import_batch_id IS NULL`,
     );
     expect(must(nulls[0], "nulls[0]").n).toBe(1);
   });
@@ -333,7 +351,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
 
     // Half the batch predates the stamp.
     await pool.query(
-      `UPDATE portfolio_transactions SET import_batch_id = NULL WHERE id = ANY($1::int[])`,
+      `UPDATE portfolio_transactions SET import_batch_id = NULL WHERE id IN (SELECT value FROM json_each($1))`,
       [lots.slice(0, 2)],
     );
 
@@ -354,11 +372,11 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
     // Cash leaves through `transactions` only…
     const ledgerDeletes = statementsMatching(/DELETE FROM "?transactions\b/i);
     expect(ledgerDeletes).toHaveLength(1);
-    expect(ledgerDeletes[0]).toContain('ANY($1::int[])');
+    expect(ledgerDeletes[0]).toMatch(/"id" in \(SELECT value FROM json_each\(\?\)\)/);
     // …and the portfolio DELETE is keyed on the batch, never on an id list.
     const lotDeletes = statementsMatching(/DELETE FROM "?portfolio_transactions(_base)?\b/i);
     expect(lotDeletes).toHaveLength(1);
-    expect(lotDeletes[0]).toMatch(/import_batch_id"? = \$1/);
+    expect(lotDeletes[0]).toMatch(/import_batch_id"? = (\$1|\?)/);
   });
 
   // ── One statement, not N ────────────────────────────────────────────────
@@ -377,7 +395,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
     expect(statementsMatching(/DELETE FROM "?portfolio_transactions(_base)?\b/i)).toHaveLength(1);
     // No per-row DELETE survives anywhere in the rollback path (the marker of
     // the old loop; the surviving `WHERE id = $1` is markBatchAborted's UPDATE).
-    expect(statementsMatching(/DELETE FROM "?\w+"? WHERE "?id"? = \$1/i)).toHaveLength(0);
+    expect(statementsMatching(/DELETE FROM "?\w+"? WHERE "?id"? = (\$1|\?)/i)).toHaveLength(0);
     expect(await allLotIds()).toEqual([]);
   });
 
@@ -455,10 +473,10 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
 
     // An innocent ledger row FORCED to share the lot's id — the collision that
     // made an unguarded cash pass destructive.
-    await pool.query(`SELECT setval(pg_get_serial_sequence('transactions', 'id'), $1, false)`, [lotId]);
+    await forceNextLedgerId(must(lotId, "lotId"));
     const { rows: tx } = await pool.query<IdRow>(
       `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, is_active)
-       VALUES ('2026-01-10', 55, 'EUR', 'innocent bystander', $1, $2, true) RETURNING id`,
+       VALUES ('2026-01-10', '55.0000', 'EUR', 'innocent bystander', $1, $2, true) RETURNING id`,
       [fx.accountId, fx.recipientId],
     );
     expect(must(tx[0], "tx[0]").id).toBe(lotId);
@@ -490,10 +508,10 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
     // pass can't reach the lot, so only the guarded fallback can delete it.
     await pool.query(`UPDATE portfolio_transactions SET import_batch_id = NULL WHERE id = $1`, [lotId]);
     await pool.query(`UPDATE portfolio_import_staging_rows SET route = 'cash' WHERE batch_id = $1`, [batchId]);
-    await pool.query(`SELECT setval(pg_get_serial_sequence('transactions', 'id'), $1, false)`, [lotId]);
+    await forceNextLedgerId(must(lotId, "lotId"));
     const { rows: tx } = await pool.query<IdRow>(
       `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, is_active)
-       VALUES ('2026-01-11', 66, 'EUR', 'innocent bystander 2', $1, $2, true) RETURNING id`,
+       VALUES ('2026-01-11', '66.0000', 'EUR', 'innocent bystander 2', $1, $2, true) RETURNING id`,
       [fx.accountId, fx.recipientId],
     );
     expect(must(tx[0], "tx[0]").id).toBe(lotId);

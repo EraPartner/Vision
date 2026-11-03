@@ -84,7 +84,7 @@ export interface TransactionWhereOptions {
   /** multiple account ids (IN clause); ignored when accountId is set */
   accountIds?: number[] | null | undefined;
   /**
-   * substring, ILIKE on the account's canonical name (accounts.name via
+   * substring, case-insensitive (ilike) on the account's canonical name (accounts.name via
    * t.account_id — ADR-088 contract: the SQL no longer touches the retired
    * bank_account string) — legacy escape hatch; prefer accountId
    */
@@ -106,7 +106,7 @@ export interface TransactionWhereOptions {
    * that primary
    */
   recipientGroupId?: number | null | undefined;
-  /** substring, ILIKE on r.name */
+  /** substring, case-insensitive (ilike) on r.name */
   recipientName?: string | null | undefined;
   /**
    * multi-column substring (memo, comment, bank, currency, amount, recipients,
@@ -114,21 +114,21 @@ export interface TransactionWhereOptions {
    * MIN_SEARCH_LENGTH after trimming
    */
   search?: string | null | undefined;
-  /** require t.is_active = true (default true) */
+  /** require t.is_active = 1 (default true) */
   active?: boolean | undefined;
   /** filter by amount sign */
   transactionType?: "income" | "expense" | null | undefined;
   /**
    * inclusive lower bound on the amount. By default compares |amount|
    * (magnitude, sign-agnostic); when amountSigned is true compares the signed
-   * amount.
+   * amount. Compared as an exact decimal (dec_ge/dec_le), never as a float.
    */
   amountMin?: number | null | undefined;
   /** inclusive upper bound (see amountMin) */
   amountMax?: number | null | undefined;
   /**
    * when true, amountMin/amountMax are compared against the signed t.amount
-   * (so -50/+50 are distinct); when false they compare against ABS(t.amount)
+   * (so -50/+50 are distinct); when false they compare against dec_abs(t.amount)
    */
   amountSigned?: boolean | undefined;
   /** OR-match: row must have at least one of these active tags */
@@ -142,7 +142,7 @@ export interface TransactionWhereOptions {
  *   LEFT JOIN recipients r ON t.recipient_id = r.id
  *
  * `r` is the ONLY join alias any predicate built here references, and only the
- * `recipientName` filter references it (`r.name ILIKE`). Every other filter
+ * `recipientName` filter references it (`ilike(r.name, …)`). Every other filter
  * resolves against `t` plus self-contained subqueries, so a caller that needs
  * no projection (a count) may join `r` alone — see the reduced join set used by
  * transactionRepository's uncategorised total. Callers that also project
@@ -176,11 +176,15 @@ export function buildTransactionWhere(
 
   const clauses: RawBuilder<unknown>[] = [sql`1=1`];
 
-  if (active) clauses.push(sql`t.is_active = true`);
+  // `= 1`, not `= true`: SQLite matches the partial indexes (WHERE is_active = 1)
+  // only against the same literal.
+  if (active) clauses.push(sql`t.is_active = 1`);
 
   if (transactionId != null) {
     clauses.push(sql`t.id = ${transactionId}`);
   }
+  // Dates are local calendar days: DATE_TEXT 'YYYY-MM-DD' compares as text,
+  // and both bounds arrive validated as 'YYYY-MM-DD' (assertYmd).
   if (startDate) {
     clauses.push(sql`t.date >= ${startDate}`);
   }
@@ -202,7 +206,7 @@ export function buildTransactionWhere(
   // are identical to the old string predicates.
   if (bankAccount) {
     clauses.push(
-      sql`t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE ${`%${bankAccount}%`})`,
+      sql`t.account_id IN (SELECT fa.id FROM accounts fa WHERE ilike(fa.name, ${`%${bankAccount}%`}))`,
     );
   } else if (Array.isArray(bankAccounts) && bankAccounts.length > 0) {
     const safe = bankAccounts
@@ -241,16 +245,18 @@ export function buildTransactionWhere(
     }
   }
   if (transactionType === "income") {
-    clauses.push(sql`t.amount > 0`);
+    clauses.push(sql`dec_sign(t.amount) > 0`);
   } else if (transactionType === "expense") {
-    clauses.push(sql`t.amount < 0`);
+    clauses.push(sql`dec_sign(t.amount) < 0`);
   }
-  const amountCol = amountSigned ? sql`t.amount` : sql`ABS(t.amount)`;
+  // Exact decimal comparison. The bound is the number's decimal text, which is
+  // what node-postgres sent PostgreSQL for a numeric comparison.
+  const amountCol = amountSigned ? sql`t.amount` : sql`dec_abs(t.amount)`;
   if (amountMin != null && Number.isFinite(amountMin)) {
-    clauses.push(sql`${amountCol} >= ${amountMin}`);
+    clauses.push(sql`dec_ge(${amountCol}, ${String(amountMin)})`);
   }
   if (amountMax != null && Number.isFinite(amountMax)) {
-    clauses.push(sql`${amountCol} <= ${amountMax}`);
+    clauses.push(sql`dec_le(${amountCol}, ${String(amountMax)})`);
   }
   if (recipientId != null) {
     // Semi-join so the planner can use the t.recipient_id index instead of an
@@ -285,7 +291,7 @@ export function buildTransactionWhere(
     )`);
   }
   if (recipientName) {
-    clauses.push(sql`r.name ILIKE ${`%${recipientName}%`}`);
+    clauses.push(sql`ilike(r.name, ${`%${recipientName}%`})`);
   }
   const searchText = search ?? "";
   if (searchText.trim().length >= MIN_SEARCH_LENGTH) {
@@ -298,36 +304,37 @@ export function buildTransactionWhere(
     // that spans joined relations down to any single scan, so the old shape
     // seq-scanned transactions plus all five joins plus per-row amount/date
     // casts and a per-row tag probe on every keystroke. Each branch here is a
-    // self-contained scan the planner can index (pg_trgm on memo/comment and
-    // recipients.name, btree on the id hops), and the CAST branches exist only
-    // when the term is made of characters the cast text can actually contain.
+    // self-contained scan (btree on the id hops), and the CAST branches exist
+    // only when the term is made of characters the cast text can actually
+    // contain. The amount and date text is the stored canonical text, which
+    // is PostgreSQL's numeric(18,4) and ISO date output.
     const term = `%${searchText}%`;
-    const matchingCategories = sql`SELECT sc.id FROM categories sc WHERE sc.path_name ILIKE ${term} OR sc.general ILIKE ${term} OR sc.detail ILIKE ${term}`;
+    const matchingCategories = sql`SELECT sc.id FROM categories sc WHERE ilike(sc.path_name, ${term}) OR ilike(sc.general, ${term}) OR ilike(sc.detail, ${term})`;
     const branches: RawBuilder<unknown>[] = [
-      sql`SELECT st.id FROM transactions st WHERE st.memo ILIKE ${term} OR st.comment ILIKE ${term}`,
+      sql`SELECT st.id FROM transactions st WHERE ilike(st.memo, ${term}) OR ilike(st.comment, ${term})`,
       // Bank label via the account entity (ADR-088): the search must match the
       // canonical accounts.name through the FK, not the retired string column.
-      sql`SELECT st.id FROM transactions st WHERE st.account_id IN (SELECT sa.id FROM accounts sa WHERE sa.name ILIKE ${term})`,
-      sql`SELECT st.id FROM transactions st WHERE st.currency ILIKE ${term}`,
+      sql`SELECT st.id FROM transactions st WHERE st.account_id IN (SELECT sa.id FROM accounts sa WHERE ilike(sa.name, ${term}))`,
+      sql`SELECT st.id FROM transactions st WHERE ilike(st.currency, ${term})`,
     ];
     if (/^[0-9.-]+$/.test(searchText)) {
       branches.push(
-        sql`SELECT st.id FROM transactions st WHERE CAST(st.amount AS TEXT) ILIKE ${term}`,
+        sql`SELECT st.id FROM transactions st WHERE ilike(CAST(st.amount AS TEXT), ${term})`,
       );
     }
     if (/^[0-9-]+$/.test(searchText)) {
       branches.push(
-        sql`SELECT st.id FROM transactions st WHERE CAST(st.date AS TEXT) ILIKE ${term}`,
+        sql`SELECT st.id FROM transactions st WHERE ilike(CAST(st.date AS TEXT), ${term})`,
       );
     }
     branches.push(
       // Recipient name — the transaction's own recipient (r.name) or the
       // primary it aliases (pr.name).
       sql`SELECT st.id FROM transactions st WHERE st.recipient_id IN (
-        SELECT sr.id FROM recipients sr WHERE sr.name ILIKE ${term}
+        SELECT sr.id FROM recipients sr WHERE ilike(sr.name, ${term})
         UNION
         SELECT sr.id FROM recipients sr WHERE sr.primary_recipient_id IN (
-          SELECT srp.id FROM recipients srp WHERE srp.name ILIKE ${term}
+          SELECT srp.id FROM recipients srp WHERE ilike(srp.name, ${term})
         )
       )`,
       // Categories — the transaction's own (c), the recipient's default (rc),
@@ -343,7 +350,7 @@ export function buildTransactionWhere(
       // Active tag slugs via the junction table.
       sql`SELECT tt.transaction_id FROM transaction_tags tt
         JOIN tags tg ON tg.id = tt.tag_id
-        WHERE tg.is_active = true AND tg.slug ILIKE ${term}`,
+        WHERE tg.is_active = 1 AND ilike(tg.slug, ${term})`,
     );
     clauses.push(sql`t.id IN (${sql.join(branches, sql` UNION `)})`);
   }
@@ -353,12 +360,13 @@ export function buildTransactionWhere(
       .map((s) => s.trim())
       .filter(Boolean);
     if (safe.length > 0) {
+      // One JSON-array parameter, so the slug list binds as a single value.
       clauses.push(sql`EXISTS (
         SELECT 1 FROM transaction_tags tt
         JOIN tags tg ON tg.id = tt.tag_id
         WHERE tt.transaction_id = t.id
-          AND tg.slug = ANY(${safe}::text[])
-          AND tg.is_active = true
+          AND tg.slug IN (SELECT value FROM json_each(${JSON.stringify(safe)}))
+          AND tg.is_active = 1
       )`);
     }
   }

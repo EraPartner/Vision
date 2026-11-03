@@ -6,6 +6,7 @@ import {
   MAX_REPORT_HTML_CHARS,
   REJECT_INVALID,
   createIpcArgumentContracts,
+  hasAllowedRestoreExt,
   isValidHslComponents,
   validateBackupDest,
 } from "./ipc-schemas";
@@ -100,6 +101,22 @@ void test("backup restore accepts only picker-blessed files with a backup extens
     [PICKED, { passphrase: 1234 }],
     "Invalid restore passphrase",
   );
+});
+
+void test("restore accepts SQLite databases and Vision 2.0 dumps, which it then explains", () => {
+  for (const file of [
+    "/b/vision_backup_x.visionbak",
+    "/b/vision_backup_x.visionbak.enc",
+    "/b/vision.sqlite3",
+    "/b/VISION.SQLITE3",
+    "/b/legacy.sql",
+    "/b/legacy.sql.enc",
+  ]) {
+    assert.equal(hasAllowedRestoreExt(file), true, file);
+  }
+  for (const file of ["/b/notes.txt", "/b/vision.sqlite3-wal", "/b/db"]) {
+    assert.equal(hasAllowedRestoreExt(file), false, file);
+  }
 });
 
 void test("backup:is-encrypted answers false for paths the picker did not bless", () => {

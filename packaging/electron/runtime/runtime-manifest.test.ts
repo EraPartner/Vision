@@ -35,7 +35,7 @@ for (const fault of ["none", "missing", "extra", "size", "hash", "symlink"] as c
 }
 
 const FILES: Record<string, Buffer> = {
-  "bin/postgres": Buffer.alloc(64 * 1024, 1),
+  "bin/vision-tool": Buffer.alloc(64 * 1024, 1),
   "dist/index.html": Buffer.from("<!DOCTYPE html>"),
 };
 
@@ -85,7 +85,7 @@ void test("the first launch hashes the payload and records it; later launches on
 
   // A same-size change is invisible to the size check (ADR-235): the launch
   // stays on the cached path instead of re-reading every byte.
-  await fs.writeFile(path.join(root, "bin/postgres"), Buffer.alloc(64 * 1024, 2));
+  await fs.writeFile(path.join(root, "bin/vision-tool"), Buffer.alloc(64 * 1024, 2));
   assert.deepEqual(await verifyRuntimeManifestOnLaunch(root, options), {
     status: "verified",
     entries: 2,

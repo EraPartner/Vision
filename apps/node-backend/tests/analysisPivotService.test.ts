@@ -60,8 +60,8 @@ describe("complete-source pivots", () => {
     );
     expect(queries).toHaveLength(1);
     expect(must(queries[0], "queries[0]").sql).toContain("UNION ALL");
-    expect(must(queries[0], "queries[0]").sql).toContain('NULL::date AS "month"');
-    expect(must(queries[0], "queries[0]").sql).toContain('NULL::text AS "category_general"');
+    expect(must(queries[0], "queries[0]").sql).toContain('NULL AS "month"');
+    expect(must(queries[0], "queries[0]").sql).toContain('NULL AS "category_general"');
     expect(() =>
       __validateAnalysisSql(must(queries[0], "queries[0]").sql, must(queries[0], "queries[0]").datasetIds),
     ).not.toThrow();

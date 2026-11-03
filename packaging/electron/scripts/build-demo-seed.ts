@@ -4,13 +4,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { databaseStatsManifest } from "../runtime/database-stats";
 import { createNativeRuntime } from "../runtime/native";
+import {
+  DEMO_SEED_DATABASE,
+  DEMO_SEED_MANIFEST,
+} from "../runtime/native-demo";
 import { appRoot } from "../paths";
-import { reservePort } from "./native-isolated-smoke";
 import { replaceGeneratedDirectory } from "./replace-generated-directory";
 
-const repoRoot = path.resolve(appRoot, "..", "..");
 const defaultOutputRoot = path.join(appRoot, "demo-seed");
 // tsc emits demo-db/generate.mts as an ES module next to this compiled script.
 const generatorPath = path.join(__dirname, "..", "demo-db", "generate.mjs");
@@ -26,12 +27,30 @@ export interface DemoSeedStats {
   readonly tableCounts: Readonly<Record<string, number>>;
 }
 
+/** The runtime operations the seed build drives. */
+export interface DemoSeedRuntime {
+  createDatabaseFile(
+    destination: string,
+    options: { seedSqlPath: string },
+  ): Promise<{
+    sha256: string;
+    bytes: number;
+    schemaVersion: number;
+    sqliteVersion: string;
+    pendingMigrations: number;
+    tableCounts?: Record<string, number> | undefined;
+  }>;
+  ensureLayout(): Promise<unknown>;
+  discover(): Promise<unknown>;
+}
+
 export interface BuildDemoSeedOptions {
   nativeRuntimeRoot?: string;
   outputRoot?: string;
-  createRuntime?: typeof createNativeRuntime;
+  createRuntime?: (
+    options: Parameters<typeof createNativeRuntime>[0],
+  ) => DemoSeedRuntime;
   load?: (referenceDate: string) => Promise<DemoSeedGeneratorResult>;
-  reserve?: () => Promise<number>;
   referenceDate?: string;
 }
 
@@ -93,7 +112,6 @@ export async function buildDemoSeed({
   outputRoot = defaultOutputRoot,
   createRuntime = createNativeRuntime,
   load = loadGenerator,
-  reserve = reservePort,
   referenceDate = new Date().toISOString().slice(0, 10),
 }: BuildDemoSeedOptions = {}) {
   const payloadRoot = path.resolve(nativeRuntimeRoot || "");
@@ -105,14 +123,13 @@ export async function buildDemoSeed({
   const stagingRoot = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-demo-seed-output-"),
   );
-  const postgresPort = await reserve();
+  // The packaged payload's database tool migrates and loads the seed, so the
+  // seed is built with the exact migrations and SQLite the app ships.
   const runtime = createRuntime({
     userDataDir,
-    repoRoot,
-    runtimeRoot: repoRoot,
-    postgresRuntimeRoot: payloadRoot,
+    runtimeRoot: payloadRoot,
+    requireRuntimeManifest: true,
     runtimeId: `vision_demo_seed_${process.pid}`,
-    postgresPort,
     appPort: 0,
   });
   try {
@@ -123,41 +140,52 @@ export async function buildDemoSeed({
     if (!sql.trim() || !isRecord(summary)) {
       throw new Error("Synthetic Demo generator returned an invalid result");
     }
-    if (/\bkysely_migration\b/i.test(sql)) {
+    if (/\b(?:vision_migrations|kysely_migration)\b/i.test(sql)) {
       throw new Error("Synthetic Demo data must not modify migration state");
     }
 
     const sqlPath = path.join(stagingRoot, "demo-seed.sql");
-    const dumpPath = path.join(stagingRoot, "demo-seed.dump");
+    const databasePath = path.join(stagingRoot, DEMO_SEED_DATABASE);
     await fs.promises.writeFile(sqlPath, sql, { mode: 0o600 });
     await runtime.ensureLayout();
     await runtime.discover();
-    await runtime.migrateDatabase();
-    await runtime.applyOwnerSqlFile(sqlPath);
-    const stats = await runtime.getDatabaseStats();
+    const report = await runtime.createDatabaseFile(databasePath, {
+      seedSqlPath: sqlPath,
+    });
+    if (!report.tableCounts) {
+      throw new Error("The database tool did not report the Demo row counts");
+    }
+    if (report.pendingMigrations !== 0) {
+      throw new Error("The Demo database is not at the packaged schema version");
+    }
+    const stats = { tableCounts: report.tableCounts };
     assertSummaryMatchesStats(summary, stats);
-    await runtime.dumpDatabase(dumpPath, { format: "custom" });
-    await runtime.validateCustomDump(dumpPath);
 
     const manifest = {
-      version: 1,
+      version: 2,
+      format: "sqlite",
       logicalSha256: sha256(sql),
-      dumpSha256: sha256(await fs.promises.readFile(dumpPath)),
-      schemaRevision: stats.schema,
+      databaseSha256: report.sha256,
+      databaseBytes: report.bytes,
+      schemaVersion: report.schemaVersion,
+      sqliteVersion: report.sqliteVersion,
       referenceDate: generated.demoSeedReferenceDate,
-      database: databaseStatsManifest(stats),
+      database: stats,
       summary,
     };
+    if (sha256(await fs.promises.readFile(databasePath)) !== manifest.databaseSha256) {
+      throw new Error("The Demo database changed after the database tool verified it");
+    }
     await fs.promises.writeFile(
-      path.join(stagingRoot, "manifest.json"),
+      path.join(stagingRoot, DEMO_SEED_MANIFEST),
       `${JSON.stringify(manifest, null, 2)}\n`,
       { mode: 0o644 },
     );
+    await fs.promises.chmod(databasePath, 0o644);
     await fs.promises.unlink(sqlPath);
     replaceGeneratedDirectory(stagingRoot, destination);
     return { outputRoot: destination, manifest };
   } finally {
-    await runtime.stop().catch(() => {});
     await fs.promises.rm(userDataDir, { recursive: true, force: true });
     await fs.promises.rm(stagingRoot, { recursive: true, force: true });
   }
@@ -169,7 +197,7 @@ export async function main(): Promise<void> {
     path.join(appRoot, "native-runtime");
   const result = await buildDemoSeed({ nativeRuntimeRoot });
   console.log(
-    `Prepared native Demo seed for schema ${result.manifest.schemaRevision}.`,
+    `Prepared native Demo seed for schema version ${result.manifest.schemaVersion}.`,
   );
 }
 

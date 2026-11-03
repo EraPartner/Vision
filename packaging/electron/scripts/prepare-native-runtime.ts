@@ -5,8 +5,10 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { appRoot } from "../paths";
-import { preparePostgresRuntime } from "./prepare-postgres-runtime";
-
+import {
+  PACKAGED_ANALYSIS_SANDBOX,
+  PACKAGED_DATABASE_TOOL,
+} from "../runtime/native";
 import { replaceGeneratedDirectory } from "./replace-generated-directory";
 
 export interface ManifestEntry {
@@ -128,6 +130,31 @@ export function compileBackend(
 }
 
 /**
+ * Bundle a backend tool for Bun. The packaged backend executable runs it as
+ * Bun (BUN_BE_BUN=1), so the tool uses the same Bun and SQLite as the backend
+ * itself: `scripts/db-file.ts` for backups, restore verification and Demo
+ * seeding, and `src/services/analysisSandbox.ts` for custom analysis SQL,
+ * which the backend runs as a child process it can kill (ADR-263).
+ */
+export function bundleBunTool(
+  bun: string,
+  entry: string,
+  outfile: string,
+  cwd: string = repoRoot,
+): void {
+  const bundle = spawnSync(
+    bun,
+    ["build", "--target=bun", entry, "--outfile", outfile],
+    { cwd, stdio: "inherit" },
+  );
+  if (bundle.error) throw bundle.error;
+  if (bundle.status !== 0)
+    throw new Error(`Bun tool bundling exited ${bundle.status}`);
+  if (!fs.existsSync(outfile))
+    throw new Error("Bun tool bundling produced no output");
+}
+
+/**
  * Build the Apple Foundation Models helper. FoundationModels needs the macOS 26
  * SDK (Xcode 26); the helper only runs on macOS 26, and the backend treats a
  * helper that cannot start as "Apple model unavailable".
@@ -246,27 +273,23 @@ export function run(): void {
       signCompiledBackend(path.join(stagingRoot, "vision-apple-ai"));
     }
 
-    copyTree(frontendRoot, path.join(stagingRoot, "dist"));
-    // The compiled backend applies db/migrations in-process on boot and reads
-    // db/schema-inventory.sql to verify the baseline fingerprint.
-    copyTree(path.join(repoRoot, "db"), path.join(stagingRoot, "db"));
-    fs.mkdirSync(path.join(stagingRoot, "config", "postgres"), {
-      recursive: true,
-    });
-    fs.copyFileSync(
-      path.join(repoRoot, "config", "postgres", "app-role-grants.sql.tpl"),
-      path.join(stagingRoot, "config", "postgres", "app-role-grants.sql.tpl"),
-    );
-    preparePostgresRuntime({
-      sourceBin: process.env.VISION_POSTGRES_SOURCE_BIN,
-      destination: path.join(stagingRoot, "postgres"),
-    });
+    for (const [packaged, source] of [
+      [PACKAGED_DATABASE_TOOL, "scripts/db-file.ts"],
+      [PACKAGED_ANALYSIS_SANDBOX, "src/services/analysisSandbox.ts"],
+    ] as const) {
+      const outfile = path.join(stagingRoot, ...packaged.split("/"));
+      fs.mkdirSync(path.dirname(outfile), { recursive: true });
+      bundleBunTool(
+        bun,
+        path.join(repoRoot, "apps", "node-backend", ...source.split("/")),
+        outfile,
+      );
+    }
 
-    fs.mkdirSync(path.join(stagingRoot, "licenses"), { recursive: true });
-    fs.copyFileSync(
-      path.join(electronRoot, "resources", "licenses", "PostgreSQL.txt"),
-      path.join(stagingRoot, "licenses", "PostgreSQL.txt"),
-    );
+    copyTree(frontendRoot, path.join(stagingRoot, "dist"));
+    // The compiled backend and the database tool apply db/migrations
+    // in-process to the SQLite database (ADR-263).
+    copyTree(path.join(repoRoot, "db"), path.join(stagingRoot, "db"));
 
     const appVersion = readPackageVersion();
     const entries = manifestEntries(stagingRoot);

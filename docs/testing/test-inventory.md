@@ -2,11 +2,11 @@
 title: Test Inventory
 type: testing
 status: active
-date: 2026-10-28
-last_modified: 2026-10-28
-updated: 2026-10-28
-last-updated: 2026-10-08
-last_updated_timestamp: 2026-10-06T00:00:00Z
+date: 2026-11-03
+last_modified: 2026-11-03
+updated: 2026-11-03
+last-updated: 2026-11-03
+last_updated_timestamp: 2026-11-03T00:00:00Z
 added_portfolio_tax_pure_module_tests: 2026-05-29
 added_chart_aria_tests: 2026-05-29
 added_portfolio_math_tests: 2026-05-05
@@ -118,7 +118,7 @@ the repository was reviewed. The responsive suite's exact CSS assertions were re
 geometry journeys that replaced them were removed with Playwright on 2026-10-18, when the Swift
 app was planned to replace the React UI. After the Swift port was retired on 2026-10-19
 ([[docs/adr/214-retire-vision-native-swift-port|ADR-214]]) the React UI has no browser-journey
-coverage. Account-close SQL mock assertions remain until real PostgreSQL scenarios prove
+coverage. Account-close SQL mock assertions remain until real database scenarios prove
 currency conservation and rollback.
 Precision/property and native restore/journal fault tests remain required. The legacy-inventory checker fixtures run with the current test runtime and disable implicit Bun environment-file loading. Their acceptance and rejection assertions are unchanged; Node and Bun can execute the same fixtures without loading local financial configuration.
 
@@ -128,8 +128,8 @@ is the service-level dedup golden copy; the canonical golden fixture is retained
 There is no browser runner; see [[docs/testing/testing#Behavior-focused cleanup and test boundaries]].
 Native isolated smoke covers backend restarts, encrypted attachment/database round trips and
 tampered restore rejection, recorded separately from deterministic fault injection.
-Removing the browser journeys is not permission to discard financial, SQL rollback, PostgreSQL or
-restore guarantees.
+Removing the browser journeys is not permission to discard financial, SQL rollback, real-database
+or restore guarantees.
 
 Frontend page integrations remain simulated-DOM tests with mocked HTTP; live GET shape
 checks remain API contracts, not end-to-end UI coverage. No static test counts imply complete
@@ -1038,10 +1038,10 @@ The Transaction Tags feature test suite is now **complete and passing**. All tes
 ## Running Tests
 
 ```bash
-# Backend tests without a database (DB-backed cases self-skip)
+# Backend tests, database tests included (each test file gets its own SQLite copy)
 bun run test
 
-# Backend watch mode with disposable PostgreSQL 18
+# Backend watch mode
 bun run test:watch
 
 # Single test file
@@ -1132,7 +1132,7 @@ tests that encode it:
 - **Persistence tests.** `taxPersistence.test.ts` and `BelgianTaxProfileContext.test.tsx` hydrate
   through the household runtime and assert the v2 keys; v1 keys are never written.
 
-These are simulated-DOM and mocked-HTTP tests. No browser, Electron or PostgreSQL run covers the
+These are simulated-DOM and mocked-HTTP tests. No browser, Electron or real-database run covers the
 merged filing flow yet.
 
 ## Related

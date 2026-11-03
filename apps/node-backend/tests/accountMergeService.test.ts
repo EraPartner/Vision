@@ -17,7 +17,13 @@ const { mockClient } = vi.hoisted(() => ({
   mockClient: { query: vi.fn<ClientQuery>() },
 }));
 
-vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
+// The portfolio import batch "lock" only checks that it runs inside the merge
+// transaction (ADR-263); every statement here does.
+vi.mock("../src/database/connection.ts", () =>
+  mockTxConnection(mockClient, {
+    __getAmbientTransactionClient: vi.fn(() => mockClient),
+  }),
+);
 // Real conversion arithmetic, fixed latest stored rates: 1 USD = 0.5 EUR (the
 // canonical fixture from the cross-currency finding).
 vi.mock(
@@ -63,17 +69,29 @@ const { query, poolQuery } = connection as unknown as {
   poolQuery: SqlSpy;
 };
 
-/** SQL text without identifier quotes, case or layout differences. */
+/**
+ * SQL text without identifier quotes, case or layout differences, and with
+ * every placeholder written `?` (Kysely's SQLite compiler emits `?`,
+ * hand-written SQL may use `$n`).
+ */
 function norm(sql: string): string {
-  return sql.replaceAll('"', "").toLowerCase().replace(/\s+/g, " ").trim();
+  return sql
+    .replaceAll('"', "")
+    .toLowerCase()
+    .replace(/\$\d+/g, "?")
+    .replace(/\s+/g, " ")
+    .trim();
 }
+
+/** A source-id list bound for `IN (SELECT value FROM json_each(?))`. */
+const idList = (ids: readonly number[]) => JSON.stringify(ids);
 
 /** The opening-anchor read, whether 'opening' is a literal or a parameter. */
 function isOpeningAnchorRead(sql: string, params: readonly unknown[] = []) {
   const text = norm(sql);
   return (
     text.includes("transfer_source = 'opening'") ||
-    (/transfer_source = \$\d/.test(text) && params.includes("opening"))
+    (/transfer_source = \?/.test(text) && params.includes("opening"))
   );
 }
 
@@ -105,11 +123,13 @@ function happyPath({
   mockClient.query.mockImplementation((sql, params = []) => {
     if (isOpeningAnchorRead(sql, params))
       return Promise.resolve({ rows: openingAnchors });
-    if (norm(sql).includes("for update") && norm(sql).includes("where id = $1"))
+    if (norm(sql).startsWith("select id, name from accounts where id = ?"))
       return Promise.resolve({ rows: [{ id: 2, name: "TARGET" }] });
-    if (norm(sql).includes("for update") && norm(sql).includes("any"))
+    if (
+      norm(sql).startsWith("select id from accounts where id in (select value from json_each(?))")
+    )
       return Promise.resolve({ rows: [{ id: 1 }] });
-    if (norm(sql).includes("from accounts where id = $1"))
+    if (norm(sql).includes("from accounts where id = ?"))
       return Promise.resolve({
         rows: fundingAccounts[params[0] as number]
             ? [fundingAccounts[params[0] as number]]
@@ -160,16 +180,16 @@ describe("mergeAccounts (ADR-088)", () => {
 
   it("throws NotFound when the survivor is missing", async () => {
     mockClient.query.mockImplementation((sql) =>
-      Promise.resolve(norm(sql).includes("where id = $1") ? { rows: [] } : { rows: [], rowCount: 0 }),
+      Promise.resolve(norm(sql).includes("where id = ?") ? { rows: [] } : { rows: [], rowCount: 0 }),
     );
     await expect(mergeAccounts(asAccountId(2), [asAccountId(1)])).rejects.toThrow(NotFoundError);
   });
 
   it("throws NotFound when a source is missing", async () => {
     mockClient.query.mockImplementation((sql) => {
-      if (norm(sql).includes("where id = $1"))
+      if (norm(sql).includes("where id = ?"))
         return Promise.resolve({ rows: [{ id: 2, name: "TARGET" }] });
-      if (norm(sql).includes("any")) return Promise.resolve({ rows: [] }); // no sources found
+      if (norm(sql).includes("json_each")) return Promise.resolve({ rows: [] }); // no sources found
       return Promise.resolve({ rows: [], rowCount: 0 });
     });
     await expect(mergeAccounts(asAccountId(2), [asAccountId(1)])).rejects.toThrow(NotFoundError);
@@ -187,15 +207,17 @@ describe("mergeAccounts (ADR-088)", () => {
     });
 
     const calls = mockClient.query.mock.calls.map(([sql]) => sql);
-    const batchLockIndex = calls.findIndex(
-      (s) =>
-        norm(s).includes("from portfolio_import_batches") && norm(s).includes("for update"),
+    // PostgreSQL's batch → account row-lock order is gone (ADR-263): the one
+    // write transaction excludes every other writer, so the merge opens it
+    // exactly once and every statement — reads included — runs on it.
+    expect(connection.withTransaction).toHaveBeenCalledTimes(1);
+    expect(poolQuery).not.toHaveBeenCalled();
+    const survivorReadIndex = calls.findIndex((s) =>
+      norm(s).startsWith("select id, name from accounts where id = ?"),
     );
-    const accountLockIndex = calls.findIndex(
-      (s) => norm(s).includes("from accounts") && norm(s).includes("for update"),
-    );
-    expect(batchLockIndex).toBeGreaterThan(-1);
-    expect(batchLockIndex).toBeLessThan(accountLockIndex);
+    const firstWriteIndex = calls.findIndex((s) => /^\s*(UPDATE|DELETE|INSERT)\b/i.test(s));
+    expect(survivorReadIndex).toBe(0);
+    expect(survivorReadIndex).toBeLessThan(firstWriteIndex);
     expect(
       calls.some(
         (s) => norm(s).includes("update transactions") && !norm(s).includes("bank_account"),
@@ -220,7 +242,7 @@ describe("mergeAccounts (ADR-088)", () => {
     expect(batchRepointIndex).toBeGreaterThan(-1);
     expect(batchRepointIndex).toBeLessThan(deleteSourcesIndex);
     const batchCall = must(mockClient.query.mock.calls[batchRepointIndex], "mockClient.query.mock.calls[batchRepointIndex]");
-    expect(batchCall[1]).toEqual([2, [1]]);
+    expect(batchCall[1]).toEqual([2, idList([1])]);
     expect(
       calls.some((s) => norm(s).includes("update accounts set funding_account_id")),
     ).toBe(true);
@@ -230,7 +252,7 @@ describe("mergeAccounts (ADR-088)", () => {
     const txCall = mockClient.query.mock.calls.find(([sql]) =>
       norm(sql).includes("update transactions"),
     );
-    expect(must(txCall, "txCall")[1]).toEqual([2, [1]]);
+    expect(must(txCall, "txCall")[1]).toEqual([2, idList([1])]);
   });
 
   it("rejects a merge that would turn the survivor's source reference into a self-cycle", async () => {
@@ -262,15 +284,16 @@ describe("mergeAccounts (ADR-088)", () => {
       /would create a funding-account cycle/,
     );
 
+    // The funding-graph reads run inside the merge's write transaction (the
+    // serialization point that replaced the advisory lock, ADR-263), and the
+    // refusal comes before any write.
+    expect(connection.withTransaction).toHaveBeenCalledTimes(1);
+    expect(poolQuery).not.toHaveBeenCalled();
     const calls = mockClient.query.mock.calls.map(([sql]) => sql);
-    const graphLockIndex = calls.findIndex((sql) =>
-      norm(sql).includes("pg_advisory_xact_lock"),
-    );
-    const firstGraphReadIndex = calls.findIndex((sql) =>
-      norm(sql).includes("from accounts where id = $1"),
-    );
-    expect(graphLockIndex).toBeGreaterThanOrEqual(0);
-    expect(graphLockIndex).toBeLessThan(firstGraphReadIndex);
+    expect(
+      calls.some((sql) => norm(sql).includes("from accounts where id = ?")),
+    ).toBe(true);
+    expect(calls.filter((sql) => /^\s*(UPDATE|DELETE|INSERT)\b/i.test(sql))).toEqual([]);
   });
 
   it("does not make an unrelated pre-existing funding cycle a merge blocker", async () => {
@@ -293,7 +316,7 @@ describe("mergeAccounts (ADR-088)", () => {
     const txCall = mockClient.query.mock.calls.find(([sql]) =>
       norm(sql).includes("update transactions"),
     );
-    expect(must(txCall, "txCall")[1]).toEqual([2, [1]]);
+    expect(must(txCall, "txCall")[1]).toEqual([2, idList([1])]);
   });
 
   // §1 F2 regression: two concurrently-imported accounts (survivor KBC stamped
@@ -313,7 +336,7 @@ describe("mergeAccounts (ADR-088)", () => {
     expect(result.stampsInterleaved).toBe(true);
     const clear = clearAnchorCall();
     expect(clear).toBeDefined();
-    expect(norm(must(clear, "clear")[0])).toContain("where account_id = $1");
+    expect(norm(must(clear, "clear")[0])).toContain("where account_id = ?");
     expect(must(clear, "clear")[1]).toEqual([2]); // clears the SURVIVOR's anchor only
 
     // Historical per-row stamps are never rewritten — no UPDATE touches
@@ -381,7 +404,8 @@ describe("mergeAccounts (ADR-088)", () => {
     );
 
     // Refused BEFORE any write: nothing was repointed or deleted. (Anchored to
-    // the start of the statement so the `FOR UPDATE` lock SELECTs don't match.)
+    // the start of the statement so a read that mentions a write keyword
+    // elsewhere does not match.)
     const writes = mockClient.query.mock.calls
       .map(([sql]) => sql)
       .filter((s) => /^\s*(UPDATE|DELETE|INSERT)\b/i.test(s));
@@ -492,6 +516,18 @@ describe("collidingAnchorCurrencies (opening-anchor merge guard)", () => {
 });
 
 describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
+  // The transactions columns the union CTE relabels (pragma_table_info).
+  const TRANSACTION_COLUMNS = [
+    "id",
+    "date",
+    "amount",
+    "currency",
+    "account_id",
+    "balance",
+    "bank_sequence",
+    "is_active",
+  ].map((name) => ({ name }));
+
   // Routes the dedicated pool sink (previewMerge is read-only — it never opens a
   // transaction). Source #1 merged INTO survivor #2 (EUR).
   function primePreview({
@@ -514,6 +550,8 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
     openingAnchors?: OpeningAnchor[];
   } = {}) {
     poolQuery.mockImplementation((sql, params = []) => {
+      if (norm(sql).includes("from pragma_table_info('transactions')"))
+        return Promise.resolve({ rows: TRANSACTION_COLUMNS });
       if (isOpeningAnchorRead(sql, params))
         return Promise.resolve({ rows: openingAnchors });
       if (norm(sql).includes("group by account_id")) return Promise.resolve({ rows: stampRanges });
@@ -602,27 +640,37 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
     );
     expect(projectedCall).toBeDefined();
     const [projectedSql] = must(projectedCall, "projectedCall");
-    // The shared hub builder (jsonb partitions), with the union substituted
-    // for a single account — so preview and hub cannot compute the merged
-    // balance differently.
-    expect(projectedSql).toContain("jsonb_agg(");
-    // Union set: account_id = ANY(...) — not a single-account filter.
-    expect(projectedSql).toMatch(/t\.account_id = ANY\(\$\d+::int\[\]\)/);
-    expect(projectedSql).not.toMatch(/t\.account_id = a\.id/);
+    // The shared hub builder (JSON partitions), evaluated over the union: the
+    // statement shadows `transactions` with the survivor's and the source's
+    // rows, all relabelled as the survivor's — so preview and hub cannot
+    // compute the merged balance differently.
+    expect(projectedSql).toContain("json_group_array(");
+    expect(norm(projectedSql)).toMatch(
+      /^with transactions as \( select .*cast\(\? as integer\) as account_id/,
+    );
+    // Union set: account_id IN (survivor, source) — not a single-account filter.
+    expect(norm(projectedSql)).toContain(
+      "from main.transactions src where src.account_id in (select value from json_each(?))",
+    );
+    // Every transactions column passes through except the relabelled account_id.
+    for (const { name } of TRANSACTION_COLUMNS) {
+      if (name !== "account_id") expect(norm(projectedSql)).toContain(`src.${name}`);
+    }
+    expect(norm(projectedSql)).not.toContain("src.account_id,");
     // Anchor = latest stamped row of THAT currency across the union.
     expect(projectedSql).toContain("t.balance IS NOT NULL");
-    expect(projectedSql).toContain(
-      "COALESCE(t.currency, 'EUR') = ccy.currency",
-    );
-    // Every bound id list is survivor + source; every other value is the
+    expect(projectedSql).toContain("t.currency = g.currency");
+    // The bound id list is survivor + source; the bound integers are the
+    // survivor (the relabel and the outer row); every other value is the
     // app-timezone as-of day.
     const params = must(projectedCall, "projectedCall")[1] ?? [];
     expect(params.length).toBeGreaterThan(0);
     for (const param of params) {
-      if (Array.isArray(param)) expect(param).toEqual([2, 1]);
-      else expect(param).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      if (typeof param === "number") expect(param).toBe(2);
+      else if (param !== idList([2, 1])) expect(param).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     }
-    expect(params.some(Array.isArray)).toBe(true);
+    expect(params.filter((param) => param === idList([2, 1]))).toHaveLength(1);
+    expect(params.filter((param) => param === 2)).toHaveLength(2);
   });
 
   it("converts each currency partition at its own rate, into the survivor currency", async () => {
@@ -698,7 +746,7 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
       .map(([sql]) => sql)
       .find((s) => norm(s).includes("portfolio_transactions") && norm(s).includes("count"));
     expect(norm(must(portfolioSql, "portfolioSql"))).toContain(
-      "from portfolio_transactions where account_id = $1",
+      "from portfolio_transactions where account_id = ?",
     );
   });
 });

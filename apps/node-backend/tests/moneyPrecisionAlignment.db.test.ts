@@ -1,17 +1,18 @@
 /**
- * Real-Postgres pins for migration 0088 (ADR-060 D7): NUMERIC(18,4) is the domain
+ * Real-database pins for migration 0088 (ADR-060 D7): NUMERIC(18,4) is the domain
  * precision for money columns, and every surviving (15,2) sibling of
  * transactions.amount is aligned to it. Later guarded contracts retired the
  * provider raw tables and accounts.statement_balance.
  *
  * What only a real database can verify here:
- *   1. The widened types themselves (information_schema) — the whole point of the
- *      migration, and the assertion that catches an incomplete inventory or a
- *      re-narrowing regression.
+ *   1. The widened types themselves (the declared DECIMAL_TEXT(18,4) column types
+ *      and their canonical-text CHECK, PostgreSQL's numeric(18,4) since ADR-263)
+ *      — the whole point of the migration, and the assertion that catches an
+ *      incomplete inventory or a re-narrowing regression.
  *   2. The finding's failure case, now possible: a 4-decimal transaction split
- *      EXACTLY into 4-decimal parts, with genuine NUMERIC equality
- *      (SUM(splits) = ABS(amount), no 0.005-tolerance masking), surviving the
- *      0019 sync-trigger path into agg_split_outstanding — whose plpgsql locals
+ *      EXACTLY into 4-decimal parts, with genuine decimal equality
+ *      (dec_sum(splits) = dec_abs(amount), no 0.005-tolerance masking), surviving
+ *      the 0019 sync-trigger path into agg_split_outstanding — whose locals
  *      0088 re-declared at (18,4) precisely so this stops rounding to cents.
  *   3. The 0062 split-guard trigger still guards after the retype.
  *   4. Planned→executed copies are precision-symmetric: a 4-dp planned amount
@@ -28,11 +29,8 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import splitPersistence from "../src/repositories/splitRepository.ts";
 import splitService from "../src/services/splitService.ts";
@@ -40,13 +38,13 @@ import { closePool } from "../src/database/connection.ts";
 import {
   asRecipientId, type PlannedTransactionId, type RecipientId, type SplitId, type TransactionId } from "@vision/types/brands";
 import { must } from "./helpers/must.ts";
+import { stringMatching } from "./helpers/matchers.ts";
 
 /** A result row whose columns the test reads without a fixed shape. */
 type DbRow = Record<string, unknown>;
 
-const maybePool = getTestPool();
-const pool = () => must(maybePool, "test pool");
-const describeDb = hasTestDatabase() ? describe : describe.skip;
+const pool = () => getTestPool();
+const describeDb = describe;
 const splitRepository = { ...splitPersistence, ...splitService };
 
 const MARK = `_0088_precision_${process.pid}`;
@@ -77,7 +75,6 @@ describeDb("migration 0088: money columns aligned to NUMERIC(18,4)", () => {
   const plannedIds: number[] = [];
 
   beforeAll(async () => {
-    await acquireDbSuiteLock();
     const { rows } = await pool().query<{ id: RecipientId }>(
       `INSERT INTO recipients (name, normalized_name) VALUES ($1, $1) RETURNING id`,
       [MARK],
@@ -86,48 +83,52 @@ describeDb("migration 0088: money columns aligned to NUMERIC(18,4)", () => {
   }, 180_000);
 
   afterAll(async () => {
-    if (maybePool) {
-      // transactions → transaction_splits → split_payments / agg_split_outstanding
-      // all cascade; planned rows and the recipient are deleted directly.
-      if (txIds.length > 0)
-        await pool().query<DbRow>(`DELETE FROM transactions WHERE id = ANY($1)`, [
-          txIds,
-        ]);
-      if (plannedIds.length > 0) {
-        await pool().query(
-          `DELETE FROM planned_transactions WHERE id = ANY($1)`,
-          [plannedIds],
-        );
-      }
-      if (recipientId !== undefined)
-        await pool().query<DbRow>(`DELETE FROM recipients WHERE id = $1`, [recipientId]);
+    // transactions → transaction_splits → split_payments / agg_split_outstanding
+    // all cascade; planned rows and the recipient are deleted directly.
+    if (txIds.length > 0)
+      await pool().query<DbRow>(
+        `DELETE FROM transactions WHERE id IN (SELECT value FROM json_each($1))`,
+        [JSON.stringify(txIds)],
+      );
+    if (plannedIds.length > 0) {
+      await pool().query(
+        `DELETE FROM planned_transactions WHERE id IN (SELECT value FROM json_each($1))`,
+        [JSON.stringify(plannedIds)],
+      );
     }
-    await releaseDbSuiteLock();
+    if (recipientId !== undefined)
+      await pool().query<DbRow>(`DELETE FROM recipients WHERE id = $1`, [recipientId]);
     await closeTestPool();
-    // The repository guards below go through the app pool (DATABASE_URL).
+    // The repository guards below go through the backend's own connections.
     await closePool();
   });
 
   async function insertTx(amount: string, balance: string | null = null) {
     const { rows } = await pool().query<{ id: TransactionId }>(
       `INSERT INTO transactions (date, amount, balance, memo, currency, recipient_id)
-       VALUES ('2026-08-01', $1, $2, $3, 'EUR', $4) RETURNING id`,
+       VALUES ('2026-08-01', vision_numeric($1, 18, 4), vision_numeric($2, 18, 4), $3, 'EUR', $4) RETURNING id`,
       [amount, balance, MARK, recipientId],
     );
     txIds.push(must(rows[0], "rows[0]").id);
     return must(rows[0], "rows[0]").id;
   }
 
-  it("pins every D7 column at numeric(18,4) via information_schema", async () => {
+  /** Every table column with its declared type (SQLite's information_schema). */
+  async function declaredColumns() {
     const { rows } = await pool().query<{
       table_name: string;
       column_name: string;
+      type: string;
     }>(`
-      SELECT table_name, column_name
-      FROM information_schema.columns
-      WHERE table_schema = 'public' AND data_type = 'numeric'
-        AND numeric_precision = 18 AND numeric_scale = 4
+      SELECT m.name AS table_name, c.name AS column_name, c.type
+      FROM sqlite_schema m, pragma_table_info(m.name) c
+      WHERE m.type = 'table'
     `);
+    return rows;
+  }
+
+  it("pins every D7 column at DECIMAL_TEXT(18,4) (numeric(18,4))", async () => {
+    const rows = (await declaredColumns()).filter((r) => r.type === "DECIMAL_TEXT(18,4)");
     const have = new Set(rows.map((r) => `${r.table_name}.${r.column_name}`));
     const missing = WIDENED.filter(([t, c]) => !have.has(`${t}.${c}`));
     expect(missing).toEqual([]);
@@ -135,25 +136,45 @@ describeDb("migration 0088: money columns aligned to NUMERIC(18,4)", () => {
     expect(have.has("transactions.amount")).toBe(true);
   });
 
-  it("leaves no numeric(15,2) money column behind, and import_staging_rows at (20,4)", async () => {
-    const { rows } = await pool().query<DbRow>(`
-      SELECT table_name || '.' || column_name AS col
-      FROM information_schema.columns
-      WHERE table_schema = 'public' AND data_type = 'numeric'
-        AND numeric_precision = 15 AND numeric_scale = 2
-    `);
-    expect(rows.map((r) => r.col)).toEqual([]);
+  it("enforces the (18,4) canonical text on writes that bypass vision_numeric()", async () => {
+    // A hand-written write of a 5-dp or 2-dp text is refused by the column's
+    // CHECK, as PostgreSQL's numeric(18,4) would have rounded it; nothing can
+    // store an off-scale value that a text comparison would then mis-order.
+    for (const amount of ["1.00001", "-99.99", "1e2"]) {
+      await expect(
+        pool().query(
+          `INSERT INTO transactions (date, amount, memo, currency, recipient_id)
+           VALUES ('2026-08-01', $1, $2, 'EUR', $3)`,
+          [amount, MARK, recipientId],
+        ),
+      ).rejects.toMatchObject({ code: "23514", constraint: "transactions_amount__vtype" });
+    }
+    // vision_numeric() rounds half away from zero to the column scale.
+    const { rows } = await pool().query<DbRow>(
+      `SELECT vision_numeric('1.00005', 18, 4) AS up, vision_numeric('-1.00005', 18, 4) AS down`,
+    );
+    expect(rows).toEqual([{ up: "1.0001", down: "-1.0001" }]);
+  });
 
-    const staging = await pool().query<DbRow>(`
-      SELECT column_name, numeric_precision, numeric_scale
-      FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = 'import_staging_rows'
-        AND column_name IN ('amount', 'balance')
-      ORDER BY column_name
-    `);
-    expect(staging.rows).toEqual([
-      { column_name: "amount", numeric_precision: 20, numeric_scale: 4 },
-      { column_name: "balance", numeric_precision: 20, numeric_scale: 4 },
+  it("leaves no numeric(15,2) money column behind, and import_staging_rows at (20,4)", async () => {
+    const columns = await declaredColumns();
+    expect(
+      columns
+        .filter((r) => r.type === "DECIMAL_TEXT(15,2)")
+        .map((r) => `${r.table_name}.${r.column_name}`),
+    ).toEqual([]);
+
+    const staging = columns
+      .filter(
+        (r) =>
+          r.table_name === "import_staging_rows" &&
+          ["amount", "balance"].includes(r.column_name),
+      )
+      .map(({ column_name, type }) => ({ column_name, type }))
+      .sort((a, b) => a.column_name.localeCompare(b.column_name));
+    expect(staging).toEqual([
+      { column_name: "amount", type: "DECIMAL_TEXT(20,4)" },
+      { column_name: "balance", type: "DECIMAL_TEXT(20,4)" },
     ]);
   });
 
@@ -166,8 +187,8 @@ describeDb("migration 0088: money columns aligned to NUMERIC(18,4)", () => {
     );
 
     const { rows } = await pool().query<DbRow>(
-      `SELECT SUM(ts.amount) AS split_sum,
-              SUM(ts.amount) = ABS(t.amount) AS exact
+      `SELECT dec_sum(ts.amount) AS split_sum,
+              dec_eq(dec_sum(ts.amount), dec_abs(t.amount)) AS "exact::bool"
        FROM transactions t JOIN transaction_splits ts ON ts.transaction_id = t.id
        WHERE t.id = $1 GROUP BY t.id, t.amount`,
       [txId],
@@ -217,12 +238,22 @@ describeDb("migration 0088: money columns aligned to NUMERIC(18,4)", () => {
       [txId, recipientId],
     );
 
-    // Shrinking the parent below the split total (beyond the 0.005 tolerance) raises.
+    // Shrinking the parent below the split total (beyond the 0.005 tolerance)
+    // raises from the guard trigger (a canonical value, so not the column CHECK).
     await expect(
-      pool().query<DbRow>(`UPDATE transactions SET amount = '-99.99' WHERE id = $1`, [
-        txId,
-      ]),
-    ).rejects.toMatchObject({ code: "23514" });
+      pool().query<DbRow>(
+        `UPDATE transactions SET amount = vision_numeric('-99.99', 18, 4) WHERE id = $1`,
+        [txId],
+      ),
+    ).rejects.toMatchObject({
+      code: "23514",
+      message: stringMatching(/below its split total 100\.0001/),
+    });
+    // Within the 0.005 tolerance passes (100.0001 - 0.005 < 99.9952).
+    await pool().query<DbRow>(
+      `UPDATE transactions SET amount = vision_numeric('-99.9952', 18, 4) WHERE id = $1`,
+      [txId],
+    );
 
     // An amount the splits cover exactly (equality, zero slack) passes.
     await pool().query<DbRow>(
@@ -251,7 +282,7 @@ describeDb("migration 0088: money columns aligned to NUMERIC(18,4)", () => {
     // is exact.
     const txId = await insertTx(must(planned[0], "planned[0]").amount);
     const { rows } = await pool().query<DbRow>(
-      `SELECT t.amount = pt.amount AS symmetric
+      `SELECT dec_eq(t.amount, pt.amount) AS "symmetric::bool"
        FROM transactions t, planned_transactions pt
        WHERE t.id = $1 AND pt.id = $2`,
       [txId, must(planned[0], "planned[0]").id],
@@ -305,7 +336,7 @@ describeDb("migration 0088: money columns aligned to NUMERIC(18,4)", () => {
       ).rejects.toThrow(/exceed split outstanding balance/);
 
       const { rows } = await pool().query<DbRow>(
-        `SELECT COALESCE(SUM(amount), 0) AS paid FROM split_payments WHERE split_id = $1`,
+        `SELECT COALESCE(dec_sum(amount), '0') AS paid FROM split_payments WHERE split_id = $1`,
         [splitId],
       );
       expect(must(rows[0], "rows[0]").paid).toBe("25.0025"); // only the first payment landed
@@ -332,7 +363,7 @@ describeDb("migration 0088: money columns aligned to NUMERIC(18,4)", () => {
       ).rejects.toThrow(/exceeds transaction total/);
 
       const { rows } = await pool().query<DbRow>(
-        `SELECT COALESCE(SUM(amount), 0) AS total FROM transaction_splits WHERE transaction_id = $1`,
+        `SELECT COALESCE(dec_sum(amount), '0') AS total FROM transaction_splits WHERE transaction_id = $1`,
         [txId],
       );
       expect(must(rows[0], "rows[0]").total).toBe("50.0000");
@@ -349,7 +380,7 @@ describeDb("migration 0088: money columns aligned to NUMERIC(18,4)", () => {
       });
       expect(created.map((s) => s.amount)).toEqual([50, 50.0001]);
       const { rows } = await pool().query<DbRow>(
-        `SELECT SUM(ts.amount) = ABS(t.amount) AS exact
+        `SELECT dec_eq(dec_sum(ts.amount), dec_abs(t.amount)) AS "exact::bool"
          FROM transactions t JOIN transaction_splits ts ON ts.transaction_id = t.id
          WHERE t.id = $1 GROUP BY t.id, t.amount`,
         [txId],

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { getConfig } from "app-builder-lib/out/util/config/config";
@@ -8,6 +9,7 @@ import type { FileSet } from "electron-builder";
 
 import { appRoot } from "../paths";
 import {
+  assertPreparedPayload,
   packageConfig,
   packageResources,
   parseArgs,
@@ -104,4 +106,30 @@ void test("native package excludes test data, source maps, and foreign Bare preb
       "!node_modules/bare-{fs,os,url}/prebuilds/!(darwin-arm64)/**/*",
     ),
   );
+  // The SQLite runtime ships no third-party database server or its license
+  // bundle; the payload is added by packageConfig.
+  assert.deepEqual(
+    fileSets(effective.extraResources).map(({ from }) => from),
+    ["i18n"],
+  );
+});
+
+void test("packaging requires the backend, its tools and a baseline migration", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vision-payload-check-"));
+  try {
+    fs.writeFileSync(path.join(root, "manifest.json"), "{}");
+    fs.writeFileSync(path.join(root, "vision-backend"), "", { mode: 0o755 });
+    fs.mkdirSync(path.join(root, "db", "migrations"), { recursive: true });
+    fs.writeFileSync(path.join(root, "db", "migrations", "0001_baseline.sql"), "");
+    assert.throws(() => assertPreparedPayload(root), /ENOENT/);
+    fs.mkdirSync(path.join(root, "tools"));
+    fs.writeFileSync(path.join(root, "tools", "db-file.js"), "");
+    assert.throws(() => assertPreparedPayload(root), /analysis-sandbox\.js/);
+    fs.writeFileSync(path.join(root, "tools", "analysis-sandbox.js"), "");
+    assert.doesNotThrow(() => assertPreparedPayload(root));
+    fs.rmSync(path.join(root, "db", "migrations", "0001_baseline.sql"));
+    assert.throws(() => assertPreparedPayload(root), /no baseline database migration/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });

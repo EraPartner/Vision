@@ -268,9 +268,10 @@ async function retagPortfolioTransactions(request: RetagRequest) {
   const transactionIds = [...request.transaction_ids].sort((a, b) => a - b);
 
   return withTransaction(async () => {
-    // Account lifecycle operations lock the account row before touching
-    // portfolio transactions. Keep the same order so close-vs-retag cannot
-    // deadlock and destination eligibility cannot change before commit.
+    // The transaction holds the single SQLite writer (BEGIN IMMEDIATE), so a
+    // concurrent account close either committed before this read or waits
+    // until this re-tag ends: destination eligibility cannot change before
+    // commit.
     if (
       request.to_account_id != null &&
       !(await repository.lockEligibleDestinationAccount(request.to_account_id))
@@ -280,9 +281,10 @@ async function retagPortfolioTransactions(request: RetagRequest) {
       );
     }
 
-    // Retagging needs a stable complete investment history. This table lock is
-    // intentionally exceptional: it prevents insert phantoms and serializes
-    // portfolio writes for the short set-based operation.
+    // Retagging needs a stable complete investment history: no insert
+    // phantoms and no concurrent portfolio writes for the short set-based
+    // operation. The writer transaction provides it; this asserts we are in
+    // one.
     await repository.lockPortfolioTransactionWrites();
 
     const selected = await repository.lockTransactions(transactionIds);
@@ -292,8 +294,9 @@ async function retagPortfolioTransactions(request: RetagRequest) {
       return row !== undefined && (row.account_id ?? null) === accountId;
     };
 
-    // A repeated request finds every row already on the destination. Under the
-    // locks above that state cannot change, so report it without writing.
+    // A repeated request finds every row already on the destination. Inside
+    // the writer transaction that state cannot change, so report it without
+    // writing.
     if (
       request.from_account_id !== request.to_account_id &&
       transactionIds.every((id) => isOn(id, request.to_account_id))

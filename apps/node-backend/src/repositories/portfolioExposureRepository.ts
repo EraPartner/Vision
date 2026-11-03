@@ -99,7 +99,11 @@ export async function listExposureTargets(
     db
       .selectFrom("investments")
       .select(["id", "asset_class as assetClass"])
-      .where("id", "=", sql<InvestmentId>`ANY(${investmentIds}::int[])`),
+      .where(
+        "id",
+        "in",
+        sql<InvestmentId>`(SELECT value FROM json_each(${JSON.stringify(investmentIds)}))`,
+      ),
   );
 }
 
@@ -152,8 +156,8 @@ export async function upsertExposureBundle({
         .insertInto("portfolio_fund_holdings_documents")
         .values({
           investment_id: asInvestmentId(item.investmentId),
-          share_class_identifier_json: sql`${JSON.stringify(item.shareClassIdentifier)}::jsonb`,
-          document_json: sql`${JSON.stringify(item.document)}::jsonb`,
+          share_class_identifier_json: sql`vision_jsonb(${JSON.stringify(item.shareClassIdentifier)})`,
+          document_json: sql`vision_jsonb(${JSON.stringify(item.document)})`,
           source_as_of_date: item.document.source.asOfDate,
           source_sha256: item.sourceSha256,
         })

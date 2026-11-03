@@ -5,11 +5,11 @@
  * ONE CLOCK, same rule as infoRepositoryForecast.js and
  * infoRepositoryAverageVsCurrent.js: every month-window edge here is anchored
  * on `todayAppDateString()` — the APP_TIMEZONE calendar day (ADR-009) — read
- * once per call and bound into the SQL as a `::date` parameter. Postgres
- * `CURRENT_DATE` is not used: it follows the DB session's zone (UTC), so with
- * the default APP_TIMEZONE=Europe/Brussels the two disagree on the calendar
- * day for the couple of hours before midnight — and on a month's last day the
- * SQL window set and the JS zero-fill key set disagreed by a whole month.
+ * once per call and bound into the SQL as a 'YYYY-MM-DD' date parameter. The
+ * SQL clock (`today()`, formerly PostgreSQL's `CURRENT_DATE`) is not used: it
+ * follows the database's zone, not APP_TIMEZONE, so the two can disagree on
+ * the calendar day for the hours around midnight — and on a month's last day
+ * the SQL window set and the JS zero-fill key set disagreed by a whole month.
  */
 
 import { sql } from "kysely";
@@ -98,7 +98,7 @@ export async function getMonthlyFinancialSummary(
     validRecipientIds,
   });
   // The single clock for this call (ADR-009). Read ONCE, bound into whichever
-  // path runs (MV filter or live generate_series) and reused for the JS
+  // path runs (MV filter or the live month series) and reused for the JS
   // zero-fill below, so the SQL month set and the JS key set can never
   // straddle a month rollover.
   const todayYmd = todayAppDateString();
@@ -129,20 +129,20 @@ export async function getMonthlyFinancialSummary(
   }
 
   if (mvUsable && mvCurrencyHomogeneous) {
-    // Upper bound matches the live path (whose generate_series ends at the
+    // Upper bound matches the live path (whose month series ends at the
     // current month) — without it a post-dated transaction adds a future month
     // on the MV path only, so the dashboard month set changed with the code path.
     // Anchored on the bound app date, the same clock as the zero-fill.
-    const dateFilterClause = sql`WHERE month_start >= date_trunc('month', ${todayYmd}::date - interval '5 months')
-        AND month_start <= date_trunc('month', ${todayYmd}::date)`;
+    const dateFilterClause = sql`WHERE month_start >= add_months(date_trunc('month', ${todayYmd}), -5)
+        AND month_start <= date_trunc('month', ${todayYmd})`;
     const mvRows = await checkedRows(
       mvMonthlyRowSchema,
       sql`
       SELECT month_start, month, year, currency,
-             SUM(transaction_count) AS transaction_count,
-             SUM(total_income) AS total_income,
-             SUM(total_spending) AS total_spending,
-             SUM(net_amount) AS net_amount
+             sum(transaction_count) AS "transaction_count::bigint",
+             dec_sum(total_income) AS total_income,
+             dec_sum(total_spending) AS total_spending,
+             dec_sum(net_amount) AS net_amount
       FROM mv_monthly_summary
       ${dateFilterClause}
       GROUP BY month_start, month, year, currency
@@ -228,7 +228,7 @@ export async function getMonthlyFinancialSummary(
     }
 
     // Zero-fill months with no transactions so the MV path returns the SAME
-    // 6-month set as the live path's generate_series. Without this, toggling an
+    // 6-month set as the live path's month series. Without this, toggling an
     // exclusion (which switches paths) changed the dashboard's month set.
     // Uses the SAME app-timezone "today" (ADR-009) bound into the SQL above —
     // one clock reading, so the key set and the window set agree by
@@ -277,25 +277,26 @@ export async function getMonthlyFinancialSummary(
     excludedRecipientIds,
   });
 
-  // The app-date anchor appears only where a default bound uses it, so both
-  // explicit bounds leave it unbound: PostgreSQL cannot type an unused
-  // prepared-statement parameter (the Statistics range hit this as $1).
-  const today = sql`${todayYmd}::date`;
+  // Month bounds are DATEs (local calendar months, ADR-009): the app-date
+  // anchor, or a caller's YYYY-MM-DD bound read as a date (ts_date is
+  // PostgreSQL's `::date`).
   let rangeStart = allTime
-    ? sql`COALESCE((SELECT date_trunc('month', MIN(date)) FROM transactions WHERE is_active = true), date_trunc('month', ${today}))`
-    : sql`date_trunc('month', ${today} - interval '5 months')`;
-  let rangeEnd = sql`date_trunc('month', ${today})`;
+    ? sql`COALESCE((SELECT date_trunc('month', min(date)) FROM transactions WHERE is_active = 1), date_trunc('month', ${todayYmd}))`
+    : sql`add_months(date_trunc('month', ${todayYmd}), -5)`;
+  let rangeEnd = sql`date_trunc('month', ${todayYmd})`;
   const transactionFilters: RawBuilder<unknown>[] = [];
   if (!allTime && startDate) {
-    rangeStart = sql`date_trunc('month', ${startDate}::date)`;
-    transactionFilters.push(sql`t.date >= ${startDate}::date`);
+    rangeStart = sql`date_trunc('month', ts_date(${startDate}))`;
+    transactionFilters.push(sql`t.date >= ts_date(${startDate})`);
   }
   if (!allTime && endDate) {
-    rangeEnd = sql`date_trunc('month', ${endDate}::date)`;
-    transactionFilters.push(sql`t.date <= ${endDate}::date`);
+    rangeEnd = sql`date_trunc('month', ts_date(${endDate}))`;
+    transactionFilters.push(sql`t.date <= ts_date(${endDate})`);
   }
   if (validAccountIds.length > 0) {
-    transactionFilters.push(sql`t.account_id = ANY(${validAccountIds}::int[])`);
+    transactionFilters.push(
+      sql`t.account_id IN (SELECT value FROM json_each(${JSON.stringify(validAccountIds)}))`,
+    );
   }
 
   // Aggregate per (date, currency) in SQL instead of streaming every transaction
@@ -306,15 +307,22 @@ export async function getMonthlyFinancialSummary(
   //   • SUM(amount) FILTER (amount >= 0) converted == Σ converted incomes
   //   • SUM(amount) FILTER (amount <  0) converted == Σ converted spendings
   // making this numerically identical to the old per-transaction loop while
-  // pushing the heavy SUM/COUNT into Postgres. (A month-level GROUP BY would NOT
-  // be valid here because intra-month FX varies.)
+  // pushing the heavy exact SUM/COUNT into the database. (A month-level GROUP
+  // BY would NOT be valid here because intra-month FX varies.)
+  //
+  // `months` is every month start from rangeStart through rangeEnd inclusive
+  // (PostgreSQL's generate_series over '1 month'); empty when the start lies
+  // after the end.
   const monthlyQuery = sql`
-    WITH months AS (
-      SELECT generate_series(
-        ${rangeStart},
-        ${rangeEnd},
-        interval '1 month'
-      )::date AS month_start
+    WITH RECURSIVE bounds AS (
+      SELECT ${rangeStart} AS first_month, ${rangeEnd} AS last_month
+    ),
+    months(month_start) AS (
+      SELECT first_month FROM bounds WHERE first_month <= last_month
+      UNION ALL
+      SELECT add_months(m.month_start, 1)
+      FROM months m, bounds b
+      WHERE add_months(m.month_start, 1) <= b.last_month
     ),
     filtered_transactions AS (
       SELECT
@@ -330,28 +338,28 @@ export async function getMonthlyFinancialSummary(
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-      WHERE t.is_active = true
-      ${includeTransfers ? sql`` : sql`AND t.is_transfer = false`}
+      WHERE t.is_active = 1
+      ${includeTransfers ? sql`` : sql`AND t.is_transfer = 0`}
       ${excl.where}
       ${andClauses(transactionFilters)}
     ),
     daily AS (
       SELECT
         date,
-        date - (EXTRACT(DAY FROM date)::int - 1) AS month_start,
+        date_trunc('month', date) AS month_start,
         currency,
-        COUNT(*) AS cnt,
-        COALESCE(SUM(amount) FILTER (WHERE amount >= 0), 0) AS income_amount,
-        COALESCE(SUM(amount) FILTER (WHERE amount < 0), 0) AS spending_amount
+        count(*) AS cnt,
+        COALESCE(dec_sum(amount) FILTER (WHERE dec_sign(amount) >= 0), '0') AS income_amount,
+        COALESCE(dec_sum(amount) FILTER (WHERE dec_sign(amount) < 0), '0') AS spending_amount
       FROM filtered_transactions
       GROUP BY date, currency
     )
     SELECT
-      EXTRACT(MONTH FROM m.month_start)::int AS month,
-      EXTRACT(YEAR FROM m.month_start)::int AS year,
-      m.month_start AS period_start,
-      (m.month_start + interval '1 month' - interval '1 day')::date AS period_end,
-      d.date, d.currency, d.cnt, d.income_amount, d.spending_amount
+      date_part('month', m.month_start) AS month,
+      date_part('year', m.month_start) AS year,
+      m.month_start AS "period_start::date",
+      month_end(m.month_start) AS "period_end::date",
+      d.date AS "date::date", d.currency, d.cnt AS "cnt::bigint", d.income_amount, d.spending_amount
     FROM months m
     -- An equality on the month (not a date range) lets the planner hash the
     -- join; the range form compared every day with every month.

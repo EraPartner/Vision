@@ -239,8 +239,8 @@ jobs:
           echo "Branch protection OK — every expected gate is enforced."
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Lint — dependency audits, ESLint, generated-artifact drift, repository
-  # script tests and the squawk migration lint.
+  # Lint — dependency audits, ESLint, generated-artifact drift and repository
+  # script tests. Migration rules are checked by the backend tests (ADR-263).
   # ─────────────────────────────────────────────────────────────────────────────
   lint:
     name: Lint
@@ -305,9 +305,6 @@ jobs:
       - name: Test repository scripts
         run: bun run test:scripts
 
-      # Destructive DDL must carry a squawk-ignore comment (config/squawk.toml, ADR-222).
-      - name: Lint migrations for destructive DDL
-        run: bun run db:lint
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Type Check — strict TypeScript for the frontend, shared packages, backend,
@@ -409,24 +406,14 @@ jobs:
             cd apps/frontend && bun run test --shard="$SHARD"
           fi
 
-  # Backend vitest runs in exactly ONE job (this one). The suite uses an
-  # isolated native PostgreSQL 18 cluster so DB-backed cases cannot silently
-  # skip.
+  # Backend vitest runs in exactly ONE job (this one). Every test file gets its
+  # own copy of a migrated SQLite template (tests/setup/sqliteTemplate.ts), so
+  # DB-backed cases always run and no database server is installed (ADR-263).
   #
-  # The cluster turns the `tests/setup/db.js` opt-in seam ON: suites gated behind
-  # `describe.skipIf(!hasTestDatabase())` execute for real instead of silently
-  # skipping. TEST_DATABASE_URL and DATABASE_URL point at the SAME database on
-  # purpose — DB-backed suites seed through the test pool (TEST_DATABASE_URL) but
-  # the code under test queries through the app pool (DATABASE_URL), so they
-  # must be the same database or the seed is invisible to the code being tested.
-  #
-  # This database is disposable and exclusive to this job — suites may wipe any
-  # table they touch; nothing here is shared with another job or persisted.
-  #
-  # The same job then builds the production frontend once and runs the native
-  # production stack twice: migrate + /health + latest-migration round trip,
-  # and the live API contracts (MSW fixture schemas against the real backend).
-  # Each wrapper starts and removes its own cluster, so they run in sequence.
+  # The same job then builds the production frontend once and runs the
+  # production backend twice on a fresh SQLite file: migrate + /health +
+  # latest-migration round trip, and the live API contracts (MSW fixture
+  # schemas against the real backend).
   test-backend:
     name: Test (Backend)
     needs: [changes]
@@ -444,21 +431,18 @@ jobs:
       - name: Setup toolchain
         uses: ./.github/actions/setup
 
-      - name: Install native PostgreSQL 18
-        run: bash .github/scripts/install-postgres-18.sh
-
       - name: Install electron workspace dependencies
         run: bun install --frozen-lockfile --ignore-scripts --cwd packaging/electron
 
       - name: Run Electron and native-runtime contract tests
         run: bun run test:electron
 
+      # Every test file gets its own copy of a migrated SQLite template (ADR-263);
+      # tests/database/codegen.test.ts fails when the generated schema types drift.
       - name: Run backend tests with coverage
         env:
           VISION_RUN_PERFORMANCE_PROBES: "1"
-          # Fails when src/database/schema.generated.ts drifts from the migrated schema.
-          VISION_TEST_DB_VERIFY_CODEGEN: "1"
-        run: scripts/with-test-db.sh --coverage
+        run: bun run --filter financial-transaction-manager-node test:coverage
 
       - name: Build production frontend
         run: CI=1 bun run build

@@ -149,7 +149,7 @@ const result = {
     requestId: "analysis-test-request",
     startedAt: "2026-09-13T10:00:00.000Z",
     completedAt: "2026-09-13T10:00:00.010Z",
-    executor: "postgresql-role-v1",
+    executor: "sqlite-sandbox-v1",
     rows: [
         {
             month: "2026-09-01",

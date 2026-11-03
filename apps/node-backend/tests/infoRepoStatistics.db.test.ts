@@ -1,5 +1,5 @@
 /**
- * Real-Postgres tests for infoRepositoryStatistics.
+ * Real-database (SQLite) tests for infoRepositoryStatistics.
  *
  * DB-backed complement to infoRepoStatistics.test.ts (which stays: it runs
  * without a DB). The mock suite feeds pre-shaped rows into the JS aggregation
@@ -18,14 +18,11 @@
  * availability) are cleared around every test so no test sees another's rates.
  */
 
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   deleteAllCategoryFixtures,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { statisticsRepository } from "../src/repositories/infoRepositoryStatistics.ts";
 import transactionRepository from "../src/repositories/transactionRepository.ts";
@@ -117,7 +114,7 @@ async function insertTxn({
   const accountId = bank ? await ensureAccount(bank) : null;
   const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: TransactionId }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, is_active, is_transfer)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+     VALUES (ts_date($1), vision_numeric($2, 18, 4), $3, $4, $5, $6, $7, $8) RETURNING id`,
     [
       date,
       amount,
@@ -141,23 +138,14 @@ async function insertRate(
 ) {
   await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-     VALUES ($1, $2, $3, $4)`,
+     VALUES ($1, ts_date($2), vision_numeric($3, 20, 10), $4)`,
     [code, date, rate, isLatest],
   );
 }
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "repositories/infoRepositoryStatistics (real DB)",
   () => {
-    beforeAll(async () => {
-      expect(
-        process.env.DATABASE_URL,
-        "DATABASE_URL must equal TEST_DATABASE_URL for this suite (see scripts/with-test-db.sh)",
-      ).toBe(process.env.TEST_DATABASE_URL);
-      // DB suites share one database across parallel vitest workers — serialize.
-      await acquireDbSuiteLock();
-    }, 180_000);
-
     afterEach(async () => {
       const pool = must(getTestPool(), "getTestPool()");
       await pool.query("DELETE FROM transactions");
@@ -177,7 +165,6 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
@@ -253,7 +240,7 @@ describe.skipIf(!hasTestDatabase())(
       it("includes transfers when the includeTransfers setting is on", async () => {
         await seedBase();
         await must(getTestPool(), "getTestPool()").query(
-          `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', 'true'::jsonb)`,
+          `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', vision_jsonb('true'))`,
         );
         await insertTxn({
           date: "2024-03-05",
@@ -289,12 +276,12 @@ describe.skipIf(!hasTestDatabase())(
         expect(must(legacy.rows[0], "legacy.rows[0]").id).toBe(cat.Food);
         const depth3 = await pool.query<{ id: CategoryId }>(
           `INSERT INTO categories (general, detail, name, parent_id, legacy_compatible)
-         VALUES ('__HIERARCHY_TEST_3', 'Fruit', 'Fruit', $1, false) RETURNING id`,
+         VALUES ('__HIERARCHY_TEST_3', 'Fruit', 'Fruit', $1, 0) RETURNING id`,
           [cat.Food],
         );
         const depth4 = await pool.query<{ id: CategoryId }>(
           `INSERT INTO categories (general, detail, name, parent_id, legacy_compatible)
-         VALUES ('__HIERARCHY_TEST_4', 'Apples', 'Apples', $1, false) RETURNING id`,
+         VALUES ('__HIERARCHY_TEST_4', 'Apples', 'Apples', $1, 0) RETURNING id`,
           [must(depth3.rows[0], "depth3.rows[0]").id],
         );
         await insertTxn({
@@ -395,9 +382,9 @@ describe.skipIf(!hasTestDatabase())(
         const exclusion = exclusionClauses({
           excludedCategoryIds: [rootId],
         });
-        const remaining = await sql<{ count: number }>`SELECT COUNT(*)::int AS count FROM transactions t
+        const remaining = await sql<{ count: number }>`SELECT COUNT(*) AS count FROM transactions t
            ${exclusion.joins}
-           WHERE t.is_active=true ${exclusion.where}`.execute(db);
+           WHERE t.is_active = 1 ${exclusion.where}`.execute(db);
         expect(remaining.rows[0]?.count).toBe(1); // Bills, no Food descendant
       });
     });

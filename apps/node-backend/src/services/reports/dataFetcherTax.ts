@@ -301,17 +301,17 @@ async function fetchTaxTransactions(
       i.asset_class,
       pt.type,
       pt.dividend_amount_convention, pt.income_recognition_role,
-      COALESCE(pt.amount, 0)  AS amount,
-      COALESCE(pt.taxes,  0)  AS taxes,
-      COALESCE(pt.fees,   0)  AS fees,
+      COALESCE(pt.amount, '0')  AS amount,
+      COALESCE(pt.taxes,  '0')  AS taxes,
+      COALESCE(pt.fees,   '0')  AS fees,
       COALESCE(pt.currency, i.currency, 'EUR') AS currency,
-      to_char(pt.date::date, 'YYYY-MM-DD') AS rate_date,
-      EXTRACT(YEAR  FROM pt.date::date)::int AS year,
-      EXTRACT(MONTH FROM pt.date::date)::int AS month
+      to_char(pt.date, 'YYYY-MM-DD') AS rate_date,
+      date_part('year', pt.date) AS year,
+      date_part('month', pt.date) AS month
     FROM portfolio_transactions pt
     JOIN investments i ON i.id = pt.investment_id
-    WHERE pt.date::date BETWEEN ${startDate} AND ${endDate}
-      AND (pt.taxes > 0 OR pt.fees > 0 OR pt.type IN ('dividend', 'tax', 'fee'))
+    WHERE pt.date BETWEEN ${startDate} AND ${endDate}
+      AND (dec_gt(pt.taxes, 0) OR dec_gt(pt.fees, 0) OR pt.type IN ('dividend', 'tax', 'fee'))
     ORDER BY pt.date
     LIMIT 100000
   `,

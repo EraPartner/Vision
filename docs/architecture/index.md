@@ -2,8 +2,8 @@
 title: Architecture Diagrams
 type: architecture-index
 status: active
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     architecture,
@@ -156,7 +156,7 @@ Detailed architectural analysis:
 - [[docs/architecture/frontend-architecture|Frontend Architecture]] - Frontend-specific diagrams
 - [[docs/architecture/deep-dive|Architecture Deep Dive]] - Design patterns, data flow, system organization
 - [[docs/architecture/electron|Electron Desktop Architecture]] - Electron packaging, IPC, security
-- [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] - PostgreSQL 18 lifecycle, cutover, backup, and rollback
+- [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] - SQLite data layout, database file tool, backup, rollback, and the Vision 2.0 refusal
 - [[docs/architecture/trade-offs|System Design Trade-offs]] - Analysis of key architectural trade-offs and alternatives
 
 ## Regenerating Diagrams
@@ -324,8 +324,8 @@ Documentation:
 
 ```
 vision_backup_{deviceId}_{timestamp}.visionbak  ← .zip archive
-├── metadata.json        # schema version, checksums, timestamps
-├── db.sql               # pg_dump output
+├── metadata.json        # schema version, SQLite version, database SHA-256 and size, timestamps
+├── db.sqlite3           # verified copy of the SQLite database (Vision 2.0 bundles carried db.sql)
 ├── attachments/         # mirrors $ATTACHMENTS_DIR/
 └── frontend-state.json  # localStorage snapshot (theme, preferences)
 ```

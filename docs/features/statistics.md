@@ -2,9 +2,9 @@
 title: Statistics Feature
 type: feature
 status: active
-date: 2026-10-22
-updated: 2026-10-19
-last_modified: 2026-10-19
+date: 2026-11-03
+updated: 2026-11-03
+last_modified: 2026-11-03
 tags:
   [
     feature,
@@ -195,7 +195,7 @@ without changing the selected date window.
 ### Key Design Decisions
 
 1. **Bounded default**: Cold page loads request 24 calendar months. All-time history is explicit.
-2. **Server-side aggregation**: PostgreSQL groups the data and conversion uses each transaction
+2. **Server-side aggregation**: SQL in the database groups the data and conversion uses each transaction
    date's foreign-exchange rate. A transaction whose currency has no stored rate is left out of
    every figure, never added 1:1; the endpoints report it in `unconverted_count` and the page shows
    "N transactions left out: exchange rates unavailable" under its header (the Sankey tab and

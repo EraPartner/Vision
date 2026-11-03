@@ -2,8 +2,8 @@
 title: Analysis API
 type: endpoint
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-11-03
+updated: 2026-11-03
 tags: [api, analysis, sql, query-builder, saved-analysis]
 description: Catalog, bounded execution and saved definitions under /api/analysis; CSV/XLSX interchange runs in the browser.
 path: /api/analysis
@@ -23,7 +23,7 @@ limiter. This is an additive API introduced with [[docs/adr/144-isolated-manual-
 | `POST`   | `/api/analysis/pivot`                 | Complete-source hierarchy, subtotals and percentages          |
 | `POST`   | `/api/analysis/extensions/evaluate`   | Preparation, time comparisons and isolated scenario evaluation |
 | `POST`   | `/api/analysis/execute`               | Run a visual plan or custom SQL with row/byte/time limits     |
-| `POST`   | `/api/analysis/cancel/:requestId`     | Cancel a running query through a same-role PostgreSQL session |
+| `POST`   | `/api/analysis/cancel/:requestId`     | Cancel a queued or running sandbox query                      |
 | `POST`   | `/api/analysis/drill`                 | Resolve one grouped row to a bounded source-record page       |
 | `GET`    | `/api/analysis/saved?workspace=`      | List the saved-analysis library                               |
 | `POST`   | `/api/analysis/saved`                 | Create definition version 1                                   |
@@ -80,9 +80,28 @@ errors such as `ECONNREFUSED`. Query cancellation (`57014`) still returns `408`.
 `requestId` is 8–128 ASCII letters, digits, underscores, or hyphens. Visual execution receives a
 catalog plan. Custom SQL receives `sql`, declared `datasetIds`, scalar `values`, and declared result
 columns. Page limits are clamped to 1–1,000 rows; results above two megabytes are explicitly
-`truncated`. PostgreSQL cancellation or timeout returns `408 ANALYSIS_CANCELLED_OR_TIMED_OUT`.
-Rejected SQL returns `400 ANALYSIS_EXECUTION_REJECTED`; a PostgreSQL character position is included
-when available.
+`truncated`. A timeout or a cancel (SQLSTATE `57014`) returns `408 ANALYSIS_CANCELLED_OR_TIMED_OUT`.
+Rejected SQL returns `400 ANALYSIS_EXECUTION_REJECTED`. A SQL character position is appended when
+the error carries one; SQLite errors do not.
+
+Custom SQL runs in the SQLite analysis sandbox, and results record the executor label
+`sqlite-sandbox-v1` ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]):
+
+- The executor reads copies of only the `vision_analysis_*` views the statement names, inside one
+  read snapshot. A child process loads them into a fresh in-memory SQLite database, where they
+  appear as `vision_analysis.<view>`. The process never gets the database file or the environment;
+  its environment holds only the time zone.
+- The sandbox database is `query_only`. A statement must start with `SELECT`, `WITH` or `VALUES`,
+  and only one statement is allowed.
+- `ATTACH`, `DETACH`, `PRAGMA`, transaction words, `load_extension`, `readfile` and `writefile` are
+  refused. So is access to the `sqlite_master` and `sqlite_schema` tables.
+- A statement gets 5 seconds, and loading the view copies gets 60 seconds. One sandbox runs at a
+  time. Other requests wait in a first-in, first-out queue for at most 30 seconds. A timeout, a
+  queue timeout or a cancel fails with `57014`, and the sandbox process is killed, even while
+  SQLite is still busy inside the statement.
+- Decimal columns hold decimal text. Use the `dec_*` functions, such as `dec_sum(amount)`, for
+  exact arithmetic. Native `SUM`, `+` and `*` on decimal text compute in floating point. See
+  [[docs/reference/sqlite-sql-dialect|SQLite SQL dialect]].
 
 Visual plans reject money sums without selected currency grouping or a single-currency equality
 filter, and event unit sums without selected investment grouping or a single-investment equality
@@ -132,7 +151,14 @@ Saved inputs contain `name`, `workspace`, `querySpec`, `parameters`, formulas, a
 `sourceReferences`, and `refreshMode`. `PUT` never edits a definition row. It inserts the next
 version and advances the library pointer. `expectedVersion` prevents overwriting a concurrent manual
 edit. Formula refresh uses decimal arithmetic and preserves explicit formula errors as a partial
-result. Each version snapshots the matching parameters, formula assumptions, chart bindings, source
+result.
+
+Saved custom SQL whose `source.dialect` is not `sqlite` was written for PostgreSQL and needs
+review. List and detail responses carry `needsReview` (boolean) and `reviewReason`
+(`"postgresql-custom-sql"` or `null`). `POST /api/analysis/saved/:id/run` on such an analysis
+returns `409` with the code `ANALYSIS_SQL_NEEDS_REVIEW` and writes no run row. Saving the analysis
+again from the SQL editor stores `sqlite` as the dialect and clears the flag. Visual analyses
+compile from their plan and never need review. Each version snapshots the matching parameters, formula assumptions, chart bindings, source
 references, and refresh mode. Restore and AI apply also append versions; neither mutates history.
 
 `parameters.scenarioModel` may hold up to five typed CSV attachments. Each attachment is limited to

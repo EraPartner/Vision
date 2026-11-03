@@ -2,13 +2,14 @@
  * Unit tests for the shared connection-mock helpers themselves.
  *
  * `mockTxConnection` models the ambient transaction context of the real
- * connection.js: module-level `query`/`queryPrepared` run on the open
+ * connection.ts: module-level `query`/`queryPrepared` run on the open
  * transaction's client instead of the pool. These tests pin that contract,
  * because service tests depend on it to keep asserting against
  * `client.query.mock.calls` once service SQL moves into repositories.
  */
 import { describe, expect, it, vi } from "vitest";
 
+import * as connection from "../../src/database/connection.ts";
 import {
   mockConnection,
   mockPooledTxConnection,
@@ -21,19 +22,10 @@ type ClientQuery = (
   params?: readonly unknown[],
 ) => Promise<unknown>;
 
-const productionSurface = [
-  "default",
-  "query",
-  "queryPrepared",
-  "getClient",
-  "getAmbientTransactionClient",
-  "withTransaction",
-  "withSavepointIfInTransaction",
-  "checkConnection",
-  "getTableCount",
-  "getPoolStats",
-  "closePool",
-];
+/** Every function export of the real module (and its default export). */
+const productionSurface = Object.entries(connection)
+  .filter(([name, value]) => name === "default" || typeof value === "function")
+  .map(([name]) => name);
 
 describe("connection mock surface", () => {
   it.each([
@@ -43,6 +35,9 @@ describe("connection mock surface", () => {
   ])(
     "keeps the %s helper aligned with every production export",
     (_name, build) => {
+      expect(productionSurface).toEqual(
+        expect.arrayContaining(["query", "withTransaction", "__getAmbientTransactionClient"]),
+      );
       expect(Object.keys(build())).toEqual(
         expect.arrayContaining(productionSurface),
       );
@@ -262,7 +257,7 @@ describe("mockTxConnection — ambient transaction routing", () => {
     expect(sqls.filter((s) => s.includes("FOR UPDATE"))).toHaveLength(2);
   });
 
-  it("routes queryPrepared onto the transaction client in pg object form", async () => {
+  it("routes queryPrepared onto the transaction client as query(text, values)", async () => {
     const client = { query: vi.fn(() => Promise.resolve({ rows: [] })) };
     const conn = mockTxConnection(client);
 
@@ -270,11 +265,7 @@ describe("mockTxConnection — ambient transaction routing", () => {
       Promise.resolve(conn.queryPrepared("tx_get_by_id", "SELECT 1", [5]) as unknown),
     );
 
-    expect(client.query).toHaveBeenCalledWith({
-      name: "tx_get_by_id",
-      text: "SELECT 1",
-      values: [5],
-    });
+    expect(client.query).toHaveBeenCalledWith("SELECT 1", [5]);
   });
 
   it("with no client the transaction shares the module spy (no self-routing recursion)", async () => {

@@ -2,8 +2,8 @@
 title: TypeScript Types Reference
 type: reference
 status: active
-date: 2026-10-25
-updated: 2026-10-25
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     reference,
@@ -82,7 +82,7 @@ primitives and the transaction, planned-transaction, account and split schemas l
 `imports`, `info`, `ledger`, `portfolio`, `portfolioImport`), which exports its row types.
 `apps/node-backend/src/types/rows.ts` derives or re-exports the raw row types; the hand-written
 types left there describe mapped or formatted shapes (for example `InvestmentRow` after
-`mapInvestmentRow`, `FormattedSplit`), not what node-postgres returns. The repositories and services check their rows against the same schemas, so the
+`mapInvestmentRow`, `FormattedSplit`), not what the database driver returns. The repositories and services check their rows against the same schemas, so the
 type and the runtime shape cannot drift. Field documentation for these rows lives on the schemas.
 
 `query<R>()` (`src/database/connection.ts`) and `QueryRunner` (`src/types/rows.ts`) default to
@@ -120,7 +120,7 @@ through `tests/helpers/responseBody.ts`, and the backend lint rule
 - **One-directional and optionality-tolerant:** additive contract changes (new fields) and `required`/`| null` nuances do not cause failures — only consumed-field removals/renames, enums widened to `string` and money-type regressions are caught
 
 > [!note] Money coercion is a separate concern
-> `api.ts` types money fields as `number`, but node-postgres returns NUMERIC columns as strings. The repository layer coerces them on emit via `numericColumn` / `coerceNumericFields` (see [[docs/reference/repository-layer|Repository Layer]] and [[docs/reference/code-patterns#money-utility-pattern-phase-9--june-2026|Money Utility Pattern]]). `contract-guard.ts` does not address this runtime conversion — it only enforces that the OpenAPI schema declares them as numeric.
+> `api.ts` types money fields as `number`, but the SQLite driver returns decimal columns as strings, as node-postgres did before [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]. The repository layer coerces them on emit via `numericColumn` / `coerceNumericFields` (see [[docs/reference/repository-layer|Repository Layer]] and [[docs/reference/code-patterns#money-utility-pattern-phase-9--june-2026|Money Utility Pattern]]). `contract-guard.ts` does not address this runtime conversion — it only enforces that the OpenAPI schema declares them as numeric.
 
 ---
 

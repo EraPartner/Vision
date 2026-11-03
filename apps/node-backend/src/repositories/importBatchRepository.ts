@@ -58,7 +58,7 @@ function batchesWithRemaining() {
     .leftJoin("transactions as t", (join) =>
       join.onRef("t.import_batch_id", "=", "b.id").on("t.is_active", "=", true),
     )
-    .select(sql<number>`COUNT(t.id)::int`.as("transactions_remaining"))
+    .select(sql<number>`COUNT(t.id)`.as("transactions_remaining"))
     .groupBy("b.id");
 }
 
@@ -82,7 +82,7 @@ export async function listBatches({
       importBatchTotalRowSchema,
       db
         .selectFrom("import_batches")
-        .select(sql<number>`COUNT(*)::int`.as("total")),
+        .select(sql<number>`COUNT(*)`.as("total")),
     ),
   ]);
 
@@ -151,7 +151,7 @@ export async function getPreviewRows(
               SELECT 1 FROM transactions t
                WHERE t.dedup_fingerprint = isr.dedup_fingerprint
                  AND t.dedup_fingerprint_version = isr.dedup_fingerprint_version
-            ) AS already_imported
+            ) AS "already_imported::bool"
            FROM import_staging_rows isr
            LEFT JOIN recipients r
              ON r.id = COALESCE(isr.user_override_recipient_id, isr.resolved_recipient_id)
@@ -164,14 +164,18 @@ export async function getPreviewRows(
   );
 }
 
-/** Lock a batch still awaiting review, or refuse the override. */
+/**
+ * Require a batch still awaiting review, or refuse the override. Called inside
+ * the override's withTransaction(): BEGIN IMMEDIATE holds the write lock, so
+ * the status read and the staging-row write cannot interleave with the commit
+ * claim (the row lock PostgreSQL needed).
+ */
 async function lockBatchUnderReview(batchId: number): Promise<void> {
   const batch = await db
     .selectFrom("import_batches")
     .select("id")
     .where("id", "=", String(batchId))
     .where("status", "=", "awaiting_review")
-    .forUpdate()
     .executeTakeFirst();
   if (!batch)
     throw new ConflictError(
@@ -304,15 +308,15 @@ export async function rollbackBatch(
   id: number,
 ): Promise<{ deleted: number; recipientsRemoved: number }> {
   return withTransaction(async (client) => {
-    // The route's earlier read is advisory. Serialize against the commit claim
-    // and review overrides before discovering any ledger rows to remove.
+    // The route's earlier read is advisory. This transaction holds the write
+    // lock (BEGIN IMMEDIATE), so the status read below is serialized against
+    // the commit claim and review overrides before any ledger rows are found.
     const batch = await checkedRow(
       z.object({ status: z.string() }),
       db
         .selectFrom("import_batches")
         .select("status")
-        .where("id", "=", String(id))
-        .forUpdate(),
+        .where("id", "=", String(id)),
     );
     if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
     if (batch.status === "aborted")
@@ -337,7 +341,7 @@ export async function rollbackBatch(
     const deleted = await db
       .deleteFrom("transactions")
       .where("import_batch_id", "=", String(id))
-      .where("id", "=", sql<TransactionId>`ANY(${targetIds}::int[])`)
+      .where("id", "in", sql<TransactionId>`(SELECT value FROM json_each(${JSON.stringify(targetIds)}))`)
       .executeTakeFirst();
 
     // Clean up recipients this import auto-created that are now orphaned.
@@ -357,7 +361,7 @@ export async function rollbackBatch(
                      WHERE batch_id = ${id} AND user_override_recipient_id IS NOT NULL
                 )
                 AND r.created_at >= COALESCE(
-                    (SELECT started_at FROM import_batches WHERE id = ${id}), to_timestamp(0))
+                    (SELECT started_at FROM import_batches WHERE id = ${id}), '1970-01-01T00:00:00.000000Z')
                 AND NOT EXISTS (SELECT 1 FROM transactions t WHERE t.recipient_id = r.id)
                 AND NOT EXISTS (SELECT 1 FROM planned_transactions pt WHERE pt.recipient_id = r.id)
                 AND NOT EXISTS (SELECT 1 FROM recipients r2 WHERE r2.primary_recipient_id = r.id)`,
@@ -366,14 +370,14 @@ export async function rollbackBatch(
     let recipientsRemoved = 0;
     if (orphanIds.length > 0) {
       // recipient_bank_accounts FK is NO ACTION, so clear those first; the rest cascade.
-      const anyOrphan = sql<RecipientId>`ANY(${orphanIds}::int[])`;
+      const anyOrphan = sql<RecipientId>`(SELECT value FROM json_each(${JSON.stringify(orphanIds)}))`;
       await db
         .deleteFrom("recipient_bank_accounts")
-        .where("recipient_id", "=", anyOrphan)
+        .where("recipient_id", "in", anyOrphan)
         .execute();
       const removed = await db
         .deleteFrom("recipients")
-        .where("id", "=", anyOrphan)
+        .where("id", "in", anyOrphan)
         .executeTakeFirst();
       recipientsRemoved = Number(removed.numDeletedRows);
     }

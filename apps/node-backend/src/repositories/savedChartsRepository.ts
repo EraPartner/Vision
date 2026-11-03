@@ -31,21 +31,36 @@ export interface SavedChartInput {
   dateRangeEnd?: string | null | undefined;
 }
 
-/** A membership id list, ordered, never NULL. */
-function memberIds(
+/**
+ * A membership id list, ordered, never NULL. json_group_array has no ORDER BY
+ * before SQLite 3.44, so it folds an ordered subquery; over zero rows it is
+ * '[]', the former COALESCE default. The `::json` hint reads it as an array.
+ */
+function memberIds<A extends "category_ids" | "recipient_ids" | "tag_ids">(
   table: "saved_chart_categories" | "saved_chart_recipients" | "saved_chart_tags",
   column: "category_id" | "recipient_id" | "tag_id",
-  alias: "category_ids" | "recipient_ids" | "tag_ids",
+  alias: A,
 ) {
-  return sql<number[]>`COALESCE(
-    (SELECT array_agg(${sql.ref(column)} ORDER BY ${sql.ref(column)})
-       FROM ${sql.table(table)} WHERE saved_chart_id = sc.id),
-    '{}'::INTEGER[]
-  )`.as(alias);
+  return sql<number[]>`(
+    SELECT json_group_array(member.id)
+      FROM (SELECT ${sql.ref(column)} AS id
+              FROM ${sql.table(table)}
+             WHERE saved_chart_id = sc.id
+             ORDER BY ${sql.ref(column)}) AS member
+  )`.as(jsonHinted(alias));
+}
+
+/**
+ * `alias` with the `::json` alias hint. The driver parses the column and
+ * returns it under `alias` without the hint, which is the key the type names.
+ */
+function jsonHinted<A extends string>(alias: A): A {
+  return `${alias}::json` as A;
 }
 
 // date_range_* are DATE columns — emitted via to_char so the wire carries the
-// calendar day, not a pg Date that JSON-serializes to the previous day east of UTC.
+// calendar day, not a local-midnight Date that JSON-serializes to the previous
+// day east of UTC.
 function selectCharts() {
   return db
     .selectFrom("saved_charts as sc")
@@ -92,7 +107,7 @@ const MEMBERSHIP_FIELDS: {
 
 /**
  * Replace only the membership sets present in `input`. The surrounding caller
- * owns the transaction and row lock, so delete-plus-insert is atomic.
+ * owns the transaction, so delete-plus-insert is atomic.
  */
 async function replaceMemberships(
   chartId: number,
@@ -109,7 +124,7 @@ async function replaceMemberships(
     if (uniqueIds.length === 0) continue;
     await sql`
       INSERT INTO ${sql.table(membership.table)} (saved_chart_id, ${sql.ref(membership.column)})
-      SELECT ${chartId}, unnest(${uniqueIds}::INTEGER[])
+      SELECT ${chartId}, value FROM json_each(${JSON.stringify(uniqueIds)})
     `.execute(db);
   }
 }
@@ -162,7 +177,10 @@ const savedChartsRepository = {
   async getCount(): Promise<number> {
     const row = await checkedRow(
       countRowSchema,
-      db.selectFrom("saved_charts").select(sql<string>`COUNT(*)`.as("count")),
+      db
+        .selectFrom("saved_charts")
+        // The text cast keeps node-postgres's int8 shape the schema checks.
+        .select(sql<string>`CAST(count(*) AS TEXT)`.as("count")),
     );
     return parseInt(requireRow(row, "saved chart count").count, 10);
   },
@@ -245,12 +263,13 @@ const savedChartsRepository = {
     };
     const hasFields = Object.values(fields).some((v) => v !== undefined);
 
+    // BEGIN IMMEDIATE on the single writer serializes this read with the
+    // writes below, as the row lock did.
     return withTransaction(async () => {
       const locked = await db
         .selectFrom("saved_charts")
         .select("id")
         .where("id", "=", id)
-        .forUpdate()
         .executeTakeFirst();
       if (!locked) return null;
       if (hasFields) {

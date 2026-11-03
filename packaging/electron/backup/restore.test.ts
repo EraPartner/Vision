@@ -6,7 +6,7 @@ import test from "node:test";
 import type { TestContext } from "node:test";
 
 import { createZipWriter } from "./zip-writer";
-import { createBundle, encryptBundle, openBundle } from "./bundle";
+import { BUNDLE_VERSION, createBundle, encryptBundle, openBundle } from "./bundle";
 import {
   assertBackupSchemaCompatible,
   init,
@@ -63,172 +63,306 @@ void test("restore fails closed without a native runtime", async () => {
 
 void test("restore rejects a backup created on a newer Vision schema", () => {
   assert.throws(
-    () =>
-      assertBackupSchemaCompatible(
-        "0072_future_revision",
-        "0071_current_revision",
-      ),
+    () => assertBackupSchemaCompatible(72, 71),
     (error) =>
       error instanceof Error &&
       error.message.startsWith("BUNDLE_SCHEMA_NEWER:") &&
-      error.message.includes("0072_future_revision") &&
-      error.message.includes("0071_current_revision"),
+      error.message.includes("schema version 72") &&
+      error.message.includes("at 71"),
   );
 });
 
-void test("restore accepts equal and older Vision schema revisions", () => {
-  assert.doesNotThrow(() =>
-    assertBackupSchemaCompatible(
-      "0071_current_revision",
-      "0071_current_revision",
-    ),
-  );
-  assert.doesNotThrow(() =>
-    assertBackupSchemaCompatible(
-      "0070_previous_revision",
-      "0071_current_revision",
-    ),
-  );
+void test("restore accepts equal and older Vision schema versions", () => {
+  assert.doesNotThrow(() => assertBackupSchemaCompatible(71, 71));
+  assert.doesNotThrow(() => assertBackupSchemaCompatible(70, 71));
 });
 
-void test("restore does not reject schema identifiers that cannot be ordered", () => {
-  assert.doesNotThrow(() =>
-    assertBackupSchemaCompatible("hash_revision", "0071_current_revision"),
-  );
+void test("restore leaves the decision to verification when this install's version is unknown", () => {
+  assert.doesNotThrow(() => assertBackupSchemaCompatible(72, 0));
 });
 
-void test("a bundle whose metadata.json is not an object is rejected as corrupt", async (t) => {
-  const workDir = fs.mkdtempSync(
-    path.join(os.tmpdir(), "vision-restore-meta-"),
-  );
-  t.after(() => fs.rmSync(workDir, { recursive: true, force: true }));
-  const bundlePath = path.join(workDir, "null-metadata.visionbak");
-  const archive = await createZipWriter(bundlePath);
-  await archive.append("metadata.json", "null");
-  await archive.append("db.sql", "SELECT 1;\n");
-  await archive.finalize();
-
-  await assert.rejects(openBundle(bundlePath), /missing metadata\.json/);
-});
-
-const PRE_BASELINE_DUMP = "CREATE TABLE public.notes (id int);\n";
-
-function kyselyDump(...names: string[]): string {
-  return `CREATE TABLE public.kysely_migration (
-    name character varying(255) NOT NULL,
-    "timestamp" character varying(255) NOT NULL
-);
-COPY public.notes (id, body) FROM stdin;
-1\tCOPY public.kysely_migration (name, "timestamp") FROM stdin;
-\\.
-COPY public.kysely_migration (name, "timestamp") FROM stdin;
-${names.map((name) => `${name}\t2026-10-19T00:00:00.000Z`).join("\n")}
-\\.
-`;
+/** A file with a valid SQLite header; user_version is the schema version. */
+function sqliteHeader(userVersion: number): Buffer {
+  const header = Buffer.alloc(4096);
+  header.write("SQLite format 3\0", 0, "latin1");
+  header.writeUInt16BE(4096, 16);
+  header.writeUInt8(2, 18);
+  header.writeUInt8(2, 19);
+  header.writeUInt32BE(1, 28);
+  header.writeUInt32BE(1, 56);
+  header.writeInt32BE(userVersion, 60);
+  header.writeUInt32BE(3_043_002, 96);
+  return header;
 }
 
-function initRuntime(currentHead: string, restored: string[]): void {
+function tempDir(t: TestContext, prefix: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+/** An install whose db/migrations ends at `version`. */
+function installWithMigrations(t: TestContext, version: number): string {
+  const root = tempDir(t, "vision-install-");
+  const migrations = path.join(root, "db", "migrations");
+  fs.mkdirSync(migrations, { recursive: true });
+  for (let current = 1; current <= version; current += 1) {
+    fs.writeFileSync(
+      path.join(migrations, `${String(current).padStart(4, "0")}_step.sql`),
+      "SELECT 1;\n",
+    );
+  }
+  return root;
+}
+
+interface RecordedRuntime {
+  calls: unknown[];
+}
+
+function initRuntime(
+  workDir: string | undefined,
+  { failActivation = true }: { failActivation?: boolean } = {},
+): RecordedRuntime {
+  const recorded: RecordedRuntime = { calls: [] };
+  const step = (name: string) => () => {
+    recorded.calls.push(name);
+    return Promise.resolve();
+  };
   init({
+    workDir: () => workDir,
     runtimeProvider: () => ({
       mode: "native",
-      getSchemaHead: () => Promise.resolve(currentHead),
-      activateRestoredDatabase: () => {
-        restored.push("activateRestoredDatabase");
-        return Promise.reject(new Error("restore must not be reached"));
+      activateRestoredDatabase: (sourcePath: string, options: unknown) => {
+        recorded.calls.push([
+          "activateRestoredDatabase",
+          fs.readFileSync(sourcePath).subarray(0, 16).toString("latin1"),
+          options,
+        ]);
+        if (failActivation)
+          return Promise.reject(new Error("restore must not be reached"));
+        return Promise.resolve({ switchToken: { id: "database" } });
       },
+      replaceAttachments: () => {
+        recorded.calls.push("replaceAttachments");
+        return Promise.resolve({ id: "attachments" });
+      },
+      start: step("start"),
+      waitUntilReady: step("waitUntilReady"),
+      finalizeDatabaseSwitch: step("finalizeDatabase"),
+      finalizeAttachmentSwitch: step("finalizeAttachments"),
+      rollbackAttachmentSwitch: step("rollbackAttachments"),
+      rollbackDatabaseSwitch: step("rollbackDatabase"),
     }),
   });
+  return recorded;
 }
 
-function hasCode(code: string) {
-  return (error: unknown) =>
+function isPostgresRefusal(error: unknown): boolean {
+  return (
     error instanceof Error &&
     "code" in error &&
-    error.code === code &&
-    /only backups taken after that switch can be restored/i.test(error.message);
-}
-
-async function writeDump(t: TestContext, sql: string): Promise<string> {
-  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "vision-dump-"));
-  t.after(() => fs.rmSync(workDir, { recursive: true, force: true }));
-  const dumpPath = path.join(workDir, "backup.sql");
-  await fs.promises.writeFile(dumpPath, sql);
-  return dumpPath;
-}
-
-async function writeBundle(
-  t: TestContext,
-  sql: string,
-  schemaHead: string,
-): Promise<string> {
-  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "vision-bundle-"));
-  t.after(() => fs.rmSync(workDir, { recursive: true, force: true }));
-  const bundlePath = path.join(workDir, "backup.visionbak");
-  const archive = await createZipWriter(bundlePath);
-  await archive.append(
-    "metadata.json",
-    JSON.stringify({ bundleVersion: 1, schemaHead, appVersion: "1.0.2" }),
+    error.code === "BACKUP_POSTGRESQL_V2" &&
+    error.message.includes("bun run transition:v2 -- <backup file>")
   );
-  await archive.append("db.sql", sql);
+}
+
+async function writeZip(
+  t: TestContext,
+  members: Record<string, string | Buffer>,
+): Promise<string> {
+  const bundlePath = path.join(tempDir(t, "vision-bundle-"), "backup.visionbak");
+  const archive = await createZipWriter(bundlePath);
+  for (const [name, contents] of Object.entries(members))
+    await archive.append(name, contents);
   await archive.finalize();
   return bundlePath;
 }
 
-void test("restore refuses a plain dump without a migration ledger", async (t) => {
-  const restored: string[] = [];
-  initRuntime("0001_baseline", restored);
-  const dumpPath = await writeDump(t, PRE_BASELINE_DUMP);
-
-  await assert.rejects(runRestore(dumpPath), hasCode("BACKUP_PRE_BASELINE"));
-  assert.deepEqual(restored, []);
+void test("a bundle whose metadata.json is not an object is rejected as corrupt", async (t) => {
+  const bundlePath = await writeZip(t, {
+    "metadata.json": "null",
+    "db.sqlite3": sqliteHeader(1),
+  });
+  await assert.rejects(openBundle(bundlePath), /missing metadata\.json/);
 });
 
-void test("restore refuses a bundle whose dump predates the baseline", async (t) => {
-  const restored: string[] = [];
-  initRuntime("0001_baseline", restored);
-  const bundlePath = await writeBundle(
-    t,
-    PRE_BASELINE_DUMP,
-    "0128_category_path_on_legacy_rename",
-  );
+void test("a bundle without a database member is rejected as corrupt", async (t) => {
+  const bundlePath = await writeZip(t, {
+    "metadata.json": JSON.stringify({ bundleVersion: 2 }),
+  });
+  await assert.rejects(openBundle(bundlePath), /missing db\.sqlite3/);
+});
 
+void test("createBundle writes the SQLite snapshot and its facts into format 2", async (t) => {
+  const work = tempDir(t, "vision-create-");
+  const databasePath = path.join(work, "snapshot.sqlite3");
+  fs.writeFileSync(databasePath, sqliteHeader(9));
+  const { bundlePath } = await createBundle({
+    destDir: path.join(work, "out"),
+    deviceId: "testdev",
+    appVersion: "2.1.0",
+    databasePath,
+    database: {
+      schemaVersion: 9,
+      sqliteVersion: "3.43.2",
+      sha256: "b".repeat(64),
+      bytes: 4096,
+    },
+    frontendState: { keys: { theme: "dark" } },
+  });
+  assert.match(path.basename(bundlePath), /^vision_backup_testdev_.*\.visionbak$/);
+  const opened = await openBundle(bundlePath);
+  t.after(opened.cleanup);
+  assert.equal(opened.dbSqlPath, null);
+  assert.ok(opened.databasePath);
+  assert.deepEqual(
+    fs.readFileSync(opened.databasePath),
+    fs.readFileSync(databasePath),
+  );
+  assert.equal(opened.metadata.bundleVersion, BUNDLE_VERSION);
+  assert.equal(opened.metadata.database, "sqlite");
+  assert.equal(opened.metadata.schemaVersion, 9);
+  assert.equal(opened.metadata.sqliteVersion, "3.43.2");
+  assert.equal(opened.metadata.databaseSha256, "b".repeat(64));
+  assert.equal(opened.metadata.databaseBytes, 4096);
+  assert.deepEqual(opened.frontendState, { keys: { theme: "dark" } });
+});
+
+void test("createBundle refuses a database file that is not SQLite", async (t) => {
+  const work = tempDir(t, "vision-create-");
+  const databasePath = path.join(work, "db.sql");
+  fs.writeFileSync(databasePath, "CREATE TABLE notes (id int);\n");
   await assert.rejects(
-    runBundleRestore(bundlePath),
-    hasCode("BACKUP_PRE_BASELINE"),
+    createBundle({
+      destDir: work,
+      deviceId: "testdev",
+      databasePath,
+      database: { schemaVersion: 1 },
+    }),
+    /not a SQLite database/,
   );
-  assert.deepEqual(restored, []);
+  assert.deepEqual(
+    fs.readdirSync(work).filter((name) => name.includes("visionbak")),
+    [],
+  );
 });
 
-void test("restore rejects a dump whose highest migration is newer than this install", async (t) => {
-  const restored: string[] = [];
-  initRuntime("0001_baseline", restored);
-  const dumpPath = await writeDump(
-    t,
-    kyselyDump("0001_baseline", "0003_future", "0002_next"),
-  );
-
-  await assert.rejects(
-    runRestore(dumpPath),
-    (error) =>
-      error instanceof Error &&
-      error.message.startsWith("BUNDLE_SCHEMA_NEWER:") &&
-      error.message.includes('"0003_future"') &&
-      error.message.includes('"0001_baseline"'),
-  );
-  assert.deepEqual(restored, []);
+void test("restore refuses a Vision 2.0 bundle with the transition command", async (t) => {
+  const recorded = initRuntime(installWithMigrations(t, 3));
+  const bundlePath = await writeZip(t, {
+    "metadata.json": JSON.stringify({
+      bundleVersion: 1,
+      schemaHead: "0128_category_path_on_legacy_rename",
+      appVersion: "2.0.0",
+    }),
+    "db.sql": "CREATE TABLE public.notes (id int);\n",
+  });
+  await assert.rejects(runBundleRestore(bundlePath), isPostgresRefusal);
+  assert.deepEqual(recorded.calls, []);
 });
 
-void test("restore rejects a bundle whose metadata disagrees with its dump", async (t) => {
-  const restored: string[] = [];
-  initRuntime("0002_next", restored);
-  const bundlePath = await writeBundle(
-    t,
-    kyselyDump("0001_baseline"),
-    "0002_next",
-  );
+void test("restore refuses a Vision 2.0 plain SQL dump with the transition command", async (t) => {
+  const recorded = initRuntime(installWithMigrations(t, 3));
+  const dumpPath = path.join(tempDir(t, "vision-dump-"), "backup.sql");
+  fs.writeFileSync(dumpPath, "CREATE TABLE public.notes (id int);\n");
+  await assert.rejects(runRestore(dumpPath), isPostgresRefusal);
+  assert.deepEqual(recorded.calls, []);
+});
 
-  await assert.rejects(runBundleRestore(bundlePath), /does not match/);
-  assert.deepEqual(restored, []);
+void test("restore refuses a file that is neither a SQLite database nor a Vision dump", async (t) => {
+  const recorded = initRuntime(installWithMigrations(t, 3));
+  const filePath = path.join(tempDir(t, "vision-other-"), "notes.sqlite3");
+  fs.writeFileSync(filePath, "not a database");
+  await assert.rejects(runRestore(filePath), {
+    code: "BACKUP_UNRECOGNIZED",
+  });
+  assert.deepEqual(recorded.calls, []);
+});
+
+void test("restore rejects a bundle whose schema is newer than this install", async (t) => {
+  const recorded = initRuntime(installWithMigrations(t, 3));
+  const bundlePath = await writeZip(t, {
+    "metadata.json": JSON.stringify({ bundleVersion: 2, schemaVersion: 4 }),
+    "db.sqlite3": sqliteHeader(4),
+  });
+  await assert.rejects(runBundleRestore(bundlePath), /^Error: BUNDLE_SCHEMA_NEWER:/);
+  assert.deepEqual(recorded.calls, []);
+});
+
+void test("restore rejects a database file whose schema is newer than this install", async (t) => {
+  const recorded = initRuntime(installWithMigrations(t, 3));
+  const filePath = path.join(tempDir(t, "vision-file-"), "copy.sqlite3");
+  fs.writeFileSync(filePath, sqliteHeader(5));
+  await assert.rejects(runRestore(filePath), /BUNDLE_SCHEMA_NEWER:/);
+  assert.deepEqual(recorded.calls, []);
+});
+
+void test("bundle restore activates the database with the facts its metadata recorded", async (t) => {
+  const recorded = initRuntime(installWithMigrations(t, 3), {
+    failActivation: false,
+  });
+  const bundlePath = await writeZip(t, {
+    "metadata.json": JSON.stringify({
+      bundleVersion: 2,
+      schemaVersion: 3,
+      databaseSha256: "c".repeat(64),
+    }),
+    "db.sqlite3": sqliteHeader(3),
+    "attachments/receipt.txt": "synthetic",
+    "frontend-state.json": JSON.stringify({ keys: { locale: "en" } }),
+  });
+  const result = await runBundleRestore(bundlePath);
+  assert.deepEqual(result.frontendState, { keys: { locale: "en" } });
+  assert.deepEqual(recorded.calls, [
+    [
+      "activateRestoredDatabase",
+      "SQLite format 3\0",
+      { expectedSchemaVersion: 3, expectedSha256: "c".repeat(64) },
+    ],
+    "replaceAttachments",
+    "start",
+    "waitUntilReady",
+    "finalizeDatabase",
+    "finalizeAttachments",
+  ]);
+});
+
+void test("bundle restore ignores malformed metadata expectations and lets verification decide", async (t) => {
+  const recorded = initRuntime(installWithMigrations(t, 3), {
+    failActivation: false,
+  });
+  const bundlePath = await writeZip(t, {
+    "metadata.json": JSON.stringify({
+      bundleVersion: 2,
+      schemaVersion: "3",
+      databaseSha256: "not-a-digest",
+    }),
+    "db.sqlite3": sqliteHeader(3),
+  });
+  await runBundleRestore(bundlePath);
+  assert.deepEqual(recorded.calls[0], [
+    "activateRestoredDatabase",
+    "SQLite format 3\0",
+    { expectedSchemaVersion: undefined, expectedSha256: undefined },
+  ]);
+});
+
+void test("database file restore activates a SQLite file without attachments", async (t) => {
+  const recorded = initRuntime(installWithMigrations(t, 3), {
+    failActivation: false,
+  });
+  const filePath = path.join(tempDir(t, "vision-file-"), "copy.sqlite3");
+  fs.writeFileSync(filePath, sqliteHeader(2));
+  await runRestore(filePath);
+  assert.deepEqual(recorded.calls, [
+    ["activateRestoredDatabase", "SQLite format 3\0", {
+      expectedSchemaVersion: undefined,
+      expectedSha256: undefined,
+    }],
+    "start",
+    "waitUntilReady",
+    "finalizeDatabase",
+  ]);
 });
 
 void test("a backup refuses a system directory even when it comes from stored settings", async () => {
@@ -245,15 +379,20 @@ void test("an encrypted backup reaches its folder only as owner-only ciphertext"
   const staging = path.join(root, "staging");
   const destDir = path.join(root, "iCloud Backups");
   fs.mkdirSync(staging);
-  const dbSqlPath = path.join(staging, "db.sql");
-  fs.writeFileSync(dbSqlPath, kyselyDump("0001_baseline"));
+  const databasePath = path.join(staging, "snapshot.sqlite3");
+  fs.writeFileSync(databasePath, sqliteHeader(1));
 
   const { bundlePath } = await createBundle({
     destDir: staging,
     deviceId: "abcd1234",
-    schemaHead: "0001_baseline",
-    appVersion: "2.0.0",
-    dbSqlPath,
+    appVersion: "2.1.0",
+    databasePath,
+    database: {
+      schemaVersion: 1,
+      sqliteVersion: "3.43.2",
+      sha256: "c".repeat(64),
+      bytes: 4096,
+    },
     attachmentsDir: null,
     frontendState: null,
   });
@@ -268,5 +407,5 @@ void test("an encrypted backup reaches its folder only as owner-only ciphertext"
   assert.equal(fs.existsSync(bundlePath), false);
   const opened = await openBundle(encPath, { passphrase: "correct horse" });
   t.after(opened.cleanup);
-  assert.equal(opened.metadata.schemaHead, "0001_baseline");
+  assert.equal(opened.metadata.schemaVersion, 1);
 });

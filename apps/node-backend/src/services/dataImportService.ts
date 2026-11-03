@@ -209,14 +209,17 @@ function categoryKeyOf(pair: CategoryPair): string {
 }
 
 async function selectCategories(
-  generals: string[],
-  details: string[],
+  pairs: CategoryPair[],
 ): Promise<CategoryIdRow[]> {
   return checkedRows(
     categoryPairIdRowSchema,
-    sql`SELECT COALESCE(c.id, a.target_category_id) AS id,
+    sql`WITH want AS (
+         SELECT p.value ->> 0 AS general, p.value ->> 1 AS detail
+           FROM json_each(${JSON.stringify(pairs.map((p) => [p.general, p.detail]))}) AS p
+       )
+       SELECT COALESCE(c.id, a.target_category_id) AS id,
             want.general, want.detail
-       FROM UNNEST(${generals}::text[], ${details}::text[]) AS want(general, detail)
+       FROM want
        LEFT JOIN categories c
          ON c.general = want.general AND c.detail = want.detail
        LEFT JOIN category_merge_aliases a
@@ -238,25 +241,24 @@ async function resolveCategories(
 ): Promise<Map<string, { id: CategoryId; created: boolean }>> {
   const resolved = new Map<string, { id: CategoryId; created: boolean }>();
   if (pairs.length === 0) return resolved;
-  // Both batch call sites run inside withTransaction. Serialize with merges so
-  // a pair cannot be reinserted between alias lookup and insertion.
-  await sql`SELECT pg_advisory_xact_lock(1128356178, 1)`.execute(db);
-
-  for (const row of await selectCategories(
-    pairs.map((p) => p.general),
-    pairs.map((p) => p.detail),
-  )) {
+  // Both batch call sites run inside withTransaction(), whose BEGIN IMMEDIATE
+  // holds the write lock: no merge can run between the alias lookup and the
+  // insertion (the advisory lock PostgreSQL needed).
+  for (const row of await selectCategories(pairs)) {
     resolved.set(categoryKeyOf(row), { id: row.id, created: false });
   }
 
   const missing = pairs.filter((p) => !resolved.has(categoryKeyOf(p)));
   if (missing.length === 0) return resolved;
 
+  // `WHERE true` keeps SQLite from reading ON CONFLICT as a join constraint.
   const inserted = await checkedRows(
     categoryPairIdRowSchema,
     sql`INSERT INTO categories (general, detail, description, is_active)
-     SELECT UNNEST(${missing.map((p) => p.general)}::text[]),
-            UNNEST(${missing.map((p) => p.detail)}::text[]), NULL, true
+     SELECT p.value ->> 0, p.value ->> 1, NULL, 1
+       FROM json_each(${JSON.stringify(missing.map((p) => [p.general, p.detail]))}) AS p
+      WHERE true
+      ORDER BY p.key
      ON CONFLICT (general, detail) DO NOTHING
      RETURNING id, general, detail`,
   );
@@ -269,10 +271,7 @@ async function resolveCategories(
   // SELECT covers. Such a row exists but is not ours, hence created: false.
   const raced = missing.filter((p) => !resolved.has(categoryKeyOf(p)));
   if (raced.length > 0) {
-    for (const row of await selectCategories(
-      raced.map((p) => p.general),
-      raced.map((p) => p.detail),
-    )) {
+    for (const row of await selectCategories(raced)) {
       resolved.set(categoryKeyOf(row), { id: row.id, created: false });
     }
   }
@@ -290,8 +289,8 @@ async function selectRecipients(
       .select(["id", "normalized_name", "notes", "default_category_id"])
       .where(
         "normalized_name",
-        "=",
-        sql<string>`ANY(${normalizedNames}::text[])`,
+        "in",
+        sql<string>`(SELECT value FROM json_each(${JSON.stringify(normalizedNames)}))`,
       ),
   );
 }
@@ -326,8 +325,10 @@ async function resolveRecipients(
   const inserted = await checkedRows(
     recipientIdentityRowSchema,
     sql`INSERT INTO recipients (name, normalized_name, is_active)
-     SELECT UNNEST(${missing.map((n) => n.upper)}::text[]),
-            UNNEST(${missing.map((n) => n.normalized)}::text[]), true
+     SELECT n.value ->> 0, n.value ->> 1, 1
+       FROM json_each(${JSON.stringify(missing.map((n) => [n.upper, n.normalized]))}) AS n
+      WHERE true
+      ORDER BY n.key
      ON CONFLICT (normalized_name) DO NOTHING
      RETURNING id, normalized_name`,
   );
@@ -549,9 +550,10 @@ async function importRecipientRowsBatched(
     outcomes,
     "notes",
     (all) =>
-      sql`UPDATE recipients r SET notes = u.notes
-         FROM UNNEST(${all.map((u) => u.id)}::int[], ${all.map((u) => u.notes)}::text[]) AS u(id, notes)
-        WHERE r.id = u.id`.execute(db),
+      sql`UPDATE recipients SET notes = u.notes
+         FROM (SELECT j.value ->> 0 AS id, j.value ->> 1 AS notes
+                 FROM json_each(${JSON.stringify(all.map((u) => [u.id, u.notes]))}) AS j) AS u
+        WHERE recipients.id = u.id`.execute(db),
     (one) => setRecipientNotes(one.id, one.notes),
   );
 
@@ -580,9 +582,10 @@ async function importRecipientRowsBatched(
     outcomes,
     "default category",
     (all) =>
-      sql`UPDATE recipients r SET default_category_id = u.category_id
-         FROM UNNEST(${all.map((u) => u.id)}::int[], ${all.map((u) => u.categoryId)}::int[]) AS u(id, category_id)
-        WHERE r.id = u.id AND r.default_category_id IS NULL`.execute(db),
+      sql`UPDATE recipients SET default_category_id = u.category_id
+         FROM (SELECT j.value ->> 0 AS id, j.value ->> 1 AS category_id
+                 FROM json_each(${JSON.stringify(all.map((u) => [u.id, u.categoryId]))}) AS j) AS u
+        WHERE recipients.id = u.id AND recipients.default_category_id IS NULL`.execute(db),
     (one) => claimDefaultCategory(one.id, one.categoryId),
   );
 

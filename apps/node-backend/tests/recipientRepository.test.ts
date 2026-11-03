@@ -4,13 +4,15 @@
  * behaviour against real rows lives in catalogRepositoryBoundary.db.test.ts.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { mockConnection } from "./helpers/repoMocks.ts";
+import { mockTxConnection } from "./helpers/repoMocks.ts";
 import type { ConnectionMockSurface } from "./helpers/repoMocks.ts";
 import {
   asRecipientId,
 } from "@vision/types/brands";
 
-vi.mock("../src/database/connection.ts", () => mockConnection());
+// withTransaction runs its callback; with no client, statements inside it
+// land on the module-level `query` spy, in order.
+vi.mock("../src/database/connection.ts", () => mockTxConnection());
 vi.mock("../src/lib/textNormalization.ts", () => ({
   normalizeForMatching: vi.fn((s) => `norm:${String(s).trim().toLowerCase()}`),
 }));
@@ -95,7 +97,8 @@ describe("recipientRepository", () => {
     it("returns the winning row after a concurrent insert", async () => {
       query
         .mockResolvedValueOnce({ rows: [] }) // concurrent miss
-        .mockResolvedValueOnce({ rows: [{ id: 8, created: false }] })
+        .mockResolvedValueOnce({ rows: [] }) // ON CONFLICT DO NOTHING: lost the race
+        .mockResolvedValueOnce({ rows: [{ id: 8 }] }) // the winner, same transaction
         .mockResolvedValueOnce({
           rows: [enrichedRow({ id: asRecipientId(8), name: "ALDI" })],
         });
@@ -104,6 +107,32 @@ describe("recipientRepository", () => {
         recipient: enrichedRow({ id: asRecipientId(8), name: "ALDI" }),
         created: false,
       });
+      // The insert and the winner read share one write transaction, so the
+      // winner cannot be deleted between them (PostgreSQL's DO UPDATE upsert
+      // returned it in one statement).
+      expect(connection.withTransaction).toHaveBeenCalledTimes(1);
+      const [insertSql, insertParams] = must(query.mock.calls[1], "query.mock.calls[1]") as [
+        string,
+        unknown[],
+      ];
+      expect(insertSql).toMatch(/^insert into "recipients"/);
+      expect(insertSql).toContain('on conflict ("normalized_name") do nothing');
+      expect(insertParams).toEqual(["ALDI", "norm:aldi", true]);
+      expect(must(query.mock.calls[2], "query.mock.calls[2]")[1]).toEqual(["norm:aldi"]);
+    });
+
+    it("reports created when the insert wins", async () => {
+      query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ id: 9 }] })
+        .mockResolvedValueOnce({
+          rows: [enrichedRow({ id: asRecipientId(9), name: "LIDL" })],
+        });
+      expect(await recipientRepository.createOrGet({ name: "Lidl" })).toEqual({
+        recipient: enrichedRow({ id: asRecipientId(9), name: "LIDL" }),
+        created: true,
+      });
+      expect(query).toHaveBeenCalledTimes(3);
     });
 
     it("reserves SYSTEM for server-generated transactions", async () => {
@@ -172,7 +201,8 @@ describe("recipientRepository", () => {
       const map = await recipientRepository.getClusterRootMap([asRecipientId(1), asRecipientId(2), asRecipientId(2), null]);
       expect(map.get(asRecipientId(1))).toBe(1);
       expect(map.get(asRecipientId(2))).toBe(1);
-      expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([[1, 2]]);
+      // The deduplicated ids bind as one JSON list for json_each.
+      expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual(["[1,2]"]);
     });
   });
 });

@@ -14,17 +14,15 @@ import { valueAt } from "./helpers/responseBody.ts";
 const pool = getTestPool();
 const keys = ["vision_test_conflict_a", "vision_test_conflict_b"] as const;
 describe.skipIf(!hasTestDatabase())(
-  "settings conflict SQL against disposable PostgreSQL",
+  "settings conflict SQL against the test database",
   () => {
-    beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180000);
+    beforeAll(acquireDbSuiteLock);
     afterAll(async () => {
       try {
-        await must(pool, "pool").query("DELETE FROM user_settings WHERE key=ANY($1)", [
-          [...keys, "daily_job_vision_test"],
-        ]);
+        await must(pool, "pool").query(
+          "DELETE FROM user_settings WHERE key IN (SELECT value FROM json_each($1))",
+          [JSON.stringify([...keys, "daily_job_vision_test"])],
+        );
       } finally {
         try {
           await releaseDbSuiteLock();
@@ -53,9 +51,10 @@ describe.skipIf(!hasTestDatabase())(
       expect(await repo.get("daily_job_vision_test")).toBe(now());
     });
     it("permits one concurrent creator, then rejects stale replacement and deletion", async () => {
-      await must(pool, "pool").query("DELETE FROM user_settings WHERE key=ANY($1)", [
-        [...keys, "daily_job_vision_test"],
-      ]);
+      await must(pool, "pool").query(
+        "DELETE FROM user_settings WHERE key IN (SELECT value FROM json_each($1))",
+        [JSON.stringify([...keys, "daily_job_vision_test"])],
+      );
       const created = await Promise.allSettled([
         repo.replace(keys[0], { a: 1 }, { exists: false }),
         repo.replace(keys[0], { b: 2 }, { exists: false }),

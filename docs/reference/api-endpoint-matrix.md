@@ -2,9 +2,9 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-10-29
-updated: 2026-10-29
-last_modified: 2026-10-24
+date: 2026-11-03
+updated: 2026-11-03
+last_modified: 2026-11-03
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
@@ -273,7 +273,7 @@ behavioral compatibility changes; clients must handle the documented errors and 
 | GET              | `/api/analysis/catalog`               | Approved dataset, field, measure, and join catalog         | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/compile`               | Currency-safe visual plan to inspectable SQL               | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/execute`               | Paged visual or bounded custom SQL execution               | 600 req/min | [[docs/api/analysis\|Analysis]] |
-| POST             | `/api/analysis/cancel/:requestId`     | Same-role PostgreSQL cancellation                          | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/cancel/:requestId`     | Cancel the queued or running sandbox statement              | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/drill`                 | Grouped row to bounded contributing records                | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | GET, POST        | `/api/analysis/saved`                 | List or create reusable analyses                           | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | GET, PUT, DELETE | `/api/analysis/saved/:id`             | Read, version, or delete one analysis                      | 600 req/min | [[docs/api/analysis\|Analysis]] |
@@ -489,7 +489,7 @@ Provider-agnostic research surface mounted at `/api/research` under `marketRateL
 | GET    | `/api/import/batches/:id/preview`                       | Review preview (groups + categories)                                         | ADR-046                    | [[docs/api/imports\|Imports]] |
 | POST   | `/api/import/batches/:id/rows/:rowId/override`          | Override recipient on staged row                                             | —                          | [[docs/api/imports\|Imports]] |
 | POST   | `/api/import/batches/:id/rows/:rowId/category-override` | Override category on staged row                                              | ADR-046                    | [[docs/api/imports\|Imports]] |
-| POST   | `/api/import/batches/:id/commit`                        | Commit reviewed batch; derived materialized views refresh asynchronously     | importRateLimiter; ADR-115 | [[docs/api/imports\|Imports]] |
+| POST   | `/api/import/batches/:id/commit`                        | Commit reviewed batch; derived summary tables refresh asynchronously         | importRateLimiter; ADR-115 | [[docs/api/imports\|Imports]] |
 | GET    | `/api/import/parsers`                                   | List saved custom parser configs (ADR-066)                                   | —                          | [[docs/api/imports\|Imports]] |
 | POST   | `/api/import/parsers`                                   | Create saved parser; 409 on duplicate name; 400 if required columns missing  | —                          | [[docs/api/imports\|Imports]] |
 | PATCH  | `/api/import/parsers/:id`                               | Update saved parser name and/or config; 404 if missing; 409 on name conflict | —                          | [[docs/api/imports\|Imports]] |
@@ -602,11 +602,11 @@ desktop app, which never set a token).
 | POST   | `/api/admin/update/apply`                         | Acknowledge update                                                                                                                           | —                  | [[docs/api/admin\|Admin]] |
 | POST   | `/api/admin/update/apply-and-restart`             | Apply and restart                                                                                                                            | —                  | [[docs/api/admin\|Admin]] |
 | POST   | `/api/admin/investments/kinesis/sanitize-history` | Sanitize Kinesis spikes                                                                                                                      | —                  | [[docs/api/admin\|Admin]] |
-| GET    | `/api/admin/database/stats`                       | Per-table live/dead row counts, size, manual and auto vacuum/analyze times (Phase 7, ADR-262)                                                | admin              | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/database/vacuum`                      | Run VACUUM ANALYZE on one or all tables; 403 when the role lacks MAINTAIN (Phase 7, ADR-262)                                                 | admin              | [[docs/api/admin\|Admin]] |
+| GET    | `/api/admin/database/stats`                       | Per-table exact row counts, size, and the VACUUM/ANALYZE times of this backend process; `dead_rows` is always 0 (Phase 7, ADR-263)        | admin              | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/database/vacuum`                      | VACUUM the whole database file, then ANALYZE one or all tables (Phase 7, ADR-263)                                                            | admin              | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/database/tables/:table/schema`        | Table column schema + primary key discovery; composite-PK aware (ADR-101)                                                                    | adminRateLimiter   | [[docs/api/admin\|Admin]] |
-| GET    | `/api/admin/database/tables/:table/rows`          | Keyset-paginated, filtered, sorted table read without an unbounded count; runs inside READ ONLY transaction with statement timeout (ADR-101) | adminRateLimiter   | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/database/tables/:table/mutate`        | Batch insert/update/delete with xmin optimistic concurrency, dry-run preview, change log, matview auto-refresh (ADR-101)                     | adminMutateLimiter | [[docs/api/admin\|Admin]] |
+| GET    | `/api/admin/database/tables/:table/rows`          | Keyset-paginated, filtered, sorted table read without an unbounded count; runs on the read-only reader connection (ADR-101, ADR-263)       | adminRateLimiter   | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/database/tables/:table/mutate`        | Batch insert/update/delete in one write transaction, row-version (`xmin`) conflict check, dry-run preview, change log, summary-table refresh (ADR-101) | adminMutateLimiter | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/providers/health`                     | List all provider health records                                                                                                             | —                  | [[docs/api/admin\|Admin]] |
 | POST   | `/api/admin/providers/:provider/probe`            | Active on-demand probe for one provider                                                                                                      | —                  | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/metrics/requests`                     | Rolling request metrics per route (in-memory, 15 min)                                                                                        | —                  | [[docs/api/admin\|Admin]] |
@@ -682,7 +682,7 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | POST   | `/api/info/exchange-rates/refresh`          | Refresh exchange rates                                                                                                                                                                                                                                                                                | admin      | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/inflation-rates`                 | Inflation rates                                                                                                                                                                                                                                                                                       | 30 req/min | [[docs/api/info\|Info]]                           |
 | POST   | `/api/info/inflation-rates/refresh`         | Refresh inflation                                                                                                                                                                                                                                                                                     | admin      | [[docs/api/info\|Info]]                           |
-| POST   | `/api/info/refresh-views`                   | Refresh materialized views                                                                                                                                                                                                                                                                            | —          | [[docs/api/info\|Info]]                           |
+| POST   | `/api/info/refresh-views`                   | Refresh the summary tables (the former materialized views)                                                                                                                                                                                                                                            | —          | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/portfolio-performance`           | Performance snapshots, metrics, heatmap, breakdownSummary. 2026-06-11 (ADR-074): snapshots gain optional `value_fx_neutral`; breakdownSummary entries gain `assetGain`, `fxGain`, `nativeCurrentValue`, `usedFallbackRate`                                                                            | 30 req/min | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/portfolio-performance/by-broker` | Forward-only daily account partitions with frozen names and an explicit unassigned series; no historical backfill (ADR-143)                                                                                                                                                                           | 30 req/min | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/portfolio-summary`               | Realtime portfolio totals and active holdings (eight-decimal units; canonical custody/adjustments). ADR-074: transaction-date FX attribution. ADR-108: partitioned `byAccount` P&L with machine-readable assignment identity and oversold repair state; per-investment `fullyAssigned` and `oversold` | 60 req/min | [[docs/api/portfolio-summary\|Portfolio Summary]] |

@@ -6,7 +6,7 @@ import { parsePort, terminateChild, waitForExit } from "./native-development";
 
 void test("native development accepts only unprivileged TCP ports", () => {
   assert.equal(parsePort(undefined, 3002), 3002);
-  assert.equal(parsePort("54329", 3002), 54329);
+  assert.equal(parsePort("43210", 3002), 43210);
   for (const value of ["1023", "65536", "1.5", "invalid"]) {
     assert.throws(() => parsePort(value, 3002), /port is invalid/);
   }

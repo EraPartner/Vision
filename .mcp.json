@@ -1,9 +1,9 @@
 {
   "mcpServers": {
-    "vision-postgres": {
+    "vision-sqlite": {
       "type": "stdio",
       "command": "bun",
-      "args": ["apps/node-backend/scripts/postgres-mcp.ts"]
+      "args": ["apps/node-backend/scripts/sqlite-mcp.ts"]
     },
     "vision-typescript": {
       "type": "stdio",

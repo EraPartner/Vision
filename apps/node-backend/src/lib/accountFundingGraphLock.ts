@@ -1,30 +1,50 @@
+import { ApiErrorCode } from "@vision/types/errors";
+import { withTransaction } from "../database/connection.ts";
+import { AppError } from "../middleware/errorHandler.ts";
+
 /**
- * One transaction-scoped lock serializes every writer of
- * `accounts.funding_account_id`, including the raw admin database editor.
+ * The serialization point for every writer of `accounts.funding_account_id`,
+ * including the raw admin database editor.
  *
- * The two-key advisory namespace spells "VISI" plus the funding-graph slot.
- * Callers must already own a transaction: PostgreSQL releases the lock when
- * that transaction commits or rolls back.
+ * PostgreSQL needed a transaction-scoped advisory lock here. Under SQLite
+ * (ADR-263) every write transaction is `BEGIN IMMEDIATE` on the single writer
+ * connection, so the `withTransaction()` the caller already owns serializes
+ * the funding-graph validation reads and the edge write against every other
+ * writer until it commits or rolls back. Nothing is left to acquire.
+ *
+ * The function stays as the documented protocol point, with its signature, so
+ * callers keep stating where the graph becomes theirs. Callers must call it
+ * inside `withTransaction()` and keep the validation read and the write in
+ * that same transaction: outside one, the read and the write are separate
+ * statements and another writer can run between them.
+ *
+ * @param _runQuery the caller's transaction runner; unused, kept so callers
+ *   written for the advisory lock compile unchanged.
  */
-const ACCOUNT_FUNDING_GRAPH_LOCK_SQL =
-  "SELECT pg_advisory_xact_lock($1::integer, $2::integer)";
-
-const ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS = Object.freeze([0x56495349, 1]);
-
-export async function lockAccountFundingGraph(
-  runQuery: (sql: string, params: readonly number[]) => Promise<unknown>,
+export function lockAccountFundingGraph(
+  _runQuery?: (sql: string, params: readonly number[]) => Promise<unknown>,
 ): Promise<void> {
+  // BEGIN IMMEDIATE already holds the database write lock for the caller.
+  return Promise.resolve();
+}
+
+/**
+ * Run a funding-graph mutation in a write transaction (a savepoint inside an
+ * open one). A wait for the database write lock that times out (55P03)
+ * answers the retryable 503 that a cancelled advisory-lock wait (57014)
+ * answered on PostgreSQL.
+ */
+export async function withFundingGraphTransaction<T>(
+  fn: () => Promise<T>,
+): Promise<T> {
   try {
-    await runQuery(
-      ACCOUNT_FUNDING_GRAPH_LOCK_SQL,
-      ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS,
-    );
+    return await withTransaction(fn);
   } catch (err) {
     if (
       typeof err === "object" &&
       err !== null &&
       "code" in err &&
-      err.code === "57014"
+      err.code === "55P03"
     ) {
       throw new AppError("Account funding graph is busy; retry the request", {
         status: 503,
@@ -35,10 +55,3 @@ export async function lockAccountFundingGraph(
     throw err;
   }
 }
-import { ApiErrorCode } from "@vision/types/errors";
-import { AppError } from "../middleware/errorHandler.ts";
-
-export {
-  ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS as __ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS,
-  ACCOUNT_FUNDING_GRAPH_LOCK_SQL as __ACCOUNT_FUNDING_GRAPH_LOCK_SQL,
-};

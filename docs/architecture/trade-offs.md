@@ -2,8 +2,8 @@
 title: System Design Trade-offs Analysis
 type: architecture-doc
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-11-03
+updated: 2026-11-03
 tags: [system-design, trade-offs, architecture, decisions, analysis]
 description: Analysis of current Vision architectural trade-offs, including the ADR-109 flat investment schema that superseded PostgreSQL inheritance.
 aliases: [trade-offs, design decisions, architecture analysis, alternatives]
@@ -71,14 +71,14 @@ runtime fork and restore enforceable foreign keys. See
 
 ## 4. Materialized Views vs. Real-Time Aggregation
 
-**Decision:** Materialized views for dashboard aggregations, refreshed on data changes
+**Decision:** Materialized views for dashboard aggregations, refreshed on data changes. Since [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] they are SQLite summary tables that the backend refills.
 
 | Aspect           | Materialized Views (Chosen)         | Real-Time Queries                  | Redis Cache            |
 | ---------------- | ----------------------------------- | ---------------------------------- | ---------------------- |
 | Read performance | Instant (pre-computed)              | Slow (aggregates on every request) | Fast (in-memory)       |
 | Data freshness   | Eventually consistent (1s debounce) | Always current                     | Eventually consistent  |
 | Write overhead   | Refresh on mutation                 | None                               | Invalidate on mutation |
-| Complexity       | CONCURRENTLY refresh + coalescing   | Simple queries                     | External dependency    |
+| Complexity       | One-transaction refill + coalescing | Simple queries                     | External dependency    |
 | Storage          | Database storage                    | No extra storage                   | Redis memory           |
 
 **Trade-off:** Dashboard data can be up to 1 second stale after a transaction change. Acceptable for a personal finance app where real-time precision isn't critical.

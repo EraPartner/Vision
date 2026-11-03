@@ -2,9 +2,9 @@
 title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
-date: 2026-10-28
-last_modified: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+last_modified: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     integration,
@@ -344,8 +344,8 @@ All five adapters are wired (Yahoo needs no key; Twelve Data, Finnhub, FMP, and 
 ## Adding a Price Provider
 
 Unlike the [bank-adapter seam](bank-adapters.md#adding-new-banks), adding a price provider is **not**
-a single registration point. The provider identity is spread across backend dispatch, a PostgreSQL
-enum, and the OpenAPI contract. The frontend picker gets its normal membership and ordering from
+a single registration point. The provider identity is spread across backend dispatch, a database
+CHECK constraint, and the OpenAPI contract. The frontend picker gets its normal membership and ordering from
 the backend catalog instead of maintaining separate Add and Edit dialog lists. It also keeps a
 compact offline/loading fallback catalog in `usePriceProviderCatalog.ts`. The current touchpoints:
 
@@ -359,10 +359,13 @@ compact offline/loading fallback catalog in `usePriceProviderCatalog.ts`. The cu
 5. Add a probe entry in `services/providerHealthService.ts` when the provider supports a useful
    health probe.
 
-**Database** 6. Add the value to the `price_provider` PostgreSQL enum via a **new** numbered `db/migrations/` file
-(`bun run db:new -- add_<provider>_price_provider`, typically `ALTER TYPE price_provider ADD VALUE`;
-the enum is defined in `db/migrations/0001_baseline.sql`), then run `bun run db:codegen`. See
-[[docs/guides/migrations|Database Migration Guide]].
+**Database** 6. Add the value to the `investments_price_provider__vtype` CHECK on
+`investments.price_provider` via a **new** numbered `db/migrations/` file
+(`bun run db:new -- add_<provider>_price_provider`). The column is `TEXT` with
+`CHECK (price_provider IN (...))`, defined in `db/migrations/0001_baseline.sql`. SQLite cannot alter
+a CHECK in place, so the migration rebuilds the `investments` table. Then run `bun run db:codegen`.
+See [[docs/guides/migrations#What ALTER TABLE can and cannot do|Database Migration Guide]] and
+[[docs/adr/263-sqlite-replaces-postgresql|ADR-263]].
 
 **Contract + frontend** 7. Add the value to the `price_provider` enum in `openapi.yaml`, run `bun run generate:types`, and
 update the hand-written `PriceProvider` union in `apps/frontend/src/types/api.ts`. 8. Add the provider to `FALLBACK_CATALOG` in `features/portfolio/usePriceProviderCatalog.ts` so an

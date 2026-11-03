@@ -2,8 +2,8 @@
 title: Splits API
 type: endpoint
 status: active
-date: 2026-10-21
-updated: 2026-10-21
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   - api
   - splits
@@ -100,7 +100,7 @@ converted figures after the convertible rows. The body-level `summary`
 (`{ currency, remaining, unconverted_count, unconverted_currencies }`, OpenAPI `OwedTotals`) is the
 total outstanding across every recipient, whatever page is returned. Implemented by
 `getOwedSummary` in [[apps/node-backend/src/services/splitService.ts]].
-Mixed-currency owed totals are covered on real PostgreSQL by
+Mixed-currency owed totals are covered against a real SQLite database by
 [[apps/node-backend/tests/owedTotals.db.test.ts]].
 
 **Recipient Alias Grouping (Phase Q+):**
@@ -134,7 +134,7 @@ Linked recipients (those sharing a `primary_recipient_id` via merge operations) 
 
 Implementation note:
 
-- Groups by `COALESCE(r.primary_recipient_id, r.id)` and returns `COALESCE(pr.name, r.name)` to collapse aliases into their primary. The aggregation joins `agg_split_outstanding` (trigger-maintained materialized view) + `recipients` + the primary recipient's name, filtering to unsettled splits. ([[apps/node-backend/src/repositories/splitRepository.ts]]).
+- Groups by `COALESCE(r.primary_recipient_id, r.id)` and returns `COALESCE(pr.name, r.name)` to collapse aliases into their primary. The aggregation joins `agg_split_outstanding` (trigger-maintained table) + `recipients` + the primary recipient's name, filtering to unsettled splits. ([[apps/node-backend/src/repositories/splitRepository.ts]]).
 
 ---
 
@@ -416,7 +416,7 @@ The share per transaction is computed server-side by `computeBulkSplitAmount` ([
 | `equal` | half of the transaction          | 50/50    |
 | `full`  | the whole transaction            | 0/100    |
 
-Rows the preset cannot apply to are **skipped and counted**, not failed, so one stale row never aborts the batch: an id that no longer exists, a transaction that already carries a split (a preset on top of an existing allocation has no single right answer; the user edits those one by one in the split dialog), and a zero-amount transaction. Ids are deduplicated and locked in ascending order (`SELECT … FOR UPDATE`) so two overlapping bulk calls cannot deadlock. An unknown recipient is a `404` before any write. Rate-limited to 30 requests per minute, like the transactions bulk routes.
+Rows the preset cannot apply to are **skipped and counted**, not failed, so one stale row never aborts the batch: an id that no longer exists, a transaction that already carries a split (a preset on top of an existing allocation has no single right answer; the user edits those one by one in the split dialog), and a zero-amount transaction. Ids are deduplicated and processed in ascending order inside one `BEGIN IMMEDIATE` transaction on the single writer, so two overlapping bulk calls run one after the other ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). An unknown recipient is a `404` before any write. Rate-limited to 30 requests per minute, like the transactions bulk routes.
 
 **Request Body:**
 

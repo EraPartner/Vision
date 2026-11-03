@@ -2,9 +2,9 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-10-28
-last_modified: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+last_modified: 2026-11-03
+updated: 2026-11-03
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: "Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail."
@@ -759,7 +759,7 @@ All invalidations cascade through `clearInvestmentsCaches()` → `invalidatePort
 ## Belgian Inflation Data Flow
 
 - Backend now owns Belgian inflation sourcing and caching via Statbel-backed service with Eurostat fallback; frontend consumes monthly rates through the info API.
-- Data path and fallback order: in-memory cache (24h) -> PostgreSQL persisted rows -> remote Statbel fetch -> remote Eurostat HICP index fallback; if both remote sources fail, service falls back to persisted DB data.
+- Data path and fallback order: in-memory cache (24h) -> persisted database rows -> remote Statbel fetch -> remote Eurostat HICP index fallback; if both remote sources fail, service falls back to persisted DB data.
 - Startup/scheduled behavior: backend warms inflation cache at startup and refreshes together with exchange-rate refresh cadence.
 - New persistence table `belgian_inflation_rates` stores monthly values (`month_date`, `monthly_rate`, `source`, `fetched_at`, `updated_at`) for deterministic portfolio calculations and offline resilience.
 
@@ -919,7 +919,7 @@ Each investment can be individually included in or excluded from the ticker. The
 - An absent row means visible (`COALESCE(tp.show_in_ticker, true)`); only explicit opt-outs need storing — no backfill required for existing holdings.
 - **Read path**: `investmentRepository` reads (`getById`, `getAll`, `getAllWithCount`) each `LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id` and select `COALESCE(tp.show_in_ticker, true) AS show_in_ticker`.
 - **Write path**: `investmentRepository.update()` peels `show_in_ticker` out of the PATCH body — it is **not** in `allowed` / `BASE_ALLOWED_FIELDS` — and UPSERTs it via `INSERT ... ON CONFLICT (investment_id) DO UPDATE`, then returns the joined read.
-- **Backup**: `investment_ticker_prefs` is included in the whole-database `pg_dump` backup and travels with `.visionbak` exports.
+- **Backup**: `investment_ticker_prefs` is included in the whole-database copy (`db.sqlite3`) and travels with `.visionbak` exports.
 - The table is part of the `0001` migration baseline, so every install has it.
 
 ### i18n keys
@@ -975,7 +975,7 @@ now replays canonical transfer events with original lots under ADR-177. Each ele
 }
 ```
 
-For an instrument whose lots are fully broker-assigned, its per-investment summary **is** the sum of its partitions, so `Σ byAccount ≡ totals` holds field-by-field by construction (locked by the real-Postgres parity suite `tests/portfolioSummaryPartitionParity.db.test.ts` under all three cost-basis methods). Each summary carries `fullyAssigned` and `oversold` booleans. While an instrument still has unassigned lot rows (transition rule), its **entire** value/P&L sits on the `account_id: null` row and its global figures stay the exact flat-replay values. The row also carries `assignment: "unassigned"`, which is the stable identity clients localize as Unassigned. `contribution_kind` separates lot-bearing `position` rows from `non_position` rows containing only income or adjustments. Thus an unassigned dividend does not make an otherwise assigned instrument incomplete, and it does not merge with a null-account position row from another instrument. Non-unit-based investments (savings/bond/real estate — no lot machinery, non-linear interest accrual) are attributed whole to their single account, or to the null row when their rows span accounts.
+For an instrument whose lots are fully broker-assigned, its per-investment summary **is** the sum of its partitions, so `Σ byAccount ≡ totals` holds field-by-field by construction (locked by the real-database parity suite `tests/portfolioSummaryPartitionParity.db.test.ts` under all three cost-basis methods). Each summary carries `fullyAssigned` and `oversold` booleans. While an instrument still has unassigned lot rows (transition rule), its **entire** value/P&L sits on the `account_id: null` row and its global figures stay the exact flat-replay values. The row also carries `assignment: "unassigned"`, which is the stable identity clients localize as Unassigned. `contribution_kind` separates lot-bearing `position` rows from `non_position` rows containing only income or adjustments. Thus an unassigned dividend does not make an otherwise assigned instrument incomplete, and it does not merge with a null-account position row from another instrument. Non-unit-based investments (savings/bond/real estate — no lot machinery, non-linear interest accrual) are attributed whole to their single account, or to the null row when their rows span accounts.
 
 Sell validation is account-scoped on fully-assigned instruments: a sell exceeding the broker-local units is rejected with an error naming the broker (display name), even if investment-wide units would cover it; unassigned sells and instruments in transition validate globally, as before. Create and update also replay the complete ordered unit-event history and reject any newly introduced or worsened broker deficit, including a later oversell caused by reassigning or redating an earlier lot. Existing invalid data remains editable when the deficit is unchanged or improved. Assignment state, availability, and projected deficits come from one database read.
 

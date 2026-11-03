@@ -386,8 +386,8 @@ export async function saveToDatabase(rates: RateTable): Promise<void> {
         .set({ is_latest: false, updated_at: sql<Date>`NOW()` })
         .where(
           "currency_code",
-          "=",
-          sql<string>`ANY(${entries.map(([currency]) => currency)}::text[])`,
+          "in",
+          sql<string>`(SELECT value FROM json_each(${JSON.stringify(entries.map(([currency]) => currency))}))`,
         )
         .where("is_latest", "=", true)
         .execute();
@@ -497,24 +497,24 @@ export async function getUnindexedRatesToEurForDates(
   }
 
   if (saveFetchedHistoricalRates && resolved.size > 0) {
-    const currencies: string[] = [];
-    const dates: string[] = [];
-    const rates: number[] = [];
+    // One JSON array of [currency, rate, date] triples. The rate travels as
+    // its JavaScript text (what node-postgres sent) and is stored through
+    // vision_numeric() at the column's NUMERIC(20,10); `WHERE true` keeps
+    // SQLite from reading ON CONFLICT as a join constraint of the SELECT.
+    const fetched: Array<[string, string, string]> = [];
     for (const [key, rate] of resolved) {
       const separator = key.indexOf(":");
-      currencies.push(key.slice(0, separator));
-      dates.push(key.slice(separator + 1));
-      rates.push(rate);
+      fetched.push([key.slice(0, separator), String(rate), key.slice(separator + 1)]);
     }
     await sql`
       INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-      SELECT currency_code, rate_to_eur, rate_date::date, false
-      FROM UNNEST(${currencies}::text[], ${rates}::numeric[], ${dates}::text[])
-        AS fetched(currency_code, rate_to_eur, rate_date)
+      SELECT f.value ->> 0, vision_numeric(f.value ->> 1, 20, 10), ts_date(f.value ->> 2), 0
+      FROM json_each(${JSON.stringify(fetched)}) AS f
+      WHERE true
       ON CONFLICT (currency_code, rate_date)
       DO UPDATE SET
-        rate_to_eur = EXCLUDED.rate_to_eur,
-        updated_at = NOW()`.execute(db);
+        rate_to_eur = excluded.rate_to_eur,
+        updated_at = now()`.execute(db);
   }
 
   return resolved;
@@ -541,7 +541,7 @@ async function getPriorRateFromDatabase(
   const row = await checkedRow(
     rateToEurRowSchema,
     selectRateToEur(currencyCode)
-      .where("rate_date", "<=", sql<Date>`${dateStr}::date`)
+      .where("rate_date", "<=", sql<Date>`ts_date(${dateStr})`)
       .orderBy("rate_date", "desc")
       .limit(1),
   );
@@ -569,11 +569,11 @@ export async function getStoredRateToEurOnOrBefore(
   const row = await checkedRow(
     rateToEurRowSchema,
     selectRateToEur(code)
-      .where("rate_date", "<=", sql<Date>`${dateStr}::date`)
+      .where("rate_date", "<=", sql<Date>`ts_date(${dateStr})`)
       .where(
         "rate_date",
         ">=",
-        sql<Date>`${dateStr}::date - make_interval(days => ${maxLookbackDays})`,
+        sql<Date>`add_days(ts_date(${dateStr}), ${-maxLookbackDays})`,
       )
       .orderBy("rate_date", "desc")
       .limit(1),
@@ -697,7 +697,7 @@ export async function getRateToEurForDate(
   const exact = await checkedRow(
     rateToEurRowSchema,
     selectRateToEur(currencyCode)
-      .where("rate_date", "=", sql<Date>`${dateStr}::date`)
+      .where("rate_date", "=", sql<Date>`ts_date(${dateStr})`)
       .limit(1),
   );
   if (exact) {

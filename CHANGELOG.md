@@ -12,6 +12,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+> [!IMPORTANT]
+> **Vision 2.0 data must be moved once.** Vision now keeps its data in one SQLite file instead of
+> a private PostgreSQL server ([ADR-263]). It refuses to start while it finds Vision 2.0 data and
+> no SQLite database. Make a backup in Vision 2.0 first, then run
+> `bun run transition:v2 -- <backup file>` from a repository checkout. The script only reads the
+> backup, verifies every table before it installs anything and never overwrites a database. See
+> [`docs/guides/sqlite-transition.md`](docs/guides/sqlite-transition.md).
+
+### Changed
+
+- **SQLite replaces PostgreSQL** ([ADR-263]). The backend opens `database/vision.sqlite3` in the
+  application data directory in-process, through the bundled Bun and the macOS system SQLite
+  (3.39.0 or later). Money stays exact decimal text and month arithmetic keeps the month-end
+  rule.
+- **Migrations** run in one transaction, refuse a database written by a newer Vision, and write
+  a copy of a database that holds data before they change it. Vision does not start when that
+  copy fails.
+- **Backups** hold a SQLite copy of the database. Backups from Vision 2.0 restore only after
+  `bun run transition:v2 -- <backup> --to-backup <new file>` converts them.
+- **Custom analysis SQL** runs in the SQLite dialect, in a separate process that holds only
+  in-memory copies of the analysis views it names, and that is killed when a statement runs past
+  its limit. Saved analyses written for PostgreSQL are kept and
+  marked "Needs review"; they run again once saved from the SQL editor.
+
+### Removed
+
+- The bundled PostgreSQL 18 server and its payload, database roles and grants, `pg` and the
+  PostgreSQL tooling (`native:prepare`, `test:db`, `db:lint`). Development and tests need no
+  database server.
+- macOS 12 support: its system SQLite is older than 3.39.
+
 ## [2.0.0] — 2026-10-28
 
 > [!IMPORTANT]
@@ -213,3 +244,4 @@ planned/recurring transactions, en/nl i18n, and an Electron desktop build.
 [ADR-259]: docs/adr/259-reduced-tier-backdrop-filter-order.md
 [ADR-260]: docs/adr/260-ledger-card-material-on-a-pseudo.md
 [ADR-261]: docs/adr/261-ticker-and-settings-material-hosts-and-20-fps-aurora.md
+[ADR-263]: docs/adr/263-sqlite-replaces-postgresql.md

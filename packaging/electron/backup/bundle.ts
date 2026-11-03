@@ -2,10 +2,15 @@
  * Vision Backup Bundle — create and open .visionbak files.
  *
  * Bundle layout (zip archive):
- *   metadata.json        — schema version, app version, device ID, timestamps
- *   db.sql               — pg_dump plain SQL
+ *   metadata.json        — bundle format, database schema version, app version,
+ *                          device ID, timestamps, database checksum
+ *   db.sqlite3           — a verified SQLite snapshot of the database (ADR-263)
  *   attachments/         — mirrors ATTACHMENTS_DIR tree (present when attachments exist)
  *   frontend-state.json  — localStorage snapshot { keys: { … } }
+ *
+ * Bundle format 1 (Vision 2.0 and earlier) carried a PostgreSQL `db.sql`
+ * dump instead. openBundle still extracts such a bundle so the caller can
+ * name the transition path; nothing in the desktop app parses db.sql.
  *
  * Encryption (optional): new bundles use AES-256-GCM with a per-file salt,
  * nonce, and authentication tag. Retired v1 AES-256-CBC bundles are refused.
@@ -59,7 +64,7 @@ export const BUNDLE_ENC_MAGIC = Buffer.from("VISIONBAK1");
 export const BUNDLE_ENC_MAGIC_V2 = Buffer.from("VISIONBAK2");
 
 // --- Zip-bomb guards for restore (extractZip) ---
-// A legitimate bundle is a DB dump + attachments (each attachment ≤ 10 MB).
+// A legitimate bundle is a database file + attachments (each attachment ≤ 10 MB).
 // These caps stop a crafted .visionbak whose entries decompress to far more
 // than the host can hold. Tracked against the *actual* bytes written, not just
 // the header-declared uncompressedSize (which a malicious bundle can lie about).
@@ -70,8 +75,16 @@ const MAX_RESTORE_BYTES = 10 * 1024 * 1024 * 1024;
 /** Max number of entries (files + dirs) in a restore bundle. */
 const MAX_RESTORE_ENTRIES = 100_000;
 
-/** Current bundle format version stored in metadata.json. */
-export const BUNDLE_VERSION = 1;
+/** Current bundle format version stored in metadata.json (2: SQLite database). */
+export const BUNDLE_VERSION = 2;
+
+/** Bundle member holding the SQLite database (format 2). */
+export const BUNDLE_DATABASE_MEMBER = "db.sqlite3";
+
+/** Bundle member holding Vision 2.0's PostgreSQL dump (format 1). */
+export const LEGACY_BUNDLE_DUMP_MEMBER = "db.sql";
+
+const SQLITE_MAGIC = Buffer.from("SQLite format 3\0", "latin1");
 
 /**
  * Parsed metadata.json. A bundle is untrusted input, so every field is
@@ -79,17 +92,27 @@ export const BUNDLE_VERSION = 1;
  */
 export type BundleMetadata = Readonly<Record<string, unknown>>;
 
+/** Facts about the snapshot that metadata.json records for restore checks. */
+export interface BundleDatabaseInfo {
+  /** Latest migration version in the snapshot's ledger. */
+  schemaVersion: number;
+  /** SQLite library version that wrote the snapshot. */
+  sqliteVersion?: string | null | undefined;
+  /** SHA-256 of db.sqlite3; restore refuses a member that does not match. */
+  sha256?: string | null | undefined;
+  bytes?: number | null | undefined;
+}
+
 export interface CreateBundleOptions {
   /** output directory */
   destDir: string;
   /** short device identifier */
   deviceId: string;
-  /** highest public.kysely_migration name at dump time */
-  schemaHead?: string | null | undefined;
   /** Electron app.getVersion() */
   appVersion?: string | null;
-  /** path to the pg_dump SQL file */
-  dbSqlPath: string;
+  /** path to a verified SQLite snapshot of the database */
+  databasePath: string;
+  database: BundleDatabaseInfo;
   /** local dir mirroring ATTACHMENTS_DIR (or null) */
   attachmentsDir?: string | null;
   /** { keys: { … } } localStorage snapshot (or null) */
@@ -98,10 +121,26 @@ export interface CreateBundleOptions {
 
 export interface OpenedBundle {
   metadata: BundleMetadata;
-  dbSqlPath: string;
+  /** The extracted db.sqlite3; null for a Vision 2.0 (format 1) bundle. */
+  databasePath: string | null;
+  /** The extracted Vision 2.0 db.sql; null for a SQLite bundle. Never parsed here. */
+  dbSqlPath: string | null;
   attachmentsDir: string | null;
   frontendState: unknown;
   cleanup: () => void;
+}
+
+async function assertSqliteFile(file: string): Promise<void> {
+  const handle = await fs.promises.open(file, "r");
+  try {
+    const head = Buffer.alloc(SQLITE_MAGIC.length);
+    const { bytesRead } = await handle.read(head, 0, head.length, 0);
+    if (bytesRead !== head.length || !head.equals(SQLITE_MAGIC)) {
+      throw new Error("The backup database is not a SQLite database file.");
+    }
+  } finally {
+    await handle.close();
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -116,12 +155,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export async function createBundle({
   destDir,
   deviceId,
-  schemaHead,
   appVersion,
-  dbSqlPath,
+  databasePath,
+  database,
   attachmentsDir,
   frontendState,
 }: CreateBundleOptions): Promise<{ bundlePath: string }> {
+  if (!Number.isSafeInteger(database.schemaVersion) || database.schemaVersion < 1) {
+    throw new Error("createBundle requires the database schema version");
+  }
+  await assertSqliteFile(databasePath);
   const timestamp = new Date()
     .toISOString()
     .replace(/[:.]/g, "-")
@@ -134,7 +177,11 @@ export async function createBundle({
 
   const metadata = {
     bundleVersion: BUNDLE_VERSION,
-    schemaHead: schemaHead || "",
+    database: "sqlite",
+    schemaVersion: database.schemaVersion,
+    sqliteVersion: database.sqliteVersion || null,
+    databaseSha256: database.sha256 || null,
+    databaseBytes: database.bytes ?? null,
     appVersion: appVersion || "unknown",
     deviceId,
     createdAt: new Date().toISOString(),
@@ -152,8 +199,8 @@ export async function createBundle({
     // metadata.json
     await archive.append("metadata.json", JSON.stringify(metadata, null, 2));
 
-    // db.sql
-    await archive.file(dbSqlPath, "db.sql");
+    // db.sqlite3
+    await archive.file(databasePath, BUNDLE_DATABASE_MEMBER);
 
     // attachments/ tree (optional — not every instance has attachments)
     if (attachmentsDir && fs.existsSync(attachmentsDir)) {
@@ -421,10 +468,19 @@ export async function openBundle(
       throw new Error("Bundle is missing metadata.json — file may be corrupt.");
     }
 
-    // db.sql is required
-    const dbSqlPath = path.join(tmpDir, "db.sql");
-    if (!fs.existsSync(dbSqlPath)) {
-      throw new Error("Bundle is missing db.sql — file may be corrupt.");
+    // db.sqlite3 is required; a Vision 2.0 bundle carries db.sql instead,
+    // which only the caller's refusal message ever looks at.
+    const databaseCandidate = path.join(tmpDir, BUNDLE_DATABASE_MEMBER);
+    const dumpCandidate = path.join(tmpDir, LEGACY_BUNDLE_DUMP_MEMBER);
+    const databasePath = fs.existsSync(databaseCandidate)
+      ? databaseCandidate
+      : null;
+    const dbSqlPath =
+      !databasePath && fs.existsSync(dumpCandidate) ? dumpCandidate : null;
+    if (!databasePath && !dbSqlPath) {
+      throw new Error(
+        `Bundle is missing ${BUNDLE_DATABASE_MEMBER} — file may be corrupt.`,
+      );
     }
 
     // attachments/ is optional
@@ -445,7 +501,14 @@ export async function openBundle(
       }
     }
 
-    return { metadata, dbSqlPath, attachmentsDir, frontendState, cleanup };
+    return {
+      metadata,
+      databasePath,
+      dbSqlPath,
+      attachmentsDir,
+      frontendState,
+      cleanup,
+    };
   } catch (err) {
     cleanup();
     throw err;

@@ -1,5 +1,5 @@
 /**
- * Real-Postgres tests for the surfaces that read the shared computed balance and
+ * Real-database (SQLite) tests for the surfaces that read the shared computed balance and
  * had to be migrated off its single cross-currency `SUM(t2.amount)`:
  *
  *   - the accounts hub          — `accountService.list` (computed_balance + drift)
@@ -25,8 +25,8 @@
  * two numbers differ, so a green assertion here cannot be satisfied by the old
  * behaviour — the failure mode this suite exists to prevent.
  *
- * Determinism: fixtures are dated by SQL expressions relative to CURRENT_DATE,
- * never by literal calendar dates. The currency memory cache is cleared around
+ * Determinism: fixtures are dated by SQL expressions relative to today() (the
+ * local calendar day), never by literal calendar dates. The currency memory cache is cleared around
  * every test so no test sees another's seeded rates.
  */
 
@@ -39,13 +39,7 @@ import {
   it,
   vi,
 } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
+import { closeTestPool, getTestPool } from "./setup/db.ts";
 import { accountService } from "../src/services/accountService.ts";
 import { accountRepository } from "../src/repositories/accountRepository.ts";
 
@@ -124,7 +118,7 @@ async function addAccount(
     id: AccountId;
   }>(
     `INSERT INTO accounts (name, type, currency, spendable, in_net_worth, is_active)
-     VALUES ($1, $2::account_type, $3, $4, $5, $6)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id`,
     [name, type, currency, spendable, inNetWorth, isActive],
   );
@@ -132,7 +126,7 @@ async function addAccount(
   if (statementBalance != null) {
     await must(getTestPool(), "getTestPool()").query(
       `INSERT INTO account_statement_balances (account_id, currency, balance, balance_date)
-       VALUES ($1, $2, $3, (${statementBalanceDate ?? "CURRENT_DATE"})::date)`,
+       VALUES ($1, $2, vision_numeric($3, 18, 4), ${statementBalanceDate ?? "today()"})`,
       [id, statementCurrency, statementBalance],
     );
   }
@@ -161,7 +155,7 @@ async function insertTxn({
   expect(account.rows).toHaveLength(1);
   await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO transactions (date, amount, currency, recipient_id, account_id, balance, is_active)
-     VALUES ((${dateExpr})::date, $1, $2, $3, $4, $5, $6)`,
+     VALUES (${dateExpr}, vision_numeric($1, 18, 4), $2, $3, $4, vision_numeric($5, 18, 4), $6)`,
     [
       amount,
       currency,
@@ -182,7 +176,7 @@ async function insertRate(
 ) {
   await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-     VALUES ($1, (${dateExpr})::date, $2, $3)`,
+     VALUES ($1, ${dateExpr}, vision_numeric($2, 20, 10), $3)`,
     [code, rate, isLatest],
   );
 }
@@ -198,15 +192,15 @@ async function seedMultiCurrencyAccount(
 ) {
   await seedRecipient();
   const id = await addAccount(name, { currency: "EUR", ...accountOpts });
-  await insertRate("USD", "CURRENT_DATE", "0.5");
+  await insertRate("USD", "today()", "0.5");
   await insertTxn({
-    dateExpr: "CURRENT_DATE - interval '2 days'",
+    dateExpr: "add_days(today(), -2)",
     amount: "100.00",
     currency: "EUR",
     bank: name,
   });
   await insertTxn({
-    dateExpr: "CURRENT_DATE - interval '1 day'",
+    dateExpr: "add_days(today(), -1)",
     amount: "100.00",
     currency: "USD",
     bank: name,
@@ -214,16 +208,10 @@ async function seedMultiCurrencyAccount(
   return id;
 }
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "cross-currency computed balance, all reader surfaces (real DB)",
   () => {
     beforeAll(async () => {
-      expect(
-        process.env.DATABASE_URL,
-        "DATABASE_URL must equal TEST_DATABASE_URL for this suite (see scripts/with-test-db.sh)",
-      ).toBe(process.env.TEST_DATABASE_URL);
-      // DB suites share one database across parallel vitest workers — serialize.
-      await acquireDbSuiteLock();
       // Net worth also reads portfolio snapshots, which earlier suites can leave behind.
       await resetNetWorthInputs();
     }, 180_000);
@@ -243,7 +231,6 @@ describe.skipIf(!hasTestDatabase())(
     afterEach(resetNetWorthInputs);
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
@@ -281,7 +268,7 @@ describe.skipIf(!hasTestDatabase())(
           date: "2026-09-03",
         });
         let { rows } = await must(getTestPool(), "getTestPool()").query<DbRow>(
-          `SELECT currency, balance::text AS balance,
+          `SELECT currency, balance,
                   to_char(balance_date, 'YYYY-MM-DD') AS balance_date
              FROM account_statement_balances
             WHERE account_id = $1 ORDER BY currency`,
@@ -385,9 +372,9 @@ describe.skipIf(!hasTestDatabase())(
           statementBalance: "100.00",
           statementCurrency: "USD",
         });
-        await insertRate("USD", "CURRENT_DATE", "0.5");
+        await insertRate("USD", "today()", "0.5");
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '3 days'",
+          dateExpr: "add_days(today(), -3)",
           amount: "100.00",
           currency: "USD",
           bank: "NOISY",
@@ -402,13 +389,13 @@ describe.skipIf(!hasTestDatabase())(
 
         // Now a cancelled EUR transfer pair: two real rows that net to zero.
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '2 days'",
+          dateExpr: "add_days(today(), -2)",
           amount: "250.00",
           currency: "EUR",
           bank: "NOISY",
         });
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '1 day'",
+          dateExpr: "add_days(today(), -1)",
           amount: "-250.00",
           currency: "EUR",
           bank: "NOISY",
@@ -435,16 +422,16 @@ describe.skipIf(!hasTestDatabase())(
           currency: "GBP",
           statementBalance: "50.00",
         });
-        await insertRate("USD", "CURRENT_DATE", "0.5");
-        await insertRate("GBP", "CURRENT_DATE", "2");
+        await insertRate("USD", "today()", "0.5");
+        await insertRate("GBP", "today()", "2");
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '2 days'",
+          dateExpr: "add_days(today(), -2)",
           amount: "100.00",
           currency: "EUR",
           bank: "GBP SHELL",
         });
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '1 day'",
+          dateExpr: "add_days(today(), -1)",
           amount: "100.00",
           currency: "USD",
           bank: "GBP SHELL",
@@ -466,24 +453,24 @@ describe.skipIf(!hasTestDatabase())(
       it("anchors each currency on its own stamp — a EUR statement never absorbs USD activity", async () => {
         await seedRecipient();
         await addAccount("WISE STAMPED", { currency: "EUR" });
-        await insertRate("USD", "CURRENT_DATE", "0.5");
+        await insertRate("USD", "today()", "0.5");
         // EUR: stamp 1000 (day-10), then −25 (day-3) → 975 EUR
         // USD: nothing stamped → Σ = 100 USD → 50 EUR
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '10 days'",
+          dateExpr: "add_days(today(), -10)",
           amount: "-50.00",
           currency: "EUR",
           bank: "WISE STAMPED",
           balance: "1000.00",
         });
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '5 days'",
+          dateExpr: "add_days(today(), -5)",
           amount: "100.00",
           currency: "USD",
           bank: "WISE STAMPED",
         });
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '3 days'",
+          dateExpr: "add_days(today(), -3)",
           amount: "-25.00",
           currency: "EUR",
           bank: "WISE STAMPED",
@@ -504,16 +491,16 @@ describe.skipIf(!hasTestDatabase())(
           currency: "USD",
           statementBalance: "900.00",
         });
-        await insertRate("USD", "CURRENT_DATE", "0.5");
+        await insertRate("USD", "today()", "0.5");
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '10 days'",
+          dateExpr: "add_days(today(), -10)",
           amount: "-50.00",
           currency: "USD",
           bank: "ONE CCY USD",
           balance: "1000.00",
         });
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '5 days'",
+          dateExpr: "add_days(today(), -5)",
           amount: "-100.00",
           currency: "USD",
           bank: "ONE CCY USD",
@@ -553,7 +540,7 @@ describe.skipIf(!hasTestDatabase())(
         await seedMultiCurrencyAccount("AAA MULTI");
         await addAccount("BBB PLAIN");
         await insertTxn({
-          dateExpr: "CURRENT_DATE",
+          dateExpr: "today()",
           amount: "10.00",
           bank: "BBB PLAIN",
         });
@@ -602,7 +589,7 @@ describe.skipIf(!hasTestDatabase())(
           getTestPool(),
           "getTestPool()",
         ).query<DbRow>(
-          `SELECT currency, balance::text AS balance,
+          `SELECT currency, balance,
                   to_char(balance_date, 'YYYY-MM-DD') AS balance_date
              FROM account_statement_balances
             WHERE account_id = $1 ORDER BY currency`,
@@ -628,16 +615,16 @@ describe.skipIf(!hasTestDatabase())(
           currency: "GBP",
           statementBalance: "50.00",
         });
-        await insertRate("USD", "CURRENT_DATE", "0.5");
-        await insertRate("GBP", "CURRENT_DATE", "2");
+        await insertRate("USD", "today()", "0.5");
+        await insertRate("GBP", "today()", "2");
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '2 days'",
+          dateExpr: "add_days(today(), -2)",
           amount: "100.00",
           currency: "EUR",
           bank: "GBP SHELL",
         });
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '1 day'",
+          dateExpr: "add_days(today(), -1)",
           amount: "100.00",
           currency: "USD",
           bank: "GBP SHELL",
@@ -704,7 +691,7 @@ describe.skipIf(!hasTestDatabase())(
         const { rows } = await must(
           getTestPool(),
           "getTestPool()",
-        ).query<DbRow>(`SELECT COUNT(*)::int AS n FROM transactions`);
+        ).query<DbRow>(`SELECT COUNT(*) AS n FROM transactions`);
         expect(must(rows[0], "rows[0]").n).toBe(2); // nothing inserted
       });
     });
@@ -738,12 +725,12 @@ describe.skipIf(!hasTestDatabase())(
         await addAccount("ARCHIVED", { isActive: false });
         await addAccount("NO ACTIVITY");
         await insertTxn({
-          dateExpr: "CURRENT_DATE",
+          dateExpr: "today()",
           amount: "999.00",
           bank: "NOT SPENDABLE",
         });
         await insertTxn({
-          dateExpr: "CURRENT_DATE",
+          dateExpr: "today()",
           amount: "999.00",
           bank: "ARCHIVED",
         });
@@ -812,21 +799,21 @@ describe.skipIf(!hasTestDatabase())(
         await seedRecipient();
         await addAccount("WISE MULTI", { currency: "EUR" });
         await addAccount("CARD", { type: "liability", currency: "USD" });
-        await insertRate("USD", "CURRENT_DATE", "0.5");
+        await insertRate("USD", "today()", "0.5");
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '2 days'",
+          dateExpr: "add_days(today(), -2)",
           amount: "100.00",
           currency: "EUR",
           bank: "WISE MULTI",
         });
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '1 day'",
+          dateExpr: "add_days(today(), -1)",
           amount: "100.00",
           currency: "USD",
           bank: "WISE MULTI",
         });
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '1 day'",
+          dateExpr: "add_days(today(), -1)",
           amount: "-200.00",
           currency: "USD",
           bank: "CARD",
@@ -843,7 +830,7 @@ describe.skipIf(!hasTestDatabase())(
         await seedMultiCurrencyAccount("WISE MULTI", { inNetWorth: true });
         await addAccount("TRACKING", { inNetWorth: false });
         await insertTxn({
-          dateExpr: "CURRENT_DATE",
+          dateExpr: "today()",
           amount: "9999.00",
           bank: "TRACKING",
         });
@@ -869,21 +856,21 @@ describe.skipIf(!hasTestDatabase())(
         await seedRecipient();
         const survivor = await addAccount("SURVIVOR", { currency: "EUR" });
         const source = await addAccount("SOURCE", { currency: "USD" });
-        await insertRate("USD", "CURRENT_DATE", "0.5");
+        await insertRate("USD", "today()", "0.5");
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '3 days'",
+          dateExpr: "add_days(today(), -3)",
           amount: "100.00",
           currency: "EUR",
           bank: "SURVIVOR",
         });
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '2 days'",
+          dateExpr: "add_days(today(), -2)",
           amount: "100.00",
           currency: "USD",
           bank: "SURVIVOR",
         });
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '1 day'",
+          dateExpr: "add_days(today(), -1)",
           amount: "200.00",
           currency: "USD",
           bank: "SOURCE",
@@ -926,22 +913,22 @@ describe.skipIf(!hasTestDatabase())(
         await seedRecipient();
         const survivor = await addAccount("SURVIVOR", { currency: "EUR" });
         const source = await addAccount("SOURCE", { currency: "USD" });
-        await insertRate("USD", "CURRENT_DATE", "0.5");
+        await insertRate("USD", "today()", "0.5");
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '10 days'",
+          dateExpr: "add_days(today(), -10)",
           amount: "-50.00",
           currency: "EUR",
           bank: "SURVIVOR",
           balance: "1000.00",
         });
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '3 days'",
+          dateExpr: "add_days(today(), -3)",
           amount: "-25.00",
           currency: "EUR",
           bank: "SURVIVOR",
         });
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '5 days'",
+          dateExpr: "add_days(today(), -5)",
           amount: "100.00",
           currency: "USD",
           bank: "SOURCE",

@@ -1,5 +1,5 @@
 /**
- * Real-Postgres tests for infoRepositoryRecipients — `getRecipientInsights`,
+ * Real-database (SQLite) tests for infoRepositoryRecipients — `getRecipientInsights`,
  * `getRecipientByYear` and `getRecipientPivot`.
  *
  * DB-backed complement to infoRepositoryRecipients.test.ts (which stays: it runs
@@ -18,20 +18,17 @@
  * queries have no date window, so those use literal calendar dates.
  */
 
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   deleteAllCategoryFixtures,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { recipientInsightsRepository } from "../src/repositories/infoRepositoryRecipients.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
-import { todayAppDateString } from "../src/lib/timezone.ts";
+import { appDateStringToUtc, todayAppDateString } from "../src/lib/timezone.ts";
 import { must } from "./helpers/must.ts";
 import type {
   AccountId,
@@ -41,7 +38,7 @@ import type {
 } from "@vision/types/brands";
 
 // The MoM window's "today": the APP_TIMEZONE day the repository binds (ADR-009).
-const TODAY_SQL = `'${todayAppDateString()}'::date`;
+const TODAY_SQL = `'${todayAppDateString()}'`;
 
 const cat = {} as Record<"Food" | "Bills", number>;
 const rec = {} as Record<
@@ -135,7 +132,7 @@ async function insertTxn({
   isTransfer = false,
 }: TxnInput): Promise<number> {
   const accountId = bank ? await ensureAccount(bank) : null;
-  const dateSql = dateExpr ? `(${dateExpr})::date` : "$6::date";
+  const dateSql = dateExpr ? `ts_date(${dateExpr})` : "ts_date($6)";
   const params = [
     amount,
     currency,
@@ -151,7 +148,7 @@ async function insertTxn({
     id: TransactionId;
   }>(
     `INSERT INTO transactions (amount, currency, recipient_id, category_id, account_id, date, is_active, is_transfer)
-     VALUES ($1, $2, $3, $4, $5, ${dateSql}, $${n}, $${n + 1}) RETURNING id`,
+     VALUES (vision_numeric($1, 18, 4), $2, $3, $4, $5, ${dateSql}, $${n}, $${n + 1}) RETURNING id`,
     params,
   );
   return must(rows[0], "rows[0]").id;
@@ -166,7 +163,7 @@ async function insertRate(
 ) {
   await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-     VALUES ($1, $2::date, $3, $4)`,
+     VALUES ($1, ts_date($2), vision_numeric($3, 20, 10), $4)`,
     [code, date, rate, isLatest],
   );
 }
@@ -180,18 +177,9 @@ const merchant = (result: RecipientInsights, name: string) =>
 const mom = (result: RecipientInsights, name: string) =>
   result.monthOverMonth.find((m) => m.name === name);
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "repositories/infoRepositoryRecipients (real DB)",
   () => {
-    beforeAll(async () => {
-      expect(
-        process.env.DATABASE_URL,
-        "DATABASE_URL must equal TEST_DATABASE_URL for this suite (see scripts/with-test-db.sh)",
-      ).toBe(process.env.TEST_DATABASE_URL);
-      // DB suites share one database across parallel vitest workers — serialize.
-      await acquireDbSuiteLock();
-    }, 180_000);
-
     afterEach(async () => {
       const pool = must(getTestPool(), "getTestPool()");
       await pool.query("DELETE FROM transactions");
@@ -209,7 +197,6 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
@@ -282,7 +269,7 @@ describe.skipIf(!hasTestDatabase())(
         // ADR-083's includeTransfers toggle governs cash-flow aggregates, NOT this
         // merchant lens — turning it on must not pull the transfer leg in.
         await must(getTestPool(), "getTestPool()").query(
-          `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', 'true'::jsonb)`,
+          `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', vision_jsonb('true'))`,
         );
 
         const r = await recipientInsightsRepository.getRecipientInsights("EUR");
@@ -454,7 +441,7 @@ describe.skipIf(!hasTestDatabase())(
           recipientId: rec.colruyt,
         });
         await insertTxn({
-          dateExpr: `date_trunc('month', ${TODAY_SQL}) - interval '1 month'`,
+          dateExpr: `add_months(date_trunc('month', ${TODAY_SQL}), -1)`,
           amount: "-40.00",
           recipientId: rec.colruyt,
         });
@@ -466,7 +453,7 @@ describe.skipIf(!hasTestDatabase())(
         });
         // Previous month only.
         await insertTxn({
-          dateExpr: `date_trunc('month', ${TODAY_SQL}) - interval '1 month'`,
+          dateExpr: `add_months(date_trunc('month', ${TODAY_SQL}), -1)`,
           amount: "-25.00",
           recipientId: rec.delhaize,
         });
@@ -490,13 +477,13 @@ describe.skipIf(!hasTestDatabase())(
           cap: string;
           beyond_cap_still_prev_month: boolean;
         }>(`
-        SELECT to_char(LEAST(
-                 (date_trunc('month', ${TODAY_SQL}) - INTERVAL '1 month')::date
-                 + (${TODAY_SQL} - DATE_TRUNC('month', ${TODAY_SQL})::date),
-                 date_trunc('month', ${TODAY_SQL})::date - 1), 'YYYY-MM-DD') AS cap,
-               ((date_trunc('month', ${TODAY_SQL}) - INTERVAL '1 month')::date
-                 + (${TODAY_SQL} - DATE_TRUNC('month', ${TODAY_SQL})::date) + 1)
-                 < date_trunc('month', ${TODAY_SQL})::date AS beyond_cap_still_prev_month
+        SELECT to_char(least(
+                 add_days(add_months(date_trunc('month', ${TODAY_SQL}), -1),
+                          date_diff_days(${TODAY_SQL}, date_trunc('month', ${TODAY_SQL}))),
+                 add_days(date_trunc('month', ${TODAY_SQL}), -1)), 'YYYY-MM-DD') AS cap,
+               add_days(add_months(date_trunc('month', ${TODAY_SQL}), -1),
+                        date_diff_days(${TODAY_SQL}, date_trunc('month', ${TODAY_SQL})) + 1)
+                 < date_trunc('month', ${TODAY_SQL}) AS "beyond_cap_still_prev_month::bool"
       `);
         const { cap, beyond_cap_still_prev_month: beyondIsTestable } = must(
           rows[0],
@@ -520,8 +507,8 @@ describe.skipIf(!hasTestDatabase())(
           // short previous month and a late day-of-month the cap lands past its
           // end, and then the whole previous month is in-window by construction.
           await insertTxn({
-            dateExpr: `(date_trunc('month', ${TODAY_SQL}) - INTERVAL '1 month')::date
-                     + (${TODAY_SQL} - DATE_TRUNC('month', ${TODAY_SQL})::date) + 1`,
+            dateExpr: `add_days(add_months(date_trunc('month', ${TODAY_SQL}), -1),
+                              date_diff_days(${TODAY_SQL}, date_trunc('month', ${TODAY_SQL})) + 1)`,
             amount: "-1000.00",
             recipientId: rec.colruyt,
           });
@@ -534,6 +521,59 @@ describe.skipIf(!hasTestDatabase())(
         });
       });
 
+      // The like-for-like cap on fixed calendar days: the previous month's start
+      // plus today's day offset, which runs past a short previous month's end
+      // (31 March → 3 March, so all of February is in), clamps nothing on a
+      // 30-day month after a 31st (31 May → 1 May: all of April), and cuts a
+      // mid-month previous month exactly (15 March → 15 February).
+      describe("month ends and leap days (pinned app clock)", () => {
+        afterEach(() => {
+          vi.useRealTimers();
+        });
+
+        it.each([
+          // [today, previous-month rows in, previous-month rows out]
+          ["2026-03-31", ["2026-02-01", "2026-02-28"], ["2026-01-31"]],
+          ["2024-03-31", ["2024-02-01", "2024-02-29"], ["2024-01-31"]],
+          ["2026-05-31", ["2026-04-01", "2026-04-30"], ["2026-03-31"]],
+          ["2026-03-30", ["2026-02-28"], ["2026-01-30"]],
+          ["2026-03-15", ["2026-02-01", "2026-02-15"], ["2026-02-16", "2026-02-28"]],
+          ["2024-02-29", ["2024-01-01", "2024-01-29"], ["2024-01-30", "2024-01-31"]],
+          ["2027-01-31", ["2026-12-01", "2026-12-31"], ["2026-11-30"]],
+        ])(
+          "on %s counts %j in the previous month and leaves out %j",
+          async (today, prevIn, prevOut) => {
+            await seedBase();
+            // Two rows on today's date: the SQL total is an exact decimal sum.
+            await insertTxn({ date: today, amount: "-0.10", recipientId: rec.colruyt });
+            await insertTxn({ date: today, amount: "-0.20", recipientId: rec.colruyt });
+            for (const date of prevIn) {
+              await insertTxn({ date, amount: "-33.33", recipientId: rec.colruyt });
+            }
+            for (const date of prevOut) {
+              await insertTxn({ date, amount: "-1000.00", recipientId: rec.colruyt });
+            }
+
+            vi.useFakeTimers({ toFake: ["Date"] });
+            vi.setSystemTime(
+              new Date(appDateStringToUtc(today).getTime() + 12 * 3_600_000),
+            );
+            expect(todayAppDateString()).toBe(today);
+
+            const r = await recipientInsightsRepository.getRecipientInsights("EUR");
+            const previous = Number((33.33 * prevIn.length).toFixed(2));
+            expect(mom(r, "Colruyt")).toEqual({
+              recipientId: rec.colruyt,
+              name: "Colruyt",
+              currentSpend: 0.3,
+              previousSpend: previous,
+              changePercent:
+                Math.round(((0.3 - previous) / previous) * 100 * 10) / 10,
+            });
+          },
+        );
+      });
+
       it("ignores months outside the two-period window entirely", async () => {
         await seedBase();
         await insertTxn({
@@ -542,12 +582,12 @@ describe.skipIf(!hasTestDatabase())(
           recipientId: rec.colruyt,
         });
         await insertTxn({
-          dateExpr: `date_trunc('month', ${TODAY_SQL}) - interval '1 month'`,
+          dateExpr: `add_months(date_trunc('month', ${TODAY_SQL}), -1)`,
           amount: "-10.00",
           recipientId: rec.colruyt,
         });
         await insertTxn({
-          dateExpr: `date_trunc('month', ${TODAY_SQL}) - interval '2 months'`,
+          dateExpr: `add_months(date_trunc('month', ${TODAY_SQL}), -2)`,
           amount: "-9999.00",
           recipientId: rec.colruyt,
         });
@@ -574,7 +614,7 @@ describe.skipIf(!hasTestDatabase())(
           prev_day: string;
         }>(`
         SELECT to_char(date_trunc('month', ${TODAY_SQL}), 'YYYY-MM-DD') AS cur_day,
-               to_char(date_trunc('month', ${TODAY_SQL}) - INTERVAL '1 month', 'YYYY-MM-DD') AS prev_day
+               to_char(add_months(date_trunc('month', ${TODAY_SQL}), -1), 'YYYY-MM-DD') AS prev_day
       `);
         const { cur_day: curDay, prev_day: prevDay } = must(rows[0], "rows[0]");
 

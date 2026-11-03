@@ -90,6 +90,18 @@ export const STARTUP_PRICE_REFRESH_DELAY_MS = 20 * 1000;
 const IMPORT_RETENTION_DAYS = 30;
 
 /**
+ * PostgreSQL's `value::jsonb ? key` as SQLite SQL over a JSON text column:
+ * true when `key` is a top-level key of an object, a string element of an
+ * array, or the string scalar itself; false (never NULL) for SQL NULL, which
+ * the NOT EXISTS predicates treat the same. `column` and `key` are constants.
+ */
+function jsonHasKeySql(column: string, key: string): string {
+  return `EXISTS (SELECT 1 FROM json_each(${column}) has_key
+      WHERE CASE WHEN json_type(${column}) = 'object' THEN has_key.key = '${key}'
+                 ELSE has_key.type = 'text' AND has_key.value = '${key}' END)`;
+}
+
+/**
  * Best-effort retention sweep: drop finished import batches (and their staging
  * rows) older than IMPORT_RETENTION_DAYS so raw CSV staging data isn't retained
  * forever. Staging rows are removed automatically — both *_staging_rows tables
@@ -102,12 +114,16 @@ async function pruneOldImportBatches() {
   for (const table of tables) {
     try {
       // Adoption receipts retain source provenance and rollback snapshots.
-      // The detail columns are json, which has no `?` operator; cast to jsonb.
+      // The jsonb predicates of the PostgreSQL version, ported (ADR-263):
+      //   after_data -> 'proof' -> 'sourceBindings' @> [{"batch_id": id}]
+      //     becomes json_contains() on the same path (jsonb containment rules;
+      //     `->` keeps a string scalar quoted, so it stays valid JSON);
+      //   details::jsonb ? 'key' becomes jsonHasKeySql() below.
       const preserveReconciliation =
         table === "portfolio_import_batches"
           ? `AND NOT EXISTS (SELECT 1 FROM portfolio_import_reconciliation_journal journal WHERE journal.batch_id = ${table}.id
-               OR (journal.after_data->>'ledgerKind'='cash' AND
-                 journal.after_data->'proof'->'sourceBindings' @> jsonb_build_array(jsonb_build_object('batch_id',${table}.id))))
+               OR (json_extract(journal.after_data, '$.ledgerKind') = 'cash' AND
+                 json_contains(journal.after_data -> '$.proof.sourceBindings', json_array(json_object('batch_id', ${table}.id)))))
              AND NOT EXISTS (SELECT 1 FROM portfolio_import_income_recognition_journal income
                JOIN portfolio_import_staging_rows unit_source ON unit_source.id=income.unit_staging_row_id
                WHERE income.batch_id=${table}.id OR unit_source.batch_id=${table}.id)
@@ -116,13 +132,15 @@ async function pruneOldImportBatches() {
              AND NOT EXISTS (SELECT 1 FROM portfolio_asset_adjustments adjustment WHERE adjustment.import_batch_id = ${table}.id)
              AND NOT EXISTS (SELECT 1 FROM portfolio_asset_adjustment_sources evidence JOIN portfolio_import_staging_rows source ON source.id=evidence.staging_row_id WHERE source.batch_id=${table}.id)
              AND NOT EXISTS (SELECT 1 FROM portfolio_import_staging_rows cash_source WHERE cash_source.batch_id=${table}.id AND portfolio_cash_receipt(cash_source.raw_data) IS NOT NULL)
-             AND NOT EXISTS (SELECT 1 FROM portfolio_import_staging_rows native_source WHERE native_source.batch_id=${table}.id AND (native_source.asset_transfer_details::jsonb ? 'networkBinding' OR native_source.asset_transfer_details::jsonb ? 'nativeGiftGroupReceipt' OR native_source.asset_adjustment_details::jsonb ? 'networkReceipt'))
+             AND NOT EXISTS (SELECT 1 FROM portfolio_import_staging_rows native_source WHERE native_source.batch_id=${table}.id AND (${jsonHasKeySql("native_source.asset_transfer_details", "networkBinding")} OR ${jsonHasKeySql("native_source.asset_transfer_details", "nativeGiftGroupReceipt")} OR ${jsonHasKeySql("native_source.asset_adjustment_details", "networkReceipt")}))
              AND NOT EXISTS (SELECT 1 FROM portfolio_import_staging_rows annotation WHERE annotation.batch_id = ${table}.id AND annotation.route = 'account_internal')`
           : "";
       // `preserveReconciliation` is built only from the constant table list.
+      // started_at is a timestamp; the cutoff is the same instant PostgreSQL's
+      // `now() - interval 'N days'` named (calendar days in the local zone).
       const result = await sql`DELETE FROM ${sql.table(table)}
           WHERE status IN ('complete', 'complete_with_errors', 'failed', 'aborted')
-            AND started_at < now() - (${String(IMPORT_RETENTION_DAYS)} || ' days')::interval
+            AND started_at < sub_interval(now(), ${`${IMPORT_RETENTION_DAYS} days`})
             ${sql.raw(preserveReconciliation)}`.execute(db);
       const pruned = result.numAffectedRows ?? 0n;
       if (pruned > 0n) {
@@ -330,14 +348,14 @@ export async function runWarmupTasks({
     );
   }
 
-  // Whole materialized-view lifecycle — create, index, refresh — runs here, not
-  // pre-`listen`. Creation is only a metadata no-op once the views exist: on a
-  // first-ever boot, or after a migration that drops a view to redefine it
-  // (0084/0085), each `CREATE MATERIALIZED VIEW` is a full aggregation scan of
-  // `transactions`, which pre-listen was serialized ahead of `/health` inside
-  // the window the Electron 60s poll budget races. Requests that land before the
-  // views exist are correct, just slower: `mvAvailable()` sees the missing
-  // relation and the repositories take their base-table path.
+  // Whole materialized-view lifecycle — fill, index, refresh — runs here, not
+  // pre-`listen`. Filling is a no-op once the tables hold rows: on a
+  // first-ever boot, or after a migration that empties a table to redefine it,
+  // each fill is a full aggregation scan of `transactions` in a write
+  // transaction (ADR-263), which pre-listen would serialize ahead of `/health`
+  // inside the window the Electron 60s poll budget races. Requests that land
+  // before the tables are filled are correct, just slower: `mvAvailable()`
+  // sees an empty table and the repositories take their base-table path.
   //
   // Failure is degradation, not a boot failure — the pre-listen call used to
   // abort `start()` (exit 1) instead. MVs are derived artifacts, so a creation

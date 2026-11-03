@@ -2,7 +2,7 @@
 title: Integration - Belgian Inflation Service
 type: integration
 status: active
-date: 2026-10-08
+date: 2026-11-03
 tags: [integration, belgian-inflation, statbel, eurostat, government-data]
 description: Belgian inflation data sourcing from Statbel and Eurostat HICP
 aliases: [belgian inflation, statbel, eurostat, hicp, inflation service]
@@ -41,7 +41,7 @@ The Belgian Inflation Service sources monthly inflation data from Belgian and Eu
 
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  In-Memory   │────▶│  PostgreSQL  │────▶│   Statbel    │
+│  In-Memory   │────▶│    SQLite    │────▶│   Statbel    │
 │   Cache      │     │   (persisted)│     │   (remote)   │
 │   (24h TTL)  │     │              │     │              │
 └──────────────┘     └──────────────┘     └──────────────┘
@@ -60,7 +60,7 @@ The Belgian Inflation Service sources monthly inflation data from Belgian and Eu
 ### Fallback Chain
 
 1. **In-memory cache** (24h TTL)
-2. **PostgreSQL persisted rows** (`belgian_inflation_rates`)
+2. **Persisted SQLite rows** (`belgian_inflation_rates`)
 3. **Remote Statbel fetch**
 4. **Remote Eurostat HICP fallback**
 5. **Persisted DB data** (if both remote sources fail)
@@ -87,14 +87,22 @@ The Belgian Inflation Service sources monthly inflation data from Belgian and Eu
 
 ## Data Model
 
+The SQLite baseline (`db/migrations/0001_baseline.sql`) defines the table as follows. A unique
+index, `belgian_inflation_rates_month_date_key`, keeps one row per month.
+
 ```sql
 CREATE TABLE belgian_inflation_rates (
-  id SERIAL PRIMARY KEY,
-  month_date DATE NOT NULL UNIQUE,
-  monthly_rate NUMERIC(10,8) NOT NULL,
-  source VARCHAR(50) DEFAULT 'statbel',
-  fetched_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ
+  id INTEGER CONSTRAINT belgian_inflation_rates_pkey PRIMARY KEY AUTOINCREMENT,
+  month_date DATE_TEXT NOT NULL
+    CONSTRAINT belgian_inflation_rates_month_date__vtype CHECK (vision_date_ok(month_date)),
+  monthly_rate DECIMAL_TEXT(10,8) NOT NULL
+    CONSTRAINT belgian_inflation_rates_monthly_rate__vtype CHECK (vision_numeric_ok(monthly_rate, 10, 8)),
+  source TEXT NOT NULL DEFAULT 'statbel'
+    CONSTRAINT belgian_inflation_rates_source__vtype CHECK (length(source) <= 50),
+  fetched_at TIMESTAMPTZ_TEXT NOT NULL DEFAULT (now())
+    CONSTRAINT belgian_inflation_rates_fetched_at__vtype CHECK (vision_ts_ok(fetched_at)),
+  updated_at TIMESTAMPTZ_TEXT NOT NULL ON CONFLICT REPLACE DEFAULT (now())
+    CONSTRAINT belgian_inflation_rates_updated_at__vtype CHECK (vision_ts_ok(updated_at))
 );
 ```
 

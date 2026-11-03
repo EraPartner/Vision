@@ -1,16 +1,10 @@
 /**
- * Real-PostgreSQL behaviour of the account repository: filtering, pagination,
+ * Real-database (SQLite) behaviour of the account repository: filtering, pagination,
  * identity lookup and whitelisted writes. Replaces mocked-pool tests that only
  * asserted the SQL text the repository emitted.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { closeTestPool, getTestPool } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import accountRepository from "../src/repositories/accountRepository.ts";
 import { accountService } from "../src/services/accountService.ts";
@@ -36,33 +30,24 @@ async function createAccount(
   return row;
 }
 
-describe.skipIf(!hasTestDatabase())("account repository (real DB)", () => {
-  beforeAll(async () => {
-    expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-    await acquireDbSuiteLock();
-  }, 180_000);
-
+describe("account repository (real DB)", () => {
   afterEach(async () => {
     const pool = must(getTestPool(), "getTestPool()");
     const ids = createdIds.splice(0);
     await pool.query(
-      "DELETE FROM account_statement_balances WHERE account_id = ANY($1::int[])",
+      "DELETE FROM account_statement_balances WHERE account_id IN (SELECT value FROM json_each($1))",
       [ids],
     );
     await pool.query(
-      "UPDATE accounts SET funding_account_id = NULL WHERE id = ANY($1::int[])",
+      "UPDATE accounts SET funding_account_id = NULL WHERE id IN (SELECT value FROM json_each($1))",
       [ids],
     );
-    await pool.query("DELETE FROM accounts WHERE id = ANY($1::int[])", [ids]);
+    await pool.query("DELETE FROM accounts WHERE id IN (SELECT value FROM json_each($1))", [ids]);
   });
 
   afterAll(async () => {
-    try {
-      await releaseDbSuiteLock();
-    } finally {
-      await closeTestPool();
-      await closePool();
-    }
+    await closeTestPool();
+    await closePool();
   });
 
   it("filters the account list and count by active status", async () => {
@@ -215,13 +200,13 @@ describe.skipIf(!hasTestDatabase())("account repository (real DB)", () => {
       date: "2026-09-04",
     });
     const { rows } = await must(getTestPool(), "getTestPool()").query(
-      `SELECT currency, balance::float8 AS balance,
+      `SELECT currency, balance,
               to_char(balance_date, 'YYYY-MM-DD') AS balance_date
          FROM account_statement_balances WHERE account_id = $1`,
       [created.id],
     );
     expect(rows).toEqual([
-      { currency: "USD", balance: 12.34, balance_date: "2026-09-04" },
+      { currency: "USD", balance: "12.3400", balance_date: "2026-09-04" },
     ]);
   });
 });

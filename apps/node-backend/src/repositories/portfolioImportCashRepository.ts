@@ -6,7 +6,7 @@
  * reads and the restoration keep already applied records reversible.
  */
 import { sql } from "kysely";
-import type { Json } from "../database/schema.generated.ts";
+import { withTransaction } from "../database/connection.ts";
 import { checkedRows, db } from "../database/db.ts";
 import {
   ibkrCashReceiptRowSchema,
@@ -23,27 +23,37 @@ import type { TransactionId } from "@vision/types/brands";
 
 export type { CashTransactionSnapshot, IbkrCashReceipt, IbkrCashSnapshot };
 
-const CASH_SNAPSHOT_SQL = `jsonb_build_object('id',t.id,'date',to_char(t.date,'YYYY-MM-DD'),
-  'amount',t.amount::text,'currency',t.currency,'memo',t.memo,'comment',t.comment,'balance',t.balance::text,
-  'account_id',t.account_id,'recipient_id',t.recipient_id,'recipient_bank_account_id',t.recipient_bank_account_id,
-  'category_id',t.category_id,'is_active',t.is_active,'import_batch_id',t.import_batch_id,
-  'source_record_hash',t.source_record_hash,'dedup_fingerprint',t.dedup_fingerprint,
-  'dedup_fingerprint_version',t.dedup_fingerprint_version,'is_transfer',t.is_transfer,
-  'transfer_source',t.transfer_source,'transfer_peer_id',t.transfer_peer_id)`;
-const cashSnapshot = sql.raw<CashTransactionSnapshot>(CASH_SNAPSHOT_SQL);
-const jsonb = (value: unknown) => sql<Json>`${JSON.stringify(value)}::jsonb`;
-const lockTransactions = () =>
-  sql`LOCK TABLE transactions IN SHARE ROW EXCLUSIVE MODE`.execute(db);
+/**
+ * The cash image of `transactions` row `alias` as canonical jsonb text
+ * (PostgreSQL's jsonb_build_object output): NUMERIC as exact text, `date` as
+ * 'YYYY-MM-DD', BIGINT `import_batch_id` as a JSON number, booleans as JSON
+ * booleans. Categories and ordinary bank pairing (category_id, is_transfer,
+ * transfer_source, transfer_peer_id) can change after a correction; they do
+ * not weaken the financial/provenance image compared for restoration, so the
+ * IBKR image leaves them out. Read it with a `::json` alias hint.
+ */
+function ibkrCashSnapshotSql(alias: "t" | "transactions") {
+  return sql.raw<IbkrCashSnapshot>(`vision_jsonb(json_object(
+  'id', ${alias}.id, 'date', to_char(${alias}.date, 'YYYY-MM-DD'),
+  'amount', ${alias}.amount, 'currency', ${alias}.currency, 'memo', ${alias}.memo,
+  'comment', ${alias}.comment, 'balance', ${alias}.balance,
+  'account_id', ${alias}.account_id, 'recipient_id', ${alias}.recipient_id,
+  'recipient_bank_account_id', ${alias}.recipient_bank_account_id,
+  'is_active', json(iif(${alias}.is_active, 'true', 'false')),
+  'import_batch_id', ${alias}.import_batch_id,
+  'source_record_hash', ${alias}.source_record_hash,
+  'dedup_fingerprint', ${alias}.dedup_fingerprint,
+  'dedup_fingerprint_version', ${alias}.dedup_fingerprint_version))`);
+}
+/** A JSON array parameter for `IN (SELECT value FROM json_each(?))`. */
+const inIds = (ids: readonly number[]) =>
+  sql<TransactionId>`(SELECT value FROM json_each(${JSON.stringify(ids.map(Number))}))`;
 /** The journal entry has not been superseded by a later restore. */
 const activeJournalEntry = sql<boolean>`NOT EXISTS(SELECT 1 FROM portfolio_import_reconciliation_journal r WHERE r.previous_entry_id=a.id)`;
 const stale = () =>
   new ConflictError("Owned cash source or ledger image changed", {
     details: { reason: "cash_receipt_changed" },
   });
-
-// Categories and ordinary bank pairing can change after a correction. They do
-// not weaken the financial/provenance image compared for restoration.
-const ibkrCashSnapshot = sql<IbkrCashSnapshot>`(${cashSnapshot}) - ARRAY['category_id','is_transfer','transfer_source','transfer_peer_id']::text[]`;
 
 /** The compared financial/provenance subset of an IBKR cash image. */
 export type IbkrCashFinancialImage = {
@@ -96,18 +106,17 @@ export interface IbkrCashEnvelope {
   proof: IbkrCashProof;
 }
 
+/** Inside the caller's writer transaction the images cannot change (ADR-263). */
 export async function readIbkrCashImagesForUpdate(
   ids: readonly number[],
 ): Promise<IbkrCashSnapshot[]> {
   return (
     await checkedRows(
       ibkrCashSnapshotRowSchema,
-      db
-        .selectFrom("transactions as t")
-        .select(ibkrCashSnapshot.as("snapshot"))
-        .where("id", "=", sql<TransactionId>`ANY(${ids}::integer[])`)
-        .orderBy("id")
-        .forUpdate(),
+      sql`SELECT ${ibkrCashSnapshotSql("t")} AS "snapshot::json"
+            FROM transactions t
+           WHERE t.id IN ${inIds(ids)}
+           ORDER BY t.id`,
     )
   ).map((item) => item.snapshot);
 }
@@ -117,18 +126,28 @@ async function compareAndSetIbkrCashImage(
   before: IbkrCashFinancialImage,
   after: IbkrCashFinancialImage,
 ): Promise<IbkrCashSnapshot> {
-  const image = jsonb(after);
-  const [row, ...extra] = await checkedRows(
-    ibkrCashSnapshotRowSchema,
-    sql`UPDATE transactions t SET
-      amount=(${image}->>'amount')::numeric, currency=${image}->>'currency',
-      dedup_fingerprint=${image}->>'dedup_fingerprint',
-      dedup_fingerprint_version=(${image}->>'dedup_fingerprint_version')::smallint
-    WHERE t.id=${before.id} AND ${ibkrCashSnapshot}=${jsonb(before)}
-    RETURNING ${ibkrCashSnapshot} AS snapshot`,
-  );
-  if (!row || extra.length > 0) throw stale();
-  return row.snapshot;
+  const image = JSON.stringify(after);
+  // A savepoint keeps the write and its read-back one unit.
+  return withTransaction(async () => {
+    // SQLite 3.39 has no UPDATE target alias: the image names the table.
+    const result = await sql`UPDATE transactions SET
+      amount = vision_numeric(${image} ->> 'amount', 18, 4),
+      currency = ${image} ->> 'currency',
+      dedup_fingerprint = ${image} ->> 'dedup_fingerprint',
+      dedup_fingerprint_version = CAST(${image} ->> 'dedup_fingerprint_version' AS INTEGER)
+    WHERE transactions.id = ${before.id}
+      AND ${ibkrCashSnapshotSql("transactions")} = vision_jsonb(${JSON.stringify(before)})`.execute(
+      db,
+    );
+    if (Number(result.numAffectedRows ?? 0) !== 1) throw stale();
+    const [row, ...extra] = await checkedRows(
+      ibkrCashSnapshotRowSchema,
+      sql`SELECT ${ibkrCashSnapshotSql("t")} AS "snapshot::json"
+            FROM transactions t WHERE t.id = ${before.id}`,
+    );
+    if (!row || extra.length > 0) throw stale();
+    return row.snapshot;
+  });
 }
 
 /**
@@ -167,8 +186,8 @@ export async function writeCashAdoption({
       transaction_id: before.id,
       action: "adopt",
       policy,
-      before_data: jsonb(envelope(before)),
-      after_data: jsonb(envelope(persisted)),
+      before_data: JSON.stringify(envelope(before)),
+      after_data: JSON.stringify(envelope(persisted)),
     })
     .execute();
   return persisted;
@@ -178,30 +197,33 @@ export async function writeCashAdoption({
 export async function writeIbkrCashRestoration(
   receipt: IbkrCashReceipt,
 ): Promise<IbkrCashSnapshot> {
-  await lockTransactions();
-  const active = await sql`SELECT 1 FROM portfolio_import_reconciliation_journal a
-    WHERE a.id=${receipt.id} AND a.action='adopt' AND ${activeJournalEntry}`.execute(
-    db,
-  );
-  if (active.rows.length !== 1) throw stale();
-  const after = await compareAndSetIbkrCashImage(
-    receipt.after_data.snapshot,
-    receipt.before_data.snapshot,
-  );
-  await db
-    .insertInto("portfolio_import_reconciliation_journal")
-    .values({
-      batch_id: receipt.batch_id,
-      staging_row_id: receipt.staging_row_id,
-      transaction_id: receipt.transaction_id,
-      action: "restore",
-      policy: receipt.policy,
-      before_data: jsonb(receipt.after_data),
-      after_data: jsonb(receipt.before_data),
-      previous_entry_id: receipt.id,
-    })
-    .execute();
-  return after;
+  // The receipt check, the restoration and its inverse receipt share one
+  // writer transaction (formerly a transactions table lock).
+  return withTransaction(async () => {
+    const active = await sql`SELECT 1 FROM portfolio_import_reconciliation_journal a
+      WHERE a.id=${receipt.id} AND a.action='adopt' AND ${activeJournalEntry}`.execute(
+      db,
+    );
+    if (active.rows.length !== 1) throw stale();
+    const after = await compareAndSetIbkrCashImage(
+      receipt.after_data.snapshot,
+      receipt.before_data.snapshot,
+    );
+    await db
+      .insertInto("portfolio_import_reconciliation_journal")
+      .values({
+        batch_id: receipt.batch_id,
+        staging_row_id: receipt.staging_row_id,
+        transaction_id: receipt.transaction_id,
+        action: "restore",
+        policy: receipt.policy,
+        before_data: JSON.stringify(receipt.after_data),
+        after_data: JSON.stringify(receipt.before_data),
+        previous_entry_id: receipt.id,
+      })
+      .execute();
+    return after;
+  });
 }
 
 /** Active IBKR cash corrections, for the repeat-import alias check. */
@@ -224,8 +246,8 @@ export async function guardOriginalIbkrCashRollback(
 ): Promise<void> {
   const active = await sql`SELECT 1 FROM portfolio_import_reconciliation_journal a
     WHERE a.action='adopt' AND a.after_data->>'ledgerKind'='cash'
-      AND ((a.after_data->'proof'->'original'->>'batchId')::bigint=${batchId}
-        OR (a.after_data->'proof'->'primaryReference'->>'batchId')::bigint=${batchId})
+      AND (CAST(a.after_data ->> '$.proof.original.batchId' AS INTEGER)=${batchId}
+        OR CAST(a.after_data ->> '$.proof.primaryReference.batchId' AS INTEGER)=${batchId})
       AND ${activeJournalEntry}
     LIMIT 1`.execute(db);
   if (active.rows.length > 0)
@@ -246,16 +268,20 @@ export async function readOwnedKinesisCashFeeIds(
 ): Promise<number[]> {
   const rows = await checkedRows(
     intIdRowSchema,
+    // portfolio_cash_receipt() once per committed cash row (formerly a
+    // CROSS JOIN LATERAL).
     sql`SELECT fee.id
-      FROM portfolio_import_staging_rows s
-      CROSS JOIN LATERAL (SELECT portfolio_cash_receipt(s.raw_data) AS receipt) r
-      JOIN transactions fee ON fee.id::text = r.receipt->'feeAfter'->>'id'
-     WHERE s.batch_id = ${batchId}
-       AND s.status = 'committed'
-       AND s.route = 'cash'
-       AND r.receipt IS NOT NULL
-       AND fee.dedup_fingerprint = r.receipt->'feeAfter'->>'dedup_fingerprint'
-       AND fee.source_record_hash = s.source_record_hash
+      FROM (SELECT s.source_record_hash,
+                   portfolio_cash_receipt(s.raw_data) AS receipt
+              FROM portfolio_import_staging_rows s
+             WHERE s.batch_id = ${batchId}
+               AND s.status = 'committed'
+               AND s.route = 'cash') r
+      JOIN transactions fee
+        ON CAST(fee.id AS TEXT) = r.receipt -> 'feeAfter' ->> 'id'
+     WHERE r.receipt IS NOT NULL
+       AND fee.dedup_fingerprint = r.receipt -> 'feeAfter' ->> 'dedup_fingerprint'
+       AND fee.source_record_hash = r.source_record_hash
      ORDER BY fee.id`,
   );
   return rows.map((row) => row.id);

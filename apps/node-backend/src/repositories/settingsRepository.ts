@@ -52,9 +52,14 @@ export interface SettingExpectation {
  *
  * @param value Parsed JSONB value from pg.
  */
-/** `JSON.stringify(value)` bound as a jsonb parameter (undefined binds NULL). */
+/**
+ * `JSON.stringify(value)` as canonical jsonb text (undefined binds NULL).
+ * Stored values are canonical too (the column CHECK), so `value = jsonb(x)`
+ * compares two canonical texts, which is jsonb equality: object key order and
+ * duplicate keys are normalised away exactly as PostgreSQL's jsonb did.
+ */
 const jsonb = (value: unknown) =>
-  sql<Json>`${JSON.stringify(value)}::jsonb`;
+  sql<Json>`vision_jsonb(${JSON.stringify(value)})`;
 
 const settingRows = () =>
   db.selectFrom("user_settings").select(["key", "value"]).orderBy("key");
@@ -103,7 +108,8 @@ export const settingsRepository = {
 
   /**
    * Atomic whole-value replacement. Omitted object fields are removed; nested
-   * values are not merged. PostgreSQL JSONB equality ignores object key order.
+   * values are not merged. The expectation compares canonical jsonb text, so
+   * object key order is ignored as PostgreSQL JSONB equality ignored it.
    */
   async replace<V>(
     key: string,
@@ -233,11 +239,14 @@ export const settingsRepository = {
       values.push(JSON.stringify(value));
     }
 
+    // One JSON array of [key, JSON text] pairs; `WHERE true` keeps SQLite from
+    // reading ON CONFLICT as a join constraint of the SELECT.
     await sql`
-      INSERT INTO user_settings (key, value, updated_at)
-      SELECT u.key, u.value::jsonb, NOW()
-      FROM UNNEST(${keys}::text[], ${values}::text[]) AS u(key, value)
-      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+      INSERT INTO user_settings ("key", value, updated_at)
+      SELECT u.value ->> 0, vision_jsonb(u.value ->> 1), now()
+      FROM json_each(${JSON.stringify(keys.map((key, i) => [key, values[i] ?? null]))}) AS u
+      WHERE true
+      ON CONFLICT ("key") DO UPDATE SET value = excluded.value, updated_at = now()
     `.execute(db);
   },
 };

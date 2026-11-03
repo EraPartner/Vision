@@ -1362,7 +1362,7 @@ describe("tool write-method denylist", () => {
       }
     });
 
-    it(`${file} does not import pg pool directly`, () => {
+    it(`${file} does not import the database connection directly`, () => {
       const source = readFileSync(resolve(toolsDir, file), "utf8");
       expect(
         BANNED_IMPORT_PATTERN.test(source),

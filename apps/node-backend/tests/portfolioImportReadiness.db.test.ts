@@ -7,7 +7,11 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.ts";
-import { closePool } from "../src/database/connection.ts";
+import {
+  closePool,
+  getPoolStats,
+  withTransaction,
+} from "../src/database/connection.ts";
 import { commitReviewedPortfolioImport } from "../src/services/portfolioImportCommitService.ts";
 import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.ts";
 import type { PortfolioTransactionInput } from "../src/services/portfolio/portfolioTransactionRules.ts";
@@ -17,19 +21,19 @@ import {
   asInvestmentId,
 } from "@vision/types/brands";
 import { must } from "./helpers/must.ts";
-import type { Pool } from "pg";
+import type { TestPool } from "./setup/db.ts";
 
 /** A row from an ad-hoc SQL read: column values are narrowed where used. */
 type DbRow = Record<string, unknown>;
 interface IdRow {
   id: number;
 }
-/** BIGINT ids arrive from node-postgres as strings. */
+/** BIGINT ids arrive from the driver as strings. */
 interface BigIdRow {
   id: string;
 }
 
-let pool: Pool;
+let pool: TestPool;
 const fixtures = {
   accountIds: [] as number[],
   investmentIds: [] as number[],
@@ -105,7 +109,7 @@ async function stageSource(
       await pool.query<BigIdRow>(
         `INSERT INTO portfolio_import_batches
            (adapter_name, custom_config, status, rows_total, rows_error, account_id, is_brokerage)
-         VALUES ($1, $2, 'awaiting_review', $3, $4, $5, true) RETURNING id`,
+         VALUES ($1, vision_jsonb($2), 'awaiting_review', $3, $4, $5, true) RETURNING id`,
         [
           opts.adapter ?? "custom",
           JSON.stringify(opts.config ?? { format: "saxo_transaction_history" }),
@@ -129,8 +133,10 @@ async function stageSource(
           price_per_unit, amount, fees, taxes, currency, resolved_investment_id,
           user_override_investment_id, raw_data, source_record_hash,
           dedup_fingerprint, dedup_fingerprint_version, dedup_occurrence)
-       VALUES ($1, $2, $3, $4, $5, $6::portfolio_txn_type, $7, $8, $9, $10,
-               $11, $12, 'EUR', $13, $14, $15, $16, $17, 1, 1)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, vision_numeric($8, 18, 8),
+               vision_numeric($9, 18, 6), vision_numeric($10, 18, 4),
+               vision_numeric($11, 18, 4), vision_numeric($12, 18, 4), 'EUR',
+               $13, $14, $15, $16, $17, 1, 1)`,
       [
         batchId,
         rowIndex,
@@ -139,12 +145,14 @@ async function stageSource(
         cash ? "Deposit" : type,
         type,
         cash ? "cash" : "portfolio",
-        units,
-        price,
+        units == null ? null : String(units),
+        price == null ? null : String(price),
         // Non-cash rows always carry units and a price.
-        row.amount ?? (cash ? 500 : must(units, "units") * must(price, "price")),
-        row.fees ?? 0,
-        row.taxes ?? 0,
+        String(
+          row.amount ?? (cash ? 500 : must(units, "units") * must(price, "price")),
+        ),
+        String(row.fees ?? 0),
+        String(row.taxes ?? 0),
         cash || row.unresolved ? null : position.investmentId,
         row.overrideInvestmentId ?? null,
         `synthetic readiness source ${identity}`,
@@ -159,8 +167,8 @@ async function stageSource(
 async function canonicalCounts(position: Position) {
   return (
     await pool.query<DbRow>(
-      `SELECT (SELECT COUNT(*)::int FROM portfolio_transactions WHERE investment_id = $1) AS portfolio,
-              (SELECT COUNT(*)::int FROM transactions WHERE account_id = $2) AS cash`,
+      `SELECT (SELECT COUNT(*) FROM portfolio_transactions WHERE investment_id = $1) AS portfolio,
+              (SELECT COUNT(*) FROM transactions WHERE account_id = $2) AS cash`,
       [position.investmentId, position.accountId],
     )
   ).rows[0];
@@ -214,24 +222,35 @@ async function assertBlockedWithoutWrites(
 }
 
 describe.skipIf(!hasTestDatabase())(
-  "maintained portfolio import readiness (real Postgres)",
+  "maintained portfolio import readiness (real database)",
   () => {
     beforeAll(() => {
       pool = must(getTestPool(), "test pool");
     });
     beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
       await acquireDbSuiteLock();
     }, 180_000);
 
     afterEach(async () => {
-      // Every fixture owns the disposable database under the suite advisory lock.
-      await pool.query(
-        "TRUNCATE portfolio_import_reconciliation_journal RESTART IDENTITY",
-      );
-      await pool.query(
-        "TRUNCATE portfolio_import_duplicate_repair_journal RESTART IDENTITY",
-      );
+      // Every fixture owns this file's disposable database. DELETE and the
+      // sequence reset replace TRUNCATE ... RESTART IDENTITY.
+      for (const journal of [
+        "portfolio_import_reconciliation_journal",
+        "portfolio_import_duplicate_repair_journal",
+      ]) {
+        // A restore entry references the entry it restores (ON DELETE
+        // RESTRICT, checked per row), so delete from the newest links back.
+        let deleted: number | null;
+        do {
+          ({ rowCount: deleted } = await pool.query(
+            `DELETE FROM ${journal} WHERE NOT EXISTS (SELECT 1 FROM ${journal} child WHERE child.previous_entry_id = ${journal}.id)`,
+          ));
+        } while (deleted !== null && deleted > 0);
+        await pool.query(
+          "UPDATE vision_sequences SET last_value = 0 WHERE name = $1",
+          [`${journal}_id_seq`],
+        );
+      }
       for (const investmentId of fixtures.investmentIds) {
         await pool.query(
           "DELETE FROM portfolio_transactions WHERE investment_id = $1",
@@ -517,37 +536,56 @@ describe.skipIf(!hasTestDatabase())(
       ).toBe("complete_with_errors");
     });
 
+    // PostgreSQL proved the wait through pg_locks: the import's
+    // SHARE ROW EXCLUSIVE lock request queued behind the manual writer. Under
+    // SQLite (ADR-263) the single writer lock provides that exclusion: the
+    // import's withTransaction() queues on it (getPoolStats().waitingCount)
+    // until the manual writer commits, then sees the manual trade.
     it("waits for an in-flight exact manual insert before adopting it without duplicates", async () => {
       const position = await seedPosition();
       const batchId = await stageSource(position, [{ route: "cash" }, {}]);
-      const writer = await pool.connect();
-      let pending;
-      try {
-        await writer.query("BEGIN");
-        await writer.query(
+      let releaseWriter!: () => void;
+      const writerGate = new Promise<void>((resolve) => {
+        releaseWriter = resolve;
+      });
+      let markInserted!: () => void;
+      const inserted = new Promise<void>((resolve) => {
+        markInserted = resolve;
+      });
+      const writer = withTransaction(async (client) => {
+        await client.query(
           `INSERT INTO portfolio_transactions (investment_id, type, date, units, price_per_unit, amount, currency)
-           VALUES ($1, 'buy', '2026-01-01', 5, 100, 500, 'EUR')`,
+           VALUES ($1, 'buy', '2026-01-01', '5.00000000', '100.000000', '500.0000', 'EUR')`,
           [position.investmentId],
         );
+        markInserted();
+        await writerGate;
+      });
+      let pending:
+        | Promise<{ value: unknown } | { error: unknown }>
+        | undefined;
+      try {
+        await inserted;
+        // Called from outside the writer's callback, so it does not join the
+        // manual transaction.
         pending = commitReviewedPortfolioImport({ batchId }).then(
           (value) => ({ value }),
           (error: unknown) => ({ error }),
         );
         let waiting = false;
         for (let attempt = 0; attempt < 100; attempt++) {
-          waiting =
-            (
-              await pool.query<DbRow>(
-                `SELECT 1 FROM pg_locks
-                WHERE relation = 'portfolio_transactions'::regclass
-                  AND mode = 'ShareRowExclusiveLock' AND NOT granted`,
-              )
-            ).rows.length > 0;
+          waiting = getPoolStats().waitingCount > 0;
           if (waiting) break;
           await new Promise((resolve) => setTimeout(resolve, 20));
         }
         expect(waiting).toBe(true);
-        await writer.query("COMMIT");
+        // Nothing of the import is visible while the manual writer holds on.
+        expect(await canonicalCounts(position)).toEqual({
+          portfolio: 0,
+          cash: 0,
+        });
+        releaseWriter();
+        await writer;
         expect(await pending).toMatchObject({
           value: { imported: 1, duplicates: 1, errors: 0 },
         });
@@ -556,8 +594,8 @@ describe.skipIf(!hasTestDatabase())(
           cash: 1,
         });
       } finally {
-        await writer.query("ROLLBACK");
-        writer.release();
+        releaseWriter();
+        await writer;
         if (pending) await pending;
       }
     });

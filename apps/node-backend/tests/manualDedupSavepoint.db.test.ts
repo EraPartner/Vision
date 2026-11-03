@@ -1,24 +1,26 @@
 /**
- * Real-PostgreSQL proof that rolling deployment without migration 0108 does
- * not poison the surrounding manual-create transaction. PostgreSQL marks a
- * transaction failed after 42P01, so this behavior cannot be represented by a
- * plain rejected-promise mock; the savepoint rollback is the contract.
+ * Real-database proof that rolling deployment without migration 0108 does
+ * not poison the surrounding manual-create transaction. PostgreSQL marked a
+ * transaction failed after 42P01; SQLite keeps it usable, but the savepoint
+ * rollback stays the contract, so this cannot be represented by a plain
+ * rejected-promise mock.
+ *
+ * The concurrency cases prove the guarantee that replaced the identity's
+ * advisory lock: every manual create runs in one BEGIN IMMEDIATE transaction
+ * on the single writer, so concurrent creates of one identity are serialized
+ * and the second one sees the first.
  */
 import {
   afterAll,
   afterEach,
-  beforeAll,
   describe,
   expect,
   it,
   vi,
 } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { closePool, withTransaction } from "../src/database/connection.ts";
 import {
@@ -54,7 +56,7 @@ vi.mock("../src/services/transferReconciliationService.ts", () => ({
 const { default: transactionService } =
   await import("../src/services/transactionService.ts");
 
-const describeDb = hasTestDatabase() ? describe : describe.skip;
+const describeDb = describe;
 const originalTable = "manual_transaction_dedup_claims";
 const hiddenTable = "manual_transaction_dedup_claims_savepoint_test";
 
@@ -74,16 +76,7 @@ async function fixtureRecipientId(): Promise<RecipientId> {
 }
 
 describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
-  beforeAll(async () => {
-    expect(
-      process.env.DATABASE_URL,
-      "DATABASE_URL must equal TEST_DATABASE_URL for this suite",
-    ).toBe(process.env.TEST_DATABASE_URL);
-    await acquireDbSuiteLock();
-  }, 180_000);
-
   afterAll(async () => {
-    await releaseDbSuiteLock();
     await closeTestPool();
     await closePool();
   });
@@ -91,11 +84,10 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
   afterEach(async () => {
     const pool = must(getTestPool(), "getTestPool()");
     await pool.query(
-      `DELETE FROM manual_transaction_dedup_claims m
-        USING transactions t
-        WHERE m.transaction_id = t.id
-          AND t.account_id IN (SELECT id FROM accounts
-            WHERE lower(btrim(name)) = 'mixed representation account')`,
+      `DELETE FROM manual_transaction_dedup_claims
+        WHERE transaction_id IN (SELECT t.id FROM transactions t
+          WHERE t.account_id IN (SELECT id FROM accounts
+            WHERE lower(btrim(name)) = 'mixed representation account'))`,
     );
     await pool.query(
       `DELETE FROM transactions WHERE account_id IN (SELECT id FROM accounts
@@ -188,7 +180,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
     expect(rejected).toMatchObject({ status: "rejected" });
     expect(valueAt(rejected, "reason", "code")).toBe("CONFLICT");
     const { rows } = await pool.query<DbRow>(
-      `SELECT count(*)::integer AS count
+      `SELECT count(*) AS count
          FROM transactions
         WHERE memo = 'MIXED REPRESENTATION LOCK PROBE'`,
     );
@@ -307,7 +299,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
         }),
       ).rejects.toMatchObject({ code: "CONFLICT" });
       const { rows } = await must(getTestPool(), "getTestPool()").query<DbRow>(
-        "SELECT count(*)::integer AS count FROM transactions WHERE account_id = $1",
+        "SELECT count(*) AS count FROM transactions WHERE account_id = $1",
         [accountId],
       );
       expect(must(rows[0], "rows[0]").count).toBe(1);
@@ -318,7 +310,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
     ["1.00001", "1.00002", "1.0000"],
     ["-1.00005", "-1.0001", "-1.0001"],
   ])(
-    "serializes amounts %s and %s that PostgreSQL stores identically",
+    "serializes amounts %s and %s that NUMERIC(18,4) stores identically",
     async (firstAmount, secondAmount, stored) => {
       const accountId = await accountRepository.resolveOrCreateByName(
         "Mixed Representation Account",
@@ -347,7 +339,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
         results.filter(({ status }) => status === "rejected"),
       ).toMatchObject([{ reason: { code: "CONFLICT" } }]);
       const { rows } = await must(getTestPool(), "getTestPool()").query<DbRow>(
-        "SELECT amount::text AS amount FROM transactions WHERE account_id = $1",
+        "SELECT amount FROM transactions WHERE account_id = $1",
         [accountId],
       );
       expect(rows).toEqual([{ amount: stored }]);

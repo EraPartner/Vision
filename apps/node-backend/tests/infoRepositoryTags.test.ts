@@ -34,8 +34,9 @@ describe("tagInsightsRepository.getTagPivot id validation", () => {
 
     await tagInsightsRepository.getTagPivot({ tagIds: [2147483647] });
 
+    // The id list is bound as one JSON array (read with json_each).
     expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([
-      [2147483647],
+      JSON.stringify([2147483647]),
     ]);
   });
 });

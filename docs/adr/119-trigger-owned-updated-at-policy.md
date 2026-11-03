@@ -11,6 +11,12 @@ aliases: [adr-119, updated-at-policy]
 
 # ADR-119: Trigger-Owned `updated_at` Policy
 
+> [!note] Superseded in part by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> the shared PostgreSQL `update_updated_at_column()` `BEFORE UPDATE` trigger no longer exists.
+> Each table has its own `AFTER UPDATE` trigger that sets `updated_at = now()` when the statement
+> left another value, and Kysely updates set the column themselves so `RETURNING` shows it. The
+> policy stays: every ordinary mutable table with `updated_at` has a trigger, and its value wins.
+
 ## Status
 
 Accepted

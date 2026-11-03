@@ -4,6 +4,7 @@ import path from "node:path";
 import { Arch, Platform, build } from "electron-builder";
 
 import { appRoot } from "../paths";
+import { PACKAGED_ANALYSIS_SANDBOX, PACKAGED_DATABASE_TOOL } from "../runtime/native";
 import {
   assertSafeNativeDestination,
   run as prepareNativeRuntime,
@@ -77,6 +78,21 @@ export function packageConfig(
   };
 }
 
+/** The prepared payload has the backend, its database tool, its analysis sandbox and the SQLite baseline. */
+export function assertPreparedPayload(runtimeRoot: string): void {
+  fs.accessSync(path.join(runtimeRoot, "manifest.json"), fs.constants.R_OK);
+  fs.accessSync(path.join(runtimeRoot, "vision-backend"), fs.constants.X_OK);
+  for (const tool of [PACKAGED_DATABASE_TOOL, PACKAGED_ANALYSIS_SANDBOX])
+    fs.accessSync(path.join(runtimeRoot, ...tool.split("/")), fs.constants.R_OK);
+  const migrations = path.join(runtimeRoot, "db", "migrations");
+  const baseline = fs
+    .readdirSync(migrations)
+    .find((name) => /^0001_[a-z0-9_]+\.sql$/.test(name));
+  if (!baseline)
+    throw new Error("The native payload has no baseline database migration");
+  fs.accessSync(path.join(migrations, baseline), fs.constants.R_OK);
+}
+
 function errorMessage(error: unknown): string {
   if (
     typeof error === "object" &&
@@ -98,12 +114,7 @@ export async function main(
   const builder = options.builder ?? build;
   prepare();
   const runtimeRoot = nativeRuntimeRoot();
-  fs.accessSync(path.join(runtimeRoot, "manifest.json"), fs.constants.R_OK);
-  fs.accessSync(path.join(runtimeRoot, "vision-backend"), fs.constants.X_OK);
-  fs.accessSync(
-    path.join(runtimeRoot, "db", "migrations", "0001_baseline.sql"),
-    fs.constants.R_OK,
-  );
+  assertPreparedPayload(runtimeRoot);
   const demoSeed = args.demo
     ? await prepareDemo({ nativeRuntimeRoot: runtimeRoot })
     : undefined;

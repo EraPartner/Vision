@@ -5,7 +5,10 @@
 import crypto from "crypto";
 import Decimal from "decimal.js";
 import { sql } from "kysely";
-import { withSavepointIfInTransaction } from "../database/connection.ts";
+import {
+  __getAmbientTransactionClient,
+  withSavepointIfInTransaction,
+} from "../database/connection.ts";
 import { logger } from "../config/logger.ts";
 import { checkedRow, db } from "../database/db.ts";
 import { idRowSchema } from "../database/rowSchemas.ts";
@@ -16,8 +19,12 @@ import type { TransactionId } from "@vision/types/brands";
 import { errorCode, errorMessage } from "../lib/errors.ts";
 
 // Match ECMAScript String.trim() exactly, including historical untrimmed rows.
-// PostgreSQL's default TRIM only removes ordinary spaces.
-const manualMemoTrimSql = sql.raw(String.raw`BTRIM(t.memo, U&'\0009\000A\000B\000C\000D\0020\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF')`);
+// SQL's default TRIM only removes ordinary spaces. The set is U+0009-U+000D,
+// U+0020, U+00A0, U+1680, U+2000-U+200A, U+2028, U+2029, U+202F, U+205F,
+// U+3000 and U+FEFF, given as code points to SQLite's char().
+const manualMemoTrimSql = sql.raw(
+  "btrim(t.memo, char(9, 10, 11, 12, 13, 32, 160, 5760, 8192, 8193, 8194, 8195, 8196, 8197, 8198, 8199, 8200, 8201, 8202, 8232, 8233, 8239, 8287, 12288, 65279))",
+);
 
 // NUMERIC(18,4) rounds ties away from zero. Identity must represent the
 // persisted value so equivalent inputs share both the lock and live predicate.
@@ -88,13 +95,26 @@ function createManualTransactionHash({
 /**
  * Serialize manual creates with the same versioned identity for the duration
  * of the caller's ambient transaction. This closes the check-then-insert race
- * without retaining a session lock if the request fails.
+ * without retaining a lock if the request fails.
+ *
+ * SQLite runs every transaction as BEGIN IMMEDIATE on the single writer
+ * connection, so the caller's withTransaction() already holds the only write
+ * lock until it commits or rolls back; it replaces PostgreSQL's
+ * `pg_advisory_xact_lock` on the identity hash. Outside a transaction there is
+ * nothing to hold the lock, so the call is refused rather than silently
+ * leaving the check-then-insert window open.
  */
-export async function lockManualTransactionIdentity(
+export function lockManualTransactionIdentity(
   input: ManualHashInput,
 ): Promise<void> {
-  const hash = createManualTransactionHash(input);
-  await sql`SELECT pg_advisory_xact_lock(hashtextextended(${hash}, 0))`.execute(db);
+  // Same identity as the claim (validates the input like the lock key did).
+  createManualTransactionHash(input);
+  if (!__getAmbientTransactionClient()) {
+    return Promise.reject(
+      new Error("lockManualTransactionIdentity must run inside withTransaction()"),
+    );
+  }
+  return Promise.resolve();
 }
 
 async function isDuplicate(transactionData: FieldHashInput): Promise<boolean> {
@@ -115,7 +135,7 @@ async function isDuplicate(transactionData: FieldHashInput): Promise<boolean> {
     .leftJoin("recipients as r", "t.recipient_id", "r.id")
     .select("t.id")
     .where(sql<boolean>`t.date = ${epochMsToUtcYmd(transactionData.date.getTime())}`)
-    .where(sql<boolean>`t.amount = ${transactionData.amount}`)
+    .where(sql<boolean>`dec_eq(t.amount, ${String(transactionData.amount)})`)
     .where(
       sql<string>`COALESCE(UPPER(r.name), '')`,
       "=",
@@ -139,7 +159,7 @@ async function isDuplicateByFields(
     .leftJoin("recipients as r", "t.recipient_id", "r.id")
     .select("t.id")
     .where(sql<boolean>`t.date = ${date}`)
-    .where(sql<boolean>`t.amount = ${amount}`)
+    .where(sql<boolean>`dec_eq(t.amount, ${String(amount)})`)
     .where(sql<string>`UPPER(r.name)`, "=", (recipientName || "").toUpperCase())
     .where(sql<string>`COALESCE(TRIM(t.memo), '')`, "=", (memo || "").trim())
     .where("t.is_active", "=", true)
@@ -176,12 +196,14 @@ export async function isManualDuplicate({
   // Claims are hints: edits can leave an old hash pointing at a different identity.
   // Validate the live fields even on a hash hit; legacy hashes fall through here too.
   const account = accountId ?? null;
-  const predicate = sql<boolean>`t.date = ${toYmd(date)} AND t.amount = ${manualAmountIdentity(amount)}
-    AND t.recipient_id IS NOT DISTINCT FROM ${recipientId ?? null}::integer
+  // `IS` is SQLite's null-safe equality; the INTEGER column's affinity turns a
+  // numeric-string id into the integer, as the `::integer` cast did.
+  const predicate = sql<boolean>`t.date = ${toYmd(date)} AND dec_eq(t.amount, ${manualAmountIdentity(amount)})
+    AND t.recipient_id IS ${recipientId ?? null}
     AND UPPER(COALESCE(${manualMemoTrimSql}, '')) = ${(memo || "").trim().toUpperCase()}
-    AND ((${account}::integer IS NOT NULL AND t.account_id = ${account})
-      OR (${account}::integer IS NULL AND COALESCE(UPPER(acct.name), '') = ${(bankAccount || "").toUpperCase()}))
-    AND UPPER(t.currency) = ${(currency || "EUR").trim().toUpperCase()} AND t.is_active = true`;
+    AND ((${account} IS NOT NULL AND t.account_id = ${account})
+      OR (${account} IS NULL AND COALESCE(UPPER(acct.name), '') = ${(bankAccount || "").toUpperCase()}))
+    AND UPPER(t.currency) = ${(currency || "EUR").trim().toUpperCase()} AND t.is_active = 1`;
 
   // Rows are checked after the try: a contract violation must fail loudly,
   // not fall through to field matching like a missing claim table does.

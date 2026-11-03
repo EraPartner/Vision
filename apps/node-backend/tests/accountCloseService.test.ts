@@ -74,8 +74,9 @@ describe("previewAccountPortfolioLots", () => {
       transaction_ids: [2, 7, 9],
       limit: 500,
     });
+    // The lot types bind as one JSON list for `IN (SELECT value FROM json_each(?))`.
     expect(must(query.mock.calls[1], "query.mock.calls[1]")[1]).toEqual(
-      expect.arrayContaining([5, "buy", "gift", "sell", 501]),
+      expect.arrayContaining([5, JSON.stringify(["buy", "gift", "sell"]), 501]),
     );
   });
 
@@ -150,10 +151,17 @@ describe("closeAccount", () => {
       balance_handling: "adjustment",
     });
 
-    const insertParams = must(query.mock.calls[2], "query.mock.calls[2]")[1];
-    expect(insertParams).toEqual(
-      expect.arrayContaining([[-125.5, 20], ["EUR", "USD"]]),
+    // One JSON list of decimal-text amounts (ROUND_HALF_EVEN to cents, then
+    // negated), in partition order; the sub-cent GBP tail is skipped.
+    const insertParams = must(query.mock.calls[2], "query.mock.calls[2]")[1] ?? [];
+    const partsParam = insertParams.find(
+      (param) => typeof param === "string" && param.startsWith("["),
     );
+    expect(JSON.parse(String(partsParam))).toEqual([
+      { amount: "-125.5", currency: "EUR" },
+      { amount: "20", currency: "USD" },
+    ]);
+    expect(insertParams).toEqual(expect.arrayContaining([5, 900]));
     expect(result.adjustments).toHaveLength(2);
     expect(query).toHaveBeenCalledTimes(4);
   });

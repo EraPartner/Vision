@@ -61,13 +61,16 @@ describe("normalizeReconcile (ADR-094 Phase C)", () => {
 
 describe("reconcileAccount (ADR-094 Phase C)", () => {
   it("404s when the account does not exist", async () => {
-    // The FOR UPDATE lock select returns no row → NotFound before the drift read.
+    // The existence read returns no row → NotFound before the drift read.
     mockClient.query.mockResolvedValueOnce({ rows: [] });
     await expect(reconcileAccount(99, { mode: "accept" })).rejects.toThrow(
       /not found/i,
     );
-    // First (and only) query is the lock, and it must take FOR UPDATE.
-    expect(querySql(0)).toMatch(/FOR UPDATE/i);
+    // First (and only) query is the existence read, inside the transaction:
+    // SQLite has no FOR UPDATE; the BEGIN IMMEDIATE write transaction is the lock.
+    expect(withTransaction).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(text(querySql(0))).toMatch(/^select id from accounts where id = \?$/i);
   });
 
   it("rejects when the account has no statement balance", async () => {
@@ -106,7 +109,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
     );
   });
 
-  it("runs the whole reconcile inside a transaction and locks the account row first", async () => {
+  it("runs the whole reconcile inside one write transaction and reads the account row first", async () => {
     mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({
@@ -127,11 +130,12 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
     await reconcileAccount(5, { mode: "adjustment" });
 
     expect(withTransaction).toHaveBeenCalledTimes(1);
-    // First query is the row lock, taken before the drift read.
+    // First query is the account read, before the drift read. withTransaction()
+    // is BEGIN IMMEDIATE on the single writer, so a concurrent reconcile waits
+    // for this one to commit (PostgreSQL took SELECT ... FOR UPDATE here).
     const [lockSql, lockParams] = queryCall(0);
-    expect(text(lockSql)).toMatch(
-      /SELECT id FROM accounts WHERE id = \$1 FOR UPDATE/i,
-    );
+    expect(text(lockSql)).toMatch(/^SELECT id FROM accounts WHERE id = \?$/i);
+    expect(text(lockSql)).not.toMatch(/FOR UPDATE/i);
     expect(lockParams).toEqual([5]);
     expect(querySql(1)).toMatch(/s\.balance AS statement_balance/);
     expect(querySql(1)).not.toMatch(/a\.statement_balance/);
@@ -168,7 +172,8 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
     expect(text(sql)).not.toMatch(/UPDATE accounts/i);
     expect(params[0]).toBe(5);
     expect(params[1]).toBe("EUR");
-    expect(params[2]).toBe(100);
+    // The write plugin binds NUMERIC(18,4) as canonical decimal text.
+    expect(params[2]).toBe("100.0000");
     expect(params[3]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
@@ -209,8 +214,9 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
     expect(text(sql)).toMatch(/INSERT INTO transactions/i);
     expect(sql).toMatch(/transfer_source/);
     expect(sql).not.toMatch(/\bbalance\b/);
-    // params: [today, amount, currency, memo, accountId, recipientId]
-    expect(params[1]).toBe(20);
+    // params: [today, amount, currency, memo, accountId, recipientId]; the
+    // amount is canonical NUMERIC(18,4) text.
+    expect(params[1]).toBe("20.0000");
     expect(params[2]).toBe("EUR");
     expect(params[4]).toBe(5);
     // recipient_id is NOT NULL: the row must carry the system recipient, and the
@@ -243,7 +249,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
     const result = await reconcileAccount(5, { mode: "adjustment" });
     expect(result.computed_balance).toBe(80);
     const [, params] = queryCall(3);
-    expect(params[1]).toBe(-20);
+    expect(params[1]).toBe("-20.0000");
   });
 
   // Multi-currency: `statement_balance` is one number carrying one date next to
@@ -281,7 +287,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       computed_balance: 120,
     });
     const [, params] = queryCall(3);
-    expect(params[1]).toBe(20); // 120 − the EUR partition's 100 (not 120 − 200)
+    expect(params[1]).toBe("20.0000"); // 120 − the EUR partition's 100 (not 120 − 200)
     expect(params[2]).toBe("EUR");
   });
 
@@ -334,7 +340,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
     await reconcileAccount(5, { mode: "adjustment" });
 
     const [, params] = queryCall(3);
-    expect(params[1]).toBe(20); // 120 − the sole (USD) partition's 100
+    expect(params[1]).toBe("20.0000"); // 120 − the sole (USD) partition's 100
     expect(params[2]).toBe("USD");
   });
 
@@ -391,6 +397,6 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       computed_balance: 0,
     });
     expect(queryCall(2)[1][1]).toBe("GBP");
-    expect(queryCall(2)[1][2]).toBe(0);
+    expect(queryCall(2)[1][2]).toBe("0.0000");
   });
 });

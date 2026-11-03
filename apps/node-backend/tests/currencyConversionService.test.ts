@@ -59,6 +59,16 @@ const originalFetch = global.fetch as typeof fetch | undefined;
  */
 const sqlText = (sql: unknown) => String(sql).toLowerCase().replace(/"/g, "");
 
+// SQL fingerprints, in sqlText() form, of the statements these tests count.
+/** rateFetcher's exact-day point lookup. */
+const EXACT_RATE_LOOKUP = "where currency_code = ? and rate_date = ts_date(?)";
+/** rateFetcher's last-resort point lookup: the latest stored rate on or before the day. */
+const PRIOR_RATE_LOOKUP = "rate_date <= ts_date(?) order by rate_date desc";
+/** The one set-based INSERT of fetched [currency, rate, date] triples. */
+const BATCH_RATE_WRITE = "from json_each(?) as f";
+/** The full-history index load of every stored rate of a currency list. */
+const HISTORICAL_INDEX_LOAD = "where currency_code in (select value from json_each(?))";
+
 describe("Currency Conversion Service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -352,10 +362,10 @@ describe("Currency Conversion Service", () => {
 
     const sqlCalls = query.mock.calls.map(([sql]) => sqlText(sql));
     const exactLookups = sqlCalls.filter((sql) =>
-      sql.includes("where currency_code = $1 and rate_date = $2::date"),
+      sql.includes(EXACT_RATE_LOOKUP),
     );
     const nearestLookups = sqlCalls.filter((sql) =>
-      sql.includes("order by abs(rate_date - $2::date) asc"),
+      sql.includes(PRIOR_RATE_LOOKUP),
     );
 
     expect(exactLookups).toHaveLength(0);
@@ -384,10 +394,10 @@ describe("Currency Conversion Service", () => {
 
     const sqlCalls = query.mock.calls.map(([sql]) => sqlText(sql));
     const exactLookups = sqlCalls.filter((sql) =>
-      sql.includes("where currency_code = $1 and rate_date = $2::date"),
+      sql.includes(EXACT_RATE_LOOKUP),
     );
     const nearestLookups = sqlCalls.filter((sql) =>
-      sql.includes("order by abs(rate_date - $2::date) asc"),
+      sql.includes(PRIOR_RATE_LOOKUP),
     );
     expect(exactLookups).toHaveLength(0);
     expect(nearestLookups).toHaveLength(0);
@@ -470,7 +480,7 @@ describe("Currency Conversion Service", () => {
     // reversing the second request therefore performs no additional HTTP work.
     expect(global.fetch).toHaveBeenCalledTimes(1);
     const writes = query.mock.calls.filter(([sql]) =>
-      sqlText(sql).includes("from unnest"),
+      sqlText(sql).includes(BATCH_RATE_WRITE),
     );
     expect(writes).toHaveLength(1);
   });
@@ -488,7 +498,7 @@ describe("Currency Conversion Service", () => {
     expect(must(converted[0], "converted[0]").amount_eur).toBe(100);
     expect(global.fetch).not.toHaveBeenCalled();
     expect(
-      query.mock.calls.some(([sql]) => sqlText(sql).includes("from unnest")),
+      query.mock.calls.some(([sql]) => sqlText(sql).includes(BATCH_RATE_WRITE)),
     ).toBe(false);
   });
 
@@ -574,21 +584,15 @@ describe("Currency Conversion Service", () => {
           ],
         },
       ],
-      [
-        "where currency_code = $1 and rate_date = $2::date",
-        { rows: [] },
-      ],
-      [
-        "ORDER BY ABS(rate_date - $2::date)",
-        { rows: [{ rate_to_eur: "0.91" }] },
-      ], // nearest — must NOT be saved
+      [EXACT_RATE_LOOKUP, { rows: [] }],
+      [PRIOR_RATE_LOOKUP, { rows: [{ rate_to_eur: "0.91" }] }], // prior stored — must NOT be saved
       ["SELECT 1 FROM exchange_rates", { rows: [] }],
       ["SET fx_rate_to_eur", { rows: [], rowCount: 0 }],
     ]);
 
     const result = await backfillPortfolioHistoricalRates();
 
-    // The nearest-rate fallback is reported as unresolved, not inserted as history.
+    // The prior-stored-rate fallback is reported as unresolved, not inserted as history.
     expect(result).toEqual({
       inserted: 0,
       missing: 1,
@@ -599,6 +603,12 @@ describe("Currency Conversion Service", () => {
       sqlText(sql).includes("insert into exchange_rates"),
     );
     expect(inserts).toHaveLength(0);
+    // Both point lookups ran, so the fingerprints the "no point DB lookups"
+    // cases count are the live SQL, not stale text that never matches.
+    const lookups = query.mock.calls
+      .map(([sql]) => sqlText(sql))
+      .filter((sql) => sql.includes(EXACT_RATE_LOOKUP) || sql.includes(PRIOR_RATE_LOOKUP));
+    expect(lookups.map((sql) => sql.includes(EXACT_RATE_LOOKUP))).toEqual([true, false]);
   });
 
   it("should use ECB historical feed during backfill when exact date exists in 90d feed", async () => {
@@ -637,14 +647,11 @@ describe("Currency Conversion Service", () => {
           return { rows: [] };
         },
       ],
-      [
-        "where currency_code = $1 and rate_date = $2::date",
-        { rows: [] },
-      ],
+      [EXACT_RATE_LOOKUP, { rows: [] }],
       // Batched existence check (replaces the former per-row SELECT 1): returns
       // the now-present pair once the rate has been saved.
       [
-        "JOIN UNNEST",
+        "FROM json_each(?) AS w) AS want",
         () => ({
           rows: savedRate
             ? [{ currency_code: "USD", rate_date: "2026-02-01" }]
@@ -695,7 +702,7 @@ describe("Currency Conversion Service", () => {
       ],
       // NUMERIC arrives as a string; a number here means the read is wrong.
       [
-        "WHERE currency_code = ANY",
+        HISTORICAL_INDEX_LOAD,
         {
           rows: [
             {
@@ -754,7 +761,7 @@ describe("Currency Conversion Service", () => {
         },
       ],
       [
-        "WHERE currency_code = ANY",
+        HISTORICAL_INDEX_LOAD,
         {
           rows: [
             {
@@ -786,10 +793,10 @@ describe("Currency Conversion Service", () => {
     // The Saturday date resolves to the preceding business day's rate
     // (2020-03-02 in this fixture) per the on-or-before convention, and is
     // saved under the transaction's own date. saveHistoricalRate binds
-    // (currency, rate, date).
+    // (currency, rate, date), the rate as canonical NUMERIC(20,10) text.
     expect(savedRates).toHaveLength(1);
     expect(must(savedRates[0], "savedRates[0]")[0]).toBe("USD");
-    expect(must(savedRates[0], "savedRates[0]")[1]).toBeCloseTo(0.5, 10);
+    expect(must(savedRates[0], "savedRates[0]")[1]).toBe("0.5000000000");
     expect(must(savedRates[0], "savedRates[0]")[2]).toBe("2020-03-07");
     expect(repairFlagSet).toBe(true);
     expect(global.fetch).toHaveBeenCalledWith(
@@ -804,7 +811,7 @@ describe("Currency Conversion Service", () => {
     query.mockImplementation((sql) => {
       const s = sqlText(sql);
       if (s.includes("is_latest =")) return Promise.resolve({ rows: [] }); // getRates → fallback
-      if (s.includes("where currency_code = any")) {
+      if (s.includes(HISTORICAL_INDEX_LOAD)) {
         return Promise.resolve({
           rows: [
             {
@@ -829,7 +836,7 @@ describe("Currency Conversion Service", () => {
 
     // The full-history index load runs once; the second call reuses the cache.
     const indexLoads = query.mock.calls.filter(([sql]) =>
-      sqlText(sql).includes("where currency_code = any"),
+      sqlText(sql).includes(HISTORICAL_INDEX_LOAD),
     );
     expect(indexLoads).toHaveLength(1);
   });

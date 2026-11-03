@@ -35,7 +35,8 @@ const getClient = vi.mocked(rawGetClient);
 
 /**
  * Match SQL text containing `fragment`, ignoring case, identifier quotes,
- * layout and `$n` placeholder numbering.
+ * layout and placeholder style: a `$n` in the fragment matches any `$n` or
+ * SQLite's `?`.
  */
 function sqlLike(fragment: string): unknown {
   const pattern = fragment
@@ -45,7 +46,7 @@ function sqlLike(fragment: string): unknown {
       token
         .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
         .replace(/[A-Za-z_][A-Za-z0-9_]*/g, '"?$&"?')
-        .replace(/\\\$\d+/g, "\\$\\d+"),
+        .replace(/\\\$\d+/g, "(?:\\$\\d+|\\?)"),
     )
     .join("\\s+");
   return expect.stringMatching(new RegExp(pattern, "i"));
@@ -61,17 +62,18 @@ describe("plannedTransactionRepository.getDueSoon / getForForecast — one clock
     vi.clearAllMocks();
   });
 
-  it("getDueSoon anchors both window edges on the bound app date and binds the lookahead via make_interval", async () => {
+  it("getDueSoon anchors both window edges on the bound app date and binds the lookahead via add_days", async () => {
     query.mockResolvedValueOnce({ rows: [] });
 
     await plannedTransactionRepository.getDueSoon(30);
 
     const [sql, params] = must(query.mock.calls[0], "query.mock.calls[0]");
     expect(params).toEqual(expect.arrayContaining([30, todayAppDateString()]));
-    expect(sql).toEqual(sqlLike("pt.planned_date >= $2::date"));
-    expect(sql).toEqual(sqlLike("make_interval(days => $1::int)"));
+    expect(sql).toEqual(sqlLike("pt.planned_date >= $1"));
+    expect(sql).toEqual(sqlLike("pt.planned_date <= add_days($1, $2)"));
     // The two-clock split (and the string-concat interval) must not come back.
     expect(sql).not.toEqual(sqlLike("CURRENT_DATE"));
+    expect(sql).not.toEqual(sqlLike("today()"));
     expect(sql).not.toEqual(sqlLike("|| ' days'"));
     expect(sql).toEqual(sqlLike("COALESCE(pr.name, r.name) AS recipient_name"));
   });
@@ -83,8 +85,9 @@ describe("plannedTransactionRepository.getDueSoon / getForForecast — one clock
 
     const [sql, params] = must(query.mock.calls[0], "query.mock.calls[0]");
     expect(params).toEqual(expect.arrayContaining([3, todayAppDateString()]));
-    expect(sql).toEqual(sqlLike("$2::date + make_interval(months => $1::int)"));
+    expect(sql).toEqual(sqlLike("pt.planned_date <= add_months($1, $2)"));
     expect(sql).not.toEqual(sqlLike("CURRENT_DATE"));
+    expect(sql).not.toEqual(sqlLike("today()"));
     expect(sql).toEqual(sqlLike("COALESCE(pr.name, r.name) AS recipient_name"));
   });
 });
@@ -108,7 +111,7 @@ describe("plannedTransactionRepository.getAll", () => {
     expect(query).toHaveBeenCalledTimes(2);
     expect(query).toHaveBeenNthCalledWith(
       1,
-      sqlLike("COUNT(*) OVER() AS total_count"),
+      sqlLike("CAST(COUNT(*) OVER () AS TEXT) AS total_count"),
       [true, 25, 1000],
     );
     expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toEqual(sqlLike(
@@ -116,7 +119,7 @@ describe("plannedTransactionRepository.getAll", () => {
     ));
     expect(query).toHaveBeenNthCalledWith(
       2,
-      sqlLike("SELECT count(*)"),
+      sqlLike("SELECT CAST(count(*) AS TEXT)"),
       [true],
     );
   });
@@ -149,8 +152,8 @@ describe("plannedTransactionRepository.getAll", () => {
     await plannedTransactionRepository.getAll({ search: "needle" });
 
     for (const [sql] of query.mock.calls) {
-      expect(sql).toEqual(sqlLike("COALESCE(pr.name, r.name) ILIKE $1"));
-      expect(sql).toEqual(sqlLike("r.name ILIKE $1"));
+      expect(sql).toEqual(sqlLike("ilike(COALESCE(pr.name, r.name), $1)"));
+      expect(sql).toEqual(sqlLike("ilike(r.name, $1)"));
     }
     expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual(
       expect.arrayContaining(["%needle%", 50, 0]),
@@ -170,7 +173,7 @@ describe("plannedTransactionRepository.getAll", () => {
 
     for (const [sql] of query.mock.calls) {
       expect(sql).toEqual(sqlLike("pt.account_id = $1"));
-      expect(sql).not.toEqual(sqlLike("fa.name ILIKE"));
+      expect(sql).not.toEqual(sqlLike("ilike(fa.name"));
     }
     expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([true, 7, 50, 0]);
     expect(must(query.mock.calls[1], "query.mock.calls[1]")[1]).toEqual([true, 7]);
@@ -420,22 +423,38 @@ describe("plannedTransactionService.create", () => {
     expect(clientQuery).toHaveBeenNthCalledWith(
       3,
       sqlLike("INSERT INTO planned_transactions"),
+      // Money is bound as decimal text (String(n), as node-postgres sent it):
+      // amount, loan_principal, loan_annual_interest_rate, regular payment.
       expect.arrayContaining([
         "2026-05-01",
         41,
         3,
-        -100,
+        "-100",
         "MORTGAGE",
         "EUR",
         true,
         null,
         true,
+        "10000",
+        "2.5",
+        "100",
       ]),
+    );
+    expect(must(clientQuery.mock.calls[2], "clientQuery.mock.calls[2]")[0]).toEqual(
+      sqlLike("vision_numeric($4, 18, 4)"),
+    );
+    expect(must(clientQuery.mock.calls[2], "clientQuery.mock.calls[2]")[0]).toEqual(
+      sqlLike("vision_numeric($20, 8, 4)"),
     );
     expect(clientQuery).toHaveBeenNthCalledWith(
       4,
       sqlLike("INSERT INTO planned_transaction_loan_schedule"),
-      expect.arrayContaining([51, 1, "2026-06-01", 100, 80, 20, 920]),
+      // Money is bound as decimal text (String(n), as node-postgres sent a JS
+      // number) and rounded to NUMERIC(18,4) by vision_numeric.
+      expect.arrayContaining([51, 1, "2026-06-01", "100", "80", "20", "920"]),
+    );
+    expect(must(clientQuery.mock.calls[3], "clientQuery.mock.calls[3]")[0]).toEqual(
+      sqlLike("ts_date($1), vision_numeric($2, 18, 4), vision_numeric($3, 18, 4)"),
     );
     expect(clientQuery).toHaveBeenNthCalledWith(5, "COMMIT");
     expect(release).toHaveBeenCalledTimes(1);
@@ -803,7 +822,7 @@ describe("plannedTransactionRepository.small mutations", () => {
     expect(clientQuery).toHaveBeenNthCalledWith(
       3,
       sqlLike("INSERT INTO planned_transaction_loan_schedule"),
-      expect.arrayContaining([12, 1, "2026-10-01", 300, 250, 50, 4700]),
+      expect.arrayContaining([12, 1, "2026-10-01", "300", "250", "50", "4700"]),
     );
     expect(clientQuery).toHaveBeenNthCalledWith(4, "COMMIT");
     expect(release).toHaveBeenCalledTimes(1);
@@ -1001,7 +1020,8 @@ describe("plannedTransactionService.executeAndAdvance", () => {
     );
     expect(tagInsertCall).toBeDefined();
     expect(must(tagInsertCall, "tagInsertCall")[0]).toEqual(sqlLike("ON CONFLICT DO NOTHING"));
-    expect(must(tagInsertCall, "tagInsertCall")[1]).toEqual([10, [7, 8]]);
+    // The tag ids are bound as one JSON array, expanded with json_each.
+    expect(must(tagInsertCall, "tagInsertCall")[1]).toEqual([10, JSON.stringify([7, 8])]);
   });
 
   it("skips tag INSERT when tagIdsToInherit is null", async () => {

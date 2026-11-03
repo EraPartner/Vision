@@ -129,8 +129,9 @@ function dateRange(
   endDate: string | null | undefined,
 ): RawBuilder<unknown>[] {
   const filters: RawBuilder<unknown>[] = [];
-  if (startDate) filters.push(sql`t.date >= ${startDate}`);
-  if (endDate) filters.push(sql`t.date <= ${endDate}`);
+  // ts_date reads the bound value as a DATE, as PostgreSQL typed it.
+  if (startDate) filters.push(sql`t.date >= ts_date(${startDate})`);
+  if (endDate) filters.push(sql`t.date <= ts_date(${endDate})`);
   return filters;
 }
 
@@ -181,14 +182,14 @@ export const recipientInsightsRepository = {
         COALESCE(pr.id, r.id)       AS recipient_id,
         t.date,
         t.currency,
-        SUM(ABS(t.amount))          AS total_abs_amount,
-        COUNT(*)                    AS tx_count,
-        MIN(t.date)                 AS first_seen,
-        MAX(t.date)                 AS last_seen
+        dec_sum(dec_abs(t.amount))  AS total_abs_amount,
+        count(*)                    AS "tx_count::bigint",
+        min(t.date)                 AS "first_seen::date",
+        max(t.date)                 AS "last_seen::date"
       FROM transactions t
       JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-      WHERE t.amount < 0
+      WHERE dec_sign(t.amount) < 0
         AND t.is_active = true
         AND t.is_transfer = false
         ${excl.where}
@@ -282,35 +283,38 @@ export const recipientInsightsRepository = {
     // APP_TIMEZONE calendar day, bound once and reused for the period keys
     // below, as the forecast, monthly and average-vs-current cards do.
     const todayYmd = todayAppDateString();
-    const today = sql`${todayYmd}::date`;
+    const today = sql`${todayYmd}`;
     const momRawRows = await checkedRows(
       recipientMomRawRowSchema,
       sql`
       SELECT
         COALESCE(pr.id, r.id)       AS recipient_id,
         COALESCE(pr.name, r.name)   AS recipient_name,
-        TO_CHAR(t.date, 'YYYY-MM')  AS period,
+        to_char(t.date, 'YYYY-MM')  AS period,
         t.date,
         t.currency,
-        SUM(ABS(t.amount))          AS abs_amount
+        dec_sum(dec_abs(t.amount))  AS abs_amount
       FROM transactions t
       JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-      WHERE t.amount < 0
+      WHERE dec_sign(t.amount) < 0
         AND t.is_active = true
         AND t.is_transfer = false
-        AND t.date >= (DATE_TRUNC('month', ${today}) - INTERVAL '1 month')
+        AND t.date >= add_months(date_trunc('month', ${today}), -1)
         -- Like-for-like windows: the current month is month-to-date, so cap the
         -- previous month at the SAME day-of-month. Otherwise (partial current vs
         -- full previous) every recipient shows a spurious decrease early in the month.
+        -- (The cap is the previous month's start plus today's day offset, in
+        -- days, as PostgreSQL's date + integer: it may run past that month's
+        -- end, where the first arm already covers the current month.)
         AND (
-          t.date >= DATE_TRUNC('month', ${today})
-          OR t.date <= (DATE_TRUNC('month', ${today}) - INTERVAL '1 month')::date
-                       + (${today} - DATE_TRUNC('month', ${today})::date)
+          t.date >= date_trunc('month', ${today})
+          OR t.date <= add_days(add_months(date_trunc('month', ${today}), -1),
+                                date_diff_days(${today}, date_trunc('month', ${today})))
         )
         ${excl.where}
         ${dateWhere}
-      GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), TO_CHAR(t.date, 'YYYY-MM'), t.date, t.currency
+      GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), to_char(t.date, 'YYYY-MM'), t.date, t.currency
     `,
     );
 
@@ -329,8 +333,8 @@ export const recipientInsightsRepository = {
     const [periodRow] = await checkedRows(
       periodKeysRowSchema,
       sql`
-      SELECT TO_CHAR(${today}, 'YYYY-MM') AS current_period,
-             TO_CHAR(${today} - INTERVAL '1 month', 'YYYY-MM') AS prev_period
+      SELECT to_char(${today}, 'YYYY-MM') AS current_period,
+             to_char(add_months(${today}, -1), 'YYYY-MM') AS prev_period
     `,
     );
     // A FROM-less SELECT always returns exactly one row.
@@ -408,21 +412,21 @@ export const recipientInsightsRepository = {
       recipientYearRowSchema,
       sql`
       SELECT
-        EXTRACT(YEAR FROM t.date)::int AS year,
+        date_part('year', t.date) AS year,
         COALESCE(pr.id, r.id) AS recipient_id,
         COALESCE(pr.name, r.name) AS name,
         t.date, t.currency,
-        SUM(ABS(t.amount)) AS abs_amount,
-        COUNT(*) AS cnt
+        dec_sum(dec_abs(t.amount)) AS abs_amount,
+        count(*) AS "cnt::bigint"
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.is_active = true
-        AND t.amount < 0
+        AND dec_sign(t.amount) < 0
         AND t.is_transfer = false
         ${excl.where}
         ${andClauses(dateRange(startDate, endDate))}
-      GROUP BY EXTRACT(YEAR FROM t.date)::int, COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.date, t.currency
+      GROUP BY date_part('year', t.date), COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.date, t.currency
     `,
     );
 
@@ -481,8 +485,8 @@ export const recipientInsightsRepository = {
 
     const periodExpr =
       bucket === "yearly"
-        ? sql`TO_CHAR(t.date, 'YYYY')`
-        : sql`TO_CHAR(t.date, 'YYYY-MM')`;
+        ? sql`to_char(t.date, 'YYYY')`
+        : sql`to_char(t.date, 'YYYY-MM')`;
 
     // Optional inclusion narrowing: the only consumer (saved CustomChart) renders
     // a handful of selected recipients, so resolve their alias members and scan
@@ -496,7 +500,7 @@ export const recipientInsightsRepository = {
         sql`WITH selected_roots AS (
            SELECT DISTINCT COALESCE(primary_recipient_id, id) AS id
            FROM recipients
-           WHERE id = ANY(${validIncludeIds}::int[])
+           WHERE id IN (SELECT value FROM json_each(${JSON.stringify(validIncludeIds)}))
          )
          SELECT id FROM selected_roots
          UNION
@@ -511,7 +515,7 @@ export const recipientInsightsRepository = {
           conversion: periodPivotConversion([]),
         };
       }
-      recipientInclude = sql`AND t.recipient_id = ANY(${memberIds}::int[])`;
+      recipientInclude = sql`AND t.recipient_id IN (SELECT value FROM json_each(${JSON.stringify(memberIds)}))`;
     }
 
     // Aggregate per (recipient, period, date, currency) in SQL. amount < 0 is
@@ -526,13 +530,13 @@ export const recipientInsightsRepository = {
         COALESCE(pr.name, r.name)   AS recipient_name,
         ${periodExpr}               AS period,
         t.date, t.currency,
-        SUM(ABS(t.amount))          AS abs_amount,
-        COUNT(*)                    AS cnt
+        dec_sum(dec_abs(t.amount))  AS abs_amount,
+        count(*)                    AS "cnt::bigint"
       FROM transactions t
       JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.is_active = true
-        AND t.amount < 0
+        AND dec_sign(t.amount) < 0
         AND t.is_transfer = false
         ${excl.where}
         ${recipientInclude}

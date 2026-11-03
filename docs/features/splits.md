@@ -2,8 +2,8 @@
 title: Feature - Splits & Owes
 type: feature
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     feature,
@@ -176,7 +176,7 @@ Overpayment protection operates at two layers:
 
 | Method | Path                              | Description                                                                                                 |
 | ------ | --------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| POST   | `/api/splits/:id/pay`             | Record a payment; validates under a row lock                                                                |
+| POST   | `/api/splits/:id/pay`             | Record a payment; validates inside one write transaction                                                    |
 | GET    | `/api/splits/:id/payments`        | Get payment history                                                                                         |
 | POST   | `/api/splits/:id/settle`          | Mark split as settled                                                                                       |
 | POST   | `/api/splits/owed/:id/settle-all` | Settle all unsettled splits for recipient; returns `settled_count`                                          |
@@ -186,7 +186,7 @@ Implementation notes:
 - Route-level ID parsing is standardized through `parseRouteId(req)` and reused across `:id` handlers ([[apps/node-backend/src/routes/splits.ts]]).
 - Owed CSV export uses shared helpers (`OWED_EXPORT_HEADER`, `escapeCsvValue`, `buildOwedExportCsvRow`, `buildOwedExportCsv`, `buildOwedExportFilename`) for centralized CSV formatting with full escape support ([[apps/node-backend/src/routes/splits.ts]]).
 - `splitService` validates allocation through the pure calculation module, and persists single or batch rows through repository primitives in one transaction.
-- POST `/api/splits/:id/pay` delegates to `splitService.addPayment`, which repeats the exact cap check under `SELECT ... FOR UPDATE` and runs insert and conditional auto-settlement in one transaction ([[apps/node-backend/src/services/splitService.ts]]).
+- POST `/api/splits/:id/pay` delegates to `splitService.addPayment`, which repeats the exact cap check and runs insert and conditional auto-settlement in one `BEGIN IMMEDIATE` transaction on the single writer, which replaces the former `SELECT ... FOR UPDATE` ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]) ([[apps/node-backend/src/services/splitService.ts]]).
 - Settlement and hard deletion delegate to `splitService`, which runs one repository statement each. DELETE returns 404 when the service reports no row.
 
 ---

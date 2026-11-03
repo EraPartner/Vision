@@ -2,10 +2,10 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-10-28
-updated: 2026-10-28
-last-updated: 2026-10-10
-last_updated_timestamp: 2026-10-06T00:00:00Z
+date: 2026-11-03
+updated: 2026-11-03
+last-updated: 2026-11-03
+last_updated_timestamp: 2026-11-03T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
 added_import_pipeline_tests: 2026-05-05
 wired_real_db_harness: 2026-07-27
@@ -48,8 +48,8 @@ that assert structure (source text, private helpers, mock call order, SQL string
 mocked client) may be deleted when a change breaks them, with a one-line reason per file in the
 PR; if one was the only check of a behaviour, add a boundary test in the same change. Preserve
 independently justified financial outcomes, public contracts, persistence and recovery. Do not update expected money values simply because new code returns
-a different value. Keep precision, conservation, parser, recurrence, property, real PostgreSQL
-and restore fault-injection suites.
+a different value. Keep precision, conservation, parser, recurrence, property, real SQLite
+database and restore fault-injection suites.
 
 The reviewed keep/replace/remove ledger is `scripts/browser-tests/coverage-ledger.json`. The
 identical `tests/services/dedup.golden.test.ts` copy was removed; the persisted hash compatibility
@@ -61,7 +61,8 @@ fixture remains in `tests/golden/dedupHash.golden.test.ts`. No coverage threshol
 > ([[docs/adr/214-retire-vision-native-swift-port|ADR-214]]), so the React UI in Electron is the
 > only UI again and its layout currently has no browser-journey coverage. The retired
 > source-string responsive suite is not replaced. The live API contract tests still run against
-> a disposable PostgreSQL stack through `.github/scripts/with-native-stack.sh`.
+> the production backend on a temporary SQLite database through
+> `.github/scripts/with-native-stack.sh`.
 
 The existing `native:isolated-smoke` runner stops and starts real backend processes and checks API
 readiness and persistence. Its synthetic bundle journey replaces changed database records and
@@ -92,82 +93,46 @@ See [[docs/testing/test-inventory]] for the boundaries and [[docs/features/impor
 ### Backend Tests
 
 ```bash
-# Run the backend suite without a database (DB-backed cases self-skip)
-bun test
+# Run the whole backend suite, database tests included
+bun run test
 
-# Watch all backend tests against a disposable database
+# Watch all backend tests, including CI performance probes
 bun run test:watch
 
-# Run specific test file
+# Run specific test file (from apps/node-backend)
 bun vitest run tests/path/to/test.test.ts
 
 # Run tests matching pattern
 bun vitest run --test-name-pattern="testName"
+
+# Keep the run's temporary database files after the run to inspect them
+VISION_TEST_DB_KEEP=1 bun run test
 ```
 
-#### Against a real Postgres
+#### Against a real SQLite database
 
-Suites gated on `TEST_DATABASE_URL` (see [Database Fixture Helper](#database-fixture-helper-phase-0))
-**skip** in a plain `bun test` run. Both `bun run test:watch` and `bun run test:db` use the
-disposable-database wrapper. It
-requires native PostgreSQL 18 tools, initializes a private cluster under the system temporary
-directory, binds it only to loopback, migrates it to head, runs Vitest, and removes the cluster on
-exit. It does not start or require the Homebrew service:
+The backend suite needs no database server and no setup
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). The Vitest global setup
+`tests/setup/sqliteTemplate.ts` migrates one template database in a new temporary directory with
+the production migration runner. Before each test file loads, `tests/setup/sqliteDatabase.ts`
+copies that template and points `VISION_DATABASE_PATH` at the copy, replacing any inherited value.
+Every test file therefore has its own migrated database, test files run in parallel without sharing
+state, and a test never opens a real Vision database. The global teardown removes the directory
+unless `VISION_TEST_DB_KEEP=1`.
 
-```bash
-# Whole backend suite, DB-backed cases included
-bun run test:db
+Database tests never skip: every run, local or CI, runs them. `bun run test` is the complete
+backend run, and a local run measures the same coverage as CI.
 
-# Interactive watch mode, including DB-backed cases and CI performance probes
-bun run test:watch
-
-# A single DB-backed suite (arguments are forwarded to vitest)
-bun run test:db tests/services/transferReconciliation.db.test.ts
-
-# Keep the generated cluster after the run to inspect diagnostics
-VISION_TEST_DB_KEEP=1 bun run test:db
-
-# Also fail when schema.generated.ts drifts from the migrated schema (CI sets this)
-VISION_TEST_DB_VERIFY_CODEGEN=1 bun run test:db
-```
-
-Watch mode keeps the same private cluster for reruns and removes it when Vitest exits. It clears
-inherited database URLs by default.
-
-The wrapper builds the schema with the Kysely migrator (`db-migrate.ts up`); no Python toolchain
-is needed. It no longer has separate lifecycle tasks: migrator, adoption and baseline behaviour is
-covered by `tests/migrate.db.test.ts` and `tests/migratedSchemaContracts.db.test.ts`, which create
-disposable sibling databases through `tests/setup/migratedDatabase.ts` (gated on
-`VISION_TEST_DB_ISOLATED=1`). The ADR-088 and statement-scalar contract suites are still gated on a
-`VISION_TEST_DB_TASK` value that the wrapper no longer sets, so they skip.
-
-PostgreSQL discovery checks `VISION_TEST_POSTGRES_BIN`, `VISION_POSTGRES_BIN`, `postgres` on
-`PATH`, the Homebrew PostgreSQL 18 keg paths, and Postgres.app. `VISION_TEST_DB_PORT` selects the
-loopback port and fails closed on a collision.
-
-The wrapper ignores inherited database URLs by default and creates a private cluster. Set
-`VISION_TEST_DB_USE_CALLER=1` only for an already-disposable `TEST_DATABASE_URL`; this skips native
-provisioning.
-
-#### The skip banner
-
-A plain `bun run test` exits 0 while omitting several hundred DB-backed cases, and vitest's `N passed | M skipped` line reads as routine. To stop a partial run being mistaken for a complete one, `tests/setup/dbSkipBanner.ts` prints a banner **after** the summary whenever DB-backed cases were skipped for want of a database. `bun run test:watch` now provides the database, so it does not trigger this banner:
-
-```
-==============================================================================
-  INCOMPLETE RUN -- 378 DB-backed tests across 27 files were SKIPPED
-==============================================================================
-  ...
-  Run "bun run test:db" before trusting this result.
-==============================================================================
-```
-
-- Counts are derived from the run, never hardcoded; a module counts as DB-backed when its source imports `tests/setup/db.ts` (so `tests/services/aggregationRefresh.test.ts` is included despite not being named `*.db.test.ts`).
-- Silent when `TEST_DATABASE_URL` is set, so `bun run test:db` and CI stay clean.
-- Attached in `vitest.config.js` through a `configureVitest` plugin hook that _appends_ to the resolved reporter list rather than declaring `test.reporters` — declaring that key would replace vitest's own default choice (`default` / `agent`, plus `github-actions` under Actions). It therefore fires for every entry point that uses the config, including `bun run test` and a bare `bun vitest run`.
-
-Run `bun run test:db` explicitly when database behavior or migrations change. It creates a
-disposable PostgreSQL cluster; `bun run test` alone reports skipped database-backed cases.
+Suites that need a schema of their own (migrator lifecycle, journals that must start empty)
+open a file of their own in the run's temporary directory with `openDatabase()`. The migration
+runner is covered by `tests/database/migrations.test.ts` (every migration from an empty file and from each
+earlier version, down migrations, the refusals, the pre-migration copy and the table-rebuild
+procedure). `tests/database/sqliteBaseline.test.ts` checks `db/migrations/0001_baseline.sql`
+against fixtures captured from PostgreSQL 18.6, `tests/database/sqlite/` holds the golden tests of
+the SQL functions, `tests/database/sqlDialect.test.ts` scans every SQL string and migration for
+forms the [[docs/reference/sqlite-sql-dialect|SQLite dialect]] forbids,
+`tests/database/dbFile.test.ts` covers the desktop database tool, and
+`tests/database/codegen.test.ts` fails when the generated Kysely types drift from the migrations.
 
 ### Destination Host HTTP smoke tests
 
@@ -194,9 +159,10 @@ bun run test:frontend
 bun run --filter 'vision-frontend' test
 ```
 
-The root command builds the frontend, starts a disposable native PostgreSQL 18 cluster and
-backend, then runs the complete frontend Vitest suite with `LIVE_API_BASE` set. It clears inherited
-database URLs and fails if the native stack cannot start. The workspace command excludes the
+The root command builds the frontend, migrates a fresh SQLite database file in a temporary
+directory, starts the production backend on it, then runs the complete frontend Vitest suite with
+`LIVE_API_BASE` set. It ignores an inherited `VISION_DATABASE_PATH` and fails if the native stack
+cannot start. The workspace command excludes the
 live-contract file. On pull requests CI runs that unit suite split over two runners without
 coverage (`Test (Frontend 1/2)` and `Test (Frontend 2/2)`); on pushes to `main` it runs it once
 with coverage. The live contracts run in the `Test (Backend)` job against a native stack; see
@@ -235,7 +201,7 @@ bun run test:frontend src/test/live-contracts/live-contracts.test.ts
 ```
 
 The installed Vision Demo is a native-runtime test target. It uses deterministic synthetic data
-under `~/Library/Application Support/Vision Demo/native/vision_demo` and never connects to the real
+in its own SQLite database below `~/Library/Application Support/Vision Demo/database/` and never opens the real
 Vision database. `./install-demo.sh` rebuilds the native payload and seed against the
 current migration head. `bun run demo:reset-native` requests an atomic seed restore for the next
 Demo launch. Seed build tests verify data-only SQL, fixed-reference-date
@@ -265,7 +231,7 @@ Backend tests are strict TypeScript
 checked by `apps/node-backend/tsconfig.tests.json`, which `bun run typecheck:backend` and CI run.
 Write new tests in TypeScript. Use `vi.mocked()` and the typed helpers in `tests/helpers`. For a
 fixture that sets only some fields, use `partial<T>()` from `tests/helpers/partial.ts`; for one
-that deliberately differs from the type (for example a pg wire shape with NUMERIC as a string),
+that deliberately differs from the type (for example a raw database row with NUMERIC as a string),
 use `loose<T>()` with a comment saying why. Do not use `@ts-ignore` or `@ts-nocheck`; keep
 `@ts-expect-error` for deliberately invalid input.
 
@@ -619,7 +585,7 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () =>
 
 `tests/helpers/repoMocks.ts` is the canonical database seam. Its variants share the complete
 `connection.ts` export surface and model inert, ambient-client, or pooled transaction behavior.
-Only the two real-PostgreSQL instrumentation suites use an explicit partial-real connection mock.
+Only the real-database instrumentation suites use an explicit partial-real connection mock.
 `tests/helpers/mockCurrencyConversion.ts` keeps named and default exports on the same spies. Its
 default conversion is identity; tests that need converted values prime explicit output rows or use
 the single already-in-target-currency fixture. Do not embed exchange-rate arithmetic in a mock.
@@ -627,7 +593,7 @@ the single already-in-target-currency fixture. Do not embed exchange-rate arithm
 #### Shared domain row builders
 
 `tests/builders/domainRows.ts` provides builders for transaction, planned-transaction, investment,
-portfolio-transaction, import-staging, and portfolio-import-staging rows. Raw PostgreSQL builders
+portfolio-transaction, import-staging, and portfolio-import-staging rows. Raw database-row builders
 keep `NUMERIC` and `BIGINT` values as strings and `DATE` values as `Date` objects. Mapped investment
 and portfolio-transaction builders use numeric values and `YYYY-MM-DD` dates, matching their
 repository mappers. Each call creates fresh dates and collections, then applies shallow overrides.
@@ -869,58 +835,67 @@ Reference: [[docs/reference/code-patterns#Golden-Fixture Pattern]], [[apps/node-
 
 ### Database Fixture Helper (Phase 0+)
 
-Opt-in shared Postgres pool for tests that need a real database. Resolved via `TEST_DATABASE_URL` environment variable.
+`tests/setup/db.ts` gives every test file a handle on its own SQLite database (see
+[Against a real SQLite database](#against-a-real-sqlite-database)). It needs no environment
+variable and never returns `null`.
 
 **Setup:**
 
 ```javascript
-import { describe, it, beforeAll, afterAll } from "vitest";
-import { getTestPool, closeTestPool, hasTestDatabase } from "../setup/db.ts";
+import { describe, it, beforeEach, afterAll, expect } from "vitest";
+import { getTestPool, closeTestPool, resetTestDatabase } from "../setup/db.ts";
 
 describe("transactionRepository", () => {
-  let pool;
+  const pool = getTestPool();
 
-  beforeAll(() => {
-    pool = getTestPool();
+  beforeEach(async () => {
+    await resetTestDatabase();
   });
 
   afterAll(async () => {
     await closeTestPool();
   });
 
-  it.skipIf(!pool)("should insert and fetch transaction", async () => {
-    const result = await pool.query("SELECT 1");
+  it("should insert and fetch transaction", async () => {
+    const result = await pool.query("SELECT 1 AS one");
     expect(result.rows).toHaveLength(1);
   });
 });
 ```
 
-**Self-skipping pattern (recommended):**
-
-```javascript
-it.skipIf(!hasTestDatabase())("database-dependent test", async () => {
-  // test code
-});
-```
-
-The helper returns `null` when `TEST_DATABASE_URL` is unset, so tests skip gracefully in environments without the test database.
+`getTestPool()` keeps the call shape of the former PostgreSQL pool, but its statements run through
+the backend's own driver (`src/database/connection.ts`). Fixtures and the code under test therefore
+share one database, one writer connection and one transaction context. `hasTestDatabase()` always
+returns `true`; it remains only for suites still written as `describe.skipIf(!hasTestDatabase())`.
+Other helpers in the same file: `inRollbackTransaction(fn)` runs `fn` in a transaction that is
+always rolled back, and `expectSqlError(client, sql, params, code)` expects one statement to fail
+with a SQLSTATE inside a savepoint.
 
 **Where the database comes from:**
 
-| Context                   | Provider                                                            | Migrated by                         |
-| ------------------------- | ------------------------------------------------------------------- | ----------------------------------- |
-| CI — `Test (Backend)` job | private native PostgreSQL 18 cluster from `scripts/with-test-db.sh` | the same script                     |
-| Local                     | private native PostgreSQL 18 cluster from `scripts/with-test-db.sh` | the same script                     |
+| Context                   | Provider                                                                  | Migrated by                              |
+| ------------------------- | ------------------------------------------------------------------------- | ---------------------------------------- |
+| CI — `Test (Backend)` job | per-file copy of the template from `tests/setup/sqliteTemplate.ts`        | the production runner, once per run      |
+| Local                     | per-file copy of the template from `tests/setup/sqliteTemplate.ts`        | the production runner, once per run      |
 
-Backend vitest runs in exactly one CI job, so the service is wired only there. `CI Complete` runs no tests — it only aggregates results.
+Backend vitest runs in exactly one CI job. `CI Complete` runs no tests — it only aggregates results.
 
-**`DATABASE_URL` must equal `TEST_DATABASE_URL`.** DB-backed suites seed through the _test_ pool (`getTestPool()`), but the code under test queries through the _app_ pool (`src/database/connection.ts`, built from `DATABASE_URL` at import time). Point them at different databases and the seed is invisible to the service. Both the CI job and `with-test-db.sh` set the two to the same value; a suite that depends on it should assert this in `beforeAll` rather than fail mysteriously.
+**Isolation.** `resetTestDatabase()` closes the backend's connections and copies the migrated
+template over this file's database, so a suite can start each test from the pristine schema. Tests
+in one file share that file's database, so a suite that does not reset must leave no rows behind.
+Per-test `DELETE` of the tables the suite touches is the other option. A wrapping transaction does
+not suit services that open their own `withTransaction` or that reconcile the whole corpus rather
+than a scoped batch.
 
-**Cleanup convention.** Prefer per-test `DELETE` of the tables the suite touches over `TRUNCATE ... CASCADE`: the cascade off `transactions` reaches a dozen unrelated tables and costs ~350 ms per test in ACCESS EXCLUSIVE locks versus ~3 ms for targeted deletes. A wrapping transaction is the other option, but it does not suit services that open their own `withTransaction` or that reconcile the whole corpus rather than a scoped batch — there, other tests' rows would still be visible. Whatever the strategy, the suite must leave no rows behind.
+**Coverage is the same everywhere.** Every database suite runs in every run, so a local
+`--coverage` run and CI measure the same figure. See the comment in `vitest.config.js` before
+bumping the thresholds.
 
-**Coverage differs between modes.** Skipped DB suites lower measured coverage, so a no-DB `--coverage` run reports below CI. The thresholds in `vitest.config.js` track the _no-DB_ figure deliberately — see the comment there before bumping them.
-
-**Migrations are required.** Use `bun run db:migrate` (→ `apps/node-backend/scripts/db-migrate.ts up`), which runs the same `runMigrations()` path the app runs on boot: an empty database receives `db/migrations/0001_baseline.sql` and its catalog fingerprint is verified, then later migrations apply in one transaction. See [[docs/guides/migrations|Database Migration Guide]] and [[docs/reference/scripts|Scripts Reference]].
+**Migrations.** The template is built by `runMigrations()`, the path the app runs on boot. For a
+database file of your own use `bun run db:migrate` (→ `apps/node-backend/scripts/db-migrate.ts up`):
+an empty file receives `db/migrations/0001_baseline.sql` and every later migration in one
+transaction. See [[docs/guides/migrations|Database Migration Guide]] and
+[[docs/reference/scripts|Scripts Reference]].
 
 Reference: [[docs/reference/code-patterns#Database Fixture]], [[apps/node-backend/tests/setup/db.ts]], [[apps/node-backend/tests/services/transferReconciliation.db.test.ts]]
 
@@ -1416,7 +1391,7 @@ on every push to `main`. Documentation-only diffs skip them. See
 | ------------------------------------------ | ------------------------------------------------------------------------------ |
 | Frontend Vitest, pull requests             | `Test (Frontend 1/2)` and `Test (Frontend 2/2)`: two shards, no coverage       |
 | Frontend Vitest, push to `main`            | `Test (Frontend 1/1)`: one run of `test:coverage` with the v8 coverage ratchet |
-| Backend Vitest, DB lifecycle tasks         | `Test (Backend)`, with coverage, on a disposable native PostgreSQL 18 cluster  |
+| Backend Vitest, database suites included   | `Test (Backend)`, with coverage, each test file on its own SQLite copy         |
 | Electron and native-runtime contract tests | `Test (Backend)`                                                               |
 | Native health and migration round trip     | `Test (Backend)`                                                               |
 | Live API contracts                         | `Test (Backend)`, against the native production stack                          |
@@ -1440,17 +1415,17 @@ bun vitest run --reporter=basic --only --update
 
 ## Non-analysis queue acceptance
 
-Run from the repository root:
+Run from `apps/node-backend`:
 
 ```bash
-bun run test:db tests/plannedExecutionConcurrency.db.test.ts tests/historicalFxFallback.db.test.ts tests/recipientMergeConcurrency.db.test.ts tests/transactionRepository.db.test.ts tests/portfolioImportSavepointRelease.db.test.ts tests/settingsConflicts.db.test.ts
+bun vitest run tests/plannedExecutionConcurrency.db.test.ts tests/historicalFxFallback.db.test.ts tests/recipientMergeConcurrency.db.test.ts tests/transactionRepository.db.test.ts tests/portfolioImportSavepointRelease.db.test.ts tests/settingsConflicts.db.test.ts
 ```
 
-The savepoint suite uses real PostgreSQL CHECK failures for a trade and a cash row, observes
+The savepoint suite uses real database CHECK failures for a trade and a cash row, observes
 rollback/release before staging-error persistence, and independently checks successful siblings
 and counters. The settings suite tests concurrent absent-key creation, stale replacement/deletion,
-JSON null, and atomic bulk rollback. No inherited real database is used by the disposable wrapper.
-An unavailable database does not establish these acceptance properties.
+JSON null, and atomic bulk rollback. Each file runs on its own copy of the migrated SQLite
+template; no inherited database is used.
 
 Listener-free checks cover daily-job checkpoints/retries, settings predicates and queues, and
 synthetic forecast benchmarks. Native/proxy Host acceptance additionally needs live legitimate,

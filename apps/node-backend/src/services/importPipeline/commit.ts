@@ -418,14 +418,20 @@ async function resolveChunkAccounts(
     ),
   ].sort((a, b) => a - b);
   if (accountIds.length > 0) {
+    // Inside the chunk transaction (BEGIN IMMEDIATE holds the write lock), so
+    // no account can be closed between this check and the chunk's inserts:
+    // the guarantee PostgreSQL's FOR SHARE row locks gave.
     const active = await checkedRows(
       z.object({ id: z.number(), is_active: z.boolean() }),
       db
         .selectFrom("accounts")
         .select(["id", "is_active"])
-        .where("id", "=", sql<AccountId>`ANY(${accountIds}::int[])`)
-        .orderBy("id")
-        .forShare(),
+        .where(
+          "id",
+          "in",
+          sql<AccountId>`(SELECT value FROM json_each(${JSON.stringify(accountIds)}))`,
+        )
+        .orderBy("id"),
     );
     if (
       active.length !== accountIds.length ||
@@ -540,7 +546,11 @@ export async function commitBatch({
     await db
       .updateTable("import_staging_rows")
       .set({ status: "error", error_message: UNRESOLVED_RECIPIENT_MESSAGE })
-      .where("id", "=", sql<string>`ANY(${unresolvedIds}::bigint[])`)
+      .where(
+        "id",
+        "in",
+        sql<string>`(SELECT CAST(value AS INTEGER) FROM json_each(${JSON.stringify(unresolvedIds)}))`,
+      )
       .execute();
     await db
       .updateTable("import_batches")

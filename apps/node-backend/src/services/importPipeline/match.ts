@@ -6,7 +6,7 @@
  *
  *   1. Pattern   — literal_prefix / glob / regex rules owned by the user.
  *                  Fastest signal; first match wins.
- *   2. Exact/Fuzzy — pg_trgm via `findBestRecipientMatches`.
+ *   2. Exact/Fuzzy — trigram similarity via `findBestRecipientMatches`.
  *                  Exact normalized hit preferred; fuzzy fallback above 0.7.
  *   3. New        — names not resolved by either phase are upserted as new
  *                  recipients.
@@ -24,6 +24,7 @@ import {
   normalizeForMatching,
 } from '../calculations/normalization.ts';
 import { loadActivePatterns, applyPatterns } from '../recipientPatternService.ts';
+import { float4Value } from '../../database/sqlite/text.ts';
 import {
   matchStagingRowSchema,
   recipientIdentityRowSchema,
@@ -120,14 +121,19 @@ export async function matchBatch({
     .filter((r) => r.normalized);
 
   if (toUpsert.length > 0) {
-    const upperNames = toUpsert.map((r) => r.upper);
     const normalizedNames = toUpsert.map((r) => r.normalized);
 
     // Batch insert — ON CONFLICT DO NOTHING returns only newly created rows.
+    // The names travel as one JSON array of [name, normalized_name] pairs, in
+    // order; `WHERE true` keeps SQLite from reading ON CONFLICT as a join
+    // constraint of the SELECT.
     const inserted = await checkedRows(
       recipientIdentityRowSchema,
       sql`INSERT INTO recipients (name, normalized_name, is_active)
-       SELECT UNNEST(${upperNames}::text[]), UNNEST(${normalizedNames}::text[]), true
+       SELECT n.value ->> 0, n.value ->> 1, 1
+         FROM json_each(${JSON.stringify(toUpsert.map((r) => [r.upper, r.normalized]))}) AS n
+        WHERE true
+        ORDER BY n.key
        ON CONFLICT (normalized_name) DO NOTHING
        RETURNING id, normalized_name`,
     );
@@ -143,7 +149,11 @@ export async function matchBatch({
         db
           .selectFrom('recipients')
           .select(['id', 'normalized_name'])
-          .where('normalized_name', '=', sql<string>`ANY(${conflicted}::text[])`),
+          .where(
+            'normalized_name',
+            'in',
+            sql<string>`(SELECT value FROM json_each(${JSON.stringify(conflicted)}))`,
+          ),
       );
       for (const r of existing) {
         insertedByNorm.set(r.normalized_name, r.id);
@@ -173,38 +183,52 @@ export async function matchBatch({
 
   for (let start = 0; start < staged.length; start += MATCH_UPDATE_CHUNK) {
     const chunk = staged.slice(start, start + MATCH_UPDATE_CHUNK);
-    const ids: string[] = [];
-    const recipientIds: (number | null)[] = [];
-    const matchSources: (MatchSource | null)[] = [];
-    const similarities: (number | null)[] = [];
-    const patternIds: (number | null)[] = [];
+    const updates: Array<{
+      id: string;
+      recipient_id: number | null;
+      match_source: MatchSource | null;
+      match_similarity: number | null;
+      matched_pattern_id: number | null;
+    }> = [];
     for (const row of chunk) {
       const info = row.recipient_raw ? resolved.get(row.recipient_raw) : null;
-      ids.push(row.id);
       if (info) {
         matched++;
-        recipientIds.push(info.recipientId);
-        matchSources.push(info.matchSource);
-        similarities.push(info.matchSimilarity);
-        patternIds.push(info.matchedPatternId);
+        updates.push({
+          id: row.id,
+          recipient_id: info.recipientId,
+          match_source: info.matchSource,
+          // match_similarity is REAL (float4) in PostgreSQL: store the value
+          // the float4 column held, so a re-read gives the same number.
+          match_similarity:
+            info.matchSimilarity == null ? null : float4Value(info.matchSimilarity),
+          matched_pattern_id: info.matchedPatternId,
+        });
       } else {
         unresolved++;
-        recipientIds.push(null);
-        matchSources.push(null);
-        similarities.push(null);
-        patternIds.push(null);
+        updates.push({
+          id: row.id,
+          recipient_id: null,
+          match_source: null,
+          match_similarity: null,
+          matched_pattern_id: null,
+        });
       }
     }
-    await sql`UPDATE import_staging_rows s
+    await sql`UPDATE import_staging_rows
           SET status                = 'matched',
               resolved_recipient_id = v.recipient_id,
               match_source          = v.match_source,
               match_similarity      = v.match_similarity,
-              matched_pattern_id    = v.matched_pattern_id
-         FROM unnest(${ids}::bigint[], ${recipientIds}::int[], ${matchSources}::text[],
-                     ${similarities}::real[], ${patternIds}::int[])
-              AS v(id, recipient_id, match_source, match_similarity, matched_pattern_id)
-        WHERE s.id = v.id`.execute(db);
+              matched_pattern_id    = v.matched_pattern_id,
+              updated_at            = now()
+         FROM (SELECT CAST(value ->> 'id' AS INTEGER) AS id,
+                      value ->> 'recipient_id' AS recipient_id,
+                      value ->> 'match_source' AS match_source,
+                      value ->> 'match_similarity' AS match_similarity,
+                      value ->> 'matched_pattern_id' AS matched_pattern_id
+                 FROM json_each(${JSON.stringify(updates)})) AS v
+        WHERE import_staging_rows.id = v.id`.execute(db);
     seen += chunk.length;
     if (onProgress) onProgress({ phase: 'matching', current: seen, total });
   }

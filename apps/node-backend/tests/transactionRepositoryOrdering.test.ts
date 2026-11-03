@@ -57,7 +57,7 @@ afterEach(() => {
 describe("transaction list count cache", () => {
   function stubListQueries(total = 7) {
     query.mockImplementation((sql) =>
-      Promise.resolve(/SELECT COUNT\(\*\)::int AS total/.test(sql)
+      Promise.resolve(/SELECT COUNT\(\*\) AS total/.test(sql)
         ? { rows: [{ total }] }
         : { rows: [] }),
     );
@@ -65,7 +65,7 @@ describe("transaction list count cache", () => {
 
   const countCalls = () =>
     query.mock.calls.filter(([sql]) =>
-      /SELECT COUNT\(\*\)::int AS total/.test(sql),
+      /SELECT COUNT\(\*\) AS total/.test(sql),
     );
 
   it("reuses one filtered count across page and page-size changes", async () => {
@@ -95,7 +95,7 @@ describe("transaction list count cache", () => {
       resolveCount = resolve;
     });
     query.mockImplementation(async (sql) => {
-      if (/SELECT COUNT\(\*\)::int AS total/.test(sql)) return pendingCount;
+      if (/SELECT COUNT\(\*\) AS total/.test(sql)) return pendingCount;
       return { rows: [] };
     });
 
@@ -142,7 +142,7 @@ describe("transaction list count cache", () => {
   it("separates distinct filters and evicts rejected counts", async () => {
     let failRent = true;
     query.mockImplementation((sql, params) => {
-      if (!/SELECT COUNT\(\*\)::int AS total/.test(sql)) return Promise.resolve({ rows: [] });
+      if (!/SELECT COUNT\(\*\) AS total/.test(sql)) return Promise.resolve({ rows: [] });
       if (params.includes("%rent%") && failRent) {
         failRent = false;
         return Promise.reject(new Error("count failed"));

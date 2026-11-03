@@ -34,29 +34,24 @@ vi.mock("../../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion(),
 );
 
-vi.mock("../../src/database/connection.ts", () =>
-  mockConnection({ getClient: vi.fn() }),
-);
+vi.mock("../../src/database/connection.ts", () => mockConnection());
 
 const { default: transactionsRouter } =
   await import("../../src/routes/transactions.ts");
 
-import { getClient } from "../../src/database/connection.ts";
+import { withReadSnapshot } from "../../src/database/connection.ts";
 import { must } from "../helpers/must.ts";
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
 const bulkExport = (body: object) =>
   api.post("/api/transactions/bulk-export").send(body);
 
-function useClientResults(...results: object[]) {
+/** Prime the read snapshot's client: every export query runs on it (ADR-263). */
+function useSnapshotResults(...results: object[]) {
   const query = vi.fn();
   for (const result of results) query.mockResolvedValueOnce(result);
-  const release = vi.fn();
-  vi.mocked(getClient).mockResolvedValue({
-    query,
-    release,
-  });
-  return { query, release };
+  vi.mocked(withReadSnapshot).mockImplementation(async (fn) => fn({ query, release: vi.fn() }));
+  return { query };
 }
 
 // Shaped like a real chunk row: pg DATE as a local-midnight Date, NUMERIC as
@@ -92,12 +87,10 @@ describe("POST /bulk-export — CSV success", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("streams CSV header and a single row to the response", async () => {
-    const { query, release } = useClientResults(
-      {}, // BEGIN snapshot
+    const { query } = useSnapshotResults(
       { rows: [{ n: 1 }] }, // exact existing row count
       { rows: [{ "?column?": 1 }] }, // probe
       { rows: [SAMPLE_ROW] }, // chunk
-      {}, // COMMIT
     );
 
     const res = await bulkExport({ ids: [1], format: "csv" }).expect(200);
@@ -109,25 +102,20 @@ describe("POST /bulk-export — CSV success", () => {
     expect(res.text).toMatch(/^Date,Bank Account,Recipient/);
     expect(res.text).toContain("Trader Joe");
     expect(res.text).toContain("weekly");
-    expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toBe(
-      "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
-    );
-    expect(must(query.mock.calls.at(-1), "query.mock.calls.at(-1)")[0]).toBe("COMMIT");
-    expect(release).toHaveBeenCalledOnce();
+    // One snapshot holds every read of the export.
+    expect(withReadSnapshot).toHaveBeenCalledOnce();
+    expect(query).toHaveBeenCalledTimes(3);
   });
 
-  it("rolls back and releases the snapshot when streaming fails", async () => {
-    const { query, release } = useClientResults(
-      {},
-      { rows: [{ n: 1 }] },
-      { rows: [] },
-      {},
-    );
+  it("ends the snapshot with the error when streaming fails", async () => {
+    useSnapshotResults({ rows: [{ n: 1 }] }, { rows: [] });
 
     await bulkExport({ ids: [1], format: "csv" }).expect(404);
 
-    expect(must(query.mock.calls.at(-1), "query.mock.calls.at(-1)")[0]).toBe("ROLLBACK");
-    expect(release).toHaveBeenCalledOnce();
+    expect(withReadSnapshot).toHaveBeenCalledOnce();
+    await expect(
+      must(vi.mocked(withReadSnapshot).mock.results[0], "snapshot result").value,
+    ).rejects.toThrow();
   });
 });
 
@@ -135,12 +123,10 @@ describe("POST /bulk-export — NDJSON success", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("streams one JSON object per line", async () => {
-    useClientResults(
-      {},
+    useSnapshotResults(
       { rows: [{ n: 1 }] },
       { rows: [{ "?column?": 1 }] },
       { rows: [SAMPLE_ROW] },
-      {},
     );
 
     const res = await bulkExport({ ids: [1], format: "json" }).expect(200);
@@ -163,7 +149,7 @@ describe("POST /bulk-export — filter-mode resolves through bulk selection", ()
   beforeEach(() => vi.clearAllMocks());
 
   it("rejects filter requests over the cap", async () => {
-    useClientResults({}, { rows: [{ n: 7000 }] }, {});
+    useSnapshotResults({ rows: [{ n: 7000 }] });
 
     await bulkExport({
       filter: { search: "big" },

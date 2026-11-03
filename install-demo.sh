@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and install Vision Demo.app with a private native PostgreSQL runtime and
+# Build and install Vision Demo.app with its own SQLite database and
 # deterministic synthetic data. It never opens the real Vision data directory.
 set -euo pipefail
 
@@ -37,5 +37,5 @@ install_app_bundle "$APP_SRC" "$APP_DEST"
 echo ""
 echo "  Vision Demo installed with synthetic data only."
 echo "  Open it: open \"$APP_DEST\""
-echo "  It uses its own bundled PostgreSQL 18 runtime."
+echo "  It uses its own SQLite database in its own data folder."
 echo "  Your real Vision database and attachments are untouched."

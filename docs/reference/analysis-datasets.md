@@ -2,7 +2,7 @@
 title: Analysis Datasets
 type: reference
 status: active
-date: 2026-10-19
+date: 2026-11-03
 tags: [analysis, datasets, reconciliation, money, portfolio, security]
 description: Versioned analysis datasets, including ordered category paths, financial meanings, joins, and reconciliation rules.
 aliases: [financial datasets, vision_analysis]
@@ -15,9 +15,12 @@ related_code:
 
 # Analysis Datasets
 
-The authoritative machine-readable catalog is `@vision/types/analysis-datasets`. The PostgreSQL
-relations live in `vision_analysis`. They are not automatically available to application or public
-roles; the isolated executor receives explicit read-only grants.
+The authoritative machine-readable catalog is `@vision/types/analysis-datasets`. Since
+[[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] the SQLite baseline migration defines each
+relation as a view named `vision_analysis_<view>`, because SQLite has no schemas. Manual analysis
+SQL does not read these views directly. The executor copies the rows of the approved views into an
+in-memory sandbox database, where they keep the names below, such as
+`vision_analysis.transactions_v1`.
 
 | Dataset          | Relation                            | Row grain                | Default meaning                                                                            | Known coverage                                                                       |
 | ---------------- | ----------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
@@ -69,8 +72,8 @@ estimate.
 
 ## Security boundary
 
-Migration 0107 revokes access from `PUBLIC`, and migration 0114 does the same for the two v2 views.
-The executor grants only approved versioned views. They exclude provider keys, admin audit data, raw CSV,
+SQLite has no roles or grants. The executor copies rows only from approved versioned views into
+the sandbox, and the sandbox database holds nothing else. The approved views exclude provider keys, admin audit data, raw CSV,
 deduplication hashes, application settings, and AI conversations. The dataset scope is
 `local-user-database`. This describes one single-user Vision database; it is not proof that a future
 multi-user deployment has row-level authorization. Broader read-only schema access is a separate

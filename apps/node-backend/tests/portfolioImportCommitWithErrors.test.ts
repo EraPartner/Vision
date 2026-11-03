@@ -5,12 +5,25 @@ import { mockConnection } from "./helpers/repoMocks.ts";
 
 vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
-vi.mock("../src/database/connection.ts", () =>
-  mockConnection({
-    query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
-    withTransaction: vi.fn(),
-  }),
-);
+// Repository writes that were one PostgreSQL statement now run as a short
+// sequence inside withTransaction(); the fake runs the callback in place and
+// reports an ambient transaction while it runs.
+vi.mock("../src/database/connection.ts", () => {
+  let inTransaction = false;
+  const query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 });
+  return mockConnection({
+    query,
+    withTransaction: vi.fn(async (fn: (client: unknown) => Promise<unknown>) => {
+      inTransaction = true;
+      try {
+        return await fn({ query });
+      } finally {
+        inTransaction = false;
+      }
+    }),
+    __getAmbientTransactionClient: vi.fn(() => (inTransaction ? { query } : null)),
+  });
+});
 
 vi.mock("../src/services/portfolioImportPipeline/commit.ts", () => ({
   commitBatch: vi.fn(),
@@ -68,9 +81,10 @@ describe("commitPortfolioImport — status reflects remaining error rows", () =>
 
 describe("overrideInvestment — repair path for errored rows", () => {
   it("resets an error row to matched and decrements rows_error", async () => {
-    // Main CTE update reports the row was previously in 'error'.
+    // The guarded read reports the row was previously in 'error'.
     query
       .mockResolvedValueOnce({ rows: [{ old_status: "error" }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
       .mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
     const rowCount = await overrideInvestment({
@@ -80,17 +94,25 @@ describe("overrideInvestment — repair path for errored rows", () => {
     });
 
     expect(rowCount).toBe(1);
-    const updateSql = must(query.mock.calls[0], "query.mock.calls[0]")[0];
-    expect(updateSql).toContain(
+    const [guardSql, guardParams] = must(query.mock.calls[0], "query.mock.calls[0]");
+    expect(guardSql).toContain(
       "error_message = 'unresolved instrument — pick or create a holding'",
     );
-    expect(updateSql).toMatch(/'matched'/);
-    // Second call decrements the batch counter (never below zero).
-    const decrement = must(query.mock.calls[1], "query.mock.calls[1]");
+    expect(guardSql).toMatch(/status = 'matched'/);
+    expect(guardParams).toEqual([5, 2]);
+    // The row update re-points it and resets the error in the same write.
+    const [updateSql, updateParams] = must(query.mock.calls[1], "query.mock.calls[1]");
+    expect(updateSql).toMatch(
+      /update "portfolio_import_staging_rows" set "user_override_investment_id" = \?, "status" = \?, "error_message" = \?/,
+    );
+    expect(updateParams).toEqual([88, "matched", null, "5", "2"]);
+    // Third call decrements the batch counter (never below zero).
+    const decrement = must(query.mock.calls[2], "query.mock.calls[2]");
     expect(decrement[0]).toMatch(
-      /"?rows_error"? = GREATEST\(COALESCE\(rows_error, 0\) - 1, 0\)/,
+      /"?rows_error"? = max\(COALESCE\(rows_error, 0\) - 1, 0\)/,
     );
     expect(decrement[1]).toEqual(["5"]);
+    expect(query).toHaveBeenCalledTimes(3);
   });
 
   it("does not decrement when the row was already matched (plain re-point)", async () => {
@@ -101,7 +123,9 @@ describe("overrideInvestment — repair path for errored rows", () => {
 
     await overrideInvestment({ batchId: 5, rowId: 2, investmentId: 88 });
 
-    expect(query).toHaveBeenCalledTimes(1); // no counter update
+    // The guarded read and the re-point; no counter update.
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(must(query.mock.calls[1], "query.mock.calls[1]")[1]).toEqual([88, "5", "2"]);
   });
 
   it("does not decrement when clearing the override (investmentId null)", async () => {
@@ -112,7 +136,9 @@ describe("overrideInvestment — repair path for errored rows", () => {
 
     await overrideInvestment({ batchId: 5, rowId: 2, investmentId: null });
 
-    expect(query).toHaveBeenCalledTimes(1);
+    // The error row keeps its status: only the override is cleared.
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(must(query.mock.calls[1], "query.mock.calls[1]")[1]).toEqual([null, "5", "2"]);
   });
 
   it("returns 0 when the row is not in a reviewable status", async () => {
@@ -133,38 +159,56 @@ describe("cash-row review guards and repair", () => {
 
     await overrideInvestment({ batchId: 5, rowId: 2, investmentId: 88 });
 
-    expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toMatch(/route IS DISTINCT FROM 'cash'/);
+    // `IS NOT` is SQLite's IS DISTINCT FROM: a NULL route stays eligible.
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toMatch(/route IS NOT 'cash'/);
   });
 
   it("repairs only the missing-account cash error when setting an account", async () => {
+    // Two cash rows carried the missing-account error.
+    query.mockResolvedValueOnce({ rows: [], rowCount: 2 });
+
     await setBatchAccount(5, 77);
 
     const [sql, params] = must(query.mock.calls[0], "query.mock.calls[0]");
-    expect(sql).toContain("route = 'cash'");
-    expect(sql).toContain(
-      "error_message = 'brokerage cash row requires a batch account'",
+    expect(sql).toMatch(
+      /update "portfolio_import_staging_rows" set "status" = \?, "error_message" = \?/,
     );
-    expect(sql).toMatch(/SET status = 'matched', error_message = NULL/);
-    expect(sql).toMatch(/rows_error = GREATEST/);
-    expect(params).toEqual([5, 77, 77, 5]);
+    expect(sql).toMatch(/"route" = \?/);
+    expect(sql).toMatch(/"error_message" = \?/);
+    expect(params).toEqual([
+      "matched",
+      null,
+      "5",
+      "cash",
+      "error",
+      "brokerage cash row requires a batch account",
+    ]);
+    const [batchSql, batchParams] = must(query.mock.calls[1], "query.mock.calls[1]");
+    expect(batchSql).toMatch(/"rows_error" = max\(COALESCE\(rows_error, 0\) - \?, 0\)/);
+    // [account, repaired rows, batch id].
+    expect(batchParams).toEqual([77, 2, "5"]);
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it("repairs no cash row when clearing the account", async () => {
+    await setBatchAccount(5, null);
+
+    expect(query).toHaveBeenCalledTimes(1);
+    const [batchSql, batchParams] = must(query.mock.calls[0], "query.mock.calls[0]");
+    expect(batchSql).toMatch(/update "portfolio_import_batches"/);
+    expect(batchParams).toEqual([null, 0, "5"]);
   });
 
   it("keeps bulk investment overrides away from cash rows", async () => {
     query.mockResolvedValueOnce({
-      rows: [
-        {
-          requested_count: 1,
-          eligible_count: 0,
-          updated_count: 0,
-          reset_error_count: 0,
-        },
-      ],
+      rows: [{ eligible_count: 0, error_count: 0 }],
       rowCount: 1,
     });
 
     await overrideInvestments({ batchId: 5, rowIds: [2], investmentId: 88 });
 
-    expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toMatch(/route IS DISTINCT FROM 'cash'/);
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toMatch(/route IS NOT 'cash'/);
+    expect(query).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -172,16 +216,10 @@ describe("overrideInvestments — atomic row-set guard", () => {
   it("updates the complete eligible set in one statement and repairs error counters once", async () => {
     query
       .mockResolvedValueOnce({
-        rows: [
-          {
-            requested_count: 3,
-            eligible_count: 3,
-            updated_count: 3,
-            reset_error_count: 2,
-          },
-        ],
+        rows: [{ eligible_count: 3, error_count: 2 }],
         rowCount: 1,
       })
+      .mockResolvedValueOnce({ rows: [], rowCount: 3 })
       .mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
     const result = await overrideInvestments({
@@ -197,27 +235,51 @@ describe("overrideInvestments — atomic row-set guard", () => {
       resetErrorCount: 2,
     });
     const [sql, params] = must(query.mock.calls[0], "query.mock.calls[0]");
-    expect(sql).toMatch(/counts\.requested_count = counts\.eligible_count/);
     expect(sql).toContain(
       "error_message = 'unresolved instrument — pick or create a holding'",
     );
-    expect(sql).toMatch(/ORDER BY r\.id\s+FOR UPDATE OF r/);
-    expect(sql).toMatch(/FOR UPDATE OF r/);
-    expect(params).toEqual([[10, 11, 12], 5, 88]);
+    expect(sql).toMatch(/id IN \(SELECT value FROM json_each\(\?\)\)/);
+    expect(params).toEqual([5, "[10,11,12]"]);
+    // One update over the same guarded row set.
+    const [updateSql, updateParams] = must(query.mock.calls[1], "query.mock.calls[1]");
+    expect(updateSql).toMatch(/update "portfolio_import_staging_rows"/);
+    expect(updateSql).toContain(
+      "error_message = 'unresolved instrument — pick or create a holding'",
+    );
+    expect(updateSql).toMatch(/CASE WHEN status = 'error' THEN 'matched' ELSE status END/);
+    expect(updateParams).toEqual([88, 5, "[10,11,12]"]);
     // [reset error count, batch id].
-    expect(must(query.mock.calls[1], "query.mock.calls[1]")[1]).toEqual([2, "5"]);
+    expect(must(query.mock.calls[2], "query.mock.calls[2]")[1]).toEqual([2, "5"]);
+    expect(query).toHaveBeenCalledTimes(3);
+  });
+
+  it("counts a repeated requested id once", async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [{ eligible_count: 2, error_count: 0 }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 2 });
+
+    const result = await overrideInvestments({
+      batchId: 5,
+      rowIds: [10, 11, 10],
+      investmentId: 88,
+    });
+
+    expect(result).toEqual({
+      requestedCount: 2,
+      eligibleCount: 2,
+      updatedCount: 2,
+      resetErrorCount: 0,
+    });
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([5, "[10,11]"]);
+    expect(query).toHaveBeenCalledTimes(2);
   });
 
   it("performs no update and no counter write when one requested row is ineligible", async () => {
     query.mockResolvedValueOnce({
-      rows: [
-        {
-          requested_count: 3,
-          eligible_count: 2,
-          updated_count: 0,
-          reset_error_count: 0,
-        },
-      ],
+      rows: [{ eligible_count: 2, error_count: 1 }],
       rowCount: 1,
     });
 
@@ -229,12 +291,17 @@ describe("overrideInvestments — atomic row-set guard", () => {
 
     expect(result.updatedCount).toBe(0);
     expect(result.eligibleCount).toBe(2);
+    expect(result.resetErrorCount).toBe(0);
     expect(query).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("lockInvestmentResolutionRows — batch-first serialization", () => {
-  it("locks the batch before locking the complete ordered row set", async () => {
+  // PostgreSQL took FOR UPDATE on the batch and then on the rows. Under SQLite
+  // the caller's withTransaction() (BEGIN IMMEDIATE on the single writer)
+  // provides that exclusion, and SQLite has no FOR UPDATE clause; the order
+  // of the reads is what remains to check here.
+  it("reads the batch before the complete ordered row set", async () => {
     query
       .mockResolvedValueOnce({
         rows: [
@@ -275,14 +342,17 @@ describe("lockInvestmentResolutionRows — batch-first serialization", () => {
     });
 
     expect(result.batchStatus).toBe("awaiting_review");
-    expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toMatch(
-      /portfolio_import_batches[\s\S]*FOR UPDATE/i,
-    );
-    expect(must(query.mock.calls[1], "query.mock.calls[1]")[0]).toMatch(/ORDER BY "?id"?\s+FOR UPDATE/i);
-    expect(must(query.mock.calls[1], "query.mock.calls[1]")[1]).toEqual(["5", [11, 10]]);
+    expect(result.rows.map((row) => row.id)).toEqual(["10", "11"]);
+    const [batchSql] = must(query.mock.calls[0], "query.mock.calls[0]");
+    expect(batchSql).toMatch(/from "portfolio_import_batches"/i);
+    expect(batchSql).not.toMatch(/for update/i);
+    const [rowsSql, rowsParams] = must(query.mock.calls[1], "query.mock.calls[1]");
+    expect(rowsSql).toMatch(/from "portfolio_import_staging_rows"[\s\S]*order by "id"$/i);
+    expect(rowsSql).not.toMatch(/for update/i);
+    expect(rowsParams).toEqual(["5", "[11,10]"]);
   });
 
-  it("does not try to lock rows when the batch does not exist", async () => {
+  it("does not read rows when the batch does not exist", async () => {
     query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
     await expect(

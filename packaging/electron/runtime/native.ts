@@ -6,32 +6,42 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
-import os from "node:os";
 import path from "node:path";
 import { execFile, spawn, type SpawnOptions } from "node:child_process";
 import {
-  DATABASE_STATS_SQL,
-  parseDatabaseStats,
-  type DatabaseStats,
+  readDatabaseFileStats,
+  type DatabaseFileStats,
 } from "./database-stats";
-import { psqlRestoreGuardArgs } from "./psql-restore-guard";
 
-export const POSTGRES_MAJOR = 18;
-export const POSTGRES_MINOR = 6;
-export const DEFAULT_POSTGRES_PORT = 54329;
 /** Records the last full payload verification, below the runtime's nativeRoot. */
 export const RUNTIME_VERIFICATION_MARKER = "runtime-verification.json";
 const DEFAULT_APP_PORT = 3002;
 export const LOOPBACK_HOST = "127.0.0.1";
-export const RUNTIME_MANAGED_MATERIALIZED_VIEWS = Object.freeze([
-  "mv_monthly_summary",
-  "mv_category_totals",
-]);
-export const REQUIRED_POSTGRES_EXTENSIONS = Object.freeze([
-  "pg_trgm",
-  "pgcrypto",
-  "pg_stat_statements",
-]);
+
+/**
+ * The SQLite database lives in `<userData>/database/vision.sqlite3` (ADR-263).
+ * The whole directory is one generation: the database file, its `-wal` and
+ * `-shm` sidecars and the backend's `pre-migration-backups/` move together
+ * when a restore swaps generations, so a write-ahead log never ends up beside
+ * the wrong database.
+ */
+export const DATABASE_DIRECTORY_NAME = "database";
+export const DATABASE_FILE_NAME = "vision.sqlite3";
+/** Previous database generations kept after a committed restore. */
+export const PREVIOUS_DATABASE_GENERATIONS_KEPT = 3;
+/** The packaged database tool, run by the backend executable as Bun (BUN_BE_BUN=1). */
+export const PACKAGED_DATABASE_TOOL = "tools/db-file.js";
+/**
+ * The packaged analysis SQL sandbox, beside the database tool. The backend
+ * executable starts it as Bun for each custom statement (ADR-263);
+ * apps/node-backend/src/services/analysisExecutor.ts names the same path.
+ */
+export const PACKAGED_ANALYSIS_SANDBOX = "tools/analysis-sandbox.js";
+/** The same tool from a source checkout, run with the developer's Bun. */
+export const SOURCE_DATABASE_TOOL = "apps/node-backend/scripts/db-file.ts";
+/** The script that converts Vision 2.0 (PostgreSQL) backups to SQLite. */
+export const TRANSITION_COMMAND = "bun run transition:v2 -- <backup file>";
+
 export const NATIVE_APPLICATION_ENV_KEYS = Object.freeze([
   "TWELVE_DATA_API_KEY",
   "FINNHUB_API_KEY",
@@ -109,6 +119,8 @@ export interface NativeRuntimeError extends Error {
   code?: string | number | null | undefined;
   exitCode?: string | number | null | undefined;
   recoveryErrors?: unknown[];
+  /** Output of a failed child process, kept so a tool's JSON error survives. */
+  stdout?: string | undefined;
 }
 
 type UnknownRecord = Readonly<Record<string, unknown>>;
@@ -138,6 +150,16 @@ function errorCode(error: unknown): unknown {
   return fieldsOf(error).code;
 }
 
+function codedError(
+  message: string,
+  code: string,
+  options?: { cause?: unknown },
+): NativeRuntimeError {
+  const error: NativeRuntimeError = new Error(message, options);
+  error.code = code;
+  return error;
+}
+
 function executableExists(candidate: unknown): boolean {
   if (!candidate || typeof candidate !== "string") return false;
   try {
@@ -159,12 +181,8 @@ export function safeChildEnv(
   for (const [key, value] of Object.entries(overrides)) {
     if (value !== undefined) env[key] = String(value);
   }
-  const inheritedPath = (process.env.PATH ?? "")
-    .split(path.delimiter)
-    .filter((entry) => !/\/(?:opt\/)?postgresql@18\/bin\/?$/.test(entry))
-    .join(path.delimiter);
   env.PATH = [
-    inheritedPath,
+    process.env.PATH ?? "",
     "/opt/homebrew/bin",
     "/usr/local/bin",
     "/usr/bin",
@@ -173,14 +191,6 @@ export function safeChildEnv(
     .filter(Boolean)
     .join(":");
   return env;
-}
-
-export function managedPostgresChildEnv(): ChildEnv {
-  return safeChildEnv({
-    LANG: "C",
-    LC_ALL: "C",
-    LC_CTYPE: "C",
-  });
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -192,41 +202,6 @@ export function validateArgs(args: unknown): string[] {
     throw new TypeError("Process arguments must be a string array");
   }
   return args;
-}
-
-/**
- * Memory-related settings for the private desktop cluster. PostgreSQL's
- * defaults size shared memory and background processes for a server; Vision
- * runs one user with at most about 20 connections: the main pool
- * (max(DB_POOL_SIZE, DB_MAX_OVERFLOW), default 10), the analysis pools (3),
- * migrations (1), role bootstrap and admin psql (1-2), pg_dump/pg_restore
- * (1), with room for a backend restart overlapping the old one. Every value
- * is a runtime setting: the data directory format is unchanged and removing a
- * line restores the default.
- */
-export const MANAGED_POSTGRES_TUNING: readonly string[] = [
-  // Default 100. Sizes the per-connection slots and lock table in shared memory.
-  "max_connections = 40",
-  // PostgreSQL 18 starts 3 I/O worker processes; one serves a single user.
-  "io_workers = 1",
-  // Default 5000 tracked statements; nothing in the app reads them.
-  "pg_stat_statements.max = 1000",
-];
-
-export function managedPostgresArgs(
-  dataDirectory: string,
-  postgresPort: number,
-): string[] {
-  return validateArgs([
-    "-D",
-    dataDirectory,
-    "-h",
-    LOOPBACK_HOST,
-    "-p",
-    String(postgresPort),
-    "-k",
-    "",
-  ]);
 }
 
 export function defaultRunFile(
@@ -255,6 +230,7 @@ export function defaultRunFile(
           );
           wrapped.code = error.code;
           wrapped.exitCode = error.code;
+          wrapped.stdout = stdout || "";
           reject(wrapped);
           return;
         }
@@ -264,252 +240,6 @@ export function defaultRunFile(
   });
 }
 
-export function parsePostgresMajor(
-  output: string | undefined,
-): number | undefined {
-  const match =
-    /PostgreSQL\)\s+(\d+)(?:\.\d+)?|PostgreSQL\s+(\d+)(?:\.\d+)?/i.exec(
-      output ?? "",
-    );
-  return match ? Number(match[1] || match[2]) : undefined;
-}
-
-export function parsePostgresVersionNumber(
-  output: string | undefined,
-): number | undefined {
-  const match =
-    /PostgreSQL\)\s+(\d+)(?:\.(\d+))?|PostgreSQL\s+(\d+)(?:\.(\d+))?/i.exec(
-      output ?? "",
-    );
-  if (!match) return undefined;
-  const major = Number(match[1] || match[3]);
-  const minor = Number(match[2] || match[4] || 0);
-  if (!Number.isInteger(major) || !Number.isInteger(minor)) return undefined;
-  return major * 10_000 + minor;
-}
-
-/**
- * A backup is restorable only when it carries the Kysely migration ledger
- * (`public.kysely_migration`). Older backups predate the squashed TypeScript
- * baseline and are refused by this code.
- */
-export const PRE_BASELINE_BACKUP_CODE = "BACKUP_PRE_BASELINE";
-export const PRE_BASELINE_BACKUP_MESSAGE =
-  "This backup was taken before Vision switched to the TypeScript migration baseline. Only backups taken after that switch can be restored.";
-
-export function preBaselineBackupError(): NativeRuntimeError {
-  const error: NativeRuntimeError = new Error(
-    `${PRE_BASELINE_BACKUP_CODE}: ${PRE_BASELINE_BACKUP_MESSAGE}`,
-  );
-  error.code = PRE_BASELINE_BACKUP_CODE;
-  return error;
-}
-
-// The schema version is the highest applied Kysely migration name. Names are
-// zero-padded `NNNN_name`, so text ordering is migration order. The first
-// query reports whether the ledger exists so a missing table is not an error.
-const SCHEMA_LEDGER_SQL =
-  "SELECT to_regclass('public.kysely_migration') IS NOT NULL;";
-const SCHEMA_HEAD_SQL = "SELECT max(name) FROM public.kysely_migration;";
-const APPLIED_MIGRATIONS_SQL =
-  "SELECT name FROM public.kysely_migration ORDER BY name;";
-
-/**
- * Highest `NNNN_name` migration in a `db/migrations` directory (rollback
- * files excluded), or "" when the directory is absent or holds none. The
- * backend applies exactly this chain at boot (`VISION_RUNTIME_ROOT/db/migrations`).
- */
-export function migrationChainHead(migrationsDir: string): string {
-  let names: string[];
-  try {
-    names = fs.readdirSync(migrationsDir);
-  } catch (error) {
-    if (errorCode(error) === "ENOENT") return "";
-    throw error;
-  }
-  return (
-    names
-      .filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name))
-      .filter((name) => !name.endsWith(".down.sql"))
-      .map((name) => name.slice(0, -".sql".length))
-      .sort()
-      .at(-1) ?? ""
-  );
-}
-
-/** Migrations the packaged backend will apply to an existing database at boot. */
-export interface PendingMigrations {
-  /** Highest migration recorded in the database's ledger. */
-  appliedHead: string;
-  /** Highest migration shipped with this install. */
-  packagedHead: string;
-}
-
-export interface NativeStartOptions {
-  /**
-   * Runs after PostgreSQL is ready and before the backend (which migrates at
-   * boot) is spawned, only when an existing database is behind the packaged
-   * migration chain. A rejection aborts the start: no backend is spawned, so
-   * no migration runs without the backup the hook was meant to take.
-   */
-  beforeMigrations?: ((pending: PendingMigrations) => Promise<void>) | undefined;
-}
-
-export function assertPostgres18Version(label: string, output: string): number {
-  const major = parsePostgresMajor(output);
-  if (major !== POSTGRES_MAJOR) {
-    const error: NativeRuntimeError = new Error(
-      `${label} must be PostgreSQL ${POSTGRES_MAJOR}; found major ${major ?? "unknown"}`,
-    );
-    error.code = "POSTGRES_WRONG_VERSION";
-    throw error;
-  }
-  return major;
-}
-
-export function bundledPostgresBin(
-  runtimeRoot: string | undefined,
-): string | undefined {
-  if (!runtimeRoot) return undefined;
-  const postgresRoot = path.join(path.resolve(runtimeRoot), "postgres");
-  const metadataPath = path.join(postgresRoot, "runtime.json");
-  let metadata: unknown;
-  try {
-    metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
-  } catch (error) {
-    if (errorCode(error) === "ENOENT") return undefined;
-    const wrapped: NativeRuntimeError = new Error(
-      "Packaged PostgreSQL metadata is invalid",
-    );
-    wrapped.code = "POSTGRES_RUNTIME_CORRUPT";
-    throw wrapped;
-  }
-  if (
-    !isRecord(metadata) ||
-    metadata.version !== 1 ||
-    metadata.postgresMajor !== POSTGRES_MAJOR ||
-    metadata.postgresVersion !== `${POSTGRES_MAJOR}.${POSTGRES_MINOR}` ||
-    metadata.platform !== process.platform ||
-    metadata.architecture !== process.arch ||
-    typeof metadata.binRelative !== "string" ||
-    path.isAbsolute(metadata.binRelative) ||
-    metadata.binRelative.split(/[\\/]/).includes("..")
-  ) {
-    const error: NativeRuntimeError = new Error(
-      "Packaged PostgreSQL metadata does not match this Vision build",
-    );
-    error.code = "POSTGRES_RUNTIME_MISMATCH";
-    throw error;
-  }
-  const binDir = path.resolve(
-    postgresRoot,
-    "root",
-    ...metadata.binRelative.split("/"),
-  );
-  const expectedRoot = `${path.resolve(postgresRoot, "root")}${path.sep}`;
-  if (!binDir.startsWith(expectedRoot)) {
-    const error: NativeRuntimeError = new Error(
-      "Packaged PostgreSQL binary path is unsafe",
-    );
-    error.code = "POSTGRES_RUNTIME_CORRUPT";
-    throw error;
-  }
-  return binDir;
-}
-
-function postgresBinCandidates(
-  explicitBinDir: string | undefined,
-  runtimeRoot: string | undefined,
-  allowExternalPostgres = false,
-): string[] {
-  if (explicitBinDir) return [explicitBinDir];
-  if (process.env.VISION_POSTGRES_BIN) return [process.env.VISION_POSTGRES_BIN];
-  const candidates = [bundledPostgresBin(runtimeRoot)].filter(
-    (candidate): candidate is string => Boolean(candidate),
-  );
-  if (allowExternalPostgres) {
-    candidates.push(
-      "/Applications/Postgres.app/Contents/Versions/18/bin",
-      "/opt/homebrew/opt/postgresql@18/bin",
-      "/usr/local/opt/postgresql@18/bin",
-    );
-  }
-  return candidates;
-}
-
-export interface DiscoverPostgresOptions {
-  binDir?: string | undefined;
-  runtimeRoot?: string | undefined;
-  allowExternalPostgres?: boolean;
-  runFile?: RunFile;
-}
-
-export interface DiscoveredPostgres {
-  binDir: string;
-  versions: Record<string, string>;
-  versionNumbers: Record<string, number | undefined>;
-  managed: boolean;
-}
-
-export async function discoverPostgres18({
-  binDir,
-  runtimeRoot,
-  allowExternalPostgres = false,
-  runFile = defaultRunFile,
-}: DiscoverPostgresOptions = {}): Promise<DiscoveredPostgres> {
-  const required = [
-    "postgres",
-    "initdb",
-    "pg_ctl",
-    "psql",
-    "pg_dump",
-    "pg_restore",
-    "pg_isready",
-    "createdb",
-    "dropdb",
-  ];
-  const attempts: string[] = [];
-  const bundledCandidate = bundledPostgresBin(runtimeRoot);
-  for (const candidate of postgresBinCandidates(
-    binDir,
-    runtimeRoot,
-    allowExternalPostgres,
-  )) {
-    const resolved = path.resolve(candidate);
-    if (attempts.includes(resolved)) continue;
-    attempts.push(resolved);
-    if (!required.every((name) => executableExists(path.join(resolved, name))))
-      continue;
-
-    const versions: Record<string, string> = {};
-    const versionNumbers: Record<string, number | undefined> = {};
-    for (const name of ["postgres", "psql", "pg_dump", "pg_restore"]) {
-      const executable = path.join(resolved, name);
-      const { stdout, stderr } = await runFile(executable, ["--version"], {
-        timeout: 10_000,
-      });
-      const output = `${stdout}\n${stderr}`;
-      assertPostgres18Version(name, output);
-      versions[name] = output.trim();
-      versionNumbers[name] = parsePostgresVersionNumber(output);
-    }
-    return {
-      binDir: resolved,
-      versions,
-      versionNumbers,
-      managed:
-        bundledCandidate !== undefined &&
-        resolved === path.resolve(bundledCandidate),
-    };
-  }
-
-  const error: NativeRuntimeError = new Error(
-    "Vision's packaged PostgreSQL 18.6 runtime was not found. Reinstall Vision or prepare the native runtime before starting.",
-  );
-  error.code = "POSTGRES_NOT_FOUND";
-  throw error;
-}
-
 function normalizeRuntimeId(value: string | undefined): string {
   const normalized = (value || "vision").toLowerCase()
     .replace(/[^a-z0-9_]/g, "_");
@@ -517,41 +247,6 @@ function normalizeRuntimeId(value: string | undefined): string {
     throw new Error(`Invalid native runtime id: ${value}`);
   }
   return normalized;
-}
-
-export interface RuntimeNames {
-  id: string;
-  database: string;
-  adminRole: string;
-  ownerRole: string;
-  appRole: string;
-}
-
-export function runtimeNames(runtimeId: string | undefined): RuntimeNames {
-  const id = normalizeRuntimeId(runtimeId);
-  return {
-    id,
-    database: id,
-    adminRole: `${id}_admin`,
-    ownerRole: `${id}_owner`,
-    appRole: `${id}_app`,
-  };
-}
-
-function validateIdentifier(value: unknown, label: string): string {
-  const identifier = typeof value === "string" ? value : "";
-  if (!/^[a-z][a-z0-9_]{0,62}$/.test(identifier)) {
-    throw new Error(`Invalid ${label}`);
-  }
-  return identifier;
-}
-
-function validateNetworkPort(value: unknown, label = "network port"): number {
-  const port = Number(value);
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-    throw new Error(`Invalid ${label}`);
-  }
-  return port;
 }
 
 export type DatabaseSwitchState =
@@ -573,33 +268,6 @@ export function classifyDatabaseSwitchState({
   return "unsafe";
 }
 
-function quoteIdentifier(value: string): string {
-  validateIdentifier(value, "PostgreSQL identifier");
-  return `"${value}"`;
-}
-
-export function materializedViewOwnershipSql(appRole: string): string {
-  const owner = quoteIdentifier(appRole);
-  return RUNTIME_MANAGED_MATERIALIZED_VIEWS.map(
-    (view) =>
-      `ALTER MATERIALIZED VIEW IF EXISTS ${quoteIdentifier("public")}.${quoteIdentifier(view)} OWNER TO ${owner};`,
-  ).join("\n");
-}
-
-function requireHexSecret(value: string | undefined): string {
-  const secret = value ?? "";
-  if (!/^[0-9a-f]{64}$/.test(secret)) {
-    throw new Error(
-      "Native database credentials must be 64 lowercase hexadecimal characters",
-    );
-  }
-  return secret;
-}
-
-function quoteHexSecret(value: string | undefined): string {
-  return `'${requireHexSecret(value)}'`;
-}
-
 export function parseEnvFile(
   contents: string | undefined,
 ): Record<string, string> {
@@ -616,119 +284,31 @@ export function parseEnvFile(
   return result;
 }
 
-export interface NativeDatabaseConfig {
-  database: string;
-  adminRole: string;
-  adminPassword: string;
-  appRole: string;
-  appPassword: string;
-  ownerRole: string;
-  ownerPassword: string;
-  host: string;
-  port: number;
-  env: Record<string, string>;
-  analysisPassword: string;
-}
-
-export function databaseConfigFromEnv(
-  contents: string | undefined,
-): NativeDatabaseConfig {
-  const env = parseEnvFile(contents);
-  // String() keeps the URL parser's "Invalid URL" failure for a missing key.
-  const appUrl = new URL(String(env.DATABASE_URL));
-  const ownerUrl = new URL(String(env.DATABASE_URL_MIGRATIONS));
-  const database = decodeURIComponent(appUrl.pathname.replace(/^\//, ""));
-  const ownerDatabase = decodeURIComponent(
-    ownerUrl.pathname.replace(/^\//, ""),
-  );
-  const config = {
-    database: validateIdentifier(database, "database name"),
-    adminRole: validateIdentifier(
-      env.VISION_POSTGRES_ADMIN_ROLE,
-      "cluster administrator role",
-    ),
-    adminPassword: env.VISION_POSTGRES_ADMIN_PASSWORD,
-    appRole: validateIdentifier(
-      decodeURIComponent(appUrl.username),
-      "application role",
-    ),
-    appPassword: decodeURIComponent(appUrl.password),
-    ownerRole: validateIdentifier(
-      decodeURIComponent(ownerUrl.username),
-      "owner role",
-    ),
-    ownerPassword: decodeURIComponent(ownerUrl.password),
-    host: appUrl.hostname,
-    port: validateNetworkPort(
-      appUrl.port || DEFAULT_POSTGRES_PORT,
-      "native PostgreSQL port",
-    ),
-    env,
-  };
-  if (ownerDatabase !== config.database)
-    throw new Error("Native database URLs target different databases");
-  if (config.host !== LOOPBACK_HOST || ownerUrl.hostname !== LOOPBACK_HOST) {
-    throw new Error("Native PostgreSQL URLs must use 127.0.0.1");
-  }
-  if (
-    validateNetworkPort(
-      ownerUrl.port || DEFAULT_POSTGRES_PORT,
-      "migration PostgreSQL port",
-    ) !== config.port
-  ) {
-    throw new Error("Native database URLs target different PostgreSQL ports");
-  }
-  const analysisUrl = new URL(
-    String(env.DATABASE_URL_ANALYSIS || env.DATABASE_URL),
-  );
-  if (!env.DATABASE_URL_ANALYSIS)
-    analysisUrl.username = "vision_analysis_executor";
-  if (
-    decodeURIComponent(analysisUrl.username) !== "vision_analysis_executor" ||
-    analysisUrl.hostname !== config.host ||
-    Number(analysisUrl.port || 5432) !== config.port ||
-    decodeURIComponent(analysisUrl.pathname.slice(1)) !== config.database ||
-    !analysisUrl.password
-  ) {
-    throw new Error(
-      "Native analysis URL must use the fixed executor on the native database",
-    );
-  }
-  const analysisPassword = decodeURIComponent(analysisUrl.password);
-  quoteHexSecret(config.appPassword);
-  quoteHexSecret(config.ownerPassword);
-  const adminPassword = requireHexSecret(config.adminPassword);
-  if (new Set([config.adminRole, config.ownerRole, config.appRole]).size !== 3)
-    throw new Error("Native PostgreSQL roles must be distinct");
-  return { ...config, adminPassword, analysisPassword };
-}
-
-export function nativeEnvContents(
-  names: Pick<RuntimeNames, "adminRole" | "appRole" | "ownerRole" | "database">,
-  { postgresPort = DEFAULT_POSTGRES_PORT }: { postgresPort?: number } = {},
-): string {
-  const appPassword = crypto.randomBytes(32).toString("hex");
-  const ownerPassword = crypto.randomBytes(32).toString("hex");
-  const adminPassword = crypto.randomBytes(32).toString("hex");
-  return [
-    "# Auto-generated by Vision native runtime. Do not commit or share this file.",
-    `VISION_POSTGRES_ADMIN_ROLE=${names.adminRole}`,
-    `VISION_POSTGRES_ADMIN_PASSWORD=${adminPassword}`,
-    `DATABASE_URL=postgresql://${names.appRole}:${appPassword}@${LOOPBACK_HOST}:${postgresPort}/${names.database}`,
-    `DATABASE_URL_MIGRATIONS=postgresql://${names.ownerRole}:${ownerPassword}@${LOOPBACK_HOST}:${postgresPort}/${names.database}`,
-    "",
-  ].join("\n");
-}
+const NATIVE_ENV_HEADER =
+  "# Auto-generated by Vision native runtime. Do not commit or share this file.\n";
 
 /**
  * Secrets of removed features (cloud AI and AI reference mapping). Older
  * runtime env files may still hold them; they are stripped from the file on
- * the next layout check and never passed to a backend or migration child.
+ * the next layout check and never passed to a backend or tool child.
  */
 export const RETIRED_NATIVE_ENV_KEYS: ReadonlySet<string> = new Set([
   "OPENAI_API_KEY",
   "OPENAI_API_ENABLED",
   "AI_REFERENCE_MAPPING_KEY",
+]);
+
+/**
+ * Credentials of Vision 2.0's private PostgreSQL cluster. They stay in the
+ * file, so Vision 2.0 can still open its untouched data directory, but no
+ * child process receives them.
+ */
+export const LEGACY_POSTGRES_ENV_KEYS: ReadonlySet<string> = new Set([
+  "DATABASE_URL",
+  "DATABASE_URL_MIGRATIONS",
+  "DATABASE_URL_ANALYSIS",
+  "VISION_POSTGRES_ADMIN_ROLE",
+  "VISION_POSTGRES_ADMIN_PASSWORD",
 ]);
 
 /** Removes every line that assigns a retired key; other lines stay byte-identical. */
@@ -745,20 +325,11 @@ function withoutRetiredEnv(
   env: Readonly<Record<string, string | undefined>>,
 ): Record<string, string | undefined> {
   return Object.fromEntries(
-    Object.entries(env).filter(([key]) => !RETIRED_NATIVE_ENV_KEYS.has(key)),
+    Object.entries(env).filter(
+      ([key]) =>
+        !RETIRED_NATIVE_ENV_KEYS.has(key) && !LEGACY_POSTGRES_ENV_KEYS.has(key),
+    ),
   );
-}
-
-export function ensureNativeAdminEnv(
-  contents: string,
-  names: Pick<RuntimeNames, "adminRole">,
-): string {
-  const env = parseEnvFile(contents);
-  if (env.VISION_POSTGRES_ADMIN_ROLE && env.VISION_POSTGRES_ADMIN_PASSWORD) {
-    return contents;
-  }
-  const base = contents.replace(/\n?$/, "\n");
-  return `${base}VISION_POSTGRES_ADMIN_ROLE=${names.adminRole}\nVISION_POSTGRES_ADMIN_PASSWORD=${crypto.randomBytes(32).toString("hex")}\n`;
 }
 
 export function validateApplicationEnv(
@@ -778,7 +349,7 @@ export function validateApplicationEnv(
 export interface NativeBackendEnvOptions {
   runtimeEnv: Readonly<Record<string, string | undefined>>;
   port: number;
-  paths: Pick<NativeRuntimePaths, "attachments" | "cache" | "env">;
+  paths: Pick<NativeRuntimePaths, "attachments" | "cache" | "env" | "database">;
   runtimeRoot?: string | undefined;
   repoRoot?: string | undefined;
   syntheticOffline?: boolean | undefined;
@@ -825,6 +396,7 @@ export function buildNativeBackendEnv({
     PORT: String(port),
     NODE_ENV: "production",
     ENVIRONMENT: "production",
+    VISION_DATABASE_PATH: paths.database,
     ATTACHMENTS_DIR: paths.attachments,
     VISION_RUNTIME_ROOT: resolvedRuntimeRoot,
     VISION_NATIVE_ENV_FILE: paths.env,
@@ -873,6 +445,37 @@ async function readJson(filePath: string): Promise<unknown> {
   }
 }
 
+/** lstat-based existence: a dangling symlink exists; only ENOENT is absence. */
+async function pathExists(file: string): Promise<boolean> {
+  try {
+    await fs.promises.lstat(file);
+    return true;
+  } catch (error) {
+    if (optionalFieldsOf(error)?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+/** Makes completed renames in a directory durable; best effort where unsupported. */
+async function syncDirectory(directory: string): Promise<void> {
+  let handle: fs.promises.FileHandle | undefined;
+  try {
+    handle = await fs.promises.open(directory, "r");
+    await handle.sync();
+  } catch {
+    // Some file systems refuse fsync on a directory; the rename still happened.
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+}
+
+export async function sha256File(filePath: string): Promise<string> {
+  const hash = crypto.createHash("sha256");
+  const stream: AsyncIterable<Buffer> = fs.createReadStream(filePath);
+  for await (const chunk of stream) hash.update(chunk);
+  return hash.digest("hex");
+}
+
 export function isPortFree(
   port: number,
   host = LOOPBACK_HOST,
@@ -919,7 +522,16 @@ function sleep(ms: number): Promise<void> {
  * The message of the backend's last "Failed to start application" log line,
  * so the shell can show why startup stopped instead of polling until timeout.
  */
-export function lastStartupError(log: string): string | undefined {
+/** Why the backend stopped during start-up, from its last failure log line. */
+export interface BackendStartupFailure {
+  message: string;
+  /** The error's code when it had one, for example PRE_MIGRATION_BACKUP_FAILED. */
+  code?: string;
+}
+
+export function lastStartupFailure(
+  log: string,
+): BackendStartupFailure | undefined {
   const line = log
     .split("\n")
     .reverse()
@@ -928,11 +540,19 @@ export function lastStartupError(log: string): string | undefined {
   if (!json?.startsWith("{")) return undefined;
   try {
     const parsed: unknown = JSON.parse(json);
-    const error = isRecord(parsed) ? parsed.error : undefined;
-    return typeof error === "string" && error ? error : undefined;
+    if (!isRecord(parsed)) return undefined;
+    const { error, code } = parsed;
+    if (typeof error !== "string" || !error) return undefined;
+    return typeof code === "string" && code
+      ? { message: error, code }
+      : { message: error };
   } catch {
     return undefined;
   }
+}
+
+export function lastStartupError(log: string): string | undefined {
+  return lastStartupFailure(log)?.message;
 }
 
 export function isDetailedHealthReady(result: unknown): boolean {
@@ -979,6 +599,139 @@ function resolveBun(
     "/opt/homebrew/bin/bun",
     "/usr/local/bin/bun",
   ]);
+}
+
+/** Highest `NNNN_name.sql` version in a migrations directory; 0 when there is none. */
+export function packagedMigrationVersion(migrationsDir: string): number {
+  let names: string[];
+  try {
+    names = fs.readdirSync(migrationsDir);
+  } catch (error) {
+    if (errorCode(error) === "ENOENT") return 0;
+    throw error;
+  }
+  let highest = 0;
+  for (const name of names) {
+    const match = /^(\d{4})_[a-z0-9_]+\.sql$/.exec(name);
+    if (!match?.[1] || name.endsWith(".down.sql")) continue;
+    highest = Math.max(highest, Number(match[1]));
+  }
+  return highest;
+}
+
+/** What `db-file.ts` prints for a database it checked or wrote. */
+export interface DatabaseFileReport {
+  file: string;
+  bytes: number;
+  sha256: string;
+  sqliteVersion: string;
+  /** Latest migration version recorded in the database's ledger. */
+  schemaVersion: number;
+  /** Migrations this build would still apply when the backend opens it. */
+  pendingMigrations: number;
+  /** Rows per table; only `create` reports them. */
+  tableCounts?: Record<string, number> | undefined;
+}
+
+function isCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function parseTableCounts(value: unknown): Record<string, number> | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value) || Array.isArray(value))
+    throw new Error("The database tool reported invalid table counts");
+  const counts: Record<string, number> = {};
+  for (const [table, count] of Object.entries(value)) {
+    if (!/^[a-z][a-z0-9_]{0,62}$/.test(table) || !isCount(count))
+      throw new Error("The database tool reported invalid table counts");
+    counts[table] = count;
+  }
+  return counts;
+}
+
+/**
+ * The result line of a `db-file.ts` run: the last stdout line that is a JSON
+ * object with a boolean `ok` (the backend logger may print lines before it).
+ */
+export function parseDatabaseToolOutput(
+  stdout: string | undefined,
+): { ok: true; report: DatabaseFileReport } | { ok: false; error: string } | undefined {
+  const lines = (stdout ?? "").split("\n").map((line) => line.trim());
+  for (const line of lines.reverse()) {
+    if (!line.startsWith("{")) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!isRecord(parsed) || typeof parsed.ok !== "boolean") continue;
+    if (!parsed.ok) {
+      return {
+        ok: false,
+        error:
+          typeof parsed.error === "string" && parsed.error
+            ? parsed.error
+            : "The database tool failed",
+      };
+    }
+    if (
+      typeof parsed.file !== "string" ||
+      !isCount(parsed.bytes) ||
+      typeof parsed.sha256 !== "string" ||
+      !/^[0-9a-f]{64}$/.test(parsed.sha256) ||
+      typeof parsed.sqliteVersion !== "string" ||
+      !isCount(parsed.schemaVersion) ||
+      !isCount(parsed.pendingMigrations)
+    ) {
+      throw new Error("The database tool returned an invalid report");
+    }
+    return {
+      ok: true,
+      report: {
+        file: parsed.file,
+        bytes: parsed.bytes,
+        sha256: parsed.sha256,
+        sqliteVersion: parsed.sqliteVersion,
+        schemaVersion: parsed.schemaVersion,
+        pendingMigrations: parsed.pendingMigrations,
+        tableCounts: parseTableCounts(parsed.tableCounts),
+      },
+    };
+  }
+  return undefined;
+}
+
+export const LEGACY_POSTGRES_DATA_CODE = "LEGACY_POSTGRES_DATA";
+
+/**
+ * Startup refusal when Vision 2.0 data exists and no SQLite database does.
+ * The fields name the message's parts for the translated dialog text
+ * (`app.legacyPostgresData`: {dataDirectory}, {backups}, {command}).
+ */
+export function legacyPostgresDataError(
+  dataDirectory: string,
+  preUpdateBackups: string,
+): NativeRuntimeError & {
+  dataDirectory: string;
+  backups: string;
+  command: string;
+} {
+  return Object.assign(
+    codedError(
+      `Vision found data from Vision 2.0 (PostgreSQL) on this Mac and did not start, so it does not create an empty database in its place. ` +
+        `The Vision 2.0 data was left untouched in ${dataDirectory}. ` +
+        `Convert a Vision 2.0 backup once with the transition script from a Vision repository checkout: ${TRANSITION_COMMAND}. ` +
+        `The backup Vision 2.0 made before the update is usually in ${preUpdateBackups}.`,
+      LEGACY_POSTGRES_DATA_CODE,
+    ),
+    {
+      dataDirectory,
+      backups: preUpdateBackups,
+      command: TRANSITION_COMMAND,
+    },
+  );
 }
 
 export interface FingerprintEntry {
@@ -1143,16 +896,8 @@ export async function rollbackDirectorySwitch(
         );
   if (previous && path.dirname(previous) !== path.dirname(destination))
     throw new Error("Attachment rollback directories must share a parent");
-  const exists = (file: string) =>
-    fs.promises
-      .lstat(file)
-      .then(() => true)
-      .catch((error: unknown) => {
-        if (optionalFieldsOf(error)?.code === "ENOENT") return false;
-        throw error;
-      });
-  const destinationExists = await exists(destination);
-  const previousExists = previous ? await exists(previous) : false;
+  const destinationExists = await pathExists(destination);
+  const previousExists = previous ? await pathExists(previous) : false;
   if (previous && !previousExists) {
     if (!destinationExists)
       throw new Error("Both attachment generations are missing");
@@ -1192,12 +937,8 @@ export interface NativeRuntimeOptions {
   userDataDir: string;
   repoRoot?: string | undefined;
   runtimeRoot?: string | undefined;
-  postgresRuntimeRoot?: string | undefined;
   runtimeId?: string | undefined;
-  postgresPort?: number | string | undefined;
   appPort?: number | (() => number) | undefined;
-  postgresBinDir?: string | undefined;
-  allowExternalPostgres?: boolean | undefined;
   bunPath?: string | undefined;
   requireRuntimeManifest?: boolean | undefined;
   /** Receives named startup timings, e.g. the runtime payload verification. */
@@ -1205,7 +946,6 @@ export interface NativeRuntimeOptions {
   syntheticOffline?: boolean | undefined;
   runFile?: RunFile | undefined;
   spawnProcess?: SpawnProcess | undefined;
-  spawnPostgresProcess?: SpawnProcess | undefined;
   isPortFree?: ((port: number) => Promise<boolean>) | undefined;
 }
 
@@ -1216,43 +956,52 @@ export interface NativeRuntimePaths {
   readonly pid: string;
   readonly logs: string;
   readonly backendLog: string;
-  readonly postgresLog: string;
-  readonly postgresPid: string;
-  readonly postgresRoot: string;
-  readonly postgresData: string;
   readonly attachments: string;
   readonly cache: string;
+  /** `<userData>/database`: one database generation. */
+  readonly databaseDir: string;
+  /** `<userData>/database/vision.sqlite3`, the backend's VISION_DATABASE_PATH. */
+  readonly database: string;
+  /** Vision 2.0's PostgreSQL data directory. Read for presence only, never changed. */
+  readonly legacyPostgresData: string;
 }
 
-export interface NativeTools extends DiscoveredPostgres {
+export interface NativeTools {
   bun: string | undefined;
   compiledBackend: string | undefined;
 }
 
+/** pendingDatabaseSwitch in runtime-state.json for a SQLite generation swap. */
 export interface DatabaseSwitchToken {
-  version: number;
-  liveDatabase: string;
-  previousDatabase: string;
-  activatedDatabase: string;
+  version: 2;
+  kind: "sqlite-directory";
+  liveDirectory: string;
+  previousDirectory: string;
+  activatedDirectory: string;
   activatedAt: string;
 }
 
 /** runtime-state.json. Persisted, so every field is read back as unknown. */
 export type NativeRuntimeState = UnknownRecord;
 
-export type ManagedClusterResult =
-  | { status: "external"; configChanged: false }
-  | {
-      status: "existing" | "initialized";
-      dataDirectory: string;
-      configChanged: boolean;
-    };
-
 export type StartResult =
   | { status: "already-running"; pid: number; port: number }
   | { status: "started"; pid: number; port: number; database: string };
 
-interface BackendCommand {
+/** A database the backend migrates forward at its next start. */
+export interface PendingSchemaUpgrade {
+  databaseVersion: number;
+  packagedVersion: number;
+}
+
+export interface ActivateRestoreOptions {
+  /** Refuse the copy unless its ledger records exactly this version. */
+  expectedSchemaVersion?: number | undefined;
+  /** Refuse the copy unless its SHA-256 matches (the backup's metadata). */
+  expectedSha256?: string | undefined;
+}
+
+interface ProcessCommand {
   bin: string;
   args: string[];
   cwd: string | undefined;
@@ -1266,19 +1015,9 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
   const runtimeRoot = options.runtimeRoot
     ? path.resolve(options.runtimeRoot)
     : repoRoot;
-  const postgresRuntimeRoot = options.postgresRuntimeRoot
-    ? path.resolve(options.postgresRuntimeRoot)
-    : runtimeRoot;
   const runtimeId = normalizeRuntimeId(options.runtimeId || "vision");
-  const postgresPort = validateNetworkPort(
-    options.postgresPort ?? DEFAULT_POSTGRES_PORT,
-    "native PostgreSQL port",
-  );
-  const names = runtimeNames(runtimeId);
   const runFile: RunFile = options.runFile ?? defaultRunFile;
   const spawnProcess: SpawnProcess = options.spawnProcess ?? spawn;
-  const spawnPostgresProcess: SpawnProcess =
-    options.spawnPostgresProcess ?? spawn;
   const checkPortFree: (port: number) => Promise<boolean> =
     options.isPortFree ?? isPortFree;
   const getAppPort: () => number =
@@ -1294,6 +1033,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
             : DEFAULT_APP_PORT;
         };
   const nativeRoot = path.join(userDataDir, "native", runtimeId);
+  const databaseDir = path.join(userDataDir, DATABASE_DIRECTORY_NAME);
   const paths: NativeRuntimePaths = Object.freeze({
     nativeRoot,
     env: path.join(nativeRoot, "runtime.env"),
@@ -1301,18 +1041,16 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     pid: path.join(nativeRoot, "backend.pid.json"),
     logs: path.join(nativeRoot, "logs"),
     backendLog: path.join(nativeRoot, "logs", "backend.log"),
-    postgresLog: path.join(nativeRoot, "logs", "postgres.log"),
-    postgresPid: path.join(nativeRoot, "postgres.pid.json"),
-    postgresRoot: path.join(nativeRoot, "postgres"),
-    postgresData: path.join(nativeRoot, "postgres", "data"),
     attachments: path.join(nativeRoot, "attachments"),
     cache: path.join(nativeRoot, "cache"),
+    databaseDir,
+    database: path.join(databaseDir, DATABASE_FILE_NAME),
+    legacyPostgresData: path.join(nativeRoot, "postgres", "data"),
   });
   let tools: NativeTools | undefined;
   let child: SpawnedChild | undefined;
   // Set when the backend started by start() exits; cleared by the next start().
   let backendExit: { code: number | null | undefined } | undefined;
-  let postgresChild: SpawnedChild | undefined;
   let restoreSwitchOwnedThisLaunch = false;
   let startupRestoreRecovery: Promise<void> | undefined;
 
@@ -1322,13 +1060,13 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     return tools;
   }
 
-  async function ensureLayout(): Promise<NativeDatabaseConfig> {
+  async function ensureLayout(): Promise<{ database: string }> {
     for (const dir of [
       paths.nativeRoot,
       paths.logs,
       paths.attachments,
       paths.cache,
-      paths.postgresRoot,
+      paths.databaseDir,
     ]) {
       await fs.promises.mkdir(dir, { recursive: true, mode: 0o700 });
       await fs.promises.chmod(dir, 0o700);
@@ -1340,32 +1078,13 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         throw error;
       });
     if (existing === undefined) {
-      await writeAtomic(
-        paths.env,
-        nativeEnvContents(names, {
-          postgresPort,
-        }),
-        0o600,
-      );
+      await writeAtomic(paths.env, NATIVE_ENV_HEADER, 0o600);
     } else {
-      const upgraded = stripRetiredNativeEnv(
-        ensureNativeAdminEnv(existing, names),
-      );
-      databaseConfigFromEnv(upgraded);
+      const upgraded = stripRetiredNativeEnv(existing);
       if (upgraded !== existing) await writeAtomic(paths.env, upgraded, 0o600);
       await fs.promises.chmod(paths.env, 0o600);
     }
-    const config = databaseConfigFromEnv(
-      await fs.promises.readFile(paths.env, "utf8"),
-    );
-    if (config.port !== postgresPort) {
-      const error: NativeRuntimeError = new Error(
-        "Native runtime configuration targets a different PostgreSQL port.",
-      );
-      error.code = "POSTGRES_PORT_MISMATCH";
-      throw error;
-    }
-    return config;
+    return { database: paths.database };
   }
 
   async function importApplicationEnv(
@@ -1389,9 +1108,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     return { importedKeys: Object.keys(additions) };
   }
 
-  async function discover(): Promise<
-    NativeTools & { postgresVersion: number }
-  > {
+  async function discover(): Promise<NativeTools> {
     if (runtimeRoot) {
       // Full hashing once per installed payload; a size check afterwards (ADR-235).
       const started = Date.now();
@@ -1406,514 +1123,63 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         );
       }
     }
-    const postgres = await discoverPostgres18({
-      binDir: options.postgresBinDir,
-      runtimeRoot: postgresRuntimeRoot,
-      allowExternalPostgres: options.allowExternalPostgres === true,
-      runFile,
-    });
     const bun = resolveBun(options.bunPath, runtimeRoot);
     const compiledBackend = runtimeRoot
       ? findFirstExecutable([path.join(runtimeRoot, "vision-backend")])
       : undefined;
     if (!compiledBackend && !bun) {
-      const error: NativeRuntimeError = new Error(
+      throw codedError(
         "Bun was not found and no packaged Vision backend executable is available.",
+        "BUN_NOT_FOUND",
       );
-      error.code = "BUN_NOT_FOUND";
-      throw error;
     }
-    tools = {
-      ...postgres,
-      bun,
-      compiledBackend,
+    tools = { bun, compiledBackend };
+    return tools;
+  }
+
+  function isSqliteSwitchToken(token: unknown): boolean {
+    const fields = optionalFieldsOf(token);
+    return fields?.version === 2 && fields.kind === "sqlite-directory";
+  }
+
+  /**
+   * The three directories a persisted switch token names, after checking
+   * that they are this runtime's database generations: a tampered or foreign
+   * token can never make the runtime rename an arbitrary directory.
+   */
+  function switchTokenDirectories(token: unknown): {
+    live: string;
+    previous: string;
+    activated: string;
+  } {
+    const fields = optionalFieldsOf(token);
+    const generation = (value: unknown, kind: "previous" | "restore") =>
+      typeof value === "string" &&
+      path.dirname(value) === userDataDir &&
+      new RegExp(`^${DATABASE_DIRECTORY_NAME}\\.${kind}-[0-9a-z-]{1,64}$`).test(
+        path.basename(value),
+      );
+    if (
+      !isSqliteSwitchToken(token) ||
+      fields?.liveDirectory !== paths.databaseDir ||
+      !generation(fields.previousDirectory, "previous") ||
+      !generation(fields.activatedDirectory, "restore")
+    ) {
+      throw new Error("No matching native database switch is available");
+    }
+    return {
+      live: paths.databaseDir,
+      previous: String(fields.previousDirectory),
+      activated: String(fields.activatedDirectory),
     };
-    return { ...tools, postgresVersion: POSTGRES_MAJOR };
-  }
-
-  function postgresConfigString(value: string): string {
-    return `'${value.replaceAll("\\", "\\\\").replaceAll("'", "''")}'`;
-  }
-
-  async function ensureManagedPostgresConfig(
-    dataDirectory: string,
-  ): Promise<boolean> {
-    const visionConfig = path.join(dataDirectory, "vision.conf");
-    const desiredConfig = [
-      `listen_addresses = ${postgresConfigString(LOOPBACK_HOST)}`,
-      `port = ${postgresPort}`,
-      "unix_socket_directories = ''",
-      "password_encryption = 'scram-sha-256'",
-      "shared_preload_libraries = 'pg_stat_statements'",
-      "logging_collector = off",
-      ...MANAGED_POSTGRES_TUNING,
-      "",
-    ].join("\n");
-    const currentConfig = await fs.promises
-      .readFile(visionConfig, "utf8")
-      .catch((error: unknown) => {
-        if (errorCode(error) === "ENOENT") return undefined;
-        throw error;
-      });
-    let changed = currentConfig !== desiredConfig;
-    if (changed) await writeAtomic(visionConfig, desiredConfig, 0o600);
-    const postgresConfig = path.join(dataDirectory, "postgresql.conf");
-    const baseConfig = await fs.promises.readFile(postgresConfig, "utf8");
-    if (!/^\s*include\s*=\s*'vision\.conf'\s*$/m.test(baseConfig)) {
-      await writeAtomic(
-        postgresConfig,
-        `${baseConfig.replace(/\n?$/, "\n")}include = 'vision.conf'\n`,
-        0o600,
-      );
-      changed = true;
-    }
-    return changed;
-  }
-
-  async function ensureManagedPostgresCluster(
-    config: NativeDatabaseConfig,
-  ): Promise<ManagedClusterResult> {
-    if (!tools?.managed) return { status: "external", configChanged: false };
-    const versionPath = path.join(paths.postgresData, "PG_VERSION");
-    const existingVersion = await fs.promises
-      .readFile(versionPath, "utf8")
-      .then((value) => value.trim())
-      .catch((error: unknown) => {
-        if (errorCode(error) === "ENOENT") return undefined;
-        throw error;
-      });
-    if (existingVersion !== undefined) {
-      if (existingVersion !== String(POSTGRES_MAJOR)) {
-        const error: NativeRuntimeError = new Error(
-          `Vision's private PostgreSQL cluster must be major ${POSTGRES_MAJOR}.`,
-        );
-        error.code = "POSTGRES_DATA_WRONG_VERSION";
-        throw error;
-      }
-      await fs.promises.chmod(paths.postgresData, 0o700);
-      const configChanged = await ensureManagedPostgresConfig(
-        paths.postgresData,
-      );
-      return {
-        status: "existing",
-        dataDirectory: paths.postgresData,
-        configChanged,
-      };
-    }
-
-    const liveStat = await fs.promises
-      .lstat(paths.postgresData)
-      .catch((error: unknown) => {
-        if (errorCode(error) === "ENOENT") return undefined;
-        throw error;
-      });
-    if (liveStat?.isSymbolicLink()) {
-      const error: NativeRuntimeError = new Error(
-        "Vision PostgreSQL data directory is a symlink",
-      );
-      error.code = "POSTGRES_DATA_UNSAFE";
-      throw error;
-    }
-    if (liveStat) {
-      const quarantine = path.join(
-        paths.postgresRoot,
-        `data.incomplete-${Date.now()}`,
-      );
-      await fs.promises.rename(paths.postgresData, quarantine);
-    }
-
-    const staging = path.join(
-      paths.postgresRoot,
-      `data.initializing-${process.pid}-${Date.now()}`,
-    );
-    const secretDir = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "vision-initdb-"),
-    );
-    const passwordFile = path.join(secretDir, "password");
-    await fs.promises.writeFile(passwordFile, `${config.adminPassword}\n`, {
-      mode: 0o600,
-    });
-    try {
-      await runFile(
-        path.join(requireTools().binDir, "initdb"),
-        [
-          "-D",
-          staging,
-          "--encoding=UTF8",
-          "--locale=C",
-          "--data-checksums",
-          "--auth-local=scram-sha-256",
-          "--auth-host=scram-sha-256",
-          "--username",
-          config.adminRole,
-          "--pwfile",
-          passwordFile,
-        ],
-        {
-          timeout: 5 * 60_000,
-          maxBuffer: 16 * 1024 * 1024,
-          env: managedPostgresChildEnv(),
-        },
-      );
-      await ensureManagedPostgresConfig(staging);
-      await fs.promises.chmod(staging, 0o700);
-      await fs.promises.rename(staging, paths.postgresData);
-      return {
-        status: "initialized",
-        dataDirectory: paths.postgresData,
-        configChanged: true,
-      };
-    } catch (error) {
-      const stagingExists = await fs.promises
-        .access(staging)
-        .then(() => true)
-        .catch(() => false);
-      if (stagingExists) {
-        await fs.promises
-          .rename(
-            staging,
-            path.join(paths.postgresRoot, `data.failed-${Date.now()}`),
-          )
-          .catch(() => {});
-      }
-      throw error;
-    } finally {
-      await fs.promises.rm(secretDir, { recursive: true, force: true });
-    }
-  }
-
-  async function inspectReadyPostgres(
-    config: NativeDatabaseConfig,
-  ): Promise<{ serverVersionNum: number; listenAddresses: string[] }> {
-    const psql = path.join(requireTools().binDir, "psql");
-    const execute = async (env: ChildEnv, roleArgs: string[]) =>
-      runFile(
-        psql,
-        [
-          "-h",
-          LOOPBACK_HOST,
-          "-p",
-          String(postgresPort),
-          ...roleArgs,
-          "--dbname",
-          "postgres",
-          "--tuples-only",
-          "--no-align",
-          "--no-psqlrc",
-          "--set",
-          "ON_ERROR_STOP=1",
-          "--command",
-          "SHOW server_version_num; SHOW listen_addresses; SHOW data_directory;",
-        ],
-        { timeout: 10_000, env },
-      );
-    const result = requireTools().managed
-      ? await withPgPass(
-          config,
-          config.adminRole,
-          config.adminPassword,
-          (env) => execute(env, ["-U", config.adminRole]),
-        )
-      : await execute(safeChildEnv(), []);
-    const lines = result.stdout
-      .split("\n")
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-    const serverVersionNum = Number(lines[0]);
-    if (
-      !Number.isInteger(serverVersionNum) ||
-      Math.floor(serverVersionNum / 10_000) !== POSTGRES_MAJOR
-    ) {
-      const error: NativeRuntimeError = new Error(
-        `Native PostgreSQL server must be major ${POSTGRES_MAJOR}.`,
-      );
-      error.code = "POSTGRES_WRONG_VERSION";
-      throw error;
-    }
-    const addresses = (lines[1] ?? "")
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-    if (
-      addresses.length === 0 ||
-      !addresses.every((entry) =>
-        ["localhost", LOOPBACK_HOST, "::1"].includes(entry),
-      )
-    ) {
-      const error: NativeRuntimeError = new Error(
-        "PostgreSQL listen_addresses is not loopback-only; refusing to start Vision.",
-      );
-      error.code = "POSTGRES_UNSAFE_BIND";
-      throw error;
-    }
-    if (requireTools().managed) {
-      const actualData = await fs.promises
-        .realpath(lines[2] || "")
-        .catch(() => "");
-      const expectedData = await fs.promises.realpath(paths.postgresData);
-      if (actualData !== expectedData) {
-        const error: NativeRuntimeError = new Error(
-          "The native PostgreSQL port belongs to a different database cluster.",
-        );
-        error.code = "POSTGRES_PORT_COLLISION";
-        throw error;
-      }
-    }
-    return { serverVersionNum, listenAddresses: addresses };
-  }
-
-  async function assertExternalPostgresObservability(): Promise<void> {
-    if (requireTools().managed) return;
-    const result = await runFile(
-      path.join(requireTools().binDir, "psql"),
-      [
-        "-h",
-        LOOPBACK_HOST,
-        "-p",
-        String(postgresPort),
-        "--dbname",
-        "postgres",
-        "--tuples-only",
-        "--no-align",
-        "--no-psqlrc",
-        "--set",
-        "ON_ERROR_STOP=1",
-        "--command",
-        "SHOW shared_preload_libraries;",
-      ],
-      { timeout: 10_000, env: safeChildEnv() },
-    );
-    const preloaded = result.stdout
-      .trim()
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-    if (!preloaded.includes("pg_stat_statements")) {
-      const error: NativeRuntimeError = new Error(
-        "External PostgreSQL must preload pg_stat_statements. Install the PostgreSQL contrib package, add pg_stat_statements to shared_preload_libraries, and restart PostgreSQL.",
-      );
-      error.code = "POSTGRES_OBSERVABILITY_UNAVAILABLE";
-      throw error;
-    }
-  }
-
-  async function startManagedPostgres(
-    _config: NativeDatabaseConfig,
-  ): Promise<number> {
-    if (!(await checkPortFree(postgresPort))) {
-      const error: NativeRuntimeError = new Error(
-        `Native PostgreSQL port ${postgresPort} is already in use.`,
-      );
-      error.code = "POSTGRES_PORT_COLLISION";
-      throw error;
-    }
-    const logFd = fs.openSync(paths.postgresLog, "a", 0o600);
-    postgresChild = spawnPostgresProcess(
-      path.join(requireTools().binDir, "postgres"),
-      managedPostgresArgs(paths.postgresData, postgresPort),
-      {
-        cwd: paths.postgresRoot,
-        env: managedPostgresChildEnv(),
-        stdio: ["ignore", logFd, logFd],
-        detached: false,
-      },
-    );
-    fs.closeSync(logFd);
-    const pid = await waitForChildSpawn(postgresChild);
-    await writeAtomicJson(paths.postgresPid, {
-      pid,
-      runtimeId,
-      port: postgresPort,
-      dataDirectory: paths.postgresData,
-      startedAt: new Date().toISOString(),
-    });
-    postgresChild.once("exit", () => {
-      void (async () => {
-        const recorded = await readJson(paths.postgresPid).catch(
-          () => undefined,
-        );
-        if (optionalFieldsOf(recorded)?.pid === pid)
-          await fs.promises.unlink(paths.postgresPid).catch(() => {});
-      })();
-    });
-    if (typeof postgresChild.unref === "function") postgresChild.unref();
-    return pid;
-  }
-
-  async function ensurePostgresReady({
-    startService = true,
-  }: { startService?: boolean } = {}): Promise<{
-    serverVersionNum: number;
-    listenAddresses: string[];
-  }> {
-    if (!tools) await discover();
-    const config = await ensureLayout();
-    const cluster = await ensureManagedPostgresCluster(config);
-    const pgIsReady = path.join(requireTools().binDir, "pg_isready");
-    const readyArgs = [
-      "-h",
-      LOOPBACK_HOST,
-      "-p",
-      String(postgresPort),
-      "-d",
-      "postgres",
-    ];
-    let ready = await runFile(pgIsReady, readyArgs, { timeout: 5_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (ready) {
-      let inspected: Awaited<ReturnType<typeof inspectReadyPostgres>>;
-      try {
-        inspected = await inspectReadyPostgres(config);
-      } catch (error) {
-        if (
-          requireTools().managed &&
-          errorCode(error) !== "POSTGRES_WRONG_VERSION"
-        ) {
-          const collision: NativeRuntimeError = new Error(
-            `Native PostgreSQL port ${postgresPort} is occupied by another server.`,
-          );
-          collision.code = "POSTGRES_PORT_COLLISION";
-          collision.cause = error;
-          throw collision;
-        }
-        throw error;
-      }
-      if (!(requireTools().managed && cluster.configChanged)) {
-        await assertExternalPostgresObservability();
-        return inspected;
-      }
-      if (!startService) {
-        const error: NativeRuntimeError = new Error(
-          "Managed PostgreSQL configuration changed and requires a restart.",
-        );
-        error.code = "POSTGRES_RESTART_REQUIRED";
-        throw error;
-      }
-      await stopPostgres();
-      ready = false;
-    }
-    if (startService && requireTools().managed) {
-      await startManagedPostgres(config);
-      // A clean cluster accepts connections ~0.1 s after spawn, so poll finely
-      // instead of losing most of a coarse interval on every launch.
-      const deadline = Date.now() + 30_000;
-      while (Date.now() < deadline) {
-        if (
-          postgresChild?.exitCode !== undefined &&
-          postgresChild.exitCode !== null
-        )
-          break;
-        ready = await runFile(pgIsReady, readyArgs, { timeout: 3_000 })
-          .then(() => true)
-          .catch(() => false);
-        if (ready) break;
-        await sleep(50);
-      }
-    }
-    if (!ready) {
-      const error: NativeRuntimeError = new Error(
-        "PostgreSQL 18 did not become ready on 127.0.0.1.",
-      );
-      error.code = "POSTGRES_UNAVAILABLE";
-      throw error;
-    }
-
-    const inspected = await inspectReadyPostgres(config);
-    await assertExternalPostgresObservability();
-    return inspected;
-  }
-
-  async function withPgPass<T>(
-    config: NativeDatabaseConfig,
-    role: string,
-    password: string,
-    callback: (env: ChildEnv) => Promise<T>,
-  ): Promise<T> {
-    const tempDir = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "vision-pgpass-"),
-    );
-    const pgpass = path.join(tempDir, "pgpass");
-    await fs.promises.writeFile(
-      pgpass,
-      `${LOOPBACK_HOST}:${config.port}:*:${role}:${password}\n`,
-      { mode: 0o600 },
-    );
-    try {
-      return await callback(safeChildEnv({ PGPASSFILE: pgpass }));
-    } finally {
-      await fs.promises.rm(tempDir, { recursive: true, force: true });
-    }
-  }
-
-  async function runAsClusterAdmin(
-    config: NativeDatabaseConfig,
-    executable: string,
-    args: string[],
-    options_: RunFileOptions = {},
-  ): Promise<RunFileResult> {
-    if (!tools?.managed)
-      return runFile(executable, args, {
-        ...options_,
-        env: safeChildEnv(options_.env ?? {}),
-      });
-    return withPgPass(config, config.adminRole, config.adminPassword, (env) =>
-      runFile(executable, args, {
-        ...options_,
-        env: safeChildEnv({ ...env, ...(options_.env ?? {}) }),
-      }),
-    );
-  }
-
-  function clusterAdminArgs(config: NativeDatabaseConfig): string[] {
-    return tools?.managed ? ["-U", config.adminRole] : [];
-  }
-
-  async function runSecretAdminSql(
-    config: NativeDatabaseConfig,
-    sql: string,
-    timeout = 10_000,
-  ): Promise<RunFileResult> {
-    const tempDir = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "vision-pg-admin-"),
-    );
-    const sqlFile = path.join(tempDir, "command.sql");
-    await fs.promises.writeFile(sqlFile, `${sql}\n`, { mode: 0o600 });
-    try {
-      try {
-        return await runAsClusterAdmin(
-          config,
-          path.join(requireTools().binDir, "psql"),
-          [
-            "-h",
-            LOOPBACK_HOST,
-            "-p",
-            String(postgresPort),
-            ...clusterAdminArgs(config),
-            "--dbname",
-            "postgres",
-            "--set",
-            "ON_ERROR_STOP=1",
-            "--no-psqlrc",
-            "--file",
-            sqlFile,
-          ],
-          { timeout },
-        );
-      } catch {
-        const error: NativeRuntimeError = new Error(
-          "Native database role bootstrap failed",
-        );
-        error.code = "POSTGRES_ROLE_BOOTSTRAP_FAILED";
-        throw error;
-      }
-    } finally {
-      await fs.promises.rm(tempDir, { recursive: true, force: true });
-    }
   }
 
   async function recoverInterruptedRestore(): Promise<void> {
     const state = await readState();
+    const pendingDatabase = state?.pendingDatabaseSwitch;
+    // A journal written by Vision 2.0 names PostgreSQL databases. Only
+    // Vision 2.0 can resolve it, so neither generation is touched here.
+    if (pendingDatabase && !isSqliteSwitchToken(pendingDatabase)) return;
     const attachments = state?.pendingAttachmentSwitch;
     if (attachments) {
       const token = fieldsOf(attachments);
@@ -1930,108 +1196,52 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         throw new Error("Invalid pending attachment restore journal");
       }
     }
-    if (state?.pendingDatabaseSwitch) {
-      await stop({ keepPostgres: true });
+    if (pendingDatabase) {
+      await stop();
       if (attachments) await rollbackAttachmentSwitch(attachments);
-      await rollbackDatabaseSwitch(state.pendingDatabaseSwitch);
+      await rollbackDatabaseSwitch(pendingDatabase);
     } else if (attachments) {
       // The database commit is durable; never roll its attachment generation back.
       await finalizeAttachmentSwitch(attachments);
     }
   }
 
-  async function bootstrapDatabase(): Promise<NativeDatabaseConfig> {
-    const config = await ensureLayout();
-    await ensurePostgresReady();
-    if (!tools) await discover();
-    if (!restoreSwitchOwnedThisLaunch) {
-      startupRestoreRecovery ??= recoverInterruptedRestore();
-      await startupRestoreRecovery;
-    }
-    // One psql session re-asserts every role, the database and (for the
-    // managed cluster) its extensions; a process per statement cost ~0.4 s
-    // on every launch.
-    const ensureRole = (role: string): string => {
-      const name = validateIdentifier(role, "PostgreSQL role");
-      return `SELECT 'CREATE ROLE ${name} NOLOGIN' WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${name}') \\gexec`;
-    };
-    const owner = quoteIdentifier(config.ownerRole);
-    const app = quoteIdentifier(config.appRole);
-    const database = validateIdentifier(config.database, "database name");
-    // Role administration stays in the desktop runtime; the migration owner
-    // only grants access to the approved views after migrations have finished.
-    const analysisRole = "vision_analysis_executor";
-    const analysisPassword = `E'${config.analysisPassword.replace(/\\/g, "\\\\").replace(/'/g, "''")}'`;
-    const statements = [
-      ensureRole(config.ownerRole),
-      `ALTER ROLE ${owner} WITH LOGIN PASSWORD ${quoteHexSecret(config.ownerPassword)} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;`,
-      ensureRole(config.appRole),
-      `ALTER ROLE ${app} WITH LOGIN PASSWORD ${quoteHexSecret(config.appPassword)} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;`,
-      ensureRole(analysisRole),
-      `ALTER ROLE ${analysisRole} WITH LOGIN PASSWORD ${analysisPassword} NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;`,
-      `ALTER ROLE ${analysisRole} SET default_transaction_read_only = on;`,
-      `ALTER ROLE ${analysisRole} SET statement_timeout = '5000ms';`,
-      `ALTER ROLE ${analysisRole} SET lock_timeout = '1000ms';`,
-      `ALTER ROLE ${analysisRole} SET idle_in_transaction_session_timeout = '5000ms';`,
-      `ALTER ROLE ${analysisRole} SET search_path = vision_analysis, pg_catalog;`,
-      `SELECT 'CREATE DATABASE ${database} OWNER ${owner} TEMPLATE template0' WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = '${database}') \\gexec`,
-      `ALTER DATABASE ${quoteIdentifier(database)} OWNER TO ${owner};`,
-    ];
-    if (requireTools().managed) {
-      // pg_stat_statements is not trusted, so only the private cluster
-      // administrator can install it. The migration owner stays non-superuser.
-      statements.push(
-        `\\connect ${database}`,
-        ...REQUIRED_POSTGRES_EXTENSIONS.map(
-          (extension) => `CREATE EXTENSION IF NOT EXISTS ${extension};`,
-        ),
-      );
-    }
-    await runSecretAdminSql(config, statements.join("\n"), 60_000);
-    if (!requireTools().managed)
-      await installRequiredExtensions(config.database, config);
-    return config;
+  async function recoverOnce(): Promise<void> {
+    if (restoreSwitchOwnedThisLaunch) return;
+    startupRestoreRecovery ??= recoverInterruptedRestore();
+    await startupRestoreRecovery;
   }
 
-  async function installRequiredExtensions(
-    database: string,
-    config: NativeDatabaseConfig,
-  ): Promise<void> {
-    const target = validateIdentifier(database, "database name");
-    const psql = path.join(requireTools().binDir, "psql");
-    const extensionArgs = (roleArgs: string[]): string[] => [
-      "-h",
-      LOOPBACK_HOST,
-      "-p",
-      String(config.port),
-      ...roleArgs,
-      "-d",
-      target,
-      "--set",
-      "ON_ERROR_STOP=1",
-      "--no-psqlrc",
-      "--command",
-      REQUIRED_POSTGRES_EXTENSIONS.map(
-        (extension) => `CREATE EXTENSION IF NOT EXISTS ${extension};`,
-      ).join(" "),
-    ];
-    if (requireTools().managed) {
-      // pg_stat_statements is not trusted, so only the private cluster
-      // administrator can install it. The migration owner stays non-superuser.
-      await runAsClusterAdmin(
-        config,
-        psql,
-        extensionArgs(clusterAdminArgs(config)),
-        { timeout: 30_000 },
-      );
-    } else {
-      await withPgPass(config, config.ownerRole, config.ownerPassword, (env) =>
-        runFile(psql, extensionArgs(["-U", config.ownerRole]), {
-          timeout: 30_000,
-          env,
-        }),
-      );
-    }
+  /**
+   * Upgrade safety (ADR-263): a Mac that holds Vision 2.0's PostgreSQL data
+   * but no SQLite database must not start a new, empty database. The old
+   * directory is only checked for presence.
+   */
+  async function assertNoUntransitionedLegacyData(): Promise<void> {
+    if (await pathExists(paths.database)) return;
+    // Only a directory with contents is Vision 2.0 data; an empty one never
+    // held a cluster. Nothing inside is read or changed.
+    const legacyEntries = await fs.promises
+      .readdir(paths.legacyPostgresData)
+      .catch((error: unknown) => {
+        if (errorCode(error) === "ENOENT" || errorCode(error) === "ENOTDIR")
+          return [];
+        throw error;
+      });
+    if (legacyEntries.length === 0) return;
+    throw legacyPostgresDataError(
+      paths.legacyPostgresData,
+      path.join(userDataDir, "pre-update-backups"),
+    );
+  }
+
+  /** Layout, interrupted-restore recovery and the upgrade check before a backend opens the database. */
+  async function ensureDatabaseReady(): Promise<{ database: string }> {
+    await ensureLayout();
+    if (!tools) await discover();
+    await recoverOnce();
+    await assertNoUntransitionedLegacyData();
+    return { database: paths.database };
   }
 
   async function readState(): Promise<NativeRuntimeState | undefined> {
@@ -2092,14 +1302,13 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       }
       await sleep(intervalMs);
     }
-    const error: NativeRuntimeError = new Error(
+    throw codedError(
       `Native backend readiness timed out${lastError ? `: ${String(fieldsOf(lastError).message)}` : ""}`,
+      "BACKEND_NOT_READY",
     );
-    error.code = "BACKEND_NOT_READY";
-    throw error;
   }
 
-  async function backendCommand(): Promise<BackendCommand> {
+  async function backendCommand(): Promise<ProcessCommand> {
     if (!tools) await discover();
     const { compiledBackend, bun } = requireTools();
     if (compiledBackend)
@@ -2113,41 +1322,175 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     };
   }
 
-  async function migrateDatabase(): Promise<{
-    status: "migrated";
-    database: string;
-  }> {
-    const config = await bootstrapDatabase();
-    const bun = tools?.bun;
+  /**
+   * `db-file.ts` through the same Bun that runs the backend: the packaged
+   * backend executable acts as Bun when BUN_BE_BUN=1 and runs the bundled
+   * tool from the payload; a source checkout runs the script with Bun.
+   */
+  async function databaseToolCommand(): Promise<
+    ProcessCommand & { env: ChildEnv }
+  > {
+    if (!tools) await discover();
+    const { compiledBackend, bun } = requireTools();
+    const toolRoot = runtimeRoot ?? repoRoot;
+    const env = {
+      NODE_ENV: "production",
+      ENVIRONMENT: "production",
+      VISION_SKIP_DOTENV: "1",
+      VISION_RUNTIME_ROOT: toolRoot,
+      VISION_DATABASE_PATH: paths.database,
+    };
+    if (compiledBackend && runtimeRoot) {
+      const tool = path.join(runtimeRoot, ...PACKAGED_DATABASE_TOOL.split("/"));
+      if (!executableExists(compiledBackend) || !(await pathExists(tool))) {
+        throw codedError(
+          "Vision's database tool is missing from this installation. Reinstall Vision.",
+          "DATABASE_TOOL_MISSING",
+        );
+      }
+      return {
+        bin: compiledBackend,
+        args: [tool],
+        cwd: runtimeRoot,
+        env: safeChildEnv({ ...env, BUN_BE_BUN: "1" }),
+      };
+    }
     if (!repoRoot || !bun) {
-      const error: NativeRuntimeError = new Error(
-        "Listener-free migration is available only from a Vision source checkout",
+      throw codedError(
+        "Vision's database tool needs Bun and a Vision source checkout.",
+        "DATABASE_TOOL_MISSING",
       );
-      error.code = "MIGRATION_SOURCE_UNAVAILABLE";
+    }
+    return {
+      bin: bun,
+      args: ["run", SOURCE_DATABASE_TOOL],
+      cwd: repoRoot,
+      env: safeChildEnv(env),
+    };
+  }
+
+  async function runDatabaseTool(
+    args: string[],
+    { timeout = 30 * 60_000, code = "DATABASE_TOOL_FAILED" } = {},
+  ): Promise<DatabaseFileReport> {
+    const command = await databaseToolCommand();
+    let stdout: string;
+    try {
+      ({ stdout } = await runFile(
+        command.bin,
+        validateArgs([...command.args, ...args]),
+        {
+          cwd: command.cwd,
+          env: command.env,
+          timeout,
+          maxBuffer: 16 * 1024 * 1024,
+        },
+      ));
+    } catch (error) {
+      const result = parseDatabaseToolOutput(optionalFieldsOf(error)?.stdout as string | undefined);
+      throw codedError(
+        result?.ok === false
+          ? result.error
+          : `Vision's database tool failed: ${String(optionalFieldsOf(error)?.message ?? error)}`,
+        code,
+        { cause: error },
+      );
+    }
+    const result = parseDatabaseToolOutput(stdout);
+    if (!result) {
+      throw codedError("Vision's database tool returned no result", code);
+    }
+    if (!result.ok) throw codedError(result.error, code);
+    return result.report;
+  }
+
+  /** integrity_check, foreign_key_check and the migration ledger of a database file. */
+  async function verifyDatabaseFile(file: string): Promise<DatabaseFileReport> {
+    return runDatabaseTool(["verify", path.resolve(file)], {
+      code: "DATABASE_VERIFY_FAILED",
+    });
+  }
+
+  /**
+   * A consistent copy of the live database (VACUUM INTO, verified) at
+   * `destination`. Written to a `.partial` sidecar and renamed only once the
+   * tool verified it, so a failure never leaves a file at the final name.
+   */
+  async function snapshotDatabase(
+    destination: string,
+  ): Promise<DatabaseFileReport> {
+    await ensureLayout();
+    if (!(await pathExists(paths.database))) {
+      throw codedError(
+        "Vision has no database to back up yet.",
+        "DATABASE_MISSING",
+      );
+    }
+    const finalPath = path.resolve(destination);
+    const partialPath = `${finalPath}.partial`;
+    await fs.promises.mkdir(path.dirname(finalPath), {
+      recursive: true,
+      mode: 0o700,
+    });
+    await fs.promises.rm(partialPath, { force: true });
+    try {
+      const report = await runDatabaseTool(
+        ["snapshot", paths.database, partialPath],
+        { code: "DATABASE_SNAPSHOT_FAILED" },
+      );
+      await fs.promises.rename(partialPath, finalPath);
+      await fs.promises.chmod(finalPath, 0o600);
+      return { ...report, file: finalPath };
+    } catch (error) {
+      await fs.promises.rm(partialPath, { force: true }).catch(() => {});
       throw error;
     }
-    const runtimeEnv = parseEnvFile(
-      await fs.promises.readFile(paths.env, "utf8"),
+  }
+
+  /**
+   * A new database at the packaged migration head, optionally loaded with a
+   * data-only SQL file (the Demo seed). Requires the `create` command of
+   * db-file.ts.
+   */
+  async function createDatabaseFile(
+    destination: string,
+    { seedSqlPath }: { seedSqlPath?: string | undefined } = {},
+  ): Promise<DatabaseFileReport> {
+    const args = ["create", path.resolve(destination)];
+    if (seedSqlPath) args.push(path.resolve(seedSqlPath));
+    return runDatabaseTool(args, { code: "DATABASE_CREATE_FAILED" });
+  }
+
+  /** File statistics of the live database, read without the backend. */
+  async function getDatabaseStats(): Promise<DatabaseFileStats> {
+    return readDatabaseFileStats(paths.database);
+  }
+
+  /** The live database is behind this build's migrations: the backend backs it up and migrates at start. */
+  async function pendingSchemaUpgrade(): Promise<
+    PendingSchemaUpgrade | undefined
+  > {
+    if (!runtimeRoot) return undefined;
+    const packagedVersion = packagedMigrationVersion(
+      path.join(runtimeRoot, "db", "migrations"),
     );
-    await runFile(
-      bun,
-      ["run", "apps/node-backend/scripts/db-migrate.ts", "up"],
-      {
-        cwd: repoRoot,
-        timeout: 15 * 60_000,
-        maxBuffer: 32 * 1024 * 1024,
-        env: safeChildEnv({
-          ...withoutRetiredEnv(runtimeEnv),
-          VISION_RUNTIME_ROOT: runtimeRoot || repoRoot,
-        }),
-      },
+    const stats = await readDatabaseFileStats(paths.database).catch(
+      () => undefined,
     );
-    return { status: "migrated", database: config.database };
+    const databaseVersion = stats?.schemaVersion;
+    // Version 0 is a database no migration has touched yet: nothing to back up.
+    if (
+      databaseVersion === undefined ||
+      databaseVersion === 0 ||
+      databaseVersion >= packagedVersion
+    )
+      return undefined;
+    return { databaseVersion, packagedVersion };
   }
 
   async function processMatchesBackend(
     pid: unknown,
-    command?: BackendCommand,
+    command?: ProcessCommand,
   ): Promise<boolean> {
     if (!processExists(pid)) return false;
     const expected = command ?? (await backendCommand());
@@ -2192,45 +1535,32 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     });
   }
 
-  /** The packaged migrations an existing database has not applied yet. */
-  async function pendingMigrations(): Promise<PendingMigrations | undefined> {
-    if (!runtimeRoot) return undefined;
-    const packagedHead = migrationChainHead(
-      path.join(runtimeRoot, "db", "migrations"),
-    );
-    if (!packagedHead) return undefined;
-    // A database without a ledger is new: there is no user data to protect.
-    const appliedHead = await getSchemaHead();
-    if (!appliedHead || packagedHead <= appliedHead) return undefined;
-    return { appliedHead, packagedHead };
-  }
-
-  async function start(
-    startOptions: NativeStartOptions = {},
-  ): Promise<StartResult> {
+  /**
+   * Starts the backend, which opens the SQLite file and applies pending
+   * migrations itself (after writing its own pre-migration copy).
+   */
+  async function start(): Promise<StartResult> {
     await assertNativeActive();
-    const config = await bootstrapDatabase();
+    await ensureDatabaseReady();
     const command = await backendCommand();
     const existing = await readJson(paths.pid).catch(() => undefined);
     const existingPid = probeableProcessId(optionalFieldsOf(existing)?.pid);
     if (existingPid !== undefined && processExists(existingPid)) {
       if (!(await processMatchesBackend(existingPid, command))) {
-        const error: NativeRuntimeError = new Error(
+        throw codedError(
           "The recorded backend process id belongs to another process; refusing to signal it.",
+          "BACKEND_PID_OWNERSHIP_MISMATCH",
         );
-        error.code = "BACKEND_PID_OWNERSHIP_MISMATCH";
-        throw error;
       }
       const healthy = await health().then(
         () => true,
         () => false,
       );
       if (!healthy) {
-        const error: NativeRuntimeError = new Error(
+        throw codedError(
           "A recorded Vision backend process exists but is not healthy; stop it before restart.",
+          "BACKEND_STALE_PID",
         );
-        error.code = "BACKEND_STALE_PID";
-        throw error;
       }
       return {
         status: "already-running",
@@ -2242,15 +1572,10 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
 
     const port = getAppPort();
     if (!(await checkPortFree(port))) {
-      const error: NativeRuntimeError = new Error(
+      throw codedError(
         `Native backend port ${port} is already in use.`,
+        "PORT_COLLISION",
       );
-      error.code = "PORT_COLLISION";
-      throw error;
-    }
-    if (startOptions.beforeMigrations) {
-      const pending = await pendingMigrations();
-      if (pending) await startOptions.beforeMigrations(pending);
     }
     const runtimeEnv = parseEnvFile(
       await fs.promises.readFile(paths.env, "utf8"),
@@ -2294,19 +1619,22 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       status: "started",
       pid: childPid,
       port,
-      database: config.database,
+      database: paths.database,
     };
   }
 
   /** Why the backend from the last start() exited, or undefined while it runs. */
-  async function backendStartupFailure(): Promise<string | undefined> {
+  async function backendStartupFailure(): Promise<
+    BackendStartupFailure | undefined
+  > {
     if (!backendExit) return undefined;
     const log = await fs.promises
       .readFile(paths.backendLog, "utf8")
       .catch(() => "");
     return (
-      lastStartupError(log.slice(-65_536)) ??
-      `The Vision backend stopped during startup (exit code ${backendExit.code ?? "unknown"}).`
+      lastStartupFailure(log.slice(-65_536)) ?? {
+        message: `The Vision backend stopped during startup (exit code ${backendExit.code ?? "unknown"}).`,
+      }
     );
   }
 
@@ -2324,11 +1652,10 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       return { status: "stopped", service: "backend" };
     }
     if (!(await processMatchesBackend(recordedPid))) {
-      const error: NativeRuntimeError = new Error(
+      throw codedError(
         "The recorded backend process id belongs to another process; refusing to signal it.",
+        "BACKEND_PID_OWNERSHIP_MISMATCH",
       );
-      error.code = "BACKEND_PID_OWNERSHIP_MISMATCH";
-      throw error;
     }
     process.kill(recordedPid, "SIGTERM");
     const deadline = Date.now() + forceAfterMs;
@@ -2348,400 +1675,95 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     return { status: "stopped", service: "backend", pid: recordedPid };
   }
 
-  async function stopPostgres(): Promise<{
-    status: "stopped" | "external-not-managed";
-    service: "postgres";
-  }> {
-    const clusterExists = await fs.promises
-      .access(path.join(paths.postgresData, "PG_VERSION"))
-      .then(() => true)
-      .catch(() => false);
-    if (!clusterExists) {
-      await fs.promises.unlink(paths.postgresPid).catch(() => {});
-      return { status: "stopped", service: "postgres" };
-    }
-    if (!tools) await discover();
-    if (!requireTools().managed)
-      return { status: "external-not-managed", service: "postgres" };
-    const postmasterPid = path.join(paths.postgresData, "postmaster.pid");
-    const running = await fs.promises
-      .access(postmasterPid)
-      .then(() => true)
-      .catch(() => false);
-    if (!running) {
-      await fs.promises.unlink(paths.postgresPid).catch(() => {});
-      return { status: "stopped", service: "postgres" };
-    }
-    try {
-      await runFile(
-        path.join(requireTools().binDir, "pg_ctl"),
-        ["-D", paths.postgresData, "-m", "fast", "-w", "-t", "30", "stop"],
-        { timeout: 35_000 },
-      );
-    } catch (error) {
-      const stillRunning = await fs.promises
-        .access(postmasterPid)
-        .then(() => true)
-        .catch(() => false);
-      if (stillRunning) throw error;
-    }
-    await fs.promises.unlink(paths.postgresPid).catch(() => {});
-    return { status: "stopped", service: "postgres" };
-  }
-
-  async function stop({
-    forceAfterMs = 10_000,
-    keepPostgres = false,
-  }: { forceAfterMs?: number; keepPostgres?: boolean } = {}) {
+  async function stop({ forceAfterMs = 10_000 }: { forceAfterMs?: number } = {}) {
     const backend = await stopBackend({ forceAfterMs });
-    const postgres = keepPostgres ? undefined : await stopPostgres();
-    return { status: "stopped", backend, postgres };
+    return { status: "stopped", backend };
   }
 
   async function restart(): Promise<StartResult> {
-    await stop({ keepPostgres: true });
+    await stop();
     return start();
   }
 
-  async function getSchemaHead({
-    database,
-  }: { database?: string | undefined } = {}): Promise<string> {
-    const config = await ensureLayout();
-    if (!tools) await discover();
-    const targetDatabase = validateIdentifier(
-      database || config.database,
-      "database name",
-    );
-    return withPgPass(
-      config,
-      config.ownerRole,
-      config.ownerPassword,
-      async (env) =>
-        (await readSchemaLedger(targetDatabase, config, env, 10_000)).head ||
-        "",
-    );
+  function generationNonce(): string {
+    return `${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
   }
 
-  /** Every migration name in the live database's ledger; [] without a ledger. */
-  async function getAppliedMigrations(): Promise<string[]> {
-    const config = await ensureLayout();
-    if (!tools) await discover();
-    const database = validateIdentifier(config.database, "database name");
-    return withPgPass(
-      config,
-      config.ownerRole,
-      config.ownerPassword,
-      async (env) => {
-        const { head } = await readSchemaLedger(database, config, env, 10_000);
-        if (!head) return [];
-        const result = await runFile(
-          path.join(requireTools().binDir, "psql"),
-          [
-            "-h",
-            LOOPBACK_HOST,
-            "-p",
-            String(config.port),
-            "-U",
-            config.ownerRole,
-            "-d",
-            database,
-            "--tuples-only",
-            "--no-align",
-            "--no-psqlrc",
-            "--set",
-            "ON_ERROR_STOP=1",
-            "--command",
-            APPLIED_MIGRATIONS_SQL,
-          ],
-          { timeout: 10_000, env },
-        );
-        return result.stdout
-          .split("\n")
-          .map((line) => line.trim())
-          .filter(Boolean);
-      },
-    );
+  async function copyFileDurably(source: string, destination: string) {
+    await fs.promises.copyFile(source, destination, fs.constants.COPYFILE_EXCL);
+    await fs.promises.chmod(destination, 0o600);
+    const handle = await fs.promises.open(destination, "r+");
+    try {
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
   }
 
-  async function readSchemaLedger(
-    database: string,
-    config: NativeDatabaseConfig,
-    env: ChildEnv,
-    timeout: number,
-  ): Promise<{ head: string | undefined }> {
-    const query = (command: string) =>
-      runFile(
-        path.join(requireTools().binDir, "psql"),
-        [
-          "-h",
-          LOOPBACK_HOST,
-          "-p",
-          String(config.port),
-          "-U",
-          config.ownerRole,
-          "-d",
-          database,
-          "--tuples-only",
-          "--no-align",
-          "--no-psqlrc",
-          "--set",
-          "ON_ERROR_STOP=1",
-          "--command",
-          command,
-        ],
-        { timeout, env },
-      ).then((result) => result.stdout.trim());
-    const head =
-      (await query(SCHEMA_LEDGER_SQL)) === "t"
-        ? (await query(SCHEMA_HEAD_SQL)) || undefined
-        : undefined;
-    return { head };
-  }
-
-  async function adminDatabasePsql(
-    database: string,
-    command: string,
-    timeout = 30_000,
-  ): Promise<RunFileResult> {
-    if (!tools) await discover();
-    const config = await ensureLayout();
-    const target = validateIdentifier(database, "database name");
-    return runAsClusterAdmin(
-      config,
-      path.join(requireTools().binDir, "psql"),
-      [
-        "-h",
-        LOOPBACK_HOST,
-        "-p",
-        String(postgresPort),
-        ...clusterAdminArgs(config),
-        "--dbname",
-        target,
-        "--set",
-        "ON_ERROR_STOP=1",
-        "--no-psqlrc",
-        "--command",
-        command,
-      ],
-      { timeout },
-    );
-  }
-
-  async function adminPsql(
-    command: string,
-    timeout = 30_000,
-  ): Promise<RunFileResult> {
-    return adminDatabasePsql("postgres", command, timeout);
-  }
-
-  async function terminateDatabaseConnections(database: string): Promise<void> {
-    const name = validateIdentifier(database, "database name");
-    await adminPsql(
-      `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${name}' AND pid <> pg_backend_pid();`,
-    );
-  }
-
-  async function databaseExists(database: string): Promise<boolean> {
-    const name = validateIdentifier(database, "database name");
-    const result = await adminPsql(
-      `SELECT 1 FROM pg_database WHERE datname = '${name}';`,
-    );
-    return result.stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .includes("1");
-  }
-
-  function restoreDatabaseName(base: string, suffix: string): string {
-    const nonce = crypto.randomBytes(5).toString("hex");
-    return validateIdentifier(
-      `${base.slice(0, 40)}_${suffix}_${nonce}`,
-      "temporary database name",
-    );
-  }
-
-  async function createEmptyDatabase(
-    database: string,
-    ownerRole: string,
-  ): Promise<void> {
-    const config = await ensureLayout();
-    const name = validateIdentifier(database, "database name");
-    const owner = validateIdentifier(ownerRole, "owner role");
-    await runAsClusterAdmin(
-      config,
-      path.join(requireTools().binDir, "createdb"),
-      [
-        "-h",
-        LOOPBACK_HOST,
-        "-p",
-        String(postgresPort),
-        ...clusterAdminArgs(config),
-        "--template",
-        "template0",
-        "--owner",
-        owner,
-        name,
-      ],
-      { timeout: 30_000 },
-    );
-  }
-
-  async function restoreIntoDatabase(
-    sourcePath: string,
-    database: string,
-    format: string,
-    config: NativeDatabaseConfig,
-  ): Promise<void> {
-    const source = path.resolve(sourcePath);
-    const stat = await fs.promises.stat(source);
-    if (!stat.isFile() || stat.size <= 0)
-      throw new Error("PostgreSQL restore source is empty or not a file");
-    const target = validateIdentifier(database, "database name");
-    // A staging database is created from template0, so it does not inherit the
-    // extensions installed in the live database. Install them with the same
-    // least-privilege boundary before replaying application-owned objects.
-    await installRequiredExtensions(target, config);
-    await withPgPass(
-      config,
-      config.ownerRole,
-      config.ownerPassword,
-      async (env) => {
-        if (format === "custom") {
-          await runFile(
-            path.join(requireTools().binDir, "pg_restore"),
-            [
-              "--exit-on-error",
-              "--single-transaction",
-              "--no-owner",
-              "--no-acl",
-              "--no-comments",
-              "-h",
-              LOOPBACK_HOST,
-              "-p",
-              String(config.port),
-              "-U",
-              config.ownerRole,
-              "-d",
-              target,
-              source,
-            ],
-            { timeout: 30 * 60_000, env, maxBuffer: 4 * 1024 * 1024 },
-          );
-          return;
-        }
-        if (format !== "plain")
-          throw new Error(`Unsupported restore format: ${format}`);
-        // The dump is user-chosen input: keep its psql meta-commands from
-        // running (see psql-restore-guard.ts).
-        const guardArgs = await psqlRestoreGuardArgs(source);
-        await runFile(
-          path.join(requireTools().binDir, "psql"),
-          [
-            "-h",
-            LOOPBACK_HOST,
-            "-p",
-            String(config.port),
-            "-U",
-            config.ownerRole,
-            "-d",
-            target,
-            "--set",
-            "ON_ERROR_STOP=1",
-            "--no-psqlrc",
-            "--single-transaction",
-            ...guardArgs,
-            "--file",
-            source,
-          ],
-          { timeout: 30 * 60_000, env, maxBuffer: 4 * 1024 * 1024 },
-        );
-      },
-    );
-    // A no-owner restore intentionally assigns restored objects to the
-    // migration role. These two materialized views are the narrow exception:
-    // the runtime service creates, indexes, refreshes, and ANALYZEs them, so the
-    // least-privilege application role must own only these derived objects.
-    await adminDatabasePsql(
-      target,
-      materializedViewOwnershipSql(config.appRole),
-    );
-  }
-
-  async function validateRestoredDatabase(
-    database: string,
-    config: NativeDatabaseConfig,
-    expectedSchemaHead: string | undefined,
-  ): Promise<{ schemaHead: string; tableCount: number }> {
-    const target = validateIdentifier(database, "database name");
-    return withPgPass(
-      config,
-      config.ownerRole,
-      config.ownerPassword,
-      async (env) => {
-        const result = await runFile(
-          path.join(requireTools().binDir, "psql"),
-          [
-            "-h",
-            LOOPBACK_HOST,
-            "-p",
-            String(config.port),
-            "-U",
-            config.ownerRole,
-            "-d",
-            target,
-            "--tuples-only",
-            "--no-align",
-            "--no-psqlrc",
-            "--set",
-            "ON_ERROR_STOP=1",
-            "--command",
-            "SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public';",
-          ],
-          { timeout: 30_000, env },
-        );
-        const tableCount = Number(result.stdout.trim());
-        if (!Number.isInteger(tableCount) || tableCount <= 0)
-          throw new Error("Restored database has no public schema tables");
-        const ledger = await readSchemaLedger(target, config, env, 30_000);
-        if (!ledger.head) throw preBaselineBackupError();
-        if (expectedSchemaHead && ledger.head !== expectedSchemaHead.trim()) {
-          throw new Error(
-            "Restored database schema revision does not match backup metadata",
-          );
-        }
-        return { schemaHead: ledger.head, tableCount };
-      },
-    );
-  }
-
+  /**
+   * Stage a database file as the next generation, verify the staged copy,
+   * then swap generations with two directory renames journaled beforehand.
+   * Nothing live changes before the copy has passed verification; a failure
+   * after the journal is written puts the previous generation back.
+   */
   async function activateRestoredDatabase(
     sourcePath: string,
-    {
-      format = "plain",
-      expectedSchemaHead,
-    }: { format?: string; expectedSchemaHead?: string | undefined } = {},
+    { expectedSchemaVersion, expectedSha256 }: ActivateRestoreOptions = {},
   ): Promise<{
     switchToken: DatabaseSwitchToken;
-    validation: { schemaHead: string; tableCount: number };
+    validation: DatabaseFileReport;
   }> {
     await assertNativeActive();
-    const config = await bootstrapDatabase();
-    const stagingDatabase = restoreDatabaseName(config.database, "restore");
-    const previousDatabase = restoreDatabaseName(config.database, "previous");
-    let switchToken: DatabaseSwitchToken | undefined;
-    await createEmptyDatabase(stagingDatabase, config.ownerRole);
-    try {
-      await restoreIntoDatabase(sourcePath, stagingDatabase, format, config);
-      const validation = await validateRestoredDatabase(
-        stagingDatabase,
-        config,
-        expectedSchemaHead,
+    await ensureLayout();
+    if (!tools) await discover();
+    await recoverOnce();
+    const source = path.resolve(sourcePath);
+    const stat = await fs.promises.lstat(source);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0) {
+      throw codedError(
+        "The database to restore is empty or not a file",
+        "INVALID_DATABASE_FILE",
       );
+    }
+    const nonce = generationNonce();
+    const staging = path.join(
+      userDataDir,
+      `${DATABASE_DIRECTORY_NAME}.restore-${nonce}`,
+    );
+    const previous = path.join(
+      userDataDir,
+      `${DATABASE_DIRECTORY_NAME}.previous-${nonce}`,
+    );
+    let switchToken: DatabaseSwitchToken | undefined;
+    await fs.promises.mkdir(staging, { mode: 0o700 });
+    try {
+      const stagedFile = path.join(staging, DATABASE_FILE_NAME);
+      await copyFileDurably(source, stagedFile);
+      const validation = await verifyDatabaseFile(stagedFile);
+      if (
+        expectedSha256 !== undefined &&
+        validation.sha256 !== expectedSha256
+      ) {
+        throw codedError(
+          "The database in the backup does not match its recorded checksum; the backup is corrupt.",
+          "DATABASE_CHECKSUM_MISMATCH",
+        );
+      }
+      if (
+        expectedSchemaVersion !== undefined &&
+        validation.schemaVersion !== expectedSchemaVersion
+      ) {
+        throw codedError(
+          "Restored database schema revision does not match backup metadata",
+          "DATABASE_SCHEMA_MISMATCH",
+        );
+      }
       switchToken = {
-        version: 1,
-        liveDatabase: config.database,
-        previousDatabase,
-        activatedDatabase: stagingDatabase,
+        version: 2,
+        kind: "sqlite-directory",
+        liveDirectory: paths.databaseDir,
+        previousDirectory: previous,
+        activatedDirectory: staging,
         activatedAt: new Date().toISOString(),
       };
       // Persist the complete rename plan before touching the live database.
@@ -2749,15 +1771,11 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       // creating a replacement empty database or guessing which copy is live.
       await writeState({ pendingDatabaseSwitch: switchToken });
       restoreSwitchOwnedThisLaunch = true;
-      await stop({ keepPostgres: true });
-      await terminateDatabaseConnections(config.database);
-      await terminateDatabaseConnections(stagingDatabase);
-      await adminPsql(
-        `ALTER DATABASE ${quoteIdentifier(config.database)} RENAME TO ${quoteIdentifier(previousDatabase)};`,
-      );
-      await adminPsql(
-        `ALTER DATABASE ${quoteIdentifier(stagingDatabase)} RENAME TO ${quoteIdentifier(config.database)};`,
-      );
+      await stop();
+      if (await pathExists(paths.databaseDir))
+        await fs.promises.rename(paths.databaseDir, previous);
+      await fs.promises.rename(staging, paths.databaseDir);
+      await syncDirectory(userDataDir);
       return { switchToken, validation };
     } catch (error) {
       if (switchToken) {
@@ -2766,168 +1784,38 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         } catch (recoveryCause) {
           restoreSwitchOwnedThisLaunch = false;
           startupRestoreRecovery = undefined;
-          const recoveryError: NativeRuntimeError = new Error(
+          const recoveryError = codedError(
             "Native database activation failed and automatic rollback did not complete; Vision remains stopped.",
+            "DATABASE_SWITCH_RECOVERY_FAILED",
             { cause: error },
           );
-          recoveryError.code = "DATABASE_SWITCH_RECOVERY_FAILED";
           recoveryError.recoveryErrors = [recoveryCause];
           throw recoveryError;
         }
-      } else if (await databaseExists(stagingDatabase)) {
-        await terminateDatabaseConnections(stagingDatabase).catch(() => {});
-        await adminPsql(
-          `DROP DATABASE ${quoteIdentifier(stagingDatabase)};`,
-        ).catch(() => {});
+      } else {
+        await fs.promises
+          .rm(staging, { recursive: true, force: true })
+          .catch(() => {});
       }
       throw error;
     }
-  }
-
-  async function validateCustomDump(
-    sourcePath: string,
-  ): Promise<{ bytes: number }> {
-    if (!tools) await discover();
-    const source = path.resolve(sourcePath);
-    const stat = await fs.promises.lstat(source);
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0) {
-      const error: NativeRuntimeError = new Error(
-        "PostgreSQL custom dump is empty or not a file",
-      );
-      error.code = "INVALID_POSTGRES_DUMP";
-      throw error;
-    }
-    try {
-      await runFile(
-        path.join(requireTools().binDir, "pg_restore"),
-        ["--list", source],
-        {
-          timeout: 60_000,
-        },
-      );
-    } catch (cause) {
-      const error: NativeRuntimeError = new Error(
-        "PostgreSQL custom dump is corrupt or truncated",
-      );
-      error.code = "INVALID_POSTGRES_DUMP";
-      error.cause = cause;
-      throw error;
-    }
-    return { bytes: stat.size };
-  }
-
-  async function getDatabaseStats({
-    database,
-  }: { database?: string | undefined } = {}): Promise<DatabaseStats> {
-    const config = await ensureLayout();
-    if (!tools) await discover();
-    const target = validateIdentifier(
-      database || config.database,
-      "database name",
-    );
-    return withPgPass(
-      config,
-      config.ownerRole,
-      config.ownerPassword,
-      async (env) => {
-        const result = await runFile(
-          path.join(requireTools().binDir, "psql"),
-          [
-            "-h",
-            LOOPBACK_HOST,
-            "-p",
-            String(config.port),
-            "-U",
-            config.ownerRole,
-            "-d",
-            target,
-            "--tuples-only",
-            "--no-align",
-            "--field-separator",
-            "\t",
-            "--quiet",
-            "--no-psqlrc",
-            "--set",
-            "ON_ERROR_STOP=1",
-            "--command",
-            DATABASE_STATS_SQL,
-          ],
-          { timeout: 60_000, env },
-        );
-        return parseDatabaseStats(result.stdout);
-      },
-    );
-  }
-
-  async function applyOwnerSqlFile(
-    sourcePath: string,
-    { database }: { database?: string | undefined } = {},
-  ): Promise<{ status: "applied"; database: string; bytes: number }> {
-    const source = path.resolve(sourcePath);
-    const stat = await fs.promises.lstat(source);
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0) {
-      const error: NativeRuntimeError = new Error(
-        "PostgreSQL seed source is empty or not a file",
-      );
-      error.code = "INVALID_POSTGRES_SEED";
-      throw error;
-    }
-    const config = await bootstrapDatabase();
-    const target = validateIdentifier(
-      database || config.database,
-      "database name",
-    );
-    await withPgPass(
-      config,
-      config.ownerRole,
-      config.ownerPassword,
-      async (env) => {
-        await runFile(
-          path.join(requireTools().binDir, "psql"),
-          [
-            "-h",
-            LOOPBACK_HOST,
-            "-p",
-            String(config.port),
-            "-U",
-            config.ownerRole,
-            "-d",
-            target,
-            "--set",
-            "ON_ERROR_STOP=1",
-            "--no-psqlrc",
-            "--single-transaction",
-            "--file",
-            source,
-          ],
-          { timeout: 30 * 60_000, env, maxBuffer: 4 * 1024 * 1024 },
-        );
-      },
-    );
-    return { status: "applied", database: target, bytes: stat.size };
   }
 
   async function rollbackDatabaseSwitch(switchToken?: unknown): Promise<{
     status: "rolled-back";
     preservedFailedDatabase: string | undefined;
   }> {
-    const config = await ensureLayout();
+    await ensureLayout();
     const token = switchToken || (await readState())?.pendingDatabaseSwitch;
-    if (!token || fieldsOf(token).liveDatabase !== config.database)
+    if (!token)
       throw new Error("No matching native database switch is available");
-    const { previousDatabase, activatedDatabase } = fieldsOf(token);
-    const previous = validateIdentifier(
-      previousDatabase,
-      "previous database name",
-    );
-    const activated = validateIdentifier(
-      activatedDatabase,
-      "activated database name",
-    );
-    await stop({ keepPostgres: true });
-    const liveExists = await databaseExists(config.database);
-    const previousExists = await databaseExists(previous);
-    const activatedExists = await databaseExists(activated);
+    const { live, previous, activated } = switchTokenDirectories(token);
+    await stop();
+    // ensureLayout recreates an empty live directory; only a database file
+    // inside it makes the live generation real.
+    const liveExists = await pathExists(path.join(live, DATABASE_FILE_NAME));
+    const previousExists = await pathExists(previous);
+    const activatedExists = await pathExists(activated);
     const switchState = classifyDatabaseSwitchState({
       liveExists,
       previousExists,
@@ -2937,37 +1825,36 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         "Neither the live nor previous native database exists; automatic rollback is unsafe",
       );
     }
-    if (liveExists) await terminateDatabaseConnections(config.database);
-    if (previousExists) await terminateDatabaseConnections(previous);
-    if (activatedExists) await terminateDatabaseConnections(activated);
 
     let preservedFailedDatabase = activatedExists ? activated : undefined;
-    if (switchState === "activated") {
-      const failedDatabase = restoreDatabaseName(config.database, "failed");
-      await adminPsql(
-        `ALTER DATABASE ${quoteIdentifier(config.database)} RENAME TO ${quoteIdentifier(failedDatabase)};`,
+    if (switchState === "activated" || switchState === "between-renames") {
+      const failed = path.join(
+        userDataDir,
+        `${DATABASE_DIRECTORY_NAME}.failed-${generationNonce()}`,
       );
+      // The live directory exists in both states: as the activated
+      // generation, or as the empty directory a layout check recreated.
+      const liveDirectoryExists = await pathExists(live);
+      if (liveDirectoryExists) await fs.promises.rename(live, failed);
       try {
-        await adminPsql(
-          `ALTER DATABASE ${quoteIdentifier(previous)} RENAME TO ${quoteIdentifier(config.database)};`,
-        );
+        await fs.promises.rename(previous, live);
       } catch (error) {
-        await adminPsql(
-          `ALTER DATABASE ${quoteIdentifier(failedDatabase)} RENAME TO ${quoteIdentifier(config.database)};`,
-        ).catch(() => {});
+        if (liveDirectoryExists)
+          await fs.promises.rename(failed, live).catch(() => {});
         throw error;
       }
-      preservedFailedDatabase = failedDatabase;
-    } else if (switchState === "between-renames") {
-      await adminPsql(
-        `ALTER DATABASE ${quoteIdentifier(previous)} RENAME TO ${quoteIdentifier(config.database)};`,
-      );
+      await syncDirectory(userDataDir);
+      if (switchState === "activated") preservedFailedDatabase = failed;
+      else
+        await fs.promises
+          .rm(failed, { recursive: true, force: true })
+          .catch(() => {});
     }
     await writeState({
       pendingDatabaseSwitch: undefined,
       lastRollback: {
         restoredDatabase:
-          switchState === "before-renames" ? config.database : previous,
+          switchState === "before-renames" ? live : previous,
         preservedFailedDatabase,
         rolledBackAt: new Date().toISOString(),
       },
@@ -2975,6 +1862,31 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     restoreSwitchOwnedThisLaunch = false;
     startupRestoreRecovery = undefined;
     return { status: "rolled-back", preservedFailedDatabase };
+  }
+
+  /** Keeps the newest previous generations; older ones are removed. */
+  async function prunePreviousDatabaseGenerations(): Promise<void> {
+    const prefix = `${DATABASE_DIRECTORY_NAME}.previous-`;
+    const entries = await fs.promises.readdir(userDataDir, {
+      withFileTypes: true,
+    });
+    const generations = await Promise.all(
+      entries
+        .filter((entry) => entry.isDirectory() && entry.name.startsWith(prefix))
+        .map(async (entry) => {
+          const full = path.join(userDataDir, entry.name);
+          return { full, mtimeMs: (await fs.promises.stat(full)).mtimeMs };
+        }),
+    );
+    generations.sort(
+      (a, b) =>
+        b.mtimeMs !== a.mtimeMs
+          ? b.mtimeMs - a.mtimeMs
+          : b.full.localeCompare(a.full),
+    );
+    for (const old of generations.slice(PREVIOUS_DATABASE_GENERATIONS_KEPT)) {
+      await fs.promises.rm(old.full, { recursive: true, force: true });
+    }
   }
 
   async function finalizeDatabaseSwitch(
@@ -2986,80 +1898,21 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     const state = await readState();
     const token = switchToken || state?.pendingDatabaseSwitch;
     if (!token) return { status: "no-pending-switch" };
+    const previousDatabase = optionalFieldsOf(token)?.previousDirectory;
     await writeState({
       pendingDatabaseSwitch: undefined,
-      previousDatabase: fieldsOf(token).previousDatabase,
+      previousDatabase,
       lastDatabaseSwitchAt: new Date().toISOString(),
     });
     restoreSwitchOwnedThisLaunch = false;
     startupRestoreRecovery = undefined;
-    return {
-      status: "finalized",
-      previousDatabase: fieldsOf(token).previousDatabase,
-    };
-  }
-
-  async function dumpDatabase(
-    destination: string,
-    {
-      format = "plain",
-      database,
-    }: { format?: string; database?: string | undefined } = {},
-  ): Promise<{ path: string; format: string; bytes: number }> {
-    const config = await ensureLayout();
-    if (!tools) await discover();
-    if (!["plain", "custom"].includes(format))
-      throw new Error(`Unsupported dump format: ${format}`);
-    const finalPath = path.resolve(destination);
-    const partialPath = `${finalPath}.partial`;
-    await fs.promises.mkdir(path.dirname(finalPath), {
-      recursive: true,
-      mode: 0o700,
-    });
-    await fs.promises.unlink(partialPath).catch(() => {});
-    try {
-      await withPgPass(config, config.ownerRole, config.ownerPassword, (env) =>
-        runFile(
-          path.join(requireTools().binDir, "pg_dump"),
-          [
-            "-h",
-            LOOPBACK_HOST,
-            "-p",
-            String(config.port),
-            "-U",
-            config.ownerRole,
-            "-d",
-            database || config.database,
-            "--no-owner",
-            "--no-acl",
-            "--no-comments",
-            ...REQUIRED_POSTGRES_EXTENSIONS.flatMap((extension) => [
-              "--exclude-extension",
-              extension,
-            ]),
-            ...(format === "custom" ? ["--format=custom"] : ["--format=plain"]),
-            "--file",
-            partialPath,
-          ],
-          { timeout: 30 * 60_000, env, maxBuffer: 1024 * 1024 },
-        ),
+    // Retention is cleanup after the commit point; it never fails the restore.
+    await prunePreviousDatabaseGenerations().catch((error: unknown) => {
+      console.warn(
+        `[native] could not prune previous database generations: ${String(optionalFieldsOf(error)?.message ?? error)}`,
       );
-      const stat = await fs.promises.stat(partialPath);
-      if (stat.size <= 0) throw new Error("PostgreSQL dump is empty");
-      if (format === "custom") {
-        await runFile(
-          path.join(requireTools().binDir, "pg_restore"),
-          ["--list", partialPath],
-          { timeout: 60_000 },
-        );
-      }
-      await fs.promises.rename(partialPath, finalPath);
-      await fs.promises.chmod(finalPath, 0o600);
-      return { path: finalPath, format, bytes: stat.size };
-    } catch (error) {
-      await fs.promises.unlink(partialPath).catch(() => {});
-      throw error;
-    }
+    });
+    return { status: "finalized", previousDatabase };
   }
 
   async function exportAttachments(
@@ -3117,40 +1970,33 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
   return Object.freeze({
     mode: "native",
     runtimeId,
-    names,
     paths,
     ensureLayout,
     importApplicationEnv,
     discover,
-    ensureManagedPostgresCluster,
-    ensurePostgresReady,
     recoverInterruptedRestore,
-    bootstrapDatabase,
+    ensureDatabaseReady,
     assertNativeActive,
     readState,
     writeState,
     start,
     backendStartupFailure,
     stop,
-    stopPostgres,
     restart,
     health,
     waitUntilReady,
-    getSchemaHead,
-    getAppliedMigrations,
-    pendingMigrations,
-    dumpDatabase,
+    pendingSchemaUpgrade,
+    verifyDatabaseFile,
+    snapshotDatabase,
+    createDatabaseFile,
+    getDatabaseStats,
     exportAttachments,
     replaceAttachments,
     rollbackAttachmentSwitch,
     finalizeAttachmentSwitch,
     processMatchesBackend,
-    migrateDatabase,
     activateRestoredDatabase,
     rollbackDatabaseSwitch,
     finalizeDatabaseSwitch,
-    validateCustomDump,
-    getDatabaseStats,
-    applyOwnerSqlFile,
   });
 }

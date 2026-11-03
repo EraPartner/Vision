@@ -1,5 +1,5 @@
 /**
- * Real-Postgres end-to-end tests for a MULTI-CURRENCY Revolut import.
+ * Real-database (SQLite) end-to-end tests for a MULTI-CURRENCY Revolut import.
  *
  * ADR-089's addendum (decision D2, 2026-07-10) settled that a Revolut account
  * stays ONE `accounts` row holding several currencies, rather than being split
@@ -171,10 +171,10 @@ interface LedgerRow {
 async function ledger() {
   const { rows } = await must(pool, "pool").query<LedgerRow>(
     `SELECT to_char(t.date, 'YYYY-MM-DD') AS date, a.name AS account_name,
-            t.amount::text AS amount, t.currency, t.balance::text AS balance
+            t.amount, t.currency, t.balance
        FROM transactions t
        JOIN accounts a ON a.id = t.account_id
-      WHERE t.is_active = true
+      WHERE t.is_active = 1
       ORDER BY t.date, t.currency, t.id`,
   );
   return rows;
@@ -250,7 +250,7 @@ describeDb("Revolut multi-currency import (real DB)", () => {
     // computed_balance converts at the latest stored rate only.
     await must(pool, "pool").query<DbRow>(
       `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-       VALUES ('USD', '0.5', CURRENT_DATE, true)`,
+       VALUES ('USD', vision_numeric('0.5', 20, 10), today(), 1)`,
     );
     clearMemoryCache();
     const account = await hubAccount();

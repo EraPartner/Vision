@@ -1,11 +1,11 @@
 /**
- * Real-Postgres tests for infoRepositoryBanks (`getBankBalances`).
+ * Real-database (SQLite) tests for infoRepositoryBanks (`getBankBalances`).
  *
  * DB-backed complement to infoRepoBanks.test.ts (which stays: it runs without a
  * DB). That mock suite choreographs `query` resolutions in order and asserts SQL
  * substrings — it can prove the two statements are *fired* in parallel and that
  * they *mention* `in_net_worth`, but it feeds the JS half pre-shaped rows and so
- * never observes what Postgres actually returns. Everything asserted here comes
+ * never observes what the database actually returns. Everything asserted here comes
  * out of the real schema: the shared anchor+delta lateral
  * (BALANCE_PROVENANCE_LATERAL) resolving against real NUMERIC/DATE columns, the
  * `accounts` population gates (type/in_net_worth/transaction_count), the 12-month
@@ -15,8 +15,8 @@
  * (`todayAppDateString()`), so fixtures are dated by SQL expressions relative to
  * it (never by a literal calendar date) and the expectations are computed from
  * the same anchor. Fixture SQL spells the anchor `CURRENT_DATE`; `appDated`
- * swaps in the app date, because the session's CURRENT_DATE follows the
- * cluster time zone and is a different day for part of every night.
+ * translates it to SQLite date functions on the app date, because the
+ * database clock's day can differ from it for part of every night.
  *
  * The materialized views are not involved here (this repository has no MV fast
  * path); the currency memory cache is cleared around every test so no test sees
@@ -26,24 +26,20 @@
 import {
   afterAll,
   afterEach,
-  beforeAll,
   describe,
   expect,
   it,
   vi,
 } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { banksRepository } from "../src/repositories/infoRepositoryBanks.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
-import { todayAppDateString } from "../src/lib/timezone.ts";
+import { appDateStringToUtc, todayAppDateString } from "../src/lib/timezone.ts";
 import { must } from "./helpers/must.ts";
 import { valueAt } from "./helpers/responseBody.ts";
 import type {
@@ -69,9 +65,27 @@ vi.mock("../src/services/currency/rateFetcher.ts", async (original) =>
 
 const rec: Record<string, unknown> = {};
 
-/** Replace `CURRENT_DATE` in fixture SQL with the repository's "today". */
+/**
+ * Fixture date expressions are written `CURRENT_DATE`, optionally followed by
+ * `± interval 'n day(s)|month(s)|year(s)'`. This turns one into SQLite SQL on
+ * the repository's "today" (the APP_TIMEZONE date, never the database
+ * clock): add_days / add_months clamp a month end exactly as PostgreSQL's
+ * date ± interval did.
+ */
 function appDated(sql: string) {
-  return sql.replaceAll("CURRENT_DATE", `'${todayAppDateString()}'::date`);
+  const today = `'${todayAppDateString()}'`;
+  return sql
+    .replace(
+      /CURRENT_DATE\s*([+-])\s*interval\s*'(\d+)\s*(day|month|year)s?'/gi,
+      (_m, sign: string, n: string, unit: string) => {
+        const k = (sign === "-" ? -1 : 1) * Number(n);
+        const u = unit.toLowerCase();
+        return u === "day"
+          ? `add_days(${today}, ${k})`
+          : `add_months(${today}, ${u === "year" ? 12 * k : k})`;
+      },
+    )
+    .replaceAll("CURRENT_DATE", today);
 }
 
 /** 'YYYY-MM-DD' for `CURRENT_DATE + <sqlInterval>` (empty string = today). */
@@ -79,7 +93,7 @@ async function ymdFromToday(sqlInterval = "") {
   const expr = sqlInterval ? `CURRENT_DATE ${sqlInterval}` : "CURRENT_DATE";
   const { rows } = await must(getTestPool(), "getTestPool()").query<{
     d: string;
-  }>(`SELECT to_char((${appDated(expr)})::date, 'YYYY-MM-DD') AS d`);
+  }>(`SELECT to_char(${appDated(expr)}, 'YYYY-MM-DD') AS d`);
   return must(rows[0], "rows[0]").d;
 }
 
@@ -121,14 +135,14 @@ async function addAccount(
     id: AccountId;
   }>(
     `INSERT INTO accounts (name, display_name, type, in_net_worth, currency)
-     VALUES ($1, $2, $3::account_type, $4, $5) RETURNING id`,
+     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
     [name, displayName, type, inNetWorth, currency],
   );
   const id = must(rows[0], "rows[0]").id;
   if (statementBalance != null) {
     await must(getTestPool(), "getTestPool()").query(
       `INSERT INTO account_statement_balances (account_id, currency, balance, balance_date)
-       VALUES ($1, $2, $3, $4)`,
+       VALUES ($1, $2, vision_numeric($3, 18, 4), ts_date($4))`,
       [id, statementCurrency, statementBalance, statementBalanceDate],
     );
   }
@@ -160,9 +174,9 @@ async function insertTxn({
     id: TransactionId;
   }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, account_id, balance, is_active)
-     VALUES ((${appDated(dateExpr)})::date, $1, $2, $3,
+     VALUES (ts_date(${appDated(dateExpr)}), vision_numeric($1, 18, 4), $2, $3,
              (SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($4))),
-             $5, $6) RETURNING id`,
+             vision_numeric($5, 18, 4), $6) RETURNING id`,
     [amount, currency, rec.misc, bank, balance, isActive],
   );
   return must(rows[0], "rows[0]").id;
@@ -177,23 +191,14 @@ async function insertRate(
 ) {
   await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-     VALUES ($1, (${appDated(dateExpr)})::date, $2, $3)`,
+     VALUES ($1, ts_date(${appDated(dateExpr)}), vision_numeric($2, 20, 10), $3)`,
     [code, rate, isLatest],
   );
 }
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "repositories/infoRepositoryBanks (real DB)",
   () => {
-    beforeAll(async () => {
-      expect(
-        process.env.DATABASE_URL,
-        "DATABASE_URL must equal TEST_DATABASE_URL for this suite (see scripts/with-test-db.sh)",
-      ).toBe(process.env.TEST_DATABASE_URL);
-      // DB suites share one database across parallel vitest workers — serialize.
-      await acquireDbSuiteLock();
-    }, 180_000);
-
     afterEach(async () => {
       const pool = must(getTestPool(), "getTestPool()");
       await pool.query("DELETE FROM transactions");
@@ -206,7 +211,6 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
@@ -480,13 +484,13 @@ describe.skipIf(!hasTestDatabase())(
 
         const r = await banksRepository.getBankBalances();
         const points = must(r.history["OLD STAMP"], 'r.history["OLD STAMP"]');
-        // generate_series(CURRENT_DATE - 12 months, CURRENT_DATE, 1 day) inclusive.
+        // The daily grid from today - 12 months through today, inclusive.
         const { rows } = await must(
           getTestPool(),
           "getTestPool()",
         ).query<DbRow>(
           appDated(
-            `SELECT (CURRENT_DATE - (CURRENT_DATE - interval '12 months')::date + 1) AS n`,
+            `SELECT date_diff_days(CURRENT_DATE, CURRENT_DATE - interval '12 months') + 1 AS n`,
           ),
         );
         expect(points).toHaveLength(Number(must(rows[0], "rows[0]").n));
@@ -498,6 +502,50 @@ describe.skipIf(!hasTestDatabase())(
         ).toBe(await ymdFromToday());
         expect(points.every((p) => p.balance === 500)).toBe(true);
       });
+
+      // The window opens at today - 12 months on the local calendar, clamped to
+      // the month end as PostgreSQL's date - interval '12 months' was: from a
+      // leap day it opens on 28 February. Balances are exact decimal sums.
+      it.each([
+        ["2024-02-29", "2023-02-28", 367],
+        ["2025-03-31", "2024-03-31", 366],
+        ["2026-02-28", "2025-02-28", 366],
+      ])(
+        "on %s opens the 12-month grid on %s with %i daily points",
+        async (today, windowStart, points) => {
+          await seedRecipient();
+          await addAccount("LEAP BANK");
+          // Stamped before the window, then unstamped rows that only add up
+          // exactly as decimals.
+          await insertTxn({
+            dateExpr: "'2020-01-15'",
+            amount: "0.10",
+            bank: "LEAP BANK",
+            balance: "0.10",
+          });
+          await insertTxn({ dateExpr: `'${windowStart}'`, amount: "0.20", bank: "LEAP BANK" });
+          await insertTxn({ dateExpr: `'${today}'`, amount: "0.01", bank: "LEAP BANK" });
+
+          try {
+            vi.useFakeTimers({ toFake: ["Date"] });
+            vi.setSystemTime(
+              new Date(appDateStringToUtc(today).getTime() + 12 * 3_600_000),
+            );
+            expect(todayAppDateString()).toBe(today);
+
+            const r = await banksRepository.getBankBalances();
+            const series = must(r.history["LEAP BANK"], 'r.history["LEAP BANK"]');
+            expect(series).toHaveLength(points);
+            expect(series[0]).toEqual({ date: windowStart, balance: 0.3 });
+            expect(series[1]?.balance).toBe(0.3);
+            expect(series[series.length - 2]?.balance).toBe(0.3);
+            expect(series[series.length - 1]).toEqual({ date: today, balance: 0.31 });
+            expect(r.total_net_position).toBe(0.31);
+          } finally {
+            vi.useRealTimers();
+          }
+        },
+      );
 
       it("opens the window at the balance carried in from BEFORE it, stamps and unstamped rows alike", async () => {
         // The series is computed over the whole ledger and then clamped onto the

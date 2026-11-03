@@ -2,8 +2,8 @@
 title: Common Tasks Quick Reference
 type: map-of-content
 status: active
-date: 2026-10-21
-updated: 2026-10-21
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     moc,
@@ -154,15 +154,15 @@ aliases:
 
 ```bash
 # Development
-bun run dev              # Start private PostgreSQL, backend and Vite
-bun run db:migrate       # Run migrations
+bun run dev              # Start native Electron development (SQLite file in the dev data directory)
+bun run db:migrate       # Run migrations on the VISION_DATABASE_PATH file
 
 # Testing
 bun run check            # Run all local checks (lint, typecheck, locales, endpoint matrix, tests)
 bun run lint             # Frontend ESLint + lint:deps (import boundaries) + lint:dead (knip)
 bun run lint:backend     # Backend ESLint, including the type-aware rules
-bun run test             # Backend suite without a database; DB cases self-skip
-bun run test:watch       # Backend watch mode with disposable PostgreSQL 18
+bun run test             # Backend suite; DB tests use SQLite template copies and never skip
+bun run test:watch       # Backend watch mode, including the performance probes
 
 # Building
 bun run build            # Production build

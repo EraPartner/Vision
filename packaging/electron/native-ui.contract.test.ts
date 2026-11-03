@@ -113,7 +113,9 @@ void test("main locates uncompiled files from the package root, not out/", () =>
   );
   assert.match(main, /path\.join\(appRoot, "i18n"\)/);
   assert.match(main, /path\.join\(appRoot, "assets", "error\.html"\)/);
-  assert.match(main, /path\.join\(appRoot, "native-runtime"\)/);
+  // A source checkout runs the backend from the repository; only a packaged
+  // app has a native-runtime payload, inside its resources.
+  assert.match(main, /path\.join\(process\.resourcesPath, "native-runtime"\)/);
   assert.match(
     main,
     /const repoRoot = path\.resolve\(appRoot, "\.\.", "\.\."\)/,

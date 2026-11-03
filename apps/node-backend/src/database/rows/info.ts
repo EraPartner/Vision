@@ -3,14 +3,17 @@
  * insights, Belgian inflation, the rebalance workspace and the report data
  * fetchers (ADR-193).
  *
- * Each schema describes what node-postgres returns with its default type
- * parsers for the projection named in its description; see
- * `../rowSchemas.ts` for the primitives and conventions. Schemas only check.
+ * Each schema describes the row the SQLite driver (database/connection.ts,
+ * ADR-263) returns for the projection named in its description — the shapes
+ * node-postgres returned on PostgreSQL; see `../rowSchemas.ts` for the
+ * primitives and conventions. Schemas only check.
  *
- * Aggregates: `SUM` of NUMERIC is NUMERIC and `SUM` of BIGINT is NUMERIC
- * (strings), `COUNT(*)` is BIGINT (a string), `MIN`/`MAX` of DATE is a DATE
- * (`Date`). An aggregate over a non-empty GROUP BY group is never NULL; a
- * `FILTER`ed one, a scalar aggregate and anything behind a LEFT JOIN can be.
+ * Aggregates: `dec_sum` of a decimal column is decimal text (a string), a
+ * `COUNT(*)` read through a `::bigint` alias hint or `CAST(... AS TEXT)` is a
+ * string (a bare one is a number), and `MIN`/`MAX` of a date column read with
+ * a `::date` hint is a `Date`. An aggregate over a non-empty GROUP BY group is
+ * never NULL; a `FILTER`ed one, a scalar aggregate and anything behind a LEFT
+ * JOIN can be.
  */
 import { z } from "zod";
 import {
@@ -37,13 +40,14 @@ export const pgDouble = z.custom<number>((value) => typeof value === "number", {
   message: "expected number",
 });
 
-/** A JSONB object column (pg hands it back parsed). */
+/** A JSONB object column (the driver hands it back parsed). */
 const pgJsonObject = z.record(z.string(), z.unknown());
 
 /**
  * The `balance_parts` column of `computedBalanceByCurrencyAggLateral`:
- * `jsonb_agg` of `{ currency, balance::text }`, NULL for an account with no
- * active rows.
+ * a JSON array of `{ currency, balance }` with the balance as decimal text,
+ * read through the `::json` alias hint; NULL for an account with no active
+ * rows.
  */
 const balancePartsSchema = z
   .array(z.object({ currency: pgCurrency, balance: pgNumeric }))
@@ -228,8 +232,9 @@ export const bankBalanceRowSchema = z
     currency: pgCurrency,
     balance: pgNumeric,
     /**
-     * `json_build_object` over the NUMERIC column: JSON encodes it as a
-     * number, so `balance` arrives as a JS number.
+     * `json_object` over the decimal column with `json(balance)`: JSON
+     * encodes it as a number, as PostgreSQL's json_build_object did, so
+     * `balance` arrives as a JS number.
      */
     statement_balances: z.array(
       z.object({

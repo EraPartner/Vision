@@ -3,8 +3,8 @@ title: Backend Architecture
 type: architecture
 status: active
 description: "Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069). September 2026: transaction ownership uses the ADR-088 Account entity and canonical account_id foreign keys."
-date: 2026-10-28
-last_modified: 2026-10-28
+date: 2026-11-03
+last_modified: 2026-11-03
 tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension, route-service-boundary, thin-seams, global-rate-limiter, trusted-proxies, vision-dev, mv-recipient-monthly-drop, shared-utils, banker-rounding]
 aliases: [backend architecture, node architecture, server design]
 ---
@@ -63,28 +63,32 @@ and income scopes and their proof services. See
 
 ## Startup Sequence Ordering (Fixed 2026-04-25; Backend DB Polling 2026-04-27)
 
-### Database Connection (2026-04-27)
+### Database Connection
 
-Backend now owns DB readiness polling via `checkConnection()` loop in `apps/node-backend/src/main.ts`:
-
-- **40 attempts** with exponential backoff (50ms → 1s)
-- Non-blocking: Bun process starts immediately instead of blocking behind entrypoint
-- On cold boots, this allows Bun initialization to overlap with postgres data-dir creation (~1s saved)
-- Prior approach: entrypoint `pg_isready` loop (60 attempts × 0.2s = up to 12s serial wait)
+The backend opens one SQLite file in-process, so it has no database server to wait for
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). `apps/node-backend/src/main.ts` first runs
+`runMigrations()` on the file named by `VISION_DATABASE_PATH`. It then calls `checkConnection()`
+once, which runs `SELECT 1` on the reader connection. If that fails, the backend stops with
+`Failed to open the database at <path>`. The readiness poll of the PostgreSQL build (40 attempts
+with exponential backoff) was removed.
 
 ### Initialization Dependency Chain
 
-Once DB is ready, initialization respects dependency ordering to prevent cache and snapshot jobs from running before FX data is populated:
+Once the database is open, initialization respects dependency ordering to prevent cache and snapshot jobs from running before FX data is populated:
 
-1. **Database connection** — `checkConnection()` poll (40 attempts, exponential backoff)
-2. **Database migrations** — `runMigrations()` applies pending `db/migrations/` files in-process
-   with Kysely's migrator in one transaction. An empty PostgreSQL 18 database receives the `0001`
-   baseline and must match its catalog fingerprint; a database with application objects but no
-   migration marker is refused and left unchanged. See
-   [[docs/guides/migrations|Database Migration Guide]],
+1. **Database migrations** — `runMigrations()` applies pending `db/migrations/` files in-process
+   in one `BEGIN IMMEDIATE` transaction and records each one with its SHA-256 in
+   `vision_migrations`. Before it changes a database that holds data, it writes a `VACUUM INTO`
+   copy to `pre-migration-backups/` next to the database file. It refuses a database that has
+   tables but no ledger, a migration this build does not know, or a changed checksum, and leaves
+   the database unchanged. See [[docs/guides/migrations|Database Migration Guide]],
    [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] and
-   [[docs/adr/224-remove-alembic-adoption|ADR-224]].
-3. **Materialized-view warmup** — after Express starts listening, create, index, and refresh the two runtime-managed views. Each phase has its own boot trace mark; failures degrade `/health/detailed` and reads fall back to live SQL.
+   [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]].
+2. **Database open** — one `checkConnection()` call on the reader connection.
+3. **Summary-table warmup** — after Express starts listening, fill the two summary tables
+   (`mv_monthly_summary`, `mv_category_totals`) if they are empty, make sure their unique indexes
+   exist, and refresh them. Each phase has its own boot trace mark; failures degrade
+   `/health/detailed` and reads fall back to live SQL.
 4. **Network reachability probe** — Single `isInternetReachable()` call via [[apps/node-backend/src/lib/network.ts]]
    - TCP probe to 1.1.1.1:443 with 1.5s timeout (manual timer for SYN bind-off)
    - Result cached for 30s; concurrent callers share in-flight promise
@@ -658,7 +662,7 @@ All aggregation endpoints return:
 
 **Source Heuristic:**
 
-- `'mv'` — Unfiltered request served from materialized view (fast, stale)
+- `'mv'` — Unfiltered request served from a summary table (fast, stale)
 - `'live'` — Exclusions force dynamic transaction scan (slower, current)
 
 **Modules:**
@@ -758,9 +762,9 @@ and [[docs/guides/deployment#Network boundary|Deployment]].
 - `POST /api/info/refresh-views` now uses `adminRateLimiter` for additional protection of expensive refresh operations ([[apps/node-backend/src/routes/info.ts]]).
 - Error responses for selected admin/import/transaction paths are now sanitized to avoid leaking internal exception details ([[apps/node-backend/src/routes/admin.ts]], [[apps/node-backend/src/routes/importRoutes.ts]], [[apps/node-backend/src/routes/transactions.ts]]).
 - Settings route validation paths are now regression-covered for single-key and bulk upsert constraints (max key length, required `value`, `dashboard_settings` exclusion validation, DELETE not-found semantics) in [[apps/node-backend/tests/routes/settings.test.ts]] against [[apps/node-backend/src/routes/settings.ts]].
-- Database connection/pool resilience paths are now regression-covered in [[apps/node-backend/tests/connection.test.ts]] for [[apps/node-backend/src/database/connection.ts]] (idle pool error handler, transient retry/backoff, non-transient fail-fast, helper methods and pool stats).
+- The SQLite connection layer [[apps/node-backend/src/database/connection.ts]] is covered in [[apps/node-backend/tests/connection.test.ts]]: placeholder binding and type mapping, SQLSTATE translation of SQLite errors, transactions and savepoints, writer serialization, read snapshots, and health after `closePool()`.
 - Pure value-validation rules live in [[apps/node-backend/src/lib/validation.ts]], while [[apps/node-backend/src/middleware/validation.ts]] keeps the Express path-parameter adapters and route compatibility exports. ID coercion and error semantics are covered in [[apps/node-backend/tests/validation.test.ts]].
-- Runtime contracts ([[docs/adr/193-zod-runtime-contracts|ADR-193]]): routes parse params, query and body with `parseInput` from [[apps/node-backend/src/lib/zodInput.ts]] (400 `VALIDATION_ERROR`). Data Vision produced is checked with [[apps/node-backend/src/lib/dataContract.ts]] (bank and portfolio adapter output, stored parser configs) and [[apps/node-backend/src/database/rowContracts.ts]] (PostgreSQL rows of almost every repository and service read, against schemas in `database/rowSchemas.ts` and the per-area `database/rows/<area>.ts`; [[docs/adr/194-runtime-contracts-completion|ADR-194]]). Fallback `catch` blocks rethrow `RowContractError` instead of hiding it. Those checks throw in tests and development and follow `PRODUCTION_DATA_CONTRACT_MODE` elsewhere, which is `"throw"` (the owner chose to block, 2026-10-09); they never answer 400.
+- Runtime contracts ([[docs/adr/193-zod-runtime-contracts|ADR-193]]): routes parse params, query and body with `parseInput` from [[apps/node-backend/src/lib/zodInput.ts]] (400 `VALIDATION_ERROR`). Data Vision produced is checked with [[apps/node-backend/src/lib/dataContract.ts]] (bank and portfolio adapter output, stored parser configs) and [[apps/node-backend/src/database/rowContracts.ts]] (database rows of almost every repository and service read, against schemas in `database/rowSchemas.ts` and the per-area `database/rows/<area>.ts`; [[docs/adr/194-runtime-contracts-completion|ADR-194]]). Fallback `catch` blocks rethrow `RowContractError` instead of hiding it. Those checks throw in tests and development and follow `PRODUCTION_DATA_CONTRACT_MODE` elsewhere, which is `"throw"` (the owner chose to block, 2026-10-09); they never answer 400.
 
 ## Database Schema
 
@@ -989,9 +993,9 @@ package "Server" {
   }
 }
 
-database "PostgreSQL 18" as DB {
+database "SQLite file (vision.sqlite3)" as DB {
   node "Tables"
-  node "Materialized Views"
+  node "Summary tables (mv_*)"
   node "Indexes"
   node "Triggers"
 }
@@ -1031,20 +1035,21 @@ package "Development" {
   node "Local Machine" as Dev {
     component "Frontend (Vite)" as FrontendDev
     component "Node.js (Bun)" as BackendDev
-    component "PostgreSQL" as PostgresDev
+    component "SQLite file" as DevDb
   }
 }
 
 package "Source Hosting" {
   node "Application Host" as SourceHost {
     component "Bun backend + static frontend" as HostedApp
-    database "Operator-managed PostgreSQL 18" as HostedDb
+    database "SQLite file (VISION_DATABASE_PATH)" as HostedDb
   }
 }
 
 package "Desktop (Electron)" as Desktop {
   node "Electron Main"
   node "Electron Renderer"
+  database "SQLite file in userData" as DesktopDb
 }
 
 actor "User" as User
@@ -1053,9 +1058,8 @@ User --> Dev : Dev Access
 User --> SourceHost : HTTPS
 User --> Desktop : Desktop App
 
-Dev --> PostgresDev
+BackendDev --> DevDb
 HostedApp --> HostedDb
-Desktop --> PostgresDev
 
 @enduml
 ```
@@ -1064,10 +1068,10 @@ Desktop --> PostgresDev
 
 The application startup is orchestrated to respect critical dependencies between warming caches and backfilling data:
 
-1. **Database connection** — exponential backoff with up to 40 attempts (max 1 second each)
-2. **Database migrations** — schema DDL through the Kysely migrator described above
-3. **Materialized views** — create, index, and refresh after schema is ready
-4. **Express server listening** — immediately accept connections on configured port/host
+1. **Database migrations** — the SQLite migration runner described above
+2. **Database open** — one `checkConnection()` call
+3. **Express server listening** — immediately accept connections on configured port/host
+4. **Summary tables** — fill, index, and refresh `mv_monthly_summary` and `mv_category_totals` after the server listens
 5. **Exchange rate warm (captured promise) + FX backfill (captured promise)** — both run concurrently but promises are captured
 6. **Portfolio snapshots + Info caches** — wait for both exchange rates and FX backfill via `Promise.all([exchangeRateWarmPromise, fxBackfillPromise])` before running, ensuring `exchange_rates` table is populated before queries try to fetch "historical FX" rows (2026-04-25 fix)
 7. **Investment price refresh** — immediate/deferred split (Kinesis with valid stored price deferred to background)
@@ -1102,7 +1106,7 @@ package "Backend Services" {
 }
 
 cloud "ECB API" as ECB
-database "PostgreSQL" as DB {
+database "SQLite" as DB {
   table "exchange_rates"
 }
 
@@ -1160,7 +1164,7 @@ cloud "Providers" as Providers {
   CustomJSON
 }
 
-database "PostgreSQL" as DB
+database "SQLite" as DB
 
 PriceProviderService --> InvestmentRepository : getActiveInvestments()
 InvestmentRepository --> DB : SELECT
@@ -1208,7 +1212,7 @@ package "Backend Services" {
   class PlannedTransactionRepository
 }
 
-database "PostgreSQL" as DB {
+database "SQLite" as DB {
   table "transactions"
   table "planned_transactions"
 }
@@ -1229,7 +1233,9 @@ DB --> PlannedTransactionRepository : created
 
 ## Materialized View Refresh Flow
 
-How materialized views are maintained for performance.
+How the two summary tables that replaced the PostgreSQL materialized views are maintained. The
+baseline migration creates them as ordinary tables with unique indexes, and
+`materializedViewService.ts` refills them.
 
 ```plantuml
 @startuml
@@ -1239,29 +1245,24 @@ skinparam nodesep 30
 skinparam ranksep 40
 
 package "Backend" {
+  class Warmup
+  class AggregationRefresh
   class MaterializedViewService
-  class SchemaInit
 }
 
-database "PostgreSQL" as DB {
-  node "Materialized Views" as MatViews {
-    category_monthly_stats
-    recipient_monthly_stats
-    monthly_trends
+database "SQLite" as DB {
+  node "Summary tables" as SummaryTables {
+    mv_monthly_summary
+    mv_category_totals
   }
-  node "Indexes" as Indexes
+  node "Unique indexes" as Indexes
 }
 
-SchemaInit --> MaterializedViewService : check version
-
-alt version match
-  MaterializedViewService --> MatViews : REFRESH MATERIALIZED VIEW
-else version mismatch
-  MaterializedViewService --> MatViews : CREATE
-  MaterializedViewService --> Indexes : CREATE INDEX
-end
-
-MatViews --> DB : refreshed
+Warmup --> MaterializedViewService : createMaterializedViews()\nensureMaterializedViewIndexes()\nrefreshMaterializedViews()
+AggregationRefresh --> MaterializedViewService : scheduleRefresh() after mutations
+MaterializedViewService --> SummaryTables : fill when empty
+MaterializedViewService --> Indexes : CREATE UNIQUE INDEX IF NOT EXISTS
+MaterializedViewService --> SummaryTables : DELETE + INSERT ... SELECT\n(one write transaction)
 
 @enduml
 ```
@@ -1282,7 +1283,7 @@ participant "Forecast Router" as Router
 participant "Forecast Service" as Service
 participant "MC Cache Repo" as CacheRepo
 participant "Accuracy Repo" as AccuracyRepo
-database "PostgreSQL" as DB {
+database "SQLite" as DB {
   node "Cache Table" as CacheTable {
     cashflow_forecast_mc
   }
@@ -1368,15 +1369,15 @@ participant "ApiClient" as API
 participant "RecipientsRouter" as Router
 participant "RecipientMergeService" as Service
 participant "Repositories" as Repos
-database "PostgreSQL" as DB
+database "SQLite" as DB
 
 User -> Page : Merge Recipients
 Page -> Hook : mergeRecipients(primaryId, aliasIds)
 Hook -> API : POST /api/recipients/:id/merge
 API -> Router : POST /recipients/:id/merge
 Router -> Service : mergeRecipients(primaryId, aliasIds)
-Service -> Repos : lock primary + repoint foreign keys + flag aliases
-Repos -> DB : transactional updates
+Service -> Repos : read participants + repoint foreign keys + flag aliases
+Repos -> DB : one BEGIN IMMEDIATE transaction
 DB -> Repos : updated
 Repos -> Service : merge results
 Service -> Router : {mergedAliasIds, reassigned}

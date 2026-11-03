@@ -5,7 +5,8 @@
  * leave behind actually exist (agg tables, their triggers, the trgm index) and
  * that the orchestrator's public surface is stable.
  *
- * DB-backed cases gate on TEST_DATABASE_URL per Phase 0 fixture contract.
+ * DB-backed cases run against this file's own SQLite copy of the migrated
+ * template (ADR-263).
  *
  * NB: the DB-backed block below was written against the pre-squash chain and had
  * NEVER executed — TEST_DATABASE_URL was set nowhere, so it skipped in CI and
@@ -21,20 +22,13 @@
  * The assertions below are re-derived from the schema the chain actually builds.
  */
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "../setup/db.ts";
+import { afterAll, describe, expect, it } from "vitest";
+import { closeTestPool, getTestPool } from "../setup/db.ts";
 import {
   __TRIGGER_MAINTAINED_TABLES as TRIGGER_MAINTAINED_TABLES,
   default as aggregationRefresh,
 } from "../../src/services/aggregationRefresh.ts";
 import { createMaterializedViews } from "../../src/services/materializedViewService.ts";
-import { must } from "../helpers/must.ts";
 
 afterAll(async () => {
   await closeTestPool();
@@ -54,92 +48,96 @@ describe("services/aggregationRefresh — module surface", () => {
   });
 });
 
-describe.skipIf(!hasTestDatabase())(
-  "services/aggregationRefresh — aggregation-layer schema artifacts",
-  () => {
-    beforeAll(async () => {
-      await acquireDbSuiteLock();
-    }, 180_000);
+describe("services/aggregationRefresh — aggregation-layer schema artifacts", () => {
+  afterAll(async () => {
+    // The refresh test below fills the materialized-view tables; leave them
+    // empty again, as the migrated template has them.
+    const pool = getTestPool();
+    await pool.query("DELETE FROM mv_monthly_summary");
+    await pool.query("DELETE FROM mv_category_totals");
+  });
 
-    afterAll(async () => {
-      const pool = must(getTestPool(), "getTestPool()");
-      try {
-        await pool.query(
-          "DROP MATERIALIZED VIEW IF EXISTS mv_monthly_summary CASCADE",
-        );
-        await pool.query(
-          "DROP MATERIALIZED VIEW IF EXISTS mv_category_totals CASCADE",
-        );
-      } finally {
-        await releaseDbSuiteLock();
-      }
-    });
+  it("leaves no materialized view behind for the app to refresh", async () => {
+    // 0038 dropped mv_recipient_monthly and 0082 dropped mv_bank_balances,
+    // both as unread views whose per-mutation refresh was pure write
+    // amplification. On SQLite (ADR-263) the only mv_* relations are the two
+    // tables materializedViewService refills; a new one appearing here means
+    // someone reintroduced that cost without wiring a reader, which is the
+    // exact regression those migrations exist to prevent.
+    const pool = getTestPool();
+    const mvs = await pool.query<{ name: string; type: string }>(
+      `SELECT name, type FROM sqlite_master
+        WHERE type IN ('table', 'view') AND name LIKE 'mv\\_%' ESCAPE '\\'
+        ORDER BY name`,
+    );
+    expect(mvs.rows).toEqual([
+      { name: "mv_category_totals", type: "table" },
+      { name: "mv_monthly_summary", type: "table" },
+    ]);
+  });
 
-    it("leaves no materialized view behind for the app to refresh", async () => {
-      // 0038 dropped mv_recipient_monthly and 0082 dropped mv_bank_balances,
-      // both as unread views whose per-mutation refresh was pure write
-      // amplification. The refresh set is now empty by design; a new MV
-      // appearing here means someone reintroduced that cost without wiring a
-      // reader, which is the exact regression those migrations exist to prevent.
-      const pool = must(getTestPool(), "getTestPool()");
-      const mvs = await pool.query<{ matviewname: string }>("SELECT matviewname FROM pg_matviews");
-      expect(mvs.rows.map((r) => r.matviewname)).toEqual([]);
-    });
+  // agg_recipient_totals was dropped in 0080_drop_agg_recipient_totals; its
+  // sole reader (recipientRepository existence probe) now hits transactions
+  // directly, so there is no table/trigger to assert here anymore.
 
-    // agg_recipient_totals was dropped in 0080_drop_agg_recipient_totals; its
-    // sole reader (recipientRepository existence probe) now hits transactions
-    // directly, so there is no table/trigger to assert here anymore.
+  it("creates agg_split_outstanding with triggers on splits and payments", async () => {
+    const pool = getTestPool();
+    const table = await pool.query(
+      `SELECT 1 FROM sqlite_master
+        WHERE type = 'table' AND name = 'agg_split_outstanding'`,
+    );
+    expect(table.rows).toHaveLength(1);
 
-    it("creates agg_split_outstanding with triggers on splits and payments", async () => {
-      const pool = must(getTestPool(), "getTestPool()");
-      const table = await pool.query(
-        `SELECT 1 FROM information_schema.tables
-         WHERE table_name = 'agg_split_outstanding'`,
-      );
-      expect(table.rowCount).toBe(1);
+    // Assert the trigger sits on the expected table, not just that a name
+    // exists somewhere — a trigger on the wrong relation keeps the aggregate
+    // stale while still satisfying a name-only probe. SQLite triggers fire on
+    // one event each, so PostgreSQL's INSERT OR UPDATE OR DELETE trigger is
+    // three triggers named <trigger>__<event>.
+    const triggers = await pool.query(
+      `SELECT tbl_name AS table_name, name AS tgname
+         FROM sqlite_master
+        WHERE type = 'trigger'
+          AND (name LIKE 'trg_split_outstanding_sync%'
+               OR name LIKE 'trg_split_payment_outstanding_sync%')
+        ORDER BY name`,
+    );
+    expect(triggers.rows).toEqual([
+      { table_name: "transaction_splits", tgname: "trg_split_outstanding_sync__delete" },
+      { table_name: "transaction_splits", tgname: "trg_split_outstanding_sync__insert" },
+      { table_name: "transaction_splits", tgname: "trg_split_outstanding_sync__update" },
+      { table_name: "split_payments", tgname: "trg_split_payment_outstanding_sync__delete" },
+      { table_name: "split_payments", tgname: "trg_split_payment_outstanding_sync__insert" },
+      { table_name: "split_payments", tgname: "trg_split_payment_outstanding_sync__update" },
+    ]);
+  });
 
-      // Assert the trigger sits on the expected table, not just that a name
-      // exists somewhere — a trigger on the wrong relation keeps the aggregate
-      // stale while still satisfying a name-only probe.
-      const triggers = await pool.query(
-        `SELECT c.relname AS table_name, t.tgname
-           FROM pg_trigger t
-           JOIN pg_class c ON c.oid = t.tgrelid
-          WHERE NOT t.tgisinternal
-            AND t.tgname IN ('trg_split_outstanding_sync', 'trg_split_payment_outstanding_sync')
-          ORDER BY t.tgname`,
-      );
-      expect(triggers.rows).toEqual([
-        {
-          table_name: "transaction_splits",
-          tgname: "trg_split_outstanding_sync",
-        },
-        {
-          table_name: "split_payments",
-          tgname: "trg_split_payment_outstanding_sync",
-        },
-      ]);
-    });
+  // PostgreSQL served recipient fuzzy matching from a pg_trgm GIN index
+  // (idx_recipients_name_trgm). SQLite has no trigram index (ADR-263: the
+  // baseline does not carry the GIN indexes over); the matcher scans with
+  // Vision's similarity(), which must score exactly as pg_trgm did.
+  it("scores trigram similarity like pg_trgm in place of the GIN index", async () => {
+    const pool = getTestPool();
+    const idx = await pool.query(
+      `SELECT 1 FROM sqlite_master
+        WHERE type = 'index' AND name = 'idx_recipients_name_trgm'`,
+    );
+    expect(idx.rows).toHaveLength(0);
+    const sim = await pool.query<{ exact: number; partial: number; none: number }>(
+      `SELECT similarity('word', 'word') AS exact,
+              similarity('word', 'two words') AS partial,
+              similarity('abc', 'xyz') AS none`,
+    );
+    // pg_trgm documents similarity('word', 'two words') = 0.36363637 (4/11 as
+    // a float4, read back as node-postgres parsed float4 text).
+    expect(sim.rows[0]).toEqual({ exact: 1, partial: 0.36363637, none: 0 });
+  });
 
-    it("creates a pg_trgm GIN index on recipients.name", async () => {
-      const pool = must(getTestPool(), "getTestPool()");
-      const idx = await pool.query<{ indexdef: string }>(
-        `SELECT indexdef FROM pg_indexes
-         WHERE tablename = 'recipients'
-           AND indexname = 'idx_recipients_name_trgm'`,
-      );
-      expect(idx.rowCount).toBe(1);
-      expect(must(idx.rows[0], "row").indexdef).toMatch(/USING gin \(name gin_trgm_ops\)/);
-    });
-
-    it("refreshAggregations completes without error against a migrated DB", async () => {
-      // Only meaningful when the app connection points at the same DB —
-      // guarded by hasTestDatabase and kept fast with concurrency. Migrations
-      // intentionally leave redefined views absent for post-listen creation.
-      await createMaterializedViews();
-      await expect(
-        aggregationRefresh.refreshAggregations(),
-      ).resolves.not.toThrow();
-    });
-  },
-);
+  it("refreshAggregations completes without error against a migrated DB", async () => {
+    // The materialized-view tables start empty in the template; fill them
+    // first, as the post-listen warmup does.
+    await createMaterializedViews();
+    await expect(
+      aggregationRefresh.refreshAggregations(),
+    ).resolves.not.toThrow();
+  });
+});

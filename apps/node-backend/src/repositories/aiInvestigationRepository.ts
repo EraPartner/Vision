@@ -42,10 +42,11 @@ const COLUMNS = [
   "updated_at as updatedAt",
 ] as const;
 
-const now = () => sql<Date>`NOW()`;
+const now = () => sql<Date>`now()`;
 
+/** Canonical jsonb text of a JSON-serialisable value. */
 function jsonb(value: unknown) {
-  return sql<Json>`${JSON.stringify(value)}::jsonb`;
+  return sql<Json>`vision_jsonb(${JSON.stringify(value)})`;
 }
 
 function nullableJsonb(value: unknown) {
@@ -123,7 +124,7 @@ export async function setPlan(
         .set({
           plan_json: jsonb(plan),
           state: "running",
-          started_at: sql<Date>`COALESCE(started_at,NOW())`,
+          started_at: sql<Date>`COALESCE(started_at,now())`,
           updated_at: now(),
         })
         .where("id", "=", id)
@@ -159,7 +160,9 @@ export async function resolveWaiting(
       db
         .updateTable("ai_investigation_jobs")
         .set({
-          scope_json: sql<Json>`jsonb_set(jsonb_set(scope_json,'{clarification}',to_jsonb(${clarification}::text),true),'{scope}',${JSON.stringify(scope)}::jsonb,true)`,
+          // jsonb_set(..., create_missing => true) twice: json_set adds or
+          // replaces both keys; vision_jsonb keeps the stored text canonical.
+          scope_json: sql<Json>`vision_jsonb(json_set(scope_json,'$.clarification',${clarification},'$.scope',json(${JSON.stringify(scope)})))`,
           plan_json: null,
           state: "queued",
           updated_at: now(),
@@ -258,7 +261,7 @@ export async function resetSteps(
       updated_at: now(),
     })
     .where("job_id", "=", jobId)
-    .where(sql<boolean>`step_id = ANY(${stepIds}::text[])`)
+    .where(sql<boolean>`step_id IN (SELECT value FROM json_each(${JSON.stringify(stepIds)}))`)
     .where("state", "=", "completed")
     .executeTakeFirst();
   return Number(result.numUpdatedRows);
@@ -276,12 +279,12 @@ export async function finishJob(
     db
       .updateTable("ai_investigation_jobs")
       .set({
-        state: sql<string>`CASE WHEN cancel_requested_at IS NOT NULL THEN 'cancelled' ELSE ${state}::text END`,
-        result_json: sql<Json | null>`CASE WHEN cancel_requested_at IS NOT NULL THEN NULL ELSE ${resultJson}::jsonb END`,
+        state: sql<string>`CASE WHEN cancel_requested_at IS NOT NULL THEN 'cancelled' ELSE ${state} END`,
+        result_json: sql<Json | null>`CASE WHEN cancel_requested_at IS NOT NULL THEN NULL ELSE vision_jsonb(${resultJson}) END`,
         error_json: sql<Json | null>`CASE WHEN cancel_requested_at IS NOT NULL
-             THEN '{"code":"CANCELLED"}'::jsonb ELSE ${errorJson}::jsonb END`,
+             THEN vision_jsonb('{"code":"CANCELLED"}') ELSE vision_jsonb(${errorJson}) END`,
         completed_at: sql<Date | null>`CASE WHEN cancel_requested_at IS NOT NULL
-             OR ${state}::text IN ('completed','failed','cancelled') THEN NOW() ELSE NULL END`,
+             OR ${state} IN ('completed','failed','cancelled') THEN now() ELSE NULL END`,
         updated_at: now(),
       })
       .where("id", "=", id)
@@ -298,7 +301,7 @@ export async function setProviderResult(
     db
       .updateTable("ai_investigation_jobs")
       .set({
-        checkpoint_json: sql<Json>`jsonb_set(checkpoint_json,'{providerResult}',${JSON.stringify(result)}::jsonb,true)`,
+        checkpoint_json: sql<Json>`vision_jsonb(json_set(checkpoint_json,'$.providerResult',json(${JSON.stringify(result)})))`,
         updated_at: now(),
       })
       .where("id", "=", id)
@@ -315,7 +318,7 @@ export async function clearProviderResult(
     db
       .updateTable("ai_investigation_jobs")
       .set({
-        checkpoint_json: sql<Json>`checkpoint_json - 'providerResult'`,
+        checkpoint_json: sql<Json>`vision_jsonb(json_remove(checkpoint_json,'$.providerResult'))`,
         updated_at: now(),
       })
       .where("id", "=", id)
@@ -333,7 +336,7 @@ export async function requestCancel(
         .set({
           cancel_requested_at: now(),
           state: sql<string>`CASE WHEN state='queued' THEN 'cancelled' ELSE state END`,
-          checkpoint_json: sql<Json>`checkpoint_json - 'providerResult'`,
+          checkpoint_json: sql<Json>`vision_jsonb(json_remove(checkpoint_json,'$.providerResult'))`,
           updated_at: now(),
         })
         .where("id", "=", id)

@@ -1,34 +1,26 @@
 /** Contract-phase smoke with accounts.statement_balance* absent. */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Pool as PgPool } from "pg";
 import { closePool } from "../src/database/connection.ts";
 import { accountRepository } from "../src/repositories/accountRepository.ts";
 import { accountService } from "../src/services/accountService.ts";
 import { transactionRepository } from "../src/repositories/transactionRepository.ts";
 import { reconcileAccount } from "../src/services/reconcileService.ts";
-import { closeTestPool, getTestPool, hasTestDatabase } from "./setup/db.ts";
+import { closeTestPool, getTestPool } from "./setup/db.ts";
+import type { TestPool } from "./setup/db.ts";
 import {
   asCurrencyCode,
   asRecipientId,
 } from "@vision/types/brands";
 import { must } from "./helpers/must.ts";
 
-const describeDb =
-  hasTestDatabase()
-    ? describe
-    : describe.skip;
-// Only dereferenced inside the database-gated suite.
-// Resolved in beforeAll: without TEST_DATABASE_URL the suite is skipped and
-// getTestPool() is null, so resolving it at import time would fail the file.
-let pool: PgPool;
+let pool: TestPool;
 
-describeDb("account statement scalar contract schema", () => {
+describe("account statement scalar contract schema", () => {
   beforeAll(async () => {
     pool = must(getTestPool(), "getTestPool()");
     const { rows } = await pool.query(
-      `SELECT column_name FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'accounts'
-          AND column_name IN ('statement_balance', 'statement_balance_date')`,
+      `SELECT name AS column_name FROM pragma_table_info('accounts')
+        WHERE name IN ('statement_balance', 'statement_balance_date')`,
     );
     expect(rows).toHaveLength(0);
   });

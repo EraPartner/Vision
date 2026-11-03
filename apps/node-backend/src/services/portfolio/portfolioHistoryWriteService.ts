@@ -1,30 +1,18 @@
 /** Keep unit-history validation and mutation under one writer transaction. */
-import { sql } from "kysely";
-import type { AccountId } from "@vision/types/brands";
 import { withTransaction } from "../../database/connection.ts";
-import { db } from "../../database/db.ts";
 
+/**
+ * Run `work` (validate the unit history, then write it) in one write
+ * transaction. PostgreSQL needed row locks on the touched accounts and a
+ * SHARE ROW EXCLUSIVE lock on the three unit-history tables; on SQLite every
+ * write transaction is BEGIN IMMEDIATE on the single writer (ADR-263), so no
+ * other write can change the history between the validation and the write.
+ *
+ * @param _accountIds the accounts the write touches (PostgreSQL locked them)
+ */
 export async function withPortfolioHistoryWrite<T>(
-  accountIds: readonly unknown[],
+  _accountIds: readonly unknown[],
   work: () => T | Promise<T>,
 ): Promise<T> {
-  return withTransaction(async () => {
-    const accounts = [
-      ...new Set(
-        accountIds.map(Number).filter((id) => Number.isInteger(id) && id > 0),
-      ),
-    ].sort((a, b) => a - b);
-    if (accounts.length > 0)
-      await db
-        .selectFrom("accounts")
-        .select("id")
-        .where("id", "=", sql<AccountId>`ANY(${accounts}::int[])`)
-        .orderBy("id")
-        .forUpdate()
-        .execute();
-    await sql`LOCK TABLE portfolio_transactions, portfolio_asset_transfers, portfolio_asset_adjustments IN SHARE ROW EXCLUSIVE MODE`.execute(
-      db,
-    );
-    return work();
-  });
+  return withTransaction(async () => work());
 }

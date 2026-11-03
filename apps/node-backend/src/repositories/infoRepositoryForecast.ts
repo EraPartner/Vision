@@ -9,10 +9,10 @@
  * 1. ONE CLOCK. Every window edge and every piece of month/day arithmetic in
  *    this file is anchored on `todayAppDateString()` — the APP_TIMEZONE
  *    calendar day (ADR-009) — read once per call and threaded into the SQL as
- *    a bound `$n::date` parameter. Postgres `CURRENT_DATE` is NOT used here:
- *    it follows the DB session's zone (UTC), so with the default
- *    APP_TIMEZONE=Europe/Brussels the two clocks name different calendar days
- *    between ~22:00/23:00 UTC and midnight. On a month's last day that
+ *    a bound 'YYYY-MM-DD' date parameter. The SQL clock (`today()`, formerly
+ *    PostgreSQL's `CURRENT_DATE`) is NOT used here: it follows the database's
+ *    zone, not APP_TIMEZONE, so the two clocks can name different calendar
+ *    days around midnight. On a month's last day that
  *    difference is a whole month of arithmetic: the JS side was already in
  *    month M+1 (so it treated M as the last complete month and counted it in
  *    the historical-average divisor) while the SQL windows still ended at the
@@ -23,8 +23,9 @@
  * 2. NO INTERPOLATED VALUES. Every runtime value reaching the SQL — the anchor
  *    date, the caller-supplied `historyMonths`/`daysBack`/`daysForward`, and
  *    the module's own `HISTORY_MONTHS` — is bound as a Kysely `sql` parameter,
- *    never spliced into the text, using `make_interval(months => $n::int)` /
- *    `make_interval(days => $n::int)` for the interval arithmetic. The
+ *    never spliced into the text, using `add_months(date, n)` /
+ *    `add_days(date, n)` for the calendar arithmetic (local calendar months,
+ *    clamped to the month end like PostgreSQL's interval arithmetic). The
  *    `Number.isInteger` + range checks stay as input validation (they answer
  *    400 on nonsense), but they are no longer the only thing standing between
  *    a caller and injection.
@@ -198,7 +199,7 @@ export async function getCashflowComparison(
     excludedCategoryIds,
     excludedRecipientIds,
   });
-  const anchor = sql`${todayYmd}::date`; // the APP_TIMEZONE anchor date
+  const anchor = sql`${todayYmd}`; // the APP_TIMEZONE anchor date
 
   // ADR-083 transfer exclusion. Identical predicate and identical setting read
   // as the sibling surfaces rendered on the same dashboard
@@ -215,28 +216,28 @@ export async function getCashflowComparison(
   // convert-then-SUM. day_of_month/month_key are deterministic functions of the
   // grouped date column, so they remain valid in the SELECT list.
   const sqlPast = sql`
-    SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date,
-           EXTRACT(DAY FROM t.date)::int AS day_of_month,
-           TO_CHAR(date_trunc('month', t.date), 'YYYY-MM') AS month_key
+    SELECT dec_sum(t.amount) AS amount, count(*) AS "cnt::bigint", t.currency, t.date,
+           date_part('day', t.date) AS day_of_month,
+           to_char(t.date, 'YYYY-MM') AS month_key
     FROM transactions t
     ${excl.joins}
     WHERE t.is_active = true
       ${transfers}
-      AND t.date >= date_trunc('month', ${anchor}) - make_interval(months => ${HISTORY_MONTHS}::int)
+      AND t.date >= add_months(date_trunc('month', ${anchor}), ${-HISTORY_MONTHS})
       AND t.date < date_trunc('month', ${anchor})
       ${excl.where}
     GROUP BY t.date, t.currency
   `;
 
   const sqlCurrent = sql`
-    SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date,
-           EXTRACT(DAY FROM t.date)::int AS day_of_month
+    SELECT dec_sum(t.amount) AS amount, count(*) AS "cnt::bigint", t.currency, t.date,
+           date_part('day', t.date) AS day_of_month
     FROM transactions t
     ${excl.joins}
     WHERE t.is_active = true
       ${transfers}
       AND t.date >= date_trunc('month', ${anchor})
-      AND t.date <= (date_trunc('month', ${anchor}) + interval '1 month' - interval '1 day')
+      AND t.date <= month_end(${anchor})
       ${excl.where}
     GROUP BY t.date, t.currency
   `;
@@ -248,24 +249,24 @@ export async function getCashflowComparison(
   // net out; a user who plans an internal transfer excludes it the pre-ADR-083
   // way, via category/recipient exclusions.
   const sqlPlannedCurrent = sql`
-    SELECT SUM(pt.amount) AS amount, COUNT(*) AS cnt, pt.currency, pt.planned_date,
-           EXTRACT(DAY FROM pt.planned_date)::int AS day_of_month
+    SELECT dec_sum(pt.amount) AS amount, count(*) AS "cnt::bigint", pt.currency, pt.planned_date,
+           date_part('day', pt.planned_date) AS day_of_month
     FROM planned_transactions pt
     WHERE pt.is_active = true
       AND pt.is_executed = false
       AND pt.planned_date >= date_trunc('month', ${anchor})
-      AND pt.planned_date <= (date_trunc('month', ${anchor}) + interval '1 month' - interval '1 day')
+      AND pt.planned_date <= month_end(${anchor})
     GROUP BY pt.planned_date, pt.currency
   `;
 
   const sqlPlannedHist = sql`
-    SELECT SUM(pt.amount) AS amount, COUNT(*) AS cnt, pt.currency, pt.planned_date,
-           EXTRACT(DAY FROM pt.planned_date)::int AS day_of_month,
-           TO_CHAR(date_trunc('month', pt.planned_date), 'YYYY-MM') AS month_key
+    SELECT dec_sum(pt.amount) AS amount, count(*) AS "cnt::bigint", pt.currency, pt.planned_date,
+           date_part('day', pt.planned_date) AS day_of_month,
+           to_char(pt.planned_date, 'YYYY-MM') AS month_key
     FROM planned_transactions pt
     WHERE pt.is_active = true
       AND pt.is_executed = false
-      AND pt.planned_date >= date_trunc('month', ${anchor}) - make_interval(months => ${HISTORY_MONTHS}::int)
+      AND pt.planned_date >= add_months(date_trunc('month', ${anchor}), ${-HISTORY_MONTHS})
       AND pt.planned_date < date_trunc('month', ${anchor})
     GROUP BY pt.planned_date, pt.currency
   `;
@@ -297,10 +298,10 @@ export async function getCashflowComparison(
   // Unfiltered means no *predicates* — the two bound values are the window
   // itself, not a filter on the ledger.
   const sqlLedgerStart = sql`
-    SELECT MIN(t.date) AS first_date
+    SELECT min(t.date) AS "first_date::date"
     FROM transactions t
     WHERE t.is_active = true
-      AND t.date >= date_trunc('month', ${anchor}) - make_interval(months => ${HISTORY_MONTHS}::int)
+      AND t.date >= add_months(date_trunc('month', ${anchor}), ${-HISTORY_MONTHS})
   `;
 
   const [
@@ -475,7 +476,7 @@ export async function getCashflowForecastData(
     excludedCategoryIds,
     excludedRecipientIds,
   });
-  const anchor = sql`${todayYmd}::date`;
+  const anchor = sql`${todayYmd}`;
 
   // ADR-083 transfer exclusion — see getCashflowComparison for the rationale.
   const transfers = await transferFilter();
@@ -484,44 +485,44 @@ export async function getCashflowForecastData(
   // conversion is per (currency, date), so this is identical to the old per-row
   // stream (see getCashflowComparison for the full rationale).
   const sqlHistory = sql`
-    SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date
+    SELECT dec_sum(t.amount) AS amount, count(*) AS "cnt::bigint", t.currency, t.date
     FROM transactions t
     ${excl.joins}
     WHERE t.is_active = true
       ${transfers}
-      AND t.date >= date_trunc('month', ${anchor}) - make_interval(months => ${historyMonths}::int)
+      AND t.date >= add_months(date_trunc('month', ${anchor}), ${-historyMonths})
       AND t.date < date_trunc('month', ${anchor})
       ${excl.where}
     GROUP BY t.date, t.currency
   `;
   const sqlCurrent = sql`
-    SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date
+    SELECT dec_sum(t.amount) AS amount, count(*) AS "cnt::bigint", t.currency, t.date
     FROM transactions t
     ${excl.joins}
     WHERE t.is_active = true
       ${transfers}
       AND t.date >= date_trunc('month', ${anchor})
-      AND t.date <= (date_trunc('month', ${anchor}) + interval '1 month' - interval '1 day')
+      AND t.date <= month_end(${anchor})
       ${excl.where}
     GROUP BY t.date, t.currency
   `;
   // No transfer predicate on the planned overlays: planned_transactions has no
   // `is_transfer` column (ADR-083 flagged `transactions` only).
   const sqlPlannedCurrent = sql`
-    SELECT SUM(pt.amount) AS amount, COUNT(*) AS cnt, pt.currency, pt.planned_date AS date
+    SELECT dec_sum(pt.amount) AS amount, count(*) AS "cnt::bigint", pt.currency, pt.planned_date AS date
     FROM planned_transactions pt
     WHERE pt.is_active = true
       AND pt.is_executed = false
       AND pt.planned_date >= date_trunc('month', ${anchor})
-      AND pt.planned_date <= (date_trunc('month', ${anchor}) + interval '1 month' - interval '1 day')
+      AND pt.planned_date <= month_end(${anchor})
     GROUP BY pt.planned_date, pt.currency
   `;
   const sqlPlannedHist = sql`
-    SELECT SUM(pt.amount) AS amount, COUNT(*) AS cnt, pt.currency, pt.planned_date AS date
+    SELECT dec_sum(pt.amount) AS amount, count(*) AS "cnt::bigint", pt.currency, pt.planned_date AS date
     FROM planned_transactions pt
     WHERE pt.is_active = true
       AND pt.is_executed = false
-      AND pt.planned_date >= date_trunc('month', ${anchor}) - make_interval(months => ${historyMonths}::int)
+      AND pt.planned_date >= add_months(date_trunc('month', ${anchor}), ${-historyMonths})
       AND pt.planned_date < date_trunc('month', ${anchor})
     GROUP BY pt.planned_date, pt.currency
   `;
@@ -596,8 +597,8 @@ export async function getCashflowForecastDataRolling(
     excludedCategoryIds,
     excludedRecipientIds,
   });
-  const anchor = sql`${todayYmd}::date`;
-  const rollingStart = sql`(${anchor} - make_interval(days => ${daysBack}::int))`;
+  const anchor = sql`${todayYmd}`;
+  const rollingStart = sql`add_days(${anchor}, ${-daysBack})`;
 
   // ADR-083 transfer exclusion — see getCashflowComparison for the rationale.
   const transfers = await transferFilter();
@@ -605,35 +606,35 @@ export async function getCashflowForecastDataRolling(
   // History ends at `today - daysBack` (exclusive) so it never overlaps with currentActual.
   // GROUP BY (date, currency) — identical to the old per-row stream (aggregateByDate re-buckets by date).
   const sqlHistory = sql`
-    SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date
+    SELECT dec_sum(t.amount) AS amount, count(*) AS "cnt::bigint", t.currency, t.date
     FROM transactions t
     ${excl.joins}
     WHERE t.is_active = true
       ${transfers}
-      AND t.date >= ${rollingStart} - make_interval(months => ${historyMonths}::int)
+      AND t.date >= add_months(${rollingStart}, ${-historyMonths})
       AND t.date < ${rollingStart}
       ${excl.where}
     GROUP BY t.date, t.currency
   `;
   const sqlCurrent = sql`
-    SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date
+    SELECT dec_sum(t.amount) AS amount, count(*) AS "cnt::bigint", t.currency, t.date
     FROM transactions t
     ${excl.joins}
     WHERE t.is_active = true
       ${transfers}
       AND t.date >= ${rollingStart}
-      AND t.date <= (${anchor} + make_interval(days => ${daysForward}::int))
+      AND t.date <= add_days(${anchor}, ${daysForward})
       ${excl.where}
     GROUP BY t.date, t.currency
   `;
   // No transfer predicate — planned_transactions has no `is_transfer` column.
   const sqlPlannedFuture = sql`
-    SELECT SUM(pt.amount) AS amount, COUNT(*) AS cnt, pt.currency, pt.planned_date AS date
+    SELECT dec_sum(pt.amount) AS amount, count(*) AS "cnt::bigint", pt.currency, pt.planned_date AS date
     FROM planned_transactions pt
     WHERE pt.is_active = true
       AND pt.is_executed = false
       AND pt.planned_date > ${anchor}
-      AND pt.planned_date <= (${anchor} + make_interval(days => ${daysForward}::int))
+      AND pt.planned_date <= add_days(${anchor}, ${daysForward})
     GROUP BY pt.planned_date, pt.currency
   `;
 
@@ -705,7 +706,7 @@ export async function getCashflowForecastDataByCategory(
     excludedCategoryIds,
     excludedRecipientIds,
   });
-  const anchor = sql`${todayYmd}::date`;
+  const anchor = sql`${todayYmd}`;
 
   // ADR-083 transfer exclusion — see getCashflowComparison for the rationale.
   // This matters doubly here: the category breakdown attributes a transfer leg
@@ -717,8 +718,8 @@ export async function getCashflowForecastDataByCategory(
   // re-buckets by (date, category) and conversion is per (currency, date), so SUM-then-convert
   // is identical to the old per-row stream.
   const selectCols = sql`
-    SUM(t.amount) AS amount,
-    COUNT(*) AS cnt,
+    dec_sum(t.amount) AS amount,
+    count(*) AS "cnt::bigint",
     t.currency,
     t.date,
     COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS category_id,
@@ -742,7 +743,7 @@ export async function getCashflowForecastDataByCategory(
     FROM transactions t ${joins}
     WHERE t.is_active = true
       ${transfers}
-      AND t.date >= date_trunc('month', ${anchor}) - make_interval(months => ${historyMonths}::int)
+      AND t.date >= add_months(date_trunc('month', ${anchor}), ${-historyMonths})
       AND t.date <  date_trunc('month', ${anchor})
       ${excl.where}
     ${groupByCols}
@@ -753,7 +754,7 @@ export async function getCashflowForecastDataByCategory(
     WHERE t.is_active = true
       ${transfers}
       AND t.date >= date_trunc('month', ${anchor})
-      AND t.date <= (date_trunc('month', ${anchor}) + interval '1 month' - interval '1 day')
+      AND t.date <= month_end(${anchor})
       ${excl.where}
     ${groupByCols}
   `;

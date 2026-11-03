@@ -2,9 +2,9 @@
 title: Feature - Portfolio Import
 type: feature
 status: active
-date: 2026-10-28
-updated: 2026-10-28
-last_modified: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
+last_modified: 2026-11-03
 tags:
   [
     feature,
@@ -493,7 +493,7 @@ price, exact units or an exact base-fee explanation, and equivalent cash economi
 evidence must also bind the staged date, explicit quote fee, and zero tax. This still
 requires an explicit reviewed date correction and does not certify the order timestamp as execution
 time. Amount and fee proofs allow only their four-decimal stored representation: the shared
-half-even rounding or PostgreSQL staging's ties-away-from-zero rounding. An exact half-decimal
+half-even rounding or the database's ties-away-from-zero rounding when staging stores the value (`vision_numeric`, as PostgreSQL `NUMERIC` did). An exact half-decimal
 must not lose its base-fee proof and appear as a new acquisition after staging.
 A plausible Pro trade with exact net or fee-explained gross units in that extended window blocks
 instead of inserting when its economics remain unproven. A proven execution in another currency
@@ -905,7 +905,7 @@ Migration 0040 introduced the two portfolio import tables:
 - Standard status lifecycle (`pending → staging → … → complete | failed | aborted | awaiting_review`)
 - `default_asset_class` and `default_type` columns store batch-level config defaults
 - `account_id` FK → `accounts` (nullable) — destination brokerage account; committed lots inherit this value (**migration 0057**)
-- Included in the whole-database `pg_dump` backup
+- Included in the whole-database backup copy (`db.sqlite3`)
 
 **`portfolio_import_staging_rows`** — mirrors `import_staging_rows` with portfolio-shaped columns:
 
@@ -916,7 +916,7 @@ Migration 0040 introduced the two portfolio import tables:
 - `route`: cash, portfolio, asset transfer, asset adjustment, or account-internal annotation
 - `asset_transfer_details` JSON retains direction, gross/fee units, and basis status (migration 0121)
 - `asset_adjustment_details` JSON retains adjustment kind, account, basis policy, and eligible yield hashes (0123)
-- Included in the whole-database `pg_dump` backup
+- Included in the whole-database backup copy (`db.sqlite3`)
 
 Migrations 0120–0123 add immutable adoption/duplicate-repair receipts, the dated custody ledger,
 and the adjustment ledger with restrictive source links. All new tables are backup-covered and

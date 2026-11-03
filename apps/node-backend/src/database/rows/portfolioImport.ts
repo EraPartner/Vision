@@ -411,15 +411,13 @@ export type InvestmentResolutionRow = z.output<
   typeof investmentResolutionRowSchema
 >;
 
-/** `overrideInvestments`' counts: every column is cast `::int`. */
-export const overrideInvestmentsSummaryRowSchema = z
+/** `overrideInvestments`' eligibility counts (`COUNT(*)` reads as a number). */
+export const overrideEligibilityRowSchema = z
   .object({
-    requested_count: pgInt,
     eligible_count: pgInt,
-    updated_count: pgInt,
-    reset_error_count: pgInt,
+    error_count: pgInt,
   })
-  .describe("portfolio import override summary row");
+  .describe("portfolio import override eligibility row");
 
 /** `getRowForInvestmentCreation`. */
 export const investmentCreationRowSchema = z

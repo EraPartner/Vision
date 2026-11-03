@@ -4,13 +4,10 @@
  * default transfer exclusion on getCashflowForecastData, and category plus
  * recipient exclusions on the by-category forecast.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import {
   getCashflowForecastData,
@@ -76,7 +73,7 @@ async function insertTxn(
     id: TransactionId;
   }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, is_transfer)
-     VALUES ($1::date, $2, 'EUR', $3, $4, $5, $6) RETURNING id`,
+     VALUES (ts_date($1), vision_numeric($2, 18, 4), 'EUR', $3, $4, $5, $6) RETURNING id`,
     [
       todayAppDateString(),
       amount,
@@ -89,26 +86,21 @@ async function insertTxn(
   created.transactionIds.push(must(rows[0], "rows[0]").id);
 }
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "cash-flow forecast reads (real DB)",
   () => {
-    beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180_000);
-
     afterEach(async () => {
       const db = must(getTestPool(), "getTestPool()");
-      await db.query("DELETE FROM transactions WHERE id = ANY($1::int[])", [
+      await db.query("DELETE FROM transactions WHERE id IN (SELECT value FROM json_each($1))", [
         created.transactionIds.splice(0),
       ]);
-      await db.query("DELETE FROM accounts WHERE id = ANY($1::int[])", [
+      await db.query("DELETE FROM accounts WHERE id IN (SELECT value FROM json_each($1))", [
         created.accountIds.splice(0),
       ]);
-      await db.query("DELETE FROM recipients WHERE id = ANY($1::int[])", [
+      await db.query("DELETE FROM recipients WHERE id IN (SELECT value FROM json_each($1))", [
         created.recipientIds.splice(0),
       ]);
-      await db.query("DELETE FROM categories WHERE id = ANY($1::int[])", [
+      await db.query("DELETE FROM categories WHERE id IN (SELECT value FROM json_each($1))", [
         created.categoryIds.splice(0),
       ]);
       await db.query(
@@ -118,7 +110,6 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });

@@ -55,8 +55,7 @@
         "tests/**/*.ts"
       ],
       "ignoreDependencies": [
-        "yauzl",
-        "kysely-codegen"
+        "yauzl"
       ]
     },
     "packaging/electron": {

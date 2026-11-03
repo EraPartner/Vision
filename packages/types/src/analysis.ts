@@ -123,7 +123,8 @@ export interface AnalysisVisualPlanSource {
 }
 export interface AnalysisCustomSqlSource {
   kind: "custom-sql";
-  dialect: "postgresql";
+  /** "postgresql": written before ADR-263 and flagged "needs review" until saved again. */
+  dialect: "postgresql" | "sqlite";
   text: string;
   datasetIds: string[];
   parameterBindings: Array<{
@@ -698,7 +699,7 @@ const visualPlanSchema = z
 const customSqlSchema = z
   .object({
     kind: z.literal("custom-sql"),
-    dialect: z.literal("postgresql"),
+    dialect: z.enum(["postgresql", "sqlite"]),
     text: z.string().min(1).max(1_000_000),
     datasetIds: z.array(identifierSchema).min(1).max(64),
     parameterBindings: z

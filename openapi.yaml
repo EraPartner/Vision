@@ -6085,9 +6085,9 @@ components:
           type: string
           nullable: true
           description: >-
-            Portfolio-import batch that created the row. PostgreSQL BIGINT is
-            serialized by node-postgres as a string; null means the transaction
-            was created manually or predates batch attribution.
+            Portfolio-import batch that created the row. The BIGINT id is
+            serialized as a decimal string; null means the transaction was
+            created manually or predates batch attribution.
         note:
           type: string
           nullable: true
@@ -7546,7 +7546,7 @@ components:
       properties:
         id:
           type: string
-          description: PostgreSQL BIGINT serialized by node-postgres as a string.
+          description: BIGINT id serialized as a decimal string.
         adapter_name:
           type: string
         source_filename:
@@ -7555,7 +7555,7 @@ components:
         source_size_bytes:
           type: string
           nullable: true
-          description: PostgreSQL BIGINT serialized by node-postgres as a string.
+          description: BIGINT id serialized as a decimal string.
         custom_config:
           type: object
           additionalProperties: true

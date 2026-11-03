@@ -1,12 +1,6 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
-import { closePool, withTransaction } from "../src/database/connection.ts";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { closeTestPool, getTestPool } from "./setup/db.ts";
+import { closePool, getPoolStats, withTransaction } from "../src/database/connection.ts";
 import { closeAccount } from "../src/services/accountCloseService.ts";
 import transactionRepository from "../src/repositories/transactionRepository.ts";
 import { accountRepository } from "../src/repositories/accountRepository.ts";
@@ -30,40 +24,44 @@ const deferred = () => {
   return { promise, resolve };
 };
 
-describe.skipIf(!hasTestDatabase())(
-  "account lifecycle locks (PostgreSQL)",
+/**
+ * Account lifecycle serialization (ADR-263). PostgreSQL serialized a close
+ * against concurrent ledger writes with row locks on the account; SQLite runs
+ * every write transaction on the single writer behind BEGIN IMMEDIATE, so the
+ * second transaction waits for the database write lock instead, and its
+ * eligibility read (lockAccountsForLedgerMutation / findActiveId) runs after
+ * the first commits. Each test holds the first transaction open, proves the
+ * second is queued on the write lock, then releases and checks the outcome.
+ */
+describe(
+  "account lifecycle serialization (single writer)",
   () => {
     const accounts: number[] = [];
     const batches: number[] = [];
     const recipients: number[] = [];
-    beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180_000);
     afterEach(async () => {
       await must(getTestPool(), "getTestPool()").query(
-        "DELETE FROM transactions WHERE account_id = ANY($1::int[])",
+        "DELETE FROM transactions WHERE account_id IN (SELECT value FROM json_each($1))",
         [accounts],
       );
       await must(getTestPool(), "getTestPool()").query(
-        "DELETE FROM import_staging_rows WHERE batch_id = ANY($1::bigint[])",
+        "DELETE FROM import_staging_rows WHERE batch_id IN (SELECT value FROM json_each($1))",
         [batches],
       );
       await must(getTestPool(), "getTestPool()").query(
-        "DELETE FROM import_batches WHERE id = ANY($1::bigint[])",
+        "DELETE FROM import_batches WHERE id IN (SELECT value FROM json_each($1))",
         [batches.splice(0)],
       );
       await must(getTestPool(), "getTestPool()").query(
-        "DELETE FROM recipients WHERE id = ANY($1::int[])",
+        "DELETE FROM recipients WHERE id IN (SELECT value FROM json_each($1))",
         [recipients.splice(0)],
       );
       await must(getTestPool(), "getTestPool()").query(
-        "DELETE FROM accounts WHERE id = ANY($1::int[])",
+        "DELETE FROM accounts WHERE id IN (SELECT value FROM json_each($1))",
         [accounts.splice(0)],
       );
     });
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
@@ -84,7 +82,7 @@ describe.skipIf(!hasTestDatabase())(
       ).id;
       recipients.push(recipientId);
       const transaction = await pool.query<{ id: number }>(
-        "INSERT INTO transactions (date, amount, currency, account_id, recipient_id) VALUES ('2026-01-01', 100, 'EUR', $1, $2) RETURNING id",
+        "INSERT INTO transactions (date, amount, currency, account_id, recipient_id) VALUES ('2026-01-01', vision_numeric('100', 18, 4), 'EUR', $1, $2) RETURNING id",
         [accountId, recipientId],
       );
       return {
@@ -93,16 +91,14 @@ describe.skipIf(!hasTestDatabase())(
         transactionId: must(transaction.rows[0], "row").id,
       };
     }
+    /** Wait until a second write transaction is queued on the write lock. */
     async function waitForBlockedLedgerWrite() {
       const deadline = Date.now() + 5000;
       while (Date.now() < deadline) {
-        const { rows } = await must(getTestPool(), "getTestPool()").query<{ n: number }>(
-          "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%accounts%'",
-        );
-        if (must(rows[0], "row").n > 0) return;
+        if (getPoolStats().waitingCount > 0) return;
         await new Promise((done) => setTimeout(done, 10));
       }
-      throw new Error("Expected an account lock waiter");
+      throw new Error("Expected a write-lock waiter");
     }
     it("rejects an edit after a concurrent close commits", async () => {
       const { accountId, transactionId } = await fixture();
@@ -130,7 +126,7 @@ describe.skipIf(!hasTestDatabase())(
       await closing;
       expect(await outcome).toContain("Reopen the account");
       const { rows } = await must(getTestPool(), "getTestPool()").query<{ balance: string }>(
-        "SELECT SUM(amount)::numeric AS balance FROM transactions WHERE account_id=$1",
+        "SELECT dec_sum(amount) AS balance FROM transactions WHERE account_id=$1",
         [accountId],
       );
       expect(Number(must(rows[0], "row").balance)).toBe(0);
@@ -144,7 +140,7 @@ describe.skipIf(!hasTestDatabase())(
           await accountRepository.findActiveId(accountId, { client }),
         ).toBe(accountId);
         await client.query(
-          "INSERT INTO transactions (date, amount, currency, account_id, recipient_id) VALUES ('2026-01-02', 25, 'EUR', $1, $2)",
+          "INSERT INTO transactions (date, amount, currency, account_id, recipient_id) VALUES ('2026-01-02', vision_numeric('25', 18, 4), 'EUR', $1, $2)",
           [accountId, recipientId],
         );
         written.resolve();
@@ -162,10 +158,31 @@ describe.skipIf(!hasTestDatabase())(
       await writing;
       await closing;
       const { rows } = await must(getTestPool(), "getTestPool()").query<{ balance: string }>(
-        "SELECT SUM(amount)::numeric AS balance FROM transactions WHERE account_id=$1",
+        "SELECT dec_sum(amount) AS balance FROM transactions WHERE account_id=$1",
         [accountId],
       );
       expect(Number(must(rows[0], "row").balance)).toBe(0);
+    });
+
+    it("zeros an exact-decimal balance on close (100 + 0.1 + 0.2 is 100.3)", async () => {
+      const { accountId, recipientId } = await fixture();
+      for (const amount of ["0.1", "0.2"]) {
+        await must(getTestPool(), "getTestPool()").query(
+          "INSERT INTO transactions (date, amount, currency, account_id, recipient_id) VALUES ('2026-01-31', vision_numeric($1, 18, 4), 'EUR', $2, $3)",
+          [amount, accountId, recipientId],
+        );
+      }
+      await closeAccount(asAccountId(accountId), { balance_handling: "adjustment" });
+      const adjustments = await must(getTestPool(), "getTestPool()").query(
+        "SELECT amount, currency FROM transactions WHERE account_id=$1 AND transfer_source='adjustment'",
+        [accountId],
+      );
+      expect(adjustments.rows).toEqual([{ amount: "-100.3000", currency: "EUR" }]);
+      const persisted = await must(getTestPool(), "getTestPool()").query(
+        "SELECT dec_sum(amount) AS balance FROM transactions WHERE account_id=$1 AND is_active",
+        [accountId],
+      );
+      expect(persisted.rows).toEqual([{ balance: "0.0000" }]);
     });
 
     async function importFixture(accountId: number) {
@@ -185,7 +202,7 @@ describe.skipIf(!hasTestDatabase())(
       recipients.push(recipientId);
       await pool.query(
         `INSERT INTO import_staging_rows(batch_id,row_index,status,tx_date,bank_account,amount,currency,memo,resolved_recipient_id,dedup_fingerprint,dedup_fingerprint_version,dedup_occurrence)
-      SELECT $1,0,'matched','2026-01-02',name,25,'EUR','Lifecycle import',$3,$4,1,1 FROM accounts WHERE id=$2`,
+      SELECT $1,0,'matched','2026-01-02',name,vision_numeric('25', 20, 4),'EUR','Lifecycle import',$3,$4,1,1 FROM accounts WHERE id=$2`,
         [
           batchId,
           accountId,
@@ -235,7 +252,7 @@ describe.skipIf(!hasTestDatabase())(
         await closing;
         expect(await observed).toMatchObject([{ status: "rejected" }]);
         const persisted = await must(getTestPool(), "getTestPool()").query(
-          "SELECT a.is_active, COALESCE(SUM(t.amount) FILTER (WHERE t.is_active),0)::numeric AS balance, COUNT(t.id)::int AS count FROM accounts a LEFT JOIN transactions t ON t.account_id=a.id WHERE a.id=$1 GROUP BY a.id",
+          "SELECT a.is_active, COALESCE(dec_sum(t.amount) FILTER (WHERE t.is_active),0) AS balance, COUNT(t.id) AS count FROM accounts a LEFT JOIN transactions t ON t.account_id=a.id WHERE a.id=$1 GROUP BY a.id",
           [accountId],
         );
         expect(persisted.rows).toEqual([
@@ -283,7 +300,7 @@ describe.skipIf(!hasTestDatabase())(
         await writing;
         expect(await observed).toMatchObject([{ status: "fulfilled" }]);
         const persisted = await must(getTestPool(), "getTestPool()").query<{ is_active: boolean; balance: string }>(
-          "SELECT a.is_active, COALESCE(SUM(t.amount) FILTER (WHERE t.is_active),0)::numeric AS balance FROM accounts a LEFT JOIN transactions t ON t.account_id=a.id WHERE a.id=$1 GROUP BY a.id",
+          "SELECT a.is_active, COALESCE(dec_sum(t.amount) FILTER (WHERE t.is_active),0) AS balance FROM accounts a LEFT JOIN transactions t ON t.account_id=a.id WHERE a.id=$1 GROUP BY a.id",
           [accountId],
         );
         expect(must(persisted.rows[0], "row").is_active).toBe(false);

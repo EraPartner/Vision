@@ -1,5 +1,5 @@
 /**
- * Real-Postgres tests for the infoRepository barrel — the sub-repositories that
+ * Real-database (SQLite) tests for the infoRepository barrel — the sub-repositories that
  * only reach a consumer through it and have no dedicated DB suite of their own:
  * `getNetWorthFromSnapshots` (infoRepositoryNetWorth), `getPlannedExpensesNextMonth`
  * (infoRepositoryPlanned) and `getAverageVsCurrentSpending`
@@ -27,14 +27,11 @@
  * `CURRENT_DATE` — the two can disagree for the last hours of a UTC day.
  */
 
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   deleteAllCategoryFixtures,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import infoRepository from "../src/repositories/infoRepository.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
@@ -93,7 +90,7 @@ async function addAccount(
     id: AccountId;
   }>(
     `INSERT INTO accounts (name, display_name, type, in_net_worth, currency)
-     VALUES ($1, $1, $2::account_type, $3, $4) RETURNING id`,
+     VALUES ($1, $1, $2, $3, $4) RETURNING id`,
     [name, type, inNetWorth, currency],
   );
   return must(rows[0], "rows[0]").id;
@@ -138,7 +135,7 @@ async function insertTxn({
     id: TransactionId;
   }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, balance, is_active, is_transfer)
-     VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+     VALUES (ts_date($1), vision_numeric($2, 18, 4), $3, $4, $5, $6, vision_numeric($7, 18, 4), $8, $9) RETURNING id`,
     [
       date,
       amount,
@@ -179,7 +176,7 @@ async function wipeAll() {
 async function insertSnapshot(date: string, value: string, currency = "EUR") {
   await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO portfolio_performance_snapshots (snapshot_date, value, currency)
-     VALUES ($1::date, $2, $3)`,
+     VALUES (ts_date($1), vision_numeric($2, 18, 6), $3)`,
     [date, value, currency],
   );
 }
@@ -231,7 +228,7 @@ async function insertPlanned({
   }>(
     `INSERT INTO planned_transactions
        (planned_date, amount, currency, recipient_id, category_id, is_recurring, recurrence_pattern, is_active, is_executed)
-     VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+     VALUES (ts_date($1), vision_numeric($2, 18, 4), $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
     [
       date,
       amount,
@@ -247,22 +244,12 @@ async function insertPlanned({
   return must(rows[0], "rows[0]").id;
 }
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "repositories/infoRepository barrel (real DB)",
   () => {
-    beforeAll(async () => {
-      expect(
-        process.env.DATABASE_URL,
-        "DATABASE_URL must equal TEST_DATABASE_URL for this suite (see scripts/with-test-db.sh)",
-      ).toBe(process.env.TEST_DATABASE_URL);
-      // DB suites share one database across parallel vitest workers — serialize.
-      await acquireDbSuiteLock();
-    }, 180_000);
-
     afterEach(wipeAll);
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
@@ -344,7 +331,7 @@ describe.skipIf(!hasTestDatabase())(
         ]) {
           await must(getTestPool(), "getTestPool()").query(
             `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-             VALUES ('USD', $1::date, '0.5', $2)`,
+             VALUES ('USD', ts_date($1), vision_numeric('0.5', 20, 10), $2)`,
             [date, isLatest],
           );
         }
@@ -676,7 +663,7 @@ describe.skipIf(!hasTestDatabase())(
         await addAccount("TRACKING", { inNetWorth: false });
         await insertTxn({ date: old, amount: "-133.25", bank: "TRACKING" });
         await must(getTestPool(), "getTestPool()").query(
-          `UPDATE transactions SET is_active = false`,
+          `UPDATE transactions SET is_active = 0`,
         );
 
         const r = await infoRepository.getNetWorthFromSnapshots();
@@ -689,7 +676,7 @@ describe.skipIf(!hasTestDatabase())(
         await addAccount("KBC");
         await insertTxn({ date: old, amount: "100.00", bank: "KBC" });
         await must(getTestPool(), "getTestPool()").query(
-          `UPDATE transactions SET is_active = false`,
+          `UPDATE transactions SET is_active = 0`,
         );
 
         const r = await infoRepository.getNetWorthFromSnapshots();
@@ -815,7 +802,7 @@ describe.skipIf(!hasTestDatabase())(
             expect(
               (
                 await must(getTestPool(), "getTestPool()").query<{ n: number }>(
-                  `SELECT count(*)::int AS n FROM transactions WHERE account_id IS NULL`,
+                  `SELECT count(*) AS n FROM transactions WHERE account_id IS NULL`,
                 )
               ).rows[0]?.n,
             ).toBe(1);
@@ -900,7 +887,7 @@ describe.skipIf(!hasTestDatabase())(
         for (let n = 32; n >= 0; n--) {
           await must(getTestPool(), "getTestPool()").query(
             `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-           VALUES ('USD', $1::date, 0.5, $2)`,
+           VALUES ('USD', ts_date($1), vision_numeric('0.5', 20, 10), $2)`,
             [d(n), n === 0],
           );
         }
@@ -928,7 +915,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(
           (
             await must(getTestPool(), "getTestPool()").query<{ n: number }>(
-              `SELECT count(*)::int AS n FROM transactions WHERE account_id IS NULL`,
+              `SELECT count(*) AS n FROM transactions WHERE account_id IS NULL`,
             )
           ).rows[0]?.n,
         ).toBe(2);
@@ -1012,14 +999,14 @@ describe.skipIf(!hasTestDatabase())(
         expect(
           (
             await must(getTestPool(), "getTestPool()").query<{ n: number }>(
-              `SELECT count(*)::int AS n FROM transactions WHERE account_id IS NULL`,
+              `SELECT count(*) AS n FROM transactions WHERE account_id IS NULL`,
             )
           ).rows[0]?.n,
         ).toBe(2);
         expect(
           (
             await must(getTestPool(), "getTestPool()").query<{ n: number }>(
-              "SELECT count(*)::int AS n FROM accounts",
+              "SELECT count(*) AS n FROM accounts",
             )
           ).rows[0]?.n,
         ).toBe(0);
@@ -1058,7 +1045,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(
           (
             await must(getTestPool(), "getTestPool()").query<{ n: number }>(
-              `SELECT count(*)::int AS n FROM transactions WHERE account_id IS NULL`,
+              `SELECT count(*) AS n FROM transactions WHERE account_id IS NULL`,
             )
           ).rows[0]?.n,
         ).toBe(1);
@@ -1088,7 +1075,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(
           (
             await must(getTestPool(), "getTestPool()").query<{ n: number }>(
-              `SELECT count(*)::int AS n FROM transactions WHERE account_id IS NOT NULL`,
+              `SELECT count(*) AS n FROM transactions WHERE account_id IS NOT NULL`,
             )
           ).rows[0]?.n,
         ).toBe(1);
@@ -1120,7 +1107,7 @@ describe.skipIf(!hasTestDatabase())(
         ]) {
           await must(getTestPool(), "getTestPool()").query(
             `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-           VALUES ('USD', $1::date, 0.5, $2)`,
+           VALUES ('USD', ts_date($1), vision_numeric('0.5', 20, 10), $2)`,
             [d, latest],
           );
         }
@@ -1300,8 +1287,9 @@ describe.skipIf(!hasTestDatabase())(
     describe("getAverageVsCurrentSpending", () => {
       /** Day N of the month `monthsBack` months before the current one. */
       const monthDay = (monthsBack: number, day: number) =>
-        // App-clock anchored (ecd7f78): the repo's windows no longer read CURRENT_DATE.
-        `date_trunc('month', '${TODAY()}'::date) - interval '${monthsBack} months' + interval '${day - 1} days'`;
+        // App-clock anchored (ecd7f78): the repo's windows read the app date, not
+        // the database clock. add_months/add_days clamp like PostgreSQL's interval math.
+        `add_days(add_months(date_trunc('month', '${TODAY()}'), ${-monthsBack}), ${day - 1})`;
 
       async function insertTxnAt(
         dateExpr: string,
@@ -1310,7 +1298,7 @@ describe.skipIf(!hasTestDatabase())(
       ) {
         const { rows } = await must(getTestPool(), "getTestPool()").query<{
           d: string;
-        }>(`SELECT to_char((${dateExpr})::date, 'YYYY-MM-DD') AS d`);
+        }>(`SELECT to_char(${dateExpr}, 'YYYY-MM-DD') AS d`);
         return insertTxn({ date: must(rows[0], "rows[0]").d, amount, ...opts });
       }
 
@@ -1329,8 +1317,8 @@ describe.skipIf(!hasTestDatabase())(
         // for the daily one.
         const { rows } = await must(getTestPool(), "getTestPool()")
           .query<DbRow>(`
-        SELECT (date_trunc('month', '${TODAY()}'::date)::date
-                - (date_trunc('month', '${TODAY()}'::date) - interval '2 months')::date) AS n
+        SELECT date_diff_days(date_trunc('month', '${TODAY()}'),
+                              add_months(date_trunc('month', '${TODAY()}'), -2)) AS n
       `);
         const calendarDays = Number(must(rows[0], "rows[0]").n);
 
@@ -1368,7 +1356,7 @@ describe.skipIf(!hasTestDatabase())(
         ).toBe(100);
 
         await must(getTestPool(), "getTestPool()").query(
-          `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', 'true'::jsonb)`,
+          `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', vision_jsonb('true'))`,
         );
         expect(
           (await infoRepository.getAverageVsCurrentSpending("EUR"))
@@ -1394,8 +1382,9 @@ describe.skipIf(!hasTestDatabase())(
     // ───────────────────────────────────────────────────────────────────────────
     describe("pinned discrepancies (current real behaviour)", () => {
       const monthDay = (monthsBack: number, day: number) =>
-        // App-clock anchored (ecd7f78): the repo's windows no longer read CURRENT_DATE.
-        `date_trunc('month', '${TODAY()}'::date) - interval '${monthsBack} months' + interval '${day - 1} days'`;
+        // App-clock anchored (ecd7f78): the repo's windows read the app date, not
+        // the database clock. add_months/add_days clamp like PostgreSQL's interval math.
+        `add_days(add_months(date_trunc('month', '${TODAY()}'), ${-monthsBack}), ${day - 1})`;
 
       async function insertTxnAt(
         dateExpr: string,
@@ -1404,7 +1393,7 @@ describe.skipIf(!hasTestDatabase())(
       ) {
         const { rows } = await must(getTestPool(), "getTestPool()").query<{
           d: string;
-        }>(`SELECT to_char((${dateExpr})::date, 'YYYY-MM-DD') AS d`);
+        }>(`SELECT to_char(${dateExpr}, 'YYYY-MM-DD') AS d`);
         return insertTxn({ date: must(rows[0], "rows[0]").d, amount, ...opts });
       }
 
@@ -1461,8 +1450,8 @@ describe.skipIf(!hasTestDatabase())(
 
         const { rows } = await must(getTestPool(), "getTestPool()")
           .query<DbRow>(`
-        SELECT (date_trunc('month', '${TODAY()}'::date)::date
-                - (date_trunc('month', '${TODAY()}'::date) - interval '2 months')::date) AS n
+        SELECT date_diff_days(date_trunc('month', '${TODAY()}'),
+                              add_months(date_trunc('month', '${TODAY()}'), -2)) AS n
       `);
         const observedDays = Number(must(rows[0], "rows[0]").n);
 
@@ -1522,7 +1511,7 @@ describe.skipIf(!hasTestDatabase())(
         ]) {
           await must(getTestPool(), "getTestPool()").query(
             `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-           VALUES ('USD', $1::date, $2, $3)`,
+           VALUES ('USD', ts_date($1), vision_numeric($2, 20, 10), $3)`,
             [date, rate, isLatest],
           );
         }

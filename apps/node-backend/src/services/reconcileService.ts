@@ -39,6 +39,7 @@ import {
   statementBalanceAmountRowSchema,
 } from "../database/rows/ledger.ts";
 import {
+  balancePartsColumn,
   computedBalanceByCurrencyAggLateral,
   statementPartition,
 } from "../repositories/accountBalanceSql.ts";
@@ -102,31 +103,30 @@ export async function reconcileAccount(
 
   // The drift read and the adjustment INSERT / accept UPDATE must be atomic:
   // two concurrent adjustment reconciles would otherwise both read the same
-  // drift and both insert, overshooting by exactly the drift. Lock the account
-  // row FOR UPDATE first so the second request blocks, then re-reads a now-zero
-  // drift and falls into the "already reconciled" guard below.
+  // drift and both insert, overshooting by exactly the drift. withTransaction()
+  // runs BEGIN IMMEDIATE on the single writer, so a second request waits for
+  // this one to commit, then re-reads a now-zero drift and falls into the
+  // "already reconciled" guard below.
   return withTransaction(async () => {
     const locked = await db
       .selectFrom("accounts")
       .select("id")
       .where("id", "=", asAccountId(accountId))
-      .forUpdate()
       .executeTakeFirst();
     if (!locked)
       throw new NotFoundError(`Account ${accountId} not found`);
 
     // Statement figure + the live computed balance, per currency partition (the
-    // same lateral the hub badge reads). The FOR UPDATE cannot ride on this
-    // SELECT — the lateral aggregates, so the lock is taken separately above.
-    const selectedCurrency = sql`COALESCE(${requestedCurrency ?? null}::varchar(3), a.currency)`;
+    // same join the hub badge reads), in the same transaction as the write.
+    const selectedCurrency = sql`COALESCE(${requestedCurrency ?? null}, a.currency)`;
     const row = await checkedRow(
       reconcileDriftRowSchema,
       sql`SELECT a.currency AS account_currency,
               ${selectedCurrency} AS reconcile_currency,
               s.balance AS statement_balance,
-              bp.balance_parts
+              ${balancePartsColumn()}
          FROM accounts a
-         ${computedBalanceByCurrencyAggLateral({ account: sql`a.id`, asOfDate: sql`${today}::date` })}
+         ${computedBalanceByCurrencyAggLateral({ account: sql`a.id`, asOfDate: sql`${today}` })}
          LEFT JOIN account_statement_balances s
            ON s.account_id = a.id
           AND s.currency = ${selectedCurrency}

@@ -39,8 +39,8 @@ describe("forward-only broker snapshots", () => {
         rows: [{ id: 7, display_name: "Broker Seven" }],
       })
       .mockResolvedValue({ rows: [] });
-    // 00:30 on 13 Sep in APP_TIMEZONE, when the UTC (and a UTC database's
-    // CURRENT_DATE) day is still 12 Sep: the split is dated the app day.
+    // 00:30 on 13 Sep in APP_TIMEZONE, when the UTC (and a database-side
+    // CURRENT_DATE/today()) day is still 12 Sep: the split is dated the app day.
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(appDateStringToUtc("2026-09-13").getTime() + 30 * 60_000);
     const outcome = await __storeCurrentBrokerSnapshot(

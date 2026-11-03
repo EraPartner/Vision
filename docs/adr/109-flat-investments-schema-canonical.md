@@ -22,6 +22,11 @@ aliases: [flat investments schema, inheritance conversion, adr-109]
 
 # ADR-109: Flat investments schema is canonical — one-time legacy-install conversion
 
+> [!note] Superseded in part by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> conversion migration 0087 and the manual cleanup were PostgreSQL SQL and left the tree with the
+> other PostgreSQL migrations. A Vision 2.0 database reaches SQLite only through
+> `bun run transition:v2`. The flat schema stays canonical; the SQLite baseline has the same shape.
+
 ## Status
 
 Accepted — 2026-07-10. Supersedes the schema-shape portion of

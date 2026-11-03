@@ -193,19 +193,11 @@ jobs:
           # vision-apple-ai imports FoundationModels, which needs the macOS 26 SDK (ADR-246).
           # The macos-15 image defaults to Xcode 16.4 (macOS 15.5 SDK); select Xcode 26.
           DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
-          POSTGRES_APP_URL: https://github.com/PostgresApp/PostgresApp/releases/download/v2.9.6/Postgres-2.9.6-14-15-16-17-18.dmg
-          POSTGRES_APP_SHA256: ee67776540fb0d29cbd119ea4db4cac3c182349ed53048fdf79766a588ac86b3
         run: |
           set -euo pipefail
           bun run build
-          PG_DMG="$RUNNER_TEMP/postgres-app-2.9.6.dmg"
-          PG_MOUNT="$RUNNER_TEMP/postgres-app-2.9.6"
-          curl -sSfL --retry 3 --retry-all-errors -o "$PG_DMG" "$POSTGRES_APP_URL"
-          echo "$POSTGRES_APP_SHA256  $PG_DMG" | shasum -a 256 -c -
-          mkdir -p "$PG_MOUNT"
-          hdiutil attach -nobrowse -readonly -mountpoint "$PG_MOUNT" "$PG_DMG"
-          trap 'hdiutil detach "$PG_MOUNT" >/dev/null' EXIT
-          export VISION_POSTGRES_SOURCE_BIN="$PG_MOUNT/Postgres.app/Contents/Versions/18/bin"
+          # The database is SQLite through the bundled Bun (ADR-263); no
+          # database server is downloaded or bundled.
           # setup-bun installs to ~/.bun/bin; prepare-native-runtime only probes Homebrew paths.
           VISION_BUN_BIN="$(command -v bun)"
           export VISION_BUN_BIN
@@ -221,8 +213,6 @@ jobs:
           bun install --frozen-lockfile --ignore-scripts
           bun build.ts
           node out/scripts/build-native-package.js
-          hdiutil detach "$PG_MOUNT"
-          trap - EXIT
 
       - name: Stage release artifacts
         env:
@@ -302,9 +292,9 @@ jobs:
             console.error(`ERROR: ${name} has no catalogued components`);
             process.exit(1);
           }
-          // One sentinel per source: Electron shell, backend, frontend, PostgreSQL.
+          // One sentinel per source: Electron shell, backend, frontend.
           const names = new Set(document.components.map((component) => component.name));
-          const missing = ["yauzl", "pg", "react", "postgresql"].filter((entry) => !names.has(entry));
+          const missing = ["yauzl", "kysely", "react"].filter((entry) => !names.has(entry));
           if (missing.length) {
             console.error(`ERROR: ${name} is missing ${missing.join(", ")}`);
             process.exit(1);

@@ -1,13 +1,12 @@
 /**
- * Real-Postgres pins for surviving migrations 0089 (TEXT + named CHECK for the
+ * Real-database pins for surviving migrations 0089 (TEXT + named CHECK for the
  * free-text enum columns) and 0090 (canonical chk_/uq_/idx_ names). Later
  * guarded contracts retired the raw-reference table, scalar balance, raw-bank
  * indexes and transaction hash index; they are not part of the current schema.
  *
- * What only a real database can verify here:
- *   1. The surviving 0089 CHECKs exist under their pinned names AND are validated
- *      (a NOT VALID leftover would mean the tolerant-VALIDATE path fired on a
- *      clean database — a migration bug).
+ * What only a real database can verify here (SQLite since ADR-263):
+ *   1. The surviving 0089 CHECKs exist under their pinned names. SQLite has no
+ *      NOT VALID constraints: every CHECK holds for every row.
  *   2. CHECK behaviour at the SQL layer, bypassing app validators entirely:
  *      every value the app can legitimately write is accepted (all
  *      SUPPORTED_PATTERNS — imported from the real module so vocabulary drift
@@ -18,22 +17,17 @@
  *      REJECTED for planned_transactions.recurrence_pattern: 0089 settles that
  *      column on 'biweekly'.
  *   3. The surviving 0090 rename inventory: every new name present, every old name gone
- *      (constraints via pg_constraint, indexes via pg_indexes), and the
- *      renamed unique indexes are still UNIQUE.
+ *      (constraints from the CREATE TABLE text, indexes from sqlite_schema),
+ *      and the renamed unique indexes are still UNIQUE.
  *
- * Isolation: every data-touching case runs inside BEGIN … ROLLBACK on a
- * dedicated client — nothing this suite writes survives it.
+ * Isolation: every data-touching case runs in a transaction that is always
+ * rolled back; nothing this suite writes survives it.
  */
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { PoolClient } from "pg";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
+import { describe, expect, it } from "vitest";
+import type { PgPoolClient } from "../src/database/connection.ts";
+import { getTestPool, inRollbackTransaction } from "./setup/db.ts";
+import { constraintNames, indexes, objectNames, objectSql, objectType, column } from "./helpers/sqliteCatalog.ts";
 import { __getSupportedPatterns as getSupportedPatterns } from "../src/lib/calculations/recurrence.ts";
 import { must } from "./helpers/must.ts";
 
@@ -42,13 +36,12 @@ type DbRow = Record<string, unknown>;
 interface IdRow {
   id: number;
 }
-/** BIGINT ids arrive from node-postgres as strings. */
+/** BIGINT ids arrive as strings, as node-postgres returned them. */
 interface BigIdRow {
   id: string;
 }
 
 const pool = getTestPool();
-const describeDb = hasTestDatabase() ? describe : describe.skip;
 
 /** Surviving entries from _CHECKS in 0089; the raw-reference table was retired. */
 const NEW_CHECKS = [
@@ -173,15 +166,17 @@ const CATEGORY_CHECKS = [
 ];
 
 /** Run `fn(client)` inside a transaction that is always rolled back. */
-async function withRollback(fn: (client: PoolClient) => Promise<void>) {
-  const client = await must(pool, "pool").connect();
-  try {
-    await client.query("BEGIN");
-    await fn(client);
-  } finally {
-    await client.query("ROLLBACK");
-    client.release();
+async function withRollback(fn: (client: PgPoolClient) => Promise<void>) {
+  await inRollbackTransaction(fn);
+}
+
+/** Every named constraint of every table, as [table, name]. */
+async function allConstraints(): Promise<Array<[string, string]>> {
+  const result: Array<[string, string]> = [];
+  for (const table of await objectNames("table")) {
+    for (const name of await constraintNames(table)) result.push([table, name]);
   }
+  return result;
 }
 
 /**
@@ -189,7 +184,7 @@ async function withRollback(fn: (client: PoolClient) => Promise<void>) {
  * Uses a SAVEPOINT so the surrounding fixture transaction stays usable.
  */
 async function expectCheckViolation(
-  client: PoolClient,
+  client: PgPoolClient,
   sql: string,
   params: unknown[],
   constraint: string,
@@ -200,6 +195,7 @@ async function expectCheckViolation(
     (e: unknown) => e,
   );
   await client.query("ROLLBACK TO SAVEPOINT chk");
+  await client.query("RELEASE SAVEPOINT chk");
   expect(
     err,
     `expected 23514 from: ${sql} ← ${JSON.stringify(params)}`,
@@ -207,28 +203,13 @@ async function expectCheckViolation(
   expect(err).toMatchObject({ code: "23514", constraint });
 }
 
-describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
-  beforeAll(async () => {
-    await acquireDbSuiteLock();
-  }, 180_000);
-
-  afterAll(async () => {
-    await releaseDbSuiteLock();
-    await closeTestPool();
-  });
-
+describe("schema naming discipline (migrations 0089 + 0090)", () => {
   // ── 0089: surviving named CHECKs ─────────────────────────────────────────
-  it("the surviving 0089 CHECK constraints exist, named and VALIDATED", async () => {
+  it("the surviving 0089 CHECK constraints exist under their pinned names", async () => {
     for (const [table, name] of NEW_CHECKS) {
-      const r = await must(pool, "pool").query<DbRow>(
-        `SELECT convalidated FROM pg_constraint
-          WHERE conname = $1 AND conrelid = $2::regclass AND contype = 'c'`,
-        [name, `public.${table}`],
-      );
-      expect(r.rows, `${name} on ${table}`).toHaveLength(1);
-      // A clean database must VALIDATE fully — a lingering NOT VALID means the
-      // tolerant path fired where it had nothing to tolerate.
-      expect(must(r.rows[0], "r.rows[0]").convalidated, `${name} validated`).toBe(true);
+      const text = await objectSql(must(table, "table"));
+      const checks = text.match(new RegExp(`\\bCONSTRAINT\\s+${must(name, "name")}\\s+CHECK\\b`, "gu")) ?? [];
+      expect(checks, `${name} on ${table}`).toHaveLength(1);
     }
   });
 
@@ -251,7 +232,7 @@ describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
       for (const pattern of good) {
         await client.query(
           `INSERT INTO planned_transactions (planned_date, amount, recipient_id, is_recurring, recurrence_pattern)
-           VALUES ('2026-01-01', 1, $1, $2, $3)`,
+           VALUES ('2026-01-01', vision_numeric('1', 18, 4), $1, $2, $3)`,
           [recipientId, pattern !== null, pattern],
         );
       }
@@ -276,7 +257,7 @@ describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
         await expectCheckViolation(
           client,
           `INSERT INTO planned_transactions (planned_date, amount, recipient_id, is_recurring, recurrence_pattern)
-           VALUES ('2026-01-01', 1, $1, true, $2)`,
+           VALUES ('2026-01-01', vision_numeric('1', 18, 4), $1, 1, $2)`,
           [recipientId, pattern],
           "chk_planned_transactions_recurrence_pattern",
         );
@@ -328,7 +309,7 @@ describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
         const { rows } = await client.query<DbRow>(
           `INSERT INTO transaction_source_records
              (source_type, legacy_source_id, recorded_at, native_payload)
-           VALUES ($1, $2, now(), '{}'::jsonb) RETURNING source_type`,
+           VALUES ($1, $2, now(), vision_jsonb('{}')) RETURNING source_type`,
           [sourceType, sourceId++],
         );
         expect(must(rows[0], "rows[0]").source_type).toBe(sourceType);
@@ -337,15 +318,15 @@ describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
   });
 
   it("guarded contracts removed the retired raw references, scalar balance, and hash index", async () => {
-    const { rows } = await must(pool, "pool").query<DbRow>(`
-      SELECT to_regclass('public.transaction_raw_references') IS NULL AS raw_refs_gone,
-             to_regclass('public.uq_transactions_tx_hash') IS NULL AS hash_index_gone,
-             NOT EXISTS (
-               SELECT 1 FROM information_schema.columns
-                WHERE table_schema = 'public' AND table_name = 'accounts'
-                  AND column_name IN ('statement_balance', 'statement_balance_date')
-             ) AS scalar_gone
-    `);
+    const rows = [
+      {
+        raw_refs_gone: (await objectType("transaction_raw_references")) === null,
+        hash_index_gone: (await objectType("uq_transactions_tx_hash")) === null,
+        scalar_gone:
+          (await column("accounts", "statement_balance")) === undefined &&
+          (await column("accounts", "statement_balance_date")) === undefined,
+      },
+    ];
     expect(rows[0]).toEqual({
       raw_refs_gone: true,
       hash_index_gone: true,
@@ -356,61 +337,49 @@ describeDb("schema naming discipline (migrations 0089 + 0090)", () => {
   // ── 0090: renames ────────────────────────────────────────────────────────
   it("every 0090 constraint rename applied: new name present, old name gone", async () => {
     for (const [table, oldName, newName] of CONSTRAINT_RENAMES) {
-      const r = await must(pool, "pool").query<DbRow>(
-        `SELECT conname FROM pg_constraint
-          WHERE conrelid = $1::regclass AND conname = ANY($2::name[])`,
-        [`public.${table}`, [oldName, newName]],
+      const names = (await constraintNames(must(table, "table"))).filter(
+        (name) => name === oldName || name === newName,
       );
-      expect(
-        r.rows.map((row) => row.conname),
-        `${table}: ${oldName} → ${newName}`,
-      ).toEqual([newName]);
+      expect(names, `${table}: ${oldName} → ${newName}`).toEqual([newName]);
     }
   });
 
   it("every 0090 index rename applied: new name present (uniqueness preserved), old name gone", async () => {
     for (const [oldName, newName, isUnique] of INDEX_RENAMES) {
-      const r = await must(pool, "pool").query<DbRow>(
-        `SELECT c.relname, i.indisunique
-           FROM pg_class c
-           JOIN pg_index i ON i.indexrelid = c.oid
-          WHERE c.relnamespace = 'public'::regnamespace AND c.relname = ANY($1::name[])`,
-        [[oldName, newName]],
+      const r = await must(pool, "pool").query<{ name: string; tbl_name: string }>(
+        "SELECT name, tbl_name FROM sqlite_schema WHERE type = 'index' AND name IN ($1, $2)",
+        [oldName, newName],
       );
       expect(
-        r.rows.map((row) => row.relname),
-        `${oldName} → ${newName}`,
+        r.rows.map((row) => row.name),
+        `${String(oldName)} → ${String(newName)}`,
       ).toEqual([newName]);
-      expect(must(r.rows[0], "r.rows[0]").indisunique, `${newName} uniqueness`).toBe(isUnique);
+      const found = (await indexes(must(r.rows[0], "r.rows[0]").tbl_name)).find((index) => index.name === newName);
+      expect(found?.unique === 1, `${String(newName)} uniqueness`).toBe(isUnique);
     }
   });
 
   it("no old naming prefixes remain beyond the intentional 0114 category checks", async () => {
-    const categoryChecks = await must(pool, "pool").query<DbRow>(
-      `SELECT conname FROM pg_constraint
-        WHERE conrelid = 'public.categories'::regclass
-          AND conname = ANY($1::name[])
-        ORDER BY conname`,
-      [CATEGORY_CHECKS],
-    );
-    expect(categoryChecks.rows.map((row) => row.conname)).toEqual(
-      [...CATEGORY_CHECKS].sort(),
-    );
-    const cons = await must(pool, "pool").query<DbRow>(
-      `SELECT conname FROM pg_constraint
-        WHERE connamespace = 'public'::regnamespace
-          AND (conname LIKE 'ck\\_%' OR conname LIKE 'uniq\\_%' OR conname LIKE 'ux\\_%' OR conname LIKE 'ix\\_%')
-          AND conname NOT LIKE 'legacy\\_inh\\_%'
-          AND conname <> ALL($1::name[])`,
-      [CATEGORY_CHECKS],
-    );
-    expect(cons.rows).toEqual([]);
+    const constraints = await allConstraints();
+    expect(
+      constraints
+        .filter(([table, name]) => table === "categories" && CATEGORY_CHECKS.includes(name))
+        .map(([, name]) => name)
+        .sort(),
+    ).toEqual([...CATEGORY_CHECKS].sort());
+    const oldPrefix = /^(ck|uniq|ux|ix)_/u;
+    expect(
+      constraints.filter(
+        ([, name]) => oldPrefix.test(name) && !name.startsWith("legacy_inh_") && !CATEGORY_CHECKS.includes(name),
+      ),
+    ).toEqual([]);
     const idx = await must(pool, "pool").query<DbRow>(
-      `SELECT indexname FROM pg_indexes
-        WHERE schemaname = 'public'
-          AND (indexname LIKE 'uniq\\_%' OR indexname LIKE 'ux\\_%' OR indexname LIKE 'ix\\_%' OR indexname LIKE '%\\_idx')
-          AND indexname NOT LIKE 'legacy\\_inh\\_%'
-          AND tablename NOT IN ('investments_legacy', 'portfolio_transactions_legacy')`,
+      `SELECT name AS indexname FROM sqlite_schema
+        WHERE type = 'index' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'
+          AND (name LIKE 'uniq\\_%' ESCAPE '\\' OR name LIKE 'ux\\_%' ESCAPE '\\'
+               OR name LIKE 'ix\\_%' ESCAPE '\\' OR name LIKE '%\\_idx' ESCAPE '\\')
+          AND name NOT LIKE 'legacy\\_inh\\_%' ESCAPE '\\'
+          AND tbl_name NOT IN ('investments_legacy', 'portfolio_transactions_legacy')`,
     );
     expect(idx.rows).toEqual([]);
   });

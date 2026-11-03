@@ -3,13 +3,10 @@
  * on the recipient insights and recipients-by-year reads. Previously pinned
  * only by asserting SQL placeholders and bound parameters on a mocked pool.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { recipientInsightsRepository } from "../src/repositories/infoRepositoryRecipients.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
@@ -54,7 +51,7 @@ async function seed() {
   for (const [date, amount, recipientId] of rows) {
     const { rows: inserted } = await db.query<{ id: TransactionId }>(
       `INSERT INTO transactions (date, amount, currency, recipient_id, account_id)
-       VALUES ($1, $2, 'EUR', $3, $4) RETURNING id`,
+       VALUES (ts_date($1), vision_numeric($2, 18, 4), 'EUR', $3, $4) RETURNING id`,
       [date, amount, recipientId, must(account[0], "account[0]").id],
     );
     created.transactionIds.push(must(inserted[0], "inserted[0]").id);
@@ -64,23 +61,18 @@ async function seed() {
 
 const bounds = { startDate: "2024-10-01", endDate: "2026-09-07" };
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "recipient read date bounds (real DB)",
   () => {
-    beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180_000);
-
     afterEach(async () => {
       const db = must(getTestPool(), "getTestPool()");
-      await db.query("DELETE FROM transactions WHERE id = ANY($1::int[])", [
+      await db.query("DELETE FROM transactions WHERE id IN (SELECT value FROM json_each($1))", [
         created.transactionIds.splice(0),
       ]);
-      await db.query("DELETE FROM accounts WHERE id = ANY($1::int[])", [
+      await db.query("DELETE FROM accounts WHERE id IN (SELECT value FROM json_each($1))", [
         created.accountIds.splice(0),
       ]);
-      await db.query("DELETE FROM recipients WHERE id = ANY($1::int[])", [
+      await db.query("DELETE FROM recipients WHERE id IN (SELECT value FROM json_each($1))", [
         created.recipientIds.splice(0),
       ]);
       clearMvCache();
@@ -88,7 +80,6 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });

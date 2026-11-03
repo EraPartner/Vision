@@ -165,7 +165,7 @@ export interface PowerSample {
 
 /** Process names kept from the tasks sampler. */
 export const TASK_NAME_FILTER =
-  /(^|[^a-z])vision|postgres|ollama|llama|windowserver|electron/i;
+  /(^|[^a-z])vision|ollama|llama|windowserver|electron/i;
 
 /** Power in mW from a `*_power` key, else from `*_energy` (mJ) over the interval. */
 function power(

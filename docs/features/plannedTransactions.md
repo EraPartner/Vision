@@ -2,8 +2,8 @@
 title: Planned Transactions
 type: feature
 status: active
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match, exchange-rates, fx]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: "Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders its dashboard reminder without duplicating the planned-payments page, while native badge synchronization remains active throughout AppLayout. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load. August 2026: Planned aggregates omit payments whose exchange rate is unavailable and visibly report the omission instead of blending currencies."
@@ -197,7 +197,7 @@ Dismissals in the recurring-pattern detection panel are persistent and do not re
 - Keeps a localStorage fallback (`dismissed_recurring_patterns`) when settings API is unavailable
 - Users can reset these dismissals from Settings → App via “Reset dismissed recurring suggestions”
 - Pattern date labels in `RecurringDetectionPanel` follow app `dateFormat` + locale settings
-- Backend settings persistence now stores dismissal arrays as explicit JSONB (`JSON.stringify` + `::jsonb`) to prevent invalid JSON writes when dismissing suggestions
+- Backend settings persistence now stores dismissal arrays as canonical jsonb text (`JSON.stringify` + `vision_jsonb(?)`) to prevent invalid JSON writes when dismissing suggestions
 
 Code links: [[apps/frontend/src/features/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/lib/dateUtils.ts]], [[apps/node-backend/src/repositories/settingsRepository.ts]]
 
@@ -330,15 +330,15 @@ The execute endpoint is now **atomic and idempotent**:
 
 - **Database:** A unique index on `planned_transaction_executions (planned_transaction_id, executed_transaction_id)` prevents duplicate execution pairs. The insert uses `ON CONFLICT DO NOTHING`.
 - **Service:** `executePlanned` locks the planned parent row before reading its date, execution count, bounds, and tags. The read, advance calculation, execution insert, inherited tags, and final read share one transaction. Distinct concurrent executions therefore advance from successive states.
-- **Calendar dates:** Execution normalizes PostgreSQL DATE values with local calendar getters and advances them with `nextOccurrenceYmd`. It does not interpret host-local midnight as an instant in `APP_TIMEZONE`; a July 1 monthly plan advances to August 1 even when the host and application timezones differ. Month-end clamping remains sequential (January 31, February 28, March 28).
+- **Calendar dates:** Execution normalizes `DATE` column values (the driver reads them as local-midnight `Date` objects) with local calendar getters and advances them with `nextOccurrenceYmd`. It does not interpret host-local midnight as an instant in `APP_TIMEZONE`; a July 1 monthly plan advances to August 1 even when the host and application timezones differ. Month-end clamping remains sequential (January 31, February 28, March 28).
 - **Bounds:** A new execution after maximum-count or end-date completion returns `409 CONFLICT` without inserting an execution or copying tags. Replaying an existing pair remains a `200` response with `Idempotent-Replay: true`, even after the series completes.
 - **Result:** Double-clicks, retries, and network replays return the same result without creating duplicate execution rows.
 
 See [[docs/adr/012-planned-execution-idempotency|ADR-012]] for design rationale.
 
 [[apps/node-backend/tests/plannedExecutionConcurrency.db.test.ts]] covers concurrent distinct
-payments, duplicate replay, the final bounded occurrence, and end-date completion on disposable
-PostgreSQL. Live verification of these new cases is pending in [[TODO]].
+payments, duplicate replay, the final bounded occurrence, and end-date completion on its own copy
+of the migrated SQLite template. Live verification of these new cases is pending in [[TODO]].
 
 ## Supporting Services
 

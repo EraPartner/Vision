@@ -48,9 +48,8 @@ const base = {
 
 let dossierId: string | undefined;
 
-describe.skipIf(!hasTestDatabase())("research dossiers (real Postgres)", () => {
+describe.skipIf(!hasTestDatabase())("research dossiers (real SQLite database)", () => {
   beforeAll(async () => {
-    expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
     await acquireDbSuiteLock();
   }, 180_000);
 

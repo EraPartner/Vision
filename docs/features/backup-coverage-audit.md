@@ -17,7 +17,7 @@ related_code: ["packaging/electron/backup/bundle.ts", "packaging/electron/main.t
 > [Open the journey](../flow-visualizer.html#backup-create) or [the companion flow](../flow-visualizer.html#backup-restore). See [[docs/guides/visual-learning|Understand Vision Visually]] for the reading paths and conceptual diagrams.
 
 > [!abstract] Overview
-> Authoritative inventory of every persistence surface in Vision — Postgres tables, filesystem files, and browser localStorage — with coverage status in the `.visionbak` bundle format.
+> Authoritative inventory of every persistence surface in Vision — SQLite database tables, filesystem files, and browser localStorage — with coverage status in the `.visionbak` bundle format.
 
 ## Feature Overview
 
@@ -27,23 +27,24 @@ related_code: ["packaging/electron/backup/bundle.ts", "packaging/electron/main.t
 
 ### Key Capabilities
 
-- Every Postgres table included in `pg_dump` SQL artifact inside bundle
-- Attachment files (receipts, PDFs) bundled alongside the SQL dump
+- Every database table included in the verified SQLite copy (`db.sqlite3`) inside the bundle
+- Attachment files (receipts, PDFs) bundled alongside the database copy
 - Browser localStorage state (theme, dismissed notifications) captured and restored
-- Table coverage is automatic: the dump is the whole database, so new migrations need no registration
+- Table coverage is automatic: the copy is the whole database, so new migrations need no registration
 - CI test enforces registration whenever a new localStorage key is added
 
 ---
 
 ## Persistence Surfaces
 
-### 1. Postgres Database Tables
+### 1. Database Tables
 
-All user-data tables are included in the `pg_dump` SQL artifact inside every `.visionbak` bundle.
+All user-data tables are included in the `db.sqlite3` member of every `.visionbak` bundle.
 
-**Source of truth:** the whole-database `pg_dump` in `packaging/electron/runtime/native.ts`. It
-passes no `--table` or `--exclude-table` filter (only `--exclude-extension` for the bundled
-extensions), so every table in the migrated schema is captured without a registry. The former
+**Source of truth:** `snapshotDatabase()` in `packaging/electron/runtime/native.ts`, which runs the
+database tool's `snapshot` command: a `VACUUM INTO` copy of the whole file, verified before it is
+used ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). It has no table filter, so every table
+in the migrated schema is captured without a registry. The former
 `BACKUP_COVERED_TABLES` list in `apps/node-backend/src/backup/coverage.ts` was read only by its own
 test and was removed on 2026-10-20. The tables below document the current schema.
 
@@ -51,32 +52,31 @@ test and was removed on 2026-10-20. The tables below document the current schema
 
 | Table                   | Domain     | Backup      | Notes |
 | ----------------------- | ---------- | ----------- | ----- |
-| `agg_recipient_totals`  | Aggregates | ✅ Included |       |
 | `agg_split_outstanding` | Aggregates | ✅ Included |       |
+| `mv_monthly_summary`    | Aggregates | ✅ Included | Summary table; the backend refills it after start |
+| `mv_category_totals`    | Aggregates | ✅ Included | Summary table; the backend refills it after start |
 
 #### Removed audit history
 
-Migration `0004_remove_audit_history` dropped `audit_chain_head`, `audit_chain_entries`,
-`audit_chain_checkpoints`, `db_editor_audit`, `split_audit` and `portfolio_retag_audit`, and
-`BACKUP_COVERED_TABLES` no longer names them
-([[docs/adr/231-remove-audit-history|ADR-231]]). An older backup that still contains them
-restores without an audit check or continuity warning; restore activates the dump at its own
-migration head, and the next backend start applies 0004 and drops the tables again. No test
-restores a pre-0004 dump end to end.
+Vision 2.0 migration `0004_remove_audit_history` dropped `audit_chain_head`, `audit_chain_entries`,
+`audit_chain_checkpoints`, `db_editor_audit`, `split_audit` and `portfolio_retag_audit`
+([[docs/adr/231-remove-audit-history|ADR-231]]). The SQLite baseline
+`db/migrations/0001_baseline.sql` does not create them.
 
-Fresh installs start at migration `0001_baseline` (which still creates the audit chain with one
-`baseline_installed` entry) and then apply the later migrations, so 0004 drops it again.
-The schema revision of a database, and the `schemaHead` a bundle records, is the highest name in
-`public.kysely_migration`. Restore refuses any backup taken before the switch to the Kysely
-baseline: a dump that has no `kysely_migration` rows fails with `BACKUP_PRE_BASELINE`. See
-[[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] and
+The schema version of a database, and the `schemaVersion` a bundle records, is the latest version
+in the database's `vision_migrations` ledger. Restore refuses a bundle whose schema version is
+newer than this install with `BUNDLE_SCHEMA_NEWER`. A Vision 2.0 bundle (format 1) carries a
+PostgreSQL `db.sql` instead of `db.sqlite3`; restore never reads it and refuses it with
+`BACKUP_POSTGRESQL_V2`, naming `bun run transition:v2`. See
+[[docs/guides/sqlite-transition|Moving Vision 2.0 data to SQLite]] and
 [[docs/guides/migrations|Database Migration Guide]].
 
 #### AI & Conversations
 
-Migration 0002 dropped `ai_disclosure_grants`, `ai_disclosure_records`, `ai_reference_scopes` and
-`ai_reference_entries` ([[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]]). An older
-backup that still contains them restores, and the next backend start drops them again.
+Vision 2.0 migration 0002 dropped `ai_disclosure_grants`, `ai_disclosure_records`,
+`ai_reference_scopes` and `ai_reference_entries`
+([[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]]). The SQLite baseline does not
+create them.
 
 | Table                            | Domain      | Backup      | Notes                                                |
 | -------------------------------- | ----------- | ----------- | ---------------------------------------------------- |
@@ -103,9 +103,9 @@ backup that still contains them restores, and the next backend start drops them 
 | `portfolio_asset_adjustments` | Included | Dated unit reversals/asset fees and per-method original-lot basis allocations (0123) |
 | `portfolio_asset_adjustment_sources` | Included | Restrictive original yield-source links, including evidence in older batches (0123) |
 
-These tables are included in the whole-database dump. They retain original-trade restoration and
+These tables are included in the whole-database copy. They retain original-trade restoration and
 custody replay state, including referenced batches/staging provenance. They are domain history. The import session's tab-scoped `sessionStorage`
-metadata is not a backup surface; canonical staged batches and source records remain in PostgreSQL.
+metadata is not a backup surface; canonical staged batches and source records remain in the database.
 See [[docs/reference/data-model]] and
 [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]] for guarded migration recovery.
 
@@ -174,8 +174,7 @@ See [[docs/reference/data-model]] and
 
 | Table                    | Reason                                                                         |
 | ------------------------ | ------------------------------------------------------------------------------ |
-| `kysely_migration`       | Migrator bookkeeping created by `database/migrate.ts`, not by a migration; the schema version it records travels with the dump |
-| `kysely_migration_lock`  | Migrator lock row created by `database/migrate.ts`, not by a migration       |
+| `vision_migrations`      | Not excluded: the migration ledger travels inside `db.sqlite3`, and restore verification requires it |
 
 ---
 
@@ -222,11 +221,11 @@ Captured as `frontend-state.json` in the bundle. Restored after DB load triggers
 
 | Surface                                            | Backup      | Notes                                                                                                                                                                                                         |
 | -------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Materialised views                                 | ❌ Excluded | Re-built at runtime by `materializedViewService.ts`                                                                                                                                                           |
+| Summary-table contents                             | ✅ Included | The `mv_*` tables travel in `db.sqlite3`; `materializedViewService.ts` refreshes them after start                                                                                                             |
 | Price provider caches (HTTP)                       | ❌ Excluded | Re-fetched on demand                                                                                                                                                                                          |
 | Electron `safeStorage` passphrase                  | ❌ Excluded | User re-enters passphrase post-restore. safeStorage is accessed lazily — only when a passphrase blob is already stored — to avoid macOS Keychain prompts for users who have not configured backup encryption. |
 | `settings.json` (Electron-local)                   | ❌ Excluded | Contains backup dir config + deviceId; meaningless on new machine                                                                                                                                             |
-| Legacy Electron `audit-anchor/` folder             | ❌ Excluded | Retired by ADR-231. `legacy-audit-cleanup.ts` deletes it once, with the macOS Keychain audit-witness item, after the database records migration 0004 (ADR-242).                                              |
+| Legacy Electron `audit-anchor/` folder             | ❌ Excluded | Retired by ADR-231. `legacy-audit-cleanup.ts` deletes it once, with the macOS Keychain audit-witness item, after the backend is ready. Every SQLite database descends from a Vision 2.0 database that had applied 0004. |
 
 The encrypted reference tables are backed up to preserve job and checkpoint consistency. On the
 same installation, a restored in-flight job can restore its provider-form checkpoint while the
@@ -271,8 +270,8 @@ Users who **do** store a passphrase will see macOS password prompts on an unsign
 
 ```
 vision_backup_{deviceId}_{timestamp}.visionbak   ← .zip archive (unencrypted)
-├── metadata.json        # schema head, app version, deviceId, timestamps, sha256 checksums
-├── db.sql               # pg_dump plain SQL
+├── metadata.json        # bundle format, schemaVersion, SQLite version, database SHA-256 and size, app version, deviceId, timestamps
+├── db.sqlite3           # verified VACUUM INTO copy of the database (Vision 2.0 bundles carried db.sql)
 ├── attachments/         # mirrors $ATTACHMENTS_DIR/
 │   └── {txn_id}/{uuid}.{ext}
 └── frontend-state.json  # { keys: { vision_theme: "dark", … } }
@@ -290,7 +289,7 @@ use, so a folder stored through the settings API cannot bypass the IPC check.
 
 **v1 (Retired):** AES-256-CBC with static salt
 
-- **Magic:** `VISIONENC1` for raw SQL backups or `VISIONBAK1` for bundles (10 bytes)
+- **Magic:** `VISIONENC1` for single-file backups or `VISIONBAK1` for bundles (10 bytes)
 - **Salt:** Static `vision-backup-v1` value (hardcoded, same across all v1 backups)
 - **KDF:** Scrypt(passphrase, salt, N=2^14, r=8, p=1)
 - **Mode:** CBC (confidentiality only; no authentication)
@@ -299,7 +298,7 @@ use, so a folder stored through the settings API cannot bypass the IPC check.
 
 **v2 (AEAD, April 2026):** AES-256-GCM with per-backup random salt and IV
 
-- **Magic:** `VISIONENC2` for raw SQL backups or `VISIONBAK2` for bundles (10 bytes)
+- **Magic:** `VISIONENC2` for single-file backups or `VISIONBAK2` for bundles (10 bytes)
 - **Salt:** Random 16 bytes per backup (generated at encryption time)
 - **IV:** Random 12 bytes per backup (GCM standard)
 - **KDF:** Scrypt(passphrase, salt, N=2^15, r=8, p=1) — doubled iteration count vs v1
@@ -315,23 +314,23 @@ use, so a folder stored through the settings API cannot bypass the IPC check.
 retired-v1 refusal, key derivation, stream cleanup, and authentication-error handling. The adapters preserve
 their public interfaces and supply format-specific magic values and messages:
 
-- `packaging/electron/backup/crypto.ts` — raw SQL backup adapter
+- `packaging/electron/backup/crypto.ts` — single-file encrypted backup adapter, passphrase storage and retention
 - `packaging/electron/backup/bundle.ts` — `.visionbak` bundle adapter, which provides:
 
-- `createBundle()` — Create zip from db.sql, attachments/, frontend-state.json, metadata.json
+- `createBundle()` — Create zip from db.sqlite3, attachments/, frontend-state.json, metadata.json
 - `encryptBundle(bundlePath, passphrase, { destDir? })` — Wrap bundle in AES-256-GCM (v2) into `destDir` (default: the bundle's folder) and delete the plaintext; takes plaintext passphrase, not pre-derived key
 - `decryptToTemp(encPath, passphrase, tmpPath)` — Decrypt a v2 bundle; refuse a retired `VISIONBAK1` bundle by name
-- `openBundle()` — Extract and decrypt bundle; returns paths to sql, attachments, frontend state
+- `openBundle()` — Extract and decrypt bundle; returns the path to `db.sqlite3` (or to a Vision 2.0 `db.sql`, which nothing parses), attachments and frontend state
 - `isBundleEncrypted()` — Inspect bundle header without full extraction
 
 ---
 
 ## Consistent native capture and restart recovery
 
-The native bundle writer captures SQL, attachments and schema head while the backend writer is
-stopped. PostgreSQL remains available for `pg_dump`. `backup/quiescent-snapshot.ts` stops the
-writer, invokes capture, and always attempts restart and detailed readiness in `finally`, even
-when capture fails. Compression and encryption run
+The native bundle writer captures the database copy, attachments and schema version while the
+backend is stopped. `backup/quiescent-snapshot.ts` stops the backend, invokes capture (the database
+tool's verified `VACUUM INTO` snapshot, then the attachment export), and always attempts restart and
+detailed readiness in `finally`, even when capture fails. Compression and encryption run
 after the backend returns. The main process pauses its watchdog and holds a maintenance guard
 against conflicting restore/update shutdown; quit waits for that guard. This introduces a brief
 write interruption, signalled through `backend:lost` with the localized backup-maintenance reason.
@@ -364,7 +363,7 @@ and [[docs/architecture/electron|Electron architecture]].
 - Path validation (v2 security enhancement): `decryptBackupFileToTemp()` and `backup:restore` IPC handler validate:
   - `filePath` is a string
   - `filePath` was returned by prior `backup:select-file` dialog (stored in `ALLOWED_RESTORE_PATHS` set)
-  - `filePath` ends in `.visionbak`, `.visionbak.enc`, `.sql`, or `.enc`
+  - The file dialog offers `.visionbak`, `.visionbak.enc`, `.sqlite3`, `.sql`, and `.enc`; `.visionbak` and `.visionbak.enc` go to the bundle restore and any other file to `runRestore()`, which accepts only a SQLite database file and refuses a Vision 2.0 `.sql` or `.sql.enc` dump with `BACKUP_POSTGRESQL_V2`
   - `filePath` exists on disk
   - `filePath` does not escape `attachments` directory via `path.resolve()` + `fs.realpath()`
   - Prevents XSS-in-renderer from passing arbitrary paths
@@ -380,25 +379,18 @@ and [[docs/architecture/electron|Electron architecture]].
    - **v1 (retired):** Refuse with "This backup uses the retired v1 encryption format, which Vision no longer restores." before any decryption
    - **v2:** Extract salt + IV from header; derive key via Scrypt KDF with per-backup salt; decrypt GCM ciphertext; verify auth tag; throw `Error('INVALID_PASSPHRASE')` on tag failure (tampering detected)
    - Frontend catches invalid-passphrase error and re-prompts modal (up to 3 attempts typical)
-4. **Schema Validation** — Read the dump's own `kysely_migration` rows. A dump without them is refused with `BACKUP_PRE_BASELINE`. The highest migration name must equal `metadata.schemaHead` when present (otherwise the bundle is reported corrupt), and is compared with the current `getSchemaHead()` (or the highest shipped `db/migrations/` file). If the bundle schema is newer, throw `BUNDLE_SCHEMA_NEWER` (user must upgrade Vision first).
-5. **Native Database Stage** — The runtime restores into a fresh staged database created from
-   `template0`, uses version-matched PostgreSQL 18 tools, stops on the
-   first error, and restores in one transaction. A plain dump is user-chosen input, so psql
-   meta-commands in it (`\!`, `\copy ... program`, `\i`, ...) never run
-   (`runtime/psql-restore-guard.ts`): a pg_dump file whose own `\restrict`/`\unrestrict` pair
-   encloses it runs unchanged; any other file runs after a `\restrict` with a fresh random key, so a
-   backslash command in it fails the restore. A no-owner restore leaves schema tables with the
-   owner/migration role, then hands only the runtime-managed materialized views to the application
-   role so their create, index, refresh, and analyze lifecycle remains least-privilege. Runtime
-   bootstrap grants restored ordinary tables and views individually and skips those app-owned
-   materialized views.
-6. **Database Validation** — Confirm the staged database's highest `kysely_migration` name equals
-   the expected schema head and that it has public tables before
-   the live database name can change.
+4. **Schema Validation** — A bundle without `db.sqlite3` (a Vision 2.0 format-1 bundle) is refused
+   with `BACKUP_POSTGRESQL_V2`. If `metadata.schemaVersion` is newer than the highest shipped
+   `db/migrations/` file, restore throws `BUNDLE_SCHEMA_NEWER` (user must upgrade Vision first).
+5. **Native Database Stage** — The runtime copies `db.sqlite3` into a staged database directory.
+6. **Database Validation** — The database tool verifies the staged copy: `integrity_check`,
+   `foreign_key_check`, a `vision_migrations` ledger this build can open, and a schema equal to a
+   fresh install at the same version. Restore refuses it unless its SHA-256 and schema version
+   match `metadata.json`. Only then is the switch journaled in `runtime-state.json`.
 7. **Attachment Stage** — Extract `attachments/` to a sibling staging directory, reject symbolic
    links, and compute the count and aggregate SHA-256 fingerprint.
-8. **Atomic Activation** — Stop the active writer, switch the staged database and attachment tree,
-   start the provider, and wait for database-backed `/health/detailed` readiness. Both switches
+8. **Atomic Activation** — Stop the backend, rename the staged database directory and attachment
+   tree into place, start the backend, and wait for database-backed `/health/detailed` readiness. Both switches
    keep rollback state until readiness succeeds. There is no audit-receipt check or
    audit-continuity warning ([[docs/adr/231-remove-audit-history|ADR-231]]).
 9. **Frontend State Restore** — Return `{ frontendState.keys }` to renderer; component writes each key to localStorage via `localStorage.setItem(key, value)`.
@@ -426,8 +418,8 @@ and [[docs/architecture/electron|Electron architecture]].
 
 ## Coverage Enforcement
 
-Tables need no enforcement: the dump is whole-database, so a table added by a migration is in the
-next backup automatically.
+Tables need no enforcement: the copy is the whole database, so a table added by a migration is in
+the next backup automatically.
 
 `apps/node-backend/tests/localStorage-keys-registry.test.ts` runs in CI and fails when frontend
 source reads or writes a raw localStorage key that is not registered in `LOCAL_STORAGE_KEYS` or
@@ -437,10 +429,10 @@ source reads or writes a raw localStorage key that is not registered in `LOCAL_S
 
 `bun run native:isolated-smoke` is the destructive backup/restore acceptance journey for the
 supported native macOS application. It creates its own temporary application-data directory and
-PostgreSQL 18 cluster, writes a synthetic account, recipient, transaction, setting, and attachment,
+SQLite database, writes a synthetic account, recipient, transaction, setting, and attachment,
 creates a current AES-256-GCM `.visionbak.enc` bundle with frontend state, mutates the temporary
 database and attachment, and restores the bundle. It then verifies exact account, transaction,
-setting, and attachment values plus the schema revision, database statistics, frontend-state
+setting, and attachment values plus the schema version, table row counts, frontend-state
 payload, API readiness, and packaged frontend assets. The entire temporary instance is removed
 after success; it cannot address the user's real Vision data.
 
@@ -454,9 +446,11 @@ SQL, an attachment, metadata, and frontend state. This checks the current reader
 bytes from the older producer rather than a bundle created by the current writer. Vision 1.0.2
 already wrote the authenticated `VISIONBAK2` envelope. The fixed encrypted-byte tests in
 `packaging/electron/backup/encrypted-file.test.ts` decrypt the v2 vectors and check that the v1
-vectors are refused without writing plaintext. Opening it does not make it restorable: its dump predates the Kysely baseline, so restore refuses
-it with `BACKUP_PRE_BASELINE`. Newer-schema and pre-baseline rejection and restore rollback remain
-covered by the focused Electron backup tests (`packaging/electron/backup/restore.test.ts`).
+vectors are refused without writing plaintext. Opening it does not make it restorable: it carries a
+PostgreSQL `db.sql` and no `db.sqlite3`, so the test expects no database path, and restore refuses
+such a bundle with `BACKUP_POSTGRESQL_V2`. Newer-schema and Vision 2.0 rejection and restore
+rollback remain covered by the focused Electron backup tests
+(`packaging/electron/backup/restore.test.ts`).
 
 ---
 
@@ -484,7 +478,7 @@ covered by the focused Electron backup tests (`packaging/electron/backup/restore
 ## Gaps / Known Limitations
 
 - No cloud/off-device sync. Bundles are local-disk only.
-- No incremental backup. Every backup is a full dump.
+- No incremental backup. Every backup is a full copy of the database.
 - Merge-restore is not supported. Restore stages and validates a complete replacement, then uses
   atomic activation with rollback instead of modifying the live attachment tree in place.
 - Restoring a bundle created on a **newer** schema version is blocked with a clear error. Upgrade Vision first.

@@ -1126,7 +1126,7 @@ describe("Phase F1: extended mutation contracts", () => {
     // `attachmentRepository.formatRow` (attachmentRepository.js:19-29). Note
     // `size_bytes` (number), not `size` — AttachmentPanel.tsx:61 reads it.
     const AttachmentSchema = z.object({
-        // BIGSERIAL: node-postgres returns it as decimal text.
+        // BIGINT id: the backend returns it as decimal text.
         id: z.string().regex(/^\d+$/),
         transaction_id: z.number().int().positive(),
         filename: z.string(),

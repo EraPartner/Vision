@@ -443,7 +443,7 @@ export async function resolveBulkSelection(
   };
 
   const countResult = await run(
-    sql`SELECT COUNT(*)::int AS n ${EXPORT_JOINS_SQL} WHERE ${where}`,
+    sql`SELECT COUNT(*) AS n ${EXPORT_JOINS_SQL} WHERE ${where}`,
   );
   const [countRow] = checkRows(intCountRowSchema, countResult.rows);
   const matched = countRow?.n ?? 0;

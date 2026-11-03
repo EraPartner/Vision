@@ -3,8 +3,8 @@
  * (survivor): every reference to a source account_id is repointed to the target, then
  * the source rows are deleted — so the accounts become one everywhere.
  *
- * Mirrors the recipient merge (ADR-014) pattern: single transaction, FOR UPDATE locks,
- * repoint-then-delete. The account_id FKs are ON DELETE RESTRICT, so deletion only
+ * Mirrors the recipient merge (ADR-014) pattern: single transaction (BEGIN IMMEDIATE on
+ * the single writer, ADR-263, which replaced the FOR UPDATE locks), repoint-then-delete. The account_id FKs are ON DELETE RESTRICT, so deletion only
  * succeeds once every reference has moved — which is exactly the integrity guarantee.
  *
  * Overlapping-stamp guard (§1 F2): per-row `balance` stamps are per-source-bank
@@ -28,22 +28,25 @@
  * collidingAnchorCurrencies.
  */
 
-import { withTransaction } from "../database/connection.ts";
+import { withFundingGraphTransaction } from "../lib/accountFundingGraphLock.ts";
 import { storedCurrencyCode } from "../lib/currencyCode.ts";
 import type { AccountId, CurrencyCode } from "@vision/types/brands";
 import { sql } from "kysely";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
-import type { BuiltQuery } from "../database/db.ts";
 import {
   accountCurrencyRowSchema,
   balancePartsRowSchema,
   bigintCountRowSchema,
 } from "../database/rows/ledger.ts";
+import { tableColumnRowSchema } from "../database/rows/catalog.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
 import { filterValidatedIdNumbers } from "../lib/validation.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import { money, roundToCents, toDecimal, toNumber } from "../lib/money.ts";
-import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.ts";
+import {
+  balancePartsColumn,
+  computedBalanceByCurrencyAggLateral,
+} from "../repositories/accountBalanceSql.ts";
 import {
   convertAtLatestRates,
   loadLatestRatesToEur,
@@ -83,11 +86,16 @@ export interface AccountMergePreview {
   openingAnchorCollision: boolean;
 }
 
-const countN = sql<string>`COUNT(*)`.as("n");
-
-/** Run a bare `COUNT(*) AS n` query; it always returns exactly one row. */
-async function countOf(builder: BuiltQuery): Promise<number> {
-  const row = await checkedRow(bigintCountRowSchema, builder);
+/** `COUNT(*)` of the rows of `table` whose `column` is `accountId`. */
+async function countOf(
+  table: "transactions" | "planned_transactions" | "portfolio_transactions" | "accounts",
+  column: "account_id" | "funding_account_id",
+  accountId: AccountId,
+): Promise<number> {
+  const row = await checkedRow(
+    bigintCountRowSchema,
+    sql`SELECT COUNT(*) AS "n::bigint" FROM ${sql.table(table)} WHERE ${sql.ref(column)} = ${accountId}`,
+  );
   if (!row) throw new Error("account merge count returned no row");
   return parseInt(row.n, 10);
 }
@@ -187,6 +195,48 @@ async function assertMergeFundingCycleSafe(
   }
 }
 
+/**
+ * Per-currency anchor+delta over the union of `unionIds`' rows, via the shared
+ * hub builder: within each currency the most recent stamped row across ALL of
+ * the accounts anchors and every active row of that currency after it is the
+ * delta. The statement's `transactions` CTE shadows the table with the union's
+ * rows relabelled as the survivor's — exactly what the merged account's rows
+ * will look like — so the builder computes the survivor's partitions over
+ * them. (PostgreSQL passed `ANY(<union ids>)` as the builder's account
+ * expression; the SQLite builder joins on one account id.)
+ */
+async function projectedBalanceParts(
+  targetId: AccountId,
+  unionIds: AccountId[],
+) {
+  const columns = await checkedRows(
+    tableColumnRowSchema,
+    sql`SELECT name FROM pragma_table_info('transactions') ORDER BY cid`,
+  );
+  const select = sql.join(
+    columns.map(({ name }) =>
+      name === "account_id"
+        ? sql`CAST(${targetId} AS INTEGER) AS account_id`
+        : sql.ref(`src.${name}`),
+    ),
+  );
+  return checkedRow(
+    balancePartsRowSchema,
+    sql`WITH transactions AS (
+         SELECT ${select}
+           FROM main.transactions src
+          WHERE src.account_id IN (SELECT value FROM json_each(${JSON.stringify(unionIds)}))
+       )
+       SELECT ${balancePartsColumn()}
+         FROM accounts a
+         ${computedBalanceByCurrencyAggLateral({
+           account: sql`a.id`,
+           asOfDate: sql`${todayAppDateString()}`,
+         })}
+        WHERE a.id = ${targetId}`,
+  );
+}
+
 export {
   stampRangesOverlap as __stampRangesOverlap,
   collidingAnchorCurrencies as __collidingAnchorCurrencies,
@@ -226,20 +276,21 @@ export async function mergeAccounts(
 
   // Composed from repository methods: the ambient transaction context routes
   // each repo call onto this transaction's client, so every statement below
-  // shares the FOR UPDATE locks taken here and rolls back atomically.
-  return withTransaction(async () => {
-    // Every writer of funding_account_id takes this transaction-scoped lock
-    // before validating and mutating the graph. Row locks alone are
-    // insufficient: the bulk repoint can change a dependent that was not on
-    // the survivor chain when validation started.
+  // runs inside one BEGIN IMMEDIATE transaction on the single writer
+  // (ADR-263) and rolls back atomically. No other writer (a concurrent merge,
+  // a funding PATCH, a portfolio import commit) can run between the reads that
+  // validate the merge and the writes that perform it.
+  return withFundingGraphTransaction(async () => {
+    // Every writer of funding_account_id states this serialization point
+    // before validating and mutating the graph: the bulk repoint can change a
+    // dependent that was not on the survivor chain when validation started.
     await accountRepository.lockFundingGraphForMutation();
 
-    // Portfolio import commit locks its batch before inserting a lot, whose
-    // account FK then locks the account row. Match that batch -> account order
-    // here so concurrent commit and merge serialize instead of deadlocking.
+    // Read the portfolio import batches routed to the sources, as a portfolio
+    // import commit does, inside the same transaction.
     await portfolioImportBatchRepository.lockForAccountMerge(ids);
 
-    // Lock the survivor + sources so concurrent merges serialize.
+    // Read the survivor + sources inside the merge transaction.
     const tgt = await accountRepository.lockByIdForMerge(targetId);
     if (!tgt) throw new NotFoundError(`Account ${targetId} not found`);
 
@@ -263,7 +314,7 @@ export async function mergeAccounts(
       ]);
     const stampsInterleaved = stampRangesOverlap(stampRanges);
 
-    // Colliding-anchor guard: read under the same locks, before the repoint that
+    // Colliding-anchor guard: read in the same transaction, before the repoint that
     // would violate uq_transactions_opening_anchor. Refuse rather than choose an
     // anchor for the user (see collidingAnchorCurrencies).
     const collisions = collidingAnchorCurrencies(
@@ -333,7 +384,7 @@ export async function mergeAccounts(
 
 /**
  * Read-only preview of merging `sourceId` INTO `targetId` (the survivor) —
- * backs GET /api/accounts/:id/merge-preview?into=. No mutation, no locks:
+ * backs GET /api/accounts/:id/merge-preview?into=. No mutation, no transaction:
  *   - reassigned.* — row counts that WOULD move (same categories mergeAccounts
  *     repoints).
  *   - projectedBalance — the post-merge computed balance: the anchor+delta
@@ -397,45 +448,11 @@ export async function previewMerge(
     stampRanges,
     anchors,
   ] = await Promise.all([
-    countOf(
-      db
-        .selectFrom("transactions")
-        .select(countN)
-        .where("account_id", "=", sourceId),
-    ),
-    countOf(
-      db
-        .selectFrom("planned_transactions")
-        .select(countN)
-        .where("account_id", "=", sourceId),
-    ),
-    countOf(
-      db
-        .selectFrom("portfolio_transactions")
-        .select(countN)
-        .where("account_id", "=", sourceId),
-    ),
-    countOf(
-      db
-        .selectFrom("accounts")
-        .select(countN)
-        .where("funding_account_id", "=", sourceId),
-    ),
-    // Per-currency anchor+delta over the union set, via the shared hub builder:
-    // within each currency the most recent stamped row across BOTH accounts
-    // anchors and every active row of that currency after it is the delta. The
-    // account expression is `ANY(<union ids>::int[])`, so the builder's
-    // `t.account_id = <account>` becomes the union predicate — which is
-    // exactly what the merged account's rows will look like.
-    checkedRow(
-      balancePartsRowSchema,
-      sql`SELECT bp.balance_parts
-         FROM (SELECT 1) merge_drv
-         ${computedBalanceByCurrencyAggLateral({
-           account: sql`ANY(${unionIds}::int[])`,
-           asOfDate: sql`${todayAppDateString()}::date`,
-         })}`,
-    ),
+    countOf("transactions", "account_id", sourceId),
+    countOf("planned_transactions", "account_id", sourceId),
+    countOf("portfolio_transactions", "account_id", sourceId),
+    countOf("accounts", "funding_account_id", sourceId),
+    projectedBalanceParts(targetId, unionIds),
     // One table of the latest stored rates for every partition; these are
     // CURRENT balances, so each converts at the latest rate, exactly as the
     // account list's computed_balance (see computedBalanceByCurrencyLateral).

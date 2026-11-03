@@ -13,17 +13,18 @@ tags:
     security,
     release,
     native-runtime,
-    postgresql,
+    sqlite,
   ]
-description: The seven-job GitHub Actions CI layout, native PostgreSQL verification, Dependabot grouping, and the macOS release flow that reuses the CI Complete result.
+description: The seven-job GitHub Actions CI layout, real SQLite database verification, Dependabot grouping, and the macOS release flow that reuses the CI Complete result.
 aliases: [CI, CD, GitHub Actions, release pipeline]
 related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml"]
 ---
 
 # CI/CD Pipelines
 
-Vision CI uses native processes and disposable PostgreSQL 18 clusters. It does not build, verify,
-scan, or publish a product container image. The required aggregate check remains **CI Complete**.
+Vision CI uses native processes and temporary SQLite database files. It installs no database
+server ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). It does not build, verify, scan, or
+publish a product container image. The required aggregate check remains **CI Complete**.
 
 ## Pull-request and push CI
 
@@ -36,11 +37,11 @@ jobs run only when the diff is classified as code:
 | --------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Detect Changes`                        | every diff          | path classification (`code` output; fails safe to `true`)                                                                                                                                                                                |
 | `Repo Checks`                           | every diff          | PR dependency review, gitleaks, agent-instruction and CI-classification checks, package boundaries, workflow supply-chain policy (each with its tests), commit-message check (`scripts/commitlint.ts`), branch-protection verifier                                           |
-| `Lint`                                  | code diffs          | `bun audit` (`scripts/audit-js.sh`), frontend and backend ESLint (with type-aware rules), import boundaries (`lint:deps`) and dead code (`lint:dead`) through `bun run lint`, locale and OpenAPI-type drift, endpoint matrix, `test:scripts`, squawk migration lint (`db:lint`)                                                                     |
+| `Lint`                                  | code diffs          | `bun audit` (`scripts/audit-js.sh`), frontend and backend ESLint (with type-aware rules), import boundaries (`lint:deps`) and dead code (`lint:dead`) through `bun run lint`, locale and OpenAPI-type drift, endpoint matrix, `test:scripts`                                                                     |
 | `Type Check`                            | code diffs          | strict TypeScript for frontend, shared packages, backend, backend tests, backend and repository scripts, and the Electron shell; shared package tests; production frontend build and `size:check`                                        |
 | `Test (Frontend 1/2)`, `(Frontend 2/2)` | code PRs            | Vitest split over two runners with `--shard`, without coverage                                                                                                                                                                           |
 | `Test (Frontend 1/1)`                   | code push to `main` | one unsharded `test:coverage` run that enforces the v8 coverage ratchet in `apps/frontend/vite.config.ts`                                                                                                                                |
-| `Test (Backend)`                        | code diffs          | Electron and native-runtime contract tests, backend tests with coverage on native PostgreSQL 18 and the Kysely type drift check, one production frontend build, native production-health and migration-reversibility smoke, live API contracts |
+| `Test (Backend)`                        | code diffs          | Electron and native-runtime contract tests, backend tests with coverage on per-file SQLite copies (including the Kysely type drift check), one production frontend build, native production-health and migration-reversibility smoke, live API contracts |
 | `CI Complete`                           | every diff          | aggregate result; the only required status check                                                                                                                                                                                         |
 
 `CI Complete` keeps a stable branch-protection name. On a documentation-only diff it passes once
@@ -74,9 +75,10 @@ The checker reads the generated `index.html` and assets to catch new eager impor
 bundle growth.
 
 The repository has no Python. The pip-audit, `mypy --strict` and destructive-migration steps left
-`Lint` with Alembic ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]). `Lint` now
-runs `bun run db:lint`, which lints `db/migrations/*.sql` with squawk and `config/squawk.toml`;
-destructive DDL fails unless a `-- squawk-ignore <rule>` comment marks it as intended.
+`Lint` with Alembic ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]). The squawk
+migration lint left with PostgreSQL ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]): the
+backend test `tests/database/sqlDialect.test.ts` checks every migration and SQL string against the
+[[docs/reference/sqlite-sql-dialect|SQLite dialect rules]], so no CI step replaces it.
 
 The backend source (`src/**/*.ts`) is checked by the strict `apps/node-backend/tsconfig.json` in
 the `Type Check` job; see
@@ -129,24 +131,20 @@ needs to pass the release checks below before its artifacts are treated as verif
 
 ### Native database checks
 
-`Test (Backend)` installs PostgreSQL 18 packages on the runner and uses `scripts/with-test-db.sh`
-and the native runtime smoke harness. Each cluster is private, loopback only, migrated with the
-Kysely migrator to the latest `db/migrations/` file, and removed after its step. The test harness
-uses a generated password and SCRAM authentication so role-bootstrap password rejection is tested.
-It also enables the extensions required by production behavior. This is a real PostgreSQL check,
-not a mock and not a dependency on a pre-existing runner service.
-Direct `bun run test:db` runs also create a disposable cluster even if database URLs are exported;
-using a caller-managed test database requires `VISION_TEST_DB_USE_CALLER=1`.
+`Test (Backend)` installs no database. The Vitest global setup
+(`apps/node-backend/tests/setup/sqliteTemplate.ts`) migrates one SQLite template with the production
+migration runner, and every test file gets its own copy, so every database test runs in every run.
+This is a real SQLite check, not a mock.
 
-The backend job enables the audit and transaction performance probes and sets
-`VISION_TEST_DB_VERIFY_CODEGEN=1`, so the run fails when
-`apps/node-backend/src/database/schema.generated.ts` differs from `kysely-codegen` output for the
-migrated schema. Migrator behaviour, including the refusal of a database from before the baseline
-([[docs/adr/224-remove-alembic-adoption|ADR-224]]), is covered by the ordinary suite
-(`tests/migrate.db.test.ts`). The same job then builds the production frontend once and starts the
-native production stack twice, in sequence: first migrate, `/health` and, when the latest
-migration ships a `.down.sql`, a down/up round trip (`VISION_NATIVE_VERIFY_MIGRATIONS=1`), then the
-live API contracts against the real backend.
+The backend job enables the performance probes (`VISION_RUN_PERFORMANCE_PROBES=1`).
+`tests/database/codegen.test.ts` fails when `apps/node-backend/src/database/schema.generated.ts` or
+`schemaMap.generated.ts` differs from what `scripts/db-codegen.ts` generates from the migrations.
+Migrator behaviour, including the refusals that protect a database, is covered by the ordinary
+suite (`tests/database/migrations.test.ts`). The same job then builds the production frontend once
+and starts the production backend twice, in sequence, through
+`.github/scripts/with-native-stack.sh`, each time on a fresh SQLite file in a temporary directory:
+first migrate, `/health` and, when the latest migration ships a `.down.sql`, a down/up round trip
+(`VISION_NATIVE_VERIFY_MIGRATIONS=1`), then the live API contracts against the real backend.
 
 ### Security scanning
 
@@ -170,7 +168,7 @@ supersedes the Trivy part of [[docs/adr/050-ci-supply-chain-security-tooling|ADR
    verified commit with pinned runtime inputs. It scans the packaged app, the extracted `app.asar`
    and a production-only install of the root workspaces from `bun.lock` (the runtime dependencies
    bundled into the backend binary and the frontend) into one CycloneDX software bill of materials
-   (SBOM). It fails unless the SBOM names `yauzl`, `pg`, `react` and `postgresql`, one per source,
+   (SBOM). It fails unless the SBOM names `yauzl`, `kysely` and `react`, one per source,
    then attests the artifacts and SBOM through GitHub. The former source-launcher bundle and source SBOM were retired by
    [[docs/adr/218-retire-source-launcher-update-channel|ADR-218]]. The app does not
    have Apple Developer ID signing or notarization.
@@ -226,7 +224,6 @@ bun run lint
 bun run lint:backend
 bun run typecheck
 bun run typecheck:electron
-bun run db:lint
 bun run validate-locales
 bun run test:scripts
 bun run test
@@ -235,16 +232,16 @@ bun run test:electron
 bun run native:isolated-smoke
 ```
 
-`bun run check` aggregates repository checks, including `test:frontend`, which requires native
-PostgreSQL 18 and runs live API contracts against a disposable backend. Packaging and signing
+`bun run check` aggregates repository checks, including `test:frontend`, which runs live API
+contracts against the production backend on a temporary SQLite database. Packaging and signing
 claims still require their focused jobs.
 
 There is no local pre-push gate. Run the relevant lint, typecheck, build, and test commands
 explicitly before publication, scaled to the change as described in `AGENTS.md`. GitHub Actions
 runs the required checks after a push; a successful local push does not establish that they passed.
-Database-backed and live API checks use disposable PostgreSQL 18 clusters. In CI the native stack finds
-PostgreSQL 18 on Linux or macOS (the shipped desktop app itself is macOS-only); `VISION_CI_POSTGRES_BIN` can select another installation.
-It refuses an occupied backend port before starting, then tracks the backend process directly so
+Database-backed and live API checks use temporary SQLite database files and need no database
+server, on Linux or macOS (the shipped desktop app itself is macOS-only). The native stack
+script (`.github/scripts/with-native-stack.sh`) refuses an occupied backend port before starting, then tracks the backend process directly so
 cleanup cannot leave a server for the next run to mistake as its own.
 
 ## Pull-request completion and merge

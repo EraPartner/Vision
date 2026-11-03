@@ -14,7 +14,8 @@ exclusions, FX lookup, or monthly/yearly SQL parity.
 [Monthly repository database tests](../../../infoRepoMonthly.db.test.ts) and
 [statistics repository database tests](../../../infoRepoStatistics.db.test.ts)
 exercise real rows, including stored historical rates and applicable filters.
-They require `TEST_DATABASE_URL`; their skip state must remain visible. Retired
+They run in every backend test run on a per-file SQLite copy of the migrated schema (ADR-263)
+and never skip. Retired
 shadow middleware is not a current test layer or registration requirement.
 
 ## Original planned aggregates

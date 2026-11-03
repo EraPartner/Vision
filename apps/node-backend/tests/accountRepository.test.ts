@@ -1,7 +1,7 @@
 /**
  * Account Repository tests (ADR-088). Mocks the DB layer and checks the row
  * shaping and balance/drift arithmetic. Filtering, pagination, identity lookup
- * and writes run against PostgreSQL in accountRepositoryBoundary.db.test.ts.
+ * and writes run against SQLite in accountRepositoryBoundary.db.test.ts.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
@@ -35,7 +35,10 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion({ listLatestStoredRates: mockListLatestStoredRates }),
 );
 
-import { query as rawQuery } from "../src/database/connection.ts";
+import {
+  query as rawQuery,
+  withTransaction as rawWithTransaction,
+} from "../src/database/connection.ts";
 import type { PgQueryResult } from "../src/database/connection.ts";
 import accountRepository from "../src/repositories/accountRepository.ts";
 import { accountService } from "../src/services/accountService.ts";
@@ -48,6 +51,10 @@ const query = rawQuery as unknown as Mock<
   ) => Promise<Partial<PgQueryResult>>
 >;
 
+const withTransaction = rawWithTransaction as unknown as Mock<
+  (fn: () => Promise<unknown>) => Promise<unknown>
+>;
+
 const listAccounts = async (
   opts: Parameters<typeof accountService.list>[0] = {},
 ) => (await accountService.list(opts)).items;
@@ -55,16 +62,26 @@ const listAccounts = async (
 describe("accountRepository", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("maps a canceled funding-graph lock wait to a retryable service error", async () => {
-    query.mockRejectedValueOnce(
-      Object.assign(new Error("canceling statement due to statement timeout"), {
-        code: "57014",
+  // PostgreSQL's advisory-lock wait was cancelled with 57014 and mapped to a
+  // retryable 503. On SQLite (ADR-263) the wait is for the write lock that
+  // withTransaction() takes (BEGIN IMMEDIATE); its timeout is 55P03, and the
+  // funding-graph mutations map it to the same retryable error.
+  it("maps a timed-out funding-graph write-lock wait to a retryable service error", async () => {
+    withTransaction.mockRejectedValueOnce(
+      Object.assign(new Error("Timed out waiting for the database write lock"), {
+        code: "55P03",
       }),
     );
 
     await expect(
-      accountRepository.lockFundingGraphForMutation(),
+      accountService.update(asAccountId(1), { funding_account_id: 2 }),
     ).rejects.toMatchObject({ status: 503, code: "SERVICE_UNAVAILABLE" });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("states the funding-graph serialization point without a statement", async () => {
+    await expect(accountRepository.lockFundingGraphForMutation()).resolves.toBeUndefined();
+    expect(query).not.toHaveBeenCalled();
   });
 
   describe("getAll", () => {

@@ -11,6 +11,7 @@ import { sql } from "kysely";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
 import { countRowSchema } from "../database/rowSchemas.ts";
 import {
+  hintedAlias,
   investmentCountedDbRowSchema,
   investmentDbRowSchema,
   latestPriceUpdatedAtRowSchema,
@@ -94,6 +95,34 @@ const mapInvestmentRow = (row: InvestmentDbRow): InvestmentRow => {
         : coerced.maturity_date,
   };
 };
+
+/**
+ * NUMERIC(p, s) of each decimal column `update` may write: hand-written SQL
+ * stores canonical decimal text through `vision_numeric(?, p, s)` (ADR-263).
+ */
+const INVESTMENT_DECIMAL_COLUMNS: Readonly<Record<string, readonly [number, number]>> = {
+  current_price: [18, 6],
+  interest_rate: [8, 4],
+  cadastral_income: [12, 2],
+  municipality_tax_rate: [8, 4],
+};
+
+/** A decimal bound as text: a JavaScript number prints as node-postgres sent it. */
+function decimalParam(value: unknown): unknown {
+  return typeof value === "number" ? String(value) : value;
+}
+
+/** One `SET column = value` clause, canonicalising decimal and timestamp text. */
+function investmentSetClause(column: string, value: unknown) {
+  const typmod = INVESTMENT_DECIMAL_COLUMNS[column];
+  if (typmod) {
+    return sql`${sql.ref(column)} = vision_numeric(${decimalParam(value)}, ${sql.lit(typmod[0])}, ${sql.lit(typmod[1])})`;
+  }
+  if (column === "price_updated_at") {
+    return sql`${sql.ref(column)} = vision_ts(${value})`;
+  }
+  return sql`${sql.ref(column)} = ${value}`;
+}
 
 // Create stores an empty or zero price/rate as NULL ("not set").
 function blankOrZeroToNull(value: number | string | null | undefined) {
@@ -217,7 +246,11 @@ function selectInvestmentsWithTickerPref() {
     .selectFrom("investments as i")
     .leftJoin("investment_ticker_prefs as tp", "tp.investment_id", "i.id")
     .selectAll("i")
-    .select(sql<boolean>`COALESCE(tp.show_in_ticker, true)`.as("show_in_ticker"));
+    .select(
+      sql<boolean>`COALESCE(tp.show_in_ticker, 1)`.as(
+        hintedAlias("show_in_ticker", "bool"),
+      ),
+    );
 }
 
 async function setTickerPreference(
@@ -262,7 +295,7 @@ export const investmentRepository = {
   }: Omit<InvestmentListFilters, "limit" | "offset"> = {}): Promise<number> {
     let builder = db
       .selectFrom("investments")
-      .select(sql<string>`count(*)`.as("count"));
+      .select(sql<string>`CAST(count(*) AS TEXT)`.as("count"));
     if (active) builder = builder.where("is_active", "=", true);
     if (assetClass)
       builder = builder.where(sql<string>`asset_class`, "=", assetClass);
@@ -281,7 +314,7 @@ export const investmentRepository = {
     total: number;
   }> {
     let builder = selectInvestmentsWithTickerPref().select(
-      sql<string>`COUNT(*) OVER ()`.as("total_count"),
+      sql<string>`CAST(COUNT(*) OVER () AS TEXT)`.as("total_count"),
     );
     if (active) builder = builder.where("i.is_active", "=", true);
     if (assetClass)
@@ -445,16 +478,18 @@ export const investmentRepository = {
     // undefined fields are skipped; `allowed` whitelists the column names.
     const setClauses = Object.entries(normalizedFields)
       .filter(([key, value]) => value !== undefined && allowed.includes(key))
-      .map(([key, value]) => sql`${sql.ref(key)} = ${value}`);
+      .map(([key, value]) => investmentSetClause(key, value));
 
     // Nothing else changed — re-read only if the ticker pref moved (to reflect it).
     if (setClauses.length === 0) {
       return showInTicker !== undefined ? this.getById(id) : existing;
     }
 
+    // updated_at in the statement itself, so RETURNING sees it (the trigger
+    // that maintains it runs after the row is written).
     const row = await checkedRow(
       investmentDbRowSchema,
-      sql`UPDATE investments SET ${sql.join(setClauses)} WHERE id = ${id} RETURNING *`,
+      sql`UPDATE investments SET ${sql.join(setClauses)}, updated_at = now() WHERE id = ${id} RETURNING *`,
     );
     if (!row) return null;
     // Re-read when the ticker pref changed so the joined value is in the response.
@@ -477,7 +512,11 @@ export const investmentRepository = {
       investmentDbRowSchema,
       db
         .updateTable("investments")
-        .set({ current_price, price_updated_at })
+        .set({
+          current_price,
+          // Canonical timestamp text from a Date or an ISO string.
+          price_updated_at: sql<Date | null>`vision_ts(${price_updated_at})`,
+        })
         .where("id", "=", id)
         .returningAll(),
     );
@@ -485,7 +524,7 @@ export const investmentRepository = {
   },
 
   /**
-   * Batch variant of updatePrice: one UNNEST-driven UPDATE for the whole
+   * Batch variant of updatePrice: one json_each-driven UPDATE for the whole
    * refresh instead of N sequential round trips (same pattern as
    * priceCache.saveHistoricalPointsToDatabase).
    *
@@ -500,15 +539,19 @@ export const investmentRepository = {
   ): Promise<number> {
     if (!Array.isArray(updates) || updates.length === 0) return 0;
 
+    // Prices travel as decimal text (a JSON number would be read as a float).
+    const rows = updates.map((u) => ({
+      id: u.id,
+      current_price: decimalParam(u.current_price),
+      price_updated_at: u.price_updated_at,
+    }));
     const result = await sql`
-      UPDATE investments i
-         SET current_price = u.current_price,
-             price_updated_at = u.price_updated_at
-        FROM UNNEST(${updates.map((u) => u.id)}::int[],
-                    ${updates.map((u) => u.current_price)}::numeric[],
-                    ${updates.map((u) => u.price_updated_at)}::timestamptz[])
-             AS u(id, current_price, price_updated_at)
-       WHERE i.id = u.id`.execute(db);
+      UPDATE investments
+         SET current_price = vision_numeric(u.value ->> 'current_price', 18, 6),
+             price_updated_at = vision_ts(u.value ->> 'price_updated_at'),
+             updated_at = now()
+        FROM json_each(${JSON.stringify(rows)}) AS u
+       WHERE investments.id = u.value ->> 'id'`.execute(db);
     return Number(result.numAffectedRows ?? 0n);
   },
 
@@ -518,7 +561,11 @@ export const investmentRepository = {
       latestPriceUpdatedAtRowSchema,
       db
         .selectFrom("investments")
-        .select((eb) => eb.fn.max("price_updated_at").as("latest"))
+        .select(
+          sql<Date | null>`max(price_updated_at)`.as(
+            hintedAlias("latest", "timestamptz"),
+          ),
+        )
         .where("is_active", "=", true)
         .where("price_provider", "is not", null)
         .where("price_provider", "<>", "manual"),

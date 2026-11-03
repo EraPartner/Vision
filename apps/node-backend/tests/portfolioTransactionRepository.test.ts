@@ -112,11 +112,13 @@ describe("portfolioTransactionService.create", () => {
         1,
         "buy",
         "2026-03-24",
-        1000,
-        5,
-        200,
-        0,
-        0,
+        // Money binds as decimal text: the derived amount as written (the
+        // SQL rounds it to NUMERIC(18,4)), the builder columns canonical.
+        "1000",
+        "5.00000000",
+        "200.000000",
+        "0.0000",
+        "0.0000",
         "unknown",
         "EUR",
         null,
@@ -179,11 +181,11 @@ describe("portfolioTransactionService.create", () => {
         1,
         "gift",
         "2026-03-24",
-        0,
-        2,
+        "0",
+        "2.00000000",
         null,
-        0,
-        0,
+        "0.0000",
+        "0.0000",
         "unknown",
         "EUR",
         null,
@@ -340,7 +342,7 @@ describe("portfolioTransactionService.remove", () => {
     await expect(portfolioTransactionRepository.remove(asPortfolioTransactionId(46))).resolves.toBe(true);
     expectNthStatement(
       -1,
-      "DELETE FROM portfolio_transactions WHERE id = $1",
+      "DELETE FROM portfolio_transactions WHERE id = ?",
       [46],
     );
   });
@@ -480,8 +482,8 @@ describe("portfolioTransactionRepository.update", () => {
 
     expectNthStatement(
       4,
-      "UPDATE portfolio_transactions SET units = $1, price_per_unit = $2, amount = $3, fees = $4, taxes = $5 WHERE id = $6 RETURNING *",
-      [6, 200, 1200, 0, 0, 8],
+      "UPDATE portfolio_transactions SET units = vision_numeric(?, 18, 8), price_per_unit = vision_numeric(?, 18, 6), amount = vision_numeric(?, 18, 4), fees = vision_numeric(?, 18, 4), taxes = vision_numeric(?, 18, 4), updated_at = now() WHERE id = ? RETURNING *",
+      ["6", "200", "1200", "0", "0", 8],
     );
     expect(result).toMatchObject({
       income_recognition_role: "standard",
@@ -540,8 +542,8 @@ describe("portfolioTransactionRepository.update", () => {
 
     expectNthStatement(
       3,
-      "UPDATE portfolio_transactions SET amount = $1 WHERE id = $2 RETURNING *",
-      [1200, 9],
+      "UPDATE portfolio_transactions SET amount = vision_numeric(?, 18, 4), updated_at = now() WHERE id = ? RETURNING *",
+      ["1200", 9],
     );
     expect(result).toMatchObject({
       id: 9,
@@ -584,7 +586,7 @@ describe("portfolioTransactionRepository.update", () => {
 
     expectNthStatement(
       3,
-      "UPDATE portfolio_transactions SET fx_rate_to_eur = $1 WHERE id = $2 RETURNING *",
+      "UPDATE portfolio_transactions SET fx_rate_to_eur = vision_numeric(?, 20, 10), updated_at = now() WHERE id = ? RETURNING *",
       [null, 11],
     );
     expect(result).toMatchObject({
@@ -732,7 +734,8 @@ describe("portfolioTransactionRepository.getAllByInvestmentIds", () => {
       investmentIds: [asInvestmentId(5), "12abc"],
     });
 
-    expect(must(must(query.mock.calls[0], "query.mock.calls[0]")[1], "must result")[0]).toEqual([5]);
+    // The id list binds as one JSON array (read with json_each).
+    expect(must(must(query.mock.calls[0], "query.mock.calls[0]")[1], "must result")[0]).toEqual("[5]");
   });
 
 });

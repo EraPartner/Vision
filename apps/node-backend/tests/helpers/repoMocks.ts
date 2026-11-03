@@ -32,13 +32,22 @@ export interface ConnectionMockSurface {
   query: Mock;
   queryPrepared: Mock;
   getClient: Mock;
+  /** Not a production export; kept as an alias of `__getAmbientTransactionClient`. */
   getAmbientTransactionClient: Mock;
+  __getAmbientTransactionClient: Mock;
   withTransaction: Mock;
   withSavepointIfInTransaction: Mock;
+  withReadSnapshot: Mock;
+  withExclusiveWriter: Mock;
+  sameTransaction: Mock;
   checkConnection: Mock;
   getTableCount: Mock;
   getPoolStats: Mock;
   closePool: Mock;
+  openDatabase: Mock;
+  resetSchemaCaches: Mock;
+  getStatementStats: Mock;
+  resetStatementStats: Mock;
 }
 
 /** Members a test may add to or override on a connection mock. */
@@ -110,12 +119,21 @@ function completeConnectionSurface<E extends object>(
     queryPrepared: vi.fn(),
     getClient: vi.fn(),
     getAmbientTransactionClient: vi.fn(() => null),
+    __getAmbientTransactionClient: vi.fn(() => null),
     withTransaction: vi.fn(),
     withSavepointIfInTransaction: vi.fn(),
+    withReadSnapshot: vi.fn(),
+    withExclusiveWriter: vi.fn(),
+    // Mock transactions hand nested scopes the same client object.
+    sameTransaction: vi.fn((a: unknown, b: unknown) => a === b),
     checkConnection: vi.fn(),
     getTableCount: vi.fn(),
     getPoolStats: vi.fn(),
     closePool: vi.fn(),
+    openDatabase: vi.fn(),
+    resetSchemaCaches: vi.fn(),
+    getStatementStats: vi.fn(() => []),
+    resetStatementStats: vi.fn(),
     ...base,
   };
   return surface;
@@ -198,11 +216,12 @@ export function mockTxConnection(
   });
 
   const queryPrepared = vi.fn(
-    (name: string, text: string, values?: unknown[]) => {
+    (_name: string, text: string, values?: unknown[]) => {
       const active = ambient();
-      // pg's object form, exactly as connection.js:151 passes it.
+      // connection.ts runs queryPrepared as query(text, values); the name
+      // only labelled node-postgres's prepared statement.
       if (!active) return callProcedure(poolQuery, [text, values]);
-      const result: unknown = active.query({ name, text, values });
+      const result: unknown = active.query(text, values);
       return result;
     },
   );
@@ -289,15 +308,33 @@ export function mockTxConnection(
     },
   );
 
+  // withReadSnapshot routes module-level queries onto its own client, as
+  // production does with its snapshot connection.
+  const withReadSnapshot = vi.fn(
+    async <T>(fn: (client: MockTxClient) => T | Promise<T>): Promise<T> => {
+      const store: TxStore = {
+        client: txClient,
+        savepointCounter: { value: 0 },
+        activeNested: null,
+      };
+      try {
+        return await txStorage.run(store, () => fn(txClient));
+      } finally {
+        store.client = null;
+      }
+    },
+  );
+  const ambientClient = vi.fn(() => txStorage.getStore()?.client ?? null);
+
   // The pool sink's static type comes from E (see PoolQuery), which the
   // implementation only sees as a MockProcedure.
   return completeConnectionSurface({
     query,
     queryPrepared,
     poolQuery,
-    getAmbientTransactionClient: vi.fn(
-      () => txStorage.getStore()?.client ?? null,
-    ),
+    getAmbientTransactionClient: ambientClient,
+    __getAmbientTransactionClient: ambientClient,
+    withReadSnapshot,
     withTransaction,
     withSavepointIfInTransaction,
     ...restExtra,

@@ -1,15 +1,9 @@
 /**
- * resolveCategoryIdByName against PostgreSQL: a category resolves by its path
+ * resolveCategoryIdByName against the real database: a category resolves by its path
  * or legacy General:Detail name only while it is active.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
+import { afterAll, describe, expect, it } from "vitest";
+import { closeTestPool, getTestPool } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import categoryRepository from "../src/repositories/categoryRepository.ts";
 import { resolveCategoryIdByName } from "../src/services/categoryService.ts";
@@ -19,28 +13,20 @@ const pool = getTestPool();
 const GENERAL = `CATSVC${process.pid}`;
 const createdIds: number[] = [];
 
-describe.skipIf(!hasTestDatabase())(
-  "resolveCategoryIdByName against PostgreSQL",
+describe(
+  "resolveCategoryIdByName against the real database",
   () => {
-    beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180000);
-
     afterAll(async () => {
       try {
-        await must(pool, "pool").query("DELETE FROM categories WHERE id = ANY($1)", [
-          createdIds,
-        ]);
+        await must(pool, "pool").query(
+          "DELETE FROM categories WHERE id IN (SELECT value FROM json_each($1))",
+          [createdIds],
+        );
       } finally {
         try {
-          await releaseDbSuiteLock();
+          await closeTestPool();
         } finally {
-          try {
-            await closeTestPool();
-          } finally {
-            await closePool();
-          }
+          await closePool();
         }
       }
     });

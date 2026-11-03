@@ -4,13 +4,10 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import type { Pool as PgPool } from "pg";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
+  type TestPool,
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { accountRepository } from "../src/repositories/accountRepository.ts";
@@ -32,13 +29,9 @@ vi.mock("../src/services/plannedMatchService.ts", () => ({
   autoLinkTransactions: vi.fn().mockResolvedValue({ autoLinkedCount: 0 }),
 }));
 
-const describeDb =
-  hasTestDatabase()
-    ? describe
-    : describe.skip;
-// Resolved in beforeAll: without TEST_DATABASE_URL the suite is skipped and
-// getTestPool() is null, so resolving it at import time would fail the file.
-let pool: PgPool;
+// Resolved in beforeAll, once tests/setup/db.ts has opened this file's
+// database.
+let pool: TestPool;
 
 const CONTRACT_ACCOUNTS = [
   "Contract Cash",
@@ -55,48 +48,53 @@ const CONTRACT_RECIPIENT = "adr088 contract recipient";
 /** Remove every row this suite creates, so later suites see a clean ledger. */
 async function cleanupContractRows(): Promise<void> {
   const recipients = `(SELECT id FROM recipients WHERE normalized_name = '${CONTRACT_RECIPIENT}')`;
-  const accounts = `(SELECT id FROM accounts WHERE name = ANY($1::text[]))`;
+  const accounts = `(SELECT id FROM accounts WHERE name IN (SELECT value FROM json_each($1)))`;
   await pool.query(
     `DELETE FROM transactions
       WHERE recipient_id IN ${recipients} OR account_id IN ${accounts}`,
-    [CONTRACT_ACCOUNTS],
+    [JSON.stringify(CONTRACT_ACCOUNTS)],
   );
   await pool.query(
     `DELETE FROM planned_transactions
       WHERE recipient_id IN ${recipients} OR account_id IN ${accounts}`,
-    [CONTRACT_ACCOUNTS],
+    [JSON.stringify(CONTRACT_ACCOUNTS)],
   );
   await pool.query(
     `DELETE FROM import_batches
       WHERE id IN (SELECT batch_id FROM import_staging_rows
                     WHERE resolved_recipient_id IN ${recipients})`,
   );
-  await pool.query(`DELETE FROM accounts WHERE name = ANY($1::text[])`, [
-    CONTRACT_ACCOUNTS,
-  ]);
+  await pool.query(
+    `DELETE FROM accounts WHERE name IN (SELECT value FROM json_each($1))`,
+    [JSON.stringify(CONTRACT_ACCOUNTS)],
+  );
   await pool.query(
     `DELETE FROM recipients WHERE normalized_name = '${CONTRACT_RECIPIENT}'`,
   );
 }
 
-describeDb("ADR-088 contract schema", () => {
+describe("ADR-088 contract schema", () => {
   beforeAll(async () => {
     pool = must(getTestPool(), "getTestPool()");
-    await acquireDbSuiteLock();
+    // SQLite's information_schema: the declared columns of each table.
     const { rows } = await pool.query(
-      `SELECT table_name, column_name
-         FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name IN ('transactions', 'planned_transactions')
-          AND column_name = 'bank_account'`,
+      `SELECT m.name AS table_name, c.name AS column_name
+         FROM sqlite_schema m, pragma_table_info(m.name) c
+        WHERE m.type = 'table'
+          AND m.name IN ('transactions', 'planned_transactions')
+          AND c.name IN ('bank_account', 'account_id')
+        ORDER BY m.name`,
     );
-    expect(rows.length).toBe(0);
+    // account_id is listed for both tables, so the probe really reads them.
+    expect(rows).toEqual([
+      { table_name: "planned_transactions", column_name: "account_id" },
+      { table_name: "transactions", column_name: "account_id" },
+    ]);
     await cleanupContractRows();
   }, 180_000);
 
   afterAll(async () => {
     await cleanupContractRows();
-    await releaseDbSuiteLock();
     await closeTestPool();
     await closePool();
   });
@@ -187,8 +185,8 @@ describeDb("ADR-088 contract schema", () => {
          (batch_id, row_index, status, tx_date, bank_account, recipient_raw,
           memo, amount, currency, balance, resolved_recipient_id)
        VALUES ($1, 0, 'matched', '2026-09-09', 'Contract Imported',
-               'ADR088 CONTRACT RECIPIENT', 'contract import', -10, 'EUR',
-               90, $2)`,
+               'ADR088 CONTRACT RECIPIENT', 'contract import',
+               vision_numeric('-10', 20, 4), 'EUR', vision_numeric('90', 20, 4), $2)`,
       [batchId, recipientId],
     );
     await expect(commitBatch({ batchId })).resolves.toMatchObject({

@@ -1,12 +1,9 @@
 #!/usr/bin/env node
-import fs from "node:fs";
-import net from "node:net";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { safeChildEnv } from "../runtime/native";
 import { resolveNativePayloadRoot } from "./resolve-native-payload";
 
-const LOOPBACK_HOST = "127.0.0.1";
 const nativePayloadRoot = resolveNativePayloadRoot();
 
 export interface RunFileOptions {
@@ -20,9 +17,7 @@ export interface RunFileResult {
 }
 
 export interface IsolatedSmokeOptions {
-  findBin?: () => string;
   packagedPayload?: boolean;
-  reserve?: () => Promise<number>;
   runner?: (
     executable: string,
     args: string[],
@@ -38,31 +33,6 @@ function errorMessage(error: unknown): string | undefined {
   return isRecord(error) && typeof error.message === "string"
     ? error.message
     : undefined;
-}
-
-function bundledPostgresBin(): string {
-  const postgresRoot = path.join(nativePayloadRoot, "postgres");
-  const metadata: unknown = JSON.parse(
-    fs.readFileSync(path.join(postgresRoot, "runtime.json"), "utf8"),
-  );
-  const binRelative = isRecord(metadata) ? metadata.binRelative : undefined;
-  if (
-    !isRecord(metadata) ||
-    metadata.postgresMajor !== 18 ||
-    metadata.postgresVersion !== "18.6" ||
-    metadata.platform !== process.platform ||
-    metadata.architecture !== process.arch ||
-    typeof binRelative !== "string" ||
-    path.isAbsolute(binRelative) ||
-    binRelative.split(/[\\/]/).includes("..")
-  ) {
-    throw new Error("Prepared PostgreSQL runtime metadata is invalid");
-  }
-  const root = path.resolve(postgresRoot, "root");
-  const bin = path.resolve(root, ...binRelative.split("/"));
-  if (!bin.startsWith(`${root}${path.sep}`))
-    throw new Error("Prepared PostgreSQL runtime path is unsafe");
-  return bin;
 }
 
 export function runFile(
@@ -100,63 +70,23 @@ export function runFile(
   });
 }
 
-export function reservePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.once("error", reject);
-    server.listen(0, LOOPBACK_HOST, () => {
-      const address = server.address();
-      if (address === null || typeof address === "string") {
-        server.close();
-        reject(new Error("Reserved port has no TCP address"));
-        return;
-      }
-      const { port } = address;
-      server.close((error) => (error ? reject(error) : resolve(port)));
-    });
-  });
-}
+// native-smoke reserves a free loopback port for each backend it starts;
+// another process can take it before the backend binds it.
+const PORT_COLLISION = /Native backend port \d+ is already in use/;
 
-export function findPostgresBin(): string {
-  const candidates = [
-    process.env.VISION_POSTGRES_BIN,
-    bundledPostgresBin(),
-    "/opt/homebrew/opt/postgresql@18/bin",
-    "/usr/local/opt/postgresql@18/bin",
-  ].filter((candidate): candidate is string => Boolean(candidate));
-  for (const candidate of candidates) {
-    const required = ["initdb", "postgres", "pg_isready"];
-    if (
-      required.every((name) => {
-        try {
-          fs.accessSync(path.join(candidate, name), fs.constants.X_OK);
-          return true;
-        } catch {
-          return false;
-        }
-      })
-    ) {
-      return path.resolve(candidate);
-    }
-  }
-  throw new Error(
-    "PostgreSQL 18 initdb, postgres, and pg_isready were not found",
-  );
-}
+const ATTEMPTS = 5;
 
-const PORT_COLLISION =
-  /Native PostgreSQL port \d+ (?:is already in use|is occupied by another server)/;
-
+/**
+ * Runs the native smoke in a child process with a minimal environment, so no
+ * developer database path, credentials or profile leaks into it. Each run
+ * uses its own temporary application-data directory and SQLite database.
+ */
 export async function runIsolatedSmoke({
-  findBin = findPostgresBin,
   packagedPayload = process.env.VISION_NATIVE_PAYLOAD_ROOT !== undefined,
-  reserve = reservePort,
   runner = runFile,
-}: IsolatedSmokeOptions = {}): Promise<{ port: number; postgresBin: string }> {
-  const postgresBin = findBin();
+}: IsolatedSmokeOptions = {}): Promise<{ attempts: number }> {
   let lastError: unknown;
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const port = await reserve();
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
     try {
       // The smoke is a compiled sibling in out/scripts.
       await runner(
@@ -165,18 +95,16 @@ export async function runIsolatedSmoke({
         {
           env: safeChildEnv({
             VISION_NATIVE_PAYLOAD_ROOT: nativePayloadRoot,
-            VISION_POSTGRES_BIN: postgresBin,
-            VISION_POSTGRES_PORT: String(port),
             VISION_SMOKE_PACKAGED_PAYLOAD: String(packagedPayload),
           }),
           timeout: 30 * 60_000,
         },
       );
-      return { port, postgresBin };
+      return { attempts: attempt };
     } catch (error) {
       lastError = error;
       if (
-        attempt === 4 ||
+        attempt === ATTEMPTS ||
         !PORT_COLLISION.test(errorMessage(error) ?? "")
       )
         throw error;
@@ -188,7 +116,7 @@ export async function runIsolatedSmoke({
 export async function main(): Promise<void> {
   await runIsolatedSmoke();
   console.log(
-    "Disposable PostgreSQL 18 native runtime, frontend, API, backup, and restore smoke passed.",
+    "Disposable SQLite native runtime, frontend, API, backup, and restore smoke passed.",
   );
 }
 

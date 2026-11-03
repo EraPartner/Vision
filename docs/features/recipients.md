@@ -2,7 +2,7 @@
 title: Recipients
 type: feature
 status: active
-date: 2026-10-28
+date: 2026-11-03
 tags: [feature, recipients, transactions, payees, payers, merge, atomic]
 description: Recipient (payee/payer) management with atomic merge, normalization-based fuzzy matching, and UNIQUE constraints
 aliases:
@@ -44,7 +44,7 @@ Recipients represent counterparties in financial transactions. They can be group
 Recipients are matched using a two-tier strategy:
 
 1. **Exact match** — Normalized names compared directly (O(1) via UNIQUE constraint on `normalized_name`).
-2. **Fuzzy match** — PostgreSQL `pg_trgm` trigram similarity (GIN index, O(log N)) via the `%` operator on `normalized_name`.
+2. **Fuzzy match** — Vision's registered `similarity()` SQL function, which computes `pg_trgm` trigram similarity on `normalized_name`. SQLite has no trigram index, so one statement compares each candidate with every recipient and keeps scores at or above 0.3 (`pg_trgm`'s `%` floor) and the caller's threshold ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]).
 
 The `normalizeForMatching` function canonicalizes names: lowercase, trim, remove punctuation, deduplicate whitespace, preserve digits.
 
@@ -72,8 +72,9 @@ If any step fails, the entire merge rolls back.
 
 **Guarantees:**
 
-- Merges lock the complete primary/alias set in ascending ID order with `FOR UPDATE`.
-- Overlapping merges serialize and recheck the locked primary's root status. A target that
+- Merges run in one `BEGIN IMMEDIATE` write transaction on the single database writer and read
+  the complete primary/alias set in ascending ID order.
+- Overlapping merges serialize on the writer and recheck the primary's root status. A target that
   became an alias returns 409 before any reference writes; a removed primary returns 404.
   This prevents a waiting merge from recreating a two-level alias chain.
 - Bank account deduplication is race-safe via `INSERT ... ON CONFLICT` and `RETURNING id` for exact-one semantics.
@@ -160,9 +161,11 @@ Pattern preview counts belong to the current text, pattern type, and case-sensit
 ### Unicode search and table headings
 
 The payee list matches accented case equivalents, such as `Café` and `CAFÉ`, in both the name
-filter and general search. PostgreSQL 18's `pg_catalog.pg_unicode_fast` collation is selected on
-these search expressions, so native clusters initialized with the C locale have Unicode case
-mapping. This changes neither stored names nor database collation and needs no migration. It is
+filter and general search. Vision's `ilike()` folds ASCII only, so the repository turns the
+search pattern into a `REGEXP` that matches the same values PostgreSQL 18's `pg_unicode_fast`
+ILIKE matched, with Unicode case mapping. Two context-dependent cases differ: the three Greek
+sigmas count as one letter, and `İ` (U+0130) stays one character. This changes neither stored
+names nor sorting and needs no migration. It is
 case-insensitive matching, not accent removal; sorting remains unchanged. See
 [[docs/api/recipients]] for the search contract.
 

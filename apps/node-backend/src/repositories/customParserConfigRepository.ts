@@ -18,7 +18,7 @@ function selectConfigs() {
 }
 
 function mapRow(r: CustomParserConfigRow): FormattedCustomParserConfig {
-  // pg returns JSONB already parsed; tolerate a string just in case.
+  // The driver returns JSONB_TEXT already parsed; tolerate a string just in case.
   const config: unknown =
     typeof r.config_json === 'string' ? JSON.parse(r.config_json) : r.config_json;
   // Stored configs were written through the save-path schema of their kind; a
@@ -79,7 +79,7 @@ const customParserConfigRepository = {
       customParserConfigRowSchema,
       db
         .insertInto('custom_parser_configs')
-        .values({ name, kind, config_json: sql`${JSON.stringify(config)}::jsonb` })
+        .values({ name, kind, config_json: sql`vision_jsonb(${JSON.stringify(config)})` })
         .returning(COLUMNS),
     );
     // INSERT ... RETURNING without ON CONFLICT yields its row or throws.
@@ -100,7 +100,7 @@ const customParserConfigRepository = {
         .set({
           ...(name !== undefined && { name }),
           ...(config !== undefined && {
-            config_json: sql`${JSON.stringify(config)}::jsonb`,
+            config_json: sql`vision_jsonb(${JSON.stringify(config)})`,
           }),
         })
         .where('id', '=', id)

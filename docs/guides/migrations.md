@@ -2,115 +2,129 @@
 title: Database Migration Guide
 type: guide
 status: active
-date: 2026-10-20
-updated: 2026-10-20
-tags: [guide, database, migrations, kysely, postgresql, destructive-ddl, ci, performance]
-description: How to create, run, lint and roll back Vision's PostgreSQL migrations with the Kysely migrator and the squashed 0001 baseline
+date: 2026-11-03
+updated: 2026-11-03
+tags: [guide, database, migrations, sqlite, destructive-ddl, ci]
+description: How to create, run, check and roll back Vision's SQLite migrations, including the table-rebuild procedure for changes ALTER TABLE cannot make
 aliases: [migration-guide, database-schema, schema-changes]
 related_code:
   [
     "db/migrations/",
-    "db/schema-inventory.sql",
     "apps/node-backend/src/database/migrate.ts",
-    "apps/node-backend/src/database/schemaInventory.ts",
-    "apps/node-backend/src/database/schema.generated.ts",
     "apps/node-backend/scripts/db-migrate.ts",
+    "apps/node-backend/scripts/db-codegen.ts",
+    "apps/node-backend/db-codegen.config.json",
+    "apps/node-backend/tests/database/migrations.test.ts",
+    "apps/node-backend/tests/database/sqlDialect.test.ts",
   ]
 ---
 
 # Database Migration Guide
 
 Vision's schema lives in numbered SQL files in `db/migrations/`. The backend applies pending files
-with Kysely's `Migrator` before it listens ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]).
-There is no Python toolchain.
+before it listens, with the runner in `apps/node-backend/src/database/migrate.ts`
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). The SQL is SQLite in the dialect described in
+[[docs/reference/sqlite-sql-dialect|SQLite SQL dialect]].
 
 ## Quick Reference
 
-| Action                                 | Command                                |
-| -------------------------------------- | -------------------------------------- |
-| Apply pending migrations               | `bun run db:migrate`                   |
-| Revert the latest migration            | `bun run db:migrate:down`              |
-| Show applied and pending migrations    | `bun run db:status`                    |
-| Create a migration file                | `bun run db:new -- describe_the_change` |
-| Lint migration SQL (squawk)            | `bun run db:lint`                      |
-| Regenerate the Kysely database types   | `bun run db:codegen`                   |
+| Action                               | Command                                 |
+| ------------------------------------ | --------------------------------------- |
+| Apply pending migrations             | `bun run db:migrate`                    |
+| Revert the latest migration          | `bun run db:migrate:down`               |
+| Show applied and pending migrations  | `bun run db:status`                     |
+| Create a migration file              | `bun run db:new -- describe_the_change` |
+| Regenerate the Kysely database types | `bun run db:codegen`                    |
 
-All commands use `DATABASE_URL` (falling back to `config/.env.local`); `DATABASE_URL_MIGRATIONS`,
-when set, is the owner role that runs DDL.
+The commands use `VISION_DATABASE_PATH` (falling back to `config/.env.local`). Point it at a
+disposable copy, never at the database the app uses.
 
 ## How migrations work
 
-- `db/migrations/0001_baseline.sql` is the full PostgreSQL 18 schema at the former Alembic head
-  `0128_category_path_on_legacy_rename`, with reference rows and one `baseline_installed` audit
-  event. Never edit it. Migration `0004_remove_audit_history` later drops that audit chain
-  ([[docs/adr/231-remove-audit-history|ADR-231]]).
-- Every later `NNNN_name.sql` is one migration. An optional `NNNN_name.down.sql` makes it
-  reversible; without one, `db:migrate:down` refuses and recovery is a backup restore.
-- `runMigrations()` in `apps/node-backend/src/database/migrate.ts` runs all pending files in one
-  transaction under Kysely's `kysely_migration_lock`. A failure rolls back the whole run.
-- Applied migrations are recorded in `public.kysely_migration`. The highest name is the schema
-  revision that backups record.
-- After a run that applied something, the migrator ANALYZEs `transactions` and
-  `asset_price_history`. `VISION_MIGRATE_TIMEOUT_MS` (default 10 minutes, `0` disables) is the
-  statement timeout of the migration connection.
+- `db/migrations/0001_baseline.sql` is the full SQLite schema at Vision 2.0.0. Never edit an
+  applied migration: the ledger stores each file's SHA-256 and the runner refuses a database whose
+  recorded checksum differs.
+- Every later `NNNN_name.sql` is one migration, numbered without gaps. An optional
+  `NNNN_name.down.sql` makes it reversible; without one, `db:migrate:down` refuses and recovery is
+  a backup restore.
+- `runMigrations()` runs all pending files in one `BEGIN IMMEDIATE` transaction with foreign keys
+  switched off for the run. Before `COMMIT` it runs `PRAGMA foreign_key_check`; any violation, or
+  any error, rolls the whole run back and the database is unchanged.
+- The ledger is the `vision_migrations` table (version, name, SHA-256, applied time), and
+  `PRAGMA user_version` holds the latest version. The latest version is the schema version that
+  backups record.
+- Before migrating a database that holds data, the runner writes a `VACUUM INTO` copy to
+  `pre-migration-backups/` next to the database, named
+  `<file>-v<from>-to-v<to>-<time>.sqlite3`, and keeps the newest three.
 
-### Fresh install
+The runner refuses, and changes nothing, when the database:
 
-An empty PostgreSQL 18 database receives the baseline. Its normalized catalog fingerprint
-(`db/schema-inventory.sql` through `schemaInventory.ts`, ignoring bookkeeping tables, the
-`mv_monthly_summary` and `mv_category_totals` materialized views the backend creates after
-migrating, column order and one equivalent CHECK spelling) must equal `BASELINE_SCHEMA_FINGERPRINT`, or the install rolls
-back. A database with application objects but no migration marker is refused.
-
-A database from before the switch falls under that rule and is left unchanged
-([[docs/adr/224-remove-alembic-adoption|ADR-224]]): the one existing database was adopted on
-2026-10-19. Restore a backup taken after the switch, or reset the Demo with
-`bun run demo:reset-native`.
+- holds application tables but no ledger (not a Vision database, or one from before the ledger);
+- lists a migration this build does not know (a newer Vision wrote it);
+- lists a migration whose file changed after it was applied.
 
 ## Creating a migration
 
 1. `bun run db:new -- add_recipient_notes` creates `db/migrations/NNNN_add_recipient_notes.sql`.
-2. Write plain SQL. It runs inside the migrator's transaction, so do not add `BEGIN`/`COMMIT`
-   and do not use statements PostgreSQL refuses inside a transaction (`CREATE INDEX
-   CONCURRENTLY`, `VACUUM`).
+2. Write plain SQLite SQL in the Vision dialect: money columns are `DECIMAL_TEXT(p,s)` with their
+   `<table>_<column>__vtype` CHECK, timestamps `TIMESTAMPTZ_TEXT`, dates `DATE_TEXT`, and so on
+   ([[docs/reference/sqlite-sql-dialect|storage types]]). Do not add `BEGIN`, `COMMIT`, `PRAGMA`,
+   `VACUUM`, `ATTACH` or `DETACH`: the runner owns the transaction and the connection.
 3. Add `NNNN_add_recipient_notes.down.sql` with the rollback.
-4. Run `bun run db:migrate`, then `bun run db:migrate:down` and `bun run db:migrate` again on a
-   disposable database.
-5. Run `bun run db:codegen` and commit the regenerated `schema.generated.ts` with the migration.
-   A new money amount, id or currency column first gets an override line in
-   `apps/node-backend/.kysely-codegenrc.json` ([[docs/adr/226-kysely-query-builder|ADR-226]]).
-6. Run `bun run db:lint` and the relevant backend tests.
+4. Run `bun run db:migrate`, `bun run db:migrate:down` and `bun run db:migrate` on a disposable
+   database.
+5. Run `bun run db:codegen` and commit the regenerated `schema.generated.ts` and
+   `schemaMap.generated.ts` with the migration. A new money, id or currency column whose generated
+   type needs a narrower TypeScript type gets an entry in
+   `apps/node-backend/db-codegen.config.json`.
+6. Run the backend tests. `tests/database/migrations.test.ts` applies every migration to an empty
+   database and to a database at each earlier version, and requires the result to equal a fresh
+   install. `tests/database/sqlDialect.test.ts` checks the migration's SQL.
 
-## Destructive DDL
+## What ALTER TABLE can and cannot do
 
-Migrations auto-apply on the next boot of the app. Squawk (`bun run db:lint`, also in CI) rejects
-dropping tables or columns and other unsafe operations in every file except the baseline. When a
-drop is genuinely safe, ask first: the code that stops reading the object must ship before the
-migration runs on Tor's machine. If it cannot, the drop does not belong in a migration yet.
-An intended destructive statement carries a `-- squawk-ignore <rule>` comment directly above it
-(rules and exclusions live in `config/squawk.toml`). Squawk has no rule for `DROP SCHEMA`, `DROP VIEW`,
-`DROP FUNCTION`, `DROP TYPE` or `DROP TRIGGER`, so review those statements by hand.
+SQLite's `ALTER TABLE` can rename a table, rename a column, add a column and drop a column. It
+cannot change a column's type, default, `NOT NULL` or CHECK, and cannot add or drop a constraint or
+foreign key. Those changes rebuild the table:
 
-## Cost: migrations run inside the boot window
+1. `CREATE TABLE new_x (...)` with the new definition, including every CHECK and foreign key.
+2. `INSERT INTO new_x (cols) SELECT cols FROM x;`
+3. `-- destructive-ok: x is rebuilt as new_x with its rows copied` and `DROP TABLE x;`
+4. `ALTER TABLE new_x RENAME TO x;`
+5. Recreate the indexes, triggers and views that belonged to `x`.
+
+Foreign keys are off during the run, so step 3 does not cascade. The `foreign_key_check` before
+`COMMIT` refuses the run if the rebuild lost a row that another table references. The migration
+test covers this procedure with a foreign key, a trigger, a view and a CHECK.
+
+`ADD COLUMN` is cheap, with limits: a `NOT NULL` column needs a non-NULL default, the default
+must be a constant (not an expression such as `(now())` or `(nextval(...))`), and the column cannot
+be `PRIMARY KEY` or `UNIQUE`. Use a rebuild for anything else.
+
+## Destructive statements
+
+Migrations apply automatically on the next start of the app. The dialect test refuses
+`DROP TABLE`, `DROP VIEW`, `DROP INDEX`, `DROP TRIGGER`, `ALTER TABLE ... DROP COLUMN` and
+`DELETE` without `WHERE` in every migration after the baseline, unless the line directly above
+carries `-- destructive-ok: <reason>`. `.down.sql` files are exempt. When a drop is genuinely
+safe, ask first: the code that stops reading the object must ship before the migration runs on
+Tor's machine. If it cannot, the drop does not belong in a migration yet.
+
+## Cost: migrations run inside the start-up window
 
 `main.ts` awaits `runMigrations()` before `app.listen()`, and the Electron shell shows an error
-page when `/health` does not answer in time. The expensive shapes and their cheap forms:
+page when `/health` does not answer in time. The expensive shapes:
 
-- **CHECK or FK constraints.** Add them `NOT VALID`, then `VALIDATE CONSTRAINT` in a later
-  migration; validation takes only `SHARE UPDATE EXCLUSIVE`.
-- **`SET NOT NULL`.** Add `CHECK (col IS NOT NULL) NOT VALID`, validate it, then `SET NOT NULL`
-  (instant) and drop the CHECK.
-- **Backfills.** A single `UPDATE` of a large table rewrites every row in one long transaction.
-  Keep backfills small or move them to application code that runs after boot.
-- **Indexes.** A plain `CREATE INDEX` blocks writes while it scans. The migrator's transaction
-  rules out `CONCURRENTLY`; build large indexes after any backfill.
-- **Column type changes** rewrite the table and its indexes under `ACCESS EXCLUSIVE`. Avoid them.
-- **Materialized views.** Drop only; the runtime `materializedViewService` recreates missing views
-  after the backend listens.
+- **Table rebuilds** copy every row. They are fine for Vision's tables, but rebuild each table
+  once per migration and build indexes after the copy.
+- **Backfills.** One `UPDATE` of a large table holds the write lock for the whole run. Keep
+  backfills small or move them to application code that runs after start-up.
+- **Indexes** scan the table while the write lock is held.
 
 ## Related
 
-- [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] — Kysely migrator and squashed baseline
-- [[docs/guides/setup|Setup Guide]] — Local development setup
+- [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]: SQLite replaces PostgreSQL
+- [[docs/reference/sqlite-sql-dialect|SQLite SQL dialect]]
+- [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]: the earlier Kysely migrator and squashed baseline
+- [[docs/guides/setup|Setup Guide]]: local development setup
 - [[docs/reference/data-model|Data Model Reference]]
-- [[docs/adr/002-database-schema|ADR-002]] — Database schema design decisions

@@ -2,25 +2,29 @@
  * Shared domain row contracts for the data layer.
  *
  * These types describe what the repository queries ACTUALLY hand back, not
- * the idealised wire shape. That distinction is the whole point of the file —
- * `node-postgres` is used with its DEFAULT type parsers (there is no
- * `pg.types.setTypeParser` call anywhere in `src/`, see
- * {@link file://./../database/connection.ts}), so:
+ * the idealised wire shape. The SQLite driver
+ * ({@link file://./../database/connection.ts}, ADR-263) maps each column by its
+ * declared type to the value node-postgres returned with its default type
+ * parsers, so the shapes did not change with the move from PostgreSQL:
  *
- *   | Postgres type        | JS value from pg      |
- *   |----------------------|-----------------------|
- *   | INTEGER / SMALLINT   | `number`              |
- *   | BIGINT / BIGSERIAL   | `string`  (!)         |
- *   | NUMERIC / DECIMAL    | `string`  (!)         |
- *   | REAL / DOUBLE        | `number`              |
- *   | BOOLEAN              | `boolean`             |
- *   | TEXT / VARCHAR       | `string`              |
- *   | DATE                 | `Date` (local midnight) |
- *   | TIMESTAMPTZ          | `Date`                |
- *   | JSONB                | parsed value          |
- *   | `COUNT(*)`           | `string` (bigint)     |
- *   | `COUNT(*)::int`      | `number`              |
- *   | `to_char(d, ...)`    | `string`              |
+ *   | Column type (PostgreSQL / SQLite)      | JS value              |
+ *   |----------------------------------------|-----------------------|
+ *   | INTEGER / SMALLINT                     | `number`              |
+ *   | BIGINT / BIGSERIAL                     | `string`  (!)         |
+ *   | NUMERIC / DECIMAL_TEXT                 | `string`  (!)         |
+ *   | REAL / DOUBLE                          | `number`              |
+ *   | BOOLEAN                                | `boolean`             |
+ *   | TEXT / VARCHAR                         | `string`              |
+ *   | DATE / DATE_TEXT                       | `Date` (local midnight) |
+ *   | TIMESTAMPTZ / TIMESTAMPTZ_TEXT         | `Date`                |
+ *   | JSONB / JSONB_TEXT                     | parsed value          |
+ *   | `count(*)` with a `::bigint` alias hint | `string` (bigint)    |
+ *   | bare `count(*)`                        | `number`              |
+ *   | `to_char(d, ...)`                      | `string`              |
+ *
+ * An expression column has no declared type; docs/reference/sqlite-sql-dialect.md
+ * lists the alias hints (`AS "x::bool"`, `::json`, `::date`, ...) that give it
+ * one.
  *
  * Two families of type live here:
  *
@@ -395,7 +399,7 @@ export type PortfolioTransactionRow = {
   /**
    * The portfolio import batch that created
    *           this lot (migration 0086); NULL for manual entry and for lots committed
-   *           before 0086 applied. BIGINT remains a node-postgres string on the wire;
+   *           before 0086 applied. BIGINT arrives as a decimal string;
    *           rollback bulk-deletes on it.
    */
   import_batch_id?: string | null | undefined;

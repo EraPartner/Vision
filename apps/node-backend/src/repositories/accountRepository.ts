@@ -25,6 +25,7 @@ import {
   accountOwnerRowSchema,
 } from "../database/rows/ledger.ts";
 import {
+  balancePartsColumn,
   balanceProvenanceLateral,
   computedBalanceByCurrencyAggLateral,
 } from "./accountBalanceSql.ts";
@@ -115,6 +116,11 @@ function sqlBtrim(s: unknown): string {
   return String(s).replace(/^ +| +$/g, "");
 }
 
+/** `IN (...)` over one JSON array parameter, however many ids there are. */
+function inIds(ids: readonly AccountId[]) {
+  return sql<AccountId>`(SELECT value FROM json_each(${JSON.stringify(ids)}))`;
+}
+
 export const accountRepository = {
   /**
    * Resolve a caller-supplied canonical identity without minting an account.
@@ -124,16 +130,16 @@ export const accountRepository = {
     id: unknown,
     { client }: { client?: QueryRunner | undefined } = {},
   ): Promise<AccountId | undefined> {
-    const select = db
-      .selectFrom("accounts")
-      .select("id")
-      .where("id", "=", sql<AccountId>`${id}`)
-      .where("is_active", "=", true);
     const row = await checkedRow(
       accountKeyRowSchema,
-      // Writers passing their transaction must retain the active-state check
-      // until commit. Account closing takes FOR UPDATE before reading balances.
-      client ? select.forShare() : select,
+      // A writer passing its transaction keeps this active-state check true
+      // until commit: the transaction is BEGIN IMMEDIATE on the single writer
+      // (ADR-263), so account closing cannot run in between.
+      db
+        .selectFrom("accounts")
+        .select("id")
+        .where("id", "=", sql<AccountId>`${id}`)
+        .where("is_active", "=", true),
       client,
     );
     return row?.id;
@@ -179,7 +185,7 @@ export const accountRepository = {
    *
    * `limit` is optional and defaults to unbounded — the accounts list has always
    * served every row and the hub UI has no paging, so only an explicit
-   * limit/offset narrows it. The per-currency lateral is the
+   * limit/offset narrows it. The per-currency join is the
    * aggregated (one row per account) form precisely so LIMIT keeps counting
    * accounts rather than currency partitions.
    */
@@ -192,7 +198,7 @@ export const accountRepository = {
     limit?: number | null;
     offset?: number;
   } = {}): Promise<AccountBalanceQueryRow[]> {
-    const asOfDate = sql`${todayAppDateString()}::date`;
+    const asOfDate = sql`${todayAppDateString()}`;
     const activeFilter =
       active === true
         ? sql` AND a.is_active = true`
@@ -207,35 +213,39 @@ export const accountRepository = {
       SELECT ${COLUMNS},
              lb.anchor_date,
              lb.post_anchor_count,
-             bp.balance_parts,
-             COALESCE(sb.statement_balances, '[]'::json) AS statement_balances,
+             ${balancePartsColumn()},
+             -- json(s.balance) embeds the NUMERIC as a JSON number, as
+             -- PostgreSQL's json_build_object did; an account without readings
+             -- folds zero rows into '[]', the former COALESCE default.
+             (
+               SELECT json_group_array(json_object(
+                        'currency', s.currency,
+                        'balance', json(s.balance),
+                        'balance_date', to_char(s.balance_date, 'YYYY-MM-DD')
+                      ))
+                 FROM (
+                   SELECT currency, balance, balance_date
+                     FROM account_statement_balances
+                    WHERE account_id = a.id
+                    ORDER BY currency
+                 ) s
+             ) AS "statement_balances::json",
              -- The ORDER BY steers the probe onto the (account_id, date) index:
              -- a bare EXISTS was planned as a sequential scan per account, which
              -- reads the whole ledger for every account that has no rows.
              (
-               SELECT true FROM transactions t2
+               SELECT 1 FROM transactions t2
                WHERE t2.account_id = a.id AND t2.is_active = true
                ORDER BY t2.date DESC
                LIMIT 1
-             ) IS NOT NULL AS has_transactions
+             ) IS NOT NULL AS "has_transactions::bool"
       FROM accounts a
-      -- lb stays the account-level (cross-currency) lateral for the PROVENANCE
+      -- lb stays the account-level (cross-currency) join for the PROVENANCE
       -- fields only: "as of {date} statement + {n} entries since" describes the
       -- account's stamping history, not a currency's. The balance and drift
       -- below come from the per-currency partitions.
       ${balanceProvenanceLateral({ asOfDate })}
       ${computedBalanceByCurrencyAggLateral({ account: sql`a.id`, asOfDate })}
-      LEFT JOIN LATERAL (
-        SELECT json_agg(
-                 json_build_object(
-                   'currency', s.currency,
-                   'balance', s.balance,
-                   'balance_date', to_char(s.balance_date, 'YYYY-MM-DD')
-                 ) ORDER BY s.currency
-               ) AS statement_balances
-          FROM account_statement_balances s
-         WHERE s.account_id = a.id
-      ) sb ON TRUE
       WHERE 1=1${activeFilter} ORDER BY a.name${page}`,
     );
   },
@@ -247,11 +257,12 @@ export const accountRepository = {
   async getCount({
     active = null,
   }: { active?: boolean | null } = {}): Promise<number> {
-    let builder = db
-      .selectFrom("accounts as a")
-      .select(sql<string>`COUNT(*)`.as("count"));
-    if (active !== null) builder = builder.where("a.is_active", "=", active);
-    const row = await checkedRow(countRowSchema, builder);
+    const activeFilter =
+      active === null ? sql`` : sql` WHERE a.is_active = ${active}`;
+    const row = await checkedRow(
+      countRowSchema,
+      sql`SELECT COUNT(*) AS "count::bigint" FROM accounts a${activeFilter}`,
+    );
     // COUNT(*) without GROUP BY always returns exactly one row.
     if (!row) throw new Error("account count returned no row");
     return parseInt(row.count, 10);
@@ -286,11 +297,13 @@ export const accountRepository = {
   },
 
   /**
-   * Serialize every mutation of the account funding graph. Callers must hold
-   * this transaction-scoped lock before validating or changing a
-   * funding_account_id edge. A single graph lock is deliberately coarse: the
-   * graph is small, writes are rare, and partial row-lock protocols can miss a
-   * dependent whose edge is repointed by an account merge.
+   * Serialize every mutation of the account funding graph. Callers run it
+   * inside the `withTransaction()` that validates and changes a
+   * funding_account_id edge; that BEGIN IMMEDIATE transaction on the single
+   * writer (ADR-263) is the lock. A single graph-wide serialization point is
+   * deliberately coarse: the graph is small, writes are rare, and partial
+   * row-lock protocols could miss a dependent whose edge an account merge
+   * repoints.
    */
   async lockFundingGraphForMutation(): Promise<void> {
     await lockAccountFundingGraph(query);
@@ -328,14 +341,14 @@ export const accountRepository = {
       accountRowSchema,
       db
         .updateTable("accounts")
-        .set({ ...changes, updated_at: sql<Date>`NOW()` })
+        .set({ ...changes, updated_at: sql<Date>`now()` })
         .where("id", "=", id)
         .returning(COLUMN_LIST),
     );
   },
 
   /**
-   * Hard-delete an account. Raises Postgres 23503 if transactions or planned
+   * Hard-delete an account. Raises 23503 if transactions or planned
    * transactions still reference it (account_id FK is ON DELETE RESTRICT) — the
    * caller turns that into a 409 (archive instead). Returns the id, or undefined.
    */
@@ -348,33 +361,28 @@ export const accountRepository = {
   },
 
   /**
-   * Lock the merge survivor and read the name the repoints stamp onto
-   * `bank_account` (ADR-088). FOR UPDATE so concurrent merges serialize.
+   * Read the merge survivor and the name the repoints stamp onto
+   * `bank_account` (ADR-088). Concurrent merges serialize because the caller
+   * runs this inside its BEGIN IMMEDIATE merge transaction (ADR-263), which
+   * replaces PostgreSQL's FOR UPDATE.
    */
   async lockByIdForMerge(
     id: AccountId,
   ): Promise<{ id: AccountId; name: string } | undefined> {
     return checkedRow(
       accountNameRowSchema,
-      db
-        .selectFrom("accounts")
-        .select(["id", "name"])
-        .where("id", "=", id)
-        .forUpdate(),
+      db.selectFrom("accounts").select(["id", "name"]).where("id", "=", id),
     );
   },
 
   /**
-   * Lock the merge sources; returns the ids that exist (caller diffs for 404s).
+   * Read the merge sources inside the merge transaction; returns the ids that
+   * exist (caller diffs for 404s).
    */
   async lockByIdsForMerge(ids: AccountId[]): Promise<{ id: AccountId }[]> {
     return checkedRows(
       accountKeyRowSchema,
-      db
-        .selectFrom("accounts")
-        .select("id")
-        .where("id", "=", sql<AccountId>`ANY(${ids}::int[])`)
-        .forUpdate(),
+      db.selectFrom("accounts").select("id").where("id", "in", inIds(ids)),
     );
   },
 
@@ -390,7 +398,7 @@ export const accountRepository = {
     const result = await db
       .updateTable("accounts")
       .set({ funding_account_id: targetId })
-      .where("funding_account_id", "=", sql<AccountId>`ANY(${sourceIds}::int[])`)
+      .where("funding_account_id", "in", inIds(sourceIds))
       .executeTakeFirst();
     return Number(result.numUpdatedRows);
   },
@@ -468,7 +476,7 @@ export const accountRepository = {
   ): Promise<number> {
     const result = await db
       .deleteFrom("accounts")
-      .where("id", "=", sql<AccountId>`ANY(${sourceIds}::int[])`)
+      .where("id", "in", inIds(sourceIds))
       .where("id", "<>", targetId)
       .executeTakeFirst();
     return Number(result.numDeletedRows);

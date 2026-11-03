@@ -45,7 +45,8 @@ interface Capture {
 // Batched resolution: one grouped query per resolution kind. The mock indexes a
 // fixture "table" of active investments by lowercased symbol / lowercased-trimmed
 // name and returns { match_key, id (MIN), count } rows just like the real
-// GROUP BY / MIN(id) / COUNT(*) SQL, honouring the `= ANY($1::text[])` filter.
+// GROUP BY / MIN(id) / COUNT(*) SQL, honouring the
+// `IN (SELECT value FROM json_each(?))` filter.
 function groupedLookup(
   fixtures: InvestmentFixture[],
   keyFn: (inv: InvestmentFixture) => string,
@@ -72,6 +73,20 @@ const DEFAULT_INVESTMENTS: InvestmentFixture[] = [
   { id: 1, symbol: "AAPL", name: "Apple", is_active: true },
   { id: 2, symbol: "AAPLX", name: "Apple Inc", is_active: true },
 ];
+
+/** The JSON array a `json_each(?)` parameter carries. */
+function jsonArrayParam<T>(params: readonly unknown[] | undefined): T[] {
+  const raw = must(params, "params")[0];
+  if (typeof raw !== "string") throw new Error("expected a JSON array parameter");
+  return JSON.parse(raw) as T[];
+}
+
+/** One staging row of the matched update's JSON parameter. */
+interface MatchedUpdate {
+  id: string;
+  investment_id: number | null;
+  match_source: string | null;
+}
 
 function makeDispatch(
   stagingRows: StagingFixture[],
@@ -114,7 +129,7 @@ function makeDispatch(
       return groupedLookup(
         investments,
         (inv) => inv.symbol.toLowerCase(),
-        must(params, "params")[0] as string[],
+        jsonArrayParam<string>(params),
       );
     }
     if (/LOWER\(TRIM\(name\)\)/.test(sql)) {
@@ -122,13 +137,20 @@ function makeDispatch(
       return groupedLookup(
         investments,
         (inv) => inv.name.trim().toLowerCase(),
-        must(params, "params")[0] as string[],
+        jsonArrayParam<string>(params),
       );
     }
     if (/SET\s+status = 'matched'/.test(sql)) {
       if (params === undefined)
         throw new Error("matched update must carry params");
-      capture.update = params;
+      // One JSON array of rows; the capture keeps the columnar
+      // [ids, investmentIds, matchSources] view the assertions read.
+      const rows = jsonArrayParam<MatchedUpdate>(params);
+      capture.update = [
+        rows.map((row) => row.id),
+        rows.map((row) => row.investment_id),
+        rows.map((row) => row.match_source),
+      ];
       return { rows: [] };
     }
     return { rows: [] };
@@ -169,7 +191,7 @@ describe("matchBatch (investment matching)", () => {
     });
     expect(result.unresolved).toBe(1);
 
-    // unnest update params: [ids, investmentIds, matchSources]
+    // matched update rows, by column: [ids, investmentIds, matchSources]
     const [ids, investmentIds, matchSources] = captured.update;
     expect(ids).toEqual(["11", "12", "13"]);
     expect(investmentIds).toEqual([1, 2, null]);
@@ -576,9 +598,7 @@ describe("matchBatch (investment matching)", () => {
     const dualNameQueried = query.mock.calls.some(
       ([sql, params]) =>
         /LOWER\(TRIM\(name\)\)/.test(sql) &&
-        ((must(params, "params")[0] as string[] | undefined) ?? []).includes(
-          "dual corp",
-        ),
+        jsonArrayParam<string>(params).includes("dual corp"),
     );
     expect(dualNameQueried).toBe(false);
   });

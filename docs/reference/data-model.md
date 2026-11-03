@@ -2,9 +2,9 @@
 title: Data Model Reference
 type: reference
 status: active
-date: 2026-10-28
-updated: 2026-10-28
-last_modified: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
+last_modified: 2026-11-03
 tags:
   [
     reference,
@@ -76,7 +76,7 @@ tags:
     migration-0088,
     adr-112,
   ]
-description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Covers aggregation tables, attachments, transaction tags, custom parser configs, portfolio imports, provider configuration, forecast accuracy, and current materialized views. September 2026 migrations retire dormant import bank-account resolution state and the empty upgraded-install-only exchange-rate cache. October 2026 adds immutable adoption/duplicate-repair receipts and dated partial custody events.
+description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Covers aggregation tables, attachments, transaction tags, custom parser configs, portfolio imports, provider configuration, forecast accuracy, and the current summary tables. September 2026 migrations retire dormant import bank-account resolution state and the empty upgraded-install-only exchange-rate cache. October 2026 adds immutable adoption/duplicate-repair receipts and dated partial custody events.
 aliases: [data model, entities, domain model, schema entities]
 related_code:
   [
@@ -89,14 +89,23 @@ related_code:
 # Data Model Reference
 
 The schema is `db/migrations/0001_baseline.sql` plus later numbered migrations, applied by the
-Kysely migrator. An empty PostgreSQL 18 database loads the baseline in one transaction and must
-match its catalog fingerprint; a database with application objects but no migration ledger is refused. The baseline is the contracted shape: it has no `bank_account` columns on
+backend's SQLite migration runner (`apps/node-backend/src/database/migrate.ts`). A new database
+loads the baseline in one `BEGIN IMMEDIATE` transaction, and each applied migration is recorded
+with its SHA-256 in the `vision_migrations` ledger. The runner refuses a database that has tables
+but no ledger, a migration this build does not know, or a migration whose checksum changed
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). The baseline is the contracted shape: it has no `bank_account` columns on
 `transactions`/`planned_transactions`, no per-bank `*_raw_transactions` tables, and no
 `legacy_inh_*` copies. Migration numbers below (`0046`, `0062`, …) are historical Alembic revisions
 whose result the baseline contains; the files exist only in Git history. Generated row types live in
 `apps/node-backend/src/database/schema.generated.ts` (`bun run db:codegen`). See
 [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] and
 [[docs/guides/migrations|Database Migration Guide]].
+
+The column types in the tables below are the logical types the schema has always used (`SERIAL`,
+`NUMERIC(p,s)`, `TIMESTAMPTZ`, `DATE`, `JSONB`, enum names). The SQLite baseline stores them as
+declared types with a `__vtype` CHECK constraint, for example `DECIMAL_TEXT(18,2)`,
+`TIMESTAMPTZ_TEXT`, `DATE_TEXT`, `JSONB_TEXT`, and `TEXT` for an enum. The storage forms and the
+canonical value forms are in [[docs/reference/sqlite-sql-dialect|SQLite SQL dialect]].
 
 > [!abstract] Overview
 > This document provides a complete reference of all data entities in Vision's domain model. Designed for **developers** working with the database, **AI agents** understanding the domain, and **computer scientists** studying the entity relationships.
@@ -114,7 +123,7 @@ whose result the baseline contains; the files exist only in Git history. Generat
 | `id`                        | SERIAL        | PK                                                                   | Unique identifier                                                                                                                                                                                                                                                                                                                                                          |
 | `date`                      | DATE          | NOT NULL                                                             | Transaction date                                                                                                                                                                                                                                                                                                                                                           |
 | `amount`                    | NUMERIC(18,4) | NOT NULL                                                             | Amount (negative=expense, positive=income). Widened from `NUMERIC(15,2)` in migration 0025 (`fix_numeric_precision`).                                                                                                                                                                                                                                                      |
-| `currency`                  | VARCHAR(3)    | NOT NULL, DEFAULT 'EUR', CHECK (`currency ~ '^[A-Z]{3}$'`) NOT VALID | Currency code (migration 0046 — see note below)                                                                                                                                                                                                                                                                                                                            |
+| `currency`                  | VARCHAR(3)    | NOT NULL, DEFAULT 'EUR', CHECK (`currency REGEXP '^[A-Z]{3}$'`) | Currency code (migration 0046 — see note below)                                                                                                                                                                                                                                                                                                                            |
 | `balance`                   | NUMERIC(18,4) | NULLABLE                                                             | Running balance after transaction; widened by migration 0088. **Written exclusively by the import pipeline** (`importPipeline/commit.ts`). `NULL` on manually-created rows. `PATCH /api/transactions/:id` and `POST /api/transactions` (create) no longer accept this field. `TransactionInspector` (formerly `TransactionInfoDialog`) renders it read-only. See [[docs/adr/094-balance-reconciliation-drift | ADR-094 addendum (2026-06-25)]]. |
 | `bank_sequence` | NUMERIC(18,0) | NULLABLE, nonnegative | Bank-provided within-day chronology; also retained on import staging rows. See [[docs/adr/206-bank-chronology]]. |
 | `memo`                      | TEXT          | NULLABLE                                                             | Original bank description                                                                                                                                                                                                                                                                                                                                                  |
@@ -327,7 +336,7 @@ is no active UI control or business-rule consumer. Flag enum types: `account_typ
 | `amount`                      | NUMERIC(18,4) | NOT NULL                                                             | Planned amount; widened by migration 0088                    |
 | `recipient_id`                | INTEGER       | FK → recipients                                                      | Payee                                                        |
 | `category_id`                 | INTEGER       | FK → categories ON DELETE SET NULL, NULLABLE                         | Category; FK updated to ON DELETE SET NULL by migration 0048 |
-| `currency`                    | VARCHAR(3)    | NOT NULL, DEFAULT 'EUR', CHECK (`currency ~ '^[A-Z]{3}$'`) NOT VALID | Currency code (historical migration 0046, in the baseline)   |
+| `currency`                    | VARCHAR(3)    | NOT NULL, DEFAULT 'EUR', CHECK (`currency REGEXP '^[A-Z]{3}$'`) | Currency code (historical migration 0046, in the baseline)   |
 | `is_recurring`                | BOOLEAN       | DEFAULT false                                                        | Recurring flag                                               |
 | `recurrence_pattern`          | TEXT          | NULLABLE                                                             | Pattern (daily, weekly, monthly, etc.)                       |
 | `reminder_days_before`        | INTEGER       | NULLABLE                                                             | Days before planned_date to show reminder (Phase 6)          |
@@ -439,7 +448,7 @@ renormalized by the exposure service.
 | ---------------- | ----------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `investment_id`  | INTEGER     | PRIMARY KEY             | References an investment by id (no FK — historical: `investments` was a view on legacy installs when 0061 shipped; orphaned rows are harmless) |
 | `show_in_ticker` | BOOLEAN     | NOT NULL, DEFAULT true  | `false` = excluded from ticker tape and not quoted from Yahoo. Absent row = `true`.                                                            |
-| `updated_at`     | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last preference change; maintained by the shared trigger (migration 0092).                                                                     |
+| `updated_at`     | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last preference change; maintained by the table's `update_<table>_updated_at` trigger (migration 0092).                                                                     |
 
 > [!info] Migration 0061 creates this table
 > `investment_ticker_prefs` was created by historical migration `0061_investments_show_in_ticker` (down_revision `0060_brokerage_import_routing`) via a plain `CREATE TABLE IF NOT EXISTS`. Downgrade drops the table. It is part of the `0001` baseline.
@@ -450,7 +459,7 @@ renormalized by the exposure service.
 
 **Write path:** `investmentRepository.update()` peels `show_in_ticker` out of the update body (it is **not** in the column allow-list `allowed`) and performs an `INSERT ... ON CONFLICT (investment_id) DO UPDATE` upsert into `investment_ticker_prefs`, then returns the joined read.
 
-**Backup:** Included in the whole-database `pg_dump` backup, so it travels with `.visionbak` exports.
+**Backup:** Included in the whole-database copy (`db.sqlite3`), so it travels with `.visionbak` exports.
 
 **Related:** [[docs/features/portfolio|Portfolio Feature — Portfolio Overview Ticker Widget]], [[docs/api/investments|Investments API — PATCH /api/investments/:id]]
 
@@ -669,7 +678,7 @@ role retains literal income separately from ordinary income and gain; see
 | `override_category_id`       | INTEGER       | FK → categories ON DELETE SET NULL, NULLABLE               | Category explicitly selected during review                                |
 | `error_message`              | TEXT          | NULLABLE                                                   | Validation or commit failure detail                                       |
 | `created_at`                 | TIMESTAMPTZ   | NOT NULL, DEFAULT NOW()                                    | Staging timestamp                                                         |
-| `updated_at`                 | TIMESTAMPTZ   | NOT NULL, DEFAULT NOW()                                    | Last matching, repair, or commit change; maintained by the shared trigger |
+| `updated_at`                 | TIMESTAMPTZ   | NOT NULL, DEFAULT NOW()                                    | Last matching, repair, or commit change; maintained by the table's `update_<table>_updated_at` trigger |
 
 Migration 0091 normalizes dangling recipient ids to `NULL` and protects the active recipient-resolution fields. Migration 0104 removes the dormant bank-account resolution column only after a locked preflight proves that every value is null. Non-terminal import batches are preserved because the current resume path does not read or write this field. Its downgrade recreates the nullable foreign key and partial index without reconstructing data.
 
@@ -715,8 +724,8 @@ Migration 0091 normalizes dangling recipient ids to `NULL` and protects the acti
 
 > [!warning] Payment writes must use the service path
 > The canonical schema has no split-payment overpayment trigger. `splitService.addPayment`
-> enforces the exact four-decimal cap while holding a `SELECT ... FOR UPDATE` lock on the split.
-> Migration 0088 removes the weaker trigger left by pre-squash databases. Direct SQL can bypass
+> enforces the exact four-decimal cap inside one `BEGIN IMMEDIATE` write transaction. SQLite has
+> one writer, so no other payment can land between the check and the insert. Migration 0088 removes the weaker trigger left by pre-squash databases. Direct SQL can bypass
 > this cap. See [[docs/adr/112-retire-legacy-split-overpayment-trigger|ADR-112]].
 
 **Related:** [[docs/features/splits|Splits Feature]], migrations `0019_transaction_splits_and_agg` and `0088_money_precision_alignment`
@@ -766,9 +775,9 @@ from current assignments. See [[docs/adr/231-remove-audit-history|ADR-231]].
 | ------------ | ----------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `provider`   | TEXT        | PK                      | Provider identifier                                                                                                                              |
 | `api_key`    | TEXT        | NOT NULL                | Stored key, plaintext (single-user self-hosted threat model, same as `.env`); masked in API responses and never returned in full to the frontend |
-| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification; maintained by the shared `update_updated_at_column()` trigger                                                                 |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification; maintained by the table's `update_<table>_updated_at` trigger                                                                 |
 
-**Backup:** Included in the whole-database `pg_dump` backup — user-configured data worth preserving.
+**Backup:** Included in the whole-database copy (`db.sqlite3`) in `.visionbak` exports. This is user-configured data worth preserving.
 
 **Related:** [[docs/features/research|Research Feature]], [[docs/adr/079-multi-provider-research-aggregation|ADR-079]], [[docs/adr/080-layered-env-loading-shared-secrets|ADR-080]], migration `0043_add_provider_api_keys`
 
@@ -791,7 +800,7 @@ from current assignments. See [[docs/adr/231-remove-audit-history|ADR-231]].
 | `status`          | TEXT        | NOT NULL, DEFAULT `'auto'`, CHECK (`status IN ('confirmed', 'auto', 'failed')`) | `confirmed` = user-verified; `auto` = system-proposed; `failed` = remembered failed lookup (avoids re-searching every visit) |
 | `verified_at`     | TIMESTAMPTZ | NULLABLE                                                                        | Last successful cross-provider sanity check                                                                                  |
 | `created_at`      | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()                                                         | Creation timestamp                                                                                                           |
-| `updated_at`      | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()                                                         | Last modification; maintained by the shared `update_updated_at_column()` trigger                                             |
+| `updated_at`      | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()                                                         | Last modification; maintained by the table's `update_<table>_updated_at` trigger                                             |
 
 **Constraints:** `ck_instrument_provider_map_key_type`, `ck_instrument_provider_map_status` — renamed `chk_instrument_provider_map_key_type` / `chk_instrument_provider_map_status` by migration 0090.
 
@@ -810,7 +819,7 @@ from current assignments. See [[docs/adr/231-remove-audit-history|ADR-231]].
 | `provider`    | TEXT        | PK (part 1)                               | Provider identifier                                                              |
 | `window_date` | DATE        | PK (part 2)                               | UTC day the counter applies to                                                   |
 | `count`       | INTEGER     | NOT NULL, DEFAULT 0, CHECK (`count >= 0`) | Requests made so far that day                                                    |
-| `updated_at`  | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()                   | Last modification; maintained by the shared `update_updated_at_column()` trigger |
+| `updated_at`  | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()                   | Last modification; maintained by the table's `update_<table>_updated_at` trigger |
 
 **Constraint:** `PRIMARY KEY (provider, window_date)` is the `ON CONFLICT` upsert target for the governor's `spend()` path. `ck_provider_quota_count_nonneg` renamed `chk_provider_quota_count_nonneg` by migration 0090.
 
@@ -1067,12 +1076,12 @@ are in `.visionbak` coverage; the 0116 downgrade refuses when monitor data remai
 > [!info] Aggregation Layer
 > These entities were introduced in historical Alembic migrations 0026 (legacy, archived) and **0035** (consolidated baseline) as part of the Phase 1 aggregation refactor. They serve as the caching tier for dashboard and analytics endpoints, using two strategies:
 >
-> - **Materialized Views** (computed on demand, refreshed after mutations)
+> - **Summary tables** named `mv_*` (refilled by the backend after mutations; they were PostgreSQL materialized views before [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]])
 > - **Trigger-maintained Tables** (updated automatically via row-level triggers)
 >
 > Migration 0035 (`add_recipient_aggregations`) added `mv_recipient_monthly` and `agg_recipient_totals`. **Both have since been dropped** — see the two sections below — because the recipient-insight endpoints run live scans instead. The only trigger-maintained aggregate still live is `agg_split_outstanding`.
 >
-> Separately, two **runtime-managed** materialized views — `mv_monthly_summary` and `mv_category_totals` — predate migration 0035 (neither the historical Alembic chain nor `db/migrations/0001_baseline.sql` creates them; they are managed at runtime by `apps/node-backend/src/services/materializedViewService.ts`). Historical migrations 0045/0084/0085 instead **dropped** them to force a same-boot rebuild whenever their SQL definition changes, because `CREATE MATERIALIZED VIEW IF NOT EXISTS` never redefines an existing view. Three other runtime projections were removed after their last reader disappeared: `mv_recipient_monthly` in 0038, `mv_bank_balances` in 0082, and `mv_cashflow_daily` in 0094.
+> Separately, two summary tables, `mv_monthly_summary` and `mv_category_totals`, back the dashboard and statistics fast paths. On PostgreSQL they were materialized views created at runtime. On SQLite `db/migrations/0001_baseline.sql` creates them as ordinary tables with their unique indexes, and `apps/node-backend/src/services/materializedViewService.ts` refills them. Three other runtime projections were removed after their last reader disappeared: `mv_recipient_monthly` in 0038, `mv_bank_balances` in 0082, and `mv_cashflow_daily` in 0094.
 >
 > See [[docs/adr/010-phase1-aggregation-strategy|ADR-010]] for the design rationale.
 
@@ -1144,9 +1153,9 @@ ADR-119 records this as the explicit exception to the shared timestamp-trigger p
 
 ---
 
-### mv_monthly_summary (Materialized View — live)
+### mv_monthly_summary (Summary table — live)
 
-**Purpose:** Monthly income/spending/net totals per currency and effective category, backing the fast path in `getMonthlyFinancialSummary()`. Not created by a migration — created (`CREATE MATERIALIZED VIEW IF NOT EXISTS`) and refreshed by `materializedViewService.ts` from the post-`listen` startup warmup; migrations 0045/0084/0085 instead drop it (forcing a same-boot rebuild) whenever its SQL definition changes.
+**Purpose:** Monthly income/spending/net totals per currency and effective category, backing the fast path in `getMonthlyFinancialSummary()`. The baseline creates it as a table. `materializedViewService.ts` fills it when it is empty during the post-`listen` startup warmup and refills it after mutations.
 
 **Scope:** Last 12 months
 
@@ -1155,7 +1164,7 @@ ADR-119 records this as the explicit exception to the shared timestamp-trigger p
 | `month_start`       | DATE    | First day of the month                                                                                                     |
 | `month`             | INTEGER | Month 1–12                                                                                                                 |
 | `year`              | INTEGER | Year                                                                                                                       |
-| `currency`          | —       | Transaction currency                                                                                                       |
+| `currency`          | TEXT    | Transaction currency (at most 3 characters)                                                                                |
 | `transaction_count` | BIGINT  | Count of transactions                                                                                                      |
 | `total_income`      | NUMERIC | Sum of amounts ≥ 0                                                                                                         |
 | `total_spending`    | NUMERIC | Sum of amounts < 0                                                                                                         |
@@ -1164,19 +1173,19 @@ ADR-119 records this as the explicit exception to the shared timestamp-trigger p
 | `category_id_key`   | INTEGER | `COALESCE(category_id, -1)` — the grouping/unique-index key (UNCATEGORISED = -1)                                           |
 | `category_name`     | TEXT    | `GENERAL:DETAIL` or `'UNCATEGORISED'`                                                                                      |
 
-**Filter:** `t.is_active = true AND t.is_transfer = false AND t.date >= date_trunc('month', CURRENT_DATE) - interval '12 months'`
+**Filter:** `t.is_active = 1 AND t.is_transfer = 0 AND t.date >= add_months(date_trunc('month', today()), -12)`
 
-**Indexes:** Unique `idx_mv_monthly_summary` on `(month_start, currency, category_id_key)` — required for `REFRESH ... CONCURRENTLY`. Runtime startup maintenance creates the canonical name before removing the legacy `mv_monthly_summary_idx` duplicate.
+**Indexes:** Unique `idx_mv_monthly_summary` on `(month_start, currency, category_id_key)`, created by the baseline. Startup warmup recreates it with `CREATE UNIQUE INDEX IF NOT EXISTS` if it was dropped.
 
-**Maintenance:** Debounced refresh (5s / 10s max wait) via `materializedViewService.scheduleRefresh()`, orchestrated by `aggregationRefresh.ts`. The 3-level effective-category definition dates from migration 0085 (drop-and-rebuild).
+**Maintenance:** Debounced refresh (5s / 10s max wait) via `materializedViewService.scheduleRefresh()`, orchestrated by `aggregationRefresh.ts`. A refresh runs `DELETE` and `INSERT ... SELECT` for both summary tables in one write transaction. Readers on the reader connection see the old contents until `COMMIT` and never an empty table. The 3-level effective-category definition dates from migration 0085.
 
 **Related:** [[docs/performance/materialized-views|Materialized Views]], [[apps/node-backend/src/services/materializedViewService.ts]]
 
 ---
 
-### mv_category_totals (Materialized View — live)
+### mv_category_totals (Summary table — live)
 
-**Purpose:** All-time category totals backing `getCategoryBreakdown()` / `getCategoryPivot()`. Same runtime-managed lifecycle as `mv_monthly_summary`; migrations 0045/0084 drop it to force a same-boot rebuild when its definition changes.
+**Purpose:** All-time category totals backing `getCategoryBreakdown()` / `getCategoryPivot()`. Same baseline table and refill lifecycle as `mv_monthly_summary`.
 
 | Field         | Type    | Description                                                        |
 | ------------- | ------- | ------------------------------------------------------------------ |
@@ -1184,13 +1193,13 @@ ADR-119 records this as the explicit exception to the shared timestamp-trigger p
 | `name`        | TEXT    | `GENERAL:DETAIL` or `'UNCATEGORISED'`                              |
 | `count`       | BIGINT  | Count of transactions                                              |
 | `total`       | NUMERIC | Sum of amounts                                                     |
-| `currency`    | —       | Transaction currency                                               |
+| `currency`    | TEXT    | Transaction currency (at most 3 characters)                        |
 
-**Filter:** `t.is_active = true AND t.is_transfer = false`
+**Filter:** `t.is_active = 1 AND t.is_transfer = 0`
 
-**Indexes:** Unique `idx_mv_category_totals` on `(category_id, currency)`. Runtime startup maintenance creates the canonical name before removing the legacy `mv_category_totals_idx` duplicate.
+**Indexes:** Unique `idx_mv_category_totals` on `(category_id, currency)`, created by the baseline. Startup warmup recreates it if it was dropped.
 
-**Maintenance:** Same debounced-refresh orchestration as `mv_monthly_summary`. The 3-level effective-category definition dates from migration 0084 (drop-and-rebuild).
+**Maintenance:** Same debounced refresh as `mv_monthly_summary`, in the same write transaction. The 3-level effective-category definition dates from migration 0084.
 
 **Related:** [[docs/performance/materialized-views|Materialized Views]], [[apps/node-backend/src/services/materializedViewService.ts]]
 
@@ -1224,13 +1233,13 @@ ADR-119 records this as the explicit exception to the shared timestamp-trigger p
 
 - Primary: `split_id`
 - Secondary: `idx_agg_split_outstanding_recipient`
-- Partial (open only): `idx_agg_split_outstanding_open` on `outstanding_amount <> 0`
+- Partial (open only): `idx_agg_split_outstanding_open` on `recipient_id` where `dec_ne(outstanding_amount, 0)`
 
-**Maintenance:** Real-time via triggers:
+**Maintenance:** Real-time via row-level `AFTER ... FOR EACH ROW` triggers:
 
-- `fn_trg_split_sync()` on `transaction_splits` (AFTER INSERT/UPDATE/DELETE)
-- `fn_trg_split_payment_sync()` on `split_payments` (AFTER INSERT/UPDATE/DELETE)
-- Syncs via `fn_agg_split_outstanding_sync(split_id)` helper (idempotent)
+- `trg_split_outstanding_sync__insert`, `__update` and `__delete` on `transaction_splits`
+- `trg_split_payment_outstanding_sync__insert`, `__update` and `__delete` on `split_payments`
+- Each trigger recomputes the affected split's row with `dec_sum`, `dec_sub` and `vision_numeric(..., 18, 4)` and upserts it (idempotent)
 
 **Call-site pattern:** No application code calls refresh; triggers keep this in sync.
 
@@ -1315,7 +1324,7 @@ live in `transaction_source_records` and `transaction_source_links`; see
 | `kind`        | TEXT        | NOT NULL, DEFAULT `'transaction'` | `'transaction'` — budgeting import; `'portfolio'` — portfolio import (ADR-078, migration 0041)                                                                                                                                          |
 | `config_json` | JSONB       | NOT NULL                          | Column mapping JSONB; shape differs by kind. Portfolio configs use the frontend camelCase mapping fields and may include optional `accountId`, the file-level broker destination; no schema migration is needed for this JSON addition. |
 | `created_at`  | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()           | Creation timestamp                                                                                                                                                                                                                      |
-| `updated_at`  | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()           | Last modification timestamp; maintained by shared `update_updated_at_column()` trigger                                                                                                                                                  |
+| `updated_at`  | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()           | Last modification timestamp; maintained by the table's `update_<table>_updated_at` trigger                                                                                                                                                  |
 
 **Indexes:**
 
@@ -1328,7 +1337,7 @@ live in `transaction_source_records` and `transaction_source_links`; see
 
 **Repository:** [[apps/node-backend/src/repositories/customParserConfigRepository.ts]] — maps `config_json` → `config` for application callers; `kind` passed as filter parameter
 
-**Backup:** Included in `.visionbak` exports (the whole-database `pg_dump` backup)
+**Backup:** Included in `.visionbak` exports (the whole-database copy, `db.sqlite3`)
 
 **Related:** [[docs/features/import#saved-named-custom-csv-parsers-adr-066|Import Feature — Saved Parsers]], [[docs/api/imports|Imports API]], [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066]], [[docs/features/portfolio-import#saved-portfolio-parser-configs|Portfolio Import — Saved Parser Configs]], [[docs/api/portfolio-imports|Portfolio Imports API]], [[docs/adr/078-portfolio-csv-import|ADR-078]]
 
@@ -1357,7 +1366,7 @@ live in `transaction_source_records` and `transaction_source_links`; see
 | `started_at`          | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()                    | When the batch was created                                                                                                                                                              |
 | `completed_at`        | TIMESTAMPTZ | NULLABLE                                   | When the batch reached a terminal state                                                                                                                                                 |
 
-**Backup:** Included in the whole-database `pg_dump` backup.
+**Backup:** Included in the whole-database backup copy.
 
 **Migrations:** `0040_add_portfolio_import_staging` (base); `0057_portfolio_import_batches_account_id` (adds `account_id`)
 
@@ -1403,7 +1412,7 @@ and secondary XML proof in an internal envelope; supplemental rows retain litera
 are restored through journal images, never deleted via a new batch's canonical pointer.
 
 Indexes cover `(batch_id,status)`, source fingerprint within a batch, and non-null resolved/override
-investment IDs. Included in the whole-database `pg_dump` backup. Receipt and custody foreign keys restrict
+investment IDs. Included in the whole-database backup copy. Receipt and custody foreign keys restrict
 ordinary batch/staging pruning even though the staging-to-batch FK itself cascades.
 
 **Related:** [[docs/features/portfolio-import]], [[docs/api/portfolio-imports]],
@@ -1461,7 +1470,7 @@ One adoption is allowed per staging row. Insertion validates that the staging ro
 batch. A restore must reference the matching adoption and swap its exact before/after images.
 Triggers reject receipt updates/deletes. Restoration compares the current financial row with the
 after-image before changing anything. Batch/action lookup and the partial unique adoption-source
-index support replay and rollback. Included in the whole-database `pg_dump` backup.
+index support replay and rollback. Included in the whole-database backup copy.
 
 Upgrade creates an empty journal and changes no existing financial rows. Downgrade refuses active
 adoptions; restore them through the application first. Once all are restored, downgrade drops the
@@ -1495,7 +1504,7 @@ transfer-date rates do not create a new purchase basis. Stored fee allocations e
 by removed fee units for each supported method; unresolved original FX is not invented. Updates
 are forbidden. Application rollback can delete events only after validating the projected remaining
 history. Replay index: `(investment_id,date,id)`; batch index: `import_batch_id`. Included in
-the whole-database `pg_dump` backup.
+the whole-database backup copy.
 
 Upgrade adds an empty ledger, nullable staging JSON, and two route values without rewriting
 holdings. Downgrade refuses any populated ledger. Roll back dependent imports in safe order first;
@@ -1541,7 +1550,7 @@ block repair. Commit clears the old staging pointer, marks it duplicate, removes
 adopts the manual row, and moves one old imported count to duplicate. Later changes to either row,
 staging, or counters make restoration conflict with `duplicate_repair_changed`.
 
-Included in the whole-database `pg_dump` backup. Retention excludes both the new reviewed batch and its old
+Included in the whole-database backup copy. Retention excludes both the new reviewed batch and its old
 original batch. Upgrade adds an empty receipt table without changing financial data. Downgrade
 refuses active repairs; application rollback must append restore receipts first. Removing the
 restored journal then loses receipts while leaving restored history intact.
@@ -1576,7 +1585,7 @@ average. A zero-yield reversal can consume only source-proven zero-basis gifted 
 Updates are forbidden. Validated import rollback can remove an event after full remaining-history
 checks. Replay index: `(investment_id,date,id)`; batch index: `import_batch_id`. Cost allocations
 retain original purchase FX rather than rates at removal time; unknown EUR basis remains null.
-Included in the whole-database `pg_dump` backup.
+Included in the whole-database backup copy.
 
 ### PortfolioAssetAdjustmentSource (migration 0123)
 
@@ -1590,7 +1599,7 @@ from a different batch. The source link prevents pruning evidence needed for rep
 | `source_record_hash` | CHAR(64) | Non-null lowercase hexadecimal source hash |
 
 Updates and direct deletes are forbidden. A parent adjustment rollback can cascade removal once
-the parent event is gone. Included in the whole-database `pg_dump` backup. Retention protects both adjustment
+the parent event is gone. Included in the whole-database backup copy. Retention protects both adjustment
 batches and batches containing linked source rows.
 
 Upgrade adds these empty tables, nullable staging `asset_adjustment_details`, and the new route
@@ -1612,14 +1621,14 @@ finding kind and recipient. Category-outlier rows are unique by category and mon
 server-derived deviation used by the 14-day worsening rule. Recipient and category foreign keys
 cascade so obsolete identities do not leave permanent preferences.
 
-`insight_digest_state` is a singleton versioned count projection. Statement triggers on
+`insight_digest_state` is a singleton versioned count projection. Row-level `AFTER` triggers on
 transactions, categories, recipients, planned transactions, and dismissals increment its dirty
 version. A refresh updates the count only when its captured version still matches.
 
 `insight_cash_projections` stores the latest month-end net-cashflow observation per month,
 currency, and forecast method. The service compares like with like, upserts after successful
 detection, and retains the current and previous two calendar months. All three tables are included
-in PostgreSQL backups automatically.
+in database backups automatically.
 
 ---
 

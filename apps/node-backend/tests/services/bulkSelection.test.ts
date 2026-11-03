@@ -67,7 +67,7 @@ describe('resolveBulkSelection — id mode happy path', () => {
   //
   // First, staleness is not what this filter catches. An id whose row was
   // deleted in another tab is a perfectly valid integer: it passes validation
-  // untouched and simply matches nothing in the `id = ANY(...)`. The tolerance
+  // untouched and simply matches nothing in the `json_each` id list. The tolerance
   // a long selection actually needs is already there, at the SQL layer, and is
   // unchanged by this. What was being dropped is *malformed* input, which a
   // stale selection never produces — the frontend holds `number[]` from the API.

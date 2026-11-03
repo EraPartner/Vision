@@ -1,9 +1,9 @@
 /**
  * Runs the portfolio import review reads that no workflow suite reaches
  * (batch list/detail, preview rows) and the batch-config reads against a
- * migrated PostgreSQL database, so a row schema in
- * src/database/rows/portfolioImport.ts that disagrees with what pg really
- * returns fails here (tests run the contracts in throw mode).
+ * migrated SQLite database, so a row schema in
+ * src/database/rows/portfolioImport.ts that disagrees with what the driver
+ * really returns fails here (tests run the contracts in throw mode).
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -32,7 +32,7 @@ async function insertBatch(customConfig: string): Promise<string> {
     `INSERT INTO portfolio_import_batches
        (adapter_name, source_filename, source_size_bytes, custom_config,
         status, rows_total)
-     VALUES ('portfolio_generic', 'synthetic.csv', 42, $1::jsonb,
+     VALUES ('portfolio_generic', 'synthetic.csv', 42, vision_jsonb($1),
              'awaiting_review', 2)
      RETURNING id`,
     [customConfig],
@@ -43,13 +43,12 @@ async function insertBatch(customConfig: string): Promise<string> {
 }
 
 describe.skipIf(!hasTestDatabase())(
-  "portfolio import row contracts against PostgreSQL",
+  "portfolio import row contracts against SQLite",
   () => {
     let objectBatch: string;
     let textBatch: string;
 
     beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
       await acquireDbSuiteLock();
       const investment = await must(pool, "pool").query<{ id: number }>(
         `INSERT INTO investments (name, symbol, asset_class, currency)
@@ -73,8 +72,10 @@ describe.skipIf(!hasTestDatabase())(
             resolved_investment_id)
          VALUES
            ($1, 0, 'matched', 'portfolio', '2026-01-05', 'buy', 'BUY',
-            'SYNRC', 'Synthetic', 2, 50, 100, 0, 0, 'EUR', 1, 'synthetic',
-            'symbol', $2),
+            'SYNRC', 'Synthetic', vision_numeric('2', 18, 8),
+            vision_numeric('50', 18, 6), vision_numeric('100', 18, 4),
+            vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+            vision_numeric('1', 20, 10), 'synthetic', 'symbol', $2),
            ($1, 1, 'error', NULL, NULL, NULL, 'UNKNOWN', NULL, NULL, NULL,
             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)`,
         [objectBatch, investmentId],
@@ -84,14 +85,14 @@ describe.skipIf(!hasTestDatabase())(
     afterAll(async () => {
       try {
         await must(pool, "pool").query(
-          "DELETE FROM portfolio_import_staging_rows WHERE batch_id = ANY($1::bigint[])",
+          "DELETE FROM portfolio_import_staging_rows WHERE batch_id IN (SELECT value FROM json_each($1))",
           [created.batchIds],
         );
         await must(pool, "pool").query(
-          "DELETE FROM portfolio_import_batches WHERE id = ANY($1::bigint[])",
+          "DELETE FROM portfolio_import_batches WHERE id IN (SELECT value FROM json_each($1))",
           [created.batchIds],
         );
-        await must(pool, "pool").query("DELETE FROM investments WHERE id = ANY($1)", [
+        await must(pool, "pool").query("DELETE FROM investments WHERE id IN (SELECT value FROM json_each($1))", [
           created.investmentIds,
         ]);
       } finally {

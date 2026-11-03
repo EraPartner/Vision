@@ -44,8 +44,9 @@ export type { PortfolioTransactionRow, PortfolioTransactionSummaryRow };
 
 /**
  * One custody-relevant unit event: a portfolio transaction, asset transfer or
- * asset adjustment. The UNION widens ids to BIGINT and the numeric columns to
- * NUMERIC, so pg emits them as strings. Derived from the checked row schema.
+ * asset adjustment. Ids are BIGINT strings (the three tables share one id
+ * sequence) and the numeric columns decimal text. Derived from the checked
+ * row schema.
  */
 export type PortfolioUnitEventRow = PortfolioUnitEventDbRow;
 
@@ -64,26 +65,29 @@ export async function getUnitEventsForInvestment(
 ): Promise<PortfolioUnitEventRow[]> {
   return checkedRows(
     portfolioUnitEventRowSchema,
+    // A UNION ALL column takes its type from the first branch: its hints
+    // read the BIGINT ids as strings and the TEXT_ARRAY as an array, and the
+    // numeric literals are decimal text.
     sql`
-    SELECT id, type::text AS type, to_char(date, 'YYYY-MM-DD') AS date,
-           COALESCE(units, 0) AS units, account_id, amount, fees, taxes,
-           CASE WHEN COALESCE(currency,'EUR')='EUR' THEN 1 ELSE COALESCE(fx_rate_to_eur,
-             (SELECT er.rate_to_eur FROM exchange_rates er WHERE er.currency_code=portfolio_transactions.currency AND er.rate_date<=portfolio_transactions.date ORDER BY er.rate_date DESC LIMIT 1)) END AS "fxMultiplier", NULL::int AS source_account_id,
-           NULL::int AS destination_account_id, 0 AS fee_units, NULL::bigint AS transfer_id, currency,
-           source_record_hash, NULL::text AS adjustment_kind, NULL::text AS basis_policy,
-           NULL::text[] AS eligible_source_record_hashes, NULL::bigint AS adjustment_id, income_recognition_role
+    SELECT id AS "id::bigint", type, to_char(date, 'YYYY-MM-DD') AS date,
+           COALESCE(units, '0') AS units, account_id, amount, fees, taxes,
+           CASE WHEN COALESCE(currency,'EUR')='EUR' THEN '1' ELSE COALESCE(fx_rate_to_eur,
+             (SELECT er.rate_to_eur FROM exchange_rates er WHERE er.currency_code=portfolio_transactions.currency AND er.rate_date<=portfolio_transactions.date ORDER BY er.rate_date DESC LIMIT 1)) END AS "fxMultiplier", NULL AS source_account_id,
+           NULL AS destination_account_id, '0' AS fee_units, NULL AS "transfer_id::bigint", currency,
+           source_record_hash, NULL AS adjustment_kind, NULL AS basis_policy,
+           NULL AS "eligible_source_record_hashes::json", NULL AS "adjustment_id::bigint", income_recognition_role
     FROM portfolio_transactions WHERE investment_id = ${investmentId}
     UNION ALL
-    SELECT id, 'asset_transfer', to_char(date,'YYYY-MM-DD'), units, NULL::int,
-           0,0,0,NULL::numeric,source_account_id,destination_account_id,fee_units,id,NULL::text,
-           source_record_hash,NULL::text,NULL::text,NULL::text[],NULL::bigint,'standard'::text
+    SELECT id, 'asset_transfer', to_char(date,'YYYY-MM-DD'), units, NULL,
+           '0','0','0',NULL,source_account_id,destination_account_id,fee_units,id,NULL,
+           source_record_hash,NULL,NULL,NULL,NULL,'standard'
     FROM portfolio_asset_transfers WHERE investment_id = ${investmentId}
     UNION ALL
     SELECT id,'asset_adjustment',to_char(date,'YYYY-MM-DD'),units,account_id,
-           0,0,0,NULL::numeric,NULL::int,NULL::int,0,NULL::bigint,NULL::text,
-           source_record_hash,adjustment_kind,basis_policy,eligible_source_record_hashes,id,'standard'::text
+           '0','0','0',NULL,NULL,NULL,'0',NULL,NULL,
+           source_record_hash,adjustment_kind,basis_policy,eligible_source_record_hashes,id,'standard'
     FROM portfolio_asset_adjustments WHERE investment_id=${investmentId}
-    ORDER BY date ASC, id ASC
+    ORDER BY date ASC, "id::bigint" ASC
   `,
   );
 }
@@ -215,7 +219,7 @@ export async function getAllWithCount({
       db
         .selectFrom("portfolio_transactions as pt")
         .selectAll("pt")
-        .select(sql<string>`COUNT(*) OVER ()`.as("total_count")),
+        .select(sql<string>`CAST(COUNT(*) OVER () AS TEXT)`.as("total_count")),
       { investmentId, type },
     )
       .orderBy("pt.date", "desc")
@@ -232,7 +236,7 @@ export async function getAllWithCount({
 }
 
 /**
- * Normalise an `investment_id` list for the `= ANY($1::int[])` predicates
+ * Normalise an `investment_id` list for the `IN (json_each(...))` predicates
  * below: dedupe, and keep only real ids.
  *
  * Kept rather than deleted even though `getBulkTransactions` now validates the
@@ -303,8 +307,8 @@ export async function getAllByInvestmentIds({
     ])
     .where(
       "pt.investment_id",
-      "=",
-      sql<InvestmentId>`ANY(${normalizedIds}::int[])`,
+      "in",
+      sql<InvestmentId>`(SELECT value FROM json_each(${JSON.stringify(normalizedIds)}))`,
     );
   if (type) ranked = ranked.where(sql<string>`pt.type`, "=", type);
 
@@ -321,7 +325,8 @@ export async function getAllByInvestmentIds({
     .selectAll("pt")
     .orderBy("pt.date", "desc")
     .orderBy("pt.id", "desc");
-  if (safeLimit != null) builder = builder.limit(safeLimit);
+  // SQLite needs a LIMIT before OFFSET; LIMIT -1 means no limit.
+  builder = builder.limit(safeLimit ?? -1);
 
   const rows = await checkedRows(
     portfolioTransactionDbRowSchema,
@@ -341,7 +346,7 @@ export async function getCount({
 } = {}): Promise<number> {
   let builder = db
     .selectFrom("portfolio_transactions")
-    .select(sql<string>`count(*)`.as("count"));
+    .select(sql<string>`CAST(count(*) AS TEXT)`.as("count"));
 
   if (investmentId != null) {
     builder = builder.where("investment_id", "=", investmentId);
@@ -350,8 +355,8 @@ export async function getCount({
     if (normalizedIds.length > 0) {
       builder = builder.where(
         "investment_id",
-        "=",
-        sql<InvestmentId>`ANY(${normalizedIds}::int[])`,
+        "in",
+        sql<InvestmentId>`(SELECT value FROM json_each(${JSON.stringify(normalizedIds)}))`,
       );
     }
   }
@@ -409,52 +414,58 @@ export async function getRowsForPortfolioMath({
   const where = (dateColumn: string) => {
     const date = sql.ref(dateColumn);
     const conditions = [
-      ...(activeInvestmentsOnly ? [sql`i.is_active = true`] : []),
-      ...(dateFrom !== undefined ? [sql`${date} >= ${dateFrom}::date`] : []),
-      ...(dateTo !== undefined ? [sql`${date} <= ${dateTo}::date`] : []),
+      ...(activeInvestmentsOnly ? [sql`i.is_active = 1`] : []),
+      // DATE columns hold canonical 'YYYY-MM-DD' text, as the bounds do.
+      ...(dateFrom !== undefined ? [sql`${date} >= ${dateFrom}`] : []),
+      ...(dateTo !== undefined ? [sql`${date} <= ${dateTo}`] : []),
     ];
     return conditions.length > 0
       ? sql`WHERE ${sql.join(conditions, sql` AND `)}`
       : sql``;
   };
+  // The id column keeps its alias hint until the driver strips it from the
+  // row, so the outer ORDER BY names it with the hint.
   const orderBy = sellsLastWithinDay
-    ? sql`ORDER BY events.date, CASE WHEN events.type = 'sell' THEN 1 ELSE 0 END, events.id`
-    : sql`ORDER BY events.date, events.id`;
+    ? sql`ORDER BY events.date, CASE WHEN events.type = 'sell' THEN 1 ELSE 0 END, events."id::bigint"`
+    : sql`ORDER BY events.date, events."id::bigint"`;
 
   return checkedRows(
     portfolioMathTxRowSchema,
+    // The first UNION ALL branch types each column: its hints read the
+    // BIGINT ids as strings and the TEXT_ARRAY as an array, and the numeric
+    // literals are decimal text. The outer SELECT * keeps the hinted names.
     sql`
     SELECT * FROM (
-    SELECT pt.id, pt.investment_id, pt.type::text AS type,
-           COALESCE(pt.amount, 0) AS amount,
-           COALESCE(pt.units, 0) AS units,
-           COALESCE(pt.fees, 0) AS fees,
-           COALESCE(pt.taxes, 0) AS taxes,
-           to_char(pt.date::date, 'YYYY-MM-DD') AS date,
-           to_char(pt.date::date, 'YYYY-MM-DD') AS day,
+    SELECT pt.id AS "id::bigint", pt.investment_id, pt.type AS type,
+           COALESCE(pt.amount, '0') AS amount,
+           COALESCE(pt.units, '0') AS units,
+           COALESCE(pt.fees, '0') AS fees,
+           COALESCE(pt.taxes, '0') AS taxes,
+           to_char(pt.date, 'YYYY-MM-DD') AS date,
+           to_char(pt.date, 'YYYY-MM-DD') AS day,
            COALESCE(pt.currency, i.currency, 'EUR') AS currency,
            pt.fx_rate_to_eur,
-           pt.account_id, NULL::int AS source_account_id,
-           NULL::int AS destination_account_id, 0 AS fee_units,
-           pt.source_record_hash, NULL::text AS adjustment_kind, NULL::text AS basis_policy,
-           NULL::text[] AS eligible_source_record_hashes, pt.income_recognition_role
+           pt.account_id, NULL AS source_account_id,
+           NULL AS destination_account_id, '0' AS fee_units,
+           pt.source_record_hash, NULL AS adjustment_kind, NULL AS basis_policy,
+           NULL AS "eligible_source_record_hashes::json", pt.income_recognition_role
     FROM portfolio_transactions pt
     JOIN investments i ON i.id = pt.investment_id
     ${where("pt.date")}
     UNION ALL
-    SELECT at.id, at.investment_id, 'asset_transfer' AS type, 0 AS amount,
-            at.units, 0 AS fees, 0 AS taxes, to_char(at.date,'YYYY-MM-DD') AS date,
+    SELECT at.id, at.investment_id, 'asset_transfer' AS type, '0' AS amount,
+            at.units, '0' AS fees, '0' AS taxes, to_char(at.date,'YYYY-MM-DD') AS date,
             to_char(at.date,'YYYY-MM-DD') AS day, COALESCE(i.currency,'EUR') AS currency,
-            NULL::numeric AS fx_rate_to_eur, NULL::int AS account_id,
+            NULL AS fx_rate_to_eur, NULL AS account_id,
             at.source_account_id, at.destination_account_id, at.fee_units,
-            at.source_record_hash,NULL::text,NULL::text,NULL::text[],'standard'::text
+            at.source_record_hash,NULL,NULL,NULL,'standard'
        FROM portfolio_asset_transfers at JOIN investments i ON i.id=at.investment_id
        ${where("at.date")}
     UNION ALL
-    SELECT aa.id,aa.investment_id,'asset_adjustment',0,aa.units,0,0,
+    SELECT aa.id,aa.investment_id,'asset_adjustment','0',aa.units,'0','0',
            to_char(aa.date,'YYYY-MM-DD'),to_char(aa.date,'YYYY-MM-DD'),COALESCE(i.currency,'EUR'),
-           NULL::numeric,aa.account_id,NULL::int,NULL::int,0,aa.source_record_hash,
-           aa.adjustment_kind,aa.basis_policy,aa.eligible_source_record_hashes,'standard'::text
+           NULL,aa.account_id,NULL,NULL,'0',aa.source_record_hash,
+           aa.adjustment_kind,aa.basis_policy,aa.eligible_source_record_hashes,'standard'
       FROM portfolio_asset_adjustments aa JOIN investments i ON i.id=aa.investment_id
       ${where("aa.date")}
     ) events ${orderBy}`,
@@ -467,7 +478,7 @@ const nullableNumber = (value: string | null) =>
 export async function getSummary(
   investmentId: InvestmentId,
 ): Promise<PortfolioTransactionSummaryRow[]> {
-  // SUM(NUMERIC) and COUNT(*) both arrive from pg as strings.
+  // Exact NUMERIC sums (dec_sum) and COUNT(*) both arrive as strings.
   const rows = await checkedRows(
     portfolioTransactionSummaryDbRowSchema,
     db
@@ -475,11 +486,11 @@ export async function getSummary(
       .select((eb) => [
         "type",
         "income_recognition_role",
-        eb.fn.sum<string>("amount").as("total_amount"),
-        eb.fn.sum<string | null>("units").as("total_units"),
-        eb.fn.sum<string | null>("fees").as("total_fees"),
-        eb.fn.sum<string | null>("taxes").as("total_taxes"),
-        eb.fn.countAll<string>().as("count"),
+        eb.fn<string>("dec_sum", ["amount"]).as("total_amount"),
+        eb.fn<string | null>("dec_sum", ["units"]).as("total_units"),
+        eb.fn<string | null>("dec_sum", ["fees"]).as("total_fees"),
+        eb.fn<string | null>("dec_sum", ["taxes"]).as("total_taxes"),
+        sql<string>`CAST(count(*) AS TEXT)`.as("count"),
       ])
       .where("investment_id", "=", investmentId)
       .groupBy(["type", "income_recognition_role"]),

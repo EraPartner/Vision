@@ -7250,7 +7250,7 @@ export interface components {
             fx_rate_to_eur?: number | null;
             /** @description Owning account for the lot (ADR-091); null = unassigned/global */
             account_id?: number | null;
-            /** @description Portfolio-import batch that created the row. PostgreSQL BIGINT is serialized by node-postgres as a string; null means the transaction was created manually or predates batch attribution. */
+            /** @description Portfolio-import batch that created the row. The BIGINT id is serialized as a decimal string; null means the transaction was created manually or predates batch attribution. */
             import_batch_id?: string | null;
             note?: string | null;
             is_recurring: boolean;
@@ -7852,11 +7852,11 @@ export interface components {
             updated_at?: string;
         };
         ImportBatch: {
-            /** @description PostgreSQL BIGINT serialized by node-postgres as a string. */
+            /** @description BIGINT id serialized as a decimal string. */
             id: string;
             adapter_name: string;
             source_filename: string | null;
-            /** @description PostgreSQL BIGINT serialized by node-postgres as a string. */
+            /** @description BIGINT id serialized as a decimal string. */
             source_size_bytes: string | null;
             /** @description Present on batch-detail responses; omitted from batch-list rows. */
             custom_config?: {

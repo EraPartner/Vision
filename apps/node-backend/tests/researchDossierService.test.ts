@@ -164,9 +164,11 @@ describe("research dossier persistence", () => {
       if (typeof sql !== "string") return Promise.resolve({ rows: [] });
       if (sql.includes('from "ai_research_documents"'))
         return Promise.reject(new Error("Unchanged source was queried"));
+      // The read inside the edit's transaction (BEGIN IMMEDIATE serialises
+      // writers, so it no longer needs FOR UPDATE).
       if (
-        sql.includes('from "research_dossiers" where "id" =') &&
-        sql.includes("for update")
+        sql.startsWith("select") &&
+        sql.includes('from "research_dossiers" where "id" =')
       )
         return Promise.resolve({ rows: [{ ...row, content_json: prior }] });
       if (sql.includes('update "research_dossiers"'))

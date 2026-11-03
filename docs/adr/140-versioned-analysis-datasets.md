@@ -10,6 +10,11 @@ aliases: [analysis datasets, financial analysis views]
 
 # ADR-140: Versioned Analysis Datasets
 
+> [!note] Superseded in part by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> the datasets are SQLite views, and the analysis sandbox reads in-memory copies of them instead of
+> security-barrier views granted to an analysis role. The versioned dataset names and their row
+> meaning stay.
+
 ## Status
 
 Accepted

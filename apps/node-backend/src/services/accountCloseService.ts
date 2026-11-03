@@ -17,7 +17,10 @@ import {
   closeAdjustmentRowSchema,
   portfolioLotRowSchema,
 } from "../database/rows/ledger.ts";
-import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.ts";
+import {
+  balancePartsColumn,
+  computedBalanceByCurrencyAggLateral,
+} from "../repositories/accountBalanceSql.ts";
 import { recipientRepository } from "../repositories/recipientRepository.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import { roundToCents, toDecimal, toNumber } from "../lib/money.ts";
@@ -59,13 +62,12 @@ export async function previewAccountPortfolioLots(accountId: AccountId) {
 
   const rows = await checkedRows(
     portfolioLotRowSchema,
-    db
-      .selectFrom("portfolio_transactions")
-      .select(["id", sql<string>`COUNT(*) OVER()`.as("eligible_count")])
-      .where("account_id", "=", accountId)
-      .where("type", "in", PORTFOLIO_LOT_TYPES)
-      .orderBy("id", "asc")
-      .limit(MAX_CLOSE_PORTFOLIO_RETAG_ROWS + 1),
+    sql`SELECT id, COUNT(*) OVER () AS "eligible_count::bigint"
+          FROM portfolio_transactions
+         WHERE account_id = ${accountId}
+           AND type IN (SELECT value FROM json_each(${JSON.stringify(PORTFOLIO_LOT_TYPES)}))
+         ORDER BY id ASC
+         LIMIT ${MAX_CLOSE_PORTFOLIO_RETAG_ROWS + 1}`,
   );
   const eligibleCount = Number(rows[0]?.eligible_count ?? 0);
   return {
@@ -104,14 +106,16 @@ export async function closeAccount(
   const balanceHandling = normalizeCloseAccount(body);
   const today = todayAppDateString();
 
+  // One BEGIN IMMEDIATE transaction (ADR-263): the active-state read, the
+  // balance read, the adjustments and the close run with no other writer in
+  // between, which the PostgreSQL version got from FOR UPDATE on the account.
   return withTransaction(async () => {
     const account = await checkedRow(
       accountActiveRowSchema,
       db
         .selectFrom("accounts")
         .select(["id", "is_active"])
-        .where("id", "=", accountId)
-        .forUpdate(),
+        .where("id", "=", accountId),
     );
     if (!account) throw new NotFoundError(`Account ${accountId} not found`);
 
@@ -129,9 +133,9 @@ export async function closeAccount(
     if (balanceHandling === "adjustment") {
       const balanceRow = await checkedRow(
         balancePartsRowSchema,
-        sql`SELECT bp.balance_parts
+        sql`SELECT ${balancePartsColumn()}
            FROM accounts a
-           ${computedBalanceByCurrencyAggLateral({ account: sql`a.id`, asOfDate: sql`${today}::date` })}
+           ${computedBalanceByCurrencyAggLateral({ account: sql`a.id`, asOfDate: sql`${today}` })}
           WHERE a.id = ${accountId}`,
       );
       adjustments = (balanceRow?.balance_parts ?? [])
@@ -147,17 +151,25 @@ export async function closeAccount(
       if (adjustments.length > 0) {
         const systemRecipientId =
           await recipientRepository.getOrCreateSystemId();
-        const amounts = adjustments.map((part) => part.amount);
-        const currencies = adjustments.map((part) => part.currency);
+        // Money binds as decimal text: String() of the rounded number is the
+        // text node-postgres sent for the former numeric[] parameter.
+        const parts = JSON.stringify(
+          adjustments.map((part) => ({
+            amount: String(part.amount),
+            currency: part.currency,
+          })),
+        );
         const inserted = await checkedRows(
           closeAdjustmentRowSchema,
           sql`INSERT INTO transactions
              (date, amount, currency, memo, account_id, recipient_id, is_transfer, transfer_source, is_active)
-           SELECT ${today}, amounts.amount, amounts.currency, ${CLOSE_ADJUSTMENT_MEMO},
-                  ${accountId}, ${systemRecipientId}, true, 'adjustment', true
-             FROM unnest(${amounts}::numeric[], ${currencies}::varchar(3)[]) AS amounts(amount, currency)
+           SELECT ${today}, vision_numeric(p.value ->> '$.amount', 18, 4), p.value ->> '$.currency',
+                  ${CLOSE_ADJUSTMENT_MEMO}, ${accountId}, ${systemRecipientId}, true, 'adjustment', true
+             FROM (SELECT value FROM json_each(${parts}) ORDER BY key) p
            RETURNING id, amount, currency, transfer_source`,
         );
+        // RETURNING order is unspecified in SQLite; ids follow insert order.
+        inserted.sort((a, b) => a.id - b.id);
         adjustments = inserted.map((row) => ({
           id: row.id,
           amount: Number(row.amount),
@@ -172,8 +184,8 @@ export async function closeAccount(
       .set({
         is_active: false,
         in_net_worth: false,
-        closed_at: sql<Date>`COALESCE(closed_at, NOW())`,
-        updated_at: sql<Date>`NOW()`,
+        closed_at: sql<Date>`COALESCE(closed_at, now())`,
+        updated_at: sql<Date>`now()`,
       })
       .where("id", "=", accountId)
       .execute();

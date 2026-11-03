@@ -4,12 +4,17 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { appRoot } from "../paths";
+import { PACKAGED_ANALYSIS_SANDBOX } from "../runtime/native";
 import {
   assertSafeNativeDestination,
+  bundleBunTool,
   compileBackend,
   manifestEntries,
   signCompiledBackend,
 } from "./prepare-native-runtime";
+
+const repoRoot = path.resolve(appRoot, "..", "..");
 
 void test("native payload replacement is restricted to a native-runtime directory", () => {
   assert.equal(
@@ -83,3 +88,59 @@ for (const exitCode of [0, 1]) {
     }
   });
 }
+
+void test("the backend and the packaging name the same analysis sandbox path", () => {
+  const executor = fs.readFileSync(
+    path.join(repoRoot, "apps", "node-backend", "src", "services", "analysisExecutor.ts"),
+    "utf8",
+  );
+  assert.ok(
+    executor.includes(`PACKAGED_ANALYSIS_SANDBOX = "${PACKAGED_ANALYSIS_SANDBOX}"`),
+    "analysisExecutor.ts must start the sandbox the payload ships",
+  );
+  assert.ok(fs.statSync(path.join(repoRoot, "apps", "node-backend", "src", "services", "analysisSandbox.ts")).isFile());
+});
+
+void test("the database tool is bundled for Bun at the packaged path", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vision-db-tool-test-"));
+  try {
+    // Stands in for `bun build`: records its arguments and writes --outfile.
+    const fakeBun = path.join(root, "fake-bun");
+    fs.writeFileSync(
+      fakeBun,
+      `#!/bin/sh\nprintf '%s\\n' "$@" > args.txt\nwhile [ "$#" -gt 0 ]; do\n  if [ "$1" = "--outfile" ]; then echo bundled > "$2"; fi\n  shift\ndone\n`,
+      { mode: 0o755 },
+    );
+    const outfile = path.join(root, "tools", "db-file.js");
+    fs.mkdirSync(path.dirname(outfile));
+    bundleBunTool(fakeBun, "apps/node-backend/scripts/db-file.ts", outfile, root);
+    assert.equal(fs.readFileSync(outfile, "utf8"), "bundled\n");
+    assert.deepEqual(
+      fs.readFileSync(path.join(root, "args.txt"), "utf8").trim().split("\n"),
+      ["build", "--target=bun", "apps/node-backend/scripts/db-file.ts", "--outfile", outfile],
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("database tool bundling fails when Bun fails or writes nothing", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vision-db-tool-test-"));
+  try {
+    const failing = path.join(root, "failing-bun");
+    fs.writeFileSync(failing, "#!/bin/sh\nexit 3\n", { mode: 0o755 });
+    const silent = path.join(root, "silent-bun");
+    fs.writeFileSync(silent, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    const outfile = path.join(root, "db-file.js");
+    assert.throws(
+      () => bundleBunTool(failing, "db-file.ts", outfile, root),
+      /bundling exited 3/,
+    );
+    assert.throws(
+      () => bundleBunTool(silent, "db-file.ts", outfile, root),
+      /produced no output/,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

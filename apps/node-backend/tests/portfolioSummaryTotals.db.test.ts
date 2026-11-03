@@ -22,6 +22,11 @@ import { bodyAt } from "./helpers/responseBody.ts";
 import portfolioSummaryRouter from "../src/routes/info/portfolioSummary.ts";
 import { must } from "./helpers/must.ts";
 
+/** A fixture number as the decimal text a DECIMAL_TEXT column stores. */
+function decimalText(value: number | null): string | null {
+  return value === null ? null : String(value);
+}
+
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
 interface InvestmentSeed {
@@ -43,8 +48,8 @@ async function investment({
 }: InvestmentSeed) {
   const { rows } = await must(getTestPool(), "test pool").query<{ id: number }>(
     `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, is_active)
-     VALUES ($1, $1, $2, $6, $3, $4, $5) RETURNING id`,
-    [name, assetClass, price, interestRate, isActive, currency],
+     VALUES ($1, $1, $2, $6, vision_numeric($3, 18, 6), vision_numeric($4, 8, 4), $5) RETURNING id`,
+    [name, assetClass, decimalText(price), decimalText(interestRate), isActive, currency],
   );
   return must(rows[0], "rows[0]").id;
 }
@@ -52,7 +57,7 @@ async function investment({
 async function brokerAccount(name: string) {
   const { rows } = await must(getTestPool(), "test pool").query<{ id: number }>(
     `INSERT INTO accounts (name, type, currency)
-     VALUES ($1, 'brokerage'::account_type, 'EUR') RETURNING id`,
+     VALUES ($1, 'brokerage', 'EUR') RETURNING id`,
     [name],
   );
   return must(rows[0], "rows[0]").id;
@@ -75,15 +80,15 @@ async function txn(
 ) {
   await must(getTestPool(), "test pool").query(
     `INSERT INTO portfolio_transactions (investment_id, type, date, amount, units, currency, account_id)
-     VALUES ($1, $2, $3::date, $4, $5, $6, $7)`,
-    [investmentId, type, date, amount, units, currency, accountId],
+     VALUES ($1, $2, ts_date($3), vision_numeric($4, 18, 4), vision_numeric($5, 18, 8), $6, $7)`,
+    [investmentId, type, date, decimalText(amount), decimalText(units), currency, accountId],
   );
 }
 
 async function setRate(code: string, rateToEur: string, rateDate: string) {
   await must(getTestPool(), "test pool").query(
     `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-     VALUES ($1, $2, $3, true)`,
+     VALUES ($1, vision_numeric($2, 20, 10), $3, 1)`,
     [code, rateToEur, rateDate],
   );
 }

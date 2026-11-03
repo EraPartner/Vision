@@ -286,10 +286,11 @@ export async function loadHistoricalPointsFromDatabase(
       .select(["price_date", "close_price"])
       .where("investment_id", "=", asInvestmentId(investmentId))
       .orderBy("price_date", "asc");
+    // DATE columns hold canonical 'YYYY-MM-DD' text, as the bounds do.
     if (fromDate !== null)
-      builder = builder.where("price_date", ">=", sql<Date>`${fromDate}::date`);
+      builder = builder.where("price_date", ">=", sql<Date>`${fromDate}`);
     if (toDateVal !== null)
-      builder = builder.where("price_date", "<=", sql<Date>`${toDateVal}::date`);
+      builder = builder.where("price_date", "<=", sql<Date>`${toDateVal}`);
     const rows = await checkedRows(pricePointDbRowSchema, builder);
 
     return normalizeHistoryPoints(
@@ -313,7 +314,7 @@ export async function loadHistoricalPointsFromDatabase(
  * both dropped and mis-accepted: a dropped id silently returned no fallback
  * price for that investment (the valuation shows it unpriced rather than
  * failing), while `Number.isFinite` let a non-integer like 1.5 through to the
- * `::int[]` cast below. The only caller feeds `inv.id` off investment rows, so
+ * id list below. The only caller feeds `inv.id` off investment rows, so
  * nothing malformed reaches this today; a throw here means a real bug, and the
  * caller already downgrades it to a logged warning rather than a failed load.
  */
@@ -324,15 +325,31 @@ export async function loadLatestHistoricalPointByInvestmentIds(
   if (ids.length === 0) return new Map();
 
   try {
+    // The newest row per investment (PostgreSQL used DISTINCT ON); the
+    // subquery keeps the columns' declared types.
+    const ranked = db
+      .selectFrom("asset_price_history")
+      .select([
+        "investment_id",
+        "price_date",
+        "close_price",
+        sql<number>`row_number() OVER (PARTITION BY investment_id ORDER BY price_date DESC)`.as(
+          "rn",
+        ),
+      ])
+      .where(
+        "investment_id",
+        "in",
+        sql<InvestmentId>`(SELECT value FROM json_each(${JSON.stringify(ids)}))`,
+      )
+      .as("ranked");
     const rows = await checkedRows(
       latestPricePointDbRowSchema,
       db
-        .selectFrom("asset_price_history")
-        .distinctOn("investment_id")
+        .selectFrom(ranked)
         .select(["investment_id", "price_date", "close_price"])
-        .where("investment_id", "=", sql<InvestmentId>`ANY(${ids}::int[])`)
-        .orderBy("investment_id")
-        .orderBy("price_date", "desc"),
+        .where("rn", "=", 1)
+        .orderBy("investment_id"),
     );
 
     const byId = new Map<number, LatestHistoricalPoint>();
@@ -365,30 +382,33 @@ export async function saveHistoricalPointsToDatabase(
   const normalized = normalizeHistoryPoints(points);
   if (!Number.isFinite(investmentId) || normalized.length === 0) return;
 
-  const priceDates: string[] = [];
-  const closePrices: number[] = [];
+  // One { d: 'YYYY-MM-DD', p: price } per day; the price travels as the text
+  // node-postgres sent (`String(n)`) so it reaches NUMERIC(18,6) exactly as
+  // before (a JSON number would be read as a float).
+  const rows: { d: string; p: string }[] = [];
 
   for (const point of normalized) {
     const dateOnly = toDateOnly(point.timestampMs);
     if (!dateOnly || !isValidPrice(point.price)) continue;
-    priceDates.push(dateOnly);
-    closePrices.push(point.price);
+    rows.push({ d: dateOnly, p: String(point.price) });
   }
 
-  if (priceDates.length === 0) return;
+  if (rows.length === 0) return;
 
   try {
+    // `WHERE true` keeps SQLite from reading ON CONFLICT as a join constraint.
     await sql`INSERT INTO asset_price_history (investment_id, price_date, close_price, source)
-     SELECT ${investmentId}, p.price_date::date, p.close_price::numeric, ${source || "provider"}
-     FROM UNNEST(${priceDates}::date[], ${closePrices}::numeric[]) AS p(price_date, close_price)
+     SELECT ${investmentId}, p.value ->> 'd', vision_numeric(p.value ->> 'p', 18, 6), ${source || "provider"}
+     FROM json_each(${JSON.stringify(rows)}) AS p
+     WHERE true
      ON CONFLICT (investment_id, price_date)
      DO UPDATE SET
-       close_price = EXCLUDED.close_price,
-       source = EXCLUDED.source,
-       fetched_at = NOW(),
-       updated_at = NOW()
-     WHERE (asset_price_history.close_price, asset_price_history.source)
-       IS DISTINCT FROM (EXCLUDED.close_price, EXCLUDED.source)`.execute(db);
+       close_price = excluded.close_price,
+       source = excluded.source,
+       fetched_at = now(),
+       updated_at = now()
+     WHERE asset_price_history.close_price IS NOT excluded.close_price
+        OR asset_price_history.source IS NOT excluded.source`.execute(db);
   } catch (error) {
     if (hasErrorCode(error, "42P01")) return;
     if (hasErrorCode(error, "23503")) {

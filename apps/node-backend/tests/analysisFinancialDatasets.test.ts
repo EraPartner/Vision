@@ -402,7 +402,7 @@ describe("canonical financial analysis", () => {
   });
   it("sums the latest broker value per account even when closing dates differ", async () => {
     const query = financialQuery((sql) => Promise.resolve(({
-      rows: sql.includes("to_regclass")
+      rows: sql.includes("FROM sqlite_schema")
         ? [{ relation: "portfolio_broker_snapshots" }]
         : [
             {

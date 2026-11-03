@@ -85,25 +85,23 @@ function mockSnapshotQueries({
     // Lower-cased without identifier quotes: matches hand-written and
     // query-builder SQL alike.
     const sql = rawSql.toLowerCase().replace(/"/g, "");
-    if (sql.includes("information_schema.columns")) {
-      return Promise.resolve({ rows: fxNeutralColumn ? [{ "?column?": 1 }] : [] });
+    if (sql.includes("pragma_table_info('portfolio_performance_snapshots')")) {
+      return Promise.resolve({ rows: fxNeutralColumn ? [{ 1: 1 }] : [] });
     }
-    if (sql.includes("select min(first_date)::date as first_data_date")) {
+    if (sql.includes("select min(first_date) as first_data_date::date")) {
       return Promise.resolve({ rows: [pgFirstDate(firstDate)] });
     }
-    if (sql.includes("from investments") && sql.includes("asset_class in")) {
-      return Promise.resolve({
-        rows: investments.map((row) => pgNumeric(row, ["current_price"])),
-      });
-    }
-    if (
-      sql.includes("from investments") &&
-      sql.includes("asset_class::text = any")
-    ) {
+    // The non-unit seed (savings/bond/real_estate) is the one with active_from.
+    if (sql.includes("from investments") && sql.includes("as active_from")) {
       return Promise.resolve({
         rows: nonUnitInvestments.map((row) =>
           pgNumeric(row, ["current_price", "interest_rate"]),
         ),
+      });
+    }
+    if (sql.includes("from investments") && sql.includes("asset_class in")) {
+      return Promise.resolve({
+        rows: investments.map((row) => pgNumeric(row, ["current_price"])),
       });
     }
     if (

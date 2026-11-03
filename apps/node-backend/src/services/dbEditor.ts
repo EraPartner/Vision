@@ -3,17 +3,24 @@
  * the admin DB Maintenance UI.
  *
  * Safety model (see docs/adr for rationale):
- *   - Table/column identifiers are validated against pg_stat_user_tables /
- *     information_schema and double-quoted — never interpolated raw.
+ *   - Table/column identifiers are validated against SQLite's catalog
+ *     (pragma_table_list / pragma_table_xinfo) and double-quoted — never
+ *     interpolated raw.
  *   - Reads accept only structured, parameterized filters[] (the raw WHERE
  *     escape hatch was removed, ADR-101 2026-07-10 — any `where` param now 400s)
- *     and run inside a READ ONLY transaction with a short statement_timeout, so a
- *     browse can neither mutate nor hang the DB.
- *   - Writes run in one transaction. Each edited row is locked (FOR UPDATE) and
- *     its version (the `xmin` system column) is compared against the token the
- *     client loaded — a mismatch is a 409 conflict, never a silent overwrite.
- *   - Postgres still enforces every structural constraint (FK / CHECK / NOT
- *     NULL / UNIQUE); violations are mapped to friendly errors in mapDbError().
+ *     and run on a read-only snapshot connection (PRAGMA query_only), so a
+ *     browse cannot mutate the DB.
+ *   - Writes run in one transaction (BEGIN IMMEDIATE on the single writer, so
+ *     no other writer runs until it ends). Each edited row's version — a hash
+ *     of its stored values, returned as `__xmin` — is compared against the
+ *     token the client loaded: a mismatch is a 409 conflict, never a silent
+ *     overwrite.
+ *   - Values are written through the storage functions of their declared type
+ *     (vision_numeric, vision_jsonb, vision_ts, ts_date) or coerced the way
+ *     PostgreSQL's input functions read them, so every CHECK passes and the
+ *     stored text stays canonical. SQLite still enforces every structural
+ *     constraint (FK / CHECK / NOT NULL / UNIQUE); violations are mapped to
+ *     friendly errors in mapDbError().
  *   - Edits to a materialized-view base table schedule a debounced refresh.
  *
  * This bypasses app-level domain logic by design (it is a raw data editor); the
@@ -21,7 +28,13 @@
  */
 
 import crypto from "node:crypto";
-import { query, getClient } from "../database/connection.ts";
+import { ApiErrorCode } from "@vision/types/errors";
+import {
+  query,
+  withReadSnapshot,
+  withTransaction,
+} from "../database/connection.ts";
+import type { PgPoolClient } from "../database/connection.ts";
 import { logger } from "../config/logger.ts";
 import { scheduleAggregationRefresh } from "./aggregationRefresh.ts";
 import {
@@ -32,15 +45,15 @@ import {
   NotFoundError,
 } from "../middleware/errorHandler.ts";
 import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.ts";
-import type { QueryRunner } from "../types/rows.ts";
-import { toWireDate } from "../lib/dateFormat.ts";
+import { formatDateToYmd, toWireDate } from "../lib/dateFormat.ts";
 
 /**
  * Column metadata for one table column, as introspected from
- * `information_schema.columns` + the primary-key query. Genuinely dynamic —
- * this editor works against any public table, so there is no fixed row shape
- * to type against; `ColumnMeta`/`TableMeta` describe the editor's own
- * bookkeeping, not the tables it edits.
+ * `pragma_table_xinfo`. Genuinely dynamic — this editor works against any user
+ * table, so there is no fixed row shape to type against; `ColumnMeta`/
+ * `TableMeta` describe the editor's own bookkeeping, not the tables it edits.
+ * `dataType`/`udtName` keep PostgreSQL's names for the column's type (the
+ * declared SQLite storage type mapped back), so the UI's editors stay the same.
  */
 export interface ColumnMeta {
   name: string;
@@ -82,27 +95,55 @@ export interface Change {
   set?: Record<string, unknown> | undefined;
   /** update/delete — primary-key column values identifying the row. */
   pk?: Record<string, unknown> | undefined;
-  /** optimistic-concurrency token (the row's `xmin`) from the row the client loaded. */
+  /** optimistic-concurrency token (the row's `__xmin`) from the row the client loaded. */
   xmin?: unknown;
+}
+
+/**
+ * How a column's values are stored, from its declared SQLite type
+ * (docs/reference/sqlite-sql-dialect.md, "Storage types").
+ */
+export type StorageKind =
+  | "integer"
+  | "bigint"
+  | "real"
+  | "decimal"
+  | "text"
+  | "boolean"
+  | "timestamptz"
+  | "date"
+  | "jsonb"
+  | "json"
+  | "array"
+  | "uuid"
+  | "other";
+
+export interface ColumnStorage {
+  kind: StorageKind;
+  /** DECIMAL_TEXT(p,s) precision and scale; null for an unconstrained DECIMAL_TEXT. */
+  precision: number | null;
+  scale: number | null;
+  /** The declared type as the catalog spells it. */
+  declared: string;
 }
 
 /** Per-change context threaded through the mutation builders. */
 export interface MutationCtx {
   colMeta: Map<string, ColumnMeta>;
+  storage: Map<string, ColumnStorage>;
   primaryKey: string[];
   index: number;
 }
 
-/** A row of `information_schema.columns` as `getTableMeta` selects it. */
+/** A row of `pragma_table_xinfo` as `getTableMeta` selects it. */
 export type RawColumnRow = {
-  column_name: string;
-  data_type: string;
-  udt_name: string;
-  is_nullable: string;
-  column_default: string | null;
-  is_generated: string;
-  is_identity: string;
-  ordinal_position: number;
+  cid: number;
+  name: string;
+  type: string;
+  notnull: number;
+  dflt_value: string | null;
+  pk: number;
+  hidden: number;
 };
 
 /** Options accepted by `readRows`. */
@@ -126,8 +167,8 @@ type CursorPayload = {
   values?: unknown;
 };
 
-/** The fields of a pg driver error that `mapDbError` reads. */
-type PgDriverError = {
+/** The fields of a driver error that `mapDbError` reads. */
+type DbDriverError = {
   code?: string;
   detail?: string;
   column?: string;
@@ -137,8 +178,6 @@ type PgDriverError = {
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 500;
-const READ_TIMEOUT_MS = 15_000;
-const WRITE_TIMEOUT_MS = 30_000;
 
 // Base tables whose rows feed the dashboard materialized views. Editing any of
 // these leaves the views stale until refreshed (see materializedViewService).
@@ -147,6 +186,20 @@ const MATVIEW_BASE_TABLES = new Set([
   "recipients",
   "categories",
 ]);
+
+/**
+ * Tables PostgreSQL did not list as user tables: the bigint sequences'
+ * state (PostgreSQL sequences) is internal to id generation and stays out of
+ * the editor.
+ */
+const INTERNAL_TABLES = new Set(["vision_sequences"]);
+
+/**
+ * The former materialized views, now ordinary tables that
+ * materializedViewService refills from the ledger. PostgreSQL listed them and
+ * refused writes to them; they stay browsable and read-only.
+ */
+const DERIVED_TABLES = new Set(["mv_monthly_summary", "mv_category_totals"]);
 
 const FILTER_OPS = new Set([
   "eq",
@@ -171,13 +224,17 @@ function quoteIdent(name: unknown): string {
  * Resolve a caller-supplied identifier to the catalog's OWN copy of that name.
  *
  * Every identifier that reaches SQL text goes through here first, so the string
- * that gets interpolated always originates from pg's catalog (listUserTables /
- * information_schema) rather than from the request — the request value is only
- * ever used as a lookup key. That is stricter than validate-then-use-the-input:
- * it holds by construction even if a membership check upstream is later
- * loosened, and it is what makes the safety legible to static taint analysis,
- * which cannot see a `Set.has()` test as a sanitizer and therefore reports the
- * read query below as a high-severity injection sink.
+ * that gets interpolated always originates from SQLite's catalog
+ * (listUserTables / pragma_table_xinfo) rather than from the request — the
+ * request value is only ever used as a lookup key. That is stricter than
+ * validate-then-use-the-input: it holds by construction even if a membership
+ * check upstream is later loosened, and it is what makes the safety legible to
+ * static taint analysis, which cannot see a `Set.has()` test as a sanitizer and
+ * therefore reports the read query below as a high-severity injection sink.
+ *
+ * The match is exact and case-sensitive, as PostgreSQL's quoted identifiers
+ * were: "Transactions" is not "transactions" here even though SQLite itself
+ * would fold the case.
  *
  * @param allowed catalog-derived names
  * @returns the catalog's string, or null when there is no match
@@ -207,16 +264,22 @@ function clampInt(
 // The catalog IS the injection allowlist, so it must stay correct — but table
 // column/PK metadata is static within a running backend (this editor only does
 // data DML, never DDL; a schema migration restarts the process). A short TTL
-// memo removes the ~5 catalog round-trips per browse tick / mutation without
+// memo removes the catalog round-trips per browse tick / mutation without
 // weakening the allowlist semantics.
 const META_TTL_MS = 60_000;
+
+interface TableInfo {
+  meta: TableMeta;
+  storage: Map<string, ColumnStorage>;
+}
+
 let userTablesCache: { value: Set<string> | null; expiresAt: number } = {
   value: null,
   expiresAt: 0,
 };
 const tableMetaCache = new Map<
   string,
-  { value: TableMeta; expiresAt: number }
+  { value: TableInfo; expiresAt: number }
 >();
 
 export function __clearDbEditorMetadataCacheForTests() {
@@ -224,15 +287,26 @@ export function __clearDbEditorMetadataCacheForTests() {
   tableMetaCache.clear();
 }
 
-async function listUserTables(): Promise<Set<string>> {
+/**
+ * The user tables of the database: ordinary tables of the main schema, without
+ * SQLite's own (`sqlite_*`), virtual and shadow tables (pragma_table_list
+ * types them apart) and Vision's sequence table. Also the allowlist of the
+ * admin maintenance endpoints, which pass `fresh` to read the catalog as it is
+ * now instead of the editor's short-lived memo.
+ */
+export async function listUserTables({ fresh = false }: { fresh?: boolean } = {}): Promise<Set<string>> {
   const now = Date.now();
-  if (userTablesCache.value && userTablesCache.expiresAt > now)
+  if (!fresh && userTablesCache.value && userTablesCache.expiresAt > now)
     return userTablesCache.value;
-  const r = await query<{ relname: string }>(
-    `SELECT relname FROM pg_stat_user_tables WHERE schemaname = 'public'`,
+  const r = await query<{ name: string }>(
+    `SELECT name FROM pragma_table_list
+      WHERE schema = 'main' AND type = 'table' AND name NOT LIKE 'sqlite_%'
+      ORDER BY name`,
     [],
   );
-  const set = new Set(r.rows.map((row) => row.relname));
+  const set = new Set(
+    r.rows.map((row) => row.name).filter((name) => !INTERNAL_TABLES.has(name)),
+  );
   userTablesCache = { value: set, expiresAt: now + META_TTL_MS };
   return set;
 }
@@ -253,10 +327,55 @@ async function resolveEditableTable(table: unknown): Promise<string> {
 
 // ── Introspection ───────────────────────────────────────────────────────────
 
-/**
- * Column + primary-key metadata for a public table.
- */
-export async function getTableMeta(table: string): Promise<TableMeta> {
+const DECIMAL_TYPE = /^DECIMAL_TEXT\s*(?:\(\s*(\d+)\s*(?:,\s*(\d+)\s*)?\))?$/;
+
+/** The storage kind of a declared column type. */
+export function storageOf(declared: string): ColumnStorage {
+  const t = declared.trim().toUpperCase();
+  const decimal = DECIMAL_TYPE.exec(t);
+  if (decimal) {
+    const precision = decimal[1] === undefined ? null : Number(decimal[1]);
+    const scale = precision === null ? null : Number(decimal[2] ?? 0);
+    return { kind: "decimal", precision, scale, declared };
+  }
+  const simple: Record<string, StorageKind> = {
+    INTEGER: "integer",
+    INT: "integer",
+    SMALLINT: "integer",
+    BIGINT: "bigint",
+    REAL: "real",
+    "DOUBLE PRECISION": "real",
+    TEXT: "text",
+    "": "text",
+    BOOLEAN: "boolean",
+    TIMESTAMPTZ_TEXT: "timestamptz",
+    DATE_TEXT: "date",
+    JSONB_TEXT: "jsonb",
+    JSON_TEXT: "json",
+    TEXT_ARRAY: "array",
+    UUID_TEXT: "uuid",
+  };
+  return { kind: simple[t] ?? "other", precision: null, scale: null, declared };
+}
+
+/** PostgreSQL's information_schema `data_type` / `udt_name` for a storage kind. */
+const PG_TYPE_NAMES: Record<StorageKind, readonly [string, string] | null> = {
+  integer: ["integer", "int4"],
+  bigint: ["bigint", "int8"],
+  real: ["double precision", "float8"],
+  decimal: ["numeric", "numeric"],
+  text: ["text", "text"],
+  boolean: ["boolean", "bool"],
+  timestamptz: ["timestamp with time zone", "timestamptz"],
+  date: ["date", "date"],
+  jsonb: ["jsonb", "jsonb"],
+  json: ["json", "json"],
+  array: ["ARRAY", "_text"],
+  uuid: ["uuid", "uuid"],
+  other: null,
+};
+
+async function getTableInfo(table: string): Promise<TableInfo> {
   // `safeTable` is the catalog's string, not the caller's — see resolveIdent.
   // Everything downstream (meta.table, and through it every quoteIdent call in
   // this module) is built from it.
@@ -266,57 +385,226 @@ export async function getTableMeta(table: string): Promise<TableMeta> {
   const cached = tableMetaCache.get(safeTable);
   if (cached && cached.expiresAt > now) return cached.value;
 
-  const [colsRes, pkRes] = await Promise.all([
-    query<RawColumnRow>(
-      `SELECT column_name, data_type, udt_name, is_nullable, column_default,
-              is_generated, is_identity, ordinal_position
-         FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = $1
-        ORDER BY ordinal_position`,
-      [safeTable],
-    ),
-    query<{ column_name: string }>(
-      `SELECT a.attname AS column_name
-         FROM pg_index i
-         JOIN pg_class c ON c.oid = i.indrelid
-         JOIN pg_namespace n ON n.oid = c.relnamespace
-         JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-        WHERE n.nspname = 'public' AND c.relname = $1 AND i.indisprimary
-        ORDER BY array_position(i.indkey, a.attnum)`,
-      [safeTable],
-    ),
-  ]);
+  // hidden: 0 an ordinary column, 2 or 3 a generated (VIRTUAL / STORED) one.
+  const colsRes = await query<RawColumnRow>(
+    `SELECT cid, name, type, "notnull", dflt_value, pk, hidden
+       FROM pragma_table_xinfo($1)
+      WHERE hidden <> 1
+      ORDER BY cid`,
+    [safeTable],
+  );
 
+  const pkRows = colsRes.rows.filter((r) => r.pk > 0).sort((a, b) => a.pk - b.pk);
+  // An INTEGER PRIMARY KEY aliases the rowid: SQLite assigns it on insert, as
+  // a serial default did.
+  const rowidAlias =
+    pkRows.length === 1 && pkRows[0]?.type.trim().toUpperCase() === "INTEGER"
+      ? pkRows[0].name
+      : null;
+  const storage = new Map<string, ColumnStorage>();
   const columns: ColumnMeta[] = colsRes.rows.map((r) => {
-    const generatedAlways =
-      r.is_generated === "ALWAYS" || r.is_identity === "YES";
+    const store = storageOf(r.type);
+    storage.set(r.name, store);
+    const names = PG_TYPE_NAMES[store.kind] ?? [
+      r.type.trim().toLowerCase() || "text",
+      r.type.trim().toLowerCase() || "text",
+    ];
+    const generated = r.hidden === 2 || r.hidden === 3;
     return {
-      name: r.column_name,
-      dataType: r.data_type,
-      udtName: r.udt_name,
-      nullable: r.is_nullable === "YES",
-      hasDefault: r.column_default !== null,
-      generated: generatedAlways,
-      // GENERATED ALWAYS (incl. identity-always) columns cannot be written.
-      writable: r.is_generated !== "ALWAYS",
+      name: r.name,
+      dataType: names[0],
+      udtName: names[1],
+      // Primary-key columns are NOT NULL, as every PostgreSQL key column was.
+      nullable: r.notnull === 0 && r.pk === 0,
+      hasDefault: r.dflt_value !== null || r.name === rowidAlias,
+      generated,
+      // Generated columns cannot be written.
+      writable: !generated,
     };
   });
 
-  const meta: TableMeta = {
-    table: safeTable,
-    columns,
-    primaryKey: pkRes.rows.map((r) => r.column_name),
+  const info: TableInfo = {
+    meta: {
+      table: safeTable,
+      columns,
+      primaryKey: pkRows.map((r) => r.name),
+    },
+    storage,
   };
-  tableMetaCache.set(safeTable, { value: meta, expiresAt: now + META_TTL_MS });
-  return meta;
+  tableMetaCache.set(safeTable, { value: info, expiresAt: now + META_TTL_MS });
+  return info;
+}
+
+/**
+ * Column + primary-key metadata for a user table.
+ */
+export async function getTableMeta(table: string): Promise<TableMeta> {
+  return (await getTableInfo(table)).meta;
+}
+
+// ── Value coercion ──────────────────────────────────────────────────────────
+
+/** PostgreSQL's name of a storage kind's type, for input-error messages. */
+const PG_INPUT_TYPE: Record<StorageKind, string> = {
+  integer: "integer",
+  bigint: "bigint",
+  real: "double precision",
+  decimal: "numeric",
+  text: "text",
+  boolean: "boolean",
+  timestamptz: "timestamp with time zone",
+  date: "date",
+  jsonb: "json",
+  json: "json",
+  array: "text[]",
+  uuid: "uuid",
+  other: "text",
+};
+
+/** Text of a value as node-postgres sent it to PostgreSQL's input functions. */
+function inputText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "bigint" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (value instanceof Date) return value.toISOString();
+  return JSON.stringify(value);
+}
+
+/** The 22P02 PostgreSQL raised for text its input function could not read. */
+function invalidInput(kind: StorageKind, value: unknown): ValidationError {
+  const prefix = kind === "array" ? "malformed array literal" : `invalid input syntax for type ${PG_INPUT_TYPE[kind]}`;
+  return new ValidationError(`Invalid value for column type: ${prefix}: "${inputText(value)}"`);
+}
+
+function outOfRange(kind: StorageKind, value: unknown): ValidationError {
+  return new ValidationError(
+    `Invalid value for column type: value "${inputText(value)}" is out of range for type ${PG_INPUT_TYPE[kind]}`,
+  );
+}
+
+const INTEGER_TEXT = /^\s*[+-]?\d+\s*$/;
+const INT4_MIN = -(2n ** 31n);
+const INT4_MAX = 2n ** 31n - 1n;
+const INT8_MIN = -(2n ** 63n);
+const INT8_MAX = 2n ** 63n - 1n;
+const TRUE_WORDS = new Set(["t", "tr", "tru", "true", "y", "ye", "yes", "on", "1"]);
+const FALSE_WORDS = new Set(["f", "fa", "fal", "fals", "false", "n", "no", "of", "off", "0"]);
+const DATE_PREFIX = /^\s*(\d{4}-\d{2}-\d{2})(?:[T ]|$)/;
+
+function coerceInteger(value: unknown, kind: "integer" | "bigint"): number | bigint {
+  let n: bigint;
+  if (typeof value === "bigint") n = value;
+  else if (typeof value === "number" && Number.isInteger(value)) n = BigInt(value);
+  else if (typeof value === "string" && INTEGER_TEXT.test(value)) n = BigInt(value.trim());
+  else throw invalidInput(kind, value);
+  const [min, max] = kind === "integer" ? [INT4_MIN, INT4_MAX] : [INT8_MIN, INT8_MAX];
+  if (n < min || n > max) throw outOfRange(kind, value);
+  const asNumber = Number(n);
+  return Number.isSafeInteger(asNumber) ? asNumber : n;
+}
+
+function coerceBoolean(value: unknown): number {
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (value === 1 || value === 0) return value;
+  if (typeof value === "string") {
+    const word = value.trim().toLowerCase();
+    if (TRUE_WORDS.has(word)) return 1;
+    if (FALSE_WORDS.has(word)) return 0;
+  }
+  throw invalidInput("boolean", value);
+}
+
+function coerceUuid(value: unknown): string {
+  const text = typeof value === "string" ? value.trim() : "";
+  const braced = /^\{(.*)\}$/.exec(text);
+  const hex = (braced ? braced[1] ?? "" : text).replace(/-/g, "");
+  if (!/^[0-9a-fA-F]{32}$/.test(hex)) throw invalidInput("uuid", value);
+  const h = hex.toLowerCase();
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+function coerceArray(value: unknown): string {
+  let parsed: unknown = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      throw invalidInput("array", value);
+    }
+  }
+  if (!Array.isArray(parsed)) throw invalidInput("array", value);
+  return JSON.stringify(parsed);
+}
+
+/**
+ * Convert a value from the request into what the column's storage holds, as
+ * PostgreSQL's input function for the column type read node-postgres's text.
+ * Types written through a SQL storage function (numeric, jsonb, timestamptz,
+ * date) only get their text here; the function validates and canonicalizes.
+ */
+export function coerceValue(value: unknown, storage: ColumnStorage | undefined): unknown {
+  if (value === null || value === undefined) return null;
+  const kind = storage?.kind ?? "other";
+  switch (kind) {
+    case "integer":
+    case "bigint":
+      return coerceInteger(value, kind);
+    case "real": {
+      const n = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : Number.NaN;
+      if (!Number.isFinite(n)) throw invalidInput(kind, value);
+      return n;
+    }
+    case "boolean":
+      return coerceBoolean(value);
+    case "uuid":
+      return coerceUuid(value);
+    case "array":
+      return coerceArray(value);
+    case "date": {
+      if (value instanceof Date) return formatDateToYmd(value);
+      const text = inputText(value);
+      // PostgreSQL's date input reads the calendar day and ignores a time.
+      return DATE_PREFIX.exec(text)?.[1] ?? text;
+    }
+    case "timestamptz":
+      return value instanceof Date ? value : inputText(value);
+    case "decimal":
+    case "jsonb":
+    case "json":
+    case "text":
+    case "other":
+      return inputText(value);
+  }
+}
+
+/**
+ * The placeholder for a value of this storage: the storage function that
+ * validates and canonicalizes it, so the column's CHECK passes.
+ */
+function storagePlaceholder(placeholder: string, storage: ColumnStorage | undefined): string {
+  switch (storage?.kind) {
+    case "decimal":
+      return storage.precision === null
+        ? `vision_numeric(${placeholder})`
+        : `vision_numeric(${placeholder}, ${storage.precision}, ${storage.scale ?? 0})`;
+    case "jsonb":
+      return `vision_jsonb(${placeholder})`;
+    case "timestamptz":
+      return `vision_ts(${placeholder})`;
+    case "date":
+      return `ts_date(${placeholder})`;
+    default:
+      return placeholder;
+  }
 }
 
 // ── Reads (browse / filter / sort / paginate) ───────────────────────────────
 
 /**
- * pg reads DATE as a local-midnight Date, which JSON-serializes as the
- * previous day's UTC timestamp east of UTC. The editor shows and round-trips
- * the cell text, so DATE (and DATE[]) values go out as calendar days.
+ * The driver reads DATE_TEXT as a local-midnight Date, which JSON-serializes
+ * as the previous day's UTC timestamp east of UTC. The editor shows and
+ * round-trips the cell text, so dates go out as calendar days.
  */
 function withWireDates(
   row: Record<string, unknown> | undefined,
@@ -327,26 +615,67 @@ function withWireDates(
     const value = row[column.name];
     if (column.udtName === "date" && value instanceof Date) {
       row[column.name] = toWireDate(value);
-    } else if (column.udtName === "_date" && Array.isArray(value)) {
-      row[column.name] = value.map((item: unknown) =>
-        item instanceof Date ? toWireDate(item) : item,
-      );
     }
   }
   return row;
 }
 
-/** Text form of a filter value for LIKE patterns. */
+/**
+ * The row-version expression: every stored value in its exact SQL literal
+ * form, so the text changes whenever any value does. quote() renders text in
+ * quotes (doubling inner ones), so the joined text is unambiguous.
+ */
+function rowVersionSql(columns: ColumnMeta[]): string {
+  return columns.map((c) => `quote(${quoteIdent(c.name)})`).join(" || ',' || ");
+}
+
+/** The `__xmin` token of a row: a digest of its row-version text. */
+function rowVersionToken(text: unknown): string {
+  return crypto
+    .createHash("sha256")
+    .update(typeof text === "string" ? text : String(text))
+    .digest("hex")
+    .slice(0, 32);
+}
+
+/** Text of a filter value for LIKE patterns. */
 function filterText(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "object" && value !== null) return JSON.stringify(value);
   return String(value);
 }
 
+/** The column as text, the way PostgreSQL's `col::text` matched it. */
+function columnText(col: string, storage: ColumnStorage | undefined): string {
+  if (storage?.kind === "boolean") {
+    return `(CASE ${col} WHEN 1 THEN 'true' WHEN 0 THEN 'false' END)`;
+  }
+  return `CAST(${col} AS TEXT)`;
+}
+
+const DECIMAL_COMPARISON: Record<string, string> = {
+  eq: "dec_eq",
+  ne: "dec_ne",
+  lt: "dec_lt",
+  lte: "dec_le",
+  gt: "dec_gt",
+  gte: "dec_ge",
+};
+
+const SQL_COMPARISON: Record<string, string> = {
+  eq: "=",
+  ne: "<>",
+  lt: "<",
+  lte: "<=",
+  gt: ">",
+  gte: ">=",
+};
+
 function buildFilterFragment(
   filter: Filter,
   params: unknown[],
   columnNames: Set<string>,
+  storage: Map<string, ColumnStorage>,
 ): string {
   const column = resolveIdent(filter.column, columnNames);
   if (column === null) {
@@ -357,6 +686,7 @@ function buildFilterFragment(
     throw new ValidationError(`Unknown filter operator: ${op}`);
   }
   const col = quoteIdent(column);
+  const store = storage.get(column);
   switch (op) {
     case "isnull":
       return `${col} IS NULL`;
@@ -364,28 +694,49 @@ function buildFilterFragment(
       return `${col} IS NOT NULL`;
     case "contains":
       params.push(`%${filterText(filter.value)}%`);
-      return `${col}::text ILIKE $${params.length}`;
+      return `ilike(${columnText(col, store)}, $${params.length})`;
     case "startsWith":
       params.push(`${filterText(filter.value)}%`);
-      return `${col}::text ILIKE $${params.length}`;
+      return `ilike(${columnText(col, store)}, $${params.length})`;
     default: {
-      const sqlOpByOp: Record<string, string> = {
-        eq: "=",
-        ne: "<>",
-        lt: "<",
-        lte: "<=",
-        gt: ">",
-        gte: ">=",
-      };
-      const sqlOp = sqlOpByOp[op];
-      params.push(filter.value);
-      return `${col} ${sqlOp} $${params.length}`;
+      params.push(coerceValue(filter.value, store));
+      const placeholder = `$${params.length}`;
+      if (store?.kind === "decimal") {
+        return `${DECIMAL_COMPARISON[op] ?? "dec_eq"}(${col}, ${placeholder})`;
+      }
+      return `${col} ${SQL_COMPARISON[op] ?? "="} ${storagePlaceholder(placeholder, store)}`;
     }
   }
 }
 
+interface CursorColumn {
+  /** The SQL the rows are ordered by. */
+  expression: string;
+  /** The SQL the cursor's value is projected from. */
+  value: string;
+  /** Wraps a bound cursor value so it compares like `expression`. */
+  bound: (placeholder: string) => string;
+  contextKey: string;
+  rowid: boolean;
+  valueKey: string;
+}
+
+function cursorColumnFor(column: string, storage: ColumnStorage | undefined): CursorColumn {
+  const col = quoteIdent(column);
+  // DECIMAL_TEXT orders by value, not by its text.
+  const decimal = storage?.kind === "decimal";
+  return {
+    expression: decimal ? `dec_key(${col})` : col,
+    value: col,
+    bound: decimal ? (p) => `dec_key(${p})` : (p) => p,
+    contextKey: column,
+    rowid: false,
+    valueKey: "",
+  };
+}
+
 /**
- * Read a page of rows. Runs inside a READ ONLY transaction.
+ * Read a page of rows, on a read-only snapshot connection.
  *
  * Only the structured, parameterized `filters[]` path exists — the ADR-101
  * raw-WHERE escape hatch was removed (2026-07-10): concatenating a caller
@@ -396,7 +747,8 @@ function buildFilterFragment(
  *          escape hatch was removed.
  */
 export async function readRows(table: string, opts: ReadRowsOptions = {}) {
-  const { table: safeTable, columns, primaryKey } = await getTableMeta(table);
+  const { meta, storage } = await getTableInfo(table);
+  const { table: safeTable, columns, primaryKey } = meta;
   const columnNames = new Set(columns.map((c) => c.name));
 
   const limit = clampInt(opts.limit, DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
@@ -404,11 +756,12 @@ export async function readRows(table: string, opts: ReadRowsOptions = {}) {
   const whereParts: string[] = [];
 
   for (const filter of opts.filters ?? []) {
-    whereParts.push(buildFilterFragment(filter, params, columnNames));
+    whereParts.push(buildFilterFragment(filter, params, columnNames, storage));
   }
 
   if (opts.where !== undefined && opts.where.trim() !== "") {
     throw new ValidationError(
+      // sql-dialect-ok: an API error message naming the filters[] parameter, not SQL
       "The raw WHERE parameter has been removed. Use the structured filters[] parameter instead.",
     );
   }
@@ -425,17 +778,15 @@ export async function readRows(table: string, opts: ReadRowsOptions = {}) {
   for (const pk of primaryKey) {
     if (!orderColumns.includes(pk)) orderColumns.push(pk);
   }
-  const cursorColumns = orderColumns.map((column) => ({
-    expression: quoteIdent(column),
-    contextKey: column,
-    ctid: false,
-    valueKey: "",
-  }));
+  const cursorColumns = orderColumns.map((column) => cursorColumnFor(column, storage.get(column)));
   if (primaryKey.length === 0) {
+    // A table without a primary key still has its rowid, a unique tiebreak.
     cursorColumns.push({
-      expression: "ctid",
-      contextKey: "__system_ctid",
-      ctid: true,
+      expression: "rowid",
+      value: "rowid",
+      bound: (p) => `CAST(${p} AS INTEGER)`,
+      contextKey: "__system_rowid",
+      rowid: true,
       valueKey: "",
     });
   }
@@ -510,18 +861,20 @@ export async function readRows(table: string, opts: ReadRowsOptions = {}) {
         .slice(0, index)
         .entries()) {
         params.push(cursorValues[prior]);
+        const bound = priorColumn.bound(`$${params.length}`);
         prefix.push(
-          priorColumn.ctid
-            ? `${priorColumn.expression} = $${params.length}::tid`
-            : `${priorColumn.expression} IS NOT DISTINCT FROM $${params.length}`,
+          priorColumn.rowid
+            ? `${priorColumn.expression} = ${bound}`
+            : `${priorColumn.expression} IS NOT DISTINCT FROM ${bound}`,
         );
       }
       const value = cursorValues[index];
       if (value === null || value === undefined) continue;
       params.push(value);
-      const comparison = column.ctid
-        ? `${column.expression} ${dir === "ASC" ? ">" : "<"} $${params.length}::tid`
-        : `(${column.expression} ${dir === "ASC" ? ">" : "<"} $${params.length} OR ${column.expression} IS NULL)`;
+      const bound = column.bound(`$${params.length}`);
+      const comparison = column.rowid
+        ? `${column.expression} ${dir === "ASC" ? ">" : "<"} ${bound}`
+        : `(${column.expression} ${dir === "ASC" ? ">" : "<"} ${bound} OR ${column.value} IS NULL)`;
       branches.push(`(${[...prefix, comparison].join(" AND ")})`);
     }
     if (branches.length === 0) {
@@ -536,43 +889,40 @@ export async function readRows(table: string, opts: ReadRowsOptions = {}) {
     : "";
 
   const tbl = quoteIdent(safeTable);
-  // xmin (the row version) rides along as a hidden optimistic-concurrency token.
-  // Cursor boundaries come from PostgreSQL text projections, not node-postgres
-  // decoded values. This preserves timestamp microseconds and exact bytea,
-  // numeric, array, and special floating-point representations.
+  // The row version rides along as a hidden optimistic-concurrency token.
+  // Cursor boundaries are the stored text (`::text`), not the decoded values,
+  // which keeps timestamp microseconds and exact decimals and bigints.
   const cursorSelect = cursorColumns
     .map(
       (column) =>
-        `, (${column.expression})::text AS ${quoteIdent(column.valueKey)}`,
+        `, ${column.value} AS ${quoteIdent(`${column.valueKey}::text`)}`,
     )
     .join("");
-  const dataSql = `SELECT *, xmin::text AS __xmin${cursorSelect} FROM ${tbl} ${cursorWhereSql} ${orderSql} LIMIT ${limit + 1}`;
+  const dataSql = `SELECT *, ${rowVersionSql(columns)} AS __xmin${cursorSelect} FROM ${tbl} ${cursorWhereSql} ${orderSql} LIMIT ${limit + 1}`;
 
-  const client = await getClient();
   try {
-    await client.query("BEGIN");
-    await client.query("SET TRANSACTION READ ONLY");
-    await client.query(`SET LOCAL statement_timeout = ${READ_TIMEOUT_MS}`);
-    const dataRes = await client.query(dataSql, [...params]);
+    const dataRes = await withReadSnapshot((client) =>
+      // A user-chosen table: its columns are dynamic, so rows stay unchecked.
+      client.query(dataSql, params),
+    );
     const hasMore = dataRes.rows.length > limit;
-    // A user-chosen table: its columns are dynamic, so rows stay unchecked.
-    const rows = dataRes.rows.slice(0, limit) as Record<string, unknown>[];
+    const rows = dataRes.rows.slice(0, limit);
     const last = rows.at(-1);
     const nextCursor =
       hasMore && last
         ? Buffer.from(
             JSON.stringify({
               ...cursorContext,
-              values: cursorColumns.map((column) => last[column.valueKey]),
+              values: cursorColumns.map((column) => last[column.valueKey] ?? null),
             }),
           ).toString("base64url")
         : null;
     for (const row of rows) {
       for (const column of cursorColumns)
         Reflect.deleteProperty(row, column.valueKey);
+      row.__xmin = rowVersionToken(row.__xmin);
       withWireDates(row, columns);
     }
-    await client.query("COMMIT");
     return {
       table: safeTable,
       columns,
@@ -584,10 +934,7 @@ export async function readRows(table: string, opts: ReadRowsOptions = {}) {
       nextCursor,
     };
   } catch (err) {
-    await client.query("ROLLBACK").catch(() => {});
     throw mapDbError(err);
-  } finally {
-    client.release();
   }
 }
 
@@ -599,7 +946,7 @@ function literalForDisplay(value: unknown): string {
   if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
   if (typeof value === "object")
     return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
-  // Pool rows and JSON bodies only carry strings and bigints past this point.
+  // JSON bodies only carry strings and bigints past this point.
   if (typeof value !== "string" && typeof value !== "bigint") return "NULL";
   const text = typeof value === "string" ? value : value.toString();
   return `'${text.replace(/'/g, "''")}'`;
@@ -615,13 +962,6 @@ function normalizeWrite(value: unknown): unknown {
   return value === undefined ? null : value;
 }
 
-/**
- * Build the primary mutation statement (INSERT/UPDATE/DELETE) for a change.
- * Used both for dry-run previews and for execution, so the SQL shown to the
- * user is exactly what runs.
- *
- * @param table must already be catalog-resolved (resolveEditableTable)
- */
 /** Column metadata for a name already filtered against the catalog. */
 function requireColumn(ctx: MutationCtx, name: string): ColumnMeta {
   const meta = ctx.colMeta.get(name);
@@ -629,11 +969,40 @@ function requireColumn(ctx: MutationCtx, name: string): ColumnMeta {
   return meta;
 }
 
+/** A mutation statement and, per parameter, the storage it is written to. */
+interface MutationSql {
+  sql: string;
+  params: unknown[];
+  storages: Array<ColumnStorage | undefined>;
+}
+
+/** `"k1" = $n AND …` over the primary key, binding its values into `out`. */
+function primaryKeyWhere(
+  pk: Record<string, unknown>,
+  ctx: MutationCtx,
+  out: Pick<MutationSql, "params" | "storages">,
+): string {
+  return ctx.primaryKey
+    .map((k) => {
+      out.params.push(pk[k]);
+      out.storages.push(ctx.storage.get(k));
+      return `${quoteIdent(k)} = ${storagePlaceholder(`$${out.params.length}`, ctx.storage.get(k))}`;
+    })
+    .join(" AND ");
+}
+
+/**
+ * Build the primary mutation statement (INSERT/UPDATE/DELETE) for a change.
+ * Used both for dry-run previews and for execution, so the SQL shown to the
+ * user is exactly what runs.
+ *
+ * @param table must already be catalog-resolved (resolveEditableTable)
+ */
 function buildMutationSql(
   table: string,
   change: Change,
   ctx: MutationCtx,
-): { sql: string; params: unknown[] } {
+): MutationSql {
   const tbl = quoteIdent(table);
 
   // Domain guard: getIncludeTransfers reads user_settings with a strict
@@ -658,6 +1027,7 @@ function buildMutationSql(
   // validateChange has already required every primary-key column in `pk` for
   // update/delete, so `pk` is only empty here when there is no key to read.
   const pk = change.pk ?? {};
+  const out: MutationSql = { sql: "", params: [], storages: [] };
 
   if (change.op === "insert") {
     const values = change.values ?? {};
@@ -673,10 +1043,13 @@ function buildMutationSql(
         );
       }
     }
-    const params = cols.map((c) => normalizeWrite(values[c]));
-    const placeholders = cols.map((_, i) => `$${i + 1}`);
-    const sql = `INSERT INTO ${tbl} (${cols.map((c) => quoteIdent(requireColumn(ctx, c).name)).join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
-    return { sql, params };
+    const placeholders = cols.map((c) => {
+      out.params.push(normalizeWrite(values[c]));
+      out.storages.push(ctx.storage.get(c));
+      return storagePlaceholder(`$${out.params.length}`, ctx.storage.get(c));
+    });
+    out.sql = `INSERT INTO ${tbl} (${cols.map((c) => quoteIdent(requireColumn(ctx, c).name)).join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
+    return out;
   }
 
   if (change.op === "update") {
@@ -694,33 +1067,23 @@ function buildMutationSql(
         );
       }
     }
-    const params: unknown[] = [];
     const assigns = cols.map((c) => {
-      params.push(normalizeWrite(set[c]));
-      return `${quoteIdent(requireColumn(ctx, c).name)} = $${params.length}`;
+      out.params.push(normalizeWrite(set[c]));
+      out.storages.push(ctx.storage.get(c));
+      return `${quoteIdent(requireColumn(ctx, c).name)} = ${storagePlaceholder(`$${out.params.length}`, ctx.storage.get(c))}`;
     });
-    const where = ctx.primaryKey
-      .map((k) => {
-        params.push(pk[k]);
-        return `${quoteIdent(k)} = $${params.length}`;
-      })
-      .join(" AND ");
-    const sql = `UPDATE ${tbl} SET ${assigns.join(", ")} WHERE ${where} RETURNING *`;
-    return { sql, params };
+    const where = primaryKeyWhere(pk, ctx, out);
+    out.sql = `UPDATE ${tbl} SET ${assigns.join(", ")} WHERE ${where} RETURNING *`;
+    return out;
   }
 
   // Widened: the route validates `op`, but this stays a runtime guard for any
   // other caller.
   const op: string = change.op;
   if (op === "delete") {
-    const params: unknown[] = [];
-    const where = ctx.primaryKey
-      .map((k) => {
-        params.push(pk[k]);
-        return `${quoteIdent(k)} = $${params.length}`;
-      })
-      .join(" AND ");
-    return { sql: `DELETE FROM ${tbl} WHERE ${where}`, params };
+    const where = primaryKeyWhere(pk, ctx, out);
+    out.sql = `DELETE FROM ${tbl} WHERE ${where}`;
+    return out;
   }
 
   throw new ValidationError(`Unknown op: ${op}`);
@@ -747,7 +1110,7 @@ function validateChange(change: Change | null | undefined, ctx: MutationCtx): vo
 
 // ── Mutation execution ──────────────────────────────────────────────────────
 
-/** xmin arrives as `xmin::text`; anything else is stringified defensively. */
+/** The token arrives as the text readRows returned; anything else is stringified defensively. */
 function xminText(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "bigint")
@@ -764,11 +1127,36 @@ function pickPk(
   return pk;
 }
 
+/** The statement's parameters converted to their columns' storage. */
+function boundParams(statement: MutationSql): unknown[] {
+  return statement.params.map((value, i) => coerceValue(value, statement.storages[i]));
+}
+
+/**
+ * The row as stored after the statement: AFTER triggers (updated_at, synced
+ * columns) change it after RETURNING has already been produced.
+ */
+async function readBack(
+  client: PgPoolClient,
+  table: string,
+  row: Record<string, unknown> | undefined,
+  ctx: MutationCtx,
+): Promise<Record<string, unknown> | undefined> {
+  if (!row) return row;
+  const out: Pick<MutationSql, "params" | "storages"> = { params: [], storages: [] };
+  const where = primaryKeyWhere(pickPk(row, ctx.primaryKey), ctx, out);
+  const res = await client.query(
+    `SELECT * FROM ${quoteIdent(table)} WHERE ${where}`,
+    boundParams({ sql: "", ...out }),
+  );
+  return res.rows[0] ?? row;
+}
+
 /**
  * @param table must already be catalog-resolved (resolveEditableTable)
  */
 async function applyOne(
-  client: QueryRunner,
+  client: PgPoolClient,
   table: string,
   change: Change,
   ctx: MutationCtx,
@@ -777,34 +1165,28 @@ async function applyOne(
   pk: Record<string, unknown> | undefined;
   after?: Record<string, unknown> | undefined;
 }> {
-  // INSERT: no row to lock; structural constraints enforced by Postgres.
+  const columns = [...ctx.colMeta.values()];
+  // INSERT: no row to check; structural constraints enforced by SQLite.
   if (change.op === "insert") {
-    const { sql, params } = buildMutationSql(table, change, ctx);
-    const res = await client.query(sql, params);
-    const after = withWireDates(
-      res.rows[0] as Record<string, unknown> | undefined,
-      [...ctx.colMeta.values()],
-    );
+    const statement = buildMutationSql(table, change, ctx);
+    const res = await client.query(statement.sql, boundParams(statement));
+    const after = withWireDates(await readBack(client, table, res.rows[0], ctx), columns);
     return { op: "insert", pk: pickPk(after, ctx.primaryKey), after };
   }
 
-  // UPDATE / DELETE: lock the row, verify its version, then mutate.
+  // UPDATE / DELETE: verify the row's version, then mutate. The transaction
+  // holds the write lock, so nothing changes the row in between.
   const tbl = quoteIdent(table);
-  const lockParams: unknown[] = [];
   // validateChange required every primary-key column in `pk`.
-  const pk = change.pk ?? {};
-  const pkWhere = ctx.primaryKey
-    .map((k) => {
-      lockParams.push(pk[k]);
-      return `${quoteIdent(k)} = $${lockParams.length}`;
-    })
-    .join(" AND ");
+  const lock: Pick<MutationSql, "params" | "storages"> = { params: [], storages: [] };
+  const pkWhere = primaryKeyWhere(change.pk ?? {}, ctx, lock);
 
-  const cur = await client.query(
-    `SELECT *, xmin::text AS __xmin FROM ${tbl} WHERE ${pkWhere} FOR UPDATE`,
-    lockParams,
+  const cur = await client.query<{ __xmin: unknown }>(
+    `SELECT ${rowVersionSql(columns)} AS __xmin FROM ${tbl} WHERE ${pkWhere}`,
+    boundParams({ sql: "", ...lock }),
   );
-  if (cur.rowCount === 0) {
+  const current = cur.rows[0];
+  if (!current) {
     throw new ConflictError(
       "Row no longer exists — it was deleted since you loaded it",
       {
@@ -812,10 +1194,9 @@ async function applyOne(
       },
     );
   }
-  const currentXmin = (cur.rows[0] as Record<string, unknown>).__xmin;
   if (
     change.xmin !== undefined &&
-    xminText(change.xmin) !== xminText(currentXmin)
+    xminText(change.xmin) !== rowVersionToken(current.__xmin)
   ) {
     throw new ConflictError(
       "Row changed since it was loaded — refresh and retry",
@@ -825,16 +1206,13 @@ async function applyOne(
     );
   }
 
-  const { sql, params } = buildMutationSql(table, change, ctx);
-  const res = await client.query(sql, params);
+  const statement = buildMutationSql(table, change, ctx);
+  const res = await client.query(statement.sql, boundParams(statement));
 
   if (change.op === "delete") {
     return { op: "delete", pk: change.pk };
   }
-  const after = withWireDates(
-    res.rows[0] as Record<string, unknown> | undefined,
-    [...ctx.colMeta.values()],
-  );
+  const after = withWireDates(await readBack(client, table, res.rows[0], ctx), columns);
   return { op: "update", pk: change.pk, after };
 }
 
@@ -848,7 +1226,8 @@ export async function applyMutations(
   changes: Change[],
   { dryRun = false }: { dryRun?: boolean } = {},
 ) {
-  const { table: safeTable, columns, primaryKey } = await getTableMeta(table);
+  const { meta, storage } = await getTableInfo(table);
+  const { table: safeTable, columns, primaryKey } = meta;
   if (primaryKey.length === 0) {
     throw new ValidationError(
       `Table "${table}" has no primary key and cannot be edited`,
@@ -861,7 +1240,7 @@ export async function applyMutations(
   const colMeta = new Map<string, ColumnMeta>(columns.map((c) => [c.name, c]));
 
   const statements = changes.map((change, index) => {
-    const ctx = { colMeta, primaryKey, index };
+    const ctx = { colMeta, storage, primaryKey, index };
     validateChange(change, ctx);
     const { sql, params } = buildMutationSql(safeTable, change, ctx);
     return { op: change.op, sql, params, preview: renderPreview(sql, params) };
@@ -875,35 +1254,38 @@ export async function applyMutations(
     };
   }
 
-  const client = await getClient();
+  // PostgreSQL refused writes to a materialized view; their tables are refilled
+  // from the ledger and stay read-only here.
+  if (DERIVED_TABLES.has(safeTable)) {
+    throw new ValidationError(
+      `Table "${safeTable}" is derived from the ledger and cannot be edited`,
+    );
+  }
+
   const committed: Array<{ op: string; pk: Record<string, unknown> | undefined }> =
     [];
   try {
-    await client.query("BEGIN");
-    await client.query(`SET LOCAL statement_timeout = ${WRITE_TIMEOUT_MS}`);
+    const results = await withTransaction(async (client) => {
+      // The editor deliberately bypasses account-domain validation, but it
+      // still joins the graph-wide lock protocol before touching account rows.
+      if (safeTable === "accounts") {
+        await lockAccountFundingGraph((sql, params) =>
+          client.query(sql, params),
+        );
+      }
 
-    // The editor deliberately bypasses account-domain validation, but it must
-    // still join the graph-wide lock protocol before taking any account row
-    // lock. Otherwise an admin edit can race a normal PATCH or merge, validate
-    // against stale graph state, or deadlock through opposite lock ordering.
-    if (safeTable === "accounts") {
-      await lockAccountFundingGraph((sql, params) =>
-        client.query(sql, [...params]),
-      );
-    }
-
-    const results: Array<{
-      op: string;
-      after: Record<string, unknown> | undefined;
-    }> = [];
-    for (const [index, change] of changes.entries()) {
-      const ctx = { colMeta, primaryKey, index };
-      const result = await applyOne(client, safeTable, change, ctx);
-      results.push({ op: result.op, after: result.after });
-      committed.push({ op: result.op, pk: result.pk });
-    }
-
-    await client.query("COMMIT");
+      const applied: Array<{
+        op: string;
+        after: Record<string, unknown> | undefined;
+      }> = [];
+      for (const [index, change] of changes.entries()) {
+        const ctx = { colMeta, storage, primaryKey, index };
+        const result = await applyOne(client, safeTable, change, ctx);
+        applied.push({ op: result.op, after: result.after });
+        committed.push({ op: result.op, pk: result.pk });
+      }
+      return applied;
+    });
 
     for (const change of committed) {
       logger.info("db-editor mutation committed", {
@@ -923,32 +1305,32 @@ export async function applyMutations(
       refreshScheduled: refreshed,
     };
   } catch (err) {
-    await client.query("ROLLBACK").catch(() => {});
-    throw mapDbError(err);
-  } finally {
-    client.release();
+    throw mapDbError(err, safeTable);
   }
 }
 
 // ── Error mapping ───────────────────────────────────────────────────────────
 
 /**
- * Translate raw Postgres error codes into friendly, typed API errors so the
- * UI can show "Column X cannot be null" instead of an opaque SQLSTATE.
+ * Translate database error codes (the driver reports SQLite's errors as
+ * PostgreSQL SQLSTATEs) into friendly, typed API errors so the UI can show
+ * "Column X cannot be null" instead of an opaque code.
  *
- * @param error raw pg driver error — shape (code/detail/column/constraint) is upstream-defined.
+ * @param error raw driver error — shape (code/detail/column/constraint) is upstream-defined.
+ * @param table the edited table, when the error comes from a mutation
  * @returns the mapped AppError, or the original error when its code is unmapped
  */
-function mapDbError(error: unknown): unknown {
+function mapDbError(error: unknown, table?: string): unknown {
   if (error instanceof AppError) return error;
 
-  const err = error as PgDriverError | null | undefined;
+  const err = error as DbDriverError | null | undefined;
   const detail = err?.detail ? { pgDetail: err.detail } : undefined;
   switch (err?.code) {
     case "23502": // not_null_violation
       return new ValidationError(`Column "${err.column}" cannot be empty`, {
         details: detail,
       });
+    case "23001": // restrict_violation (ON DELETE RESTRICT)
     case "23503": // foreign_key_violation
       return new ValidationError(
         "References a row that does not exist (foreign key)",
@@ -970,6 +1352,7 @@ function mapDbError(error: unknown): unknown {
     case "22P02": // invalid_text_representation
     case "22003": // numeric_value_out_of_range
     case "22007": // invalid_datetime_format
+    case "22008": // datetime_field_overflow
       return new ValidationError(
         `Invalid value for column type: ${err.message}`,
       );
@@ -989,6 +1372,16 @@ function mapDbError(error: unknown): unknown {
       );
     case "25006": // read_only_sql_transaction
       return new ForbiddenError("Write attempted inside a read-only query");
+    case "55P03": // lock_not_available: the wait for the write lock timed out
+      // BEGIN IMMEDIATE is where every writer queues, including the funding-graph
+      // writers of accounts; PostgreSQL answered a cancelled funding-graph lock
+      // wait with this retryable 503 (src/lib/accountFundingGraphLock.ts).
+      return new AppError(
+        table === "accounts"
+          ? "Account funding graph is busy; retry the request"
+          : "Database is busy; retry the request",
+        { status: 503, code: ApiErrorCode.SERVICE_UNAVAILABLE, cause: err },
+      );
     case "57014": // query_canceled (statement timeout)
       return new AppError("Query timed out", {
         status: 504,

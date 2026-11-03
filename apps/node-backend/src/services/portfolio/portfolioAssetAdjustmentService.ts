@@ -209,8 +209,7 @@ export async function commitPortfolioAssetAdjustment({
       db
         .selectFrom("accounts")
         .select(["id", "is_active", "type"])
-        .where("id", "=", event.account_id)
-        .forUpdate(),
+        .where("id", "=", event.account_id),
     );
     if (
       !account?.is_active ||

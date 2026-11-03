@@ -1,5 +1,5 @@
 /**
- * Real-Postgres tests for the ADR-088 account_id contract across planned
+ * Real-database (SQLite) tests for the ADR-088 account_id contract across planned
  * transactions, split owed views, and transaction export. Both the fresh
  * compatibility schema and the manually contracted schema must work: the
  * canonical tables are written through account_id only, while API-facing
@@ -9,18 +9,14 @@
 import {
   afterAll,
   afterEach,
-  beforeAll,
   beforeEach,
   describe,
   expect,
   it,
 } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { transactionRepository } from "../src/repositories/transactionRepository.ts";
 import plannedTransactionPersistence from "../src/repositories/plannedTransactionRepository.ts";
@@ -39,7 +35,6 @@ import {
 } from "@vision/types/brands";
 import { must } from "./helpers/must.ts";
 
-const describeDb = hasTestDatabase() ? describe : describe.skip;
 const plannedTransactionRepository = {
   ...plannedTransactionPersistence,
   ...plannedTransactionService,
@@ -80,8 +75,8 @@ async function seedCorpus() {
   // require the retired compatibility column or its trigger.
   const t = await pool.query<{ id: number }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, account_id, memo)
-     VALUES ('2026-01-10', '-750.00', 'EUR', $1, $2, 'RENT JANUARY'),
-            ('2026-01-12', '-45.10', 'USD', $1, $3, 'US SUBSCRIPTION')
+     VALUES ('2026-01-10', vision_numeric('-750.00', 18, 4), 'EUR', $1, $2, 'RENT JANUARY'),
+            ('2026-01-12', vision_numeric('-45.10', 18, 4), 'USD', $1, $3, 'US SUBSCRIPTION')
      RETURNING id`,
     [fx.recipientId, fx["KBC Current"], fx["Wise USD"]],
   );
@@ -91,8 +86,8 @@ async function seedCorpus() {
   // Planned rows on both accounts.
   const p = await pool.query<{ id: number }>(
     `INSERT INTO planned_transactions (planned_date, amount, currency, recipient_id, account_id, memo, is_executed, is_active)
-     VALUES ('2026-02-01', '-750.00', 'EUR', $1, $2, 'RENT FEBRUARY', false, true),
-            ('2026-02-05', '-45.10', 'USD', $1, $3, 'US SUB FEBRUARY', false, true)
+     VALUES ('2026-02-01', vision_numeric('-750.00', 18, 4), 'EUR', $1, $2, 'RENT FEBRUARY', false, true),
+            ('2026-02-05', vision_numeric('-45.10', 18, 4), 'USD', $1, $3, 'US SUB FEBRUARY', false, true)
      RETURNING id`,
     [fx.recipientId, fx["KBC Current"], fx["Wise USD"]],
   );
@@ -102,7 +97,7 @@ async function seedCorpus() {
   // One unsettled split on the KBC transaction, owed by the recipient.
   const s = await pool.query<{ id: number }>(
     `INSERT INTO transaction_splits (transaction_id, recipient_id, amount, is_settled)
-     VALUES ($1, $2, '100.00', false) RETURNING id`,
+     VALUES ($1, $2, vision_numeric('100.00', 18, 4), false) RETURNING id`,
     [fx.txnKbc, fx.recipientId],
   );
   fx.splitId = must(s.rows[0], "row").id;
@@ -130,17 +125,9 @@ function captureRes() {
   });
 }
 
-describeDb(
+describe(
   "ADR-088 string decouple across planned/splits/export (real DB)",
   () => {
-    beforeAll(async () => {
-      expect(
-        process.env.DATABASE_URL,
-        "DATABASE_URL must equal TEST_DATABASE_URL for this suite (see scripts/with-test-db.sh)",
-      ).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180_000);
-
     beforeEach(seedCorpus);
 
     afterEach(async () => {
@@ -155,7 +142,6 @@ describeDb(
     });
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
@@ -198,7 +184,7 @@ describeDb(
             .bank_account,
         ).toBe("KBC Renamed");
         // Both rows are in the future relative to 2026-02 fixtures only when
-        // CURRENT_DATE precedes them; getDueSoon is exercised for projection
+        // today() precedes them; getDueSoon is exercised for projection
         // shape only when it returns rows, so guard on that.
         const due = await plannedTransactionRepository.getDueSoon(365);
         for (const row of due) {
@@ -259,7 +245,7 @@ describeDb(
 
       it("transaction update to an existing account_id does not mint an account", async () => {
         const { rows: before } = await must(getTestPool(), "getTestPool()").query<{ n: number }>(
-          "SELECT count(*)::int AS n FROM accounts",
+          "SELECT count(*) AS n FROM accounts",
         );
         const updated = await transactionRepository.update(asTransactionId(fx.txnKbc), {
           account_id: fx["Wise USD"],
@@ -267,7 +253,7 @@ describeDb(
         expect(must(updated, "updated").account_id).toBe(fx["Wise USD"]);
         expect(must(updated, "updated").bank_account).toBe("Wise USD");
         const { rows: after } = await must(getTestPool(), "getTestPool()").query<{ n: number }>(
-          "SELECT count(*)::int AS n FROM accounts",
+          "SELECT count(*) AS n FROM accounts",
         );
         expect(must(after[0], "row").n).toBe(must(before[0], "row").n);
       });
@@ -323,7 +309,7 @@ describeDb(
         expect(must(rows[0], "row").transaction_account_id).toBe(fx["KBC Current"]);
         expect(must(rows[0], "row").planned_account_id).toBe(fx["KBC Current"]);
         const { rows: n } = await must(getTestPool(), "getTestPool()").query<{ n: number }>(
-          `SELECT count(*)::int AS n FROM accounts WHERE lower(btrim(name)) = 'ignored label'`,
+          `SELECT count(*) AS n FROM accounts WHERE lower(btrim(name)) = 'ignored label'`,
         );
         expect(must(n[0], "row").n).toBe(0);
       });
@@ -369,18 +355,18 @@ describeDb(
       it("all fixture transactions and plans have valid account foreign keys", async () => {
         const pool = must(getTestPool(), "getTestPool()");
         const { rows: a } = await pool.query<{ n: number }>(
-          `SELECT count(*)::int AS n FROM transactions t
+          `SELECT count(*) AS n FROM transactions t
            LEFT JOIN accounts a ON a.id = t.account_id
-           WHERE t.id = ANY($1::bigint[])
+           WHERE t.id IN (SELECT value FROM json_each($1))
              AND (t.account_id IS NULL OR a.id IS NULL)`,
-          [[fx.txnKbc, fx.txnWise]],
+          [JSON.stringify([fx.txnKbc, fx.txnWise])],
         );
         const { rows: b } = await pool.query<{ n: number }>(
-          `SELECT count(*)::int AS n FROM planned_transactions p
+          `SELECT count(*) AS n FROM planned_transactions p
            LEFT JOIN accounts a ON a.id = p.account_id
-           WHERE p.id = ANY($1::bigint[])
+           WHERE p.id IN (SELECT value FROM json_each($1))
              AND (p.account_id IS NULL OR a.id IS NULL)`,
-          [[fx.plannedKbc, fx.plannedWise]],
+          [JSON.stringify([fx.plannedKbc, fx.plannedWise])],
         );
         expect(must(a[0], "row").n).toBe(0);
         expect(must(b[0], "row").n).toBe(0);

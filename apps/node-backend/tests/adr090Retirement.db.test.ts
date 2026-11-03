@@ -1,49 +1,18 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
-import { must } from "./helpers/must.ts";
+import { describe, expect, it } from "vitest";
+import { column, objectSql } from "./helpers/sqliteCatalog.ts";
 
-const describeDb = hasTestDatabase() ? describe : describe.skip;
-
-describeDb("ADR-090 transaction schema retirement", () => {
-  beforeAll(async () => {
-    expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-    await acquireDbSuiteLock();
-  }, 180_000);
-
-  afterAll(async () => {
-    await releaseDbSuiteLock();
-    await closeTestPool();
-  });
-
+describe("ADR-090 transaction schema retirement", () => {
   it("removes the retired link and narrows transfer_source", async () => {
-    const pool = must(getTestPool(), "getTestPool()");
-    const column = await pool.query(
-      `SELECT 1
-         FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'transactions'
-          AND column_name = 'portfolio_transaction_id'`,
-    );
-    expect(column.rows).toHaveLength(0);
+    expect(await column("transactions", "portfolio_transaction_id")).toBeUndefined();
 
-    const constraint = await pool.query<{ definition: string }>(
-      `SELECT pg_get_constraintdef(oid) AS definition
-         FROM pg_constraint
-        WHERE conrelid = 'public.transactions'::regclass
-          AND conname = 'chk_transactions_transfer_source'`,
-    );
-    expect(constraint.rows).toHaveLength(1);
-    const definition = must(constraint.rows[0], "row").definition;
-    expect(definition).toContain("'auto'::text");
-    expect(definition).toContain("'manual'::text");
-    expect(definition).toContain("'opening'::text");
-    expect(definition).toContain("'adjustment'::text");
-    expect(definition).not.toContain("'trade'::text");
+    const table = await objectSql("transactions");
+    const definitions = table.match(/CONSTRAINT chk_transactions_transfer_source CHECK \(([^\n]*)\),?$/mu) ?? [];
+    expect(definitions).toHaveLength(2);
+    const definition = definitions[1] ?? "";
+    expect(definition).toContain("'auto'");
+    expect(definition).toContain("'manual'");
+    expect(definition).toContain("'opening'");
+    expect(definition).toContain("'adjustment'");
+    expect(definition).not.toContain("'trade'");
   });
 });

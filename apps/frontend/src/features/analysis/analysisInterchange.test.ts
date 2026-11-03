@@ -40,7 +40,7 @@ describe("analysis CSV interchange", () => {
                 requestId: "analysis-test",
                 startedAt: "2026-09-14T09:59:59Z",
                 completedAt: "2026-09-14T10:00:00Z",
-                executor: "postgresql-role-v1",
+                executor: "sqlite-sandbox-v1",
                 rows: [
                     {
                         label: "=CMD()",

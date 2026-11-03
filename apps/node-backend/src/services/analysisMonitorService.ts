@@ -31,9 +31,13 @@ import type {
   MonitorObservationRow,
   MonitorRunRow,
 } from "../database/rows/analysis.ts";
-import { monitorRunIdOf, runSavedAnalysis } from "./savedAnalysisService.ts";
+import {
+  ANALYSIS_SQL_NEEDS_REVIEW,
+  monitorRunIdOf,
+  runSavedAnalysis,
+} from "./savedAnalysisService.ts";
 import { valueText } from "./valueText.ts";
-import { errorMessage } from "../lib/errors.ts";
+import { errorCode, errorMessage } from "../lib/errors.ts";
 import { isRecord } from "../lib/typeGuards.ts";
 
 /** A stored observation, or the latest one as `MONITOR_SELECT` embeds it. */
@@ -221,52 +225,59 @@ function mapNotification(row: NotificationRow) {
   };
 }
 
+/**
+ * The monitors with their latest observation as a JSON object, as the former
+ * LATERAL join's `row_to_json(o.*)` built it: INTEGER columns are JSON
+ * numbers and the jsonb columns are embedded JSON. `checked_at` is the stored
+ * UTC timestamp text (row_to_json printed it with the session offset; both
+ * name the same instant).
+ */
 function selectMonitors() {
   return db
     .selectFrom("analysis_monitors as m")
-    .leftJoinLateral(
-      (eb) =>
-        eb
-          .selectFrom("analysis_monitor_observations")
-          .select([
-            "id",
-            "monitor_id",
-            "status",
-            "previous_value",
-            "current_value",
-            "previous_evidence_version",
-            "current_evidence_version",
-            "analysis_definition_version",
-            "analysis_run_id",
-            "historical_analysis_run_id",
-            "analysis_run_status",
-            "analysis_window_json",
-            "coverage_json",
-            "reason_code",
-            "reason",
-            "checked_at",
-          ])
-          .whereRef("monitor_id", "=", "m.id")
-          .orderBy("checked_at", "desc")
-          .orderBy("id", "desc")
-          .limit(1)
-          .as("o"),
-      (join) => join.onTrue(),
-    )
     .selectAll("m")
     .select(
-      sql<MonitorObservationJson | null>`row_to_json(o.*)`.as(
-        "last_observation",
-      ),
+      sql<MonitorObservationJson | null>`(
+        SELECT json_object(
+                 'id', o.id,
+                 'monitor_id', o.monitor_id,
+                 'status', o.status,
+                 'previous_value', o.previous_value,
+                 'current_value', o.current_value,
+                 'previous_evidence_version', o.previous_evidence_version,
+                 'current_evidence_version', o.current_evidence_version,
+                 'analysis_definition_version', o.analysis_definition_version,
+                 'analysis_run_id', o.analysis_run_id,
+                 'historical_analysis_run_id', o.historical_analysis_run_id,
+                 'analysis_run_status', o.analysis_run_status,
+                 'analysis_window_json', json(o.analysis_window_json),
+                 'coverage_json', json(o.coverage_json),
+                 'reason_code', o.reason_code,
+                 'reason', o.reason,
+                 'checked_at', o.checked_at)
+          FROM analysis_monitor_observations o
+         WHERE o.monitor_id = m.id
+         ORDER BY o.checked_at DESC, o.id DESC
+         LIMIT 1
+      )`.as(jsonHinted("last_observation")),
     );
 }
 
+/**
+ * `alias` with the `::json` alias hint. The driver parses the column and
+ * returns it under `alias` without the hint, which is the key the type names.
+ */
+function jsonHinted<A extends string>(alias: A): A {
+  return `${alias}::json` as A;
+}
+
+/**
+ * Read a monitor for an update. Called inside withTransaction(), whose BEGIN
+ * IMMEDIATE on the single writer serializes it with the update, as the row
+ * lock did.
+ */
 function lockMonitor(id: string) {
-  return db
-    .selectFrom("analysis_monitors")
-    .selectAll()
-    .where("id", "=", id)
-    .forUpdate();
+  return db.selectFrom("analysis_monitors").selectAll().where("id", "=", id);
 }
 
 function savedDefinition(savedAnalysisId: string | null) {
@@ -282,7 +293,7 @@ function savedDefinition(savedAnalysisId: string | null) {
 }
 
 function addMinutes(minutes: number) {
-  return sql<Date>`now()+(${String(minutes)} || ' minutes')::interval`;
+  return sql<Date>`add_interval(now(), ${`${String(minutes)} minutes`})`;
 }
 
 async function getMonitor(id: string) {
@@ -314,7 +325,7 @@ export async function listAnalysisMonitors(input?: PageInput) {
         countNRowSchema,
         db
           .selectFrom("analysis_monitors")
-          .select(sql<string>`count(*)`.as("n")),
+          .select(sql<string>`CAST(count(*) AS TEXT)`.as("n")),
       )
     )?.n,
   );
@@ -376,9 +387,8 @@ export async function createAnalysisMonitor(input: unknown) {
       target_label: sql<string>`${target.name ?? target.title}`,
       field_id: value.kind === "analysis-threshold" ? value.fieldId : null,
       operator: value.kind === "analysis-threshold" ? value.operator : null,
-      threshold: sql<string | null>`${
-        value.kind === "analysis-threshold" ? value.threshold : null
-      }::numeric`,
+      // The write plugin stores the canonical NUMERIC text, as the cast did.
+      threshold: value.kind === "analysis-threshold" ? value.threshold : null,
       interval_minutes: value.intervalMinutes,
       cooldown_minutes: value.cooldownMinutes,
     })
@@ -422,8 +432,9 @@ export async function patchAnalysisMonitor(id: string, input: unknown) {
       value.fieldId !== undefined ||
       value.operator !== undefined ||
       value.threshold !== undefined;
-    const changed = sql<boolean>`${conditionChanged}::boolean`;
-    const enabling = sql<boolean>`${value.enabled === true}::boolean`;
+    // Bound booleans are 1 or 0.
+    const changed = sql<boolean>`${conditionChanged}`;
+    const enabling = sql<boolean>`${value.enabled === true}`;
     await db
       .updateTable("analysis_monitors")
       .set({
@@ -431,9 +442,7 @@ export async function patchAnalysisMonitor(id: string, input: unknown) {
         enabled: value.enabled ?? current.enabled,
         field_id: value.fieldId ?? current.field_id,
         operator: value.operator ?? current.operator,
-        threshold: sql<
-          string | null
-        >`${value.threshold ?? current.threshold}::numeric`,
+        threshold: value.threshold ?? current.threshold,
         interval_minutes: value.intervalMinutes ?? current.interval_minutes,
         cooldown_minutes: value.cooldownMinutes ?? current.cooldown_minutes,
         next_due_at: sql<Date>`CASE WHEN ${changed} OR (${enabling} AND NOT enabled) THEN now() ELSE next_due_at END`,
@@ -487,7 +496,7 @@ export async function listMonitorObservations(id: string, input?: PageInput) {
         countNRowSchema,
         db
           .selectFrom("analysis_monitor_observations")
-          .select(sql<string>`count(*)`.as("n"))
+          .select(sql<string>`CAST(count(*) AS TEXT)`.as("n"))
           .where("monitor_id", "=", id),
       )
     )?.n,
@@ -512,8 +521,11 @@ export async function listMonitorNotifications(input?: PageInput) {
     db
       .selectFrom("analysis_monitor_notifications")
       .select([
-        sql<string>`count(*)`.as("total"),
-        sql<string>`count(*) FILTER (WHERE read_at IS NULL)`.as("unread"),
+        // The text casts keep node-postgres's int8 shape the schema checks.
+        sql<string>`CAST(count(*) AS TEXT)`.as("total"),
+        sql<string>`CAST(count(*) FILTER (WHERE read_at IS NULL) AS TEXT)`.as(
+          "unread",
+        ),
       ]),
   );
   return {
@@ -691,6 +703,15 @@ async function inspectAnalysis(row: MonitorRow): Promise<MonitorFinding> {
     });
     runId = response.runId;
   } catch (caught) {
+    // Custom SQL saved for PostgreSQL is not executed until the user saves a
+    // SQLite version (ADR-263); runSavedAnalysis refuses it before any run.
+    if (errorCode(caught) === ANALYSIS_SQL_NEEDS_REVIEW)
+      return {
+        status: "stale",
+        reasonCode: "analysis-needs-review",
+        reason:
+          "The saved analysis has custom SQL written for PostgreSQL; review it and save a SQLite version before monitors can run it.",
+      };
     // runSavedAnalysis rethrows the execution Error tagged with its run id.
     const monitorRunId = monitorRunIdOf(caught);
     const failedRun = monitorRunId
@@ -998,9 +1019,9 @@ async function finalizeObservation(
           historical_analysis_run_id: finding.runId ?? null,
           analysis_run_status: finding.runStatus ?? null,
           analysis_window_json: finding.runWindow
-            ? sql<Json>`${JSON.stringify(finding.runWindow)}::jsonb`
+            ? sql<Json>`vision_jsonb(${JSON.stringify(finding.runWindow)})`
             : null,
-          coverage_json: sql<Json>`${JSON.stringify(COVERAGE)}::jsonb`,
+          coverage_json: sql<Json>`vision_jsonb(${JSON.stringify(COVERAGE)})`,
           reason_code: reasonCode,
           reason: reason.slice(0, 1000),
         })

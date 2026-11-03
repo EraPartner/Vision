@@ -12,7 +12,6 @@ import {
   ConflictError,
   ValidationError,
 } from "../../middleware/errorHandler.ts";
-import { sql } from "kysely";
 import { withTransaction } from "../../database/connection.ts";
 import { checkedRows, db } from "../../database/db.ts";
 import { custodyAccountLockRowSchema } from "../../database/rows/portfolio.ts";
@@ -219,11 +218,15 @@ export function previewPortfolioAssetTransfer(
   };
 }
 
-/** Serialize custody writes against every unit-history table. */
-export async function lockCustodyTables(): Promise<void> {
-  await sql`LOCK TABLE portfolio_transactions, portfolio_asset_transfers, portfolio_asset_adjustments IN SHARE ROW EXCLUSIVE MODE`.execute(
-    db,
-  );
+/**
+ * Serialize custody writes against every unit-history table. PostgreSQL took
+ * a SHARE ROW EXCLUSIVE lock on the three tables; on SQLite the caller's
+ * withTransaction() is BEGIN IMMEDIATE on the single writer (ADR-263), which
+ * already keeps every other write out until it commits. Kept so callers state
+ * where the serialized section starts.
+ */
+export function lockCustodyTables(): Promise<void> {
+  return Promise.resolve();
 }
 
 /** Validate chronology and custody independently from cost-basis selection. */
@@ -278,8 +281,7 @@ export async function commitPortfolioAssetTransfer({
         .selectFrom("accounts")
         .select(["id", "is_active", "type"])
         .where("id", "in", [event.source_account_id, event.destination_account_id])
-        .orderBy("id")
-        .forUpdate(),
+        .orderBy("id"),
     );
     if (
       accounts.length !== 2 ||

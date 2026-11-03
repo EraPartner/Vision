@@ -60,14 +60,15 @@ export const tagInsightsRepository = {
     if (!allTags && validTagIds.length === 0)
       return { tagPivot: {}, conversion: periodPivotConversion([]) };
 
-    const periodExpr = bucket === 'yearly' ? sql`TO_CHAR(t.date, 'YYYY')` : sql`TO_CHAR(t.date, 'YYYY-MM')`;
+    const periodExpr = bucket === 'yearly' ? sql`to_char(t.date, 'YYYY')` : sql`to_char(t.date, 'YYYY-MM')`;
 
     const filters: RawBuilder<unknown>[] = [];
     // "all tags" drops the inclusion filter entirely so every tag with spend in
     // range is returned; the client caps to top-N + Other.
-    if (!allTags) filters.push(sql`tt.tag_id = ANY(${validTagIds}::int[])`);
-    if (startDate) filters.push(sql`t.date >= ${startDate}`);
-    if (endDate) filters.push(sql`t.date <= ${endDate}`);
+    if (!allTags) filters.push(sql`tt.tag_id IN (SELECT value FROM json_each(${JSON.stringify(validTagIds)}))`);
+    // ts_date reads the bound value as a DATE, as PostgreSQL typed it.
+    if (startDate) filters.push(sql`t.date >= ts_date(${startDate})`);
+    if (endDate) filters.push(sql`t.date <= ts_date(${endDate})`);
 
     // Aggregate per (tag, period, date, currency) in SQL. amount < 0 is pinned
     // so ABS distributes over the same-sign SUM; per-date conversion matches the
@@ -79,13 +80,13 @@ export const tagInsightsRepository = {
         tg.slug        AS tag_slug,
         ${periodExpr}  AS period,
         t.date, t.currency,
-        SUM(ABS(t.amount)) AS abs_amount,
-        COUNT(*)           AS cnt
+        dec_sum(dec_abs(t.amount)) AS abs_amount,
+        count(*)           AS "cnt::bigint"
       FROM transactions t
       JOIN transaction_tags tt ON tt.transaction_id = t.id
       JOIN tags tg ON tg.id = tt.tag_id
       WHERE t.is_active = true
-        AND t.amount < 0
+        AND dec_sign(t.amount) < 0
         AND t.is_transfer = false
         ${andClauses(filters)}
       GROUP BY tt.tag_id, tg.slug, ${periodExpr}, t.date, t.currency

@@ -1,7 +1,6 @@
 import {
   afterAll,
   afterEach,
-  beforeAll,
   beforeEach,
   describe,
   expect,
@@ -9,11 +8,9 @@ import {
   vi,
 } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
   hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import {
@@ -23,10 +20,6 @@ import {
 import { must } from "./helpers/must.ts";
 
 describe.skipIf(!hasTestDatabase())("historical FX database fallback", () => {
-  beforeAll(async () => {
-    expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-    await acquireDbSuiteLock();
-  }, 180_000);
   beforeEach(() => {
     clearHistoricalCache();
     vi.stubGlobal(
@@ -38,26 +31,35 @@ describe.skipIf(!hasTestDatabase())("historical FX database fallback", () => {
     vi.unstubAllGlobals();
     clearHistoricalCache();
     await must(getTestPool(), "getTestPool()").query(
-      "DELETE FROM exchange_rates WHERE currency_code = 'USD' AND rate_date IN ('1950-01-01', '1950-01-10')",
+      "DELETE FROM exchange_rates WHERE currency_code = 'USD' AND rate_date IN ('1950-01-01', '1950-01-10', '1950-01-31')",
     );
   });
   afterAll(async () => {
-    await releaseDbSuiteLock();
     await closeTestPool();
     await closePool();
   });
 
   it("does not use a future database quote when providers fail", async () => {
     await must(getTestPool(), "getTestPool()").query(
-      "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest) VALUES ('USD', 0.8, '1950-01-10', false)",
+      "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest) VALUES ('USD', vision_numeric('0.8', 20, 10), '1950-01-10', 0)",
     );
     expect(await getRateToEurForDate("USD", "1950-01-09")).toBeUndefined();
   });
 
   it("uses the prior database quote even when the future one is closer", async () => {
     await must(getTestPool(), "getTestPool()").query(
-      "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest) VALUES ('USD', 0.9, '1950-01-01', false), ('USD', 0.8, '1950-01-10', false)",
+      "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest) VALUES ('USD', vision_numeric('0.9', 20, 10), '1950-01-01', 0), ('USD', vision_numeric('0.8', 20, 10), '1950-01-10', 0)",
     );
     expect(await getRateToEurForDate("USD", "1950-01-09")).toBeCloseTo(0.9);
+  });
+
+  it("matches a month-end quote on the day itself, not the day before", async () => {
+    // DATE_TEXT compares as calendar-day text: the 31st is on-or-before the
+    // 31st and after the 30th, with no time-of-day or DST shift.
+    await must(getTestPool(), "getTestPool()").query(
+      "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest) VALUES ('USD', vision_numeric('0.9', 20, 10), '1950-01-01', 0), ('USD', vision_numeric('0.123456789', 20, 10), '1950-01-31', 0)",
+    );
+    expect(await getRateToEurForDate("USD", "1950-01-31")).toBe(0.123456789);
+    expect(await getRateToEurForDate("USD", "1950-01-30")).toBe(0.9);
   });
 });

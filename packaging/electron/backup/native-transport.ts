@@ -2,7 +2,7 @@
 export interface NativeRestoreRuntime {
   activateRestoredDatabase(
     sourcePath: string,
-    options: { format: string; expectedSchemaHead: string | undefined },
+    options: NativeRestoreOptions,
   ): Promise<{ switchToken: unknown }>;
   replaceAttachments(
     sourceDir: string,
@@ -16,8 +16,10 @@ export interface NativeRestoreRuntime {
   rollbackDatabaseSwitch(switchToken: unknown): Promise<unknown>;
 }
 
+/** What the backup's metadata says about its database; activation refuses a mismatch. */
 export interface NativeRestoreOptions {
-  expectedSchemaHead?: string | undefined;
+  expectedSchemaVersion?: number | undefined;
+  expectedSha256?: string | undefined;
 }
 
 interface DatabaseSwitch {
@@ -74,16 +76,13 @@ function markRollbackErrors(error: unknown, rollbackErrors: unknown[]): void {
 export async function restoreNativeDatabase(
   runtime: NativeRestoreRuntime,
   sourcePath: string,
-  {
-    format = "plain",
-    expectedSchemaHead,
-  }: NativeRestoreOptions & { format?: string } = {},
+  { expectedSchemaVersion, expectedSha256 }: NativeRestoreOptions = {},
 ): Promise<{ databaseSwitch: DatabaseSwitch }> {
   let databaseSwitch: DatabaseSwitch | undefined;
   try {
     databaseSwitch = await runtime.activateRestoredDatabase(sourcePath, {
-      format,
-      expectedSchemaHead,
+      expectedSchemaVersion,
+      expectedSha256,
     });
     await runtime.start();
     await runtime.waitUntilReady({ detailed: true });
@@ -103,11 +102,12 @@ export async function restoreNativeDatabase(
 export async function restoreNativeBundle(
   runtime: NativeRestoreRuntime,
   {
-    dbSqlPath,
+    databasePath,
     attachmentsDir,
-    expectedSchemaHead,
+    expectedSchemaVersion,
+    expectedSha256,
   }: NativeRestoreOptions & {
-    dbSqlPath: string;
+    databasePath: string;
     attachmentsDir?: string | null;
   },
 ): Promise<{
@@ -118,9 +118,9 @@ export async function restoreNativeBundle(
   let databaseSwitch: DatabaseSwitch | undefined;
   let attachmentSwitch: unknown;
   try {
-    databaseSwitch = await runtime.activateRestoredDatabase(dbSqlPath, {
-      format: "plain",
-      expectedSchemaHead,
+    databaseSwitch = await runtime.activateRestoredDatabase(databasePath, {
+      expectedSchemaVersion,
+      expectedSha256,
     });
     if (attachmentsDir) {
       attachmentSwitch = await runtime.replaceAttachments(attachmentsDir, {

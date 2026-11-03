@@ -58,7 +58,11 @@ function selectHistoricalRates(currencies: readonly string[]) {
       sql<string>`to_char(rate_date, 'YYYY-MM-DD')`.as("rate_date"),
       "rate_to_eur",
     ])
-    .where("currency_code", "=", sql<string>`ANY(${currencies}::text[])`);
+    .where(
+      "currency_code",
+      "in",
+      sql<string>`(SELECT value FROM json_each(${JSON.stringify(currencies)}))`,
+    );
 }
 
 /** Message of a caught value, for log metadata. */
@@ -165,7 +169,7 @@ export async function getHistoricalRateIndex(
  * Merge fetched points into the request's historical index without duplicating
  * dates. If another request replaced the process cache while providers were in
  * flight, invalidate that newer-but-now-stale cache so the next request reloads
- * the points just persisted to PostgreSQL.
+ * the points just persisted to the database.
  */
 function mergeFetchedRatesIntoHistoricalIndex(
   requestIndex: HistoricalRateIndex,
@@ -669,15 +673,17 @@ async function repairHistoricalRatesFromFullHistory(
  * their missing historical rates are still backfilled in exchange_rates.
  */
 async function stampTransactionFxRates() {
-  const result = await sql`UPDATE portfolio_transactions pt
-     SET fx_rate_to_eur = sub.rate
+  // rate_date and pt2.date are both DATE_TEXT, so the on-or-before window is a
+  // comparison of canonical calendar-day text; add_days() is `date - 7 days`.
+  const result = await sql`UPDATE portfolio_transactions AS pt
+     SET fx_rate_to_eur = vision_numeric(sub.rate, 20, 10)
      FROM (
        SELECT pt2.id,
               (SELECT er.rate_to_eur
                FROM exchange_rates er
-               WHERE er.currency_code = UPPER(pt2.currency::text)
-                 AND er.rate_date <= pt2.date::date
-                 AND er.rate_date >= pt2.date::date - INTERVAL '7 days'
+               WHERE er.currency_code = UPPER(pt2.currency)
+                 AND er.rate_date <= pt2.date
+                 AND er.rate_date >= add_days(pt2.date, -7)
                ORDER BY er.rate_date DESC
                LIMIT 1) AS rate
        FROM portfolio_transactions pt2
@@ -686,8 +692,8 @@ async function stampTransactionFxRates() {
          AND pt2.source_record_hash IS NULL
          AND pt2.dedup_fingerprint IS NULL
          AND pt2.currency IS NOT NULL
-         AND UPPER(pt2.currency::text) <> 'EUR'
-     ) sub
+         AND UPPER(pt2.currency) <> 'EUR'
+     ) AS sub
      WHERE pt.id = sub.id AND sub.rate IS NOT NULL
        AND pt.fx_rate_to_eur IS NULL
        AND pt.import_batch_id IS NULL
@@ -699,12 +705,12 @@ async function stampTransactionFxRates() {
 export async function backfillPortfolioHistoricalRates() {
   const pairRows = await checkedRows(
     currencyDatePairRowSchema,
-    sql`SELECT pt.currency::text AS currency_code, pt.date::date AS rate_date
+    sql`SELECT pt.currency AS currency_code, pt.date AS rate_date
      FROM portfolio_transactions pt
      WHERE pt.currency IS NOT NULL
-       AND UPPER(pt.currency::text) <> 'EUR'
-     GROUP BY pt.currency::text, pt.date::date
-     ORDER BY pt.date::date ASC`,
+       AND UPPER(pt.currency) <> 'EUR'
+     GROUP BY pt.currency, pt.date
+     ORDER BY pt.date ASC`,
   );
   if (pairRows.length === 0)
     return { inserted: 0, missing: 0, repaired: 0, stamped: 0 };
@@ -722,16 +728,16 @@ export async function backfillPortfolioHistoricalRates() {
 
   const missingRows = await checkedRows(
     currencyDatePairRowSchema,
-    sql`SELECT pt.currency::text AS currency_code, pt.date::date AS rate_date
+    sql`SELECT pt.currency AS currency_code, pt.date AS rate_date
      FROM portfolio_transactions pt
      LEFT JOIN exchange_rates er
-       ON er.currency_code = UPPER(pt.currency::text)
-      AND er.rate_date = pt.date::date
+       ON er.currency_code = UPPER(pt.currency)
+      AND er.rate_date = pt.date
      WHERE pt.currency IS NOT NULL
-       AND UPPER(pt.currency::text) <> 'EUR'
+       AND UPPER(pt.currency) <> 'EUR'
        AND er.id IS NULL
-     GROUP BY pt.currency::text, pt.date::date
-     ORDER BY pt.date::date ASC`,
+     GROUP BY pt.currency, pt.date
+     ORDER BY pt.date ASC`,
   );
 
   let inserted = 0;
@@ -758,15 +764,15 @@ export async function backfillPortfolioHistoricalRates() {
   // per-row SELECT (the N+1). Same accounting: a pair with an exact stored row
   // now counts as inserted, everything else unresolved.
   if (resolvedPairs.length > 0) {
-    const codes = resolvedPairs.map((p) => p.currencyCode);
-    const dates = resolvedPairs.map((p) => p.rateDate);
+    const wanted = resolvedPairs.map((p) => [p.currencyCode, p.rateDate]);
     const existsRows = await checkedRows(
       currencyDayKeyRowSchema,
-      sql`SELECT er.currency_code, er.rate_date::text AS rate_date
+      sql`SELECT er.currency_code, er.rate_date AS "rate_date::text"
          FROM exchange_rates er
-         JOIN UNNEST(${codes}::text[], ${dates}::text[]) AS want(currency_code, rate_date)
+         JOIN (SELECT w.value ->> 0 AS currency_code, ts_date(w.value ->> 1) AS rate_date
+                 FROM json_each(${JSON.stringify(wanted)}) AS w) AS want
            ON er.currency_code = want.currency_code
-          AND er.rate_date = want.rate_date::date`,
+          AND er.rate_date = want.rate_date`,
     );
     const present = new Set(
       existsRows.map(

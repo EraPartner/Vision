@@ -2,8 +2,8 @@
 title: Dashboard Components
 type: component
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     components,
@@ -482,7 +482,7 @@ interface CashFlowForecastDiagnosticsProps {
 - **Data loading (Phase D + H v2)** — Sheet-open triggered lazy loading
   - Fetches persisted accuracy history through `useCashflowForecastAccuracy` when open; `useDashboardQueries.ts` owns the query definition
   - staleTime 10 minutes to avoid excessive refetch
-  - Falls back to current session backtest if Postgres table is missing (error code 42P01)
+  - Falls back to current session backtest if the accuracy table is missing (the backend maps SQLite's "no such table" to 42P01)
   - **Mode detection (H v2):** Detects active forecast mode (month vs. rolling) and selects appropriate data source
     - Month view: Uses per-calendar-month backtest from API response
     - Rolling view: Uses rolling walk-forward backtest when `include_backtest=true`

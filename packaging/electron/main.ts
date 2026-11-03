@@ -43,14 +43,13 @@ import {
 } from "./runtime/ipc-schemas";
 import * as updater from "./updater";
 import { createRuntimeProvider } from "./runtime";
-import { LOOPBACK_HOST, type PendingMigrations } from "./runtime/native";
+import { LEGACY_POSTGRES_DATA_CODE, LOOPBACK_HOST } from "./runtime/native";
 import {
   externalBrowserUrl,
   isAllowedPermissionCheck,
   isTrustedRendererUrl,
 } from "./runtime/renderer-security";
 import {
-  DEMO_POSTGRES_PORT,
   DEMO_RUNTIME_ID,
   finalizeNativeDemo,
   prepareNativeDemo,
@@ -352,8 +351,9 @@ const HEALTH_POLL_INTERVAL_MS = numberFromEnv(
   "VISION_HEALTH_POLL_INTERVAL_MS",
   300,
 );
-// A cold native start may initialize PostgreSQL and run migrations. Give that
-// path a larger budget than a warm restart. 600 × 300ms ≈ 3 min.
+// A cold native start may back up and migrate the SQLite database before the
+// backend answers. Give that path a larger budget than a warm restart.
+// 600 × 300ms ≈ 3 min.
 const HEALTH_POLL_BUILD_ATTEMPTS = numberFromEnv(
   "VISION_HEALTH_POLL_BUILD_ATTEMPTS",
   600,
@@ -803,7 +803,26 @@ function pingReady(timeoutMs = 2000): Promise<{ ready: boolean } | undefined> {
 // Same cadence/budget as pollHealth, but waits for warmup readiness, not just
 // liveness. Used only for the initial navigation; restart/update flows keep using
 // the lighter pollHealth liveness probe.
-class BackendStartupError extends Error {}
+class BackendStartupError extends Error {
+  readonly code: string | undefined;
+
+  constructor(message: string, code?: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+/** The backend's start-up failure as the dialog explains it. */
+function backendStartupDetail(error: BackendStartupError): string {
+  if (error.code === "PRE_MIGRATION_BACKUP_FAILED") {
+    return t(
+      "app.preMigrationBackupFailed",
+      { error: error.message },
+      error.message,
+    );
+  }
+  return error.message;
+}
 
 function pollReady(maxAttempts = HEALTH_POLL_ATTEMPTS): Promise<void> {
   return new Promise<void>((resolve, reject) => {
@@ -813,7 +832,8 @@ function pollReady(maxAttempts = HEALTH_POLL_ATTEMPTS): Promise<void> {
       if (status && status.ready) return resolve();
       // A backend that already exited will never answer; stop waiting.
       const failure = await activeRuntime?.backendStartupFailure();
-      if (failure) return reject(new BackendStartupError(failure));
+      if (failure)
+        return reject(new BackendStartupError(failure.message, failure.code));
       tries += 1;
       if (tries >= maxAttempts) return reject(new Error("timeout"));
       const interval =
@@ -1077,7 +1097,7 @@ function pollAndLoad({ building = false } = {}): void {
           buttons: [t("common.ok", null, "OK")],
           title: APP_NAME,
           message: t("app.failedStart", null, "Vision could not start."),
-          detail: error.message,
+          detail: backendStartupDetail(error),
         });
         return;
       }
@@ -1805,7 +1825,7 @@ registerHandler(
       filters: [
         {
           name: "Vision Backup Files",
-          extensions: ["visionbak", "visionbak.enc", "sql", "enc"],
+          extensions: ["visionbak", "visionbak.enc", "sqlite3", "sql", "enc"],
         },
         { name: "All Files", extensions: ["*"] },
       ],
@@ -2565,46 +2585,12 @@ app.on("open-file", (event, filePath) => {
 // ── Launch flow ───────────────────────────────────────────────────────────────
 let workDir: string | null = null;
 
-/**
- * ADR-242: the backend applies pending migrations at boot, and some of them
- * delete data. Before the runtime spawns a backend that will migrate an
- * existing database, take the same bundle backup as the in-app update button
- * into <userData>/pre-update-backups. PostgreSQL is up and no backend runs
- * yet, so the capture is already quiescent. A failure aborts the start.
- */
-async function backupBeforeMigrations(
-  pending: PendingMigrations,
-): Promise<void> {
-  console.log(
-    `[pre-migration-backup] database at ${pending.appliedHead}, this build ships ${pending.packagedHead}; backing up before migrating`,
-  );
-  setSplashStatus("splash.backingUp");
-  try {
-    const backupDir = path.join(app.getPath("userData"), "pre-update-backups");
-    fs.mkdirSync(backupDir, { recursive: true, mode: 0o700 });
-    const result = await runBundleBackup(backupDir, null, {
-      backendStopped: true,
-    });
-    console.log(
-      `[pre-migration-backup] saved ${path.basename(result.file)}${result.encrypted ? " (encrypted)" : ""}`,
-    );
-    if (result.warning) console.warn(`[pre-migration-backup] ${result.warning}`);
-  } catch (error) {
-    const message = String(errorMessage(error));
-    console.error(`[pre-migration-backup] failed: ${message}`);
-    throw new Error(
-      t("app.preMigrationBackupFailed", { error: message }, message),
-    );
-  } finally {
-    setSplashStatus("splash.startingServices");
-  }
-}
-
-// Migration that dropped the audit-history tables. Its on-disk receipts and
-// Keychain witness are removed only once the database has applied it, so a
-// failed upgrade can still fall back to the previous build with them intact.
-const LEGACY_AUDIT_REMOVAL_MIGRATION = "0004_remove_audit_history";
-
+// Migration 0004 dropped the audit-history tables. Their on-disk receipts and
+// Keychain witness are removed only once a database without them is serving,
+// so a failed upgrade can still fall back to the previous build with them
+// intact. Every SQLite database descends from a Vision 2.0 database that had
+// applied 0004 (the SQLite baseline already lacks those tables), so a ready
+// backend proves the retirement.
 async function cleanupLegacyAuditAfterMigration(
   runtime: RuntimeProvider,
 ): Promise<void> {
@@ -2617,11 +2603,31 @@ async function cleanupLegacyAuditAfterMigration(
         attempts: HEALTH_POLL_BUILD_ATTEMPTS,
         intervalMs: HEALTH_POLL_INTERVAL_MS,
       });
-      return (await runtime.getAppliedMigrations()).includes(
-        LEGACY_AUDIT_REMOVAL_MIGRATION,
-      );
+      return true;
     },
   });
+}
+
+/** The startup failure dialog's detail: the transition steps for Vision 2.0 data. */
+function startupFailureDetail(error: unknown): string {
+  if (
+    isObjectLike(error) &&
+    error.code === LEGACY_POSTGRES_DATA_CODE &&
+    typeof error.dataDirectory === "string" &&
+    typeof error.backups === "string" &&
+    typeof error.command === "string"
+  ) {
+    return t(
+      "app.legacyPostgresData",
+      {
+        dataDirectory: error.dataDirectory,
+        backups: error.backups,
+        command: error.command,
+      },
+      String(errorMessage(error)),
+    );
+  }
+  return String(errorMessage(error));
 }
 
 async function launch(): Promise<void> {
@@ -2663,9 +2669,6 @@ async function launch(): Promise<void> {
     const runtimeRoot = app.isPackaged
       ? path.join(process.resourcesPath, "native-runtime")
       : repoRoot;
-    const nativePayloadRoot = app.isPackaged
-      ? runtimeRoot
-      : path.join(appRoot, "native-runtime");
     workDir = runtimeRoot;
     try {
       const port = await resolveAppPort();
@@ -2675,12 +2678,8 @@ async function launch(): Promise<void> {
           userDataDir: app.getPath("userData"),
           repoRoot: app.isPackaged ? undefined : repoRoot,
           runtimeRoot,
-          postgresRuntimeRoot: nativePayloadRoot,
-          allowExternalPostgres:
-            process.env.VISION_ALLOW_EXTERNAL_POSTGRES === "true",
           runtimeId: NATIVE_RUNTIME_ID,
           recordBootPhase,
-          postgresPort: __IS_DEMO ? DEMO_POSTGRES_PORT : undefined,
           appPort: () => appPort,
           requireRuntimeManifest: app.isPackaged,
         },
@@ -2698,20 +2697,25 @@ async function launch(): Promise<void> {
           console.warn(finalized.resetCleanupWarning);
         }
       }
-      // The Demo database is synthetic and reseeded at the packaged schema
-      // head, so only real Vision backs up before boot-time migrations.
-      const startOptions = __IS_DEMO
-        ? {}
-        : { beforeMigrations: backupBeforeMigrations };
+      // ADR-242/263: the backend backs the database up into
+      // <userData>/database/pre-migration-backups before it applies pending
+      // migrations, some of which delete data. The splash says so while it runs.
+      const schemaUpgrade = await activeRuntime.pendingSchemaUpgrade();
+      if (schemaUpgrade) {
+        console.log(
+          `[pre-migration-backup] database at schema ${schemaUpgrade.databaseVersion}, this build ships ${schemaUpgrade.packagedVersion}; the backend backs it up before migrating`,
+        );
+      }
       try {
         setSplashStatus("splash.startingServices");
         try {
-          await activeRuntime.start(startOptions);
+          await activeRuntime.start();
         } catch (error) {
           if (errorField(error, "code") !== "PORT_COLLISION") throw error;
           await repickAppPort();
-          await activeRuntime.start(startOptions);
+          await activeRuntime.start();
         }
+        if (schemaUpgrade) setSplashStatus("splash.backingUp");
         if (preparedDemo?.switchToken) {
           await activeRuntime.waitUntilReady({ detailed: true });
           const finalized = await finalizeNativeDemo(
@@ -2742,7 +2746,7 @@ async function launch(): Promise<void> {
         buttons: [t("common.ok", null, "OK")],
         title: APP_NAME,
         message: t("app.failedStart", null, "Vision could not start."),
-        detail: String(errorMessage(error)),
+        detail: startupFailureDetail(error),
       });
       app.quit();
       return;
@@ -2754,7 +2758,7 @@ async function launch(): Promise<void> {
 
 let isQuitting = false;
 // Set when macOS is shutting down, restarting or logging out: quit skips the
-// optional backup so Vision never holds up logout, but still stops PostgreSQL.
+// optional backup so Vision never holds up logout, but still stops the backend.
 let systemShuttingDown = false;
 
 // After this long without keyboard or mouse input (or while the screen is

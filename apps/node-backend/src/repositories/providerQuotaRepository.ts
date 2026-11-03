@@ -24,7 +24,8 @@ export async function getDayCount(
       .selectFrom("provider_quota")
       .select("count")
       .where("provider", "=", provider)
-      .where("window_date", "=", sql<Date>`${windowDate}::date`),
+      // DATE columns hold canonical 'YYYY-MM-DD' text.
+      .where("window_date", "=", sql<Date>`${windowDate}`),
   );
   return row?.count ?? 0;
 }

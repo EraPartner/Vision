@@ -2,8 +2,8 @@
 title: Portfolio Summary API
 type: endpoint
 status: active
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     endpoint,
@@ -307,7 +307,7 @@ its contribution kinds summed on the server (Decimal, rounded once), and the res
 portfolio-wide `accountTotals` above. The Portfolio Overview broker filter reads the selected
 account's row of each investment and the top-level subtotal; it no longer adds `byAccount` rows in
 the browser and derives only the return percentage. Not a breaking change: existing fields are
-unchanged. Covered on real PostgreSQL by
+unchanged. Covered against a real SQLite database by
 [[apps/node-backend/tests/portfolioSummaryTotals.db.test.ts]].
 
 **Current-rate conversion (2026-10-19).** Current values (and the archived presentation of
@@ -431,7 +431,7 @@ Each entry (OpenAPI `PortfolioHoldingTotals`) carries `holdingCount`, `totalPort
 The Stocks, Crypto, Metals, Real Estate and Savings pages and the Portfolio allocation chart read
 these through `findHoldingTotals(summary, assetClasses)` in
 `apps/frontend/src/hooks/portfolio/assetGroupTotals.ts` instead of summing or converting holdings
-in the browser. Covered on real PostgreSQL by
+in the browser. Covered against a real SQLite database by
 [[apps/node-backend/tests/portfolioSummaryTotals.db.test.ts]].
 
 ## Caching Strategy

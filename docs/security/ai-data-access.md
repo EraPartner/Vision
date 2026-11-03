@@ -2,8 +2,8 @@
 title: AI Data Access Policy
 type: security
 status: active
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     security,
@@ -80,7 +80,7 @@ The registry contains **30 read-only tools** across **6 domains**: Expenses (11)
 - **Explicit schema.** Each tool declares JSON Schema for model-facing arguments. The dispatcher applies the shared hand-written date, enum, and bounded-integer validators before repository or service calls.
 - **Result shape contract.** Every tool returns `{ok, data, meta}`. Optional `meta.renderAs` drives UI rendering only; the LLM receives the same payload.
 - **Row cap.** Default 500 rows per call. Tools exceeding the cap return with `meta.truncated = true`.
-- **Denylist check (implemented).** A CI check verifies that no tool file calls write methods (`create(`, `update(`, `delete(`, `bulk(`, `upsert(`, `insert(`) or imports the Postgres pool directly. See `describe('tool write-method denylist')` in `apps/node-backend/tests/aiChatTools.test.ts`. Ten test cases: 5 tool files × 2 assertions each (banned call patterns + pg pool import guard).
+- **Denylist check (implemented).** A CI check verifies that no tool file calls write methods (`create(`, `update(`, `delete(`, `bulk(`, `upsert(`, `insert(`) or imports the database connection (`database/connection.ts`) directly. See `describe('tool write-method denylist')` in `apps/node-backend/tests/aiChatTools.test.ts`. Ten test cases: 5 tool files × 2 assertions each (banned call patterns + database connection import guard).
 
 ### Tool Domains and Purposes
 

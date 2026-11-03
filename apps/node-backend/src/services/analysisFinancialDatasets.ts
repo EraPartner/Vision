@@ -395,13 +395,13 @@ async function localRows(
         await run(
           sql<{
             relation: string | null;
-          }>`SELECT to_regclass('public.portfolio_broker_snapshots') AS relation`,
+          }>`SELECT name AS relation FROM sqlite_schema WHERE type = 'table' AND name = 'portfolio_broker_snapshots'`,
         )
       ).rows[0]?.relation
     )
       return [];
     const columns = broker
-      ? sql`CASE WHEN invested <> 0 THEN gain_loss/invested*100 ELSE NULL END AS return_pct, account_key, account_id, account_name`
+      ? sql`CASE WHEN dec_sign(invested) <> 0 THEN dec_mul(dec_div(gain_loss, invested), 100) ELSE NULL END AS return_pct, account_key, account_id, account_name`
       : sql`return_pct`;
     const table = broker
       ? sql`portfolio_broker_snapshots`

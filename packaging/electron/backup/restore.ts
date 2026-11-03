@@ -2,8 +2,8 @@ import { app } from "electron";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import readline from "node:readline";
 import {
+  BUNDLE_DATABASE_MEMBER,
   createBundle,
   encryptBundle,
   openBundle,
@@ -20,19 +20,29 @@ import {
   ERR_INVALID_PASSPHRASE,
 } from "./crypto";
 import { restoreNativeBundle, restoreNativeDatabase } from "./native-transport";
-import { preBaselineBackupError } from "../runtime/native";
+import {
+  SQLITE_HEADER_BYTES,
+  isSqliteDatabaseFile,
+  parseSqliteHeader,
+  readFileHead,
+} from "../runtime/database-stats";
+import { TRANSITION_COMMAND, packagedMigrationVersion } from "../runtime/native";
 import { validateBackupDest } from "../runtime/ipc-schemas";
 import type { NativeRestoreRuntime } from "./native-transport";
+
+/** What the runtime reports about a verified database snapshot. */
+export interface DatabaseSnapshotReport {
+  schemaVersion: number;
+  sqliteVersion?: string | undefined;
+  sha256?: string | undefined;
+  bytes?: number | undefined;
+}
 
 /** The native runtime operations backup and restore use. */
 export interface NativeBackupRuntime extends NativeRestoreRuntime {
   mode: "native";
-  dumpDatabase(
-    destination: string,
-    options: { format: "plain" },
-  ): Promise<unknown>;
+  snapshotDatabase(destination: string): Promise<DatabaseSnapshotReport>;
   exportAttachments(destination: string): Promise<unknown>;
-  getSchemaHead(): Promise<string | undefined>;
 }
 
 /** Context threaded from main via init(). */
@@ -103,115 +113,79 @@ export function resolveDatabaseEnvironment(): Promise<{
   return Promise.resolve().then(() => ({ nativeRuntime: getNativeRuntime() }));
 }
 
-function revisionNumericPrefix(rev: string): number | undefined {
-  const match = /^(\d+)_/.exec(rev);
-  return match?.[1] !== undefined ? Number.parseInt(match[1], 10) : undefined;
-}
-
-/** Highest migration shipped with this install, from db/migrations. */
-function getLocalMigrationChainHead(): string {
-  try {
-    const root = ctx.workDir?.() || ctx.repoRootFallback;
-    // path.join() rejects a missing root; that is "no local chain".
-    if (typeof root !== "string") return "";
-    return (
-      fs
-        .readdirSync(path.join(root, "db", "migrations"))
-        .filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name))
-        .filter((name) => !name.endsWith(".down.sql"))
-        .map((name) => name.slice(0, -".sql".length))
-        .sort()
-        .at(-1) || ""
-    );
-  } catch {
-    return "";
-  }
-}
-
-interface DumpSchemaLedger {
-  /** Highest public.kysely_migration name, or "" when the ledger is absent. */
-  head: string;
-}
-
-const KYSELY_COPY =
-  /^COPY\s+(?:"?public"?\.)?"?kysely_migration"?\s*\(\s*"?name"?\s*,[^)]*\)\s+FROM\s+stdin;/i;
-const KYSELY_INSERT =
-  /^INSERT INTO\s+(?:"?public"?\.)?"?kysely_migration"?\s*(?:\([^)]*\)\s*)?VALUES\s*\('([^']+)'/i;
-const ANY_COPY = /^COPY\s+\S.*\s+FROM\s+stdin;$/i;
-
-// Reads the migration ledger rows from a plain pg_dump. A plain dump writes
-// one COPY block per table, so the scan reads the whole file.
-function readDumpSchemaLedger(sqlPath: string): Promise<DumpSchemaLedger> {
-  return new Promise((resolve, reject) => {
-    const stream = fs.createReadStream(sqlPath, { encoding: "utf8" });
-    const lines = readline.createInterface({
-      input: stream,
-      crlfDelay: Infinity,
-    });
-    const ledger: DumpSchemaLedger = { head: "" };
-    const record = (name: string | undefined) => {
-      if (name && name > ledger.head) ledger.head = name;
-    };
-    let copyBlock: "kysely" | "other" | undefined;
-    lines.on("line", (line) => {
-      // COPY rows are table data; only statements outside them are parsed.
-      if (copyBlock) {
-        if (line === "\\.") copyBlock = undefined;
-        else if (copyBlock === "kysely") record(line.split("\t", 1)[0]);
-        return;
-      }
-      if (KYSELY_COPY.test(line)) copyBlock = "kysely";
-      else if (ANY_COPY.test(line)) copyBlock = "other";
-      else record(KYSELY_INSERT.exec(line)?.[1]);
-    });
-    // A read error rejects first; the later close cannot settle the promise.
-    stream.on("error", reject);
-    lines.on("close", () => resolve(ledger));
-  });
-}
+export const BACKUP_POSTGRESQL_V2_CODE = "BACKUP_POSTGRESQL_V2";
 
 /**
- * Refuses a backup taken before the TypeScript migration baseline: it has no
- * Kysely migration ledger.
+ * A Vision 2.0 backup holds a PostgreSQL dump. Vision converts it once with
+ * the repository's transition script and never reads the dump itself.
  */
-function assertPostBaselineBackup(ledger: DumpSchemaLedger): string {
-  if (!ledger.head) throw preBaselineBackupError();
-  return ledger.head;
-}
-
-function isSchemaRevisionNewer(candidate: string, current: string): boolean {
-  const candidateNumber = revisionNumericPrefix(candidate);
-  const currentNumber = revisionNumericPrefix(current);
-  if (candidateNumber === undefined || currentNumber === undefined)
-    return false;
-  return candidateNumber > currentNumber;
-}
-
-export function assertBackupSchemaCompatible(
-  candidate: string,
-  current: string,
-  noun = "backup",
-): void {
-  if (!isSchemaRevisionNewer(candidate, current)) return;
-  throw new Error(
-    `BUNDLE_SCHEMA_NEWER: This ${noun} was created on schema revision "${candidate}" ` +
-      `but this Vision install is at "${current}". Update Vision to a newer version and retry.`,
+export function postgresBackupError(): Error & { code: string } {
+  return Object.assign(
+    new Error(
+      "This backup was made by Vision 2.0 (PostgreSQL) and cannot be restored directly. " +
+        `Convert it once with the transition script from a Vision repository checkout: ${TRANSITION_COMMAND}`,
+    ),
+    { code: BACKUP_POSTGRESQL_V2_CODE },
   );
 }
 
-export interface BundleBackupOptions {
-  /**
-   * The caller guarantees no backend is running (PostgreSQL is up), so the
-   * capture is already quiescent and must not stop or restart the backend.
-   * Used by the pre-migration backup at launch.
-   */
-  backendStopped?: boolean;
+function notVisionBackupError(): Error & { code: string } {
+  return Object.assign(
+    new Error(
+      "This file is not a Vision backup. Choose a .visionbak backup or a Vision SQLite database file.",
+    ),
+    { code: "BACKUP_UNRECOGNIZED" },
+  );
+}
+
+/** Highest migration shipped with this install, from db/migrations; 0 when unknown. */
+function getLocalMigrationVersion(): number {
+  try {
+    const root = ctx.workDir?.() || ctx.repoRootFallback;
+    if (typeof root !== "string") return 0;
+    return packagedMigrationVersion(path.join(root, "db", "migrations"));
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Refuses a backup whose schema is newer than this install, with the marker
+ * the renderer turns into an "update Vision" message. Restore verification
+ * enforces the same rule on the database itself.
+ */
+export function assertBackupSchemaCompatible(
+  candidate: number,
+  current: number,
+  noun = "backup",
+): void {
+  if (!Number.isSafeInteger(candidate) || !Number.isSafeInteger(current))
+    return;
+  if (current <= 0 || candidate <= current) return;
+  throw new Error(
+    `BUNDLE_SCHEMA_NEWER: This ${noun} was created on schema version ${candidate} ` +
+      `but this Vision install is at ${current}. Update Vision to a newer version and retry.`,
+  );
+}
+
+/** metadata.json is untrusted: only well-formed values become restore expectations. */
+function metadataSchemaVersion(metadata: OpenedBundle["metadata"]): number | undefined {
+  const value = metadata.schemaVersion;
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
+function metadataSha256(metadata: OpenedBundle["metadata"]): string | undefined {
+  const value = metadata.databaseSha256;
+  return typeof value === "string" && /^[0-9a-f]{64}$/.test(value)
+    ? value
+    : undefined;
 }
 
 export async function runBundleBackup(
   destDir: string,
   frontendStateJson: unknown = null,
-  { backendStopped = false }: BundleBackupOptions = {},
 ): Promise<BundleBackupResult> {
   if (!destDir) throw new Error("No backup directory configured");
   // Every caller lands here, including the quit-time backup whose folder comes
@@ -223,22 +197,18 @@ export async function runBundleBackup(
   const tmpDir = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision_bak_"),
   );
-  const dbSqlPath = path.join(tmpDir, "db.sql");
+  const databasePath = path.join(tmpDir, BUNDLE_DATABASE_MEMBER);
   const attachmentsDir = path.join(tmpDir, "attachments");
   try {
-    const capture = async () => {
-      await nativeRuntime.dumpDatabase(dbSqlPath, { format: "plain" });
+    if (!ctx.withBackupSnapshot)
+      throw new Error("Consistent native backup capture is unavailable");
+    // The backend is stopped while both halves are captured, so the database
+    // snapshot and the attachment tree describe the same moment.
+    const database = await ctx.withBackupSnapshot(async () => {
+      const report = await nativeRuntime.snapshotDatabase(databasePath);
       await nativeRuntime.exportAttachments(attachmentsDir);
-      return nativeRuntime.getSchemaHead();
-    };
-    let schemaHead: string | undefined;
-    if (backendStopped) {
-      schemaHead = await capture();
-    } else {
-      if (!ctx.withBackupSnapshot)
-        throw new Error("Consistent native backup capture is unavailable");
-      schemaHead = await ctx.withBackupSnapshot(capture);
-    }
+      return report;
+    });
     let frontendState: unknown = null;
     if (frontendStateJson) {
       try {
@@ -256,10 +226,15 @@ export async function runBundleBackup(
     const { bundlePath } = await createBundle({
       destDir: passphrase ? tmpDir : destDir,
       deviceId,
-      schemaHead,
       appVersion:
         typeof app.getVersion === "function" ? app.getVersion() : "unknown",
-      dbSqlPath,
+      databasePath,
+      database: {
+        schemaVersion: database.schemaVersion,
+        sqliteVersion: database.sqliteVersion,
+        sha256: database.sha256,
+        bytes: database.bytes,
+      },
       attachmentsDir,
       frontendState,
     });
@@ -308,7 +283,7 @@ export async function runBundleRestore(
     const message = typeof details.message === "string" ? details.message : "";
     if (
       encrypted &&
-      (/bad decrypt|wrong final block|unable to authenticate|missing metadata\.json|missing db\.sql|end of central directory|not a zip file/i.test(
+      (/bad decrypt|wrong final block|unable to authenticate|missing metadata\.json|missing db\.sqlite3|end of central directory|not a zip file/i.test(
         message,
       ) ||
         details.code === "ERR_OSSL_BAD_DECRYPT" ||
@@ -318,33 +293,27 @@ export async function runBundleRestore(
     }
     throw error;
   }
-  const { metadata, dbSqlPath, attachmentsDir, frontendState, cleanup } =
+  const { metadata, databasePath, attachmentsDir, frontendState, cleanup } =
     opened;
-  const nativeRuntime = getNativeRuntime();
   try {
-    // metadata.json is untrusted bundle content; the dump's own migration
-    // ledger decides the schema revision and must agree with it.
-    const schemaHead = assertPostBaselineBackup(
-      await readDumpSchemaLedger(dbSqlPath),
-    );
-    const declaredHead = metadata.schemaHead;
-    const headMismatch =
-      typeof declaredHead === "string"
-        ? declaredHead !== "" && declaredHead !== schemaHead
-        : Boolean(declaredHead);
-    if (headMismatch) {
-      throw new Error(
-        "Backup schema revision does not match its metadata; the bundle is corrupt.",
+    // A Vision 2.0 bundle carries a PostgreSQL dump (db.sql), which only the
+    // transition script converts. It is never read here.
+    if (!databasePath) throw postgresBackupError();
+    const nativeRuntime = getNativeRuntime();
+    // metadata.json is untrusted bundle content. Activation verifies the
+    // database itself and refuses it unless it matches what metadata recorded.
+    const declaredVersion = metadataSchemaVersion(metadata);
+    if (declaredVersion !== undefined)
+      assertBackupSchemaCompatible(
+        declaredVersion,
+        getLocalMigrationVersion(),
+        "bundle",
       );
-    }
-    const currentHead =
-      (await nativeRuntime.getSchemaHead().catch(() => "")) ||
-      getLocalMigrationChainHead();
-    assertBackupSchemaCompatible(schemaHead, currentHead, "bundle");
     const restore = await restoreNativeBundle(nativeRuntime, {
-      dbSqlPath,
+      databasePath,
       attachmentsDir,
-      expectedSchemaHead: schemaHead,
+      expectedSchemaVersion: declaredVersion,
+      expectedSha256: metadataSha256(metadata),
     });
     const cleanupWarning = restore.cleanupWarning;
     return {
@@ -361,38 +330,52 @@ export async function runBundleRestore(
   }
 }
 
+/** user_version of a SQLite file, or undefined when its header cannot be read. */
+async function sqliteFileSchemaVersion(file: string): Promise<number | undefined> {
+  try {
+    return parseSqliteHeader(await readFileHead(file, SQLITE_HEADER_BYTES))
+      .userVersion;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Restores a bare database file: a Vision SQLite database (for example a
+ * pre-migration backup the backend wrote). Vision 2.0's `.sql` and `.sql.enc`
+ * PostgreSQL dumps are refused with the transition command.
+ */
 export async function runRestore(
-  sqlFilePath: string,
+  filePath: string,
   { passphrase }: RestoreRequestOptions = {},
 ): Promise<{ success: true; file: string }> {
-  if (!sqlFilePath) throw new Error("No backup file specified");
-  if (!fs.existsSync(sqlFilePath))
-    throw new Error(`File not found: ${sqlFilePath}`);
-  let restoreSource = sqlFilePath;
+  if (!filePath) throw new Error("No backup file specified");
+  if (!fs.existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
+  let restoreSource = filePath;
   let cleanupRestoreSource = () => {};
-  if (await isEncryptedBackupFile(sqlFilePath)) {
+  if (await isEncryptedBackupFile(filePath)) {
     const effectivePassphrase = passphrase || (await getBackupPassphrase());
     if (!effectivePassphrase) throw new Error(ERR_PASSPHRASE_REQUIRED);
     restoreSource = await decryptBackupFileToTemp(
-      sqlFilePath,
+      filePath,
       effectivePassphrase,
     );
     cleanupRestoreSource = () => fs.unlink(restoreSource, () => {});
   }
-  const nativeRuntime = getNativeRuntime();
   try {
-    const dumpHead = assertPostBaselineBackup(
-      await readDumpSchemaLedger(restoreSource),
-    );
-    const currentHead =
-      (await nativeRuntime.getSchemaHead().catch(() => "")) ||
-      getLocalMigrationChainHead();
-    assertBackupSchemaCompatible(dumpHead, currentHead);
-    await restoreNativeDatabase(nativeRuntime, restoreSource, {
-      format: "plain",
-      expectedSchemaHead: dumpHead,
-    });
-    return { success: true, file: sqlFilePath };
+    if (!(await isSqliteDatabaseFile(restoreSource))) {
+      // The single-file encrypted format and bare .sql files are Vision 2.0
+      // PostgreSQL dumps; only the magic bytes were read to tell them apart.
+      if (restoreSource !== filePath || /\.sql$/i.test(filePath))
+        throw postgresBackupError();
+      throw notVisionBackupError();
+    }
+    const nativeRuntime = getNativeRuntime();
+    const fileVersion = await sqliteFileSchemaVersion(restoreSource);
+    if (fileVersion !== undefined)
+      assertBackupSchemaCompatible(fileVersion, getLocalMigrationVersion());
+    await restoreNativeDatabase(nativeRuntime, restoreSource);
+    return { success: true, file: filePath };
   } finally {
     cleanupRestoreSource();
   }

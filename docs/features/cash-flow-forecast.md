@@ -2,9 +2,9 @@
 title: Cash Flow Forecast
 type: feature
 status: active
-date: 2026-10-28
-updated: 2026-10-28
-last_modified: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
+last_modified: 2026-11-03
 tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, ensemble-v2, empirical-bayes, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
 aliases: [cashflow-forecast, forward-projections, cash-flow-planning, income-expense-forecast, budget-projection, multi-method-forecast, ensemble-forecast, category-breakdown]
 description: Project income and expenses forward using 8 statistical methods including 7 base methods + Ensemble (v2) (Phase 10, F). Phase C adds frontend dashboard visualization with controls, MC confidence bands, and diagnostics panel. Phase E adds nightly cache materialization. Phase G adds per-category breakdown with hierarchical reconciliation. June 2026: ensemble weighting upgraded from plain inverse-MSE to sample-size-shrunk RMSE + uniform-blend floor (empirical Bayes).
@@ -424,7 +424,7 @@ than a fixed nightly time. It records success only after cache persistence compl
 
 **Phase C (Complete):** Frontend dashboard visualization with 8-method chart (7 base + ensemble), controls, MC bands, and diagnostics panel
 
-**Phase D (Complete):** Postgres persistence of monthly accuracy metrics (MAE/RMSE/MAPE per method); diagnostics panel updated to fetch and display persisted history with sparklines; fallback to in-memory store on DB table missing
+**Phase D (Complete):** Database persistence of monthly accuracy metrics (MAE/RMSE/MAPE per method); diagnostics panel updated to fetch and display persisted history with sparklines; fallback to in-memory store on DB table missing
 
 **Phase E (Complete):** Nightly materialized Monte Carlo cache + cache-aware endpoint. Precomputes forecasts for all active users daily (via `refreshCashflowForecastMc` nightly job). Daytime requests check 6-hour TTL cache before computing live. Response envelope includes `source: 'cache' | 'live'` indicator.
 
@@ -490,10 +490,10 @@ Modular forecast orchestrator with 7 pluggable methods:
 
 **Rewrote accuracyStore:** `apps/node-backend/src/services/calculations/forecast/accuracyStore.ts`
 
-- Now delegates to Postgres via repository
-- **Fallback (April 2026):** when table is missing or Postgres is unreachable, reverts to in-memory Map for backward compatibility
-  - Triggers on error codes: `42P01` (undefined_table), `ECONNREFUSED`, `ENOTFOUND`, `ETIMEDOUT`
-  - Enables dev/test environments without a running PostgreSQL instance
+- Now delegates to the database via repository
+- **Fallback (April 2026):** when the table is missing, reverts to in-memory Map for backward compatibility
+  - Triggers on error code `42P01` (the driver reports SQLite's "no such table" with this code) or an error message that names `cashflow_forecast_accuracy`
+  - The code also still lists the network codes `ECONNREFUSED`, `ENOTFOUND` and `ETIMEDOUT` from the PostgreSQL build; the SQLite file never produces them ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]])
   - Fallback is silent; forecast endpoints remain usable
 - Enables nightly batch persistence without requiring restart
 
@@ -705,7 +705,7 @@ Additionally, when `include_backtest=true` the diagnostics section includes the 
 - Data loading:
   - Enabled only when sheet is open (lazy)
   - Fetches persisted accuracy history through `useCashflowForecastAccuracy` with staleTime 10 minutes
-  - Falls back to current backtest data if table is missing or Postgres is unreachable (error codes: 42P01, ECONNREFUSED, ENOTFOUND, ETIMEDOUT)
+  - Falls back to current backtest data if the accuracy table is missing (error code 42P01)
 - Renders:
   - Accuracy table (MAE/RMSE/MAPE, sorted by MAE ascending) — displays latest DB history per method
   - Rank badge per method (1st, 2nd, 3rd place)

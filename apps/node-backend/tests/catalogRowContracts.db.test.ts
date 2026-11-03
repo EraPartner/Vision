@@ -1,16 +1,10 @@
 /**
  * Runs every row-checked catalog query (src/database/rows/catalog.ts) against
- * a migrated PostgreSQL database, so a schema that disagrees with what pg
+ * a migrated SQLite database, so a schema that disagrees with what the driver
  * really returns fails here (tests run the contracts in throw mode).
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
+import { afterAll, describe, expect, it } from "vitest";
+import { closeTestPool, getTestPool } from "./setup/db.ts";
 import { closePool, withTransaction } from "../src/database/connection.ts";
 import attachmentModule from "../src/repositories/attachmentRepository.ts";
 import categoryRepository from "../src/repositories/categoryRepository.ts";
@@ -56,47 +50,42 @@ const created = {
   transactionIds: [] as number[],
 };
 
-describe.skipIf(!hasTestDatabase())(
-  "catalog row contracts against PostgreSQL",
+describe(
+  "catalog row contracts against the real database",
   () => {
-    beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180000);
-
     afterAll(async () => {
       try {
         const db = must(pool, "pool");
-        await db.query("DELETE FROM transactions WHERE id = ANY($1)", [
+        await db.query("DELETE FROM transactions WHERE id IN (SELECT value FROM json_each($1))", [
           created.transactionIds,
         ]);
-        await db.query("DELETE FROM accounts WHERE id = ANY($1)", [
+        await db.query("DELETE FROM accounts WHERE id IN (SELECT value FROM json_each($1))", [
           created.accountIds,
         ]);
-        await db.query("DELETE FROM saved_charts WHERE id = ANY($1)", [
+        await db.query("DELETE FROM saved_charts WHERE id IN (SELECT value FROM json_each($1))", [
           created.chartIds,
         ]);
-        await db.query("DELETE FROM tags WHERE id = ANY($1)", [created.tagIds]);
+        await db.query("DELETE FROM tags WHERE id IN (SELECT value FROM json_each($1))", [created.tagIds]);
         await db.query("DELETE FROM user_settings WHERE key = $1", [
           SETTING_KEY,
         ]);
         await db.query(
-          "UPDATE recipients SET primary_recipient_id = NULL WHERE id = ANY($1)",
+          "UPDATE recipients SET primary_recipient_id = NULL WHERE id IN (SELECT value FROM json_each($1))",
           [created.recipientIds],
         );
         await db.query(
-          "DELETE FROM recipient_bank_accounts WHERE recipient_id = ANY($1)",
+          "DELETE FROM recipient_bank_accounts WHERE recipient_id IN (SELECT value FROM json_each($1))",
           [created.recipientIds],
         );
-        await db.query("DELETE FROM recipients WHERE id = ANY($1)", [
+        await db.query("DELETE FROM recipients WHERE id IN (SELECT value FROM json_each($1))", [
           created.recipientIds,
         ]);
         await db.query(
-          "DELETE FROM category_merge_aliases WHERE target_category_id = ANY($1)",
+          "DELETE FROM category_merge_aliases WHERE target_category_id IN (SELECT value FROM json_each($1))",
           [created.categoryIds],
         );
         await db.query(
-          "DELETE FROM category_root_aliases WHERE target_category_id = ANY($1)",
+          "DELETE FROM category_root_aliases WHERE target_category_id IN (SELECT value FROM json_each($1))",
           [created.categoryIds],
         );
         // Children before parents (the self-reference is restrictive).
@@ -105,13 +94,9 @@ describe.skipIf(!hasTestDatabase())(
         }
       } finally {
         try {
-          await releaseDbSuiteLock();
+          await closeTestPool();
         } finally {
-          try {
-            await closeTestPool();
-          } finally {
-            await closePool();
-          }
+          await closePool();
         }
       }
     });
@@ -430,7 +415,7 @@ describe.skipIf(!hasTestDatabase())(
       created.accountIds.push(accountId);
       const tx = await db.query<{ id: number }>(
         `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id)
-         VALUES (CURRENT_DATE, -12.34, 'EUR', $1, $2, $3) RETURNING id`,
+         VALUES (today(), vision_numeric('-12.34', 18, 4), 'EUR', $1, $2, $3) RETURNING id`,
         [recipient.id, category.id, accountId],
       );
       const transactionId = must(tx.rows[0], "tx.rows[0]").id;

@@ -11,7 +11,7 @@ export interface LeakSample {
   t: number;
   cycle: number;
   phase: LeakPhase;
-  /** Column → value; columns carry their unit (`backend_mb`, `postgres_processes`). */
+  /** Column → value; columns carry their unit (`backend_mb`). */
   values: Record<string, number | null>;
 }
 
@@ -131,7 +131,7 @@ export function renderLeakSummary(result: LeakResult): string {
     `# Vision leak check: ${result.app} ${result.version}`,
     "",
     `${result.minutes} min of alternating ${result.windowSeconds} s active (scroll and page switches) and ${result.windowSeconds} s idle, sampled every ${result.sampleSeconds} s. Judged on idle samples after a ${result.warmupSeconds / 60} min warm-up.`,
-    `"rising" = idle-window medians went up across each of the last ${LEAK_MIN_WINDOWS} windows AND the slope is above ${LEAK_SLOPE_MB_PER_MIN} MB/min. backend_mb and postgres_mb count shared memory once (footprint(1)); the *_sum_mb columns add up each process.`,
+    `"rising" = idle-window medians went up across each of the last ${LEAK_MIN_WINDOWS} windows AND the slope is above ${LEAK_SLOPE_MB_PER_MIN} MB/min. backend_mb counts memory the backend's processes share once (footprint(1)); the *_sum_mb columns add up each process.`,
     "",
   ];
   if (result.error) out.push(`**Stopped early:** ${result.error}`, "");

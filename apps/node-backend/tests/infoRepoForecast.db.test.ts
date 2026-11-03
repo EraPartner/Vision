@@ -1,21 +1,21 @@
 /**
- * Real-Postgres tests for infoRepositoryForecast — `getCashflowComparison`,
+ * Real-database (SQLite) tests for infoRepositoryForecast — `getCashflowComparison`,
  * `getCashflowForecastData`, `getCashflowForecastDataRolling` and
  * `getCashflowForecastDataByCategory`.
  *
  * DB-backed complement to infoRepoForecast.test.ts (which stays: it runs without
  * a DB, and its argument-validation cases are pure JS with no DB reachable).
- * The mock suite pins SQL text — `interval '12 months'`, `planned_date >
- * CURRENT_DATE`, param numbering — and hand-feeds already-converted rows into
- * the JS reducers. It therefore proves nothing about which rows Postgres puts in
+ * The mock suite pins SQL text — the month windows, the planned-date bound,
+ * param numbering — and hand-feeds already-converted rows into
+ * the JS reducers. It therefore proves nothing about which rows the database puts in
  * (or leaves out of) each window, which is where every behaviour below lives:
  * the four/three/two parallel window predicates, the planned-transaction
  * overlays and their `is_executed` gate, the 3-level effective-category JOIN,
  * and per-date FX off seeded `exchange_rates` rows.
  *
  * Determinism: since ecd7f78 the queries anchor every window on the
- * APP_TIMEZONE calendar day (ADR-009), not Postgres `CURRENT_DATE` — and for
- * the last hours of a UTC day the two disagree by one day (nightly, not just
+ * APP_TIMEZONE calendar day (ADR-009), not the database clock's `today()` —
+ * and for the last hours of a UTC day the two disagree by one day (nightly, not just
  * at month ends: a rolling `daysBack` boundary shifts every evening). So the
  * fixture helpers below substitute the literal token `CURRENT_DATE` in every
  * date expression with the app-clock date at call time, keeping fixtures and
@@ -29,19 +29,15 @@
 import {
   afterAll,
   afterEach,
-  beforeAll,
   describe,
   expect,
   it,
   vi,
 } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   deleteAllCategoryFixtures,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import {
   getCashflowComparison,
@@ -67,23 +63,22 @@ const rec = {} as Record<"electrabel" | "electrabelAlias" | "misc", number>;
 
 /** Day N of the month `monthsBack` months before the current one, as 'YYYY-MM-DD'. */
 const monthDay = (monthsBack: number, day: number) =>
-  `date_trunc('month', CURRENT_DATE) - interval '${monthsBack} months' + interval '${day - 1} days'`;
+  `add_days(add_months(date_trunc('month', CURRENT_DATE), ${-monthsBack}), ${day - 1})`;
 
 /**
  * Anchor a fixture date expression on the SAME clock the queries use: the
  * literal token `CURRENT_DATE` becomes the APP_TIMEZONE calendar day, resolved
- * at call time (so the fake-timer rollover cases see the frozen clock). `now()`
- * is deliberately NOT substituted — the rollover describe uses it to seed on
- * the real DB clock.
+ * at call time (so the fake-timer rollover cases see the frozen clock).
+ * `today()` is deliberately NOT substituted.
  */
 const anchored = (dateExpr: string) =>
-  dateExpr.replaceAll("CURRENT_DATE", `('${todayAppDateString()}'::date)`);
+  dateExpr.replaceAll("CURRENT_DATE", `('${todayAppDateString()}')`);
 
 /** 'YYYY-MM-DD' for an arbitrary date expression (app-clock anchored). */
 async function ymd(dateExpr: string): Promise<string> {
   const { rows } = await must(getTestPool(), "getTestPool()").query<{
     d: string;
-  }>(`SELECT to_char((${anchored(dateExpr)})::date, 'YYYY-MM-DD') AS d`);
+  }>(`SELECT to_char(${anchored(dateExpr)}, 'YYYY-MM-DD') AS d`);
   return must(rows[0], "rows[0]").d;
 }
 
@@ -170,7 +165,7 @@ async function insertTxn({
     id: TransactionId;
   }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, is_active, is_transfer)
-     VALUES ((${anchored(dateExpr)})::date, $1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+     VALUES (ts_date(${anchored(dateExpr)}), vision_numeric($1, 18, 4), $2, $3, $4, $5, $6, $7) RETURNING id`,
     [
       amount,
       currency,
@@ -199,7 +194,7 @@ async function insertPlanned({
 }) {
   await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO planned_transactions (planned_date, amount, currency, is_active, is_executed)
-     VALUES ((${anchored(dateExpr)})::date, $1, $2, $3, $4)`,
+     VALUES (ts_date(${anchored(dateExpr)}), vision_numeric($1, 18, 4), $2, $3, $4)`,
     [amount, currency, isActive, isExecuted],
   );
 }
@@ -213,23 +208,14 @@ async function insertRate(
 ) {
   await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-     VALUES ($1, (${anchored(dateExpr)})::date, $2, $3)`,
+     VALUES ($1, ts_date(${anchored(dateExpr)}), vision_numeric($2, 20, 10), $3)`,
     [code, rate, isLatest],
   );
 }
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "repositories/infoRepositoryForecast (real DB)",
   () => {
-    beforeAll(async () => {
-      expect(
-        process.env.DATABASE_URL,
-        "DATABASE_URL must equal TEST_DATABASE_URL for this suite (see scripts/with-test-db.sh)",
-      ).toBe(process.env.TEST_DATABASE_URL);
-      // DB suites share one database across parallel vitest workers — serialize.
-      await acquireDbSuiteLock();
-    }, 180_000);
-
     afterEach(async () => {
       const pool = must(getTestPool(), "getTestPool()");
       await pool.query("DELETE FROM planned_transactions");
@@ -248,7 +234,6 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
@@ -298,7 +283,7 @@ describe.skipIf(!hasTestDatabase())(
         // part of the projected path once its effective day is reached.
         await insertTxn({
           dateExpr:
-            "date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day'",
+            "add_days(add_months(date_trunc('month', CURRENT_DATE), 1), -1)",
           amount: "-500.00",
         });
 
@@ -461,7 +446,7 @@ describe.skipIf(!hasTestDatabase())(
         await insertTxn({ dateExpr: "CURRENT_DATE", amount: "-7.00" });
         await insertTxn({
           dateExpr:
-            "date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day'",
+            "add_days(add_months(date_trunc('month', CURRENT_DATE), 1), -1)",
           amount: "-11.00",
         });
         await insertPlanned({ dateExpr: monthDay(0, 1), amount: "-20.00" });
@@ -476,7 +461,7 @@ describe.skipIf(!hasTestDatabase())(
         ]);
         const today = await ymd("CURRENT_DATE");
         const lastDay = await ymd(
-          "date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day'",
+          "add_days(add_months(date_trunc('month', CURRENT_DATE), 1), -1)",
         );
         expect(r.currentActual).toEqual([
           { date: today, net: today === lastDay ? -18 : -7 },
@@ -504,27 +489,27 @@ describe.skipIf(!hasTestDatabase())(
       it("keeps history strictly before the rolling window and only future planned rows", async () => {
         await seedBase();
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '40 days'",
+          dateExpr: "add_days(CURRENT_DATE, -40)",
           amount: "100.00",
         });
         // Exactly on the boundary: history is `< CURRENT_DATE - daysBack`, current
         // is `>= CURRENT_DATE - daysBack`, so this row belongs to currentActual.
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '30 days'",
+          dateExpr: "add_days(CURRENT_DATE, -30)",
           amount: "5.00",
         });
         await insertTxn({ dateExpr: "CURRENT_DATE", amount: "-3.00" });
         await insertTxn({
-          dateExpr: "CURRENT_DATE + interval '10 days'",
+          dateExpr: "add_days(CURRENT_DATE, 10)",
           amount: "-12.00",
         });
         await insertPlanned({ dateExpr: "CURRENT_DATE", amount: "-99.00" }); // not > CURRENT_DATE
         await insertPlanned({
-          dateExpr: "CURRENT_DATE + interval '10 days'",
+          dateExpr: "add_days(CURRENT_DATE, 10)",
           amount: "-50.00",
         });
         await insertPlanned({
-          dateExpr: "CURRENT_DATE + interval '90 days'",
+          dateExpr: "add_days(CURRENT_DATE, 90)",
           amount: "-11.00",
         }); // beyond daysForward
 
@@ -538,17 +523,17 @@ describe.skipIf(!hasTestDatabase())(
         );
 
         expect(r.history).toEqual([
-          { date: await ymd("CURRENT_DATE - interval '40 days'"), net: 100 },
+          { date: await ymd("add_days(CURRENT_DATE, -40)"), net: 100 },
         ]);
         expect(r.currentActual).toEqual([
-          { date: await ymd("CURRENT_DATE - interval '30 days'"), net: 5 },
+          { date: await ymd("add_days(CURRENT_DATE, -30)"), net: 5 },
           { date: await ymd("CURRENT_DATE"), net: -3 },
         ]);
         expect(r.scheduledActual).toEqual([
-          { date: await ymd("CURRENT_DATE + interval '10 days'"), net: -12 },
+          { date: await ymd("add_days(CURRENT_DATE, 10)"), net: -12 },
         ]);
         expect(r.plannedCurrent).toEqual([
-          { date: await ymd("CURRENT_DATE + interval '10 days'"), net: -50 },
+          { date: await ymd("add_days(CURRENT_DATE, 10)"), net: -50 },
         ]);
       });
     });
@@ -591,7 +576,7 @@ describe.skipIf(!hasTestDatabase())(
         });
         await insertTxn({
           dateExpr:
-            "date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day'",
+            "add_days(add_months(date_trunc('month', CURRENT_DATE), 1), -1)",
           amount: "-7.00",
           recipientId: rec.misc,
           categoryId: cat.Food,
@@ -631,7 +616,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(r.historyByCategory).toHaveLength(3);
         const today = await ymd("CURRENT_DATE");
         const lastDay = await ymd(
-          "date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day'",
+          "add_days(add_months(date_trunc('month', CURRENT_DATE), 1), -1)",
         );
         expect(r.currentActualByCategory).toEqual([
           {
@@ -736,7 +721,7 @@ describe.skipIf(!hasTestDatabase())(
         // month's start (byCat's boundary) AND before CURRENT_DATE - 30 days
         // (rolling's boundary) — monthDay(1, 5) is not on the first days of a
         // month, where it falls inside the trailing 30-day current window.
-        const histDate = "CURRENT_DATE - interval '45 days'";
+        const histDate = "add_days(CURRENT_DATE, -45)";
         await insertTxn({ dateExpr: histDate, amount: "50.00" });
         await insertTxn({
           dateExpr: histDate,
@@ -788,7 +773,7 @@ describe.skipIf(!hasTestDatabase())(
       it("counts transfer legs again when includeTransfers is switched on", async () => {
         await seedBase();
         await must(getTestPool(), "getTestPool()").query(
-          `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', 'true'::jsonb)
+          `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', vision_jsonb('true'))
          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
         );
         await insertTxn({ dateExpr: "CURRENT_DATE", amount: "-100.00" });
@@ -1036,11 +1021,12 @@ describe.skipIf(!hasTestDatabase())(
     // whole month of arithmetic.
     //
     // These cases choose the adjacent APP_TIMEZONE month boundary whose UTC
-    // instant lies in the month Postgres currently reports. In a positive-offset
-    // zone that is 00:30 on the first of the next app month; in a negative-offset
-    // zone it is 23:30 on the last day of the previous app month. The DB keeps its
-    // real, unfaked clock. This reproduces the month disagreement in either
-    // direction instead of assuming Brussels is always ahead of UTC.
+    // instant lies in the month the database clock currently reports. In a
+    // positive-offset zone that is 00:30 on the first of the next app month; in a
+    // negative-offset zone it is 23:30 on the last day of the previous app month.
+    // The database-clock facts are read before Date is faked. This reproduces the
+    // month disagreement in either direction instead of assuming Brussels is
+    // always ahead of UTC.
     //
     // Every expectation below is stated in APP_TIMEZONE terms. If any window edge
     // fell back to CURRENT_DATE, the last-complete month's rows would vanish from
@@ -1052,9 +1038,9 @@ describe.skipIf(!hasTestDatabase())(
       // from that one clock. Day 5 of the last two complete app months forms a
       // two-month history; CURRENT_DATE itself is the current-app-month fixture.
       const lastCompleteMonthDay5 =
-        "date_trunc('month', CURRENT_DATE) - interval '1 month' + interval '4 days'";
+        "add_days(add_months(date_trunc('month', CURRENT_DATE), -1), 4)";
       const monthBeforeDay5 =
-        "date_trunc('month', CURRENT_DATE) - interval '2 months' + interval '4 days'";
+        "add_days(add_months(date_trunc('month', CURRENT_DATE), -2), 4)";
       const appToday = "CURRENT_DATE";
 
       afterEach(() => {
@@ -1074,9 +1060,9 @@ describe.skipIf(!hasTestDatabase())(
           next_month_first: string;
           previous_month_last: string;
         }>(`
-        SELECT to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM') AS db_month,
-               to_char(date_trunc('month', CURRENT_DATE) + interval '1 month', 'YYYY-MM-DD') AS next_month_first,
-               to_char(date_trunc('month', CURRENT_DATE) - interval '1 day', 'YYYY-MM-DD') AS previous_month_last
+        SELECT to_char(date_trunc('month', today()), 'YYYY-MM') AS db_month,
+               to_char(add_months(date_trunc('month', today()), 1), 'YYYY-MM-DD') AS next_month_first,
+               to_char(add_days(date_trunc('month', today()), -1), 'YYYY-MM-DD') AS previous_month_last
       `);
         const dbFacts = must(rows[0], "rollover facts");
         const candidates = [

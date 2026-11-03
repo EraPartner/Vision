@@ -14,10 +14,11 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.ts";
+import { randomUUID } from "node:crypto";
 import { closePool } from "../src/database/connection.ts";
-import { ensureAnalysisRole } from "../src/database/analysisRoleBootstrap.ts";
 import { closeAnalysisPool } from "../src/services/analysisExecutor.ts";
 import {
+  __buildDefinition,
   createSavedAnalysis,
   updateSavedAnalysis,
 } from "../src/services/savedAnalysisService.ts";
@@ -66,21 +67,9 @@ let savedAnalysisId: string | undefined;
 let recipientId: number | undefined;
 let transactionId: number | undefined;
 
-describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
+describe.skipIf(!hasTestDatabase())("analysis monitors (real database)", () => {
   beforeAll(async () => {
-    expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
     await acquireDbSuiteLock();
-    if (process.env.VISION_TEST_DB_ISOLATED === "1") {
-      expect(
-        (
-          await ensureAnalysisRole({
-            databaseUrl: must(process.env.DATABASE_URL, "process.env.DATABASE_URL"),
-            analysisUrl: process.env.DATABASE_URL_ANALYSIS,
-            migrationsUrl: process.env.DATABASE_URL,
-          })
-        ).status,
-      ).not.toBe("degraded");
-    }
   }, 180_000);
 
   afterEach(async () => {
@@ -176,10 +165,10 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
         "cooldown-pending",
       );
       const aged = await must(getTestPool(), "getTestPool()").query<{ cooldown_minutes: number; last_notified_at: Date; age_seconds: number }>(
-        `UPDATE analysis_monitors SET last_notified_at=now()-interval '2 hours',
-           next_due_at=now()-interval '1 hour' WHERE id=$1
+        `UPDATE analysis_monitors SET last_notified_at=sub_interval(now(), '2 hours'),
+           next_due_at=sub_interval(now(), '1 hour') WHERE id=$1
          RETURNING cooldown_minutes,last_notified_at,
-           extract(epoch FROM (now()-last_notified_at))::int AS age_seconds`,
+           CAST(date_part('epoch', now()) - date_part('epoch', last_notified_at) AS INTEGER) AS age_seconds`,
         [monitorId],
       );
       expect(aged.rowCount).toBe(1);
@@ -230,7 +219,9 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
     }
   });
 
-  it.skipIf(process.env.VISION_TEST_DB_ISOLATED !== "1")(
+  // Every test file has its own database and the analysis sandbox needs no
+  // database role, so this runs everywhere (ADR-263).
+  it(
     "uses the exact completed saved-analysis run for a numeric crossing and deduplicates the episode",
     async () => {
       const marker = "vision-monitor-synthetic-fixture";
@@ -239,7 +230,7 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
         workspace: "budgeting",
         querySpec: {
           mode: "sql",
-          sql: `SELECT count(*)::numeric AS amount FROM vision_analysis.transactions_v1 WHERE memo = '${marker}'`,
+          sql: `SELECT CAST(count(*) AS TEXT) AS amount FROM vision_analysis.transactions_v1 WHERE memo = '${marker}'`,
           datasetIds: ["transactions"],
           columns: [
             { id: "amount", label: "Count", type: "decimal", nullable: false },
@@ -278,7 +269,7 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
         await must(getTestPool(), "getTestPool()").query<{ id: number }>(
           `INSERT INTO transactions
       (date,amount,currency,recipient_id,account_id,is_active,is_transfer,memo)
-      VALUES ('2026-09-19',1,'EUR',$1,NULL,true,false,$2) RETURNING id`,
+      VALUES ('2026-09-19','1.0000','EUR',$1,NULL,true,false,$2) RETURNING id`,
           [recipientId, marker],
         ),
       ).id;
@@ -305,7 +296,7 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
         expectedVersion: 1,
         querySpec: {
           mode: "sql",
-          sql: `SELECT amount::numeric AS amount FROM vision_analysis.transactions_v1 WHERE memo = '${marker}' UNION ALL SELECT 2::numeric AS amount`,
+          sql: `SELECT amount FROM vision_analysis.transactions_v1 WHERE memo = '${marker}' UNION ALL SELECT '2' AS amount`,
           datasetIds: ["transactions"],
           columns,
         },
@@ -325,7 +316,7 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
         expectedVersion: 2,
         querySpec: {
           mode: "sql",
-          sql: `SELECT count(*)::numeric AS amount FROM vision_analysis.transactions_v1 WHERE memo = '${marker}'`,
+          sql: `SELECT CAST(count(*) AS TEXT) AS amount FROM vision_analysis.transactions_v1 WHERE memo = '${marker}'`,
           datasetIds: ["transactions"],
           columns,
         },
@@ -338,4 +329,81 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
       ).toHaveLength(1);
     },
   );
+
+  it("records a stale observation for custom SQL that needs review, without running it", async () => {
+    // A saved analysis as the move to SQLite left it: custom SQL with the
+    // PostgreSQL dialect (definition versions are immutable, so insert it).
+    const pool = must(getTestPool(), "getTestPool()");
+    savedAnalysisId = randomUUID();
+    const definitionId = `analysis:${randomUUID()}`;
+    const definition = __buildDefinition({
+      definitionId,
+      version: 1,
+      name: "Legacy monitored SQL",
+      workspace: "budgeting",
+      parameters: {},
+      querySpec: {
+        mode: "sql",
+        sql: "SELECT count(*)::numeric AS amount FROM vision_analysis.transactions_v1",
+        datasetIds: ["transactions"],
+        columns: [{ id: "amount", label: "Count", type: "decimal", nullable: false }],
+      },
+    });
+    await pool.query(
+      `INSERT INTO saved_analyses (id, definition_id, name, workspace, current_version)
+       VALUES ($1, $2, 'Legacy monitored SQL', 'budgeting', 1)`,
+      [savedAnalysisId, definitionId],
+    );
+    await pool.query(
+      `INSERT INTO saved_analysis_definition_versions (saved_analysis_id, version, definition_json)
+       VALUES ($1, 1, vision_jsonb($2))`,
+      [
+        savedAnalysisId,
+        JSON.stringify({ ...definition, source: { ...definition.source, dialect: "postgresql" } }),
+      ],
+    );
+    const monitor = await createAnalysisMonitor({
+      kind: "analysis-threshold",
+      title: "Legacy SQL crossing",
+      savedAnalysisId,
+      fieldId: "amount",
+      operator: "above",
+      threshold: "0.00",
+      intervalMinutes: 15,
+      cooldownMinutes: 60,
+    });
+    monitorId = monitor.id;
+    const checked = await checkAnalysisMonitor(monitorId);
+    expect(checked).toMatchObject({
+      status: "stale",
+      reasonCode: "analysis-needs-review",
+    });
+    const observations = await listMonitorObservations(monitorId, {});
+    expect(must(observations.items[0], "observation")).toMatchObject({
+      status: "stale",
+      reasonCode: "analysis-needs-review",
+    });
+    const runs = await pool.query<{ n: number }>(
+      "SELECT count(*) AS n FROM saved_analysis_runs WHERE saved_analysis_id = $1",
+      [savedAnalysisId],
+    );
+    expect(runs.rows).toEqual([{ n: 0 }]);
+    // The due-monitor sweep records it the same way and keeps going.
+    await pool.query(
+      "UPDATE analysis_monitors SET next_due_at = sub_interval(now(), '1 minute') WHERE id = $1",
+      [monitorId],
+    );
+    expect(await checkDueAnalysisMonitors()).toBe(1);
+    expect(
+      must(
+        firstRow(
+          await pool.query<{ last_status: string }>(
+            "SELECT last_status FROM analysis_monitors WHERE id = $1",
+            [monitorId],
+          ),
+        ),
+        "monitor",
+      ).last_status,
+    ).toBe("stale");
+  });
 });

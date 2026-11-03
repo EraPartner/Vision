@@ -1,9 +1,9 @@
 /**
- * Real-Postgres coverage for ledger row contracts (ADR-193) that no other DB
+ * Real-database coverage for ledger row contracts (ADR-193) that no other DB
  * suite runs: bulk tagging, filter-mode bulk selection, the bulk export
  * snapshot, planned-transaction tags, batch split creation and the account
  * close adjustment. Each call below runs its query through the row schema in
- * `throw` mode, so a schema that disagrees with what node-postgres returns
+ * `throw` mode, so a schema that disagrees with what the driver returns
  * fails here with a RowContractError.
  *
  * Isolation: targeted per-test DELETEs of the rows this suite seeds (same
@@ -11,13 +11,10 @@
  * transactions).
  */
 
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { bulkTagTransactions } from "../src/services/transactionBulkService.ts";
@@ -60,8 +57,8 @@ async function seed() {
   accountId = must(acct.rows[0], "acct.rows[0]").id;
   const tx = await pool.query<{ id: TransactionId }>(
     `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, is_active)
-     VALUES ('2024-03-01', -40.25, 'EUR', $1, $2, $3, true),
-            ('2024-03-02', 12.5, 'EUR', $1, $2, $3, true)
+     VALUES ('2024-03-01', vision_numeric('-40.25', 18, 4), 'EUR', $1, $2, $3, true),
+            ('2024-03-02', vision_numeric('12.5', 18, 4), 'EUR', $1, $2, $3, true)
      RETURNING id`,
     [MEMO, accountId, recipientId],
   );
@@ -107,21 +104,12 @@ function fakeResponse() {
   return loose<ExpressResponse & typeof res>(res);
 }
 
-describe.skipIf(!hasTestDatabase())("ledger row contracts (real DB)", () => {
-  beforeAll(async () => {
-    expect(
-      process.env.DATABASE_URL,
-      "DATABASE_URL must equal TEST_DATABASE_URL for this suite",
-    ).toBe(process.env.TEST_DATABASE_URL);
-    await acquireDbSuiteLock();
-  }, 180_000);
-
+describe("ledger row contracts (real DB)", () => {
   afterEach(async () => {
     await wipe();
   });
 
   afterAll(async () => {
-    await releaseDbSuiteLock();
     await closeTestPool();
     await closePool();
   });

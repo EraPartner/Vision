@@ -1,12 +1,12 @@
 /**
- * Runtime contracts for rows coming back from PostgreSQL (ADR-193).
+ * Runtime contracts for rows coming back from the database (ADR-193).
  *
  * `query<R>()` trusts its generic; these helpers check each row against a zod
- * schema that describes what node-postgres ACTUALLY returns with its default
- * type parsers (NUMERIC/BIGINT/COUNT(*) as strings, DATE/TIMESTAMPTZ as
- * `Date`, see src/types/rows.ts). No global type parsers are installed and
- * rows are never rewritten: a schema only checks, and the caller receives the
- * exact objects pg produced (extra columns included).
+ * schema that describes what the SQLite driver ACTUALLY returns: the shapes
+ * node-postgres returned with its default type parsers (NUMERIC/BIGINT/COUNT(*)
+ * as strings, DATE/TIMESTAMPTZ as `Date`, see src/types/rows.ts and ADR-263).
+ * Rows are never rewritten: a schema only checks, and the caller receives the
+ * exact objects the driver produced (extra columns included).
  *
  * A mismatch is a bug in Vision, not bad input, so it is never a 400. Tests
  * and development throw; other environments follow the shared ADR-193

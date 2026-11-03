@@ -1,5 +1,5 @@
 /**
- * Real-PostgreSQL behaviour of saved custom CSV parser configs: name ordering
+ * Real-database behaviour of saved custom CSV parser configs: name ordering
  * and partial updates. Replaces mocked-pool tests that asserted the SQL SET
  * clause and bound parameters.
  */
@@ -38,15 +38,12 @@ async function create(name: string, amountColumn = "Amount") {
 }
 
 describe.skipIf(!hasTestDatabase())("custom parser configs (real DB)", () => {
-  beforeAll(async () => {
-    expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-    await acquireDbSuiteLock();
-  }, 180_000);
+  beforeAll(acquireDbSuiteLock);
 
   afterEach(async () => {
     await must(getTestPool(), "getTestPool()").query(
-      "DELETE FROM custom_parser_configs WHERE id = ANY($1::int[])",
-      [ids.splice(0)],
+      "DELETE FROM custom_parser_configs WHERE id IN (SELECT value FROM json_each($1))",
+      [JSON.stringify(ids.splice(0))],
     );
   });
 
@@ -63,6 +60,23 @@ describe.skipIf(!hasTestDatabase())("custom parser configs (real DB)", () => {
       .filter((row) => [a.id, b.id].includes(row.id))
       .map((row) => row.id);
     expect(ours).toEqual([a.id, b.id]);
+  });
+
+  it("stores the config as canonical jsonb text and reads it back parsed", async () => {
+    const created = await create("Canonical");
+    const { rows } = await must(getTestPool(), "getTestPool()").query<{ config_json: string }>(
+      "SELECT config_json FROM custom_parser_configs WHERE id = $1",
+      [created.id],
+    );
+    // jsonb key order: shorter keys first, then bytewise; the read is parsed.
+    expect(rows).toEqual([{ config_json: config("Amount") }]);
+    const { rows: text } = await must(getTestPool(), "getTestPool()").query<{ t: string }>(
+      "SELECT CAST(config_json AS TEXT) AS t FROM custom_parser_configs WHERE id = $1",
+      [created.id],
+    );
+    expect(must(text[0], "text[0]").t).toBe(
+      '{"encoding": "utf-8", "skipRows": 0, "separator": ",", "dateColumn": "Date", "dateFormat": "%Y-%m-%d", "memoColumn": "", "amountColumn": "Amount", "recipientColumn": "Name"}',
+    );
   });
 
   it("updates only the supplied fields", async () => {

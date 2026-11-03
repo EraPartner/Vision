@@ -24,7 +24,7 @@ import {
 } from "./currency/latestRateConversion.ts";
 import { money, toDecimal, toNumber, roundToCents } from "../lib/money.ts";
 import { statementPartition } from "../repositories/accountBalanceSql.ts";
-import { withTransaction } from "../database/connection.ts";
+import { withFundingGraphTransaction } from "../lib/accountFundingGraphLock.ts";
 import { storedCurrencyCode } from "../lib/currencyCode.ts";
 import { invalidateStatisticsCaches } from "./info/cache.ts";
 import { asAccountId } from "@vision/types/brands";
@@ -413,7 +413,9 @@ const accountService = {
         throw err;
       }
     };
-    return "funding_account_id" in fields ? withTransaction(mutate) : mutate();
+    return "funding_account_id" in fields
+      ? withFundingGraphTransaction(mutate)
+      : mutate();
   },
 
   /** @param body unvalidated wire payload — see `sanitize`. */
@@ -468,7 +470,7 @@ const accountService = {
       return updated;
     };
     const updated = await ("funding_account_id" in fields
-      ? withTransaction(mutate)
+      ? withFundingGraphTransaction(mutate)
       : mutate());
     // The category pivot splits income by account owner (ADR-201).
     if ("owner" in fields) invalidateStatisticsCaches();
@@ -534,13 +536,16 @@ const accountService = {
    * the caller to the close flow (lifecycle D5: active → closed → deleted).
    */
   async remove(id: AccountId) {
-    return withTransaction(async () => {
+    return withFundingGraphTransaction(async () => {
       await accountRepository.lockFundingGraphForMutation();
       let removed;
       try {
         removed = await accountRepository.remove(id);
       } catch (err) {
-        if (errorCode(err) === "23503") {
+        // The ledger references accounts ON DELETE RESTRICT, which raises
+        // 23001 on SQLite (ADR-263); PostgreSQL raised 23503.
+        const code = errorCode(err);
+        if (code === "23503" || code === "23001") {
           throw new ConflictError(
             `Account ${id} still has activity referencing it and cannot be deleted. Close the account instead.`,
           );

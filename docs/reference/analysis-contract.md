@@ -2,7 +2,7 @@
 title: Analysis Definition and Result Contract Reference
 type: reference
 status: active
-date: 2026-10-28
+date: 2026-11-03
 tags: [reference, analysis, contract, lineage, versioning, datasets, money]
 description: Exact version-1 shapes, invariants, compatibility rules, and acceptance fixtures for shared Vision financial analyses.
 aliases:
@@ -76,8 +76,12 @@ the future executor must enforce the authenticated user's rows independently.
 
 `visual-plan` records typed field or metric selections, catalog-approved join-path IDs, typed
 filters, output-ID grouping and ordering, an optional limit, and optional generated SQL. It never
-uses raw join or filter expressions. `custom-sql` records PostgreSQL text, referenced datasets and
-parameters, and whether visual conversion is supported. Each binding names a declared parameter and
+uses raw join or filter expressions. `custom-sql` records SQL text, referenced datasets and
+parameters, and whether visual conversion is supported. Its `dialect` field is `sqlite` or
+`postgresql`. The executor runs the text as SQLite SQL in the analysis sandbox, labelled
+`sqlite-sandbox-v1` ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). Custom SQL whose dialect
+is not `sqlite` was written for PostgreSQL: it is kept unchanged, marked as needing review, and not
+run until the user saves it again as SQLite SQL. Each binding names a declared parameter and
 the exact JavaScript UTF-16 code-unit range containing its `:parameter` placeholder. SQL text is otherwise opaque and
 preserved verbatim, including casts, comments, quoted strings, and dollar-quoted bodies. A saved visual
 origin may accompany edited SQL, but consumers must not pretend advanced SQL can round-trip.
@@ -189,8 +193,8 @@ their focused tests and database lifecycle checks are separate evidence.
 
 - `@vision/types/analysis` owns vocabulary, runtime validation, and compatibility.
 - Dataset owners define and test financial meaning.
-- `analysisExecutor.ts` and the `vision_analysis_executor` role own authorization, resource limits,
-  cancellation, and query execution.
+- `analysisExecutor.ts` and its SQLite sandbox process own authorization, resource limits,
+  cancellation, and query execution ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]).
 - `savedAnalysisService.ts` owns immutable definition versions, run persistence, and last-usable-result state.
 - Presentations own rendering but cannot weaken completeness or compatibility checks.
 - AI can propose inspectable definitions but receives no privileged execution path.

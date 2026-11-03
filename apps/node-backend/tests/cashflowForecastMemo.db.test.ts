@@ -1,15 +1,12 @@
 /**
  * The month forecast reuses a payload only while its inputs are unchanged.
- * Real PostgreSQL: a ledger write between two requests with the dashboard's
+ * Real database (SQLite): a ledger write between two requests with the dashboard's
  * non-default MC params must show up in the second answer.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { computeCashflowForecast } from "../src/services/calculations/forecast/index.ts";
@@ -24,25 +21,21 @@ const DASHBOARD = {
   includeBacktest: true,
 };
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "cash-flow forecast payload reuse (real DB)",
   () => {
     const accounts: number[] = [];
     const recipients: number[] = [];
-    beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180_000);
     afterEach(async () => {
       const pool = must(getTestPool(), "getTestPool()");
       await pool.query(
-        "DELETE FROM transactions WHERE account_id = ANY($1::int[])",
+        "DELETE FROM transactions WHERE account_id IN (SELECT value FROM json_each($1))",
         [accounts],
       );
-      await pool.query("DELETE FROM accounts WHERE id = ANY($1::int[])", [
+      await pool.query("DELETE FROM accounts WHERE id IN (SELECT value FROM json_each($1))", [
         accounts.splice(0),
       ]);
-      await pool.query("DELETE FROM recipients WHERE id = ANY($1::int[])", [
+      await pool.query("DELETE FROM recipients WHERE id IN (SELECT value FROM json_each($1))", [
         recipients.splice(0),
       ]);
       await pool.query(
@@ -51,7 +44,6 @@ describe.skipIf(!hasTestDatabase())(
       );
     });
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
@@ -75,7 +67,7 @@ describe.skipIf(!hasTestDatabase())(
       recipients.push(recipientId);
       const transactionId = firstRow(
         await pool.query<{ id: number }>(
-          "INSERT INTO transactions (date, amount, currency, account_id, recipient_id) VALUES ($1, -40, 'EUR', $2, $3) RETURNING id",
+          "INSERT INTO transactions (date, amount, currency, account_id, recipient_id) VALUES (ts_date($1), vision_numeric('-40', 18, 4), 'EUR', $2, $3) RETURNING id",
           [todayAppDateString(), accountId, recipientId],
         ),
       ).id;
@@ -87,7 +79,7 @@ describe.skipIf(!hasTestDatabase())(
       const repeated = await computeCashflowForecast(DASHBOARD);
       expect(repeated.data).toEqual(before.data);
 
-      await pool.query("UPDATE transactions SET amount = -90 WHERE id = $1", [
+      await pool.query("UPDATE transactions SET amount = vision_numeric('-90', 18, 4) WHERE id = $1", [
         transactionId,
       ]);
       const after = await computeCashflowForecast(DASHBOARD);

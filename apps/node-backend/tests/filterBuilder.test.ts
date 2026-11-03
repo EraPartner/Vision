@@ -18,13 +18,23 @@ import type { TransactionWhereOptions } from "../src/lib/filterBuilder.ts";
 import { ValidationError } from "../src/middleware/errorHandler.ts";
 
 /**
+ * SQLite's compiler binds every value as `?`. Number them `$1..$n` in order,
+ * so a test can still say which bound value a placeholder takes.
+ */
+function numbered(text: string): string {
+  let n = 0;
+  return text.replace(/\?/g, () => `$${++n}`);
+}
+
+/**
  * The compiled predicate and its bound values, numbered from $1. `shape` is the
  * same text with every placeholder written `$`: a value used in several places
  * binds once per use.
  */
 function buildTransactionWhere(opts?: TransactionWhereOptions) {
-  const { sql, parameters } = transactionWhere(opts).compile(db);
-  return { sql, shape: sql.replace(/\$\d+/g, "$"), params: [...parameters] };
+  const compiled = transactionWhere(opts).compile(db);
+  const sql = numbered(compiled.sql);
+  return { sql, shape: sql.replace(/\$\d+/g, "$"), params: [...compiled.parameters] };
 }
 
 /** The compiled exclusion predicates (without the leading AND). */
@@ -35,7 +45,7 @@ function buildExclusionClauses(
   const where = result.where.compile(db);
   return {
     joinSql: result.joins.compile(db).sql,
-    whereSql: where.sql.replace(/^AND /, ""),
+    whereSql: numbered(where.sql).replace(/^AND /, ""),
     params: [...where.parameters],
   };
 }
@@ -154,7 +164,9 @@ describe("validateInt4Ids", () => {
 describe("buildTransactionWhere", () => {
   it("defaults to active-only filter when given no options", () => {
     const { sql, params } = buildTransactionWhere();
-    expect(sql).toBe("1=1 AND t.is_active = true");
+    // `= 1`, not `= true`: SQLite uses the `WHERE is_active = 1` partial indexes
+    // only for that exact term.
+    expect(sql).toBe("1=1 AND t.is_active = 1");
     expect(params).toEqual([]);
   });
 
@@ -174,7 +186,7 @@ describe("buildTransactionWhere", () => {
     // ADR-088 contract phase: the bank filter resolves through account_id and
     // matches accounts.name — the SQL must NOT touch the retired string column.
     expect(sql).toContain(
-      "t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $3)",
+      "t.account_id IN (SELECT fa.id FROM accounts fa WHERE ilike(fa.name, $3))",
     );
     expect(sql).not.toContain("t.bank_account");
     expect(params).toEqual(["2026-01-01", "2026-01-31", "%BE12%"]);
@@ -293,7 +305,7 @@ describe("buildTransactionWhere", () => {
       ...everything,
       recipientName: "delh",
     }).sql;
-    expect(withName).toMatch(/\br\.name ILIKE/);
+    expect(withName).toMatch(/ilike\(r\.name, /);
     expect(withName).not.toMatch(/\b(pr|c|rc|pc|acct)\.\w+/);
   });
 
@@ -304,16 +316,16 @@ describe("buildTransactionWhere", () => {
     // One id-producing branch per relation instead of an OR chain over the
     // outer join aliases, so each branch can use its own index.
     expect(shape).toContain("t.id IN (");
-    expect(shape).toContain("st.memo ILIKE $ OR st.comment ILIKE $");
+    expect(shape).toContain("ilike(st.memo, $) OR ilike(st.comment, $)");
     // Bank-label branch goes through the account entity (ADR-088), the
     // currency branch stays on the transaction row.
     expect(shape).toContain(
-      "st.account_id IN (SELECT sa.id FROM accounts sa WHERE sa.name ILIKE $)",
+      "st.account_id IN (SELECT sa.id FROM accounts sa WHERE ilike(sa.name, $))",
     );
-    expect(shape).toContain("st.currency ILIKE $");
+    expect(shape).toContain("ilike(st.currency, $)");
     expect(shape).not.toContain("bank_account");
-    expect(shape).toContain("sr.name ILIKE $");
-    expect(shape).toContain("sc.general ILIKE $ OR sc.detail ILIKE $");
+    expect(shape).toContain("ilike(sr.name, $)");
+    expect(shape).toContain("ilike(sc.general, $) OR ilike(sc.detail, $)");
     expect(shape).toContain("sr.default_category_id IN");
     expect(shape).toContain("srp.default_category_id IN");
     expect([...new Set(params)]).toEqual(["%groceries%"]);
@@ -324,11 +336,11 @@ describe("buildTransactionWhere", () => {
       search: "2026-06",
     });
     // Date is matched as ISO text so "2026-06" finds June 2026.
-    expect(shape).toContain("CAST(st.date AS TEXT) ILIKE $");
+    expect(shape).toContain("ilike(CAST(st.date AS TEXT), $)");
     // Tags are matched via the junction table, reusing the same slot.
     expect(shape).toContain("FROM transaction_tags tt");
-    expect(shape).toContain("tg.slug ILIKE $");
-    expect(shape).toContain("tg.is_active = true");
+    expect(shape).toContain("ilike(tg.slug, $)");
+    expect(shape).toContain("tg.is_active = 1");
     expect([...new Set(params)]).toEqual(["%2026-06%"]);
   });
 
@@ -340,7 +352,7 @@ describe("buildTransactionWhere", () => {
 
   it("search includes the amount CAST branch only for numeric-shaped terms", () => {
     const { shape } = buildTransactionWhere({ search: "12.5" });
-    expect(shape).toContain("CAST(st.amount AS TEXT) ILIKE $");
+    expect(shape).toContain("ilike(CAST(st.amount AS TEXT), $)");
     // '.' never appears in date text, so the date branch is skipped.
     expect(shape).not.toContain("CAST(st.date AS TEXT)");
   });
@@ -351,7 +363,7 @@ describe("buildTransactionWhere", () => {
         search: term,
       });
       expect(sql).not.toContain("t.id IN (");
-      expect(sql).not.toContain("ILIKE");
+      expect(sql).not.toContain("ilike(");
       expect(params).toEqual([]);
     }
   });
@@ -361,9 +373,10 @@ describe("buildTransactionWhere", () => {
       amountMin: 10,
       amountMax: 50,
     });
-    expect(sql).toContain("ABS(t.amount) >= $1");
-    expect(sql).toContain("ABS(t.amount) <= $2");
-    expect(params).toEqual([10, 50]);
+    // Exact decimal comparison: the bound is bound as decimal text.
+    expect(sql).toContain("dec_ge(dec_abs(t.amount), $1)");
+    expect(sql).toContain("dec_le(dec_abs(t.amount), $2)");
+    expect(params).toEqual(["10", "50"]);
   });
 
   it("amount bounds are skipped when null or non-finite", () => {
@@ -371,7 +384,7 @@ describe("buildTransactionWhere", () => {
       amountMin: null,
       amountMax: undefined,
     });
-    expect(sql).not.toContain("ABS(t.amount)");
+    expect(sql).not.toContain("dec_abs(t.amount)");
     expect(params).toEqual([]);
   });
 
@@ -381,10 +394,10 @@ describe("buildTransactionWhere", () => {
       amountMax: -50,
       amountSigned: true,
     });
-    expect(sql).toContain("t.amount >= $1");
-    expect(sql).toContain("t.amount <= $2");
-    expect(sql).not.toContain("ABS(t.amount)");
-    expect(params).toEqual([-50, -50]);
+    expect(sql).toContain("dec_ge(t.amount, $1)");
+    expect(sql).toContain("dec_le(t.amount, $2)");
+    expect(sql).not.toContain("dec_abs(t.amount)");
+    expect(params).toEqual(["-50", "-50"]);
   });
 
 });
@@ -510,7 +523,7 @@ describe("buildTransactionWhere — accountId / accountIds (FK filter, ADR-088)"
     expect(sql).toContain("t.account_id = $1");
     expect(sql).not.toContain("t.account_id IN ($");
     expect(sql).toContain(
-      "t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $2)",
+      "t.account_id IN (SELECT fa.id FROM accounts fa WHERE ilike(fa.name, $2))",
     );
     expect(params).toEqual([4, "%BE12%"]);
   });
@@ -552,13 +565,13 @@ describe("buildTransactionWhere — bankAccounts (plural IN clause)", () => {
     expect(params).toHaveLength(0);
   });
 
-  it("bankAccount (singular ILIKE) takes precedence over bankAccounts", () => {
+  it("bankAccount (singular ilike()) takes precedence over bankAccounts", () => {
     const { sql, params } = buildTransactionWhere({
       bankAccount: "NL12",
       bankAccounts: ["BE68539007547034"],
       active: false,
     });
-    expect(sql).toContain("fa.name ILIKE");
+    expect(sql).toContain("ilike(fa.name, ");
     expect(sql).not.toContain("fa.name IN (");
     expect(params).toEqual(["%NL12%"]);
   });
@@ -575,22 +588,22 @@ describe("buildTransactionWhere — bankAccounts (plural IN clause)", () => {
 });
 
 describe("buildTransactionWhere — transactionType", () => {
-  it("adds t.amount > 0 for income", () => {
+  it("adds dec_sign(t.amount) > 0 for income", () => {
     const { sql } = buildTransactionWhere({
       transactionType: "income",
       active: false,
     });
-    expect(sql).toContain("t.amount > 0");
-    expect(sql).not.toContain("t.amount < 0");
+    expect(sql).toContain("dec_sign(t.amount) > 0");
+    expect(sql).not.toContain("dec_sign(t.amount) < 0");
   });
 
-  it("adds t.amount < 0 for expense", () => {
+  it("adds dec_sign(t.amount) < 0 for expense", () => {
     const { sql } = buildTransactionWhere({
       transactionType: "expense",
       active: false,
     });
-    expect(sql).toContain("t.amount < 0");
-    expect(sql).not.toContain("t.amount > 0");
+    expect(sql).toContain("dec_sign(t.amount) < 0");
+    expect(sql).not.toContain("dec_sign(t.amount) > 0");
   });
 
   it("adds no amount clause for null transactionType", () => {
@@ -668,26 +681,26 @@ describe("buildTransactionWhere — tagSlugs", () => {
     });
     expect(sql).toContain("EXISTS");
     expect(sql).toContain("transaction_tags");
-    expect(sql).toContain("ANY($1::text[])");
-    expect(params).toEqual([["rome-2020"]]);
+    expect(sql).toContain("tg.slug IN (SELECT value FROM json_each($1))");
+    expect(params).toEqual([JSON.stringify(["rome-2020"])]);
   });
 
-  it("passes multiple slugs as a single array param (OR semantics)", () => {
+  it("passes multiple slugs as a single JSON array param (OR semantics)", () => {
     const { sql, params } = buildTransactionWhere({
       tagSlugs: ["rome-2020", "lisbon-2024"],
       active: false,
     });
-    expect(sql).toContain("ANY($1::text[])");
+    expect(sql).toContain("tg.slug IN (SELECT value FROM json_each($1))");
     expect(params).toHaveLength(1);
-    expect(params[0]).toEqual(["rome-2020", "lisbon-2024"]);
+    expect(JSON.parse(String(params[0]))).toEqual(["rome-2020", "lisbon-2024"]);
   });
 
-  it("filters only active tags (is_active = true)", () => {
+  it("filters only active tags (is_active = 1)", () => {
     const { sql } = buildTransactionWhere({
       tagSlugs: ["rome-2020"],
       active: false,
     });
-    expect(sql).toContain("is_active = true");
+    expect(sql).toContain("tg.is_active = 1");
   });
 
   it("joins on tag_id so inactive tags are excluded from match", () => {
@@ -717,7 +730,7 @@ describe("buildTransactionWhere — tagSlugs", () => {
       tagSlugs: ["rome-2020", "  ", ""],
       active: false,
     });
-    expect(params[0]).toEqual(["rome-2020"]);
+    expect(JSON.parse(String(params[0]))).toEqual(["rome-2020"]);
   });
 
   it("produces no clause when all slugs are blank after trim", () => {
@@ -735,7 +748,7 @@ describe("buildTransactionWhere — tagSlugs", () => {
       tagSlugs: manySlugs,
       active: false,
     });
-    expect(params[0]).toHaveLength(50);
+    expect(JSON.parse(String(params[0]))).toHaveLength(50);
   });
 
 });

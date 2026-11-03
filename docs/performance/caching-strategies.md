@@ -2,8 +2,8 @@
 title: Caching Strategies
 type: performance
 status: active
-date: 2026-10-28
-last_modified: 2026-10-28
+date: 2026-11-03
+last_modified: 2026-11-03
 tags: [performance, caching, optimization, startup, dependency-ordering]
 description: In-memory caching implementation for exchange rates and price feeds
 aliases: [caching, cache layers, in-memory cache, ttl, cache invalidation]
@@ -76,7 +76,7 @@ Vision implements multi-layer caching to minimize external API calls and improve
 
 **Service:** `priceProviderService.ts`  
 **TTL:** 5 minutes  
-**Storage:** In-memory (Map) + PostgreSQL historical cache (`asset_price_history`)
+**Storage:** In-memory (Map) + SQLite historical cache (`asset_price_history`)
 
 ```javascript
 // Cache key format
@@ -104,7 +104,7 @@ Vision implements multi-layer caching to minimize external API calls and improve
 **Repository:** `infoRepository.ts`  
 **Storage:** In-memory (Map)
 
-Caches materialized view availability checks to avoid repeated database queries.
+Caches summary-table availability checks (the `mv_*` tables) for 60 seconds to avoid repeated database queries.
 
 ```javascript
 const mvCache = new Map();
@@ -152,7 +152,7 @@ Code link: [[apps/node-backend/src/routes/investments.ts]]
 ### 6. Portfolio Performance Snapshots
 
 **Service:** `portfolioPerformanceSnapshotService.ts`  
-**Storage:** PostgreSQL (`portfolio_performance_snapshots` table)
+**Storage:** SQLite (`portfolio_performance_snapshots` table)
 
 **Features:**
 - Daily snapshots computed and stored for portfolio performance charts

@@ -4,8 +4,8 @@ type: endpoint
 method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
 tags: [api, settings, preferences, phase-3, auto-link, planned-match, june-2026]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
@@ -63,8 +63,8 @@ Stale baselines return 409 CONFLICT without changing the row. JSON null differs 
 
 Storage behavior:
 
-- Backend serializes all values with `JSON.stringify(...)` and writes them as `$2::jsonb`
-- This guarantees valid JSONB for primitive arrays (for example `dismissed_recurring_patterns: [373]`) and avoids malformed payloads like `{"373"}`
+- Backend serializes all values with `JSON.stringify(...)` and writes them through `vision_jsonb(?)`, which stores canonical jsonb text ([[docs/reference/sqlite-sql-dialect|SQLite SQL dialect]])
+- This guarantees valid JSON for primitive arrays (for example `dismissed_recurring_patterns: [373]`) and avoids malformed payloads like `{"373"}`
 
 **Request Body:**
 
@@ -176,7 +176,7 @@ before, so a client that wrote mismatched keys must correct them. No stored valu
 { "dividend": null, "interest": null, "fee": null, "tax": null }
 ```
 
-All four keys are required. Each value is either `null` or a positive PostgreSQL integer category ID. Strings, fractions, zero, negatives, out-of-range IDs, missing keys, and extra keys are rejected for single and bulk writes. The all-null object is the read default. Imports re-check that configured IDs are active; a missing, deleted, inactive, or unset category leaves the new cash row uncategorized.
+All four keys are required. Each value is either `null` or a positive integer category ID no larger than 2147483647. Strings, fractions, zero, negatives, out-of-range IDs, missing keys, and extra keys are rejected for single and bulk writes. The all-null object is the read default. Imports re-check that configured IDs are active; a missing, deleted, inactive, or unset category leaves the new cash row uncategorized.
 
 ### Removed `life_scenarios` key (2026-10-20)
 

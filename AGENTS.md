@@ -14,7 +14,7 @@ categorization, multi-bank CSV imports, portfolios, Belgian tax, planned and rec
 transactions, and English/Dutch localization. License: AGPL-3.0-only.
 
 The Bun-workspaces monorepo uses React 19, TypeScript, Vite, Tailwind and Radix on the frontend;
-Node/Bun, Express and PostgreSQL on the backend; Vitest for backend tests; and Electron for the
+Node/Bun, Express and SQLite (one database file, ADR-263) on the backend; Vitest for backend tests; and Electron for the
 desktop app.
 
 | Workspace                            | Path                     |
@@ -49,11 +49,11 @@ bun run typecheck
 bun run test
 bun run test:frontend
 bun run check
-# database (Kysely migrator over db/migrations/; needs DATABASE_URL):
+# database (SQLite migrations in db/migrations/; uses VISION_DATABASE_PATH):
 bun run db:migrate            # apply pending migrations through the app's migration runner
 bun run db:status             # list applied and pending migrations
-bun run db:lint               # squawk lint of migration SQL for destructive DDL
-bun run db:codegen            # regenerate the Kysely database types from a migrated database
+bun run db:new -- <name>      # create the next migration file
+bun run db:codegen            # regenerate the Kysely database types from the migrations
 bun run search:ast -l ts -p 'sumMoney($$$)' apps   # structural search (ast-grep)
 # from apps/node-backend:
 bun vitest run src/path/to/x.test.js
@@ -73,9 +73,8 @@ replace these rules.
   synthetic data, never the real financial stack. Launch it with
   `open "/Applications/Vision Demo.app"` and rebuild it with `./install-demo.sh` after relevant
   code changes. Discover its persisted random backend port from `appPort` in the Demo settings,
-  then check `/health`. Its PostgreSQL cluster is isolated below
-  `~/Library/Application Support/Vision Demo/native/vision_demo`; it uses only the bundled native
-  runtime.
+  then check `/health`. Its SQLite database is isolated below
+  `~/Library/Application Support/Vision Demo/database/`; it uses only the bundled native runtime.
 - Do not wipe or mutate the Demo database merely to make it boot. Inspect the native Demo logs and
   seed activation state first. When a canonical synthetic reset is intended, use
   `bun run demo:reset-native` and reopen the Demo app. Never apply that workflow to real Vision.
@@ -143,8 +142,8 @@ Finish with changed files, checks run, skipped checks, residual risk, and follow
 
 Tests are evidence, not an unquestionable specification of the internals (ADR-215). Agents may
 restructure code freely: move, split, merge or inline modules and change internal signatures to
-reach a better design. Tests belong at stable boundaries: HTTP/API contracts, real PostgreSQL
-state, pure domain functions through their public module (money, FX, tax, parsers, recurrence),
+reach a better design. Tests belong at stable boundaries: HTTP/API contracts, real SQLite
+database state, pure domain functions through their public module (money, FX, tax, parsers, recurrence),
 file and backup formats, and rendered UI or end-to-end journeys. A test that asserts structure
 instead of behaviour (source text, file layout, class names or tokens in source, private helpers
 exported for tests, mock call order, SQL strings sent to a mocked client) may be deleted when a
@@ -155,7 +154,7 @@ recovery and public contracts. Never change expected financial values solely bec
 implementation returns different values, delete a domain failure to make a redesign pass, delete
 a source assertion that is the only enforcement of a security or data-safety invariant without a
 boundary replacement, or lower coverage gates to obtain a green result.
-Distinguish simulated-DOM/mocked HTTP tests, live API contracts, real PostgreSQL tests and actual
+Distinguish simulated-DOM/mocked HTTP tests, live API contracts, real SQLite database tests and actual
 native/Electron journeys in verification reports.
 
 ## Key paths
@@ -191,8 +190,8 @@ maintenance unless the user asks for one.
   files (ADR-238).
 - `.claude/settings.json` runs a background edit hook (owning `tsc` project, ESLint,
   dependency-cruiser) that reports errors after edits, and a cloud-only session-start hook that
-  installs dependencies. `.mcp.json` adds `vision-postgres`, read-only SQL against a local database
-  named by `VISION_MCP_DATABASE_URL`, and `vision-typescript`, which finds symbols, definitions,
+  installs dependencies. `.mcp.json` adds `vision-sqlite`, read-only SQL against a local database
+  file named by `VISION_MCP_DATABASE_PATH`, and `vision-typescript`, which finds symbols, definitions,
   references, types and per-file diagnostics across all workspaces. See ADR-227 and ADR-228.
 - Prefer `bun run search:ast` over text search when the question is about code shape, such as
   every call of a function or every `||` fallback on a field.

@@ -37,7 +37,6 @@ import {
   saveHistoricalPointsToDatabase as rawSaveHistoricalPointsToDatabase,
 } from "../src/services/priceProviderService.ts";
 import { must } from "./helpers/must.ts";
-import { listAt } from "./helpers/responseBody.ts";
 
 const fetchHistoricalPrices = vi.mocked(rawFetchHistoricalPrices);
 const saveHistoricalPointsToDatabase = vi.mocked(
@@ -49,6 +48,15 @@ const saveHistoricalPointsToDatabase = vi.mocked(
 const query = (connection as unknown as ConnectionMockSurface).query as Mock<
   (sql: string, params?: unknown[]) => Promise<unknown>
 >;
+
+// cleanupStaleQuotes binds its holding windows as one JSON list (param 1).
+function windowsParam(
+  params: unknown[],
+): { inv: number; from: string; to: string }[] {
+  const raw = params[1];
+  if (typeof raw !== "string") throw new Error("windows param is not JSON text");
+  return JSON.parse(raw) as { inv: number; from: string; to: string }[];
+}
 
 describe("Quote Backfill Service", () => {
   beforeEach(() => {
@@ -522,10 +530,13 @@ describe("Quote Backfill Service", () => {
       const deleted = await cleanupStaleQuotes(investmentWindows);
 
       expect(deleted).toBe(5);
-      // Single-statement cleanup: [invIds, windowInvIds, fromDates, toDates]
+      // Single-statement cleanup: [invIds JSON, windows JSON]
       expect(query).toHaveBeenCalledWith(
         expect.stringContaining("DELETE FROM asset_price_history"),
-        [[1], [1], ["2025-01-01"], ["2025-03-01"]],
+        [
+          "[1]",
+          JSON.stringify([{ inv: 1, from: "2025-01-01", to: "2025-03-01" }]),
+        ],
       );
     });
 
@@ -550,9 +561,10 @@ describe("Quote Backfill Service", () => {
         must(query.mock.calls[0], "query.mock.calls[0]")[1],
         "query params",
       );
-      expect(callArgs[2]).toEqual(["2025-01-01"]);
+      const windows = windowsParam(callArgs);
+      expect(windows[0]?.from).toBe("2025-01-01");
       // toDate should be today's date string
-      expect(listAt(callArgs, 3)[0]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(windows[0]?.to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 
     it("uses UTC for the open-window today sentinel (not the server local time)", async () => {
@@ -584,7 +596,7 @@ describe("Quote Backfill Service", () => {
           must(query.mock.calls[0], "query.mock.calls[0]")[1],
           "query params",
         );
-        expect(callArgs[3]).toEqual(["2025-06-15"]);
+        expect(windowsParam(callArgs)[0]?.to).toBe("2025-06-15");
       } finally {
         vi.useRealTimers();
       }

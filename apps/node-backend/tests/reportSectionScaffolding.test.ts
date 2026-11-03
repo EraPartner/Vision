@@ -719,9 +719,10 @@ describe("portfolio report view models", () => {
     ]);
   });
 
-  it("keeps a pg DATE valuation day on a host east of APP_TIMEZONE", () => {
-    // pg hands DATE back as local midnight; in Helsinki that instant is still
-    // the previous evening in Brussels, which used to print the day before.
+  it("keeps a DATE valuation day on a host east of APP_TIMEZONE", () => {
+    // The driver hands DATE back as local midnight; in Helsinki that instant
+    // is still the previous evening in Brussels, which used to print the day
+    // before.
     const previousTz = process.env.TZ;
     process.env.TZ = "Europe/Helsinki";
     try {

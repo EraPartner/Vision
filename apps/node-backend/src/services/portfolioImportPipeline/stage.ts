@@ -71,9 +71,9 @@ export async function createBatch({
     sql`INSERT INTO portfolio_import_batches
        (adapter_name, source_filename, source_size_bytes, custom_config, default_asset_class, default_type, is_brokerage, account_id, status, started_at)
      VALUES (${adapterName}, ${filename || null}, ${sizeBytes ?? null},
-       ${customConfig ? JSON.stringify(customConfig) : null}, ${defaultAssetClass || null},
+       vision_jsonb(${customConfig ? JSON.stringify(customConfig) : null}), ${defaultAssetClass || null},
        ${defaultType || null}, ${isBrokerage}, ${accountId != null ? Number(accountId) : null},
-       'pending', NOW())
+       'pending', now())
      RETURNING id`,
   );
   return normalizeCreatedBatchId(
@@ -126,13 +126,14 @@ export async function stageBatch({
         await mergeBatchConfig(
           batchId,
           "scope_excluded_rows",
-          sql`${parsed.length - rows.length}::int`,
+          // node:sqlite binds a JS number as REAL; the count is a JSON integer.
+          sql`CAST(${parsed.length - rows.length} AS INTEGER)`,
         );
       if (rows.sourceColumns)
         await mergeBatchConfig(
           batchId,
           "source_columns",
-          sql`${rows.sourceColumns}::text[]`,
+          sql`json(${JSON.stringify(rows.sourceColumns)})`,
         );
       return rows;
     },
@@ -153,16 +154,19 @@ export async function stageBatch({
   });
 }
 
-/** Add one key to the batch's stored config, keeping the keys already there. */
+/**
+ * Add one key to the batch's stored config, keeping the keys already there
+ * (PostgreSQL's `config || jsonb_build_object(key, value)`).
+ */
 async function mergeBatchConfig(
   batchId: PortfolioImportBatchId,
-  key: string,
+  key: "scope_excluded_rows" | "source_columns",
   value: RawBuilder<unknown>,
 ): Promise<void> {
   await db
     .updateTable("portfolio_import_batches")
     .set({
-      custom_config: sql<Json>`COALESCE(custom_config,'{}'::jsonb)||jsonb_build_object(${key}::text,${value})`,
+      custom_config: sql<Json>`vision_jsonb(json_set(COALESCE(custom_config, '{}'), ${`$.${key}`}, ${value}))`,
     })
     .where("id", "=", String(batchId))
     .execute();
@@ -208,8 +212,8 @@ async function insertStagingChunk(
   startIndex: number,
 ): Promise<void> {
   if (rows.length === 0) return;
-  const json = (value: unknown) =>
-    value ? sql<Json>`${JSON.stringify(value)}::json` : null;
+  // json columns keep the text as written, as PostgreSQL's json type did.
+  const json = (value: unknown) => (value ? JSON.stringify(value) : null);
   await withTransaction(async () => {
     // status defaults to 'pending' via the column default.
     await db

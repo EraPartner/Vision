@@ -13,12 +13,9 @@ export async function hasPortfolioTransactionImportBatchIdColumn(): Promise<bool
   const row = await checkedRow(
     presentRowSchema,
     sql`SELECT EXISTS (
-       SELECT 1 FROM pg_attribute
-        WHERE attrelid = to_regclass('public.portfolio_transactions')
-          AND attname = 'import_batch_id'
-          AND attnum > 0
-          AND NOT attisdropped
-     ) AS present`,
+       SELECT 1 FROM pragma_table_info('portfolio_transactions')
+        WHERE name = 'import_batch_id'
+     ) AS "present::bool"`,
   );
   _hasPortfolioTransactionImportBatchIdColumn = Boolean(row?.present);
   return _hasPortfolioTransactionImportBatchIdColumn;

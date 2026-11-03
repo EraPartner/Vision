@@ -172,7 +172,7 @@ describe("recipientInsightsRepository.getRecipientInsights", () => {
     // day-of-month so a partial current month isn't compared to a full prior one.
     const momSql = must(query.mock.calls[1], "query.mock.calls[1]")[0];
     expect(momSql).toMatch(
-      /\(\$\d+::date - DATE_TRUNC\('month', \$\d+::date\)::date\)/,
+      /date_diff_days\(\?, date_trunc\('month', \?\)\)/,
     );
     // "Today" is the APP_TIMEZONE day (ADR-009), not CURRENT_DATE: every
     // bound value of the MoM window and the period keys is that one day.
@@ -353,8 +353,9 @@ describe("recipientInsightsRepository.getRecipientPivot", () => {
       recipientIds: [2147483647],
     });
 
+    // The id list is bound as one JSON array (read with json_each).
     expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([
-      [2147483647],
+      JSON.stringify([2147483647]),
     ]);
   });
 

@@ -2,8 +2,8 @@
 title: Analysis Workspace
 type: feature
 status: active
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     feature,
@@ -23,6 +23,7 @@ related_code:
   - packages/shared-utils/src/analysis/workbook.ts
   - packages/shared-utils/src/analysis/interchange.ts
   - apps/node-backend/src/services/analysisExecutor.ts
+  - apps/node-backend/src/services/analysisSandbox.ts
   - apps/node-backend/src/services/savedAnalysisService.ts
 ---
 
@@ -133,11 +134,23 @@ check value/type reconciliation in portable tests.
 
 ## SQL workflow
 
-The SQL editor accepts one PostgreSQL `SELECT` or `WITH` statement. Users declare the approved
-datasets it references and enter scalar `$1`, `$2`, and later values as a JSON array. Dataset and
-column buttons provide local schema help. PostgreSQL window functions, aggregates, common table
-expressions, and approved joins remain available. Writes, arbitrary tables, file access, extension
-escape, and network escape are rejected independently by SQL validation and database privileges.
+The SQL editor accepts one SQLite `SELECT`, `WITH` or `VALUES` statement. Users declare the
+approved datasets it references and enter scalar `$1`, `$2`, and later values as a JSON array.
+Dataset and column buttons provide local schema help. Window functions, aggregates, common table
+expressions, and approved joins remain available. Decimal columns hold decimal text, so exact
+arithmetic needs the `dec_*` functions, such as `dec_sum(amount)`; native `SUM`, `+` and `*` on
+decimal text compute in floating point ([[docs/reference/sqlite-sql-dialect|SQLite SQL dialect]]).
+SQL validation refuses writes, `ATTACH`, `DETACH`, `PRAGMA`, transaction words, `load_extension`,
+`readfile`, `writefile` and the `sqlite_master` and `sqlite_schema` tables. The sandbox database
+is `query_only` and holds only the copied views, so other tables and the database file are out of
+reach.
+
+Custom SQL saved before [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] was written for
+PostgreSQL. Such an analysis shows a **Needs review** badge in the saved list and a message on the
+selected analysis, and Refresh is disabled. Running it returns `409 ANALYSIS_SQL_NEEDS_REVIEW`
+and records no run. Saving it again from the SQL editor stores it as SQLite SQL and clears the
+flag. Monitors on such an analysis record status `stale` with reason code
+`analysis-needs-review`.
 
 Running custom SQL records a local ten-query history. Editing generated SQL changes the saved source
 to `custom-sql`; the original saved visual definition remains an immutable earlier version, and a
@@ -247,27 +260,18 @@ selected cannot replace the current history or error state.
 
 ## Operational boundary
 
-`DATABASE_URL_ANALYSIS` must name `vision_analysis_executor`, use the same database as
-`DATABASE_URL`, and provide its password. When omitted, the server derives that URL from the runtime
-URL by replacing the username. The native runtime additionally requires the same host and port.
-
-Native startup provisions the login and its password through the private cluster administrator in
-`packaging/electron/runtime/native.ts`. It reapplies the restricted role attributes, read-only
-default, timeouts, and `vision_analysis, pg_catalog` search path. The migration owner remains
-`NOCREATEROLE`; it does not administer executor credentials.
-
-After migrations succeed, backend startup calls `analysisRoleBootstrap.ts` through
-`DATABASE_URL_MIGRATIONS` when available. A restricted owner checks the existing login's attributes
-before resetting relation grants: it revokes only grants the executor actually holds in `public`
-and `vision_analysis`, so runtime materialized views owned by the application role do not fail the
-pass. The grant set contains six approved views: `transactions_v1`,
+Custom SQL runs in the SQLite analysis sandbox, not against the application database file
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). There is no executor role, login or grant
+pass. `services/analysisExecutor.ts` reads copies of only the approved `vision_analysis_*` views the
+statement names, inside one read snapshot. A child process (`services/analysisSandbox.ts`)
+loads them into a fresh in-memory SQLite database and serves them as `vision_analysis.<view>`. The
+process never gets the database file or the environment; its environment holds only the time zone. The approved views are `transactions_v1`,
 `transactions_v2`, `accounts_v1`, `holding_events_v1`, `cash_flows_v1`, and `cash_flows_v2`.
-Running this pass after migrations includes newly created or replaced views. A privileged bootstrap
-connection can still provision the role directly for standalone backend deployments.
 
-A missing role without role-creation privileges, unsafe existing attributes, or failed grant pass
-produces a bootstrap warning and degraded result. This does not prevent the rest of Vision from
-starting. See [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] for native diagnostics.
+The sandbox database is `query_only`. A statement gets 5 seconds, and loading the view copies gets
+60 seconds. One sandbox runs at a time; other requests wait in a first-in, first-out queue for at
+most 30 seconds. A timeout or a cancel fails with SQLSTATE `57014` and kills the sandbox process. Results record the executor
+label `sqlite-sandbox-v1`. See [[docs/api/analysis|Analysis API]] for the full limits.
 
 ## Related
 

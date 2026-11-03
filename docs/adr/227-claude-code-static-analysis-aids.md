@@ -19,6 +19,12 @@ related_code:
 
 # ADR-227: Claude Code static-analysis aids
 
+> [!note] Superseded in part by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> the `vision-postgres` MCP server and `postgres-mcp.ts` no longer exist. `.mcp.json` registers
+> `vision-sqlite` (`apps/node-backend/scripts/sqlite-mcp.ts`), which opens the file named by
+> `VISION_MCP_DATABASE_PATH` read-only. The edit hook, the TypeScript MCP server and the other aids
+> stay.
+
 ## Status
 
 Accepted on 2026-10-20.

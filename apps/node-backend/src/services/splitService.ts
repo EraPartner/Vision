@@ -114,8 +114,9 @@ export async function createSplitsBatchAtomic({
  * counted rather than failing the batch: an id that no longer exists, a
  * transaction that already carries a split (a preset on top of an existing
  * allocation has no single right answer — the user edits those one by one),
- * and a zero-amount transaction. Ids are deduplicated and locked in
- * ascending order so two overlapping bulk calls cannot deadlock.
+ * and a zero-amount transaction. Ids are deduplicated and handled in
+ * ascending order inside one write transaction; the single SQLite writer
+ * runs overlapping bulk calls one after the other (ADR-263).
  */
 export async function createBulkSplitsAtomic({
   transaction_ids,

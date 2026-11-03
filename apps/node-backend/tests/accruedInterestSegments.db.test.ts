@@ -27,8 +27,8 @@ const describeDb = hasTestDatabase() ? describe : describe.skip;
 async function savings(rate: number) {
   const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: number }>(
     `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, is_active)
-     VALUES ('Synthetic term deposit', 'SYNTD', 'savings', 'EUR', 0, $1, true) RETURNING id`,
-    [rate],
+     VALUES ('Synthetic term deposit', 'SYNTD', 'savings', 'EUR', '0.000000', vision_numeric($1, 8, 4), 1) RETURNING id`,
+    [String(rate)],
   );
   return must(rows[0], "rows[0]").id;
 }
@@ -36,8 +36,8 @@ async function savings(rate: number) {
 async function txn(id: number, type: string, date: string, amount: number) {
   await must(getTestPool(), "getTestPool()").query(
     `INSERT INTO portfolio_transactions (investment_id, type, date, amount, currency)
-     VALUES ($1, $2, $3::date, $4, 'EUR')`,
-    [id, type, date, amount],
+     VALUES ($1, $2, ts_date($3), vision_numeric($4, 18, 4), 'EUR')`,
+    [id, type, date, String(amount)],
   );
 }
 

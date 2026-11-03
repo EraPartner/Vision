@@ -291,7 +291,7 @@ describe("InfoRepository", () => {
 
       const result = await infoRepository.getNetWorthFromSnapshots();
 
-      expect(probeSql.match(/MIN\(t\.date\)/g)).toHaveLength(1);
+      expect(probeSql.match(/MIN\(t\.date\)/gi)).toHaveLength(1);
       expect(probeSql).toContain("t.is_active = true");
       expect(result.snapshots).toEqual([]);
     });
@@ -1128,26 +1128,25 @@ describe("InfoRepository", () => {
       );
 
       expect(
-        calls.some(({ sql }) => sql.includes("SUM(transaction_count)")),
+        calls.some(({ sql }) => /SUM\(transaction_count\)/i.test(sql)),
       ).toBe(false);
-      const live = calls.find(({ sql }) => sql.includes("WITH months AS"));
-      expect(live).toBeTruthy();
-      // The account filter binds the requested ids, and with both bounds
-      // given no app-date anchor is bound.
-      const placeholder = /t\.account_id = ANY\(\$(\d+)::int\[\]\)/.exec(
-        must(live, "live").sql,
+      const live = calls.find(({ sql }) =>
+        sql.includes("WITH RECURSIVE bounds AS"),
       );
-      expect(placeholder).toBeTruthy();
+      expect(live).toBeTruthy();
+      // The account filter binds the requested ids (a JSON array read with
+      // json_each), and with both bounds given no app-date anchor is bound.
+      const liveSql = must(live, "live").sql;
+      const marker = "t.account_id IN (SELECT value FROM json_each(?))";
+      const at = liveSql.indexOf(marker);
+      expect(at).toBeGreaterThanOrEqual(0);
+      const placeholderIndex = (liveSql.slice(0, at).match(/\?/g) ?? []).length;
+      expect(must(live, "live").params?.[placeholderIndex]).toBe(
+        JSON.stringify([3, 7]),
+      );
+      const bounds = ["2026-01-01", "2026-06-30", JSON.stringify([3, 7])];
       expect(
-        must(live, "live").params?.[
-          Number(must(placeholder, "placeholder")[1]) - 1
-        ],
-      ).toEqual([3, 7]);
-      const bounds = ["2026-01-01", "2026-06-30"];
-      expect(
-        must(live, "live").params?.every(
-          (p) => Array.isArray(p) || bounds.includes(p as string),
-        ),
+        must(live, "live").params?.every((p) => bounds.includes(p as string)),
       ).toBe(true);
     });
   });

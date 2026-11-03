@@ -12,7 +12,14 @@ import { protectPlannedExecutions } from "./plannedExecutionGuard.ts";
  *   caches the separate filtered count across page requests.
  *
  * Row shapes are declared against the shared contracts in `src/types/rows.ts`;
- * mind that `amount`/`balance` are pg NUMERIC (strings) and `date` is a `Date`.
+ * mind that `amount`/`balance` are exact decimal strings (NUMERIC) and `date`
+ * is a `Date`.
+ *
+ * SQLite (ADR-263): money is compared, summed and ordered through the dec_*
+ * functions; id lists bind as one JSON array (`IN (SELECT value FROM
+ * json_each(?))`). Row locks are gone: every write transaction is BEGIN
+ * IMMEDIATE on the single writer, so a read inside withTransaction() already
+ * holds the lock the former FOR UPDATE took.
  */
 
 import { sql } from "kysely";
@@ -68,6 +75,14 @@ import type {
 } from "../types/rows.ts";
 import { nanToZero } from "../lib/math.ts";
 import { isRecord } from "../lib/typeGuards.ts";
+
+/**
+ * A money value bound for SQL: its decimal text (what node-postgres sent for a
+ * number), so dec_* and vision_numeric never see a float. NULL stays NULL.
+ */
+function decimalParam(value: unknown): unknown {
+  return typeof value === "number" ? String(value) : (value ?? null);
+}
 
 /**
  * Validate canonical account identity before dynamic SET clauses are built.
@@ -192,7 +207,7 @@ const ACCOUNT_LABEL_SQL = sql`acct.name AS bank_account`;
 
 // Reduced join set for count-only queries over a buildTransactionWhere clause.
 // `r` is the sole join alias that builder's predicates reference (recipientName's
-// `r.name ILIKE`); the other five aliases in TRANSACTION_JOINS exist purely to
+// `ilike(r.name, …)`); the other five aliases in TRANSACTION_JOINS exist purely to
 // project labels, which a count does not select. Dropping them cannot change
 // count(*): all six are LEFT JOINs onto the target's PRIMARY KEY (recipients.id,
 // categories.id, accounts.id), so each matches at most one row and none can drop
@@ -234,7 +249,7 @@ function getCachedTransactionCount(
   const key = JSON.stringify([compiled.sql, compiled.parameters]);
   const cached = transactionCountCache.get(key);
   // A pending full count remains the single-flight authority regardless of
-  // how long PostgreSQL needs. The short TTL starts only after it resolves.
+  // how long the database needs. The short TTL starts only after it resolves.
   if (cached && (cached.pending || cached.expiresAt > now)) {
     return cached.promise;
   }
@@ -342,15 +357,16 @@ function runningBalanceCtes(
   // depends on its own (account, currency) partition alone. One window pass yields the
   // running sum and, as a running count of stamps, the group each row shares
   // with the latest stamp at or before it (group 0 has none). A stamp opens its
-  // group and is its only stamped row, so MAX over the group is that stamp's
-  // (balance - cumulative). Page rows are picked out only after both windows
-  // ran over the whole partition.
+  // group and is its only stamped row, so the sum of (balance - cumulative)
+  // over the group's stamped rows is that stamp's carry (dec_sum: an exact
+  // decimal window aggregate). Page rows are picked out only after both
+  // windows ran over the whole partition.
   return sql`
     ledger AS (
       SELECT t.id, t.account_id, COALESCE(t.currency, 'EUR') AS currency, t.balance,
-             SUM(t.amount) OVER ledger_order AS cumulative,
+             dec_sum(t.amount) OVER ledger_order AS cumulative,
              COUNT(t.balance) OVER ledger_order AS stamp_group,
-             ${forPage ? sql`t.id IN (SELECT p.id FROM page p)` : sql`true`} AS on_page
+             ${forPage ? sql`t.id IN (SELECT p.id FROM page p)` : sql`1`} AS on_page
       FROM transactions t
       ${joins}
       WHERE ${where}
@@ -370,10 +386,11 @@ function runningBalanceCtes(
       SELECT id, running_balance
       FROM (
         SELECT id, on_page,
-               cumulative + COALESCE(
-                 MAX(balance - cumulative) OVER (PARTITION BY account_id, currency, stamp_group),
-                 0
-               ) AS running_balance
+               dec_add(cumulative, COALESCE(
+                 dec_sum(CASE WHEN balance IS NOT NULL THEN dec_sub(balance, cumulative) END)
+                   OVER (PARTITION BY account_id, currency, stamp_group),
+                 '0'
+               )) AS running_balance
         FROM ledger
       ) carried
       WHERE on_page
@@ -406,10 +423,12 @@ function enrichedById(id: TransactionId) {
   return sql`${enrichedSelect(sql.id("transactions"))} WHERE t.id = ${id}`;
 }
 
-// Allowed sort columns for transactions (maps frontend key -> SQL expression)
+// Allowed sort columns for transactions (maps frontend key -> SQL expression).
+// `amount` sorts by its exact-decimal key; dates sort as their 'YYYY-MM-DD'
+// text and names in the C collation, as PostgreSQL did.
 const TRANSACTION_SORT_COLUMNS: Record<string, RawBuilder<unknown>> = {
   date: sql`t.date`,
-  amount: sql`t.amount`,
+  amount: sql`dec_key(t.amount)`,
   memo: sql`t.memo`,
   recipient: RECIPIENT_NAME_SQL,
   category: CATEGORY_NAME_SQL,
@@ -422,6 +441,9 @@ const TRANSACTION_SORT_COLUMNS: Record<string, RawBuilder<unknown>> = {
  * supplied. The secondary date DESC keeps rows stable when the primary column
  * ties; t.id DESC is the unique final tiebreaker so LIMIT/OFFSET pages cannot
  * duplicate or skip same-date rows across separate query executions.
+ *
+ * NULLs sort as PostgreSQL sorted them: last ascending, first descending
+ * (SQLite's default is the opposite).
  */
 function transactionOrderBy(
   sortBy: string | null | undefined,
@@ -432,7 +454,8 @@ function transactionOrderBy(
       ? TRANSACTION_SORT_COLUMNS[sortBy]
       : undefined;
   if (!sortCol) return sql`t.date DESC, t.id DESC`;
-  const direction = sortDir === "asc" ? sql`ASC` : sql`DESC`;
+  const direction =
+    sortDir === "asc" ? sql`ASC NULLS LAST` : sql`DESC NULLS FIRST`;
   return sql`${sortCol} ${direction}, t.date DESC, t.id DESC`;
 }
 
@@ -506,7 +529,7 @@ async function attachTagsToRows(
       .selectFrom("transaction_tags as tt")
       .innerJoin("tags as tg", "tg.id", "tt.tag_id")
       .select(["tt.transaction_id", "tg.id", "tg.slug", "tg.color", "tg.is_active"])
-      .where(sql<boolean>`tt.transaction_id = ANY(${ids}::int[])`),
+      .where(sql<boolean>`tt.transaction_id IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`),
   );
   const tagMap = new Map<TransactionId, TransactionTagRef[]>();
   for (const row of tagRows) {
@@ -548,7 +571,7 @@ async function setTransactionTags(
     db
       .selectFrom("tags")
       .select("id")
-      .where(sql<boolean>`slug = ANY(${slugs}::text[])`)
+      .where(sql<boolean>`slug IN (SELECT value FROM json_each(${JSON.stringify(slugs)}))`)
       .where("is_active", "=", true),
     client,
   );
@@ -559,7 +582,11 @@ async function setTransactionTags(
     db
       .insertInto("transaction_tags")
       .columns(["transaction_id", "tag_id"])
-      .expression(sql`SELECT ${transactionId}, unnest(${tagIds}::int[])`)
+      // `WHERE true`: SQLite needs a WHERE before an upsert's ON CONFLICT
+      // when the rows come from a SELECT.
+      .expression(
+        sql`SELECT ${transactionId}, value FROM json_each(${JSON.stringify(tagIds)}) WHERE true`,
+      )
       .onConflict((oc) => oc.doNothing()),
   );
 }
@@ -611,7 +638,7 @@ export const transactionRepository = {
   /**
    * Get total count with optional filters (reuses the same WHERE builder as getAll).
    *
-   * @returns `COUNT(*)` arrives as a bigint string; parsed here.
+   * @returns `COUNT(*)` arrives as a bigint string (alias hint); parsed here.
    */
   async getCount({
     transactionId = null,
@@ -655,7 +682,7 @@ export const transactionRepository = {
     const [row] = await checkedRows(
       countRowSchema,
       sql`
-        SELECT count(*) FROM transactions t
+        SELECT count(*) AS "count::bigint" FROM transactions t
         ${COUNT_JOINS}
         WHERE ${where}
       `,
@@ -793,7 +820,7 @@ export const transactionRepository = {
 
     const pageQuery = sql`
       ${includeBalance ? sql`WITH ${runningBalanceCtes(uncategorisedWhere, uncategorisedJoins, { forPage: false })},` : sql`WITH`} total_cte AS (
-        SELECT count(*)::int AS total
+        SELECT count(*) AS total
         FROM transactions t
         ${COUNT_JOINS}
         LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
@@ -804,7 +831,9 @@ export const transactionRepository = {
                ${ACCOUNT_LABEL_SQL},
                r.name AS recipient_name,
                NULL AS category_name${runningBalanceCol},
-               ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS _row_order
+               -- BIGINT text, as PostgreSQL's ROW_NUMBER() arrived; the final
+               -- ORDER BY reads it back as an integer.
+               CAST(ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS TEXT) AS _row_order
         FROM transactions t
         ${uncategorisedJoins}
         ${includeBalance ? sql`JOIN ledger_balances lb ON lb.id = t.id` : sql``}
@@ -816,7 +845,7 @@ export const transactionRepository = {
              tc.total AS total_count
       FROM total_cte tc
       LEFT JOIN uncategorised_rows u ON true
-      ORDER BY u._row_order NULLS LAST
+      ORDER BY CAST(u._row_order AS INTEGER) NULLS LAST
     `;
 
     // The LEFT JOIN onto total_cte yields one all-NULL row when the page is
@@ -827,7 +856,7 @@ export const transactionRepository = {
       uncategorisedTotalRowSchema,
       pageRows.slice(0, 1),
     );
-    // String(): total_count is COUNT(*)::int; parseInt coerced it the same way.
+    // String(): total_count is a bare COUNT(*) (a number); parseInt coerced it the same way.
     const total = totalRow ? parseInt(String(totalRow.total_count), 10) : 0;
     const rows = checkRows(
       uncategorisedPageRowSchema,
@@ -850,10 +879,11 @@ export const transactionRepository = {
   },
 
   /**
-   * Create a new transaction and return the full enriched row in a single round-trip.
+   * Create a new transaction and return the full enriched row.
    *
-   * Uses a CTE to INSERT the row and immediately JOIN with recipients/categories so
-   * callers get the complete representation without a second SELECT (getById) call.
+   * SQLite has no data-modifying CTE, so the INSERT returns the id and the
+   * enriched projection is read back in the same transaction (one connection,
+   * no extra round-trip cost in-process).
    */
   async create({
     transaction_date,
@@ -883,19 +913,26 @@ export const transactionRepository = {
         }
         // Default currency to EUR rather than NULL: it is NOT NULL at the DB
         // level (migration 0046) and the read layer already coalesces missing → EUR.
+        // amount: NUMERIC(18,4) assignment (vision_numeric rounds half away
+        // from zero and refuses an overflow, as the PostgreSQL cast did); the
+        // number binds as its decimal text, as node-postgres sent it.
+        const key = await checkedRow(
+          transactionKeyRowSchema,
+          sql`
+            INSERT INTO transactions (date, account_id, recipient_id, amount, memo, currency, category_id, comment, is_active)
+            VALUES (${transaction_date}, ${accountId}, ${recipient_id},
+                    vision_numeric(${decimalParam(amount)}, 18, 4),
+                    ${memo ? memo.toUpperCase() : null},
+                    ${currency ? currency.toUpperCase() : "EUR"},
+                    ${category_id}, ${comment}, 1)
+            RETURNING id
+          `,
+          client,
+        );
+        if (!key) return null;
         const inserted = await checkedRow(
           enrichedTransactionDbRowSchema,
-          sql`
-            WITH inserted AS (
-              INSERT INTO transactions (date, account_id, recipient_id, amount, memo, currency, category_id, comment, is_active)
-              VALUES (${transaction_date}, ${accountId}, ${recipient_id}, ${amount},
-                      ${memo ? memo.toUpperCase() : null},
-                      ${currency ? currency.toUpperCase() : "EUR"},
-                      ${category_id}, ${comment}, true)
-              RETURNING *
-            )
-            ${enrichedSelect(sql.id("inserted"))}
-          `,
+          enrichedById(key.id),
           client,
         );
         if (!inserted) return null;
@@ -917,7 +954,7 @@ export const transactionRepository = {
    * independently pipelined under LIMIT while page changes reuse the same
    * filter count.
    *
-   * @returns `total` is `COUNT(*)::int`, a real number.
+   * @returns `total` is a bare `COUNT(*)`, a real number.
    */
   async getAllWithCount({
     transactionId = null,
@@ -981,7 +1018,7 @@ export const transactionRepository = {
         enrichedPage(where, { includeBalance, sortBy, sortDir, limit, offset }),
       ),
       getCachedTransactionCount(
-        sql`SELECT COUNT(*)::int AS total FROM transactions t ${COUNT_JOINS} WHERE ${where}`,
+        sql`SELECT COUNT(*) AS total FROM transactions t ${COUNT_JOINS} WHERE ${where}`,
       ),
     ]);
     return { rows: await attachTagsToRows(rows), total };
@@ -1023,18 +1060,21 @@ export const transactionRepository = {
         }
         await stampAccountIdForUpdate(sanitized, client);
         // Columns are whitelisted by sanitizeUpdateFields; undefined is skipped.
+        // `amount` is the one NUMERIC(18,4) column the whitelist admits; it is
+        // assigned through vision_numeric like every hand-written money write.
         const setClauses = Object.entries(sanitized)
           .filter(([, value]) => value !== undefined)
-          .map(
-            ([key, value]) =>
-              sql`${sql.id(key === "transaction_date" ? "date" : key)} = ${value}`,
+          .map(([key, value]) =>
+            key === "amount"
+              ? sql`amount = vision_numeric(${decimalParam(value)}, 18, 4)`
+              : sql`${sql.id(key === "transaction_date" ? "date" : key)} = ${value}`,
           );
 
         if (setClauses.length > 0) {
           const res = await runOn(
             client,
             sql`
-              UPDATE transactions SET ${sql.join(setClauses)}, updated_at = NOW()
+              UPDATE transactions SET ${sql.join(setClauses)}, updated_at = now()
               WHERE id = ${id} RETURNING id
             `,
           );
@@ -1137,8 +1177,8 @@ export const transactionRepository = {
   // Account / recipient merge repoints (ADR-088, ADR-014)
   //
   // Composed by the merge services inside withTransaction; the ambient context
-  // routes these onto the transaction's client, so the repoints share the
-  // merge's FOR UPDATE locks and roll back with it.
+  // routes these onto the transaction's client, so the repoints run under the
+  // merge's write transaction and roll back with it.
   // ---------------------------------------------------------------------------
 
   /**
@@ -1159,7 +1199,7 @@ export const transactionRepository = {
           sql<string>`to_char(MIN(date), 'YYYY-MM-DD')`.as("min_date"),
           sql<string>`to_char(MAX(date), 'YYYY-MM-DD')`.as("max_date"),
         ])
-        .where(sql<boolean>`account_id = ANY(${accountIds}::int[])`)
+        .where(sql<boolean>`account_id IN (SELECT value FROM json_each(${JSON.stringify(accountIds)}))`)
         .where("is_active", "=", true)
         .where("balance", "is not", null)
         .groupBy("account_id"),
@@ -1184,7 +1224,7 @@ export const transactionRepository = {
       db
         .selectFrom("transactions")
         .select(["account_id", "currency"])
-        .where(sql<boolean>`account_id = ANY(${accountIds}::int[])`)
+        .where(sql<boolean>`account_id IN (SELECT value FROM json_each(${JSON.stringify(accountIds)}))`)
         .where("transfer_source", "=", "opening"),
     );
   },
@@ -1201,7 +1241,7 @@ export const transactionRepository = {
     const result = await db
       .updateTable("transactions")
       .set({ account_id: targetId })
-      .where(sql<boolean>`account_id = ANY(${sourceIds}::int[])`)
+      .where(sql<boolean>`account_id IN (SELECT value FROM json_each(${JSON.stringify(sourceIds)}))`)
       .executeTakeFirst();
     return Number(result.numUpdatedRows);
   },
@@ -1218,7 +1258,7 @@ export const transactionRepository = {
     const result = await db
       .updateTable("transactions")
       .set({ recipient_id: primaryId })
-      .where(sql<boolean>`recipient_id = ANY(${aliasIds}::int[])`)
+      .where(sql<boolean>`recipient_id IN (SELECT value FROM json_each(${JSON.stringify(aliasIds)}))`)
       .executeTakeFirst();
     return Number(result.numUpdatedRows);
   },
@@ -1229,16 +1269,22 @@ export const transactionRepository = {
 
   /** Return only mutually unique pairs; directional probes stop at two matches. */
   async listUniqueTransferPairs(windowDays: number): Promise<TransferCandidatePairRow[]> {
+    // first_match is one row per open outflow: its candidate count (capped at
+    // two) and, when that count is one, the lone candidate's id. Correlated
+    // scalar subqueries stand in for PostgreSQL's LATERAL.
     return checkedRows(transferCandidatePairRowSchema, sql`
-      SELECT a.id AS "outId", first_match.id AS "inId"
-      FROM transactions a
-      CROSS JOIN LATERAL (
-        SELECT min(candidate.id) AS id, count(*) AS n
-        FROM (SELECT b.id FROM transactions b WHERE ${transferCandidate("a", "b", windowDays)} LIMIT 2) candidate
+      SELECT first_match.out_id AS "outId", b.id AS "inId"
+      FROM (
+        SELECT a.id AS out_id,
+               ${candidateCount("a", "b", windowDays)} AS n,
+               (SELECT min(candidate.id)
+                  FROM (SELECT b.id FROM transactions b WHERE ${transferCandidate("a", "b", windowDays)} LIMIT 2) candidate
+               ) AS in_id
+        FROM transactions a
+        WHERE ${openTransferRow("a")} AND dec_sign(a.amount) < 0
       ) first_match
-      JOIN transactions b ON b.id = first_match.id
-      WHERE ${openTransferRow("a")} AND a.amount < 0
-        AND first_match.n = 1 AND ${candidateCount("b", "reverse_out", windowDays)} = 1`);
+      JOIN transactions b ON b.id = first_match.in_id
+      WHERE first_match.n = 1 AND ${candidateCount("b", "reverse_out", windowDays)} = 1`);
   },
 
   /** Candidate edges are paged independently of the full-corpus uniqueness probes. */
@@ -1246,11 +1292,11 @@ export const transactionRepository = {
     return checkedRows(transferCandidatePairRowSchema, sql`
       SELECT a.id AS "outId", b.id AS "inId"
       FROM transactions a JOIN transactions b ON ${transferCandidate("a", "b", windowDays)}
-      WHERE ${openTransferRow("a")} AND a.amount < 0
-        AND (a.id, b.id) > (${after[0]}::int, ${after[1]}::int)
+      WHERE ${openTransferRow("a")} AND dec_sign(a.amount) < 0
+        AND (a.id, b.id) > (${after[0]}, ${after[1]})
         AND (${candidateCount("a", "other_in", windowDays)} = 2
           OR ${candidateCount("b", "other_out", windowDays)} = 2)
-      ORDER BY a.id, b.id LIMIT ${limit}::int`);
+      ORDER BY a.id, b.id LIMIT ${limit}`);
   },
 
   /**
@@ -1286,18 +1332,19 @@ export const transactionRepository = {
              -- excluded from cash-flow aggregates).
              AND p.transfer_peer_id = t.id
              AND p.transfer_source = t.transfer_source
-             AND p.amount * t.amount < 0
+             AND dec_sign(p.amount) * dec_sign(t.amount) < 0
              AND (t.transfer_source = 'manual' OR (
-               p.amount = -t.amount
+               p.amount = dec_neg(t.amount)
                AND COALESCE(p.currency, 'EUR') = COALESCE(t.currency, 'EUR')
-               AND p.date BETWEEN t.date - ${windowDays}::int AND t.date + ${windowDays}::int
+               AND p.date BETWEEN add_days(t.date, ${-windowDays}) AND add_days(t.date, ${windowDays})
              ))
-             AND p.account_id IS DISTINCT FROM t.account_id
+             AND p.account_id IS NOT t.account_id
              AND p.account_id IS NOT NULL AND t.account_id IS NOT NULL
              AND p.is_active AND t.is_active
         )`;
-      // Discovery is unlocked. Never evaluate peer validity in the same statement
-      // that waits on a writer: READ COMMITTED would retain a stale peer snapshot.
+      // Discovery, the re-read of the affected endpoints and the release all run
+      // in this one write transaction (BEGIN IMMEDIATE on the single writer), so
+      // no other writer can change a pair between them.
       const discovered = await checkedRows(
         transferPeerPointerRowSchema.extend(transactionKeyRowSchema.shape),
         db
@@ -1316,18 +1363,17 @@ export const transactionRepository = {
         db
           .selectFrom("transactions")
           .select("id")
-          .where(sql<boolean>`id = ANY(${ids}::int[])`)
-          .orderBy("id")
-          .forUpdate(),
+          .where(sql<boolean>`id IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`)
+          .orderBy("id"),
       );
-      // A separate statement gets a fresh snapshot after all waits. Repaired
-      // pairs now pass validity; changed peers outside the locked set are deferred.
-      const lockedIds = locked.map((row) => row.id);
+      // Only pairs whose both endpoints still exist are released; the update
+      // re-evaluates validity, so a pair repaired since discovery stays.
+      const lockedIds = JSON.stringify(locked.map((row) => row.id));
       await db
         .updateTable("transactions as t")
         .set({ is_transfer: false, transfer_peer_id: null, transfer_source: null })
-        .where(sql<boolean>`t.id = ANY(${lockedIds}::int[])`)
-        .where(sql<boolean>`t.transfer_peer_id = ANY(${lockedIds}::int[])`)
+        .where(sql<boolean>`t.id IN (SELECT value FROM json_each(${lockedIds}))`)
+        .where(sql<boolean>`t.transfer_peer_id IN (SELECT value FROM json_each(${lockedIds}))`)
         .where(invalid)
         .execute();
     });
@@ -1355,7 +1401,7 @@ export const transactionRepository = {
           "t.memo",
           "t.recipient_id",
         ])
-        .where(sql<boolean>`t.id = ANY(${ids})`),
+        .where(sql<boolean>`t.id IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`),
     );
   },
 
@@ -1416,7 +1462,9 @@ export const transactionRepository = {
   },
 
   /**
-   * Lock both legs of a manual mark and read what markTransfer validates.
+   * Read both legs of a mark and what markTransfer validates. Call it inside
+   * withTransaction(): the write transaction is what keeps the legs from
+   * changing until the mark commits (it replaced FOR UPDATE).
    */
   async lockTransferLegs(
     ids: TransactionId[],
@@ -1428,13 +1476,15 @@ export const transactionRepository = {
       db
         .selectFrom("transactions")
         .select(["id", "amount", "account_id", "is_active", "transfer_source"])
-        .where(sql<boolean>`id = ANY(${ids})`)
-        .orderBy("id")
-        .forUpdate(),
+        .where(sql<boolean>`id IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`)
+        .orderBy("id"),
     );
   },
 
-  /** Lock every endpoint the manual re-pair can read or release, in one order. */
+  /**
+   * Read every endpoint the manual re-pair can read or release, in one order,
+   * inside the caller's write transaction (which replaced the row locks).
+   */
   async lockTransferGraphForMark(ids: TransactionId[]) {
     const schema = transferLegRowSchema.extend(transferPeerPointerRowSchema.shape);
     const columns = [
@@ -1449,8 +1499,10 @@ export const transactionRepository = {
       .selectFrom("transactions")
       .select(columns)
       .where(
-        sql<boolean>`id = ANY(${ids}::int[]) OR transfer_peer_id = ANY(${ids}::int[])
-          OR id IN (SELECT transfer_peer_id FROM transactions WHERE id = ANY(${ids}::int[]))`,
+        sql<boolean>`id IN (SELECT value FROM json_each(${JSON.stringify(ids)}))
+          OR transfer_peer_id IN (SELECT value FROM json_each(${JSON.stringify(ids)}))
+          OR id IN (SELECT transfer_peer_id FROM transactions
+                     WHERE id IN (SELECT value FROM json_each(${JSON.stringify(ids)})))`,
       )
       .orderBy("id")
       .limit(501);
@@ -1462,9 +1514,8 @@ export const transactionRepository = {
       db
         .selectFrom("transactions")
         .select(columns)
-        .where(sql<boolean>`id = ANY(${beforeIds}::int[])`)
-        .orderBy("id")
-        .forUpdate(),
+        .where(sql<boolean>`id IN (SELECT value FROM json_each(${JSON.stringify(beforeIds)}))`)
+        .orderBy("id"),
     );
     const after = await checkedRows(schema, discover);
     const signature = (rows: typeof before) => JSON.stringify(rows.map((row) => [row.id, row.transfer_peer_id, row.transfer_source]));
@@ -1485,21 +1536,22 @@ export const transactionRepository = {
     const result = await db
       .updateTable("transactions")
       .set({ is_transfer: false, transfer_peer_id: null, transfer_source: null })
-      .where(sql<boolean>`transfer_peer_id = ANY(${ids})`)
-      .where(sql<boolean>`id <> ALL(${ids})`)
+      .where(sql<boolean>`transfer_peer_id IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`)
+      .where(sql<boolean>`id NOT IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`)
       .where("transfer_source", "in", ["auto", "manual"])
-      .where(sql<boolean>`id = ANY(${lockedIds}::int[])`)
+      .where(sql<boolean>`id IN (SELECT value FROM json_each(${JSON.stringify(lockedIds)}))`)
       .executeTakeFirst();
     return Number(result.numUpdatedRows);
   },
 
   /**
-   * Lock the discovered pair in ID order and recheck reciprocity before unmarking.
-   * A changed target pointer is a retry conflict; never acquire a new peer out of order.
+   * Read the discovered pair in ID order and recheck reciprocity before
+   * unmarking, inside the caller's write transaction (which replaced the row
+   * locks). A changed target pointer is a retry conflict.
    */
   async lockTransferPairForUnmark(id: TransactionId): Promise<{ peer: TransactionId | undefined; peerPointsBack: boolean }> {
-    // Discover without a lock, then acquire the complete known pair in one order.
-    // If discovery became stale, reject instead of locking a newly found peer.
+    // Discover, then read the complete known pair in one order. If discovery
+    // became stale, reject instead of following a newly found peer.
     const discovered = await checkedRows(
       transferPeerPointerRowSchema,
       db
@@ -1514,9 +1566,8 @@ export const transactionRepository = {
       db
         .selectFrom("transactions")
         .select(["id", "transfer_peer_id", "transfer_source"])
-        .where(sql<boolean>`id = ANY(${ids}::int[])`)
-        .orderBy("id")
-        .forUpdate(),
+        .where(sql<boolean>`id IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`)
+        .orderBy("id"),
     );
     const target = locked.find((row) => row.id === id);
     if ((target?.transfer_peer_id ?? undefined) !== expectedPeer) {
@@ -1539,8 +1590,8 @@ export const transactionRepository = {
     await db
       .insertInto("transfer_dismissals")
       .values({
-        txn_a_id: sql<TransactionId>`LEAST(${aId}::int, ${bId}::int)`,
-        txn_b_id: sql<TransactionId>`GREATEST(${aId}::int, ${bId}::int)`,
+        txn_a_id: Math.min(aId, bId) as TransactionId,
+        txn_b_id: Math.max(aId, bId) as TransactionId,
       })
       .onConflict((oc) => oc.doNothing())
       .execute();
@@ -1613,16 +1664,17 @@ export const transactionRepository = {
       intCountRowSchema,
       db
         .selectFrom("transactions as t")
-        .select(sql<number>`COUNT(*)::int`.as("n"))
+        .select(sql<number>`COUNT(*)`.as("n"))
         .where("t.dedup_fingerprint", "is", null)
         .where("t.is_active", "=", true)
         .where(sql<boolean>`t.date = ${date}`)
-        .where(sql<boolean>`t.amount = ${amount}`)
-        .where(sql<boolean>`t.recipient_id IS NOT DISTINCT FROM ${recipientId}::integer`)
+        .where(sql<boolean>`dec_eq(t.amount, ${decimalParam(amount)})`)
+        .where(sql<boolean>`t.recipient_id IS ${recipientId}`)
+        // E' \t\n\r\f\013': space, tab, LF, CR, FF and VT.
         .where(
-          sql<boolean>`COALESCE(BTRIM(t.memo, E' \\t\\n\\r\\f\\013'), '') = ${memo}`,
+          sql<boolean>`COALESCE(btrim(t.memo, ' ' || char(9, 10, 13, 12, 11)), '') = ${memo}`,
         )
-        .where(sql<boolean>`t.account_id IS NOT DISTINCT FROM ${accountId}::integer`)
+        .where(sql<boolean>`t.account_id IS ${accountId}`)
         .where("t.currency", "=", currency),
     );
     return nanToZero(Number(row?.n));
@@ -1658,6 +1710,7 @@ export const transactionRepository = {
   }: ImportedTransactionInput): Promise<TransactionId | undefined> {
     // A template, not insertInto(): a NULL recipient or amount must reach the
     // NOT NULL constraint so the caller's savepoint rejects just this row.
+    // Money columns are NUMERIC assignments (vision_numeric keeps NULL NULL).
     const row = await checkedRow(
       transactionKeyRowSchema,
       sql`
@@ -1665,10 +1718,12 @@ export const transactionRepository = {
           (date, account_id, recipient_id, category_id, amount, memo, currency, balance, comment,
            import_batch_id, matched_pattern_id, source_record_hash,
            dedup_fingerprint, dedup_fingerprint_version, bank_sequence, is_active)
-        VALUES (${date}, ${accountId ?? null}, ${recipientId}, ${categoryId}, ${amount},
-                ${memo}, ${currency}, ${balance}, ${comment}, ${importBatchId},
+        VALUES (${date}, ${accountId ?? null}, ${recipientId}, ${categoryId},
+                vision_numeric(${decimalParam(amount)}, 18, 4),
+                ${memo}, ${currency}, vision_numeric(${decimalParam(balance)}, 18, 4),
+                ${comment}, ${importBatchId},
                 ${matchedPatternId}, ${sourceRecordHash ?? null}, ${dedupFingerprint ?? null},
-                ${fingerprintVersion ?? null}, ${bankSequence ?? null}, true)
+                ${fingerprintVersion ?? null}, vision_numeric(${decimalParam(bankSequence)}, 18, 0), 1)
         ON CONFLICT DO NOTHING
         RETURNING id
       `,

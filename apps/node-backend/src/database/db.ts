@@ -1,16 +1,20 @@
 /**
- * Typed query builder over the generated schema (ADR-226).
+ * Typed query builder over the generated schema (ADR-226, ADR-263).
  *
- * `db` builds SQL with Kysely and runs it through `query()` from
+ * `db` builds SQLite SQL with Kysely and runs it through `query()` from
  * connection.ts, so a built query joins the ambient `withTransaction()`,
  * keeps the slow-query log and stays visible to tests that mock `query()`.
  * Open transactions with `withTransaction()`, never `db.transaction()`.
+ *
+ * The write plugin (writePlugin.ts) canonicalises decimal values written to
+ * DECIMAL_TEXT columns and stamps `updated_at`, which PostgreSQL triggers did
+ * before; SQLite triggers cannot change the row a statement returns.
  */
 import {
   Kysely,
-  PostgresAdapter,
-  PostgresIntrospector,
-  PostgresQueryCompiler,
+  SqliteAdapter,
+  SqliteIntrospector,
+  SqliteQueryCompiler,
 } from "kysely";
 import type {
   CompiledQuery,
@@ -21,6 +25,7 @@ import type {
   RawBuilder,
 } from "kysely";
 import { query } from "./connection.ts";
+import { VisionWritePlugin } from "./writePlugin.ts";
 import { queryOne, queryRows } from "./rowContracts.ts";
 import type { RowSchema } from "./rowContracts.ts";
 import type { DB } from "./schema.generated.ts";
@@ -54,14 +59,28 @@ const driver: Driver = {
   async destroy() {},
 };
 
+/**
+ * Kysely's SQLite adapter declares one connection, so Kysely queues every
+ * query behind the one before it. Here a "connection" is only a facade over
+ * query(): connection.ts already serializes writers with its write lock and
+ * routes a query to its transaction through AsyncLocalStorage. With Kysely's
+ * queue as well, a write waiting for the lock outside a transaction held the
+ * queue, and the transaction holding the lock could never run its next query.
+ */
+class VisionSqliteAdapter extends SqliteAdapter {
+  override get supportsMultipleConnections(): boolean {
+    return true;
+  }
+}
+
 const dialect: Dialect = {
-  createAdapter: () => new PostgresAdapter(),
+  createAdapter: () => new VisionSqliteAdapter(),
   createDriver: () => driver,
-  createIntrospector: (kysely) => new PostgresIntrospector(kysely),
-  createQueryCompiler: () => new PostgresQueryCompiler(),
+  createIntrospector: (kysely) => new SqliteIntrospector(kysely),
+  createQueryCompiler: () => new SqliteQueryCompiler(),
 };
 
-export const db = new Kysely<DB>({ dialect });
+export const db = new Kysely<DB>({ dialect, plugins: [new VisionWritePlugin()] });
 
 interface Compilable {
   compile(): CompiledQuery;

@@ -78,7 +78,7 @@ export async function bulkTagTransactions({
       db
         .selectFrom("tags")
         .select(["id", "slug"])
-        .where(sql<boolean>`slug = ANY(${addSlugs}::text[])`)
+        .where(sql<boolean>`slug IN (SELECT value FROM json_each(${JSON.stringify(addSlugs)}))`)
         .where("is_active", "=", true),
     );
     const found = new Map(rows.map((row) => [row.slug, row.id]));
@@ -95,7 +95,9 @@ export async function bulkTagTransactions({
       db
         .selectFrom("tags")
         .select(["id", "slug"])
-        .where(sql<boolean>`slug = ANY(${removeSlugs}::text[])`),
+        .where(
+          sql<boolean>`slug IN (SELECT value FROM json_each(${JSON.stringify(removeSlugs)}))`,
+        ),
     );
     const found = new Map(rows.map((row) => [row.slug, row.id]));
     for (const s of removeSlugs) {
@@ -122,10 +124,13 @@ export async function bulkTagTransactions({
         db
           .insertInto("transaction_tags")
           .columns(["transaction_id", "tag_id"])
+          // `WHERE true` ends the SELECT, so SQLite does not parse the
+          // upsert's ON CONFLICT as the join's ON clause.
           .expression(
-            sql`SELECT t_id, g_id
-                FROM unnest(${txIds}::int[]) AS t(t_id)
-                CROSS JOIN unnest(${addTagIds}::int[]) AS g(g_id)`,
+            sql`SELECT t.value, g.value
+                FROM json_each(${JSON.stringify(txIds)}) AS t
+                CROSS JOIN json_each(${JSON.stringify(addTagIds)}) AS g
+                WHERE true`,
           )
           .onConflict((oc) => oc.doNothing())
           .returning("transaction_id"),
@@ -140,8 +145,12 @@ export async function bulkTagTransactions({
         transactionIdRowSchema,
         db
           .deleteFrom("transaction_tags")
-          .where(sql<boolean>`transaction_id = ANY(${txIds}::int[])`)
-          .where(sql<boolean>`tag_id = ANY(${removeTagIds}::int[])`)
+          .where(
+            sql<boolean>`transaction_id IN (SELECT value FROM json_each(${JSON.stringify(txIds)}))`,
+          )
+          .where(
+            sql<boolean>`tag_id IN (SELECT value FROM json_each(${JSON.stringify(removeTagIds)}))`,
+          )
           .returning("transaction_id"),
         client,
       );
@@ -226,9 +235,9 @@ export async function bulkUpdateTransactions({
         recipient_id: asRecipientId(recipient_id),
       }),
       ...(is_active !== undefined && { is_active }),
-      updated_at: sql<Date>`NOW()`,
+      updated_at: sql<Date>`now()`,
     })
-    .where(sql<boolean>`id = ANY(${txIds}::int[])`)
+    .where(sql<boolean>`id IN (SELECT value FROM json_each(${JSON.stringify(txIds)}))`)
     .returning("id");
 
   const updated = await withTransaction(async (client) => {
@@ -278,7 +287,7 @@ export async function bulkDeleteTransactions({
       client,
       db
         .deleteFrom("transactions")
-        .where(sql<boolean>`id = ANY(${txIds}::int[])`)
+        .where(sql<boolean>`id IN (SELECT value FROM json_each(${JSON.stringify(txIds)}))`)
         .returning("id"),
     );
     return r.rows.length;

@@ -72,7 +72,7 @@ export const watchlistRepository = {
         db
           .selectFrom('watchlist as w')
           .selectAll('w')
-          .select(sql<string>`COUNT(*) OVER ()`.as('total_count')),
+          .select(sql<string>`CAST(COUNT(*) OVER () AS TEXT)`.as('total_count')),
         assetClass,
       )
         .orderBy('w.created_at', 'desc')
@@ -93,7 +93,7 @@ export const watchlistRepository = {
     const row = await checkedRow(
       countRowSchema,
       whereAssetClass(
-        db.selectFrom('watchlist as w').select(sql<string>`count(*)`.as('count')),
+        db.selectFrom('watchlist as w').select(sql<string>`CAST(count(*) AS TEXT)`.as('count')),
         assetClass,
       ),
     );
@@ -156,15 +156,23 @@ export const watchlistRepository = {
   ): Promise<FormattedWatchlistRow | null> {
     const allowed = ['name', 'symbol', 'asset_class', 'target_price', 'currency', 'notes', 'price_provider_id'];
     // undefined fields are skipped; `allowed` whitelists the column names.
+    // target_price is NUMERIC(18,6): hand-written SQL stores canonical decimal
+    // text through vision_numeric (a number binds as the text node-postgres sent).
     const setClauses = Object.entries(fields)
       .filter(([key, value]) => value !== undefined && allowed.includes(key))
-      .map(([key, value]) => sql`${sql.ref(key)} = ${value}`);
+      .map(([key, value]) =>
+        key === 'target_price'
+          ? sql`${sql.ref(key)} = vision_numeric(${typeof value === 'number' ? String(value) : value}, 18, 6)`
+          : sql`${sql.ref(key)} = ${value}`,
+      );
 
     if (setClauses.length === 0) return this.getById(id);
 
+    // updated_at in the statement itself, so RETURNING sees it (the trigger
+    // that maintains it runs after the row is written).
     const row = await checkedRow(
       watchlistRowSchema,
-      sql`UPDATE watchlist SET ${sql.join(setClauses)} WHERE id = ${id} RETURNING *`,
+      sql`UPDATE watchlist SET ${sql.join(setClauses)}, updated_at = now() WHERE id = ${id} RETURNING *`,
     );
     return row ? mapWatchlistRow(row) : null;
   },

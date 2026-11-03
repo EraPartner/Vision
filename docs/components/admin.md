@@ -2,8 +2,8 @@
 title: Admin Pages
 type: component
 status: active
-date: 2026-10-07
-updated: 2026-04-24
+date: 2026-11-03
+updated: 2026-11-03
 tags: [component, admin, observability, dashboard, provider-health, endpoint-liveness, phase-f]
 description: System observability dashboard components (Phase F) - AdminOverviewPage, ProviderHealthPage, EndpointLivenessPage
 aliases: [admin pages, observability dashboards, system admin UI]
@@ -123,18 +123,21 @@ Per-table statistics + VACUUM ANALYZE controls (Phase 7).
 
 | Column | Data | Calculation |
 |--------|------|-------------|
-| Table | Table name (e.g. `transactions`) | `pg_stat_user_tables` |
-| Rows | Estimated live rows | `n_live_tup` |
-| Size | Total relation size on disk | `pg_total_relation_size` |
-| Last analyse | When ANALYZE last ran | `last_analyze` |
-| Last vacuum | When VACUUM last ran | `last_vacuum` |
+| Table | Table name (e.g. `transactions`) | SQLite's table list |
+| Rows | Live rows | `count(*)` per table |
+| Size | Pages of the table and its indexes | `dbstat`; shows "—" when the system SQLite lacks it |
+| Last analyse | When this backend process last ran ANALYZE on the table | Empty until then |
+| Last vacuum | When this backend process last ran VACUUM | Empty until then |
+
+SQLite keeps no per-table maintenance history, so the analyse and vacuum times reset when the
+backend restarts ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]).
 
 ### UI features
 
 - Per-table "VACUUM ANALYZE" button → `POST /api/admin/db/vacuum?table=<name>`
 - "Run all" button → bulk VACUUM ANALYZE across non-system tables
 - Live polling (10s) for size + analyse / vacuum timestamps
-- Uses the raw database client (not the pool) because VACUUM cannot run inside a transaction
+- SQLite's VACUUM rebuilds the whole database file, even when one table is selected. It runs on the writer connection outside any transaction, then ANALYZE refreshes the selected table (or every table)
 
 ### Usage
 

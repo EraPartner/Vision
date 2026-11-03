@@ -22,10 +22,14 @@ describe("analysis catalog compiler", () => {
     });
 
     expect(compiled.sql).toContain("FROM vision_analysis.cash_flows_v2");
+    // A month bucket of a date column is a 'YYYY-MM-DD' date in SQLite.
     expect(compiled.sql).toContain(
-      "date_trunc('month', analysis_base.cash_flow_date)::date",
+      "date_trunc('month', analysis_base.cash_flow_date) AS \"month\"",
     );
-    expect(compiled.sql).toContain("SUM(spending_amount)");
+    // Money totals use the exact decimal sum.
+    expect(compiled.sql).toContain("dec_sum(spending_amount)");
+    // PostgreSQL's NULL placement: last ascending, first descending.
+    expect(compiled.sql).toContain('ORDER BY "month" ASC NULLS LAST');
     expect(compiled.sql).toContain("GROUP BY");
     expect(compiled.values).toEqual([false, true]);
     expect(compiled.visualPlan.generatedSql).toBe(compiled.sql);
@@ -41,8 +45,9 @@ describe("analysis catalog compiler", () => {
       joins: [],
       limit: 500,
     });
+    // The text cast keeps PostgreSQL's int8 count shape: a decimal string.
     expect(compiled.sql).toBe(
-      'SELECT COUNT(*) AS "count"\nFROM vision_analysis.transactions_v2',
+      'SELECT CAST(count(*) AS TEXT) AS "count"\nFROM vision_analysis.transactions_v2',
     );
     expect(compiled.columns).toEqual([
       {
@@ -68,10 +73,29 @@ describe("analysis catalog compiler", () => {
       orderBy: [{ id: "sum_amount", direction: "desc" }],
     });
     expect(compiled.sql).not.toContain("GROUP BY");
+    // A decimal total orders by its exact sort key, not by its text.
     expect(compiled.sql).toContain(
-      'WHERE is_active = $1 AND currency = $2\nORDER BY "sum_amount" DESC',
+      "WHERE is_active = $1 AND currency = $2\nORDER BY dec_key(dec_sum(amount)) DESC NULLS FIRST",
     );
     expect(compiled.values).toEqual([true, "EUR"]);
+  });
+
+  it("compares decimal filters exactly and matches text case-insensitively", () => {
+    const compiled = compileVisualAnalysis({
+      datasetId: "transactions",
+      fields: ["amount", "memo"],
+      groups: [],
+      measures: [],
+      filters: [
+        { fieldId: "amount", operator: "gte", value: 9 },
+        { fieldId: "memo", operator: "contains", value: "Rent" },
+      ],
+      orderBy: [{ id: "amount", direction: "asc" }],
+    });
+    // Text order would put '100.0000' before '9'; dec_ge compares the numbers.
+    expect(compiled.sql).toContain("WHERE dec_ge(amount, $1) AND ilike(memo, $2)");
+    expect(compiled.values).toEqual(["9", "%Rent%"]);
+    expect(compiled.sql).toContain("ORDER BY dec_key(amount) ASC NULLS LAST");
   });
 
   it.each([
@@ -128,7 +152,7 @@ describe("analysis catalog compiler", () => {
       "Raw event amount total",
       "Raw event units total",
     ]);
-    expect(compiled.sql).toContain('SUM(units) AS "sum_units"');
+    expect(compiled.sql).toContain('dec_sum(units) AS "sum_units"');
     const holdings = getAnalysisCatalog().datasets.find(
       ({ id }) => id === "holdings",
     );

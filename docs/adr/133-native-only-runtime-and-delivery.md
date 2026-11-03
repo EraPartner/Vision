@@ -20,6 +20,11 @@ aliases: [native-only Vision, Docker retirement, Compose retirement]
 
 # ADR-133: Native-only runtime and delivery
 
+> [!note] Superseded in part by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> the bundled PostgreSQL 18 cluster, the CI PostgreSQL checks and the grant template under
+> `config/postgres/` no longer exist, and source operators no longer provide PostgreSQL. Docker and
+> Compose stay retired, and real-database tests now run against SQLite files.
+
 ## Status
 
 Accepted — 2026-09-08. This supersedes [[docs/adr/039-docker-container-hardening|ADR-039]],

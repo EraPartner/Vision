@@ -9,7 +9,12 @@ import type { FormulaUnit } from "./analysisFormulaEngine.ts";
 import { nonZeroOr } from "../lib/math.ts";
 import { valueText } from "./valueText.ts";
 
-/** [label, value type, SQL expression, optional "currency" money marker] */
+/**
+ * [label, value type, SQL expression, optional "currency" money marker].
+ * The expressions run in the analysis sandbox (ADR-263): a date bucket of a
+ * date column stays a 'YYYY-MM-DD' date, and decimal totals use the exact
+ * dec_sum().
+ */
 type CatalogEntry = [string, string, string, string?];
 
 interface CatalogDataset {
@@ -71,7 +76,7 @@ const DATASETS: Record<string, CatalogDataset> = {
     fields: {
       transaction_id: ["Transaction ID", "integer", "transaction_id"],
       transaction_date: ["Date", "date", "transaction_date"],
-      month: ["Month", "date", "date_trunc('month', transaction_date)::date"],
+      month: ["Month", "date", "date_trunc('month', transaction_date)"],
       amount: ["Amount", "decimal", "amount"],
       currency: ["Currency", "currency", "currency"],
       account_id: ["Account ID", "integer", "account_id"],
@@ -106,8 +111,8 @@ const DATASETS: Record<string, CatalogDataset> = {
       ],
     },
     measures: {
-      count: ["Transaction count", "integer", "COUNT(*)"],
-      sum_amount: ["Net amount", "decimal", "SUM(amount)", "currency"],
+      count: ["Transaction count", "integer", "count(*)"],
+      sum_amount: ["Net amount", "decimal", "dec_sum(amount)", "currency"],
     },
     joins: ["transactions.account"],
   },
@@ -125,7 +130,7 @@ const DATASETS: Record<string, CatalogDataset> = {
       owner: ["Owner", "string", "owner"],
       is_active: ["Active", "boolean", "is_active"],
     },
-    measures: { count: ["Account count", "integer", "COUNT(*)"] },
+    measures: { count: ["Account count", "integer", "count(*)"] },
     joins: [],
   },
   holdings: {
@@ -135,7 +140,7 @@ const DATASETS: Record<string, CatalogDataset> = {
     fields: {
       event_id: ["Event ID", "integer", "event_id"],
       event_date: ["Date", "date", "event_date"],
-      month: ["Month", "date", "date_trunc('month', event_date)::date"],
+      month: ["Month", "date", "date_trunc('month', event_date)"],
       investment_id: ["Investment ID", "integer", "investment_id"],
       investment_name: ["Investment", "string", "investment_name"],
       symbol: ["Symbol", "string", "symbol"],
@@ -158,14 +163,14 @@ const DATASETS: Record<string, CatalogDataset> = {
       ],
     },
     measures: {
-      count: ["Event count", "integer", "COUNT(*)"],
+      count: ["Event count", "integer", "count(*)"],
       sum_amount: [
         "Raw event amount total",
         "decimal",
-        "SUM(amount)",
+        "dec_sum(amount)",
         "currency",
       ],
-      sum_units: ["Raw event units total", "decimal", "SUM(units)"],
+      sum_units: ["Raw event units total", "decimal", "dec_sum(units)"],
     },
     joins: ["holdings.account"],
   },
@@ -176,7 +181,7 @@ const DATASETS: Record<string, CatalogDataset> = {
     fields: {
       cash_flow_id: ["Cash-flow ID", "integer", "cash_flow_id"],
       cash_flow_date: ["Date", "date", "cash_flow_date"],
-      month: ["Month", "date", "date_trunc('month', cash_flow_date)::date"],
+      month: ["Month", "date", "date_trunc('month', cash_flow_date)"],
       account_id: ["Account ID", "integer", "account_id"],
       account_name: ["Account", "string", "account_name"],
       currency: ["Currency", "currency", "currency"],
@@ -216,18 +221,18 @@ const DATASETS: Record<string, CatalogDataset> = {
       ],
     },
     measures: {
-      count: ["Cash-flow count", "integer", "COUNT(*)"],
-      sum_spending: ["Spending", "decimal", "SUM(spending_amount)", "currency"],
+      count: ["Cash-flow count", "integer", "count(*)"],
+      sum_spending: ["Spending", "decimal", "dec_sum(spending_amount)", "currency"],
       sum_positive_flow: [
         "Income and refunds",
         "decimal",
-        "SUM(positive_flow_amount)",
+        "dec_sum(positive_flow_amount)",
         "currency",
       ],
       sum_amount: [
         "Net cash flow",
         "decimal",
-        "SUM(signed_amount)",
+        "dec_sum(signed_amount)",
         "currency",
       ],
     },
@@ -244,7 +249,7 @@ for (const dataset of Object.values(DATASETS)) {
       dataset.fields[bucket] = [
         bucket.charAt(0).toUpperCase() + bucket.slice(1),
         "date",
-        `date_trunc('${bucket}', ${dateField})::date`,
+        `date_trunc('${bucket}', ${dateField})`,
       ];
     }
 }
@@ -261,6 +266,54 @@ const OPERATORS: Record<string, string> = {
   "is-null": "IS NULL",
   "is-not-null": "IS NOT NULL",
 };
+
+/** Exact comparisons for decimal fields: text order is not numeric order. */
+const DECIMAL_COMPARISONS: Record<string, string> = {
+  eq: "dec_eq",
+  neq: "dec_ne",
+  lt: "dec_lt",
+  lte: "dec_le",
+  gt: "dec_gt",
+  gte: "dec_ge",
+};
+
+/** The boolean spellings PostgreSQL's boolean input accepted. */
+const BOOLEAN_TEXT: Record<string, boolean> = {
+  true: true,
+  t: true,
+  yes: true,
+  y: true,
+  on: true,
+  "1": true,
+  false: false,
+  f: false,
+  no: false,
+  n: false,
+  off: false,
+  "0": false,
+};
+
+/**
+ * A filter value bound for a field of `type`. Decimals bind as exact text
+ * (the dec_* functions refuse a fractional float); boolean text binds as the
+ * boolean PostgreSQL's input cast read from it, because SQLite stores
+ * booleans as 0 and 1 and would compare the text instead.
+ */
+function filterValue(type: string, value: unknown): unknown {
+  if (type === "decimal") return valueText(value);
+  if (type === "boolean" && typeof value === "string") {
+    const key = value.trim().toLowerCase();
+    if (Object.hasOwn(BOOLEAN_TEXT, key)) return BOOLEAN_TEXT[key];
+  }
+  return value;
+}
+
+/** PostgreSQL sorts NULLs last ascending and first descending. */
+function orderSqlFor(key: string, direction: string) {
+  return direction === "desc"
+    ? `${key} DESC NULLS FIRST`
+    : `${key} ASC NULLS LAST`;
+}
 
 const quoteIdent = (value: string) => `"${value.replace(/"/g, '""')}"`;
 
@@ -384,10 +437,17 @@ export function compileVisualAnalysis(
   }
   const selected: string[] = [];
   const columns: CompiledAnalysisColumn[] = [];
+  // What ORDER BY uses for each output: decimal text by its exact sort key,
+  // a count by the integer (the output is int8-style text), anything else by
+  // its alias.
+  const orderKeys = new Map<string, string>();
   for (const id of fields) {
     const field = selectedField(dataset, id);
-    selected.push(
-      `${fieldExpression(dataset, id, joined)} AS ${quoteIdent(id)}`,
+    const expression = fieldExpression(dataset, id, joined);
+    selected.push(`${expression} AS ${quoteIdent(id)}`);
+    orderKeys.set(
+      id,
+      field[1] === "decimal" ? `dec_key(${expression})` : quoteIdent(id),
     );
     const fixedCurrency = (plan.filters ?? []).find(
       (f) => f.fieldId === "currency" && f.operator === "eq",
@@ -426,7 +486,19 @@ export function compileVisualAnalysis(
   for (const id of measures) {
     const measure = own(dataset.measures, id);
     if (!measure) throw new Error(`Unsupported analysis measure: ${id}`);
-    selected.push(`${measure[2]} AS ${quoteIdent(id)}`);
+    // count(*) was a PostgreSQL bigint, which the API returned as decimal
+    // text; the CAST keeps that shape.
+    selected.push(
+      `${measure[1] === "integer" ? `CAST(${measure[2]} AS TEXT)` : measure[2]} AS ${quoteIdent(id)}`,
+    );
+    orderKeys.set(
+      id,
+      measure[1] === "decimal"
+        ? `dec_key(${measure[2]})`
+        : measure[1] === "integer"
+          ? measure[2]
+          : quoteIdent(id),
+    );
     const measureInstrument = (plan.filters ?? []).find(
       (f) => f.fieldId === "investment_id" && f.operator === "eq",
     )?.value;
@@ -471,7 +543,7 @@ export function compileVisualAnalysis(
   const values: unknown[] = [];
   const where: string[] = [];
   for (const filter of plan.filters ?? []) {
-    selectedField(dataset, filter.fieldId);
+    const filterType = selectedField(dataset, filter.fieldId)[1];
     const operator = own(OPERATORS, filter.operator);
     if (!operator)
       throw new Error(`Unsupported analysis filter: ${filter.operator}`);
@@ -493,10 +565,19 @@ export function compileVisualAnalysis(
         ? `%${valueText(filter.value)}%`
         : filter.operator === "starts-with"
           ? `${valueText(filter.value)}%`
-          : filter.value,
+          : filterValue(filterType, filter.value),
     );
+    const left = fieldExpression(dataset, filter.fieldId, joined);
+    const decimalComparison =
+      filterType === "decimal"
+        ? own(DECIMAL_COMPARISONS, filter.operator)
+        : undefined;
     where.push(
-      `${fieldExpression(dataset, filter.fieldId, joined)} ${operator} $${values.length}`,
+      operator === "ILIKE"
+        ? `ilike(${left}, $${values.length})`
+        : decimalComparison
+          ? `${decimalComparison}(${left}, $${values.length})`
+          : `${left} ${operator} $${values.length}`,
     );
   }
 
@@ -552,7 +633,7 @@ export function compileVisualAnalysis(
   const order = (plan.orderBy ?? []).map(({ id, direction }) => {
     if (!allowedOutputs.has(id))
       throw new Error(`Unsupported sort output: ${id}`);
-    return `${quoteIdent(id)} ${direction === "desc" ? "DESC" : "ASC"}`;
+    return orderSqlFor(orderKeys.get(id) ?? quoteIdent(id), direction);
   });
   const orderSql = order.length > 0 ? `\nORDER BY ${order.join(", ")}` : "";
   const limit = Math.min(Math.max(nonZeroOr(Number(plan.limit), 500), 1), 1000);

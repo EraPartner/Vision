@@ -15,6 +15,7 @@ vi.mock("../../src/database/connection.ts", () =>
     getTableCount: vi.fn(),
     getClient: vi.fn(),
     query: vi.fn(),
+    withExclusiveWriter: vi.fn(),
   }),
 );
 
@@ -40,19 +41,26 @@ vi.mock("../../src/services/providerHealthService.ts", () => ({
 
 vi.mock("../../src/services/dbEditor.ts", () => ({
   getTableMeta: vi.fn(),
+  listUserTables: vi.fn(),
   readRows: vi.fn(),
   applyMutations: vi.fn(),
 }));
 
-import { getClient, query } from "../../src/database/connection.ts";
+import {
+  getClient,
+  query,
+  withExclusiveWriter,
+  withTransaction,
+} from "../../src/database/connection.ts";
 import {
   applyMutations,
   getTableMeta,
+  listUserTables,
   readRows,
 } from "../../src/services/dbEditor.ts";
 import { probeProvider } from "../../src/services/providerHealthService.ts";
 
-const { default: adminRouter } = await import("../../src/routes/admin.ts");
+const { default: adminRouter, prettySize } = await import("../../src/routes/admin.ts");
 
 const api = routeAgent(adminRouter, { mountPath: "/api/admin" });
 const BASE = "/api/admin";
@@ -67,61 +75,70 @@ function expectValidationError(res: { body: unknown }, message: RegExp) {
 }
 
 describe("Admin route request validation", () => {
-  const client = { query: vi.fn(), release: vi.fn() };
+  /** The writer connection withExclusiveWriter hands out. */
+  const writer = { exec: vi.fn() };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(query).mockResolvedValue({
-      rows: [
-        { relname: "accounts", can_maintain: true },
-        { relname: "transactions", can_maintain: true },
-      ],
-    } as never);
-    vi.mocked(getClient).mockResolvedValue(client);
-    client.query.mockResolvedValue({ rows: [] });
+    vi.mocked(listUserTables).mockResolvedValue(
+      new Set(["accounts", "transactions"]),
+    );
+    vi.mocked(withExclusiveWriter).mockImplementation(
+      // The route only calls exec() on the writer.
+      (fn) => Promise.resolve(fn(writer as never)),
+    );
+    writer.exec.mockReturnValue(undefined);
     vi.mocked(readRows).mockResolvedValue({} as never);
     vi.mocked(applyMutations).mockResolvedValue({ dryRun: true } as never);
   });
 
   describe("POST /database/vacuum", () => {
-    it("vacuums one allow-listed table or all tables", async () => {
+    it("vacuums the file, then analyzes one allow-listed table or all tables", async () => {
       await api
         .post(`${BASE}/database/vacuum`)
         .send({ table: "transactions" })
         .expect(200);
-      expect(client.query).toHaveBeenLastCalledWith(
-        'VACUUM ANALYZE "transactions"',
-      );
+      expect(writer.exec.mock.calls).toEqual([
+        ["VACUUM"],
+        ['ANALYZE "transactions"'],
+        ["PRAGMA optimize"],
+      ]);
+      writer.exec.mockClear();
       const all = await api
         .post(`${BASE}/database/vacuum`)
         .send({ table: null })
         .expect(200);
-      expect(client.query).toHaveBeenLastCalledWith(
-        'VACUUM ANALYZE "accounts", "transactions"',
-      );
+      expect(writer.exec.mock.calls).toEqual([
+        ["VACUUM"],
+        ["ANALYZE"],
+        ["PRAGMA optimize"],
+      ]);
       expect(bodyAt(all, "data")).toEqual({ vacuumed: "all" });
     });
 
-    it("refuses with 403 instead of a skipped VACUUM when MAINTAIN is missing", async () => {
-      vi.mocked(query).mockResolvedValue({
-        rows: [
-          { relname: "accounts", can_maintain: true },
-          { relname: "transactions", can_maintain: false },
-        ],
-      } as never);
-      for (const table of ["transactions", null]) {
-        const res = await api
-          .post(`${BASE}/database/vacuum`)
-          .send({ table })
-          .expect(403);
-        expect(res.body).toEqual(
-          errEnvelope({
-            code: "FORBIDDEN",
-            message: "Insufficient database privileges to VACUUM transactions",
-          }),
-        );
-      }
+    it("runs VACUUM on the exclusive writer, outside any transaction", async () => {
+      // SQLite refuses VACUUM inside a transaction; there is no per-table
+      // privilege to check (PostgreSQL's MAINTAIN), so the guarantee is that
+      // nothing else holds the writer while it runs.
+      await api
+        .post(`${BASE}/database/vacuum`)
+        .send({ table: "accounts" })
+        .expect(200);
+      expect(withExclusiveWriter).toHaveBeenCalledOnce();
+      expect(withTransaction).not.toHaveBeenCalled();
       expect(getClient).not.toHaveBeenCalled();
+      expect(query).not.toHaveBeenCalled();
+    });
+
+    it("reports a failed VACUUM instead of claiming success", async () => {
+      writer.exec.mockImplementationOnce(() => {
+        throw Object.assign(new Error("database is locked"), { code: "55P03" });
+      });
+      const res = await api
+        .post(`${BASE}/database/vacuum`)
+        .send({ table: "transactions" });
+      expect(res.status).toBeGreaterThanOrEqual(500);
+      expect(writer.exec).toHaveBeenCalledTimes(1);
     });
 
     it("rejects a non-string table and keeps the unknown-table message", async () => {
@@ -135,11 +152,48 @@ describe("Admin route request validation", () => {
       expectValidationError(
         await api
           .post(`${BASE}/database/vacuum`)
-          .send({ table: "pg_authid" })
+          .send({ table: "sqlite_schema" })
           .expect(400),
-        /^Unknown table: pg_authid$/,
+        /^Unknown table: sqlite_schema$/,
       );
-      expect(getClient).not.toHaveBeenCalled();
+      // Case-sensitive, as PostgreSQL's quoted identifiers were.
+      expectValidationError(
+        await api
+          .post(`${BASE}/database/vacuum`)
+          .send({ table: "Transactions" })
+          .expect(400),
+        /^Unknown table: Transactions$/,
+      );
+      expect(withExclusiveWriter).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("prettySize", () => {
+    it("formats sizes exactly as pg_size_pretty did", () => {
+      expect(
+        [
+          0, 1, 10239, 10240, 10751, 10752, 1048575, 1048576, 10485759,
+          10485760, 20971520, 21474836480, 1099511627776, 1125899906842624,
+          -10240,
+        ].map(prettySize),
+      ).toEqual([
+        "0 bytes",
+        "1 bytes",
+        "10239 bytes",
+        "10 kB",
+        "10 kB",
+        // Half rounding: 10752 bytes are 10.5 kB, which rounds up.
+        "11 kB",
+        "1024 kB",
+        "1024 kB",
+        "10 MB",
+        "10 MB",
+        "20 MB",
+        "20 GB",
+        "1024 GB",
+        "1024 TB",
+        "-10 kB",
+      ]);
     });
   });
 

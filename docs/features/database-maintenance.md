@@ -2,8 +2,8 @@
 title: Database Maintenance UI
 type: feature
 status: active
-date: 2026-10-29
-updated: 2026-10-29
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     feature,
@@ -18,7 +18,7 @@ tags:
     adr-231,
     adr-262,
   ]
-description: Administrative interface for monitoring database statistics, running VACUUM ANALYZE operations, and (ADR-101) browsing/editing raw table data with optimistic concurrency, dry-run preview, and a log line per committed change.
+description: Administrative interface for monitoring SQLite table statistics, running VACUUM and ANALYZE, and (ADR-101) browsing/editing raw table data with optimistic concurrency, dry-run preview, and a log line per committed change.
 aliases:
   [
     db maintenance,
@@ -39,99 +39,32 @@ related_code:
 # Database Maintenance UI (Phase 7 + ADR-101)
 
 > [!abstract] Overview
-> The Database Maintenance page provides administrators with real-time visibility into PostgreSQL table health and the ability to execute VACUUM ANALYZE operations for performance optimization. Phase 7 addition. ADR-101 (2026-06-18) extends it with a JetBrains-style **data editor** for permitted tables: browse, filter, sort, and edit/insert/delete rows with optimistic-concurrency protection, a SQL dry-run preview, and a log line per committed change.
+> The Database Maintenance page provides administrators with real-time visibility into the tables of Vision's SQLite database and the ability to run VACUUM and ANALYZE for performance optimization ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). Phase 7 addition. ADR-101 (2026-06-18) extends it with a JetBrains-style **data editor** for permitted tables: browse, filter, sort, and edit/insert/delete rows with optimistic-concurrency protection, a SQL dry-run preview, and a log line per committed change.
 
 ## Feature Overview
 
-The Database maintenance page (`/admin/db`) displays live statistics for every table in the Vision database and allows running `VACUUM ANALYZE` on a per-table or bulk basis. This is critical for:
+The Database maintenance page (`/admin/db`) displays live statistics for every table in the Vision database and allows running maintenance for one table or for all of them. SQLite's `VACUUM` always rebuilds the whole database file; the table choice selects which table `ANALYZE` refreshes. This is useful for:
 
-- **Autovacuum monitoring**: See actual dead row counts and bloat
-- **Disk space optimization**: Reclaim space from deleted rows
+- **Size monitoring**: See exact row counts and the pages each table and its indexes use
+- **Disk space optimization**: Reclaim the free pages left by deleted rows
 - **Query planning**: Updated table statistics improve query plans
 - **Performance tuning**: Identify tables needing attention
 
 ## Endpoints
 
-### GET /api/admin/db/stats
+### GET /api/admin/database/stats
 
-Retrieve current table statistics including row counts, dead rows, and estimated size.
-
-**Query Parameters:**
-
-| Parameter | Type   | Default | Description                                                 |
-| --------- | ------ | ------- | ----------------------------------------------------------- |
-| `table`   | string | none    | Optional: specific table name to fetch; omit for all tables |
-
-**Response:**
-
-```json
-{
-  "tables": [
-    {
-      "table_name": "transactions",
-      "live_rows": 2453,
-      "dead_rows": 127,
-      "size_mb": 3.2,
-      "last_vacuum": "2026-04-24T10:15:32Z",
-      "last_analyze": "2026-04-24T10:15:32Z",
-      "autovacuum_enabled": true
-    },
-    {
-      "table_name": "categories",
-      "live_rows": 45,
-      "dead_rows": 2,
-      "size_mb": 0.1,
-      "last_vacuum": "2026-04-23T03:21:15Z",
-      "last_analyze": "2026-04-23T03:21:15Z",
-      "autovacuum_enabled": true
-    }
-  ],
-  "timestamp": "2026-04-24T12:34:56Z"
-}
-```
+Retrieve statistics for every user table: exact row counts, sizes from `dbstat`, and the times of
+this process's last maintenance run. The response shape and every field are described in
+[[docs/api/admin|Admin API]].
 
 ---
 
-### POST /api/admin/db/vacuum
+### POST /api/admin/database/vacuum
 
-Run `VACUUM ANALYZE` on one or all tables.
-
-**Query Parameters:**
-
-| Parameter | Type    | Required          | Description                                       |
-| --------- | ------- | ----------------- | ------------------------------------------------- |
-| `table`   | string  | No                | Specific table name to vacuum; omit to vacuum all |
-| `analyze` | boolean | No (default true) | Run ANALYZE after VACUUM                          |
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "VACUUM ANALYZE completed on 3 table(s)",
-  "tables_vacuumed": [
-    {
-      "table_name": "transactions",
-      "status": "completed",
-      "duration_ms": 245
-    },
-    {
-      "table_name": "investments",
-      "status": "completed",
-      "duration_ms": 67
-    }
-  ],
-  "total_duration_ms": 312
-}
-```
-
-**Error Response (409):**
-
-```json
-{
-  "detail": "VACUUM already running. Please wait."
-}
-```
+Run `VACUUM`, then `ANALYZE` on the table in the optional JSON body field `table` (or on all
+tables), then `PRAGMA optimize`. The response is `{ "vacuumed": "<table>" }`, or
+`{ "vacuumed": "all" }`. See [[docs/api/admin|Admin API]].
 
 ---
 
@@ -139,33 +72,19 @@ Run `VACUUM ANALYZE` on one or all tables.
 
 ### Backend Implementation
 
-The VACUUM operation uses a **raw database client** (not the connection pool) because PostgreSQL does not allow VACUUM inside a transaction:
+SQLite does not allow `VACUUM` inside a transaction, so the route runs it on the single writer
+connection while it holds that connection exclusively (`withExclusiveWriter` in
+`apps/node-backend/src/database/connection.ts`). The exclusive hold waits for running write
+transactions to finish, and other writers wait until maintenance ends. The table name in the
+request is only a lookup key: the route checks it against the user tables from `pragma_table_list`
+and quotes the catalog's copy of the name for `ANALYZE`.
 
-```typescript
-// apps/node-backend/src/routes/admin.ts
-const client = await getClient(); // Raw client, not pool
-try {
-  await client.query("SET statement_timeout = 120000");
-  // Targets come from pg_stat_user_tables and are quoted as identifiers.
-  const vacuum = compileQuery(
-    sql`VACUUM ANALYZE ${sql.join(targets.map((r) => sql.id(r.relname)))}`,
-  );
-  await client.query(vacuum.sql);
-} finally {
-  client.release();
-}
-```
+SQLite records no maintenance history, so the route keeps the time of its last `VACUUM` and of
+each table's last `ANALYZE` in memory. A restart resets them to `null`.
 
-The backend runs as the least-privilege app role, which owns no tables. PostgreSQL skips a table
-the role may not maintain with only a warning, so the route checks the `MAINTAIN` privilege first
-and returns `403` instead of a false success. The app role holds `MAINTAIN` on public tables
-([[docs/adr/262-app-role-maintain-for-admin-vacuum|ADR-262]]).
-
-**Why raw client?**
-
-- VACUUM cannot run in a transaction block
-- The connection pool wraps all queries in implicit transactions
-- We need an auto-commit connection for this operation
+The backend opens the database file itself and has no database roles, so the former `MAINTAIN`
+privilege check and its `403` are gone ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]
+supersedes the role split of [[docs/adr/262-app-role-maintain-for-admin-vacuum|ADR-262]]).
 
 ### Frontend Implementation
 
@@ -175,17 +94,16 @@ The page consists of:
 
 1. **Statistics Table**: Displays all tables with:
    - Live row count
-   - Dead row count (indicator of vacuum pressure)
-   - Estimated size in MB
-   - Last vacuum timestamp (the later of manual and automatic)
-   - Last analyze timestamp (the later of manual and automatic)
+   - Dead row count (always 0: SQLite keeps no dead row versions)
+   - Size of the table and its indexes ("—" when the SQLite build has no `dbstat`)
+   - Last vacuum timestamp (the later of manual and automatic; SQLite has only manual runs)
+   - Last analyze timestamp (the later of manual and automatic; SQLite has only manual runs)
 
 Timestamp and size columns keep their values on one line with reserved minimum widths. The table scrolls horizontally within its container when the window cannot fit all columns.
 
 2. **Row Count Behavior**:
-   - **Important:** Row counts (`live_rows`, `dead_rows`) are estimates from PostgreSQL statistics (via `pg_stat_user_tables`), not authoritative counts. They are only updated when VACUUM ANALYZE is run.
-   - All tables display actual row counts from PostgreSQL statistics regardless of their vacuum/analyze history. Tables with no vacuum/analyze events show the last known statistics (which may be zero for newly created tables).
-   - Row count accuracy improves after running VACUUM ANALYZE, which updates the statistics.
+   - Row counts (`live_rows`) are exact: the route runs `count(*)` on every table for each request.
+     Before ADR-263 they were estimates from PostgreSQL's `pg_stat_user_tables`.
 
 3. **Actions** ([[docs/adr/187-completeness-sweep|ADR-187]]):
    - "Vacuum all tables" is the primary header button (bulk operation); Refresh is the header ••• menu item
@@ -221,7 +139,7 @@ The editor page (`TableDataEditorPage.tsx`) renders a controlled grid using the 
 
 - **Column sizing**: data columns use a fixed 11rem width and the row-action column uses 3rem. Column names and text values wrap, including long identifiers, instead of widening the grid or truncating values. Tables with many columns still scroll horizontally inside the card.
 - **Column headers** are sortable (click once for ASC, again for DESC). Sorting is paused while uncommitted changes exist to prevent silent loss of dirty state.
-- **Per-column filter inputs** appear below each header with a short “Filter…” hint and a column-specific accessible label. Supported ops: `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `contains` (ILIKE), `startsWith` (ILIKE), `isnull`, `notnull`.
+- **Per-column filter inputs** appear below each header with a short “Filter…” hint and a column-specific accessible label. Supported ops: `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `contains` (ILIKE), `startsWith` (ILIKE), `isnull`, `notnull`. Decimal columns filter and sort by exact value; text sorts bytewise.
 - **Pagination** via `limit` (default 100, max 500) and `offset` controls.
 
 The backend endpoint is `GET /api/admin/database/tables/:table/rows` — see [[docs/api/admin|Admin API]].
@@ -245,7 +163,7 @@ The backend endpoint is `GET /api/admin/database/tables/:table/rows` — see [[d
 
 ### Optimistic concurrency
 
-Each row returned by `/rows` includes a hidden `__xmin` token (PostgreSQL row version). On commit, the server locks each target row `FOR UPDATE` and compares the current `xmin` to the client's token. If another write changed the row since the editor loaded it, the server returns `409 Conflict` and the entire batch is rolled back. This prevents silent overwrites without requiring a full serializable transaction on reads.
+Each row returned by `/rows` includes a hidden `__xmin` token: a digest of the row's stored values. The commit runs in one `BEGIN IMMEDIATE` transaction on the single writer, so no other write runs between the version check and the write. The server compares each target row's current digest to the client's token. If another write changed the row's values since the editor loaded it, the server returns `409 Conflict` and the entire batch is rolled back. A write that stored the same values again does not count as a change. This prevents silent overwrites without requiring a full serializable transaction on reads.
 
 ### Tables with no primary key
 
@@ -255,30 +173,34 @@ Tables that lack a primary key are **read-only** in the data editor — the Comm
 
 | Concern                                               | Mitigation                                                                                              |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| SQL injection via table/column identifiers            | Names validated against `pg_stat_user_tables` / `information_schema.columns`; identifiers double-quoted |
+| SQL injection via table/column identifiers            | Names validated against `pragma_table_list` / `pragma_table_xinfo`; identifiers double-quoted           |
 | SQL injection via values                              | Always parameterized                                                                                    |
-| Read queries causing mutations                        | All reads run in a `READ ONLY` transaction                                                              |
-| Hung read queries                                     | `SET LOCAL statement_timeout = '10s'`                                                                   |
-| Raw WHERE clause abuse                                | Semicolons rejected; runs inside READ ONLY transaction                                                  |
-| Silent concurrent overwrites                          | `xmin` optimistic-concurrency token; `409 Conflict` on mismatch                                         |
-| Constraint violations surfaced as raw Postgres errors | SQLSTATEs (`23502/23503/23505/23514/22P02`) mapped to friendly 400/409 messages                         |
+| Read queries causing mutations                        | All reads run in one snapshot on the read-only (`PRAGMA query_only`) connection                         |
+| Hung read queries                                     | No statement timeout on SQLite; reads are bounded by `limit` (max 500) and keyset paging                |
+| Raw WHERE clause abuse                                | The raw `where` parameter was removed; only structured, parameterized `filters`                         |
+| Silent concurrent overwrites                          | `__xmin` row-version digest; `409 Conflict` on mismatch                                                 |
+| Values that would break storage CHECKs                | Written through `vision_numeric` / `vision_jsonb` / `vision_ts` / `ts_date`; generated columns read-only |
+| Constraint violations surfaced as raw database errors | SQLSTATEs (`23502/23503/23001/23505/23514/22P02`) mapped to friendly 400/409 messages                   |
+| Write lock held by another writer                     | A timed-out wait (`55P03`) returns a retryable `503`                                                    |
 | Partial batch application                             | Entire batch runs in one transaction; any failure rolls back all changes                                |
 | Untraceable edits                                     | Each committed change is written to the structured logger (no database change table since ADR-231)      |
 
 ### Bypass-domain-validation caveat
 
 > [!warning] Raw writes bypass app-level domain logic
-> The data editor writes directly to PostgreSQL. It honors every _structural_ constraint Postgres enforces (FK, CHECK, NOT NULL, UNIQUE), but **skips** application-level rules, computed/derived values, and cascade side-effects that live only in repository/service code. Only the admin (with full visibility into the data model) should use this tool. See [[docs/adr/101-db-data-editor|ADR-101]] for the full trade-off discussion.
+> The data editor writes directly to the database. It honors every _structural_ constraint SQLite enforces (FK, CHECK, NOT NULL, UNIQUE), but **skips** application-level rules, computed/derived values, and cascade side-effects that live only in repository/service code. Only the admin (with full visibility into the data model) should use this tool. See [[docs/adr/101-db-data-editor|ADR-101]] for the full trade-off discussion.
 
-Account-table writes are one narrow exception to the otherwise raw transaction protocol: before
-locking any `accounts` row, the editor takes the same transaction-scoped advisory lock used by
-account create, PATCH, and merge. This only serializes changes to the funding graph. It does not
-run the application-level `funding_account_id` existence or cycle checks, so the administrator
+Account-table writes follow the same funding-graph protocol as account create, PATCH, and merge.
+On PostgreSQL that was a transaction-scoped advisory lock. On SQLite the editor's `BEGIN IMMEDIATE`
+transaction already holds the database write lock, so it serializes funding-graph changes against
+every other writer; `lockAccountFundingGraph()` remains as the protocol point and takes nothing.
+A timed-out wait for the write lock returns the same retryable `503` as before. The editor does
+not run the application-level `funding_account_id` existence or cycle checks, so the administrator
 remains responsible for preserving those invariants.
 
 ### Materialized-view auto-refresh
 
-After a successful commit to `transactions`, `recipients`, or `categories` (the base tables for the dashboard materialized views), the service calls the existing debounced `scheduleRefresh()` from `materializedViewService`. The commit response includes `refreshScheduled: true` when this happens. Edits to other tables skip the refresh.
+After a successful commit to `transactions`, `recipients`, or `categories` (the base tables for the dashboard summary tables `mv_*`, which the editor shows read-only), the service calls the existing debounced `scheduleRefresh()` from `materializedViewService`. The commit response includes `refreshScheduled: true` when this happens. Edits to other tables skip the refresh.
 
 ### Change log
 
@@ -306,7 +228,8 @@ Full endpoint documentation: [[docs/api/admin|Admin API]].
 - [[docs/features/settings|Settings & Administration]]
 - [[docs/performance/index|Performance Optimization]]
 - [[docs/adr/231-remove-audit-history|ADR-231: Remove audit history]] — why `db_editor_audit` was dropped
-- [[docs/adr/262-app-role-maintain-for-admin-vacuum|ADR-262: App role gets MAINTAIN so admin VACUUM runs]]
+- [[docs/adr/262-app-role-maintain-for-admin-vacuum|ADR-262: App role gets MAINTAIN so admin VACUUM runs]] (superseded by ADR-263)
+- [[docs/adr/263-sqlite-replaces-postgresql|ADR-263: SQLite replaces PostgreSQL]]
 
 ## Related Code
 

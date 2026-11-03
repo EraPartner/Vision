@@ -16,7 +16,12 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.ts";
-import { closePool } from "../src/database/connection.ts";
+import {
+  closePool,
+  getPoolStats,
+  withTransaction,
+} from "../src/database/connection.ts";
+import { portfolioIncomeTransactionSnapshotSql } from "../src/database/sqlite/schemaFunctions.ts";
 import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.ts";
 import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.ts";
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.ts";
@@ -31,16 +36,22 @@ import {
   replaceRepairStaging,
 } from "../src/repositories/portfolioImportDuplicateRepairRepository.ts";
 import { must } from "./helpers/must.ts";
-import type { Pool } from "pg";
+import type { TestPool } from "./setup/db.ts";
 
 /** A row from an ad-hoc SQL read: column values are narrowed where used. */
 type DbRow = Record<string, unknown>;
-/** A `to_jsonb(row)` value: the id is known, the other columns are not read. */
+/** A whole row (PostgreSQL: `to_jsonb(row)`): the id is known, the other columns are not read. */
 type JsonRow = { id: number } & Record<string, unknown>;
+/**
+ * Every portfolio_transactions column, as PostgreSQL's to_jsonb(pt) held
+ * them: the timestamps as their stored text (the hinted duplicates replace
+ * the decoded columns), so a restored row must match to the microsecond.
+ */
+const PT_ROW = `pt.*, pt.created_at AS "created_at::text", pt.updated_at AS "updated_at::text"`;
 interface IdRow {
   id: number;
 }
-/** BIGINT ids arrive from node-postgres as strings. */
+/** BIGINT ids arrive from the driver as strings. */
 interface BigIdRow {
   id: string;
 }
@@ -55,7 +66,7 @@ vi.mock(
     }),
 );
 
-let pool: Pool;
+let pool: TestPool;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const owned = {
   accounts: [] as number[],
@@ -112,8 +123,8 @@ async function legacy(
   return must((
     await pool.query<IdRow>(
       `INSERT INTO portfolio_transactions(investment_id,type,date,amount,units,price_per_unit,fees,currency,note)
-    VALUES ($1,'buy',$2,$3,$4,$5,$6,'EUR',$7) RETURNING id`,
-      [fx.investment, date, amount, units, price, fees, note],
+    VALUES ($1,'buy',$2,vision_numeric($3,18,4),vision_numeric($4,18,8),vision_numeric($5,18,6),vision_numeric($6,18,4),'EUR',$7) RETURNING id`,
+      [fx.investment, date, String(amount), String(units), String(price), String(fees), note],
     )
   ).rows[0], "query row").id;
 }
@@ -126,7 +137,7 @@ async function batch(
     must((
       await pool.query<BigIdRow>(
         `INSERT INTO portfolio_import_batches(adapter_name,custom_config,status,rows_total,account_id,is_brokerage)
-    VALUES ('saxo_transaction_history','{"format":"saxo_transaction_history"}','awaiting_review',$1,$2,true) RETURNING id`,
+    VALUES ('saxo_transaction_history',vision_jsonb('{"format":"saxo_transaction_history"}'),'awaiting_review',$1,$2,true) RETURNING id`,
         [rows.length, fx.account],
       )
     ).rows[0], "query row").id,
@@ -136,17 +147,17 @@ async function batch(
     const identity = `${identityPrefix}-${index}`;
     await pool.query(
       `INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,tx_date,type_raw,type,route,units,price_per_unit,amount,fees,taxes,currency,resolved_investment_id,raw_data,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,dedup_occurrence)
-      VALUES ($1,$2,$3,$4,$5::text,$5::text::portfolio_txn_type,'portfolio',$6,$7,$8,$9,0,'EUR',$10,$11,$12,$13,1,1)`,
+      VALUES ($1,$2,$3,$4,$5,$5,'portfolio',vision_numeric($6,18,8),vision_numeric($7,18,6),vision_numeric($8,18,4),vision_numeric($9,18,4),'0.0000','EUR',$10,$11,$12,$13,1,1)`,
       [
         id,
         index,
         row.status ?? "matched",
         row.date ?? "2026-01-01",
         row.type ?? "buy",
-        row.units === undefined ? 5 : row.units,
-        row.price === undefined ? 100 : row.price,
-        row.amount ?? 500,
-        row.fees ?? 0,
+        decimalParam(row.units === undefined ? 5 : row.units),
+        decimalParam(row.price === undefined ? 100 : row.price),
+        decimalParam(row.amount ?? 500),
+        decimalParam(row.fees ?? 0),
         fx.investment,
         `Synthetic source ${identity}`,
         hash(`raw-${identity}`),
@@ -156,6 +167,21 @@ async function batch(
   }
   return id;
 }
+/** A whole portfolio row without updated_at (PostgreSQL: to_jsonb(pt) - 'updated_at'). */
+async function rowWithoutUpdatedAt(id: number): Promise<DbRow> {
+  const row = must((
+    await pool.query<DbRow>(
+      `SELECT ${PT_ROW} FROM portfolio_transactions pt WHERE id=$1`,
+      [id],
+    )
+  ).rows[0], "query row");
+  const { updated_at: _updatedAt, ...rest } = row;
+  return rest;
+}
+/** A NUMERIC fixture value as the text a decimal parameter binds as. */
+function decimalParam(value: number | string | null): string | null {
+  return value === null ? null : String(value);
+}
 async function cleanup() {
   historicalWarm.mockReset();
   await pool.query(
@@ -164,42 +190,51 @@ async function cleanup() {
   for (const directory of owned.directories)
     await rm(directory, { recursive: true, force: true });
   owned.directories.length = 0;
-  // Suite-wide advisory lock makes these receipts solely this fixture corpus.
-  await pool.query(
-    "TRUNCATE portfolio_import_reconciliation_journal RESTART IDENTITY",
-  );
-  await pool.query(
-    "TRUNCATE portfolio_import_duplicate_repair_journal RESTART IDENTITY",
-  );
-  await pool.query(
-    "TRUNCATE portfolio_import_income_recognition_journal RESTART IDENTITY",
-  );
+  // This file's own database holds only this fixture corpus. DELETE and the
+  // sequence reset replace TRUNCATE ... RESTART IDENTITY.
+  for (const journal of [
+    "portfolio_import_reconciliation_journal",
+    "portfolio_import_duplicate_repair_journal",
+    "portfolio_import_income_recognition_journal",
+  ]) {
+    // A restore entry references the entry it restores (ON DELETE
+    // RESTRICT, checked per row), so delete from the newest links back.
+    let deleted: number | null;
+    do {
+      ({ rowCount: deleted } = await pool.query(
+        `DELETE FROM ${journal} WHERE NOT EXISTS (SELECT 1 FROM ${journal} child WHERE child.previous_entry_id = ${journal}.id)`,
+      ));
+    } while (deleted !== null && deleted > 0);
+    await pool.query("UPDATE vision_sequences SET last_value = 0 WHERE name = $1", [
+      `${journal}_id_seq`,
+    ]);
+  }
   if (owned.investments.length > 0)
     await pool.query(
-      "DELETE FROM portfolio_asset_transfers WHERE investment_id = ANY($1::integer[])",
+      "DELETE FROM portfolio_asset_transfers WHERE investment_id IN (SELECT value FROM json_each($1))",
       [owned.investments],
     );
   if (owned.investments.length > 0)
     await pool.query(
-      "DELETE FROM portfolio_transactions WHERE investment_id = ANY($1::integer[])",
+      "DELETE FROM portfolio_transactions WHERE investment_id IN (SELECT value FROM json_each($1))",
       [owned.investments],
     );
   if (owned.batches.length > 0)
     await pool.query(
-      "DELETE FROM portfolio_import_batches WHERE id = ANY($1::bigint[])",
+      "DELETE FROM portfolio_import_batches WHERE id IN (SELECT value FROM json_each($1))",
       [owned.batches],
     );
   if (owned.accounts.length > 0)
     await pool.query(
-      "DELETE FROM transactions WHERE account_id = ANY($1::integer[])",
+      "DELETE FROM transactions WHERE account_id IN (SELECT value FROM json_each($1))",
       [owned.accounts],
     );
   if (owned.investments.length > 0)
-    await pool.query("DELETE FROM investments WHERE id = ANY($1::integer[])", [
+    await pool.query("DELETE FROM investments WHERE id IN (SELECT value FROM json_each($1))", [
       owned.investments,
     ]);
   if (owned.accounts.length > 0)
-    await pool.query("DELETE FROM accounts WHERE id = ANY($1::integer[])", [
+    await pool.query("DELETE FROM accounts WHERE id IN (SELECT value FROM json_each($1))", [
       owned.accounts,
     ]);
   owned.accounts.length = 0;
@@ -208,7 +243,7 @@ async function cleanup() {
 }
 
 
-describeDb("real PostgreSQL reversible source adoption", () => {
+describeDb("real database reversible source adoption", () => {
   beforeAll(() => {
     pool = must(getTestPool(), "test pool");
   });
@@ -229,7 +264,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     ]);
     await pool.query(
       `UPDATE portfolio_import_batches SET adapter_name='nexo_pro_spot_history',
-        custom_config='{"format":"nexo_pro_spot_history"}' WHERE id=$1`,
+        custom_config=vision_jsonb('{"format":"nexo_pro_spot_history"}') WHERE id=$1`,
       [id],
     );
     await pool.query(
@@ -273,7 +308,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
       const old = must((
         await pool.query<IdRow>(
           `INSERT INTO portfolio_transactions(investment_id,type,date,amount,currency,note,dividend_amount_convention)
-      VALUES($1,$2::portfolio_txn_type,'2026-01-01',85,'EUR','Original income note',$3) RETURNING id`,
+      VALUES($1,$2,'2026-01-01','85.0000','EUR','Original income note',$3) RETURNING id`,
           [fx.investment, type, type === "dividend" ? "net" : "unknown"],
         )
       ).rows[0], "query row").id;
@@ -281,7 +316,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
         { type, amount: 100, units: null, price: null },
       ]);
       await pool.query(
-        "UPDATE portfolio_import_staging_rows SET taxes=15 WHERE batch_id=$1",
+        "UPDATE portfolio_import_staging_rows SET taxes='15.0000' WHERE batch_id=$1",
         [id],
       );
       const plan = await previewPortfolioImportReconciliation({
@@ -326,7 +361,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     const fx = await fixture();
     const old = must((
       await pool.query<IdRow>(
-        "INSERT INTO portfolio_transactions(investment_id,type,date,amount,currency,dividend_amount_convention) VALUES($1,'dividend','2026-01-01',68,'EUR','net') RETURNING id",
+        "INSERT INTO portfolio_transactions(investment_id,type,date,amount,currency,dividend_amount_convention) VALUES($1,'dividend','2026-01-01','68.0000','EUR','net') RETURNING id",
         [fx.investment],
       )
     ).rows[0], "query row").id;
@@ -334,7 +369,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
       { type: "dividend", amount: 100, units: null, price: null },
     ]);
     await pool.query(
-      "UPDATE portfolio_import_staging_rows SET taxes=15,currency='USD',fx_rate_to_eur=0.8 WHERE batch_id=$1",
+      "UPDATE portfolio_import_staging_rows SET taxes='15.0000',currency='USD',fx_rate_to_eur='0.8000000000' WHERE batch_id=$1",
       [id],
     );
     const plan = await previewPortfolioImportReconciliation({
@@ -379,33 +414,44 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     async (change) => {
       const fx = await fixture();
       const id = await batch(fx);
-      const writer = await pool.connect();
-      let pending;
-      try {
-        await writer.query("BEGIN");
-        await writer.query(
+      // PostgreSQL showed the import waiting on the account row lock in
+      // pg_stat_activity. Under SQLite (ADR-263) the manual writer holds the
+      // single writer lock and the import queues on it
+      // (getPoolStats().waitingCount) until the change commits.
+      let releaseWriter!: () => void;
+      const writerGate = new Promise<void>((resolve) => {
+        releaseWriter = resolve;
+      });
+      let markChanged!: () => void;
+      const changed = new Promise<void>((resolve) => {
+        markChanged = resolve;
+      });
+      const writer = withTransaction(async (client) => {
+        await client.query(
           change === "close"
             ? "UPDATE accounts SET is_active=false WHERE id=$1"
             : "UPDATE accounts SET type='checking' WHERE id=$1",
           [fx.account],
         );
+        markChanged();
+        await writerGate;
+      });
+      let pending;
+      try {
+        await changed;
         pending = commitReviewedPortfolioImports({ batchIds: [id] }).then(
           (value) => ({ value }),
           (error: unknown) => ({ error }),
         );
         let waiting = false;
         for (let attempt = 0; attempt < 100; attempt++) {
-          waiting =
-            (
-              await pool.query<DbRow>(
-                "SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query ILIKE '%from \"accounts\" where \"id\" = ANY%'",
-              )
-            ).rows.length > 0;
+          waiting = getPoolStats().waitingCount > 0;
           if (waiting) break;
           await new Promise((resolve) => setTimeout(resolve, 20));
         }
         expect(waiting).toBe(true);
-        await writer.query("COMMIT");
+        releaseWriter();
+        await writer;
         expect(await pending).toMatchObject({
           error: {
             status: 400,
@@ -415,7 +461,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
         expect(
           must((
             await pool.query<DbRow>(
-              "SELECT COUNT(*)::integer AS n FROM portfolio_transactions WHERE investment_id=$1",
+              "SELECT COUNT(*) AS n FROM portfolio_transactions WHERE investment_id=$1",
               [fx.investment],
             )
           ).rows[0], "query row").n,
@@ -429,8 +475,8 @@ describeDb("real PostgreSQL reversible source adoption", () => {
           ).rows[0], "query row").status,
         ).toBe("awaiting_review");
       } finally {
-        await writer.query("ROLLBACK");
-        writer.release();
+        releaseWriter();
+        await writer;
         if (pending) await pending;
       }
     },
@@ -440,12 +486,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     const fx = await fixture();
     const old = await legacy(fx);
     const id = await batch(fx);
-    const before = must((
-      await pool.query<DbRow>(
-        "SELECT to_jsonb(pt) - 'updated_at' AS row FROM portfolio_transactions pt WHERE id=$1",
-        [old],
-      )
-    ).rows[0], "query row").row;
+    const before = await rowWithoutUpdatedAt(old);
     const result = await commitReviewedPortfolioImports({ batchIds: [id] });
     expect(result).toMatchObject({
       imported: 0,
@@ -470,14 +511,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
       ).rows[0], "query row").committed_txn_id,
     ).toBeNull();
     await expect(rollbackBatch(id)).resolves.toMatchObject({ deleted: 0 });
-    expect(
-      must((
-        await pool.query<DbRow>(
-          "SELECT to_jsonb(pt) - 'updated_at' AS row FROM portfolio_transactions pt WHERE id=$1",
-          [old],
-        )
-      ).rows[0], "query row").row,
-    ).toEqual(before);
+    expect(await rowWithoutUpdatedAt(old)).toEqual(before);
     expect(
       (
         await pool.query<DbRow>(
@@ -619,7 +653,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     expect(
       must((
         await pool.query<DbRow>(
-          "SELECT COUNT(*)::integer AS n FROM portfolio_transactions WHERE investment_id=$1",
+          "SELECT COUNT(*) AS n FROM portfolio_transactions WHERE investment_id=$1",
           [fx.investment],
         )
       ).rows[0], "query row").n,
@@ -646,7 +680,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     expect(
       must((
         await pool.query<DbRow>(
-          "SELECT COUNT(*)::integer AS n FROM portfolio_transactions WHERE investment_id=$1",
+          "SELECT COUNT(*) AS n FROM portfolio_transactions WHERE investment_id=$1",
           [fx.investment],
         )
       ).rows[0], "query row").n,
@@ -723,7 +757,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     expect(
       must((
         await pool.query<DbRow>(
-          "SELECT COUNT(*)::integer AS n FROM portfolio_transactions WHERE investment_id=$1",
+          "SELECT COUNT(*) AS n FROM portfolio_transactions WHERE investment_id=$1",
           [fx.investment],
         )
       ).rows[0], "query row").n,
@@ -731,7 +765,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     expect(
       must((
         await pool.query<DbRow>(
-          "SELECT COUNT(*)::integer AS n FROM portfolio_import_reconciliation_journal",
+          "SELECT COUNT(*) AS n FROM portfolio_import_reconciliation_journal",
         )
       ).rows[0], "query row").n,
     ).toBe(0);
@@ -764,12 +798,12 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     owned.accounts.push(destination);
     const id = await batch(fx);
     await pool.query(
-      "UPDATE portfolio_import_batches SET custom_config=custom_config || jsonb_build_object('transfer_destination_account_id',$2::integer),rows_total=2 WHERE id=$1",
+      "UPDATE portfolio_import_batches SET custom_config=vision_jsonb(json_set(custom_config,'$.transfer_destination_account_id',CAST($2 AS INTEGER))),rows_total=2 WHERE id=$1",
       [id, destination],
     );
     await pool.query(
       `INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,tx_date,type_raw,route,units,amount,fees,taxes,currency,resolved_investment_id,raw_data,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,asset_transfer_details)
-      VALUES ($1,1,'matched','2026-01-05','AssetTransfer','asset_transfer',5,0,0,0,'EUR',$2,'Synthetic custody transfer',$3,$4,1,'{"direction":"out","basisStatus":"carried","feeUnits":"0","receivedUnits":"5"}')`,
+      VALUES ($1,1,'matched','2026-01-05','AssetTransfer','asset_transfer','5.00000000','0.0000','0.0000','0.0000','EUR',$2,'Synthetic custody transfer',$3,$4,1,vision_jsonb('{"direction":"out","basisStatus":"carried","feeUnits":"0","receivedUnits":"5"}'))`,
       [id, fx.investment, hash(`transfer-raw-${id}`), hash(`transfer-${id}`)],
     );
     const preview = await previewPortfolioImportReconciliation({
@@ -787,7 +821,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     expect(
       must((
         await pool.query<DbRow>(
-          "SELECT COUNT(*)::integer AS n FROM portfolio_transactions WHERE investment_id=$1",
+          "SELECT COUNT(*) AS n FROM portfolio_transactions WHERE investment_id=$1",
           [fx.investment],
         )
       ).rows[0], "query row").n,
@@ -824,7 +858,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     expect(
       must((
         await pool.query<DbRow>(
-          "SELECT COUNT(*)::integer AS n FROM portfolio_asset_transfers WHERE import_batch_id=$1",
+          "SELECT COUNT(*) AS n FROM portfolio_asset_transfers WHERE import_batch_id=$1",
           [id],
         )
       ).rows[0], "query row").n,
@@ -835,12 +869,12 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     const fx = await fixture();
     const wallet = await batch(fx, []);
     await pool.query(
-      "UPDATE portfolio_import_batches SET custom_config=$2::jsonb,rows_total=1 WHERE id=$1",
+      "UPDATE portfolio_import_batches SET custom_config=vision_jsonb($2),rows_total=1 WHERE id=$1",
       [wallet, JSON.stringify({ format: "nexo_transaction_history" })],
     );
     await pool.query(
       `INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,tx_date,type_raw,route,units,amount,fees,taxes,currency,raw_data,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,asset_transfer_details)
-      VALUES ($1,0,'matched','2026-01-02','InternalMovement','account_internal',5,0,0,0,'EUR','Synthetic Wallet Pro movement',$2,$3,1,'{"direction":"internal","basisStatus":"not_applicable"}')`,
+      VALUES ($1,0,'matched','2026-01-02','InternalMovement','account_internal','5.00000000','0.0000','0.0000','0.0000','EUR','Synthetic Wallet Pro movement',$2,$3,1,vision_jsonb('{"direction":"internal","basisStatus":"not_applicable"}'))`,
       [wallet, hash(`wallet-raw-${wallet}`), hash(`wallet-${wallet}`)],
     );
     expect(
@@ -849,7 +883,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     ).toBe("missing_companion_pro_history");
     const pro = await batch(fx);
     await pool.query(
-      "UPDATE portfolio_import_batches SET custom_config=$2::jsonb WHERE id=$1",
+      "UPDATE portfolio_import_batches SET custom_config=vision_jsonb($2) WHERE id=$1",
       [pro, JSON.stringify({ format: "nexo_pro_spot_history" })],
     );
     const plan = await previewPortfolioImportReconciliation({
@@ -875,7 +909,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     expect(
       must((
         await pool.query<DbRow>(
-          "SELECT COUNT(*)::integer AS n FROM portfolio_transactions WHERE investment_id=$1",
+          "SELECT COUNT(*) AS n FROM portfolio_transactions WHERE investment_id=$1",
           [fx.investment],
         )
       ).rows[0], "query row").n,
@@ -902,11 +936,11 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     const originalBatch = await batch(fx, rows, { identityPrefix });
     await commitReviewedPortfolioImports({ batchIds: [originalBatch] });
     const imported = (
-      await pool.query<{ data: JsonRow }>(
-        "SELECT to_jsonb(pt) AS data FROM portfolio_transactions pt WHERE import_batch_id=$1 ORDER BY date,id",
+      await pool.query<JsonRow>(
+        `SELECT ${PT_ROW} FROM portfolio_transactions pt WHERE import_batch_id=$1 ORDER BY date,id`,
         [originalBatch],
       )
-    ).rows.map((row) => row.data);
+    ).rows;
     const legacyIds: number[] = [];
     for (const row of rows)
       legacyIds.push(await legacy(fx, { ...row, fees: 2 }));
@@ -940,7 +974,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     ]);
     await pool.query(
       policy === "prefer_source"
-        ? "UPDATE portfolio_transactions SET account_id=$2,fees=0 WHERE id=$1"
+        ? "UPDATE portfolio_transactions SET account_id=$2,fees='0.0000' WHERE id=$1"
         : "UPDATE portfolio_transactions SET account_id=$2 WHERE id=$1",
       [legacyId, data.fx.account],
     );
@@ -982,7 +1016,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     const data = await duplicatedHistory();
     const before = (
       await pool.query<DbRow>(
-        "SELECT to_jsonb(pt) AS data FROM portfolio_transactions pt WHERE investment_id=$1 ORDER BY id",
+        `SELECT ${PT_ROW} FROM portfolio_transactions pt WHERE investment_id=$1 ORDER BY id`,
         [data.fx.investment],
       )
     ).rows;
@@ -996,7 +1030,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     expect(
       (
         await pool.query<DbRow>(
-          "SELECT to_jsonb(pt) AS data FROM portfolio_transactions pt WHERE investment_id=$1 ORDER BY id",
+          `SELECT ${PT_ROW} FROM portfolio_transactions pt WHERE investment_id=$1 ORDER BY id`,
           [data.fx.investment],
         )
       ).rows,
@@ -1004,7 +1038,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     expect(
       must((
         await pool.query<DbRow>(
-          "SELECT COUNT(*)::integer AS n FROM portfolio_import_duplicate_repair_journal",
+          "SELECT COUNT(*) AS n FROM portfolio_import_duplicate_repair_journal",
         )
       ).rows[0], "query row").n,
     ).toBe(0);
@@ -1013,7 +1047,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
   it("restores a duplicate repair applied before ADR-236 with full original rows, pointers and counters", async () => {
     const data = await duplicatedHistory();
     await pool.query(
-      "UPDATE portfolio_import_batches SET started_at=NOW()-INTERVAL '60 days' WHERE id=ANY($1::bigint[])",
+      "UPDATE portfolio_import_batches SET started_at=sub_interval(now(),'60 days') WHERE id IN (SELECT value FROM json_each($1))",
       [[data.originalBatch, data.reviewBatch]],
     );
     await applyLegacyDuplicateRepair(data, 0, "prefer_source");
@@ -1060,7 +1094,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     expect(
       must((
         await pool.query<DbRow>(
-          "SELECT COUNT(*)::integer AS n FROM portfolio_import_batches WHERE id=ANY($1::bigint[])",
+          "SELECT COUNT(*) AS n FROM portfolio_import_batches WHERE id IN (SELECT value FROM json_each($1))",
           [[data.originalBatch, data.reviewBatch]],
         )
       ).rows[0], "query row").n,
@@ -1072,11 +1106,11 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     });
     expect(
       must((
-        await pool.query<{ data: JsonRow }>(
-          "SELECT to_jsonb(pt) AS data FROM portfolio_transactions pt WHERE id=$1",
+        await pool.query<JsonRow>(
+          `SELECT ${PT_ROW} FROM portfolio_transactions pt WHERE id=$1`,
           [must(data.imported[0], "data.imported[0]").id],
         )
-      ).rows[0], "query row").data,
+      ).rows[0], "query row"),
     ).toEqual(data.imported[0]);
     expect(
       (
@@ -1119,11 +1153,11 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     const data = await duplicatedHistory({ count: 2 });
     // Separate dates must have a unique counterpart within the overlap window.
     await pool.query(
-      "UPDATE portfolio_transactions SET units=6,amount=600 WHERE id=ANY($1::integer[])",
+      "UPDATE portfolio_transactions SET units='6.00000000',amount='600.0000' WHERE id IN (SELECT value FROM json_each($1))",
       [[data.legacyIds[1], must(data.imported[1], "data.imported[1]").id]],
     );
     await pool.query(
-      "UPDATE portfolio_import_staging_rows SET units=6,amount=600 WHERE batch_id=ANY($1::bigint[]) AND row_index=1",
+      "UPDATE portfolio_import_staging_rows SET units='6.00000000',amount='600.0000' WHERE batch_id IN (SELECT value FROM json_each($1)) AND row_index=1",
       [[data.originalBatch, data.reviewBatch]],
     );
     await applyLegacyDuplicateRepair(data, 0, "preserve_existing");
@@ -1164,7 +1198,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
         [data.legacyIds[0]],
       );
       await pool.query(
-        "UPDATE portfolio_import_staging_rows SET tx_date='2025-01-01' WHERE batch_id=ANY($1::bigint[])",
+        "UPDATE portfolio_import_staging_rows SET tx_date='2025-01-01' WHERE batch_id IN (SELECT value FROM json_each($1))",
         [[data.originalBatch, data.reviewBatch]],
       );
       await pool.query(
@@ -1173,7 +1207,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
       );
       await pool.query(
         `INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,tx_date,type_raw,type,route,units,price_per_unit,amount,fees,taxes,currency,resolved_investment_id,raw_data,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,dedup_occurrence)
-      VALUES($1,1,'matched','2026-01-01','buy','buy','portfolio',1,100,100,0,0,'EUR',$2,'Synthetic genuinely new acquisition',$3,$4,1,1)`,
+      VALUES($1,1,'matched','2026-01-01','buy','buy','portfolio','1.00000000','100.000000','100.0000','0.0000','0.0000','EUR',$2,'Synthetic genuinely new acquisition',$3,$4,1,1)`,
         [
           data.reviewBatch,
           data.fx.investment,
@@ -1202,12 +1236,12 @@ describeDb("real PostgreSQL reversible source adoption", () => {
         );
       if (target === "recreated_imported")
         await pool.query(
-          "INSERT INTO portfolio_transactions(id,investment_id,type,date,amount,units,currency) VALUES($1,$2,'buy','2025-01-01',500,5,'EUR')",
+          "INSERT INTO portfolio_transactions(id,investment_id,type,date,amount,units,currency) VALUES($1,$2,'buy','2025-01-01','500.0000','5.00000000','EUR')",
           [must(data.imported[0], "data.imported[0]").id, data.fx.investment],
         );
       const before = (
         await pool.query<DbRow>(
-          "SELECT to_jsonb(pt) AS data FROM portfolio_transactions pt WHERE investment_id=$1 ORDER BY id",
+          `SELECT ${PT_ROW} FROM portfolio_transactions pt WHERE investment_id=$1 ORDER BY id`,
           [data.fx.investment],
         )
       ).rows;
@@ -1218,7 +1252,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
       expect(
         (
           await pool.query<DbRow>(
-            "SELECT to_jsonb(pt) AS data FROM portfolio_transactions pt WHERE investment_id=$1 ORDER BY id",
+            `SELECT ${PT_ROW} FROM portfolio_transactions pt WHERE investment_id=$1 ORDER BY id`,
             [data.fx.investment],
           )
         ).rows,
@@ -1240,7 +1274,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     const snapshot = async () =>
       must((
         await pool.query<DbRow>(
-          "SELECT portfolio_income_transaction_snapshot(pt) AS data FROM portfolio_transactions pt WHERE id=$1",
+          `SELECT ${portfolioIncomeTransactionSnapshotSql("pt")} AS "data::json" FROM portfolio_transactions pt WHERE id=$1`,
           [old],
         )
       ).rows[0], "query row").data;
@@ -1248,7 +1282,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     // The state an applied pre-ADR-236 adoption left: the manual row moved to
     // the batch account, its source settled and an `adopt` receipt recorded.
     await pool.query(
-      "UPDATE portfolio_transactions SET account_id=$2,fees=1 WHERE id=$1",
+      "UPDATE portfolio_transactions SET account_id=$2,fees='1.0000' WHERE id=$1",
       [old, fx.account],
     );
     const after = await snapshot();
@@ -1263,7 +1297,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
       [id],
     );
     await pool.query(
-      "INSERT INTO portfolio_import_reconciliation_journal(batch_id,staging_row_id,transaction_id,action,policy,before_data,after_data) VALUES($1,$2,$3,'adopt','prefer_source',$4,$5)",
+      "INSERT INTO portfolio_import_reconciliation_journal(batch_id,staging_row_id,transaction_id,action,policy,before_data,after_data) VALUES($1,$2,$3,'adopt','prefer_source',vision_jsonb($4),vision_jsonb($5))",
       [id, source, old, JSON.stringify(before), JSON.stringify(after)],
     );
     await expect(rollbackBatch(id)).resolves.toMatchObject({ deleted: 0 });
@@ -1271,7 +1305,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     expect(
       (
         await pool.query<DbRow>(
-          "SELECT action,previous_entry_id IS NOT NULL AS linked FROM portfolio_import_reconciliation_journal ORDER BY id",
+          `SELECT action,previous_entry_id IS NOT NULL AS "linked::bool" FROM portfolio_import_reconciliation_journal ORDER BY id`,
         )
       ).rows,
     ).toEqual([
@@ -1308,18 +1342,18 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     ).rows.map((row) => row.id);
     const unit = must((
       await pool.query<IdRow>(
-        "INSERT INTO portfolio_transactions(investment_id,type,date,amount,units,price_per_unit,fees,taxes,currency,account_id,import_batch_id) VALUES($1,'gift','2026-01-01',0,0.5,0,0,0,'EUR',$2,$3) RETURNING id",
+        "INSERT INTO portfolio_transactions(investment_id,type,date,amount,units,price_per_unit,fees,taxes,currency,account_id,import_batch_id) VALUES($1,'gift','2026-01-01','0.0000','0.50000000','0.000000','0.0000','0.0000','EUR',$2,$3) RETURNING id",
         [fx.investment, fx.account, id],
       )
     ).rows[0], "query row").id;
     const income = must((
       await pool.query<IdRow>(
-        "INSERT INTO portfolio_transactions(investment_id,type,date,amount,fees,taxes,currency,account_id,import_batch_id,income_recognition_role) VALUES($1,'dividend','2026-01-01',3,0,0,'EUR',$2,$3,'included_in_units') RETURNING id",
+        "INSERT INTO portfolio_transactions(investment_id,type,date,amount,fees,taxes,currency,account_id,import_batch_id,income_recognition_role) VALUES($1,'dividend','2026-01-01','3.0000','0.0000','0.0000','EUR',$2,$3,'included_in_units') RETURNING id",
         [fx.investment, fx.account, id],
       )
     ).rows[0], "query row").id;
     await pool.query(
-      "UPDATE portfolio_import_staging_rows SET committed_txn_id=CASE WHEN id=$2 THEN $3::integer ELSE $4::integer END WHERE batch_id=$1",
+      "UPDATE portfolio_import_staging_rows SET committed_txn_id=CASE WHEN id=$2 THEN CAST($3 AS INTEGER) ELSE CAST($4 AS INTEGER) END WHERE batch_id=$1",
       [id, incomeSource, income, unit],
     );
     await pool.query(
@@ -1328,7 +1362,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     );
     await pool.query(
       `INSERT INTO portfolio_import_income_recognition_journal(batch_id,staging_row_id,unit_staging_row_id,income_transaction_id,unit_transaction_id,action,income_data,unit_data,proof_data)
-      SELECT $1,$2,$3,i.id,u.id,'record',portfolio_income_transaction_snapshot(i),portfolio_income_transaction_snapshot(u),'{"sourceFileHash":"synthetic"}' FROM portfolio_transactions i,portfolio_transactions u WHERE i.id=$4 AND u.id=$5`,
+      SELECT $1,$2,$3,i.id,u.id,'record',${portfolioIncomeTransactionSnapshotSql("i")},${portfolioIncomeTransactionSnapshotSql("u")},vision_jsonb('{"sourceFileHash":"synthetic"}') FROM portfolio_transactions i,portfolio_transactions u WHERE i.id=$4 AND u.id=$5`,
       [id, incomeSource, unitSource, income, unit],
     );
     // An active pair still guards both transactions against direct edits.
@@ -1339,7 +1373,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     expect(
       must((
         await pool.query<DbRow>(
-          "SELECT COUNT(*)::integer AS n FROM portfolio_transactions WHERE id=ANY($1::integer[])",
+          "SELECT COUNT(*) AS n FROM portfolio_transactions WHERE id IN (SELECT value FROM json_each($1))",
           [[income, unit]],
         )
       ).rows[0], "query row").n,

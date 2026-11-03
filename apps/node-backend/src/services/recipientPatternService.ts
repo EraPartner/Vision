@@ -186,7 +186,8 @@ export async function loadActivePatterns(): Promise<ActivePatternRow[]> {
         'case_sensitive',
         'priority',
         'source',
-        sql<string>`updated_at::text`.as('updated_at'),
+        // The stored timestamp text, used verbatim in the compile-cache key.
+        sql<string>`CAST(updated_at AS TEXT)`.as('updated_at'),
       ])
       .where('is_active', '=', true)
       .orderBy('priority', 'asc')
@@ -340,9 +341,9 @@ export async function previewPatternMatches(patternRow: {
     throw new ValidationError(`Pattern compilation failed: ${errorMessage(err)}`);
   }
 
-  // For `regex` patterns use JS matching (same engine as runtime) because
-  // Postgres POSIX ERE (~) does not support JS tokens like \d, \b, lookaheads.
-  // For literal_prefix/glob the patterns are safe POSIX ERE and Postgres is faster.
+  // For `regex` patterns use JS matching (same engine as runtime) because the
+  // database's PostgreSQL-ARE REGEXP does not read JS tokens like \d, \b or
+  // lookaheads the same way. literal_prefix/glob patterns are plain AREs.
   if (patternRow.pattern_kind === 'regex') {
     const re = compilePattern({ id: 0, updated_at: '0', ...patternRow });
     const rows = await checkedRows(
@@ -361,7 +362,10 @@ export async function previewPatternMatches(patternRow: {
   }
 
   const sqlPattern = buildSqlRegexPattern(patternRow);
-  const op = patternRow.case_sensitive ? '~' : '~*';
+  // PostgreSQL `~` / `~*` (C locale): REGEXP and regexp_i().
+  const matches = patternRow.case_sensitive
+    ? sql<boolean>`UPPER(name) REGEXP ${sqlPattern}`
+    : sql<boolean>`regexp_i(UPPER(name), ${sqlPattern})`;
 
   const rows = await checkedRows(
     idRowSchema,
@@ -369,7 +373,7 @@ export async function previewPatternMatches(patternRow: {
       .selectFrom('recipients')
       .select('id')
       .where('is_active', '=', true)
-      .where(sql<string>`UPPER(name)`, op, sqlPattern),
+      .where(matches),
   );
 
   return {

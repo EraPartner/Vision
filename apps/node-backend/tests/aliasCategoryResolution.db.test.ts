@@ -1,5 +1,5 @@
 /**
- * Real-Postgres tests for the canonical 3-level effective-category resolution
+ * Real-database (SQLite) tests for the canonical 3-level effective-category resolution
  * on the aggregation surfaces that used to resolve only TWO levels:
  *
  *   • monthly summary — live path (infoRepositoryMonthly) and the
@@ -34,14 +34,11 @@
  * assumes a freshly-migrated database with no MVs present.
  */
 
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   deleteAllCategoryFixtures,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.ts";
 import { computeSankeyFlow } from "../src/services/calculations/aggregation/sankey.ts";
@@ -77,12 +74,12 @@ const MANAGED_VIEWS = ["mv_monthly_summary", "mv_category_totals"];
  * The APP_TIMEZONE calendar day as a SQL date literal, resolved at call time —
  * the very anchor the monthly and planned repositories bind into their windows
  * (ADR-009, one clock). Fixtures for THOSE surfaces must be dated relative to
- * this, not to Postgres `CURRENT_DATE` (the DB session's UTC day, one day
- * behind the app day for the last hours of every UTC day). The
- * recurring-detection fixtures below deliberately stay on `CURRENT_DATE`:
- * recurringDetectionService still windows on it.
+ * this, not to the database clock's `today()` (which can be a different day
+ * from the app day for part of every night). The recurring-detection fixtures
+ * below deliberately stay on `today()`: recurringDetectionService still
+ * windows on the database clock (PostgreSQL's `CURRENT_DATE`).
  */
-const appTodaySql = () => `('${todayAppDateString()}'::date)`;
+const appTodaySql = () => `('${todayAppDateString()}')`;
 
 const cat = {} as Record<"Food" | "Bills" | "Zzz", number>; // Zzz: seedAliasWithOwnDefault only
 const rec = {} as Record<
@@ -196,7 +193,7 @@ async function insertTxn({
   const n = dateSql ? 0 : 1;
   const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: number }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, is_active, is_transfer)
-     VALUES (${dateExpr}, $${n + 1}, $${n + 2}, $${n + 3}, $${n + 4}, $${n + 5}, $${n + 6}, $${n + 7}) RETURNING id`,
+     VALUES (ts_date(${dateExpr}), vision_numeric($${n + 1}, 18, 4), $${n + 2}, $${n + 3}, $${n + 4}, $${n + 5}, $${n + 6}, $${n + 7}) RETURNING id`,
     params,
   );
   return must(rows[0], "row").id;
@@ -288,35 +285,32 @@ async function insertPlanned({
 }): Promise<number> {
   const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: number }>(
     `INSERT INTO planned_transactions (planned_date, amount, currency, recipient_id, category_id, memo)
-     VALUES (${dateSql}, $1, 'EUR', $2, $3, $4) RETURNING id`,
+     VALUES (ts_date(${dateSql}), vision_numeric($1, 18, 4), 'EUR', $2, $3, $4) RETURNING id`,
     [amount, recipientId, categoryId, memo],
   );
   return must(rows[0], "row").id;
 }
 
+/**
+ * Empty the materialized-view tables (ADR-263: ordinary tables refilled by
+ * materializedViewService), so mvAvailable() sees no rows and the
+ * repositories take their live path, as they did with no views.
+ */
 async function dropManagedViews() {
   const pool = must(getTestPool(), "getTestPool()");
   for (const view of MANAGED_VIEWS) {
-    await pool.query(`DROP MATERIALIZED VIEW IF EXISTS ${view} CASCADE`);
+    await pool.query(`DELETE FROM ${view}`);
   }
   clearMvCache();
 }
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "3-level effective-category resolution (real DB)",
   () => {
-    beforeAll(async () => {
-      expect(
-        process.env.DATABASE_URL,
-        "DATABASE_URL must equal TEST_DATABASE_URL for this suite (see scripts/with-test-db.sh)",
-      ).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180_000);
-
     afterEach(async () => {
       const pool = must(getTestPool(), "getTestPool()");
-      // MVs first: they are the only artefact of this suite that outlives a row
-      // wipe, and every other DB suite assumes a migrated DB with no MVs.
+      // MV tables first: they are the only artefact of this suite that outlives
+      // a row wipe, and the suite's tests assume empty ones.
       await dropManagedViews();
       // transaction_splits/split_payments cascade off transactions;
       // planned_transactions does NOT cascade off recipients, so it goes first.
@@ -336,7 +330,6 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
@@ -352,17 +345,17 @@ describe.skipIf(!hasTestDatabase())(
       async function seedCurrentMonth() {
         await seedBase();
         const aliasTxn = await insertTxn({
-          dateSql: `(date_trunc('month', ${appTodaySql()}) + interval '5 days')::date`,
+          dateSql: `add_days(date_trunc('month', ${appTodaySql()}), 5)`,
           amount: "-120.00",
           recipientId: rec.electrabelAlias, // categorised ONLY via the primary's default
         });
         await insertTxn({
-          dateSql: `(date_trunc('month', ${appTodaySql()}) + interval '6 days')::date`,
+          dateSql: `add_days(date_trunc('month', ${appTodaySql()}), 6)`,
           amount: "-40.00",
           recipientId: rec.aldi, // categorised via its own recipient default
         });
         await insertTxn({
-          dateSql: `(date_trunc('month', ${appTodaySql()}) + interval '7 days')::date`,
+          dateSql: `add_days(date_trunc('month', ${appTodaySql()}), 7)`,
           amount: "2000.00",
           recipientId: rec.misc, // uncategorised at all three levels
         });
@@ -387,7 +380,7 @@ describe.skipIf(!hasTestDatabase())(
         const { rows } = await must(getTestPool(), "getTestPool()").query<{ category_id: number | null; category_id_key: number; category_name: string; total_spending: string; total_income: string }>(
           `SELECT category_id, category_id_key, category_name, total_spending, total_income, transaction_count
            FROM mv_monthly_summary
-          WHERE month_start = date_trunc('month', ${appTodaySql()})::date
+          WHERE month_start = date_trunc('month', ${appTodaySql()})
           ORDER BY category_name`,
         );
 
@@ -420,7 +413,7 @@ describe.skipIf(!hasTestDatabase())(
         await seedCurrentMonth();
         // A second month so the comparison spans more than the current one.
         await insertTxn({
-          dateSql: `(date_trunc('month', ${appTodaySql()}) - interval '1 month' + interval '5 days')::date`,
+          dateSql: `add_days(add_months(date_trunc('month', ${appTodaySql()}), -1), 5)`,
           amount: "-33.00",
           recipientId: rec.electrabelAlias,
         });
@@ -573,7 +566,7 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         await must(getTestPool(), "getTestPool()").query(
-          `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', 'true'::jsonb)`,
+          `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', vision_jsonb('true'))`,
         );
         expect(await flow({})).toEqual({
           income: 3900,
@@ -591,7 +584,7 @@ describe.skipIf(!hasTestDatabase())(
         // Three monthly occurrences under the ALIAS, none carrying its own category.
         for (const daysAgo of [90, 60, 30]) {
           await insertTxn({
-            dateSql: `(CURRENT_DATE - interval '${daysAgo} days')::date`,
+            dateSql: `add_days(today(), ${-daysAgo})`,
             amount: "-120.00",
             recipientId: rec.electrabelAlias,
           });
@@ -613,7 +606,7 @@ describe.skipIf(!hasTestDatabase())(
         // category.id — the category comes only from the PRIMARY's default.
         for (const daysAgo of [90, 60, 30]) {
           await insertTxn({
-            dateSql: `(CURRENT_DATE - interval '${daysAgo} days')::date`,
+            dateSql: `add_days(today(), ${-daysAgo})`,
             amount: "-120.00",
             recipientId: rec.electrabelAlias,
           });
@@ -641,13 +634,13 @@ describe.skipIf(!hasTestDatabase())(
         await seedBase();
         for (const daysAgo of [90, 60, 30]) {
           await insertTxn({
-            dateSql: `(CURRENT_DATE - interval '${daysAgo} days')::date`,
+            dateSql: `add_days(today(), ${-daysAgo})`,
             amount: "-120.00",
             recipientId: rec.electrabel,
           });
         }
         await insertPlanned({
-          dateSql: "(CURRENT_DATE + interval '30 days')::date",
+          dateSql: "add_days(today(), 30)",
           amount: "-120.00",
           recipientId: rec.electrabelAlias,
         });
@@ -745,7 +738,7 @@ describe.skipIf(!hasTestDatabase())(
         // rec.misc owes half of the alias-recipient transaction.
         await must(getTestPool(), "getTestPool()").query(
           `INSERT INTO transaction_splits (transaction_id, recipient_id, amount, is_settled)
-         VALUES ($1, $2, '5.00', false)`,
+         VALUES ($1, $2, vision_numeric('5.00', 18, 4), 0)`,
           [aliasTxn, rec.misc],
         );
         const { effectiveCategoryId, name } =
@@ -770,7 +763,7 @@ describe.skipIf(!hasTestDatabase())(
         });
         await must(getTestPool(), "getTestPool()").query(
           `INSERT INTO transaction_splits (transaction_id, recipient_id, amount, is_settled)
-         VALUES ($1, $2, '4.00', false)`,
+         VALUES ($1, $2, vision_numeric('4.00', 18, 4), 0)`,
           [aliasTxn, rec.misc],
         );
         const { name } = await listResolvedCategoryName(aliasTxn);
@@ -792,7 +785,7 @@ describe.skipIf(!hasTestDatabase())(
       // out (getForForecast). Resolved per seed so a suite running across
       // midnight stays consistent.
       const NEXT_MONTH_SQL = () =>
-        `(date_trunc('month', ${appTodaySql()}) + interval '1 month' + interval '4 days')::date`;
+        `add_days(add_months(date_trunc('month', ${appTodaySql()}), 1), 4)`;
 
       async function seedPlanned() {
         await seedAliasWithOwnDefault();

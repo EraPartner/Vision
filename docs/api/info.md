@@ -2,8 +2,8 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
@@ -532,7 +532,7 @@ by-account list through `useNetWorthByAccount(currency)` in
   assigned to an account form a final row with `accountId: null`.
 - `total` is the sum of row totals, or `null` while any account is in `unconvertedAccountIds`.
 
-Covered on real PostgreSQL by [[apps/node-backend/tests/netWorthByAccount.db.test.ts]].
+Covered against a real SQLite database by [[apps/node-backend/tests/netWorthByAccount.db.test.ts]].
 
 ---
 
@@ -812,7 +812,7 @@ Notes:
 
 ### POST /api/info/refresh-views
 
-Manually refresh materialized views.
+Manually refresh the summary tables `mv_monthly_summary` and `mv_category_totals` (the former materialized views).
 
 **Response:** `200 OK`
 

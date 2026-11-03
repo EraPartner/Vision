@@ -8,25 +8,30 @@ import os from "node:os";
 import path from "node:path";
 import { gunzipSync } from "node:zlib";
 
-import { createNativeRuntime, directoryFingerprint } from "../runtime/native";
 import {
-  assertDatabaseStatsEqual,
-  assertStableDatabaseStatsEqual,
-} from "../runtime/database-stats";
+  createNativeRuntime,
+  directoryFingerprint,
+  sha256File,
+} from "../runtime/native";
+import { STABLE_TABLES, assertTableCountsEqual } from "../runtime/database-stats";
 import { createBundle, encryptBundle, openBundle } from "../backup/bundle";
 import { restoreNativeBundle } from "../backup/native-transport";
 import { appRoot } from "../paths";
 import { resolveNativePayloadRoot } from "./resolve-native-payload";
 
 type NativeRuntime = ReturnType<typeof createNativeRuntime>;
-type DatabaseStats = Parameters<typeof assertDatabaseStatsEqual>[0];
 
 /** The runtime methods the smoke restore wrapper intercepts. */
 export interface SmokeRestorable {
+  readonly paths: { readonly database: string };
   activateRestoredDatabase(...args: never[]): Promise<unknown>;
   start(...args: never[]): Promise<unknown>;
   rollbackDatabaseSwitch(...args: never[]): Promise<unknown>;
-  getDatabaseStats(): Promise<DatabaseStats>;
+}
+
+/** The database snapshot a restore must reproduce byte for byte. */
+export interface SmokeSnapshot {
+  sha256: string;
 }
 
 export interface FrontendResponse {
@@ -55,10 +60,18 @@ function field(value: unknown, ...keys: string[]): unknown {
   return current;
 }
 
-/** Bundle metadata is parsed JSON; createBundle always writes a string. */
-function schemaHeadOf(metadata: unknown): string | undefined {
-  const schemaHead = field(metadata, "schemaHead");
-  return typeof schemaHead === "string" ? schemaHead : undefined;
+/** Bundle metadata is parsed JSON; only well-formed values become expectations. */
+function bundleExpectations(metadata: unknown): {
+  expectedSchemaVersion: number | undefined;
+  expectedSha256: string | undefined;
+} {
+  const schemaVersion = field(metadata, "schemaVersion");
+  const sha256 = field(metadata, "databaseSha256");
+  return {
+    expectedSchemaVersion:
+      typeof schemaVersion === "number" ? schemaVersion : undefined,
+    expectedSha256: typeof sha256 === "string" ? sha256 : undefined,
+  };
 }
 
 function errorCode(error: unknown): unknown {
@@ -82,13 +95,15 @@ function reservePort(): Promise<number> {
   });
 }
 
-function tableCounts(stats: DatabaseStats): Record<string, number> {
-  return stats.tableCounts ?? {};
-}
-
+/**
+ * Wraps a runtime so the first start after a restore activation first proves
+ * that the live database is the snapshot byte for byte. The check runs while
+ * the backend is still stopped, before startup can write anything.
+ */
 export function createSmokeRestoreRuntime<T extends SmokeRestorable>(
   runtime: T,
-  expectedStats: DatabaseStats,
+  expected: SmokeSnapshot,
+  hashFile: (file: string) => Promise<string> = sha256File,
 ): T {
   let validateNextStart = false;
   // Pass-through calls keep `runtime` as the receiver, as the methods expect.
@@ -104,34 +119,25 @@ export function createSmokeRestoreRuntime<T extends SmokeRestorable>(
       validateNextStart = false;
       const restored = await activate(...args);
       // Let the transport retain its rollback token before checking the
-      // stopped database. Startup may then write provider/cache telemetry.
+      // stopped database.
       validateNextStart = true;
       return restored;
     },
     async start(...args: unknown[]) {
       if (validateNextStart) {
         validateNextStart = false;
-        const restoredStats = await runtime.getDatabaseStats();
-        try {
-          assertDatabaseStatsEqual(expectedStats, restoredStats);
-        } catch (error) {
-          if (errorCode(error) === "DATABASE_COUNT_MISMATCH") {
-            const expectedCounts = tableCounts(expectedStats);
-            const restoredCounts = tableCounts(restoredStats);
-            console.error(
-              "Synthetic smoke count mismatch:",
-              Object.keys(expectedCounts)
-                .filter(
-                  (table) => expectedCounts[table] !== restoredCounts[table],
-                )
-                .map((table) => ({
-                  table,
-                  before: expectedCounts[table],
-                  after: restoredCounts[table],
-                })),
-            );
-          }
-          throw error;
+        const actual = await hashFile(runtime.paths.database);
+        if (actual !== expected.sha256) {
+          console.error("Synthetic smoke restored database differs:", {
+            expected: expected.sha256,
+            actual,
+          });
+          throw Object.assign(
+            new Error(
+              "The restored database is not the backed-up snapshot (checksum mismatch)",
+            ),
+            { code: "DATABASE_CHECKSUM_MISMATCH" },
+          );
         }
       }
       return start(...args);
@@ -309,6 +315,7 @@ export function sanitizeSmokeDiagnostic(value: unknown): string {
     .replace(/postgres(?:ql)?:\/\/[^\s'"`]+/gi, "[redacted database URL]")
     .replace(
       /\b(PGPASSWORD|DATABASE_URL|MIGRATION_DATABASE_URL|password|passphrase)\s*(?:=|:)\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi,
+      // sql-dialect-ok: a regex replacement string, not SQL
       "$1=[redacted]",
     );
 }
@@ -328,7 +335,7 @@ export async function readSmokeLogTail(
     return sanitizeSmokeDiagnostic(buffer.toString("utf8")).trim();
   } catch (error) {
     if (errorCode(error) === "ENOENT") return "";
-    return `Unable to read the synthetic PostgreSQL log: ${sanitizeSmokeDiagnostic(field(error, "message"))}`;
+    return `Unable to read the synthetic log: ${sanitizeSmokeDiagnostic(field(error, "message"))}`;
   } finally {
     await handle?.close().catch(() => {});
   }
@@ -368,11 +375,9 @@ export async function main(): Promise<void> {
     userDataDir,
     repoRoot,
     runtimeRoot,
-    postgresRuntimeRoot: nativePayloadRoot,
     requireRuntimeManifest,
     runtimeId,
     appPort: () => port,
-    postgresPort: Number(process.env.VISION_POSTGRES_PORT || 54329),
     syntheticOffline: true,
   });
   let moveTarget: NativeRuntime | undefined;
@@ -451,21 +456,25 @@ export async function main(): Promise<void> {
     // Freeze the only synthetic writer before creating the bundle. The
     // restore proof must compare one stable source snapshot, not race startup
     // cache refreshes such as exchange_rates.
-    await runtime.stop({ keepPostgres: true });
-    const before = await runtime.getDatabaseStats();
+    await runtime.stop();
     const bundleInputDir = path.join(userDataDir, "bundle-input");
     const bundleOutputDir = path.join(userDataDir, "backups");
-    const dbSqlPath = path.join(bundleInputDir, "db.sql");
+    const databasePath = path.join(bundleInputDir, "db.sqlite3");
     const attachmentsDir = path.join(bundleInputDir, "attachments");
     await fs.promises.mkdir(bundleInputDir, { recursive: true, mode: 0o700 });
-    await runtime.dumpDatabase(dbSqlPath, { format: "plain" });
+    const before = await runtime.snapshotDatabase(databasePath);
     await runtime.exportAttachments(attachmentsDir);
     const { bundlePath } = await createBundle({
       destDir: bundleOutputDir,
       deviceId: "native-smoke",
-      schemaHead: before.schema,
       appVersion: "native-smoke",
-      dbSqlPath,
+      databasePath,
+      database: {
+        schemaVersion: before.schemaVersion,
+        sqliteVersion: before.sqliteVersion,
+        sha256: before.sha256,
+        bytes: before.bytes,
+      },
       attachmentsDir,
       frontendState,
     });
@@ -487,27 +496,36 @@ export async function main(): Promise<void> {
       memo: "Native smoke mutated transaction",
     });
     await fs.promises.writeFile(attachment, "post-backup mutation");
-    await runtime.stop({ keepPostgres: true });
+    await runtime.stop();
 
     const opened = await openBundle(encPath, { passphrase });
     try {
-      if (opened.metadata.schemaHead !== before.schema)
-        throw new Error("Native bundle schema revision changed");
+      if (opened.metadata.schemaVersion !== before.schemaVersion)
+        throw new Error("Native bundle schema version changed");
+      if (opened.metadata.databaseSha256 !== before.sha256)
+        throw new Error("Native bundle database checksum changed");
       if (
         JSON.stringify(opened.frontendState) !== JSON.stringify(frontendState)
       )
         throw new Error("Native bundle frontend state changed");
+      if (!opened.databasePath)
+        throw new Error("Native bundle has no SQLite database");
       await restoreNativeBundle(createSmokeRestoreRuntime(runtime, before), {
-        dbSqlPath: opened.dbSqlPath,
+        databasePath: opened.databasePath,
         attachmentsDir: opened.attachmentsDir,
-        expectedSchemaHead: schemaHeadOf(opened.metadata),
+        ...bundleExpectations(opened.metadata),
       });
     } finally {
       opened.cleanup();
     }
 
-    const after = await runtime.getDatabaseStats();
-    assertStableDatabaseStatsEqual(before, after);
+    // The backend is running again; user data must still be the snapshot's.
+    const after = await runtime.verifyDatabaseFile(runtime.paths.database);
+    if (before.tableCounts && after.tableCounts) {
+      assertTableCountsEqual(before.tableCounts, after.tableCounts, {
+        tables: STABLE_TABLES,
+      });
+    }
     const restoredSettings = await requestJson(
       port,
       "GET",
@@ -563,7 +581,7 @@ export async function main(): Promise<void> {
     )
       throw new Error("Native bundle attachment state was not restored");
 
-    await runtime.stop({ keepPostgres: true });
+    await runtime.stop();
     moveTargetDir = await fs.promises.mkdtemp(
       path.join(os.tmpdir(), "vision-device-move-smoke-"),
     );
@@ -572,21 +590,21 @@ export async function main(): Promise<void> {
       userDataDir: moveTargetDir,
       repoRoot,
       runtimeRoot,
-      postgresRuntimeRoot: nativePayloadRoot,
       requireRuntimeManifest,
       runtimeId: `vision_move_${crypto.randomBytes(4).toString("hex")}`,
       appPort: () => movePort,
-      postgresPort: await reservePort(),
     });
     await moveTarget.start();
     await moveTarget.waitUntilReady({ detailed: true });
-    await moveTarget.stop({ keepPostgres: true });
+    await moveTarget.stop();
     const movedBundle = await openBundle(encPath, { passphrase });
     try {
+      if (!movedBundle.databasePath)
+        throw new Error("Native bundle has no SQLite database");
       await restoreNativeBundle(moveTarget, {
-        dbSqlPath: movedBundle.dbSqlPath,
+        databasePath: movedBundle.databasePath,
         attachmentsDir: movedBundle.attachmentsDir,
-        expectedSchemaHead: schemaHeadOf(movedBundle.metadata),
+        ...bundleExpectations(movedBundle.metadata),
       });
     } finally {
       movedBundle.cleanup();
@@ -601,8 +619,8 @@ export async function main(): Promise<void> {
 
     console.log(
       cleanup
-        ? `Native PostgreSQL 18 smoke passed on loopback port ${port}. Synthetic data was removed.`
-        : `Native PostgreSQL 18 smoke passed on loopback port ${port}. Synthetic database ${runtimeId} was preserved for inspection.`,
+        ? `Native SQLite smoke passed on loopback port ${port}. Synthetic data was removed.`
+        : `Native SQLite smoke passed on loopback port ${port}. Synthetic data for ${runtimeId} was preserved in ${userDataDir} for inspection.`,
     );
   } catch (error) {
     failure = error;
@@ -610,10 +628,8 @@ export async function main(): Promise<void> {
     await moveTarget?.stop().catch(() => {});
     await runtime.stop().catch(() => {});
     if (failure) {
-      const logs: [string, string][] = [
-        ["PostgreSQL", runtime.paths.postgresLog],
-        ["backend", runtime.paths.backendLog],
-      ];
+      const logs: [string, string][] = [["backend", runtime.paths.backendLog]];
+      if (moveTarget) logs.push(["device-move backend", moveTarget.paths.backendLog]);
       for (const [label, logPath] of logs) {
         const log = await readSmokeLogTail(logPath);
         if (log) console.error(`Synthetic ${label} log (sanitized):\n${log}`);

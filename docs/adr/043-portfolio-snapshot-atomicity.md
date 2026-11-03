@@ -10,6 +10,11 @@ related: [docs/adr/014-atomic-merge-transactional-safety, docs/adr/008-performan
 
 # ADR-043: Portfolio Snapshot Atomicity
 
+> [!note] Superseded in part by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> the PostgreSQL MVCC reasoning no longer applies. Readers use the backend's reader connection,
+> which sees the last committed state of the SQLite file, so they still see the old or the new
+> snapshot rows and never an empty table. The one-transaction `DELETE` and `INSERT` stays.
+
 ## Status
 
 **Accepted** — Implemented 2026-04-29.

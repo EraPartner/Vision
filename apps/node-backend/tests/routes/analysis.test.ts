@@ -48,6 +48,7 @@ import {
   getSavedAnalysis,
   listSavedAnalyses,
   restoreSavedAnalysisVersion,
+  runSavedAnalysis,
   updateSavedAnalysis,
 } from "../../src/services/savedAnalysisService.ts";
 import {
@@ -618,6 +619,35 @@ describe("Analysis routes request validation", () => {
         await api.put(`${BASE}/saved/saved-1`).send({ name: "x" }).expect(400),
         /^querySpec: /,
       );
+    });
+
+    it("never lets an API save mark custom SQL as PostgreSQL (ADR-263)", async () => {
+      vi.mocked(createSavedAnalysis).mockResolvedValue({} as never);
+      const querySpec = {
+        mode: "sql",
+        sql: "SELECT account_name FROM vision_analysis.accounts_v1",
+        datasetIds: ["accounts"],
+      };
+      await api
+        .post(`${BASE}/saved`)
+        .send({ ...input, querySpec: { ...querySpec, dialect: "postgresql" } })
+        .expect(201);
+      // The service stamps SQLite when no dialect arrives.
+      expect(createSavedAnalysis).toHaveBeenCalledWith({ ...input, querySpec });
+    });
+
+    it("refuses to run custom SQL that needs review with 409", async () => {
+      vi.mocked(runSavedAnalysis).mockRejectedValueOnce(
+        Object.assign(
+          new Error(
+            "This analysis has custom SQL written for PostgreSQL. Review the SQL and save it as SQLite SQL before running it.",
+          ),
+          { status: 409, code: "ANALYSIS_SQL_NEEDS_REVIEW" },
+        ),
+      );
+      const res = await api.post(`${BASE}/saved/saved-1/run`).expect(409);
+      expect(bodyAt(res, "error", "code")).toBe("ANALYSIS_SQL_NEEDS_REVIEW");
+      expect(runSavedAnalysis).toHaveBeenCalledWith("saved-1");
     });
 
     it("restores only explicit positive integer versions", async () => {

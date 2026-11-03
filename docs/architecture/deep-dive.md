@@ -2,8 +2,8 @@
 title: Architecture Deep Dive
 type: architecture-doc
 status: active
-date: 2026-10-22
-updated: 2026-10-20
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     architecture,
@@ -48,8 +48,8 @@ aliases:
 └────────────────────────────────────────────┼─────────────────┘
                                              │
                                     ┌────────▼────────┐
-                                    │   PostgreSQL     │
-                                    │   (Local/Remote) │
+                                    │   SQLite file    │
+                                    │   (in-process)   │
                                     └─────────────────┘
 ```
 
@@ -201,7 +201,7 @@ User Action
                  │
                  ▼
 ┌─────────────────────────────────────┐
-│         PostgreSQL                  │
+│         SQLite (node:sqlite)        │
 │  (query execution, index scan)      │
 └─────────────────────────────────────┘
 ```
@@ -233,8 +233,8 @@ Frontend Dependencies:
 
 Backend Dependencies:
 ├── Express (HTTP server)
-├── pg (PostgreSQL client and pool)
-├── Kysely (query builder over pg via query(), migrator over db/migrations/, kysely-codegen types)
+├── node:sqlite (one writer and one reader connection to the SQLite file)
+├── Kysely (query builder sent through query(); types from scripts/db-codegen.ts)
 ├── Bun (runtime/package manager)
 └── yahoo-finance2 (market data)
 (Binance prices use fetch; the Host guard, CSRF guard and rate limiting live in dedicated middleware modules)
@@ -249,7 +249,7 @@ Shared:
 
 ### Current Design (Single-User Desktop)
 
-- **Database:** Single PostgreSQL instance (local or remote)
+- **Database:** One SQLite file opened in-process ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]])
 - **Backend:** Single Node.js process
 - **Frontend:** Single Chromium instance
 - **Concurrency:** Event loop (Node.js) + async I/O
@@ -257,7 +257,7 @@ Shared:
 ### Scaling Paths
 
 1. **Multi-user:** Add authentication layer, workspace isolation via tenant_id
-2. **Horizontal:** Stateless backend behind load balancer, shared PostgreSQL
+2. **Horizontal:** Stateless backend behind load balancer, which would need a shared database server instead of the SQLite file
 3. **Caching:** Redis for cross-instance cache sharing
 4. **CDN:** Static assets served from CDN for web deployment
 
@@ -265,7 +265,7 @@ Shared:
 
 | Component  | Current Bottleneck      | Scaling Solution                        |
 | ---------- | ----------------------- | --------------------------------------- |
-| PostgreSQL | Connection pool size    | PgBouncer connection pooling            |
+| SQLite     | One writer at a time    | Short write transactions; the lock wait ends after `VISION_DB_LOCK_TIMEOUT_MS` |
 | Backend    | Single event loop       | Worker threads or clustering            |
 | Frontend   | Large dataset rendering | Virtual scrolling (already implemented) |
 | Import     | CSV parsing speed       | Streaming (already implemented)         |

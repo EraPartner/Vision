@@ -30,6 +30,8 @@ const savedAnalysis = (overrides: Record<string, unknown>) => ({
     updatedAt: stamp,
     definition: {},
     lastResult: null,
+    needsReview: false,
+    reviewReason: null,
     ...overrides,
 });
 

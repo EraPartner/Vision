@@ -1,6 +1,6 @@
 /** Reviewed custody writes share one transaction and one approved source scope. */
 import { AsyncLocalStorage } from "node:async_hooks";
-import { withTransaction } from "../../database/connection.ts";
+import { sameTransaction, withTransaction } from "../../database/connection.ts";
 import type { PgPoolClient } from "../../database/connection.ts";
 import { ConflictError } from "../../middleware/errorHandler.ts";
 import { toDecimal } from "../../lib/money.ts";
@@ -36,6 +36,7 @@ export type CustodyEventLike = {
 };
 
 type CustodyScope = {
+  /** The scope's own transaction client. */
   client: PgPoolClient;
   /** eventKey → approved signature */
   approved: Map<string, string>;
@@ -168,7 +169,9 @@ export function portfolioCustodyWriteHistory<H extends { date: string }>(
   if (!scope) return history;
   if (
     !scope.active ||
-    scope.client !== client ||
+    // A nested withTransaction() inside the scope is a SAVEPOINT with its
+    // own client object for the same transaction (ADR-263).
+    !sameTransaction(client, scope.client) ||
     scope.approved.get(eventKey(event)) !== signature(event)
   )
     throw new ConflictError(
