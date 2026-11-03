@@ -261,6 +261,15 @@ export async function runTransition(options: RunOptions): Promise<RunResult> {
       // left free; verification below reads the compacted file.
       db.exec("VACUUM");
       db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+      // Leave WAL mode, as db-file.ts does for the files it writes. A
+      // read-only open of a closed WAL-mode file must create its -wal and
+      // -shm files; macOS's system SQLite refused that ("unable to open
+      // database file"), so verification could not read the database.
+      // The backend's writer switches the installed file back to WAL.
+      const mode = db.prepare("PRAGMA journal_mode = DELETE").get() as { journal_mode?: unknown } | undefined;
+      if (mode?.journal_mode !== "delete") {
+        throw new TransitionError(`could not leave WAL mode (journal_mode is ${String(mode?.journal_mode)}).`);
+      }
     } finally {
       db.close();
     }
