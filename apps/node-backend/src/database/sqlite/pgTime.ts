@@ -222,7 +222,7 @@ export function toInstant(value: unknown): Instant | null {
   if (value === null || value === undefined) return null;
   if (value instanceof Date) return instantFromDate(value);
   if (typeof value === "string") return parseInstant(value);
-  throw new TimeError(`invalid timestamp value: ${String(value)}`);
+  throw new TimeError(`invalid timestamp value of type ${typeof value}`);
 }
 
 export function canonicalTimestamp(value: unknown): string | null {
@@ -444,8 +444,8 @@ export function parseInterval(text: string): Interval {
   }
   if (!sawValue) throw badInterval(text);
   const sign = ago ? -1 : 1;
-  // `|| 0` turns a negated zero into 0.
-  return { months: sign * months || 0, days: sign * days || 0, micros: sign * micros || 0 };
+  // Adding 0 turns a negated zero into 0.
+  return { months: sign * months + 0, days: sign * days + 0, micros: sign * micros + 0 };
 }
 
 export function negateInterval(i: Interval): Interval {

@@ -155,7 +155,7 @@ export function parseDecimalText(text: string): Dec {
     let intPart = "";
     let fracPart = "";
     for (;;) {
-      const c = at(i);
+      const c = at(i) ?? "";
       if (isDigit(c)) {
         if (haveDot) fracPart += c;
         else intPart += c;
@@ -180,7 +180,7 @@ export function parseDecimalText(text: string): Dec {
       }
       if (!isDigit(at(i))) throw invalidSyntax(text);
       for (;;) {
-        const c = at(i);
+        const c = at(i) ?? "";
         if (isDigit(c)) {
           exponent = exponent * 10 + Number(c);
           if (exponent > 1_073_741_823) throw formatOverflow(); // PG_INT32_MAX / 2

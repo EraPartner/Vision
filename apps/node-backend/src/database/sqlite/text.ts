@@ -167,7 +167,7 @@ function otherCase(c: string): string {
 
 /** A literal character inside a JavaScript `u`-flag character class. */
 function classLiteral(c: string): string {
-  return /[\\\]\[^-]/.test(c) ? `\\${c}` : c;
+  return /[\\\][^-]/.test(c) ? `\\${c}` : c;
 }
 
 /** The JavaScript form of an ARE escape `\x` outside or inside brackets. */

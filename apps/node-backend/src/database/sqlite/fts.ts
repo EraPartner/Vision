@@ -796,24 +796,24 @@ class Parser {
       if (action === undefined) throw new Error(`text search parser has no default in ${this.state.state}`);
       const [, flags, to, type, special] = action;
       if (special) special(this);
-      if (flags & A_BINGO) {
+      if ((flags & A_BINGO) !== 0) {
         const len = this.state.len;
         found = { type, text: this.chars.slice(this.tokenStart, this.tokenStart + len).join("") };
         this.state.len = 0;
       }
-      if (flags & A_POP) {
+      if ((flags & A_POP) !== 0) {
         const prev = this.state.prev;
         if (prev === null) throw new Error("text search parser popped an empty stack");
         this.state = prev;
-      } else if (flags & A_PUSH) {
+      } else if ((flags & A_PUSH) !== 0) {
         this.state.pushedAt = index;
         this.state = { ...this.state, pushedAt: null, prev: this.state };
-      } else if (flags & A_CLEAR) {
+      } else if ((flags & A_CLEAR) !== 0) {
         const prev = this.state.prev;
         if (prev !== null) this.state.prev = prev.prev;
-      } else if (flags & A_CLRALL) {
+      } else if ((flags & A_CLRALL) !== 0) {
         this.state.prev = null;
-      } else if (flags & A_MERGE) {
+      } else if ((flags & A_MERGE) !== 0) {
         const cur = this.state;
         const prev = cur.prev;
         if (prev === null) throw new Error("text search parser merged an empty stack");
@@ -822,8 +822,8 @@ class Parser {
         this.state = prev;
       }
       if (to !== "Null") this.state.state = to;
-      if (flags & A_BINGO || (this.state.pos >= this.chars.length && (flags & A_RERUN) === 0)) break;
-      if (flags & (A_RERUN | A_POP)) continue;
+      if ((flags & A_BINGO) !== 0 || (this.state.pos >= this.chars.length && (flags & A_RERUN) === 0)) break;
+      if ((flags & (A_RERUN | A_POP)) !== 0) continue;
       if (this.state.pos < this.chars.length) {
         this.state.pos++;
         this.state.len++;
@@ -1181,23 +1181,23 @@ function phraseOutput(data: PhraseData | null, l: PhraseData, r: PhraseData, emi
     let output = 0;
     if (li < l.pos.length) lpos = (l.pos[li] ?? 0) + lOffset;
     else {
-      if (!(emit & TSPO_R_ONLY)) break;
+      if ((emit & TSPO_R_ONLY) === 0) break;
       lpos = Number.MAX_SAFE_INTEGER;
     }
     if (ri < r.pos.length) rpos = (r.pos[ri] ?? 0) + rOffset;
     else {
-      if (!(emit & TSPO_L_ONLY)) break;
+      if ((emit & TSPO_L_ONLY) === 0) break;
       rpos = Number.MAX_SAFE_INTEGER;
     }
     if (lpos < rpos) {
-      if (emit & TSPO_L_ONLY) output = lpos;
+      if ((emit & TSPO_L_ONLY) !== 0) output = lpos;
       li++;
     } else if (lpos === rpos) {
-      if (emit & TSPO_BOTH) output = rpos;
+      if ((emit & TSPO_BOTH) !== 0) output = rpos;
       li++;
       ri++;
     } else {
-      if (emit & TSPO_R_ONLY) output = rpos;
+      if ((emit & TSPO_R_ONLY) !== 0) output = rpos;
       ri++;
     }
     if (output > 0) {
@@ -1347,7 +1347,7 @@ export function tsRankCd(vector: TsVector, query: TsQuery | null): number {
     }
   }
   if (byKey.size === 0) return 0;
-  const doc = [...byKey.values()].sort((a, b) => a.pos - b.pos || compareBytes(a.lexeme, b.lexeme));
+  const doc = [...byKey.values()].sort((a, b) => (a.pos !== b.pos ? a.pos - b.pos : compareBytes(a.lexeme, b.lexeme)));
   const len = doc.length;
 
   // QueryRepresentation: positions seen per operand during a scan.
