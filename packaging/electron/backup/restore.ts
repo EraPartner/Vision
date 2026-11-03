@@ -21,6 +21,7 @@ import {
 } from "./crypto";
 import { restoreNativeBundle, restoreNativeDatabase } from "./native-transport";
 import { preBaselineBackupError } from "../runtime/native";
+import { validateBackupDest } from "../runtime/ipc-schemas";
 import type { NativeRestoreRuntime } from "./native-transport";
 
 /** The native runtime operations backup and restore use. */
@@ -213,6 +214,10 @@ export async function runBundleBackup(
   { backendStopped = false }: BundleBackupOptions = {},
 ): Promise<BundleBackupResult> {
   if (!destDir) throw new Error("No backup directory configured");
+  // Every caller lands here, including the quit-time backup whose folder comes
+  // from the stored setting, so the destination is checked at use as well.
+  const destError = validateBackupDest(destDir);
+  if (destError) throw new Error(destError);
   const nativeRuntime = getNativeRuntime();
   const deviceId = await getBackupDeviceId();
   const tmpDir = await fs.promises.mkdtemp(
@@ -245,8 +250,11 @@ export async function runBundleBackup(
         // Invalid optional UI state does not invalidate the database backup.
       }
     }
+    // With a passphrase, the plaintext archive is built in the private
+    // staging directory and only its encrypted form reaches destDir.
+    const passphrase = await getBackupPassphrase();
     const { bundlePath } = await createBundle({
-      destDir,
+      destDir: passphrase ? tmpDir : destDir,
       deviceId,
       schemaHead,
       appVersion:
@@ -255,12 +263,13 @@ export async function runBundleBackup(
       attachmentsDir,
       frontendState,
     });
-    const passphrase = await getBackupPassphrase();
     let finalFile = bundlePath;
     let encrypted = false;
     let warning: string | undefined;
     if (passphrase) {
-      ({ encPath: finalFile } = await encryptBundle(bundlePath, passphrase));
+      ({ encPath: finalFile } = await encryptBundle(bundlePath, passphrase, {
+        destDir,
+      }));
       encrypted = true;
     } else {
       warning = "Backup encryption skipped: no passphrase configured.";

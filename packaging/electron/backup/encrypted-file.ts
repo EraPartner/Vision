@@ -169,7 +169,7 @@ export async function encryptFileV2(
   try {
     const input = fs.createReadStream(sourcePath);
     const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
-    const output = fs.createWriteStream(destinationPath);
+    const output = fs.createWriteStream(destinationPath, { mode: 0o600 });
     output.write(magic);
     output.write(salt);
     output.write(iv);
@@ -276,7 +276,7 @@ export async function decryptFile({
         end: headerLength + cipherTextLength - 1,
       }),
       decipher,
-      fs.createWriteStream(destinationPath),
+      fs.createWriteStream(destinationPath, { mode: 0o600 }),
       destinationPath,
     );
   } catch (err) {
