@@ -41,13 +41,12 @@ function syntheticRestoreRuntime({
   const runtime = {
     calls,
     paths: { database: "/synthetic/database/vision.sqlite3" },
-    hash(file: string) {
-      return settled(() => {
+    hash: (file: string) =>
+      settled(() => {
         assert.equal(file, runtime.paths.database);
         step(`hash:${active}`);
         return active === "restored" ? restoredSha256 : "b".repeat(64);
-      });
-    },
+      }),
     activateRestoredDatabase() {
       return settled(() => {
         step("activateDatabase");

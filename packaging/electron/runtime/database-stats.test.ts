@@ -176,9 +176,9 @@ void test(
     db.exec("INSERT INTO notes (body) VALUES ('one'), ('two')");
     db.exec("PRAGMA user_version = 42");
     db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
-    const pageSize = Number(
-      (db.prepare("PRAGMA page_size").get() as { page_size: number }).page_size,
-    );
+    const pageSize = (
+      db.prepare("PRAGMA page_size").get() as { page_size: number }
+    ).page_size;
     db.close();
     const stats = await readDatabaseFileStats(file);
     assert.equal(stats.exists, true);

@@ -10,8 +10,12 @@
  * and column list through the schema, so `constraint` keeps naming the index
  * a PostgreSQL error would have named.
  *
- * Triggers raise `RAISE(ABORT, 'vision:<sqlstate>:<constraint>:<message>')`;
- * the prefix becomes `code` and `constraint`.
+ * Triggers raise `RAISE(ABORT, 'vision:<sqlstate>:<constraint>:<message>')`
+ * or call vision_raise(); the prefix becomes `code` and `constraint`.
+ *
+ * Known differences: SQLite does not name the foreign key that failed, so FK
+ * errors carry no `constraint`; a primary key or unique index resolves through
+ * the schema (a rowid key falls back to `<table>_pkey`).
  */
 
 export interface DatabaseError extends Error {
@@ -75,14 +79,15 @@ export function translateSqliteError(err: unknown, resolveUnique?: UniqueIndexRe
     case SQLITE_CONSTRAINT_UNIQUE:
     case SQLITE_CONSTRAINT_PRIMARYKEY: {
       const m = /constraint failed: (.+)$/.exec(message);
-      const cols = (m?.[1] ?? "").split(",").map((s) => s.trim());
+      const target = m?.[1] ?? "";
+      // An expression index is reported by name: "index 'idx_x'".
+      const indexName = /^index '([^']+)'$/.exec(target)?.[1];
+      const cols = indexName ? [] : target.split(",").map((s) => s.trim());
       const table = cols[0]?.split(".")[0];
       const columns = cols.map((c) => c.split(".").slice(1).join("."));
-      const constraint = !table
-        ? undefined
-        : code === SQLITE_CONSTRAINT_PRIMARYKEY
-          ? `${table}_pkey`
-          : resolveUnique?.(table, columns);
+      const resolved = table ? resolveUnique?.(table, columns) : undefined;
+      const constraint =
+        indexName ?? resolved ?? (table && code === SQLITE_CONSTRAINT_PRIMARYKEY ? `${table}_pkey` : undefined);
       return make(err, "23505", {
         constraint,
         table,
@@ -119,6 +124,10 @@ export function translateSqliteError(err: unknown, resolveUnique?: UniqueIndexRe
           constraint: m[2] ? m[2] : undefined,
           message: m[3] ?? message,
         });
+      }
+      // ON DELETE/UPDATE RESTRICT fails inside SQLite's FK trigger code.
+      if (/FOREIGN KEY constraint failed/.test(message)) {
+        return make(err, "23001", { message: "update or delete violates a RESTRICT foreign key constraint" });
       }
       return make(err, "P0001", {});
     }

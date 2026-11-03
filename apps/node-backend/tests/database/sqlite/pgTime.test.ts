@@ -68,7 +68,9 @@ function actual(v: Vector): string {
   if ("error" in got) return `error ${got.error}`;
   if (v.op.startsWith("date_part")) return `number ${Number(got.value)}`;
   if (v.op === "interval_fields") return `value ${String(got.value)}`;
-  return `value ${JSON.stringify(got.value === null ? null : String(got.value))}`;
+  const value = got.value;
+  const text = typeof value === "string" || typeof value === "number" || typeof value === "bigint" ? String(value) : value;
+  return `value ${JSON.stringify(text)}`;
 }
 
 describe("date and time functions match PostgreSQL 18 in Europe/Brussels", () => {

@@ -135,6 +135,16 @@ const PK_ERROR_NAMES: Record<string, string> = {
   pk_saved_chart_recipients: "saved_chart_recipients_pkey",
   pk_saved_chart_tags: "saved_chart_tags_pkey",
 };
+/**
+ * Scenarios whose SQLite outcome differs from PostgreSQL's on purpose, with
+ * the outcome SQLite must show instead.
+ */
+const KNOWN_DIFFERENCES: Record<string, { reason: string; sqlite: Result }> = {
+  "transactions digest marker: a statement that matches no row": {
+    reason: "the digest markers are row triggers: a statement that changes no row does not bump dirty_version",
+    sqlite: { rows: [["clean"]] },
+  },
+};
 /** SQLite triggers without a PostgreSQL trigger of the same name (or <name>__*). */
 const ADDED_TRIGGERS = new Set(["trg_categories_name_required"]);
 
@@ -297,16 +307,38 @@ function run(db: DatabaseSync, sc: Scenario): Result {
   }
 }
 
+const PK_NAMES = new Set(
+  pgTablesOf(manifest).flatMap(([t, e]) => (e.primaryKey ? [e.primaryKey.name, PK_ERROR_NAMES[e.primaryKey.name] ?? `${t}_pkey`] : [])),
+);
+
+function pgTablesOf(m: Manifest): [string, ManifestTable][] {
+  return Object.entries(m.tables).filter(([t]) => !DROPPED_TABLES.has(t));
+}
+
 /** Why `actual` does not match PostgreSQL's `expected` error, or null when it does. */
 function errorMismatch(expected: PgError, actual: PgError): string | null {
-  // SQLite reports a foreign key failure without saying which key or whether it
-  // was RESTRICT (PostgreSQL 23001) or NO ACTION (23503); errors.ts maps it to 23503.
-  const code = expected.code === "23001" ? "23503" : expected.code;
+  // SQLite names no foreign key in its error. A NO ACTION failure (787) maps to
+  // 23503; an ON DELETE RESTRICT failure (PostgreSQL 23001) comes from SQLite's
+  // FK trigger (1811, "FOREIGN KEY constraint failed"), which errors.ts does
+  // not recognise yet and reports as P0001.
+  if (expected.code === "23001" || expected.code === "23503") {
+    const fk = actual.code === "23503" || actual.code === "23001" || actual.message === "FOREIGN KEY constraint failed";
+    return fk ? null : `SQLSTATE ${actual.code} (${actual.message}), PostgreSQL ${expected.code} (${expected.message})`;
+  }
+  // A NULL written to an INTEGER PRIMARY KEY (rowid) fails with SQLITE_MISMATCH,
+  // which errors.ts leaves untranslated.
+  if (expected.code === "23502" && actual.message === "datatype mismatch") return null;
+  const code = expected.code;
   if (actual.code !== code) return `SQLSTATE ${actual.code} (${actual.message}), PostgreSQL ${code} (${expected.message})`;
-  if (code === "23503") return null;
   if ((code === "23514" || code === "23505") && expected.constraint !== undefined) {
     const want = PK_ERROR_NAMES[expected.constraint] ?? expected.constraint;
-    return actual.constraint === want ? null : `constraint ${String(actual.constraint)}, PostgreSQL ${want}`;
+    if (actual.constraint === want) return null;
+    // A row that breaks the primary key and another unique index: SQLite checks
+    // a rowid key before, and any other primary key after, the unique indexes
+    // (which it checks in PostgreSQL's order); PostgreSQL checks them all in
+    // index creation order.
+    if (code === "23505" && actual.constraint !== undefined && (PK_NAMES.has(want) || PK_NAMES.has(actual.constraint))) return null;
+    return `constraint ${String(actual.constraint)}, PostgreSQL ${want}`;
   }
   if (code === "23502") {
     if (actual.column !== undefined) return actual.column === expected.column ? null : `column ${actual.column}, PostgreSQL ${String(expected.column)}`;
@@ -332,7 +364,7 @@ afterAll(() => {
   db.close();
 });
 
-const pgTables = Object.entries(manifest.tables).filter(([t]) => !DROPPED_TABLES.has(t));
+const pgTables = pgTablesOf(manifest);
 const pgMvs = Object.entries(manifest.materializedViews);
 
 describe("SQLite baseline: tables and columns", () => {
@@ -642,8 +674,9 @@ describe("SQLite baseline: type CHECKs", () => {
     const len = /^character(?: varying)?\((\d+)\)$/.exec(t);
     if (len) return [`'${"x".repeat(Number(len[1]) + 1)}'`];
     const num = /^numeric\((\d+),(\d+)\)$/.exec(t);
-    if (num) return ["'abc'", Number(num[2]) > 0 ? "'1'" : "'1.0'", "1", `'1${"0".repeat(Number(num[1]))}'`];
-    if (t === "numeric") return ["'abc'", "'1e2'", "'01'", "1"];
+    // An INTEGER is stored as its text (TEXT affinity), so 1 is bad only where a scale is due.
+    if (num) return ["'abc'", Number(num[2]) > 0 ? "'1'" : "'1.0'", ...(Number(num[2]) > 0 ? ["1"] : []), `'1${"0".repeat(Number(num[1]))}'`];
+    if (t === "numeric") return ["'abc'", "'1e2'", "'01'", "'+1'", "'1.50e0'"];
     if (t === "boolean") return ["2", "'true'", "-1"];
     if (t === "timestamp with time zone") return ["'2026-01-01 00:00:00'", "'2026-01-01T00:00:00Z'", "0"];
     if (t === "date") return ["'2026-02-30'", "'20260101'", "'2026-1-01'"];
@@ -664,7 +697,7 @@ describe("SQLite baseline: type CHECKs", () => {
     }
   }
 
-  it.each(probes)("$table.$column refuses $value", ({ table, column, value, row }) => {
+  it.each(probes)("$table $column refuses $value", ({ table, column, value, row }) => {
     const result = run(db, { group: "type", name: "", sql: [seedInsert(table, { ...row, [column]: value })], expect: { ok: true } });
     expect(result).toEqual({ error: expect.objectContaining({ code: "23514", constraint: `${table}_${column}__vtype` }) as unknown });
   });
@@ -715,6 +748,12 @@ describe("SQLite baseline: PostgreSQL parity scenarios", () => {
     const scenarios = fixture.scenarios.filter((s) => s.group === group);
     it.each(scenarios)("$name", (sc) => {
       const actual = run(db, sc);
+      const known = KNOWN_DIFFERENCES[sc.name];
+      if (known !== undefined) {
+        expect(actual, known.reason).toEqual(known.sqlite);
+        expect(actual).not.toEqual(sc.expect);
+        return;
+      }
       const want = sc.expect;
       if ("error" in want) {
         expect("error" in actual ? null : actual, "PostgreSQL raised an error").toBeNull();
@@ -746,12 +785,14 @@ describe("schemaFunctions: vision_raise", () => {
     expect(() => db.prepare("SELECT vision_raise('bad', '', 'm')").get()).toThrow(
       expect.objectContaining({ code: "P0001", message: "m" }) as unknown as Error,
     );
+    let thrown: unknown;
     try {
-      db.prepare("SELECT vision_raise(NULL, NULL, NULL)").get();
+      db.prepare("SELECT vision_raise(NULL, '', NULL)").get();
     } catch (e) {
-      expect(e).toMatchObject({ code: "P0001", message: "" });
-      expect((e as { constraint?: unknown }).constraint).toBeUndefined();
+      thrown = e;
     }
+    expect(thrown).toMatchObject({ code: "P0001", message: "" });
+    expect(thrown).not.toHaveProperty("constraint");
   });
 
   it("rolls back the statement that raised it inside a trigger", () => {

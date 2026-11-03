@@ -32,12 +32,20 @@ export type Reader = (value: unknown) => unknown;
 
 const identity: Reader = (v) => v;
 
+/** String(v) for the values SQLite returns: text, numbers and blobs. */
+function sqlText(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "bigint" || typeof v === "boolean") return String(v);
+  if (v instanceof Uint8Array) return v.join(",");
+  return Object.prototype.toString.call(v);
+}
+
 const readBoolean: Reader = (v) => {
   if (v === null || v === undefined) return null;
   if (v === 1 || v === 1n) return true;
   if (v === 0 || v === 0n) return false;
   if (typeof v === "boolean") return v;
-  throw new TypeError(`boolean column holds ${typeof v} ${String(v)}`);
+  throw new TypeError(`boolean column holds ${typeof v} ${sqlText(v)}`);
 };
 
 const CANONICAL_TS = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3})\d{3}Z$/;
@@ -74,7 +82,27 @@ const readBigint: Reader = (v) => {
   return v;
 };
 
-const readText: Reader = (v) => (v === null || v === undefined ? null : String(v));
+const readText: Reader = (v) => (v === null || v === undefined ? null : sqlText(v));
+
+/** True for the reader of BIGINT columns and `::bigint` aliases. */
+export function readsBigint(reader: Reader): boolean {
+  return reader === readBigint;
+}
+
+/**
+ * A statement with a BIGINT column is read with BigInts (so values above
+ * 2^53 stay exact); its other columns then see BigInt for every integer.
+ * Wrap their readers so a safe integer is a number again and a larger one
+ * becomes decimal text, as node-postgres returned int8.
+ */
+export function withBigIntInput(reader: Reader): Reader {
+  if (reader === readBigint) return reader;
+  return (v) => {
+    if (typeof v !== "bigint") return reader(v);
+    const asNumber = Number(v);
+    return reader(Number.isSafeInteger(asNumber) ? asNumber : v.toString());
+  };
+}
 
 /** Reader for a declared column type, or null when the value passes through. */
 export function readerForDeclaredType(declared: string | null | undefined): Reader | null {
@@ -119,7 +147,13 @@ export function planColumn(name: string, declared: string | null | undefined): C
   return { key: name, read: readerForDeclaredType(declared) ?? identity };
 }
 
-function isDecimalLike(v: object): boolean {
+/** A Decimal.js-style value, which prints its exact digits with toString(). */
+interface DecimalLike {
+  toString(): string;
+  toFixed(): string;
+}
+
+function isDecimalLike(v: object): v is DecimalLike {
   const candidate = v as { toFixed?: unknown; isFinite?: unknown; d?: unknown };
   return typeof candidate.toFixed === "function" && typeof candidate.isFinite === "function" && "d" in candidate;
 }
@@ -140,7 +174,7 @@ export function toSqlParam(value: unknown): SqlParam {
       if (value instanceof Date) return formatInstant(instantFromDate(value));
       if (value instanceof Uint8Array) return value;
       if (Array.isArray(value)) return JSON.stringify(value);
-      if (isDecimalLike(value)) return String(value);
+      if (isDecimalLike(value)) return value.toString();
       return JSON.stringify(value);
     }
     default:

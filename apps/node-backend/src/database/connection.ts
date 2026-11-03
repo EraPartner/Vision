@@ -25,10 +25,11 @@ import settings from "../config/config.ts";
 import { logger } from "../config/logger.ts";
 import { errorMessage } from "../lib/errors.ts";
 import { registerFunctions } from "./sqlite/functions.ts";
+import { registerSchemaFunctions } from "./sqlite/schemaFunctions.ts";
 import type { ConnectionClock } from "./sqlite/functions.ts";
 import { instantFromDate } from "./sqlite/pgTime.ts";
 import { scanSql } from "./sqlite/sqlText.ts";
-import { planColumn, toSqlParams } from "./sqlite/values.ts";
+import { planColumn, readsBigint, toSqlParams, withBigIntInput } from "./sqlite/values.ts";
 import type { ColumnPlan } from "./sqlite/values.ts";
 import { translateSqliteError } from "./sqlite/errors.ts";
 
@@ -143,6 +144,7 @@ export function openDatabase(
     }
     applyPragmas(db, role);
     registerFunctions(db, clock);
+    registerSchemaFunctions(db);
   } catch (err) {
     db.close();
     throw err;
@@ -196,7 +198,13 @@ function resolveUniqueIndex(table: string, columns: readonly string[]): string |
         const indexes = db.prepare(`PRAGMA index_list("${name.replaceAll('"', '""')}")`).all() as Array<{
           name: string;
           unique: number;
+          origin: string;
         }>;
+        const tableSql =
+          (db.prepare("SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?").get(name) as
+            | { sql: string | null }
+            | undefined)?.sql ?? "";
+        const pkName = /CONSTRAINT\s+"?(\w+)"?\s+PRIMARY\s+KEY/i.exec(tableSql)?.[1] ?? `${name}_pkey`;
         for (const index of indexes) {
           if (index.unique === 0) continue;
           const cols = (
@@ -204,8 +212,9 @@ function resolveUniqueIndex(table: string, columns: readonly string[]): string |
           ).map((c) => c.name ?? "<expr>");
           const key = `${name}(${cols.join(",")})`;
           // sqlite_autoindex_* names stand for a table-level UNIQUE/PRIMARY KEY.
-          if (!uniqueIndexes.has(key) || !index.name.startsWith("sqlite_autoindex_")) {
-            uniqueIndexes.set(key, index.name.startsWith("sqlite_autoindex_") ? `${name}_${cols.join("_")}_key` : index.name);
+          const auto = index.name.startsWith("sqlite_autoindex_");
+          if (!uniqueIndexes.has(key) || !auto) {
+            uniqueIndexes.set(key, !auto ? index.name : index.origin === "pk" ? pkName : `${name}_${cols.join("_")}_key`);
           }
         }
       }
@@ -239,10 +248,12 @@ function prepare(conn: Connection, text: string): PreparedStatement {
   const stmt = conn.db.prepare(text);
   const columns = stmt.columns();
   stmt.setReturnArrays(true);
-  prepared = {
-    stmt,
-    plan: columns.length > 0 ? columns.map((c) => planColumn(c.name, c.type)) : null,
-  };
+  let plan = columns.length > 0 ? columns.map((c) => planColumn(c.name, c.type)) : null;
+  if (plan?.some((c) => readsBigint(c.read))) {
+    stmt.setReadBigInts(true);
+    plan = plan.map((c) => ({ ...c, read: withBigIntInput(c.read) }));
+  }
+  prepared = { stmt, plan };
   conn.statements.set(text, prepared);
   if (conn.statements.size > STATEMENT_CACHE_LIMIT) {
     const oldest = conn.statements.keys().next().value;

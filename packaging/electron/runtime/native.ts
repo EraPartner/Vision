@@ -1432,7 +1432,13 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       () => undefined,
     );
     const databaseVersion = stats?.schemaVersion;
-    if (!databaseVersion || databaseVersion >= packagedVersion) return undefined;
+    // Version 0 is a database no migration has touched yet: nothing to back up.
+    if (
+      databaseVersion === undefined ||
+      databaseVersion === 0 ||
+      databaseVersion >= packagedVersion
+    )
+      return undefined;
     return { databaseVersion, packagedVersion };
   }
 
@@ -1824,7 +1830,10 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         }),
     );
     generations.sort(
-      (a, b) => b.mtimeMs - a.mtimeMs || b.full.localeCompare(a.full),
+      (a, b) =>
+        b.mtimeMs !== a.mtimeMs
+          ? b.mtimeMs - a.mtimeMs
+          : b.full.localeCompare(a.full),
     );
     for (const old of generations.slice(PREVIOUS_DATABASE_GENERATIONS_KEPT)) {
       await fs.promises.rm(old.full, { recursive: true, force: true });

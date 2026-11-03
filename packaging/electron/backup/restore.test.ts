@@ -141,7 +141,10 @@ function initRuntime(
           return Promise.reject(new Error("restore must not be reached"));
         return Promise.resolve({ switchToken: { id: "database" } });
       },
-      replaceAttachments: step("replaceAttachments"),
+      replaceAttachments: () => {
+        recorded.calls.push("replaceAttachments");
+        return Promise.resolve({ id: "attachments" });
+      },
       start: step("start"),
       waitUntilReady: step("waitUntilReady"),
       finalizeDatabaseSwitch: step("finalizeDatabase"),

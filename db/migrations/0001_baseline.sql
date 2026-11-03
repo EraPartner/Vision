@@ -20,6 +20,10 @@
 --   * Constraint and index names are the PostgreSQL names, because services
 --     read err.constraint. UNIQUE constraints are named unique indexes. Table
 --     CHECKs are listed in name order, the order PostgreSQL evaluates them in.
+--     A table's unique indexes are created in reverse PostgreSQL index order,
+--     because SQLite checks the newest first; a row that breaks two of them
+--     reports the one PostgreSQL reported. (SQLite checks a rowid key before,
+--     and any other primary key after, its unique indexes.)
 --   * serial keys are INTEGER PRIMARY KEY AUTOINCREMENT. bigint keys draw from
 --     vision_sequences through nextval(); portfolio_transactions,
 --     portfolio_asset_adjustments and portfolio_asset_transfers share
@@ -35,8 +39,13 @@
 --     kysely_migration_lock (the runner keeps vision_migrations), and
 --     security_barrier view options.
 --   * mv_monthly_summary and mv_category_totals were materialized views
---     created at runtime; they are ordinary tables that
---     materializedViewService refreshes.
+--     created at runtime; they are ordinary tables (no foreign keys) that
+--     materializedViewService refills with DELETE + INSERT ... SELECT.
+--   * updated_at, where update_updated_at_column() maintained it, is
+--     NOT NULL ON CONFLICT REPLACE: an UPDATE that writes NULL stores now(),
+--     as the PostgreSQL BEFORE trigger did.
+--   * categories.name defaults to '__LEGACY_NAME_PENDING__', which the legacy
+--     sync replaces; see the categories triggers.
 --   * Triggers: see the Triggers section.
 
 -- ============================================================================
@@ -1764,8 +1773,8 @@ CREATE UNIQUE INDEX idx_mv_monthly_summary ON mv_monthly_summary (month_start, c
 -- Indexes
 -- ============================================================================
 
-CREATE UNIQUE INDEX uq_accounts_import_identity ON accounts (import_identity);
 CREATE UNIQUE INDEX uq_accounts_name_norm ON accounts (lower(btrim(name)));
+CREATE UNIQUE INDEX uq_accounts_import_identity ON accounts (import_identity);
 
 CREATE INDEX idx_agg_split_outstanding_open ON agg_split_outstanding (recipient_id) WHERE dec_ne(outstanding_amount, 0);
 CREATE INDEX idx_agg_split_outstanding_recipient ON agg_split_outstanding (recipient_id);
@@ -1776,14 +1785,14 @@ CREATE INDEX idx_ai_investigation_jobs_state_updated ON ai_investigation_jobs (s
 
 CREATE INDEX idx_ai_messages_conv_created ON ai_messages (conversation_id, created_at);
 
-CREATE UNIQUE INDEX ai_research_documents_source_name_content_sha256_key ON ai_research_documents (source_name, content_sha256);
 CREATE UNIQUE INDEX ai_research_documents_source_name_version_key ON ai_research_documents (source_name, version);
+CREATE UNIQUE INDEX ai_research_documents_source_name_content_sha256_key ON ai_research_documents (source_name, content_sha256);
 
 CREATE UNIQUE INDEX ai_research_passages_document_id_ordinal_key ON ai_research_passages (document_id, ordinal);
 CREATE INDEX idx_ai_research_passages_document ON ai_research_passages (document_id, ordinal);
 
-CREATE UNIQUE INDEX analysis_monitor_notifications_monitor_id_episode_key_key ON analysis_monitor_notifications (monitor_id, episode_key);
 CREATE UNIQUE INDEX analysis_monitor_notifications_observation_id_key ON analysis_monitor_notifications (observation_id);
+CREATE UNIQUE INDEX analysis_monitor_notifications_monitor_id_episode_key_key ON analysis_monitor_notifications (monitor_id, episode_key);
 CREATE INDEX idx_analysis_monitor_notifications_inbox ON analysis_monitor_notifications (created_at DESC, id DESC);
 
 CREATE INDEX idx_analysis_monitor_observations_history ON analysis_monitor_observations (monitor_id, checked_at DESC, id DESC);
@@ -1810,12 +1819,12 @@ CREATE INDEX idx_cfmc_user_month ON cashflow_forecast_mc (user_id, month);
 CREATE UNIQUE INDEX cashflow_forecast_mc_rolling_user_id_today_iso_days_back_da_key ON cashflow_forecast_mc_rolling (user_id, today_iso, days_back, days_forward, filter_hash);
 CREATE INDEX idx_cfmcr_user_today ON cashflow_forecast_mc_rolling (user_id, today_iso);
 
+CREATE UNIQUE INDEX uq_categories_sibling_name ON categories (parent_id, name) WHERE parent_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_categories_root_name ON categories (name) WHERE parent_id IS NULL;
 CREATE UNIQUE INDEX uq_general_detail ON categories (general, detail);
 CREATE INDEX idx_categories_detail ON categories (detail);
 CREATE INDEX idx_categories_general ON categories (general);
 CREATE INDEX idx_categories_parent_id ON categories (parent_id);
-CREATE UNIQUE INDEX uq_categories_root_name ON categories (name) WHERE parent_id IS NULL;
-CREATE UNIQUE INDEX uq_categories_sibling_name ON categories (parent_id, name) WHERE parent_id IS NOT NULL;
 
 CREATE INDEX idx_category_merge_aliases_target ON category_merge_aliases (target_category_id);
 
@@ -1836,18 +1845,18 @@ CREATE INDEX idx_import_staging_rows_user_override_recipient_id ON import_stagin
 CREATE INDEX idx_staging_batch_status ON import_staging_rows (batch_id, status);
 CREATE INDEX idx_staging_override_category ON import_staging_rows (override_category_id) WHERE override_category_id IS NOT NULL;
 
-CREATE UNIQUE INDEX uq_insight_dismissals_outlier ON insight_dismissals (category_id, month_start) WHERE kind = 'category_outlier';
 CREATE UNIQUE INDEX uq_insight_dismissals_subscription ON insight_dismissals (kind, recipient_id) WHERE kind IN ('subscription_new', 'subscription_price_change');
+CREATE UNIQUE INDEX uq_insight_dismissals_outlier ON insight_dismissals (category_id, month_start) WHERE kind = 'category_outlier';
 
-CREATE INDEX idx_instrument_provider_map_provider_symbol ON instrument_provider_map (provider, provider_symbol);
 CREATE UNIQUE INDEX uq_instrument_provider_map_key_provider ON instrument_provider_map (instrument_key, key_type, provider);
+CREATE INDEX idx_instrument_provider_map_provider_symbol ON instrument_provider_map (provider, provider_symbol);
 
 CREATE INDEX idx_investments_asset_class ON investments (asset_class);
 CREATE INDEX idx_investments_is_active ON investments (is_active);
 
+CREATE UNIQUE INDEX uq_pte_planned_executed ON planned_transaction_executions (planned_transaction_id, executed_transaction_id);
 CREATE INDEX idx_pte_executed_tx_id ON planned_transaction_executions (executed_transaction_id);
 CREATE INDEX idx_pte_planned_id ON planned_transaction_executions (planned_transaction_id);
-CREATE UNIQUE INDEX uq_pte_planned_executed ON planned_transaction_executions (planned_transaction_id, executed_transaction_id);
 
 CREATE UNIQUE INDEX uq_ptls_planned_installment ON planned_transaction_loan_schedule (planned_transaction_id, installment_number);
 CREATE INDEX idx_ptls_due_date ON planned_transaction_loan_schedule (due_date);
@@ -1865,20 +1874,20 @@ CREATE INDEX idx_pt_is_recurring ON planned_transactions (is_recurring);
 CREATE INDEX idx_pt_planned_date ON planned_transactions (planned_date);
 CREATE INDEX idx_pt_recipient_id ON planned_transactions (recipient_id);
 
-CREATE UNIQUE INDEX portfolio_asset_adjustments_dedup_fingerprint_version_dedup_key ON portfolio_asset_adjustments (dedup_fingerprint_version, dedup_fingerprint);
 CREATE UNIQUE INDEX portfolio_asset_adjustments_staging_row_id_key ON portfolio_asset_adjustments (staging_row_id);
+CREATE UNIQUE INDEX portfolio_asset_adjustments_dedup_fingerprint_version_dedup_key ON portfolio_asset_adjustments (dedup_fingerprint_version, dedup_fingerprint);
 CREATE INDEX idx_portfolio_asset_adjustments_batch ON portfolio_asset_adjustments (import_batch_id);
 CREATE INDEX idx_portfolio_asset_adjustments_replay ON portfolio_asset_adjustments (investment_id, date, id);
 
-CREATE UNIQUE INDEX portfolio_asset_transfers_dedup_fingerprint_version_dedup_f_key ON portfolio_asset_transfers (dedup_fingerprint_version, dedup_fingerprint);
 CREATE UNIQUE INDEX portfolio_asset_transfers_staging_row_id_key ON portfolio_asset_transfers (staging_row_id);
+CREATE UNIQUE INDEX portfolio_asset_transfers_dedup_fingerprint_version_dedup_f_key ON portfolio_asset_transfers (dedup_fingerprint_version, dedup_fingerprint);
 CREATE INDEX idx_portfolio_asset_transfers_batch ON portfolio_asset_transfers (import_batch_id);
 CREATE INDEX idx_portfolio_asset_transfers_replay ON portfolio_asset_transfers (investment_id, date, id);
 
 CREATE INDEX idx_portfolio_broker_snapshots_currency_date ON portfolio_broker_snapshots (currency, snapshot_date);
 
-CREATE UNIQUE INDEX uq_portfolio_exposure_classification_identifier ON portfolio_exposure_classifications (identifier_type, identifier_value, COALESCE(identifier_exchange, '')) WHERE investment_id IS NULL;
 CREATE UNIQUE INDEX uq_portfolio_exposure_classification_investment ON portfolio_exposure_classifications (investment_id) WHERE investment_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_portfolio_exposure_classification_identifier ON portfolio_exposure_classifications (identifier_type, identifier_value, COALESCE(identifier_exchange, '')) WHERE investment_id IS NULL;
 
 CREATE UNIQUE INDEX portfolio_fund_holdings_documents_investment_id_key ON portfolio_fund_holdings_documents (investment_id);
 CREATE INDEX idx_portfolio_fund_holdings_as_of ON portfolio_fund_holdings_documents (source_as_of_date DESC);
@@ -1887,19 +1896,19 @@ CREATE INDEX idx_portfolio_import_batches_account_id ON portfolio_import_batches
 CREATE INDEX idx_portfolio_import_batches_started_at ON portfolio_import_batches (started_at DESC);
 CREATE INDEX idx_portfolio_import_batches_status ON portfolio_import_batches (status) WHERE status NOT IN ('complete', 'failed', 'aborted');
 
+CREATE UNIQUE INDEX uq_portfolio_import_duplicate_repair_source ON portfolio_import_duplicate_repair_journal (staging_row_id) WHERE "action" = 'repair';
 CREATE UNIQUE INDEX portfolio_import_duplicate_repair_journal_previous_entry_id_key ON portfolio_import_duplicate_repair_journal (previous_entry_id);
 CREATE INDEX idx_portfolio_import_duplicate_repair_batch ON portfolio_import_duplicate_repair_journal (batch_id, "action");
-CREATE UNIQUE INDEX uq_portfolio_import_duplicate_repair_source ON portfolio_import_duplicate_repair_journal (staging_row_id) WHERE "action" = 'repair';
 
+CREATE UNIQUE INDEX uq_portfolio_income_transaction ON portfolio_import_income_recognition_journal (income_transaction_id) WHERE "action" = 'record';
+CREATE UNIQUE INDEX uq_portfolio_income_source ON portfolio_import_income_recognition_journal (staging_row_id) WHERE "action" = 'record';
 CREATE UNIQUE INDEX portfolio_import_income_recognition_journ_previous_entry_id_key ON portfolio_import_income_recognition_journal (previous_entry_id);
 CREATE INDEX idx_portfolio_income_batch ON portfolio_import_income_recognition_journal (batch_id, "action");
 CREATE INDEX idx_portfolio_income_unit ON portfolio_import_income_recognition_journal (unit_transaction_id, "action");
-CREATE UNIQUE INDEX uq_portfolio_income_source ON portfolio_import_income_recognition_journal (staging_row_id) WHERE "action" = 'record';
-CREATE UNIQUE INDEX uq_portfolio_income_transaction ON portfolio_import_income_recognition_journal (income_transaction_id) WHERE "action" = 'record';
 
+CREATE UNIQUE INDEX uq_portfolio_import_adoption_source ON portfolio_import_reconciliation_journal (staging_row_id) WHERE "action" = 'adopt';
 CREATE UNIQUE INDEX portfolio_import_reconciliation_journal_previous_entry_id_key ON portfolio_import_reconciliation_journal (previous_entry_id);
 CREATE INDEX idx_portfolio_import_reconciliation_batch ON portfolio_import_reconciliation_journal (batch_id, "action");
-CREATE UNIQUE INDEX uq_portfolio_import_adoption_source ON portfolio_import_reconciliation_journal (staging_row_id) WHERE "action" = 'adopt';
 
 CREATE INDEX idx_pf_staging_batch_status ON portfolio_import_staging_rows (batch_id, status);
 CREATE INDEX idx_portfolio_import_staging_rows_dedup_fingerprint ON portfolio_import_staging_rows (batch_id, dedup_fingerprint_version, dedup_fingerprint) WHERE dedup_fingerprint IS NOT NULL;
@@ -1911,6 +1920,7 @@ CREATE INDEX idx_portfolio_performance_snapshots_currency ON portfolio_performan
 
 CREATE INDEX idx_snapshot_accounts_currency_date ON portfolio_snapshot_accounts (currency, snapshot_date);
 
+CREATE UNIQUE INDEX uq_portfolio_transactions_dedup_fingerprint ON portfolio_transactions (dedup_fingerprint_version, dedup_fingerprint) WHERE dedup_fingerprint IS NOT NULL;
 CREATE INDEX idx_portfolio_transactions_account_id ON portfolio_transactions (account_id);
 CREATE INDEX idx_portfolio_transactions_import_batch_id ON portfolio_transactions (import_batch_id) WHERE import_batch_id IS NOT NULL;
 CREATE INDEX idx_portfolio_txn_date ON portfolio_transactions (date);
@@ -1918,13 +1928,12 @@ CREATE INDEX idx_portfolio_txn_investment_id ON portfolio_transactions (investme
 CREATE INDEX idx_portfolio_txn_type ON portfolio_transactions (type);
 CREATE INDEX idx_ptxn_investment_account ON portfolio_transactions (investment_id, account_id);
 CREATE INDEX idx_ptxn_investment_date_id ON portfolio_transactions (investment_id, date, id);
-CREATE UNIQUE INDEX uq_portfolio_transactions_dedup_fingerprint ON portfolio_transactions (dedup_fingerprint_version, dedup_fingerprint) WHERE dedup_fingerprint IS NOT NULL;
 
 CREATE INDEX idx_ph_kind ON provider_health (kind);
 
+CREATE UNIQUE INDEX uq_recipient_primary_account ON recipient_bank_accounts (recipient_id) WHERE is_primary;
 CREATE UNIQUE INDEX recipient_bank_accounts_account_number_key ON recipient_bank_accounts (account_number);
 CREATE INDEX idx_rba_recipient_id ON recipient_bank_accounts (recipient_id);
-CREATE UNIQUE INDEX uq_recipient_primary_account ON recipient_bank_accounts (recipient_id) WHERE is_primary;
 
 CREATE INDEX idx_rmp_active_priority ON recipient_match_patterns (priority) WHERE is_active = 1;
 CREATE INDEX idx_rmp_recipient ON recipient_match_patterns (recipient_id);
@@ -1953,8 +1962,8 @@ CREATE INDEX idx_saved_chart_tags_tag ON saved_chart_tags (tag_id);
 
 CREATE INDEX idx_split_payments_split ON split_payments (split_id);
 
-CREATE INDEX idx_tags_active ON tags (is_active) WHERE is_active = 1;
 CREATE UNIQUE INDEX uq_tags_slug ON tags (slug);
+CREATE INDEX idx_tags_active ON tags (is_active) WHERE is_active = 1;
 
 CREATE UNIQUE INDEX uq_transaction_source_link ON transaction_source_links (source_record_id, legacy_transaction_id);
 CREATE INDEX idx_transaction_source_links_transaction_id ON transaction_source_links (transaction_id) WHERE transaction_id IS NOT NULL;
@@ -1968,6 +1977,8 @@ CREATE INDEX idx_splits_unsettled ON transaction_splits (is_settled) WHERE is_se
 
 CREATE INDEX idx_transaction_tags_tag ON transaction_tags (tag_id);
 
+CREATE UNIQUE INDEX uq_transactions_opening_anchor ON transactions (account_id, currency) WHERE transfer_source = 'opening';
+CREATE UNIQUE INDEX uq_transactions_dedup_fingerprint ON transactions (dedup_fingerprint_version, dedup_fingerprint) WHERE dedup_fingerprint IS NOT NULL;
 CREATE INDEX idx_transaction_date_recipient ON transactions (date, recipient_id);
 CREATE INDEX idx_transactions_abs_amount_date ON transactions (dec_abs(amount), date);
 CREATE INDEX idx_transactions_account_date_active ON transactions (account_id, date DESC) WHERE is_active = 1;
@@ -1987,8 +1998,6 @@ CREATE INDEX idx_transactions_recipient_date ON transactions (recipient_id, date
 CREATE INDEX idx_transactions_recipient_date_active ON transactions (recipient_id, date DESC) WHERE is_active = 1;
 CREATE INDEX idx_transactions_recipient_id ON transactions (recipient_id);
 CREATE INDEX idx_transactions_transfer_peer ON transactions (transfer_peer_id) WHERE transfer_peer_id IS NOT NULL;
-CREATE UNIQUE INDEX uq_transactions_dedup_fingerprint ON transactions (dedup_fingerprint_version, dedup_fingerprint) WHERE dedup_fingerprint IS NOT NULL;
-CREATE UNIQUE INDEX uq_transactions_opening_anchor ON transactions (account_id, currency) WHERE transfer_source = 'opening';
 
 CREATE INDEX idx_transfer_dismissals_b ON transfer_dismissals (txn_b_id);
 
@@ -2212,11 +2221,43 @@ SELECT v1.transaction_id,
 -- ============================================================================
 -- Triggers
 -- ============================================================================
+-- Naming: a PostgreSQL trigger that maps to one SQLite trigger keeps its name.
+-- One that SQLite must split by event or timing becomes <name>__insert,
+-- <name>__update, <name>__delete (and <name>__insert_check/__update_check for
+-- the validation half of a split BEFORE trigger).
+--
+-- Order: SQLite fires the most recently created trigger first. Where several
+-- triggers of one table fire on the same event, they are created in the reverse
+-- of PostgreSQL's firing order (by name), so they fire in PostgreSQL's order.
+--
+-- Errors: RAISE(ABORT, 'vision:<sqlstate>:<constraint>:<message>') with the
+-- SQLSTATE and message the PL/pgSQL function raised (RAISE EXCEPTION without
+-- ERRCODE is P0001). SQLite 3.39 accepts only a string literal in RAISE, so the
+-- one message that quotes row values calls vision_raise(sqlstate, constraint,
+-- message) from schemaFunctions.ts instead.
+--
+-- Statement-level PostgreSQL triggers (the insight digest dirty markers) are
+-- row-level here: the marker only has to move when rows change, so a
+-- statement that touches no row no longer bumps it (PostgreSQL also bumped it
+-- for the empty statements its foreign key actions ran) and one that touches n
+-- rows bumps it n times. Readers compare dirty_version with computed_version
+-- for equality only.
+--
+-- BEFORE triggers that assigned NEW.<column> are AFTER triggers that UPDATE the
+-- row, because a SQLite BEFORE trigger cannot change NEW. RETURNING does not
+-- see what they write:
+--   update_*_updated_at (updated_at = now(); the Kysely write plugin also sets
+--     updated_at in the statement, so RETURNING sees the same value),
+--   trg_categories_0_sync_legacy__insert/__update (parent_id and name of a
+--     legacy category).
+
+-- ---------------------------------------------------------------------------
 -- updated_at NOT NULL on INSERT. The column's NOT NULL is ON CONFLICT REPLACE,
--- so that an UPDATE writing NULL stores now() as update_updated_at_column() did;
--- an INSERT of NULL was refused in PostgreSQL and is refused here. These are
--- created first so they fire after every other BEFORE INSERT trigger, as the
--- NOT NULL check ran after the BEFORE triggers.
+-- so that an UPDATE writing NULL stores now(), as update_updated_at_column()
+-- did; an INSERT of NULL was refused in PostgreSQL and is refused here. These
+-- are created first, so they fire after every other BEFORE INSERT trigger of
+-- their table, as PostgreSQL checked NOT NULL after its BEFORE triggers.
+-- ---------------------------------------------------------------------------
 
 CREATE TRIGGER update_accounts_updated_at__insert_not_null
 BEFORE INSERT ON accounts FOR EACH ROW
@@ -2406,34 +2447,6 @@ WHEN NEW.updated_at IS NULL
 BEGIN
   SELECT RAISE(ABORT, 'vision:23502::null value in column "updated_at" of relation "watchlist" violates not-null constraint');
 END;
-
--- Naming: a PostgreSQL trigger that maps to one SQLite trigger keeps its name.
--- One that SQLite must split by event or timing becomes <name>__insert,
--- <name>__update, <name>__delete (and <name>__insert_check/__update_check for
--- the validation half of a split BEFORE trigger).
---
--- Order: SQLite fires the most recently created trigger first. Where several
--- triggers of one table fire on the same event, they are created in the reverse
--- of PostgreSQL's firing order (by name), so they fire in PostgreSQL's order.
---
--- Errors: RAISE(ABORT, 'vision:<sqlstate>:<constraint>:<message>') with the
--- SQLSTATE and message the PL/pgSQL function raised (RAISE EXCEPTION without
--- ERRCODE is P0001). SQLite 3.39 accepts only a string literal in RAISE, so the
--- one message that quotes row values calls vision_raise(sqlstate, constraint,
--- message) from schemaFunctions.ts instead.
---
--- Statement-level PostgreSQL triggers (the insight digest dirty markers) are
--- row-level here: the marker only has to change when rows change, so a
--- statement that touches no row no longer bumps it and one that touches n rows
--- bumps it n times.
---
--- BEFORE triggers that assigned NEW.<column> are AFTER triggers that UPDATE the
--- row, because a SQLite BEFORE trigger cannot change NEW. RETURNING does not
--- see what they write:
---   update_*_updated_at (updated_at = now(); the Kysely write plugin also sets
---     updated_at in the statement, so RETURNING sees the same value),
---   trg_categories_0_sync_legacy__insert/__update (parent_id and name of a
---     legacy category).
 
 -- ---------------------------------------------------------------------------
 -- ai_messages

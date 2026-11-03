@@ -77,7 +77,7 @@ function run(v: Vector): { value: string | null } | { error: string } {
       loadSet(v.args);
       out = scalar(db, set);
     }
-    return out === null ? null : String(out);
+    return out === null ? null : typeof out === "number" || typeof out === "string" ? String(out) : JSON.stringify(out);
   });
 }
 
@@ -109,7 +109,7 @@ describe("NUMERIC functions match PostgreSQL 18", () => {
   });
 
   for (const op of ops) {
-    it(`${op}`, () => {
+    it(op, () => {
       const mismatches: string[] = [];
       for (const v of vectors) {
         if (v.op !== op) continue;

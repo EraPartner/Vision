@@ -14,15 +14,25 @@
  *       foreign_key_check, that its migration ledger is one this build can
  *       open (not newer, no edited migration), and that its schema equals a
  *       fresh install migrated to the same version.
+ *   create <destination> [<seed.sql>]
+ *       Build a new database from the migrations (the Demo database), then
+ *       optionally run a seed in one transaction. The seed must not change the
+ *       migration ledger or the schema and must leave foreign_key_check
+ *       empty. Refuses an existing destination and removes a partial one.
+ *
+ * Every successful result also carries `tableCounts`: the row count of every
+ * table, for post-start checks.
  */
 import { createHash } from "node:crypto";
-import { createReadStream, existsSync, rmSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, rmSync, statSync } from "node:fs";
+import type { DatabaseSync } from "node:sqlite";
 import { openDatabase } from "../src/database/connection.ts";
 import {
   loadMigrations,
   migrateConnection,
   planMigrations,
   readLedger,
+  runMigrations,
   schemaFingerprint,
 } from "../src/database/migrate.ts";
 
@@ -34,7 +44,24 @@ interface VerifyResult {
   sqliteVersion: string;
   schemaVersion: number;
   pendingMigrations: number;
+  tableCounts: Record<string, number>;
   error?: string;
+}
+
+function tableCounts(db: DatabaseSync): Record<string, number> {
+  const tables = db
+    .prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+    .all() as Array<{ name: string }>;
+  const counts: Record<string, number> = {};
+  for (const { name } of tables) {
+    const row = db.prepare(`SELECT count(*) AS n FROM "${name.replaceAll('"', '""')}"`).get() as { n: number };
+    counts[name] = row.n;
+  }
+  return counts;
+}
+
+function removeDatabaseFiles(file: string): void {
+  for (const suffix of ["", "-wal", "-shm", "-journal"]) rmSync(`${file}${suffix}`, { force: true });
 }
 
 async function fileSha256(file: string): Promise<string> {
@@ -56,7 +83,9 @@ function freshFingerprint(version: number): string {
 export async function verifyDatabaseFile(file: string): Promise<VerifyResult> {
   if (!existsSync(file)) throw new Error(`${file} does not exist`);
   // Opened read-only so verification never changes the file it checks; the
-  // Vision functions are registered because CHECKs call them.
+  // Vision functions are registered because CHECKs call them. A read-only
+  // reader of a WAL-mode file leaves empty -wal/-shm files beside it; the
+  // files this tool writes (snapshot, create) are rollback-journal files.
   const raw = openDatabase(file, "inspect");
   try {
     const integrity = raw.prepare("PRAGMA integrity_check").all() as Array<{ integrity_check: string }>;
@@ -80,6 +109,7 @@ export async function verifyDatabaseFile(file: string): Promise<VerifyResult> {
       sha256: await fileSha256(file),
       sqliteVersion: version,
       schemaVersion,
+      tableCounts: tableCounts(raw),
       pendingMigrations: pending.length,
     };
   } finally {
@@ -96,10 +126,55 @@ export async function snapshotDatabase(source: string, destination: string): Pro
     db.prepare("VACUUM INTO ?").run(destination);
     return await verifyDatabaseFile(destination);
   } catch (err) {
-    rmSync(destination, { force: true });
+    removeDatabaseFiles(destination);
     throw err;
   } finally {
     db.close();
+  }
+}
+
+/** The ledger and user_version, to prove a seed left them alone. */
+function ledgerState(db: DatabaseSync): string {
+  const version = (db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
+  return JSON.stringify([version, readLedger(db).map((m) => [m.version, m.name, m.sha256, m.appliedAt])]);
+}
+
+/**
+ * A new database at the latest migration, optionally loaded with a data-only
+ * seed in one transaction. The file is left in rollback-journal mode, like a
+ * VACUUM INTO copy, so it is one self-contained file that can be moved into
+ * place; the app's writer switches it back to WAL when it opens it.
+ */
+export async function createDatabase(destination: string, seedFile?: string): Promise<VerifyResult> {
+  if (existsSync(destination)) throw new Error(`${destination} already exists`);
+  const seed = seedFile === undefined ? undefined : readFileSync(seedFile, "utf8");
+  try {
+    await runMigrations(destination, { skipBackup: true });
+    const db = openDatabase(destination, "writer");
+    try {
+      if (seed !== undefined) {
+        const before = ledgerState(db);
+        db.exec("BEGIN IMMEDIATE");
+        try {
+          db.exec(seed);
+          if (ledgerState(db) !== before) throw new Error("the seed changed the migration ledger");
+          const fk = db.prepare("PRAGMA foreign_key_check").all();
+          if (fk.length > 0) throw new Error(`the seed left ${fk.length} foreign key violation(s)`);
+          db.exec("COMMIT");
+        } catch (err) {
+          if (db.isTransaction) db.exec("ROLLBACK");
+          throw err;
+        }
+      }
+      const mode = db.prepare("PRAGMA journal_mode = DELETE").get() as { journal_mode: string };
+      if (mode.journal_mode !== "delete") throw new Error(`could not leave WAL mode (${mode.journal_mode})`);
+    } finally {
+      db.close();
+    }
+    return await verifyDatabaseFile(destination);
+  } catch (err) {
+    removeDatabaseFiles(destination);
+    throw err;
   }
 }
 
@@ -112,8 +187,12 @@ if (import.meta.main) {
       result = await snapshotDatabase(first, second);
     } else if (command === "verify" && first !== undefined && args.length === 1) {
       result = await verifyDatabaseFile(first);
+    } else if (command === "create" && first !== undefined && args.length <= 2) {
+      result = await createDatabase(first, second);
     } else {
-      throw new Error("usage: db-file.ts snapshot <database> <destination> | verify <database>");
+      throw new Error(
+        "usage: db-file.ts snapshot <database> <destination> | verify <database> | create <destination> [<seed.sql>]",
+      );
     }
     process.stdout.write(`${JSON.stringify(result)}\n`);
     process.exit(0);

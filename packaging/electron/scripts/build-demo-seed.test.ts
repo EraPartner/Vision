@@ -19,7 +19,7 @@ const repoRoot = path.resolve(appRoot, "..", "..");
 
 interface GeneratorModule {
   DEMO_DECIMAL_COLUMNS: Readonly<Record<string, number>>;
-  decimalText(value: number, d: number, scale: number): string;
+  decimalText: (value: number, d: number, scale: number) => string;
 }
 
 async function generatorModule(): Promise<GeneratorModule> {
