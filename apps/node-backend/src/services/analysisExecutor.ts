@@ -1,19 +1,47 @@
-/** Isolated, bounded SQL execution over the approved analysis views only. */
+/**
+ * Isolated, bounded SQL execution over the approved analysis views only
+ * (ADR-263).
+ *
+ * A statement runs in the analysis sandbox (analysisSandboxWorker.ts): a
+ * worker thread with a fresh in-memory SQLite database. The executor reads
+ * the rows of the approved `vision_analysis_*` views the statement names
+ * from one read snapshot and hands them to the worker, which serves them as
+ * `vision_analysis.<view>` with `query_only` on. The worker never sees the
+ * database file or its path. One sandbox runs at a time; a statement gets
+ * 5 s, after which the request fails with SQLSTATE 57014 and the worker is
+ * terminated.
+ */
 
-import pg from "pg";
-import settings from "../config/config.ts";
-import { checkRows } from "../database/rowContracts.ts";
-import {
-  backendPidRowSchema,
-  cancelBackendRowSchema,
-} from "../database/rows/analysis.ts";
+import { Worker } from "node:worker_threads";
+import path from "node:path";
+import { withReadSnapshot } from "../database/connection.ts";
+import type { PgPoolClient } from "../database/connection.ts";
+import { toSqlParam } from "../database/sqlite/values.ts";
 import { APPROVED_ANALYSIS_RELATIONS } from "./analysisCatalog.ts";
+import type {
+  SandboxColumn,
+  SandboxKind,
+  SandboxMessage,
+  SandboxRequest,
+  SandboxTable,
+  SandboxValue,
+} from "./analysisSandboxWorker.ts";
 import { nanToZero, nonZeroOr } from "../lib/math.ts";
 
 const MAX_ROWS = 1000;
 const DEFAULT_ROWS = 500;
 const MAX_RESULT_BYTES = 2 * 1024 * 1024;
 const MAX_SQL_BYTES = 100_000;
+const STATEMENT_TIMEOUT_MS = 5_000;
+/** Copying the views into the sandbox, before the statement starts. */
+const LOAD_TIMEOUT_MS = 60_000;
+/** How long a request waits for the sandbox another request is using. */
+const QUEUE_TIMEOUT_MS = 30_000;
+/** The worker stops itself at the deadline; this is how long the executor waits for it. */
+const TERMINATE_GRACE_MS = 250;
+const SANDBOX_HEAP_MB = 1024;
+const EXECUTOR = "sqlite-sandbox-v1";
+
 export interface AnalysisSqlRequest {
   requestId?: string | undefined;
   sql: string;
@@ -49,44 +77,59 @@ export interface AnalysisSqlResult {
   byteLength: number;
 }
 
-const activeQueries = new Map<string, { pid: number }>();
-const resultTypes = {
-  getTypeParser(
-    ...[oid, format]: Parameters<typeof pg.types.getTypeParser>
-  ): (value: string) => unknown {
-    // Calendar dates have no timezone; converting them to Date shifts day boundaries.
-    if (oid === pg.types.builtins.DATE && (!format || format === "text"))
-      return (value: string) => value;
-    return pg.types.getTypeParser(oid, format) as (value: string) => unknown;
-  },
+const RELATIONS_BY_DATASET: Record<string, string[]> = {
+  transactions: [
+    "vision_analysis.transactions_v1",
+    "vision_analysis.transactions_v2",
+  ],
+  accounts: ["vision_analysis.accounts_v1"],
+  holdings: ["vision_analysis.holding_events_v1"],
+  "cash-flows": [
+    "vision_analysis.cash_flows_v1",
+    "vision_analysis.cash_flows_v2",
+  ],
 };
 
-const pool = new pg.Pool({
-  connectionString: settings.database.analysisUrl,
-  max: 2,
-  idleTimeoutMillis: 15_000,
-  connectionTimeoutMillis: 5_000,
-  statement_timeout: 5_000,
-  application_name: "vision-analysis-executor",
-});
+/**
+ * Declared types for the view columns the baseline computes with an
+ * expression, which SQLite reports without a type; they are the PostgreSQL
+ * view's column types.
+ */
+const COMPUTED_COLUMN_TYPES: Record<string, Record<string, string>> = {
+  accounts_v1: { statement_balances: "JSON_TEXT" },
+  cash_flows_v1: {
+    flow_type: "TEXT",
+    spending_amount: "DECIMAL_TEXT",
+    positive_flow_amount: "DECIMAL_TEXT",
+  },
+  cash_flows_v2: {
+    flow_type: "TEXT",
+    spending_amount: "DECIMAL_TEXT",
+    positive_flow_amount: "DECIMAL_TEXT",
+    category_path_segments: "TEXT_ARRAY",
+    category_path_ids: "TEXT_ARRAY",
+  },
+  holding_events_v1: { fees: "DECIMAL_TEXT", taxes: "DECIMAL_TEXT" },
+  transactions_v2: {
+    category_path_segments: "TEXT_ARRAY",
+    category_path_ids: "TEXT_ARRAY",
+  },
+};
+/** TEXT_ARRAY columns that were PostgreSQL integer[] (the others were text[]). */
+const INTEGER_ARRAY_COLUMNS = new Set(["category_path_ids"]);
 
-// Keep one connection outside the execution pool so cancellation still works
-// when every query slot is occupied by a long-running statement.
-const cancellationPool = new pg.Pool({
-  connectionString: settings.database.analysisUrl,
-  max: 1,
-  idleTimeoutMillis: 15_000,
-  connectionTimeoutMillis: 5_000,
-  statement_timeout: 2_000,
-  application_name: "vision-analysis-canceller",
-});
-
+/**
+ * Blank out comments and string literals, keeping identifiers, so the
+ * checks below see only SQL keywords and names. Follows SQLite's lexer:
+ * '...' strings, "..."/`...`/[...] identifiers, -- and /* comments. `$`
+ * starts a parameter in SQLite, not a quoted string.
+ */
 function maskSql(sql: string) {
   let out = "";
   let state = "code";
-  let dollar = "";
+  let close = "";
   for (let i = 0; i < sql.length; i++) {
-    const ch = sql[i];
+    const ch = sql[i] ?? "";
     const next = sql[i + 1];
     if (state === "line") {
       if (ch === "\n") {
@@ -113,22 +156,14 @@ function maskSql(sql: string) {
       } else out += ch === "\n" ? "\n" : " ";
       continue;
     }
-    if (state === "double") {
-      if (ch === '"' && next === '"') {
-        out += '""';
+    if (state === "identifier") {
+      if (ch === close && close !== "]" && next === close) {
+        out += ch + ch;
         i++;
-      } else if (ch === '"') {
+      } else if (ch === close) {
         out += '"';
         state = "code";
       } else out += ch;
-      continue;
-    }
-    if (state === "dollar") {
-      if (sql.startsWith(dollar, i)) {
-        out += " ".repeat(dollar.length);
-        i += dollar.length - 1;
-        state = "code";
-      } else out += ch === "\n" ? "\n" : " ";
       continue;
     }
     if (ch === "-" && next === "-") {
@@ -148,52 +183,52 @@ function maskSql(sql: string) {
       state = "single";
       continue;
     }
-    if (ch === '"') {
+    if (ch === '"' || ch === "`" || ch === "[") {
+      // Every identifier quote becomes ", so the relation checks see one form.
       out += '"';
-      state = "double";
+      close = ch === "[" ? "]" : ch;
+      state = "identifier";
       continue;
-    }
-    if (ch === "$") {
-      const match = sql.slice(i).match(/^\$[A-Za-z_][A-Za-z0-9_]*\$|^\$\$/);
-      if (match) {
-        dollar = match[0];
-        out += " ".repeat(dollar.length);
-        i += dollar.length - 1;
-        state = "dollar";
-        continue;
-      }
     }
     out += ch;
   }
   return out;
 }
 
-export function __validateAnalysisSql(
-  sql: unknown,
-  datasetIds: string[] = [],
-): string {
+interface CheckedSql {
+  /** The statement to run: the input, trimmed, without a final semicolon. */
+  sql: string;
+  /** The same text with comments and strings blanked out. */
+  masked: string;
+}
+
+function checkAnalysisSql(sql: unknown, datasetIds: string[] = []): CheckedSql {
   if (typeof sql !== "string" || !sql.trim())
     throw new Error("SQL is required");
   if (Buffer.byteLength(sql) > MAX_SQL_BYTES)
     throw new Error("SQL exceeds the 100 KB limit");
   const masked = maskSql(sql);
   const trimmed = masked.trim().replace(/;\s*$/, "");
-  if (!/^(select|with)\b/i.test(trimmed))
+  if (!/^(select|with|values)\b/i.test(trimmed))
     throw new Error("Only SELECT queries are allowed");
   if (trimmed.includes(";"))
     throw new Error("Exactly one SQL statement is allowed");
   const forbidden =
-    /\b(insert|update|delete|merge|create|alter|drop|truncate|copy|call|do|grant|revoke|set|reset|vacuum|analyze|refresh|lock|listen|notify|prepare|execute|deallocate|discard|reindex|cluster|load|into)\b/i;
+    /\b(insert|update|delete|merge|create|alter|drop|truncate|copy|call|do|grant|revoke|set|reset|vacuum|analyze|refresh|lock|listen|notify|prepare|execute|deallocate|discard|reindex|cluster|load|into|attach|detach|pragma|begin|commit|rollback|savepoint|release)\b/i;
   if (forbidden.test(trimmed))
     throw new Error("SQL contains a forbidden operation");
   if (
-    /\b(pg_read_file|pg_read_binary_file|pg_ls_dir|pg_stat_file|lo_import|lo_export|dblink|pg_sleep|set_config)\s*\(/i.test(
+    /\b(pg_read_file|pg_read_binary_file|pg_ls_dir|pg_stat_file|lo_import|lo_export|dblink|pg_sleep|set_config|load_extension|readfile|writefile|edit|fts3_tokenizer|pragma_[a-z0-9_]+)\s*\(/i.test(
       trimmed,
     )
   ) {
     throw new Error("SQL contains a forbidden function");
   }
-  if (/\b(pg_catalog|information_schema|public)\s*\./i.test(trimmed)) {
+  if (
+    /\b(pg_catalog|information_schema|public|sqlite_master|sqlite_schema|sqlite_temp_master|sqlite_temp_schema)\s*\./i.test(
+      trimmed,
+    )
+  ) {
     throw new Error("Only approved analysis datasets may be queried");
   }
   if (!Array.isArray(datasetIds) || datasetIds.length === 0) {
@@ -220,25 +255,15 @@ export function __validateAnalysisSql(
       );
     }
   }
-  const relationByDataset: Record<string, string[]> = {
-    transactions: [
-      "vision_analysis.transactions_v1",
-      "vision_analysis.transactions_v2",
-    ],
-    accounts: ["vision_analysis.accounts_v1"],
-    holdings: ["vision_analysis.holding_events_v1"],
-    "cash-flows": [
-      "vision_analysis.cash_flows_v1",
-      "vision_analysis.cash_flows_v2",
-    ],
-  };
   const unknownDataset = datasetIds.find(
-    (id) => !Object.hasOwn(relationByDataset, id),
+    (id) => !Object.hasOwn(RELATIONS_BY_DATASET, id),
   );
   if (unknownDataset) {
     throw new Error(`Dataset is not approved: ${unknownDataset}`);
   }
-  const expected = new Set(datasetIds.flatMap((id) => relationByDataset[id]));
+  const expected = new Set(
+    datasetIds.flatMap((id) => RELATIONS_BY_DATASET[id] ?? []),
+  );
   if (
     relations.some(
       (relation) => !cteNames.has(relation) && !expected.has(relation),
@@ -246,26 +271,289 @@ export function __validateAnalysisSql(
   ) {
     throw new Error("SQL references a dataset not declared by the analysis");
   }
-  return sql.trim().replace(/;\s*$/, "");
+  return { sql: sql.trim().replace(/;\s*$/, ""), masked };
 }
 
-function safeValue(value: unknown): unknown {
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === "bigint") return value.toString();
-  if (Buffer.isBuffer(value)) return undefined;
-  return value;
+export function __validateAnalysisSql(
+  sql: unknown,
+  datasetIds: string[] = [],
+): string {
+  return checkAnalysisSql(sql, datasetIds).sql;
 }
 
-function postgresType(oid: number) {
-  if (oid === 16) return "boolean";
-  if ([20, 21, 23].includes(oid)) return "integer";
-  if ([1005, 1007, 1016].includes(oid)) return "integer[]";
-  if ([700, 701, 1700].includes(oid)) return "decimal";
-  if ([1009, 1015].includes(oid)) return "string[]";
-  if (oid === 1082) return "date";
-  if ([1114, 1184].includes(oid)) return "datetime";
-  if ([114, 3802].includes(oid)) return "json";
+/**
+ * The views of the declared datasets that the statement names. A view can
+ * only be read by naming it, so a view the masked text never mentions is
+ * not copied; one named in a comment or a string is not a reference.
+ */
+function referencedViews(masked: string, datasetIds: string[]): string[] {
+  const views = new Set<string>();
+  for (const relation of datasetIds.flatMap(
+    (id) => RELATIONS_BY_DATASET[id] ?? [],
+  )) {
+    const view = relation.slice("vision_analysis.".length);
+    if (new RegExp(`(?<![A-Za-z0-9_$])${view}(?![A-Za-z0-9_$])`, "i").test(masked))
+      views.add(view);
+  }
+  return [...views];
+}
+
+function quoteIdent(name: string): string {
+  return `"${name.replaceAll('"', '""')}"`;
+}
+
+function columnKind(column: string, declaredType: string): SandboxKind | null {
+  const type = declaredType.trim().toUpperCase();
+  if (type === "") return null;
+  if (type === "BOOLEAN") return "boolean";
+  if (type === "BIGINT") return "bigint";
+  if (type.startsWith("DECIMAL_TEXT")) return "decimal";
+  if (type === "DATE_TEXT") return "date";
+  if (type === "TIMESTAMPTZ_TEXT") return "datetime";
+  if (type === "JSON_TEXT" || type === "JSONB_TEXT") return "json";
+  if (type === "TEXT_ARRAY")
+    return INTEGER_ARRAY_COLUMNS.has(column) ? "integer[]" : "string[]";
+  if (type.includes("INT")) return "integer";
+  if (type === "REAL") return "decimal";
+  // UUID_TEXT, TEXT and anything else the views add later.
   return "string";
+}
+
+/**
+ * The alias hint that reads a column's stored value unchanged: integers and
+ * booleans as exact decimal text (the copy's INTEGER and NUMERIC affinity
+ * stores them as integers again), date, timestamp and JSON text as text.
+ */
+function storedValueHint(declaredType: string): string {
+  const type = declaredType.trim().toUpperCase();
+  if (type === "BOOLEAN" || type.includes("INT")) return "::bigint";
+  if (
+    ["DATE_TEXT", "TIMESTAMPTZ_TEXT", "JSON_TEXT", "JSONB_TEXT", "TEXT_ARRAY"].includes(type)
+  )
+    return "::text";
+  return "";
+}
+
+async function copyView(client: PgPoolClient, view: string): Promise<SandboxTable> {
+  const source = `vision_analysis_${view}`;
+  const info = await client.query<{ name: string; type: string }>(
+    "SELECT name, type FROM pragma_table_info($1) ORDER BY cid",
+    [source],
+  );
+  if (info.rows.length === 0)
+    throw Object.assign(new Error(`Analysis view ${source} is missing`), {
+      code: "XX000",
+    });
+  const computed = COMPUTED_COLUMN_TYPES[view] ?? {};
+  const columns: SandboxColumn[] = info.rows.map(({ name, type }) => {
+    const declaredType = type || computed[name] || "";
+    return { name, declaredType, kind: columnKind(name, declaredType) };
+  });
+  const list = columns
+    .map(
+      ({ name, declaredType }) =>
+        `${quoteIdent(name)} AS ${quoteIdent(`${name}${storedValueHint(declaredType)}`)}`,
+    )
+    .join(", ");
+  const result = await client.query(`SELECT ${list} FROM ${quoteIdent(source)}`);
+  return {
+    view,
+    columns,
+    // The hints give text, integers and floats, and NULL.
+    rows: result.rows.map((row) =>
+      columns.map(({ name }) => (row[name] ?? null) as SandboxValue),
+    ),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The sandbox slot: one worker at a time
+// ---------------------------------------------------------------------------
+
+interface Job {
+  requestId: string;
+  /** Set by cancelAnalysisQuery(). */
+  cancelled: Error | null;
+  /** While the worker runs: fail the request and terminate the worker. */
+  abort: ((error: Error) => void) | null;
+}
+
+interface Waiter {
+  job: Job;
+  grant: () => void;
+  refuse: (error: Error) => void;
+}
+
+let slotHeld = false;
+const waiters: Waiter[] = [];
+const jobs = new Map<string, Job>();
+const runningWorkers = new Set<Worker>();
+let statementTimeoutMs = STATEMENT_TIMEOUT_MS;
+
+function cancelledError(message: string) {
+  return Object.assign(new Error(message), { code: "57014" });
+}
+
+const timeoutError = () =>
+  cancelledError("canceling statement due to statement timeout");
+const userCancelError = () =>
+  cancelledError("canceling statement due to user request");
+
+function acquireSlot(job: Job): Promise<void> {
+  if (!slotHeld) {
+    slotHeld = true;
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      waiter.refuse(
+        cancelledError(
+          "canceling statement due to statement timeout: another analysis is still running",
+        ),
+      );
+    }, QUEUE_TIMEOUT_MS);
+    timer.unref();
+    const waiter: Waiter = {
+      job,
+      grant: () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      refuse: (error) => {
+        clearTimeout(timer);
+        const index = waiters.indexOf(waiter);
+        if (index >= 0) waiters.splice(index, 1);
+        reject(error);
+      },
+    };
+    waiters.push(waiter);
+  });
+}
+
+function releaseSlot(): void {
+  const next = waiters.shift();
+  if (next) next.grant();
+  else slotHeld = false;
+}
+
+/**
+ * Where the worker module is. From source (Bun or Node) it sits next to
+ * this file. A compiled backend (`bun build --compile`, which must list it
+ * as a second entrypoint) embeds it at the same path under the bundle root
+ * that holds the main entrypoint: `/$bunfs/root/services/...`.
+ */
+function sandboxWorkerEntry(): string | URL {
+  const bunMain = (globalThis as { Bun?: { main?: unknown } }).Bun?.main;
+  if (typeof bunMain === "string" && bunMain.startsWith("/$bunfs/"))
+    return path.posix.join(
+      path.posix.dirname(bunMain),
+      "services",
+      "analysisSandboxWorker.js",
+    );
+  return new URL("./analysisSandboxWorker.ts", import.meta.url);
+}
+
+type SandboxResultMessage = Extract<SandboxMessage, { kind: "result" }>;
+
+function workerFailure(error: Error): Error {
+  if ((error as { code?: unknown }).code === "ERR_WORKER_OUT_OF_MEMORY")
+    return Object.assign(new Error("out of memory"), { code: "53200" });
+  return Object.assign(
+    new Error(`The analysis sandbox failed: ${error.message}`),
+    { code: "XX000" },
+  );
+}
+
+function startSandbox(
+  job: Job,
+  request: SandboxRequest,
+): { result: Promise<SandboxResultMessage>; exited: Promise<void> } {
+  const worker = new Worker(sandboxWorkerEntry(), {
+    workerData: request,
+    // The sandbox gets no environment: nothing in it names the database file.
+    env: {},
+    resourceLimits: { maxOldGenerationSizeMb: SANDBOX_HEAP_MB },
+  });
+  runningWorkers.add(worker);
+  const exited = new Promise<void>((resolve) => {
+    worker.once("exit", () => {
+      runningWorkers.delete(worker);
+      resolve();
+    });
+  });
+  const result = new Promise<SandboxResultMessage>((resolve, reject) => {
+    let settled = false;
+    let timer = setTimeout(() => {
+      stop(
+        cancelledError(
+          "canceling statement due to statement timeout: loading the analysis data took too long",
+        ),
+      );
+    }, LOAD_TIMEOUT_MS);
+    const settle = () => {
+      settled = true;
+      clearTimeout(timer);
+      job.abort = null;
+    };
+    const stop = (error: Error) => {
+      if (settled) return;
+      settle();
+      reject(error);
+      void worker.terminate();
+    };
+    job.abort = stop;
+    worker.on("message", (message: SandboxMessage) => {
+      if (settled) return;
+      if (message.kind === "ready") {
+        clearTimeout(timer);
+        timer = setTimeout(
+          () => stop(timeoutError()),
+          request.statementTimeoutMs + TERMINATE_GRACE_MS,
+        );
+        return;
+      }
+      settle();
+      if (message.kind === "result") resolve(message);
+      else
+        reject(
+          Object.assign(
+            new Error(message.message),
+            message.code ? { code: message.code } : {},
+          ),
+        );
+      void worker.terminate();
+    });
+    worker.on("error", (error: Error) => stop(workerFailure(error)));
+    worker.once("exit", (exitCode: number) =>
+      stop(
+        Object.assign(
+          new Error(`The analysis sandbox stopped unexpectedly (exit code ${exitCode})`),
+          { code: "XX000" },
+        ),
+      ),
+    );
+  });
+  return { result, exited };
+}
+
+/** Test hook: a shorter statement limit, or null for the 5 s default. */
+export function __setAnalysisStatementTimeout(ms: number | null): void {
+  statementTimeoutMs = ms ?? STATEMENT_TIMEOUT_MS;
+}
+
+function checkParameters(values: unknown): SandboxValue[] {
+  if (
+    !Array.isArray(values) ||
+    values.some(
+      (value) =>
+        value !== null &&
+        !["string", "number", "boolean"].includes(typeof value),
+    )
+  ) {
+    throw new Error("SQL parameters must be scalar values");
+  }
+  // Booleans bind as 1/0, the form SQLite stores them in.
+  return values.map((value) => toSqlParam(value) as SandboxValue);
 }
 
 export async function executeAnalysisSql({
@@ -280,56 +568,43 @@ export async function executeAnalysisSql({
     throw new Error("A valid request ID is required");
   // Validated non-empty above; `|| ""` only narrows the type.
   const activeId = requestId || "";
-  if (
-    !Array.isArray(values) ||
-    values.some(
-      (value) =>
-        value !== null &&
-        !["string", "number", "boolean"].includes(typeof value),
-    )
-  ) {
-    throw new Error("SQL parameters must be scalar values");
-  }
-  const checkedSql = __validateAnalysisSql(sql, datasetIds);
+  const params = checkParameters(values);
+  const checked = checkAnalysisSql(sql, datasetIds);
+  const views = referencedViews(checked.masked, datasetIds);
   const pageLimit = Math.min(
     Math.max(nonZeroOr(limit, DEFAULT_ROWS), 1),
     MAX_ROWS,
   );
   const pageOffset = Math.max(nanToZero(offset), 0);
-  const client = await pool.connect();
-  const startedAt = new Date().toISOString();
-  // Widened: assigned in the catch block, which TS does not carry to `finally`.
-  let rollbackFailed = false as boolean;
+  const job: Job = { requestId: activeId, cancelled: null, abort: null };
+  jobs.set(activeId, job);
+  let exited: Promise<void> | null = null;
   try {
-    await client.query("BEGIN READ ONLY");
-    await client.query("SET LOCAL statement_timeout = '5000ms'");
-    await client.query("SET LOCAL lock_timeout = '1000ms'");
-    await client.query(
-      "SET LOCAL idle_in_transaction_session_timeout = '5000ms'",
-    );
-    await client.query("SET LOCAL work_mem = '8MB'");
-    const pidResult = await client.query("SELECT pg_backend_pid() AS pid");
-    const [pidRow] = checkRows(backendPidRowSchema, pidResult.rows);
-    if (!pidRow) throw new Error("pg_backend_pid() returned no row");
-    const pid = pidRow.pid;
-    activeQueries.set(activeId, { pid });
-    const wrapped = `SELECT * FROM (${checkedSql}) AS vision_analysis_result LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
-    const result: {
-      rows: Record<string, unknown>[];
-      fields?: Array<{ name: string; dataTypeID: number }>;
-    } = await client.query({
-      text: wrapped,
-      values: [...values, pageLimit + 1, pageOffset],
-      types: resultTypes,
+    await acquireSlot(job);
+  } catch (error) {
+    if (jobs.get(activeId) === job) jobs.delete(activeId);
+    throw error;
+  }
+  try {
+    const startedAt = new Date().toISOString();
+    const tables = await withReadSnapshot(async (client) => {
+      const copies: SandboxTable[] = [];
+      for (const view of views) copies.push(await copyView(client, view));
+      return copies;
     });
-    const hasMore = result.rows.length > pageLimit;
-    const rows = result.rows
-      .slice(0, pageLimit)
-      .map((row) =>
-        Object.fromEntries(
-          Object.entries(row).map(([key, value]) => [key, safeValue(value)]),
-        ),
-      );
+    if (job.cancelled) throw job.cancelled;
+    const sandbox = startSandbox(job, {
+      sql: checked.sql,
+      params,
+      limit: pageLimit,
+      offset: pageOffset,
+      statementTimeoutMs,
+      startedAt,
+      tables,
+    });
+    exited = sandbox.exited;
+    const result = await sandbox.result;
+    const rows = result.rows;
     let byteLength = Buffer.byteLength(JSON.stringify(rows));
     let byteTruncated = false;
     while (rows.length > 0 && byteLength > MAX_RESULT_BYTES) {
@@ -337,17 +612,13 @@ export async function executeAnalysisSql({
       byteTruncated = true;
       byteLength = Buffer.byteLength(JSON.stringify(rows));
     }
-    await client.query("COMMIT");
     return {
       requestId,
       startedAt,
       completedAt: new Date().toISOString(),
-      executor: "postgresql-role-v1",
+      executor: EXECUTOR,
       rows,
-      columns: (result.fields ?? []).map((field) => ({
-        id: field.name,
-        type: postgresType(field.dataTypeID),
-      })),
+      columns: result.columns,
       window: byteTruncated
         ? {
             kind: "truncated",
@@ -359,38 +630,56 @@ export async function executeAnalysisSql({
             kind: "page",
             offset: pageOffset,
             limit: pageLimit,
-            hasMore,
+            hasMore: result.hasMore,
             returnedRows: rows.length,
           },
       byteLength,
     };
-  } catch (error) {
-    try {
-      await client.query("ROLLBACK");
-    } catch {
-      rollbackFailed = true;
-    }
-    throw error;
   } finally {
-    activeQueries.delete(activeId);
-    client.release(rollbackFailed || undefined);
+    if (jobs.get(activeId) === job) jobs.delete(activeId);
+    // The slot frees when the thread has ended, so two sandboxes never run at once.
+    if (exited) void exited.then(releaseSlot);
+    else releaseSlot();
   }
 }
 
-export async function cancelAnalysisQuery(requestId: string) {
-  const active = activeQueries.get(requestId);
-  if (!active) return { cancelled: false, reason: "not-running" };
-  // PostgreSQL permits a role to cancel its own sessions. Use the same
-  // restricted pool so cancellation does not require pg_signal_backend on the
-  // wider application role.
-  const result = await cancellationPool.query(
-    "SELECT pg_cancel_backend($1) AS cancelled",
-    [active.pid],
-  );
-  const [row] = checkRows(cancelBackendRowSchema, result.rows);
-  return { cancelled: row?.cancelled === true };
+export function cancelAnalysisQuery(
+  requestId: string,
+): Promise<{ cancelled: boolean; reason?: string }> {
+  const job = jobs.get(requestId);
+  if (!job) return Promise.resolve({ cancelled: false, reason: "not-running" });
+  const error = userCancelError();
+  job.cancelled = error;
+  const waiter = waiters.find((entry) => entry.job === job);
+  if (waiter) waiter.refuse(error);
+  job.abort?.(error);
+  return Promise.resolve({ cancelled: true });
 }
 
+/** Cancel queued and running analyses and wait (up to 1 s) for the worker to end. */
 export async function closeAnalysisPool() {
-  await Promise.all([pool.end(), cancellationPool.end()]);
+  for (const waiter of [...waiters]) waiter.refuse(userCancelError());
+  for (const job of jobs.values()) {
+    // A job still copying its views stops before it starts a worker.
+    job.cancelled = userCancelError();
+    job.abort?.(job.cancelled);
+  }
+  const ended = Promise.all(
+    [...runningWorkers].map(
+      (worker) =>
+        new Promise<void>((resolve) => {
+          worker.once("exit", () => resolve());
+          void worker.terminate();
+        }),
+    ),
+  );
+  let timer: NodeJS.Timeout | undefined;
+  await Promise.race([
+    ended,
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, 1_000);
+      timer.unref();
+    }),
+  ]);
+  clearTimeout(timer);
 }

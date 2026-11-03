@@ -98,10 +98,10 @@ export async function createDocument(
   input: ResearchDocumentInput,
   passages: ResearchPassageInput[],
 ): Promise<ResearchDocumentRow> {
+  // The duplicate check, the version read and the inserts share one
+  // BEGIN IMMEDIATE transaction on the single writer, which serializes
+  // concurrent uploads of the same source as the advisory lock did.
   return withTransaction(async () => {
-    await sql`SELECT pg_advisory_xact_lock(hashtext(${`ai-research-document:${input.sourceName}`}))`.execute(
-      db,
-    );
     const existing = await checkedRow(
       researchDocumentRowSchema,
       selectDocuments()
@@ -146,7 +146,7 @@ export async function createDocument(
           section: passage.section ?? null,
           content: passage.content,
           embedding_json: passage.embedding
-            ? sql<Json>`${JSON.stringify(passage.embedding)}::jsonb`
+            ? sql<Json>`vision_jsonb(${JSON.stringify(passage.embedding)})`
             : null,
         })
         .execute();
@@ -168,13 +168,16 @@ export async function keywordSearch(
   search: string,
   limit: number,
 ): Promise<ScoredResearchPassageRow[]> {
-  const tsquery = sql`websearch_to_tsquery('simple',${search})`;
-  // ts_rank_cd() returns REAL, which pg parses to a number.
+  // The former generated column search_vector was
+  // to_tsvector('simple', coalesce(section, '') || ' ' || content);
+  // vision_fts_match/vision_fts_rank evaluate websearch_to_tsquery('simple')
+  // and ts_rank_cd() over the same text. The rank is a REAL (a number).
+  const document = sql`coalesce(p.section, '') || ' ' || p.content`;
   return checkedRows(
     scoredResearchPassageRowSchema,
     selectReadyPassages()
-      .select(sql<number>`ts_rank_cd(p.search_vector, ${tsquery})`.as("score"))
-      .where(sql<boolean>`p.search_vector @@ ${tsquery}`)
+      .select(sql<number>`vision_fts_rank(${document}, ${search})`.as("score"))
+      .where(sql<boolean>`vision_fts_match(${document}, ${search})`)
       .orderBy("score", "desc")
       .orderBy("d.updated_at", "desc")
       .orderBy("p.ordinal")

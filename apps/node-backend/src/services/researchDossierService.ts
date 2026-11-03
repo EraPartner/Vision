@@ -126,8 +126,9 @@ interface ResolvedLink {
   live: LiveLink;
 }
 
+/** Canonical jsonb text of a JSON-serialisable value. */
 function jsonb(value: unknown) {
-  return sql<Json>`${JSON.stringify(value)}::jsonb`;
+  return sql<Json>`vision_jsonb(${JSON.stringify(value)})`;
 }
 
 function parse<T>(schema: z.ZodType<T>, input: unknown): T {
@@ -395,14 +396,18 @@ async function hydrate(row: DossierRow) {
   };
 }
 
-async function getRow(id: string, lock = false): Promise<DossierRow> {
-  const builder = db
-    .selectFrom("research_dossiers")
-    .selectAll()
-    .where("id", "=", parse(uuid, id));
+/**
+ * Read a dossier. Inside withTransaction() the read runs on the single writer
+ * after BEGIN IMMEDIATE, so nothing else can change the row before the
+ * transaction's own UPDATE (the former row lock).
+ */
+async function getRow(id: string): Promise<DossierRow> {
   const row = await checkedRow(
     researchDossierRowSchema,
-    lock ? builder.forUpdate() : builder,
+    db
+      .selectFrom("research_dossiers")
+      .selectAll()
+      .where("id", "=", parse(uuid, id)),
   );
   if (!row)
     throw new NotFoundError("Research dossier not found", {
@@ -446,7 +451,7 @@ export async function listResearchDossiers({
       intTotalRowSchema,
       db
         .selectFrom("research_dossiers")
-        .select(sql<number>`count(*)::int`.as("total")),
+        .select(sql<number>`count(*)`.as("total")),
     ),
   ]);
   // An aggregate without GROUP BY always returns exactly one row.
@@ -507,7 +512,7 @@ async function writeVersion(
 ) {
   parse(versionNumber, expectedVersion);
   return withTransaction(async () => {
-    const current = await getRow(id, true);
+    const current = await getRow(id);
     if (current.version !== expectedVersion) {
       throw new ConflictError("Dossier version changed; reload before saving", {
         code: "DOSSIER_VERSION_CONFLICT",
@@ -515,7 +520,7 @@ async function writeVersion(
     }
     await validateDocuments(content, current.content_json);
     const links = await resolvedLinks(content);
-    // The row is locked above, so the UPDATE matches it.
+    // The transaction read the row above, so the UPDATE matches it.
     const updated = await checkedRow(
       researchDossierRowSchema,
       db

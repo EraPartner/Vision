@@ -206,6 +206,9 @@ export interface SavedAnalysis {
     lastResult: AnalysisResult | null;
     createdAt: string;
     updatedAt: string;
+    /** Custom SQL written for PostgreSQL before Vision moved to SQLite; it runs once saved again. */
+    needsReview: boolean;
+    reviewReason: "postgresql-custom-sql" | null;
 }
 
 export const getAnalysisCatalog = () =>

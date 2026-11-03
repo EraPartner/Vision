@@ -1,8 +1,9 @@
 /**
- * Real-Postgres coverage for the checked reads (ADR-193) of the AI
- * repositories, saved-analysis versions, monitor notifications and the admin database stats. Each call
- * goes through its row schema, so a schema that is wrong for what pg really
- * returns fails here with a RowContractError.
+ * Real-database coverage for the checked reads (ADR-193) of the AI
+ * repositories, saved-analysis versions, monitor notifications and the admin
+ * database stats. Each call goes through its row schema, so a schema that is
+ * wrong for what the SQLite driver really returns fails here with a
+ * RowContractError.
  */
 import { bodyAt } from "./helpers/responseBody.ts";
 import { randomUUID } from "node:crypto";
@@ -17,7 +18,6 @@ import {
 } from "./setup/db.ts";
 import { routeAgent } from "./helpers/routeApp.ts";
 import { closePool } from "../src/database/connection.ts";
-import { ensureAnalysisRole } from "../src/database/analysisRoleBootstrap.ts";
 import {
   cancelAnalysisQuery,
   closeAnalysisPool,
@@ -61,22 +61,10 @@ function onCleanup(sql: string, ...params: unknown[]) {
 }
 
 describe.skipIf(!hasTestDatabase())(
-  "AI and analysis row contracts (real Postgres)",
+  "AI and analysis row contracts (real database)",
   () => {
     beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
       await acquireDbSuiteLock();
-      if (process.env.VISION_TEST_DB_ISOLATED === "1") {
-        expect(
-          (
-            await ensureAnalysisRole({
-              databaseUrl: must(process.env.DATABASE_URL, "process.env.DATABASE_URL"),
-              analysisUrl: process.env.DATABASE_URL_ANALYSIS,
-              migrationsUrl: process.env.DATABASE_URL,
-            })
-          ).status,
-        ).not.toBe("degraded");
-      }
     }, 180_000);
 
     afterEach(async () => {
@@ -321,7 +309,9 @@ describe.skipIf(!hasTestDatabase())(
       await deleteAnalysisMonitor(monitor.id);
     });
 
-    it.skipIf(process.env.VISION_TEST_DB_ISOLATED !== "1")(
+    // Every test file has its own database, and the analysis sandbox needs
+    // no database role, so these run everywhere (ADR-263).
+    it(
       "reads saved analyses through run, versions, restore and delete",
       async () => {
         const querySpec = (sql: string) => ({
@@ -336,7 +326,7 @@ describe.skipIf(!hasTestDatabase())(
           name: "Row contract analysis",
           workspace: "budgeting",
           querySpec: querySpec(
-            "SELECT count(*)::numeric AS amount FROM vision_analysis.transactions_v1 WHERE false",
+            "SELECT count(*) AS amount FROM vision_analysis.transactions_v1 WHERE false",
           ),
           parameters: {},
         });
@@ -352,7 +342,7 @@ describe.skipIf(!hasTestDatabase())(
         await updateSavedAnalysis(id, {
           expectedVersion: 1,
           querySpec: querySpec(
-            "SELECT 2::numeric AS amount FROM vision_analysis.transactions_v1 WHERE false",
+            "SELECT 2 AS amount FROM vision_analysis.transactions_v1 WHERE false",
           ),
         });
         const versions = await listSavedAnalysisVersions(id);
@@ -367,17 +357,21 @@ describe.skipIf(!hasTestDatabase())(
       },
     );
 
-    it.skipIf(process.env.VISION_TEST_DB_ISOLATED !== "1")(
-      "cancels a running analysis query through pg_cancel_backend",
+    it(
+      "cancels a running analysis by terminating its sandbox worker",
       async () => {
         const requestId = `row-contracts-${randomUUID()}`;
+        const started = Date.now();
         const running = executeAnalysisSql({
           requestId,
-          // A CPU-bound cross join that would outlast the 5 s statement timeout.
-          sql: `WITH s AS (SELECT generate_series(1, 50000) AS n)
-                SELECT count(*)::numeric AS amount
-                  FROM s AS a CROSS JOIN s AS b
-                  LEFT JOIN vision_analysis.transactions_v1 AS t ON false`,
+          // A CPU-bound cross join that would outlast the 5 s statement
+          // limit; the Vision function call per row lets the worker stop.
+          sql: `WITH s AS (VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10))
+                SELECT count(*) AS amount
+                  FROM s AS a, s AS b, s AS c, s AS d, s AS e, s AS f, s AS g, s AS h
+                  LEFT JOIN vision_analysis.transactions_v1 AS t ON false
+                 WHERE dec_add(a.column1, b.column1, c.column1, d.column1,
+                               e.column1, f.column1, g.column1, h.column1) IS NOT NULL`,
           datasetIds: ["transactions"],
         });
         const outcome = running.then(
@@ -396,6 +390,14 @@ describe.skipIf(!hasTestDatabase())(
         }
         expect(cancelled).toEqual({ cancelled: true });
         expect(await outcome).toBe("57014");
+        // The worker ended, so the next analysis gets the sandbox at once.
+        const next = await executeAnalysisSql({
+          requestId: `row-contracts-${randomUUID()}`,
+          sql: "SELECT count(*) AS n FROM vision_analysis.transactions_v1",
+          datasetIds: ["transactions"],
+        });
+        expect(next.rows).toEqual([{ n: 0 }]);
+        expect(Date.now() - started).toBeLessThan(4_000);
       },
     );
 

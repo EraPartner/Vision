@@ -54,6 +54,7 @@ import type {
 } from "./analysisFormulaEngine.ts";
 import { nonZeroOr } from "../lib/math.ts";
 import { errorCode, errorMessage } from "../lib/errors.ts";
+import { APP_TIMEZONE, todayAppDateString } from "../lib/timezone.ts";
 
 interface StandardParameterValues {
   currency?: string;
@@ -93,7 +94,19 @@ export type SavedAnalysisQuerySpec =
         nullable?: boolean;
       }>;
       visualOrigin?: VisualAnalysisPlan;
+      /**
+       * The SQL's dialect; omitted means SQLite. The API never sends it, so
+       * a save through the API marks the SQL as SQLite. An internal re-save
+       * of a stored definition passes the stored dialect to keep it.
+       */
+      dialect?: SqlDialect | undefined;
     };
+
+/** "postgresql": custom SQL saved before Vision moved to SQLite (ADR-263). */
+export type SqlDialect = "postgresql" | "sqlite";
+
+/** Error code for running a saved analysis whose custom SQL needs review. */
+export const ANALYSIS_SQL_NEEDS_REVIEW = "ANALYSIS_SQL_NEEDS_REVIEW";
 
 export interface BuildDefinitionInput {
   definitionId: string;
@@ -184,7 +197,8 @@ function standardParameters(values: StandardParameterValues = {}) {
       label: "Reporting timezone",
       type: "string",
       required: true,
-      defaultValue: values.timezone || "Europe/Helsinki",
+      // Datasets bucket calendar days in APP_TIMEZONE, so label them with it.
+      defaultValue: values.timezone || APP_TIMEZONE,
       sensitive: false,
     },
     {
@@ -200,7 +214,8 @@ function standardParameters(values: StandardParameterValues = {}) {
       label: "To",
       type: "date",
       required: true,
-      defaultValue: values.date_to || new Date().toISOString().slice(0, 10),
+      // App-zone today: the UTC day is still yesterday after local midnight.
+      defaultValue: values.date_to || todayAppDateString(),
       sensitive: false,
     },
   ];
@@ -347,7 +362,7 @@ function buildDefinition({
       : undefined;
     source = {
       kind: "custom-sql",
-      dialect: "postgresql",
+      dialect: querySpec.dialect ?? "sqlite",
       text: querySpec.sql,
       datasetIds,
       parameterBindings: [],
@@ -408,7 +423,25 @@ function buildDefinition({
   return analysisDefinitionSchema.parse(definition);
 }
 
+/**
+ * Custom SQL stored without the SQLite dialect was written for PostgreSQL.
+ * It is kept unchanged but not run until the user saves a SQLite version
+ * (ADR-263). Visual analyses compile from their plan and never need review.
+ */
+function sqlReviewReason(
+  definition: AnalysisDefinition,
+): "postgresql-custom-sql" | null {
+  // A stored document: read the fields without trusting their types.
+  const source: unknown = definition.source;
+  if (typeof source !== "object" || source === null) return null;
+  if (!("kind" in source) || source.kind !== "custom-sql") return null;
+  return "dialect" in source && source.dialect === "sqlite"
+    ? null
+    : "postgresql-custom-sql";
+}
+
 function mapSaved(row: SavedAnalysisRow) {
+  const reviewReason = sqlReviewReason(row.definition_json);
   return {
     id: row.id,
     definitionId: row.definition_id,
@@ -426,6 +459,9 @@ function mapSaved(row: SavedAnalysisRow) {
     updatedAt: row.updated_at,
     definition: row.definition_json,
     lastResult: row.result_json ?? null,
+    /** True while custom SQL written for PostgreSQL waits for a SQLite version. */
+    needsReview: reviewReason !== null,
+    reviewReason,
   };
 }
 
@@ -473,7 +509,7 @@ function resolveFormulaModel(
 }
 
 function jsonb(value: unknown) {
-  return sql<Json>`${JSON.stringify(value)}::jsonb`;
+  return sql<Json>`vision_jsonb(${JSON.stringify(value)})`;
 }
 
 function selectSaved() {
@@ -578,12 +614,14 @@ export async function createSavedAnalysis(input: SavedAnalysisInput) {
   return getSavedAnalysis(id);
 }
 
+/**
+ * The row an update or restore builds on. Callers read it inside
+ * withTransaction(), whose BEGIN IMMEDIATE holds the database's single write
+ * lock, so no other writer can change it before they commit (PostgreSQL
+ * needed FOR UPDATE).
+ */
 function lockSaved(id: string) {
-  return db
-    .selectFrom("saved_analyses")
-    .selectAll()
-    .where("id", "=", id)
-    .forUpdate();
+  return db.selectFrom("saved_analyses").selectAll().where("id", "=", id);
 }
 
 export async function updateSavedAnalysis(
@@ -843,6 +881,13 @@ export async function runSavedAnalysis(
   const saved = await getSavedAnalysis(id);
   if (!saved)
     throw Object.assign(new Error("Saved analysis not found"), { status: 404 });
+  if (saved.needsReview)
+    throw Object.assign(
+      new Error(
+        "This analysis has custom SQL written for PostgreSQL. Review the SQL and save it as SQLite SQL before running it.",
+      ),
+      { status: 409, code: ANALYSIS_SQL_NEEDS_REVIEW },
+    );
   const runId = randomUUID();
   await withTransaction(async () => {
     await db
@@ -911,7 +956,7 @@ export async function runSavedAnalysis(
     const updated = await getSavedAnalysis(id);
     return options.includeRunId ? { saved: updated, runId } : updated;
   } catch (caught) {
-    // Execution failures are pg or service Errors, optionally with a SQLSTATE.
+    // Execution failures are sandbox or service Errors, optionally with a SQLSTATE.
     const cancelled = errorCode(caught) === "57014";
     const errorJson = {
       code: cancelled ? "cancelled" : "execution-failed",
@@ -1017,7 +1062,7 @@ export async function restoreSavedAnalysisVersion(
           state.sourceReferences ?? locked.source_references_json,
         ),
         refresh_mode: state.refreshMode || locked.refresh_mode,
-        updated_at: sql<Date>`NOW()`,
+        updated_at: sql<Date>`now()`,
       })
       .where("id", "=", id)
       .execute();

@@ -161,27 +161,15 @@ export async function executeAnalysisPivot(
   if (!financial) {
     const fields = [...new Set([...rows, ...columns, ...partitions])];
     const quote = (id: string) => `"${id.replaceAll('"', '""')}"`;
-    const sqlTypes: Record<string, string> = {
-      date: "date",
-      datetime: "timestamptz",
-      integer: "bigint",
-      decimal: "numeric",
-      boolean: "boolean",
-    };
-    // Explicit types prevent earlier all-NULL UNION branches resolving dates/numbers as text.
-    const nullType = (id: string) => {
-      const column = compiledLevels
-        .flatMap((level) => level.compiled.columns)
-        .find((column) => column.id === id);
-      return (column && sqlTypes[column.type]) || "text";
-    };
+    // SQLite has no typed NULL: an all-NULL branch keeps each value's own
+    // type, and the levels read their column types from the compiled spec.
     const sql = compiledLevels
       .map((level) => {
         const selected = [
           ...fields.map((id) =>
             level.groups.includes(id)
               ? quote(id)
-              : `NULL::${nullType(id)} AS ${quote(id)}`,
+              : `NULL AS ${quote(id)}`,
           ),
           ...measures.map(quote),
           `${level.rowDepth} AS "__row_depth"`,
@@ -263,7 +251,7 @@ export async function executeAnalysisPivot(
       maxRows: financial ? 4000 : 1000,
       snapshot: financial
         ? "one canonical source snapshot"
-        : "one PostgreSQL statement",
+        : "one SQLite statement",
     },
   };
 }

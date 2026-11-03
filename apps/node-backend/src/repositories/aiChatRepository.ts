@@ -50,7 +50,7 @@ export class ConversationDeletedError extends Error {
 
   /**
    * @param conversationId UUID of the deleted conversation.
-   * @param cause The underlying pg FK-violation error.
+   * @param cause The underlying foreign-key violation (SQLSTATE 23503).
    */
   constructor(conversationId: string, cause?: unknown) {
     super(
@@ -64,11 +64,13 @@ export class ConversationDeletedError extends Error {
 }
 
 /**
- * @param value Arbitrary JSON-serialisable value.
+ * @param value Arbitrary JSON-serialisable value, stored as canonical jsonb
+ *   text; a string becomes a JSON string, as the PostgreSQL jsonb cast of its
+ *   JSON.stringify() text did.
  */
 function jsonb(value: unknown) {
   if (value === undefined || value === null) return null;
-  return sql<Json>`${JSON.stringify(value)}::jsonb`;
+  return sql<Json>`vision_jsonb(${JSON.stringify(value)})`;
 }
 
 const aiChatRepository = {
@@ -90,7 +92,7 @@ const aiChatRepository = {
         intTotalRowSchema,
         db
           .selectFrom("ai_conversations")
-          .select(sql<number>`COUNT(*)::int`.as("total")),
+          .select(sql<number>`count(*)`.as("total")),
       ),
     ]);
     return {
@@ -142,7 +144,7 @@ const aiChatRepository = {
       aiConversationRowSchema,
       db
         .updateTable("ai_conversations")
-        .set({ title, updated_at: sql<Date>`NOW()` })
+        .set({ title, updated_at: sql<Date>`now()` })
         .where("id", "=", id)
         .returning(CONVERSATION_COLUMNS),
     );
@@ -160,7 +162,7 @@ const aiChatRepository = {
       aiConversationRowSchema,
       db
         .updateTable("ai_conversations")
-        .set({ model, updated_at: sql<Date>`NOW()` })
+        .set({ model, updated_at: sql<Date>`now()` })
         .where("id", "=", id)
         .returning(CONVERSATION_COLUMNS),
     );

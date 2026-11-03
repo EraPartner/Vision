@@ -120,7 +120,7 @@ export interface SavedPortfolioParserConfig {
 }
 
 /**
- * A staged import row as node-postgres returns it: the BIGINT `id` and the
+ * A staged import row as the backend returns it: the BIGINT `id` and the
  * NUMERIC amount columns arrive as decimal strings.
  */
 export interface PortfolioPreviewRow {

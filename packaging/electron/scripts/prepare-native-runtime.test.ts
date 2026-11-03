@@ -6,6 +6,8 @@ import test from "node:test";
 
 import {
   assertSafeNativeDestination,
+  BACKEND_ENTRIES,
+  BACKEND_SOURCE,
   bundleDatabaseTool,
   compileBackend,
   manifestEntries,
@@ -72,7 +74,7 @@ for (const exitCode of [0, 1]) {
         { mode: 0o755 },
       );
       const compile = () =>
-        compileBackend(fakeBun, "main.ts", path.join(root, "out"), root);
+        compileBackend(fakeBun, ["main.ts"], path.join(root, "out"), root);
       if (exitCode === 0) compile();
       else assert.throws(compile, /compilation exited 1/);
       assert.deepEqual(
@@ -84,6 +86,15 @@ for (const exitCode of [0, 1]) {
     }
   });
 }
+
+void test("the backend compiles the analysis sandbox worker with the main entrypoint", () => {
+  for (const entry of BACKEND_ENTRIES) {
+    assert.ok(fs.statSync(path.join(BACKEND_SOURCE, ...entry.split("/"))).isFile(), entry);
+  }
+  const executor = fs.readFileSync(path.join(BACKEND_SOURCE, "services", "analysisExecutor.ts"), "utf8");
+  // The compiled worker path the executor builds next to the main entrypoint.
+  assert.match(executor, /"services",\s*"analysisSandboxWorker\.js"/);
+});
 
 void test("the database tool is bundled for Bun at the packaged path", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "vision-db-tool-test-"));

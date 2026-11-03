@@ -2,12 +2,12 @@
  * Row schemas for saved analyses, analysis monitors and research dossiers
  * (ADR-193).
  *
- * Like `../rowSchemas.ts`, each schema describes what node-postgres returns
- * with its default parsers and only checks. Saved-analysis ids are TEXT,
- * monitor and dossier ids are UUIDs (strings either way). The JSONB documents
- * Vision wrote (definitions, parameters, dossier content) are checked to be
- * JSON objects and typed as what Vision stored; their readers re-validate
- * the parts they depend on.
+ * Like `../rowSchemas.ts`, each schema describes what the database driver
+ * returns (the node-postgres shapes, ADR-263) and only checks. Saved-analysis
+ * ids are TEXT, monitor and dossier ids are UUIDs (strings either way). The
+ * JSONB documents Vision wrote (definitions, parameters, dossier content) are
+ * checked to be JSON objects and typed as what Vision stored; their readers
+ * re-validate the parts they depend on.
  */
 import { z } from "zod";
 import type { AnalysisDefinition } from "@vision/types/analysis";
@@ -360,16 +360,5 @@ export const researchDossierSnapshotRowSchema = researchDossierVersionRowSchema
   .pick({ snapshot_json: true })
   .describe("research_dossier_versions snapshot row");
 
-// ---------------------------------------------------------------------------
-// Analysis executor (fixed session queries only; user SQL is dynamic)
-// ---------------------------------------------------------------------------
-
-/** `SELECT pg_backend_pid() AS pid` (INTEGER). */
-export const backendPidRowSchema = z
-  .object({ pid: pgInt })
-  .describe("backend pid row");
-
-/** `SELECT pg_cancel_backend($1) AS cancelled` (BOOLEAN). */
-export const cancelBackendRowSchema = z
-  .object({ cancelled: z.boolean() })
-  .describe("cancel backend row");
+// The analysis executor has no fixed queries of its own: user SQL runs in the
+// sandbox worker (analysisSandboxWorker.ts), whose rows are dynamic.

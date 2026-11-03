@@ -93,9 +93,22 @@ function bunScratchFiles(directory: string): Set<string> {
   );
 }
 
+export const BACKEND_SOURCE = path.join(repoRoot, "apps", "node-backend", "src");
+
+/**
+ * The backend's entrypoints, relative to its `src/`. The compiled backend
+ * finds the worker at `/$bunfs/root/services/analysisSandboxWorker.js`.
+ */
+export const BACKEND_ENTRIES = ["main.ts", "services/analysisSandboxWorker.ts"] as const;
+
+/**
+ * Compile the backend into one executable. `entries` are the main entrypoint
+ * and the analysis sandbox worker (ADR-263), which the backend starts as a
+ * worker thread; Bun embeds both under the directory they share (`src/`).
+ */
 export function compileBackend(
   bun: string,
-  entry: string,
+  entries: readonly string[],
   outfile: string,
   cwd: string = repoRoot,
 ): void {
@@ -109,7 +122,7 @@ export function compileBackend(
         // Precompiled bytecode skips parsing ~1,500 bundled modules on every
         // launch: the backend answers /health ~0.35 s sooner.
         "--bytecode",
-        entry,
+        ...entries,
         "--outfile",
         outfile,
       ],
@@ -255,7 +268,7 @@ export function run(): void {
   try {
     compileBackend(
       bun,
-      path.join(repoRoot, "apps", "node-backend", "src", "main.ts"),
+      BACKEND_ENTRIES.map((entry) => path.join(BACKEND_SOURCE, ...entry.split("/"))),
       path.join(stagingRoot, "vision-backend"),
     );
     fs.chmodSync(path.join(stagingRoot, "vision-backend"), 0o755);

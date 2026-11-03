@@ -2,8 +2,9 @@
  * Row schemas for the AI repositories (ADR-193): chat, investigations,
  * research documents.
  *
- * Like `../rowSchemas.ts`, each schema describes what node-postgres returns
- * with its default parsers and only checks; callers receive pg's own objects.
+ * Like `../rowSchemas.ts`, each schema describes what the database driver
+ * returns (the node-postgres shapes, ADR-263) and only checks; callers receive
+ * the driver's own objects.
  * Most projections alias snake_case columns to camelCase in SQL, so the keys
  * below are the aliases.
  */
@@ -70,7 +71,7 @@ export const aiMessageRowSchema = z
   .describe("ai_messages row");
 export type AiMessageRow = z.output<typeof aiMessageRowSchema>;
 
-/** `SELECT COUNT(*)::int AS total`. */
+/** `SELECT count(*) AS total` (a bare SQLite count is a number). */
 export const intTotalRowSchema = z
   .object({ total: pgInt })
   .describe("int total row");
@@ -102,8 +103,8 @@ export const aiInvestigationJobRowSchema = z
     /** `plan_json`: a plan Vision parsed with `aiInvestigationPlanSchema`. */
     plan: storedJsonObject<AiInvestigationPlan>().nullable(),
     /**
-     * `checkpoint_json` (NOT NULL, default `{}`, only changed by `jsonb_set`
-     * and `- 'providerResult'`, which keep it an object).
+     * `checkpoint_json` (NOT NULL, default `{}`, only changed by `json_set`
+     * and `json_remove(..., '$.providerResult')`, which keep it an object).
      */
     checkpoint: jsonObject,
     /** `result_json`: the stored answer. */

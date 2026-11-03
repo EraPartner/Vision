@@ -820,6 +820,8 @@ export type TranslationKey =
   | "analysis.moreRows"
   | "analysis.namePlaceholder"
   | "analysis.nameRequired"
+  | "analysis.needsReview.badge"
+  | "analysis.needsReview.message"
   | "analysis.next"
   | "analysis.noBenchmarkForRun"
   | "analysis.noEarlierVersions"

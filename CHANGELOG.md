@@ -31,8 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   copy fails.
 - **Backups** hold a SQLite copy of the database. Backups from Vision 2.0 restore only after
   `bun run transition:v2 -- <backup> --to-backup <new file>` converts them.
-- **Custom analysis SQL** runs in the SQLite dialect. Saved analyses written for PostgreSQL are
-  kept and marked as needing review.
+- **Custom analysis SQL** runs in the SQLite dialect, in a worker that holds only in-memory
+  copies of the analysis views it names. Saved analyses written for PostgreSQL are kept and
+  marked "Needs review"; they run again once saved from the SQL editor.
 
 ### Removed
 
