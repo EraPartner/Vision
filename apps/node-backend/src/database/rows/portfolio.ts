@@ -743,11 +743,6 @@ export const accountDisplayNameRowSchema = z
   .object({ id: pgAccountId, display_name: z.string() })
   .describe("account display name row");
 
-/** `SELECT CURRENT_DATE::text AS today`. */
-export const currentDateRowSchema = z
-  .object({ today: pgDayString })
-  .describe("current date row");
-
 /** `portfolioSummaryService`'s archived in-kind income read. */
 export const archivedIncomeDbRowSchema = z
   .object({

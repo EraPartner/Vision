@@ -22,7 +22,7 @@ import {
   createUnconvertedTally,
   noteUnconverted,
 } from "../../lib/unconvertedTally.ts";
-import { toAppDateString } from "../../lib/timezone.ts";
+import { toYmd } from "../../lib/dateFormat.ts";
 import { logger } from "../../config/logger.ts";
 import { findRateOnOrBeforeInIndex } from "../currency/rateFetcher.ts";
 import { addAll, toNumber, toDecimal } from "../../lib/money.ts";
@@ -228,7 +228,9 @@ function buildPortfolioExecutiveSummaryData(
       ? Number(latest.inflation_adjusted_value)
       : null,
     valuationDate: latest
-      ? toAppDateString(new Date(latest.snapshot_date))
+      ? // pg DATE = local midnight: read its own calendar day. Converting it
+        // to APP_TIMEZONE moved it a day back on hosts east of that zone.
+        toYmd(latest.snapshot_date)
       : null,
     totalDividends: toNumber(
       addAll((dividends?.byMonth ?? []).map((month) => month.amount)),

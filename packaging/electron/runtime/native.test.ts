@@ -25,6 +25,7 @@ import {
   databaseConfigFromEnv,
   validateApplicationEnv,
   buildNativeBackendEnv,
+  systemTimeZone,
   isPortFree,
   isDetailedHealthReady,
   lastStartupError,
@@ -1483,6 +1484,33 @@ void test("packaged backend environment pins native data, migration, and loopbac
     env.VISION_NATIVE_ENV_FILE,
     "/Users/test/Library/Application Support/Vision/native/vision/runtime.env",
   );
+});
+
+void test("packaged backend computes calendar days in the Mac's zone unless runtime.env pins one", () => {
+  const base = {
+    port: 43123,
+    paths: {
+      env: "/tmp/runtime.env",
+      attachments: "/tmp/attachments",
+      cache: "/tmp/cache",
+    },
+    runtimeRoot: "/tmp/native-runtime",
+  };
+  assert.equal(
+    buildNativeBackendEnv({ ...base, runtimeEnv: {} }).APP_TIMEZONE,
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+  );
+  assert.equal(
+    buildNativeBackendEnv({
+      ...base,
+      runtimeEnv: { APP_TIMEZONE: "Europe/Brussels" },
+    }).APP_TIMEZONE,
+    "Europe/Brussels",
+  );
+  assert.equal(systemTimeZone(() => "Europe/Helsinki"), "Europe/Helsinki");
+  // A zone the backend would reject must not stop it from starting.
+  assert.equal(systemTimeZone(() => "Not/AZone"), undefined);
+  assert.equal(systemTimeZone(() => undefined), undefined);
 });
 
 void test("attachment replacement verifies content and atomically replaces the destination", async () => {

@@ -11,11 +11,11 @@ import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   accountDisplayNameRowSchema,
   brokerSnapshotRowSchema,
-  currentDateRowSchema,
   portfolioPerformanceSnapshotRowSchema,
   regclassRowSchema,
 } from "../database/rows/portfolio.ts";
 import { toYmd } from "../lib/dateFormat.ts";
+import { todayAppDateString } from "../lib/timezone.ts";
 import {
   computeMetrics,
   computeHeatmap,
@@ -153,12 +153,10 @@ export async function __storeCurrentBrokerSnapshot(
       );
     }
 
-    const snapshotDate: string | undefined = (
-      await checkedRow(
-        currentDateRowSchema,
-        sql`SELECT CURRENT_DATE::text AS today`,
-      )
-    )?.today;
+    // The same app-zone day the aggregate snapshots end on (snapshotBuilder).
+    // Postgres CURRENT_DATE follows the DB session zone, so after midnight it
+    // could overwrite the previous day's broker split (ADR-264).
+    const snapshotDate = todayAppDateString();
     await sql`DELETE FROM portfolio_broker_snapshots
       WHERE snapshot_date = ${snapshotDate} AND currency = ${currency}`.execute(db);
     for (const row of rows) {
