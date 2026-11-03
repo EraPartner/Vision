@@ -156,7 +156,8 @@ jobs:
   # 1. Build mac .app + .dmg via electron-builder (arm64 — Apple Silicon only)
   #    Ad-hoc signed (mac.identity=null) so the binary loads on Apple Silicon
   #    without an Apple Developer ID. Users still see Gatekeeper on first run
-  #    and need right-click → Open once. README explains this.
+  #    and allow the app once (Privacy & Security → Open Anyway on macOS 15+,
+  #    right-click → Open on macOS 13-14). README explains this.
   # ─────────────────────────────────────────────────────────────────────────────
   package-mac:
     name: Build mac .app + DMG
