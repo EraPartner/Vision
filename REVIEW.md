@@ -18,15 +18,16 @@ behind each item is in `AGENTS.md` (Conventions, Verification, Security) and `do
 - [ ] Backend: **no `null` — use `undefined`**; ES2022+ ESM `async/await`; functions over classes.
 - [ ] All inputs validated with **Zod** (frontend _and_ server-side).
 - [ ] ADRs in `docs/adr/` are **append-only** — supersede with a new ADR, never rewrite.
-- [ ] DB schema change → a numbered `db/migrations/NNNN_name.sql` with a `.down.sql` rollback
-      (CI round-trips the latest migration down → up when it has one), `bun run db:lint` clean,
+- [ ] DB schema change → a numbered `db/migrations/NNNN_name.sql` in the SQLite dialect
+      (`docs/reference/sqlite-sql-dialect.md`), with a `.down.sql` rollback when it can be
+      reverted (the migration tests revert and re-apply every migration that has one),
       `schema.generated.ts` regenerated (`bun run db:codegen`); pending migrations auto-run
       during backend startup.
 - [ ] Route/API change → `docs/reference/api-endpoint-matrix.md` + the `docs/api/` doc updated,
       count matches `openapi.yaml` (`bun run check-endpoint-matrix`), and `generated.ts`
       regenerated (`bun run generate:types`). Note breaking vs non-breaking.
 - [ ] i18n change → `bun run generate-locales`; en/nl key parity holds; committed locale TS is in sync.
-- [ ] Packaging or persistence edit → native PostgreSQL and attachment paths stay inside the
+- [ ] Packaging or persistence edit → the SQLite database and attachment paths stay inside the
       application data directory, and backup/restore coverage passes.
 
 ## Tests & validation

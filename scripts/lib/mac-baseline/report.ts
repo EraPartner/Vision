@@ -459,12 +459,6 @@ export const SPREAD_METRICS: readonly {
     digits: 1,
     read: (t) => t.memory.afterLaunch.backend?.sharedOnceMb,
   },
-  {
-    key: "postgresAfterLaunchMb",
-    label: "PostgreSQL memory after launch MB (shared once)",
-    digits: 1,
-    read: (t) => t.memory.afterLaunch.postgres?.sharedOnceMb,
-  },
 ];
 
 export interface Spread {
@@ -753,7 +747,6 @@ export function renderSummary(results: BaselineResults): string {
         "GPU proc",
         "Main",
         "Backend",
-        "Postgres",
         "WindowServer",
         "GPU active %",
         "GPU mW",
@@ -769,7 +762,6 @@ export function renderSummary(results: BaselineResults): string {
         cpu(tier.idle.cpu, "gpu"),
         cpu(tier.idle.cpu, "main"),
         cpu(tier.idle.cpu, "backend"),
-        cpu(tier.idle.cpu, "postgres"),
         cpu(tier.idle.cpu, "windowserver"),
         fmt(tier.idle.power?.gpuActivePercent, 1),
         fmt(tier.idle.power?.gpuPowerMw),
@@ -972,7 +964,6 @@ export function renderSummary(results: BaselineResults): string {
     "network",
     "utility",
     "backend",
-    "postgres",
   ];
   out.push(
     table(
@@ -990,39 +981,22 @@ export function renderSummary(results: BaselineResults): string {
     ),
   );
   out.push("");
-  out.push("## Backend and PostgreSQL memory (MB)");
+  out.push("## Backend memory (MB)");
   out.push(
-    "After launch / after the sustained run. Summed adds up each process's footprint, so memory the PostgreSQL processes share is counted once per process; shared once is footprint(1) over the role's processes together.",
+    "After launch / after the sustained run. Summed adds up each backend process's footprint; shared once is footprint(1) over the backend's processes together, so memory they share is counted once.",
   );
   out.push("");
   const backendCell = (
     summary: RoleSummary | undefined | null,
-    role: "backend" | "postgres",
-    field: "processes" | "footprintMb" | "sharedOnceMb",
-  ) => fmt(summary?.[role]?.[field], field === "processes" ? 0 : 1);
+    field: "footprintMb" | "sharedOnceMb",
+  ) => fmt(summary?.backend?.[field], 1);
   out.push(
     table(
-      [
-        "App",
-        "Tier",
-        "backend summed",
-        "backend shared once",
-        "postgres processes",
-        "postgres summed",
-        "postgres shared once",
-      ],
+      ["App", "Tier", "backend summed", "backend shared once"],
       rowsFor(results, (_app, tier) =>
-        (
-          [
-            ["backend", "footprintMb"],
-            ["backend", "sharedOnceMb"],
-            ["postgres", "processes"],
-            ["postgres", "footprintMb"],
-            ["postgres", "sharedOnceMb"],
-          ] as const
-        ).map(
-          ([role, field]) =>
-            `${backendCell(tier.memory.afterLaunch, role, field)} / ${backendCell(tier.memory.afterSustained, role, field)}`,
+        (["footprintMb", "sharedOnceMb"] as const).map(
+          (field) =>
+            `${backendCell(tier.memory.afterLaunch, field)} / ${backendCell(tier.memory.afterSustained, field)}`,
         ),
       ),
     ),

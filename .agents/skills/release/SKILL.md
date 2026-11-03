@@ -15,7 +15,8 @@ bun run test:electron
 bun run native:smoke
 ```
 
-- Verify the bundled PostgreSQL runtime, migration runner, frontend, backend, and PDF browser.
+- Verify the runtime manifest, the bundled Bun and database-file tool, the migration runner,
+  frontend, backend, and PDF browser. Vision ships no database server (ADR-263).
 - Keep native database and attachment paths inside the application data directory.
 - Keep versions in root and packaging `package.json` files identical.
 - Preserve `contextIsolation`, disabled `nodeIntegration`, and Electron sandboxing.

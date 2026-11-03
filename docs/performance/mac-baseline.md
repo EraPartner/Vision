@@ -2,8 +2,8 @@
 title: Mac Performance Baseline
 type: performance
 status: active
-date: 2026-10-28
-last_modified: 2026-10-28
+date: 2026-11-03
+last_modified: 2026-11-03
 tags: [performance, macos, gpu, energy, measurement, electron]
 description: Repeatable before/after measurement of the installed Vision apps on a Mac (memory, CPU, GPU, power, launch, frames) across the three UI tiers
 aliases: [mac baseline, performance baseline, powermetrics run]
@@ -33,7 +33,8 @@ Terminal on the Mac, never in CI.
   for thermal throttling.
 
 Process roles: Electron main, renderer, GPU process, network and other utility processes, the
-Bun backend and PostgreSQL (found through the native runtime's pid files), Ollama, and
+Bun backend (found through the native runtime's pid file; it opens the SQLite database
+in-process, [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]), Ollama, and
 WindowServer (compositing cost lands there). CPU % is CPU time per wall second over the window
 (100% = one core).
 
@@ -86,13 +87,14 @@ bun scripts/mac-baseline.ts --app /Applications/Vision.app --tiers reduced,stand
   --launch-probe 90 --idle 10 --sustained 0 --no-trace
 ```
 
-## Backend and PostgreSQL memory
+## Backend memory
 
-Footprint per role adds up each process, so memory several PostgreSQL processes map (the shared
-buffers) is counted once per process that touched it. The summary's "Backend and PostgreSQL
-memory" table therefore also runs `footprint <pids…>` over each role's processes together, which
-counts shared memory once ("shared once"), and lists the PostgreSQL process count. The headline
-spread table reports both shared-once values after launch.
+Footprint per role adds up each process, so memory several processes map is counted once per
+process that touched it. The summary's "Backend memory" table therefore also runs
+`footprint <pids…>` over the backend's processes together, which counts shared memory once
+("shared once"). The backend opens SQLite in-process, so both values are usually the same. The
+headline spread table reports the shared-once value after launch. Vision 2.0 also had PostgreSQL
+roles and columns; reports from 2.0 runs still show them.
 
 ## Leak check
 
@@ -106,7 +108,7 @@ on the Dashboard and samples memory every 30 s. After a 10-minute warm-up it jud
 samples only: "rising" needs the idle-window medians to go up across each of the last three
 windows and a least-squares slope above 1 MB/min; otherwise "flat", or "too short" with fewer
 than three idle windows (45 minutes is enough). Output: `leak.md`, `leak.csv` and `leak.json`.
-Backend and PostgreSQL decide the verdict; renderer and GPU process are recorded for later phases.
+The backend decides the verdict; renderer and GPU process are recorded for later phases.
 
 ## Full effects and repeats
 

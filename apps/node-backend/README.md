@@ -1,7 +1,7 @@
 # Vision Node Backend
 
 The Express backend is Vision's production application service. It provides the REST API,
-PostgreSQL persistence, imports, portfolios, planning, reports, attachments, backups, admin tools,
+SQLite persistence, imports, portfolios, planning, reports, attachments, backups, admin tools,
 and integrations used by the React frontend.
 
 ## Normal development
@@ -10,17 +10,16 @@ Start from the repository root:
 
 ```bash
 bun install --frozen-lockfile
-bun run native:prepare
 bun run dev
 ```
 
-This starts Vision's private PostgreSQL 18.6 development cluster, the backend in watch mode, and
-Vite. It does not require a running Homebrew PostgreSQL service. The native preparation step needs
-PostgreSQL 18.6 build files. PDF reports are printed by the Electron shell, not the backend. See
+This starts the backend in watch mode on its own development SQLite database, and Vite. The
+backend creates and migrates the database file when it starts; no database server is involved.
+PDF reports are printed by the Electron shell, not the backend. See
 [`docs/guides/native-macos-runtime.md`](../../docs/guides/native-macos-runtime.md).
 
-To run only the backend, provide a real `DATABASE_URL` and, for schema changes,
-`DATABASE_URL_MIGRATIONS`, then run:
+To run only the backend, set `VISION_DATABASE_PATH` to a database file (development defaults to
+`./data/vision.sqlite3` under `apps/node-backend`), then run:
 
 ```bash
 bun run --filter 'financial-transaction-manager-node' dev
@@ -73,12 +72,9 @@ bun vitest run src/path/to/test.test.js
 bun vitest run --test-name-pattern="name"
 ```
 
-Database-backed tests use the repository's disposable PostgreSQL 18 harness. It requires installed
-PostgreSQL 18 tools and does not start the Homebrew service:
-
-```bash
-bun run test:db
-```
+Database-backed tests run against real SQLite database files: the run migrates one template
+database in a temporary directory and every test file gets its own copy, so `bun run test` needs
+no other setup.
 
 The root [`AGENTS.md`](../../AGENTS.md) and repository documentation define the current development
 and safety contract.

@@ -495,7 +495,7 @@ function appInfo(
   };
 }
 
-/** Backend and PostgreSQL pids from the native runtime's pid files. */
+/** The backend pid from the native runtime's pid file. */
 function runtimeRoots(userData: string, mainPid: number): RoleRoots {
   const roots: RoleRoots = { mainPid };
   const nativeDir = path.join(userData, "native");
@@ -506,18 +506,16 @@ function runtimeRoots(userData: string, mainPid: number): RoleRoots {
     return roots;
   }
   for (const runtime of runtimes) {
-    for (const [file, key] of [
-      ["backend.pid.json", "backendPid"],
-      ["postgres.pid.json", "postgresPid"],
-    ] as const) {
-      try {
-        const { pid } = JSON.parse(
-          fs.readFileSync(path.join(nativeDir, runtime, file), "utf8"),
-        ) as { pid?: unknown };
-        if (typeof pid === "number" && processAlive(pid)) roots[key] = pid;
-      } catch {
-        /* no pid file for this runtime */
-      }
+    try {
+      const { pid } = JSON.parse(
+        fs.readFileSync(
+          path.join(nativeDir, runtime, "backend.pid.json"),
+          "utf8",
+        ),
+      ) as { pid?: unknown };
+      if (typeof pid === "number" && processAlive(pid)) roots.backendPid = pid;
+    } catch {
+      /* no pid file for this runtime */
     }
   }
   return roots;
@@ -646,7 +644,9 @@ async function launchApp(
 }
 
 async function quitApp(app: RunningApp): Promise<void> {
-  const postgresPid = runtimeRoots(app.info.userData, app.mainPid).postgresPid;
+  // Read before quitting: the runtime deletes the pid file once the backend
+  // stops.
+  const backendPid = runtimeRoots(app.info.userData, app.mainPid).backendPid;
   app.cdp.close();
   run("osascript", [
     "-e",
@@ -661,12 +661,13 @@ async function quitApp(app: RunningApp): Promise<void> {
     app.child.kill("SIGTERM");
     await new Promise((resolve) => setTimeout(resolve, 10_000));
   }
-  // PostgreSQL stops after the main process; wait so the next launch is clean.
-  const pgDeadline = Date.now() + 30_000;
+  // The backend holds the SQLite database and can outlive the main process;
+  // wait so the next launch does not race it for the database.
+  const backendDeadline = Date.now() + 30_000;
   while (
-    postgresPid !== undefined &&
-    processAlive(postgresPid) &&
-    Date.now() < pgDeadline
+    backendPid !== undefined &&
+    processAlive(backendPid) &&
+    Date.now() < backendDeadline
   ) {
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
@@ -1270,8 +1271,11 @@ async function measureQuietWindow(
   };
 }
 
-/** Roles whose processes share memory (PostgreSQL's shared buffers). */
-const SHARED_ONCE_ROLES = ["backend", "postgres"] as const;
+/**
+ * Roles also measured with footprint(1) over their processes together. The
+ * backend opens SQLite in-process, so this is usually its own footprint.
+ */
+const SHARED_ONCE_ROLES = ["backend"] as const;
 
 /** footprint(1) over several pids: memory they share is counted once. */
 function sharedOnceMb(pids: number[]): number | null {
@@ -1534,7 +1538,7 @@ async function launchProbe(
   const pct = (value: number | null | undefined) =>
     value === null || value === undefined ? "?" : value.toFixed(1);
   log(
-    `  probe: app CPU ${pct(cpu.appTotal?.cpuPercent)}% (backend ${pct(cpu.backend?.cpuPercent)}%, postgres ${pct(cpu.postgres?.cpuPercent)}%, gpu ${pct(cpu.gpu?.cpuPercent)}%), GPU active ${pct(measured.window.power?.gpuActivePercent)}%`,
+    `  probe: app CPU ${pct(cpu.appTotal?.cpuPercent)}% (backend ${pct(cpu.backend?.cpuPercent)}%, gpu ${pct(cpu.gpu?.cpuPercent)}%), GPU active ${pct(measured.window.power?.gpuActivePercent)}%`,
   );
   for (const animation of animations.slice(0, 5)) {
     log(
@@ -1953,10 +1957,7 @@ const LEAK_SAMPLE_SECONDS = 30;
 const LEAK_WARMUP_SECONDS = 600;
 const LEAK_COLUMNS = [
   "backend_mb",
-  "postgres_mb",
   "backend_sum_mb",
-  "postgres_sum_mb",
-  "postgres_processes",
   "app_total_sum_mb",
   "main_mb",
   "renderer_mb",
@@ -1965,9 +1966,7 @@ const LEAK_COLUMNS = [
 /** Columns the verdict covers; renderer and GPU are recorded for phase E. */
 const LEAK_VERDICT_COLUMNS = [
   "backend_mb",
-  "postgres_mb",
   "backend_sum_mb",
-  "postgres_sum_mb",
   "renderer_mb",
   "gpu_mb",
 ];
@@ -1976,10 +1975,7 @@ function leakValues(app: RunningApp): Record<string, number | null> {
   const memory = memorySnapshot(app);
   return {
     backend_mb: memory.backend?.sharedOnceMb ?? null,
-    postgres_mb: memory.postgres?.sharedOnceMb ?? null,
     backend_sum_mb: memory.backend?.footprintMb ?? null,
-    postgres_sum_mb: memory.postgres?.footprintMb ?? null,
-    postgres_processes: memory.postgres?.processes ?? null,
     app_total_sum_mb: memory.appTotal?.footprintMb ?? null,
     main_mb: memory.main?.footprintMb ?? null,
     renderer_mb: memory.renderer?.footprintMb ?? null,

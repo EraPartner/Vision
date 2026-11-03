@@ -17,7 +17,7 @@
     {
       "path": "apps/node-backend/tests/moneyPrecisionAlignment.db.test.ts",
       "decision": "keep",
-      "boundary": "real PostgreSQL",
+      "boundary": "real SQLite database",
       "reason": "Database money precision is a domain contract independent of implementation."
     },
     {
@@ -59,7 +59,7 @@
     {
       "path": "apps/frontend/src/test/live-contracts/live-contracts.test.ts",
       "decision": "keep",
-      "boundary": "live HTTP/PostgreSQL response shape",
+      "boundary": "live HTTP/SQLite response shape",
       "reason": "Useful contract validation; explicitly not a UI journey."
     },
     {
@@ -231,7 +231,7 @@
       "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed LIMIT/OFFSET and COUNT SQL-text/param assertions from the paging it (renamed); kept page+total results and past-end total",
-      "replacement": "apps/node-backend/tests/aiAuditRowContracts.db.test.ts (existing listConversations against PostgreSQL)"
+      "replacement": "apps/node-backend/tests/aiAuditRowContracts.db.test.ts (existing listConversations against the real SQLite database)"
     },
     {
       "path": "apps/node-backend/tests/customParserConfigRepository.test.ts",

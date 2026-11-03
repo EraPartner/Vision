@@ -20,7 +20,6 @@ export type ProcessRole =
   | "utility"
   | "other"
   | "backend"
-  | "postgres"
   | "ollama"
   | "windowserver";
 
@@ -33,13 +32,11 @@ export const APP_ROLES: readonly ProcessRole[] = [
   "utility",
   "other",
   "backend",
-  "postgres",
 ];
 
 export interface RoleRoots {
   mainPid: number;
   backendPid?: number | undefined;
-  postgresPid?: number | undefined;
 }
 
 /** `ps -axww -o pid=,ppid=,rss=,time=,command=` → rows. */
@@ -159,16 +156,11 @@ export function classifyProcesses(
   const byPid = new Map(rows.map((row) => [row.pid, row]));
   const roles = new Map<number, ProcessRole>();
 
-  const postgres =
-    roots.postgresPid !== undefined && byPid.has(roots.postgresPid)
-      ? descendants(children, roots.postgresPid)
-      : new Set<number>();
   const backend =
     roots.backendPid !== undefined && byPid.has(roots.backendPid)
       ? descendants(children, roots.backendPid)
       : new Set<number>();
-  for (const pid of postgres) roles.set(pid, "postgres");
-  for (const pid of backend) if (!roles.has(pid)) roles.set(pid, "backend");
+  for (const pid of backend) roles.set(pid, "backend");
 
   if (byPid.has(roots.mainPid)) {
     for (const pid of descendants(children, roots.mainPid)) {
@@ -176,9 +168,7 @@ export function classifyProcesses(
       const command = byPid.get(pid)?.command ?? "";
       if (pid === roots.mainPid) roles.set(pid, "main");
       else if (/--type=/.test(command)) roles.set(pid, chromiumRole(command));
-      // Without pid files, fall back to the executable names.
-      else if (/\/postgres(\s|$)|^postgres:/.test(command))
-        roles.set(pid, "postgres");
+      // Without the pid file, fall back to the executable name.
       else if (/vision-backend|\/bun(\s|$)/.test(command))
         roles.set(pid, "backend");
       else roles.set(pid, "other");
@@ -274,7 +264,7 @@ export interface FootprintReport {
   perProcess: Map<number, number>;
   /**
    * The de-duplicated total for all listed processes: footprint(1) counts
-   * memory that several of them map (PostgreSQL's shared buffers) once.
+   * memory that several of them map once.
    */
   totalBytes: number | null;
 }

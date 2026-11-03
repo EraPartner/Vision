@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/Platform-macOS%20(Apple%20Silicon)-black" alt="Platform: macOS (Apple Silicon)" />
   <img src="https://img.shields.io/badge/Frontend-React%2019%20%2B%20TypeScript-61DAFB" alt="Frontend: React + TypeScript" />
   <img src="https://img.shields.io/badge/Backend-Express%20on%20Bun-339933" alt="Backend: Express on Bun" />
-  <img src="https://img.shields.io/badge/Database-PostgreSQL%2018-4169E1" alt="Database: PostgreSQL 18" />
+  <img src="https://img.shields.io/badge/Database-SQLite-003B57" alt="Database: SQLite" />
   <img src="https://img.shields.io/badge/i18n-EN%20%7C%20NL-success" alt="Languages: EN | NL" />
 </p>
 
@@ -20,15 +20,15 @@
 ## What is Vision?
 
 Vision is a desktop finance manager. It imports your bank exports, categorizes and analyses your
-spending, tracks your portfolio and net worth, and computes Belgian personal income tax. The
-macOS app bundles its own PostgreSQL 18 database, so your data lives in a private, loopback-only
-database on your Mac.
+spending, tracks your portfolio and net worth, and computes Belgian personal income tax. Your
+data lives in one SQLite database file in the app's own data folder on your Mac. There is no
+database server.
 
 - **Private by default.** No account and no cloud service. AI chat and investigations run on a
   local Ollama model ([AI data access](docs/security/ai-data-access.md)).
 - **One app.** Transactions, budgets, planned payments, forecasts, investments, research, and tax
   in one place.
-- **Built to last.** A strict TypeScript monorepo with an OpenAPI contract, a PostgreSQL schema
+- **Built to last.** A strict TypeScript monorepo with an OpenAPI contract, a SQLite schema
   under versioned migrations, and tests against a real database.
 
 Vision is a native macOS app for Apple Silicon. There are no Windows, Linux, or browser builds
@@ -90,18 +90,21 @@ Feature details live in [`docs/features/`](docs/features/index.md).
 
 ### Install the macOS app
 
-Install the release DMG. It contains PostgreSQL 18, the migrations, the backend and the frontend.
-PDF reports print with the desktop app's own Electron Chromium. You do not need a separate
-PostgreSQL service.
+Install the release DMG. It contains Bun, the migrations, the backend and the frontend, and uses
+the SQLite library that ships with macOS. PDF reports print with the desktop app's own Electron
+Chromium.
 
-Vision creates its database under its macOS application-data directory on first launch. See
-[`docs/guides/native-macos-runtime.md`](docs/guides/native-macos-runtime.md) for data migration
+Vision creates its database, `database/vision.sqlite3`, under its macOS application-data
+directory on first launch. See
+[`docs/guides/native-macos-runtime.md`](docs/guides/native-macos-runtime.md) for the data layout
 and rollback.
+
+**Coming from Vision 2.0?** Its data was in PostgreSQL. Move it once with the transition script
+before you use the new version: [`docs/guides/sqlite-transition.md`](docs/guides/sqlite-transition.md).
 
 ### Build the app from source
 
-You need Bun, Node.js, and a PostgreSQL 18.6 distribution from Postgres.app or Homebrew
-(`postgresql@18`). The PostgreSQL service does not need to run.
+You need Bun and Node.js. No database server is needed.
 
 ```bash
 git clone https://github.com/EraPartner/Vision.git
@@ -113,8 +116,8 @@ open /Applications/Vision.app
 ### Try the demo
 
 **Vision Demo** is a separate app with deterministic synthetic data. It uses its own database
-below `~/Library/Application Support/Vision Demo/native/vision_demo` and cannot reach the real
-Vision database.
+below `~/Library/Application Support/Vision Demo/database/` and cannot reach the real Vision
+database.
 
 ```bash
 ./install-demo.sh
@@ -129,8 +132,7 @@ repository's `dist` directory.
 
 ```bash
 bun install --frozen-lockfile
-bun run native:prepare   # one-time: private PostgreSQL payload
-bun run dev              # private PostgreSQL + watched backend + Vite
+bun run dev              # watched backend on its own development database + Vite
 ```
 
 | Service     | URL                                                    |
@@ -150,7 +152,7 @@ flowchart LR
     UI["React 19 frontend<br/>TanStack Query"]
   end
   UI -- "REST (openapi.yaml)" --> API["Express backend on Bun<br/>routes → services → repositories"]
-  API -- "Kysely" --> DB[("PostgreSQL 18<br/>bundled, loopback-only")]
+  API -- "Kysely" --> DB[("SQLite file<br/>in-process, app data folder")]
   API --> Ext["Price, FX and research providers"]
   API --> AI["Ollama (local)"]
 ```
@@ -159,8 +161,9 @@ flowchart LR
   are computed by the backend ([ADR-216](docs/adr/216-server-owned-domain-calculations.md)).
 - **Database access** goes through Kysely with types generated from the migrated schema
   ([ADR-226](docs/adr/226-kysely-query-builder.md)).
-- **Migrations** are numbered `.sql` files in `db/migrations/`, applied by a Kysely migrator on
-  boot, starting from one baseline ([ADR-222](docs/adr/222-typescript-migrations-kysely-baseline.md)).
+- **Migrations** are numbered `.sql` files in `db/migrations/`, applied on boot in one
+  transaction, after an automatic copy of a database that already holds data
+  ([ADR-263](docs/adr/263-sqlite-replaces-postgresql.md)).
 - **Ids, currency codes and money are branded types**
   ([ADR-220](docs/adr/220-branded-ids-currency-codes-and-money.md)).
 
@@ -177,10 +180,10 @@ Vision/
 ├── packages/
 │   ├── shared-utils/      # Pure helpers shared by backend and frontend (money, CSV, Belgian tax engine)
 │   └── types/             # Shared TypeScript types and branded ids
-├── packaging/electron/    # Desktop shell and native PostgreSQL runtime
-├── db/migrations/         # PostgreSQL migrations (Kysely migrator)
+├── packaging/electron/    # Desktop shell and native runtime
+├── db/migrations/         # SQLite migrations
 ├── i18n/source/           # Locale sources, compiled to apps/frontend/src/locales/
-├── scripts/               # Repository tooling (locales, checks, test database)
+├── scripts/               # Repository tooling (locales, checks, the 2.0 transition script)
 ├── config/                # Shared tool configuration
 ├── docs/                  # Obsidian knowledge base (ADRs, features, guides, reference)
 └── openapi.yaml           # REST API contract
@@ -192,10 +195,10 @@ Vision/
 | -------- | ----------------------------------------------------------------------------- |
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS, Radix UI, shadcn/ui, TanStack Query |
 | Backend  | Express on Bun, Zod, decimal.ts                                               |
-| Database | PostgreSQL 18.6 with Kysely                                                   |
+| Database | SQLite (system library, 3.39 or later) with Kysely                            |
 | Desktop  | Electron, Apple Silicon DMG and ZIP                                           |
 | AI       | Ollama (local)                                                                |
-| Testing  | Vitest, with backend tests against a disposable PostgreSQL 18                 |
+| Testing  | Vitest, with backend tests against real SQLite database files                 |
 | API spec | OpenAPI 3 (`openapi.yaml`)                                                    |
 
 ---
@@ -206,7 +209,7 @@ Vision/
 
 ```bash
 # Run
-bun run dev                  # private PostgreSQL + watched backend + Vite
+bun run dev                  # watched backend on its own development database + Vite
 bun run electron:dev         # desktop shell with isolated development data
 
 # Check
@@ -217,15 +220,13 @@ bun run check                # every lint, typecheck and test gate in sequence
 
 # Test
 bun run test                 # backend Vitest suite
-bun run test:db              # backend suite with a private temporary PostgreSQL 18
-bun run test:frontend        # frontend suite with a disposable PostgreSQL 18 and live API contracts
+bun run test:frontend        # frontend suite with live API contracts against a temporary database
 bun run test:all             # backend + frontend suites
 
 # Database
 bun run db:migrate           # apply pending migrations
 bun run db:status            # list applied and pending migrations
 bun run db:new -- <name>     # create db/migrations/NNNN_<name>.sql
-bun run db:lint              # squawk lint of migration SQL
 bun run db:codegen           # regenerate the Kysely database types
 
 # API and locales
@@ -242,18 +243,18 @@ The full list, with what each script needs, is in
 
 ### Configuration
 
-The packaged app generates its own database credentials and writes them to a restricted
-`runtime.env` in its application-data directory. Do not set a database URL for it.
+The packaged app chooses its own database file and keeps its settings in a restricted
+`runtime.env` in its application-data directory. Do not set a database path for it.
 
 For source development, copy `.env.example` to `.env` only when you need provider API keys or
-overrides. The template documents every optional setting (database roles, logging, Ollama,
+overrides. The template documents every optional setting (database file, logging, Ollama,
 AI web research, research providers). See
 [`docs/reference/environment-variables.md`](docs/reference/environment-variables.md).
 
 ### Contributing
 
 1. Create a branch from `main`.
-2. Write tests at stable boundaries: API contracts, real PostgreSQL state, and pure domain
+2. Write tests at stable boundaries: API contracts, real SQLite state, and pure domain
    functions ([ADR-215](docs/adr/215-behaviour-boundary-tests.md)).
 3. Run `bun run lint`, `bun run lint:backend`, `bun run typecheck`, and the relevant tests.
 4. Use Conventional Commits. `main` requires signed commits, linear history, and a passing
@@ -267,7 +268,7 @@ See [`docs/guides/contributing.md`](docs/guides/contributing.md) and
 ### Coding agents
 
 [`AGENTS.md`](AGENTS.md) is the shared guide for coding agents. Claude Code also gets edit-time
-checks, a read-only PostgreSQL MCP server, a TypeScript navigation MCP server, and structural
+checks, a read-only SQLite MCP server, a TypeScript navigation MCP server, and structural
 search with `bun run search:ast`
 ([ADR-227](docs/adr/227-claude-code-static-analysis-aids.md),
 [ADR-228](docs/adr/228-typescript-navigation-mcp.md)).
@@ -285,7 +286,8 @@ dependency audits on the release tree before packaging.
 
 ## Security and privacy
 
-- Your data stays in a loopback-only PostgreSQL database on your Mac.
+- Your data stays in one SQLite file in Vision's data folder on your Mac. No database server
+  listens on any port.
 - Never commit real `.env` files or secrets.
 - The Electron shell runs with context isolation and the sandbox on, and Node integration off.
 - Backups can be encrypted with AES-256-GCM (per-backup random salt).
