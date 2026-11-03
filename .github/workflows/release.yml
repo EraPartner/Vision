@@ -268,14 +268,45 @@ jobs:
             echo "ERROR: expected exactly one packaged Vision.app for the SBOM"
             exit 1
           fi
+          # syft cannot see inside app.asar or the Bun-compiled backend, and the
+          # frontend ships as a Vite bundle. Stage what they contain next to an
+          # APFS clone of the app and scan the whole tree:
+          #   app-asar/    the extracted Electron shell (its node_modules)
+          #   bundled-js/  a production-only install of the root workspaces from
+          #                the committed lockfile: the declared runtime
+          #                dependencies the backend binary and frontend bundle
+          #                are built from (a superset of what the bundlers keep)
+          SBOM_SRC="$RUNNER_TEMP/sbom-src"
+          mkdir -p "$SBOM_SRC/bundled-js"
+          cp -cR "${APP_DIRS[0]}" "$SBOM_SRC/Vision.app"
+          (cd packaging/electron && node -e 'require("@electron/asar").extractAll(process.argv[1], process.argv[2])' \
+            "$SBOM_SRC/Vision.app/Contents/Resources/app.asar" "$SBOM_SRC/app-asar")
+          git ls-files package.json bun.lock 'apps/*/package.json' 'packages/*/package.json' |
+            while read -r manifest; do
+              mkdir -p "$SBOM_SRC/bundled-js/$(dirname "$manifest")"
+              cp "$manifest" "$SBOM_SRC/bundled-js/$manifest"
+            done
+          (cd "$SBOM_SRC/bundled-js" && bun install --production --frozen-lockfile --ignore-scripts --linker hoisted)
+          # The lockfile also lists dev dependencies; keep only what was installed.
+          rm "$SBOM_SRC/bundled-js/bun.lock"
+          # Directory scans read lockfiles only by default; add the cataloger
+          # that reads installed node_modules/*/package.json.
           SYFT_CHECK_FOR_APP_UPDATE=false "$RUNNER_TEMP/syft-bin/syft" \
-            "dir:${APP_DIRS[0]}" -o "cyclonedx-json=dist/release/Vision-app.cdx.json"
+            "dir:$SBOM_SRC" --select-catalogers "+javascript-package-cataloger" \
+            -o "cyclonedx-json=dist/release/Vision-app.cdx.json"
           node - <<'JS'
           const fs = require("node:fs");
           const name = "Vision-app.cdx.json";
           const document = JSON.parse(fs.readFileSync(`dist/release/${name}`, "utf8"));
           if (document.bomFormat !== "CycloneDX" || !document.components?.length) {
             console.error(`ERROR: ${name} has no catalogued components`);
+            process.exit(1);
+          }
+          // One sentinel per source: Electron shell, backend, frontend, PostgreSQL.
+          const names = new Set(document.components.map((component) => component.name));
+          const missing = ["yauzl", "pg", "react", "postgresql"].filter((entry) => !names.has(entry));
+          if (missing.length) {
+            console.error(`ERROR: ${name} is missing ${missing.join(", ")}`);
             process.exit(1);
           }
           console.log(`${name}: ${document.components.length} components`);

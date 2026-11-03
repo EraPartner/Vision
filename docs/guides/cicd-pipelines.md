@@ -2,8 +2,8 @@
 title: CI/CD Pipelines
 type: guide
 status: active
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     guide,
@@ -167,9 +167,11 @@ supersedes the Trivy part of [[docs/adr/050-ci-supply-chain-security-tooling|ADR
    after CI: a full-tree gitleaks scan, and `scripts/audit-js.sh`. If CI on that commit
    has not finished or failed, wait for it or re-run it before releasing.
 2. **Build mac .app + DMG** builds the ad-hoc signed native macOS artifacts from the exact
-   verified commit with pinned runtime inputs. It scans the packaged app into a CycloneDX software
-   bill of materials (SBOM), checks that it contains components, and attests the artifacts and SBOM
-   through GitHub. The former source-launcher bundle and source SBOM were retired by
+   verified commit with pinned runtime inputs. It scans the packaged app, the extracted `app.asar`
+   and a production-only install of the root workspaces from `bun.lock` (the runtime dependencies
+   bundled into the backend binary and the frontend) into one CycloneDX software bill of materials
+   (SBOM). It fails unless the SBOM names `yauzl`, `pg`, `react` and `postgresql`, one per source,
+   then attests the artifacts and SBOM through GitHub. The former source-launcher bundle and source SBOM were retired by
    [[docs/adr/218-retire-source-launcher-update-channel|ADR-218]]. The app does not
    have Apple Developer ID signing or notarization.
 3. **Create GitHub Release** downloads the staged artifacts, verifies build provenance, and adds
