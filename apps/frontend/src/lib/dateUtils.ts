@@ -319,3 +319,16 @@ export function weekStartsOnFromSetting(
 ): 0 | 1 {
     return startOfWeek === "sunday" ? 0 : 1;
 }
+
+/**
+ * An ISO instant as the local wall-clock value a `datetime-local` input
+ * shows ("YYYY-MM-DDTHH:mm"). Slicing the UTC ISO string showed UTC as local
+ * time, so every edit moved the stored instant by the UTC offset.
+ */
+export function isoToDateTimeLocal(iso: string | null | undefined): string {
+    if (!iso) return "";
+    const instant = new Date(iso);
+    return Number.isNaN(instant.getTime())
+        ? ""
+        : dateFnsFormat(instant, "yyyy-MM-dd'T'HH:mm");
+}

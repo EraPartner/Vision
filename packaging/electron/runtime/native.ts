@@ -349,6 +349,27 @@ export interface NativeBackendEnvOptions {
   syntheticOffline?: boolean | undefined;
 }
 
+/**
+ * The Mac's IANA zone, for the backend's APP_TIMEZONE (ADR-264). The renderer
+ * already uses this zone for "today"; the backend's Europe/Brussels default
+ * put the two a calendar day apart every night on a Mac in another zone.
+ * Undefined when the host reports no usable zone, so the backend keeps its
+ * own default instead of refusing to start.
+ */
+export function systemTimeZone(
+  resolve: () => string | undefined = () =>
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+): string | undefined {
+  try {
+    const zone = resolve();
+    if (!zone) return undefined;
+    new Intl.DateTimeFormat("en-US", { timeZone: zone });
+    return zone;
+  } catch {
+    return undefined;
+  }
+}
+
 export function buildNativeBackendEnv({
   runtimeEnv,
   port,
@@ -363,6 +384,8 @@ export function buildNativeBackendEnv({
   }
   return safeChildEnv({
     ...withoutRetiredEnv(runtimeEnv),
+    // An explicit APP_TIMEZONE in runtime.env still wins.
+    APP_TIMEZONE: runtimeEnv.APP_TIMEZONE || systemTimeZone(),
     SERVER_HOST: LOOPBACK_HOST,
     PORT: String(port),
     NODE_ENV: "production",

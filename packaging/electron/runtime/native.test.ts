@@ -13,6 +13,7 @@ import {
   classifyDatabaseSwitchState,
   validateApplicationEnv,
   buildNativeBackendEnv,
+  systemTimeZone,
   isPortFree,
   isDetailedHealthReady,
   lastStartupError,
@@ -947,6 +948,34 @@ void test("finalizing a restore keeps only the newest previous generations", asy
     "database.previous-5-old",
   ]);
   assert.ok(fs.existsSync(path.join(temp, "database.failed-1-keep")));
+});
+
+void test("packaged backend computes calendar days in the Mac's zone unless runtime.env pins one", () => {
+  const base = {
+    port: 43123,
+    paths: {
+      env: "/tmp/runtime.env",
+      attachments: "/tmp/attachments",
+      cache: "/tmp/cache",
+      database: "/tmp/database/vision.sqlite3",
+    },
+    runtimeRoot: "/tmp/native-runtime",
+  };
+  assert.equal(
+    buildNativeBackendEnv({ ...base, runtimeEnv: {} }).APP_TIMEZONE,
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+  );
+  assert.equal(
+    buildNativeBackendEnv({
+      ...base,
+      runtimeEnv: { APP_TIMEZONE: "Europe/Brussels" },
+    }).APP_TIMEZONE,
+    "Europe/Brussels",
+  );
+  assert.equal(systemTimeZone(() => "Europe/Helsinki"), "Europe/Helsinki");
+  // A zone the backend would reject must not stop it from starting.
+  assert.equal(systemTimeZone(() => "Not/AZone"), undefined);
+  assert.equal(systemTimeZone(() => undefined), undefined);
 });
 
 void test("attachment replacement verifies content and atomically replaces the destination", async (t) => {

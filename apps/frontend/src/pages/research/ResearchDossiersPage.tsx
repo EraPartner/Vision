@@ -1,4 +1,4 @@
-import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
+import { isoToDateTimeLocal, parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import { useEffect, useId, useRef, useState } from "react";
 import {
     AlertTriangle,
@@ -1247,7 +1247,7 @@ function EvidenceEditor({
                     <Input
                         id={`source-accessed-${item.id}`}
                         type="datetime-local"
-                        value={item.source.accessedAt?.slice(0, 16) ?? ""}
+                        value={isoToDateTimeLocal(item.source.accessedAt)}
                         onChange={(event) =>
                             updateSource({
                                 accessedAt: event.target.value

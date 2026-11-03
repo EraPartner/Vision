@@ -24,7 +24,7 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
-import { parseYmd, daysBetween } from "@/lib/timezone";
+import { calendarDaysUntil } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
@@ -41,7 +41,7 @@ const ALLOWED_ASSET_CLASSES = ["savings", "bond"] as const;
 
 function daysUntil(dateStr?: string) {
     if (!dateStr) return null;
-    return Math.ceil(daysBetween(new Date(), parseYmd(dateStr)));
+    return calendarDaysUntil(dateStr);
 }
 
 export default function SavingsPage() {
