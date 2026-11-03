@@ -187,8 +187,12 @@ export async function createBundle({
 // ---------------------------------------------------------------------------
 
 /**
- * Encrypt a bundle in-place with AES-256-GCM (v2 format).
- * Writes the encrypted file as `<bundlePath>.enc`, deletes the original.
+ * Encrypt a bundle with AES-256-GCM (v2 format) and delete the plaintext.
+ * Writes `<destDir>/<bundle name>.enc` (destDir defaults to the bundle's own
+ * directory) through a `.partial` sidecar, so an interrupted write never
+ * leaves a truncated file at the restorable name. Building the plaintext
+ * bundle in a private staging directory and passing the backup folder as
+ * destDir keeps the unencrypted archive out of that folder (e.g. iCloud Drive).
  *
  * @param passphrase - user passphrase; key is derived per-bundle
  *                     with a fresh random salt embedded in the header.
@@ -196,12 +200,26 @@ export async function createBundle({
 export async function encryptBundle(
   bundlePath: string,
   passphrase: string,
+  { destDir = path.dirname(bundlePath) }: { destDir?: string } = {},
 ): Promise<{ encPath: string }> {
   if (!passphrase || typeof passphrase !== "string") {
     throw new Error("encryptBundle requires a passphrase");
   }
-  const encPath = `${bundlePath}.enc`;
-  await encryptFileV2(bundlePath, encPath, passphrase, BUNDLE_ENC_MAGIC_V2);
+  await fs.promises.mkdir(destDir, { recursive: true });
+  const encPath = path.join(destDir, `${path.basename(bundlePath)}.enc`);
+  const partialPath = `${encPath}.partial`;
+  try {
+    await encryptFileV2(
+      bundlePath,
+      partialPath,
+      passphrase,
+      BUNDLE_ENC_MAGIC_V2,
+    );
+    await fs.promises.rename(partialPath, encPath);
+  } catch (err) {
+    await fs.promises.unlink(partialPath).catch(() => {});
+    throw err;
+  }
 
   await fs.promises.unlink(bundlePath);
   return { encPath };

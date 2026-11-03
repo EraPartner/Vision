@@ -1000,6 +1000,10 @@ contextBridge.exposeInMainWorld("electronRecovery", electronRecovery);
 - Every privileged invoke must come from the current main frame at the selected
   backend origin or the exact packaged recovery page. A localhost page at a
   different port, a subframe, and an arbitrary local file cannot use the bridge.
+- The backend binds `127.0.0.1` only. The renderer origin stays `http://localhost:<port>`, but a
+  `host-resolver-rules` switch (`MAP localhost 127.0.0.1`) keeps Chromium from also trying
+  `[::1]:<port>`, where another local process or account could listen and be served as the trusted
+  origin. Main-process health and settings requests use `http://127.0.0.1:<port>` directly.
 - Renderer navigation and redirects are restricted to that backend origin and
   recovery page. Programmatic splash loads remain controlled by the main process.
 - The request and check permission handlers deny renderer capabilities except

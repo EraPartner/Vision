@@ -123,3 +123,14 @@ void test("main locates uncompiled files from the package root, not out/", () =>
     /repoRootFallback: path\.resolve\(appRoot, "\.\.", "\.\."\)/,
   );
 });
+
+void test("the app origin resolves only to the backend's IPv4 loopback bind", () => {
+  // The backend binds 127.0.0.1; a [::1] listener on the same port must never
+  // be served as the trusted http://localhost origin or answer main-process calls.
+  assert.match(
+    main,
+    /appendSwitch\(\s*"host-resolver-rules",\s*`MAP localhost \$\{LOOPBACK_HOST\}`/,
+  );
+  assert.doesNotMatch(main, /http\.(get|request)\([^)]*appUrl\(\)/);
+  assert.doesNotMatch(main, /`http:\/\/localhost:\$\{appPort\}\/api/);
+});

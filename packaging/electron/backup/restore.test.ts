@@ -6,11 +6,12 @@ import test from "node:test";
 import type { TestContext } from "node:test";
 
 import { createZipWriter } from "./zip-writer";
-import { openBundle } from "./bundle";
+import { createBundle, encryptBundle, openBundle } from "./bundle";
 import {
   assertBackupSchemaCompatible,
   init,
   resolveDatabaseEnvironment,
+  runBundleBackup,
   runBundleRestore,
   runRestore,
 } from "./restore";
@@ -228,4 +229,44 @@ void test("restore rejects a bundle whose metadata disagrees with its dump", asy
 
   await assert.rejects(runBundleRestore(bundlePath), /does not match/);
   assert.deepEqual(restored, []);
+});
+
+void test("a backup refuses a system directory even when it comes from stored settings", async () => {
+  init({ runtimeProvider: () => null });
+  await assert.rejects(
+    runBundleBackup("/etc/vision", null),
+    /system directories is not allowed/,
+  );
+});
+
+void test("an encrypted backup reaches its folder only as owner-only ciphertext", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vision-backup-dest-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const staging = path.join(root, "staging");
+  const destDir = path.join(root, "iCloud Backups");
+  fs.mkdirSync(staging);
+  const dbSqlPath = path.join(staging, "db.sql");
+  fs.writeFileSync(dbSqlPath, kyselyDump("0001_baseline"));
+
+  const { bundlePath } = await createBundle({
+    destDir: staging,
+    deviceId: "abcd1234",
+    schemaHead: "0001_baseline",
+    appVersion: "2.0.0",
+    dbSqlPath,
+    attachmentsDir: null,
+    frontendState: null,
+  });
+  assert.equal(fs.statSync(bundlePath).mode & 0o777, 0o600);
+  const { encPath } = await encryptBundle(bundlePath, "correct horse", {
+    destDir,
+  });
+
+  assert.deepEqual(fs.readdirSync(destDir), [path.basename(encPath)]);
+  assert.match(path.basename(encPath), /\.visionbak\.enc$/);
+  assert.equal(fs.statSync(encPath).mode & 0o777, 0o600);
+  assert.equal(fs.existsSync(bundlePath), false);
+  const opened = await openBundle(encPath, { passphrase: "correct horse" });
+  t.after(opened.cleanup);
+  assert.equal(opened.metadata.schemaHead, "0001_baseline");
 });

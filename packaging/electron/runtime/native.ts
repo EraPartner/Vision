@@ -14,6 +14,7 @@ import {
   parseDatabaseStats,
   type DatabaseStats,
 } from "./database-stats";
+import { psqlRestoreGuardArgs } from "./psql-restore-guard";
 
 export const POSTGRES_MAJOR = 18;
 export const POSTGRES_MINOR = 6;
@@ -2607,6 +2608,9 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         }
         if (format !== "plain")
           throw new Error(`Unsupported restore format: ${format}`);
+        // The dump is user-chosen input: keep its psql meta-commands from
+        // running (see psql-restore-guard.ts).
+        const guardArgs = await psqlRestoreGuardArgs(source);
         await runFile(
           path.join(requireTools().binDir, "psql"),
           [
@@ -2622,6 +2626,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
             "ON_ERROR_STOP=1",
             "--no-psqlrc",
             "--single-transaction",
+            ...guardArgs,
             "--file",
             source,
           ],
