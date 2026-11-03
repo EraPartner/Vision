@@ -22,7 +22,7 @@ import {
   createUnconvertedTally,
   noteUnconverted,
 } from "../../lib/unconvertedTally.ts";
-import { toAppDateString } from "../../lib/timezone.ts";
+import { toYmd } from "../../lib/dateFormat.ts";
 import { logger } from "../../config/logger.ts";
 import { findRateOnOrBeforeInIndex } from "../currency/rateFetcher.ts";
 import { addAll, toNumber, toDecimal } from "../../lib/money.ts";
@@ -228,7 +228,9 @@ function buildPortfolioExecutiveSummaryData(
       ? Number(latest.inflation_adjusted_value)
       : null,
     valuationDate: latest
-      ? toAppDateString(new Date(latest.snapshot_date))
+      ? // A DATE value is local midnight: read its own calendar day. Converting
+        // it to APP_TIMEZONE moved it a day back on hosts east of that zone.
+        toYmd(latest.snapshot_date)
       : null,
     totalDividends: toNumber(
       addAll((dividends?.byMonth ?? []).map((month) => month.amount)),
@@ -262,15 +264,15 @@ async function fetchDividends(
       i.name AS investment_name,
       i.symbol,
       i.asset_class,
-      EXTRACT(YEAR  FROM pt.date::date)::int AS year,
-      EXTRACT(MONTH FROM pt.date::date)::int AS month,
-      COALESCE(pt.amount, 0) AS amount,
+      date_part('year', pt.date) AS year,
+      date_part('month', pt.date) AS month,
+      COALESCE(pt.amount, '0') AS amount,
       COALESCE(pt.currency, i.currency, 'EUR') AS currency, pt.income_recognition_role,
       to_char(pt.date,'YYYY-MM-DD') AS rate_date
     FROM portfolio_transactions pt
     JOIN investments i ON i.id = pt.investment_id
     WHERE pt.type = 'dividend'
-      AND pt.date::date BETWEEN ${startDate} AND ${endDate}
+      AND pt.date BETWEEN ${startDate} AND ${endDate}
     ORDER BY year, month
     LIMIT 100000
   `,

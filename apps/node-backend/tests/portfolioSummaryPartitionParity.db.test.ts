@@ -1,5 +1,5 @@
 /**
- * ADR-108 WP-C4 parity invariant — REAL Postgres, the work package's
+ * ADR-108 WP-C4 parity invariant — the REAL (SQLite) database, the work package's
  * definition of done:
  *
  *   Σ per-account (invested / realized / unrealized / value / gainLoss)
@@ -21,26 +21,19 @@
  * cross-account lot consumption produces DIFFERENT numbers for every method —
  * the green suite cannot mask a broken partition seam behind symmetric math.
  *
- * Needs TEST_DATABASE_URL and DATABASE_URL pointing at the same migrated
- * database (the service under test uses the app's own pool).
+ * Fixtures and the service under test share this file's SQLite database
+ * (tests/setup/db.ts).
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
+import { closeTestPool, getTestPool } from "./setup/db.ts";
+import type { TestPool } from "./setup/db.ts";
 
 import { closePool } from "../src/database/connection.ts";
 import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.ts";
 import { must } from "./helpers/must.ts";
-import type { Pool } from "pg";
 
-let pool: Pool;
-const describeDb = hasTestDatabase() ? describe : describe.skip;
+let pool: TestPool;
 
 /** Fixture ids populated by seed(). */
 const fx = {} as Record<
@@ -58,7 +51,7 @@ type BreakdownField =
 
 async function setCostBasisMethod(method: string) {
   await pool.query(
-    `INSERT INTO user_settings (key, value) VALUES ('cost_basis_method', to_jsonb($1::text))
+    `INSERT INTO user_settings (key, value) VALUES ('cost_basis_method', vision_jsonb(json_quote($1)))
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
     [method],
   );
@@ -75,8 +68,8 @@ async function seedAccount(name: string, displayName: string) {
 async function seedInvestment(name: string, currentPrice: number) {
   const { rows } = await pool.query<{ id: number }>(
     `INSERT INTO investments (name, symbol, asset_class, currency, current_price)
-     VALUES ($1, $1, 'stock', 'EUR', $2) RETURNING id`,
-    [name, currentPrice],
+     VALUES ($1, $1, 'stock', 'EUR', vision_numeric($2, 18, 6)) RETURNING id`,
+    [name, String(currentPrice)],
   );
   return must(rows[0], "rows[0]").id;
 }
@@ -93,8 +86,8 @@ async function seedTxn(
 ) {
   const { rows } = await pool.query<{ id: number }>(
     `INSERT INTO portfolio_transactions (investment_id, type, date, amount, units, currency, account_id)
-     VALUES ($1, $2, $3::date, $4, $5, 'EUR', $6) RETURNING id`,
-    [investmentId, type, date, amount, units, accountId],
+     VALUES ($1, $2, $3, vision_numeric($4, 18, 4), vision_numeric($5, 18, 8), 'EUR', $6) RETURNING id`,
+    [investmentId, type, date, String(amount), units === null ? null : String(units), accountId],
   );
   return must(rows[0], "rows[0]").id;
 }
@@ -252,16 +245,14 @@ const EXPECTED = {
 // Account B: value 300+275+200+600 = 1375 · invested 1000+1100+500+1000 = 3600
 // Null row (UNASSIGNED only): value 900 · invested 1000 · realized 50 · unrealized 0
 
-describeDb(
-  "WP-C4 parity invariant — Σ per-account ≡ global engine (real Postgres)",
+describe(
+  "WP-C4 parity invariant — Σ per-account ≡ global engine (real DB)",
   () => {
     beforeAll(() => {
       pool = must(getTestPool(), "test pool");
     });
-    beforeAll(acquireDbSuiteLock, 180_000);
     afterAll(async () => {
       await wipe();
-      await releaseDbSuiteLock();
       await closePool();
       await closeTestPool();
     });
@@ -383,7 +374,7 @@ describeDb(
       // engine must survive, not crash on).
       await pool.query(
         `UPDATE portfolio_transactions SET account_id = $1
-       WHERE investment_id = $2 AND type = 'buy' AND units = 20`,
+       WHERE investment_id = $2 AND type = 'buy' AND dec_eq(units, '20')`,
         [fx.ibkr, fx.retag],
       );
       const after = await getPortfolioSummary("EUR");

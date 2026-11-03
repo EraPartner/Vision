@@ -718,4 +718,23 @@ describe("portfolio report view models", () => {
       7, 6, 5, 4, 3,
     ]);
   });
+
+  it("keeps a DATE valuation day on a host east of APP_TIMEZONE", () => {
+    // The driver hands DATE back as local midnight; in Helsinki that instant
+    // is still the previous evening in Brussels, which used to print the day
+    // before.
+    const previousTz = process.env.TZ;
+    process.env.TZ = "Europe/Helsinki";
+    try {
+      const summary = must(buildPortfolioExecutiveSummaryData(
+        [],
+        loose<SnapshotRow[]>([{ snapshot_date: new Date(2025, 11, 31), value: "112", invested: "100", return_pct: 12, inflation_adjusted_value: 107 }]),
+        null,
+      ), "executive summary data");
+      expect(summary.valuationDate).toBe("2025-12-31");
+    } finally {
+      if (previousTz === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTz;
+    }
+  });
 });

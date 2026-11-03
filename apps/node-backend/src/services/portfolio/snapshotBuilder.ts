@@ -229,17 +229,19 @@ function latestDayOnOrBefore(days: readonly string[], day: string): string {
   return bestDay;
 }
 
-/** @returns the first data day (a pg DATE, local midnight) or null */
+/** @returns the first data day (a DATE, local midnight) or null */
 export async function getFirstDataDate(): Promise<Date | null> {
+  // MIN over canonical 'YYYY-MM-DD' text is the earliest day; ts_date() is
+  // the backend-local calendar day of a timestamp.
   const row = await checkedRow(
     firstDataDateRowSchema,
     sql`
-    SELECT MIN(first_date)::date AS first_data_date
+    SELECT MIN(first_date) AS "first_data_date::date"
     FROM (
-      SELECT MIN(date)::date AS first_date
+      SELECT MIN(date) AS first_date
       FROM portfolio_transactions
       UNION ALL
-      SELECT MIN(COALESCE(created_at::date, CURRENT_DATE))::date AS first_date
+      SELECT MIN(COALESCE(ts_date(created_at), today())) AS first_date
       FROM investments
       WHERE is_active = true
     ) seed
@@ -284,7 +286,7 @@ export async function computeDailySnapshots(
         .select([
           "i.id",
           sql<string>`COALESCE(i.currency, 'EUR')`.as("currency"),
-          sql<string>`COALESCE(i.current_price, 0)`.as("current_price"),
+          sql<string>`COALESCE(i.current_price, '0')`.as("current_price"),
           "i.asset_class",
         ])
         .where("i.is_active", "=", true)
@@ -302,19 +304,15 @@ export async function computeDailySnapshots(
         .select([
           "id",
           sql<string>`COALESCE(currency, 'EUR')`.as("currency"),
-          sql<string>`COALESCE(current_price, 0)`.as("current_price"),
-          sql<string>`COALESCE(interest_rate, 0)`.as("interest_rate"),
+          sql<string>`COALESCE(current_price, '0')`.as("current_price"),
+          sql<string>`COALESCE(interest_rate, '0')`.as("interest_rate"),
           "asset_class",
-          sql<string>`COALESCE(created_at::date, ${firstDateYmd}::date)::text`.as(
+          sql<string>`COALESCE(ts_date(created_at), ${firstDateYmd})`.as(
             "active_from",
           ),
         ])
         .where("is_active", "=", true)
-        .where(
-          sql<string>`asset_class::text`,
-          "=",
-          sql<string>`ANY(${NON_UNIT_ASSET_CLASSES}::text[])`,
-        ),
+        .where(sql<string>`asset_class`, "in", NON_UNIT_ASSET_CLASSES),
     ),
     checkedRows(
       snapshotPriceHistoryRowSchema,
@@ -325,8 +323,8 @@ export async function computeDailySnapshots(
           sql<string>`to_char(price_date, 'YYYY-MM-DD')`.as("day"),
           "close_price",
         ])
-        .where("price_date", ">=", sql<Date>`${firstDateYmd}::date`)
-        .where("price_date", "<=", sql<Date>`${todayYmd}::date`)
+        .where("price_date", ">=", sql<Date>`${firstDateYmd}`)
+        .where("price_date", "<=", sql<Date>`${todayYmd}`)
         .orderBy("investment_id")
         .orderBy("price_date"),
     ),
@@ -338,7 +336,7 @@ export async function computeDailySnapshots(
           sql<string>`to_char(month_date, 'YYYY-MM')`.as("month"),
           "monthly_rate",
         ])
-        .where("month_date", ">=", sql<Date>`${firstDateYmd}::date`)
+        .where("month_date", ">=", sql<Date>`${firstDateYmd}`)
         .orderBy("month_date"),
     ),
     // A failed FX read degrades to "no rates" (the .catch), but a row that
@@ -359,7 +357,7 @@ export async function computeDailySnapshots(
         sql<string>`to_char(rate_date, 'YYYY-MM-DD')`.as("day"),
         "rate_to_eur",
       ])
-      .where("rate_date", ">=", sql<Date>`${firstDateYmd}::date`)
+      .where("rate_date", ">=", sql<Date>`${firstDateYmd}`)
       .orderBy("currency_code")
       .orderBy("rate_date")
       .execute()
@@ -1144,13 +1142,41 @@ const BATCH_SIZE = 500;
 async function hasFxNeutralColumn(): Promise<boolean> {
   const result = await sql`
     SELECT 1
-    FROM information_schema.columns
-    WHERE table_schema = current_schema()
-      AND table_name = 'portfolio_performance_snapshots'
-      AND column_name = 'value_fx_neutral'
+    FROM pragma_table_info('portfolio_performance_snapshots')
+    WHERE name = 'value_fx_neutral'
     LIMIT 1
   `.execute(db);
   return result.rows.length > 0;
+}
+
+/**
+ * NUMERIC(p, s) of each decimal snapshot column. The day walk computes plain
+ * numbers; each is bound as the text node-postgres sent (`String(n)`) and
+ * stored through `vision_numeric`, which rounds half away from zero as the
+ * PostgreSQL assignment cast did (ADR-263).
+ */
+const SNAPSHOT_DECIMAL_COLUMNS: Readonly<Record<string, readonly [number, number]>> = {
+  invested: [18, 6],
+  value: [18, 6],
+  stocks_etfs_value: [18, 6],
+  crypto_value: [18, 6],
+  metals_value: [18, 6],
+  cash_value: [18, 6],
+  gain_loss: [18, 6],
+  return_pct: [10, 4],
+  inflation_adjusted_value: [18, 6],
+  stocks_etfs_invested: [18, 6],
+  crypto_invested: [18, 6],
+  metals_invested: [18, 6],
+  value_fx_neutral: [18, 2],
+};
+
+/** One snapshot value for `column`, canonicalised when the column is decimal. */
+function snapshotValue(column: string, value: unknown) {
+  const typmod = SNAPSHOT_DECIMAL_COLUMNS[column];
+  if (!typmod) return sql`${value}`;
+  const text = typeof value === "number" ? String(value) : value;
+  return sql`vision_numeric(${text}, ${sql.lit(typmod[0])}, ${sql.lit(typmod[1])})`;
 }
 
 /**
@@ -1217,7 +1243,8 @@ export async function computeAndStoreSnapshots(
 
   // Atomic replace: DELETE + INSERTs in one transaction so concurrent readers
   // (e.g. /api/info/net-worth during startup warmup) see either fully-old or
-  // fully-new state via Postgres MVCC — never an empty/partial table.
+  // fully-new state (the read connection sees committed data only) — never an
+  // empty/partial table.
   await withTransaction(async () => {
     await db
       .deleteFrom("portfolio_performance_snapshots")
@@ -1227,7 +1254,8 @@ export async function computeAndStoreSnapshots(
     for (let i = 0; i < snapshots.length; i += BATCH_SIZE) {
       const batch = snapshots.slice(i, i + BATCH_SIZE);
       const values = batch.map(
-        (snap) => sql`(${sql.join(snapParams(snap))}, NOW())`,
+        (snap) =>
+          sql`(${sql.join(snapParams(snap).map((value, index) => snapshotValue(columns[index] ?? "", value)))}, NOW())`,
       );
 
       await sql`

@@ -1,16 +1,10 @@
 /**
- * Real-PostgreSQL check that saving an exposure bundle upserts the supplied
+ * Real-database (SQLite) check that saving an exposure bundle upserts the supplied
  * sources and never deletes sources the bundle omits. Replaces a mocked-client
  * test that asserted the absence of DELETE in the emitted SQL.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { closeTestPool, getTestPool } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { upsertExposureBundle } from "../src/repositories/portfolioExposureRepository.ts";
 import { must } from "./helpers/must.ts";
@@ -30,28 +24,22 @@ async function investment(): Promise<number> {
   return must(rows[0], "rows[0]").id;
 }
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "portfolio exposure sources (real DB)",
   () => {
-    beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180_000);
-
     afterEach(async () => {
       const db = must(getTestPool(), "test pool");
       const ids = investmentIds.splice(0);
       await db.query(
-        "DELETE FROM portfolio_exposure_classifications WHERE investment_id = ANY($1::int[])",
+        "DELETE FROM portfolio_exposure_classifications WHERE investment_id IN (SELECT value FROM json_each($1))",
         [ids],
       );
-      await db.query("DELETE FROM investments WHERE id = ANY($1::int[])", [
+      await db.query("DELETE FROM investments WHERE id IN (SELECT value FROM json_each($1))", [
         ids,
       ]);
     });
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });

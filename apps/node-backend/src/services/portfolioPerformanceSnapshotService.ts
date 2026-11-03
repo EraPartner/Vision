@@ -11,11 +11,11 @@ import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   accountDisplayNameRowSchema,
   brokerSnapshotRowSchema,
-  currentDateRowSchema,
   portfolioPerformanceSnapshotRowSchema,
   regclassRowSchema,
 } from "../database/rows/portfolio.ts";
 import { toYmd } from "../lib/dateFormat.ts";
+import { todayAppDateString } from "../lib/timezone.ts";
 import {
   computeMetrics,
   computeHeatmap,
@@ -67,7 +67,8 @@ const BROKER_HISTORY_PARITY_TOLERANCE = 0.011;
 async function hasBrokerSnapshotTable() {
   const row = await checkedRow(
     regclassRowSchema,
-    sql`SELECT to_regclass('public.portfolio_broker_snapshots') AS relation`,
+    sql`SELECT (SELECT name FROM sqlite_schema
+                 WHERE type = 'table' AND name = 'portfolio_broker_snapshots') AS relation`,
   );
   return Boolean(row?.relation);
 }
@@ -102,7 +103,11 @@ export async function __storeCurrentBrokerSnapshot(
                   "display_name",
                 ),
               ])
-              .where("id", "=", sql<AccountId>`ANY(${accountIds}::int[])`),
+              .where(
+                "id",
+                "in",
+                sql<AccountId>`(SELECT value FROM json_each(${JSON.stringify(accountIds)}))`,
+              ),
           )
         : [];
     const names = new Map<number, string>(
@@ -153,21 +158,23 @@ export async function __storeCurrentBrokerSnapshot(
       );
     }
 
-    const snapshotDate: string | undefined = (
-      await checkedRow(
-        currentDateRowSchema,
-        sql`SELECT CURRENT_DATE::text AS today`,
-      )
-    )?.today;
+    // The same app-zone day the aggregate snapshots end on (snapshotBuilder).
+    // A database-side current date (PostgreSQL CURRENT_DATE, SQLite today())
+    // follows another zone, so after midnight it could overwrite the previous
+    // day's broker split (ADR-264).
+    const snapshotDate = todayAppDateString();
     await sql`DELETE FROM portfolio_broker_snapshots
       WHERE snapshot_date = ${snapshotDate} AND currency = ${currency}`.execute(db);
+    // NUMERIC(18,2): vision_numeric rounds the exact sums half away from zero,
+    // as the PostgreSQL assignment cast did.
     for (const row of rows) {
       await sql`INSERT INTO portfolio_broker_snapshots
           (snapshot_date, currency, account_key, account_id, account_name,
            value, invested, gain_loss, computed_at)
         VALUES (${snapshotDate}, ${currency}, ${row.accountKey}, ${row.accountId},
-                ${row.accountName}, ${row.value.toString()}, ${row.invested.toString()},
-                ${row.gainLoss.toString()}, now())`.execute(db);
+                ${row.accountName}, vision_numeric(${row.value.toString()}, 18, 2),
+                vision_numeric(${row.invested.toString()}, 18, 2),
+                vision_numeric(${row.gainLoss.toString()}, 18, 2), now())`.execute(db);
     }
     return { stored: true, rows: rows.length, snapshotDate };
   });

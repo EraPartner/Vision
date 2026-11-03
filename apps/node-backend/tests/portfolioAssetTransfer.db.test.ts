@@ -3,13 +3,8 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
+import { closeTestPool, getTestPool } from "./setup/db.ts";
+import type { TestPool } from "./setup/db.ts";
 import { closePool, withTransaction } from "../src/database/connection.ts";
 import {
   getRowsForPortfolioMath,
@@ -33,7 +28,6 @@ import {
   asInvestmentId,
 } from "@vision/types/brands";
 import { must } from "./helpers/must.ts";
-import type { Pool } from "pg";
 
 /** A row from an ad-hoc SQL read: column values are narrowed where used. */
 type DbRow = Record<string, unknown>;
@@ -46,7 +40,7 @@ interface BigIdRow {
 }
 type StagedRow = Parameters<typeof commitPortfolioAssetTransfer>[0]["row"];
 
-let pool: Pool;
+let pool: TestPool;
 const ids: { investments: number[]; accounts: number[]; batches: string[] } = {
   investments: [],
   accounts: [],
@@ -100,7 +94,7 @@ async function stage(
 ) {
   const batch = must((
     await pool.query<BigIdRow>(
-      "INSERT INTO portfolio_import_batches(adapter_name,status,account_id,custom_config) VALUES ('kinesis_transaction_history','awaiting_review',$1,$2::jsonb) RETURNING id",
+      "INSERT INTO portfolio_import_batches(adapter_name,status,account_id,custom_config) VALUES ('kinesis_transaction_history','awaiting_review',$1,vision_jsonb($2)) RETURNING id",
       [
         position.source,
         JSON.stringify({
@@ -113,7 +107,7 @@ async function stage(
   const row = must((
     await pool.query<StagedRow>(
       `INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,tx_date,type_raw,route,units,amount,resolved_investment_id,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,asset_transfer_details)
-    VALUES ($1,0,'matched',$2,'AssetTransfer','asset_transfer',$3,0,$4,$5,$6,1,$7::json) RETURNING *,to_char(tx_date,'YYYY-MM-DD') AS tx_date`,
+    VALUES ($1,0,'matched',$2,'AssetTransfer','asset_transfer',vision_numeric($3,18,8),'0.0000',$4,$5,$6,1,$7) RETURNING *,to_char(tx_date,'YYYY-MM-DD') AS tx_date`,
       [
         batch.id,
         date,
@@ -143,50 +137,45 @@ async function transferCount() {
   return Number(
     must((
       await pool.query<DbRow>(
-        "SELECT count(*) FROM portfolio_asset_transfers WHERE investment_id=ANY($1::int[])",
+        "SELECT count(*) AS \"count::bigint\" FROM portfolio_asset_transfers WHERE investment_id IN (SELECT value FROM json_each($1))",
         [ids.investments],
       )
     ).rows[0], "query row").count,
   );
 }
 
-describe.skipIf(!hasTestDatabase())(
-  "canonical dated asset transfers (real Postgres)",
+describe(
+  "canonical dated asset transfers (real DB)",
   () => {
     beforeAll(() => {
       pool = must(getTestPool(), "test pool");
     });
-    beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180000);
     afterEach(async () => {
       await pool.query(
-        "DELETE FROM portfolio_asset_transfers WHERE investment_id=ANY($1::int[])",
+        "DELETE FROM portfolio_asset_transfers WHERE investment_id IN (SELECT value FROM json_each($1))",
         [ids.investments],
       );
       await pool.query(
-        "DELETE FROM portfolio_transactions WHERE investment_id=ANY($1::int[])",
+        "DELETE FROM portfolio_transactions WHERE investment_id IN (SELECT value FROM json_each($1))",
         [ids.investments],
       );
       await pool.query(
-        "DELETE FROM portfolio_import_staging_rows WHERE batch_id=ANY($1::bigint[])",
+        "DELETE FROM portfolio_import_staging_rows WHERE batch_id IN (SELECT value FROM json_each($1))",
         [ids.batches],
       );
       await pool.query(
-        "DELETE FROM portfolio_import_batches WHERE id=ANY($1::bigint[])",
+        "DELETE FROM portfolio_import_batches WHERE id IN (SELECT value FROM json_each($1))",
         [ids.batches],
       );
-      await pool.query("DELETE FROM investments WHERE id=ANY($1::int[])", [
+      await pool.query("DELETE FROM investments WHERE id IN (SELECT value FROM json_each($1))", [
         ids.investments,
       ]);
-      await pool.query("DELETE FROM accounts WHERE id=ANY($1::int[])", [
+      await pool.query("DELETE FROM accounts WHERE id IN (SELECT value FROM json_each($1))", [
         ids.accounts,
       ]);
       ids.investments.length = ids.accounts.length = ids.batches.length = 0;
     });
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closePool();
       await closeTestPool();
     });
@@ -197,7 +186,7 @@ describe.skipIf(!hasTestDatabase())(
       const cashBefore = Number(
         must((
           await pool.query<DbRow>(
-            "SELECT count(*) FROM transactions WHERE account_id=ANY($1::int[])",
+            "SELECT count(*) AS \"count::bigint\" FROM transactions WHERE account_id IN (SELECT value FROM json_each($1))",
             [[position.source, position.destination]],
           )
         ).rows[0], "query row").count,
@@ -211,7 +200,7 @@ describe.skipIf(!hasTestDatabase())(
         Number(
           must((
             await pool.query<DbRow>(
-              "SELECT count(*) FROM portfolio_transactions WHERE investment_id=$1",
+              "SELECT count(*) AS \"count::bigint\" FROM portfolio_transactions WHERE investment_id=$1",
               [position.investment],
             )
           ).rows[0], "query row").count,
@@ -221,14 +210,14 @@ describe.skipIf(!hasTestDatabase())(
         Number(
           must((
             await pool.query<DbRow>(
-              "SELECT count(*) FROM transactions WHERE account_id=ANY($1::int[])",
+              "SELECT count(*) AS \"count::bigint\" FROM transactions WHERE account_id IN (SELECT value FROM json_each($1))",
               [[position.source, position.destination]],
             )
           ).rows[0], "query row").count,
         ),
       ).toBe(cashBefore);
       await expect(
-        pool.query<DbRow>("UPDATE portfolio_asset_transfers SET units=4 WHERE id=$1", [
+        pool.query<DbRow>("UPDATE portfolio_asset_transfers SET units=vision_numeric('4',18,8) WHERE id=$1", [
           first.id,
         ]),
       ).rejects.toThrow(/immutable/);
@@ -281,7 +270,7 @@ describe.skipIf(!hasTestDatabase())(
           transfer_destination_account_id: position.destination,
         };
         await pool.query(
-          "UPDATE portfolio_import_batches SET custom_config=$2::jsonb,default_asset_class='crypto',is_brokerage=true WHERE id=$1",
+          "UPDATE portfolio_import_batches SET custom_config=vision_jsonb($2),default_asset_class='crypto',is_brokerage=true WHERE id=$1",
           [input.batch.id, JSON.stringify(config)],
         );
         expect(
@@ -387,7 +376,7 @@ describe.skipIf(!hasTestDatabase())(
         transfer_destination_account_id: position.destination,
       };
       await pool.query(
-        "UPDATE portfolio_import_batches SET adapter_name='nexo_transaction_history',custom_config=$2::jsonb,default_asset_class='crypto',is_brokerage=true WHERE id=$1",
+        "UPDATE portfolio_import_batches SET adapter_name='nexo_transaction_history',custom_config=vision_jsonb($2),default_asset_class='crypto',is_brokerage=true WHERE id=$1",
         [incoming.batch.id, JSON.stringify(config)],
       );
       const directory = await mkdtemp(
@@ -581,7 +570,7 @@ describe.skipIf(!hasTestDatabase())(
         Number(
           must((
             await pool.query<DbRow>(
-              "SELECT count(*) FROM portfolio_transactions WHERE investment_id=$1 AND type='sell'",
+              "SELECT count(*) AS \"count::bigint\" FROM portfolio_transactions WHERE investment_id=$1 AND type='sell'",
               [position.investment],
             )
           ).rows[0], "query row").count,

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import { partial } from "./helpers/partial.ts";
 import { mockTxConnection } from "./helpers/repoMocks.ts";
@@ -18,6 +18,7 @@ import {
   __storeCurrentBrokerSnapshot,
 } from "../src/services/portfolioPerformanceSnapshotService.ts";
 import { must } from "./helpers/must.ts";
+import { appDateStringToUtc } from "../src/lib/timezone.ts";
 
 // Fixtures return only the `rows` the service reads.
 const query = rawQuery as unknown as Mock<
@@ -27,6 +28,7 @@ type Summary = Parameters<typeof __storeCurrentBrokerSnapshot>[1];
 
 describe("forward-only broker snapshots", () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.useRealTimers());
 
   it("replaces only today's split, snapshots names, preserves unassigned identity, and enforces sum parity", async () => {
     query
@@ -36,8 +38,11 @@ describe("forward-only broker snapshots", () => {
       .mockResolvedValueOnce({
         rows: [{ id: 7, display_name: "Broker Seven" }],
       })
-      .mockResolvedValueOnce({ rows: [{ today: "2026-09-13" }] })
       .mockResolvedValue({ rows: [] });
+    // 00:30 on 13 Sep in APP_TIMEZONE, when the UTC (and a database-side
+    // CURRENT_DATE/today()) day is still 12 Sep: the split is dated the app day.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(appDateStringToUtc("2026-09-13").getTime() + 30 * 60_000);
     const outcome = await __storeCurrentBrokerSnapshot(
       "EUR",
       partial<Summary>({
@@ -53,6 +58,7 @@ describe("forward-only broker snapshots", () => {
         ],
       }),
     );
+    vi.useRealTimers();
     expect(outcome).toEqual({
       stored: true,
       rows: 2,

@@ -10,8 +10,8 @@ import type { PortfolioAssetTransferDbRow } from "../database/rows/portfolio.ts"
 import type { AccountId, InvestmentId } from "@vision/types/brands";
 
 /**
- * BIGINT ids and NUMERIC units arrive from pg as strings. Derived from the
- * checked row schema.
+ * BIGINT ids and NUMERIC units arrive as strings. Derived from the checked
+ * row schema.
  */
 export type PortfolioAssetTransferRow = PortfolioAssetTransferDbRow;
 
@@ -39,7 +39,7 @@ export async function hasAssetTransfersForInvestment(
           SELECT 1 FROM portfolio_asset_transfers WHERE investment_id=${investmentId}
           UNION ALL
           SELECT 1 FROM portfolio_asset_adjustments WHERE investment_id=${investmentId}
-        ) AS present`,
+        ) AS "present::bool"`,
   );
   // SELECT EXISTS always returns exactly one row.
   if (!row) throw new Error("EXISTS query returned no row");
@@ -84,7 +84,7 @@ export async function insertAssetTransfer(
         source_record_hash: event.source_record_hash,
         dedup_fingerprint: event.dedup_fingerprint,
         dedup_fingerprint_version: event.dedup_fingerprint_version,
-        fee_basis_allocations: sql`${JSON.stringify(event.fee_basis_allocations)}::jsonb`,
+        fee_basis_allocations: sql`vision_jsonb(${JSON.stringify(event.fee_basis_allocations)})`,
       })
       .returning("id"),
   );

@@ -3,13 +3,8 @@ import { createHash } from "node:crypto";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import {
-  acquireDbSuiteLock,
-  releaseDbSuiteLock,
-  getTestPool,
-  hasTestDatabase,
-  closeTestPool,
-} from "./setup/db.ts";
+import { getTestPool, closeTestPool } from "./setup/db.ts";
+import type { TestPool } from "./setup/db.ts";
 import { closePool, withTransaction } from "../src/database/connection.ts";
 import transactionService from "../src/services/portfolio/portfolioTransactionService.ts";
 import { stageBatch } from "../src/services/portfolioImportPipeline/stage.ts";
@@ -32,7 +27,6 @@ import {
 import type { AccountId } from "@vision/types/brands";
 import type { PortfolioParserConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
 import { must } from "./helpers/must.ts";
-import type { Pool } from "pg";
 
 /** A row from an ad-hoc SQL read: column values are narrowed where used. */
 type DbRow = Record<string, unknown>;
@@ -54,7 +48,7 @@ type AdjustmentRow = Parameters<
   typeof commitPortfolioAssetAdjustment
 >[0]["row"];
 
-let pool: Pool;
+let pool: TestPool;
 const owned: {
   accounts: number[];
   investments: number[];
@@ -110,7 +104,7 @@ async function batch(
 ) {
   const row = must((
     await pool.query<BatchRow>(
-      "INSERT INTO portfolio_import_batches(adapter_name,status,account_id,is_brokerage,default_asset_class,custom_config) VALUES ($1,'awaiting_review',$2,true,'crypto',$3::jsonb) RETURNING *",
+      "INSERT INTO portfolio_import_batches(adapter_name,status,account_id,is_brokerage,default_asset_class,custom_config) VALUES ($1,'awaiting_review',$2,true,'crypto',vision_jsonb($3)) RETURNING *",
       [config.format, account, JSON.stringify(config)],
     )
   ).rows[0], "batch row");
@@ -164,7 +158,7 @@ async function fee(position: Position, units = "1") {
   const row = must((
     await pool.query<AdjustmentRow>(
       `INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,tx_date,type_raw,route,units,amount,fees,taxes,resolved_investment_id,raw_data,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,asset_adjustment_details)
-    VALUES ($1,0,'matched','2020-02-01','AssetAdjustment','asset_adjustment',$2,0,0,0,$3,$4,$5,$6,1,$7::json) RETURNING *,to_char(tx_date,'YYYY-MM-DD') AS tx_date`,
+    VALUES ($1,0,'matched','2020-02-01','AssetAdjustment','asset_adjustment',vision_numeric($2,18,8),'0.0000','0.0000','0.0000',$3,$4,$5,$6,1,$7) RETURNING *,to_char(tx_date,'YYYY-MM-DD') AS tx_date`,
       [
         input.id,
         units,
@@ -179,47 +173,58 @@ async function fee(position: Position, units = "1") {
   return { row, batch: input };
 }
 async function clear() {
-  // The suite lock isolates fixture receipts; the native test cluster is disposable.
+  // This file's database is disposable: TRUNCATE ... RESTART IDENTITY is a
+  // DELETE plus a reset of the table's sequence. A restore entry's
+  // previous_entry_id is ON DELETE RESTRICT, which SQLite enforces row by row
+  // (TRUNCATE skipped it), so entries go newest-first: those no entry names.
+  for (const journal of [
+    "portfolio_import_reconciliation_journal",
+    "portfolio_import_duplicate_repair_journal",
+  ]) {
+    let deleted: number | null;
+    do {
+      ({ rowCount: deleted } = await pool.query(
+        `DELETE FROM ${journal} WHERE NOT EXISTS (
+           SELECT 1 FROM ${journal} later WHERE later.previous_entry_id = ${journal}.id)`,
+      ));
+    } while (deleted !== null && deleted > 0);
+    await pool.query(
+      "UPDATE vision_sequences SET last_value = 0 WHERE name = $1",
+      [`${journal}_id_seq`],
+    );
+  }
   await pool.query(
-    "TRUNCATE portfolio_import_reconciliation_journal RESTART IDENTITY",
-  );
-  await pool.query(
-    "TRUNCATE portfolio_import_duplicate_repair_journal RESTART IDENTITY",
-  );
-  await pool.query(
-    "DELETE FROM portfolio_asset_adjustments WHERE investment_id=ANY($1::int[])",
+    "DELETE FROM portfolio_asset_adjustments WHERE investment_id IN (SELECT value FROM json_each($1))",
     [owned.investments],
   );
   await pool.query(
-    "DELETE FROM portfolio_asset_transfers WHERE investment_id=ANY($1::int[])",
+    "DELETE FROM portfolio_asset_transfers WHERE investment_id IN (SELECT value FROM json_each($1))",
     [owned.investments],
   );
   await pool.query(
-    "DELETE FROM portfolio_transactions WHERE investment_id=ANY($1::int[])",
+    "DELETE FROM portfolio_transactions WHERE investment_id IN (SELECT value FROM json_each($1))",
     [owned.investments],
   );
   await pool.query(
-    "DELETE FROM portfolio_import_batches WHERE id=ANY($1::bigint[])",
+    "DELETE FROM portfolio_import_batches WHERE id IN (SELECT value FROM json_each($1))",
     [owned.batches],
   );
-  await pool.query("DELETE FROM investments WHERE id=ANY($1::int[])", [
+  await pool.query("DELETE FROM investments WHERE id IN (SELECT value FROM json_each($1))", [
     owned.investments,
   ]);
-  await pool.query("DELETE FROM accounts WHERE id=ANY($1::int[])", [
+  await pool.query("DELETE FROM accounts WHERE id IN (SELECT value FROM json_each($1))", [
     owned.accounts,
   ]);
   owned.accounts.length = owned.investments.length = owned.batches.length = 0;
 }
-describe.skipIf(!hasTestDatabase())(
-  "canonical asset corrections (disposable PostgreSQL)",
+describe(
+  "canonical asset corrections (disposable SQLite)",
   () => {
     beforeAll(() => {
       pool = must(getTestPool(), "test pool");
     });
-    beforeAll(acquireDbSuiteLock, 180000);
     afterEach(clear);
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closePool();
       await closeTestPool();
     });
@@ -260,7 +265,7 @@ describe.skipIf(!hasTestDatabase())(
         };
         const staged = must((
           await pool.query<TransferRow>(
-            "INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,tx_date,type_raw,route,symbol_raw,units,amount,currency,resolved_investment_id,raw_data,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,asset_transfer_details) VALUES($1,0,'matched',$2,'AssetTransfer','asset_transfer','REVTEST',$3,0,'EUR',$4,$5,$6,$7,1,$8::jsonb) RETURNING *",
+            "INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,tx_date,type_raw,route,symbol_raw,units,amount,currency,resolved_investment_id,raw_data,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,asset_transfer_details) VALUES($1,0,'matched',$2,'AssetTransfer','asset_transfer','REVTEST',vision_numeric($3,18,8),'0.0000','EUR',$4,$5,$6,$7,1,vision_jsonb($8)) RETURNING *",
             [
               input.id,
               date,
@@ -371,7 +376,7 @@ describe.skipIf(!hasTestDatabase())(
       expect(
         must((
           await pool.query<DbRow>(
-            "SELECT count(*) FROM portfolio_asset_adjustment_sources WHERE adjustment_id=$1",
+            "SELECT count(*) AS \"count::bigint\" FROM portfolio_asset_adjustment_sources WHERE adjustment_id=$1",
             [adjustment.id],
           )
         ).rows[0], "query row").count,
@@ -391,7 +396,7 @@ describe.skipIf(!hasTestDatabase())(
       expect(
         must((
           await pool.query<DbRow>(
-            "SELECT custom_config->'source_columns' AS headers FROM portfolio_import_batches WHERE id=$1",
+            "SELECT custom_config->'source_columns' AS \"headers::json\" FROM portfolio_import_batches WHERE id=$1",
             [input.id],
           )
         ).rows[0], "query row").headers,
@@ -401,13 +406,13 @@ describe.skipIf(!hasTestDatabase())(
       ).rejects.toThrow(/source-proven zero-basis/);
       await expect(
         pool.query<DbRow>(
-          "UPDATE portfolio_asset_adjustments SET units=1 WHERE id=$1",
+          "UPDATE portfolio_asset_adjustments SET units=vision_numeric('1',18,8) WHERE id=$1",
           [adjustment.id],
         ),
       ).rejects.toThrow(/immutable/);
       await expect(
         pool.query<DbRow>(
-          "DELETE FROM portfolio_import_staging_rows WHERE source_record_hash=ANY($1::text[]) AND batch_id=$2",
+          "DELETE FROM portfolio_import_staging_rows WHERE source_record_hash IN (SELECT value FROM json_each($1)) AND batch_id=$2",
           [adjustment.eligible_source_record_hashes, input.id],
         ),
       ).rejects.toThrow();
@@ -425,7 +430,7 @@ describe.skipIf(!hasTestDatabase())(
       expect(
         must((
           await pool.query<DbRow>(
-            "SELECT count(*) FROM portfolio_asset_adjustment_sources WHERE adjustment_id=$1",
+            "SELECT count(*) AS \"count::bigint\" FROM portfolio_asset_adjustment_sources WHERE adjustment_id=$1",
             [adjustment.id],
           )
         ).rows[0], "query row").count,
@@ -485,7 +490,7 @@ describe.skipIf(!hasTestDatabase())(
       expect(
         must((
           await pool.query<DbRow>(
-            "SELECT count(*) FROM transactions WHERE account_id=ANY($1::int[])",
+            "SELECT count(*) AS \"count::bigint\" FROM transactions WHERE account_id IN (SELECT value FROM json_each($1))",
             [[position.account, position.wallet]],
           )
         ).rows[0], "query row").count,
@@ -530,7 +535,7 @@ describe.skipIf(!hasTestDatabase())(
       expect(
         must((
           await pool.query<DbRow>(
-            "SELECT count(*) FROM portfolio_asset_adjustments WHERE investment_id=$1",
+            "SELECT count(*) AS \"count::bigint\" FROM portfolio_asset_adjustments WHERE investment_id=$1",
             [position.investment],
           )
         ).rows[0], "query row").count,
@@ -558,7 +563,7 @@ describe.skipIf(!hasTestDatabase())(
       expect(
         must((
           await pool.query<DbRow>(
-            "SELECT count(*) FROM portfolio_asset_adjustments WHERE investment_id=$1",
+            "SELECT count(*) AS \"count::bigint\" FROM portfolio_asset_adjustments WHERE investment_id=$1",
             [position.investment],
           )
         ).rows[0], "query row").count,

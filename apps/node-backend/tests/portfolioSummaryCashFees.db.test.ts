@@ -1,6 +1,6 @@
 /**
  * Source-owned account fees are additive reporting, never security cost basis.
- * Requires a migrated disposable database with DATABASE_URL=TEST_DATABASE_URL.
+ * Runs against this file's own migrated SQLite database (tests/setup/db.ts).
  * Only this suite's tracked fixtures are removed; no actual data is accessed.
  */
 import { createHash } from "node:crypto";
@@ -13,27 +13,29 @@ import {
   it,
   vi,
 } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
+import { closeTestPool, getTestPool } from "./setup/db.ts";
+import type { TestPool } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.ts";
 import type { CashTransactionSnapshot } from "../src/repositories/portfolioImportCashRepository.ts";
 import { must } from "./helpers/must.ts";
-import type { Pool } from "pg";
 
-/** A cash transaction's full image, as Kinesis cash receipts recorded it. */
-const CASH_SNAPSHOT_SQL = `jsonb_build_object('id',t.id,'date',to_char(t.date,'YYYY-MM-DD'),
-  'amount',t.amount::text,'currency',t.currency,'memo',t.memo,'comment',t.comment,'balance',t.balance::text,
+/** A JSON boolean from a BOOLEAN (0/1) column, NULL kept. */
+const jsonBool = (column: string) =>
+  `CASE ${column} WHEN 1 THEN json('true') WHEN 0 THEN json('false') END`;
+
+/**
+ * A cash transaction's full image, as Kinesis cash receipts recorded it.
+ * DECIMAL_TEXT columns are already their canonical text (PostgreSQL's
+ * `amount::text`); the image is canonical jsonb.
+ */
+const CASH_SNAPSHOT_SQL = `vision_jsonb(json_object('id',t.id,'date',to_char(t.date,'YYYY-MM-DD'),
+  'amount',t.amount,'currency',t.currency,'memo',t.memo,'comment',t.comment,'balance',t.balance,
   'account_id',t.account_id,'recipient_id',t.recipient_id,'recipient_bank_account_id',t.recipient_bank_account_id,
-  'category_id',t.category_id,'is_active',t.is_active,'import_batch_id',t.import_batch_id,
+  'category_id',t.category_id,'is_active',${jsonBool("t.is_active")},'import_batch_id',t.import_batch_id,
   'source_record_hash',t.source_record_hash,'dedup_fingerprint',t.dedup_fingerprint,
-  'dedup_fingerprint_version',t.dedup_fingerprint_version,'is_transfer',t.is_transfer,
-  'transfer_source',t.transfer_source,'transfer_peer_id',t.transfer_peer_id)`;
+  'dedup_fingerprint_version',t.dedup_fingerprint_version,'is_transfer',${jsonBool("t.is_transfer")},
+  'transfer_source',t.transfer_source,'transfer_peer_id',t.transfer_peer_id))`;
 
 // Historical conversion still reads the real exchange_rates table. Only a
 // missing-rate fallback is controlled, so this suite never requests live FX.
@@ -57,7 +59,7 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () => ({
   })),
 }));
 
-let pool: Pool;
+let pool: TestPool;
 const owned: Record<
   | "accounts"
   | "batches"
@@ -128,7 +130,7 @@ async function batch(accountId: number, options: BatchOptions = {}) {
   const format = options.format ?? "ibkr_transaction_history";
   const { rows } = await pool.query<{ id: string }>(
     `INSERT INTO portfolio_import_batches(adapter_name,custom_config,status,rows_total,account_id,is_brokerage)
-     VALUES($1,$2,$3,1,$4,true) RETURNING id`,
+     VALUES($1,vision_jsonb($2),$3,1,$4,true) RETURNING id`,
     [
       format,
       JSON.stringify({ format }),
@@ -154,15 +156,15 @@ async function cash(
     `INSERT INTO transactions(date,amount,currency,memo,account_id,recipient_id,
        balance,is_active,is_transfer,transfer_source,source_record_hash,
        dedup_fingerprint,dedup_fingerprint_version)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,1) RETURNING id`,
+     VALUES($1,vision_numeric($2,18,4),$3,$4,$5,$6,vision_numeric($7,18,4),$8,$9,$10,$11,$12,1) RETURNING id`,
     [
       options.date ?? "2025-01-10",
-      options.amount ?? -3,
+      String(options.amount ?? -3),
       options.currency ?? "EUR",
       label,
       accountId,
       must(recipients[0], "recipients[0]").id,
-      options.balance ?? null,
+      options.balance == null ? null : String(options.balance),
       options.isActive ?? true,
       options.isTransfer ?? false,
       options.transferSource ?? null,
@@ -173,7 +175,7 @@ async function cash(
   owned.transactions.push(must(rows[0], "rows[0]").id);
   return must((
     await pool.query<{ snapshot: CashTransactionSnapshot }>(
-      `SELECT ${CASH_SNAPSHOT_SQL} AS snapshot FROM transactions t WHERE t.id=$1`,
+      `SELECT ${CASH_SNAPSHOT_SQL} AS "snapshot::json" FROM transactions t WHERE t.id=$1`,
       [must(rows[0], "rows[0]").id],
     )
   ).rows[0], "query row").snapshot;
@@ -188,13 +190,13 @@ async function source(
     `INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,tx_date,type_raw,type,route,
        amount,fees,taxes,currency,raw_data,committed_txn_id,source_record_hash,
        dedup_fingerprint,dedup_fingerprint_version,dedup_occurrence)
-     VALUES($1,0,$2,$3,'Fee',$4,'cash',$5,0,0,$6,$7,$8,$9,$10,1,1) RETURNING id`,
+     VALUES($1,0,$2,$3,'Fee',$4,'cash',vision_numeric($5,18,4),'0.0000','0.0000',$6,$7,$8,$9,$10,1,1) RETURNING id`,
     [
       batchId,
       options.status ?? "committed",
       options.date ?? current.date,
       options.type === undefined ? "fee" : options.type,
-      Math.abs(Number(current.amount)),
+      String(Math.abs(Number(current.amount))),
       current.currency,
       options.rawData ?? "synthetic literal fee record",
       options.committedId === undefined ? current.id : options.committedId,
@@ -219,15 +221,15 @@ async function investment(
   const label = tag();
   const { rows } = await pool.query<{ id: number }>(
     `INSERT INTO investments(name,symbol,asset_class,currency,current_price)
-     VALUES($1,$1,'stock','EUR',12) RETURNING id`,
+     VALUES($1,$1,'stock','EUR','12.000000') RETURNING id`,
     [label],
   );
   owned.investments.push(must(rows[0], "rows[0]").id);
   await pool.query(
     `INSERT INTO portfolio_transactions(investment_id,type,date,units,amount,price_per_unit,
        fees,taxes,currency,account_id,source_record_hash)
-     VALUES($1,'buy','2025-01-01',10,100,10,$2,0,'EUR',$3,$4)`,
-    [must(rows[0], "rows[0]").id, options.fees ?? 0, accountId, options.sourceHash ?? null],
+     VALUES($1,'buy','2025-01-01','10.00000000','100.0000','10.000000',vision_numeric($2,18,4),'0.0000','EUR',$3,$4)`,
+    [must(rows[0], "rows[0]").id, String(options.fees ?? 0), accountId, options.sourceHash ?? null],
   );
   return must(rows[0], "rows[0]").id;
 }
@@ -284,8 +286,8 @@ async function recordedFundingFee(accountId: number) {
 async function historicalRate(date: string, value: number) {
   const { rows } = await pool.query<{ id: number }>(
     `INSERT INTO exchange_rates(currency_code,rate_date,rate_to_eur,is_latest)
-     VALUES('USD',$1,$2,false) RETURNING id`,
-    [date, value],
+     VALUES('USD',$1,vision_numeric($2,20,10),false) RETURNING id`,
+    [date, String(value)],
   );
   owned.rates.push(must(rows[0], "rows[0]").id);
 }
@@ -293,14 +295,14 @@ async function historicalRate(date: string, value: number) {
 async function cleanup() {
   if (owned.batches.length > 0)
     await pool.query(
-      "DELETE FROM portfolio_import_batches WHERE id=ANY($1::bigint[])",
+      "DELETE FROM portfolio_import_batches WHERE id IN (SELECT value FROM json_each($1))",
       [owned.batches],
     );
-  await pool.query("DELETE FROM transactions WHERE id=ANY($1::int[])", [
+  await pool.query("DELETE FROM transactions WHERE id IN (SELECT value FROM json_each($1))", [
     owned.transactions,
   ]);
   await pool.query(
-    "DELETE FROM portfolio_transactions WHERE investment_id=ANY($1::int[])",
+    "DELETE FROM portfolio_transactions WHERE investment_id IN (SELECT value FROM json_each($1))",
     [owned.investments],
   );
   const tables: [string, (number | string)[]][] = [
@@ -311,21 +313,19 @@ async function cleanup() {
     ["exchange_rates", owned.rates],
   ];
   for (const [table, ids] of tables)
-    await pool.query(`DELETE FROM ${table} WHERE id=ANY($1::int[])`, [ids]);
+    await pool.query(`DELETE FROM ${table} WHERE id IN (SELECT value FROM json_each($1))`, [ids]);
   for (const ids of Object.values(owned)) ids.length = 0;
 }
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "source-owned brokerage cash fee summary",
   () => {
     beforeAll(() => {
       pool = must(getTestPool(), "test pool");
     });
-    beforeAll(acquireDbSuiteLock, 180_000);
     afterEach(cleanup);
     afterAll(async () => {
       await cleanup();
-      await releaseDbSuiteLock();
       await closePool();
       await closeTestPool();
     });
@@ -430,7 +430,7 @@ describe.skipIf(!hasTestDatabase())(
       expect((await summary()).brokerageCashFees).toEqual(
         before.brokerageCashFees,
       );
-      await pool.query("UPDATE transactions SET amount=-3 WHERE id=$1", [
+      await pool.query("UPDATE transactions SET amount=vision_numeric('-3',18,4) WHERE id=$1", [
         fee.id,
       ]);
       expect((await summary()).brokerageCashFees.total).toBe(0);

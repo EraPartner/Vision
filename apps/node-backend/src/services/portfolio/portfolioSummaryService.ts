@@ -171,8 +171,8 @@ export async function getPortfolioSummary(
           .selectAll("i")
           .select([
             sql<string>`COALESCE(i.currency, 'EUR')`.as("currency"),
-            sql<string>`COALESCE(i.current_price, 0)`.as("current_price"),
-            sql<string>`COALESCE(i.interest_rate, 0)`.as("interest_rate"),
+            sql<string>`COALESCE(i.current_price, '0')`.as("current_price"),
+            sql<string>`COALESCE(i.interest_rate, '0')`.as("interest_rate"),
           ])
           .$if(activeInvestmentsOnly, (qb) => qb.where("i.is_active", "=", true))
           .orderBy("i.name"),
@@ -294,7 +294,7 @@ export async function getPortfolioSummary(
         .where("i.is_active", "=", false)
         .where("pt.income_recognition_role", "=", "included_in_units")
         .$if(Boolean(throughDate), (qb) =>
-          qb.where("pt.date", "<=", sql<Date>`${throughDate}::date`),
+          qb.where("pt.date", "<=", sql<Date>`${throughDate}`),
         )
         .orderBy("pt.investment_id")
         .orderBy("pt.date")
@@ -394,6 +394,18 @@ export async function getPortfolioSummary(
 }
 
 /**
+ * PostgreSQL's `jsonb ->> key` for a scalar at `path` of canonical jsonb text:
+ * a string's value, 'true'/'false' for a boolean, a number's JSON text (its
+ * canonical numeric form, as jsonb printed it), NULL for null or a missing
+ * key. SQLite's `->>` returns 1/0 for a boolean and a float for a number.
+ * `json` and `path` are SQL written here, never input.
+ */
+function jsonbText(json: string, path: string): string {
+  const at = `${json}, '${path}'`;
+  return `(CASE json_type(${at}) WHEN 'text' THEN json_extract(${at}) WHEN 'true' THEN 'true' WHEN 'false' THEN 'false' WHEN 'null' THEN NULL ELSE ${json} -> '${path}' END)`;
+}
+
+/**
  * Imported costs with no security allocation stay in the cash ledger. Report
  * only source-owned fees, once per canonical ID, separately from investment
  * returns. Economic ownership survives category and memo edits.
@@ -403,9 +415,19 @@ async function getBrokerageCashFees(
   throughDate: string,
   investmentGain: Parameters<typeof toDecimal>[0],
 ) {
+  const receipt = (path: string) => sql.raw(jsonbText("r.receipt", path));
   const rows = await checkedRows(
     brokerageCashFeeRowSchema,
-    sql`WITH owned_fee_ids AS (
+    // PostgreSQL computed each receipt with CROSS JOIN LATERAL; here it is
+    // computed once per candidate staging row in a materialized CTE.
+    sql`WITH receipts AS MATERIALIZED (
+        SELECT s.id AS staging_row_id, portfolio_cash_receipt(s.raw_data) AS receipt
+        FROM portfolio_import_staging_rows s
+        WHERE s.status = 'committed'
+          AND s.route = 'cash'
+          AND s.type IS NULL
+      ),
+      owned_fee_ids AS (
         SELECT t.id
         FROM transactions t
         WHERE EXISTS (
@@ -421,15 +443,15 @@ async function getBrokerageCashFees(
             AND b.account_id = t.account_id
             AND s.resolved_investment_id IS NULL
             AND s.user_override_investment_id IS NULL
-            AND NULLIF(BTRIM(COALESCE(s.symbol_raw, '')), '') IS NULL
-            AND NULLIF(BTRIM(COALESCE(s.name_raw, '')), '') IS NULL
-            AND COALESCE(s.units, 0) = 0
-            AND COALESCE(s.price_per_unit, 0) = 0
-            AND COALESCE(s.fees, 0) = 0
-            AND COALESCE(s.taxes, 0) = 0
+            AND NULLIF(btrim(COALESCE(s.symbol_raw, '')), '') IS NULL
+            AND NULLIF(btrim(COALESCE(s.name_raw, '')), '') IS NULL
+            AND dec_eq(COALESCE(s.units, 0), 0)
+            AND dec_eq(COALESCE(s.price_per_unit, 0), 0)
+            AND dec_eq(COALESCE(s.fees, 0), 0)
+            AND dec_eq(COALESCE(s.taxes, 0), 0)
             AND s.tx_date = t.date
             AND s.currency = t.currency
-            AND t.amount = -ABS(s.amount)
+            AND dec_eq(t.amount, dec_neg(dec_abs(s.amount)))
             AND NULLIF(s.source_record_hash, '') IS NOT NULL
             AND s.source_record_hash = t.source_record_hash
             AND NULLIF(s.dedup_fingerprint, '') IS NOT NULL
@@ -440,23 +462,25 @@ async function getBrokerageCashFees(
         SELECT fee.id
         FROM portfolio_import_staging_rows s
         JOIN portfolio_import_batches b ON b.id = s.batch_id
-        CROSS JOIN LATERAL (SELECT portfolio_cash_receipt(s.raw_data) AS receipt) r
+        JOIN receipts r ON r.staging_row_id = s.id
+        -- id = text keeps the key lookup; the CAST compares the exact text.
         JOIN transactions main
           ON main.id = s.committed_txn_id
-         AND main.id::text = r.receipt->'after'->>'id'
+         AND CAST(main.id AS TEXT) = ${receipt("$.after.id")}
         JOIN transactions fee
-          ON fee.id::text = r.receipt->'feeAfter'->>'id'
+          ON fee.id = ${receipt("$.feeAfter.id")}
+         AND CAST(fee.id AS TEXT) = ${receipt("$.feeAfter.id")}
         WHERE s.status = 'committed'
           AND s.route = 'cash'
           AND s.type IS NULL
           AND b.is_brokerage = true
           AND b.status <> 'aborted'
-          AND b.custom_config->>'format' = 'kinesis_transaction_history'
-          AND r.receipt->>'version' = '1'
-          AND r.receipt->'proof'->>'kind' = 'closed_kinesis_cash'
-          AND r.receipt->'proof'->>'eventKind' = 'own_account_funding'
-          AND r.receipt->'proof'->>'componentCount' = '2'
-          AND r.receipt->'feeValues'->>'isTransfer' = 'false'
+          AND b.custom_config ->> 'format' = 'kinesis_transaction_history'
+          AND ${receipt("$.version")} = '1'
+          AND ${receipt("$.proof.kind")} = 'closed_kinesis_cash'
+          AND ${receipt("$.proof.eventKind")} = 'own_account_funding'
+          AND ${receipt("$.proof.componentCount")} = '2'
+          AND ${receipt("$.feeValues.isTransfer")} = 'false'
           AND main.id <> fee.id
           AND main.is_active = true
           AND main.is_transfer = true
@@ -466,30 +490,30 @@ async function getBrokerageCashFees(
           AND main.dedup_fingerprint = s.dedup_fingerprint
           AND main.dedup_fingerprint_version = s.dedup_fingerprint_version
           AND fee.account_id = b.account_id
-          AND fee.account_id::text = r.receipt->'feeAfter'->>'account_id'
-          AND to_char(fee.date, 'YYYY-MM-DD') = r.receipt->'feeAfter'->>'date'
-          AND fee.currency = r.receipt->'feeAfter'->>'currency'
-          AND fee.amount::text = r.receipt->'feeAfter'->>'amount'
+          AND CAST(fee.account_id AS TEXT) = ${receipt("$.feeAfter.account_id")}
+          AND to_char(fee.date, 'YYYY-MM-DD') = ${receipt("$.feeAfter.date")}
+          AND fee.currency = ${receipt("$.feeAfter.currency")}
+          AND CAST(fee.amount AS TEXT) = ${receipt("$.feeAfter.amount")}
           AND fee.source_record_hash = s.source_record_hash
-          AND fee.source_record_hash = r.receipt->'feeAfter'->>'source_record_hash'
-          AND fee.dedup_fingerprint = r.receipt->'feeAfter'->>'dedup_fingerprint'
-          AND fee.dedup_fingerprint_version::text = r.receipt->'feeAfter'->>'dedup_fingerprint_version'
+          AND fee.source_record_hash = ${receipt("$.feeAfter.source_record_hash")}
+          AND fee.dedup_fingerprint = ${receipt("$.feeAfter.dedup_fingerprint")}
+          AND CAST(fee.dedup_fingerprint_version AS TEXT) = ${receipt("$.feeAfter.dedup_fingerprint_version")}
           AND fee.transfer_source = 'brokerage'
       )
       SELECT t.id, t.account_id, to_char(t.date, 'YYYY-MM-DD') AS date,
-             t.currency, (-t.amount)::text AS amount
+             t.currency, dec_neg(t.amount) AS amount
       FROM transactions t
       JOIN owned_fee_ids owned ON owned.id = t.id
       WHERE t.is_active = true
-        AND t.amount < 0
+        AND dec_lt(t.amount, 0)
         AND t.is_transfer = false
         AND t.balance IS NULL
         AND COALESCE(t.transfer_source, '') IN ('', 'brokerage')
-        AND t.date <= ${throughDate}::date
+        AND t.date <= ${throughDate}
         AND NOT EXISTS (
           SELECT 1 FROM portfolio_transactions pt
           WHERE pt.source_record_hash = t.source_record_hash
-            AND (COALESCE(pt.fees, 0) <> 0 OR pt.type = 'fee')
+            AND (dec_ne(COALESCE(pt.fees, 0), 0) OR pt.type = 'fee')
         )
       ORDER BY t.date, t.id`,
   );
@@ -690,7 +714,11 @@ async function loadHistoricalRateIndex(
         sql<string>`to_char(rate_date, 'YYYY-MM-DD')`.as("rate_date"),
         "rate_to_eur",
       ])
-      .where("currency_code", "=", sql<string>`ANY(${relevant}::text[])`)
+      .where(
+        "currency_code",
+        "in",
+        sql<string>`(SELECT value FROM json_each(${JSON.stringify(relevant)}))`,
+      )
       .orderBy("currency_code", "asc")
       .orderBy("rate_date", "asc"),
   );

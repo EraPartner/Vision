@@ -14,8 +14,8 @@ import { asAccountId, asInvestmentId } from "@vision/types/brands";
 import type { AccountId, InvestmentId } from "@vision/types/brands";
 
 /**
- * BIGINT ids and NUMERIC units arrive from pg as strings. Derived from the
- * checked row schema.
+ * BIGINT ids and NUMERIC units arrive as strings. Derived from the checked
+ * row schema.
  */
 export type PortfolioAssetAdjustmentRow = PortfolioAssetAdjustmentDbRow;
 
@@ -46,9 +46,10 @@ export async function getEligibleYieldSources(
     db
       .selectFrom("portfolio_import_staging_rows as s")
       .innerJoin("portfolio_import_batches as b", "b.id", "s.batch_id")
-      .select((eb) => [
+      .select([
         "s.source_record_hash",
-        eb.fn.min("s.id").as("staging_row_id"),
+        // MIN() has no declared type; the BIGINT id is read back as text.
+        sql<string>`CAST(min(s.id) AS TEXT)`.as("staging_row_id"),
       ])
       .where(
         (eb) =>
@@ -127,8 +128,9 @@ export async function insertAssetAdjustment(
         units: event.units,
         adjustment_kind: event.adjustment_kind,
         basis_policy: event.basis_policy,
-        basis_allocations: sql`${JSON.stringify(event.basis_allocations)}::jsonb`,
-        eligible_source_record_hashes: sql`${event.eligible_source_record_hashes}::text[]`,
+        basis_allocations: sql`vision_jsonb(${JSON.stringify(event.basis_allocations)})`,
+        // TEXT_ARRAY stores the JSON array text.
+        eligible_source_record_hashes: sql<string[]>`${JSON.stringify(event.eligible_source_record_hashes)}`,
         import_batch_id: event.import_batch_id,
         staging_row_id: event.staging_row_id,
         source_record_hash: event.source_record_hash,

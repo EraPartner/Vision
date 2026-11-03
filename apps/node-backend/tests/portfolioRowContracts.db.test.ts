@@ -1,10 +1,10 @@
 /**
- * Real-Postgres coverage for the checked reads (ADR-193) of the portfolio
- * (non-import), investment, price and currency paths. Every call below goes
- * through its row schema in strict mode, so a schema that is wrong for what
- * node-postgres really returns fails here with a RowContractError.
+ * Real-database (SQLite) coverage for the checked reads (ADR-193) of the
+ * portfolio (non-import), investment, price and currency paths. Every call
+ * below goes through its row schema in strict mode, so a schema that is wrong
+ * for what the driver really returns fails here with a RowContractError.
  *
- * Requires a migrated disposable database with DATABASE_URL=TEST_DATABASE_URL.
+ * Runs against this file's own migrated SQLite database (tests/setup/db.ts).
  * Fixtures are synthetic and removed afterwards; no real data is read.
  */
 import { createHash, randomUUID } from "node:crypto";
@@ -17,13 +17,9 @@ import {
   it,
   vi,
 } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
+import { closeTestPool, getTestPool } from "./setup/db.ts";
+import type { TestPool } from "./setup/db.ts";
+import { portfolioIncomeTransactionSnapshotSql } from "../src/database/sqlite/schemaFunctions.ts";
 import {
   asAccountId,
   asCurrencyCode,
@@ -102,12 +98,11 @@ import {
 } from "../src/services/portfolioPerformanceSnapshotService.ts";
 import { todayAppDateString } from "../src/lib/timezone.ts";
 import { must } from "./helpers/must.ts";
-import type { Pool } from "pg";
 
 /** A row from an ad-hoc SQL read: column values are narrowed where used. */
 type DbRow = Record<string, unknown>;
 
-let pool: Pool;
+let pool: TestPool;
 const cleanup: { sql: string; params: unknown[] }[] = [];
 function onCleanup(sql: string, ...params: unknown[]) {
   cleanup.unshift({ sql, params });
@@ -135,7 +130,7 @@ async function investment(
 ): Promise<number> {
   const { rows } = await pool.query<{ id: number }>(
     `INSERT INTO investments(name,symbol,asset_class,currency,current_price,interest_rate)
-     VALUES($1,$2,$3,$4,10,2) RETURNING id`,
+     VALUES($1,$2,$3,$4,'10.000000','2.0000') RETURNING id`,
     [tag("Row contract asset"), null, assetClass, currency],
   );
   const id = must(rows[0], "rows[0]").id;
@@ -148,7 +143,7 @@ async function investment(
 async function batch(accountId: number): Promise<string> {
   const { rows } = await pool.query<{ id: string }>(
     `INSERT INTO portfolio_import_batches(adapter_name,custom_config,status,rows_total,account_id,is_brokerage)
-     VALUES('kinesis_transaction_history',$1,'complete',2,$2,true) RETURNING id`,
+     VALUES('kinesis_transaction_history',vision_jsonb($1),'complete',2,$2,true) RETURNING id`,
     [JSON.stringify({ format: "kinesis_transaction_history" }), accountId],
   );
   const id = must(rows[0], "rows[0]").id;
@@ -172,22 +167,20 @@ async function stagingRow(
   return must(rows[0], "rows[0]").id;
 }
 
-describe.skipIf(!hasTestDatabase())(
-  "portfolio, investment, price and currency row contracts (real Postgres)",
+describe(
+  "portfolio, investment, price and currency row contracts (real DB)",
   () => {
     beforeAll(() => {
       pool = must(getTestPool(), "test pool");
     });
     const realFetch = globalThis.fetch;
 
-    beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
+    beforeAll(() => {
       // No live FX or quote provider is ever asked.
       globalThis.fetch = vi.fn(() =>
         Promise.reject(new Error("network disabled in this suite")),
       );
-    }, 180_000);
+    });
 
     afterEach(async () => {
       for (const { sql, params } of cleanup.splice(0))
@@ -197,7 +190,6 @@ describe.skipIf(!hasTestDatabase())(
 
     afterAll(async () => {
       globalThis.fetch = realFetch;
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
@@ -488,7 +480,7 @@ describe.skipIf(!hasTestDatabase())(
       // as paired income recording wrote it before ADR-236.
       const { rows: unitRows } = await pool.query<{ id: number }>(
         `INSERT INTO portfolio_transactions(investment_id,type,date,amount,units,price_per_unit,fees,taxes,currency,account_id,source_record_hash,import_batch_id)
-         VALUES($1,'gift','2025-03-03',0,0.1,0,0,0,'EUR',$2,$3,$4) RETURNING id`,
+         VALUES($1,'gift','2025-03-03','0.0000','0.10000000','0.000000','0.0000','0.0000','EUR',$2,$3,$4) RETURNING id`,
         [inv, source, hex("income"), importBatch],
       );
       const unitId = must(unitRows[0], "unitRows[0]").id;
@@ -500,6 +492,13 @@ describe.skipIf(!hasTestDatabase())(
       const unitSource = await stagingRow(importBatch, 5);
       onCleanup(
         "DELETE FROM portfolio_import_income_recognition_journal WHERE batch_id=$1",
+        importBatch,
+      );
+      // previous_entry_id is ON DELETE RESTRICT, which SQLite enforces row by
+      // row (PostgreSQL at the end of the statement): restore entries go
+      // first (cleanup runs last-registered first).
+      onCleanup(
+        "DELETE FROM portfolio_import_income_recognition_journal WHERE batch_id=$1 AND previous_entry_id IS NOT NULL",
         importBatch,
       );
       onCleanup(
@@ -534,7 +533,7 @@ describe.skipIf(!hasTestDatabase())(
       });
       await pool.query(
         `INSERT INTO portfolio_import_income_recognition_journal(batch_id,staging_row_id,unit_staging_row_id,income_transaction_id,unit_transaction_id,action,income_data,unit_data,proof_data)
-         SELECT $1,$2,$3,i.id,u.id,'record',portfolio_income_transaction_snapshot(i),portfolio_income_transaction_snapshot(u),'{"sourceFileHash":"synthetic"}' FROM portfolio_transactions i,portfolio_transactions u WHERE i.id=$4 AND u.id=$5`,
+         SELECT $1,$2,$3,i.id,u.id,'record',${portfolioIncomeTransactionSnapshotSql("i")},${portfolioIncomeTransactionSnapshotSql("u")},vision_jsonb('{"sourceFileHash":"synthetic"}') FROM portfolio_transactions i,portfolio_transactions u WHERE i.id=$4 AND u.id=$5`,
         [importBatch, incomeRow, unitSource, incomeId, unitId],
       );
       expect(
@@ -659,7 +658,7 @@ describe.skipIf(!hasTestDatabase())(
       onCleanup("DELETE FROM exchange_rates WHERE currency_code=$1", currency);
       await pool.query(
         `INSERT INTO exchange_rates(currency_code,rate_to_eur,rate_date,is_latest)
-         VALUES($1,0.5,'2025-01-02',false),($1,0.25,$2::date,true)`,
+         VALUES($1,vision_numeric('0.5',20,10),'2025-01-02',false),($1,vision_numeric('0.25',20,10),$2,true)`,
         [currency, todayAppDateString()],
       );
 
@@ -688,7 +687,7 @@ describe.skipIf(!hasTestDatabase())(
       );
       await pool.query(
         `INSERT INTO exchange_rates(currency_code,rate_to_eur,rate_date,is_latest)
-         VALUES($1,0.9,'2025-01-02',false) ON CONFLICT DO NOTHING`,
+         VALUES($1,vision_numeric('0.9',20,10),'2025-01-02',false) ON CONFLICT DO NOTHING`,
         [usd],
       );
       await portfolioTransactionService.create({
@@ -710,7 +709,7 @@ describe.skipIf(!hasTestDatabase())(
       });
       await pool.query(
         `INSERT INTO portfolio_transactions(investment_id,type,date,amount,currency,account_id)
-         VALUES($1,'dividend','2025-01-03',2,'EUR',$2)`,
+         VALUES($1,'dividend','2025-01-03','2.0000','EUR',$2)`,
         [unitInv, broker],
       );
       await pool.query("UPDATE investments SET is_active=false WHERE id=$1", [
@@ -756,7 +755,7 @@ describe.skipIf(!hasTestDatabase())(
       );
       await pool.query(
         `INSERT INTO exchange_rates(currency_code,rate_to_eur,rate_date,is_latest)
-         VALUES('USD',0.9,'2025-01-06',false) ON CONFLICT DO NOTHING`,
+         VALUES('USD',vision_numeric('0.9',20,10),'2025-01-06',false) ON CONFLICT DO NOTHING`,
       );
       await portfolioTransactionService.create({
         investment_id: asInvestmentId(inv),
@@ -774,7 +773,7 @@ describe.skipIf(!hasTestDatabase())(
         "SELECT value FROM user_settings WHERE key='fx_full_history_repair_done'",
       );
       onCleanup(
-        "DELETE FROM user_settings WHERE key='fx_full_history_repair_done' AND $1::boolean",
+        "DELETE FROM user_settings WHERE key='fx_full_history_repair_done' AND $1",
         previousFlag.rows.length === 0,
       );
       await pool.query(
@@ -792,8 +791,8 @@ describe.skipIf(!hasTestDatabase())(
       );
       if (previousFlag.rows.length > 0)
         await pool.query(
-          "UPDATE user_settings SET value=$1 WHERE key='fx_full_history_repair_done'",
-          [must(previousFlag.rows[0], "previousFlag.rows[0]").value],
+          "UPDATE user_settings SET value=vision_jsonb($1) WHERE key='fx_full_history_repair_done'",
+          [JSON.stringify(must(previousFlag.rows[0], "previousFlag.rows[0]").value)],
         );
     });
   },

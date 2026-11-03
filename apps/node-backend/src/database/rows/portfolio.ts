@@ -2,19 +2,21 @@
  * Row schemas for the portfolio (non-import), investment, price and currency
  * queries (ADR-193).
  *
- * Same rules as `../rowSchemas.ts`: each schema describes what node-postgres
- * returns with its DEFAULT parsers (NUMERIC/BIGINT/`COUNT(*)` as strings,
- * DATE/TIMESTAMPTZ as `Date`, INTEGER as number, JSON parsed), only checks (no
- * transforms or coercion), and stays a plain `z.object` so `SELECT *` keeps
- * working when a migration adds a column. `.nullable()` marks SQL NULL;
- * `.optional()` marks a column only some projections select.
+ * Same rules as `../rowSchemas.ts`: each schema describes the row shape the
+ * driver returns (ADR-263; the shape node-postgres returned with its DEFAULT
+ * parsers: NUMERIC/BIGINT/`COUNT(*)` as strings, DATE/TIMESTAMPTZ as `Date`,
+ * INTEGER as number, JSON parsed), only checks (no transforms or coercion), and
+ * stays a plain `z.object` so `SELECT *` keeps working when a migration adds a
+ * column. `.nullable()` marks SQL NULL; `.optional()` marks a column only some
+ * projections select.
  *
- * Column types were checked against the real schema (information_schema and
- * `\gdesc`). Two easy-to-miss facts:
- *   - a `UNION ALL` of an INTEGER id with a BIGINT id is BIGINT, so the unit
- *     event and portfolio-math reads emit `id` as a string;
+ * Two easy-to-miss facts:
+ *   - an expression column has no declared type, so the SQL gives it an alias
+ *     hint (`AS "id::bigint"`, see {@link hintedAlias}) or yields text itself
+ *     (`COALESCE(units, '0')`, `CAST(count(*) AS TEXT)`); a `UNION ALL` takes
+ *     each column's type from its first branch;
  *   - `SELECT t.*, to_char(t.date, ...) AS date` returns two `date` fields and
- *     node-postgres keeps the LAST one, so `date` is the formatted string.
+ *     the driver keeps the LAST one, so `date` is the formatted string.
  */
 import { z } from "zod";
 import type { FundHoldingsDocument } from "@vision/types/fund-holdings";
@@ -31,6 +33,19 @@ import {
   pgTimestamptz,
   pgTransactionId,
 } from "../rowSchemas.ts";
+
+/** The driver's alias type hints (src/database/sqlite/values.ts). */
+export type AliasHint = "bool" | "json" | "timestamptz" | "date" | "bigint" | "text";
+
+/**
+ * A column alias with a driver type hint for an expression column (ADR-263):
+ * the SQL alias is `name::hint`, the driver reads the value as that type and
+ * removes the hint from the row key. Typed as `name`, so a Kysely `.as()`
+ * keeps the key the row schema checks.
+ */
+export function hintedAlias<N extends string>(name: N, hint: AliasHint): N {
+  return `${name}::${hint}` as N;
+}
 
 // ---------------------------------------------------------------------------
 // Small shared projections
@@ -64,7 +79,7 @@ export const presentRowSchema = z
   .object({ present: z.boolean() })
   .describe("present row");
 
-/** `SELECT id,is_active,type FROM accounts ... FOR UPDATE` (custody writes). */
+/** `SELECT id,is_active,type FROM accounts` inside the custody write transaction. */
 export const custodyAccountLockRowSchema = z
   .object({
     id: pgAccountId,
@@ -139,8 +154,8 @@ export const assetClassRowSchema = z
 
 /**
  * `getUnitEventsForInvestment`: transactions, asset transfers and asset
- * adjustments in one UNION, so ids widen to BIGINT and the numeric columns
- * to NUMERIC.
+ * adjustments in one UNION; ids are BIGINT strings (the three tables share
+ * one id sequence) and the numeric columns decimal text.
  */
 export const portfolioUnitEventRowSchema = z
   .object({
@@ -176,7 +191,7 @@ export const portfolioUnitEventRowSchema = z
  */
 export const portfolioMathTxRowSchema = z
   .object({
-    /** BIGINT: the UNION widens the INTEGER transaction id. */
+    /** BIGINT string: one id sequence across the three event tables. */
     id: pgBigint,
     investment_id: pgInvestmentId,
     type: z.string(),
@@ -320,7 +335,7 @@ export const retagTransactionEventRowSchema = z
 // Asset adjustments and transfers
 // ---------------------------------------------------------------------------
 
-/** `getEligibleYieldSources`: MIN over a BIGINT staging id. */
+/** `getEligibleYieldSources`: MIN over a BIGINT staging id, as text. */
 export const eligibleYieldSourceRowSchema = z
   .object({
     source_record_hash: z.string(),
@@ -653,7 +668,7 @@ export const snapshotNonUnitInvestmentRowSchema =
     .extend({
       /** `COALESCE(interest_rate, 0)` */
       interest_rate: pgNumeric,
-      /** `COALESCE(created_at::date, $1::date)::text` */
+      /** `COALESCE(ts_date(created_at), $1)` */
       active_from: pgDayString,
     })
     .describe("snapshot non-unit investment row");
@@ -733,7 +748,7 @@ export const brokerSnapshotRowSchema = z
   })
   .describe("portfolio_broker_snapshots row");
 
-/** `to_regclass(...) AS relation`: NULL when the table is missing. */
+/** The table's name from `sqlite_schema`: NULL when the table is missing. */
 export const regclassRowSchema = z
   .object({ relation: z.string().nullable() })
   .describe("regclass row");
@@ -742,11 +757,6 @@ export const regclassRowSchema = z
 export const accountDisplayNameRowSchema = z
   .object({ id: pgAccountId, display_name: z.string() })
   .describe("account display name row");
-
-/** `SELECT CURRENT_DATE::text AS today`. */
-export const currentDateRowSchema = z
-  .object({ today: pgDayString })
-  .describe("current date row");
 
 /** `portfolioSummaryService`'s archived in-kind income read. */
 export const archivedIncomeDbRowSchema = z
@@ -770,7 +780,7 @@ export const brokerageCashFeeRowSchema = z
     account_id: pgAccountId,
     date: pgDayString,
     currency: pgCurrency,
-    /** `(-t.amount)::text` */
+    /** `dec_neg(t.amount)` */
     amount: z.string(),
   })
   .describe("brokerage cash fee row");
@@ -789,12 +799,12 @@ export const latestStoredRateRowSchema = fxRateRowSchema
   .extend({ rate_date: pgDate, fetched_at: pgTimestamptz })
   .describe("latest stored rate row");
 
-/** A distinct (currency, transaction day) pair; `rate_date` is a pg DATE. */
+/** A distinct (currency, transaction day) pair; `rate_date` is a DATE. */
 export const currencyDatePairRowSchema = z
   .object({ currency_code: z.string(), rate_date: pgDate })
   .describe("currency date pair row");
 
-/** `rate_date::text` existence check. */
+/** `rate_date` as text, an existence check. */
 export const currencyDayKeyRowSchema = z
   .object({ currency_code: z.string(), rate_date: pgDayString })
   .describe("currency day key row");

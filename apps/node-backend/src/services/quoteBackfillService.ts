@@ -288,8 +288,8 @@ function selectHoldingWindowRows() {
       "i.price_provider_history_price_path",
       "pt.id as tx_id",
       "pt.type as tx_type",
-      sql<string>`to_char(pt.date::date, 'YYYY-MM-DD')`.as("tx_date"),
-      sql<string>`COALESCE(pt.units, 0)`.as("tx_units"),
+      sql<string>`to_char(pt.date, 'YYYY-MM-DD')`.as("tx_date"),
+      sql<string>`COALESCE(pt.units, '0')`.as("tx_units"),
     ])
     .where("i.asset_class", "in", ["stock", "etf", "crypto", "metals"]);
 }
@@ -745,12 +745,10 @@ export async function refreshQuotesForInvestment(
 async function cleanupStaleQuotes(
   investmentWindows: Map<number, InvestmentHoldingWindows>,
 ): Promise<number> {
-  // Flatten all windows into parallel arrays so the cleanup is ONE statement
+  // Flatten all windows into one JSON list so the cleanup is ONE statement
   // (was one DELETE per investment — N round-trips on every maintenance pass).
   const invIds: number[] = [];
-  const windowInvIds: number[] = [];
-  const fromDates: string[] = [];
-  const toDates: string[] = [];
+  const windows: { inv: number; from: string; to: string }[] = [];
 
   // asset_price_history.price_date is stored in UTC; the open-window sentinel
   // must be UTC-today as well, otherwise a server in a non-UTC timezone
@@ -761,9 +759,7 @@ async function cleanupStaleQuotes(
     if (holdingWindows.length === 0) continue;
     invIds.push(invId);
     for (const w of holdingWindows) {
-      windowInvIds.push(invId);
-      fromDates.push(w.fromDate);
-      toDates.push(w.toDate ?? todayUtc);
+      windows.push({ inv: invId, from: w.fromDate, to: w.toDate ?? todayUtc });
     }
   }
 
@@ -771,13 +767,15 @@ async function cleanupStaleQuotes(
 
   let totalDeleted = 0;
   try {
+    // Window bounds are 'YYYY-MM-DD' text, compared with the DATE column's
+    // canonical text.
     const result = await sql`
-      DELETE FROM asset_price_history aph
-       WHERE aph.investment_id = ANY(${invIds}::int[])
+      DELETE FROM asset_price_history AS aph
+       WHERE aph.investment_id IN (SELECT value FROM json_each(${JSON.stringify(invIds)}))
          AND NOT EXISTS (
-           SELECT 1 FROM unnest(${windowInvIds}::int[], ${fromDates}::date[], ${toDates}::date[]) AS w(inv_id, from_date, to_date)
-           WHERE w.inv_id = aph.investment_id
-             AND aph.price_date >= w.from_date AND aph.price_date <= w.to_date
+           SELECT 1 FROM json_each(${JSON.stringify(windows)}) AS w
+           WHERE w.value ->> 'inv' = aph.investment_id
+             AND aph.price_date >= w.value ->> 'from' AND aph.price_date <= w.value ->> 'to'
          )`.execute(db);
     totalDeleted = Number(result.numAffectedRows ?? 0n);
   } catch (error) {

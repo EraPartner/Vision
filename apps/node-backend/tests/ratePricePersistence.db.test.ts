@@ -1,5 +1,5 @@
 /**
- * Real-PostgreSQL persistence of exchange rates and asset price history.
+ * Real-database (SQLite) persistence of exchange rates and asset price history.
  * Replaces the SQL-text cases of rateFetcher.test.ts (latest-marker rewrite,
  * historical upsert) and priceCache.test.ts (date-range binding, upsert,
  * default source) with the rows the database holds afterwards.
@@ -7,13 +7,7 @@
  * Uses the ISO 4217 testing codes XTS/XXX so no real currency row is touched.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
+import { closeTestPool, getTestPool } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { todayAppDateString } from "../src/lib/timezone.ts";
 import investmentRepository from "../src/repositories/investmentRepository.ts";
@@ -39,21 +33,19 @@ let investmentId: number | undefined;
 
 async function rateRows(code: string) {
   const { rows } = await must(getTestPool(), "getTestPool()").query<DbRow>(
-    `SELECT to_char(rate_date, 'YYYY-MM-DD') AS day, rate_to_eur::text AS rate, is_latest
+    `SELECT to_char(rate_date, 'YYYY-MM-DD') AS day, rate_to_eur AS rate, is_latest
        FROM exchange_rates WHERE currency_code = $1 ORDER BY rate_date`,
     [code],
   );
   return rows;
 }
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "rate and price persistence (real DB)",
   () => {
     beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
       await must(getTestPool(), "getTestPool()").query(
-        "DELETE FROM exchange_rates WHERE currency_code = ANY($1)",
+        "DELETE FROM exchange_rates WHERE currency_code IN (SELECT value FROM json_each($1))",
         [CODES],
       );
     }, 180_000);
@@ -62,7 +54,7 @@ describe.skipIf(!hasTestDatabase())(
       try {
         const db = must(getTestPool(), "getTestPool()");
         await db.query(
-          "DELETE FROM exchange_rates WHERE currency_code = ANY($1)",
+          "DELETE FROM exchange_rates WHERE currency_code IN (SELECT value FROM json_each($1))",
           [CODES],
         );
         if (investmentId !== undefined) {
@@ -79,7 +71,6 @@ describe.skipIf(!hasTestDatabase())(
           ]);
         }
       } finally {
-        await releaseDbSuiteLock();
         await closeTestPool();
         await closePool();
       }
@@ -88,7 +79,7 @@ describe.skipIf(!hasTestDatabase())(
     it("moves the latest marker to today's rate and loads only latest rows", async () => {
       await must(getTestPool(), "getTestPool()").query(
         `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-         VALUES ('XTS', 0.4, '2001-01-02', true)`,
+         VALUES ('XTS', vision_numeric('0.4', 20, 10), '2001-01-02', true)`,
       );
 
       await saveToDatabase({ EUR: 1, XTS: 0.5, XXX: 2 });
@@ -183,7 +174,7 @@ describe.skipIf(!hasTestDatabase())(
           day: string;
           updated_at: string;
         }>(
-          `SELECT to_char(price_date, 'YYYY-MM-DD') AS day, updated_at::text AS updated_at
+          `SELECT to_char(price_date, 'YYYY-MM-DD') AS day, CAST(updated_at AS TEXT) AS "updated_at::text"
              FROM asset_price_history WHERE investment_id = $1 ORDER BY price_date`,
           [investmentId],
         );

@@ -1,16 +1,10 @@
 /**
- * Real-PostgreSQL behaviour of investment writes: provider fields, the
+ * Real-database (SQLite) behaviour of investment writes: provider fields, the
  * ticker-preference side table, price updates and deletion. Replaces
  * mocked-pool tests that asserted INSERT/UPDATE/UNNEST SQL and parameters.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { closeTestPool, getTestPool } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import investmentRepository from "../src/repositories/investmentRepository.ts";
 import {
@@ -35,28 +29,22 @@ async function create(fields: Record<string, unknown> = {}) {
   return id;
 }
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "investment repository writes (real DB)",
   () => {
-    beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180_000);
-
     afterEach(async () => {
       const db = must(getTestPool(), "getTestPool()");
       const owned = ids.splice(0);
       await db.query(
-        "DELETE FROM investment_ticker_prefs WHERE investment_id = ANY($1::int[])",
+        "DELETE FROM investment_ticker_prefs WHERE investment_id IN (SELECT value FROM json_each($1))",
         [owned],
       );
-      await db.query("DELETE FROM investments WHERE id = ANY($1::int[])", [
+      await db.query("DELETE FROM investments WHERE id IN (SELECT value FROM json_each($1))", [
         owned,
       ]);
     });
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
