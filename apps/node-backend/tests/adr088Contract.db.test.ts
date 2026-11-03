@@ -4,6 +4,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import type { Pool as PgPool } from "pg";
 import {
   acquireDbSuiteLock,
   closeTestPool,
@@ -35,7 +36,9 @@ const describeDb =
   hasTestDatabase()
     ? describe
     : describe.skip;
-const pool = must(getTestPool(), "getTestPool()");
+// Resolved in beforeAll: without TEST_DATABASE_URL the suite is skipped and
+// getTestPool() is null, so resolving it at import time would fail the file.
+let pool: PgPool;
 
 const CONTRACT_ACCOUNTS = [
   "Contract Cash",
@@ -78,6 +81,7 @@ async function cleanupContractRows(): Promise<void> {
 
 describeDb("ADR-088 contract schema", () => {
   beforeAll(async () => {
+    pool = must(getTestPool(), "getTestPool()");
     await acquireDbSuiteLock();
     const { rows } = await pool.query(
       `SELECT table_name, column_name
