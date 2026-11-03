@@ -4,7 +4,6 @@ import { createHash } from "node:crypto";
 import { promises as fsp } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { must } from "./helpers/must.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
@@ -13,8 +12,7 @@ const repoRoot = resolve(__dirname, "../../..");
 // the untyped yauzl dependency).
 interface OpenedBundle {
   metadata: Readonly<Record<string, unknown>>;
-  databasePath: string | null;
-  dbSqlPath: string | null;
+  databasePath: string;
   attachmentsDir: string | null;
   frontendState: unknown;
   cleanup: () => void;
@@ -31,10 +29,10 @@ const { openBundle } = require(
 ) as BundleModule;
 
 describe("backup release compatibility", () => {
-  // A format-1 bundle (PostgreSQL db.sql) still opens, so the restore path can
-  // refuse it with the transition instructions and the transition script can
-  // convert it (ADR-263).
-  it("opens the sanitized bundle produced by Vision 1.0.2", async () => {
+  // Vision 1.0.2 wrote an encrypted format-1 bundle. It still decrypts with its
+  // passphrase, and is then refused by its declared format rather than as a
+  // wrong passphrase or a corrupt file.
+  it("refuses the bundle produced by Vision 1.0.2 by its format", async () => {
     const fixturePath = join(
       repoRoot,
       "packaging/electron/backup/fixtures/vision-1.0.2-sanitized.visionbak.enc",
@@ -43,27 +41,14 @@ describe("backup release compatibility", () => {
     expect(createHash("sha256").update(fixtureBytes).digest("hex")).toBe(
       "096068975bedafbf7ac0e77a2c57ba4ee13bf4bf37b32bca5064fd27e3bbf766",
     );
-    const result = await openBundle(fixturePath, {
+    const failure: unknown = await openBundle(fixturePath, {
       passphrase: "vision-v1.0.2-fixture",
-    });
-    try {
-      expect(result.metadata.appVersion).toBe("1.0.2");
-      expect(result.metadata.schemaHead).toBe("fixture_schema");
-      expect(result.databasePath).toBeNull();
-      expect(await fsp.readFile(must(result.dbSqlPath, "dbSqlPath"), "utf8")).toContain(
-        "INSERT INTO fixture_probe VALUES (1, 'v1.0.2');",
-      );
-      expect(result.frontendState).toEqual({
-        keys: { "vision.language": "nl" },
-      });
-      expect(
-        await fsp.readFile(
-          join(must(result.attachmentsDir, "attachmentsDir"), "tx-001", "receipt.txt"),
-          "utf8",
-        ),
-      ).toBe("SANITIZED-RECEIPT");
-    } finally {
-      result.cleanup();
-    }
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as { code?: unknown }).code).toBe("BACKUP_FORMAT_UNSUPPORTED");
+    expect((failure as Error).message).toContain("backup format 1");
   });
 });

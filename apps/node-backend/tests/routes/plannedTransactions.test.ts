@@ -95,7 +95,7 @@ vi.mock(
 
 import rawPlannedTransactionService from "../../src/services/plannedTransactionService.ts";
 import { query as rawQuery } from "../../src/database/connection.ts";
-import type { PgQueryResult } from "../../src/database/connection.ts";
+import type { DbQueryResult } from "../../src/database/connection.ts";
 import { generateLoanRepaymentSchedule as rawGenerateLoanRepaymentSchedule } from "../../src/services/calculations/loanSchedule.ts";
 import { must } from "../helpers/must.ts";
 
@@ -981,8 +981,8 @@ describe("Planned Transaction Routes", () => {
         }),
       );
       dbQuery
-        .mockResolvedValueOnce({ rows: [{ id: 11 }] } as PgQueryResult)
-        .mockResolvedValueOnce({ rows: [{ id: 22 }] } as PgQueryResult);
+        .mockResolvedValueOnce({ rows: [{ id: 11 }] } as DbQueryResult)
+        .mockResolvedValueOnce({ rows: [{ id: 22 }] } as DbQueryResult);
 
       await patch(1, {
         recipient_name: "John",

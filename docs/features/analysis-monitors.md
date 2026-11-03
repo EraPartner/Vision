@@ -25,9 +25,7 @@ baseline rather than comparing unlike results.
 
 Only a completed, current-version, single-row, finite numeric saved-analysis result can drive a
 threshold alert. Partial, stale, or failed checks appear in the observation history and cannot
-trigger one. A check on a saved analysis whose custom SQL was written for PostgreSQL
-records status `stale` with reason code `analysis-needs-review` until the analysis is saved again as
-SQLite SQL ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). The observation records the exact analysis run, result-window metadata, reason, and
+trigger one. The observation records the exact analysis run, result-window metadata, reason, and
 `coverage: unknown`: Vision does not claim verified upstream source coverage. An evidence change
 means the saved dossier evidence set changed, not that any source was rechecked or a claim was
 fact-checked. If a target is deleted, its rule and past observations remain visible with a saved

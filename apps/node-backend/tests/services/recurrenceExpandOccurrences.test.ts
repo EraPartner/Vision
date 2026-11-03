@@ -100,10 +100,10 @@ describe("expandOccurrences", () => {
   });
 
   it("accepts a pg-style local-midnight Date and recovers the stored calendar day", () => {
-    const pgDate = new Date(2026, 4, 15); // local midnight May 15 2026
+    const dbDate = new Date(2026, 4, 15); // local midnight May 15 2026
     const out = expandOccurrences(
       {
-        planned_date: pgDate,
+        planned_date: dbDate,
         is_recurring: true,
         recurrence_pattern: "monthly",
       },

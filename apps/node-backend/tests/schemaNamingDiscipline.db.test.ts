@@ -25,7 +25,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { PgPoolClient } from "../src/database/connection.ts";
+import type { DbClient } from "../src/database/connection.ts";
 import { getTestPool, inRollbackTransaction } from "./setup/db.ts";
 import { constraintNames, indexes, objectNames, objectSql, objectType, column } from "./helpers/sqliteCatalog.ts";
 import { __getSupportedPatterns as getSupportedPatterns } from "../src/lib/calculations/recurrence.ts";
@@ -166,7 +166,7 @@ const CATEGORY_CHECKS = [
 ];
 
 /** Run `fn(client)` inside a transaction that is always rolled back. */
-async function withRollback(fn: (client: PgPoolClient) => Promise<void>) {
+async function withRollback(fn: (client: DbClient) => Promise<void>) {
   await inRollbackTransaction(fn);
 }
 
@@ -184,7 +184,7 @@ async function allConstraints(): Promise<Array<[string, string]>> {
  * Uses a SAVEPOINT so the surrounding fixture transaction stays usable.
  */
 async function expectCheckViolation(
-  client: PgPoolClient,
+  client: DbClient,
   sql: string,
   params: unknown[],
   constraint: string,

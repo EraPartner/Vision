@@ -157,12 +157,12 @@ function initRuntime(
   return recorded;
 }
 
-function isPostgresRefusal(error: unknown): boolean {
+function isUnsupportedFormat(error: unknown): boolean {
   return (
     error instanceof Error &&
     "code" in error &&
-    error.code === "BACKUP_POSTGRESQL_V2" &&
-    error.message.includes("bun run transition:v2 -- <backup file>")
+    error.code === "BACKUP_FORMAT_UNSUPPORTED" &&
+    error.message.includes("backup format 1")
   );
 }
 
@@ -213,7 +213,6 @@ void test("createBundle writes the SQLite snapshot and its facts into format 2",
   assert.match(path.basename(bundlePath), /^vision_backup_testdev_.*\.visionbak$/);
   const opened = await openBundle(bundlePath);
   t.after(opened.cleanup);
-  assert.equal(opened.dbSqlPath, null);
   assert.ok(opened.databasePath);
   assert.deepEqual(
     fs.readFileSync(opened.databasePath),
@@ -247,7 +246,7 @@ void test("createBundle refuses a database file that is not SQLite", async (t) =
   );
 });
 
-void test("restore refuses a Vision 2.0 bundle with the transition command", async (t) => {
+void test("restore refuses a bundle of an older format", async (t) => {
   const recorded = initRuntime(installWithMigrations(t, 3));
   const bundlePath = await writeZip(t, {
     "metadata.json": JSON.stringify({
@@ -257,19 +256,11 @@ void test("restore refuses a Vision 2.0 bundle with the transition command", asy
     }),
     "db.sql": "CREATE TABLE public.notes (id int);\n",
   });
-  await assert.rejects(runBundleRestore(bundlePath), isPostgresRefusal);
+  await assert.rejects(runBundleRestore(bundlePath), isUnsupportedFormat);
   assert.deepEqual(recorded.calls, []);
 });
 
-void test("restore refuses a Vision 2.0 plain SQL dump with the transition command", async (t) => {
-  const recorded = initRuntime(installWithMigrations(t, 3));
-  const dumpPath = path.join(tempDir(t, "vision-dump-"), "backup.sql");
-  fs.writeFileSync(dumpPath, "CREATE TABLE public.notes (id int);\n");
-  await assert.rejects(runRestore(dumpPath), isPostgresRefusal);
-  assert.deepEqual(recorded.calls, []);
-});
-
-void test("restore refuses a file that is neither a SQLite database nor a Vision dump", async (t) => {
+void test("restore refuses a file that is not a SQLite database", async (t) => {
   const recorded = initRuntime(installWithMigrations(t, 3));
   const filePath = path.join(tempDir(t, "vision-other-"), "notes.sqlite3");
   fs.writeFileSync(filePath, "not a database");

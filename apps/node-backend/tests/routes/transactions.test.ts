@@ -77,7 +77,7 @@ import {
   scheduleReconcile,
 } from "../../src/services/transferReconciliationService.ts";
 import { query as rawDbQuery } from "../../src/database/connection.ts";
-import type { PgQueryResult } from "../../src/database/connection.ts";
+import type { DbQueryResult } from "../../src/database/connection.ts";
 import { isManualDuplicate as rawIsManualDuplicate } from "../../src/services/deduplication.ts";
 import { convertRowsToEur as rawConvertRowsToEur } from "../../src/services/currency/currencyConversionService.ts";
 import type {
@@ -107,7 +107,7 @@ type TxnFixture = Omit<Partial<EnrichedTransactionRow>, "date"> & {
 const txnRow = (fields: TxnFixture) =>
   fields as unknown as EnrichedTransactionRow;
 /** A pooled `query` result carrying only `rows`. */
-const pgResult = (result: { rows: unknown[] }) => result as PgQueryResult;
+const dbResult = (result: { rows: unknown[] }) => result as DbQueryResult;
 
 const { default: transactionsRouter } =
   await import("../../src/routes/transactions.ts");
@@ -365,7 +365,7 @@ describe("Transaction Routes", () => {
 
   describe("GET /export/csv", () => {
     it("should neutralize spreadsheet formula values in CSV export", async () => {
-      dbQuery.mockResolvedValue(pgResult({
+      dbQuery.mockResolvedValue(dbResult({
         rows: [
           {
             id: 1,
@@ -415,8 +415,8 @@ describe("Transaction Routes", () => {
 
     it("should apply transaction_type=expense filter to export query", async () => {
       dbQuery
-        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
-        .mockResolvedValueOnce(pgResult({ rows: [] }));
+        .mockResolvedValueOnce(dbResult({ rows: [{}] }))
+        .mockResolvedValueOnce(dbResult({ rows: [] }));
 
       await api
         .get("/api/transactions/export/csv?transaction_type=expense")
@@ -428,8 +428,8 @@ describe("Transaction Routes", () => {
 
     it("should apply transaction_type=income filter to export query", async () => {
       dbQuery
-        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
-        .mockResolvedValueOnce(pgResult({ rows: [] }));
+        .mockResolvedValueOnce(dbResult({ rows: [{}] }))
+        .mockResolvedValueOnce(dbResult({ rows: [] }));
 
       await api
         .get("/api/transactions/export/csv?transaction_type=income")
@@ -441,8 +441,8 @@ describe("Transaction Routes", () => {
 
     it("should apply recipient_id filter to export query", async () => {
       dbQuery
-        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
-        .mockResolvedValueOnce(pgResult({ rows: [] }));
+        .mockResolvedValueOnce(dbResult({ rows: [{}] }))
+        .mockResolvedValueOnce(dbResult({ rows: [] }));
 
       await api.get("/api/transactions/export/csv?recipient_id=42").expect(200);
 
@@ -452,8 +452,8 @@ describe("Transaction Routes", () => {
 
     it("should apply search filter as an ilike() pattern in export query", async () => {
       dbQuery
-        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
-        .mockResolvedValueOnce(pgResult({ rows: [] }));
+        .mockResolvedValueOnce(dbResult({ rows: [{}] }))
+        .mockResolvedValueOnce(dbResult({ rows: [] }));
 
       await api.get("/api/transactions/export/csv?search=netflix").expect(200);
 
@@ -464,8 +464,8 @@ describe("Transaction Routes", () => {
 
     it("should apply transaction_id filter to export query", async () => {
       dbQuery
-        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
-        .mockResolvedValueOnce(pgResult({ rows: [] }));
+        .mockResolvedValueOnce(dbResult({ rows: [{}] }))
+        .mockResolvedValueOnce(dbResult({ rows: [] }));
 
       await api
         .get("/api/transactions/export/csv?transaction_id=7")
@@ -478,8 +478,8 @@ describe("Transaction Routes", () => {
 
     it("should join recipients/categories tables in probe SQL so recipient/search filters resolve", async () => {
       dbQuery
-        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
-        .mockResolvedValueOnce(pgResult({ rows: [] }));
+        .mockResolvedValueOnce(dbResult({ rows: [{}] }))
+        .mockResolvedValueOnce(dbResult({ rows: [] }));
 
       await api.get("/api/transactions/export/csv?search=foo").expect(200);
 
@@ -490,8 +490,8 @@ describe("Transaction Routes", () => {
 
     it("sets the streamed CSV download headers", async () => {
       dbQuery
-        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
-        .mockResolvedValueOnce(pgResult({ rows: [] }));
+        .mockResolvedValueOnce(dbResult({ rows: [{}] }))
+        .mockResolvedValueOnce(dbResult({ rows: [] }));
 
       const res = await api.get("/api/transactions/export/csv").expect(200);
 
@@ -522,8 +522,8 @@ describe("Transaction Routes", () => {
     it("should stream NDJSON with correct Content-Type", async () => {
       // probe returns a row; chunk has 1 row (< EXPORT_CHUNK_SIZE) → breaks after first chunk
       dbQuery
-        .mockResolvedValueOnce(pgResult({ rows: [{}] })) // probe
-        .mockResolvedValueOnce(pgResult({ rows: [sampleRow] })); // chunk (1 row < 1000 → break)
+        .mockResolvedValueOnce(dbResult({ rows: [{}] })) // probe
+        .mockResolvedValueOnce(dbResult({ rows: [sampleRow] })); // chunk (1 row < 1000 → break)
 
       const res = await api.get("/api/transactions/export/json").expect(200);
 
@@ -536,8 +536,8 @@ describe("Transaction Routes", () => {
     it("should emit one JSON object per transaction line", async () => {
       // 2 rows in chunk → still < EXPORT_CHUNK_SIZE → breaks after first chunk
       dbQuery
-        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
-        .mockResolvedValueOnce(pgResult({
+        .mockResolvedValueOnce(dbResult({ rows: [{}] }))
+        .mockResolvedValueOnce(dbResult({
           rows: [sampleRow, { ...sampleRow, id: 2, amount: "-5.00" }],
         }));
 
@@ -557,7 +557,7 @@ describe("Transaction Routes", () => {
     });
 
     it("should return 404 when no transactions match filters", async () => {
-      dbQuery.mockResolvedValueOnce(pgResult({ rows: [] })); // probe
+      dbQuery.mockResolvedValueOnce(dbResult({ rows: [] })); // probe
 
       const res = await api
         .get("/api/transactions/export/json?start_date=2099-01-01")
@@ -577,8 +577,8 @@ describe("Transaction Routes", () => {
     it("should include all expected fields in output", async () => {
       // 1 row < EXPORT_CHUNK_SIZE → loop breaks after first chunk; only 2 DB calls needed
       dbQuery
-        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
-        .mockResolvedValueOnce(pgResult({ rows: [sampleRow] }));
+        .mockResolvedValueOnce(dbResult({ rows: [{}] }))
+        .mockResolvedValueOnce(dbResult({ rows: [sampleRow] }));
 
       const res = await api.get("/api/transactions/export/json").expect(200);
 
@@ -825,7 +825,7 @@ describe("Transaction Routes", () => {
     });
 
     it("should return 400 when recipient_name cannot be resolved", async () => {
-      dbQuery.mockResolvedValueOnce(pgResult({ rows: [] }));
+      dbQuery.mockResolvedValueOnce(dbResult({ rows: [] }));
 
       await api
         .patch("/api/transactions/1")
@@ -836,7 +836,7 @@ describe("Transaction Routes", () => {
     });
 
     it("should return 400 for invalid category_name format", async () => {
-      dbQuery.mockResolvedValueOnce(pgResult({ rows: [] }));
+      dbQuery.mockResolvedValueOnce(dbResult({ rows: [] }));
       await api
         .patch("/api/transactions/1")
         .send({ category_name: "INVALID" })
@@ -846,9 +846,9 @@ describe("Transaction Routes", () => {
     });
 
     it("should return 400 when category_name does not exist", async () => {
-      dbQuery.mockResolvedValueOnce(pgResult({ rows: [{ id: 11 }] }));
-      dbQuery.mockResolvedValueOnce(pgResult({ rows: [] }));
-      dbQuery.mockResolvedValueOnce(pgResult({ rows: [] }));
+      dbQuery.mockResolvedValueOnce(dbResult({ rows: [{ id: 11 }] }));
+      dbQuery.mockResolvedValueOnce(dbResult({ rows: [] }));
+      dbQuery.mockResolvedValueOnce(dbResult({ rows: [] }));
 
       await api
         .patch("/api/transactions/1")

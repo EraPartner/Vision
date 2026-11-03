@@ -1,15 +1,15 @@
 import { sql } from "kysely";
 import { z } from "zod";
 import { checkedRows, db } from "../database/db.ts";
-import { pgAccountId, pgTransactionId } from "../database/rowSchemas.ts";
+import { dbAccountId, dbTransactionId } from "../database/rowSchemas.ts";
 import { accountActiveRowSchema } from "../database/rows/ledger.ts";
 import type { QueryRunner } from "../types/rows.ts";
 import type { AccountId, TransactionId } from "@vision/types/brands";
 import { ValidationError } from "../middleware/errorHandler.ts";
 
 const ownershipSchema = z.object({
-  id: pgTransactionId,
-  account_id: pgAccountId.nullable(),
+  id: dbTransactionId,
+  account_id: dbAccountId.nullable(),
 });
 
 /** `IN (...)` over one JSON array parameter, however many ids there are. */

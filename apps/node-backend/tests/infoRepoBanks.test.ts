@@ -13,13 +13,13 @@ vi.mock("../src/repositories/infoRepositoryHelpers.ts", async () => {
 });
 
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import { batchConvertGroupsWithHistoricalRateFallback as rawBatchConvertGroupsWithHistoricalRateFallback } from "../src/repositories/infoRepositoryHelpers.ts";
 import { banksRepository } from "../src/repositories/infoRepositoryBanks.ts";
 import { must } from "./helpers/must.ts";
 
 const query = rawQuery as unknown as Mock<
-  (text: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
+  (text: string, params?: readonly unknown[]) => Promise<Partial<DbQueryResult>>
 >;
 const batchConvertGroupsWithHistoricalRateFallback = mockedBatchConvertGroups(
   rawBatchConvertGroupsWithHistoricalRateFallback,

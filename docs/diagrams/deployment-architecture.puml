@@ -1,5 +1,5 @@
 @startuml Deployment Architecture
-title Deployment Architecture — Native macOS, Native Demo, and Source Hosting
+title Deployment Architecture — Native macOS, Native Demo, and Source Development
 
 !theme plain
 skinparam linetype ortho
@@ -14,15 +14,13 @@ package "Native macOS (default)" as NativeMac {
     component "Native runtime provider" as NativeProvider
     component "Compiled Bun backend" as NativeBackend
     component "Production frontend (dist)" as NativeFrontend
-    component "PostgreSQL 18.6 binaries" as NativePostgresBinaries
-    component "db/migrations (Kysely, in-process)" as NativeMigrations
-
+    component "Database tool (db-file)\n+ analysis SQL sandbox" as NativeDbTools
+    component "db/migrations (in-process runner)" as NativeMigrations
   }
-  database "Vision-managed PostgreSQL 18.6\n127.0.0.1:54329" as NativePostgres
-  folder "Application Support/Vision/native/vision" as NativeData {
-    folder "postgres/data" as NativePostgresData
-    folder "attachments" as NativeAttachments
-    folder "logs + runtime marker" as NativeState
+  folder "Application Support/Vision" as NativeData {
+    database "database/vision.sqlite3\n(+ -wal / -shm)" as NativeDatabase
+    folder "database/pre-migration-backups" as NativePreMigration
+    folder "native/vision\nattachments · logs · runtime state" as NativeState
   }
   node "Local Ollama\n127.0.0.1:11434" as NativeOllama
 }
@@ -30,26 +28,19 @@ package "Native macOS (default)" as NativeMac {
 package "Native Vision Demo (synthetic)" as NativeDemo {
   node "Vision Demo.app" as DemoElectron {
     component "Electron + shared native payload" as DemoRuntime
-    artifact "demo-seed.dump\n+ validation manifest" as DemoSeed
+    artifact "vision-demo.sqlite3\n+ manifest.json" as DemoSeed
   }
-  database "Isolated Demo PostgreSQL 18.6\n127.0.0.1:54330" as DemoPostgres
-  folder "Application Support/Vision Demo/native/vision_demo" as DemoData {
-    folder "postgres/data" as DemoPostgresData
-    folder "attachments + logs + seed marker" as DemoState
+  folder "Application Support/Vision Demo" as DemoData {
+    database "database/vision.sqlite3" as DemoDatabase
+    folder "native/vision_demo\nattachments · logs · seed state" as DemoState
   }
 }
 
 package "Source Development" as SourceDev {
   component "Vite frontend" as FrontendDev
   component "Bun backend" as BackendDev
-  component "Electron shell" as ElectronDev
-  database "Managed development PostgreSQL 18.6\nVision Development data" as DevelopmentPostgres
-}
-
-package "Browser Production" as BrowserProduction {
-  node "TLS reverse proxy" as Proxy
-  component "Vision backend + frontend" as HostedApp
-  database "PostgreSQL 18" as HostedPostgres
+  component "Electron shell\n(Vision Development profile)" as ElectronDev
+  database "Application Support/Vision Development\ndatabase/vision.sqlite3" as DevelopmentDatabase
 }
 
 cloud "External data providers" as External
@@ -57,48 +48,44 @@ cloud "External data providers" as External
 User --> ElectronUI : Desktop UI
 ElectronUI --> NativeProvider : lifecycle / IPC
 NativeProvider --> NativeBackend : spawn / stop / logs
-NativeProvider --> NativePostgresBinaries : verify / spawn / stop
+NativeProvider --> NativeDbTools : check / snapshot / activate file
 NativeBackend --> NativeMigrations : runMigrations() on boot
 NativeBackend --> NativeFrontend : static files
-NativeBackend --> NativePostgres : owner migration / app role
-NativePostgres --> NativePostgresData : durable cluster
-NativeBackend --> NativeAttachments : absolute durable path
+NativeBackend --> NativeDatabase : one writer + readers (in-process)
+NativeBackend --> NativePreMigration : copy before migrating
+NativeBackend --> NativeState : attachments (absolute path)
 ElectronUI --> NativeBackend : report document (HTML)
 NativeBackend --> NativeOllama : local AI
 NativeBackend --> External : HTTPS
 
 User --> DemoRuntime : synthetic desktop UI
 DemoRuntime --> DemoSeed : verify checksum / schema / counts
-DemoRuntime --> DemoPostgres : staged restore + backend lifecycle
-DemoPostgres --> DemoPostgresData : isolated durable cluster
+DemoRuntime --> DemoDatabase : activate seed copy + backend lifecycle
 DemoRuntime --> DemoState : attachments / logs / activation state
 
 User --> ElectronDev : development UI
 ElectronDev --> BackendDev : native provider
 FrontendDev --> BackendDev : loopback HTTP
-BackendDev --> DevelopmentPostgres : isolated development database
-
-User --> Proxy : HTTPS
-Proxy --> HostedApp
-HostedApp --> HostedPostgres
-HostedApp --> External : HTTPS
+BackendDev --> DevelopmentDatabase : isolated development database
 
 note right of NativeProvider
-  Runtime marker prevents database switching.
-  A legacy marker fails closed and requires
-  migration with Vision 1.0.2 (ADR-133).
+  No database server: the backend opens one
+  SQLite file through the bundled Bun and the
+  system SQLite 3.39.0 or later (ADR-263).
+  Restores and Demo activations swap the whole
+  database directory as one generation.
 end note
 
-note right of NativePostgres
+note right of NativeDatabase
   Private data is outside Vision.app.
-  Separate admin, owner/migration, and app roles.
-  Required extensions and the db/migrations schema.
+  WAL mode while the backend runs; backups
+  carry a consistent snapshot (db.sqlite3).
 end note
 
 note right of NativeDemo
   Demo always selects native and never reads Vision data.
-  First launch, reset, or seed change activates a
-  deterministic custom dump with rollback until detailed
+  First launch, reset, or seed change activates a copy of
+  the packaged seed database with rollback until detailed
   readiness succeeds (ADR-114).
 end note
 

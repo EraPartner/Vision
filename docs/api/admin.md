@@ -202,14 +202,10 @@ Retrieve statistics for every user table of the SQLite database, largest table f
 {
   "tables": [
     {
-      "schemaname": "main",
       "table_name": "transactions",
       "live_rows": "2453",
-      "dead_rows": "0",
       "last_vacuum": "2026-11-03T10:15:32.123Z",
-      "last_autovacuum": null,
       "last_analyze": "2026-11-03T10:15:32.123Z",
-      "last_autoanalyze": null,
       "size": "3200 kB",
       "size_bytes": "3276800"
     }
@@ -218,18 +214,16 @@ Retrieve statistics for every user table of the SQLite database, largest table f
 }
 ```
 
-- `live_rows`, `dead_rows` and `size_bytes` are BIGINT values, so they arrive as decimal strings.
-- `live_rows` is an exact `count(*)` of the table. `dead_rows` is always `"0"`: SQLite keeps no dead
-  row versions.
+- `live_rows` and `size_bytes` are BIGINT values, so they arrive as decimal strings.
+- `live_rows` is an exact `count(*)` of the table.
 - `last_vacuum` and `last_analyze` are ISO timestamps of the last run of
   `POST /api/admin/database/vacuum` in this backend process, and `null` until one runs. SQLite does
   not record maintenance runs, so a restart resets them. `last_vacuum` is the same for every table,
-  because `VACUUM` rebuilds the whole file. `last_autovacuum` and `last_autoanalyze` are always
-  `null`: SQLite has no autovacuum daemon.
+  because `VACUUM` rebuilds the whole file.
 - `size_bytes` is the bytes of the table's pages plus its indexes' pages, from the `dbstat` virtual
   table. A SQLite build without `dbstat` reports `size` as `"—"` and `size_bytes` as `"0"`, and the
   tables are then ordered by row count.
-- `size` and `db_size` are formatted as `pg_size_pretty` formatted them (`bytes`, `kB`, `MB`, ...).
+- `size` and `db_size` are human-readable sizes in 1024-byte units (`bytes`, `kB`, `MB`, ...).
   `db_size` is the database file plus its write-ahead log.
 - Contract change (October 2026, non-breaking): `openapi.yaml` now types the responses of `GET /api/admin/database/stats` (`DbStats`), `GET /api/admin/providers/health` (`ProviderHealthList`), `POST /api/admin/providers/{provider}/probe` (`ProbeResult`), `GET /api/admin/metrics/requests` (`RouteMetricList`) and `GET /api/admin/endpoints` (`EndpointList`) with the shapes the routes already returned and `packages/types/src/contracts/admin.ts` already checked. This page previously described a `table` query parameter and a different stats body that the route never had.
 

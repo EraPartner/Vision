@@ -21,17 +21,17 @@
 import { z } from "zod";
 import type { FundHoldingsDocument } from "@vision/types/fund-holdings";
 import {
-  pgAccountId,
-  pgBigint,
-  pgCurrency,
-  pgDate,
-  pgDayString,
-  pgInt,
-  pgInvestmentId,
-  pgNumeric,
-  pgPortfolioTransactionId,
-  pgTimestamptz,
-  pgTransactionId,
+  dbAccountId,
+  dbBigint,
+  dbCurrency,
+  dbDate,
+  dbDayString,
+  dbInt,
+  dbInvestmentId,
+  dbNumeric,
+  dbPortfolioTransactionId,
+  dbTimestamptz,
+  dbTransactionId,
 } from "../rowSchemas.ts";
 
 /** The driver's alias type hints (src/database/sqlite/values.ts). */
@@ -53,12 +53,12 @@ export function hintedAlias<N extends string>(name: N, hint: AliasHint): N {
 
 /** `RETURNING id` / `SELECT id` over an INTEGER/SERIAL key. */
 export const portfolioIntIdRowSchema = z
-  .object({ id: pgInt })
+  .object({ id: dbInt })
   .describe("portfolio int id row");
 
 /** `SELECT id` / `RETURNING id` over `portfolio_transactions`. */
 export const portfolioTransactionKeyRowSchema = z
-  .object({ id: pgPortfolioTransactionId })
+  .object({ id: dbPortfolioTransactionId })
   .describe("portfolio transaction id row");
 
 /**
@@ -66,12 +66,12 @@ export const portfolioTransactionKeyRowSchema = z
  * @public
  */
 export const investmentKeyRowSchema = z
-  .object({ id: pgInvestmentId })
+  .object({ id: dbInvestmentId })
   .describe("investment id row");
 
 /** `RETURNING id` over a BIGINT/BIGSERIAL key. */
 export const portfolioBigintIdRowSchema = z
-  .object({ id: pgBigint })
+  .object({ id: dbBigint })
   .describe("portfolio bigint id row");
 
 /** `SELECT EXISTS (...) AS present`: EXISTS is never NULL. */
@@ -82,7 +82,7 @@ export const presentRowSchema = z
 /** `SELECT id,is_active,type FROM accounts` inside the custody write transaction. */
 export const custodyAccountLockRowSchema = z
   .object({
-    id: pgAccountId,
+    id: dbAccountId,
     is_active: z.boolean(),
     /** `account_type` enum. */
     type: z.string(),
@@ -98,35 +98,35 @@ const incomeRecognitionRoleSchema = z.enum(["standard", "included_in_units"]);
 /** A raw `portfolio_transactions` row (`SELECT *` / `RETURNING *`). */
 export const portfolioTransactionDbRowSchema = z
   .object({
-    id: pgPortfolioTransactionId,
-    investment_id: pgInvestmentId,
+    id: dbPortfolioTransactionId,
+    investment_id: dbInvestmentId,
     /** `portfolio_txn_type` enum. */
     type: z.string(),
-    date: pgDate,
+    date: dbDate,
     /** NUMERIC(18,4) NOT NULL */
-    amount: pgNumeric,
-    units: pgNumeric.nullable(),
-    price_per_unit: pgNumeric.nullable(),
-    fees: pgNumeric.nullable(),
-    taxes: pgNumeric.nullable(),
-    currency: pgCurrency,
-    fx_rate_to_eur: pgNumeric.nullable(),
+    amount: dbNumeric,
+    units: dbNumeric.nullable(),
+    price_per_unit: dbNumeric.nullable(),
+    fees: dbNumeric.nullable(),
+    taxes: dbNumeric.nullable(),
+    currency: dbCurrency,
+    fx_rate_to_eur: dbNumeric.nullable(),
     note: z.string().nullable(),
     is_recurring: z.boolean(),
     recurrence_interval: z.string().nullable(),
-    recurrence_end_date: pgDate.nullable(),
-    created_at: pgTimestamptz,
-    updated_at: pgTimestamptz,
-    account_id: pgAccountId.nullable(),
+    recurrence_end_date: dbDate.nullable(),
+    created_at: dbTimestamptz,
+    updated_at: dbTimestamptz,
+    account_id: dbAccountId.nullable(),
     /**
      * BIGINT FK (migration 0086). Optional because the repository still
      * probes for the column (`hasPortfolioTransactionImportBatchIdColumn`).
      */
-    import_batch_id: pgBigint.nullable().optional(),
+    import_batch_id: dbBigint.nullable().optional(),
     dividend_amount_convention: z.enum(["gross", "net", "unknown"]),
     source_record_hash: z.string().nullable(),
     dedup_fingerprint: z.string().nullable(),
-    dedup_fingerprint_version: pgInt.nullable(),
+    dedup_fingerprint_version: dbInt.nullable(),
     income_recognition_role: incomeRecognitionRoleSchema,
   })
   .describe("portfolio_transactions row");
@@ -134,12 +134,12 @@ export const portfolioTransactionDbRowSchema = z
 /** `getAllWithCount`: the raw row plus the window `COUNT(*) OVER ()`. */
 export const portfolioTransactionCountedRowSchema =
   portfolioTransactionDbRowSchema
-    .extend({ total_count: pgBigint })
+    .extend({ total_count: dbBigint })
     .describe("portfolio_transactions counted row");
 
 /** `getUnitEventIdsForImportBatch`. */
 export const portfolioTransactionIdPairRowSchema = z
-  .object({ id: pgPortfolioTransactionId, investment_id: pgInvestmentId })
+  .object({ id: dbPortfolioTransactionId, investment_id: dbInvestmentId })
   .describe("portfolio transaction id pair row");
 
 /** `getAccountLabel`: `accounts.name` is NOT NULL. */
@@ -159,28 +159,28 @@ export const assetClassRowSchema = z
  */
 export const portfolioUnitEventRowSchema = z
   .object({
-    id: pgBigint,
+    id: dbBigint,
     type: z.string(),
-    date: pgDayString,
+    date: dbDayString,
     /** `COALESCE(units, 0)` on the transaction leg. */
-    units: pgNumeric,
-    account_id: pgAccountId.nullable(),
-    amount: pgNumeric,
+    units: dbNumeric,
+    account_id: dbAccountId.nullable(),
+    amount: dbNumeric,
     /** Raw nullable `fees` on the transaction leg. */
-    fees: pgNumeric.nullable(),
-    taxes: pgNumeric.nullable(),
+    fees: dbNumeric.nullable(),
+    taxes: dbNumeric.nullable(),
     /** NULL when a non-EUR transaction has neither a stamped nor a stored rate. */
-    fxMultiplier: pgNumeric.nullable(),
-    source_account_id: pgAccountId.nullable(),
-    destination_account_id: pgAccountId.nullable(),
-    fee_units: pgNumeric,
-    transfer_id: pgBigint.nullable(),
-    currency: pgCurrency.nullable(),
+    fxMultiplier: dbNumeric.nullable(),
+    source_account_id: dbAccountId.nullable(),
+    destination_account_id: dbAccountId.nullable(),
+    fee_units: dbNumeric,
+    transfer_id: dbBigint.nullable(),
+    currency: dbCurrency.nullable(),
     source_record_hash: z.string().nullable(),
     adjustment_kind: z.enum(["yield_reversal", "asset_fee"]).nullable(),
     basis_policy: z.enum(["zero_yield_only", "carried"]).nullable(),
     eligible_source_record_hashes: z.array(z.string()).nullable(),
-    adjustment_id: pgBigint.nullable(),
+    adjustment_id: dbBigint.nullable(),
     income_recognition_role: incomeRecognitionRoleSchema,
   })
   .describe("portfolio unit event row");
@@ -192,23 +192,23 @@ export const portfolioUnitEventRowSchema = z
 export const portfolioMathTxRowSchema = z
   .object({
     /** BIGINT string: one id sequence across the three event tables. */
-    id: pgBigint,
-    investment_id: pgInvestmentId,
+    id: dbBigint,
+    investment_id: dbInvestmentId,
     type: z.string(),
-    amount: pgNumeric,
-    units: pgNumeric,
-    fees: pgNumeric,
-    taxes: pgNumeric,
-    date: pgDayString,
+    amount: dbNumeric,
+    units: dbNumeric,
+    fees: dbNumeric,
+    taxes: dbNumeric,
+    date: dbDayString,
     /** Same value as `date`, second alias. */
-    day: pgDayString,
-    currency: pgCurrency,
-    fx_rate_to_eur: pgNumeric.nullable(),
-    account_id: pgAccountId.nullable(),
+    day: dbDayString,
+    currency: dbCurrency,
+    fx_rate_to_eur: dbNumeric.nullable(),
+    account_id: dbAccountId.nullable(),
     /** Custody event origin; NULL on transaction and adjustment legs. */
-    source_account_id: pgAccountId.nullable(),
-    destination_account_id: pgAccountId.nullable(),
-    fee_units: pgNumeric,
+    source_account_id: dbAccountId.nullable(),
+    destination_account_id: dbAccountId.nullable(),
+    fee_units: dbNumeric,
     source_record_hash: z.string().nullable(),
     adjustment_kind: z.enum(["yield_reversal", "asset_fee"]).nullable(),
     basis_policy: z.enum(["zero_yield_only", "carried"]).nullable(),
@@ -223,19 +223,19 @@ export const portfolioTransactionSummaryDbRowSchema = z
     type: z.string(),
     income_recognition_role: incomeRecognitionRoleSchema,
     /** SUM over the NOT NULL `amount`; every group has at least one row. */
-    total_amount: pgNumeric,
-    total_units: pgNumeric.nullable(),
-    total_fees: pgNumeric.nullable(),
-    total_taxes: pgNumeric.nullable(),
+    total_amount: dbNumeric,
+    total_units: dbNumeric.nullable(),
+    total_fees: dbNumeric.nullable(),
+    total_taxes: dbNumeric.nullable(),
     /** Bare COUNT(*) */
-    count: pgBigint,
+    count: dbBigint,
   })
   .describe("portfolio transaction summary row");
 
 /** The jsonb `portfolio_income_transaction_snapshot(pt)` returns. */
 export const portfolioTransactionSnapshotSchema = z.object({
-  id: pgPortfolioTransactionId,
-  investment_id: pgInvestmentId,
+  id: dbPortfolioTransactionId,
+  investment_id: dbInvestmentId,
   type: z.string(),
   date: z.string(),
   amount: z.string().nullable(),
@@ -243,9 +243,9 @@ export const portfolioTransactionSnapshotSchema = z.object({
   price_per_unit: z.string().nullable(),
   fees: z.string().nullable(),
   taxes: z.string().nullable(),
-  currency: pgCurrency.nullable(),
+  currency: dbCurrency.nullable(),
   fx_rate_to_eur: z.string().nullable(),
-  account_id: pgAccountId.nullable(),
+  account_id: dbAccountId.nullable(),
   note: z.string().nullable(),
   dividend_amount_convention: z.string(),
   is_recurring: z.boolean(),
@@ -266,19 +266,19 @@ const jsonObjectSchema = z.record(z.string(), z.unknown());
 /** A `portfolio_import_income_recognition_journal` row (`SELECT r.*`). */
 export const incomeRecognitionJournalRowSchema = z
   .object({
-    id: pgBigint,
-    batch_id: pgBigint,
-    staging_row_id: pgBigint,
-    unit_staging_row_id: pgBigint,
-    income_transaction_id: pgPortfolioTransactionId,
-    unit_transaction_id: pgPortfolioTransactionId,
+    id: dbBigint,
+    batch_id: dbBigint,
+    staging_row_id: dbBigint,
+    unit_staging_row_id: dbBigint,
+    income_transaction_id: dbPortfolioTransactionId,
+    unit_transaction_id: dbPortfolioTransactionId,
     action: z.enum(["record", "restore"]),
-    previous_entry_id: pgBigint.nullable(),
+    previous_entry_id: dbBigint.nullable(),
     /** CHECK jsonb_typeof = 'object' */
     income_data: jsonObjectSchema,
     unit_data: jsonObjectSchema,
     proof_data: jsonObjectSchema,
-    created_at: pgTimestamptz,
+    created_at: dbTimestamptz,
   })
   .describe("income recognition journal row");
 
@@ -289,7 +289,7 @@ export const incomeRecognitionJournalRowSchema = z
 /** `lockEligibleDestinationAccount`. */
 export const retagDestinationAccountRowSchema = z
   .object({
-    id: pgAccountId,
+    id: dbAccountId,
     name: z.string(),
     display_name: z.string().nullable(),
     /** `account_type` enum. */
@@ -301,33 +301,33 @@ export const retagDestinationAccountRowSchema = z
 /** `lockTransactions`. */
 export const retagLockedTransactionRowSchema = z
   .object({
-    id: pgPortfolioTransactionId,
-    investment_id: pgInvestmentId,
-    account_id: pgAccountId.nullable(),
+    id: dbPortfolioTransactionId,
+    investment_id: dbInvestmentId,
+    account_id: dbAccountId.nullable(),
   })
   .describe("retag locked transaction row");
 
 /** `getUnitEventsForInvestments`' transaction projection. */
 export const retagTransactionEventRowSchema = z
   .object({
-    id: pgPortfolioTransactionId,
-    investment_id: pgInvestmentId,
+    id: dbPortfolioTransactionId,
+    investment_id: dbInvestmentId,
     /** `portfolio_txn_type` enum. */
     type: z.string(),
-    date: pgDayString,
-    amount: pgNumeric,
-    units: pgNumeric,
-    fees: pgNumeric,
-    taxes: pgNumeric,
-    currency: pgCurrency,
-    fx_rate_to_eur: pgNumeric.nullable(),
+    date: dbDayString,
+    amount: dbNumeric,
+    units: dbNumeric,
+    fees: dbNumeric,
+    taxes: dbNumeric,
+    currency: dbCurrency,
+    fx_rate_to_eur: dbNumeric.nullable(),
     /** NULL when a non-EUR row has neither a stamped nor a stored rate. */
-    fx_multiplier_eur: pgNumeric.nullable(),
-    account_id: pgAccountId.nullable(),
+    fx_multiplier_eur: dbNumeric.nullable(),
+    account_id: dbAccountId.nullable(),
     /** `asset_class` enum. */
     asset_class: z.string(),
-    current_price: pgNumeric,
-    interest_rate: pgNumeric,
+    current_price: dbNumeric,
+    interest_rate: dbNumeric,
   })
   .describe("retag transaction event row");
 
@@ -339,50 +339,50 @@ export const retagTransactionEventRowSchema = z
 export const eligibleYieldSourceRowSchema = z
   .object({
     source_record_hash: z.string(),
-    staging_row_id: pgBigint,
+    staging_row_id: dbBigint,
   })
   .describe("eligible yield source row");
 
 /** `portfolio_asset_adjustments` with `date` re-projected as 'YYYY-MM-DD'. */
 export const portfolioAssetAdjustmentRowSchema = z
   .object({
-    id: pgBigint,
-    investment_id: pgInvestmentId,
-    account_id: pgAccountId,
-    date: pgDayString,
-    units: pgNumeric,
+    id: dbBigint,
+    investment_id: dbInvestmentId,
+    account_id: dbAccountId,
+    date: dbDayString,
+    units: dbNumeric,
     adjustment_kind: z.enum(["yield_reversal", "asset_fee"]),
     basis_policy: z.enum(["zero_yield_only", "carried"]),
     eligible_source_record_hashes: z.array(z.string()),
     /** jsonb object, DEFAULT '{}'. */
     basis_allocations: jsonObjectSchema,
-    import_batch_id: pgBigint,
-    staging_row_id: pgBigint,
+    import_batch_id: dbBigint,
+    staging_row_id: dbBigint,
     source_record_hash: z.string(),
     dedup_fingerprint: z.string(),
-    dedup_fingerprint_version: pgInt,
-    created_at: pgTimestamptz,
+    dedup_fingerprint_version: dbInt,
+    created_at: dbTimestamptz,
   })
   .describe("portfolio_asset_adjustments row");
 
 /** `portfolio_asset_transfers` with `date` re-projected as 'YYYY-MM-DD'. */
 export const portfolioAssetTransferRowSchema = z
   .object({
-    id: pgBigint,
-    investment_id: pgInvestmentId,
-    source_account_id: pgAccountId,
-    destination_account_id: pgAccountId,
-    date: pgDayString,
-    units: pgNumeric,
-    fee_units: pgNumeric,
+    id: dbBigint,
+    investment_id: dbInvestmentId,
+    source_account_id: dbAccountId,
+    destination_account_id: dbAccountId,
+    date: dbDayString,
+    units: dbNumeric,
+    fee_units: dbNumeric,
     /** jsonb object, DEFAULT '{}'. */
     fee_basis_allocations: jsonObjectSchema,
-    import_batch_id: pgBigint,
-    staging_row_id: pgBigint,
+    import_batch_id: dbBigint,
+    staging_row_id: dbBigint,
     source_record_hash: z.string(),
     dedup_fingerprint: z.string(),
-    dedup_fingerprint_version: pgInt,
-    created_at: pgTimestamptz,
+    dedup_fingerprint_version: dbInt,
+    created_at: dbTimestamptz,
   })
   .describe("portfolio_asset_transfers row");
 
@@ -395,7 +395,7 @@ export const exposureClassificationRowSchema = z
   .object({
     /** UUID */
     id: z.string(),
-    investmentId: pgInvestmentId.nullable(),
+    investmentId: dbInvestmentId.nullable(),
     identifierType: z.string().nullable(),
     identifierValue: z.string().nullable(),
     identifierExchange: z.string().nullable(),
@@ -404,8 +404,8 @@ export const exposureClassificationRowSchema = z
     sector: z.string().nullable(),
     issuerCountryCode: z.string().nullable(),
     sourceLabel: z.string(),
-    createdAt: pgTimestamptz,
-    updatedAt: pgTimestamptz,
+    createdAt: dbTimestamptz,
+    updatedAt: dbTimestamptz,
   })
   .describe("exposure classification row");
 
@@ -428,23 +428,23 @@ export const fundHoldingsDocumentRowSchema = z
   .object({
     /** UUID */
     id: z.string(),
-    investmentId: pgInvestmentId,
+    investmentId: dbInvestmentId,
     shareClassIdentifier: z.object({
       type: z.string(),
       value: z.string(),
       exchange: z.string().nullable().optional(),
     }),
     document: storedFundHoldingsDocumentSchema,
-    sourceAsOfDate: pgDate,
+    sourceAsOfDate: dbDate,
     sourceSha256: z.string(),
-    createdAt: pgTimestamptz,
-    updatedAt: pgTimestamptz,
+    createdAt: dbTimestamptz,
+    updatedAt: dbTimestamptz,
   })
   .describe("fund holdings document row");
 
 /** `listExposureTargets`. */
 export const exposureTargetRowSchema = z
-  .object({ id: pgInvestmentId, assetClass: z.string() })
+  .object({ id: dbInvestmentId, assetClass: z.string() })
   .describe("exposure target row");
 
 // ---------------------------------------------------------------------------
@@ -454,20 +454,20 @@ export const exposureTargetRowSchema = z
 /** A raw `investments` row (`SELECT i.*` / `RETURNING *`). */
 export const investmentDbRowSchema = z
   .object({
-    id: pgInvestmentId,
+    id: dbInvestmentId,
     name: z.string(),
     symbol: z.string().nullable(),
     /** `asset_class` enum. */
     asset_class: z.string(),
-    currency: pgCurrency,
+    currency: dbCurrency,
     /** NUMERIC(18,6) */
-    current_price: pgNumeric.nullable(),
-    interest_rate: pgNumeric.nullable(),
-    maturity_date: pgDate.nullable(),
+    current_price: dbNumeric.nullable(),
+    interest_rate: dbNumeric.nullable(),
+    maturity_date: dbDate.nullable(),
     location: z.string().nullable(),
     municipality: z.string().nullable(),
-    cadastral_income: pgNumeric.nullable(),
-    municipality_tax_rate: pgNumeric.nullable(),
+    cadastral_income: dbNumeric.nullable(),
+    municipality_tax_rate: dbNumeric.nullable(),
     notes: z.string().nullable(),
     is_active: z.boolean(),
     /** `price_provider` enum. */
@@ -480,9 +480,9 @@ export const investmentDbRowSchema = z
     price_provider_history_path: z.string().nullable(),
     price_provider_history_ts_path: z.string().nullable(),
     price_provider_history_price_path: z.string().nullable(),
-    price_updated_at: pgTimestamptz.nullable(),
-    created_at: pgTimestamptz,
-    updated_at: pgTimestamptz,
+    price_updated_at: dbTimestamptz.nullable(),
+    created_at: dbTimestamptz,
+    updated_at: dbTimestamptz,
     /** `COALESCE(tp.show_in_ticker, true)` on the joined reads only. */
     show_in_ticker: z.boolean().optional(),
   })
@@ -490,7 +490,7 @@ export const investmentDbRowSchema = z
 
 /** `getAllWithCount`: the joined row plus `COUNT(*) OVER ()`. */
 export const investmentCountedDbRowSchema = investmentDbRowSchema
-  .extend({ total_count: pgBigint })
+  .extend({ total_count: dbBigint })
   .describe("investments counted row");
 
 /**
@@ -498,12 +498,12 @@ export const investmentCountedDbRowSchema = investmentDbRowSchema
  * and `interest_rate` re-projected through COALESCE (non-null).
  */
 export const summaryInvestmentDbRowSchema = investmentDbRowSchema
-  .extend({ current_price: pgNumeric, interest_rate: pgNumeric })
+  .extend({ current_price: dbNumeric, interest_rate: dbNumeric })
   .describe("portfolio summary investments row");
 
 /** `getLatestPriceUpdatedAt`: MAX over zero rows is NULL. */
 export const latestPriceUpdatedAtRowSchema = z
-  .object({ latest: pgTimestamptz.nullable() })
+  .object({ latest: dbTimestamptz.nullable() })
   .describe("latest price updated row");
 
 // ---------------------------------------------------------------------------
@@ -513,26 +513,26 @@ export const latestPriceUpdatedAtRowSchema = z
 /** A raw `watchlist` row (`SELECT *` / `RETURNING *`). */
 export const watchlistRowSchema = z
   .object({
-    id: pgInt,
+    id: dbInt,
     name: z.string(),
     symbol: z.string().nullable(),
     /** `asset_class` enum. */
     asset_class: z.string(),
     /** NUMERIC(18,6) */
-    target_price: pgNumeric,
-    currency: pgCurrency,
+    target_price: dbNumeric,
+    currency: dbCurrency,
     notes: z.string().nullable(),
     price_provider_id: z.string().nullable(),
     /** NUMERIC(18,6); NULL on rows predating migration 0058. */
-    added_price: pgNumeric.nullable(),
-    created_at: pgTimestamptz,
-    updated_at: pgTimestamptz,
+    added_price: dbNumeric.nullable(),
+    created_at: dbTimestamptz,
+    updated_at: dbTimestamptz,
   })
   .describe("watchlist row");
 
 /** `getAllWithCount`. */
 export const watchlistCountedRowSchema = watchlistRowSchema
-  .extend({ total_count: pgBigint })
+  .extend({ total_count: dbBigint })
   .describe("watchlist counted row");
 
 // ---------------------------------------------------------------------------
@@ -542,18 +542,18 @@ export const watchlistCountedRowSchema = watchlistRowSchema
 /** `instrument_provider_map` (migration 0042), the full table. */
 export const instrumentProviderMapRowSchema = z
   .object({
-    id: pgInt,
+    id: dbInt,
     instrument_key: z.string(),
     key_type: z.enum(["isin", "internal"]),
     provider: z.string(),
     provider_symbol: z.string().nullable(),
     resolved_name: z.string().nullable(),
     exchange: z.string().nullable(),
-    currency: pgCurrency.nullable(),
+    currency: dbCurrency.nullable(),
     status: z.enum(["confirmed", "auto", "failed"]),
-    verified_at: pgTimestamptz.nullable(),
-    created_at: pgTimestamptz,
-    updated_at: pgTimestamptz,
+    verified_at: dbTimestamptz.nullable(),
+    created_at: dbTimestamptz,
+    updated_at: dbTimestamptz,
   })
   .describe("instrument_provider_map row");
 
@@ -562,17 +562,17 @@ export const providerHealthRowSchema = z
   .object({
     provider: z.string(),
     kind: z.string(),
-    last_success_at: pgTimestamptz.nullable(),
-    last_error_at: pgTimestamptz.nullable(),
+    last_success_at: dbTimestamptz.nullable(),
+    last_error_at: dbTimestamptz.nullable(),
     last_error: z.string().nullable(),
-    consecutive_failures: pgInt,
-    updated_at: pgTimestamptz,
+    consecutive_failures: dbInt,
+    updated_at: dbTimestamptz,
   })
   .describe("provider_health row");
 
 /** `provider_quota.count` (INTEGER). */
 export const providerQuotaCountRowSchema = z
-  .object({ count: pgInt })
+  .object({ count: dbInt })
   .describe("provider quota count row");
 
 /** `provider_api_keys` (migration 0043). */
@@ -580,7 +580,7 @@ export const providerApiKeyRowSchema = z
   .object({
     provider: z.string(),
     api_key: z.string(),
-    updated_at: pgTimestamptz,
+    updated_at: dbTimestamptz,
   })
   .describe("provider_api_keys row");
 
@@ -591,14 +591,14 @@ export const providerApiKeyRowSchema = z
 /** A full `asset_price_history` row. */
 export const assetPriceHistoryRowSchema = z
   .object({
-    id: pgInt,
-    investment_id: pgInvestmentId,
-    price_date: pgDate,
+    id: dbInt,
+    investment_id: dbInvestmentId,
+    price_date: dbDate,
     /** NUMERIC(18,6) */
-    close_price: pgNumeric,
+    close_price: dbNumeric,
     source: z.string(),
-    fetched_at: pgTimestamptz,
-    updated_at: pgTimestamptz,
+    fetched_at: dbTimestamptz,
+    updated_at: dbTimestamptz,
   })
   .describe("asset_price_history row");
 
@@ -615,9 +615,9 @@ export const latestPricePointDbRowSchema = assetPriceHistoryRowSchema
 /** `quoteBackfillService`'s selectHoldingWindowRows(). */
 export const holdingWindowRowSchema = z
   .object({
-    id: pgInvestmentId,
+    id: dbInvestmentId,
     asset_class: z.string(),
-    currency: pgCurrency,
+    currency: dbCurrency,
     price_provider: z.string(),
     price_provider_id: z.string().nullable(),
     symbol: z.string().nullable(),
@@ -628,18 +628,18 @@ export const holdingWindowRowSchema = z
     price_provider_history_path: z.string().nullable(),
     price_provider_history_ts_path: z.string().nullable(),
     price_provider_history_price_path: z.string().nullable(),
-    tx_id: pgPortfolioTransactionId,
+    tx_id: dbPortfolioTransactionId,
     /** `portfolio_txn_type` enum, filtered to buy|gift|sell. */
     tx_type: z.string(),
-    tx_date: pgDayString,
+    tx_date: dbDayString,
     /** `COALESCE(pt.units, 0)` */
-    tx_units: pgNumeric,
+    tx_units: dbNumeric,
   })
   .describe("holding window row");
 
 /** `getStoredPriceDates`. */
 export const storedPriceDateRowSchema = z
-  .object({ d: pgDayString })
+  .object({ d: dbDayString })
   .describe("stored price date row");
 
 // ---------------------------------------------------------------------------
@@ -648,16 +648,16 @@ export const storedPriceDateRowSchema = z
 
 /** `getFirstDataDate`: MIN over zero rows is NULL. */
 export const firstDataDateRowSchema = z
-  .object({ first_data_date: pgDate.nullable() })
+  .object({ first_data_date: dbDate.nullable() })
   .describe("first data date row");
 
 /** The day walk's unit-priced investment seed. */
 export const snapshotUnitInvestmentRowSchema = z
   .object({
-    id: pgInvestmentId,
-    currency: pgCurrency,
+    id: dbInvestmentId,
+    currency: dbCurrency,
     /** `COALESCE(i.current_price, 0)` */
-    current_price: pgNumeric,
+    current_price: dbNumeric,
     asset_class: z.string(),
   })
   .describe("snapshot unit investment row");
@@ -667,18 +667,18 @@ export const snapshotNonUnitInvestmentRowSchema =
   snapshotUnitInvestmentRowSchema
     .extend({
       /** `COALESCE(interest_rate, 0)` */
-      interest_rate: pgNumeric,
+      interest_rate: dbNumeric,
       /** `COALESCE(ts_date(created_at), $1)` */
-      active_from: pgDayString,
+      active_from: dbDayString,
     })
     .describe("snapshot non-unit investment row");
 
 /** The day walk's price history. */
 export const snapshotPriceHistoryRowSchema = z
   .object({
-    investment_id: pgInvestmentId,
-    day: pgDayString,
-    close_price: pgNumeric,
+    investment_id: dbInvestmentId,
+    day: dbDayString,
+    close_price: dbNumeric,
   })
   .describe("snapshot price history row");
 
@@ -688,63 +688,63 @@ export const snapshotInflationRowSchema = z
     /** 'YYYY-MM' */
     month: z.string(),
     /** NUMERIC(10,8) */
-    monthly_rate: pgNumeric,
+    monthly_rate: dbNumeric,
   })
   .describe("snapshot inflation row");
 
 /** `exchange_rates` `currency_code, rate_to_eur` (latest or point reads). */
 export const fxRateRowSchema = z
-  .object({ currency_code: z.string(), rate_to_eur: pgNumeric })
+  .object({ currency_code: z.string(), rate_to_eur: dbNumeric })
   .describe("fx rate row");
 
 /** A single `rate_to_eur` lookup. */
 export const rateToEurRowSchema = z
-  .object({ rate_to_eur: pgNumeric })
+  .object({ rate_to_eur: dbNumeric })
   .describe("rate to eur row");
 
 /** The day walk's FX history (`to_char(rate_date) AS day`). */
 export const snapshotFxHistoryRowSchema = fxRateRowSchema
-  .extend({ day: pgDayString })
+  .extend({ day: dbDayString })
   .describe("snapshot fx history row");
 
 /** `SELECT * FROM portfolio_performance_snapshots`. */
 export const portfolioPerformanceSnapshotRowSchema = z
   .object({
-    id: pgInt,
-    snapshot_date: pgDate,
-    invested: pgNumeric,
-    value: pgNumeric,
-    stocks_etfs_value: pgNumeric,
-    crypto_value: pgNumeric,
-    metals_value: pgNumeric,
-    cash_value: pgNumeric,
-    gain_loss: pgNumeric,
-    return_pct: pgNumeric,
-    inflation_adjusted_value: pgNumeric,
-    cumulative_inflation: pgNumeric,
-    real_return_pct: pgNumeric,
-    stocks_etfs_invested: pgNumeric,
-    crypto_invested: pgNumeric,
-    metals_invested: pgNumeric,
-    currency: pgCurrency,
-    computed_at: pgTimestamptz,
+    id: dbInt,
+    snapshot_date: dbDate,
+    invested: dbNumeric,
+    value: dbNumeric,
+    stocks_etfs_value: dbNumeric,
+    crypto_value: dbNumeric,
+    metals_value: dbNumeric,
+    cash_value: dbNumeric,
+    gain_loss: dbNumeric,
+    return_pct: dbNumeric,
+    inflation_adjusted_value: dbNumeric,
+    cumulative_inflation: dbNumeric,
+    real_return_pct: dbNumeric,
+    stocks_etfs_invested: dbNumeric,
+    crypto_invested: dbNumeric,
+    metals_invested: dbNumeric,
+    currency: dbCurrency,
+    computed_at: dbTimestamptz,
     /** NUMERIC(18,2), migration 0039; absent on un-migrated databases. */
-    value_fx_neutral: pgNumeric.nullable().optional(),
+    value_fx_neutral: dbNumeric.nullable().optional(),
   })
   .describe("portfolio_performance_snapshots row");
 
 /** `portfolio_broker_snapshots` as `getBrokerSnapshots` projects it. */
 export const brokerSnapshotRowSchema = z
   .object({
-    snapshot_date: pgDate,
-    currency: pgCurrency,
+    snapshot_date: dbDate,
+    currency: dbCurrency,
     account_key: z.string(),
-    account_id: pgAccountId.nullable(),
+    account_id: dbAccountId.nullable(),
     account_name: z.string(),
-    value: pgNumeric,
-    invested: pgNumeric,
-    gain_loss: pgNumeric,
-    computed_at: pgTimestamptz,
+    value: dbNumeric,
+    invested: dbNumeric,
+    gain_loss: dbNumeric,
+    computed_at: dbTimestamptz,
   })
   .describe("portfolio_broker_snapshots row");
 
@@ -755,18 +755,18 @@ export const regclassRowSchema = z
 
 /** Broker snapshot account names: `COALESCE(NULLIF(display_name,''), name)`. */
 export const accountDisplayNameRowSchema = z
-  .object({ id: pgAccountId, display_name: z.string() })
+  .object({ id: dbAccountId, display_name: z.string() })
   .describe("account display name row");
 
 /** `portfolioSummaryService`'s archived in-kind income read. */
 export const archivedIncomeDbRowSchema = z
   .object({
-    investment_id: pgInvestmentId,
+    investment_id: dbInvestmentId,
     /** NUMERIC NOT NULL */
-    amount: pgNumeric,
-    currency: pgCurrency,
-    date: pgDayString,
-    fx_rate_to_eur: pgNumeric.nullable(),
+    amount: dbNumeric,
+    currency: dbCurrency,
+    date: dbDayString,
+    fx_rate_to_eur: dbNumeric.nullable(),
   })
   .describe("archived income row");
 
@@ -776,10 +776,10 @@ export const archivedIncomeDbRowSchema = z
  */
 export const brokerageCashFeeRowSchema = z
   .object({
-    id: pgTransactionId,
-    account_id: pgAccountId,
-    date: pgDayString,
-    currency: pgCurrency,
+    id: dbTransactionId,
+    account_id: dbAccountId,
+    date: dbDayString,
+    currency: dbCurrency,
     /** `dec_neg(t.amount)` */
     amount: z.string(),
   })
@@ -791,22 +791,22 @@ export const brokerageCashFeeRowSchema = z
 
 /** `exchange_rates` with `rate_date` formatted as 'YYYY-MM-DD'. */
 export const historicalRateRowSchema = fxRateRowSchema
-  .extend({ rate_date: pgDayString })
+  .extend({ rate_date: dbDayString })
   .describe("historical rate row");
 
 /** `listLatestStoredRates`. */
 export const latestStoredRateRowSchema = fxRateRowSchema
-  .extend({ rate_date: pgDate, fetched_at: pgTimestamptz })
+  .extend({ rate_date: dbDate, fetched_at: dbTimestamptz })
   .describe("latest stored rate row");
 
 /** A distinct (currency, transaction day) pair; `rate_date` is a DATE. */
 export const currencyDatePairRowSchema = z
-  .object({ currency_code: z.string(), rate_date: pgDate })
+  .object({ currency_code: z.string(), rate_date: dbDate })
   .describe("currency date pair row");
 
 /** `rate_date` as text, an existence check. */
 export const currencyDayKeyRowSchema = z
-  .object({ currency_code: z.string(), rate_date: pgDayString })
+  .object({ currency_code: z.string(), rate_date: dbDayString })
   .describe("currency day key row");
 
 // ---------------------------------------------------------------------------

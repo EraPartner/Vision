@@ -16,7 +16,7 @@ participant "Transaction Service" as Service
 participant "TransactionRepository" as Repo
 participant "RecipientRepository" as RecipientRepo
 participant "CategoryRepository" as CategoryRepo
-participant "PostgreSQL" as DB
+participant "SQLite" as DB
 
 group Create Transaction
   User -> Page : Submit Transaction Form

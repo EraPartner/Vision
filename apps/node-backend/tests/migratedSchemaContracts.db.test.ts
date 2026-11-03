@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { PgPoolClient } from "../src/database/connection.ts";
+import type { DbClient } from "../src/database/connection.ts";
 import { expectSqlError, getTestPool, inRollbackTransaction } from "./setup/db.ts";
 import type { DbRow } from "./setup/db.ts";
 import {
@@ -30,12 +30,12 @@ import type {
 
 const pool = getTestPool();
 
-async function inRollback(run: (client: PgPoolClient) => Promise<void>) {
+async function inRollback(run: (client: DbClient) => Promise<void>) {
   await inRollbackTransaction(run);
 }
 
 async function failsWith(
-  client: PgPoolClient,
+  client: DbClient,
   text: string,
   params: unknown[],
   code: string,

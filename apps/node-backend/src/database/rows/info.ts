@@ -17,31 +17,31 @@
  */
 import { z } from "zod";
 import {
-  pgAccountId,
-  pgBigint,
-  pgCategoryId,
-  pgCurrency,
-  pgDate,
-  pgDayString,
-  pgInt,
-  pgInvestmentId,
-  pgNumeric,
-  pgPortfolioTransactionId,
-  pgRecipientId,
-  pgTagId,
-  pgTimestamptz,
+  dbAccountId,
+  dbBigint,
+  dbCategoryId,
+  dbCurrency,
+  dbDate,
+  dbDayString,
+  dbInt,
+  dbInvestmentId,
+  dbNumeric,
+  dbPortfolioTransactionId,
+  dbRecipientId,
+  dbTagId,
+  dbTimestamptz,
 } from "../rowSchemas.ts";
 
 /**
  * DOUBLE PRECISION / REAL. Any JS number, including NaN and ±Infinity, which
  * a float column can hold and `z.number()` would reject.
  */
-export const pgDouble = z.custom<number>((value) => typeof value === "number", {
+export const dbDouble = z.custom<number>((value) => typeof value === "number", {
   message: "expected number",
 });
 
 /** A JSONB object column (the driver hands it back parsed). */
-const pgJsonObject = z.record(z.string(), z.unknown());
+const dbJsonObject = z.record(z.string(), z.unknown());
 
 /**
  * The `balance_parts` column of `computedBalanceByCurrencyAggLateral`:
@@ -50,12 +50,12 @@ const pgJsonObject = z.record(z.string(), z.unknown());
  * rows.
  */
 const balancePartsSchema = z
-  .array(z.object({ currency: pgCurrency, balance: pgNumeric }))
+  .array(z.object({ currency: dbCurrency, balance: dbNumeric }))
   .nullable();
 
 /** `MIN(t.date) AS first_date` over a WHERE that can match nothing. */
 export const ledgerStartRowSchema = z
-  .object({ first_date: pgDate.nullable() })
+  .object({ first_date: dbDate.nullable() })
   .describe("ledger start row");
 
 // ---------------------------------------------------------------------------
@@ -68,22 +68,22 @@ export const ledgerStartRowSchema = z
  */
 export const categoryCurrencyAmountRowSchema = z
   .object({
-    category_id: pgCategoryId,
+    category_id: dbCategoryId,
     name: z.string(),
-    amount: pgNumeric,
-    cnt: pgBigint,
-    currency: pgCurrency,
+    amount: dbNumeric,
+    cnt: dbBigint,
+    currency: dbCurrency,
   })
   .describe("category currency amount row");
 
 /** `SELECT * FROM mv_category_totals` (materializedViewService). */
 export const mvCategoryTotalsRowSchema = z
   .object({
-    category_id: pgCategoryId,
+    category_id: dbCategoryId,
     name: z.string(),
-    count: pgBigint,
-    total: pgNumeric,
-    currency: pgCurrency,
+    count: dbBigint,
+    total: dbNumeric,
+    currency: dbCurrency,
   })
   .describe("mv_category_totals row");
 
@@ -96,22 +96,22 @@ export const bankLabelRowSchema = z
 export const categoryPivotRowSchema = z
   .object({
     /** The effective-category COALESCE, filtered IS NOT NULL. */
-    category_id: pgCategoryId,
+    category_id: dbCategoryId,
     /** LEFT JOIN categories */
     category_name: z.string().nullable(),
     /** LEFT JOIN category_paths: INTEGER[] / TEXT[]. */
-    category_path_ids: z.array(pgInt).nullable(),
+    category_path_ids: z.array(dbInt).nullable(),
     category_path_segments: z.array(z.string()).nullable(),
     period: z.string(),
-    date: pgDate,
-    currency: pgCurrency,
+    date: dbDate,
+    currency: dbCurrency,
     /** SUM ... FILTER: NULL when the group has no row of that sign. */
-    income: pgNumeric.nullable(),
-    expense: pgNumeric.nullable(),
+    income: dbNumeric.nullable(),
+    expense: dbNumeric.nullable(),
     /** Income from `partner` / `joint` accounts (ADR-201); NULL when there is none. */
-    income_partner: pgNumeric.nullable().optional(),
-    income_joint: pgNumeric.nullable().optional(),
-    cnt: pgBigint,
+    income_partner: dbNumeric.nullable().optional(),
+    income_joint: dbNumeric.nullable().optional(),
+    cnt: dbBigint,
   })
   .describe("category pivot row");
 
@@ -122,31 +122,31 @@ export const categoryPivotRowSchema = z
 /** The MV fast path, grouped by month and currency. */
 export const mvMonthlyRowSchema = z
   .object({
-    month_start: pgDate,
-    month: pgInt,
-    year: pgInt,
-    currency: pgCurrency,
+    month_start: dbDate,
+    month: dbInt,
+    year: dbInt,
+    currency: dbCurrency,
     /** SUM over the MV's BIGINT `transaction_count`: NUMERIC. */
-    transaction_count: pgNumeric,
-    total_income: pgNumeric,
-    total_spending: pgNumeric,
-    net_amount: pgNumeric,
+    transaction_count: dbNumeric,
+    total_income: dbNumeric,
+    total_spending: dbNumeric,
+    net_amount: dbNumeric,
   })
   .describe("mv monthly summary row");
 
 /** The live path: a month LEFT JOINed to its per-(date, currency) totals. */
 export const liveMonthlyRowSchema = z
   .object({
-    month: pgInt,
-    year: pgInt,
-    period_start: pgDate,
-    period_end: pgDate,
+    month: dbInt,
+    year: dbInt,
+    period_start: dbDate,
+    period_end: dbDate,
     /** NULL for a month without transactions. */
-    date: pgDate.nullable(),
-    currency: pgCurrency.nullable(),
-    cnt: pgBigint.nullable(),
-    income_amount: pgNumeric.nullable(),
-    spending_amount: pgNumeric.nullable(),
+    date: dbDate.nullable(),
+    currency: dbCurrency.nullable(),
+    cnt: dbBigint.nullable(),
+    income_amount: dbNumeric.nullable(),
+    spending_amount: dbNumeric.nullable(),
   })
   .describe("live monthly summary row");
 
@@ -157,12 +157,12 @@ export const liveMonthlyRowSchema = z
 /** Per (date, currency, sign) amount (infoRepositoryAverageVsCurrent). */
 export const signedDailyAmountRowSchema = z
   .object({
-    date: pgDate,
-    currency: pgCurrency,
+    date: dbDate,
+    currency: dbCurrency,
     is_spending: z.boolean(),
-    amount: pgNumeric,
+    amount: dbNumeric,
     /** COUNT(*): the group's transactions. */
-    cnt: pgBigint,
+    cnt: dbBigint,
   })
   .describe("signed daily amount row");
 
@@ -172,17 +172,17 @@ export const signedDailyAmountRowSchema = z
  */
 export const dailyAmountRowSchema = z
   .object({
-    amount: pgNumeric,
+    amount: dbNumeric,
     /** COUNT(*): the group's transactions (planned rows for overlays). */
-    cnt: pgBigint,
-    currency: pgCurrency,
-    date: pgDate,
+    cnt: dbBigint,
+    currency: dbCurrency,
+    date: dbDate,
   })
   .describe("daily amount row");
 
 /** `getCashflowComparison`'s current-month actuals. */
 export const dailyAmountDomRowSchema = dailyAmountRowSchema
-  .extend({ day_of_month: pgInt })
+  .extend({ day_of_month: dbInt })
   .describe("daily amount day-of-month row");
 
 /** `getCashflowComparison`'s historical actuals. */
@@ -193,12 +193,12 @@ export const dailyAmountMonthRowSchema = dailyAmountDomRowSchema
 /** `getCashflowComparison`'s current-month planned overlay. */
 export const plannedDailyAmountDomRowSchema = z
   .object({
-    amount: pgNumeric,
+    amount: dbNumeric,
     /** COUNT(*): the group's planned rows. */
-    cnt: pgBigint,
-    currency: pgCurrency,
-    planned_date: pgDate,
-    day_of_month: pgInt,
+    cnt: dbBigint,
+    currency: dbCurrency,
+    planned_date: dbDate,
+    day_of_month: dbInt,
   })
   .describe("planned daily amount day-of-month row");
 
@@ -211,7 +211,7 @@ export const plannedDailyAmountMonthRowSchema = plannedDailyAmountDomRowSchema
 export const categoryDailyAmountRowSchema = dailyAmountRowSchema
   .extend({
     /** The effective-category COALESCE: NULL when uncategorised. */
-    category_id: pgCategoryId.nullable(),
+    category_id: dbCategoryId.nullable(),
     /** COALESCE(..., 'Uncategorized') */
     general: z.string(),
     detail: z.string(),
@@ -226,11 +226,11 @@ export const categoryDailyAmountRowSchema = dailyAmountRowSchema
 /** `getBankBalances`' current balance: one row per (account, currency). */
 export const bankBalanceRowSchema = z
   .object({
-    account_id: pgAccountId,
+    account_id: dbAccountId,
     bank_account: z.string(),
     display_name: z.string(),
-    currency: pgCurrency,
-    balance: pgNumeric,
+    currency: dbCurrency,
+    balance: dbNumeric,
     /**
      * `json_object` over the decimal column with `json(balance)`: JSON
      * encodes it as a number, as PostgreSQL's json_build_object did, so
@@ -238,19 +238,19 @@ export const bankBalanceRowSchema = z
      */
     statement_balances: z.array(
       z.object({
-        currency: pgCurrency,
+        currency: dbCurrency,
         balance: z.number(),
-        balance_date: pgDayString,
+        balance_date: dbDayString,
       }),
     ),
-    account_currency: pgCurrency,
-    anchor_date: pgDayString.nullable(),
+    account_currency: dbCurrency,
+    anchor_date: dbDayString.nullable(),
     /** Scalar sub-select of a COUNT(*). */
-    post_anchor_count: pgBigint.nullable(),
-    date: pgDayString,
-    transaction_count: pgBigint,
-    first_transaction: pgDate.nullable(),
-    last_transaction: pgDate.nullable(),
+    post_anchor_count: dbBigint.nullable(),
+    date: dbDayString,
+    transaction_count: dbBigint,
+    first_transaction: dbDate.nullable(),
+    last_transaction: dbDate.nullable(),
   })
   .describe("bank balance row");
 export type BankBalanceRow = z.output<typeof bankBalanceRowSchema>;
@@ -259,9 +259,9 @@ export type BankBalanceRow = z.output<typeof bankBalanceRowSchema>;
 export const bankHistoryRowSchema = z
   .object({
     bank_account: z.string(),
-    day: pgDayString,
-    currency: pgCurrency,
-    balance: pgNumeric,
+    day: dbDayString,
+    currency: dbCurrency,
+    balance: dbNumeric,
   })
   .describe("bank history row");
 
@@ -271,22 +271,22 @@ export const bankHistoryRowSchema = z
 
 /** LEAST of two scalar MINs: NULL when there is no source record. */
 export const firstDataDateRowSchema = z
-  .object({ first_data_date: pgDate.nullable() })
+  .object({ first_data_date: dbDate.nullable() })
   .describe("net worth first data date row");
 
 /** Portfolio snapshot values per day. */
 export const snapshotInvestmentRowSchema = z
-  .object({ day: pgDayString, investments: pgNumeric })
+  .object({ day: dbDayString, investments: dbNumeric })
   .describe("net worth snapshot row");
 
 /** The history walk: one row per (day, account, currency partition). */
 export const netWorthHistoryRowSchema = z
   .object({
-    day: pgDayString,
+    day: dbDayString,
     bank_account: z.string(),
     is_liability: z.boolean(),
-    currency: pgCurrency,
-    balance: pgNumeric,
+    currency: dbCurrency,
+    balance: dbNumeric,
   })
   .describe("net worth history row");
 
@@ -295,7 +295,7 @@ export const netWorthCurrentBalanceRowSchema = z
   .object({
     bank_account: z.string(),
     is_liability: z.boolean(),
-    account_currency: pgCurrency,
+    account_currency: dbCurrency,
     balance_parts: balancePartsSchema,
   })
   .describe("net worth current balance row");
@@ -303,10 +303,10 @@ export const netWorthCurrentBalanceRowSchema = z
 /** The transaction-flow fallback: a running total per (day, bucket). */
 export const netWorthFlowRowSchema = z
   .object({
-    day: pgDayString,
-    currency: pgCurrency,
+    day: dbDayString,
+    currency: dbCurrency,
     is_liability: z.boolean(),
-    value: pgNumeric,
+    value: dbNumeric,
   })
   .describe("net worth flow row");
 
@@ -318,25 +318,25 @@ export const netWorthFlowRowSchema = z
 export const recipientTopRawRowSchema = z
   .object({
     recipient_name: z.string(),
-    recipient_id: pgRecipientId,
-    date: pgDate,
-    currency: pgCurrency,
-    total_abs_amount: pgNumeric,
-    tx_count: pgBigint,
-    first_seen: pgDate,
-    last_seen: pgDate,
+    recipient_id: dbRecipientId,
+    date: dbDate,
+    currency: dbCurrency,
+    total_abs_amount: dbNumeric,
+    tx_count: dbBigint,
+    first_seen: dbDate,
+    last_seen: dbDate,
   })
   .describe("recipient top merchants row");
 
 /** `getRecipientInsights`' month-over-month rows. */
 export const recipientMomRawRowSchema = z
   .object({
-    recipient_id: pgRecipientId,
+    recipient_id: dbRecipientId,
     recipient_name: z.string(),
     period: z.string(),
-    date: pgDate,
-    currency: pgCurrency,
-    abs_amount: pgNumeric,
+    date: dbDate,
+    currency: dbCurrency,
+    abs_amount: dbNumeric,
   })
   .describe("recipient month-over-month row");
 
@@ -352,58 +352,58 @@ export const periodKeysRowSchema = z
  */
 export const recipientYearRowSchema = z
   .object({
-    year: pgInt,
-    recipient_id: pgRecipientId,
+    year: dbInt,
+    recipient_id: dbRecipientId,
     name: z.string(),
-    date: pgDate,
-    currency: pgCurrency,
-    abs_amount: pgNumeric,
-    cnt: pgBigint,
+    date: dbDate,
+    currency: dbCurrency,
+    abs_amount: dbNumeric,
+    cnt: dbBigint,
   })
   .describe("recipient by year row");
 
 /** `getRecipientPivot`'s alias-member resolution. */
 export const recipientMemberRowSchema = z
-  .object({ id: pgRecipientId })
+  .object({ id: dbRecipientId })
   .describe("recipient member row");
 
 /** `getRecipientPivot`: per (recipient, period, date, currency). */
 export const recipientPivotRowSchema = z
   .object({
-    recipient_id: pgRecipientId,
+    recipient_id: dbRecipientId,
     recipient_name: z.string(),
     period: z.string(),
-    date: pgDate,
-    currency: pgCurrency,
-    abs_amount: pgNumeric,
-    cnt: pgBigint,
+    date: dbDate,
+    currency: dbCurrency,
+    abs_amount: dbNumeric,
+    cnt: dbBigint,
   })
   .describe("recipient pivot row");
 
 /** `getTagPivot`: per (tag, period, date, currency). */
 export const tagPivotRowSchema = z
   .object({
-    tag_id: pgTagId,
+    tag_id: dbTagId,
     tag_slug: z.string(),
     period: z.string(),
-    date: pgDate,
-    currency: pgCurrency,
-    abs_amount: pgNumeric,
-    cnt: pgBigint,
+    date: dbDate,
+    currency: dbCurrency,
+    abs_amount: dbNumeric,
+    cnt: dbBigint,
   })
   .describe("tag pivot row");
 
 /** `getSankeyAggregates`; the category is a LEFT JOIN. */
 export const sankeyAggregateRowSchema = z
   .object({
-    category_id: pgCategoryId.nullable(),
+    category_id: dbCategoryId.nullable(),
     category_name: z.string().nullable(),
-    currency: pgCurrency,
+    currency: dbCurrency,
     is_income: z.boolean(),
     /** SUM(ABS(NUMERIC)) */
-    amount: pgNumeric,
+    amount: dbNumeric,
     /** COUNT(*): the group's transactions. */
-    cnt: pgBigint,
+    cnt: dbBigint,
   })
   .describe("sankey aggregate row");
 export type SankeyAggregateRow = z.output<typeof sankeyAggregateRowSchema>;
@@ -424,11 +424,11 @@ export const forecastAccuracyRowSchema = z
     user_id: z.string(),
     method_id: z.string(),
     as_of_month: z.string(),
-    mae: pgDouble.nullable(),
-    rmse: pgDouble.nullable(),
-    mape: pgDouble.nullable(),
-    sample_days: pgInt.nullable(),
-    recorded_at: pgTimestamptz,
+    mae: dbDouble.nullable(),
+    rmse: dbDouble.nullable(),
+    mape: dbDouble.nullable(),
+    sample_days: dbInt.nullable(),
+    recorded_at: dbTimestamptz,
   })
   .describe("cashflow forecast accuracy row");
 export type ForecastAccuracyRow = z.output<typeof forecastAccuracyRowSchema>;
@@ -440,7 +440,7 @@ export const forecastUserIdRowSchema = z
 
 /** A cached Monte Carlo forecast (monthly or rolling): JSONB payload. */
 export const forecastMcCacheRowSchema = z
-  .object({ payload: pgJsonObject, computed_at: pgTimestamptz })
+  .object({ payload: dbJsonObject, computed_at: dbTimestamptz })
   .describe("forecast mc cache row");
 export type ForecastMcCacheRow = z.output<typeof forecastMcCacheRowSchema>;
 
@@ -461,13 +461,13 @@ const insightKindSchema = z.enum([
  */
 export const insightDismissalRowSchema = z
   .object({
-    id: pgBigint,
+    id: dbBigint,
     kind: insightKindSchema,
-    recipient_id: pgRecipientId.nullable(),
-    category_id: pgCategoryId.nullable(),
+    recipient_id: dbRecipientId.nullable(),
+    category_id: dbCategoryId.nullable(),
     month_key: z.string().nullable(),
-    dismissed_at: pgTimestamptz,
-    deviation_at_dismiss: pgDouble.nullable(),
+    dismissed_at: dbTimestamptz,
+    deviation_at_dismiss: dbDouble.nullable(),
   })
   .describe("insight_dismissals row");
 export type InsightDismissalRow = z.output<typeof insightDismissalRowSchema>;
@@ -495,11 +495,11 @@ export const existsRowSchema = z
 /** The `insight_digest_state` singleton; the versions are BIGINT. */
 export const insightDigestStateRowSchema = z
   .object({
-    undismissed_count: pgInt.nullable(),
-    dirty_version: pgBigint,
-    computed_version: pgBigint,
-    computed_at: pgTimestamptz.nullable(),
-    expires_at: pgTimestamptz.nullable(),
+    undismissed_count: dbInt.nullable(),
+    dirty_version: dbBigint,
+    computed_version: dbBigint,
+    computed_at: dbTimestamptz.nullable(),
+    expires_at: dbTimestamptz.nullable(),
   })
   .describe("insight digest state row");
 export type InsightDigestStateRow = z.output<
@@ -508,12 +508,12 @@ export type InsightDigestStateRow = z.output<
 
 /** `saveCountIfVersion`'s `RETURNING computed_at` (set to NOW()). */
 export const computedAtRowSchema = z
-  .object({ computed_at: pgTimestamptz })
+  .object({ computed_at: dbTimestamptz })
   .describe("computed at row");
 
 /** `insight_cash_projections.month_end_net_cashflow` (NUMERIC NOT NULL). */
 export const cashProjectionRowSchema = z
-  .object({ month_end_net_cashflow: pgNumeric })
+  .object({ month_end_net_cashflow: dbNumeric })
   .describe("cash projection row");
 
 // ---------------------------------------------------------------------------
@@ -523,15 +523,15 @@ export const cashProjectionRowSchema = z
 /** A row of `belgian_inflation_rates` (migration 0001). */
 export const belgianInflationRateRowSchema = z
   .object({
-    id: pgInt,
+    id: dbInt,
     /** DATE (first of month). */
-    month_date: pgDate,
+    month_date: dbDate,
     /** NUMERIC(10,8) */
-    monthly_rate: pgNumeric,
+    monthly_rate: dbNumeric,
     /** VARCHAR(50) NOT NULL DEFAULT 'statbel' */
     source: z.string(),
-    fetched_at: pgTimestamptz,
-    updated_at: pgTimestamptz,
+    fetched_at: dbTimestamptz,
+    updated_at: dbTimestamptz,
   })
   .describe("belgian_inflation_rates row");
 
@@ -547,9 +547,9 @@ export const belgianInflationMonthRowSchema = belgianInflationRateRowSchema
 /** A spendable account with its per-currency computed balance. */
 export const rebalanceCashAccountRowSchema = z
   .object({
-    id: pgAccountId,
+    id: dbAccountId,
     name: z.string(),
-    currency: pgCurrency,
+    currency: dbCurrency,
     balance_parts: balancePartsSchema,
   })
   .describe("rebalance cash account row");
@@ -564,8 +564,8 @@ const incomeRecognitionRoleSchema = z.enum(["standard", "included_in_units"]);
 /** `fetchTaxTransactions` (reports/dataFetcherTax). */
 export const taxTxnRowSchema = z
   .object({
-    id: pgPortfolioTransactionId,
-    investment_id: pgInvestmentId,
+    id: dbPortfolioTransactionId,
+    investment_id: dbInvestmentId,
     investment_name: z.string(),
     symbol: z.string().nullable(),
     /** `asset_class` enum */
@@ -576,28 +576,28 @@ export const taxTxnRowSchema = z
     dividend_amount_convention: z.enum(["gross", "net", "unknown"]),
     income_recognition_role: incomeRecognitionRoleSchema,
     /** COALESCE(NUMERIC, 0) */
-    amount: pgNumeric,
-    taxes: pgNumeric,
-    fees: pgNumeric,
-    currency: pgCurrency,
-    rate_date: pgDayString,
-    year: pgInt,
-    month: pgInt,
+    amount: dbNumeric,
+    taxes: dbNumeric,
+    fees: dbNumeric,
+    currency: dbCurrency,
+    rate_date: dbDayString,
+    year: dbInt,
+    month: dbInt,
   })
   .describe("report tax transaction row");
 
 /** `fetchDividends` (reports/dataFetcherPortfolio). */
 export const dividendTxRowSchema = z
   .object({
-    investment_id: pgInvestmentId,
+    investment_id: dbInvestmentId,
     investment_name: z.string(),
     symbol: z.string().nullable(),
     asset_class: z.string(),
-    year: pgInt,
-    month: pgInt,
-    amount: pgNumeric,
-    currency: pgCurrency,
+    year: dbInt,
+    month: dbInt,
+    amount: dbNumeric,
+    currency: dbCurrency,
     income_recognition_role: incomeRecognitionRoleSchema,
-    rate_date: pgDayString,
+    rate_date: dbDayString,
   })
   .describe("report dividend row");

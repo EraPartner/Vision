@@ -15,12 +15,12 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () =>
 );
 
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import {
-  pgLocalDate,
+  dbLocalDate,
   portfolioPerformanceSnapshotDbRow,
   toPgMathTxRow,
-} from "./helpers/portfolioPgRows.ts";
+} from "./helpers/portfolioRowFixtures.ts";
 import {
   computeAndStoreSnapshots,
   getSnapshots,
@@ -32,28 +32,28 @@ import { must } from "./helpers/must.ts";
 
 /** `query` as these tests drive it: SQL text in, a bare `{ rows }` result out. */
 const query = vi.mocked(rawQuery) as unknown as Mock<
-  (sql: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
+  (sql: string, params?: readonly unknown[]) => Promise<Partial<DbQueryResult>>
 >;
 
 /** A mocked result row; each SQL shape returns its own projection. */
 type Row = Record<string, unknown>;
 
 /** The fixture as node-postgres returns it: numeric NUMERIC columns as strings. */
-const pgNumeric = (row: Row, keys: readonly string[]): Row => {
+const dbNumeric = (row: Row, keys: readonly string[]): Row => {
   const out = { ...row };
   for (const key of keys) {
     if (typeof out[key] === "number") out[key] = String(out[key]);
   }
   return out;
 };
-const pgFirstDate = (day: string | null) => ({
-  first_data_date: day === null ? null : pgLocalDate(day),
+const dbFirstDate = (day: string | null) => ({
+  first_data_date: day === null ? null : dbLocalDate(day),
 });
 /** A stored snapshot row from a sparse fixture. */
-const pgSnapshot = (row: Row) =>
+const dbSnapshot = (row: Row) =>
   portfolioPerformanceSnapshotDbRow({
-    ...pgNumeric(row, ["value", "invested"]),
-    snapshot_date: pgLocalDate(String(row.snapshot_date)),
+    ...dbNumeric(row, ["value", "invested"]),
+    snapshot_date: dbLocalDate(String(row.snapshot_date)),
   });
 
 interface SnapshotQueryFixtures {
@@ -89,19 +89,19 @@ function mockSnapshotQueries({
       return Promise.resolve({ rows: fxNeutralColumn ? [{ 1: 1 }] : [] });
     }
     if (sql.includes("select min(first_date) as first_data_date::date")) {
-      return Promise.resolve({ rows: [pgFirstDate(firstDate)] });
+      return Promise.resolve({ rows: [dbFirstDate(firstDate)] });
     }
     // The non-unit seed (savings/bond/real_estate) is the one with active_from.
     if (sql.includes("from investments") && sql.includes("as active_from")) {
       return Promise.resolve({
         rows: nonUnitInvestments.map((row) =>
-          pgNumeric(row, ["current_price", "interest_rate"]),
+          dbNumeric(row, ["current_price", "interest_rate"]),
         ),
       });
     }
     if (sql.includes("from investments") && sql.includes("asset_class in")) {
       return Promise.resolve({
-        rows: investments.map((row) => pgNumeric(row, ["current_price"])),
+        rows: investments.map((row) => dbNumeric(row, ["current_price"])),
       });
     }
     if (
@@ -111,22 +111,22 @@ function mockSnapshotQueries({
       return Promise.resolve({ rows: transactions.map(toPgMathTxRow) });
     }
     if (sql.includes("from asset_price_history")) {
-      return Promise.resolve({ rows: prices.map((row) => pgNumeric(row, ["close_price"])) });
+      return Promise.resolve({ rows: prices.map((row) => dbNumeric(row, ["close_price"])) });
     }
     if (sql.includes("from belgian_inflation_rates")) {
       return Promise.resolve({
-        rows: inflation.map((row) => pgNumeric(row, ["monthly_rate"])),
+        rows: inflation.map((row) => dbNumeric(row, ["monthly_rate"])),
       });
     }
     if (sql.includes("from exchange_rates")) {
       if (sql.includes("rate_date >=")) {
         return Promise.resolve({
-          rows: fxHistory.map((row) => pgNumeric(row, ["rate_to_eur"])),
+          rows: fxHistory.map((row) => dbNumeric(row, ["rate_to_eur"])),
         });
       }
       if (fxRates instanceof Error) return Promise.reject(fxRates);
       return Promise.resolve({
-        rows: fxRates.map((row) => pgNumeric(row, ["rate_to_eur"])),
+        rows: fxRates.map((row) => dbNumeric(row, ["rate_to_eur"])),
       });
     }
     if (sql.includes("delete from portfolio_performance_snapshots")) {
@@ -144,7 +144,7 @@ function mockSnapshotQueries({
     ) {
       return Promise.resolve({
         rows: [
-          pgSnapshot({
+          dbSnapshot({
             snapshot_date: "2026-01-01",
             value: 10,
             invested: 9,
@@ -427,7 +427,7 @@ describe("portfolioPerformanceSnapshotService", () => {
   });
 
   it("returns empty snapshot list when no first data date exists", async () => {
-    query.mockResolvedValueOnce({ rows: [pgFirstDate(null)] });
+    query.mockResolvedValueOnce({ rows: [dbFirstDate(null)] });
 
     const result = await computeAndStoreSnapshots("EUR");
 
@@ -1074,7 +1074,7 @@ describe("portfolioPerformanceSnapshotService", () => {
   });
 
   it("returns latest snapshot row when present", async () => {
-    const stored = pgSnapshot({
+    const stored = dbSnapshot({
       snapshot_date: "2026-01-03",
       value: 12,
       invested: 10,
@@ -1093,7 +1093,7 @@ describe("portfolioPerformanceSnapshotService", () => {
   it("returns range snapshots from getSnapshots", async () => {
     query.mockResolvedValueOnce({
       rows: [
-        pgSnapshot({
+        dbSnapshot({
           snapshot_date: "2026-01-01",
           value: 10,
           invested: 9,
@@ -1118,7 +1118,7 @@ describe("portfolioPerformanceSnapshotService", () => {
     // string|number split.
     query.mockResolvedValueOnce({
       rows: [
-        pgSnapshot({
+        dbSnapshot({
           snapshot_date: "2026-01-01",
           value: "10",
           invested: "9",

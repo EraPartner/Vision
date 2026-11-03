@@ -315,13 +315,7 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
    - recover a persisted unfinished restore switch before the backend opens the database;
      attachment intent is journaled before filesystem renames. A pending database switch restores
      the previous attachment tree first and then rolls back the database. An attachment journal
-     left after database finalization is cleanup-only. Invalid journal paths fail closed;
-   - refuse to start when Vision 2.0's PostgreSQL data directory
-     (`<userData>/native/vision/postgres/data`) has contents and no `database/vision.sqlite3`
-     exists, so a first launch never creates an empty database over real data. The error
-     (`LEGACY_POSTGRES_DATA`) names the untouched data directory, `<userData>/pre-update-backups`
-     and the transition command; see [[docs/guides/sqlite-transition|Moving Vision 2.0 data to
-     SQLite]]; and
+     left after database finalization is cleanup-only. Invalid journal paths fail closed; and
    - spawn the backend with an allowlisted child environment and argument arrays. The environment
      sets `VISION_DATABASE_PATH` to `<userData>/database/vision.sqlite3` and `ATTACHMENTS_DIR` to
      the runtime's attachment directory. Vision 2.0's PostgreSQL credentials that may remain in
@@ -778,9 +772,9 @@ Mounted once in `AppLayout`, inside `SidebarProvider`. Responsibilities:
 
 `packaging/electron/backup/restore.ts` runs bundle backup, bundle restore and bare-file restore
 through the native runtime. A bare-file restore (`runRestore`) accepts a Vision SQLite database
-file, for example a copy from `pre-migration-backups/`, encrypted or not. Vision 2.0's PostgreSQL
-dumps (`.sql`, `.sql.enc`) and bundles that carry `db.sql` are refused with `BACKUP_POSTGRESQL_V2`
-and the transition command ([[docs/guides/sqlite-transition|Moving Vision 2.0 data to SQLite]]).
+file, for example a copy from `pre-migration-backups/`, encrypted or not, and refuses any other
+file with `BACKUP_UNRECOGNIZED`. A bundle of an older format (Vision 2.0 and earlier wrote format
+1) is refused with `BACKUP_FORMAT_UNSUPPORTED`.
 Restores finalize the database switch after detailed readiness, without an audit-receipt check or
 audit-continuity warning
 ([[docs/adr/231-remove-audit-history|ADR-231]]). A backup taken before migration 0004 restores

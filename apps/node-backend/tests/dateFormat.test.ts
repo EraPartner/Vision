@@ -37,9 +37,9 @@ describe("normalizeDateLikeToYmd", () => {
 describe("formatDateToYmd (local extraction)", () => {
   it("formats a pg-read DATE (local midnight) to its own calendar day east of UTC", () => {
     process.env.TZ = "Europe/Brussels";
-    const pgRead = new Date(2026, 5, 1); // local midnight, June 1
+    const dbRead = new Date(2026, 5, 1); // local midnight, June 1
     // Old UTC extraction: toISOString() → '2026-05-31T22:00:00.000Z' → '2026-05-31'.
-    expect(formatDateToYmd(pgRead)).toBe("2026-06-01");
+    expect(formatDateToYmd(dbRead)).toBe("2026-06-01");
   });
 
   it("formats a locally-constructed month end to the last day (period_end regression)", () => {

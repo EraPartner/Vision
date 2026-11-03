@@ -104,9 +104,8 @@ release job verifies build provenance before publishing. No application image is
 
 Application rollback and database rollback are separate. Replacing the app does not downgrade the
 database. A migration rollback (`bun run db:migrate:down`, only for migrations with a `.down.sql`) requires
-explicit review and a backup; below the `0001` SQLite baseline there is no migration, and a
-Vision 2.0 backup must go through `bun run transition:v2` once
-([[docs/guides/sqlite-transition|Moving Vision 2.0 data to SQLite]]). A failed native database switch
+explicit review and a backup; below the `0001` SQLite baseline there is no migration, and this
+version does not read Vision 2.0 data. A failed native database switch
 keeps the previous database until validation succeeds.
 
 ## Security properties

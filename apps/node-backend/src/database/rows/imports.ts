@@ -9,14 +9,14 @@
  */
 import { z } from "zod";
 import {
-  pgBigint,
-  pgCategoryId,
-  pgCurrency,
-  pgDate,
-  pgInt,
-  pgNumeric,
-  pgRecipientId,
-  pgTimestamptz,
+  dbBigint,
+  dbCategoryId,
+  dbCurrency,
+  dbDate,
+  dbInt,
+  dbNumeric,
+  dbRecipientId,
+  dbTimestamptz,
 } from "../rowSchemas.ts";
 
 // ---------------------------------------------------------------------------
@@ -40,21 +40,21 @@ export const importBatchStatusSchema = z.enum([
 export const importBatchListRowSchema = z
   .object({
     /** BIGSERIAL */
-    id: pgBigint,
+    id: dbBigint,
     adapter_name: z.string(),
     source_filename: z.string().nullable(),
     /** BIGINT */
-    source_size_bytes: pgBigint.nullable(),
+    source_size_bytes: dbBigint.nullable(),
     status: importBatchStatusSchema,
-    rows_total: pgInt,
-    rows_imported: pgInt,
-    rows_duplicate: pgInt,
-    rows_error: pgInt,
+    rows_total: dbInt,
+    rows_imported: dbInt,
+    rows_duplicate: dbInt,
+    rows_error: dbInt,
     error_summary: z.string().nullable(),
-    started_at: pgTimestamptz,
-    completed_at: pgTimestamptz.nullable(),
+    started_at: dbTimestamptz,
+    completed_at: dbTimestamptz.nullable(),
     /** COUNT(t.id)::int over a LEFT JOIN: 0, never NULL. */
-    transactions_remaining: pgInt,
+    transactions_remaining: dbInt,
   })
   .describe("import batch list row");
 export type ImportBatchListRow = z.output<typeof importBatchListRowSchema>;
@@ -70,12 +70,12 @@ export type ImportBatchRow = z.output<typeof importBatchRowSchema>;
 
 /** `SELECT COUNT(*)::int AS total FROM import_batches`. */
 export const importBatchTotalRowSchema = z
-  .object({ total: pgInt })
+  .object({ total: dbInt })
   .describe("import batch total row");
 
 /** `createBatch`' `RETURNING id` (BIGSERIAL). */
 export const importBatchIdRowSchema = z
-  .object({ id: pgBigint })
+  .object({ id: dbBigint })
   .describe("import batch id row");
 
 /** `commitBatch`' status flip `RETURNING adapter_name`. */
@@ -120,21 +120,21 @@ export const importMatchSourceSchema = z.enum([
 export const importStagingRowSchema = z
   .object({
     /** BIGSERIAL */
-    id: pgBigint,
+    id: dbBigint,
     /** BIGINT */
-    batch_id: pgBigint,
-    row_index: pgInt,
+    batch_id: dbBigint,
+    row_index: dbInt,
     status: importStagingStatusSchema,
-    tx_date: pgDate.nullable(),
+    tx_date: dbDate.nullable(),
     bank_account: z.string().nullable(),
     recipient_raw: z.string().nullable(),
     memo: z.string().nullable(),
     /** NUMERIC(20,4) */
-    amount: pgNumeric.nullable(),
-    currency: pgCurrency.nullable(),
+    amount: dbNumeric.nullable(),
+    currency: dbCurrency.nullable(),
     /** NUMERIC(20,4) */
-    balance: pgNumeric.nullable(),
-    bank_sequence: pgNumeric.nullable().optional(),
+    balance: dbNumeric.nullable(),
+    bank_sequence: dbNumeric.nullable().optional(),
     recipient_account: z.string().nullable(),
     recipient_address: z.string().nullable(),
     recipient_bank_name: z.string().nullable(),
@@ -147,18 +147,18 @@ export const importStagingRowSchema = z
     /** CHAR(64) hex digest. */
     dedup_fingerprint: z.string().nullable().optional(),
     /** SMALLINT */
-    dedup_fingerprint_version: pgInt.nullable().optional(),
-    dedup_occurrence: pgInt.nullable().optional(),
-    resolved_recipient_id: pgRecipientId.nullable(),
+    dedup_fingerprint_version: dbInt.nullable().optional(),
+    dedup_occurrence: dbInt.nullable().optional(),
+    resolved_recipient_id: dbRecipientId.nullable(),
     error_message: z.string().nullable(),
     match_source: importMatchSourceSchema.nullable().optional(),
-    matched_pattern_id: pgInt.nullable().optional(),
+    matched_pattern_id: dbInt.nullable().optional(),
     /** REAL */
     match_similarity: z.number().nullable().optional(),
-    user_override_recipient_id: pgRecipientId.nullable().optional(),
-    override_category_id: pgCategoryId.nullable().optional(),
-    created_at: pgTimestamptz,
-    updated_at: pgTimestamptz.optional(),
+    user_override_recipient_id: dbRecipientId.nullable().optional(),
+    override_category_id: dbCategoryId.nullable().optional(),
+    created_at: dbTimestamptz,
+    updated_at: dbTimestamptz.optional(),
   })
   .describe("import_staging_rows row");
 export type ImportStagingRow = z.output<typeof importStagingRowSchema>;
@@ -215,16 +215,16 @@ export const commitStagingRowSchema = importStagingRowSchema
   })
   .extend({
     tx_date: z.string().nullable(),
-    amount: pgNumeric.nullable(),
+    amount: dbNumeric.nullable(),
     source_record_hash: z.string().nullable(),
     dedup_fingerprint: z.string().nullable(),
-    dedup_fingerprint_version: pgInt.nullable(),
-    dedup_occurrence: pgInt.nullable(),
-    user_override_recipient_id: pgRecipientId.nullable(),
-    matched_pattern_id: pgInt.nullable(),
-    override_category_id: pgCategoryId.nullable(),
+    dedup_fingerprint_version: dbInt.nullable(),
+    dedup_occurrence: dbInt.nullable(),
+    user_override_recipient_id: dbRecipientId.nullable(),
+    matched_pattern_id: dbInt.nullable(),
+    override_category_id: dbCategoryId.nullable(),
     /** LEFT JOIN recipients */
-    recipient_default_category_id: pgCategoryId.nullable(),
+    recipient_default_category_id: dbCategoryId.nullable(),
   })
   .describe("commit staging row");
 export type CommitStagingRow = z.output<typeof commitStagingRowSchema>;
@@ -249,12 +249,12 @@ export const importPreviewRowSchema = importStagingRowSchema
     tx_date: z.string().nullable(),
     match_source: importMatchSourceSchema.nullable(),
     match_similarity: z.number().nullable(),
-    matched_pattern_id: pgInt.nullable(),
-    user_override_recipient_id: pgRecipientId.nullable(),
-    override_category_id: pgCategoryId.nullable(),
-    effective_recipient_id: pgRecipientId.nullable(),
+    matched_pattern_id: dbInt.nullable(),
+    user_override_recipient_id: dbRecipientId.nullable(),
+    override_category_id: dbCategoryId.nullable(),
+    effective_recipient_id: dbRecipientId.nullable(),
     recipient_name: z.string().nullable(),
-    recipient_default_category_id: pgCategoryId.nullable(),
+    recipient_default_category_id: dbCategoryId.nullable(),
     recipient_default_category_general: z.string().nullable(),
     recipient_default_category_detail: z.string().nullable(),
     recipient_default_category_path: z.string().nullable(),
@@ -274,19 +274,19 @@ export type ImportPreviewRow = z.output<typeof importPreviewRowSchema>;
 
 /** `SELECT r.id` / `RETURNING id` over the INTEGER `recipients.id`. */
 export const recipientIdOnlyRowSchema = z
-  .object({ id: pgRecipientId })
+  .object({ id: dbRecipientId })
   .describe("recipient id row");
 
 /** `recipients` `id, normalized_name` (SELECT or INSERT ... RETURNING). */
 export const recipientIdentityRowSchema = z
-  .object({ id: pgRecipientId, normalized_name: z.string() })
+  .object({ id: dbRecipientId, normalized_name: z.string() })
   .describe("recipient identity row");
 
 /** `selectRecipients` in the CSV data importer. */
 export const recipientResolutionRowSchema = recipientIdentityRowSchema
   .extend({
     notes: z.string().nullable(),
-    default_category_id: pgCategoryId.nullable(),
+    default_category_id: dbCategoryId.nullable(),
   })
   .describe("recipient resolution row");
 
@@ -296,7 +296,7 @@ export const recipientResolutionRowSchema = recipientIdentityRowSchema
  * them) and the INSERT ... RETURNING.
  */
 export const categoryPairIdRowSchema = z
-  .object({ id: pgCategoryId, general: z.string(), detail: z.string() })
+  .object({ id: dbCategoryId, general: z.string(), detail: z.string() })
   .describe("category pair id row");
 
 // ---------------------------------------------------------------------------
@@ -311,14 +311,14 @@ export const categoryPairIdRowSchema = z
  */
 export const customParserConfigRowSchema = z
   .object({
-    id: pgInt,
+    id: dbInt,
     name: z.string(),
     /** CHECK constraint (migration 0041). */
     kind: z.enum(["transaction", "portfolio"]),
     /** JSONB NOT NULL: any JSON value (the parser-config check is separate). */
     config_json: z.json(),
-    created_at: pgTimestamptz,
-    updated_at: pgTimestamptz,
+    created_at: dbTimestamptz,
+    updated_at: dbTimestamptz,
   })
   .describe("custom_parser_configs row");
 export type CustomParserConfigRow = z.output<

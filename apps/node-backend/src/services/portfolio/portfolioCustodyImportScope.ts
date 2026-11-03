@@ -1,7 +1,7 @@
 /** Reviewed custody writes share one transaction and one approved source scope. */
 import { AsyncLocalStorage } from "node:async_hooks";
 import { sameTransaction, withTransaction } from "../../database/connection.ts";
-import type { PgPoolClient } from "../../database/connection.ts";
+import type { DbClient } from "../../database/connection.ts";
 import { ConflictError } from "../../middleware/errorHandler.ts";
 import { toDecimal } from "../../lib/money.ts";
 import type { DecimalInput } from "../../lib/money.ts";
@@ -37,7 +37,7 @@ export type CustodyEventLike = {
 
 type CustodyScope = {
   /** The scope's own transaction client. */
-  client: PgPoolClient;
+  client: DbClient;
   /** eventKey → approved signature */
   approved: Map<string, string>;
   active: boolean;
@@ -163,7 +163,7 @@ export async function withPortfolioCustodyImportScope<T>(
 export function portfolioCustodyWriteHistory<H extends { date: string }>(
   history: H[],
   event: CustodyEventLike,
-  client: PgPoolClient,
+  client: DbClient,
 ): H[] {
   const scope = scopes.getStore();
   if (!scope) return history;

@@ -153,12 +153,8 @@ version and advances the library pointer. `expectedVersion` prevents overwriting
 edit. Formula refresh uses decimal arithmetic and preserves explicit formula errors as a partial
 result.
 
-Saved custom SQL whose `source.dialect` is not `sqlite` was written for PostgreSQL and needs
-review. List and detail responses carry `needsReview` (boolean) and `reviewReason`
-(`"postgresql-custom-sql"` or `null`). `POST /api/analysis/saved/:id/run` on such an analysis
-returns `409` with the code `ANALYSIS_SQL_NEEDS_REVIEW` and writes no run row. Saving the analysis
-again from the SQL editor stores `sqlite` as the dialect and clears the flag. Visual analyses
-compile from their plan and never need review. Each version snapshots the matching parameters, formula assumptions, chart bindings, source
+Custom SQL runs as SQLite SQL. Definition versions saved by Vision 2.1.0 and earlier may carry a
+`source.dialect` field; it is ignored. Each version snapshots the matching parameters, formula assumptions, chart bindings, source
 references, and refresh mode. Restore and AI apply also append versions; neither mutates history.
 
 `parameters.scenarioModel` may hold up to five typed CSV attachments. Each attachment is limited to

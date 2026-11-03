@@ -12,12 +12,12 @@
 import { z } from "zod";
 import type { AnalysisDefinition } from "@vision/types/analysis";
 import {
-  pgBigint,
-  pgCategoryId,
-  pgInt,
-  pgInvestmentId,
-  pgNumeric,
-  pgTimestamptz,
+  dbBigint,
+  dbCategoryId,
+  dbInt,
+  dbInvestmentId,
+  dbNumeric,
+  dbTimestamptz,
 } from "../rowSchemas.ts";
 import { storedJsonObject } from "./ai.ts";
 import type {
@@ -28,7 +28,7 @@ import type { DossierContent } from "../../services/researchDossierService.ts";
 
 /** A bare `count(*)` aliased `n`. */
 export const countNRowSchema = z
-  .object({ n: pgBigint })
+  .object({ n: dbBigint })
   .describe("count n row");
 
 /** A `SELECT id` / `RETURNING id` row of a TEXT- or UUID-keyed table. */
@@ -45,7 +45,7 @@ export const savedAnalysisTableRowSchema = z
     definition_id: z.string(),
     name: z.string(),
     workspace: z.string(),
-    current_version: pgInt,
+    current_version: dbInt,
     /** CHECK (refresh_mode IN ('live','frozen')). */
     refresh_mode: z.string(),
     /** JSONB object (default `{}`). */
@@ -57,8 +57,8 @@ export const savedAnalysisTableRowSchema = z
     refresh_status: z.string(),
     last_successful_run_id: z.string().nullable(),
     last_error_json: z.unknown(),
-    created_at: pgTimestamptz,
-    updated_at: pgTimestamptz,
+    created_at: dbTimestamptz,
+    updated_at: dbTimestamptz,
   })
   .describe("saved_analyses row");
 
@@ -78,11 +78,11 @@ export type SavedAnalysisRow = z.output<typeof savedAnalysisRowSchema>;
 /** `listSavedAnalysisVersions` (camelCase aliases). */
 export const savedAnalysisVersionRowSchema = z
   .object({
-    version: pgInt,
+    version: dbInt,
     definition: storedJsonObject<AnalysisDefinition>(),
     /** NULL on legacy versions saved before state was recorded. */
     state: storedJsonObject<SavedVersionState>().nullable(),
-    createdAt: pgTimestamptz,
+    createdAt: dbTimestamptz,
   })
   .describe("saved_analysis_definition_versions row");
 
@@ -120,21 +120,21 @@ export const analysisMonitorRowSchema = z
     field_id: z.string().nullable(),
     operator: z.string().nullable(),
     /** NUMERIC */
-    threshold: pgNumeric.nullable(),
-    interval_minutes: pgInt,
-    cooldown_minutes: pgInt,
-    next_due_at: pgTimestamptz,
-    last_checked_at: pgTimestamptz.nullable(),
+    threshold: dbNumeric.nullable(),
+    interval_minutes: dbInt,
+    cooldown_minutes: dbInt,
+    next_due_at: dbTimestamptz,
+    last_checked_at: dbTimestamptz.nullable(),
     last_status: z.string().nullable(),
-    condition_revision: pgInt,
+    condition_revision: dbInt,
     active_episode_key: z.string().nullable(),
     pending_signature: z.string().nullable(),
-    pending_since: pgTimestamptz.nullable(),
-    last_notified_at: pgTimestamptz.nullable(),
+    pending_since: dbTimestamptz.nullable(),
+    last_notified_at: dbTimestamptz.nullable(),
     lease_token: z.string().nullable(),
-    lease_expires_at: pgTimestamptz.nullable(),
-    created_at: pgTimestamptz,
-    updated_at: pgTimestamptz,
+    lease_expires_at: dbTimestamptz.nullable(),
+    created_at: dbTimestamptz,
+    updated_at: dbTimestamptz,
   })
   .describe("analysis_monitors row");
 export type AnalysisMonitorRow = z.output<typeof analysisMonitorRowSchema>;
@@ -147,11 +147,11 @@ export const monitorObservationRowSchema = z
     status: z.string(),
     previous_value: z.string().nullable(),
     current_value: z.string().nullable(),
-    previous_evidence_version: pgInt.nullable(),
-    current_evidence_version: pgInt.nullable(),
+    previous_evidence_version: dbInt.nullable(),
+    current_evidence_version: dbInt.nullable(),
     evidence_hash: z.string().nullable(),
-    condition_revision: pgInt,
-    analysis_definition_version: pgInt.nullable(),
+    condition_revision: dbInt,
+    analysis_definition_version: dbInt.nullable(),
     analysis_run_id: z.string().nullable(),
     historical_analysis_run_id: z.string().nullable(),
     analysis_run_status: z.string().nullable(),
@@ -160,7 +160,7 @@ export const monitorObservationRowSchema = z
     coverage_json: z.unknown(),
     reason_code: z.string(),
     reason: z.string(),
-    checked_at: pgTimestamptz,
+    checked_at: dbTimestamptz,
   })
   .describe("analysis_monitor_observations row");
 export type MonitorObservationRow = z.output<
@@ -210,8 +210,8 @@ export const monitorNotificationRowSchema = z
     reason: z.string(),
     previous_value: z.string().nullable(),
     current_value: z.string().nullable(),
-    created_at: pgTimestamptz,
-    read_at: pgTimestamptz.nullable(),
+    created_at: dbTimestamptz,
+    read_at: dbTimestamptz.nullable(),
   })
   .describe("analysis_monitor_notifications row");
 export type MonitorNotificationRow = z.output<
@@ -220,7 +220,7 @@ export type MonitorNotificationRow = z.output<
 
 /** Bare `count(*)` totals of the notification inbox. */
 export const monitorNotificationCountsRowSchema = z
-  .object({ total: pgBigint, unread: pgBigint })
+  .object({ total: dbBigint, unread: dbBigint })
   .describe("analysis monitor notification counts row");
 
 /** A monitor target: a saved analysis (`id,name,refresh_mode`). */
@@ -262,8 +262,8 @@ export const monitorRunRowSchema = z
     status: z.string(),
     /** NOT NULL exactly when status is completed or partial. */
     result_json: storedJsonObject<MonitorRunResult>().nullable(),
-    definition_version: pgInt,
-    current_version: pgInt,
+    definition_version: dbInt,
+    current_version: dbInt,
     definition_json: storedJsonObject<AnalysisDefinition>(),
   })
   .describe("analysis monitor run row");
@@ -272,7 +272,7 @@ export type MonitorRunRow = z.output<typeof monitorRunRowSchema>;
 /** `SELECT version,content_json FROM research_dossiers` (monitor read). */
 export const monitorDossierRowSchema = z
   .object({
-    version: pgInt,
+    version: dbInt,
     /** JSONB, CHECK object. */
     content_json: z.record(z.string(), z.unknown()),
   })
@@ -286,13 +286,13 @@ export const monitorDossierRowSchema = z
 export const researchDossierRowSchema = z
   .object({
     id: z.string(),
-    version: pgInt,
+    version: dbInt,
     workspace: z.string(),
     title: z.string(),
     /** JSONB, CHECK object; written from `normalizeContent`. */
     content_json: storedJsonObject<DossierContent>(),
-    created_at: pgTimestamptz,
-    updated_at: pgTimestamptz,
+    created_at: dbTimestamptz,
+    updated_at: dbTimestamptz,
   })
   .describe("research_dossiers row");
 export type ResearchDossierRow = z.output<typeof researchDossierRowSchema>;
@@ -301,15 +301,15 @@ export type ResearchDossierRow = z.output<typeof researchDossierRowSchema>;
 export const researchDossierSummaryRowSchema = z
   .object({
     id: z.string(),
-    version: pgInt,
+    version: dbInt,
     workspace: z.string(),
     title: z.string(),
     /** `content_json->>'question'`: NULL when absent. */
     question: z.string().nullable(),
     /** `content_json->>'reviewDate'`: NULL when absent or JSON null. */
     review_date: z.string().nullable(),
-    created_at: pgTimestamptz,
-    updated_at: pgTimestamptz,
+    created_at: dbTimestamptz,
+    updated_at: dbTimestamptz,
   })
   .describe("research dossier summary row");
 
@@ -319,8 +319,8 @@ export const researchDossierLinkRowSchema = z
     link_type: z.string(),
     historical_id: z.string(),
     label_snapshot: z.string(),
-    category_id: pgCategoryId.nullable(),
-    investment_id: pgInvestmentId.nullable(),
+    category_id: dbCategoryId.nullable(),
+    investment_id: dbInvestmentId.nullable(),
     saved_analysis_id: z.string().nullable(),
   })
   .describe("research_dossier_links row");
@@ -341,7 +341,7 @@ export const researchDossierDocumentRowSchema = z
   .object({
     id: z.string(),
     title: z.string(),
-    version: pgInt,
+    version: dbInt,
     content_sha256: z.string(),
   })
   .describe("research dossier document row");
@@ -349,9 +349,9 @@ export const researchDossierDocumentRowSchema = z
 /** A `research_dossier_versions` row as `listResearchDossierVersions` reads it. */
 export const researchDossierVersionRowSchema = z
   .object({
-    version: pgInt,
+    version: dbInt,
     snapshot_json: z.unknown(),
-    created_at: pgTimestamptz,
+    created_at: dbTimestamptz,
   })
   .describe("research_dossier_versions row");
 

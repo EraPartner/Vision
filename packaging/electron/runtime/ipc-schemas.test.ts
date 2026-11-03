@@ -103,18 +103,17 @@ void test("backup restore accepts only picker-blessed files with a backup extens
   );
 });
 
-void test("restore accepts SQLite databases and Vision 2.0 dumps, which it then explains", () => {
+void test("restore accepts Vision backups and SQLite databases only", () => {
   for (const file of [
     "/b/vision_backup_x.visionbak",
     "/b/vision_backup_x.visionbak.enc",
     "/b/vision.sqlite3",
     "/b/VISION.SQLITE3",
-    "/b/legacy.sql",
-    "/b/legacy.sql.enc",
+    "/b/vision.sqlite3.enc",
   ]) {
     assert.equal(hasAllowedRestoreExt(file), true, file);
   }
-  for (const file of ["/b/notes.txt", "/b/vision.sqlite3-wal", "/b/db"]) {
+  for (const file of ["/b/notes.txt", "/b/vision.sqlite3-wal", "/b/db", "/b/dump.sql"]) {
     assert.equal(hasAllowedRestoreExt(file), false, file);
   }
 });

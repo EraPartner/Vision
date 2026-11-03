@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
-import { portfolioUnitEventDbRow } from "./helpers/portfolioPgRows.ts";
+import { portfolioUnitEventDbRow } from "./helpers/portfolioRowFixtures.ts";
 import { asAccountId } from "@vision/types/brands";
 
 const mocks = vi.hoisted(() => ({

@@ -62,9 +62,6 @@ function querySpecFromDefinition(
     return {
       mode: "sql",
       sql: source.text,
-      // Keep a PostgreSQL analysis flagged "needs review" (ADR-263): only a
-      // save from the SQL editor marks its text as SQLite.
-      dialect: source.dialect,
       datasetIds: source.datasetIds,
       columns: definition.expectedResult.columns,
       ...(source.visualOrigin

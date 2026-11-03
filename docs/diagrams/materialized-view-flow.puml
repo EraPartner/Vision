@@ -13,16 +13,15 @@ package "Backend" {
     +ensureMaterializedViewIndexes(): Promise<void>
   }
 
-  class SchemaInit {
-    +initializeSchema(): Promise<void>
-    +checkVersion(): Promise<boolean>
+  class SchemaInit as "Migrations (database/migrate.ts)" {
+    +runMigrations()
   }
 }
 
-database "PostgreSQL" as DB {
-  node "Materialized Views" as MatViews {
-    view "mv_monthly_summary"
-    view "mv_category_totals"
+database "SQLite" as DB {
+  node "Summary tables (baseline migration)" as MatViews {
+    rectangle "mv_monthly_summary"
+    rectangle "mv_category_totals"
   }
 
   node "Indexes" as Indexes {
@@ -40,23 +39,24 @@ package "External" as External {
 External --> SchemaInit : App startup and migrations
 SchemaInit --> External : Express begins listening
 External --> MaterializedViewService : Post-listen warmup
-MaterializedViewService --> MatViews : CREATE IF NOT EXISTS
+MaterializedViewService --> MatViews : fill empty tables (one transaction)
 MaterializedViewService --> Indexes : CREATE INDEX IF NOT EXISTS
-MaterializedViewService --> MatViews : REFRESH MATERIALIZED VIEW
+MaterializedViewService --> MatViews : refill: DELETE + INSERT ... SELECT\n(both tables, one transaction)
 
 MatViews --> DB : refreshed
 
 ' Import-triggered refresh
 ImportCompletion --> MaterializedViewService : Schedule after reconciliation\nHTTP response does not await
-MaterializedViewService --> MatViews : CONCURRENTLY refresh
+MaterializedViewService --> MatViews : debounced refill
 
 note right of MaterializedViewService
   Views:
   - mv_monthly_summary
   - mv_category_totals
    
-  CONCURRENTLY option for
-  non-locking refresh
+  Readers see the last committed
+  contents until COMMIT, never an
+  empty table mid-refill (ADR-263)
    
   Refreshed on:
   - App startup (after schema init)

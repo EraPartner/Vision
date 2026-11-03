@@ -8,10 +8,10 @@ import {
 vi.mock("../src/database/connection.ts", () => mockTxConnection());
 
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import investmentRepository from "../src/repositories/investmentRepository.ts";
 import { partial } from "./helpers/partial.ts";
-import { investmentDbRow } from "./helpers/portfolioPgRows.ts";
+import { investmentDbRow } from "./helpers/portfolioRowFixtures.ts";
 
 const query = vi.mocked(rawQuery);
 
@@ -21,7 +21,7 @@ describe("investmentRepository.create symbol uniqueness", () => {
   });
 
   it("rejects a duplicate symbol on create with the same error shape as update", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [{ id: 7 }] })); // uniqueness check finds a match
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [{ id: 7 }] })); // uniqueness check finds a match
 
     await expect(
       investmentRepository.create({
@@ -42,7 +42,7 @@ describe("investmentRepository.create symbol uniqueness", () => {
 
   it("skips the uniqueness check when no symbol is provided", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [
           investmentDbRow({ id: asInvestmentId(12), asset_class: "savings", name: "Book" }),
         ],
@@ -72,7 +72,7 @@ describe("investmentRepository.update", () => {
 
   it("rejects changing asset_class", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [investmentDbRow({ id: asInvestmentId(2), asset_class: "stock" })],
       }),
     );
@@ -87,7 +87,7 @@ describe("investmentRepository.update", () => {
 
   it("rejects empty symbol", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [investmentDbRow({ id: asInvestmentId(3), asset_class: "stock", symbol: "OLD" })],
       }),
     );
@@ -103,13 +103,13 @@ describe("investmentRepository.update", () => {
   it("normalizes symbol and enforces uniqueness", async () => {
     query
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [
             investmentDbRow({ id: asInvestmentId(4), asset_class: "stock", symbol: "OLD" }),
           ],
         }),
       )
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [{ id: 99 }] }));
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [{ id: 99 }] }));
 
     await expect(
       investmentRepository.update(asInvestmentId(4), { symbol: " aapl " }),
@@ -131,7 +131,7 @@ describe("investmentRepository.updatePrice", () => {
   });
 
   it("returns null for a missing investment", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
 
     const result = await investmentRepository.updatePrice(asInvestmentId(404), {
       current_price: 1,
@@ -159,7 +159,7 @@ describe("investmentRepository.hardDelete", () => {
   });
 
   it("returns false when nothing was deleted", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rowCount: 0 }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rowCount: 0 }));
 
     expect(await investmentRepository.hardDelete(asInvestmentId(11))).toBe(false);
   });
@@ -173,19 +173,19 @@ describe("investmentRepository read helpers and extra branches", () => {
   it("supports getAll/getCount/getAllWithCount/getById branch paths", async () => {
     query
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [investmentDbRow({ id: asInvestmentId(1), name: "A" })],
         }),
       )
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [{ count: "3" }] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [{ count: "3" }] }))
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [
             { ...investmentDbRow({ id: asInvestmentId(2), name: "B" }), total_count: "5" },
           ],
         }),
       )
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
 
     const all = await investmentRepository.getAll({
       limit: 10,
@@ -214,7 +214,7 @@ describe("investmentRepository read helpers and extra branches", () => {
 
   it("returns existing row when update has no allowed fields", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [investmentDbRow({ id: asInvestmentId(5), asset_class: "stock", name: "AAPL" })],
       }),
     );
@@ -226,7 +226,7 @@ describe("investmentRepository read helpers and extra branches", () => {
   });
 
   it("returns null when updating non-existing investment", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
 
     const result = await investmentRepository.update(asInvestmentId(404), { name: "Nope" });
 

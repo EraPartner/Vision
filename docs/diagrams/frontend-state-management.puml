@@ -171,7 +171,7 @@ package "Custom Hooks (Business Logic)" {
     +paged rules and observations
     +inbox and unread count
     +create, edit, check, read, delete
-    note bottom: PostgreSQL owns due times, history,
+    note bottom: The database owns due times, history,
     episodes, and read state; React Query caches views only.
   }
 

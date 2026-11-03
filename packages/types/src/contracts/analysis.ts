@@ -151,9 +151,6 @@ export const SavedAnalysisSchema = z.looseObject({
   updatedAt: WireTimestampSchema,
   definition: JsonObjectSchema,
   lastResult: JsonObjectSchema.nullable(),
-  /** Custom SQL written for PostgreSQL (ADR-263) runs only after it is saved again. */
-  needsReview: z.boolean(),
-  reviewReason: z.enum(["postgresql-custom-sql"]).nullable(),
 });
 
 /** `GET /api/analysis/saved`. */

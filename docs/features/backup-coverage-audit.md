@@ -65,10 +65,8 @@ Vision 2.0 migration `0004_remove_audit_history` dropped `audit_chain_head`, `au
 
 The schema version of a database, and the `schemaVersion` a bundle records, is the latest version
 in the database's `vision_migrations` ledger. Restore refuses a bundle whose schema version is
-newer than this install with `BUNDLE_SCHEMA_NEWER`. A Vision 2.0 bundle (format 1) carries a
-PostgreSQL `db.sql` instead of `db.sqlite3`; restore never reads it and refuses it with
-`BACKUP_POSTGRESQL_V2`, naming `bun run transition:v2`. See
-[[docs/guides/sqlite-transition|Moving Vision 2.0 data to SQLite]] and
+newer than this install with `BUNDLE_SCHEMA_NEWER`. A bundle of an older format (Vision 2.0 and
+earlier wrote format 1, without `db.sqlite3`) is refused with `BACKUP_FORMAT_UNSUPPORTED`. See
 [[docs/guides/migrations|Database Migration Guide]].
 
 #### AI & Conversations
@@ -363,7 +361,7 @@ and [[docs/architecture/electron|Electron architecture]].
 - Path validation (v2 security enhancement): `decryptBackupFileToTemp()` and `backup:restore` IPC handler validate:
   - `filePath` is a string
   - `filePath` was returned by prior `backup:select-file` dialog (stored in `ALLOWED_RESTORE_PATHS` set)
-  - The file dialog offers `.visionbak`, `.visionbak.enc`, `.sqlite3`, `.sql`, and `.enc`; `.visionbak` and `.visionbak.enc` go to the bundle restore and any other file to `runRestore()`, which accepts only a SQLite database file and refuses a Vision 2.0 `.sql` or `.sql.enc` dump with `BACKUP_POSTGRESQL_V2`
+  - The file dialog offers `.visionbak`, `.visionbak.enc`, `.sqlite3`, and `.enc`; `.visionbak` and `.visionbak.enc` go to the bundle restore and any other file to `runRestore()`, which accepts only a SQLite database file (decrypted first when encrypted) and refuses anything else with `BACKUP_UNRECOGNIZED`
   - `filePath` exists on disk
   - `filePath` does not escape `attachments` directory via `path.resolve()` + `fs.realpath()`
   - Prevents XSS-in-renderer from passing arbitrary paths
@@ -379,8 +377,8 @@ and [[docs/architecture/electron|Electron architecture]].
    - **v1 (retired):** Refuse with "This backup uses the retired v1 encryption format, which Vision no longer restores." before any decryption
    - **v2:** Extract salt + IV from header; derive key via Scrypt KDF with per-backup salt; decrypt GCM ciphertext; verify auth tag; throw `Error('INVALID_PASSPHRASE')` on tag failure (tampering detected)
    - Frontend catches invalid-passphrase error and re-prompts modal (up to 3 attempts typical)
-4. **Schema Validation** — A bundle without `db.sqlite3` (a Vision 2.0 format-1 bundle) is refused
-   with `BACKUP_POSTGRESQL_V2`. If `metadata.schemaVersion` is newer than the highest shipped
+4. **Schema Validation** — A bundle of an older format without `db.sqlite3` is refused with
+   `BACKUP_FORMAT_UNSUPPORTED`. If `metadata.schemaVersion` is newer than the highest shipped
    `db/migrations/` file, restore throws `BUNDLE_SCHEMA_NEWER` (user must upgrade Vision first).
 5. **Native Database Stage** — The runtime copies `db.sqlite3` into a staged database directory.
 6. **Database Validation** — The database tool verifies the staged copy: `integrity_check`,
@@ -446,9 +444,9 @@ SQL, an attachment, metadata, and frontend state. This checks the current reader
 bytes from the older producer rather than a bundle created by the current writer. Vision 1.0.2
 already wrote the authenticated `VISIONBAK2` envelope. The fixed encrypted-byte tests in
 `packaging/electron/backup/encrypted-file.test.ts` decrypt the v2 vectors and check that the v1
-vectors are refused without writing plaintext. Opening it does not make it restorable: it carries a
-PostgreSQL `db.sql` and no `db.sqlite3`, so the test expects no database path, and restore refuses
-such a bundle with `BACKUP_POSTGRESQL_V2`. Newer-schema and Vision 2.0 rejection and restore
+vectors are refused without writing plaintext. The bundle decrypts but is format 1 with no
+`db.sqlite3`, so the test expects `BACKUP_FORMAT_UNSUPPORTED`. Newer-schema and older-format
+rejection and restore
 rollback remain covered by the focused Electron backup tests
 (`packaging/electron/backup/restore.test.ts`).
 

@@ -433,11 +433,11 @@ SavedAnalysisService --> AnalysisExecutor : refreshes saved runs
 AnalysisMonitorScheduler --> AnalysisMonitorService : bounded due checks
 AnalysisMonitorService --> SavedAnalysisService : one exact local run per check
 note right of AnalysisMonitorService
-  Reads current dossier evidence from PostgreSQL;
+  Reads current dossier evidence from the database;
   it does not invoke document or provider fetches.
 end note
 note right of ResearchDossierService
-  Uses the normal PostgreSQL connection and transaction.
+  Uses the normal database connection and transaction.
   Validates live category, investment, saved-analysis,
   and document references directly before each write.
 end note

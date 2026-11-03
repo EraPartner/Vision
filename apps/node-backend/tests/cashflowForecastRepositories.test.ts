@@ -4,13 +4,13 @@ import { mockConnection } from './helpers/repoMocks.ts';
 vi.mock('../src/database/connection.ts', () => mockConnection());
 
 import { query as rawQuery } from '../src/database/connection.ts';
-import type { PgQueryResult } from '../src/database/connection.ts';
+import type { DbQueryResult } from '../src/database/connection.ts';
 import mcRepo, { get as mcGet, isFresh as mcIsFresh, upsert as mcUpsert, getActiveUserIds } from '../src/repositories/cashflowForecastMcRepository.ts';
 import rollingRepo, { get as rollingGet, isFresh as rollingIsFresh, upsert as rollingUpsert } from '../src/repositories/cashflowForecastMcRollingRepository.ts';
 import accuracyRepo from '../src/repositories/cashflowForecastAccuracyRepository.ts';
 import providerHealthRepo from '../src/repositories/providerHealthRepository.ts';
 import { partial } from './helpers/partial.ts';
-import { providerHealthDbRow } from './helpers/portfolioPgRows.ts';
+import { providerHealthDbRow } from './helpers/portfolioRowFixtures.ts';
 
 const query = vi.mocked(rawQuery);
 
@@ -19,13 +19,13 @@ beforeEach(() => vi.clearAllMocks());
 describe('cashflowForecastMcRepository.get', () => {
   it('returns the row when present', async () => {
     const row = { payload: { foo: 1 }, computed_at: new Date('2025-01-01T00:00:00Z') };
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [row] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [row] }));
     const r = await mcGet({ userId: 'u1', month: '2025-04', filterHash: 'abc' });
     expect(r).toEqual(row);
   });
 
   it('returns null when no row found', async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
     expect(await mcGet({ userId: 'u', month: 'm', filterHash: 'h' })).toBeNull();
   });
 });
@@ -54,7 +54,7 @@ describe('cashflowForecastMcRepository.isFresh', () => {
 
 describe('cashflowForecastMcRepository.getActiveUserIds', () => {
   it('returns distinct user ids and always includes anonymous', async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [{ user_id: 'alice' }, { user_id: 'bob' }] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [{ user_id: 'alice' }, { user_id: 'bob' }] }));
     const ids = await getActiveUserIds();
     expect(ids).toContain('alice');
     expect(ids).toContain('bob');
@@ -67,7 +67,7 @@ describe('cashflowForecastMcRepository.getActiveUserIds', () => {
   });
 
   it('does not duplicate anonymous if already in result', async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [{ user_id: 'anonymous' }] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [{ user_id: 'anonymous' }] }));
     const ids = await getActiveUserIds();
     expect(ids.filter((i) => i === 'anonymous')).toHaveLength(1);
   });
@@ -87,7 +87,7 @@ describe('cashflowForecastMcRepository.getActiveUserIds', () => {
 
 describe('cashflowForecastMcRollingRepository.get', () => {
   it('returns null on miss', async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
     expect(await rollingGet({ userId: 'u', todayIso: 'd', daysBack: 1, daysForward: 1, filterHash: 'h' })).toBeNull();
   });
 });
@@ -125,7 +125,7 @@ describe('cashflowForecastAccuracyRepository.getHistory', () => {
         recorded_at: new Date('2026-06-01T00:00:00Z'),
       },
     ];
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows }));
     expect(await accuracyRepo.getHistory({ userId: 'u', methodId: 'm' })).toEqual(rows);
   });
 });
@@ -133,20 +133,20 @@ describe('cashflowForecastAccuracyRepository.getHistory', () => {
 describe('providerHealthRepository.listAll', () => {
   it('returns rows from query', async () => {
     const rows = [providerHealthDbRow({ provider: 'binance', kind: 'price' })];
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows }));
     expect(await providerHealthRepo.listAll()).toEqual(rows);
   });
 });
 
 describe('providerHealthRepository.findByProvider', () => {
   it('returns null when not found', async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
     expect(await providerHealthRepo.findByProvider('unknown')).toBeNull();
   });
 
   it('returns the matching row', async () => {
     const row = providerHealthDbRow({ provider: 'binance' });
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [row] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [row] }));
     expect(await providerHealthRepo.findByProvider('binance')).toBe(row);
   });
 });

@@ -33,10 +33,10 @@ package "Server" {
   }
 }
 
-database "PostgreSQL 18" as DB {
-  node "Schema (db/migrations, Kysely migrator)" as SchemaInit
+database "SQLite (vision.sqlite3, in-process)" as DB {
+  node "Schema (db/migrations, in-process migration runner)" as SchemaInit
   node "User-data tables\ntransactions · recipients · planning · portfolio + exposure sources\nimports + reconciliation receipts + custody/adjustment evidence · attachments · AI jobs · monitor history · settings" as Tables
-  node "Materialized Views\nmonthly summary · category totals\ncashflow daily · bank balances" as MatViews
+  node "Summary tables (backend-refilled)\nmonthly summary · category totals" as MatViews
   node "Aggregation tables (trigger-maintained)\nrecipient totals · split outstanding" as AggTables
   node "Indexes (incl. covering partial)" as Indexes
 }
@@ -54,7 +54,7 @@ cloud "External Services" as External {
 }
 
 cloud "Build & Distribution" as DevToolsCloud {
-  node "Native runtime provider\n(PostgreSQL 18 + Bun lifecycle)" as NativeRuntime
+  node "Native runtime provider\n(SQLite file + Bun lifecycle)" as NativeRuntime
   node "Bun (runtime + workspaces)" as Bun
   node "Electron (packaging/electron)" as Electron
   node "electron-builder\n(ad hoc signing)" as Builder
@@ -133,16 +133,15 @@ note right of DevTools
 end note
 
 note right of NativeRuntime
-  Vision ships PostgreSQL 18.6, the compiled backend with
-  its db/migrations files. Electron prints report PDFs with its own Chromium and manages the private,
-  loopback-only PostgreSQL cluster and Bun backend lifecycle,
-  logs, readiness, updates, and durable runtime marker.
-  Cluster admin provisions Analysis executor credentials and defaults.
-  After migrations, the NOCREATEROLE owner resets approved view grants.
-  A saved legacy runtime marker fails closed and directs
-  the user to the last migration-capable release (ADR-133).
+  Vision ships the compiled backend with its db/migrations files,
+  the database tool and the analysis SQL sandbox. There is no
+  database server: the backend opens one SQLite file through the
+  bundled Bun and the system SQLite (ADR-263). Electron prints
+  report PDFs with its own Chromium and manages the Bun backend
+  lifecycle, logs, readiness, updates, and database generations.
+  Analysis SQL runs read-only in a separate sandbox process.
   Vision Demo reuses this provider with an isolated runtime,
-  port, and deterministic seed activated atomically (ADR-114).
+  port, and packaged seed database activated atomically (ADR-114).
 end note
 
 @enduml

@@ -13,8 +13,8 @@ import {
   query as rawQuery,
 } from "../src/database/connection.ts";
 import type {
-  PgPoolClient,
-  PgQueryResult,
+  DbClient,
+  DbQueryResult,
 } from "../src/database/connection.ts";
 import { logger } from "../src/config/logger.ts";
 import {
@@ -49,9 +49,9 @@ describe("belgianInflationService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // The pooled client shares the module-level `query` spy, whose generic
-    // signature differs from PgPoolClient's non-generic `query`.
+    // signature differs from DbClient's non-generic `query`.
     getClient.mockResolvedValue(
-      loose<PgPoolClient>({ query, release: vi.fn() }),
+      loose<DbClient>({ query, release: vi.fn() }),
     );
     clearInflationMemoryCache();
   });
@@ -59,14 +59,14 @@ describe("belgianInflationService", () => {
   it("returns cached database rates without external fetch", async () => {
     query
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [
             { month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" },
           ],
         }),
       )
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [
             { month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" },
           ],
@@ -90,16 +90,16 @@ describe("belgianInflationService", () => {
     const prevTz = process.env.TZ;
     process.env.TZ = "Europe/Brussels";
     try {
-      const pgDate = new Date(2024, 5, 1); // local midnight, June 1
+      const dbDate = new Date(2024, 5, 1); // local midnight, June 1
       query
         .mockResolvedValueOnce(
-          partial<PgQueryResult>({
-            rows: [{ month_date: pgDate, monthly_rate: "0.00300000" }],
+          partial<DbQueryResult>({
+            rows: [{ month_date: dbDate, monthly_rate: "0.00300000" }],
           }),
         )
         .mockResolvedValueOnce(
-          partial<PgQueryResult>({
-            rows: [{ month_date: pgDate, monthly_rate: "0.00300000" }],
+          partial<DbQueryResult>({
+            rows: [{ month_date: dbDate, monthly_rate: "0.00300000" }],
           }),
         );
 
@@ -117,11 +117,11 @@ describe("belgianInflationService", () => {
 
   it("fetches Statbel rates and saves to database when db is empty", async () => {
     query
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -149,7 +149,7 @@ describe("belgianInflationService", () => {
   });
 
   it("ignores a Statbel month named after an Object.prototype key", async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValue(partial<DbQueryResult>({ rows: [] }));
     const fact = (Month: string, cpi: string) => ({
       Month,
       "Level 1": null,
@@ -181,7 +181,7 @@ describe("belgianInflationService", () => {
     // (never a date-range subset), so it issues an extra loadFromDatabase() —
     // a blanket mock keeps the test robust to the exact query count.
     query.mockResolvedValue(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [
           { month_date: new Date(2023, 11, 1), monthly_rate: "0.00150000" },
         ],
@@ -203,11 +203,11 @@ describe("belgianInflationService", () => {
 
   it("retries Statbel fetch and succeeds on a later attempt", async () => {
     query
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
 
     const fetchMock = vi
       .fn()
@@ -232,7 +232,7 @@ describe("belgianInflationService", () => {
   it("throttles repeated Statbel fallback warnings while offline", async () => {
     vi.useFakeTimers();
     query.mockResolvedValue(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [
           { month_date: new Date(2023, 11, 1), monthly_rate: "0.00150000" },
         ],
@@ -264,11 +264,11 @@ describe("belgianInflationService", () => {
 
   it("falls back to Eurostat when Statbel is unreachable", async () => {
     query
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
 
     const fetchMock = vi.fn((url) => {
       if (
@@ -320,14 +320,14 @@ describe("belgianInflationService", () => {
   it("returns database rates in dbOnly mode and schedules background refresh", async () => {
     query
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [
             { month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" },
           ],
         }),
       )
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [
             { month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" },
           ],
@@ -366,14 +366,14 @@ describe("belgianInflationService", () => {
   it("does not use memory shortcut in dbOnly mode when db slice is empty", async () => {
     query
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [
             { month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" },
           ],
         }),
       )
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [
             { month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" },
           ],
@@ -382,7 +382,7 @@ describe("belgianInflationService", () => {
 
     await getInflationRates();
 
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
     const dbOnlyResult = await getInflationRates({
       startMonth: "2025-01",
       endMonth: "2025-12",
@@ -397,11 +397,11 @@ describe("belgianInflationService", () => {
     // 5 empty pre-checks during the refresh path (db loads + filter checks),
     // then BEGIN, then exactly ONE INSERT for all rates, then COMMIT.
     query
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -434,7 +434,7 @@ describe("belgianInflationService", () => {
   });
 
   it("offline warmup loads cached rates without any external attempt", async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" }] }));
+    query.mockResolvedValue(partial<DbQueryResult>({ rows: [{ month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" }] }));
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     try {
@@ -448,14 +448,14 @@ describe("belgianInflationService", () => {
   it("warmInflationCache returns DB quickly when available and refreshes in background", async () => {
     query
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [
             { month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" },
           ],
         }),
       )
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [
             { month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" },
           ],

@@ -460,14 +460,10 @@ describe("Admin database maintenance on SQLite (real DB)", () => {
     await getTestPool().query(`DELETE FROM ${TABLE} WHERE source = $1`, [MAINTENANCE]);
   });
   type StatRow = {
-    schemaname: string;
     table_name: string;
     live_rows: string;
-    dead_rows: string;
     last_vacuum: string | null;
-    last_autovacuum: string | null;
     last_analyze: string | null;
-    last_autoanalyze: string | null;
     size: string;
     size_bytes: string;
   };
@@ -488,19 +484,15 @@ describe("Admin database maintenance on SQLite (real DB)", () => {
     const { tables, dbSize } = await stats();
     const names = tables.map((t) => t.table_name);
     expect(names).toContain(TABLE);
-    // SQLite's own tables and the sequence state stay out, as PostgreSQL's
-    // catalogs did.
+    // SQLite's own tables and the sequence state stay out.
     expect(names.some((n) => n.startsWith("sqlite_"))).toBe(false);
     expect(names).not.toContain("vision_sequences");
 
     const inflation = must(tables.find((t) => t.table_name === TABLE), "stats row");
-    expect(inflation).toMatchObject({
-      schemaname: "main",
-      live_rows: String(must(rows[0], "count").n),
-      dead_rows: "0",
-      last_autovacuum: null,
-      last_autoanalyze: null,
-    });
+    expect(inflation).toMatchObject({ live_rows: String(must(rows[0], "count").n) });
+    expect(Object.keys(inflation).sort()).toEqual(
+      ["last_analyze", "last_vacuum", "live_rows", "size", "size_bytes", "table_name"],
+    );
     for (const t of tables) {
       expect(t.live_rows).toMatch(/^\d+$/);
       expect(t.size_bytes).toMatch(/^\d+$/);

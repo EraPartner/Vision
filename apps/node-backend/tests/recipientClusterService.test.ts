@@ -6,7 +6,7 @@ import { partial } from './helpers/partial.ts';
 vi.mock('../src/database/connection.ts', () => mockConnection());
 
 import { query as rawQuery } from '../src/database/connection.ts';
-import type { PgQueryResult } from '../src/database/connection.ts';
+import type { DbQueryResult } from '../src/database/connection.ts';
 import { findRecipientClusters } from '../src/services/recipientClusterService.ts';
 
 const query = vi.mocked(rawQuery);
@@ -15,7 +15,7 @@ describe('recipientClusterService', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('loads a bounded recipient scan and builds only meaningful clusters', async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({
+    query.mockResolvedValueOnce(partial<DbQueryResult>({
       rows: [
         { id: 1, name: 'ALBERT HEIJN 123', default_category_id: 4 },
         { id: 2, name: 'ALBERT HEIJN 456', default_category_id: 4 },
@@ -39,7 +39,7 @@ describe('recipientClusterService', () => {
   });
 
   it('caps the result at 50 clusters in deterministic recipient order', async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({
+    query.mockResolvedValueOnce(partial<DbQueryResult>({
       rows: Array.from({ length: 51 }, (_, clusterIndex) => {
         const prefix = String(clusterIndex).padStart(4, '0');
         return [

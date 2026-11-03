@@ -43,7 +43,7 @@ import {
 } from "./runtime/ipc-schemas";
 import * as updater from "./updater";
 import { createRuntimeProvider } from "./runtime";
-import { LEGACY_POSTGRES_DATA_CODE, LOOPBACK_HOST } from "./runtime/native";
+import { LOOPBACK_HOST } from "./runtime/native";
 import {
   externalBrowserUrl,
   isAllowedPermissionCheck,
@@ -873,7 +873,6 @@ function loadErrorPage({ messageKey = "app.errorPageMessage" } = {}): void {
 // so startup errors can be diagnosed from userData/logs/main.log.
 function redactStartupDiagnostics(value: unknown): string {
   return (typeof value === "string" ? value : "")
-    .replace(/(postgres(?:ql)?:\/\/[^:\s/@]+:)[^@\s/]+(@)/gi, "$1***$2")
     .replace(/\x1b\[[0-9;]*m/g, "");
 }
 
@@ -1680,7 +1679,7 @@ const REJECT_SENDER = Symbol("reject-unauthorized-sender");
 
 // Paths blessed by a user-driven file-picker dialog. Only these can be passed
 // to `backup:restore` — prevents a compromised renderer from passing an
-// arbitrary filesystem path (e.g. /etc/passwd, malicious .sql) for restore.
+// arbitrary filesystem path (e.g. /etc/passwd) for restore.
 const ALLOWED_RESTORE_PATHS = new Set<string>();
 
 const ipcArgumentContracts = createIpcArgumentContracts({
@@ -1825,7 +1824,7 @@ registerHandler(
       filters: [
         {
           name: "Vision Backup Files",
-          extensions: ["visionbak", "visionbak.enc", "sqlite3", "sql", "enc"],
+          extensions: ["visionbak", "visionbak.enc", "sqlite3", "enc"],
         },
         { name: "All Files", extensions: ["*"] },
       ],
@@ -1892,8 +1891,8 @@ registerHandler(
     beginNativeMaintenance();
     stopHealthWatchdog();
     try {
-      // Route .visionbak / .visionbak.enc through the new bundle restore path;
-      // legacy .sql / .enc files fall through to the original runRestore.
+      // .visionbak / .visionbak.enc go through the bundle restore; a bare
+      // (optionally encrypted) SQLite database file through runRestore.
       const lower = resolved.toLowerCase();
       const isBundle =
         lower.endsWith(".visionbak") || lower.endsWith(".visionbak.enc");
@@ -2608,28 +2607,6 @@ async function cleanupLegacyAuditAfterMigration(
   });
 }
 
-/** The startup failure dialog's detail: the transition steps for Vision 2.0 data. */
-function startupFailureDetail(error: unknown): string {
-  if (
-    isObjectLike(error) &&
-    error.code === LEGACY_POSTGRES_DATA_CODE &&
-    typeof error.dataDirectory === "string" &&
-    typeof error.backups === "string" &&
-    typeof error.command === "string"
-  ) {
-    return t(
-      "app.legacyPostgresData",
-      {
-        dataDirectory: error.dataDirectory,
-        backups: error.backups,
-        command: error.command,
-      },
-      String(errorMessage(error)),
-    );
-  }
-  return String(errorMessage(error));
-}
-
 async function launch(): Promise<void> {
   const endLaunch = bootMark("launch");
 
@@ -2746,7 +2723,7 @@ async function launch(): Promise<void> {
         buttons: [t("common.ok", null, "OK")],
         title: APP_NAME,
         message: t("app.failedStart", null, "Vision could not start."),
-        detail: startupFailureDetail(error),
+        detail: String(errorMessage(error)),
       });
       app.quit();
       return;

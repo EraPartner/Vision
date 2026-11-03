@@ -106,7 +106,6 @@ interface BundleModule {
 interface OpenedBundle {
   metadata: Readonly<Record<string, unknown>>;
   databasePath: string | null;
-  dbSqlPath: string | null;
   frontendState: unknown;
   cleanup(): void;
 }
@@ -400,7 +399,6 @@ describe("populated portfolio import recovery backup", () => {
       schemaVersion: head,
       databaseSha256: snapshot.sha256,
     });
-    expect(opened.dbSqlPath).toBeNull();
     expect(opened.frontendState).toEqual(frontendState);
     const restoredFile = must(opened.databasePath, "opened.databasePath");
     // The gate every restore passes before the file is activated.

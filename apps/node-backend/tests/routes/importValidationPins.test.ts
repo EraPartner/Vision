@@ -121,7 +121,7 @@ import {
   categoryExists as rawCategoryExists,
 } from "../../src/repositories/importBatchRepository.ts";
 import { query as rawQuery } from "../../src/database/connection.ts";
-import type { PgQueryResult } from "../../src/database/connection.ts";
+import type { DbQueryResult } from "../../src/database/connection.ts";
 import rawCustomParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
 import { must } from "../helpers/must.ts";
 
@@ -866,7 +866,7 @@ describe("batch_id wire type", () => {
   const realBatchId = async () => {
     dbQuery.mockResolvedValueOnce({
       rows: [{ id: String(BATCH_ID) }],
-    } as PgQueryResult);
+    } as DbQueryResult);
     return createBatch({ adapterName: "vision" });
   };
 

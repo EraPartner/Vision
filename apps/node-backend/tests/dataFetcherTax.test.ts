@@ -17,7 +17,7 @@ vi.mock(
 );
 
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import {
   loadCurrentRates as rawLoadCurrentRates,
   __clearHistoricalIndexCache as clearHistoricalIndexCache,
@@ -70,9 +70,9 @@ describe("fetchTaxData — Belgian tax FX uses transaction-date rates (ADR-085)"
 
   it("converts a foreign-currency dividend at the rate on the transaction date, not today", async () => {
     query
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [dividendRow()] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [dividendRow()] }))
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [
             {
               currency_code: "USD",
@@ -94,12 +94,12 @@ describe("fetchTaxData — Belgian tax FX uses transaction-date rates (ADR-085)"
   it("uses the rate on-or-before the date when no exact-day rate exists (weekend convention)", async () => {
     query
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [dividendRow({ rate_date: "2024-03-16" })],
         }),
       ) // a Saturday
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [
             {
               currency_code: "USD",
@@ -119,9 +119,9 @@ describe("fetchTaxData — Belgian tax FX uses transaction-date rates (ADR-085)"
   it("falls back to the current rate when no historical rate exists on/before the date", async () => {
     query
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({ rows: [dividendRow({ taxes: 0 })] }),
+        partial<DbQueryResult>({ rows: [dividendRow({ taxes: 0 })] }),
       )
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] })); // nothing stored
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] })); // nothing stored
 
     const data = await fetchTaxData("EUR", { kind: "year", year: 2024 }, {});
 
@@ -131,7 +131,7 @@ describe("fetchTaxData — Belgian tax FX uses transaction-date rates (ADR-085)"
 
   it("leaves EUR rows untouched and skips the FX lookup entirely", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [dividendRow({ currency: "EUR", amount: 500, taxes: 30 })],
       }),
     );
@@ -146,7 +146,7 @@ describe("fetchTaxData — Belgian tax FX uses transaction-date rates (ADR-085)"
 
   it("accumulates decimal tax-report money without binary float drift", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [
           dividendRow({
             id: 11,
@@ -182,7 +182,7 @@ describe("fetchTaxData — Belgian tax FX uses transaction-date rates (ADR-085)"
 
   it("computes gross and net dividend totals from each row's explicit convention", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [
           dividendRow({
             id: 21,
@@ -212,7 +212,7 @@ describe("fetchTaxData — Belgian tax FX uses transaction-date rates (ADR-085)"
 
   it("marks convention-dependent dividend totals incomplete when any row is unknown", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [
           dividendRow({
             currency: "EUR",
@@ -235,11 +235,11 @@ describe("fetchTaxData — Belgian tax FX uses transaction-date rates (ADR-085)"
     // KRW has neither a stored historical rate nor a current rate.
     query
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [dividendRow({ currency: "KRW", amount: 1000, taxes: 0 })],
         }),
       )
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] })); // no historical rate stored for KRW
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] })); // no historical rate stored for KRW
 
     const data = await fetchTaxData("EUR", { kind: "year", year: 2024 }, {});
 
@@ -256,7 +256,7 @@ describe("fetchTaxData — Belgian tax FX uses transaction-date rates (ADR-085)"
     // "Capital Gains / Sell Tax" label (materially misleading with CGT at 0%
     // through 2025) while the TOB line under-reported the whole sell side.
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [
           dividendRow({
             id: 2,
@@ -287,7 +287,7 @@ it("keeps paired in-kind source amount and costs separate from ordinary dividend
   vi.clearAllMocks();
   clearHistoricalIndexCache();
   query.mockResolvedValueOnce(
-    partial<PgQueryResult>({
+    partial<DbQueryResult>({
       rows: [
         dividendRow({
           currency: "EUR",
@@ -316,7 +316,7 @@ it("surfaces a row contract mismatch instead of skipping the tax sections", asyn
   vi.clearAllMocks();
   clearHistoricalIndexCache();
   query.mockResolvedValueOnce(
-    partial<PgQueryResult>({
+    partial<DbQueryResult>({
       rows: [{ ...dividendRow({ currency: "EUR" }), amount: 10 }],
     }),
   );
@@ -326,7 +326,7 @@ it("surfaces a row contract mismatch instead of skipping the tax sections", asyn
 });
 
 it('includes annual PIT only for the same explicit report year', async () => {
-  query.mockResolvedValue(partial<PgQueryResult>({ rows: [] }));
+  query.mockResolvedValue(partial<DbQueryResult>({ rows: [] }));
   loadCurrentRates.mockResolvedValue({ EUR: 1 });
   const options = { taxProfile: { taxYear: 2024 }, precomputedPIT: { totalTax: 250 } };
   const annual = await fetchTaxData('USD', { kind: 'year', year: 2024 }, options);
@@ -344,7 +344,7 @@ it('rejects unavailable tax transactions instead of reporting zero tax', async (
 });
 
 it('keeps genuine empty tax activity as zero totals', async () => {
-  query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+  query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
   loadCurrentRates.mockResolvedValue({ EUR: 1 });
   const report = await fetchTaxData('EUR', { kind: 'year', year: 2024 });
   expect(report.tobTotal).toBe(0);

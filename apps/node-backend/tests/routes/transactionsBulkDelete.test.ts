@@ -63,7 +63,7 @@ import {
   getClient as rawGetClient,
   query as rawQuery,
 } from "../../src/database/connection.ts";
-import type { PgQueryResult } from "../../src/database/connection.ts";
+import type { DbQueryResult } from "../../src/database/connection.ts";
 import { scheduleReconcile } from "../../src/services/transferReconciliationService.ts";
 import { must } from "../helpers/must.ts";
 import { loose } from "../helpers/partial.ts";
@@ -173,7 +173,7 @@ describe("POST /bulk-delete — filter-mode", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("rejects filter requests that exceed the cap", async () => {
-    dbQuery.mockResolvedValueOnce({ rows: [{ n: 6000 }] } as PgQueryResult);
+    dbQuery.mockResolvedValueOnce({ rows: [{ n: 6000 }] } as DbQueryResult);
 
     await bulkDelete({
       filter: { search: "big" },
@@ -185,10 +185,10 @@ describe("POST /bulk-delete — filter-mode", () => {
 
   it("resolves filter to ids and deletes them", async () => {
     dbQuery
-      .mockResolvedValueOnce({ rows: [{ n: 2 }] } as PgQueryResult) // count
+      .mockResolvedValueOnce({ rows: [{ n: 2 }] } as DbQueryResult) // count
       .mockResolvedValueOnce({
         rows: [{ id: 11 }, { id: 22 }],
-      } as PgQueryResult); // ids
+      } as DbQueryResult); // ids
 
     const clientQuery = vi
       .fn<(sql: string, params?: unknown[]) => unknown>()
@@ -214,7 +214,7 @@ describe("POST /bulk-delete — filter-mode", () => {
 
   it("reports selection drift to zero without scheduling reconciliation", async () => {
     dbQuery
-      .mockResolvedValueOnce({ rows: [{ n: 0 }] } as PgQueryResult)
+      .mockResolvedValueOnce({ rows: [{ n: 0 }] } as DbQueryResult)
       .mockResolvedValueOnce({ rows: [], rowCount: 0 });
     const clientQuery = vi
       .fn<(sql: string, params?: unknown[]) => unknown>()

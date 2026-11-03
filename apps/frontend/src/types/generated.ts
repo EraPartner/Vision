@@ -5180,19 +5180,14 @@ export interface components {
             message: string;
         };
         DbTableStat: {
-            schemaname: string;
             table_name: string;
-            /** @description BIGINT estimate from pg_stat_user_tables, as decimal text */
+            /** @description Exact row count (count(*)), as decimal text */
             live_rows: string;
-            /** @description BIGINT estimate from pg_stat_user_tables, as decimal text */
-            dead_rows: string;
-            /** @description Last manual VACUUM (pg_stat_user_tables.last_vacuum as text) */
+            /** @description When this backend last ran VACUUM (ISO 8601) */
             last_vacuum: string | null;
-            last_autovacuum: string | null;
-            /** @description Last manual ANALYZE (pg_stat_user_tables.last_analyze as text) */
+            /** @description When this backend last ran ANALYZE on the table (ISO 8601) */
             last_analyze: string | null;
-            last_autoanalyze: string | null;
-            /** @description pg_size_pretty of the total relation size */
+            /** @description Human-readable size of the table and its indexes */
             size: string;
             /** @description BIGINT byte count, as decimal text */
             size_bytes: string;

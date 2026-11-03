@@ -8,7 +8,7 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () =>
 );
 
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import { convertRowsToEur as rawConvertRowsToEur } from "../src/services/currency/currencyConversionService.ts";
 import { tagInsightsRepository } from "../src/repositories/infoRepositoryTags.ts";
 import { partial } from "./helpers/partial.ts";
@@ -29,7 +29,7 @@ describe("tagInsightsRepository.getTagPivot id validation", () => {
   });
 
   it("retains a selected tag at the int4 ceiling", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
     convertRowsToEur.mockResolvedValueOnce([]);
 
     await tagInsightsRepository.getTagPivot({ tagIds: [2147483647] });

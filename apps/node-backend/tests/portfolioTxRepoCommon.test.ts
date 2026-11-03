@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mockConnection } from "./helpers/repoMocks.ts";
 import { partial } from "./helpers/partial.ts";
-import { portfolioUnitEventDbRow } from "./helpers/portfolioPgRows.ts";
+import { portfolioUnitEventDbRow } from "./helpers/portfolioRowFixtures.ts";
 import type { PortfolioUnitEventDbRow } from "../src/database/rows/portfolio.ts";
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import {
   __resetPortfolioTransactionSchemaCache,
 } from "../src/repositories/portfolioTxRepo.common.ts";
@@ -338,7 +338,7 @@ describe("validateSellUnitsAvailability", () => {
 
   it("passes when sell units fit available holdings", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [unitEvent({ type: "buy", units: "10" })],
       }),
     );
@@ -355,7 +355,7 @@ describe("validateSellUnitsAvailability", () => {
 
   it("throws VALIDATION_ERROR when exceeds available holdings", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [unitEvent({ type: "buy", units: "5" })],
       }),
     );
@@ -377,7 +377,7 @@ describe("validateSellUnitsAvailability", () => {
     // Buy 10 → 2:1 split (row units = 20 new total). Held = 20, so selling 20 is
     // valid. The old flat SUM ignored the split and saw only 10 → wrong reject.
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [
           unitEvent({ type: "buy", units: "10" }),
           unitEvent({ type: "split", units: "20" }),
@@ -400,7 +400,7 @@ describe("validateSellUnitsAvailability", () => {
     // total (matches the canonical core, which requires units already held).
     // Held = 0, so any sell is an oversell and must be rejected.
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [unitEvent({ type: "split", units: "20" })],
       }),
     );
@@ -417,7 +417,7 @@ describe("validateSellUnitsAvailability", () => {
 
   it("subtracts prior sells and ignores return_of_capital for units", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [
           unitEvent({ type: "buy", units: "10" }),
           unitEvent({ type: "sell", units: "4" }),
@@ -440,7 +440,7 @@ describe("validateSellUnitsAvailability", () => {
   it("rejects reassigning a buy when that newly oversells a later broker partition", async () => {
     query
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [
             unitEvent({
               id: "1",
@@ -467,7 +467,7 @@ describe("validateSellUnitsAvailability", () => {
         }),
       )
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [{ display_name: "Broker A", name: "Broker" }],
         }),
       );
@@ -495,7 +495,7 @@ describe("validateSellUnitsAvailability", () => {
     // transaction 7 must not drop asset transfer 7 from the history.
     query
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [
             unitEvent({
               id: "1",
@@ -524,7 +524,7 @@ describe("validateSellUnitsAvailability", () => {
         }),
       )
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [{ display_name: "Broker A", name: "Broker" }],
         }),
       );
@@ -548,7 +548,7 @@ describe("validateSellUnitsAvailability", () => {
 
   it("allows an unchanged edit when legacy data is already oversold", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [
           unitEvent({
             id: "1",
@@ -584,7 +584,7 @@ describe("validateSellUnitsAvailability", () => {
   it("rejects creating a reverse split that oversells a later broker sale", async () => {
     query
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [
             unitEvent({
               id: "1",
@@ -604,7 +604,7 @@ describe("validateSellUnitsAvailability", () => {
         }),
       )
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [{ display_name: "Broker A", name: "Broker" }],
         }),
       );
@@ -628,7 +628,7 @@ describe("validateSellUnitsAvailability", () => {
   it("surfaces a broken account-label row instead of masking it as a lookup miss", async () => {
     query
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [
             unitEvent({ id: "1", type: "buy", units: "10", account_id: asAccountId(1) }),
             unitEvent({
@@ -643,7 +643,7 @@ describe("validateSellUnitsAvailability", () => {
       )
       // `accounts.name` is NOT NULL; a row without it breaks the contract.
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({ rows: [{ display_name: "Broker A" }] }),
+        partial<DbQueryResult>({ rows: [{ display_name: "Broker A" }] }),
       );
 
     await expect(
@@ -661,7 +661,7 @@ describe("validateSellUnitsAvailability", () => {
   it("rejects deleting a buy that a later broker sale depends on", async () => {
     query
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [
             unitEvent({
               id: "1",
@@ -688,7 +688,7 @@ describe("validateSellUnitsAvailability", () => {
         }),
       )
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({
+        partial<DbQueryResult>({
           rows: [{ display_name: "Broker A", name: "Broker" }],
         }),
       );

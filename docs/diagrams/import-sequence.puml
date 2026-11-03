@@ -10,7 +10,7 @@ actor User
 participant "ImportPage / ImportReviewPage\nlib/api/imports.ts" as Frontend
 participant "routes/importRoutes.ts" as Route
 participant "importPipeline\nindex.ts + stage / validate / match / commit" as Pipeline
-database "PostgreSQL\nbatches, staging rows, canonical ledger" as DB
+database "SQLite\nbatches, staging rows, canonical ledger" as DB
 participant "Post-commit services" as Derived
 
 group 1. Prepare the uploaded rows

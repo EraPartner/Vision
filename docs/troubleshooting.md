@@ -29,14 +29,11 @@ Vision has no database server. The backend opens `<userData>/database/vision.sql
 
 1. Open logs from the recovery screen and inspect `backend.log`
    (`native/<runtime id>/logs/backend.log`).
-2. If the dialog says Vision found data from Vision 2.0 (`LEGACY_POSTGRES_DATA`), the old
-   PostgreSQL data is still in `native/vision/postgres/data` and nothing was changed. Follow
-   [[docs/guides/sqlite-transition|Moving Vision 2.0 data to SQLite]].
-3. If the log says the SQLite library is too old, the Mac needs macOS 13 or later (SQLite 3.39.0
+2. If the log says the SQLite library is too old, the Mac needs macOS 13 or later (SQLite 3.39.0
    or later).
-4. If payload verification fails, reinstall the same Vision release. Runtime data and attachments
+3. If payload verification fails, reinstall the same Vision release. Runtime data and attachments
    live outside `Vision.app` and must not be deleted.
-5. From a prepared checkout, run `bun run native:isolated-smoke`.
+4. From a prepared checkout, run `bun run native:isolated-smoke`.
 
 Do not reset the database merely to make startup succeed.
 
@@ -129,8 +126,7 @@ Never print the passphrase. A signed and notarized production build provides the
 | ----------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `INVALID_PASSPHRASE`                | Encrypted backup authentication failed            | Re-enter the passphrase; do not modify the bundle                                                                                             |
 | `BUNDLE_SCHEMA_NEWER`               | Backup was created by a newer schema              | Upgrade Vision before restoring                                                                                                               |
-| `BACKUP_POSTGRESQL_V2`              | Backup is a Vision 2.0 PostgreSQL backup          | Convert it once with `bun run transition:v2 -- <backup> --to-backup <new.visionbak>` ([[docs/guides/sqlite-transition\|Moving Vision 2.0 data to SQLite]]) |
-| `LEGACY_POSTGRES_DATA`              | Vision 2.0 data exists and no SQLite database yet | Follow [[docs/guides/sqlite-transition\|Moving Vision 2.0 data to SQLite]]; do not delete the old data directory |
+| `BACKUP_FORMAT_UNSUPPORTED`         | Backup uses an older backup format                | Vision 2.0 backups: convert with the transition script at commit `dd4cc71` (`--to-backup <new.visionbak>`)                                    |
 | `PRE_MIGRATION_BACKUP_FAILED`       | The copy before a migration could not be written  | Free disk space or fix permissions in `database/`, then start Vision again; nothing was migrated                                              |
 | `PORT_COLLISION`                    | An unknown process owns the backend loopback port | Identify and stop the exact process or choose a valid development port                                                                        |
 | `APP_ERROR`                         | Sanitized backend failure                         | Correlate the request ID with structured logs                                                                                                 |

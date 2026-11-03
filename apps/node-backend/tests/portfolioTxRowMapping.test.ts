@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { asPortfolioTransactionId } from "@vision/types/brands";
-import { portfolioTransactionDbRow } from "./helpers/portfolioPgRows.ts";
+import { portfolioTransactionDbRow } from "./helpers/portfolioRowFixtures.ts";
 import { mockConnection } from "./helpers/repoMocks.ts";
 
 vi.mock("../src/database/connection.ts", () => mockConnection());

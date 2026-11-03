@@ -2082,48 +2082,36 @@ components:
       type: object
       required:
         [
-          schemaname,
           table_name,
           live_rows,
-          dead_rows,
           last_vacuum,
-          last_autovacuum,
           last_analyze,
-          last_autoanalyze,
           size,
           size_bytes,
         ]
       properties:
-        schemaname: { type: string }
         table_name: { type: string }
         live_rows:
           {
             type: string,
-            description: "BIGINT estimate from pg_stat_user_tables, as decimal text",
-          }
-        dead_rows:
-          {
-            type: string,
-            description: "BIGINT estimate from pg_stat_user_tables, as decimal text",
+            description: "Exact row count (count(*)), as decimal text",
           }
         last_vacuum:
           {
             type: string,
             nullable: true,
-            description: Last manual VACUUM (pg_stat_user_tables.last_vacuum as text),
+            description: When this backend last ran VACUUM (ISO 8601), null until then,
           }
-        last_autovacuum: { type: string, nullable: true }
         last_analyze:
           {
             type: string,
             nullable: true,
-            description: Last manual ANALYZE (pg_stat_user_tables.last_analyze as text),
+            description: When this backend last ran ANALYZE on the table (ISO 8601), null until then,
           }
-        last_autoanalyze: { type: string, nullable: true }
         size:
           {
             type: string,
-            description: pg_size_pretty of the total relation size,
+            description: Human-readable size of the table and its indexes,
           }
         size_bytes:
           { type: string, description: "BIGINT byte count, as decimal text" }

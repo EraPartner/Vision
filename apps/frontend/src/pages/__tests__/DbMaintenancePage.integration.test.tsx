@@ -21,14 +21,10 @@ const statsWithTable = {
     db_size: "14 MB",
     tables: [
         {
-            schemaname: "public",
             table_name: "transactions",
             live_rows: "1234",
-            dead_rows: "5",
-            last_vacuum: null,
-            last_autovacuum: "2025-01-01T00:00:00.000Z",
-            last_analyze: null,
-            last_autoanalyze: "2025-01-01T00:00:00.000Z",
+            last_vacuum: "2025-01-01T00:00:00.000Z",
+            last_analyze: "2025-01-01T00:00:00.000Z",
             size: "4096 kB",
             size_bytes: "4194304",
         },

@@ -32,12 +32,11 @@ import type {
   MonitorRunRow,
 } from "../database/rows/analysis.ts";
 import {
-  ANALYSIS_SQL_NEEDS_REVIEW,
   monitorRunIdOf,
   runSavedAnalysis,
 } from "./savedAnalysisService.ts";
 import { valueText } from "./valueText.ts";
-import { errorCode, errorMessage } from "../lib/errors.ts";
+import { errorMessage } from "../lib/errors.ts";
 import { isRecord } from "../lib/typeGuards.ts";
 
 /** A stored observation, or the latest one as `MONITOR_SELECT` embeds it. */
@@ -703,15 +702,6 @@ async function inspectAnalysis(row: MonitorRow): Promise<MonitorFinding> {
     });
     runId = response.runId;
   } catch (caught) {
-    // Custom SQL saved for PostgreSQL is not executed until the user saves a
-    // SQLite version (ADR-263); runSavedAnalysis refuses it before any run.
-    if (errorCode(caught) === ANALYSIS_SQL_NEEDS_REVIEW)
-      return {
-        status: "stale",
-        reasonCode: "analysis-needs-review",
-        reason:
-          "The saved analysis has custom SQL written for PostgreSQL; review it and save a SQLite version before monitors can run it.",
-      };
     // runSavedAnalysis rethrows the execution Error tagged with its run id.
     const monitorRunId = monitorRunIdOf(caught);
     const failedRun = monitorRunId

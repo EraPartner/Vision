@@ -34,7 +34,7 @@ import {
   withReadSnapshot,
   withTransaction,
 } from "../database/connection.ts";
-import type { PgPoolClient } from "../database/connection.ts";
+import type { DbClient } from "../database/connection.ts";
 import { logger } from "../config/logger.ts";
 import { scheduleAggregationRefresh } from "./aggregationRefresh.ts";
 import {
@@ -1137,7 +1137,7 @@ function boundParams(statement: MutationSql): unknown[] {
  * columns) change it after RETURNING has already been produced.
  */
 async function readBack(
-  client: PgPoolClient,
+  client: DbClient,
   table: string,
   row: Record<string, unknown> | undefined,
   ctx: MutationCtx,
@@ -1156,7 +1156,7 @@ async function readBack(
  * @param table must already be catalog-resolved (resolveEditableTable)
  */
 async function applyOne(
-  client: PgPoolClient,
+  client: DbClient,
   table: string,
   change: Change,
   ctx: MutationCtx,
@@ -1324,7 +1324,7 @@ function mapDbError(error: unknown, table?: string): unknown {
   if (error instanceof AppError) return error;
 
   const err = error as DbDriverError | null | undefined;
-  const detail = err?.detail ? { pgDetail: err.detail } : undefined;
+  const detail = err?.detail ? { dbDetail: err.detail } : undefined;
   switch (err?.code) {
     case "23502": // not_null_violation
       return new ValidationError(`Column "${err.column}" cannot be empty`, {

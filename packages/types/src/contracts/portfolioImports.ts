@@ -14,7 +14,7 @@ const CountSchema = z.number().int().nonnegative();
 /** A BIGSERIAL/BIGINT id: node-postgres returns it as a digit string. */
 const BigintIdStringSchema = z.string().regex(/^[1-9]\d*$/);
 /** A NUMERIC column left as node-postgres's decimal string. */
-const PgNumericStringSchema = z.string().regex(/^-?\d+(\.\d+)?$/);
+const NumericStringSchema = z.string().regex(/^-?\d+(\.\d+)?$/);
 
 /**
  * A saved parser config (customParserConfigRepository.mapRow). The stored
@@ -51,13 +51,13 @@ export const PortfolioPreviewRowSchema = z.looseObject({
   type_raw: z.string().nullable(),
   symbol_raw: z.string().nullable(),
   name_raw: z.string().nullable(),
-  units: PgNumericStringSchema.nullable(),
-  price_per_unit: PgNumericStringSchema.nullable(),
-  amount: PgNumericStringSchema.nullable(),
-  fees: PgNumericStringSchema.nullable(),
-  taxes: PgNumericStringSchema.nullable(),
+  units: NumericStringSchema.nullable(),
+  price_per_unit: NumericStringSchema.nullable(),
+  amount: NumericStringSchema.nullable(),
+  fees: NumericStringSchema.nullable(),
+  taxes: NumericStringSchema.nullable(),
   currency: z.string().nullable(),
-  fx_rate_to_eur: PgNumericStringSchema.nullable(),
+  fx_rate_to_eur: NumericStringSchema.nullable(),
   note: z.string().nullable(),
   match_source: z.string().nullable(),
   error_message: z.string().nullable(),

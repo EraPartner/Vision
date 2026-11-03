@@ -120,8 +120,8 @@ database copy alone is not a complete Vision backup.
 Native packaged updates install a verified macOS release artifact after creating a pre-update
 backup. The backend also copies the database to `pre-migration-backups/` before it applies pending
 migrations at launch, whichever way the app was installed, and does not start when that copy fails
-([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). Vision 2.0 data moves once through
-[[docs/guides/sqlite-transition|the transition script]]. Source runs are operator-managed. See
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). This version does not read Vision 2.0
+data. Source runs are operator-managed. See
 [[docs/features/application-updates|Application Updates]].
 
 ## Monitoring

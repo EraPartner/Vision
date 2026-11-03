@@ -56,7 +56,7 @@ import { must } from "./helpers/must.ts";
 import { mockOf } from "./helpers/mockOf.ts";
 const accountRepository = vi.mocked(rawAccountRepository);
 
-const pgErr = (code: string) => Object.assign(new Error(code), { code });
+const dbErr = (code: string) => Object.assign(new Error(code), { code });
 const emptyBalanceAccount = (id: number) => ({
   id,
   computed_balance: 0,
@@ -92,7 +92,7 @@ describe("accountService.create", () => {
   });
 
   it("maps a unique-violation (23505) to ConflictError", async () => {
-    accountRepository.create.mockRejectedValueOnce(pgErr("23505"));
+    accountRepository.create.mockRejectedValueOnce(dbErr("23505"));
     await expect(accountService.create({ name: "KBC" })).rejects.toThrow(
       ConflictError,
     );
@@ -124,7 +124,7 @@ describe("accountService.create", () => {
     accountRepository.getById.mockResolvedValueOnce(
       partial<AccountRow>({ id: 7 }),
     ); // passes the existence pre-check
-    accountRepository.create.mockRejectedValueOnce(pgErr("23503")); // lost a race with a delete
+    accountRepository.create.mockRejectedValueOnce(dbErr("23503")); // lost a race with a delete
     await expect(
       accountService.create({ name: "KBC", funding_account_id: 7 }),
     ).rejects.toThrow(ValidationError);
@@ -549,7 +549,7 @@ describe("accountService — sanitize pins (update)", () => {
 
 describe("accountService.remove", () => {
   it("maps a FK violation (23503) to ConflictError (archive instead)", async () => {
-    accountRepository.remove.mockRejectedValueOnce(pgErr("23503"));
+    accountRepository.remove.mockRejectedValueOnce(dbErr("23503"));
     await expect(accountService.remove(asAccountId(1))).rejects.toThrow(ConflictError);
   });
 

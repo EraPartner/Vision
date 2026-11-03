@@ -27,21 +27,21 @@ import {
   query as rawQuery,
   queryPrepared as rawQueryPrepared,
 } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import { convertRowsToEur as rawConvertRowsToEur } from "../src/services/currency/currencyConversionService.ts";
 import { mvAvailable as rawMvAvailable } from "../src/repositories/infoRepositoryHelpers.ts";
 import { statisticsRepository } from "../src/repositories/infoRepositoryStatistics.ts";
 import { must } from "./helpers/must.ts";
 
 const query = rawQuery as unknown as Mock<
-  (text: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
+  (text: string, params?: readonly unknown[]) => Promise<Partial<DbQueryResult>>
 >;
 const queryPrepared = rawQueryPrepared as unknown as Mock<
   (
     name: string,
     text: string,
     params?: readonly unknown[],
-  ) => Promise<Partial<PgQueryResult>>
+  ) => Promise<Partial<DbQueryResult>>
 >;
 const convertRowsToEur = mockedConvertRowsToEur(rawConvertRowsToEur);
 const mvAvailable = vi.mocked(rawMvAvailable);

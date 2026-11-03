@@ -145,12 +145,9 @@ SQL validation refuses writes, `ATTACH`, `DETACH`, `PRAGMA`, transaction words, 
 is `query_only` and holds only the copied views, so other tables and the database file are out of
 reach.
 
-Custom SQL saved before [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] was written for
-PostgreSQL. Such an analysis shows a **Needs review** badge in the saved list and a message on the
-selected analysis, and Refresh is disabled. Running it returns `409 ANALYSIS_SQL_NEEDS_REVIEW`
-and records no run. Saving it again from the SQL editor stores it as SQLite SQL and clears the
-flag. Monitors on such an analysis record status `stale` with reason code
-`analysis-needs-review`.
+Custom SQL saved by Vision 2.0 was written for PostgreSQL. It runs as SQLite SQL and fails where
+the dialects differ; edit it in the SQL editor
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]).
 
 Running custom SQL records a local ten-query history. Editing generated SQL changes the saved source
 to `custom-sql`; the original saved visual definition remains an immutable earlier version, and a

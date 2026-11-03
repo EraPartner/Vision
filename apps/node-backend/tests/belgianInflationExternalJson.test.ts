@@ -15,8 +15,8 @@ import {
   query as rawQuery,
 } from "../src/database/connection.ts";
 import type {
-  PgPoolClient,
-  PgQueryResult,
+  DbClient,
+  DbQueryResult,
 } from "../src/database/connection.ts";
 import {
   clearInflationMemoryCache,
@@ -37,7 +37,7 @@ const fact = (Month: string, cpi: string) => ({
   "Consumer price index": cpi,
 });
 
-const storedRows = partial<PgQueryResult>({
+const storedRows = partial<DbQueryResult>({
   rows: [{ month_date: new Date(2023, 11, 1), monthly_rate: "0.00150000" }],
 });
 
@@ -45,10 +45,10 @@ describe("belgianInflationService with unexpected provider JSON", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getClient.mockResolvedValue(
-      loose<PgPoolClient>({ query, release: vi.fn() }),
+      loose<DbClient>({ query, release: vi.fn() }),
     );
     clearInflationMemoryCache();
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValue(partial<DbQueryResult>({ rows: [] }));
   });
 
   afterEach(() => {

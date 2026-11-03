@@ -45,7 +45,7 @@ import * as N from "./sqlite/numeric.ts";
 import { TABLE_WRITE_INFO } from "./schemaMap.generated.ts";
 import type { TableWriteInfo } from "./schemaMap.generated.ts";
 import { canonicalJsonbValue } from "./sqlite/jsonbValue.ts";
-import { canonicalTimestamp, dateInputText, formatInstant, instantFromDate } from "./sqlite/pgTime.ts";
+import { canonicalTimestamp, dateInputText, formatInstant, instantFromDate } from "./sqlite/timestamps.ts";
 import { booleanInput } from "./sqlite/values.ts";
 
 /** Canonical decimal text for a value bound to NUMERIC(p, s). */

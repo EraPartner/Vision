@@ -8,9 +8,7 @@
  *   attachments/         — mirrors ATTACHMENTS_DIR tree (present when attachments exist)
  *   frontend-state.json  — localStorage snapshot { keys: { … } }
  *
- * Bundle format 1 (Vision 2.0 and earlier) carried a PostgreSQL `db.sql`
- * dump instead. openBundle still extracts such a bundle so the caller can
- * name the transition path; nothing in the desktop app parses db.sql.
+ * Older bundle formats are refused (BACKUP_FORMAT_UNSUPPORTED).
  *
  * Encryption (optional): new bundles use AES-256-GCM with a per-file salt,
  * nonce, and authentication tag. Retired v1 AES-256-CBC bundles are refused.
@@ -81,9 +79,6 @@ export const BUNDLE_VERSION = 2;
 /** Bundle member holding the SQLite database (format 2). */
 export const BUNDLE_DATABASE_MEMBER = "db.sqlite3";
 
-/** Bundle member holding Vision 2.0's PostgreSQL dump (format 1). */
-export const LEGACY_BUNDLE_DUMP_MEMBER = "db.sql";
-
 const SQLITE_MAGIC = Buffer.from("SQLite format 3\0", "latin1");
 
 /**
@@ -121,10 +116,8 @@ export interface CreateBundleOptions {
 
 export interface OpenedBundle {
   metadata: BundleMetadata;
-  /** The extracted db.sqlite3; null for a Vision 2.0 (format 1) bundle. */
-  databasePath: string | null;
-  /** The extracted Vision 2.0 db.sql; null for a SQLite bundle. Never parsed here. */
-  dbSqlPath: string | null;
+  /** The extracted db.sqlite3. */
+  databasePath: string;
   attachmentsDir: string | null;
   frontendState: unknown;
   cleanup: () => void;
@@ -278,7 +271,7 @@ export async function encryptBundle(
 
 /**
  * Peek at the first bytes of a file to check for the encryption magic header.
- * Works for both .visionbak.enc (new) and .sql.enc (legacy) files.
+ * Works for .visionbak.enc bundles and single encrypted files.
  */
 export async function isBundleEncrypted(filePath: string): Promise<boolean> {
   return isEncryptedFile(filePath, [BUNDLE_ENC_MAGIC, BUNDLE_ENC_MAGIC_V2]);
@@ -468,16 +461,19 @@ export async function openBundle(
       throw new Error("Bundle is missing metadata.json — file may be corrupt.");
     }
 
-    // db.sqlite3 is required; a Vision 2.0 bundle carries db.sql instead,
-    // which only the caller's refusal message ever looks at.
-    const databaseCandidate = path.join(tmpDir, BUNDLE_DATABASE_MEMBER);
-    const dumpCandidate = path.join(tmpDir, LEGACY_BUNDLE_DUMP_MEMBER);
-    const databasePath = fs.existsSync(databaseCandidate)
-      ? databaseCandidate
-      : null;
-    const dbSqlPath =
-      !databasePath && fs.existsSync(dumpCandidate) ? dumpCandidate : null;
-    if (!databasePath && !dbSqlPath) {
+    // db.sqlite3 is required. A bundle of an older format holds no SQLite
+    // database and is refused by its declared format.
+    const databasePath = path.join(tmpDir, BUNDLE_DATABASE_MEMBER);
+    if (!fs.existsSync(databasePath)) {
+      const format = metadata.bundleVersion;
+      if (typeof format === "number" && format < BUNDLE_VERSION) {
+        throw Object.assign(
+          new Error(
+            `This backup uses backup format ${format}, which this version of Vision cannot restore.`,
+          ),
+          { code: "BACKUP_FORMAT_UNSUPPORTED" },
+        );
+      }
       throw new Error(
         `Bundle is missing ${BUNDLE_DATABASE_MEMBER} — file may be corrupt.`,
       );
@@ -504,7 +500,6 @@ export async function openBundle(
     return {
       metadata,
       databasePath,
-      dbSqlPath,
       attachmentsDir,
       frontendState,
       cleanup,

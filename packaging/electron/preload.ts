@@ -118,13 +118,13 @@ const electronBackup: ElectronBackupBridge = {
   selectDir: () => ipcRenderer.invoke("backup:select-dir"),
 
   /**
-   * Open the system file-picker dialog to choose a .sql backup file to restore.
+   * Open the system file-picker dialog to choose a backup file to restore.
    */
   selectFile: () => ipcRenderer.invoke("backup:select-file"),
 
   /**
    * Restore from a backup file.  Accepts .visionbak, .visionbak.enc (new bundle
-   * format) or legacy .sql / .enc files. When the file is encrypted, supply
+   * format) or a bare SQLite database file (.sqlite3, or .enc when encrypted). When the file is encrypted, supply
    * `opts.passphrase` to decrypt it.
    */
   restoreBackup: (filePath, opts) =>

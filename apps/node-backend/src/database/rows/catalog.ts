@@ -10,15 +10,15 @@
  */
 import { z } from "zod";
 import {
-  pgBigint,
-  pgCategoryId,
-  pgDate,
-  pgInt,
-  pgNumeric,
-  pgRecipientId,
-  pgTagId,
-  pgTimestamptz,
-  pgTransactionId,
+  dbBigint,
+  dbCategoryId,
+  dbDate,
+  dbInt,
+  dbNumeric,
+  dbRecipientId,
+  dbTagId,
+  dbTimestamptz,
+  dbTransactionId,
 } from "../rowSchemas.ts";
 
 // ---------------------------------------------------------------------------
@@ -40,15 +40,15 @@ export { requireRow } from "../rowContracts.ts";
 /** A row of `categories` as returned by `SELECT *` / `RETURNING *`. */
 export const categoryRowSchema = z
   .object({
-    id: pgCategoryId,
+    id: dbCategoryId,
     general: z.string(),
     detail: z.string(),
     description: z.string().nullable(),
     is_active: z.boolean(),
-    created_at: pgTimestamptz.nullable(),
-    updated_at: pgTimestamptz,
+    created_at: dbTimestamptz.nullable(),
+    updated_at: dbTimestamptz,
     /** Hierarchy parent (self-referencing). */
-    parent_id: pgCategoryId.nullable(),
+    parent_id: dbCategoryId.nullable(),
     name: z.string(),
     hierarchy_only: z.boolean(),
     legacy_compatible: z.boolean(),
@@ -64,15 +64,15 @@ export type CategoryRow = z.output<typeof categoryRowSchema>;
  */
 export const categoryNodeRowSchema = z
   .object({
-    id: pgCategoryId,
+    id: dbCategoryId,
     name: z.string(),
-    parent_id: pgCategoryId.nullable(),
+    parent_id: dbCategoryId.nullable(),
     /** Root-first id path from the recursive view; never NULL for a joined row. */
-    ids: z.array(pgCategoryId),
+    ids: z.array(dbCategoryId),
     names: z.array(z.string()),
     path_name: z.string(),
     /** `json_array_length(ids)`: INTEGER. */
-    depth: pgInt,
+    depth: dbInt,
     description: z.string().nullable(),
     is_active: z.boolean(),
     hierarchy_only: z.boolean(),
@@ -83,23 +83,23 @@ export type CategoryNodeRow = z.output<typeof categoryNodeRowSchema>;
 
 /** `SELECT id,is_active FROM categories` (parent check). */
 export const categoryActiveRowSchema = z
-  .object({ id: pgCategoryId, is_active: z.boolean() })
+  .object({ id: dbCategoryId, is_active: z.boolean() })
   .describe("category active row");
 
 /** The next AUTOINCREMENT id of `categories`: an INTEGER expression. */
 export const categoryNextIdRowSchema = z
-  .object({ id: pgCategoryId })
+  .object({ id: dbCategoryId })
   .describe("category next id row");
 
 /** `categoryRepository.getCount`: a bare `count(*)`, so a number. */
 export const categoryCountRowSchema = z
-  .object({ count: pgInt })
+  .object({ count: dbInt })
   .describe("category count row");
 
 /** The merge participants' projection. */
 export const categoryMergeNodeRowSchema = z
   .object({
-    id: pgCategoryId,
+    id: dbCategoryId,
     is_active: z.boolean(),
     general: z.string(),
     detail: z.string(),
@@ -123,16 +123,16 @@ export const categoryReferenceRowSchema = z
 /** A row of `recipients` as returned by `SELECT *` / `SELECT r.*`. */
 export const recipientRowSchema = z
   .object({
-    id: pgRecipientId,
+    id: dbRecipientId,
     name: z.string(),
     normalized_name: z.string(),
-    default_category_id: pgCategoryId.nullable(),
+    default_category_id: dbCategoryId.nullable(),
     /** Merge target (self-referencing). */
-    primary_recipient_id: pgRecipientId.nullable(),
+    primary_recipient_id: dbRecipientId.nullable(),
     notes: z.string().nullable(),
     is_active: z.boolean(),
-    created_at: pgTimestamptz.nullable(),
-    updated_at: pgTimestamptz,
+    created_at: dbTimestamptz.nullable(),
+    updated_at: dbTimestamptz,
   })
   .describe("recipients row");
 export type RecipientRow = z.output<typeof recipientRowSchema>;
@@ -153,19 +153,19 @@ export const enrichedRecipientRowSchema = recipientAliasRowSchema
     primary_bank_account: z.string().nullable(),
     primary_recipient_name: z.string().nullable(),
     /** `count(*)` of the aliases: an integer, 0 when there are none. */
-    alias_count: pgInt,
+    alias_count: dbInt,
   })
   .describe("enriched recipients row");
 export type EnrichedRecipientRow = z.output<typeof enrichedRecipientRowSchema>;
 
 /** `lockByIdsForMerge`. */
 export const recipientMergeLockRowSchema = z
-  .object({ id: pgRecipientId, primary_recipient_id: pgRecipientId.nullable() })
+  .object({ id: dbRecipientId, primary_recipient_id: dbRecipientId.nullable() })
   .describe("recipient merge lock row");
 
 /** `getClusterRootMap`: `COALESCE(primary_recipient_id, id)` is never NULL. */
 export const recipientClusterRootRowSchema = z
-  .object({ id: pgRecipientId, cluster_root: pgRecipientId })
+  .object({ id: dbRecipientId, cluster_root: dbRecipientId })
   .describe("recipient cluster root row");
 
 /** `findRecipientClusters`' scan projection. */
@@ -181,8 +181,8 @@ export const recipientNameRowSchema = recipientRowSchema
 /** A row of `recipient_bank_accounts` (`SELECT *` / `RETURNING *`). */
 export const recipientBankAccountRowSchema = z
   .object({
-    id: pgInt,
-    recipient_id: pgRecipientId.nullable(),
+    id: dbInt,
+    recipient_id: dbRecipientId.nullable(),
     /** VARCHAR(34), stored trimmed + uppercased. */
     account_number: z.string(),
     bank_name: z.string().nullable(),
@@ -190,8 +190,8 @@ export const recipientBankAccountRowSchema = z
     address: z.string().nullable(),
     is_primary: z.boolean(),
     is_active: z.boolean(),
-    created_at: pgTimestamptz.nullable(),
-    updated_at: pgTimestamptz,
+    created_at: dbTimestamptz.nullable(),
+    updated_at: dbTimestamptz,
   })
   .describe("recipient_bank_accounts row");
 export type RecipientBankAccountRow = z.output<
@@ -205,18 +205,18 @@ export type RecipientBankAccountRow = z.output<
  */
 export const recipientMatchPatternRowSchema = z
   .object({
-    id: pgInt,
+    id: dbInt,
     /** FK → recipients, ON DELETE CASCADE */
-    recipient_id: pgRecipientId,
+    recipient_id: dbRecipientId,
     pattern: z.string(),
     pattern_kind: z.string(),
     case_sensitive: z.boolean(),
-    priority: pgInt,
+    priority: dbInt,
     is_active: z.boolean(),
     source: z.string(),
     notes: z.string().nullable(),
-    created_at: pgTimestamptz,
-    updated_at: pgTimestamptz,
+    created_at: dbTimestamptz,
+    updated_at: dbTimestamptz,
   })
   .describe("recipient_match_patterns row");
 
@@ -259,12 +259,12 @@ export type RecipientPatternListRow = z.output<
 /** A row of `tags` (`SELECT *` / `RETURNING *`). */
 export const tagRowSchema = z
   .object({
-    id: pgTagId,
+    id: dbTagId,
     slug: z.string(),
     color: z.string().nullable(),
     is_active: z.boolean(),
-    created_at: pgTimestamptz,
-    updated_at: pgTimestamptz,
+    created_at: dbTimestamptz,
+    updated_at: dbTimestamptz,
   })
   .describe("tags row");
 export type TagRow = z.output<typeof tagRowSchema>;
@@ -294,12 +294,12 @@ export const settingValueRowSchema = settingRowSchema
  */
 export const savedChartRowSchema = z
   .object({
-    id: pgInt,
+    id: dbInt,
     name: z.string(),
     chart_type: z.string(),
-    category_ids: z.array(pgInt),
-    recipient_ids: z.array(pgInt),
-    tag_ids: z.array(pgInt),
+    category_ids: z.array(dbInt),
+    recipient_ids: z.array(dbInt),
+    tag_ids: z.array(dbInt),
     all_categories: z.boolean(),
     all_recipients: z.boolean(),
     all_tags: z.boolean(),
@@ -309,8 +309,8 @@ export const savedChartRowSchema = z
     date_range_start: z.string().nullable(),
     /** 'YYYY-MM-DD' */
     date_range_end: z.string().nullable(),
-    created_at: pgTimestamptz,
-    updated_at: pgTimestamptz,
+    created_at: dbTimestamptz,
+    updated_at: dbTimestamptz,
   })
   .describe("saved_charts row");
 export type SavedChartRow = z.output<typeof savedChartRowSchema>;
@@ -325,13 +325,13 @@ export type SavedChartRow = z.output<typeof savedChartRowSchema>;
  */
 export const attachmentRowSchema = z
   .object({
-    id: pgBigint,
-    transaction_id: pgTransactionId,
+    id: dbBigint,
+    transaction_id: dbTransactionId,
     filename: z.string(),
     stored_path: z.string(),
     mime_type: z.string(),
-    size_bytes: pgBigint,
-    created_at: pgTimestamptz,
+    size_bytes: dbBigint,
+    created_at: dbTimestamptz,
   })
   .describe("attachments row");
 export type AttachmentRow = z.output<typeof attachmentRowSchema>;
@@ -348,9 +348,9 @@ export const attachmentPathRowSchema = attachmentRowSchema
 /** `categoryOutlierService`'s expense scan (`category_id IS NOT NULL`). */
 export const categoryOutlierExpenseRowSchema = z
   .object({
-    date: pgDate,
-    amount: pgNumeric,
-    category_id: pgCategoryId,
+    date: dbDate,
+    amount: dbNumeric,
+    category_id: dbCategoryId,
     /** LEFT JOIN categories. */
     category_name: z.string().nullable(),
   })

@@ -130,20 +130,11 @@ function TableStatRow({
             <TableCell className="text-right tabular-nums">
                 {Number(row.live_rows).toLocaleString(locale)}
             </TableCell>
-            <TableCell className="text-right tabular-nums">
-                <span
-                    className={
-                        Number(row.dead_rows) > 1000 ? "text-warning" : ""
-                    }
-                >
-                    {Number(row.dead_rows).toLocaleString(locale)}
-                </span>
+            <TableCell className="min-w-40 whitespace-nowrap type-footnote tabular-nums text-label-secondary">
+                {fmt(row.last_vacuum)}
             </TableCell>
             <TableCell className="min-w-40 whitespace-nowrap type-footnote tabular-nums text-label-secondary">
-                {fmt(latest(row.last_vacuum, row.last_autovacuum))}
-            </TableCell>
-            <TableCell className="min-w-40 whitespace-nowrap type-footnote tabular-nums text-label-secondary">
-                {fmt(latest(row.last_analyze, row.last_autoanalyze))}
+                {fmt(row.last_analyze)}
             </TableCell>
             <TableCell className="min-w-24 whitespace-nowrap text-right font-medium tabular-nums">
                 {row.size}
@@ -175,12 +166,6 @@ function TableStatRow({
             </TableCell>
         </TableRow>
     );
-}
-
-/** The later of a manual and an automatic run; either may be NULL. */
-function latest(manual: string | null, auto: string | null): string | null {
-    if (!manual || !auto) return manual ?? auto;
-    return Date.parse(manual) >= Date.parse(auto) ? manual : auto;
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -312,9 +297,6 @@ export default function DbMaintenancePage() {
                                 <TableHead className="text-right">
                                     {t("dbMaintenance.col.liveRows")}
                                 </TableHead>
-                                <TableHead className="text-right">
-                                    {t("dbMaintenance.col.deadRows")}
-                                </TableHead>
                                 <TableHead>
                                     {t("dbMaintenance.col.lastVacuum")}
                                 </TableHead>
@@ -346,7 +328,7 @@ export default function DbMaintenancePage() {
                                   ))}
                             {!isLoading && !error && tableCount === 0 && (
                                 <TableRow className="hover:bg-transparent">
-                                    <TableCell colSpan={7}>
+                                    <TableCell colSpan={6}>
                                         <EmptyState
                                             size="compact"
                                             headingLevel={3}

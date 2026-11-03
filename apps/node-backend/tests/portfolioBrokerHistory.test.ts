@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import { partial } from "./helpers/partial.ts";
 import { mockTxConnection } from "./helpers/repoMocks.ts";
-import { pgLocalDate } from "./helpers/portfolioPgRows.ts";
+import { dbLocalDate } from "./helpers/portfolioRowFixtures.ts";
 
 vi.mock("../src/database/connection.ts", () => mockTxConnection());
 vi.mock("../src/config/logger.ts", () => ({
@@ -143,7 +143,7 @@ describe("forward-only broker snapshots", () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            snapshot_date: pgLocalDate("2026-09-12"),
+            snapshot_date: dbLocalDate("2026-09-12"),
             currency: "EUR",
             account_key: "account:7",
             account_id: 7,
@@ -179,7 +179,7 @@ describe("forward-only broker snapshots", () => {
         .mockResolvedValueOnce({
           rows: [
             {
-              snapshot_date: pgLocalDate("2026-09-12"),
+              snapshot_date: dbLocalDate("2026-09-12"),
               currency: "EUR",
               account_key: "account:7",
               account_id: 7,
