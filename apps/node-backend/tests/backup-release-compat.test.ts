@@ -13,7 +13,8 @@ const repoRoot = resolve(__dirname, "../../..");
 // the untyped yauzl dependency).
 interface OpenedBundle {
   metadata: Readonly<Record<string, unknown>>;
-  dbSqlPath: string;
+  databasePath: string | null;
+  dbSqlPath: string | null;
   attachmentsDir: string | null;
   frontendState: unknown;
   cleanup: () => void;
@@ -30,6 +31,9 @@ const { openBundle } = require(
 ) as BundleModule;
 
 describe("backup release compatibility", () => {
+  // A format-1 bundle (PostgreSQL db.sql) still opens, so the restore path can
+  // refuse it with the transition instructions and the transition script can
+  // convert it (ADR-263).
   it("opens the sanitized bundle produced by Vision 1.0.2", async () => {
     const fixturePath = join(
       repoRoot,
@@ -45,7 +49,8 @@ describe("backup release compatibility", () => {
     try {
       expect(result.metadata.appVersion).toBe("1.0.2");
       expect(result.metadata.schemaHead).toBe("fixture_schema");
-      expect(await fsp.readFile(result.dbSqlPath, "utf8")).toContain(
+      expect(result.databasePath).toBeNull();
+      expect(await fsp.readFile(must(result.dbSqlPath, "dbSqlPath"), "utf8")).toContain(
         "INSERT INTO fixture_probe VALUES (1, 'v1.0.2');",
       );
       expect(result.frontendState).toEqual({

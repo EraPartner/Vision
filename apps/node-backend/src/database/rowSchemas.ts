@@ -1,10 +1,12 @@
 /**
  * Row schemas for the queries checked through `rowContracts.ts` (ADR-193).
  *
- * Each schema describes what node-postgres returns with its DEFAULT type
- * parsers, not the wire shape: NUMERIC/BIGINT/`COUNT(*)` are strings,
- * DATE/TIMESTAMPTZ are `Date`s, `COUNT(*)::int` and INTEGER are numbers, and
- * JSON columns arrive parsed. The matching TypeScript row types in
+ * Each schema describes what the database driver returns, not the wire
+ * shape. The SQLite driver (src/database/connection.ts, ADR-263) returns the
+ * shapes node-postgres returned with its default type parsers:
+ * NUMERIC/BIGINT/`COUNT(*)` with a `::bigint` alias hint are strings,
+ * DATE/TIMESTAMPTZ are `Date`s, INTEGER and a bare `count(*)` are numbers, and
+ * JSON columns arrive parsed. The primitives keep their `pg*` names. The matching TypeScript row types in
  * src/types/rows.ts are derived from these schemas, so the two cannot drift.
  *
  * Schemas only check: no coercion or transform (see `RowSchema`). Plain
@@ -15,20 +17,20 @@
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
-// pg default parser primitives
+// Driver value primitives (named after the PostgreSQL types they stand for)
 // ---------------------------------------------------------------------------
 
-/** INTEGER / SMALLINT / SERIAL, and any `::int` cast. */
+/** INTEGER / SMALLINT / SERIAL, and a bare SQLite `count(*)`. */
 export const pgInt = z.int();
 /** NUMERIC / DECIMAL: the exact decimal text. */
 export const pgNumeric = z.string();
-/** BIGINT / BIGSERIAL / bare `COUNT(*)` / window `COUNT(*) OVER ()`. */
+/** BIGINT / BIGSERIAL, and `count(*)` read with a `::bigint` alias hint. */
 export const pgBigint = z.string();
 /** DATE: a local-midnight `Date`, NOT a 'YYYY-MM-DD' string. */
 export const pgDate = z.date();
 /** TIMESTAMPTZ. */
 export const pgTimestamptz = z.date();
-/** A `to_char(..., 'YYYY-MM-DD')` projection. */
+/** A `to_char(..., 'YYYY-MM-DD')` projection (a Vision SQL function). */
 export const pgDayString = z.string();
 
 // ---------------------------------------------------------------------------

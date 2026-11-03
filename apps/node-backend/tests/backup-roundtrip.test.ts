@@ -12,7 +12,9 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { promises as fsp, mkdtempSync, existsSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { promises as fsp, mkdtempSync, existsSync, readFileSync, rmSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,15 +30,21 @@ const REPO_ROOT = resolve(__dirname, "../../..");
 interface BundleOptions {
   destDir: string;
   deviceId: string;
-  schemaHead?: string | null | undefined;
   appVersion?: string | null;
-  dbSqlPath: string;
+  databasePath: string;
+  database: {
+    schemaVersion: number;
+    sqliteVersion?: string | null;
+    sha256?: string | null;
+    bytes?: number | null;
+  };
   attachmentsDir?: string | null;
   frontendState?: unknown;
 }
 interface OpenedBundle {
   metadata: Readonly<Record<string, unknown>>;
-  dbSqlPath: string;
+  databasePath: string | null;
+  dbSqlPath: string | null;
   attachmentsDir: string | null;
   frontendState: unknown;
   cleanup: () => void;
@@ -123,20 +131,27 @@ afterAll(() => {
 // Helpers
 // ---------------------------------------------------------------------------
 
+const sha256 = (file: string) => createHash("sha256").update(readFileSync(file)).digest("hex");
+
 /** Build minimal test fixtures in a subdirectory, return paths. */
 async function buildFixtures(subdir: string) {
   const base = join(TEST_TMP, subdir);
   await fsp.mkdir(base, { recursive: true });
 
-  // db.sql — realistic pg_dump header + a few INSERT statements
-  const dbSqlPath = join(base, "db.sql");
-  const dbSqlContent = [
-    "-- pg_dump output",
-    "SET standard_conforming_strings = on;",
-    "INSERT INTO categories (id, general, detail) VALUES (1, 'FOOD', 'Groceries');",
-    "INSERT INTO transactions (id, amount, date) VALUES (1, -42.00, '2025-01-15');",
-  ].join("\n");
-  await fsp.writeFile(dbSqlPath, dbSqlContent, "utf8");
+  // db.sqlite3: a small SQLite database file, as the snapshot step writes it
+  const databasePath = join(base, "snapshot.sqlite3");
+  const db = new DatabaseSync(databasePath);
+  db.exec(`CREATE TABLE categories (id INTEGER PRIMARY KEY, general TEXT, detail TEXT);
+           INSERT INTO categories VALUES (1, 'FOOD', 'Groceries');
+           CREATE TABLE transactions (id INTEGER PRIMARY KEY, amount DECIMAL_TEXT(18,2), date DATE_TEXT);
+           INSERT INTO transactions VALUES (1, '-42.00', '2025-01-15');`);
+  db.close();
+  const database = {
+    schemaVersion: 1,
+    sqliteVersion: "3.53.4",
+    sha256: sha256(databasePath),
+    bytes: (await fsp.stat(databasePath)).size,
+  };
 
   // attachments/ tree with two files
   const attachmentsDir = join(base, "attachments");
@@ -150,7 +165,7 @@ async function buildFixtures(subdir: string) {
     Buffer.from("FAKEPDF"),
   );
 
-  return { base, dbSqlPath, dbSqlContent, attachmentsDir };
+  return { base, databasePath, database, attachmentsDir };
 }
 
 // ---------------------------------------------------------------------------
@@ -159,7 +174,7 @@ async function buildFixtures(subdir: string) {
 
 describe("createBundle + openBundle (plain)", () => {
   it("produces a valid .visionbak and round-trips all fields", async () => {
-    const { dbSqlPath, dbSqlContent, attachmentsDir } =
+    const { databasePath, database, attachmentsDir } =
       await buildFixtures("plain");
 
     const frontendState = {
@@ -174,9 +189,9 @@ describe("createBundle + openBundle (plain)", () => {
     const { bundlePath } = await createBundle({
       destDir,
       deviceId: "test-device",
-      schemaHead: "0015_test_migration",
       appVersion: "2.0.0-test",
-      dbSqlPath,
+      databasePath,
+      database,
       attachmentsDir,
       frontendState,
     });
@@ -191,15 +206,19 @@ describe("createBundle + openBundle (plain)", () => {
     try {
       // Metadata integrity
       expect(result.metadata.bundleVersion).toBe(BUNDLE_VERSION);
-      expect(result.metadata.schemaHead).toBe("0015_test_migration");
+      expect(result.metadata.database).toBe("sqlite");
+      expect(result.metadata.schemaVersion).toBe(1);
+      expect(result.metadata.sqliteVersion).toBe("3.53.4");
+      expect(result.metadata.databaseSha256).toBe(database.sha256);
+      expect(result.metadata.databaseBytes).toBe(database.bytes);
       expect(result.metadata.appVersion).toBe("2.0.0-test");
       expect(result.metadata.deviceId).toBe("test-device");
       expect(result.metadata.encrypted).toBe(false);
       expect(result.metadata.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
-      // db.sql content
-      const restoredSql = await fsp.readFile(result.dbSqlPath, "utf8");
-      expect(restoredSql).toBe(dbSqlContent);
+      // db.sqlite3 is the same file, byte for byte
+      expect(result.dbSqlPath).toBeNull();
+      expect(sha256(must(result.databasePath, "databasePath"))).toBe(database.sha256);
 
       // attachments tree preserved
       expect(result.attachmentsDir).not.toBeNull();
@@ -220,15 +239,15 @@ describe("createBundle + openBundle (plain)", () => {
   });
 
   it("handles missing attachmentsDir gracefully (null)", async () => {
-    const { dbSqlPath } = await buildFixtures("no_attach");
+    const { databasePath, database } = await buildFixtures("no_attach");
 
     const destDir = join(TEST_TMP, "no_attach_out");
     const { bundlePath } = await createBundle({
       destDir,
       deviceId: "dev",
-      schemaHead: "",
       appVersion: "1.0.0",
-      dbSqlPath,
+      databasePath,
+      database,
       attachmentsDir: null,
       frontendState: null,
     });
@@ -242,16 +261,30 @@ describe("createBundle + openBundle (plain)", () => {
     }
   });
 
+  it("refuses a database file that is not SQLite, and a missing schema version", async () => {
+    const { base, databasePath, database } = await buildFixtures("refusals");
+    const notSqlite = join(base, "db.sql");
+    await fsp.writeFile(notSqlite, "-- pg_dump output\n");
+    const destDir = join(TEST_TMP, "refusals_out");
+    await expect(
+      createBundle({ destDir, deviceId: "dev", databasePath: notSqlite, database }),
+    ).rejects.toThrow(/not a SQLite database/u);
+    await expect(
+      createBundle({ destDir, deviceId: "dev", databasePath, database: { schemaVersion: 0 } }),
+    ).rejects.toThrow(/schema version/u);
+    expect(existsSync(destDir) ? await fsp.readdir(destDir) : []).toEqual([]);
+  });
+
   it("handles non-existent attachmentsDir gracefully", async () => {
-    const { dbSqlPath } = await buildFixtures("missing_attach");
+    const { databasePath, database } = await buildFixtures("missing_attach");
 
     const destDir = join(TEST_TMP, "missing_attach_out");
     const { bundlePath } = await createBundle({
       destDir,
       deviceId: "dev",
-      schemaHead: "",
       appVersion: "1.0.0",
-      dbSqlPath,
+      databasePath,
+      database,
       attachmentsDir: join(TEST_TMP, "does_not_exist"),
       frontendState: null,
     });
@@ -271,14 +304,14 @@ describe("createBundle + openBundle (plain)", () => {
 
 describe("isBundleEncrypted", () => {
   it("returns false for a plain .visionbak", async () => {
-    const { dbSqlPath } = await buildFixtures("enc_detect_plain");
+    const { databasePath, database } = await buildFixtures("enc_detect_plain");
     const destDir = join(TEST_TMP, "enc_detect_plain_out");
     const { bundlePath } = await createBundle({
       destDir,
       deviceId: "dev",
-      schemaHead: "",
       appVersion: "1.0.0",
-      dbSqlPath,
+      databasePath,
+      database,
       attachmentsDir: null,
       frontendState: null,
     });
@@ -287,14 +320,14 @@ describe("isBundleEncrypted", () => {
   });
 
   it("returns true for a .visionbak.enc", async () => {
-    const { dbSqlPath } = await buildFixtures("enc_detect_enc");
+    const { databasePath, database } = await buildFixtures("enc_detect_enc");
     const destDir = join(TEST_TMP, "enc_detect_enc_out");
     const { bundlePath } = await createBundle({
       destDir,
       deviceId: "dev",
-      schemaHead: "",
       appVersion: "1.0.0",
-      dbSqlPath,
+      databasePath,
+      database,
       attachmentsDir: null,
       frontendState: null,
     });
@@ -317,7 +350,7 @@ describe("isBundleEncrypted", () => {
 
 describe("encryptBundle + openBundle (encrypted)", () => {
   it("round-trips through AES-256-GCM with correct passphrase", async () => {
-    const { dbSqlPath, dbSqlContent, attachmentsDir } =
+    const { databasePath, database, attachmentsDir } =
       await buildFixtures("enc_rt");
     const frontendState = { keys: { "vision.theme": "light" } };
 
@@ -325,9 +358,9 @@ describe("encryptBundle + openBundle (encrypted)", () => {
     const { bundlePath } = await createBundle({
       destDir,
       deviceId: "enc-device",
-      schemaHead: "0020_enc_migration",
       appVersion: "2.1.0",
-      dbSqlPath,
+      databasePath,
+      database,
       attachmentsDir,
       frontendState,
     });
@@ -344,11 +377,10 @@ describe("encryptBundle + openBundle (encrypted)", () => {
     // Open with correct passphrase
     const result = await openBundle(encPath, { passphrase });
     try {
-      expect(result.metadata.schemaHead).toBe("0020_enc_migration");
+      expect(result.metadata.schemaVersion).toBe(1);
       expect(result.metadata.deviceId).toBe("enc-device");
 
-      const restoredSql = await fsp.readFile(result.dbSqlPath, "utf8");
-      expect(restoredSql).toBe(dbSqlContent);
+      expect(sha256(must(result.databasePath, "databasePath"))).toBe(database.sha256);
 
       expect(result.frontendState).toEqual(frontendState);
 
@@ -362,15 +394,15 @@ describe("encryptBundle + openBundle (encrypted)", () => {
   });
 
   it("throws when opening encrypted bundle without a passphrase", async () => {
-    const { dbSqlPath } = await buildFixtures("enc_no_key");
+    const { databasePath, database } = await buildFixtures("enc_no_key");
 
     const destDir = join(TEST_TMP, "enc_no_key_out");
     const { bundlePath } = await createBundle({
       destDir,
       deviceId: "dev",
-      schemaHead: "",
       appVersion: "1.0.0",
-      dbSqlPath,
+      databasePath,
+      database,
       attachmentsDir: null,
       frontendState: null,
     });
@@ -381,15 +413,15 @@ describe("encryptBundle + openBundle (encrypted)", () => {
   });
 
   it("throws when opening encrypted bundle with wrong passphrase", async () => {
-    const { dbSqlPath } = await buildFixtures("enc_wrong_key");
+    const { databasePath, database } = await buildFixtures("enc_wrong_key");
 
     const destDir = join(TEST_TMP, "enc_wrong_key_out");
     const { bundlePath } = await createBundle({
       destDir,
       deviceId: "dev",
-      schemaHead: "",
       appVersion: "1.0.0",
-      dbSqlPath,
+      databasePath,
+      database,
       attachmentsDir: null,
       frontendState: null,
     });
@@ -414,15 +446,16 @@ describe("openBundle error conditions", () => {
     await expect(openBundle(badPath)).rejects.toThrow();
   });
 
-  it("throws on a zip missing db.sql", async () => {
-    // Build a zip with only metadata.json (no db.sql)
+  it("throws on a zip missing db.sqlite3", async () => {
+    // Build a zip with only metadata.json (no database member)
     const noDbPath = join(TEST_TMP, "no_db.visionbak");
     const archive = await createZipWriter(noDbPath);
     await archive.append(
       "metadata.json",
       JSON.stringify({
-        bundleVersion: 1,
-        schemaHead: "",
+        bundleVersion: 2,
+        database: "sqlite",
+        schemaVersion: 1,
         appVersion: "1.0.0",
         deviceId: "dev",
         createdAt: new Date().toISOString(),
@@ -431,13 +464,36 @@ describe("openBundle error conditions", () => {
     );
     await archive.finalize();
 
-    await expect(openBundle(noDbPath)).rejects.toThrow(/db\.sql|corrupt/i);
+    await expect(openBundle(noDbPath)).rejects.toThrow(/db\.sqlite3|corrupt/i);
+  });
+
+  it("opens a Vision 2.0 bundle (db.sql) without a database, for the caller to refuse", async () => {
+    const legacyPath = join(TEST_TMP, "legacy_v2.visionbak");
+    const archive = await createZipWriter(legacyPath);
+    await archive.append(
+      "metadata.json",
+      JSON.stringify({ bundleVersion: 1, schemaHead: "0005_x", appVersion: "2.0.0", deviceId: "dev", encrypted: false }),
+    );
+    await archive.append("db.sql", "-- pg_dump output\n");
+    await archive.finalize();
+
+    const result = await openBundle(legacyPath);
+    try {
+      expect(result.databasePath).toBeNull();
+      expect(result.dbSqlPath).not.toBeNull();
+      expect(result.metadata.bundleVersion).toBe(1);
+    } finally {
+      result.cleanup();
+    }
   });
 
   it("throws on a zip missing metadata.json", async () => {
     const noMetaPath = join(TEST_TMP, "no_meta.visionbak");
     const archive = await createZipWriter(noMetaPath);
-    await archive.append("db.sql", "SELECT 1;");
+    await archive.file(
+      (await buildFixtures("no_meta")).databasePath,
+      "db.sqlite3",
+    );
     await archive.finalize();
 
     await expect(openBundle(noMetaPath)).rejects.toThrow(

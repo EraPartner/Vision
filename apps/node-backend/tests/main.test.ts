@@ -64,7 +64,7 @@ describe("Main Application", () => {
     });
 
     it("should have database settings", () => {
-      expect(settings.database.url).toBeDefined();
+      expect(settings.database.path).toBeDefined();
     });
   });
 

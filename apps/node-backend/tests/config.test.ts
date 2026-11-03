@@ -21,10 +21,9 @@ const ENV_KEYS = [
   'PORT',
   'ENVIRONMENT',
   'NODE_ENV',
-  'DATABASE_URL',
+  'VISION_DATABASE_PATH',
+  'VISION_DB_LOCK_TIMEOUT_MS',
   'DB_ECHO',
-  'DB_POOL_SIZE',
-  'DB_MAX_OVERFLOW',
   'ENABLE_RESET_DB',
 ];
 
@@ -61,10 +60,9 @@ describe('Configuration Management', () => {
 
     it('should have default database settings', async () => {
       const { default: settings } = await importConfigFresh();
-      expect(settings.database.url).toBe('postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions');
+      expect(settings.database.path).toBe('./data/vision.sqlite3');
       expect(settings.database.echo).toBe(false);
-      expect(settings.database.poolSize).toBe(5);
-      expect(settings.database.maxOverflow).toBe(10);
+      expect(settings.database.lockTimeoutMs).toBe(60_000);
     });
 
     it('should have default API settings', async () => {
@@ -96,17 +94,17 @@ describe('Configuration Management', () => {
 
     it('should override server environment from env', async () => {
       process.env.ENVIRONMENT = 'production';
-      process.env.DATABASE_URL = 'postgresql://user:pass@host:5432/db'; // required outside development
+      process.env.VISION_DATABASE_PATH = '/data/vision.sqlite3'; // required outside development
       const { default: settings } = await importConfigFresh();
       expect(settings.server.environment).toBe('production');
       expect(settings.isProduction()).toBe(true);
       expect(settings.isDevelopment()).toBe(false);
     });
 
-    it('should override database URL from env', async () => {
-      process.env.DATABASE_URL = 'postgresql://user:pass@host:5432/db';
+    it('should override the database path from env', async () => {
+      process.env.VISION_DATABASE_PATH = '/data/vision.sqlite3';
       const { default: settings } = await importConfigFresh();
-      expect(settings.database.url).toBe('postgresql://user:pass@host:5432/db');
+      expect(settings.database.path).toBe('/data/vision.sqlite3');
     });
 
     it('should override database echo from env', async () => {
@@ -115,10 +113,10 @@ describe('Configuration Management', () => {
       expect(settings.database.echo).toBe(true);
     });
 
-    it('should override database pool size from env', async () => {
-      process.env.DB_POOL_SIZE = '10';
+    it('should override the write-lock timeout from env', async () => {
+      process.env.VISION_DB_LOCK_TIMEOUT_MS = '1500';
       const { default: settings } = await importConfigFresh();
-      expect(settings.database.poolSize).toBe(10);
+      expect(settings.database.lockTimeoutMs).toBe(1500);
     });
 
     it('should override admin reset db from env', async () => {
@@ -139,36 +137,36 @@ describe('Configuration Management', () => {
     it('should prioritize ENVIRONMENT over NODE_ENV', async () => {
       process.env.ENVIRONMENT = 'staging';
       process.env.NODE_ENV = 'production';
-      process.env.DATABASE_URL = 'postgresql://user:pass@host:5432/db'; // required outside development
+      process.env.VISION_DATABASE_PATH = '/data/vision.sqlite3'; // required outside development
       const { default: settings } = await importConfigFresh();
       expect(settings.server.environment).toBe('staging');
     });
 
     it('should fall back to NODE_ENV when ENVIRONMENT not set', async () => {
       process.env.NODE_ENV = 'production';
-      process.env.DATABASE_URL = 'postgresql://user:pass@host:5432/db'; // required outside development
+      process.env.VISION_DATABASE_PATH = '/data/vision.sqlite3'; // required outside development
       const { default: settings } = await importConfigFresh();
       expect(settings.server.environment).toBe('production');
     });
   });
 
-  describe('DATABASE_URL fail-closed policy', () => {
-    it('refuses to start without DATABASE_URL outside development', async () => {
+  describe('VISION_DATABASE_PATH fail-closed policy', () => {
+    it('refuses to start without VISION_DATABASE_PATH outside development', async () => {
       process.env.ENVIRONMENT = 'production';
-      await expect(importConfigFresh()).rejects.toThrow(/DATABASE_URL is not set/);
+      await expect(importConfigFresh()).rejects.toThrow(/VISION_DATABASE_PATH is not set/);
     });
 
-    it('honours an explicit DATABASE_URL in production', async () => {
+    it('honours an explicit VISION_DATABASE_PATH in production', async () => {
       process.env.ENVIRONMENT = 'production';
-      process.env.DATABASE_URL = 'postgresql://user:pass@host:5432/db';
+      process.env.VISION_DATABASE_PATH = '/data/vision.sqlite3';
       const { default: settings } = await importConfigFresh();
-      expect(settings.database.url).toBe('postgresql://user:pass@host:5432/db');
+      expect(settings.database.path).toBe('/data/vision.sqlite3');
     });
 
-    it('falls back to the built-in default in development (unset DATABASE_URL)', async () => {
+    it('falls back to the built-in default in development (unset VISION_DATABASE_PATH)', async () => {
       process.env.ENVIRONMENT = 'development';
       const { default: settings } = await importConfigFresh();
-      expect(settings.database.url).toBe('postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions');
+      expect(settings.database.path).toBe('./data/vision.sqlite3');
     });
   });
 
