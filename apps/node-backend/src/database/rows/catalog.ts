@@ -269,11 +269,6 @@ export const tagRowSchema = z
   .describe("tags row");
 export type TagRow = z.output<typeof tagRowSchema>;
 
-/** `findOrCreateBySlug`: `RETURNING *, (xmax <> 0) AS was_conflict`. */
-export const tagUpsertRowSchema = tagRowSchema
-  .extend({ was_conflict: z.boolean() })
-  .describe("tag upsert row");
-
 // ---------------------------------------------------------------------------
 // User settings
 // ---------------------------------------------------------------------------
