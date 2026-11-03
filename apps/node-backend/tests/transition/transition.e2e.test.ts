@@ -430,7 +430,13 @@ describe("--output", () => {
     const result = await run({ input: PLAIN_BUNDLE, mode: "output", output: out });
     expect(result.exitCode).toBe(0);
     expect(sha256(out)).toBe(result.report?.target.databaseSha256);
+    // Bytes 18 and 19 of the header are 1 in rollback-journal mode and 2 in
+    // WAL mode. A read-only open of a closed WAL file must create -wal and
+    // -shm files, which macOS's system SQLite refused.
+    const header = fs.readFileSync(out).subarray(18, 20);
+    expect([...header]).toEqual([1, 1]);
     await expect(verifyDatabaseFile(out)).resolves.toMatchObject({ ok: true });
+    expect(fs.readdirSync(path.dirname(out)).filter((name) => name.startsWith("vision.sqlite3"))).toEqual(["vision.sqlite3"]);
   });
 });
 
