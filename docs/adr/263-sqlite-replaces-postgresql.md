@@ -95,9 +95,10 @@ Facts checked for this ADR (2026-11-03, Linux container):
   temporary file. `bun:sqlite` and `better-sqlite3` are not used.
 - macOS uses the system SQLite that Bun loads. The backend refuses to start when
   `sqlite_version()` is below **3.39.0** (macOS 13), with a message naming both versions. SQL is
-  written for that floor: no `->`/`->>`, `RIGHT`/`FULL JOIN`, `IS [NOT] DISTINCT FROM`,
-  `unixepoch()`, `concat()`, `string_agg()`, ordered aggregates, `jsonb()` or built-in math
-  functions. A source check fails the backend tests when one of them appears in SQL.
+  written for that floor: `->`/`->>` (3.38), `RIGHT`/`FULL JOIN` and `IS [NOT] DISTINCT FROM`
+  (3.39) are allowed; `string_agg()`, `concat()`, `unhex()`, ordered aggregates (3.44), the
+  `jsonb()` family (3.45) and built-in math functions (a compile option macOS lacks) are not. A
+  source check fails the backend tests when one of them appears in SQL.
 - Pragmas on every connection: `foreign_keys = ON`, `journal_mode = WAL`, `synchronous = FULL`,
   `fullfsync = ON`, `checkpoint_fullfsync = ON`, `busy_timeout`, `recursive_triggers = OFF`.
 - Concurrency: one write connection and one read connection. `withTransaction()` keeps its API and
@@ -113,12 +114,14 @@ Facts checked for this ADR (2026-11-03, Linux container):
 | PostgreSQL | SQLite storage | Read by the backend as |
 | --- | --- | --- |
 | `NUMERIC(p,s)` | TEXT in PostgreSQL's output form (`12.3400`), checked by `vision_numeric_ok(value, p, s)` | the same decimal string as node-postgres |
-| `integer`, `bigint`, `serial` | INTEGER (`AUTOINCREMENT`, so ids are never reused) | number |
+| `integer`, `serial` | INTEGER (`AUTOINCREMENT`, so ids are never reused) | number |
+| `bigint`, `bigserial` | INTEGER declared `BIGINT`; sequence ids from `nextval()` over a `vision_sequences` table, so the three portfolio tables keep their shared id sequence | the decimal string node-postgres returned for `int8` |
 | `boolean` | INTEGER 0/1 | boolean |
 | `timestamptz` | TEXT, UTC, `YYYY-MM-DDTHH:MM:SS.ffffffZ` (microseconds kept) | `Date` |
 | `date` | TEXT `YYYY-MM-DD` | a local-midnight `Date`, as node-postgres returned |
-| `json`, `jsonb` | TEXT JSON | parsed value |
-| `text[]` | TEXT JSON array | array |
+| `jsonb` | TEXT in PostgreSQL's canonical jsonb output (keys deduplicated and ordered as jsonb orders them) | parsed value, with the key order PostgreSQL returned |
+| `json` | TEXT JSON as written | parsed value |
+| `text[]`, `integer[]` | TEXT JSON array | array |
 | enum types | TEXT with `CHECK (... IN (...))` | string |
 | `uuid` | TEXT, lower case | string |
 
@@ -133,8 +136,8 @@ so what services read stays what node-postgres returned. Bound values convert th
   from zero and refused above its precision (`numeric field overflow`), as PostgreSQL does; the
   check constraint refuses any value that is not in canonical form, so a missed conversion fails
   instead of storing a near value.
-- Every calculation on a NUMERIC value in SQL uses a `decimal.js` function registered on each
-  connection: `dec_add`, `dec_sub`, `dec_mul`, `dec_div`, `dec_neg`, `dec_abs`, `dec_round`,
+- Every calculation on a NUMERIC value in SQL uses an exact BigInt fixed-point function registered
+  on each connection (`apps/node-backend/src/database/sqlite/numeric.ts`): `dec_add`, `dec_sub`, `dec_mul`, `dec_div`, `dec_neg`, `dec_abs`, `dec_round`,
   `dec_cmp`, `dec_sign`, `dec_sum`, `dec_avg`, `dec_min`, `dec_max`. Their results carry
   PostgreSQL's display scale (sum and add keep the larger scale, multiply adds scales, divide uses
   PostgreSQL's `select_div_scale`), so the text matches what PostgreSQL returned.
@@ -146,14 +149,16 @@ so what services read stays what node-postgres returned. Bound values convert th
 
 - Calendar month steps go through `add_months(date, n)` and `date_trunc(unit, value)`, which keep
   PostgreSQL's semantics (`2026-01-31` plus one month is `2026-02-28`). SQLite's `+N month`
-  modifier is forbidden by the source check. Day steps may use `date(d, '+N day')`.
+  modifier is forbidden by the source check; day steps use `add_days(date, n)`.
 - `now()` returns the transaction start time inside a transaction and the statement time outside
   one, as in PostgreSQL. "Today" and day boundaries of timestamps use the backend process's time
   zone, which is the zone the PostgreSQL session used.
 - `ilike()`, `regexp` (JavaScript regular expressions), `similarity()` (pg_trgm's trigram rule),
   `json_contains()` for `@>`, `gen_random_uuid()` and `to_char()` for the formats Vision uses are
-  JavaScript functions. AI research passages move from a tsvector column to an FTS5 table with
-  `bm25()` ranking when the SQLite build has FTS5, and to a JavaScript scorer otherwise.
+  JavaScript functions. AI research passages drop the tsvector column; `vision_fts_match()` and
+  `vision_fts_rank()` reimplement PostgreSQL's `simple` text-search configuration,
+  `websearch_to_tsquery()` and `ts_rank_cd()` in JavaScript, so search does not depend on whether
+  the system SQLite was built with FTS5.
 - `LATERAL`, `DISTINCT ON`, `generate_series`, arrays and `= ANY()` are rewritten as correlated
   subqueries, window functions, recursive CTEs and `json_each()`.
 - Triggers keep every integrity rule (immutability guards, split totals, category cycle guard,
@@ -166,11 +171,11 @@ so what services read stays what node-postgres returned. Bound values convert th
 
 ### Least-privilege analysis SQL
 
-- PostgreSQL's analysis role becomes a separate read-only connection whose authorizer allows only
-  `SELECT` and reading the `vision_analysis_*` views and the functions the analysis catalog
-  documents. Everything else is denied. Where the runtime has no `setAuthorizer()` (Node in tests),
-  the executor builds an in-memory database that contains only those views' rows and runs the SQL
-  there; both paths are tested.
+- PostgreSQL's analysis role becomes an in-memory sandbox database: the executor copies the rows
+  of the approved `vision_analysis_*` views into an attached in-memory database named
+  `vision_analysis` (so `vision_analysis.transactions_v2` keeps resolving) and runs the user's
+  single read-only statement there with `query_only` on. The sandbox has no connection to the real
+  database file, so nothing else is reachable. The same path runs under Bun and under Node in tests.
 - Analysis SQL runs in a worker thread with a 5 s limit. On timeout the request fails and the
   worker is terminated; only one analysis worker runs at a time.
 - Open question answered by default: saved analyses whose custom SQL was written for PostgreSQL
@@ -180,18 +185,21 @@ so what services read stays what node-postgres returned. Bound values convert th
 ### Migrations
 
 - Numbered SQL files stay in `db/migrations/`, now SQLite SQL, starting again at
-  `0001_sqlite_baseline.sql`. The PostgreSQL files leave the tree (they stay in Git history).
-- The runner records each applied migration with a SHA-256 of its text in `vision_migrations`,
-  runs each one in its own `BEGIN IMMEDIATE` transaction with foreign keys deferred to a
-  `PRAGMA foreign_key_check` before commit, so the twelve-step table rebuild SQLite needs for most
-  `ALTER TABLE` changes is safe. It refuses a database that records a migration it does not know
-  (a newer Vision wrote it) or whose recorded checksum differs. Before applying anything to a
-  database that has data it writes a `VACUUM INTO` copy next to the database and keeps the last
-  three. Optional `.down.sql` files keep `db:migrate:down`.
+  `0001_baseline.sql` (the SQLite translation of the 2.0.0 schema). The PostgreSQL files leave the
+  tree (they stay in Git history).
+- The runner (`apps/node-backend/src/database/migrate.ts`) records each applied migration with a
+  SHA-256 of its text in `vision_migrations`, and runs all pending migrations in one
+  `BEGIN IMMEDIATE` transaction with foreign keys switched off for the run and a
+  `PRAGMA foreign_key_check` that must be empty before commit, so the twelve-step table rebuild
+  SQLite needs for most `ALTER TABLE` changes is safe; any failure rolls the whole run back. It
+  refuses a database that has tables but no ledger, records a migration it does not know (a newer
+  Vision wrote it) or whose recorded checksum differs. Before applying anything to a database that
+  has data it writes a `VACUUM INTO` copy next to the database and keeps the last three. Optional
+  `.down.sql` files keep `db:migrate:down`.
 - The migration test runs every migration on an empty database and on a database built at each
   earlier version with data, then checks `integrity_check`, `foreign_key_check` and that the
-  result equals a fresh install. squawk is replaced by a small SQLite migration lint in the
-  existing lint step.
+  result equals a fresh install. squawk is replaced by SQLite migration rules checked in the
+  backend tests, so no CI step is added.
 
 ### Backups and restore
 

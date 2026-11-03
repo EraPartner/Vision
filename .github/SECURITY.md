@@ -60,7 +60,8 @@ The codebase ships defense-in-depth that is documented and worth reading before 
   ([ADR-050](docs/adr/050-ci-supply-chain-security-tooling.md)).
 - **Runtime:** input validation (Zod + server-side), rate limiting, SSRF guard, strict CSP,
   admin token-or-open auth + CSRF guard ([ADR-063](docs/adr/063-admin-auth-csrf-guard.md)).
-- **Native runtime:** loopback-only defaults, least-privilege database roles, and isolated
-  PostgreSQL data directories.
+- **Native runtime:** loopback-only defaults, the SQLite database file and attachments kept inside
+  the app data directory, and custom analysis SQL run in a separate in-memory sandbox
+  ([ADR-263](docs/adr/263-sqlite-replaces-postgresql.md)).
 
 Full details: [`docs/security/index.md`](docs/security/index.md).

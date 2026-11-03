@@ -1,42 +1,13 @@
 import { defineConfig } from "vitest/config";
 
-import { createDbSkipBannerReporter } from "./tests/setup/dbSkipBanner.ts";
-
-// Append the DB-skip banner reporter instead of declaring `test.reporters`.
-// Declaring that key would replace vitest's own choice of default reporter
-// (`default` / `agent`, plus `github-actions` under Actions), so the banner
-// would silently cost us CI annotations. `configureVitest` runs after the
-// config is resolved and before the reporters are constructed, which is the
-// one window where the resolved list can still be extended.
-//
-// The banner is the guard against trusting a DB-less run, so a guard that
-// quietly fails to attach is worse than none: shout if the list is not there.
-function dbSkipBannerPlugin() {
-  return {
-    name: "vision:db-skip-banner",
-    configureVitest({ vitest }) {
-      const reporters = vitest?.config?.reporters;
-      if (!Array.isArray(reporters)) {
-        process.stdout.write(
-          "[db-skip-banner] could not attach to vitest reporters -- " +
-            "DB-backed skips will NOT be announced. Fix tests/setup/dbSkipBanner.ts.\n",
-        );
-        return;
-      }
-      // The hook runs once per project; one banner is enough.
-      if (reporters.some((r) => r?.isDbSkipBanner)) return;
-      reporters.push(createDbSkipBannerReporter());
-    },
-  };
-}
-
 export default defineConfig({
-  plugins: [dbSkipBannerPlugin()],
   test: {
     globals: true,
     environment: "node",
     // Compiles packaging/electron into out/ when stale (ADR-196).
-    globalSetup: ["./tests/setup/electronBuild.ts"],
+    globalSetup: ["./tests/setup/electronBuild.ts", "./tests/setup/sqliteTemplate.ts"],
+    // Each test file gets its own copy of the migrated SQLite template.
+    setupFiles: ["./tests/setup/sqliteDatabase.ts"],
     include: [
       "src/**/*.test.{js,ts}",
       "tests/**/*.test.{js,ts}",
@@ -61,10 +32,6 @@ export default defineConfig({
         // Process entrypoint: invokes start() at import time and installs
         // process.exit handlers, so it cannot be imported by a unit test.
         "src/main.{js,ts}",
-        // Migration runner: needs a live PostgreSQL 18 database, so only the
-        // DB-gated migrate.db.test.ts exercises it; counting it would skew the
-        // no-DB figure the thresholds track.
-        "src/database/migrate.{js,ts}",
       ],
       // Ratchet gate — tracks current actual coverage so regressions are caught
       // immediately. Bump after each phase adds meaningful tests; never lower
@@ -72,18 +39,11 @@ export default defineConfig({
       // v8 line-attribution variance between runs (convention: floor(measured)
       // minus 2).
       //
-      // Coverage now depends on whether TEST_DATABASE_URL is set: the DB-backed
-      // suites (tests/setup/db.ts seam) skip without it, so a plain local run
-      // measures LOWER than CI, which always has the Postgres service. Always
-      // set these thresholds from the no-DB figure — deriving them from a CI
-      // number would leave `bun vitest run --coverage` failing on any machine
-      // without a database.
+      // Every DB-backed suite runs in every run (each test file has its own
+      // SQLite copy, ADR-263), so a local run and CI measure the same figure.
       //
-      // Last measured (2026-07-27, 3.1k-test suite, with the include list above):
-      //   without TEST_DATABASE_URL (the figure the thresholds track):
-      //     statements 80.52 % | branches 70.62 % | functions 78.97 % | lines 82.45 %
-      //   with TEST_DATABASE_URL (CI):
-      //     statements 80.74 % | branches 70.75 % | functions 79.33 % | lines 82.67 %
+      // Last measured (2026-07-27, PostgreSQL era, before ADR-263):
+      //   statements 80.74 % | branches 70.75 % | functions 79.33 % | lines 82.67 %
       thresholds: {
         statements: 78,
         branches: 68,

@@ -29,16 +29,6 @@ function defaultOllamaUrl() {
   return "http://127.0.0.1:11434";
 }
 
-function defaultAnalysisDatabaseUrl(databaseUrl: string): string | undefined {
-  try {
-    const parsed = new URL(databaseUrl);
-    parsed.username = "vision_analysis_executor";
-    return parsed.toString();
-  } catch {
-    return undefined;
-  }
-}
-
 const settings = deepFreeze({
   server: {
     host: env.SERVER_HOST || "localhost",
@@ -47,16 +37,11 @@ const settings = deepFreeze({
   },
 
   database: {
-    url: env.DATABASE_URL,
-    // Privileged (DDL) connection string for the least-privilege setup;
-    // database/migrate.ts reads it directly from the environment. undefined in
-    // the classic single-role setup.
-    migrationsUrl: env.DATABASE_URL_MIGRATIONS,
-    analysisUrl:
-      env.DATABASE_URL_ANALYSIS || defaultAnalysisDatabaseUrl(env.DATABASE_URL),
+    // SQLite database file (ADR-263). The desktop runtime passes a path inside
+    // the application data directory.
+    path: env.VISION_DATABASE_PATH,
+    lockTimeoutMs: env.VISION_DB_LOCK_TIMEOUT_MS,
     echo: env.DB_ECHO,
-    poolSize: env.DB_POOL_SIZE,
-    maxOverflow: env.DB_MAX_OVERFLOW,
   },
 
   api: {

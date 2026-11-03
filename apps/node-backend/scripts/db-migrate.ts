@@ -1,16 +1,17 @@
 #!/usr/bin/env bun
 /**
- * Migration CLI for the DATABASE_URL database. Delegates to
- * `src/database/migrate.ts`, the exact code the app runs on boot (ADR-222).
+ * Migration CLI for the VISION_DATABASE_PATH SQLite database. Delegates to
+ * `src/database/migrate.ts`, the exact code the app runs on boot (ADR-222,
+ * ADR-263).
  *
- * Usage: DATABASE_URL=postgres://... bun run apps/node-backend/scripts/db-migrate.ts [command]
+ * Usage: VISION_DATABASE_PATH=/path/vision.sqlite3 bun run apps/node-backend/scripts/db-migrate.ts [command]
  *   (no command) | up   apply every pending migration
  *   down                revert the latest migration (needs its .down.sql)
  *   status              list migrations and when each was applied
  *   new <name>          create db/migrations/NNNN_<name>.sql
  *
- * DATABASE_URL is read from the environment; when unset, config/.env.local is
- * consulted. DATABASE_URL_MIGRATIONS, when set, is the owner role used.
+ * VISION_DATABASE_PATH is read from the environment; when unset,
+ * config/.env.local is consulted.
  */
 
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
@@ -24,7 +25,7 @@ const USAGE = `Usage: db-migrate.ts [up | down | status | new <name>]
   down                revert the latest migration (needs its .down.sql)
   status              list migrations and when each was applied
   new <name>          create db/migrations/NNNN_<name>.sql
-Env: DATABASE_URL (falls back to config/.env.local), DATABASE_URL_MIGRATIONS.`;
+Env: VISION_DATABASE_PATH (falls back to config/.env.local).`;
 
 const args = process.argv.slice(2).filter((a) => a !== "--");
 if (args.includes("--help") || args.includes("-h")) {
@@ -46,7 +47,7 @@ if (command === "new") {
   const file = path.join(MIGRATIONS_DIR, `${next}_${name}.sql`);
   writeFileSync(
     file,
-    `-- ${next}_${name}\n-- Runs inside the migrator's transaction. Add ${next}_${name}.down.sql to make it reversible.\n`,
+    `-- ${next}_${name}\n-- Runs inside the migrator's transaction with foreign keys off; see docs/guides/migrations.md.\n-- SQLite dialect: docs/reference/sqlite-sql-dialect.md. Add ${next}_${name}.down.sql to make it reversible.\n`,
     { flag: "wx" },
   );
   console.log(`[db-migrate] created ${path.relative(REPO_ROOT, file)}`);
@@ -59,7 +60,7 @@ if (!["up", "down", "status"].includes(command) || args.length > 1) {
 }
 
 // Only fills variables that are not already set. Must happen before
-// connection.ts is imported: the pg pool captures DATABASE_URL at module load.
+// config/env.ts is imported: it reads VISION_DATABASE_PATH at module load.
 function loadConfigEnvLocal(): void {
   const envLocalPath = path.join(REPO_ROOT, "config", ".env.local");
   if (!existsSync(envLocalPath)) return;
@@ -78,31 +79,31 @@ function loadConfigEnvLocal(): void {
   }
 }
 
-if (!process.env.DATABASE_URL) loadConfigEnvLocal();
-if (!process.env.DATABASE_URL) {
+if (!process.env.VISION_DATABASE_PATH) loadConfigEnvLocal();
+const databasePath = process.env.VISION_DATABASE_PATH?.trim();
+if (!databasePath) {
   console.error(
-    "[db-migrate] DATABASE_URL is not set — refusing to guess a target database.",
+    "[db-migrate] VISION_DATABASE_PATH is not set — refusing to guess a target database.",
   );
   process.exit(1);
 }
 
 const { runMigrations, revertLatestMigration, readMigrationStatus } =
   await import("../src/database/migrate.ts");
-const { closePool } = await import("../src/database/connection.ts");
 
 let exitCode = 0;
 try {
   if (command === "up") {
-    const result = await runMigrations();
+    const result = await runMigrations(databasePath);
     console.log(
       `[db-migrate] schema is at ${result.revision}` +
         (result.applied.length > 0 ? ` (applied ${result.applied.join(", ")})` : ""),
     );
   } else if (command === "down") {
-    const revision = await revertLatestMigration();
+    const revision = await revertLatestMigration(databasePath);
     console.log(`[db-migrate] reverted; schema is at ${revision}`);
   } else {
-    for (const { name, executedAt } of await readMigrationStatus()) {
+    for (const { name, executedAt } of await readMigrationStatus(databasePath)) {
       console.log(
         `${executedAt ? executedAt.toISOString() : "pending".padEnd(24)}  ${name}`,
       );
@@ -114,5 +115,4 @@ try {
   );
   exitCode = 1;
 }
-await closePool().catch(() => {});
 process.exit(exitCode);

@@ -1,62 +1,64 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import {
-  assertDatabaseStatsEqual,
-  assertStableDatabaseStatsEqual,
-} from "./database-stats";
-import type {
-  ComparableDatabaseStats,
-  ImportantRowCounts,
-} from "./database-stats";
+import { STABLE_TABLES, assertTableCountsEqual } from "./database-stats";
 
 export const DEMO_RUNTIME_ID = "vision_demo";
-export const DEMO_POSTGRES_PORT = 54330;
 export const DEMO_USER_DATA_NAME = "Vision Demo";
 export const DEMO_RESET_REQUEST = "demo-reset-request.json";
+/** The packaged Demo database: migrated to the build's head and loaded with the seed. */
+export const DEMO_SEED_DATABASE = "vision-demo.sqlite3";
+export const DEMO_SEED_MANIFEST = "manifest.json";
 
-/**
- * Database statistics recorded in the packaged seed manifest. Only the fields
- * validateDemoSeedManifest checks are guaranteed; database-stats compares the
- * rest value by value, so a mistyped field fails as a mismatch.
- */
-export type DemoSeedDatabase = ComparableDatabaseStats & {
-  readonly importantRowCounts?: Readonly<ImportantRowCounts>;
-};
+/** Rows per table in the packaged Demo database, as the database tool counted them. */
+export interface DemoSeedDatabase {
+  readonly tableCounts: Readonly<Record<string, number>>;
+  readonly [key: string]: unknown;
+}
 
 export interface DemoSeedManifest {
-  version: 1;
+  version: 2;
+  format: "sqlite";
+  /** Hash of the generated seed SQL: identifies the Demo content across builds. */
   logicalSha256: string;
-  dumpSha256: string;
-  schemaRevision: string;
+  /** Hash of the packaged database file. */
+  databaseSha256: string;
+  databaseBytes: number;
+  /** Migration version the packaged database is at. */
+  schemaVersion: number;
   database: DemoSeedDatabase;
   [key: string]: unknown;
 }
 
 export interface DemoSeed {
-  dumpPath: string;
+  databasePath: string;
   manifest: DemoSeedManifest;
+}
+
+/** What the runtime's database tool reports about a database file. */
+export interface DemoDatabaseReport {
+  schemaVersion: number;
+  sha256?: string | undefined;
+  tableCounts?: Readonly<Record<string, number>> | undefined;
 }
 
 /** The part of the native runtime that Demo seeding drives. */
 export interface NativeDemoRuntime {
   runtimeId: string;
-  paths: { nativeRoot: string };
+  paths: { nativeRoot: string; database: string };
   ensureLayout(): Promise<unknown>;
   discover(): Promise<unknown>;
   readState(): Promise<unknown>;
   writeState(next: Record<string, unknown>): Promise<unknown>;
-  ensurePostgresReady(): Promise<unknown>;
   recoverInterruptedRestore(): Promise<void>;
   rollbackDatabaseSwitch(switchToken: unknown): Promise<unknown>;
-  validateCustomDump(sourcePath: string): Promise<unknown>;
   activateRestoredDatabase(
     sourcePath: string,
-    options: { format: "custom"; expectedSchemaHead: string },
+    options: { expectedSchemaVersion: number; expectedSha256: string },
   ): Promise<{ switchToken: unknown }>;
-  getDatabaseStats(): Promise<ComparableDatabaseStats>;
+  verifyDatabaseFile(file: string): Promise<DemoDatabaseReport>;
   finalizeDatabaseSwitch(switchToken: unknown): Promise<unknown>;
-  stop(options: { keepPostgres: boolean }): Promise<unknown>;
+  stop(): Promise<unknown>;
 }
 
 export interface PreparedNativeDemo {
@@ -92,25 +94,33 @@ function isSha256(value: unknown): boolean {
   return /^[a-f0-9]{64}$/.test(typeof value === "string" ? value : "");
 }
 
+function isCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
 function hasDemoSeedManifestShape(value: unknown): value is DemoSeedManifest {
   if (!isObjectValue(value) || Array.isArray(value)) {
     return false;
   }
   const manifest = value;
   if (
-    manifest.version !== 1 ||
+    manifest.version !== 2 ||
+    manifest.format !== "sqlite" ||
     !isSha256(manifest.logicalSha256) ||
-    !isSha256(manifest.dumpSha256) ||
-    typeof manifest.schemaRevision !== "string" ||
-    !manifest.schemaRevision.trim()
+    !isSha256(manifest.databaseSha256) ||
+    !isCount(manifest.databaseBytes) ||
+    manifest.databaseBytes === 0 ||
+    !isCount(manifest.schemaVersion) ||
+    manifest.schemaVersion === 0
   ) {
     return false;
   }
-  const database = fieldsOf(manifest.database);
+  const tableCounts = fieldsOf(fieldsOf(manifest.database)?.tableCounts);
   return (
-    database !== undefined &&
-    !!database.tableCounts &&
-    Object.keys(database.tableCounts).length > 0
+    tableCounts !== undefined &&
+    !Array.isArray(tableCounts) &&
+    Object.keys(tableCounts).length > 0 &&
+    Object.values(tableCounts).every(isCount)
   );
 }
 
@@ -121,19 +131,7 @@ export function validateDemoSeedManifest(value: unknown): DemoSeedManifest {
       "DEMO_SEED_MANIFEST_INVALID",
     );
   }
-  if (value.database.schema !== value.schemaRevision) {
-    throw demoError(
-      "Packaged Demo seed schema metadata is inconsistent",
-      "DEMO_SEED_MANIFEST_INVALID",
-    );
-  }
   return value;
-}
-
-export function comparableManifestStats(
-  database: DemoSeedDatabase,
-): ComparableDatabaseStats {
-  return { ...database, ...(database.importantRowCounts ?? {}) };
 }
 
 export function assertDemoRuntimeIsolation(
@@ -146,7 +144,10 @@ export function assertDemoRuntimeIsolation(
     );
   }
   const userDataDir = path.dirname(path.dirname(runtime.paths.nativeRoot));
-  if (path.basename(userDataDir) !== DEMO_USER_DATA_NAME) {
+  if (
+    path.basename(userDataDir) !== DEMO_USER_DATA_NAME ||
+    path.dirname(path.dirname(runtime.paths.database)) !== userDataDir
+  ) {
     throw demoError(
       "Native Demo seeding is restricted to the Vision Demo data directory",
       "DEMO_RUNTIME_UNSAFE",
@@ -226,9 +227,9 @@ export async function sha256File(filePath: string): Promise<string> {
 
 export async function loadDemoSeed(seedRoot: string): Promise<DemoSeed> {
   const root = path.resolve(seedRoot);
-  const dumpPath = path.join(root, "demo-seed.dump");
-  const manifestPath = path.join(root, "manifest.json");
-  for (const candidate of [dumpPath, manifestPath]) {
+  const databasePath = path.join(root, DEMO_SEED_DATABASE);
+  const manifestPath = path.join(root, DEMO_SEED_MANIFEST);
+  for (const candidate of [databasePath, manifestPath]) {
     const stat = await fs.promises.lstat(candidate);
     if (!stat.isFile() || stat.isSymbolicLink()) {
       throw demoError(
@@ -240,13 +241,23 @@ export async function loadDemoSeed(seedRoot: string): Promise<DemoSeed> {
   const manifest = validateDemoSeedManifest(
     JSON.parse(await fs.promises.readFile(manifestPath, "utf8")),
   );
-  if ((await sha256File(dumpPath)) !== manifest.dumpSha256) {
+  if ((await sha256File(databasePath)) !== manifest.databaseSha256) {
     throw demoError(
       "Packaged Demo seed checksum does not match",
       "DEMO_SEED_CHECKSUM_MISMATCH",
     );
   }
-  return { dumpPath, manifest };
+  return { databasePath, manifest };
+}
+
+async function pathExists(file: string): Promise<boolean> {
+  try {
+    await fs.promises.lstat(file);
+    return true;
+  } catch (error) {
+    if (errorCode(error) === "ENOENT") return false;
+    throw error;
+  }
 }
 
 async function readRuntimeState(
@@ -264,7 +275,6 @@ export async function prepareNativeDemo(
   const resetRequested = reset || (await hasDemoResetRequest(runtime));
   await runtime.ensureLayout();
   await runtime.discover();
-  await runtime.ensurePostgresReady();
   // Recover both generations before deciding whether the seed is current.
   // Database-only rollback would leave new attachments against the old data.
   await runtime.recoverInterruptedRestore();
@@ -273,7 +283,9 @@ export async function prepareNativeDemo(
   if (
     !resetRequested &&
     currentSeed?.logicalSha256 === seed.manifest.logicalSha256 &&
-    currentSeed.schemaRevision === seed.manifest.schemaRevision
+    currentSeed.databaseSha256 === seed.manifest.databaseSha256 &&
+    currentSeed.schemaVersion === seed.manifest.schemaVersion &&
+    (await pathExists(runtime.paths.database))
   ) {
     await runtime.writeState({
       activeRuntime: "native",
@@ -288,21 +300,24 @@ export async function prepareNativeDemo(
     activation: "demo-native",
     demoSeedInProgress: {
       logicalSha256: seed.manifest.logicalSha256,
-      schemaRevision: seed.manifest.schemaRevision,
+      databaseSha256: seed.manifest.databaseSha256,
+      schemaVersion: seed.manifest.schemaVersion,
       startedAt: new Date().toISOString(),
     },
   });
-  await runtime.validateCustomDump(seed.dumpPath);
-  const activation = await runtime.activateRestoredDatabase(seed.dumpPath, {
-    format: "custom",
-    expectedSchemaHead: seed.manifest.schemaRevision,
+  // Activation copies and verifies the seed (integrity, foreign keys, ledger)
+  // and refuses it unless its checksum and schema version match the manifest.
+  const activation = await runtime.activateRestoredDatabase(seed.databasePath, {
+    expectedSchemaVersion: seed.manifest.schemaVersion,
+    expectedSha256: seed.manifest.databaseSha256,
   });
-  const restored = await runtime.getDatabaseStats();
   try {
-    assertDatabaseStatsEqual(
-      comparableManifestStats(seed.manifest.database),
-      restored,
-    );
+    if ((await sha256File(runtime.paths.database)) !== seed.manifest.databaseSha256) {
+      throw demoError(
+        "The activated Demo database does not match the packaged seed",
+        "DEMO_SEED_CHECKSUM_MISMATCH",
+      );
+    }
   } catch (error) {
     await runtime.rollbackDatabaseSwitch(activation.switchToken);
     throw error;
@@ -328,11 +343,22 @@ export async function finalizeNativeDemo(
     throw new Error("Native Demo preparation result is missing");
   }
   if (prepared.switchToken) {
-    const afterStart = await runtime.getDatabaseStats();
-    assertStableDatabaseStatsEqual(
-      comparableManifestStats(prepared.manifest.database),
-      afterStart,
-    );
+    // The backend has started (and migrated, if this build is newer than the
+    // seed); the Demo data it serves must still be the seed's.
+    const afterStart = await runtime.verifyDatabaseFile(runtime.paths.database);
+    if (afterStart.schemaVersion < prepared.manifest.schemaVersion) {
+      throw demoError(
+        "The Demo database schema moved backwards after startup",
+        "DATABASE_SCHEMA_MISMATCH",
+      );
+    }
+    if (afterStart.tableCounts) {
+      assertTableCountsEqual(
+        prepared.manifest.database.tableCounts,
+        afterStart.tableCounts,
+        { tables: STABLE_TABLES },
+      );
+    }
     await runtime.finalizeDatabaseSwitch(prepared.switchToken);
   }
   await runtime.writeState({
@@ -341,7 +367,8 @@ export async function finalizeNativeDemo(
     demoSeedInProgress: undefined,
     demoSeed: {
       logicalSha256: prepared.manifest.logicalSha256,
-      schemaRevision: prepared.manifest.schemaRevision,
+      databaseSha256: prepared.manifest.databaseSha256,
+      schemaVersion: prepared.manifest.schemaVersion,
       appliedAt: new Date().toISOString(),
     },
   });
@@ -367,7 +394,7 @@ export async function rollbackNativeDemo(
   runtime: NativeDemoRuntime,
   prepared: PreparedNativeDemo | null | undefined,
 ): Promise<{ status: "rolled-back" }> {
-  await runtime.stop({ keepPostgres: true }).catch(() => {});
+  await runtime.stop().catch(() => {});
   if (prepared?.switchToken) {
     await runtime.rollbackDatabaseSwitch(prepared.switchToken);
   }

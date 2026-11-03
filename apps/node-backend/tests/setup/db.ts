@@ -1,117 +1,143 @@
 /**
- * Shared DB test-fixture helper (Phase 0 step 6).
+ * Shared DB test helpers (ADR-263).
  *
- * Tests that need a real Postgres instance import `getTestPool()`. Resolution
- * rules:
- *   - If `TEST_DATABASE_URL` is set, use that disposable test database.
- *   - Otherwise return null so the test can self-skip with `it.skipIf(!pool)`
+ * Every test file runs against its own copy of the migrated SQLite template
+ * (tests/setup/sqliteDatabase.ts), so DB-backed tests always run: there is no
+ * external database to configure and nothing to skip. `getTestPool()` keeps
+ * the PostgreSQL-era call shape for fixture SQL; its statements go through the
+ * backend's own driver (src/database/connection.ts), so fixtures and the code
+ * under test share one database, one writer and one transaction context.
  *
- * Callers are responsible for their own schema/truncate/rollback strategy. A
- * per-test transaction + rollback pattern is recommended; a per-suite truncate
- * is acceptable when transactions would hide the behaviour under test.
- *
- * The pool is memoised per-process so repeated imports don't leak connections.
- * Closing is handled in the vitest `afterAll` hook at call-site; the helper
- * exposes `closeTestPool()` for that purpose.
- *
- * A run that skipped for want of a database is not a complete run, so
- * `dbSkipBanner.js` shouts about it after the summary — importing this file is
- * what marks a module as DB-backed for that count.
+ * Isolation: call `resetTestDatabase()` (for example in `beforeEach`) to start
+ * from the pristine migrated schema; it closes the backend's connections and
+ * copies the template over this file's database.
  */
+import { copyFileSync, rmSync } from "node:fs";
+import {
+  closePool,
+  getClient,
+  query,
+  withTransaction,
+} from "../../src/database/connection.ts";
+import type { PgPoolClient } from "../../src/database/connection.ts";
 
-import pg from "pg";
-import type { Pool as PgPool, PoolClient } from "pg";
+/** A result row whose columns a test reads without a fixed shape. */
+export type DbRow = Record<string, unknown>;
 
-const { Pool } = pg;
-
-let cachedPool: PgPool | null = null;
-
-/**
- * Return a shared Postgres pool if `TEST_DATABASE_URL` is set, else null.
- */
-export function getTestPool(): PgPool | null {
-  const url = process.env.TEST_DATABASE_URL;
-  if (!url) return null;
-  if (cachedPool) return cachedPool;
-  cachedPool = new Pool({ connectionString: url, max: 4 });
-  return cachedPool;
+export interface TestQueryResult<R> {
+  rows: R[];
+  rowCount: number | null;
 }
 
-/**
- * Close the shared pool if it was opened. Safe to call when no pool exists.
- */
+export interface TestPool {
+  query<R = DbRow>(text: string, params?: readonly unknown[]): Promise<TestQueryResult<R>>;
+  connect(): Promise<PgPoolClient>;
+  end(): Promise<void>;
+}
+
+const pool: TestPool = {
+  query: <R = DbRow>(text: string, params?: readonly unknown[]) =>
+    query<R>(text, params),
+  connect: () => getClient(),
+  end: () => closePool(),
+};
+
+/** The test database handle. Never null: every test file has a database. */
+export function getTestPool(): TestPool {
+  return pool;
+}
+
+/** Close the backend's connections (they reopen on the next query). */
 export async function closeTestPool(): Promise<void> {
-  if (!cachedPool) return;
-  const pool = cachedPool;
-  cachedPool = null;
-  await pool.end();
+  await closePool();
 }
 
-/**
- * Boolean convenience for `it.skipIf(!hasTestDatabase())`.
- */
+/** Always true; kept for suites written as `describe.skipIf(!hasTestDatabase())`. */
 export function hasTestDatabase(): boolean {
-  return Boolean(process.env.TEST_DATABASE_URL);
+  return true;
+}
+
+/** Replace this file's database with a fresh copy of the migrated template. */
+export async function resetTestDatabase(): Promise<void> {
+  const file = process.env.VISION_DATABASE_PATH;
+  const template = process.env.VISION_TEST_DB_TEMPLATE;
+  if (!file || !template) throw new Error("The SQLite test harness is not set up");
+  await closePool();
+  for (const suffix of ["-wal", "-shm"]) rmSync(`${file}${suffix}`, { force: true });
+  copyFileSync(template, file);
 }
 
 /**
  * Delete category fixtures from leaves toward roots. The hierarchy's
- * restrictive self-reference intentionally rejects deleting a parent that
- * still has children; a broad single-statement DELETE is no longer valid.
- * Call only after other fixture tables that reference categories are cleared.
+ * restrictive self-reference rejects deleting a parent that still has
+ * children. Call only after other fixture tables that reference categories
+ * are cleared.
  */
 export async function deleteAllCategoryFixtures(
-  pool: PgPool | PoolClient,
+  runner: Pick<TestPool, "query"> = pool,
 ): Promise<void> {
-  await pool.query("DELETE FROM category_merge_aliases");
-  await pool.query("DELETE FROM category_root_aliases");
+  await runner.query("DELETE FROM category_merge_aliases");
+  await runner.query("DELETE FROM category_root_aliases");
   let deleted: number | null;
   do {
-    ({ rowCount: deleted } = await pool.query(`
-      DELETE FROM categories c
-      WHERE NOT EXISTS (SELECT 1 FROM categories child WHERE child.parent_id = c.id)
+    ({ rowCount: deleted } = await runner.query(`
+      DELETE FROM categories
+      WHERE NOT EXISTS (SELECT 1 FROM categories child WHERE child.parent_id = categories.id)
     `));
   } while (deleted !== null && deleted > 0);
 }
 
-// ── Cross-suite serialization ───────────────────────────────────────────────
-// Vitest runs test FILES in parallel workers, but every DB-backed suite shares
-// the one TEST_DATABASE_URL database and wipes whole tables between tests —
-// two suites running concurrently delete each other's fixtures mid-test. A
-// session-scoped Postgres advisory lock serializes them at the database level
-// without slowing the (much larger) non-DB portion of the run: each suite
-// takes the lock in beforeAll and releases it in afterAll, so DB suites queue
-// behind one another while everything else stays parallel.
-//
-// Suites must pass a generous timeout to beforeAll (the wait is the sum of the
-// suites ahead in the queue): `beforeAll(acquireDbSuiteLock, 180_000)`.
+/** Thrown to end inRollbackTransaction(); never escapes it. */
+class RollbackSignal extends Error {}
 
-const DB_SUITE_LOCK_KEY = 715_001;
-
-let lockClient: PoolClient | null = null;
-
-/** Block until this process holds the shared DB-suite advisory lock. */
-export async function acquireDbSuiteLock(): Promise<void> {
-  const pool = getTestPool();
-  if (!pool || lockClient) return;
-  const client = await pool.connect();
+/**
+ * Run `fn` in a transaction that is always rolled back (the PostgreSQL-era
+ * `BEGIN … ROLLBACK` on a dedicated client). Code under test that calls
+ * `query()` or `withTransaction()` inside `fn` joins the same transaction.
+ */
+export async function inRollbackTransaction<T>(fn: (client: PgPoolClient) => Promise<T>): Promise<T> {
+  let result: T | undefined;
   try {
-    await client.query("SELECT pg_advisory_lock($1)", [DB_SUITE_LOCK_KEY]);
+    await withTransaction(async (client) => {
+      result = await fn(client);
+      throw new RollbackSignal("rollback");
+    });
   } catch (err) {
-    client.release();
-    throw err;
+    if (!(err instanceof RollbackSignal)) throw err;
   }
-  lockClient = client;
+  return result as T;
 }
 
-/** Release the advisory lock (safe to call when not held). */
-export async function releaseDbSuiteLock(): Promise<void> {
-  if (!lockClient) return;
-  const client = lockClient;
-  lockClient = null;
+/**
+ * Expect one statement to fail with `code`, inside a savepoint so the
+ * surrounding transaction stays usable.
+ */
+export async function expectSqlError(
+  client: Pick<PgPoolClient, "query">,
+  text: string,
+  params: readonly unknown[],
+  code: string,
+): Promise<void> {
+  await client.query("SAVEPOINT expected_failure");
+  let failure: unknown;
   try {
-    await client.query("SELECT pg_advisory_unlock($1)", [DB_SUITE_LOCK_KEY]);
-  } finally {
-    client.release();
+    await client.query(text, [...params]);
+  } catch (err) {
+    failure = err;
+  }
+  await client.query("ROLLBACK TO SAVEPOINT expected_failure");
+  await client.query("RELEASE SAVEPOINT expected_failure");
+  if (failure === undefined) throw new Error(`Expected SQLSTATE ${code}, but the statement succeeded: ${text}`);
+  const actual = (failure as { code?: unknown }).code;
+  if (actual !== code) {
+    throw new Error(
+      `Expected SQLSTATE ${code}, got ${String(actual)}: ${failure instanceof Error ? failure.message : JSON.stringify(failure)}`,
+    );
   }
 }
+
+/** No-op: each test file has its own database, so suites need no serialization. */
+export async function acquireDbSuiteLock(): Promise<void> {}
+
+/** No-op counterpart of {@link acquireDbSuiteLock}. */
+export async function releaseDbSuiteLock(): Promise<void> {}

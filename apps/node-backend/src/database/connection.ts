@@ -1,337 +1,571 @@
 /**
- * Database connection and pool management module.
+ * Database connection module: one SQLite file opened in-process (ADR-263).
  *
- * Uses node-postgres (pg) with a connection pool.
+ * Two connections:
+ *   - the writer runs every transaction and every statement that may change
+ *     data, one at a time behind an async write lock;
+ *   - the reader (PRAGMA query_only) runs plain reads outside transactions,
+ *     so a long import never blocks the screens that only read. In WAL mode
+ *     it sees the last committed state, as another pool connection did.
+ *
+ * `withTransaction()` keeps its PostgreSQL-era contract: the callback runs in
+ * an AsyncLocalStorage context, so module-level `query()` (and every Kysely
+ * query through db.ts) joins the transaction; a nested call becomes a
+ * SAVEPOINT; a leaked continuation after the transaction ended falls back to
+ * autocommit instead of writing into a finished transaction. `BEGIN
+ * IMMEDIATE` plus the single writer replace PostgreSQL's row locks and
+ * advisory locks.
  */
-
 import { AsyncLocalStorage } from "node:async_hooks";
-import pg from "pg";
+import { mkdirSync } from "node:fs";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import type { StatementSync } from "node:sqlite";
 import settings from "../config/config.ts";
 import { logger } from "../config/logger.ts";
-import { nonZeroOr } from "../lib/math.ts";
-import { errorCode, errorMessage } from "../lib/errors.ts";
+import { errorMessage } from "../lib/errors.ts";
+import { registerFunctions } from "./sqlite/functions.ts";
+import type { ConnectionClock } from "./sqlite/functions.ts";
+import { instantFromDate } from "./sqlite/pgTime.ts";
+import { scanSql } from "./sqlite/sqlText.ts";
+import { planColumn, toSqlParams } from "./sqlite/values.ts";
+import type { ColumnPlan } from "./sqlite/values.ts";
+import { translateSqliteError } from "./sqlite/errors.ts";
+
+/** The oldest SQLite Vision's SQL is written for (macOS 13 ships 3.39.5). */
+export const MINIMUM_SQLITE_VERSION = "3.39.0";
 
 /**
- * The slice of a pg `PoolClient` this module and its JS callers rely on. Kept
- * structural (rather than re-exporting `pg` types) because the legacy checkJs
- * program resolves `pg` through the ambient `declare module 'pg'` shim, where
- * pg's own types are `any`.
- */
-export interface PgPoolClient {
-  query: (
-    text:
-      string | { name: string; text: string; values?: unknown[] | undefined },
-    params?: unknown[],
-  ) => Promise<PgQueryResult>;
-  release: (err?: Error | boolean) => void;
-}
-
-/**
- * `query<Row>(...)` is an unchecked claim about the row shape; untyped callers
- * get `unknown` rows. Prefer `queryRows`/`checkRows` (rowContracts.ts), which
- * check rows against a schema (ADR-193).
+ * What a query returns: rows and the number of rows a write touched (or
+ * returned). Same shape as node-postgres's result for the fields Vision used.
  */
 export interface PgQueryResult<R = unknown> {
   rows: R[];
   rowCount: number | null;
 }
 
+/** A handle that runs statements on one connection (a transaction's, usually). */
+export interface PgPoolClient {
+  query: (
+    text: string | { name: string; text: string; values?: unknown[] | undefined },
+    params?: unknown[],
+  ) => Promise<PgQueryResult>;
+  release: (err?: Error | boolean) => void;
+}
+
 export interface QueryOptions {
+  /** Kept for call compatibility; SQLite has no transient connection errors to retry. */
   retries?: number;
 }
 
+interface PreparedStatement {
+  stmt: StatementSync;
+  /** Column plans for statements that return rows; null for plain writes. */
+  plan: ColumnPlan[] | null;
+}
+
+interface Connection {
+  db: DatabaseSync;
+  clock: ConnectionClock;
+  statements: Map<string, PreparedStatement>;
+  /** `inspect`: a read-only file handle for verification (backups, restores, scripts). */
+  role: "writer" | "reader" | "snapshot" | "inspect";
+}
+
 interface TransactionStore {
-  client: PgPoolClient | null;
+  conn: Connection | null;
   savepointCounter: { value: number };
   activeNested: Promise<unknown> | null;
 }
 
-// Ambient transaction context: withTransaction() runs its callback inside this
-// store so module-level query() joins the transaction instead of grabbing a
-// separate pool connection. Without it, a repo call inside withTransaction
-// silently runs OUTSIDE the transaction — it can't see uncommitted rows and
-// survives a rollback, which is exactly the partial-write bug transactions
-// exist to prevent. The store is invalidated (client nulled) when the
-// transaction ends so a leaked continuation can't write on a released client.
 const txStorage = new AsyncLocalStorage<TransactionStore>();
 
-/**
- * The pg client of the withTransaction() this code is running inside, or null.
- * Exposed for callers that must adapt to ambient-transaction mode (e.g. wrap a
- * catch-and-retry INSERT in a SAVEPOINT — see withSavepointIfInTransaction).
- */
-function getAmbientTransactionClient(): PgPoolClient | null {
-  return txStorage.getStore()?.client ?? null;
-}
-
-// pool.max should be the true ceiling for concurrent DB connections.
-// settings.database.poolSize is the sustained pool size;
-// settings.database.maxOverflow is kept for configuration parity but we use
-// the larger of the two so burst traffic is absorbed without exhausting the DB.
-const poolMax = nonZeroOr(
-  Math.max(settings.database.poolSize, settings.database.maxOverflow),
-  nonZeroOr(settings.database.poolSize, 10),
-);
-
-const pool = new pg.Pool({
-  connectionString: settings.database.url,
-  max: poolMax,
-  idleTimeoutMillis: 60_000, // close idle connections after 60s
-  connectionTimeoutMillis: 5_000, // fail fast if can't connect in 5s
-  statement_timeout: 30_000, // kill queries running > 30s
-  // statement_timeout does NOT fire while a session is idle *inside* a
-  // transaction — if a withTransaction() callback stalls on a non-DB await
-  // (hung network/stream) the lock + pool slot are held until restart, and
-  // autovacuum's xmin horizon stalls (table bloat). node-postgres passes this
-  // per-connection; kill any transaction left idle > 60s.
-  idle_in_transaction_session_timeout: 60_000,
-});
-
-pool.on("error", (err: unknown) => {
-  logger.error("Unexpected error on idle database client", err);
-});
-
-/**
- * A statement is safe to transparently retry only if it cannot have applied a
- * write before the connection dropped. A transient error (e.g. ECONNRESET) can
- * fire *after* the server committed an INSERT/UPDATE/DELETE — retrying that
- * would double-apply the write. Restrict retries to plain read statements.
- */
-function isRetryableStatement(sql: string): boolean {
-  return /^\s*(?:SELECT|SHOW|EXPLAIN)\b/i.test(sql);
-}
-
-/**
- * Execute a query against the database with optional retry on transient errors.
- * Retries apply to read-only statements only — see {@link isRetryableStatement}.
- * @param text - SQL query
- * @param params - Query parameters
- */
-export async function query<R = unknown>(
-  text: string,
-  params?: readonly unknown[],
-  opts: QueryOptions = {},
-): Promise<PgQueryResult<R>> {
-  // pg's typings require a mutable array; pg only reads the values.
-  const values = params as unknown[] | undefined;
-  // Inside withTransaction(): run on the transaction's client, and never
-  // retry — after a connection error the transaction is dead, so a retried
-  // statement would run outside it (or on a poisoned client).
-  const ambient = getAmbientTransactionClient();
-  if (ambient) {
-    // `R` is the caller's unchecked claim, as for `pool.query` below; checked
-    // callers go through rowContracts.ts.
-    return (await ambient.query(text, values)) as PgQueryResult<R>;
+function compareVersions(a: string, b: string): number {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d !== 0) return d;
   }
+  return 0;
+}
 
-  const retries = opts.retries ?? 0;
-  const maxRetries = retries > 0 && isRetryableStatement(text) ? retries : 0;
-  let attempt = 0;
+// ---------------------------------------------------------------------------
+// Opening
+// ---------------------------------------------------------------------------
 
-  for (;;) {
-    const start = Date.now();
+/** Pragmas every Vision connection runs with. */
+function applyPragmas(db: DatabaseSync, role: Connection["role"]): void {
+  if (role === "writer") db.exec("PRAGMA journal_mode = WAL");
+  db.exec(
+    [
+      "PRAGMA foreign_keys = ON",
+      "PRAGMA synchronous = FULL",
+      "PRAGMA fullfsync = ON",
+      "PRAGMA checkpoint_fullfsync = ON",
+      "PRAGMA busy_timeout = 10000",
+      "PRAGMA recursive_triggers = OFF",
+      // Vision's own schema calls its own functions from CHECK constraints
+      // and triggers; a build that defaults trusted_schema to OFF would
+      // refuse them.
+      "PRAGMA trusted_schema = ON",
+    ].join(";\n"),
+  );
+  if (role !== "writer") db.exec("PRAGMA query_only = ON");
+}
+
+/**
+ * Open a Vision database file with the pragmas and SQL functions every
+ * connection needs. Exported for the migrator, backups and scripts; the
+ * backend itself uses the shared connections below.
+ */
+export function openDatabase(
+  file: string,
+  role: Connection["role"] = "writer",
+  clock: ConnectionClock = { transactionStart: null, statementStart: null },
+): DatabaseSync {
+  if (role === "writer" && file !== ":memory:") {
+    mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  }
+  const db = new DatabaseSync(file, {
+    enableForeignKeyConstraints: true,
+    enableDoubleQuotedStringLiterals: false,
+    readOnly: role === "inspect",
+    timeout: 10_000,
+  });
+  try {
+    const row = db.prepare("SELECT sqlite_version() AS v").get() as { v?: unknown } | undefined;
+    const version = typeof row?.v === "string" ? row.v : "0";
+    if (compareVersions(version, MINIMUM_SQLITE_VERSION) < 0) {
+      throw new Error(
+        `SQLite ${version} is too old: Vision needs ${MINIMUM_SQLITE_VERSION} or newer (macOS 13 or later).`,
+      );
+    }
+    applyPragmas(db, role);
+    registerFunctions(db, clock);
+  } catch (err) {
+    db.close();
+    throw err;
+  }
+  return db;
+}
+
+function databaseFile(): string {
+  const file = settings.database.path;
+  if (!file) throw new Error("VISION_DATABASE_PATH is not set");
+  return file;
+}
+
+let writer: Connection | null = null;
+let reader: Connection | null = null;
+
+function makeConnection(file: string, role: Connection["role"]): Connection {
+  const clock: ConnectionClock = { transactionStart: null, statementStart: null };
+  const db = openDatabase(file, role, clock);
+  return { db, clock, statements: new Map(), role };
+}
+
+function getWriter(): Connection {
+  writer ??= makeConnection(databaseFile(), "writer");
+  return writer;
+}
+
+function getReader(): Connection {
+  if (!reader) {
+    getWriter(); // creates the file and switches it to WAL first
+    reader = makeConnection(databaseFile(), "reader");
+  }
+  return reader;
+}
+
+// ---------------------------------------------------------------------------
+// Unique-index names for error translation
+// ---------------------------------------------------------------------------
+
+let uniqueIndexes: Map<string, string> | null = null;
+
+function resolveUniqueIndex(table: string, columns: readonly string[]): string | undefined {
+  if (!uniqueIndexes) {
+    uniqueIndexes = new Map();
     try {
-      const result = await pool.query(text, values);
-      const duration = Date.now() - start;
-      // A >1s query is a production-relevant signal; keep it visible at the
-      // default (info/warn) level instead of debug, where it was invisible in
-      // prod. Plain echo tracing stays at debug.
-      if (duration > 1000) {
-        logger.warn(`Slow query (${duration}ms): ${text.slice(0, 100)}`);
-      } else if (settings.database.echo) {
-        logger.debug(`Query executed in ${duration}ms: ${text.slice(0, 100)}`);
+      const db = getWriter().db;
+      const tables = db
+        .prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+        .all() as Array<{ name: string }>;
+      for (const { name } of tables) {
+        const indexes = db.prepare(`PRAGMA index_list("${name.replaceAll('"', '""')}")`).all() as Array<{
+          name: string;
+          unique: number;
+        }>;
+        for (const index of indexes) {
+          if (index.unique === 0) continue;
+          const cols = (
+            db.prepare(`PRAGMA index_info("${index.name.replaceAll('"', '""')}")`).all() as Array<{ name: string | null }>
+          ).map((c) => c.name ?? "<expr>");
+          const key = `${name}(${cols.join(",")})`;
+          // sqlite_autoindex_* names stand for a table-level UNIQUE/PRIMARY KEY.
+          if (!uniqueIndexes.has(key) || !index.name.startsWith("sqlite_autoindex_")) {
+            uniqueIndexes.set(key, index.name.startsWith("sqlite_autoindex_") ? `${name}_${cols.join("_")}_key` : index.name);
+          }
+        }
       }
-      return result;
-    } catch (caught) {
-      const code = errorCode(caught);
-      const message = errorMessage(caught);
-      const duration = Date.now() - start;
-      const isTransient =
-        code === "ECONNRESET" ||
-        code === "57P01" || // admin_shutdown
-        code === "08006" || // connection_failure
-        code === "08001" || // sqlclient_unable_to_establish_sqlconnection
-        message.includes("Connection terminated");
+    } catch (err) {
+      logger.warn(`Could not read unique indexes: ${errorMessage(err)}`);
+    }
+  }
+  return uniqueIndexes.get(`${table}(${columns.join(",")})`);
+}
 
-      if (isTransient && attempt < maxRetries) {
-        attempt++;
-        const backoff = Math.min(200 * attempt, 2000);
-        logger.warn(
-          `Transient DB error (attempt ${attempt}/${maxRetries}), retrying in ${backoff}ms: ${message}`,
-        );
-        // Global setTimeout, not node:timers/promises: connection.test.ts
-        // drives this backoff with vi.useFakeTimers(), which cannot fake
-        // timers/promises.
-        await new Promise((r) => setTimeout(r, backoff));
-        continue;
+/** Forget cached schema facts after migrations or a restore. */
+export function resetSchemaCaches(): void {
+  uniqueIndexes = null;
+  for (const conn of [writer, reader]) conn?.statements.clear();
+}
+
+// ---------------------------------------------------------------------------
+// Statement execution
+// ---------------------------------------------------------------------------
+
+const STATEMENT_CACHE_LIMIT = 400;
+
+function prepare(conn: Connection, text: string): PreparedStatement {
+  let prepared = conn.statements.get(text);
+  if (prepared) {
+    // Refresh LRU position.
+    conn.statements.delete(text);
+    conn.statements.set(text, prepared);
+    return prepared;
+  }
+  const stmt = conn.db.prepare(text);
+  const columns = stmt.columns();
+  stmt.setReturnArrays(true);
+  prepared = {
+    stmt,
+    plan: columns.length > 0 ? columns.map((c) => planColumn(c.name, c.type)) : null,
+  };
+  conn.statements.set(text, prepared);
+  if (conn.statements.size > STATEMENT_CACHE_LIMIT) {
+    const oldest = conn.statements.keys().next().value;
+    if (oldest !== undefined) conn.statements.delete(oldest);
+  }
+  return prepared;
+}
+
+function rowsFromArrays(plan: ColumnPlan[], raw: unknown[]): Record<string, unknown>[] {
+  const rows = new Array<Record<string, unknown>>(raw.length);
+  for (let r = 0; r < raw.length; r++) {
+    const values = raw[r] as unknown[];
+    const row: Record<string, unknown> = {};
+    for (const [c, column] of plan.entries()) {
+      row[column.key] = column.read(values[c]);
+    }
+    rows[r] = row;
+  }
+  return rows;
+}
+
+// Per-statement timing, replacing pg_stat_statements for the admin page.
+interface StatementStats {
+  calls: number;
+  totalMs: number;
+  maxMs: number;
+  rows: number;
+}
+const statementStats = new Map<string, StatementStats>();
+const STATS_LIMIT = 1000;
+
+function recordTiming(text: string, ms: number, rows: number): void {
+  const key = text.replace(/\s+/g, " ").trim().slice(0, 500);
+  let stats = statementStats.get(key);
+  if (!stats) {
+    if (statementStats.size >= STATS_LIMIT) {
+      let victim: string | undefined;
+      let fewest = Infinity;
+      for (const [k, v] of statementStats) {
+        if (v.calls < fewest) {
+          fewest = v.calls;
+          victim = k;
+        }
       }
+      if (victim !== undefined) statementStats.delete(victim);
+    }
+    stats = { calls: 0, totalMs: 0, maxMs: 0, rows: 0 };
+    statementStats.set(key, stats);
+  }
+  stats.calls += 1;
+  stats.totalMs += ms;
+  stats.maxMs = Math.max(stats.maxMs, ms);
+  stats.rows += rows;
+}
 
-      logger.error(`Query failed after ${duration}ms: ${text.slice(0, 100)}`, {
-        error: message,
-      });
-      throw caught;
+/** Statement timings since the backend started, slowest total first. */
+export function getStatementStats(limit = 50): Array<{ query: string } & StatementStats> {
+  return [...statementStats.entries()]
+    .map(([query, s]) => ({ query, ...s }))
+    .sort((a, b) => b.totalMs - a.totalMs)
+    .slice(0, limit);
+}
+
+export function resetStatementStats(): void {
+  statementStats.clear();
+}
+
+/** Run one statement on a connection, synchronously. */
+function execute<R>(conn: Connection, sqlText: string, params: readonly unknown[] | undefined): PgQueryResult<R> {
+  const scanned = scanSql(sqlText);
+  const bound = toSqlParams(params);
+  const started = performance.now();
+  const inTransaction = conn.clock.transactionStart !== null;
+  if (!inTransaction) conn.clock.statementStart = instantFromDate(new Date());
+  try {
+    if (scanned.multipleStatements) {
+      if (bound.length > 0) throw new Error("Parameters cannot be bound to multi-statement SQL");
+      conn.db.exec(scanned.text);
+      return { rows: [], rowCount: null };
+    }
+    const prepared = prepare(conn, scanned.text);
+    if (prepared.plan) {
+      const raw = prepared.stmt.all(...bound) as unknown[];
+      const rows = rowsFromArrays(prepared.plan, raw) as R[];
+      return { rows, rowCount: rows.length };
+    }
+    const info = prepared.stmt.run(...bound);
+    return { rows: [], rowCount: Number(info.changes) };
+  } catch (err) {
+    const translated = translateSqliteError(err, resolveUniqueIndex);
+    logger.error(`Query failed: ${scanned.text.slice(0, 200)}`, { error: errorMessage(translated) });
+    throw translated;
+  } finally {
+    if (!inTransaction) conn.clock.statementStart = null;
+    const ms = performance.now() - started;
+    recordTiming(scanned.text, ms, 0);
+    if (ms > 1000) {
+      logger.warn(`Slow query (${Math.round(ms)}ms): ${scanned.text.slice(0, 100)}`);
+    } else if (settings.database.echo) {
+      logger.debug(`Query executed in ${ms.toFixed(1)}ms: ${scanned.text.slice(0, 100)}`);
     }
   }
 }
 
+// ---------------------------------------------------------------------------
+// Write lock
+// ---------------------------------------------------------------------------
+
+const LOCK_TIMEOUT_MS = settings.database.lockTimeoutMs;
+const LONG_TRANSACTION_MS = 60_000;
+
+interface Waiter {
+  resolve: () => void;
+  reject: (err: Error) => void;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+class WriteLock {
+  private held = false;
+  private heldSince = 0;
+  private readonly queue: Waiter[] = [];
+
+  async acquire(): Promise<() => void> {
+    if (!this.held) {
+      this.held = true;
+      this.heldSince = Date.now();
+      return () => this.release();
+    }
+    await new Promise<void>((resolve, reject) => {
+      const waiter: Waiter = { resolve, reject, timer: null };
+      if (LOCK_TIMEOUT_MS > 0) {
+        waiter.timer = setTimeout(() => {
+          const i = this.queue.indexOf(waiter);
+          if (i >= 0) this.queue.splice(i, 1);
+          const heldFor = Date.now() - this.heldSince;
+          const err = new Error(
+            `Timed out after ${LOCK_TIMEOUT_MS} ms waiting for the database write lock (held for ${heldFor} ms). ` +
+              "A transaction may be waiting on work that itself needs the database outside the transaction.",
+          ) as Error & { code: string };
+          err.code = "55P03";
+          reject(err);
+        }, LOCK_TIMEOUT_MS);
+        waiter.timer.unref();
+      }
+      this.queue.push(waiter);
+    });
+    this.heldSince = Date.now();
+    return () => this.release();
+  }
+
+  private release(): void {
+    const heldFor = Date.now() - this.heldSince;
+    if (heldFor > LONG_TRANSACTION_MS) {
+      logger.warn(`Database write lock was held for ${heldFor} ms`);
+    }
+    const next = this.queue.shift();
+    if (next) {
+      if (next.timer) clearTimeout(next.timer);
+      next.resolve();
+    } else {
+      this.held = false;
+    }
+  }
+
+  stats() {
+    return { held: this.held, waiting: this.queue.length };
+  }
+}
+
+const writeLock = new WriteLock();
+
+function ambientStore(): TransactionStore | undefined {
+  const store = txStorage.getStore();
+  return store?.conn ? store : undefined;
+}
+
+/** A client bound to one connection; used for transactions and snapshots. */
+function clientFor(store: TransactionStore): PgPoolClient {
+  return {
+    query(text, params) {
+      const conn = store.conn;
+      if (!conn) return Promise.reject(new Error("This transaction has already ended"));
+      const sqlText = typeof text === "string" ? text : text.text;
+      const values = typeof text === "string" ? params : (text.values ?? params);
+      try {
+        return Promise.resolve(execute(conn, sqlText, values));
+      } catch (err) {
+        return Promise.reject(err instanceof Error ? err : new Error(String(err)));
+      }
+    },
+    release() {},
+  };
+}
+
 /**
- * Execute a named prepared statement. PostgreSQL parses the plan once per
- * connection; pg passes text every call because pool connections are independent.
- *
- * @param name   - Unique statement name (stable across calls)
- * @param text   - SQL text
- * @param params - Bound parameters
+ * The transaction client of the withTransaction() this code runs inside,
+ * or null. Exported for callers that adapt to ambient-transaction mode.
  */
+function getAmbientTransactionClient(): PgPoolClient | null {
+  const store = ambientStore();
+  return store ? clientFor(store) : null;
+}
+
+/**
+ * Execute a statement. Inside withTransaction() it joins the transaction;
+ * otherwise reads use the reader and writes take the write lock.
+ */
+export async function query<R = unknown>(
+  text: string,
+  params?: readonly unknown[],
+  _opts: QueryOptions = {},
+): Promise<PgQueryResult<R>> {
+  const store = ambientStore();
+  if (store?.conn) return execute<R>(store.conn, text, params);
+  const scanned = scanSql(text);
+  if (scanned.readOnly) return execute<R>(getReader(), text, params);
+  const release = await writeLock.acquire();
+  try {
+    return execute<R>(getWriter(), text, params);
+  } finally {
+    release();
+  }
+}
+
+/** Kept for call compatibility: SQLite statements are cached by text already. */
 export async function queryPrepared(
-  name: string,
+  _name: string,
   text: string,
   params?: readonly unknown[],
 ): Promise<PgQueryResult> {
-  // pg's typings require a mutable array; pg only reads the values.
-  const values = params as unknown[] | undefined;
-  // Inside withTransaction(): run on the ambient client so repo methods built on
-  // queryPrepared (e.g. transactionRepository.getById/create) participate in the
-  // transaction instead of silently hitting the pool outside it — the same
-  // partial-write class the query() reroute above closes.
-  const ambient = getAmbientTransactionClient();
-  if (ambient) {
-    return ambient.query({ name, text, values });
-  }
-  return pool.query(
-    values === undefined ? { name, text } : { name, text, values },
-  );
+  return query(text, params);
 }
 
 /**
- * Get a client from the pool for transactions.
- * Remember to call client.release() when done.
+ * Run `fn` inside a transaction. The outermost call takes the write lock and
+ * runs BEGIN IMMEDIATE; a nested call runs under a SAVEPOINT on the same
+ * connection. COMMIT on success, ROLLBACK on throw.
  */
-export async function getClient(): Promise<PgPoolClient> {
-  return pool.connect();
-}
-
-/**
- * Run `fn` inside a database transaction.
- *
- * The outermost call acquires a pooled client, issues BEGIN, invokes
- * `fn(client)`, then COMMITs on success or ROLLBACKs on throw. A nested call
- * reuses the ambient client behind a unique savepoint, so it never opens an
- * independent transaction. The outermost call always releases the client.
- */
-export async function withTransaction<T>(
-  fn: (client: PgPoolClient) => Promise<T>,
-): Promise<T> {
-  const ambientClient = getAmbientTransactionClient();
-  const parentStore = txStorage.getStore();
-  if (ambientClient && parentStore) {
+export async function withTransaction<T>(fn: (client: PgPoolClient) => Promise<T>): Promise<T> {
+  const parentStore = ambientStore();
+  if (parentStore?.conn) {
     if (parentStore.activeNested) {
       try {
         await parentStore.activeNested;
       } catch {
-        // The active scope reports its own error to its caller. This sibling
-        // still rejects as an unsupported concurrent nesting attempt.
+        // The active scope reports its own error to its caller.
       }
       throw new Error(
         "Concurrent sibling withTransaction calls are not supported; await nested transactions sequentially",
       );
     }
-
+    const conn = parentStore.conn;
     const runNested = async () => {
       parentStore.savepointCounter.value += 1;
-      const savepointName = `vision_nested_tx_${parentStore.savepointCounter.value}`;
+      const name = `vision_nested_tx_${parentStore.savepointCounter.value}`;
       const childStore: TransactionStore = {
-        client: ambientClient,
+        conn,
         savepointCounter: parentStore.savepointCounter,
         activeNested: null,
       };
       try {
-        return await withSavepointIfInTransaction(savepointName, () =>
-          txStorage.run(childStore, () => fn(ambientClient)),
+        return await withSavepointIfInTransaction(name, () =>
+          txStorage.run(childStore, () => fn(clientFor(childStore))),
         );
       } finally {
-        childStore.client = null;
+        childStore.conn = null;
       }
     };
-
-    // pg clients execute one protocol stream. A sibling call observes this
-    // active promise and rejects only after it settles, so the outer rollback
-    // can never race an in-flight savepoint. Deeper nesting receives a child
-    // store and remains properly lexical.
     const operation = runNested();
     parentStore.activeNested = operation;
     try {
       return await operation;
     } finally {
-      if (parentStore.activeNested === operation) {
-        parentStore.activeNested = null;
-      }
+      if (parentStore.activeNested === operation) parentStore.activeNested = null;
     }
   }
 
-  const client = await getClient();
-  // The callback runs inside txStorage so module-level query() joins this
-  // transaction (see getAmbientTransactionClient). fn still receives the
-  // client for code that threads it explicitly — both routes hit the same
-  // connection.
-  const store: TransactionStore = {
-    client,
-    savepointCounter: { value: 0 },
-    activeNested: null,
-  };
-  // Widened so the `finally` below sees a boolean, not the narrowed literal.
-  let rollbackFailed = false as boolean;
+  const release = await writeLock.acquire();
+  const conn = getWriter();
+  const store: TransactionStore = { conn, savepointCounter: { value: 0 }, activeNested: null };
   try {
-    await client.query("BEGIN");
-    const result = await txStorage.run(store, () => fn(client));
-    await client.query("COMMIT");
-    return result;
-  } catch (err) {
+    conn.db.exec("BEGIN IMMEDIATE");
+    conn.clock.transactionStart = instantFromDate(new Date());
     try {
-      await client.query("ROLLBACK");
-    } catch (rollbackErr) {
-      logger.error("Transaction rollback failed", rollbackErr);
-      rollbackFailed = true;
+      const result = await txStorage.run(store, () => fn(clientFor(store)));
+      conn.db.exec("COMMIT");
+      return result;
+    } catch (err) {
+      try {
+        if (conn.db.isTransaction) conn.db.exec("ROLLBACK");
+      } catch (rollbackErr) {
+        logger.error("Transaction rollback failed", rollbackErr);
+      }
+      throw err;
     }
-    throw err;
   } finally {
-    // Invalidate the ambient store: a continuation leaked out of the callback
-    // (timer, un-awaited promise) must fall back to the pool, not write on a
-    // released client.
-    store.client = null;
-    // If ROLLBACK threw, the connection's transaction state is unknown.
-    // Passing a truthy arg to release() destroys the client instead of
-    // returning a poisoned connection to the pool.
-    client.release(rollbackFailed || undefined);
+    conn.clock.transactionStart = null;
+    // A continuation leaked out of the callback must not write into a
+    // finished transaction.
+    store.conn = null;
+    release();
   }
 }
 
 /**
- * Run `fn` under a SAVEPOINT when inside an ambient withTransaction(), so a
- * caught failure doesn't abort the whole transaction (PostgreSQL poisons a tx
- * on ANY statement error — a catch-and-retry pattern that works on a pool
- * connection would otherwise fail with 25P02 on every statement after the
- * catch). Outside a transaction this is a plain passthrough.
- *
- * `name` must be a static identifier from the caller, never user input.
- *
+ * Run `fn` under a SAVEPOINT when inside withTransaction(), so a caught
+ * failure rolls back only its own statements. Outside a transaction this is
+ * a plain passthrough. `name` must be a static identifier.
  */
-export async function withSavepointIfInTransaction<T>(
-  name: string,
-  fn: () => Promise<T>,
-): Promise<T> {
-  const client = getAmbientTransactionClient();
-  if (!client) return fn();
-  await client.query(`SAVEPOINT ${name}`);
+export async function withSavepointIfInTransaction<T>(name: string, fn: () => Promise<T>): Promise<T> {
+  const store = ambientStore();
+  if (!store?.conn) return fn();
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`Unsafe savepoint name: ${name}`);
+  const conn = store.conn;
+  conn.db.exec(`SAVEPOINT ${name}`);
   try {
     const result = await fn();
-    await client.query(`RELEASE SAVEPOINT ${name}`);
+    conn.db.exec(`RELEASE SAVEPOINT ${name}`);
     return result;
   } catch (err) {
-    // If fn failed because the connection dropped, ROLLBACK TO SAVEPOINT throws
-    // too; log it but rethrow the ORIGINAL error so the root cause isn't lost
-    // (mirrors withTransaction's rollback handling above).
     try {
-      await client.query(`ROLLBACK TO SAVEPOINT ${name}`);
+      conn.db.exec(`ROLLBACK TO SAVEPOINT ${name}`);
+      conn.db.exec(`RELEASE SAVEPOINT ${name}`);
     } catch (rollbackErr) {
       logger.error(`ROLLBACK TO SAVEPOINT ${name} failed`, rollbackErr);
     }
@@ -340,44 +574,110 @@ export async function withSavepointIfInTransaction<T>(
 }
 
 /**
- * Check if the database is reachable.
+ * Run `fn` against one consistent snapshot of committed data: a separate
+ * read-only connection holds a read transaction for the duration, so every
+ * query inside sees the same state (PostgreSQL's REPEATABLE READ READ ONLY).
  */
-export async function checkConnection(): Promise<boolean> {
+export async function withReadSnapshot<T>(fn: (client: PgPoolClient) => Promise<T>): Promise<T> {
+  getWriter();
+  const conn = makeConnection(databaseFile(), "snapshot");
+  const store: TransactionStore = { conn, savepointCounter: { value: 0 }, activeNested: null };
   try {
-    await pool.query("SELECT 1");
-    return true;
+    conn.db.exec("BEGIN");
+    // A read transaction starts at its first read; take it now.
+    conn.db.prepare("SELECT 1 FROM sqlite_schema LIMIT 1").get();
+    conn.clock.transactionStart = instantFromDate(new Date());
+    return await txStorage.run(store, () => fn(clientFor(store)));
+  } finally {
+    store.conn = null;
+    try {
+      if (conn.db.isTransaction) conn.db.exec("COMMIT");
+    } finally {
+      conn.db.close();
+    }
+  }
+}
+
+/** A client for code that runs a sequence of statements; prefer withTransaction(). */
+export function getClient(): Promise<PgPoolClient> {
+  return Promise.resolve({
+    query: (text, params) =>
+      typeof text === "string" ? query(text, params) : query(text.text, text.values ?? params),
+    release() {},
+  });
+}
+
+export function checkConnection(): Promise<boolean> {
+  try {
+    execute(getReader(), "SELECT 1", []);
+    return Promise.resolve(true);
   } catch {
-    return false;
+    return Promise.resolve(false);
+  }
+}
+
+/** Number of application tables. */
+export function getTableCount(): Promise<number> {
+  try {
+    const result = execute<{ count: number }>(
+      getReader(),
+      "SELECT count(*) AS count FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+      [],
+    );
+    return Promise.resolve(result.rows[0]?.count ?? 0);
+  } catch (err) {
+    return Promise.reject(err instanceof Error ? err : new Error(String(err)));
+  }
+}
+
+/** Lock statistics in the shape the health endpoint reported for the pool. */
+export function getPoolStats() {
+  const lock = writeLock.stats();
+  return {
+    totalCount: (writer ? 1 : 0) + (reader ? 1 : 0),
+    idleCount: lock.held ? 0 : 1,
+    waitingCount: lock.waiting,
+    maxConnections: 2,
+  };
+}
+
+/** Checkpoint the WAL and close both connections. */
+export async function closePool(): Promise<void> {
+  const release = await writeLock.acquire();
+  try {
+    if (reader) {
+      reader.db.close();
+      reader = null;
+    }
+    if (writer) {
+      try {
+        writer.db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+      } catch (err) {
+        logger.warn(`WAL checkpoint at close failed: ${errorMessage(err)}`);
+      }
+      writer.db.close();
+      writer = null;
+    }
+    resetSchemaCaches();
+  } finally {
+    release();
   }
 }
 
 /**
- * Get table count in the public schema.
+ * Run `fn` with exclusive use of the writer outside any transaction (for
+ * VACUUM, checkpoints and file swaps). Waits for running transactions.
  */
-export async function getTableCount(): Promise<number> {
-  const result = await pool.query<{ count: string }>(
-    "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'",
-  );
-  const row = result.rows[0];
-  return parseInt(row?.count ?? "0", 10);
+export async function withExclusiveWriter<T>(fn: (db: DatabaseSync) => T | Promise<T>): Promise<T> {
+  const release = await writeLock.acquire();
+  try {
+    return await fn(getWriter().db);
+  } finally {
+    release();
+  }
 }
 
-/**
- * Get pool statistics for monitoring.
- */
-export function getPoolStats() {
-  return {
-    totalCount: pool.totalCount,
-    idleCount: pool.idleCount,
-    waitingCount: pool.waitingCount,
-    maxConnections: poolMax,
-  };
-}
-
-export async function closePool(): Promise<void> {
-  await pool.end();
-}
-
+const pool = { query, connect: getClient, end: closePool };
 export default pool;
 
 export { getAmbientTransactionClient as __getAmbientTransactionClient };

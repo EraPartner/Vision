@@ -21,10 +21,10 @@ for (const fails of [false, true]) {
     };
     const capture = captureQuiescentSnapshot(runtime, () => {
       assert.equal(running, false);
-      if (fails) return Promise.reject(new Error("dump failed"));
+      if (fails) return Promise.reject(new Error("snapshot failed"));
       return Promise.resolve("snapshot");
     });
-    if (fails) await assert.rejects(capture, /dump failed/);
+    if (fails) await assert.rejects(capture, /snapshot failed/);
     else assert.equal(await capture, "snapshot");
     assert.equal(running, true);
   });

@@ -161,7 +161,7 @@ describe("checkRows in log mode (production default)", () => {
 });
 
 describe("checkRows on valid rows", () => {
-  it("returns pg's own objects, extra columns included, and logs nothing", () => {
+  it("returns the driver's own row objects, extra columns included, and logs nothing", () => {
     const row = { ...txRow({ id: asTransactionId(5) }), tx_hash: "legacy column" };
     const result = checkRows(transactionRowSchema, [row], { mode: "throw" });
     expect(result[0]).toBe(row);
@@ -225,7 +225,7 @@ describe("queryRows / queryOne", () => {
 });
 
 describe("row types derived from the schemas", () => {
-  it("keep pg's string NUMERIC/BIGINT and Date DATE shapes", () => {
+  it("keep the driver's string DECIMAL/BIGINT and Date DATE shapes", () => {
     expectTypeOf<TransactionRow["amount"]>().toEqualTypeOf<string>();
     expectTypeOf<TransactionRow["date"]>().toEqualTypeOf<Date>();
     expectTypeOf<TransactionRow["import_batch_id"]>().toEqualTypeOf<

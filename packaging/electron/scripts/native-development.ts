@@ -16,7 +16,6 @@ import {
 import { appRoot } from "../paths";
 
 const repoRoot = path.resolve(appRoot, "..", "..");
-const nativePayloadRoot = path.resolve(appRoot, "native-runtime");
 
 export interface ChildExit {
   code: number | null;
@@ -72,7 +71,6 @@ export async function terminateChild(
 
 export async function main(): Promise<void> {
   const appPort = parsePort(process.env.VISION_APP_PORT, 3002);
-  const postgresPort = parsePort(process.env.VISION_POSTGRES_PORT, 54329);
   if (!(await isPortFree(appPort))) {
     throw Object.assign(
       new Error(
@@ -95,12 +93,8 @@ export async function main(): Promise<void> {
     userDataDir,
     repoRoot,
     runtimeRoot: repoRoot,
-    postgresRuntimeRoot: nativePayloadRoot,
-    allowExternalPostgres:
-      process.env.VISION_ALLOW_EXTERNAL_POSTGRES === "true",
     runtimeId: "vision_dev",
     appPort,
-    postgresPort,
   });
   let backend: ChildProcess | undefined;
   let frontend: ChildProcess | undefined;
@@ -112,7 +106,8 @@ export async function main(): Promise<void> {
       developmentRuntime: true,
     });
     const tools = await runtime.discover();
-    await runtime.bootstrapDatabase();
+    // The backend creates and migrates the SQLite database when it starts.
+    await runtime.ensureDatabaseReady();
     const runtimeEnv = parseEnvFile(
       await fs.promises.readFile(runtime.paths.env, "utf8"),
     );
@@ -180,7 +175,6 @@ export async function main(): Promise<void> {
       process.exitCode = result.code;
   } finally {
     await Promise.all([terminateChild(backend), terminateChild(frontend)]);
-    await runtime.stopPostgres();
   }
 }
 

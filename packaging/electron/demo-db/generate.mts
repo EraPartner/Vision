@@ -1,5 +1,9 @@
-// Deterministic generator for the Vision demo dataset. Emits data-only SQL for
-// a database that has already been migrated to the packaged schema revision.
+// Deterministic generator for the Vision demo dataset. Emits data-only SQLite
+// SQL (ADR-263) for a database that has already been migrated to the packaged
+// schema version. It runs on a connection with Vision's SQL functions
+// registered (vision_jsonb), and every value is written in the canonical text
+// form the column CHECK constraints require: decimals at the column's declared
+// scale, dates as YYYY-MM-DD, booleans as 0/1 and jsonb through vision_jsonb.
 // Persona: a Belgian dual-income household in Ghent, ~2.5 years of history.
 
 import { pathToFileURL } from "node:url";
@@ -80,8 +84,68 @@ const out: string[] = [];
 const S = (s: string): number => out.push(s);
 const q = (v: string | number | boolean | null | undefined): string =>
   v === null || v === undefined ? "NULL" : `'${String(v).replace(/'/g, "''")}'`;
-const num = (v: number | null | undefined, d = 2): string =>
-  v === null || v === undefined ? "NULL" : v.toFixed(d);
+const bool = (v: boolean): string => (v ? "1" : "0");
+const jsonb = (value: unknown): string =>
+  `vision_jsonb(${q(JSON.stringify(value))})`;
+
+/**
+ * Declared scale of every DECIMAL_TEXT(p,s) column this generator writes. The
+ * build-demo-seed test checks it against db/migrations.
+ */
+export const DEMO_DECIMAL_COLUMNS = Object.freeze({
+  "account_statement_balances.balance": 4,
+  "transactions.amount": 4,
+  "transactions.balance": 4,
+  "transaction_splits.amount": 4,
+  "split_payments.amount": 4,
+  "planned_transactions.amount": 4,
+  "planned_transactions.loan_principal": 4,
+  "planned_transactions.loan_annual_interest_rate": 4,
+  "planned_transactions.loan_regular_payment_amount": 4,
+  "planned_transaction_loan_schedule.payment_amount": 4,
+  "planned_transaction_loan_schedule.principal_amount": 4,
+  "planned_transaction_loan_schedule.interest_amount": 4,
+  "planned_transaction_loan_schedule.remaining_principal": 4,
+  "asset_price_history.close_price": 6,
+  "exchange_rates.rate_to_eur": 10,
+  "investments.current_price": 6,
+  "investments.interest_rate": 4,
+  "investments.cadastral_income": 2,
+  "investments.municipality_tax_rate": 4,
+  "portfolio_transactions.amount": 4,
+  "portfolio_transactions.fees": 4,
+  "portfolio_transactions.taxes": 4,
+  "portfolio_transactions.units": 8,
+  "portfolio_transactions.price_per_unit": 6,
+  "portfolio_transactions.fx_rate_to_eur": 10,
+  "watchlist.target_price": 6,
+} as const);
+type DecimalColumn = keyof typeof DEMO_DECIMAL_COLUMNS;
+
+/**
+ * Canonical decimal text for a DECIMAL_TEXT column, as PostgreSQL numeric
+ * output: the value rounded to `d` places (the precision the dataset is
+ * defined with), then written at the column's scale with no exponent and no
+ * negative zero.
+ */
+export function decimalText(value: number, d: number, scale: number): string {
+  if (!Number.isFinite(value) || d > scale)
+    throw new Error(`Synthetic Demo decimal ${value} does not fit scale ${scale}`);
+  const rounded = value.toFixed(d);
+  const negative = rounded.startsWith("-");
+  const [whole = "0", fraction = ""] = (negative ? rounded.slice(1) : rounded).split(".");
+  const text = scale > 0 ? `${whole}.${fraction.padEnd(scale, "0")}` : whole;
+  return negative && /[1-9]/.test(text) ? `-${text}` : text;
+}
+
+const num = (
+  v: number | null | undefined,
+  d: number,
+  column: DecimalColumn,
+): string =>
+  v === null || v === undefined
+    ? "NULL"
+    : q(decimalText(v, d, DEMO_DECIMAL_COLUMNS[column]));
 S("-- Vision demo data (synthetic). Generated deterministically.");
 
 // ---- Accounts (ADR-088: real account entities) ----
@@ -155,15 +219,21 @@ const CATS: readonly (readonly [string, string])[] = [
   ["FINANCE", "TAX"],
   ["TELECOM", "MOBILE"],
 ];
-// Migration 0114 creates a root row on each legacy leaf insert. Keep those
-// sequence-assigned root IDs above the explicit synthetic leaf IDs.
-S(`SELECT setval('public.categories_id_seq',${CATS.length},true);`);
+// A trigger creates a root row on each legacy leaf insert. Reserve the
+// explicit synthetic leaf IDs in the AUTOINCREMENT sequence so the root rows
+// it assigns land above them.
+S(
+  `INSERT INTO sqlite_sequence (name,seq) SELECT 'categories',0 WHERE NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name='categories');`,
+);
+S(
+  `UPDATE sqlite_sequence SET seq=max(seq,${CATS.length}) WHERE name='categories';`,
+);
 const catId: Record<string, number> = {};
 CATS.forEach((c, i) => {
   const id = i + 1;
   catId[c[0] + ":" + c[1]] = id;
   S(
-    `INSERT INTO categories (id,general,detail,is_active) VALUES (${id},${q(c[0])},${q(c[1])},true);`,
+    `INSERT INTO categories (id,general,detail,is_active) VALUES (${id},${q(c[0])},${q(c[1])},1);`,
   );
 });
 
@@ -232,18 +302,18 @@ RECIPS.forEach((r, i) => {
     .replace(/[^A-Z0-9]+/g, " ")
     .trim();
   S(
-    `INSERT INTO recipients (id,name,normalized_name,default_category_id,is_active) VALUES (${id},${q(r[0])},${q(norm)},${catId[r[1]] ?? "NULL"},true);`,
+    `INSERT INTO recipients (id,name,normalized_name,default_category_id,is_active) VALUES (${id},${q(r[0])},${q(norm)},${catId[r[1]] ?? "NULL"},1);`,
   );
 });
 
 S(
-  `INSERT INTO recipient_bank_accounts (id,recipient_id,account_number,bank_name,is_primary,is_active) VALUES (1,${recId["Creatief Bureau BVBA"]},'BE68 5390 0754 7034','KBC',true,true);`,
+  `INSERT INTO recipient_bank_accounts (id,recipient_id,account_number,bank_name,is_primary,is_active) VALUES (1,${recId["Creatief Bureau BVBA"]},'BE68 5390 0754 7034','KBC',1,1);`,
 );
 S(
-  `INSERT INTO recipient_bank_accounts (id,recipient_id,account_number,bank_name,is_primary,is_active) VALUES (2,${recId["Tech Solutions BVBA"]},'BE71 0961 2345 6769','BNP Paribas Fortis',true,true);`,
+  `INSERT INTO recipient_bank_accounts (id,recipient_id,account_number,bank_name,is_primary,is_active) VALUES (2,${recId["Tech Solutions BVBA"]},'BE71 0961 2345 6769','BNP Paribas Fortis',1,1);`,
 );
 S(
-  `INSERT INTO recipient_bank_accounts (id,recipient_id,account_number,bank_name,is_primary,is_active) VALUES (3,${recId["KBC Woonkrediet"]},'BE62 5100 0754 7061','KBC',true,true);`,
+  `INSERT INTO recipient_bank_accounts (id,recipient_id,account_number,bank_name,is_primary,is_active) VALUES (3,${recId["KBC Woonkrediet"]},'BE62 5100 0754 7061','KBC',1,1);`,
 );
 S(
   `INSERT INTO recipient_match_patterns (id,recipient_id,pattern,pattern_kind,priority) VALUES (1,${recId["Colruyt"]},'COLRUYT','literal_prefix',10);`,
@@ -682,19 +752,19 @@ S(
   `INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency) VALUES (${AID.SAVINGS},${q(ACCT.SAVINGS)},'KBC Spaarrekening','KBC','savings','semi_liquid','joint','EUR');`,
 );
 S(
-  `INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,has_cash_sleeve) VALUES (${AID.DEGIRO},'DEGIRO Beleggingsrekening','DEGIRO','DEGIRO','brokerage','liquid','me','EUR',true);`,
+  `INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,has_cash_sleeve) VALUES (${AID.DEGIRO},'DEGIRO Beleggingsrekening','DEGIRO','DEGIRO','brokerage','liquid','me','EUR',1);`,
 );
 S(
-  `INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,has_cash_sleeve) VALUES (${AID.IBKR},'Interactive Brokers','IBKR','Interactive Brokers','brokerage','liquid','partner','EUR',true);`,
+  `INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,has_cash_sleeve) VALUES (${AID.IBKR},'Interactive Brokers','IBKR','Interactive Brokers','brokerage','liquid','partner','EUR',1);`,
 );
 S(
-  `INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,spendable,has_cash_sleeve) VALUES (${AID.MORTGAGE},${q(ACCT.MORTGAGE)},'Hypotheek woning Gent','KBC','liability','illiquid','joint','EUR',false,false);`,
+  `INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,spendable,has_cash_sleeve) VALUES (${AID.MORTGAGE},${q(ACCT.MORTGAGE)},'Hypotheek woning Gent','KBC','liability','illiquid','joint','EUR',0,0);`,
 );
 S(
-  `INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,has_cash_sleeve) VALUES (${AID.BITVAVO},'Bitvavo','Bitvavo','Bitvavo','crypto_exchange','liquid','me','EUR',true);`,
+  `INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,has_cash_sleeve) VALUES (${AID.BITVAVO},'Bitvavo','Bitvavo','Bitvavo','crypto_exchange','liquid','me','EUR',1);`,
 );
 S(
-  `INSERT INTO account_statement_balances (account_id,currency,balance,balance_date) VALUES (${AID.CHECKING},'EUR',${num(finalBal(ACCT.CHECKING) + 15.5, 2)},'${fmt(TODAY)}'),(${AID.SAVINGS},'EUR',${num(finalBal(ACCT.SAVINGS), 2)},'${fmt(TODAY)}');`,
+  `INSERT INTO account_statement_balances (account_id,currency,balance,balance_date) VALUES (${AID.CHECKING},'EUR',${num(finalBal(ACCT.CHECKING) + 15.5, 2, "account_statement_balances.balance")},'${fmt(TODAY)}'),(${AID.SAVINGS},'EUR',${num(finalBal(ACCT.SAVINGS), 2, "account_statement_balances.balance")},'${fmt(TODAY)}');`,
 );
 
 const accountIdByName: Record<string, number> = {
@@ -709,7 +779,7 @@ for (const t of txns.slice().sort((a, b) => a.id - b.id)) {
     throw new Error(`Unknown synthetic account: ${t.account}`);
   }
   S(
-    `INSERT INTO transactions (id,date,amount,currency,account_id,recipient_id,category_id,is_active,memo,comment,balance,is_transfer,transfer_source) VALUES (${t.id},'${fmt(t.date)}',${num(t.amount, 4)},'EUR',${accountId},${recId[t.recip]},${t.cid ?? "NULL"},true,${q(t.memo)},${q(t.comment)},${num(t.balance, 2)},${t.isTransfer ? "true" : "false"},${t.transferSource ? q(t.transferSource) : "NULL"});`,
+    `INSERT INTO transactions (id,date,amount,currency,account_id,recipient_id,category_id,is_active,memo,comment,balance,is_transfer,transfer_source) VALUES (${t.id},'${fmt(t.date)}',${num(t.amount, 4, "transactions.amount")},'EUR',${accountId},${recId[t.recip]},${t.cid ?? "NULL"},1,${q(t.memo)},${q(t.comment)},${num(t.balance, 2, "transactions.balance")},${bool(t.isTransfer)},${t.transferSource ? q(t.transferSource) : "NULL"});`,
   );
 }
 
@@ -725,7 +795,7 @@ TAGS.forEach((t, i) => {
   const id = i + 1;
   tagId[t[0]] = id;
   S(
-    `INSERT INTO tags (id,slug,color,is_active) VALUES (${id},${q(t[0])},${q(t[1])},true);`,
+    `INSERT INTO tags (id,slug,color,is_active) VALUES (${id},${q(t[0])},${q(t[1])},1);`,
   );
 });
 const seenTL = new Set<string>();
@@ -756,18 +826,18 @@ chosen.forEach((c, idx) => {
   splitId++;
   const settled = idx % 3 === 0;
   S(
-    `INSERT INTO transaction_splits (id,transaction_id,recipient_id,amount,note,is_settled) VALUES (${splitId},${c.txId},${recId[friend]},${num(share, 2)},${q("Gedeelde rekening met " + friend)},${settled});`,
+    `INSERT INTO transaction_splits (id,transaction_id,recipient_id,amount,note,is_settled) VALUES (${splitId},${c.txId},${recId[friend]},${num(share, 2, "transaction_splits.amount")},${q("Gedeelde rekening met " + friend)},${bool(settled)});`,
   );
   if (settled) {
     payId++;
     S(
-      `INSERT INTO split_payments (id,split_id,amount,paid_at,note) VALUES (${payId},${splitId},${num(share, 2)},'${fmt(addDaysUTC(c.date, ri(2, 20)))}','Terugbetaald');`,
+      `INSERT INTO split_payments (id,split_id,amount,paid_at,note) VALUES (${payId},${splitId},${num(share, 2, "split_payments.amount")},'${fmt(addDaysUTC(c.date, ri(2, 20)))}','Terugbetaald');`,
     );
   } else if (idx % 3 === 1) {
     const part = Math.round((share / 2) * 100) / 100;
     payId++;
     S(
-      `INSERT INTO split_payments (id,split_id,amount,paid_at,note) VALUES (${payId},${splitId},${num(part, 2)},'${fmt(addDaysUTC(c.date, ri(2, 15)))}','Deelbetaling');`,
+      `INSERT INTO split_payments (id,split_id,amount,paid_at,note) VALUES (${payId},${splitId},${num(part, 2, "split_payments.amount")},'${fmt(addDaysUTC(c.date, ri(2, 15)))}','Deelbetaling');`,
     );
   }
 });
@@ -786,7 +856,7 @@ function planned(
 ): number {
   planId++;
   S(
-    `INSERT INTO planned_transactions (id,planned_date,amount,currency,memo,recipient_id,category_id,is_recurring,recurrence_pattern,is_executed,is_active,reminder_days_before) VALUES (${planId},'${fmt(date)}',${num(amount, 2)},'EUR',${q(memo)},${recId[recip]},${catId[catKey]},${recurring},${pattern ? q(pattern) : "NULL"},false,true,${reminder ?? "NULL"});`,
+    `INSERT INTO planned_transactions (id,planned_date,amount,currency,memo,recipient_id,category_id,is_recurring,recurrence_pattern,is_executed,is_active,reminder_days_before) VALUES (${planId},'${fmt(date)}',${num(amount, 2, "planned_transactions.amount")},'EUR',${q(memo)},${recId[recip]},${catId[catKey]},${bool(recurring)},${pattern ? q(pattern) : "NULL"},0,1,${reminder ?? "NULL"});`,
   );
   return planId;
 }
@@ -868,7 +938,7 @@ let loanSchedId = 0;
   planId++;
   const nextDue = ymd(2026, 7, 1);
   S(
-    `INSERT INTO planned_transactions (id,planned_date,amount,currency,memo,recipient_id,category_id,is_recurring,recurrence_pattern,is_executed,is_active,is_loan,loan_type,loan_principal,loan_annual_interest_rate,loan_term_months,loan_start_date,loan_payment_day,loan_regular_payment_amount,loan_first_payment_date) VALUES (${planId},'${fmt(nextDue)}',${num(-pay, 2)},'EUR','Hypotheek woning Gent',${recId["KBC Woonkrediet"]},${catId["HOUSING:MORTGAGE"]},true,'monthly',false,true,true,'amortizing',${num(principal, 2)},${num(annual, 4)},${termM},'${fmt(startDate)}',3,${num(pay, 2)},'${fmt(startDate)}');`,
+    `INSERT INTO planned_transactions (id,planned_date,amount,currency,memo,recipient_id,category_id,is_recurring,recurrence_pattern,is_executed,is_active,is_loan,loan_type,loan_principal,loan_annual_interest_rate,loan_term_months,loan_start_date,loan_payment_day,loan_regular_payment_amount,loan_first_payment_date) VALUES (${planId},'${fmt(nextDue)}',${num(-pay, 2, "planned_transactions.amount")},'EUR','Hypotheek woning Gent',${recId["KBC Woonkrediet"]},${catId["HOUSING:MORTGAGE"]},1,'monthly',0,1,1,'amortizing',${num(principal, 2, "planned_transactions.loan_principal")},${num(annual, 4, "planned_transactions.loan_annual_interest_rate")},${termM},'${fmt(startDate)}',3,${num(pay, 2, "planned_transactions.loan_regular_payment_amount")},'${fmt(startDate)}');`,
   );
   const loanPlanId = planId;
   let bal = principal;
@@ -879,7 +949,7 @@ let loanSchedId = 0;
     const due = ymd(2018, 5 + i, 1);
     loanSchedId++;
     S(
-      `INSERT INTO planned_transaction_loan_schedule (id,planned_transaction_id,installment_number,due_date,payment_amount,principal_amount,interest_amount,remaining_principal) VALUES (${loanSchedId},${loanPlanId},${i},'${fmt(due)}',${num(pay, 2)},${num(princ, 2)},${num(interest, 2)},${num(bal, 2)});`,
+      `INSERT INTO planned_transaction_loan_schedule (id,planned_transaction_id,installment_number,due_date,payment_amount,principal_amount,interest_amount,remaining_principal) VALUES (${loanSchedId},${loanPlanId},${i},'${fmt(due)}',${num(pay, 2, "planned_transaction_loan_schedule.payment_amount")},${num(princ, 2, "planned_transaction_loan_schedule.principal_amount")},${num(interest, 2, "planned_transaction_loan_schedule.interest_amount")},${num(bal, 2, "planned_transaction_loan_schedule.remaining_principal")});`,
     );
   }
 }
@@ -928,7 +998,7 @@ function emitHistory(
   for (const [d, p] of series) {
     aphId++;
     S(
-      `INSERT INTO asset_price_history (id,investment_id,price_date,close_price,source) VALUES (${aphId},${investmentId},'${fmt(d)}',${num(p, 6)},'manual');`,
+      `INSERT INTO asset_price_history (id,investment_id,price_date,close_price,source) VALUES (${aphId},${investmentId},'${fmt(d)}',${num(p, 6, "asset_price_history.close_price")},'manual');`,
     );
   }
 }
@@ -953,7 +1023,7 @@ const fxSeries: PricePoint[] = [];
   rows.forEach(([d, rate], i) => {
     ercId++;
     S(
-      `INSERT INTO exchange_rates (id,currency_code,rate_to_eur,rate_date,is_latest) VALUES (${ercId},'USD',${num(rate, 10)},'${fmt(d)}',${i === rows.length - 1 ? "true" : "false"});`,
+      `INSERT INTO exchange_rates (id,currency_code,rate_to_eur,rate_date,is_latest) VALUES (${ercId},'USD',${num(rate, 10, "exchange_rates.rate_to_eur")},'${fmt(d)}',${bool(i === rows.length - 1)});`,
     );
   });
 }
@@ -989,7 +1059,7 @@ function unitInv(
   const series = priceSeries(ymd(2024, 1, 1), basePrice, vol, bias);
   const cur = at(series, series.length - 1)[1];
   S(
-    `INSERT INTO investments (id,name,symbol,asset_class,currency,is_active,price_provider,current_price) VALUES (${id},${q(name)},${q(sym)},'${cls}',${q(ccy)},true,'manual',${num(cur, 6)});`,
+    `INSERT INTO investments (id,name,symbol,asset_class,currency,is_active,price_provider,current_price) VALUES (${id},${q(name)},${q(sym)},'${cls}',${q(ccy)},1,'manual',${num(cur, 6, "investments.current_price")});`,
   );
   emitHistory(series, id);
   return { id, ccy, series, basePrice, cls, accountId };
@@ -1007,7 +1077,7 @@ function buy(
   const fx = inv.ccy === "USD" ? fxAt(date) : 1;
   ptxId++;
   S(
-    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,fees,taxes,currency,units,price_per_unit,fx_rate_to_eur,account_id) VALUES (${ptxId},${inv.id},'buy','${fmt(date)}',${num(amount, 4)},${num(rf(0, 4), 4)},0,${q(inv.ccy)},${num(units, 8)},${num(ppu, 6)},${num(fx, 10)},${acctId ?? "NULL"});`,
+    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,fees,taxes,currency,units,price_per_unit,fx_rate_to_eur,account_id) VALUES (${ptxId},${inv.id},'buy','${fmt(date)}',${num(amount, 4, "portfolio_transactions.amount")},${num(rf(0, 4), 4, "portfolio_transactions.fees")},${num(0, 4, "portfolio_transactions.taxes")},${q(inv.ccy)},${num(units, 8, "portfolio_transactions.units")},${num(ppu, 6, "portfolio_transactions.price_per_unit")},${num(fx, 10, "portfolio_transactions.fx_rate_to_eur")},${acctId ?? "NULL"});`,
   );
 }
 function dividend(
@@ -1018,7 +1088,7 @@ function dividend(
 ): void {
   ptxId++;
   S(
-    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,fees,taxes,currency,fx_rate_to_eur,account_id) VALUES (${ptxId},${inv.id},'dividend','${fmt(date)}',${num(amount, 4)},0,${num(amount * 0.3, 4)},${q(inv.ccy)},${inv.ccy === "USD" ? num(fxAt(date), 10) : 1},${acctId ?? "NULL"});`,
+    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,fees,taxes,currency,fx_rate_to_eur,account_id) VALUES (${ptxId},${inv.id},'dividend','${fmt(date)}',${num(amount, 4, "portfolio_transactions.amount")},${num(0, 4, "portfolio_transactions.fees")},${num(amount * 0.3, 4, "portfolio_transactions.taxes")},${q(inv.ccy)},${num(inv.ccy === "USD" ? fxAt(date) : 1, 10, "portfolio_transactions.fx_rate_to_eur")},${acctId ?? "NULL"});`,
   );
 }
 
@@ -1163,19 +1233,19 @@ invId++;
 {
   const id = invId;
   S(
-    `INSERT INTO investments (id,name,asset_class,currency,is_active,price_provider,current_price,interest_rate) VALUES (${id},'KBC Termijnrekening','savings','EUR',true,'manual',15250.00,2.5000);`,
+    `INSERT INTO investments (id,name,asset_class,currency,is_active,price_provider,current_price,interest_rate) VALUES (${id},'KBC Termijnrekening','savings','EUR',1,'manual',${num(15250, 2, "investments.current_price")},${num(2.5, 4, "investments.interest_rate")});`,
   );
   ptxId++;
   S(
-    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'buy','${fmt(ymd(2024, 1, 15))}',12000.0000,'EUR',${AID.SAVINGS});`,
+    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'buy','${fmt(ymd(2024, 1, 15))}',${num(12000, 4, "portfolio_transactions.amount")},'EUR',${AID.SAVINGS});`,
   );
   ptxId++;
   S(
-    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'interest','${fmt(ymd(2025, 1, 2))}',180.0000,'EUR',${AID.SAVINGS});`,
+    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'interest','${fmt(ymd(2025, 1, 2))}',${num(180, 4, "portfolio_transactions.amount")},'EUR',${AID.SAVINGS});`,
   );
   ptxId++;
   S(
-    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'buy','${fmt(ymd(2025, 6, 10))}',3000.0000,'EUR',${AID.SAVINGS});`,
+    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'buy','${fmt(ymd(2025, 6, 10))}',${num(3000, 4, "portfolio_transactions.amount")},'EUR',${AID.SAVINGS});`,
   );
 }
 invId++;
@@ -1183,30 +1253,30 @@ invId++;
   const id = invId;
   const maturityDate = ymd(2027, 9, 4);
   S(
-    `INSERT INTO investments (id,name,asset_class,currency,is_active,price_provider,current_price,interest_rate,maturity_date) VALUES (${id},'Belgische Staatsbon ${maturityDate.getUTCFullYear()}','bond','EUR',true,'manual',5000.000000,2.8500,'${fmt(maturityDate)}');`,
+    `INSERT INTO investments (id,name,asset_class,currency,is_active,price_provider,current_price,interest_rate,maturity_date) VALUES (${id},'Belgische Staatsbon ${maturityDate.getUTCFullYear()}','bond','EUR',1,'manual',${num(5000, 6, "investments.current_price")},${num(2.85, 4, "investments.interest_rate")},'${fmt(maturityDate)}');`,
   );
   ptxId++;
   S(
-    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'buy','${fmt(ymd(2024, 9, 4))}',5000.0000,'EUR',${AID.DEGIRO});`,
+    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'buy','${fmt(ymd(2024, 9, 4))}',${num(5000, 4, "portfolio_transactions.amount")},'EUR',${AID.DEGIRO});`,
   );
   ptxId++;
   S(
-    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'interest','${fmt(ymd(2025, 9, 4))}',142.5000,'EUR',${AID.DEGIRO});`,
+    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'interest','${fmt(ymd(2025, 9, 4))}',${num(142.5, 4, "portfolio_transactions.amount")},'EUR',${AID.DEGIRO});`,
   );
 }
 invId++;
 {
   const id = invId;
   S(
-    `INSERT INTO investments (id,name,asset_class,currency,is_active,price_provider,current_price,location,municipality,cadastral_income,municipality_tax_rate) VALUES (${id},'Appartement Gent','real_estate','EUR',true,'manual',325000.000000,'Korenmarkt, Gent','Gent',1450.00,7.5000);`,
+    `INSERT INTO investments (id,name,asset_class,currency,is_active,price_provider,current_price,location,municipality,cadastral_income,municipality_tax_rate) VALUES (${id},'Appartement Gent','real_estate','EUR',1,'manual',${num(325000, 6, "investments.current_price")},'Korenmarkt, Gent','Gent',${num(1450, 2, "investments.cadastral_income")},${num(7.5, 4, "investments.municipality_tax_rate")});`,
   );
   ptxId++;
   S(
-    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'buy','${fmt(ymd(2018, 5, 1))}',298000.0000,'EUR');`,
+    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'buy','${fmt(ymd(2018, 5, 1))}',${num(298000, 4, "portfolio_transactions.amount")},'EUR');`,
   );
   ptxId++;
   S(
-    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'appreciation','${fmt(ymd(2025, 12, 31))}',27000.0000,'EUR');`,
+    `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'appreciation','${fmt(ymd(2025, 12, 31))}',${num(27000, 4, "portfolio_transactions.amount")},'EUR');`,
   );
 }
 
@@ -1298,7 +1368,7 @@ S(
   S(
     `INSERT INTO portfolio_fund_holdings_documents
       (investment_id,share_class_identifier_json,document_json,source_as_of_date,source_sha256)
-     VALUES (${iwda.id},${q(JSON.stringify({ type: "isin", value: "IE00B4L5Y983" }))}::jsonb,${q(serialized)}::jsonb,'${fmt(asOf)}','${sourceSha256}');`,
+     VALUES (${iwda.id},${jsonb({ type: "isin", value: "IE00B4L5Y983" })},${jsonb(fundDocument)},'${fmt(asOf)}','${sourceSha256}');`,
   );
 }
 
@@ -1314,7 +1384,7 @@ let wlId = 0;
 ).forEach((w) => {
   wlId++;
   S(
-    `INSERT INTO watchlist (id,name,symbol,asset_class,target_price,currency) VALUES (${wlId},${q(w[0])},${q(w[1])},'${w[2]}',${num(w[4], 6)},${q(w[3])});`,
+    `INSERT INTO watchlist (id,name,symbol,asset_class,target_price,currency) VALUES (${wlId},${q(w[0])},${q(w[1])},'${w[2]}',${num(w[4], 6, "watchlist.target_price")},${q(w[3])});`,
   );
 });
 
@@ -1361,7 +1431,7 @@ const taxProfile = {
   taxYear: ymd(2025, 12, 31).getUTCFullYear(),
 };
 S(
-  `INSERT INTO user_settings (key,value) VALUES ('belgian_tax_profile', '${JSON.stringify(taxProfile).replace(/'/g, "''")}'::jsonb);`,
+  `INSERT INTO user_settings (key,value) VALUES ('belgian_tax_profile', ${jsonb(taxProfile)});`,
 );
 // Household v2 (ADR-200), the frontend's source of truth: partner A carries the
 // figures above; partner B has an employee job of 22,000 gross (the v1 row's
@@ -1454,36 +1524,21 @@ const taxHousehold = {
   taxIncomeCategoryIds: taxProfile.taxIncomeCategoryIds,
 };
 S(
-  `INSERT INTO user_settings (key,value) VALUES ('belgian_tax_household_v2', '${JSON.stringify(taxHousehold).replace(/'/g, "''")}'::jsonb);`,
+  `INSERT INTO user_settings (key,value) VALUES ('belgian_tax_household_v2', ${jsonb(taxHousehold)});`,
 );
 S(
-  "INSERT INTO user_settings (key,value) VALUES ('onboarding_complete', 'true'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;",
+  "INSERT INTO user_settings (key,value) VALUES ('onboarding_complete', vision_jsonb('true')) ON CONFLICT (key) DO UPDATE SET value = excluded.value;",
 );
 
-// ===== Reset sequences =====
-const seqs: readonly (readonly [string, number])[] = [
-  ["accounts_id_seq", 6],
-  ["recipients_id_seq", RECIPS.length],
-  ["recipient_bank_accounts_id_seq", 3],
-  ["recipient_match_patterns_id_seq", 2],
-  ["transactions_id_seq", txId],
-  ["tags_id_seq", TAGS.length],
-  ["transaction_splits_id_seq", splitId],
-  ["split_payments_id_seq", payId],
-  ["planned_transactions_id_seq", planId],
-  ["planned_transaction_loan_schedule_id_seq", loanSchedId],
-  ["investments_id_seq", invId],
-  ["portfolio_transactions_id_seq", ptxId],
-  ["asset_price_history_id_seq", aphId],
-  ["exchange_rates_id_seq", ercId],
-  ["watchlist_id_seq", wlId],
-];
-for (const [s, v] of seqs) {
-  if (v > 0) S(`SELECT setval('public.${s}',${v},true);`);
+// ===== Sequences =====
+// AUTOINCREMENT tables track the explicit ids above on their own. The bigint
+// id that portfolio_transactions shares with the asset adjustment and
+// transfer tables comes from vision_sequences, which explicit ids do not move.
+if (ptxId > 0) {
+  S(
+    `INSERT INTO vision_sequences (name,last_value) VALUES ('portfolio_transactions_id_seq',${ptxId}) ON CONFLICT (name) DO UPDATE SET last_value=max(last_value,excluded.last_value);`,
+  );
 }
-S(
-  "SELECT setval('public.categories_id_seq',(SELECT MAX(id) FROM categories),true);",
-);
 
 export const demoSeedSql = out.join("\n") + "\n";
 export const demoSeedReferenceDate = fmt(REFERENCE_DATE);

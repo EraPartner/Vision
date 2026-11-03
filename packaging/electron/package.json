@@ -7,7 +7,6 @@
   "scripts": {
     "postinstall": "install-electron",
     "start": "bun ../../scripts/generate-locales.ts && bun build.ts && electron .",
-    "prepare:postgres": "bun build.ts && node out/scripts/prepare-postgres-runtime.js",
     "prepare:native": "bun build.ts && node out/scripts/prepare-native-runtime.js",
     "dist": "bun ../../scripts/generate-locales.ts && bun build.ts && node out/scripts/build-native-package.js",
     "dist:dir": "bun ../../scripts/generate-locales.ts && bun build.ts && node out/scripts/build-native-package.js --dir",
@@ -53,12 +52,6 @@
         }
       ]
     },
-    "extraResources": [
-      {
-        "from": "resources",
-        "to": "resources"
-      }
-    ],
     "publish": null
   }
 }

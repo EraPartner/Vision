@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
+# Run a command against the production backend on a fresh SQLite database
+# (ADR-263): migrate a temporary database file with the CLI the app shares,
+# optionally round-trip the latest migration, start the backend and wait for
+# /health, then run the command from VISION_NATIVE_COMMAND_DIR.
 set -euo pipefail
 umask 077
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-postgres_bin=${VISION_CI_POSTGRES_BIN:-}
 port=${VISION_CI_PORT:-3002}
-database_port=${VISION_CI_DATABASE_PORT:-55432}
 command_dir=${VISION_NATIVE_COMMAND_DIR:-.}
 
 if [[ $# -eq 0 ]]; then
@@ -16,47 +18,14 @@ if ( : >"/dev/tcp/127.0.0.1/$port" ) 2>/dev/null; then
   echo "Native stack cannot start: backend port $port is already in use." >&2
   exit 1
 fi
-if [[ -z "$postgres_bin" ]]; then
-  command_postgres=$(command -v postgres 2>/dev/null || true)
-  for candidate in \
-    "${command_postgres%/postgres}" \
-    /usr/lib/postgresql/18/bin \
-    /opt/homebrew/opt/postgresql@18/bin \
-    /usr/local/opt/postgresql@18/bin \
-    /Applications/Postgres.app/Contents/Versions/18/bin
-  do
-    [[ -n "$candidate" ]] || continue
-    [[ -x "$candidate/postgres" ]] || continue
-    if [[ $("$candidate/postgres" --version 2>/dev/null) == *" 18."* ]]; then
-      postgres_bin=$candidate
-      break
-    fi
-  done
-fi
-if [[ -z "$postgres_bin" ]]; then
-  echo "Native PostgreSQL 18 tools were not found. Set VISION_CI_POSTGRES_BIN." >&2
-  exit 1
-fi
 case "$command_dir" in
   /*|*'..'*)
     echo "VISION_NATIVE_COMMAND_DIR must be a repository-relative path without '..'." >&2
     exit 2
     ;;
 esac
-for tool in initdb pg_ctl pg_isready createdb psql postgres; do
-  if [[ ! -x "$postgres_bin/$tool" ]]; then
-    echo "PostgreSQL 18 tool is missing: $postgres_bin/$tool" >&2
-    exit 1
-  fi
-done
-if [[ $("$postgres_bin/postgres" --version) != *" 18."* ]]; then
-  echo "The native stack requires PostgreSQL 18." >&2
-  exit 1
-fi
 
 work_root=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/vision-native-ci.XXXXXX")
-data_dir=$work_root/postgres
-postgres_log=$work_root/postgres.log
 backend_log=$work_root/backend.log
 backend_pid=
 
@@ -67,14 +36,9 @@ cleanup() {
     kill -TERM "$backend_pid" 2>/dev/null || true
     wait "$backend_pid" 2>/dev/null || true
   fi
-  if [[ -f "$data_dir/postmaster.pid" ]]; then
-    "$postgres_bin/pg_ctl" -D "$data_dir" -m fast -w -t 30 stop >/dev/null 2>&1 || true
-  fi
   if [[ $status -ne 0 ]]; then
     echo "Native stack failed. Backend log:" >&2
     tail -200 "$backend_log" >&2 2>/dev/null || true
-    echo "PostgreSQL log:" >&2
-    tail -200 "$postgres_log" >&2 2>/dev/null || true
   fi
   rm -rf -- "$work_root"
   exit "$status"
@@ -83,25 +47,8 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-"$postgres_bin/initdb" -D "$data_dir" --encoding=UTF8 --locale=C \
-  --auth-local=trust --auth-host=trust --username=vision_ci --no-instructions >/dev/null
-{
-  echo "listen_addresses = '127.0.0.1'"
-  echo "port = $database_port"
-  echo "unix_socket_directories = ''"
-  echo "shared_preload_libraries = 'pg_stat_statements'"
-  echo "logging_collector = off"
-} >> "$data_dir/postgresql.conf"
-"$postgres_bin/pg_ctl" -D "$data_dir" -l "$postgres_log" -w -t 60 start >/dev/null
-"$postgres_bin/createdb" -h 127.0.0.1 -p "$database_port" -U vision_ci \
-  -O vision_ci -E UTF8 --locale=C --template=template0 vision_ci
-"$postgres_bin/psql" -h 127.0.0.1 -p "$database_port" -U vision_ci -d vision_ci \
-  -v ON_ERROR_STOP=1 \
-  -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE EXTENSION IF NOT EXISTS pg_stat_statements;' >/dev/null
-
-export DATABASE_URL="postgresql://vision_ci@127.0.0.1:${database_port}/vision_ci"
-export TEST_DATABASE_URL=$DATABASE_URL
-export DATABASE_URL_MIGRATIONS=$DATABASE_URL
+export VISION_DATABASE_PATH=$work_root/database/vision.sqlite3
+export ATTACHMENTS_DIR=$work_root/attachments
 export ENVIRONMENT=production
 export SERVER_HOST=127.0.0.1
 export PORT=$port

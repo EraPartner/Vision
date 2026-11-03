@@ -6,7 +6,6 @@
 
 import express from "express";
 import type { Server } from "node:http";
-import { setTimeout as sleep } from "node:timers/promises";
 import fs from "node:fs";
 import { dirname, resolve, sep } from "path";
 import { fileURLToPath } from "url";
@@ -17,9 +16,7 @@ import {
   closePool,
   getPoolStats,
 } from "./database/connection.ts";
-import { ensureAppRole } from "./database/roleBootstrap.ts";
-import { ensureAnalysisRole } from "./database/analysisRoleBootstrap.ts";
-import { runDatabaseAnalyze, runMigrations } from "./database/migrate.ts";
+import { runMigrations } from "./database/migrate.ts";
 import {
   createErrorHandler,
   NotFoundError,
@@ -423,115 +420,30 @@ async function start() {
   }
 
   try {
-    // Least-privilege role bootstrap — MUST run before the pool poll below:
-    // in the three-variable setup DATABASE_URL points at the non-superuser app
-    // role, which may not exist yet on an already-initialised database. Connect
-    // once as the privileged DATABASE_URL_MIGRATIONS role, create the app
-    // role if missing and (re)applies the shared grant set. No-op in the
-    // classic single-role setup; warn-not-crash on every failure path.
-    const endRoleBootstrap = bootMark("role_bootstrap");
-    const appRoleBootstrap = await ensureAppRole({
-      databaseUrl: settings.database.url,
-      migrationsUrl: settings.database.migrationsUrl,
-      beforeMigrations: true,
-    });
-    endRoleBootstrap();
-
-    // Wait for PostgreSQL to be fully ready. On a cold first-ever native start,
-    // PostgreSQL can take up to ~30s to initialise its data directory, so give
-    // it 40 attempts with exponential backoff (max 1s). Warm starts are faster.
-    let dbReady = false;
-    let attemptCount = 0;
-    const maxAttempts = 40;
-    const baseDelay = 50; // Start with 50ms
-    const maxDelay = 1000;
-
-    const endDbPoll = bootMark("db_poll");
-    while (!dbReady && attemptCount < maxAttempts) {
-      const isConnected = await checkConnection();
-      if (isConnected) {
-        dbReady = true;
-        endDbPoll();
-        logger.info("Database connection verified successfully");
-        // Apply pending migrations from db/migrations (fail-fast, ADR-222).
-        const endMig = bootMark("run_migrations");
-        await runMigrations();
-        // Approved views may be created or replaced by this migration pass.
-        await ensureAnalysisRole({
-          databaseUrl: settings.database.url,
-          analysisUrl: settings.database.analysisUrl,
-          migrationsUrl: settings.database.migrationsUrl,
-        });
-        // A fresh baseline can introduce routines after the app role's first
-        // grant pass. Apply that grant set once more only when a grant was
-        // missing before migration.
-        if ((appRoleBootstrap.grantFailures ?? 0) > 0) {
-          await ensureAppRole({
-            databaseUrl: settings.database.url,
-            migrationsUrl: settings.database.migrationsUrl,
-          });
-        }
-        endMig();
-        resumeRecoverableInvestigations()
-          .then((count) => {
-            if (count > 0)
-              logger.info("Resumed recoverable AI investigations", { count });
-          })
-          .catch((err: unknown) =>
-            logger.warn(
-              "AI investigation recovery failed; jobs remain resumable",
-              {
-                error: errorMessage(err),
-              },
-            ),
-          );
-        // One database-wide ANALYZE at boot so small, rarely-mutated tables
-        // (which no migration or trigger ever ANALYZEs) still hand the planner
-        // fresh statistics. Fire-and-forget: ANALYZE only refreshes planner
-        // stats (idempotent, non-destructive), so it must never delay `listen`
-        // or block boot — hence not awaited, errors swallowed. This is complementary
-        // to, not in conflict with, the post-migration targeted ANALYZE in
-        // migrate.ts: that one guarantees the two big, migration-rewritten tables
-        // are fresh immediately after an upgrade; this one covers every remaining
-        // table on every boot. On a boot that just migrated, the two big tables
-        // are simply re-sampled here — harmless (ANALYZE is idempotent), and the
-        // whole-DB sample is cheap on this dataset.
-        runDatabaseAnalyze().catch((err: unknown) =>
-          logger.warn(
-            { err: errorMessage(err) },
-            "boot-time ANALYZE failed; non-fatal",
-          ),
-        );
-        // Materialized views are runtime artifacts, not schema (ADR-027), so the
-        // whole create/index/refresh lifecycle lives in the post-listen warmup
-        // (startup/warmup.ts) rather than here. Creation is not a no-op on the
-        // boots that matter: on a first-ever boot, or after a migration that
-        // drops a view to redefine it (0084/0085), `CREATE MATERIALIZED VIEW`
-        // runs a full aggregation scan of `transactions` per view — pre-listen
-        // that sat inside the window the Electron 60s poll budget is racing.
-        // The Electron first-navigation gate reads `caches.materializedViews`,
-        // which still only flips once that whole chain settles.
-      } else {
-        attemptCount++;
-        // Exponential backoff: 50ms, 100ms, 200ms... capped at 1000ms
-        const delay = Math.min(
-          baseDelay * Math.pow(2, attemptCount - 1),
-          maxDelay,
-        );
-        logger.debug(
-          `Waiting for database to be ready (attempt ${attemptCount}/${maxAttempts}, next retry in ${delay}ms)`,
-        );
-        await sleep(delay);
-      }
+    // Apply pending migrations to the SQLite file before the shared
+    // connections open (fail-fast, ADR-222, ADR-263). The runner refuses a
+    // database written by a newer Vision and copies a database that holds
+    // data before changing it.
+    const endMig = bootMark("run_migrations");
+    await runMigrations(settings.database.path);
+    endMig();
+    if (!(await checkConnection())) {
+      throw new Error(`Failed to open the database at ${settings.database.path}`);
     }
-
-    if (!dbReady) {
-      logger.error("Database connection failed after multiple attempts");
-      logger.info(
-        `DATABASE_URL: ${settings.database.url.replace(/:[^:@]+@/, ":***@")}`,
+    logger.info("Database opened", { path: settings.database.path });
+    resumeRecoverableInvestigations()
+      .then((count) => {
+        if (count > 0)
+          logger.info("Resumed recoverable AI investigations", { count });
+      })
+      .catch((err: unknown) =>
+        logger.warn("AI investigation recovery failed; jobs remain resumable", {
+          error: errorMessage(err),
+        }),
       );
-      throw new Error("Failed to connect to database");
-    }
+    // Summary tables (the former materialized views) are rebuilt in the
+    // post-listen warmup (startup/warmup.ts), outside the boot window the
+    // Electron first-navigation poll races.
 
     // Start Express server immediately after DB is ready
     const endListen = bootMark("app_listen");

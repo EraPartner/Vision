@@ -1,33 +1,27 @@
 /**
- * Smoke test for the shared DB test-fixture helper.
- *
- * The helper itself is inert without TEST_DATABASE_URL; these cases only
- * verify the resolution semantics so future DB-bound suites can rely on them.
+ * The SQLite test harness (ADR-263): every test file has its own database
+ * copy of the migrated template, and resetTestDatabase() restores it.
  */
+import { describe, expect, it } from "vitest";
+import { getTestPool, hasTestDatabase, resetTestDatabase } from "./db.ts";
 
-import { afterEach, describe, expect, it } from 'vitest';
-import { getTestPool, hasTestDatabase, closeTestPool } from './db.ts';
-
-const originalUrl = process.env.TEST_DATABASE_URL;
-
-afterEach(async () => {
-  await closeTestPool();
-  if (originalUrl === undefined) {
-    delete process.env.TEST_DATABASE_URL;
-  } else {
-    process.env.TEST_DATABASE_URL = originalUrl;
-  }
-});
-
-describe('tests/setup/db', () => {
-  it('returns null when TEST_DATABASE_URL is unset', () => {
-    delete process.env.TEST_DATABASE_URL;
-    expect(getTestPool()).toBeNull();
-    expect(hasTestDatabase()).toBe(false);
+describe("tests/setup/db", () => {
+  it("gives every test file its own migrated database", async () => {
+    expect(hasTestDatabase()).toBe(true);
+    expect(process.env.VISION_DATABASE_PATH).toMatch(/test-\d+-[0-9a-f-]+\.sqlite3$/);
+    const { rows } = await getTestPool().query<{ n: number }>(
+      "SELECT count(*) AS n FROM vision_migrations",
+    );
+    expect(rows[0]?.n).toBeGreaterThan(0);
   });
 
-  it('hasTestDatabase reflects env presence without opening a pool', () => {
-    process.env.TEST_DATABASE_URL = 'postgres://example';
-    expect(hasTestDatabase()).toBe(true);
+  it("resetTestDatabase() discards every change", async () => {
+    const pool = getTestPool();
+    await pool.query("CREATE TABLE harness_probe (x INTEGER)");
+    await resetTestDatabase();
+    const { rows } = await pool.query<{ n: number }>(
+      "SELECT count(*) AS n FROM sqlite_schema WHERE name = 'harness_probe'",
+    );
+    expect(rows[0]?.n).toBe(0);
   });
 });

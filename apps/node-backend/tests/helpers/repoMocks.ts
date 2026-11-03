@@ -198,11 +198,12 @@ export function mockTxConnection(
   });
 
   const queryPrepared = vi.fn(
-    (name: string, text: string, values?: unknown[]) => {
+    (_name: string, text: string, values?: unknown[]) => {
       const active = ambient();
-      // pg's object form, exactly as connection.js:151 passes it.
+      // connection.ts runs queryPrepared as query(text, values); the name
+      // only labelled node-postgres's prepared statement.
       if (!active) return callProcedure(poolQuery, [text, values]);
-      const result: unknown = active.query({ name, text, values });
+      const result: unknown = active.query(text, values);
       return result;
     },
   );

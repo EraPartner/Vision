@@ -17,51 +17,20 @@ import {
 } from "./native-smoke";
 import type { FrontendResponse } from "./native-smoke";
 import { restoreNativeBundle } from "../backup/native-transport";
-import {
-  assertStableDatabaseStatsEqual,
-  parseDatabaseStats,
-} from "../runtime/database-stats";
 
-type SyntheticStats = ReturnType<typeof parseDatabaseStats>;
-
-function syntheticStats({
-  providerHealth = 0,
-  receipts = 1,
-  transactions = 1,
-}: { providerHealth?: number; receipts?: number; transactions?: number } = {}) {
-  return parseDatabaseStats(
-    [
-      "schema\t0125",
-      "postgres_version_num\t180000",
-      "stable:user_settings\t1",
-      "table:accounts\t1",
-      "table:attachments\t1",
-      "table:investments\t1",
-      "table:planned_transactions\t0",
-      "table:portfolio_transactions\t1",
-      "table:recipients\t1",
-      `table:transactions\t${transactions}`,
-      "table:user_settings\t1",
-      `table:provider_health\t${providerHealth}`,
-      `table:portfolio_import_reconciliations\t${receipts}`,
-    ].join("\n"),
-  );
-}
+const SNAPSHOT = { sha256: "a".repeat(64) };
 
 function syntheticRestoreRuntime({
-  restoredStats = syntheticStats(),
+  restoredSha256 = SNAPSHOT.sha256,
   failAt,
-  startupTransactions = 1,
 }: {
-  restoredStats?: SyntheticStats;
+  restoredSha256?: string;
   failAt?: string;
-  startupTransactions?: number;
 } = {}) {
   const calls: string[] = [];
   const databaseToken = { id: "synthetic-database" };
   const attachmentToken = { id: "synthetic-attachments" };
   let active = "original";
-  let stats = syntheticStats({ transactions: 2 });
   const step = (name: string) => {
     calls.push(name);
     if (failAt === name) throw new Error(`${name} failed`);
@@ -69,13 +38,20 @@ function syntheticRestoreRuntime({
   // Runs the body at call time; a throw becomes a rejection, like an async method.
   const settled = <T>(run: () => T): Promise<T> =>
     new Promise((resolve) => resolve(run()));
-  return {
+  const runtime = {
     calls,
+    paths: { database: "/synthetic/database/vision.sqlite3" },
+    hash(file: string) {
+      return settled(() => {
+        assert.equal(file, runtime.paths.database);
+        step(`hash:${active}`);
+        return active === "restored" ? restoredSha256 : "b".repeat(64);
+      });
+    },
     activateRestoredDatabase() {
       return settled(() => {
         step("activateDatabase");
         active = "restored";
-        stats = structuredClone(restoredStats);
         return { switchToken: databaseToken };
       });
     },
@@ -85,21 +61,9 @@ function syntheticRestoreRuntime({
         return attachmentToken;
       });
     },
-    getDatabaseStats() {
-      return settled(() => {
-        step(`getStats:${active}`);
-        return structuredClone(stats);
-      });
-    },
     start() {
       return settled(() => {
         step(`start:${active}`);
-        if (active === "restored") {
-          stats = syntheticStats({
-            providerHealth: 1,
-            transactions: startupTransactions,
-          });
-        }
       });
     },
     waitUntilReady() {
@@ -130,71 +94,61 @@ function syntheticRestoreRuntime({
         assert.equal(token, databaseToken);
         step("rollbackDatabase");
         active = "original";
-        stats = syntheticStats({ transactions: 2 });
       });
     },
   };
+  return runtime;
 }
 
 const syntheticRestoreOptions = {
-  dbSqlPath: "/synthetic/db.sql",
+  databasePath: "/synthetic/db.sqlite3",
   attachmentsDir: "/synthetic/attachments",
-  expectedSchemaHead: "0125",
+  expectedSchemaVersion: 125,
 };
 
-void test("smoke validates every restored table before startup telemetry can write", async () => {
-  const expected = syntheticStats();
+void test("smoke proves the restored database is the snapshot before startup can write", async () => {
   const runtime = syntheticRestoreRuntime();
   await restoreNativeBundle(
-    createSmokeRestoreRuntime(runtime, expected),
+    createSmokeRestoreRuntime(runtime, SNAPSHOT, runtime.hash),
     syntheticRestoreOptions,
   );
   assert.deepEqual(runtime.calls, [
     "activateDatabase",
     "replaceAttachments",
-    "getStats:restored",
+    "hash:restored",
     "start:restored",
     "waitUntilReady",
     "finalizeDatabase",
     "finalizeAttachments",
   ]);
-  const after = await runtime.getDatabaseStats();
-  assert.equal(after.tableCounts.provider_health, 1);
-  assert.doesNotThrow(() => assertStableDatabaseStatsEqual(expected, after));
 });
 
-void test("smoke count drift rolls back both switch tokens before finalization", async (t) => {
+void test("smoke checksum drift rolls back both switch tokens before finalization", async (t) => {
   const diagnostic = t.mock.method(console, "error", () => {});
-  const drifts: [string, SyntheticStats][] = [
-    ["provider_health", syntheticStats({ providerHealth: 1 })],
-    ["portfolio_import_reconciliations", syntheticStats({ receipts: 2 })],
-  ];
-  for (const [table, restoredStats] of drifts) {
-    const runtime = syntheticRestoreRuntime({ restoredStats });
-    await assert.rejects(
-      restoreNativeBundle(
-        createSmokeRestoreRuntime(runtime, syntheticStats()),
-        syntheticRestoreOptions,
-      ),
-      { code: "DATABASE_COUNT_MISMATCH", message: new RegExp(table) },
-    );
-    assert.deepEqual(runtime.calls, [
-      "activateDatabase",
-      "replaceAttachments",
-      "getStats:restored",
-      "rollbackAttachments",
-      "rollbackDatabase",
-      "start:original",
-    ]);
-  }
-  assert.equal(diagnostic.mock.calls.length, 2);
+  const runtime = syntheticRestoreRuntime({ restoredSha256: "c".repeat(64) });
+  await assert.rejects(
+    restoreNativeBundle(
+      createSmokeRestoreRuntime(runtime, SNAPSHOT, runtime.hash),
+      syntheticRestoreOptions,
+    ),
+    { code: "DATABASE_CHECKSUM_MISMATCH" },
+  );
+  assert.deepEqual(runtime.calls, [
+    "activateDatabase",
+    "replaceAttachments",
+    "hash:restored",
+    "rollbackAttachments",
+    "rollbackDatabase",
+    "start:original",
+  ]);
+  assert.equal(diagnostic.mock.calls.length, 1);
 });
 
 void test("smoke activation failure restarts the original without arming validation", async () => {
   const runtime = syntheticRestoreRuntime({ failAt: "activateDatabase" });
   await assert.rejects(
     restoreNativeBundle(
-      createSmokeRestoreRuntime(runtime, syntheticStats()),
+      createSmokeRestoreRuntime(runtime, SNAPSHOT, runtime.hash),
       syntheticRestoreOptions,
     ),
     /activateDatabase failed/,
@@ -206,7 +160,7 @@ void test("smoke attachment failure disarms validation before original restart",
   const runtime = syntheticRestoreRuntime({ failAt: "replaceAttachments" });
   await assert.rejects(
     restoreNativeBundle(
-      createSmokeRestoreRuntime(runtime, syntheticStats()),
+      createSmokeRestoreRuntime(runtime, SNAPSHOT, runtime.hash),
       syntheticRestoreOptions,
     ),
     /replaceAttachments failed/,
@@ -219,31 +173,17 @@ void test("smoke attachment failure disarms validation before original restart",
   ]);
 });
 
-void test("smoke consumes its pre-start validation even if statistics cannot be read", async () => {
-  const runtime = syntheticRestoreRuntime({ failAt: "getStats:restored" });
-  const wrapped = createSmokeRestoreRuntime(runtime, syntheticStats());
+void test("smoke consumes its pre-start validation even if the database cannot be read", async () => {
+  const runtime = syntheticRestoreRuntime({ failAt: "hash:restored" });
+  const wrapped = createSmokeRestoreRuntime(runtime, SNAPSHOT, runtime.hash);
   await wrapped.activateRestoredDatabase();
-  await assert.rejects(wrapped.start(), /getStats:restored failed/);
+  await assert.rejects(wrapped.start(), /hash:restored failed/);
   await wrapped.start();
   assert.deepEqual(runtime.calls, [
     "activateDatabase",
-    "getStats:restored",
+    "hash:restored",
     "start:restored",
   ]);
-});
-
-void test("smoke post-start stable validation still rejects user transaction drift", async () => {
-  const expected = syntheticStats();
-  const runtime = syntheticRestoreRuntime({ startupTransactions: 2 });
-  await restoreNativeBundle(
-    createSmokeRestoreRuntime(runtime, expected),
-    syntheticRestoreOptions,
-  );
-  const after = await runtime.getDatabaseStats();
-  assert.throws(() => assertStableDatabaseStatsEqual(expected, after), {
-    code: "DATABASE_COUNT_MISMATCH",
-    message: /transactions/,
-  });
 });
 
 void test("native smoke accepts only the explicit cleanup flag", () => {
@@ -283,11 +223,11 @@ void test("smoke diagnostics redact database URLs and password values", () => {
   assert.match(diagnostic, /PGPASSWORD=\[redacted\]/);
 });
 
-void test("smoke diagnostics read only the bounded end of the PostgreSQL log", async () => {
+void test("smoke diagnostics read only the bounded end of the backend log", async () => {
   const root = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-native-smoke-log-"),
   );
-  const logPath = path.join(root, "postgres.log");
+  const logPath = path.join(root, "backend.log");
   await fs.promises.writeFile(
     logPath,
     `discarded-prefix-${"x".repeat(32)}-useful-tail`,

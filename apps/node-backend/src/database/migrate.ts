@@ -1,16 +1,33 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+/**
+ * Forward-only, versioned schema migrations for the SQLite database
+ * (ADR-263; replaces the Kysely PostgreSQL migrator of ADR-222).
+ *
+ * Every `db/migrations/NNNN_name.sql` is one migration, numbered from 0001
+ * without gaps; an optional `NNNN_name.down.sql` makes it reversible from
+ * the CLI. The ledger table `vision_migrations` records each applied
+ * migration's version, name and SHA-256, and the runner refuses to touch a
+ * database when:
+ *   - it holds application tables but no ledger,
+ *   - its ledger lists a version this build does not know (a newer Vision
+ *     wrote it), or
+ *   - an applied migration's file changed since it was applied.
+ *
+ * Pending migrations run in one `BEGIN IMMEDIATE` transaction with foreign
+ * keys switched off for the run (SQLite's procedure for table rebuilds), and
+ * `PRAGMA foreign_key_check` must come back empty before COMMIT; any failure
+ * rolls the whole run back. Before a database that already holds data is
+ * migrated, a `VACUUM INTO` copy is written next to it; the newest three
+ * copies are kept.
+ */
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CompiledQuery, Kysely, PostgresDialect, sql } from "kysely";
-import { Migrator } from "kysely/migration";
-import type { Migration, MigrationResult } from "kysely/migration";
-import pg from "pg";
+import type { DatabaseSync } from "node:sqlite";
 import { logger } from "../config/logger.ts";
-import { readSchemaInventory, schemaFingerprint } from "./schemaInventory.ts";
-import { errorMessage } from "../lib/errors.ts";
+import { openDatabase } from "./connection.ts";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // repo root: apps/node-backend/src/database/ -> ../../../..
 const REPO_ROOT = process.env.VISION_RUNTIME_ROOT
@@ -18,281 +35,341 @@ const REPO_ROOT = process.env.VISION_RUNTIME_ROOT
   : path.resolve(__dirname, "..", "..", "..", "..");
 
 export const MIGRATIONS_DIR = path.join(REPO_ROOT, "db", "migrations");
-export const BASELINE_MIGRATION = "0001_baseline";
-/**
- * Normalized catalog fingerprint of `0001_baseline.sql` on PostgreSQL 18,
- * excluding migration bookkeeping. A fresh install must match it.
- */
-export const BASELINE_SCHEMA_FINGERPRINT =
-  "c79fae80e075e13fa995db08eda282bc4ede1a96791181457859f445bc075615";
+export const LEDGER_TABLE = "vision_migrations";
+/** Pre-migration copies kept next to the database. */
+export const PRE_MIGRATION_BACKUPS_KEPT = 3;
 
-const MIGRATION_NAME = /^(\d{4})_[a-z0-9_]+$/;
+const MIGRATION_FILE = /^(\d{4})_([a-z0-9_]+)\.sql$/;
 
-// A large migration can legitimately run for minutes (full-table rewrites).
-// VISION_MIGRATE_TIMEOUT_MS overrides the 10-minute default (0 = no timeout).
-function resolveTimeoutMs(): number {
-  const raw = process.env.VISION_MIGRATE_TIMEOUT_MS;
-  if (raw === undefined || raw === "") return 600_000;
-  const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? n : 600_000;
+export interface Migration {
+  version: number;
+  /** `NNNN_name` */
+  name: string;
+  upSql: string;
+  downSql: string | undefined;
+  sha256: string;
 }
 
-const PUBLIC_TABLES_ANALYZE_SQL = `DO $vision_analyze$
-DECLARE item record;
-BEGIN
-  FOR item IN
-    SELECT schemaname, tablename
-    FROM pg_catalog.pg_tables
-    WHERE schemaname = 'public'
-    ORDER BY tablename
-  LOOP
-    EXECUTE format('ANALYZE %I.%I', item.schemaname, item.tablename);
-  END LOOP;
-END
-$vision_analyze$`;
-
-type Db = Kysely<unknown>;
+export interface AppliedMigration {
+  version: number;
+  name: string;
+  sha256: string;
+  appliedAt: string;
+}
 
 export interface RunMigrationsResult {
-  /** Latest applied migration after the run. */
+  /** Latest applied migration after the run (`NNNN_name`). */
   revision: string | undefined;
   applied: string[];
+  /** The pre-migration copy written before this run, if any. */
+  backupFile: string | undefined;
 }
 
-function migrationConnectionString(): string {
-  const url =
-    process.env.DATABASE_URL_MIGRATIONS?.trim() ||
-    process.env.DATABASE_URL?.trim();
-  if (!url) throw new Error("Migration database URL is required");
-  return url;
+export interface MigrateOptions {
+  dir?: string;
+  /** Stop after this version (tests that start from an older schema). */
+  targetVersion?: number;
+  /** Where pre-migration copies go; default `<db dir>/pre-migration-backups`. */
+  backupDir?: string;
+  /** Skip the pre-migration copy (tests, and the transition script's fresh file). */
+  skipBackup?: boolean;
 }
 
-/**
- * A dedicated, short-lived Kysely instance as the schema owner. The
- * application pool deliberately lacks ownership of the schema, so migrations
- * never fall back to DATABASE_URL in the least-privilege setup.
- */
-function createMigrationDb(): Db {
-  return new Kysely<unknown>({
-    dialect: new PostgresDialect({
-      pool: new pg.Pool({
-        connectionString: migrationConnectionString(),
-        max: 1,
-        connectionTimeoutMillis: 5_000,
-        statement_timeout: resolveTimeoutMs(),
-      }),
-    }),
-  });
-}
-
-async function rows<R>(db: Db, text: string): Promise<R[]> {
-  const result = await db.executeQuery<R>(CompiledQuery.raw(text, []));
-  return [...result.rows];
-}
-
-async function currentFingerprint(db: Db): Promise<string> {
-  const inventory = await readSchemaInventory(
-    (text) => rows(db, text).then((r) => ({ rows: r })),
-    REPO_ROOT,
-  );
-  return schemaFingerprint(inventory);
-}
-
-/** Dumped SQL scopes search_path to its transaction; restore it for what follows. */
-async function restoreSearchPath(db: Db) {
-  await sql`SELECT pg_catalog.set_config('search_path', '"$user", public', true)`.execute(
-    db,
-  );
-}
-
-/**
- * Install the baseline into an empty database inside the migrator's
- * transaction and lock. A database with objects but no ledger is refused.
- */
-async function baselineUp(db: Db, baselineSql: string) {
-  const [state] = await rows<{
-    major: number;
-    has_objects: boolean;
-  }>(
-    db,
-    `SELECT current_setting('server_version_num')::int / 10000 AS major,
-            EXISTS (
-              SELECT 1 FROM pg_class c
-              JOIN pg_namespace n ON n.oid = c.relnamespace
-              WHERE n.nspname IN ('public', 'vision_analysis')
-                AND c.relkind IN ('r','p','v','m','S','f')
-                AND c.relname NOT IN ('kysely_migration', 'kysely_migration_lock')
-                AND NOT EXISTS (
-                  SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_class'::regclass
-                    AND d.objid = c.oid AND d.deptype = 'e'
-                )
-            ) OR to_regnamespace('vision_analysis') IS NOT NULL AS has_objects`,
-  );
-  if (state?.major !== 18) {
-    throw new Error("The Vision baseline requires PostgreSQL 18");
-  }
-
-  if (state.has_objects) {
-    throw new Error(
-      "Database has application objects but no migration marker; refusing the baseline. " +
-        "Restore a backup taken after the switch to TypeScript migrations, or reset the " +
-        "Demo with bun run demo:reset-native.",
-    );
-  }
-  await sql.raw(baselineSql).execute(db);
-  await restoreSearchPath(db);
-  if ((await currentFingerprint(db)) !== BASELINE_SCHEMA_FINGERPRINT) {
-    throw new Error("Installed baseline differs from the reviewed schema");
+export class MigrationError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "MigrationError";
   }
 }
 
-/**
- * Every `db/migrations/NNNN_name.sql` is one migration; an optional
- * `NNNN_name.down.sql` makes it reversible.
- */
-export function loadMigrations(
-  dir = MIGRATIONS_DIR,
-): Record<string, Migration> {
-  if (!existsSync(dir)) throw new Error(`Migrations directory missing: ${dir}`);
-  const files = readdirSync(dir);
-  const names = files
-    .filter((file) => file.endsWith(".sql") && !file.endsWith(".down.sql"))
-    .map((file) => file.slice(0, -".sql".length))
-    .sort();
-  if (names[0] !== BASELINE_MIGRATION) {
-    throw new Error(`The first migration must be ${BASELINE_MIGRATION}`);
-  }
-  const migrations: Record<string, Migration> = {};
-  names.forEach((name) => {
-    if (!MIGRATION_NAME.test(name)) {
-      throw new Error(`Invalid migration file name: ${name}.sql`);
-    }
-    const upSql = readFileSync(path.join(dir, `${name}.sql`), "utf8");
-    if (name === BASELINE_MIGRATION) {
-      migrations[name] = { up: (db) => baselineUp(db, upSql) };
-      return;
-    }
+function sha256(text: string): string {
+  return createHash("sha256").update(text, "utf8").digest("hex");
+}
+
+/** Read and validate the migration files. */
+export function loadMigrations(dir = MIGRATIONS_DIR): Migration[] {
+  if (!existsSync(dir)) throw new MigrationError(`Migrations directory missing: ${dir}`);
+  const files = readdirSync(dir).filter((f) => f.endsWith(".sql"));
+  const migrations: Migration[] = [];
+  for (const file of files.filter((f) => !f.endsWith(".down.sql")).sort()) {
+    const match = MIGRATION_FILE.exec(file);
+    if (!match) throw new MigrationError(`Invalid migration file name: ${file}`);
+    const version = Number(match[1]);
+    const name = file.slice(0, -".sql".length);
+    const upSql = readFileSync(path.join(dir, file), "utf8");
     const downFile = path.join(dir, `${name}.down.sql`);
-    const migration: Migration = {
-      up: async (db) => {
-        await sql.raw(upSql).execute(db);
-        await restoreSearchPath(db);
-      },
-    };
-    if (existsSync(downFile)) {
-      const downSql = readFileSync(downFile, "utf8");
-      migration.down = async (db) => {
-        await sql.raw(downSql).execute(db);
-        await restoreSearchPath(db);
-      };
+    migrations.push({
+      version,
+      name,
+      upSql,
+      downSql: existsSync(downFile) ? readFileSync(downFile, "utf8") : undefined,
+      sha256: sha256(upSql),
+    });
+  }
+  for (const file of files.filter((f) => f.endsWith(".down.sql"))) {
+    const up = file.replace(/\.down\.sql$/, ".sql");
+    if (!files.includes(up)) throw new MigrationError(`${file} has no matching ${up}`);
+  }
+  migrations.forEach((m, i) => {
+    if (m.version !== i + 1) {
+      throw new MigrationError(
+        `Migration numbers must run from 0001 without gaps; found ${m.name} at position ${i + 1}`,
+      );
     }
-    migrations[name] = migration;
   });
+  if (migrations.length === 0) throw new MigrationError(`No migrations in ${dir}`);
   return migrations;
 }
 
-function createMigrator(db: Db): Migrator {
-  return new Migrator({
-    db,
-    provider: { getMigrations: () => Promise.resolve().then(() => loadMigrations()) },
-  });
+function ensureLedger(db: DatabaseSync): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS ${LEDGER_TABLE} (
+    version INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    sha256 TEXT NOT NULL,
+    applied_at TEXT NOT NULL
+  )`);
 }
 
-function assertSucceeded(
-  error: unknown,
-  results: readonly MigrationResult[] | undefined,
-): string[] {
-  for (const result of results ?? []) {
-    if (result.status === "Error") {
-      logger.error(
-        { migration: result.migrationName, direction: result.direction },
-        "migration failed",
-      );
-    }
-  }
-  if (error) {
-    throw error instanceof Error
-      ? error
-      : new Error(typeof error === "string" ? error : JSON.stringify(error));
-  }
-  return (results ?? [])
-    .filter((result) => result.status === "Success")
-    .map((result) => result.migrationName);
+function ledgerExists(db: DatabaseSync): boolean {
+  return (
+    db.prepare("SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = ?").get(LEDGER_TABLE) !==
+    undefined
+  );
 }
 
-async function latestApplied(migrator: Migrator) {
-  const migrations = await migrator.getMigrations();
-  return migrations.filter((m) => m.executedAt).at(-1)?.name;
+function hasApplicationObjects(db: DatabaseSync): boolean {
+  return (
+    db
+      .prepare(
+        `SELECT 1 FROM sqlite_schema
+          WHERE name NOT LIKE 'sqlite_%' AND name <> ? LIMIT 1`,
+      )
+      .get(LEDGER_TABLE) !== undefined
+  );
+}
+
+/** The ledger rows, oldest first. Empty when there is no ledger. */
+export function readLedger(db: DatabaseSync): AppliedMigration[] {
+  if (!ledgerExists(db)) return [];
+  const rows = db
+    .prepare(`SELECT version, name, sha256, applied_at FROM ${LEDGER_TABLE} ORDER BY version`)
+    .all() as Array<{ version: number; name: string; sha256: string; applied_at: string }>;
+  return rows.map((r) => ({
+    version: r.version,
+    name: r.name,
+    sha256: r.sha256,
+    appliedAt: r.applied_at,
+  }));
 }
 
 /**
- * Best-effort ANALYZE of the tables migrations most likely rewrote, so the
- * first queries after an upgrade plan with fresh statistics. Never fails boot.
+ * Compare the ledger with the known migrations. Returns the migrations still
+ * to apply, or throws when the database must not be touched.
  */
-async function analyzeAfterMigrations(db: Db) {
-  for (const table of ["transactions", "asset_price_history"]) {
+export function planMigrations(db: DatabaseSync, migrations: readonly Migration[]): Migration[] {
+  const ledger = readLedger(db);
+  if (ledger.length === 0 && hasApplicationObjects(db)) {
+    throw new MigrationError(
+      "The database holds tables but no migration ledger; refusing to migrate it. " +
+        "Open a database created by Vision, or restore a Vision backup.",
+    );
+  }
+  const known = new Map(migrations.map((m) => [m.version, m]));
+  const latestKnown = migrations.at(-1)?.version ?? 0;
+  for (const [i, applied] of ledger.entries()) {
+    if (applied.version !== i + 1) {
+      throw new MigrationError(`The migration ledger has a gap before version ${applied.version}`);
+    }
+    const migration = known.get(applied.version);
+    if (!migration) {
+      throw new MigrationError(
+        `The database was migrated to ${applied.name} by a newer Vision ` +
+          `(this build knows up to version ${latestKnown}). Install the newer Vision or restore a backup.`,
+      );
+    }
+    if (migration.name !== applied.name || migration.sha256 !== applied.sha256) {
+      throw new MigrationError(
+        `Migration ${applied.name} changed after it was applied (recorded ${applied.sha256.slice(0, 12)}, ` +
+          `file ${migration.name} ${migration.sha256.slice(0, 12)}). Applied migrations must never be edited; add a new one.`,
+      );
+    }
+  }
+  return migrations.slice(ledger.length);
+}
+
+function timestampForFile(date = new Date()): string {
+  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
+}
+
+/** Write a consistent copy of the database with VACUUM INTO and prune old copies. */
+export function writePreMigrationBackup(
+  db: DatabaseSync,
+  dbFile: string,
+  fromVersion: number,
+  toVersion: number,
+  backupDir = path.join(path.dirname(dbFile), "pre-migration-backups"),
+): string {
+  mkdirSync(backupDir, { recursive: true, mode: 0o700 });
+  const target = path.join(
+    backupDir,
+    `${path.basename(dbFile, path.extname(dbFile))}-v${fromVersion}-to-v${toVersion}-${timestampForFile()}.sqlite3`,
+  );
+  db.prepare("VACUUM INTO ?").run(target);
+  const copies = readdirSync(backupDir)
+    .filter((f) => f.endsWith(".sqlite3"))
+    .map((f) => ({ f, t: statSync(path.join(backupDir, f)).mtimeMs }))
+    .sort((a, b) => (b.t !== a.t ? b.t - a.t : b.f.localeCompare(a.f)));
+  for (const old of copies.slice(PRE_MIGRATION_BACKUPS_KEPT)) {
+    rmSync(path.join(backupDir, old.f), { force: true });
+  }
+  return target;
+}
+
+function foreignKeyViolations(db: DatabaseSync): string[] {
+  const rows = db.prepare("PRAGMA foreign_key_check").all() as Array<{
+    table: string;
+    rowid: number | null;
+    parent: string;
+    fkid: number;
+  }>;
+  return rows.slice(0, 20).map((r) => `${r.table} row ${String(r.rowid)} -> ${r.parent}`);
+}
+
+/**
+ * Apply pending migrations to an open connection. The connection must not be
+ * inside a transaction. Exported for the transition script and tests;
+ * the backend calls {@link runMigrations}.
+ */
+export function migrateConnection(
+  db: DatabaseSync,
+  dbFile: string,
+  options: MigrateOptions = {},
+): RunMigrationsResult {
+  const migrations = loadMigrations(options.dir);
+  const target = options.targetVersion ?? migrations.at(-1)?.version ?? 0;
+  const pending = planMigrations(db, migrations).filter((m) => m.version <= target);
+  const ledgerBefore = readLedger(db);
+  const current = ledgerBefore.at(-1);
+  const last = pending.at(-1);
+  if (!last) {
+    return { revision: current?.name, applied: [], backupFile: undefined };
+  }
+
+  let backupFile: string | undefined;
+  if (!options.skipBackup && current && dbFile !== ":memory:") {
+    backupFile = writePreMigrationBackup(
+      db,
+      dbFile,
+      current.version,
+      last.version,
+      options.backupDir,
+    );
+    logger.info("pre-migration backup written", { file: backupFile });
+  }
+
+  db.exec("PRAGMA foreign_keys = OFF");
+  try {
+    db.exec("BEGIN IMMEDIATE");
+    let running: Migration | undefined;
     try {
-      await sql.raw(`ANALYZE ${table}`).execute(db);
-    } catch (err) {
-      logger.warn(
-        { err: errorMessage(err), table },
-        "post-migration ANALYZE failed; non-fatal",
+      ensureLedger(db);
+      const record = db.prepare(
+        `INSERT INTO ${LEDGER_TABLE} (version, name, sha256, applied_at) VALUES (?, ?, ?, ?)`,
       );
+      for (const migration of pending) {
+        running = migration;
+        db.exec(migration.upSql);
+        record.run(migration.version, migration.name, migration.sha256, new Date().toISOString());
+      }
+      running = undefined;
+      const violations = foreignKeyViolations(db);
+      if (violations.length > 0) {
+        throw new MigrationError(
+          `Migrations left foreign key violations: ${violations.join("; ")}`,
+        );
+      }
+      db.exec(`PRAGMA user_version = ${last.version}`);
+      db.exec("COMMIT");
+    } catch (err) {
+      if (db.isTransaction) db.exec("ROLLBACK");
+      const where = running ? `${running.name} failed` : "Migration run failed";
+      throw err instanceof MigrationError
+        ? err
+        : new MigrationError(
+            `${where}: ${err instanceof Error ? err.message : String(err)}. Nothing was changed.`,
+            { cause: err },
+          );
     }
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+  const applied = pending.map((m) => m.name);
+  logger.info("migrations applied", { applied });
+  return { revision: applied.at(-1), applied, backupFile };
+}
+
+/** Run `fn` on a dedicated writer connection; failures become a rejected promise. */
+function withMigrationConnection<T>(file: string, fn: (db: DatabaseSync) => T): Promise<T> {
+  try {
+    const db = openDatabase(file, "writer");
+    try {
+      return Promise.resolve(fn(db));
+    } finally {
+      db.close();
+    }
+  } catch (err) {
+    return Promise.reject(err instanceof Error ? err : new Error(String(err)));
   }
 }
 
 /**
- * Refresh database-wide planner statistics through the migration/owner role in
- * split-role installs. The caller keeps this best-effort so an ANALYZE failure
- * can never block backend readiness.
+ * Apply every pending migration to the database file. Runs on its own
+ * connection before the backend opens its shared ones.
  */
-export async function runDatabaseAnalyze(): Promise<void> {
-  const db = createMigrationDb();
-  try {
-    await sql.raw(PUBLIC_TABLES_ANALYZE_SQL).execute(db);
-  } finally {
-    await db.destroy();
-  }
-}
-
-/** Apply every pending migration in one transaction under the migration lock. */
-export async function runMigrations(): Promise<RunMigrationsResult> {
-  const db = createMigrationDb();
-  try {
-    const migrator = createMigrator(db);
-    const { error, results } = await migrator.migrateToLatest();
-    const applied = assertSucceeded(error, results);
-    if (applied.length > 0) {
-      logger.info({ applied }, "migrations applied");
-      await analyzeAfterMigrations(db);
-    }
-    return {
-      revision: await latestApplied(migrator),
-      applied,
-    };
-  } finally {
-    await db.destroy();
-  }
+export function runMigrations(
+  file: string,
+  options: MigrateOptions = {},
+): Promise<RunMigrationsResult> {
+  return withMigrationConnection(file, (db) => migrateConnection(db, file, options));
 }
 
 /** Revert the latest migration. Only migrations with a `.down.sql` can revert. */
-export async function revertLatestMigration(): Promise<string | undefined> {
-  const db = createMigrationDb();
-  try {
-    const migrator = createMigrator(db);
-    const current = await latestApplied(migrator);
-    if (!current || !loadMigrations()[current]?.down) {
-      throw new Error(
-        `${current ?? "No migration"} has no down migration; restore a backup instead`,
+export function revertLatestMigration(
+  file: string,
+  options: Pick<MigrateOptions, "dir"> = {},
+): Promise<string | undefined> {
+  return withMigrationConnection(file, (db) => {
+    const migrations = loadMigrations(options.dir);
+    planMigrations(db, migrations);
+    const ledger = readLedger(db);
+    const current = ledger.at(-1);
+    const migration = current ? migrations[current.version - 1] : undefined;
+    if (!current || !migration?.downSql) {
+      throw new MigrationError(
+        `${current?.name ?? "No migration"} has no down migration; restore a backup instead`,
       );
     }
-    const { error, results } = await migrator.migrateDown();
-    assertSucceeded(error, results);
-    return await latestApplied(migrator);
-  } finally {
-    await db.destroy();
-  }
+    db.exec("PRAGMA foreign_keys = OFF");
+    try {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        db.exec(migration.downSql);
+        db.prepare(`DELETE FROM ${LEDGER_TABLE} WHERE version = ?`).run(current.version);
+        const violations = foreignKeyViolations(db);
+        if (violations.length > 0) {
+          throw new MigrationError(`Down migration left foreign key violations: ${violations.join("; ")}`);
+        }
+        db.exec(`PRAGMA user_version = ${current.version - 1}`);
+        db.exec("COMMIT");
+      } catch (err) {
+        if (db.isTransaction) db.exec("ROLLBACK");
+        throw err;
+      }
+    } finally {
+      db.exec("PRAGMA foreign_keys = ON");
+    }
+    return ledger.at(-2)?.name;
+  });
 }
 
 export interface MigrationStatus {
@@ -300,12 +377,42 @@ export interface MigrationStatus {
   executedAt: Date | undefined;
 }
 
-export async function readMigrationStatus(): Promise<MigrationStatus[]> {
-  const db = createMigrationDb();
-  try {
-    const migrations = await createMigrator(db).getMigrations();
-    return migrations.map(({ name, executedAt }) => ({ name, executedAt }));
-  } finally {
-    await db.destroy();
-  }
+export function readMigrationStatus(
+  file: string,
+  options: Pick<MigrateOptions, "dir"> = {},
+): Promise<MigrationStatus[]> {
+  return withMigrationConnection(file, (db) => {
+    const applied = new Map(readLedger(db).map((a) => [a.version, a]));
+    return loadMigrations(options.dir).map((m) => {
+      const at = applied.get(m.version)?.appliedAt;
+      return { name: m.name, executedAt: at ? new Date(at) : undefined };
+    });
+  });
+}
+
+/**
+ * Normalised schema of a database for comparisons: every table, index,
+ * trigger and view with its SQL, whitespace collapsed, excluding SQLite's own
+ * objects and the migration ledger.
+ */
+export function schemaFingerprint(db: DatabaseSync): string {
+  const rows = db
+    .prepare(
+      `SELECT type, name, tbl_name, sql FROM sqlite_schema
+        WHERE name NOT LIKE 'sqlite_%' AND tbl_name <> ?
+        ORDER BY type, name`,
+    )
+    .all(LEDGER_TABLE) as Array<{ type: string; name: string; tbl_name: string; sql: string | null }>;
+  const text = rows
+    .map((r) => {
+      // ALTER TABLE ... RENAME rewrites names, and references to them, as
+      // quoted identifiers; double quotes only ever quote identifiers here.
+      const sql = (r.sql ?? "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .replace(/"([A-Za-z_][A-Za-z0-9_]*)"/g, "$1");
+      return `${r.type}\t${r.name}\t${r.tbl_name}\t${sql}`;
+    })
+    .join("\n");
+  return sha256(text);
 }

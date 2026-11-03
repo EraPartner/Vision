@@ -1,13 +1,32 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import type { TestContext } from "node:test";
+import { appRoot } from "../paths";
+import { loadDemoSeed } from "../runtime/native-demo";
 import {
   assertSafeDemoSeedDestination,
   assertSummaryMatchesStats,
+  buildDemoSeed,
   loadGenerator,
   sha256,
 } from "./build-demo-seed";
+import type { DemoSeedRuntime } from "./build-demo-seed";
+
+const repoRoot = path.resolve(appRoot, "..", "..");
+
+interface GeneratorModule {
+  DEMO_DECIMAL_COLUMNS: Readonly<Record<string, number>>;
+  decimalText(value: number, d: number, scale: number): string;
+}
+
+async function generatorModule(): Promise<GeneratorModule> {
+  const loaded = await loadGenerator("2026-09-03");
+  assert.ok("DEMO_DECIMAL_COLUMNS" in loaded && "decimalText" in loaded);
+  return loaded as unknown as GeneratorModule;
+}
 
 async function loadSql(referenceDate: string): Promise<string> {
   const { demoSeedSql } = await loadGenerator(referenceDate);
@@ -26,12 +45,11 @@ void test("Demo seed transfer rows survive the startup transfer reconciler", asy
     .filter((line) => line.startsWith("INSERT INTO transactions ("));
   assert.ok(rows.length > 0);
   const flagged = rows
-    .map((line) => /,(true|false),(NULL|'[a-z]+')\);$/.exec(line))
+    .map((line) => /,([01]),(NULL|'[a-z]+')\);$/.exec(line))
     .filter((match): match is RegExpExecArray => match !== null)
-    .filter(([, isTransfer]) => isTransfer === "true");
+    .filter(([, isTransfer]) => isTransfer === "1");
   assert.equal(
-    rows.filter((line) => /,(true|false),(NULL|'[a-z]+')\);$/.test(line))
-      .length,
+    rows.filter((line) => /,([01]),(NULL|'[a-z]+')\);$/.test(line)).length,
     rows.length,
   );
   assert.ok(flagged.length > 0, "expected the liability paydown rows");
@@ -64,7 +82,7 @@ void test("the synthetic generator is deterministic data-only SQL", async () => 
   assert.equal(first.demoSeedReferenceDate, "2026-09-03");
   assert.equal(typeof first.demoSeedSql, "string");
   const firstSql = String(first.demoSeedSql);
-  assert.doesNotMatch(firstSql, /\bkysely_migration\b/i);
+  assert.doesNotMatch(firstSql, /\b(?:kysely_migration|vision_migrations)\b/i);
   assert.doesNotMatch(
     firstSql,
     /\bstatement_balance_date\b|\bbank_account,recipient_id\b/,
@@ -114,12 +132,93 @@ void test("hierarchy root IDs cannot collide with explicit demo category IDs", a
   assert.ok(categoryIds.length > 0);
   assert.equal(
     lines[beforeLeaf - 1],
-    `SELECT setval('public.categories_id_seq',${Math.max(...categoryIds)},true);`,
+    `UPDATE sqlite_sequence SET seq=max(seq,${Math.max(...categoryIds)}) WHERE name='categories';`,
+  );
+  assert.match(
+    String(lines[beforeLeaf - 2]),
+    /^INSERT INTO sqlite_sequence \(name,seq\) SELECT 'categories',0 WHERE NOT EXISTS/,
+  );
+});
+
+void test("the seed uses SQLite literal forms only", async () => {
+  const demoSeedSql = await loadSql("2026-09-03");
+  assert.doesNotMatch(demoSeedSql, /::|\bsetval\b|\bnextval\b|\bpublic\./);
+  for (const line of demoSeedSql.split("\n")) {
+    // Outside string literals, booleans are 0/1 and nothing is a float.
+    const code = line.replace(/'(?:[^']|'')*'/g, "''");
+    assert.doesNotMatch(code, /\b(?:true|false)\b/i, line.slice(0, 120));
+    assert.doesNotMatch(code, /\b\d+\.\d+\b/, line.slice(0, 120));
+  }
+  assert.match(
+    demoSeedSql,
+    /'belgian_tax_profile', vision_jsonb\('\{"profileConfigured":true,/,
   );
   assert.match(
     demoSeedSql,
-    /SELECT setval\('public.categories_id_seq',\(SELECT MAX\(id\) FROM categories\),true\);/,
+    /INSERT INTO vision_sequences \(name,last_value\) VALUES \('portfolio_transactions_id_seq',\d+\)/,
   );
+});
+
+void test("decimal literals are canonical text at the column scale", async () => {
+  const { decimalText } = await generatorModule();
+  assert.equal(decimalText(12.5, 2, 4), "12.5000");
+  assert.equal(decimalText(-932.6081, 2, 4), "-932.6100");
+  assert.equal(decimalText(-0.001, 2, 4), "0.0000");
+  assert.equal(decimalText(1, 10, 10), "1.0000000000");
+  assert.equal(decimalText(1450, 2, 2), "1450.00");
+  assert.throws(() => decimalText(1.23456, 6, 4), /does not fit scale/);
+  assert.throws(() => decimalText(Number.NaN, 2, 4), /does not fit scale/);
+});
+
+/**
+ * DECIMAL_TEXT(p,s) (or, before ADR-263, numeric(p,s)) scale of every column
+ * the migrations declare, by "table.column"; later migrations win.
+ */
+function declaredDecimalScales(): Map<string, number> {
+  const dir = path.join(repoRoot, "db", "migrations");
+  const scales = new Map<string, number>();
+  const name = String.raw`"?(?:public"?\.")?([a-z_][a-z0-9_]*)"?`;
+  const decimal = String.raw`(?:numeric|DECIMAL_TEXT)\((\d+),\s*(\d+)\)`;
+  const createTable = new RegExp(
+    String.raw`CREATE TABLE (?:IF NOT EXISTS )?${name}\s*\(([\s\S]*?)\n\);`,
+    "gi",
+  );
+  const column = new RegExp(String.raw`^\s*"?([a-z_][a-z0-9_]*)"?\s+${decimal}`, "gim");
+  const addColumn = new RegExp(
+    String.raw`ALTER TABLE (?:ONLY )?${name}\s+ADD COLUMN (?:IF NOT EXISTS )?"?([a-z_][a-z0-9_]*)"?\s+${decimal}`,
+    "gi",
+  );
+  const alterType = new RegExp(
+    String.raw`ALTER TABLE (?:ONLY )?${name}\s+ALTER COLUMN "?([a-z_][a-z0-9_]*)"?\s+(?:SET DATA )?TYPE\s+${decimal}`,
+    "gi",
+  );
+  const files = fs
+    .readdirSync(dir)
+    .filter((file) => /^\d{4}_.*\.sql$/.test(file) && !file.endsWith(".down.sql"))
+    .sort();
+  for (const file of files) {
+    const sql = fs.readFileSync(path.join(dir, file), "utf8");
+    for (const [, rawTable = "", body = ""] of sql.matchAll(createTable)) {
+      // A SQLite table rebuild creates <table>__new and renames it.
+      const table = rawTable.replace(/__?new$/, "");
+      for (const [, col = "", , scale = ""] of body.matchAll(column))
+        scales.set(`${table}.${col}`, Number(scale));
+    }
+    for (const pattern of [addColumn, alterType]) {
+      for (const [, table = "", col = "", , scale = ""] of sql.matchAll(pattern))
+        scales.set(`${table}.${col}`, Number(scale));
+    }
+  }
+  return scales;
+}
+
+void test("the generator's decimal scales match the migrated schema", async () => {
+  const { DEMO_DECIMAL_COLUMNS } = await generatorModule();
+  const declared = declaredDecimalScales();
+  assert.ok(declared.size > 0, "no decimal columns found in db/migrations");
+  for (const [columnName, scale] of Object.entries(DEMO_DECIMAL_COLUMNS)) {
+    assert.equal(declared.get(columnName), scale, columnName);
+  }
 });
 
 void test("the reference date shifts historical and planned rows together", async () => {
@@ -201,4 +300,139 @@ void test("seed build rejects generated row-count drift", () => {
       "code" in error &&
       error.code === "DEMO_SEED_COUNT_MISMATCH",
   );
+});
+
+const syntheticSummary = {
+  accounts: 1,
+  transactions: 2,
+  recipients: 1,
+  investments: 0,
+  portfolioTransactions: 0,
+  assetPriceHistory: 0,
+  plannedTransactions: 0,
+  transactionSplits: 0,
+};
+
+function syntheticTableCounts() {
+  return {
+    accounts: 1,
+    transactions: 2,
+    recipients: 1,
+    investments: 0,
+    portfolio_transactions: 0,
+    asset_price_history: 0,
+    planned_transactions: 0,
+    transaction_splits: 0,
+    categories: 3,
+  };
+}
+
+async function seedBuildFixture(t: TestContext) {
+  const root = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-demo-seed-build-"),
+  );
+  t.after(() => fs.promises.rm(root, { recursive: true, force: true }));
+  const payload = path.join(root, "native-runtime");
+  await fs.promises.mkdir(payload);
+  await fs.promises.writeFile(path.join(payload, "manifest.json"), "{}");
+  return { payload, outputRoot: path.join(root, "demo-seed") };
+}
+
+function fakeRuntime(
+  seen: unknown[],
+  overrides: Partial<Awaited<ReturnType<DemoSeedRuntime["createDatabaseFile"]>>> = {},
+): DemoSeedRuntime {
+  return {
+    ensureLayout: () => Promise.resolve(),
+    discover: () => Promise.resolve(),
+    async createDatabaseFile(destination, { seedSqlPath }) {
+      seen.push(await fs.promises.readFile(seedSqlPath, "utf8"));
+      const contents = Buffer.from("SQLite format 3\0synthetic Demo");
+      await fs.promises.writeFile(destination, contents);
+      return {
+        sha256: sha256(contents),
+        bytes: contents.length,
+        schemaVersion: 7,
+        sqliteVersion: "3.46.1",
+        pendingMigrations: 0,
+        tableCounts: syntheticTableCounts(),
+        ...overrides,
+      };
+    },
+  };
+}
+
+void test("the seed build writes a SQLite seed the Demo runtime accepts", async (t) => {
+  const { payload, outputRoot } = await seedBuildFixture(t);
+  const seen: unknown[] = [];
+  const created: unknown[] = [];
+  const sql = "INSERT INTO accounts (id,name) VALUES (1,'Synthetic');\n";
+  const result = await buildDemoSeed({
+    nativeRuntimeRoot: payload,
+    outputRoot,
+    createRuntime: (options) => {
+      created.push(options);
+      return fakeRuntime(seen);
+    },
+    load: () =>
+      Promise.resolve({
+        demoSeedSql: sql,
+        demoSeedSummary: syntheticSummary,
+        demoSeedReferenceDate: "2026-09-03",
+      }),
+  });
+  assert.deepEqual(seen, [sql]);
+  assert.equal(
+    (created[0] as { runtimeRoot?: unknown }).runtimeRoot,
+    path.resolve(payload),
+  );
+  assert.equal(
+    (created[0] as { requireRuntimeManifest?: unknown }).requireRuntimeManifest,
+    true,
+  );
+  assert.deepEqual(fs.readdirSync(outputRoot).sort(), [
+    "manifest.json",
+    "vision-demo.sqlite3",
+  ]);
+  const seed = await loadDemoSeed(outputRoot);
+  assert.deepEqual(seed.manifest, result.manifest);
+  assert.equal(seed.manifest.schemaVersion, 7);
+  assert.equal(seed.manifest.logicalSha256, sha256(sql));
+  assert.deepEqual(seed.manifest.database.tableCounts, syntheticTableCounts());
+});
+
+void test("the seed build refuses SQL that writes migration state", async (t) => {
+  const { payload, outputRoot } = await seedBuildFixture(t);
+  await assert.rejects(
+    buildDemoSeed({
+      nativeRuntimeRoot: payload,
+      outputRoot,
+      createRuntime: () => fakeRuntime([]),
+      load: () =>
+        Promise.resolve({
+          demoSeedSql: "DELETE FROM vision_migrations;\n",
+          demoSeedSummary: syntheticSummary,
+        }),
+    }),
+    /must not modify migration state/,
+  );
+  assert.equal(fs.existsSync(outputRoot), false);
+});
+
+void test("the seed build refuses a database behind the packaged migrations", async (t) => {
+  const { payload, outputRoot } = await seedBuildFixture(t);
+  await assert.rejects(
+    buildDemoSeed({
+      nativeRuntimeRoot: payload,
+      outputRoot,
+      createRuntime: () => fakeRuntime([], { pendingMigrations: 1 }),
+      load: () =>
+        Promise.resolve({
+          demoSeedSql: "SELECT 1;\n",
+          demoSeedSummary: syntheticSummary,
+        }),
+    }),
+    /not at the packaged schema version/,
+  );
+  assert.equal(fs.existsSync(outputRoot), false);
 });

@@ -27,17 +27,18 @@ const tableCounts = {
   transactions: 200,
   user_settings: 2,
 };
-const database = {
-  schema: "0099_demo_head",
-  postgresVersionNum: 180_006,
-  tableCount: Object.keys(tableCounts).length,
-  tableCounts,
-  importantRowCounts: tableCounts,
-};
+const SCHEMA_VERSION = 99;
 
 interface MockState {
   activeRuntime?: unknown;
-  demoSeed?: { logicalSha256?: unknown; schemaRevision?: unknown };
+  demoSeed?:
+    | {
+        logicalSha256?: unknown;
+        databaseSha256?: unknown;
+        schemaVersion?: unknown;
+        schemaRevision?: unknown;
+      }
+    | undefined;
   pendingDatabaseSwitch?: unknown;
   [key: string]: unknown;
 }
@@ -52,6 +53,10 @@ function hasCode(code: string) {
     error.code === code;
 }
 
+function sha256(buffer: Buffer): string {
+  return crypto.createHash("sha256").update(buffer).digest("hex");
+}
+
 async function fixture(t: TestContext) {
   const root = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-native-demo-test-"),
@@ -60,16 +65,21 @@ async function fixture(t: TestContext) {
   const userDataDir = path.join(root, "Vision Demo");
   const seedRoot = path.join(root, "seed");
   await fs.promises.mkdir(seedRoot, { recursive: true });
-  const dump = Buffer.from("synthetic custom dump");
+  const seedDatabase = Buffer.from("SQLite format 3\0synthetic Demo database");
   const manifest = {
-    version: 1,
+    version: 2,
+    format: "sqlite",
     logicalSha256: "a".repeat(64),
-    dumpSha256: crypto.createHash("sha256").update(dump).digest("hex"),
-    schemaRevision: database.schema,
-    database,
+    databaseSha256: sha256(seedDatabase),
+    databaseBytes: seedDatabase.length,
+    schemaVersion: SCHEMA_VERSION,
+    database: { tableCounts },
     summary: { accounts: 6 },
   };
-  await fs.promises.writeFile(path.join(seedRoot, "demo-seed.dump"), dump);
+  await fs.promises.writeFile(
+    path.join(seedRoot, "vision-demo.sqlite3"),
+    seedDatabase,
+  );
   await fs.promises.writeFile(
     path.join(seedRoot, "manifest.json"),
     JSON.stringify(manifest),
@@ -77,25 +87,39 @@ async function fixture(t: TestContext) {
   return { manifest, seedRoot, userDataDir };
 }
 
+function currentSeedState(manifest: {
+  logicalSha256: string;
+  databaseSha256: string;
+  schemaVersion: number;
+}): MockState["demoSeed"] {
+  return {
+    logicalSha256: manifest.logicalSha256,
+    databaseSha256: manifest.databaseSha256,
+    schemaVersion: manifest.schemaVersion,
+  };
+}
+
 function runtimeMock(userDataDir: string, initialState: MockState = {}) {
   let state: MockState = structuredClone(initialState);
   const calls: MockCall[] = [];
-  const stats = {
-    ...database,
-    ...tableCounts,
+  const databaseDir = path.join(userDataDir, "database");
+  const database = path.join(databaseDir, "vision.sqlite3");
+  const report = {
+    schemaVersion: SCHEMA_VERSION,
     tableCounts: { ...tableCounts },
-    stableImportantRowCounts: undefined as
-      { user_settings: number } | undefined,
   };
   const runtime = {
     calls,
     runtimeId: DEMO_RUNTIME_ID,
     paths: {
       nativeRoot: path.join(userDataDir, "native", DEMO_RUNTIME_ID),
+      database,
     },
+    /** What activation writes to the live path; the seed itself by default. */
+    activatedContents: undefined as Buffer | undefined,
     ensureLayout() {
       calls.push("ensureLayout");
-      return Promise.resolve();
+      return fs.promises.mkdir(databaseDir, { recursive: true });
     },
     discover() {
       calls.push("discover");
@@ -109,10 +133,6 @@ function runtimeMock(userDataDir: string, initialState: MockState = {}) {
       state = { ...state, ...next };
       return Promise.resolve();
     },
-    ensurePostgresReady() {
-      calls.push("ensurePostgresReady");
-      return Promise.resolve();
-    },
     recoverInterruptedRestore() {
       calls.push("recoverInterruptedRestore");
       state.pendingAttachmentSwitch = undefined;
@@ -124,17 +144,18 @@ function runtimeMock(userDataDir: string, initialState: MockState = {}) {
       state.pendingDatabaseSwitch = undefined;
       return Promise.resolve();
     },
-    validateCustomDump() {
-      calls.push("validateCustomDump");
-      return Promise.resolve();
-    },
-    activateRestoredDatabase(_source: string, options: unknown) {
+    async activateRestoredDatabase(source: string, options: unknown) {
       calls.push(["activateRestoredDatabase", options]);
-      return Promise.resolve({ switchToken: { liveDatabase: "vision_demo" } });
+      await fs.promises.mkdir(databaseDir, { recursive: true });
+      await fs.promises.writeFile(
+        database,
+        runtime.activatedContents ?? (await fs.promises.readFile(source)),
+      );
+      return { switchToken: { kind: "sqlite-directory" } };
     },
-    getDatabaseStats() {
-      calls.push("getDatabaseStats");
-      return Promise.resolve(structuredClone(stats));
+    verifyDatabaseFile(file: string) {
+      calls.push(["verifyDatabaseFile", file]);
+      return Promise.resolve(structuredClone(report));
     },
     finalizeDatabaseSwitch() {
       calls.push("finalizeDatabaseSwitch");
@@ -145,59 +166,92 @@ function runtimeMock(userDataDir: string, initialState: MockState = {}) {
       return Promise.resolve();
     },
     state: () => structuredClone(state),
-    stats,
+    report,
   };
   return runtime satisfies NativeDemoRuntime;
 }
 
 void test("validates and checksums the packaged Demo seed", async (t) => {
   const { manifest, seedRoot } = await fixture(t);
-  assert.deepEqual((await loadDemoSeed(seedRoot)).manifest, manifest);
+  const seed = await loadDemoSeed(seedRoot);
+  assert.deepEqual(seed.manifest, manifest);
+  assert.equal(seed.databasePath, path.join(seedRoot, "vision-demo.sqlite3"));
   await fs.promises.appendFile(
-    path.join(seedRoot, "demo-seed.dump"),
+    path.join(seedRoot, "vision-demo.sqlite3"),
     "truncated",
   );
   await assert.rejects(
     loadDemoSeed(seedRoot),
     hasCode("DEMO_SEED_CHECKSUM_MISMATCH"),
   );
-  assert.throws(
-    () => validateDemoSeedManifest({ version: 1 }),
-    hasCode("DEMO_SEED_MANIFEST_INVALID"),
-  );
+  for (const invalid of [
+    { version: 1 },
+    { ...manifest, version: 1 },
+    { ...manifest, format: "postgresql-custom" },
+    { ...manifest, schemaVersion: "0099_demo_head" },
+    { ...manifest, database: { tableCounts: {} } },
+    { ...manifest, database: { tableCounts: { accounts: -1 } } },
+  ]) {
+    assert.throws(
+      () => validateDemoSeedManifest(invalid),
+      hasCode("DEMO_SEED_MANIFEST_INVALID"),
+    );
+  }
 });
 
 void test("skips an already-current native Demo seed", async (t) => {
   const { manifest, seedRoot, userDataDir } = await fixture(t);
   const runtime = runtimeMock(userDataDir, {
     activeRuntime: "native",
-    demoSeed: {
-      logicalSha256: manifest.logicalSha256,
-      schemaRevision: manifest.schemaRevision,
-    },
+    demoSeed: currentSeedState(manifest),
   });
+  await fs.promises.mkdir(path.dirname(runtime.paths.database), {
+    recursive: true,
+  });
+  await fs.promises.writeFile(runtime.paths.database, "SQLite format 3\0used");
   const result = await prepareNativeDemo(runtime, { seedRoot });
   assert.equal(result.status, "current");
   assert.ok(!runtime.calls.some((call) => Array.isArray(call)));
   assert.equal(runtime.state().activeRuntime, "native");
 });
 
+void test("re-seeds a current Demo seed whose database file is gone", async (t) => {
+  const { manifest, seedRoot, userDataDir } = await fixture(t);
+  const runtime = runtimeMock(userDataDir, {
+    demoSeed: currentSeedState(manifest),
+  });
+  const result = await prepareNativeDemo(runtime, { seedRoot });
+  assert.equal(result.status, "activated");
+});
+
+void test("a Vision 2.0 Demo seed marker is replaced by the SQLite seed", async (t) => {
+  const { manifest, seedRoot, userDataDir } = await fixture(t);
+  const runtime = runtimeMock(userDataDir, {
+    demoSeed: {
+      logicalSha256: manifest.logicalSha256,
+      schemaRevision: "0128_category_path_on_legacy_rename",
+    },
+  });
+  const result = await prepareNativeDemo(runtime, { seedRoot });
+  assert.equal(result.status, "activated");
+});
+
 void test("recovers paired restore journals before trusting a current Demo seed", async (t) => {
   const { manifest, seedRoot, userDataDir } = await fixture(t);
   const runtime = runtimeMock(userDataDir, {
-    pendingDatabaseSwitch: { previousDatabase: "vision_demo_previous" },
+    pendingDatabaseSwitch: { kind: "sqlite-directory" },
     pendingAttachmentSwitch: { previousDirectory: "attachments.previous" },
-    demoSeed: {
-      logicalSha256: manifest.logicalSha256,
-      schemaRevision: manifest.schemaRevision,
-    },
+    demoSeed: currentSeedState(manifest),
   });
+  await fs.promises.mkdir(path.dirname(runtime.paths.database), {
+    recursive: true,
+  });
+  await fs.promises.writeFile(runtime.paths.database, "SQLite format 3\0used");
   const readState = runtime.readState.bind(runtime);
   runtime.readState = async () => {
     const state = await readState();
     assert.equal(state.pendingDatabaseSwitch, undefined);
     assert.equal(state.pendingAttachmentSwitch, undefined);
-    assert.ok(runtime.calls.includes("ensurePostgresReady"));
     assert.ok(runtime.calls.includes("recoverInterruptedRestore"));
     return state;
   };
@@ -211,7 +265,7 @@ void test("recovers paired restore journals before trusting a current Demo seed"
 void test("stops Demo preparation when coordinated recovery fails", async (t) => {
   const { seedRoot, userDataDir } = await fixture(t);
   const journals = {
-    pendingDatabaseSwitch: { previousDatabase: "vision_demo_previous" },
+    pendingDatabaseSwitch: { kind: "sqlite-directory" },
     pendingAttachmentSwitch: { previousDirectory: "attachments.previous" },
   };
   const runtime = runtimeMock(userDataDir, journals);
@@ -233,42 +287,63 @@ void test("activates, verifies, and finalizes a changed Demo seed", async (t) =>
   const prepared = await prepareNativeDemo(runtime, { seedRoot });
   assert.equal(prepared.status, "activated");
   assert.deepEqual(runtime.calls.find((call) => Array.isArray(call))?.[1], {
-    format: "custom",
-    expectedSchemaHead: manifest.schemaRevision,
+    expectedSchemaVersion: manifest.schemaVersion,
+    expectedSha256: manifest.databaseSha256,
   });
+  assert.equal(
+    sha256(await fs.promises.readFile(runtime.paths.database)),
+    manifest.databaseSha256,
+  );
   await finalizeNativeDemo(runtime, prepared);
+  assert.ok(
+    runtime.calls.some(
+      (call) =>
+        Array.isArray(call) &&
+        call[0] === "verifyDatabaseFile" &&
+        call[1] === runtime.paths.database,
+    ),
+  );
   assert.ok(runtime.calls.includes("finalizeDatabaseSwitch"));
-  assert.equal(runtime.state().demoSeed?.logicalSha256, manifest.logicalSha256);
+  assert.deepEqual(runtime.state().demoSeed && {
+    ...runtime.state().demoSeed,
+    appliedAt: undefined,
+  }, { ...currentSeedState(manifest), appliedAt: undefined });
 });
 
-void test("finalization permits a runtime-owned settings marker", async (t) => {
+void test("finalization permits runtime-owned settings rows but protects Demo data", async (t) => {
   const { seedRoot, userDataDir } = await fixture(t);
   const runtime = runtimeMock(userDataDir);
-  const stableImportantRowCounts = {
-    user_settings: tableCounts.user_settings,
-  };
-  runtime.stats.stableImportantRowCounts = stableImportantRowCounts;
   const prepared = await prepareNativeDemo(runtime, { seedRoot });
-  runtime.stats.user_settings += 1;
-  runtime.stats.tableCounts.user_settings += 1;
+  runtime.report.tableCounts.user_settings += 1;
   await finalizeNativeDemo(runtime, prepared);
   assert.ok(runtime.calls.includes("finalizeDatabaseSwitch"));
 
-  stableImportantRowCounts.user_settings += 1;
+  runtime.report.tableCounts.transactions -= 1;
   await assert.rejects(
     finalizeNativeDemo(runtime, prepared),
     hasCode("DATABASE_COUNT_MISMATCH"),
   );
 });
 
-void test("rolls back a staged Demo database after verification failure", async (t) => {
+void test("finalization refuses a Demo database whose schema moved backwards", async (t) => {
   const { seedRoot, userDataDir } = await fixture(t);
   const runtime = runtimeMock(userDataDir);
-  runtime.stats.transactions += 1;
-  runtime.stats.tableCounts.transactions += 1;
+  const prepared = await prepareNativeDemo(runtime, { seedRoot });
+  runtime.report.schemaVersion = SCHEMA_VERSION - 1;
+  await assert.rejects(
+    finalizeNativeDemo(runtime, prepared),
+    hasCode("DATABASE_SCHEMA_MISMATCH"),
+  );
+  assert.ok(!runtime.calls.includes("finalizeDatabaseSwitch"));
+});
+
+void test("rolls back an activated Demo database that does not match the seed", async (t) => {
+  const { seedRoot, userDataDir } = await fixture(t);
+  const runtime = runtimeMock(userDataDir);
+  runtime.activatedContents = Buffer.from("SQLite format 3\0different");
   await assert.rejects(
     prepareNativeDemo(runtime, { seedRoot }),
-    hasCode("DATABASE_COUNT_MISMATCH"),
+    hasCode("DEMO_SEED_CHECKSUM_MISMATCH"),
   );
   assert.ok(runtime.calls.includes("rollbackDatabaseSwitch"));
 });
@@ -277,14 +352,16 @@ void test("rollback restores the seed marker that belongs to the previous databa
   const { seedRoot, userDataDir } = await fixture(t);
   const previousDemoSeed = {
     logicalSha256: "b".repeat(64),
-    schemaRevision: database.schema,
+    databaseSha256: "c".repeat(64),
+    schemaVersion: SCHEMA_VERSION,
   };
   const runtime = runtimeMock(userDataDir, { demoSeed: previousDemoSeed });
   const prepared = await prepareNativeDemo(runtime, { seedRoot });
   await runtime.writeState({
     demoSeed: {
       logicalSha256: "a".repeat(64),
-      schemaRevision: database.schema,
+      databaseSha256: "d".repeat(64),
+      schemaVersion: SCHEMA_VERSION,
     },
   });
   await rollbackNativeDemo(runtime, prepared);
@@ -297,7 +374,8 @@ void test("reset requests are isolated and retained until successful finalizatio
   const runtime = runtimeMock(userDataDir, {
     demoSeed: {
       logicalSha256: "a".repeat(64),
-      schemaRevision: database.schema,
+      databaseSha256: "d".repeat(64),
+      schemaVersion: SCHEMA_VERSION,
     },
   });
   const prepared = await prepareNativeDemo(runtime, { seedRoot });
@@ -347,10 +425,22 @@ void test("rejects a reset request that is a symbolic link, directory or FIFO", 
 });
 
 void test("refuses to seed outside the Vision Demo application-data directory", async (t) => {
-  const { seedRoot } = await fixture(t);
+  const { seedRoot, userDataDir } = await fixture(t);
   const runtime = runtimeMock(path.join(os.tmpdir(), "Vision"));
   await assert.rejects(
     prepareNativeDemo(runtime, { seedRoot }),
+    hasCode("DEMO_RUNTIME_UNSAFE"),
+  );
+  // A Demo runtime whose database path leaves the Demo directory is refused too.
+  const escaped = runtimeMock(userDataDir);
+  escaped.paths.database = path.join(
+    path.dirname(userDataDir),
+    "Vision",
+    "database",
+    "vision.sqlite3",
+  );
+  await assert.rejects(
+    prepareNativeDemo(escaped, { seedRoot }),
     hasCode("DEMO_RUNTIME_UNSAFE"),
   );
 });

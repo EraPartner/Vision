@@ -1,98 +1,54 @@
 /**
- * Disposable sibling databases for suites that need a pristine schema of
- * their own (adoption, migrator lifecycle, receipt journals that must start
- * empty). Each database is created next to TEST_DATABASE_URL and dropped by
- * the returned `drop()`. Callers gate on `hasIsolatedTestDatabase()`: creating
- * databases needs CREATEDB, which only the disposable harness guarantees.
+ * Disposable database files for suites that need a schema of their own
+ * (migrator lifecycle, adoption, journals that must start empty). Each file
+ * lives in the run's temporary directory and is removed by `drop()`.
  */
-
 import { randomUUID } from "node:crypto";
-import pg from "pg";
+import { rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { runMigrations } from "../../src/database/migrate.ts";
-import type { RunMigrationsResult } from "../../src/database/migrate.ts";
-import { must } from "../helpers/must.ts";
-
-export function hasIsolatedTestDatabase(): boolean {
-  return (
-    process.env.VISION_TEST_DB_ISOLATED === "1" &&
-    Boolean(process.env.TEST_DATABASE_URL)
-  );
-}
+import type { MigrateOptions, RunMigrationsResult } from "../../src/database/migrate.ts";
 
 export interface DisposableDatabase {
   name: string;
-  url: string;
+  file: string;
   drop(): Promise<void>;
 }
 
-async function withAdmin<T>(run: (admin: pg.Client) => Promise<T>) {
-  const admin = new pg.Client({
-    connectionString: process.env.TEST_DATABASE_URL,
-  });
-  await admin.connect();
-  try {
-    return await run(admin);
-  } finally {
-    await admin.end();
-  }
+/** Always true: creating a database is creating a file. */
+export function hasIsolatedTestDatabase(): boolean {
+  return true;
 }
 
-/** Create an empty database (no schema) beside TEST_DATABASE_URL. */
-export async function createEmptyDatabase(
-  prefix: string,
-): Promise<DisposableDatabase> {
+/** A path for a new, empty database file. */
+export function createEmptyDatabase(prefix: string): Promise<DisposableDatabase> {
   const name = `${prefix}_${randomUUID().replaceAll("-", "")}`;
-  if (!/^[a-z][a-z0-9_]{0,62}$/.test(name)) {
-    throw new Error(`Unsafe database name: ${name}`);
-  }
-  const url = new URL(must(process.env.TEST_DATABASE_URL, "process.env.TEST_DATABASE_URL"));
-  url.pathname = `/${name}`;
-  await withAdmin((admin) =>
-    admin.query(
-      `CREATE DATABASE ${name} WITH TEMPLATE template0 ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C'`,
-    ),
-  );
-  return {
+  const dir = process.env.VISION_TEST_DB_DIR ?? os.tmpdir();
+  const file = path.join(dir, `${name}.sqlite3`);
+  return Promise.resolve({
     name,
-    url: url.toString(),
-    drop: () =>
-      withAdmin(async (admin) => {
-        await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
-      }),
-  };
+    file,
+    drop: () => {
+      for (const suffix of ["", "-wal", "-shm", "-journal"]) rmSync(`${file}${suffix}`, { force: true });
+      return Promise.resolve();
+    },
+  });
 }
 
-/**
- * Run the production migrator against `url`. The migrator reads its target
- * from the environment, so both URLs are pointed at the scratch database for
- * the duration of the call and restored afterwards.
- */
+/** Run the production migrator against `file`. */
 export async function migrateDatabase(
-  url: string,
+  file: string,
+  options: MigrateOptions = {},
 ): Promise<RunMigrationsResult> {
-  const saved = {
-    DATABASE_URL: process.env.DATABASE_URL,
-    DATABASE_URL_MIGRATIONS: process.env.DATABASE_URL_MIGRATIONS,
-  };
-  process.env.DATABASE_URL = url;
-  process.env.DATABASE_URL_MIGRATIONS = url;
-  try {
-    return await runMigrations();
-  } finally {
-    for (const [key, value] of Object.entries(saved)) {
-      if (value === undefined) Reflect.deleteProperty(process.env, key);
-      else process.env[key] = value;
-    }
-  }
+  return runMigrations(file, options);
 }
 
-/** Create a database and migrate it to the current head. */
-export async function createMigratedDatabase(
-  prefix: string,
-): Promise<DisposableDatabase> {
+/** Create a database file and migrate it to the current head. */
+export async function createMigratedDatabase(prefix: string): Promise<DisposableDatabase> {
   const database = await createEmptyDatabase(prefix);
   try {
-    await migrateDatabase(database.url);
+    await migrateDatabase(database.file, { skipBackup: true });
   } catch (err) {
     await database.drop();
     throw err;

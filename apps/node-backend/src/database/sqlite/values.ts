@@ -1,0 +1,154 @@
+/**
+ * Value conversion between JavaScript and Vision's SQLite storage (ADR-263).
+ *
+ * Reads: SQLite returns only integers, floats, text, blobs and NULL. The
+ * declared column type of a direct column reference (StatementSync.columns()
+ * reports it through subqueries and views) says what the value means, and
+ * the reader turns it into what node-postgres returned for the PostgreSQL
+ * type, so services keep the row shapes they were written for:
+ *
+ *   BOOLEAN              0/1          -> boolean
+ *   TIMESTAMPTZ_TEXT     UTC text     -> Date
+ *   DATE_TEXT            YYYY-MM-DD   -> local-midnight Date (node-postgres's DATE parser)
+ *   JSONB_TEXT           jsonb text   -> parsed value
+ *   JSON_TEXT            JSON text    -> parsed value
+ *   TEXT_ARRAY           JSON array   -> array (was text[] or int[])
+ *   BIGINT               integer      -> decimal string (node-postgres's int8)
+ *   DECIMAL_TEXT(p,s)    decimal text -> the same text
+ *   UUID_TEXT            uuid text    -> the same text
+ *
+ * An expression has no declared type. Its alias may carry the type instead:
+ * `AS "flag::bool"`, `::json`, `::timestamptz`, `::date`, `::bigint`. The
+ * suffix is removed from the row key.
+ *
+ * Writes: a Date becomes canonical UTC text, a boolean 0/1, an array or a
+ * plain object JSON text, `undefined` NULL.
+ */
+import { formatInstant, instantFromDate, parseDate } from "./pgTime.ts";
+
+export type SqlParam = null | number | bigint | string | Uint8Array;
+
+export type Reader = (value: unknown) => unknown;
+
+const identity: Reader = (v) => v;
+
+const readBoolean: Reader = (v) => {
+  if (v === null || v === undefined) return null;
+  if (v === 1 || v === 1n) return true;
+  if (v === 0 || v === 0n) return false;
+  if (typeof v === "boolean") return v;
+  throw new TypeError(`boolean column holds ${typeof v} ${String(v)}`);
+};
+
+const CANONICAL_TS = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3})\d{3}Z$/;
+
+const readTimestamp: Reader = (v) => {
+  if (v === null || v === undefined) return null;
+  if (typeof v !== "string") throw new TypeError(`timestamp column holds ${typeof v}`);
+  const m = CANONICAL_TS.exec(v);
+  // Date.parse of ISO with a Z suffix is exact to the millisecond; the three
+  // microsecond digits are dropped, as node-postgres's parser drops them.
+  const ms = Date.parse(m ? `${m[1]}Z` : v);
+  if (Number.isNaN(ms)) throw new TypeError(`unreadable timestamp ${v}`);
+  return new Date(ms);
+};
+
+const readDate: Reader = (v) => {
+  if (v === null || v === undefined) return null;
+  if (typeof v !== "string") throw new TypeError(`date column holds ${typeof v}`);
+  const d = parseDate(v);
+  const out = new Date(d.year, d.month - 1, d.day);
+  if (d.year < 100) out.setFullYear(d.year);
+  return out;
+};
+
+const readJson: Reader = (v) => {
+  if (v === null || v === undefined) return null;
+  if (typeof v !== "string") return v;
+  return JSON.parse(v) as unknown;
+};
+
+const readBigint: Reader = (v) => {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "number" || typeof v === "bigint") return String(v);
+  return v;
+};
+
+const readText: Reader = (v) => (v === null || v === undefined ? null : String(v));
+
+/** Reader for a declared column type, or null when the value passes through. */
+export function readerForDeclaredType(declared: string | null | undefined): Reader | null {
+  if (!declared) return null;
+  const t = declared.trim().toUpperCase();
+  if (t === "BOOLEAN") return readBoolean;
+  if (t === "TIMESTAMPTZ_TEXT") return readTimestamp;
+  if (t === "DATE_TEXT") return readDate;
+  if (t === "JSONB_TEXT" || t === "JSON_TEXT" || t === "TEXT_ARRAY") return readJson;
+  if (t === "BIGINT") return readBigint;
+  return null;
+}
+
+const HINT = /::(bool|json|timestamptz|date|bigint|text)$/;
+
+export interface ColumnPlan {
+  /** Row key after the hint is removed. */
+  key: string;
+  read: Reader;
+}
+
+/** Plan one result column from its name and declared type. */
+export function planColumn(name: string, declared: string | null | undefined): ColumnPlan {
+  const hint = HINT.exec(name);
+  if (hint) {
+    const key = name.slice(0, name.length - hint[0].length);
+    switch (hint[1]) {
+      case "bool":
+        return { key, read: readBoolean };
+      case "json":
+        return { key, read: readJson };
+      case "timestamptz":
+        return { key, read: readTimestamp };
+      case "date":
+        return { key, read: readDate };
+      case "bigint":
+        return { key, read: readBigint };
+      default:
+        return { key, read: readText };
+    }
+  }
+  return { key: name, read: readerForDeclaredType(declared) ?? identity };
+}
+
+function isDecimalLike(v: object): boolean {
+  const candidate = v as { toFixed?: unknown; isFinite?: unknown; d?: unknown };
+  return typeof candidate.toFixed === "function" && typeof candidate.isFinite === "function" && "d" in candidate;
+}
+
+/** Convert one bound value to what SQLite stores. */
+export function toSqlParam(value: unknown): SqlParam {
+  if (value === null || value === undefined) return null;
+  switch (typeof value) {
+    case "string":
+    case "bigint":
+      return value;
+    case "number":
+      if (Number.isNaN(value)) throw new TypeError("NaN cannot be bound to SQLite");
+      return value;
+    case "boolean":
+      return value ? 1 : 0;
+    case "object": {
+      if (value instanceof Date) return formatInstant(instantFromDate(value));
+      if (value instanceof Uint8Array) return value;
+      if (Array.isArray(value)) return JSON.stringify(value);
+      if (isDecimalLike(value)) return String(value);
+      return JSON.stringify(value);
+    }
+    default:
+      throw new TypeError(`cannot bind a ${typeof value} to SQLite`);
+  }
+}
+
+export function toSqlParams(values: readonly unknown[] | undefined): SqlParam[] {
+  if (!values) return [];
+  return values.map(toSqlParam);
+}

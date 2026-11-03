@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   assertSafeNativeDestination,
+  bundleDatabaseTool,
   compileBackend,
   manifestEntries,
   signCompiledBackend,
@@ -83,3 +84,47 @@ for (const exitCode of [0, 1]) {
     }
   });
 }
+
+void test("the database tool is bundled for Bun at the packaged path", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vision-db-tool-test-"));
+  try {
+    // Stands in for `bun build`: records its arguments and writes --outfile.
+    const fakeBun = path.join(root, "fake-bun");
+    fs.writeFileSync(
+      fakeBun,
+      `#!/bin/sh\nprintf '%s\\n' "$@" > args.txt\nwhile [ "$#" -gt 0 ]; do\n  if [ "$1" = "--outfile" ]; then echo bundled > "$2"; fi\n  shift\ndone\n`,
+      { mode: 0o755 },
+    );
+    const outfile = path.join(root, "tools", "db-file.js");
+    fs.mkdirSync(path.dirname(outfile));
+    bundleDatabaseTool(fakeBun, "apps/node-backend/scripts/db-file.ts", outfile, root);
+    assert.equal(fs.readFileSync(outfile, "utf8"), "bundled\n");
+    assert.deepEqual(
+      fs.readFileSync(path.join(root, "args.txt"), "utf8").trim().split("\n"),
+      ["build", "--target=bun", "apps/node-backend/scripts/db-file.ts", "--outfile", outfile],
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("database tool bundling fails when Bun fails or writes nothing", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vision-db-tool-test-"));
+  try {
+    const failing = path.join(root, "failing-bun");
+    fs.writeFileSync(failing, "#!/bin/sh\nexit 3\n", { mode: 0o755 });
+    const silent = path.join(root, "silent-bun");
+    fs.writeFileSync(silent, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    const outfile = path.join(root, "db-file.js");
+    assert.throws(
+      () => bundleDatabaseTool(failing, "db-file.ts", outfile, root),
+      /bundling exited 3/,
+    );
+    assert.throws(
+      () => bundleDatabaseTool(silent, "db-file.ts", outfile, root),
+      /produced no output/,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

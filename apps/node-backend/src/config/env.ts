@@ -11,13 +11,12 @@
 
 import "./loadDotenv.ts";
 import { z } from "zod";
-import { logger } from "./logger.ts";
 
-// Development-only convenience fallback for a local PostgreSQL installation.
-// Outside development the backend must fail closed rather than silently
-// connect with a guessable password — see enforceDatabaseUrlPolicy().
-const DEFAULT_DATABASE_URL =
-  "postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions";
+// Development-only default for the SQLite database file (ADR-263). Outside
+// development and test the path must be set explicitly, so a packaged or
+// misconfigured backend never writes a database somewhere unexpected — see
+// enforceDatabasePathPolicy().
+const DEFAULT_DATABASE_PATH = "./data/vision.sqlite3";
 
 const booleanEnv = (defaultValue: boolean) =>
   z
@@ -75,20 +74,11 @@ const envSchema = z
     ENVIRONMENT: optionalStringEnv,
     NODE_ENV: optionalStringEnv,
 
-    DATABASE_URL: stringEnv(DEFAULT_DATABASE_URL),
-    // Least-privilege setup (optional): privileged connection string used for
-    // migrations (database/migrate.ts prefers it over DATABASE_URL) and for the
-    // boot-time role bootstrap (database/roleBootstrap.ts) that creates the
-    // non-superuser app role on already-initialised databases. Unset = classic
-    // single-role setup.
-    DATABASE_URL_MIGRATIONS: optionalStringEnv,
-    // Optional dedicated login URL for the isolated analysis executor. When
-    // omitted, config.js derives the same host/database/password with the
-    // fixed vision_analysis_executor role.
-    DATABASE_URL_ANALYSIS: optionalStringEnv,
+    VISION_DATABASE_PATH: stringEnv(DEFAULT_DATABASE_PATH),
+    // How long a write waits for the single writer connection before failing
+    // with SQLSTATE 55P03 (database/connection.ts).
+    VISION_DB_LOCK_TIMEOUT_MS: intEnv(60_000),
     DB_ECHO: booleanEnv(false),
-    DB_POOL_SIZE: intEnv(5),
-    DB_MAX_OVERFLOW: intEnv(10),
 
     // Explicit opt-in for the dev-only rate-limit bypass.
     // Unset/default is fail-safe: bypasses stay OFF even when ENVIRONMENT is
@@ -165,39 +155,27 @@ function parseEnv() {
       .join("\n");
     throw new Error(`[env] Invalid environment configuration:\n${issues}`);
   }
-  enforceDatabaseUrlPolicy(result.data);
+  enforceDatabasePathPolicy(result.data);
   return result.data;
 }
 
 /**
- * DATABASE_URL is required (no fallback) outside development: the default
- * carries a well-known password, so an unset variable in production must fail
- * fast instead of silently connecting with guessable credentials. An
- * explicitly set value is always honoured (the operator made a choice); the
- * development fallback stays, but with a visible warning.
+ * VISION_DATABASE_PATH is required outside development and test: the desktop
+ * runtime always passes the file inside the application data directory, and
+ * any other deployment must say where its database lives instead of silently
+ * creating one under the working directory.
  */
-function enforceDatabaseUrlPolicy(data: z.infer<typeof envSchema>) {
-  const explicitlySet = Boolean(
-    process.env.DATABASE_URL && process.env.DATABASE_URL.trim(),
-  );
+function enforceDatabasePathPolicy(data: z.infer<typeof envSchema>) {
+  const explicitlySet = Boolean(process.env.VISION_DATABASE_PATH?.trim());
   if (explicitlySet) return;
-  const environment = (
-    data.ENVIRONMENT ||
-    data.NODE_ENV ||
-    "development"
-  ).toLowerCase();
+  const environment = (data.ENVIRONMENT || data.NODE_ENV || "development").toLowerCase();
   if (environment !== "development" && environment !== "test") {
     throw new Error(
-      "[env] DATABASE_URL is not set. Refusing to fall back to the built-in " +
-        "development credentials outside development — set DATABASE_URL explicitly " +
+      "[env] VISION_DATABASE_PATH is not set. Refusing to create a database at the " +
+        "development default outside development; set VISION_DATABASE_PATH explicitly " +
         "(see .env.example).",
     );
   }
-  if (environment === "test") return; // unit tests never open a real connection
-  logger.warn(
-    "[env] DATABASE_URL is not set — falling back to the built-in development " +
-      "default (ftm_user/ftm_password@localhost). Never use this outside local development.",
-  );
 }
 
 export const env = Object.freeze(parseEnv());

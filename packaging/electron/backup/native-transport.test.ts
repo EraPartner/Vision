@@ -71,9 +71,9 @@ function fakeActivationRecoveryFailureRuntime(): FakeRuntime {
 void test("native bundle restore commits only after detailed readiness", async () => {
   const runtime = fakeRuntime();
   const result = await restoreNativeBundle(runtime, {
-    dbSqlPath: "/tmp/db.sql",
+    databasePath: "/tmp/db.sqlite3",
     attachmentsDir: "/tmp/attachments",
-    expectedSchemaHead: "0072_test",
+    expectedSchemaVersion: 72,
   });
   assert.deepEqual(runtime.calls, [
     "activateDatabase",
@@ -86,11 +86,31 @@ void test("native bundle restore commits only after detailed readiness", async (
   assert.equal(result.cleanupWarning, undefined);
 });
 
+void test("native bundle restore passes the backup's recorded database facts to activation", async () => {
+  const runtime = fakeRuntime();
+  const seen: unknown[] = [];
+  runtime.activateRestoredDatabase = (sourcePath, options) => {
+    seen.push([sourcePath, options]);
+    return Promise.resolve({ switchToken: { id: "database" } });
+  };
+  await restoreNativeBundle(runtime, {
+    databasePath: "/tmp/db.sqlite3",
+    expectedSchemaVersion: 72,
+    expectedSha256: "a".repeat(64),
+  });
+  assert.deepEqual(seen, [
+    [
+      "/tmp/db.sqlite3",
+      { expectedSchemaVersion: 72, expectedSha256: "a".repeat(64) },
+    ],
+  ]);
+});
+
 void test("native bundle restore rolls attachments and database back before restarting", async () => {
   const runtime = fakeRuntime({ failAt: "waitUntilReady" });
   await assert.rejects(
     restoreNativeBundle(runtime, {
-      dbSqlPath: "/tmp/db.sql",
+      databasePath: "/tmp/db.sqlite3",
       attachmentsDir: "/tmp/attachments",
     }),
     /waitUntilReady failed/,
@@ -109,7 +129,7 @@ void test("native bundle restore rolls attachments and database back before rest
 void test("post-commit attachment cleanup failure is retained as a warning", async () => {
   const runtime = fakeRuntime({ cleanupFails: true });
   const result = await restoreNativeBundle(runtime, {
-    dbSqlPath: "/tmp/db.sql",
+    databasePath: "/tmp/db.sqlite3",
     attachmentsDir: "/tmp/attachments",
   });
   assert.match(
@@ -120,10 +140,10 @@ void test("post-commit attachment cleanup failure is retained as a warning", asy
   assert.equal(runtime.calls.includes("rollbackAttachments"), false);
 });
 
-void test("native plain SQL restore rolls the database back on readiness failure", async () => {
+void test("native database file restore rolls the database back on readiness failure", async () => {
   const runtime = fakeRuntime({ failAt: "waitUntilReady" });
   await assert.rejects(
-    restoreNativeDatabase(runtime, "/tmp/db.sql"),
+    restoreNativeDatabase(runtime, "/tmp/db.sqlite3"),
     /waitUntilReady failed/,
   );
   assert.deepEqual(runtime.calls, [
@@ -142,7 +162,7 @@ void test("a failed rollback is attached to the restore error", async () => {
     return Promise.reject(codedError("backend not ready", "BACKEND_NOT_READY"));
   };
   await assert.rejects(
-    restoreNativeDatabase(runtime, "/tmp/db.sql"),
+    restoreNativeDatabase(runtime, "/tmp/db.sqlite3"),
     (error) => {
       const rollbackErrors = field(error, "rollbackErrors");
       return (
@@ -158,7 +178,7 @@ void test("a failed rollback is attached to the restore error", async () => {
 void test("an uncertain database switch remains stopped", async () => {
   const runtime = fakeActivationRecoveryFailureRuntime();
   await assert.rejects(
-    restoreNativeDatabase(runtime, "/tmp/db.sql"),
+    restoreNativeDatabase(runtime, "/tmp/db.sqlite3"),
     (error) => field(error, "code") === "DATABASE_SWITCH_RECOVERY_FAILED",
   );
   assert.deepEqual(runtime.calls, ["activateDatabase"]);

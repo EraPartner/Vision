@@ -1,16 +1,20 @@
 /**
- * Typed query builder over the generated schema (ADR-226).
+ * Typed query builder over the generated schema (ADR-226, ADR-263).
  *
- * `db` builds SQL with Kysely and runs it through `query()` from
+ * `db` builds SQLite SQL with Kysely and runs it through `query()` from
  * connection.ts, so a built query joins the ambient `withTransaction()`,
  * keeps the slow-query log and stays visible to tests that mock `query()`.
  * Open transactions with `withTransaction()`, never `db.transaction()`.
+ *
+ * The write plugin (writePlugin.ts) canonicalises decimal values written to
+ * DECIMAL_TEXT columns and stamps `updated_at`, which PostgreSQL triggers did
+ * before; SQLite triggers cannot change the row a statement returns.
  */
 import {
   Kysely,
-  PostgresAdapter,
-  PostgresIntrospector,
-  PostgresQueryCompiler,
+  SqliteAdapter,
+  SqliteIntrospector,
+  SqliteQueryCompiler,
 } from "kysely";
 import type {
   CompiledQuery,
@@ -21,6 +25,7 @@ import type {
   RawBuilder,
 } from "kysely";
 import { query } from "./connection.ts";
+import { VisionWritePlugin } from "./writePlugin.ts";
 import { queryOne, queryRows } from "./rowContracts.ts";
 import type { RowSchema } from "./rowContracts.ts";
 import type { DB } from "./schema.generated.ts";
@@ -55,13 +60,13 @@ const driver: Driver = {
 };
 
 const dialect: Dialect = {
-  createAdapter: () => new PostgresAdapter(),
+  createAdapter: () => new SqliteAdapter(),
   createDriver: () => driver,
-  createIntrospector: (kysely) => new PostgresIntrospector(kysely),
-  createQueryCompiler: () => new PostgresQueryCompiler(),
+  createIntrospector: (kysely) => new SqliteIntrospector(kysely),
+  createQueryCompiler: () => new SqliteQueryCompiler(),
 };
 
-export const db = new Kysely<DB>({ dialect });
+export const db = new Kysely<DB>({ dialect, plugins: [new VisionWritePlugin()] });
 
 interface Compilable {
   compile(): CompiledQuery;

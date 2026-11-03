@@ -2,7 +2,7 @@
  * Unit tests for the shared connection-mock helpers themselves.
  *
  * `mockTxConnection` models the ambient transaction context of the real
- * connection.js: module-level `query`/`queryPrepared` run on the open
+ * connection.ts: module-level `query`/`queryPrepared` run on the open
  * transaction's client instead of the pool. These tests pin that contract,
  * because service tests depend on it to keep asserting against
  * `client.query.mock.calls` once service SQL moves into repositories.
@@ -262,7 +262,7 @@ describe("mockTxConnection — ambient transaction routing", () => {
     expect(sqls.filter((s) => s.includes("FOR UPDATE"))).toHaveLength(2);
   });
 
-  it("routes queryPrepared onto the transaction client in pg object form", async () => {
+  it("routes queryPrepared onto the transaction client as query(text, values)", async () => {
     const client = { query: vi.fn(() => Promise.resolve({ rows: [] })) };
     const conn = mockTxConnection(client);
 
@@ -270,11 +270,7 @@ describe("mockTxConnection — ambient transaction routing", () => {
       Promise.resolve(conn.queryPrepared("tx_get_by_id", "SELECT 1", [5]) as unknown),
     );
 
-    expect(client.query).toHaveBeenCalledWith({
-      name: "tx_get_by_id",
-      text: "SELECT 1",
-      values: [5],
-    });
+    expect(client.query).toHaveBeenCalledWith("SELECT 1", [5]);
   });
 
   it("with no client the transaction shares the module spy (no self-routing recursion)", async () => {
