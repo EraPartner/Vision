@@ -41,18 +41,18 @@ export async function getSankeyAggregates({
            THEN c.general || ': ' || c.detail
            ELSE c.path_name END AS category_name,
       t.currency,
-      (t.amount > 0) AS is_income,
-      SUM(ABS(t.amount)) AS amount,
-      COUNT(*) AS cnt
+      (dec_sign(t.amount) > 0) AS "is_income::bool",
+      dec_sum(dec_abs(t.amount)) AS amount,
+      count(*) AS "cnt::bigint"
     FROM transactions t
     LEFT JOIN recipients r ON t.recipient_id = r.id
     LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
     LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
     WHERE t.is_active = true
       ${includeTransfers ? sql`` : sql`AND t.is_transfer = false`}
-      AND t.date BETWEEN ${yearStart} AND ${yearEnd}
+      AND t.date BETWEEN ts_date(${yearStart}) AND ts_date(${yearEnd})
       ${exclusions.where}
-    GROUP BY c.id, t.currency, (t.amount > 0)
+    GROUP BY c.id, t.currency, (dec_sign(t.amount) > 0)
     `,
   );
 }

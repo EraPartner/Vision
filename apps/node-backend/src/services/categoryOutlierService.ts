@@ -345,8 +345,10 @@ async function getRawFindings(): Promise<CategoryOutlierFinding[]> {
         ])
         .where("t.is_active", "=", true)
         .where("t.category_id", "is not", null)
-        .where(sql<boolean>`t.amount < 0`)
-        .where("t.date", ">=", sql<Date>`CURRENT_DATE - INTERVAL '7 months'`)
+        .where(sql<boolean>`dec_sign(t.amount) < 0`)
+        // add_months clamps a 29th-31st to the target month's last day, as
+        // PostgreSQL's date - interval '7 months' did.
+        .where("t.date", ">=", sql<Date>`add_months(today(), -7)`)
         .orderBy("t.category_id")
         .orderBy("t.date"),
     );

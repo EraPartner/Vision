@@ -3,13 +3,10 @@
  * in the category breakdown and pivot. Previously pinned only by asserting the
  * bound SQL placeholders and parameters on a mocked pool.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { statisticsRepository } from "../src/repositories/infoRepositoryStatistics.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
@@ -54,24 +51,19 @@ async function seed() {
   };
 }
 
-describe.skipIf(!hasTestDatabase())("statistics date bounds (real DB)", () => {
-  beforeAll(async () => {
-    expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-    await acquireDbSuiteLock();
-  }, 180_000);
-
+describe("statistics date bounds (real DB)", () => {
   afterEach(async () => {
     const db = must(getTestPool(), "getTestPool()");
-    await db.query("DELETE FROM transactions WHERE id = ANY($1::int[])", [
+    await db.query("DELETE FROM transactions WHERE id IN (SELECT value FROM json_each($1))", [
       created.transactionIds.splice(0),
     ]);
-    await db.query("DELETE FROM accounts WHERE id = ANY($1::int[])", [
+    await db.query("DELETE FROM accounts WHERE id IN (SELECT value FROM json_each($1))", [
       created.accountIds.splice(0),
     ]);
-    await db.query("DELETE FROM recipients WHERE id = ANY($1::int[])", [
+    await db.query("DELETE FROM recipients WHERE id IN (SELECT value FROM json_each($1))", [
       created.recipientIds.splice(0),
     ]);
-    await db.query("DELETE FROM categories WHERE id = ANY($1::int[])", [
+    await db.query("DELETE FROM categories WHERE id IN (SELECT value FROM json_each($1))", [
       created.categoryIds.splice(0),
     ]);
     clearMvCache();
@@ -79,7 +71,6 @@ describe.skipIf(!hasTestDatabase())("statistics date bounds (real DB)", () => {
   });
 
   afterAll(async () => {
-    await releaseDbSuiteLock();
     await closeTestPool();
     await closePool();
   });
@@ -100,7 +91,7 @@ describe.skipIf(!hasTestDatabase())("statistics date bounds (real DB)", () => {
         "getTestPool()",
       ).query<{ id: number }>(
         `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id)
-         VALUES ($1, $2, 'EUR', $3, $4, $5) RETURNING id`,
+         VALUES (ts_date($1), vision_numeric($2, 18, 4), 'EUR', $3, $4, $5) RETURNING id`,
         [date, amount, recipientId, categoryId, fx.accountId],
       );
       created.transactionIds.push(must(inserted[0], "inserted[0]").id);

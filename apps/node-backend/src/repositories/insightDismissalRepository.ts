@@ -16,6 +16,14 @@ import type {
 
 export type { InsightDigestStateRow, InsightDismissalRow };
 
+/**
+ * A column alias with a driver type hint for an expression column (ADR-263):
+ * the driver reads the value as that type and drops the hint from the row key.
+ */
+function hinted<N extends string>(name: N, hint: "bool"): N {
+  return `${name}::${hint}` as N;
+}
+
 const monthKey = sql<string | null>`to_char(month_start, 'YYYY-MM')`.as(
   "month_key",
 );
@@ -50,7 +58,8 @@ export async function recipientExists(recipientId: number): Promise<boolean> {
             .select(sql<number>`1`.as("one"))
             .where("id", "=", asRecipientId(recipientId)),
         )
-        .as("exists"),
+        // EXISTS yields 0/1 in SQLite: read it back as a boolean.
+        .as(hinted("exists", "bool")),
     ),
   );
   return row?.exists === true;
@@ -71,7 +80,8 @@ export async function upsertSubscription(
       .onConflict((oc) =>
         oc
           .columns(["kind", "recipient_id"])
-          // Literal predicate so PostgreSQL can match the partial unique index.
+          // Literal predicate matching the partial unique index's WHERE, so the
+          // conflict target resolves to uq_insight_dismissals_subscription.
           .where(sql<boolean>`kind IN ('subscription_new', 'subscription_price_change')`)
           .doUpdateSet({
             dismissed_at: (eb) => eb.ref("insight_dismissals.dismissed_at"),
@@ -96,7 +106,7 @@ export async function upsertOutlier(
       .values({
         kind: "category_outlier",
         category_id: asCategoryId(categoryId),
-        month_start: sql<Date>`(${month} || '-01')::date`,
+        month_start: sql<Date>`ts_date(${month} || '-01')`,
         deviation_at_dismiss: deviation,
       })
       .onConflict((oc) =>
@@ -104,7 +114,7 @@ export async function upsertOutlier(
           .columns(["category_id", "month_start"])
           .where(sql<boolean>`kind = 'category_outlier'`)
           .doUpdateSet({
-            dismissed_at: sql<Date>`NOW()`,
+            dismissed_at: sql<Date>`now()`,
             deviation_at_dismiss: (eb) => eb.ref("excluded.deviation_at_dismiss"),
           }),
       )
@@ -148,8 +158,8 @@ export async function saveCountIfVersion(
       .set({
         undismissed_count: count,
         computed_version: version,
-        computed_at: sql<Date>`NOW()`,
-        expires_at: sql<Date>`NOW() + INTERVAL '3 minutes'`,
+        computed_at: sql<Date>`now()`,
+        expires_at: sql<Date>`add_interval(now(), '3 minutes')`,
       })
       .where("singleton_id", "=", 1)
       .where("dirty_version", "=", String(version))

@@ -79,11 +79,11 @@ async function prepared(name: string, builder: BuiltQuery) {
   return queryPrepared(name, text, parameters);
 }
 
-/** One `count(*)` over active transactions. */
+/** One `count(*)` over active transactions, as BIGINT text (pg's int8). */
 function countActiveTransactions() {
   return db
     .selectFrom("transactions")
-    .select(sql<string>`count(*)`.as("count"))
+    .select(sql<string>`CAST(count(*) AS TEXT)`.as("count"))
     .where("is_active", "=", true);
 }
 
@@ -104,8 +104,9 @@ export const statisticsRepository = {
       excludedRecipientIds: filters.excludedRecipientIds ?? [],
     });
     const dateClauses: RawBuilder<unknown>[] = [];
-    if (filters.startDate) dateClauses.push(sql`t.date >= ${filters.startDate}`);
-    if (filters.endDate) dateClauses.push(sql`t.date <= ${filters.endDate}`);
+    // ts_date reads the bound value as a DATE, as PostgreSQL typed it.
+    if (filters.startDate) dateClauses.push(sql`t.date >= ts_date(${filters.startDate})`);
+    if (filters.endDate) dateClauses.push(sql`t.date <= ts_date(${filters.endDate})`);
     const hasFilters = exclusion.active || dateClauses.length > 0;
     const filterSql = sql`${exclusion.where} ${andClauses(dateClauses)}`;
     const transferFilter = includeTransfers
@@ -120,7 +121,7 @@ export const statisticsRepository = {
         categoryCurrencyAmountRowSchema,
         sql`
         SELECT ancestor.id AS category_id, ancestor.path_name AS name,
-               SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency
+               dec_sum(t.amount) AS amount, count(*) AS "cnt::bigint", t.currency
         FROM transactions t
         LEFT JOIN recipients r ON t.recipient_id = r.id
         LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
@@ -202,8 +203,8 @@ export const statisticsRepository = {
       sql`
       SELECT COALESCE(c.id, -1) AS category_id,
              COALESCE(c.path_name, 'UNCATEGORISED') AS name,
-             SUM(t.amount) AS amount,
-             COUNT(*) AS cnt,
+             dec_sum(t.amount) AS amount,
+             count(*) AS "cnt::bigint",
              t.currency
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
@@ -313,8 +314,8 @@ export const statisticsRepository = {
       excludedRecipientIds,
     });
     const dateFilters: RawBuilder<unknown>[] = [];
-    if (startDate) dateFilters.push(sql`t.date >= ${startDate}`);
-    if (endDate) dateFilters.push(sql`t.date <= ${endDate}`);
+    if (startDate) dateFilters.push(sql`t.date >= ts_date(${startDate})`);
+    if (endDate) dateFilters.push(sql`t.date <= ts_date(${endDate})`);
 
     // Aggregate in SQL per (category, period, date, currency) instead of
     // streaming every active transaction into JS. Conversion uses each row's
@@ -332,18 +333,19 @@ export const statisticsRepository = {
       sql`
       SELECT
         COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS category_id,
+        -- CONCAT treats NULL as the empty string; || would propagate it.
         CASE WHEN c.legacy_compatible
-             THEN CONCAT(c.general, ': ', c.detail)
+             THEN COALESCE(c.general, '') || ': ' || COALESCE(c.detail, '')
              ELSE c.path_name END AS category_name,
-        path.ids AS category_path_ids,
-        path.names AS category_path_segments,
-        TO_CHAR(t.date, 'YYYY-MM') AS period,
+        path.ids AS "category_path_ids::json",
+        path.names AS "category_path_segments::json",
+        to_char(t.date, 'YYYY-MM') AS period,
         t.date, t.currency,
-        SUM(t.amount) FILTER (WHERE t.amount >= 0) AS income,
-        SUM(t.amount) FILTER (WHERE t.amount < 0) AS expense,
-        SUM(t.amount) FILTER (WHERE t.amount >= 0 AND acct.owner = 'partner') AS income_partner,
-        SUM(t.amount) FILTER (WHERE t.amount >= 0 AND acct.owner = 'joint') AS income_joint,
-        COUNT(*) AS cnt
+        dec_sum(t.amount) FILTER (WHERE dec_sign(t.amount) >= 0) AS income,
+        dec_sum(t.amount) FILTER (WHERE dec_sign(t.amount) < 0) AS expense,
+        dec_sum(t.amount) FILTER (WHERE dec_sign(t.amount) >= 0 AND acct.owner = 'partner') AS income_partner,
+        dec_sum(t.amount) FILTER (WHERE dec_sign(t.amount) >= 0 AND acct.owner = 'joint') AS income_joint,
+        count(*) AS "cnt::bigint"
       FROM transactions t
       LEFT JOIN accounts acct ON acct.id = t.account_id
       LEFT JOIN recipients r ON t.recipient_id = r.id
@@ -356,7 +358,7 @@ export const statisticsRepository = {
         ${excl.where}
         ${andClauses(dateFilters)}
       GROUP BY COALESCE(t.category_id, r.default_category_id, pr.default_category_id),
-               c.id, path.ids, path.names, TO_CHAR(t.date, 'YYYY-MM'), t.date, t.currency
+               c.id, path.ids, path.names, to_char(t.date, 'YYYY-MM'), t.date, t.currency
       ORDER BY period
     `,
     );

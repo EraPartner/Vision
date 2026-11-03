@@ -4,7 +4,7 @@
 
 import type { Decimal } from "decimal.js";
 import type { CurrencyCode } from "@vision/types/brands";
-import { currencyOrEur, EUR, storedCurrencyCode } from "../lib/currencyCode.ts";
+import { currencyOrEur, storedCurrencyCode } from "../lib/currencyCode.ts";
 import { sql } from "kysely";
 import { checkedRows } from "../database/db.ts";
 import {
@@ -107,7 +107,7 @@ export const banksRepository = {
   async getBankBalances(targetCurrency = "EUR") {
     const accounts: BankAccountBalance[] = [];
     const todayYmd = todayAppDateString();
-    const asOf = sql`${todayYmd}::date`;
+    const asOf = sql`${todayYmd}`;
 
     // Both queries are independent — run in parallel, then batch-convert
     // with one historical-rate lookup instead of two.
@@ -120,10 +120,26 @@ export const banksRepository = {
                COALESCE(a.display_name, a.name) AS display_name,
                bal.currency,
                bal.balance,
-               COALESCE(sb.statement_balances, '[]'::json) AS statement_balances,
+               -- Statement readings as a JSON array ordered by currency, with
+               -- balance as a JSON number (json() over the decimal text), as
+               -- json_build_object emitted the NUMERIC column. Correlated
+               -- sub-selects stand in for the LATERALs SQLite does not have.
+               COALESCE((
+                 SELECT json_group_array(json_object(
+                          'currency', s.currency,
+                          'balance', json(s.balance),
+                          'balance_date', to_char(s.balance_date, 'YYYY-MM-DD')
+                        ))
+                   FROM (
+                     SELECT s0.currency, s0.balance, s0.balance_date
+                       FROM account_statement_balances s0
+                      WHERE s0.account_id = a.id
+                      ORDER BY s0.currency
+                   ) s
+               ), '[]') AS "statement_balances::json",
                COALESCE(a.currency, 'EUR') AS account_currency,
                lb.anchor_date,
-               lb.post_anchor_count,
+               lb.post_anchor_count AS "post_anchor_count::bigint",
                -- FX anchor for the conversion below: TODAY, the day this
                -- balance represents — the same day the history series ends on,
                -- so the headline and the last chart point convert at one rate.
@@ -133,9 +149,9 @@ export const banksRepository = {
                -- USD account last imported 30 days ago showed 500 over a chart
                -- ending at 900. Native-currency figures (drift) are unaffected.
                to_char(${asOf}, 'YYYY-MM-DD') AS date,
-               tx.transaction_count,
-               tx.first_transaction,
-               tx.last_transaction
+               tx.transaction_count AS "transaction_count::bigint",
+               tx.first_transaction AS "first_transaction::date",
+               tx.last_transaction AS "last_transaction::date"
         FROM accounts a
         ${balanceProvenanceLateral({ asOfDate: asOf })}
         -- One row per currency the account holds, each with its own anchored
@@ -146,31 +162,24 @@ export const banksRepository = {
         -- history, not one currency's — matching the accounts hub, which reads
         -- the same lateral for the same two fields.
         ${computedBalanceByCurrencyLateral({ account: sql`a.id`, asOfDate: asOf })}
-        LEFT JOIN LATERAL (
-          SELECT json_agg(
-                   json_build_object(
-                     'currency', s.currency,
-                     'balance', s.balance,
-                     'balance_date', to_char(s.balance_date, 'YYYY-MM-DD')
-                   ) ORDER BY s.currency
-                 ) AS statement_balances
-            FROM account_statement_balances s
-           WHERE s.account_id = a.id
-        ) sb ON TRUE
-        JOIN LATERAL (
-          -- Per-account activity metadata over active rows.
-          SELECT COUNT(*) AS transaction_count,
-                 MIN(t.date) AS first_transaction,
-                 MAX(t.date) AS last_transaction
-          FROM transactions t
-          WHERE t.account_id = a.id AND t.is_active = true
-        ) tx ON true
+        JOIN (
+          -- Per-account activity metadata over active rows (one row per
+          -- account, so the join never drops or fans out an account).
+          SELECT tx_acc.id AS tx_account_id,
+                 (SELECT COUNT(*) FROM transactions t
+                   WHERE t.account_id = tx_acc.id AND t.is_active = 1) AS transaction_count,
+                 (SELECT MIN(t.date) FROM transactions t
+                   WHERE t.account_id = tx_acc.id AND t.is_active = 1) AS first_transaction,
+                 (SELECT MAX(t.date) FROM transactions t
+                   WHERE t.account_id = tx_acc.id AND t.is_active = 1) AS last_transaction
+          FROM accounts tx_acc
+        ) tx ON tx.tx_account_id = a.id
         WHERE a.type <> 'liability'
           AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES_SQL})
           -- §1 F3: in_net_worth governs aggregates (is_active governs UI
           -- listing) — closing an account sets in_net_worth=false, so it
           -- leaves this widget the moment it is closed, matching net worth.
-          AND a.in_net_worth = true
+          AND a.in_net_worth = 1
           AND tx.transaction_count > 0
         ORDER BY a.name, bal.currency
       `,
@@ -178,12 +187,17 @@ export const banksRepository = {
       checkedRows(
         bankHistoryRowSchema,
         sql`
-        WITH days AS (
-          SELECT generate_series(
-            ${asOf} - interval '12 months',
-            ${asOf},
-            interval '1 day'
-          )::date AS day
+        WITH RECURSIVE bounds AS (
+          SELECT add_months(${asOf}, -12) AS start_date, ${asOf} AS end_date
+        ),
+        days(day) AS (
+          -- The daily grid over the last 12 months (generate_series in
+          -- PostgreSQL); add_months clamps a 29th-31st to the month's end.
+          SELECT start_date FROM bounds WHERE start_date <= end_date
+          UNION ALL
+          SELECT add_days(d.day, 1)
+          FROM days d, bounds b
+          WHERE add_days(d.day, 1) <= b.end_date
         ),
         account_list AS (
           SELECT a.id AS account_id, a.name AS bank_account
@@ -192,10 +206,10 @@ export const banksRepository = {
           -- aggregates include only in_net_worth accounts.
           WHERE a.type <> 'liability'
             AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES_SQL})
-            AND a.in_net_worth = true
+            AND a.in_net_worth = 1
             AND a.id IN (
               SELECT t.account_id FROM transactions t
-               WHERE t.is_active = true AND t.account_id IS NOT NULL
+               WHERE t.is_active = 1 AND t.account_id IS NOT NULL
             )
         ),
         -- The series carries the SAME per-currency anchor+delta definition the
@@ -216,11 +230,13 @@ export const banksRepository = {
         -- rows remain visible in the ledger but do not affect current balances
         -- until their effective date.
         ${computedBalanceSeriesCtes({ byCurrency: true })}
-        -- to_char keeps the day a plain string (pg DATE → local-midnight JS Date
-        -- otherwise — the recurring day-shift hazard).
+        -- balance_series produces day as 'YYYY-MM-DD' text from a recursive
+        -- CTE (no declared column type), so it reads as a plain string, never
+        -- the local-midnight JS Date a DATE_TEXT column gives (the recurring
+        -- day-shift hazard); bankHistoryRowSchema checks the day string.
         SELECT
           a.bank_account,
-          to_char(s.day, 'YYYY-MM-DD') AS day,
+          s.day AS day,
           s.currency,
           s.balance
         FROM balance_series s
@@ -362,8 +378,8 @@ export const banksRepository = {
     for (const row of historyConverted) {
       const key = row.bank_account;
       historyByDay[key] ??= new Map();
-      // toYmd uses local getters for the defensive Date branch (the SQL emits
-      // day via to_char, so this normally passes the string straight through).
+      // toYmd uses local getters for the defensive Date branch (the series
+      // emits day as 'YYYY-MM-DD' text, so this normally passes it through).
       const day = toYmd(row.day);
       const dayTotals = historyByDay[key];
       dayTotals.set(

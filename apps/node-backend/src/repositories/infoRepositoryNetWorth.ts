@@ -124,7 +124,7 @@ function walkAnswersCte(endYmd: string) {
           WHERE t.is_active = true
             AND a.in_net_worth = true
             AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES})
-            AND t.date <= ${endYmd}::date
+            AND t.date <= ${endYmd}
         ) AS answers
       )`;
 }
@@ -152,6 +152,21 @@ function walkAnswersCte(endYmd: string) {
  */
 const ATTRIBUTED_WHEN_WALK_ANSWERS = sql`
             AND (t.account_id IS NOT NULL OR NOT (SELECT answers FROM walk))`;
+
+/**
+ * `days(day)`: every calendar day from `bounds.start_date` through
+ * `bounds.end_date` inclusive (PostgreSQL's generate_series over '1 day'),
+ * empty when the start lies after the end. Splice it into a `WITH RECURSIVE`
+ * chain after a `bounds(start_date, end_date)` CTE; it ends with a comma.
+ */
+const dayGridCte = sql`
+      days(day) AS (
+        SELECT start_date FROM bounds WHERE start_date <= end_date
+        UNION ALL
+        SELECT add_days(d.day, 1)
+        FROM days d, bounds b
+        WHERE add_days(d.day, 1) <= b.end_date
+      ),`;
 
 export const netWorthRepository = {
   /**
@@ -212,11 +227,11 @@ export const netWorthRepository = {
       firstDataDateRowSchema,
       sql`
       WITH ${walkAnswersCte(todayYmd)}
-      SELECT LEAST(
-        (SELECT MIN(snapshot_date) FROM portfolio_performance_snapshots WHERE currency = ${targetCurrency}),
-        (SELECT MIN(t.date)::date FROM transactions t
-          WHERE t.is_active = true AND t.date <= ${todayYmd}::date ${NOT_TRACKING_ONLY} ${ATTRIBUTED_WHEN_WALK_ANSWERS})
-      )::date AS first_data_date
+      SELECT least(
+        (SELECT min(snapshot_date) FROM portfolio_performance_snapshots WHERE currency = ${targetCurrency}),
+        (SELECT min(t.date) FROM transactions t
+          WHERE t.is_active = true AND t.date <= ${todayYmd} ${NOT_TRACKING_ONLY} ${ATTRIBUTED_WHEN_WALK_ANSWERS})
+      ) AS "first_data_date::date"
     `,
     );
 
@@ -263,13 +278,10 @@ export const netWorthRepository = {
       checkedRows(
         netWorthHistoryRowSchema,
         sql`
-      WITH bounds AS (
-        SELECT ${firstDataDateYmd}::date AS start_date, ${todayYmd}::date AS end_date
+      WITH RECURSIVE bounds AS (
+        SELECT ${firstDataDateYmd} AS start_date, ${todayYmd} AS end_date
       ),
-      days AS (
-        SELECT generate_series(start_date, end_date, interval '1 day')::date AS day
-        FROM bounds
-      ),
+      ${dayGridCte}
       account_list AS (
         -- in_net_worth gates the bank/cash side of net worth (ADR-089): a
         -- tracking-only account (in_net_worth=false) does not contribute.
@@ -306,7 +318,7 @@ export const netWorthRepository = {
       SELECT
         to_char(s.day, 'YYYY-MM-DD') AS day,
         a.bank_account,
-        a.is_liability,
+        a.is_liability AS "is_liability::bool",
         COALESCE(s.row_currency, a.account_currency, 'EUR') AS currency,
         s.balance
       FROM balance_series s
@@ -333,11 +345,11 @@ export const netWorthRepository = {
         netWorthCurrentBalanceRowSchema,
         sql`
       SELECT a.name AS bank_account,
-             (a.type = 'liability') AS is_liability,
+             (a.type = 'liability') AS "is_liability::bool",
              COALESCE(a.currency, 'EUR') AS account_currency,
-             bp.balance_parts
+             bp.balance_parts AS "balance_parts::json"
       FROM accounts a
-      ${computedBalanceByCurrencyAggLateral({ account: sql`a.id`, asOfDate: sql`${todayYmd}::date` })}
+      ${computedBalanceByCurrencyAggLateral({ account: sql`a.id`, asOfDate: sql`${todayYmd}` })}
       WHERE a.in_net_worth = true
         AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES})
     `,
@@ -424,20 +436,17 @@ export const netWorthRepository = {
       const liquidFlowRows = await checkedRows(
         netWorthFlowRowSchema,
         sql`
-        WITH bounds AS (
-          SELECT ${firstDataDateYmd}::date AS start_date, ${todayYmd}::date AS end_date
+        WITH RECURSIVE bounds AS (
+          SELECT ${firstDataDateYmd} AS start_date, ${todayYmd} AS end_date
         ),
-        days AS (
-          SELECT generate_series(start_date, end_date, interval '1 day')::date AS day
-          FROM bounds
-        ),
+        ${dayGridCte}
         flow_rows AS (
           -- The row population and the two resolutions, written ONCE. The
           -- bucket list and the daily aggregate below both read this CTE, so
           -- they cannot disagree about which rows are in scope or which bucket
           -- one falls into.
           SELECT
-            t.date::date AS day,
+            t.date AS day,
             COALESCE(t.currency, 'EUR') AS currency,
             ${IS_LIABILITY_BY_ACCOUNT} AS is_liability,
             t.amount
@@ -459,7 +468,7 @@ export const netWorthRepository = {
             day,
             currency,
             is_liability,
-            COALESCE(SUM(amount), 0) AS amount
+            COALESCE(dec_sum(amount), '0') AS amount
           FROM flow_rows
           GROUP BY day, currency, is_liability
         ),
@@ -468,7 +477,7 @@ export const netWorthRepository = {
             d.day,
             b.currency,
             b.is_liability,
-            COALESCE(td.amount, 0) AS amount
+            COALESCE(td.amount, '0') AS amount
           FROM days d
           CROSS JOIN buckets b
           LEFT JOIN tx_daily td
@@ -481,13 +490,13 @@ export const netWorthRepository = {
             day,
             currency,
             is_liability,
-            SUM(amount) OVER (PARTITION BY currency, is_liability ORDER BY day) AS value
+            dec_sum(amount) OVER (PARTITION BY currency, is_liability ORDER BY day) AS value
           FROM tx_series
         )
         SELECT
           to_char(day, 'YYYY-MM-DD') AS day,
           currency,
-          is_liability,
+          is_liability AS "is_liability::bool",
           value
         FROM tx_cumulative
         ORDER BY day, currency, is_liability

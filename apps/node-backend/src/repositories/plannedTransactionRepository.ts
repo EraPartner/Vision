@@ -4,9 +4,10 @@
  */
 
 import { sql } from "kysely";
-import type { Updateable } from "kysely";
+import type { Expression, Updateable } from "kysely";
 import { checkedRow, checkedRows, compileQuery, db } from "../database/db.ts";
 import type { BuiltQuery } from "../database/db.ts";
+import { booleanInput } from "../database/sqlite/values.ts";
 import type { PlannedTransactions } from "../database/schema.generated.ts";
 import {
   countRowSchema,
@@ -109,6 +110,33 @@ const plannedCategoryName = sql<string | null>`CASE
 // pt.recipient_id unchanged so edit/match behavior still targets the stored
 // recipient row; this expression is presentation-only.
 const plannedRecipientName = sql<string | null>`COALESCE(pr.name, r.name)`;
+
+/** `value ILIKE pattern` (Vision's ilike(), PostgreSQL LIKE semantics, case-folded). */
+function ilike(value: Expression<unknown>, pattern: string) {
+  return sql<boolean>`ilike(${value}, ${pattern})`;
+}
+
+/** `column IN (ids)` for a bound id list (PostgreSQL's `= ANY($1::int[])`). */
+function inIdList(column: string, ids: readonly number[]) {
+  return sql<boolean>`${sql.ref(column)} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`;
+}
+
+/**
+ * A column alias with a driver type hint for an expression column (ADR-263):
+ * the driver reads the value as that type and drops the hint from the row key.
+ */
+function hinted<N extends string>(name: N, hint: "bool"): N {
+  return `${name}::${hint}` as N;
+}
+
+/**
+ * A NUMERIC parameter for hand-written SQL, bound as decimal text exactly as
+ * node-postgres sent a JS number (String(n)); vision_numeric then rounds it to
+ * the column's scale as the PostgreSQL assignment cast did.
+ */
+function decimalParam(value: unknown): unknown {
+  return typeof value === "number" ? String(value) : value;
+}
 
 function plannedJoins() {
   return db
@@ -220,9 +248,9 @@ function filterPlannedTransactions({
 
   if (active) builder = builder.where("pt.is_active", "=", true);
   if (startDate)
-    builder = builder.where("pt.planned_date", ">=", sql<Date>`${startDate}`);
+    builder = builder.where("pt.planned_date", ">=", sql<Date>`ts_date(${startDate})`);
   if (endDate)
-    builder = builder.where("pt.planned_date", "<=", sql<Date>`${endDate}`);
+    builder = builder.where("pt.planned_date", "<=", sql<Date>`ts_date(${endDate})`);
   // Bank filter via the FK (ADR-088) — matches the account's canonical name,
   // never the retired bank_account string.
   if (accountId != null) {
@@ -232,7 +260,7 @@ function filterPlannedTransactions({
       eb
         .selectFrom("accounts as fa")
         .select("fa.id")
-        .where("fa.name", "ilike", `%${bankAccount}%`),
+        .where(ilike(sql.ref("fa.name"), `%${bankAccount}%`)),
     );
   }
   if (categoryId != null) {
@@ -250,16 +278,16 @@ function filterPlannedTransactions({
     const sp = `%${search}%`;
     builder = builder.where((eb) =>
       eb.or([
-        eb("pt.memo", "ilike", sp),
-        eb("pt.comment", "ilike", sp),
-        eb("acct.name", "ilike", sp),
-        eb(plannedRecipientName, "ilike", sp),
-        eb("r.name", "ilike", sp),
+        ilike(sql.ref("pt.memo"), sp),
+        ilike(sql.ref("pt.comment"), sp),
+        ilike(sql.ref("acct.name"), sp),
+        ilike(plannedRecipientName, sp),
+        ilike(sql.ref("r.name"), sp),
         // Match the RESOLVED label the row displays, not each candidate level
         // in turn. ORing c/rc separately both missed rows categorised through
         // the primary recipient (no pc term at all) and matched rows whose own
         // category_id overrode the recipient default the term hit.
-        eb(plannedCategoryName, "ilike", sp),
+        ilike(plannedCategoryName, sp),
       ]),
     );
   }
@@ -294,9 +322,11 @@ export async function insertLoanScheduleBatch(
 
   const values = scheduleEntries.map(
     (installment: LoanScheduleEntryInput) =>
-      sql`(${plannedTransactionId}, ${installment.installment_number}, ${installment.due_date},
-           ${installment.payment_amount}, ${installment.principal_amount},
-           ${installment.interest_amount}, ${installment.remaining_principal})`,
+      sql`(${plannedTransactionId}, ${installment.installment_number}, ts_date(${installment.due_date}),
+           vision_numeric(${decimalParam(installment.payment_amount)}, 18, 4),
+           vision_numeric(${decimalParam(installment.principal_amount)}, 18, 4),
+           vision_numeric(${decimalParam(installment.interest_amount)}, 18, 4),
+           vision_numeric(${decimalParam(installment.remaining_principal)}, 18, 4))`,
   );
 
   await runOn(
@@ -325,7 +355,7 @@ export async function setPlannedTransactionTags(
     db
       .selectFrom("tags")
       .select("id")
-      .where("slug", "=", sql<string>`ANY(${slugs}::text[])`)
+      .where(sql<boolean>`slug IN (SELECT value FROM json_each(${JSON.stringify(slugs)}))`)
       .where("is_active", "=", true),
     client,
   );
@@ -333,8 +363,10 @@ export async function setPlannedTransactionTags(
   const tagIds = resolved.map((r) => r.id);
   await runOn(
     client,
+    // WHERE true: SQLite's upsert needs it after INSERT ... SELECT.
     sql`INSERT INTO planned_transaction_tags (planned_transaction_id, tag_id)
-     SELECT ${plannedTransactionId}, unnest(${tagIds}::int[])
+     SELECT ${plannedTransactionId}, value FROM json_each(${JSON.stringify(tagIds)})
+     WHERE true
      ON CONFLICT DO NOTHING`,
   );
 }
@@ -368,7 +400,7 @@ export async function applyPlannedFieldUpdate(
     client,
     db
       .updateTable("planned_transactions")
-      .set({ ...changes, updated_at: sql<Date>`NOW()` })
+      .set({ ...changes, updated_at: sql<Date>`now()` })
       .where("id", "=", id)
       .returning("id"),
   );
@@ -407,16 +439,16 @@ export async function insertPlannedTransactionInTransaction(
        loan_term_months, loan_start_date, loan_payment_day,
        loan_regular_payment_amount, loan_first_payment_date
      ) VALUES (
-       ${input.planned_date}, ${input.account_id}, ${input.recipient_id},
-       ${input.amount}, ${input.memo}, ${input.currency}, ${input.category_id},
+       ts_date(${input.planned_date}), ${input.account_id}, ${input.recipient_id},
+       vision_numeric(${decimalParam(input.amount)}, 18, 4), ${input.memo}, ${input.currency}, ${input.category_id},
        ${input.comment}, ${input.url},
-       ${input.is_recurring}, ${input.recurrence_pattern},
-       ${input.recurrence_end_date}, ${input.max_occurrences},
-       ${input.reminder_days_before}, false, true,
-       ${input.is_loan}, ${input.loan_type}, ${input.loan_principal},
-       ${input.loan_annual_interest_rate}, ${input.loan_term_months},
-       ${input.loan_start_date}, ${input.loan_payment_day},
-       ${input.loan_regular_payment_amount}, ${input.loan_first_payment_date}
+       ${booleanInput(input.is_recurring)}, ${input.recurrence_pattern},
+       ts_date(${input.recurrence_end_date}), ${input.max_occurrences},
+       ${input.reminder_days_before}, 0, 1,
+       ${booleanInput(input.is_loan)}, ${input.loan_type}, vision_numeric(${decimalParam(input.loan_principal)}, 18, 4),
+       vision_numeric(${decimalParam(input.loan_annual_interest_rate)}, 8, 4), ${input.loan_term_months},
+       ts_date(${input.loan_start_date}), ${input.loan_payment_day},
+       vision_numeric(${decimalParam(input.loan_regular_payment_amount)}, 18, 4), ts_date(${input.loan_first_payment_date})
      ) RETURNING id`,
     client,
   );
@@ -458,20 +490,26 @@ export async function inheritTransactionTagsInTransaction(
 ): Promise<void> {
   await runOn(
     client,
+    // WHERE true: SQLite's upsert needs it after INSERT ... SELECT.
     sql`INSERT INTO transaction_tags (transaction_id, tag_id)
-     SELECT ${transactionId}, unnest(${tagIds}::int[])
+     SELECT ${transactionId}, value FROM json_each(${JSON.stringify(tagIds)})
+     WHERE true
      ON CONFLICT DO NOTHING`,
   );
 }
 
 export const plannedTransactionRepository = {
-  /** Lock the parent before reading recurrence state on the ambient transaction. */
+  /**
+   * Called first on the ambient write transaction, before recurrence state is
+   * read. There is no row lock to take: the single SQLite writer (BEGIN
+   * IMMEDIATE) already serializes this execution with every other write, so
+   * the state read next cannot change before the caller's write commits.
+   */
   async lockForExecution(id: PlannedTransactionId): Promise<void> {
     await db
       .selectFrom("planned_transactions")
       .select("id")
       .where("id", "=", id)
-      .forUpdate()
       .execute();
   },
   /** Execution needs scalar state and tag IDs, not full history or loan schedules. */
@@ -492,7 +530,7 @@ export const plannedTransactionRepository = {
             .as("recipient_cluster_id"),
           eb
             .selectFrom("planned_transaction_executions as e")
-            .select(sql<number>`count(*)::int`.as("n"))
+            .select(sql<number>`count(*)`.as("n"))
             .whereRef("e.planned_transaction_id", "=", "pt.id")
             .as("execution_count"),
           eb
@@ -503,7 +541,7 @@ export const plannedTransactionRepository = {
                 .whereRef("e.planned_transaction_id", "=", "pt.id")
                 .where("e.executed_transaction_id", "=", transactionId),
             )
-            .as("duplicate"),
+            .as(hinted("duplicate", "bool")),
         ],
       ),
     );
@@ -550,7 +588,7 @@ export const plannedTransactionRepository = {
     const pageRows = await checkedRows(
       plannedTransactionPageRowSchema,
       selectPlannedFields(filtered)
-        .select(sql<string>`COUNT(*) OVER()`.as("total_count"))
+        .select(sql<string>`CAST(COUNT(*) OVER () AS TEXT)`.as("total_count"))
         .orderBy("pt.planned_date", "desc")
         .limit(limit)
         .offset(offset),
@@ -560,7 +598,7 @@ export const plannedTransactionRepository = {
     if (!firstPageRow) {
       const countRow = await checkedRow(
         countRowSchema,
-        filtered.select(sql<string>`count(*)`.as("count")),
+        filtered.select(sql<string>`CAST(count(*) AS TEXT)`.as("count")),
       );
       // String(): parseInt coerced a missing row's `undefined` the same way.
       total = nanToZero(parseInt(String(countRow?.count), 10));
@@ -580,11 +618,7 @@ export const plannedTransactionRepository = {
         db
           .selectFrom("planned_transaction_executions")
           .selectAll()
-          .where(
-            "planned_transaction_id",
-            "=",
-            sql<PlannedTransactionId>`ANY(${plannedTransactionIds}::int[])`,
-          )
+          .where(inIdList("planned_transaction_id", plannedTransactionIds))
           .orderBy("planned_transaction_id", "asc")
           .orderBy("execution_date", "desc"),
       );
@@ -612,11 +646,7 @@ export const plannedTransactionRepository = {
         db
           .selectFrom("planned_transaction_loan_schedule")
           .select(["planned_transaction_id", ...LOAN_SCHEDULE_COLUMNS])
-          .where(
-            "planned_transaction_id",
-            "=",
-            sql<PlannedTransactionId>`ANY(${loanPlannedTransactionIds}::int[])`,
-          )
+          .where(inIdList("planned_transaction_id", loanPlannedTransactionIds))
           .orderBy("planned_transaction_id", "asc")
           .orderBy("installment_number", "asc"),
       );
@@ -645,11 +675,7 @@ export const plannedTransactionRepository = {
             "tg.color",
             "tg.is_active",
           ])
-          .where(
-            "ptt.planned_transaction_id",
-            "=",
-            sql<PlannedTransactionId>`ANY(${plannedTransactionIds}::int[])`,
-          )
+          .where(inIdList("ptt.planned_transaction_id", plannedTransactionIds))
           .orderBy("ptt.planned_transaction_id", "asc")
           .orderBy("tg.slug", "asc"),
       );
@@ -726,11 +752,10 @@ export const plannedTransactionRepository = {
    * the next `days` days. Used by the bill-reminder endpoint.
    *
    * The window is anchored on the APP_TIMEZONE calendar day (ADR-009), read
-   * once and bound as $2 — not Postgres `CURRENT_DATE`, whose session-zone
-   * (UTC) day lags the app day for the last hours of every UTC day, shifting
-   * both window edges. Same one-clock rule as infoRepositoryForecast.js; the
-   * lookahead binds via make_interval rather than string-concatenating a bound
-   * value into an interval literal.
+   * once and bound — not the database's `today()`, whose backend-local day can
+   * differ from the app day, shifting both window edges. Same one-clock rule
+   * as infoRepositoryForecast.ts; the lookahead binds the day count to
+   * add_days rather than string-concatenating it into an interval.
    *
    * @param days - Lookahead window (1–365)
    */
@@ -742,11 +767,11 @@ export const plannedTransactionRepository = {
         plannedJoins()
           .where("pt.is_active", "=", true)
           .where("pt.is_executed", "=", false)
-          .where("pt.planned_date", ">=", sql<Date>`${today}::date`)
+          .where("pt.planned_date", ">=", sql<Date>`${today}`)
           .where(
             "pt.planned_date",
             "<=",
-            sql<Date>`${today}::date + make_interval(days => ${days}::int)`,
+            sql<Date>`add_days(${today}, ${days})`,
           ),
       ).orderBy("pt.planned_date", "asc"),
     );
@@ -784,7 +809,9 @@ export const plannedTransactionRepository = {
         .where(
           "pt.planned_date",
           "<=",
-          sql<Date>`${todayAppDateString()}::date + make_interval(months => ${months}::int)`,
+          // add_months clamps to the month's last day (Jan 31 + 1 → Feb 28/29),
+          // as PostgreSQL's date + interval 'n months' did.
+          sql<Date>`add_months(${todayAppDateString()}, ${months})`,
         )
         .orderBy("pt.planned_date", "asc"),
     );
@@ -812,13 +839,13 @@ export const plannedTransactionRepository = {
           "pt.max_occurrences",
           eb
             .selectFrom("planned_transaction_executions as pte")
-            .select(sql<number>`COUNT(*)::int`.as("n"))
+            .select(sql<number>`COUNT(*)`.as("n"))
             .whereRef("pte.planned_transaction_id", "=", "pt.id")
             .as("execution_count"),
         ])
         .where("pt.is_active", "=", true)
         .where("pt.is_executed", "=", false)
-        .where("pt.planned_date", "<=", sql<Date>`${horizonEnd}::date`)
+        .where("pt.planned_date", "<=", sql<Date>`ts_date(${horizonEnd})`)
         .orderBy("pt.planned_date")
         .orderBy("pt.id"),
     );
@@ -863,7 +890,7 @@ export const plannedTransactionRepository = {
     const result = await db
       .updateTable("planned_transactions")
       .set({ account_id: targetId })
-      .where("account_id", "=", sql<AccountId>`ANY(${sourceIds}::int[])`)
+      .where(inIdList("account_id", sourceIds))
       .executeTakeFirst();
     return Number(result.numUpdatedRows);
   },
@@ -873,8 +900,8 @@ export const plannedTransactionRepository = {
    * column, and the recipient merge must skip the repoint rather than fail.
    */
   async hasRecipientIdColumn(): Promise<boolean> {
-    const { rows } = await sql`SELECT 1 FROM information_schema.columns
-       WHERE table_name = 'planned_transactions' AND column_name = 'recipient_id'
+    const { rows } = await sql`SELECT 1 FROM pragma_table_info('planned_transactions')
+       WHERE name = 'recipient_id'
        LIMIT 1`.execute(db);
     return rows.length > 0;
   },
@@ -891,7 +918,7 @@ export const plannedTransactionRepository = {
     const result = await db
       .updateTable("planned_transactions")
       .set({ recipient_id: primaryId })
-      .where("recipient_id", "=", sql<RecipientId>`ANY(${aliasIds}::int[])`)
+      .where(inIdList("recipient_id", aliasIds))
       .executeTakeFirst();
     return Number(result.numUpdatedRows);
   },

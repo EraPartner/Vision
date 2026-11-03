@@ -1,10 +1,7 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import insightDismissalRepository from "../src/repositories/insightDismissalRepository.ts";
 import insightCashProjectionRepository from "../src/repositories/insightCashProjectionRepository.ts";
@@ -17,7 +14,6 @@ type DbRow = Record<string, unknown>;
 
 const maybePool = getTestPool();
 const pool = () => must(maybePool, "test pool");
-const describeDb = hasTestDatabase() ? describe : describe.skip;
 
 async function wipe() {
   await pool().query("DELETE FROM insight_dismissals");
@@ -37,17 +33,11 @@ async function wipe() {
   );
 }
 
-describeDb("insight dismissal persistence (real Postgres)", () => {
-  beforeAll(async () => {
-    expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-    await acquireDbSuiteLock();
-  }, 180_000);
-
+describe("insight dismissal persistence (real database)", () => {
   beforeEach(wipe);
 
   afterAll(async () => {
     await wipe();
-    await releaseDbSuiteLock();
     await closePool();
     await closeTestPool();
   });
@@ -61,13 +51,13 @@ describeDb("insight dismissal persistence (real Postgres)", () => {
     await insightDismissalRepository.upsertSubscription("subscription_new", id);
     await insightDismissalRepository.upsertSubscription("subscription_new", id);
     const before = await pool().query<DbRow>(
-      "SELECT count(*)::int AS count FROM insight_dismissals",
+      "SELECT count(*) AS count FROM insight_dismissals",
     );
     expect(must(before.rows[0], "before.rows[0]").count).toBe(1);
 
     await pool().query("DELETE FROM recipients WHERE id = $1", [id]);
     const after = await pool().query<DbRow>(
-      "SELECT count(*)::int AS count FROM insight_dismissals",
+      "SELECT count(*) AS count FROM insight_dismissals",
     );
     expect(must(after.rows[0], "after.rows[0]").count).toBe(0);
   });

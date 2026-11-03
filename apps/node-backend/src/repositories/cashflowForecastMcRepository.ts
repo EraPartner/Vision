@@ -27,7 +27,7 @@ export async function get({
       .selectFrom("cashflow_forecast_mc")
       .select(["payload", "computed_at"])
       .where("user_id", "=", userId)
-      .where("month", "=", sql<Date>`(${month} || '-01')::date`)
+      .where("month", "=", sql<Date>`ts_date(${month} || '-01')`)
       .where("filter_hash", "=", filterHash)
       .limit(1),
   );
@@ -35,7 +35,7 @@ export async function get({
 }
 
 /**
- * @param computedAt TIMESTAMPTZ — pg hands this back as a `Date`.
+ * @param computedAt TIMESTAMPTZ — the driver hands this back as a `Date`.
  */
 export function isFresh(computedAt: Date | string | number): boolean {
   return Date.now() - new Date(computedAt).getTime() < CACHE_TTL_MS;
@@ -58,17 +58,17 @@ export async function upsert({
     .insertInto("cashflow_forecast_mc")
     .values({
       user_id: userId,
-      month: sql<Date>`(${month} || '-01')::date`,
+      month: sql<Date>`ts_date(${month} || '-01')`,
       filter_hash: filterHash,
       mc_paths: mcPaths,
-      payload: sql<Json>`${JSON.stringify(payload)}::jsonb`,
-      computed_at: sql<Date>`NOW()`,
+      payload: sql<Json>`vision_jsonb(${JSON.stringify(payload)})`,
+      computed_at: sql<Date>`now()`,
     })
     .onConflict((oc) =>
       oc.columns(["user_id", "month", "filter_hash"]).doUpdateSet((eb) => ({
         mc_paths: eb.ref("excluded.mc_paths"),
         payload: eb.ref("excluded.payload"),
-        computed_at: sql<Date>`NOW()`,
+        computed_at: sql<Date>`now()`,
       })),
     )
     .execute();

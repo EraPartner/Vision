@@ -10,11 +10,8 @@
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { createCategoryNode } from "../src/repositories/categoryHierarchyRepository.ts";
@@ -62,7 +59,7 @@ async function txn(
 ) {
   const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: TransactionId }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, is_transfer, is_active, memo)
-     VALUES ($1, $2, 'EUR', $3, $4, $5, $6, $7) RETURNING id`,
+     VALUES (ts_date($1), vision_numeric($2, 18, 4), 'EUR', $3, $4, $5, $6, $7) RETURNING id`,
     [date, amount, recipientId, categoryId, isTransfer, isActive, MARK],
   );
   created.transactionIds.push(must(rows[0], "rows[0]").id);
@@ -78,13 +75,11 @@ function totals(rows: Awaited<ReturnType<typeof getSankeyAggregates>>) {
   );
 }
 
-describe.skipIf(!hasTestDatabase())("getSankeyAggregates (real DB)", () => {
+describe("getSankeyAggregates (real DB)", () => {
   const cat = {} as Record<"food" | "groceries" | "salary", number>;
   const rec = {} as Record<"shop" | "shopAlias" | "employer" | "misc", number>;
 
   beforeAll(async () => {
-    expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-    await acquireDbSuiteLock();
     await must(getTestPool(), "getTestPool()").query(
       "DELETE FROM user_settings WHERE key = 'includeTransfers'",
     );
@@ -119,21 +114,20 @@ describe.skipIf(!hasTestDatabase())("getSankeyAggregates (real DB)", () => {
   afterAll(async () => {
     try {
       const db = must(getTestPool(), "getTestPool()");
-      await db.query("DELETE FROM transactions WHERE id = ANY($1)", [
+      await db.query("DELETE FROM transactions WHERE id IN (SELECT value FROM json_each($1))", [
         created.transactionIds,
       ]);
       await db.query(
-        "UPDATE recipients SET primary_recipient_id = NULL WHERE id = ANY($1)",
+        "UPDATE recipients SET primary_recipient_id = NULL WHERE id IN (SELECT value FROM json_each($1))",
         [created.recipientIds],
       );
-      await db.query("DELETE FROM recipients WHERE id = ANY($1)", [
+      await db.query("DELETE FROM recipients WHERE id IN (SELECT value FROM json_each($1))", [
         created.recipientIds,
       ]);
       for (const id of [...created.categoryIds].reverse()) {
         await db.query("DELETE FROM categories WHERE id = $1", [id]);
       }
     } finally {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     }
@@ -171,7 +165,7 @@ describe.skipIf(!hasTestDatabase())("getSankeyAggregates (real DB)", () => {
 
   it("counts transfers only when the includeTransfers setting is on", async () => {
     await must(getTestPool(), "getTestPool()").query(
-      `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', 'true'::jsonb)`,
+      `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', vision_jsonb('true'))`,
     );
     expect(totals(await getSankeyAggregates(RANGE))["none:out"]).toBe(
       "57.0000",

@@ -1,16 +1,13 @@
 /**
- * GET /api/planned-transactions/totals against real PostgreSQL: the planned
+ * GET /api/planned-transactions/totals against the real database: the planned
  * totals the Home hero and the planned page show are computed on the server,
  * every recurring occurrence counted and every amount converted at the latest
  * stored rate.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import {
@@ -23,8 +20,6 @@ import { routeAgent } from "./helpers/routeApp.ts";
 import { bodyAt } from "./helpers/responseBody.ts";
 import plannedRouter from "../src/routes/plannedTransactions.ts";
 import { must } from "./helpers/must.ts";
-
-const describeDb = hasTestDatabase() ? describe : describe.skip;
 
 interface PlannedSeed {
   date: string;
@@ -42,7 +37,7 @@ async function insertPlanned(row: PlannedSeed) {
     `INSERT INTO planned_transactions
        (planned_date, amount, currency, is_recurring, recurrence_pattern,
         recurrence_end_date, max_occurrences, is_active, is_executed)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+     VALUES (ts_date($1), vision_numeric($2, 18, 4), $3, $4, $5, ts_date($6), $7, $8, $9)`,
     [
       row.date,
       row.amount,
@@ -60,12 +55,12 @@ async function insertPlanned(row: PlannedSeed) {
 async function setRate(code: string, rateToEur: string, rateDate: string) {
   await must(getTestPool(), "test pool").query(
     `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-     VALUES ($1, $2, $3, true)`,
+     VALUES ($1, vision_numeric($2, 20, 10), ts_date($3), 1)`,
     [code, rateToEur, rateDate],
   );
 }
 
-describeDb("GET /api/planned-transactions/totals (real DB)", () => {
+describe("GET /api/planned-transactions/totals (real DB)", () => {
   const api = routeAgent(plannedRouter, {
     mountPath: "/api/planned-transactions",
   });
@@ -75,10 +70,6 @@ describeDb("GET /api/planned-transactions/totals (real DB)", () => {
   const weeklyThisMonth =
     Math.floor(differenceInCalendarDaysYmd(today, monthEnd) / 7) + 1;
 
-  beforeAll(async () => {
-    await acquireDbSuiteLock();
-  });
-
   beforeEach(async () => {
     const pool = must(getTestPool(), "test pool");
     await pool.query("DELETE FROM planned_transaction_executions");
@@ -87,7 +78,6 @@ describeDb("GET /api/planned-transactions/totals (real DB)", () => {
   });
 
   afterAll(async () => {
-    await releaseDbSuiteLock();
     await closeTestPool();
     await closePool();
   });

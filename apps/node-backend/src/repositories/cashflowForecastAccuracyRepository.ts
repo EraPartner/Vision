@@ -56,12 +56,12 @@ async function upsert({
     .values({
       user_id: userId,
       method_id: methodId,
-      as_of_month: sql<Date>`(${asOfMonth} || '-01')::date`,
+      as_of_month: sql<Date>`ts_date(${asOfMonth} || '-01')`,
       mae,
       rmse,
       mape,
       sample_days: sampleDays,
-      recorded_at: sql<Date>`NOW()`,
+      recorded_at: sql<Date>`now()`,
     })
     .onConflict((oc) =>
       oc.columns(["user_id", "method_id", "as_of_month"]).doUpdateSet((eb) => ({
@@ -69,7 +69,7 @@ async function upsert({
         rmse: eb.ref("excluded.rmse"),
         mape: eb.ref("excluded.mape"),
         sample_days: eb.ref("excluded.sample_days"),
-        recorded_at: sql<Date>`NOW()`,
+        recorded_at: sql<Date>`now()`,
       })),
     )
     .execute();
@@ -107,15 +107,36 @@ async function getLatestByMethod({
 }: {
   userId: string;
 }): Promise<AccuracyRow[]> {
+  // DISTINCT ON (method_id) ... ORDER BY method_id, as_of_month DESC: the
+  // newest month per method, as a row_number() window (one row per
+  // (user, method, month) by the unique key, so there are no ties).
   return checkedRows(
     forecastAccuracyRowSchema,
     db
-      .selectFrom("cashflow_forecast_accuracy")
-      .distinctOn("method_id")
-      .select(accuracyColumns)
-      .where("user_id", "=", userId)
-      .orderBy("method_id")
-      .orderBy("as_of_month", "desc"),
+      .selectFrom((eb) =>
+        eb
+          .selectFrom("cashflow_forecast_accuracy")
+          .select([
+            ...accuracyColumns,
+            sql<number>`row_number() OVER (PARTITION BY method_id ORDER BY as_of_month DESC)`.as(
+              "rn",
+            ),
+          ])
+          .where("user_id", "=", userId)
+          .as("ranked"),
+      )
+      .select([
+        "user_id",
+        "method_id",
+        "as_of_month",
+        "mae",
+        "rmse",
+        "mape",
+        "sample_days",
+        "recorded_at",
+      ])
+      .where("rn", "=", 1)
+      .orderBy("method_id"),
   );
 }
 
@@ -139,7 +160,7 @@ async function getAllHistory({
       .where(
         "as_of_month",
         ">=",
-        sql<Date>`(date_trunc('month', CURRENT_DATE) - make_interval(months => ${limitMonths}))::date`,
+        sql<Date>`add_months(date_trunc('month', today()), ${-limitMonths})`,
       )
       .orderBy("method_id")
       .orderBy("as_of_month", "asc"),

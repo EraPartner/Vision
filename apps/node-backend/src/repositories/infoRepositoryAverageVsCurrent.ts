@@ -4,10 +4,10 @@
  * ONE CLOCK, same rule as infoRepositoryForecast.js: every window edge and
  * every piece of month/day arithmetic here is anchored on
  * `todayAppDateString()` — the APP_TIMEZONE calendar day (ADR-009) — read once
- * per call and bound into the SQL as a `::date` parameter. Postgres `CURRENT_DATE` is not
- * used: it follows the DB session's zone (UTC), so with the default
- * APP_TIMEZONE=Europe/Brussels the two disagree on the calendar day for the
- * couple of hours before midnight, and on a month's last day that is a whole
+ * per call and bound into the SQL as a 'YYYY-MM-DD' date parameter. The SQL
+ * clock (`today()`, formerly PostgreSQL's `CURRENT_DATE`) is not used: it
+ * follows the database's zone, not APP_TIMEZONE, so the two can disagree on
+ * the calendar day around midnight, and on a month's last day that is a whole
  * month of arithmetic — the divisor counted a month whose rows the window had
  * already excluded. `WINDOW_MONTHS` is bound too, so no value is spliced into
  * the SQL text.
@@ -85,7 +85,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   // (and the dropping of mv_cashflow_daily) set out to prevent.
   const includeTransfers = await getIncludeTransfers();
   const transferFilter = includeTransfers ? sql`` : sql`AND t.is_transfer = false`;
-  const anchor = sql`${todayYmd}::date`;
+  const anchor = sql`${todayYmd}`;
   // Aggregate in SQL, grouped by (date, currency, sign). The previous
   // row-streaming version capped the scans with LIMIT 10000/5000 and NO ORDER
   // BY — past 10k rows in the window Postgres dropped *arbitrary* heap-order
@@ -94,22 +94,24 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   // signed `amount` per row so the existing conversion pipeline and sign
   // checks below work unchanged, and moves the summing where it belongs.
   const sql6m = sql`
-    SELECT t.date, t.currency, (t.amount < 0) AS is_spending, SUM(t.amount) AS amount, COUNT(*) AS cnt
+    SELECT t.date, t.currency, (dec_sign(t.amount) < 0) AS "is_spending::bool",
+           dec_sum(t.amount) AS amount, count(*) AS "cnt::bigint"
     FROM transactions t
     WHERE t.is_active = true
       ${transferFilter}
-      AND t.date >= date_trunc('month', ${anchor}) - make_interval(months => ${WINDOW_MONTHS}::int)
+      AND t.date >= add_months(date_trunc('month', ${anchor}), ${-WINDOW_MONTHS})
       AND t.date < date_trunc('month', ${anchor})
-    GROUP BY t.date, t.currency, (t.amount < 0)
+    GROUP BY t.date, t.currency, (dec_sign(t.amount) < 0)
   `;
   const sqlCurrent = sql`
-    SELECT t.date, t.currency, (t.amount < 0) AS is_spending, SUM(t.amount) AS amount, COUNT(*) AS cnt
+    SELECT t.date, t.currency, (dec_sign(t.amount) < 0) AS "is_spending::bool",
+           dec_sum(t.amount) AS amount, count(*) AS "cnt::bigint"
     FROM transactions t
     WHERE t.is_active = true
       ${transferFilter}
       AND t.date >= date_trunc('month', ${anchor})
       AND t.date <= ${anchor}
-    GROUP BY t.date, t.currency, (t.amount < 0)
+    GROUP BY t.date, t.currency, (dec_sign(t.amount) < 0)
   `;
 
   // Ledger start for the average denominators (countObservedMonths above).
@@ -119,10 +121,10 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   // "Unfiltered" means no predicates; the two bound values are the window
   // itself, anchored on the same app date as everything else.
   const sqlLedgerStart = sql`
-    SELECT MIN(t.date) AS first_date
+    SELECT min(t.date) AS "first_date::date"
     FROM transactions t
     WHERE t.is_active = true
-      AND t.date >= date_trunc('month', ${anchor}) - make_interval(months => ${WINDOW_MONTHS}::int)
+      AND t.date >= add_months(date_trunc('month', ${anchor}), ${-WINDOW_MONTHS})
   `;
 
   const [past6Rows, currentRows, ledgerStartRows] = await Promise.all([

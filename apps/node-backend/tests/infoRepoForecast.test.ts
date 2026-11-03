@@ -54,11 +54,11 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 /** Matches the unfiltered ledger-start probe (last query of getCashflowComparison). */
-const isLedgerStartSql = (sql: string) => /MIN\(t\.date\)/.test(sql);
+const isLedgerStartSql = (sql: string) => /MIN\(t\.date\)/i.test(sql);
 
 /**
  * query() stub. The ledger-start probe answers with `firstDate` (a 'YYYY-MM-DD'
- * string or null), handed back as pg returns a DATE: a local-midnight Date.
+ * string or null), handed back as the driver returns a DATE: a local-midnight Date.
  * Every other query returns no rows. Needed because the probe — not the result
  * rows — is what sets the historical-average divisor.
  */

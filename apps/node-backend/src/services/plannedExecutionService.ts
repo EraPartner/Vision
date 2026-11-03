@@ -6,7 +6,9 @@
  * (plannedMatchService) so both compute the same updateFields, advance
  * recurring rows identically, and inherit tags the same way.
  *
- * The parent row is locked before reading recurrence state. The replay check
+ * Everything runs in one write transaction (the single SQLite writer
+ * serializes it with every other write), so recurrence state is read and
+ * advanced atomically. The replay check
  * and UNIQUE (planned_transaction_id, executed_transaction_id) index ensure
  * re-running the same pair is a no-op, including after series completion.
  */
@@ -74,7 +76,8 @@ export async function executePlanned({
     if (!existing.is_active || existing.is_executed) {
       throw new ConflictError("Planned transaction is inactive or complete");
     }
-    // Lock the ledger row as well: deletion and edits must not race validation.
+    // Read the ledger row inside the same write transaction: the single
+    // SQLite writer keeps deletion and edits from racing validation.
     const transaction = await db
       .selectFrom("transactions as t")
       .leftJoin("recipients as r", "r.id", "t.recipient_id")
@@ -88,7 +91,6 @@ export async function executePlanned({
           .as("recipient_cluster_id"),
       ])
       .where("t.id", "=", executedTransactionId)
-      .forUpdate("t")
       .executeTakeFirst();
     if (!transaction) throw new NotFoundError("Transaction not found");
     if (!transaction.is_active) {
@@ -136,7 +138,7 @@ export async function executePlanned({
     /**
      * Sanitized update payload for `plannedTransactionService.executeAndAdvance`
      * — write-side values, NOT the read-side row shape: both dates go in as
-     * 'YYYY-MM-DD' strings (pg coerces on bind), whereas a fetched row's same
+     * 'YYYY-MM-DD' strings (stored as DATE_TEXT), whereas a fetched row's same
      * columns come back as `Date` (see `PlannedTransactionRow` in types/rows.ts).
      */
     const updateFields: {
@@ -159,7 +161,7 @@ export async function executePlanned({
         existing.max_occurrences != null &&
         priorExecutions + 1 >= existing.max_occurrences;
 
-      // pg DATE values represent local calendar days, not instants in APP_TIMEZONE.
+      // DATE values represent local calendar days, not instants in APP_TIMEZONE.
       // Preserve the stored day before applying the shared calendar recurrence.
       // planned_date is NOT NULL, so plannedYmd is always a string here.
       const plannedYmd = toWireDate(existing.planned_date);

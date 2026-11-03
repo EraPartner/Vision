@@ -8,13 +8,10 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import {
@@ -102,7 +99,7 @@ function writeCsv(csv: string): string {
 async function insertAccount(name: string, type = "checking"): Promise<number> {
   const { rows } = await must(pool, "pool").query<{ id: AccountId }>(
     `INSERT INTO accounts (name, display_name, type, currency)
-     VALUES ($1, $1, $2::account_type, 'EUR') RETURNING id`,
+     VALUES ($1, $1, $2, 'EUR') RETURNING id`,
     [name, type],
   );
   owned.accountIds.push(must(rows[0], "rows[0]").id);
@@ -126,48 +123,43 @@ async function insertTransaction(
 ): Promise<number> {
   const { rows } = await must(pool, "pool").query<{ id: TransactionId }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, account_id, is_active)
-     VALUES ($1, $2, 'EUR', $3, $4, true) RETURNING id`,
+     VALUES (ts_date($1), vision_numeric($2, 18, 4), 'EUR', $3, $4, 1) RETURNING id`,
     [date, amount, recipientId, accountId],
   );
   owned.transactionIds.push(must(rows[0], "rows[0]").id);
   return must(rows[0], "rows[0]").id;
 }
 
-describe.skipIf(!hasTestDatabase())(
-  "import, info, forecast and report row contracts against PostgreSQL",
+describe(
+  "import, info, forecast and report row contracts against the database",
   () => {
-    beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180000);
-
     afterAll(async () => {
       try {
         const db = must(pool, "pool");
         await db.query(
-          "DELETE FROM transactions WHERE id = ANY($1) OR import_batch_id = ANY($2)",
+          "DELETE FROM transactions WHERE id IN (SELECT value FROM json_each($1)) OR import_batch_id IN (SELECT value FROM json_each($2))",
           [owned.transactionIds, owned.batchIds],
         );
-        await db.query("DELETE FROM import_batches WHERE id = ANY($1)", [
+        await db.query("DELETE FROM import_batches WHERE id IN (SELECT value FROM json_each($1))", [
           owned.batchIds,
         ]);
-        await db.query("DELETE FROM custom_parser_configs WHERE id = ANY($1)", [
+        await db.query("DELETE FROM custom_parser_configs WHERE id IN (SELECT value FROM json_each($1))", [
           owned.parserConfigIds,
         ]);
         await db.query(
-          "DELETE FROM portfolio_transactions WHERE investment_id = ANY($1)",
+          "DELETE FROM portfolio_transactions WHERE investment_id IN (SELECT value FROM json_each($1))",
           [owned.investmentIds],
         );
-        await db.query("DELETE FROM investments WHERE id = ANY($1)", [
+        await db.query("DELETE FROM investments WHERE id IN (SELECT value FROM json_each($1))", [
           owned.investmentIds,
         ]);
-        await db.query("DELETE FROM tags WHERE id = ANY($1)", [owned.tagIds]);
+        await db.query("DELETE FROM tags WHERE id IN (SELECT value FROM json_each($1))", [owned.tagIds]);
         await db.query(
-          "DELETE FROM recipients WHERE id = ANY($1) OR name LIKE $2",
+          "DELETE FROM recipients WHERE id IN (SELECT value FROM json_each($1)) OR name LIKE $2",
           [owned.recipientIds, `%${SUFFIX}%`],
         );
         await db.query(
-          "DELETE FROM accounts WHERE id = ANY($1) OR name LIKE $2",
+          "DELETE FROM accounts WHERE id IN (SELECT value FROM json_each($1)) OR name LIKE $2",
           [owned.accountIds, `%${SUFFIX}%`],
         );
         await db.query(
@@ -188,7 +180,6 @@ describe.skipIf(!hasTestDatabase())(
         for (const dir of tempDirs)
           fs.rmSync(dir, { recursive: true, force: true });
       } finally {
-        await releaseDbSuiteLock();
         await closePool();
         await closeTestPool();
       }
@@ -278,7 +269,7 @@ describe.skipIf(!hasTestDatabase())(
       await must(pool, "pool").query<DbRow>(
         `INSERT INTO cashflow_forecast_accuracy
            (user_id, method_id, as_of_month, mae, rmse, mape, sample_days)
-         VALUES ($1, 'null-metrics', date_trunc('month', CURRENT_DATE)::date,
+         VALUES ($1, 'null-metrics', date_trunc('month', today()),
                  NULL, NULL, NULL, NULL)`,
         [USER],
       );
@@ -347,7 +338,8 @@ describe.skipIf(!hasTestDatabase())(
     it("reads Belgian inflation rates from the database", async () => {
       await must(pool, "pool").query(
         `INSERT INTO belgian_inflation_rates (month_date, monthly_rate, source)
-         VALUES ('1990-01-01', 0.0031, $1), ('1990-02-01', 0.0012, $1)`,
+         VALUES ('1990-01-01', vision_numeric('0.0031', 10, 8), $1),
+                ('1990-02-01', vision_numeric('0.0012', 10, 8), $1)`,
         [SUFFIX],
       );
       const result = await getInflationRates({
@@ -446,9 +438,9 @@ describe.skipIf(!hasTestDatabase())(
           await statisticsRepository.getCategoryBreakdown("EUR");
         expect(categories.some((c) => c.id === categoryId)).toBe(true);
       } finally {
-        await must(pool, "pool").query(
-          "DROP MATERIALIZED VIEW IF EXISTS mv_monthly_summary, mv_category_totals CASCADE",
-        );
+        // Empty the materialized-view tables again (ADR-263: ordinary tables).
+        await must(pool, "pool").query("DELETE FROM mv_monthly_summary");
+        await must(pool, "pool").query("DELETE FROM mv_category_totals");
         clearMvCache();
         await must(pool, "pool").query(
           "DELETE FROM transactions WHERE id = $1",
@@ -467,7 +459,7 @@ describe.skipIf(!hasTestDatabase())(
       );
       const { rows } = await must(pool, "pool").query<{ id: InvestmentId }>(
         `INSERT INTO investments (name, symbol, asset_class, currency, current_price)
-         VALUES ($1, 'IIRC', 'stock', 'EUR', 12) RETURNING id`,
+         VALUES ($1, 'IIRC', 'stock', 'EUR', vision_numeric('12', 18, 6)) RETURNING id`,
         [`IIRC Asset ${SUFFIX}`],
       );
       const investmentId = must(rows[0], "rows[0]").id;
@@ -475,7 +467,8 @@ describe.skipIf(!hasTestDatabase())(
       await must(pool, "pool").query(
         `INSERT INTO portfolio_transactions
            (investment_id, type, date, units, amount, price_per_unit, fees, taxes, currency, account_id)
-         VALUES ($1, 'dividend', '2019-05-10', NULL, 10, NULL, 0, 3, 'EUR', $2)`,
+         VALUES ($1, 'dividend', '2019-05-10', NULL, vision_numeric('10', 18, 4), NULL,
+                 vision_numeric('0', 18, 4), vision_numeric('3', 18, 4), 'EUR', $2)`,
         [investmentId, accountId],
       );
 

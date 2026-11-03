@@ -1,50 +1,49 @@
 /**
- * Real-Postgres tests for infoRepositoryMonthly (`getMonthlyFinancialSummary`).
+ * Real-database (SQLite) tests for infoRepositoryMonthly (`getMonthlyFinancialSummary`).
  *
  * DB-backed complement to infoRepoMonthly.test.ts (which stays: it runs without
  * a DB). The mock suite stubs `mvAvailable` and `getIncludeTransfers` outright
- * and matches SQL substrings (`FROM mv_monthly_summary`, `generate_series`,
+ * and matches SQL substrings (`FROM mv_monthly_summary`, the month grid,
  * `NOT IN ($1, $2)`), so it verifies which branch the JS *chose* — never what
  * either branch computes. Here both paths run for real: the live path against
- * the 6-month `generate_series` × `daily` join, and the materialized-view fast
- * path against an actually-created `mv_monthly_summary` (created inside the MV
- * tests and dropped again, since every other DB suite assumes a freshly-migrated
- * database with no MVs).
+ * the 6-month recursive month grid × `daily` join, and the materialized-view
+ * fast path against an actually-filled `mv_monthly_summary` table (filled
+ * inside the MV tests and emptied again, since the other tests assume empty
+ * materialized-view tables).
  *
  * The headline property is the one the module's own comments claim and no mock
  * could ever check: toggling an exclusion switches paths, so the two paths must
  * agree on the same corpus.
  *
  * Determinism: the repository's windows are anchored on the APP_TIMEZONE
- * calendar day (ADR-009), not Postgres `CURRENT_DATE` — for the last hours of
- * a UTC day the two disagree by one day. So, exactly as in
+ * calendar day (ADR-009), not the database clock's `today()` — for part of
+ * every night the two disagree by one day. So, exactly as in
  * infoRepoForecast.db.test.ts, the fixture helpers substitute the literal
  * token `CURRENT_DATE` in every date expression with the app-clock date at
  * call time, keeping fixtures and queries on ONE clock whatever hour the suite
  * runs. Day 5/10/15 exist in every month. The rollover describe at the bottom
- * deliberately seeds on the DB clock via `now()`, which the substitution
- * leaves alone.
+ * deliberately seeds on the database clock via `today()`, which the
+ * substitution leaves alone.
  */
 
 import {
   afterAll,
   afterEach,
-  beforeAll,
   describe,
   expect,
   it,
   vi,
 } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   deleteAllCategoryFixtures,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.ts";
-import { createMaterializedViews } from "../src/services/materializedViewService.ts";
+import {
+  createMaterializedViews,
+  refreshMaterializedViews,
+} from "../src/services/materializedViewService.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
@@ -64,17 +63,17 @@ const rec = {} as Record<"electrabel" | "electrabelAlias" | "misc", number>;
 
 /** Day N of the month `monthsBack` months before the current one. */
 const monthDay = (monthsBack: number, day: number) =>
-  `date_trunc('month', CURRENT_DATE) - interval '${monthsBack} months' + interval '${day - 1} days'`;
+  `add_days(add_months(date_trunc('month', CURRENT_DATE), ${-monthsBack}), ${day - 1})`;
 
 /**
  * Anchor a fixture date expression on the SAME clock the queries use: the
  * literal token `CURRENT_DATE` becomes the APP_TIMEZONE calendar day, resolved
- * at call time (so the fake-timer rollover cases see the frozen clock). `now()`
- * is deliberately NOT substituted — the rollover describe uses it to seed on
- * the real DB clock.
+ * at call time (so the fake-timer rollover cases see the frozen clock).
+ * `today()` is deliberately NOT substituted — the rollover describe uses it to
+ * seed on the database clock.
  */
 const anchored = (dateExpr: string) =>
-  dateExpr.replaceAll("CURRENT_DATE", `('${todayAppDateString()}'::date)`);
+  dateExpr.replaceAll("CURRENT_DATE", `('${todayAppDateString()}')`);
 
 /** 'YYYY-MM' key for the month `monthsBack` months before the current one (app-clock anchored). */
 async function monthKey(monthsBack: number): Promise<string> {
@@ -82,7 +81,7 @@ async function monthKey(monthsBack: number): Promise<string> {
     k: string;
   }>(
     anchored(
-      `SELECT to_char(date_trunc('month', CURRENT_DATE) - interval '${monthsBack} months', 'YYYY-MM') AS k`,
+      `SELECT to_char(add_months(date_trunc('month', CURRENT_DATE), ${-monthsBack}), 'YYYY-MM') AS k`,
     ),
   );
   return must(rows[0], "rows[0]").k;
@@ -92,7 +91,7 @@ async function monthKey(monthsBack: number): Promise<string> {
 async function ymd(dateExpr: string): Promise<string> {
   const { rows } = await must(getTestPool(), "getTestPool()").query<{
     d: string;
-  }>(`SELECT to_char((${anchored(dateExpr)})::date, 'YYYY-MM-DD') AS d`);
+  }>(`SELECT to_char(${anchored(dateExpr)}, 'YYYY-MM-DD') AS d`);
   return must(rows[0], "rows[0]").d;
 }
 
@@ -182,7 +181,7 @@ async function insertTxn({
     id: TransactionId;
   }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, is_active, is_transfer)
-     VALUES ((${anchored(dateExpr)})::date, $1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+     VALUES (ts_date(${anchored(dateExpr)}), vision_numeric($1, 18, 4), $2, $3, $4, $5, $6, $7) RETURNING id`,
     [
       amount,
       currency,
@@ -196,26 +195,18 @@ async function insertTxn({
   return must(rows[0], "rows[0]").id;
 }
 
+/** Empty the materialized-view tables, so mvAvailable() takes the live path. */
 async function dropManagedViews() {
   const pool = must(getTestPool(), "getTestPool()");
   for (const view of MANAGED_VIEWS) {
-    await pool.query(`DROP MATERIALIZED VIEW IF EXISTS ${view} CASCADE`);
+    await pool.query(`DELETE FROM ${view}`);
   }
   clearMvCache();
 }
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "repositories/infoRepositoryMonthly (real DB)",
   () => {
-    beforeAll(async () => {
-      expect(
-        process.env.DATABASE_URL,
-        "DATABASE_URL must equal TEST_DATABASE_URL for this suite (see scripts/with-test-db.sh)",
-      ).toBe(process.env.TEST_DATABASE_URL);
-      // DB suites share one database across parallel vitest workers — serialize.
-      await acquireDbSuiteLock();
-    }, 180_000);
-
     afterEach(async () => {
       const pool = must(getTestPool(), "getTestPool()");
       // MVs first: they are the only artefact of this suite that outlives a row
@@ -235,7 +226,6 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
@@ -283,7 +273,7 @@ describe.skipIf(!hasTestDatabase())(
         );
         expect(current.period_end).toBe(
           await ymd(
-            `date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day'`,
+            `add_days(add_months(date_trunc('month', CURRENT_DATE), 1), -1)`,
           ),
         );
         expect(typeof current.period_start).toBe("string");
@@ -324,7 +314,7 @@ describe.skipIf(!hasTestDatabase())(
           transaction_count: 4,
         });
         expect(r.summary.period_start).toBe(
-          await ymd(`date_trunc('month', CURRENT_DATE) - interval '5 months'`),
+          await ymd(`add_months(date_trunc('month', CURRENT_DATE), -5)`),
         );
       });
 
@@ -344,7 +334,7 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         await must(getTestPool(), "getTestPool()").query(
-          `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', 'true'::jsonb)`,
+          `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', vision_jsonb('true'))`,
         );
         const on = await getMonthlyFinancialSummary([], "EUR", [], false);
         expect(byMonth(on)[await monthKey(1)]).toMatchObject({
@@ -426,8 +416,8 @@ describe.skipIf(!hasTestDatabase())(
         await seedBase();
         await must(getTestPool(), "getTestPool()").query(
           `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-         VALUES ('USD', (${anchored(monthDay(1, 5))})::date, 0.5, false),
-                ('USD', (${anchored(monthDay(2, 5))})::date, 0.25, false)`,
+         VALUES ('USD', ts_date(${anchored(monthDay(1, 5))}), vision_numeric('0.5', 20, 10), 0),
+                ('USD', ts_date(${anchored(monthDay(2, 5))}), vision_numeric('0.25', 20, 10), 0)`,
         );
         await insertTxn({
           dateExpr: monthDay(1, 5),
@@ -455,7 +445,7 @@ describe.skipIf(!hasTestDatabase())(
         await seedBase();
         await must(getTestPool(), "getTestPool()").query(
           `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-         VALUES ('USD', (${anchored(monthDay(1, 5))})::date, 0.9, false)`,
+         VALUES ('USD', ts_date(${anchored(monthDay(1, 5))}), vision_numeric('0.9', 20, 10), 0)`,
         );
         // 11.34 USD × 0.9 = 10.206 → 10.21; −5.56 USD × 0.9 = −5.004 → −5.00.
         // Net 10.21 − 5.00 = 5.21; rounding the unrounded net 5.202 gave 5.20.
@@ -482,6 +472,76 @@ describe.skipIf(!hasTestDatabase())(
     // ───────────────────────────────────────────────────────────────────────────
     // Materialized-view fast path
     // ───────────────────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────────────────────
+    // Month ends and leap days on a pinned app clock: the window is six local
+    // calendar months ending in today's month, every row on a month's last day
+    // stays in that month, February ends on the 28th or the 29th, and the totals
+    // are exact decimal sums on both paths.
+    // ───────────────────────────────────────────────────────────────────────────
+    describe("month ends and leap days (pinned app clock)", () => {
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      const lastDay = (key: string) => {
+        const [y, m] = key.split("-").map(Number) as [number, number];
+        return `${key}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
+      };
+
+      it.each([
+        ["2024-02-29", ["2023-09", "2023-10", "2023-11", "2023-12", "2024-01", "2024-02"], "2023-08-31", "2024-03-01"],
+        ["2026-03-31", ["2025-10", "2025-11", "2025-12", "2026-01", "2026-02", "2026-03"], "2025-09-30", "2026-04-01"],
+        ["2026-12-31", ["2026-07", "2026-08", "2026-09", "2026-10", "2026-11", "2026-12"], "2026-06-30", "2027-01-01"],
+      ])(
+        "on %s keys the six months %j, each with its month-end rows",
+        async (today, keys, beforeWindow, afterToday) => {
+          await seedBase();
+          for (const key of keys) {
+            await insertTxn({ dateExpr: `'${lastDay(key)}'`, amount: "-0.10" });
+            await insertTxn({ dateExpr: `'${lastDay(key)}'`, amount: "-0.20" });
+            await insertTxn({ dateExpr: `'${key}-01'`, amount: "33.33" });
+          }
+          await insertTxn({ dateExpr: `'${beforeWindow}'`, amount: "-1000.00" });
+          await insertTxn({ dateExpr: `'${afterToday}'`, amount: "-1000.00" });
+
+          vi.useFakeTimers({ toFake: ["Date"] });
+          vi.setSystemTime(
+            new Date(appDateStringToUtc(today).getTime() + 12 * 3_600_000),
+          );
+          expect(todayAppDateString()).toBe(today);
+
+          const live = await getMonthlyFinancialSummary([], "EUR", [], false);
+          expect(
+            live.months.map((m) => `${m.year}-${String(m.month).padStart(2, "0")}`),
+          ).toEqual(keys);
+          for (const key of keys) {
+            expect(byMonth(live)[key]).toMatchObject({
+              period_start: `${key}-01`,
+              period_end: lastDay(key),
+              total_spending: -0.3,
+              total_income: 33.33,
+              net_amount: 33.03,
+              transaction_count: 3,
+            });
+          }
+          expect(live.summary).toMatchObject({
+            period_start: `${keys[0]}-01`,
+            total_spending: -1.8,
+            total_income: 199.98,
+            net_amount: 198.18,
+            transaction_count: 18,
+          });
+
+          // The view table, filled on the same pinned clock, agrees exactly.
+          await createMaterializedViews();
+          clearMvCache();
+          const mv = await getMonthlyFinancialSummary([], "EUR", [], false);
+          expect(mv.months).toEqual(live.months);
+          expect(mv.summary).toEqual(live.summary);
+        },
+      );
+    });
+
     describe("materialized-view fast path", () => {
       /** The corpus used for both path-agreement tests. */
       async function seedCorpus() {
@@ -535,7 +595,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(mv.summary).toEqual(live.summary);
       });
 
-      it("really serves from the MV: a post-creation insert stays invisible until REFRESH", async () => {
+      it("really serves from the MV: a post-creation insert stays invisible until the refresh", async () => {
         // Path proof for the agreement test above — without it, an MV that failed
         // to populate would make "MV path == live path" vacuously true. The MV is
         // a snapshot, so a row inserted after CREATE is absent until refreshed.
@@ -552,9 +612,7 @@ describe.skipIf(!hasTestDatabase())(
         const after = await getMonthlyFinancialSummary([], "EUR", [], false);
         expect(after.months).toEqual(before.months); // stale MV — the new row is unseen
 
-        await must(getTestPool(), "getTestPool()").query(
-          "REFRESH MATERIALIZED VIEW mv_monthly_summary",
-        );
+        await refreshMaterializedViews();
         const refreshed = await getMonthlyFinancialSummary(
           [],
           "EUR",
@@ -578,7 +636,7 @@ describe.skipIf(!hasTestDatabase())(
         await seedBase();
         await must(getTestPool(), "getTestPool()").query(
           `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-         VALUES ('USD', (${anchored(monthDay(1, 5))})::date, 0.5, true)`,
+         VALUES ('USD', ts_date(${anchored(monthDay(1, 5))}), vision_numeric('0.5', 20, 10), 1)`,
         );
         await insertTxn({
           dateExpr: monthDay(1, 5),
@@ -646,23 +704,24 @@ describe.skipIf(!hasTestDatabase())(
 
     // ───────────────────────────────────────────────────────────────────────────
     // One clock: the app-date anchor across a month rollover (same technique as
-    // infoRepoForecast.db.test.ts — only `Date` is faked; the DB keeps its real
-    // clock, faithfully reproducing "the app is a month ahead of CURRENT_DATE",
-    // the ~2h window before UTC midnight on every month's last day).
+    // infoRepoForecast.db.test.ts — only `Date` is faked, after every fixture
+    // and the database-clock facts are read, faithfully reproducing "the app is
+    // a month ahead of the database clock's today()", the ~2h window before UTC
+    // midnight on every month's last day).
     // ───────────────────────────────────────────────────────────────────────────
     describe("one clock: APP_TIMEZONE anchor across a month rollover", () => {
-      // These fixtures deliberately anchor on the REAL DB clock (`now()`, which
-      // the anchored() substitution leaves alone — `CURRENT_DATE` would be
-      // rewritten to the app date): the premise is "app clock one month ahead
-      // of the DB's month".
-      // Day 5 of the month five months before the one Postgres is in — inside a
-      // CURRENT_DATE-anchored window, OUTSIDE the app-anchored one.
+      // These fixtures deliberately anchor on the REAL database clock
+      // (`today()`, which the anchored() substitution leaves alone —
+      // `CURRENT_DATE` would be rewritten to the app date): the premise is "app
+      // clock one month ahead of the database's month".
+      // Day 5 of the month five months before the database's — inside a
+      // database-clock-anchored window, OUTSIDE the app-anchored one.
       const oldestDbWindowMonthDay5 =
-        "date_trunc('month', now()) - interval '5 months' + interval '4 days'";
-      // Day 5 of the month Postgres is in — the app clock's LAST COMPLETE month.
-      const dbMonthDay5 = "date_trunc('month', now()) + interval '4 days'";
+        "add_days(add_months(date_trunc('month', today()), -5), 4)";
+      // Day 5 of the database's month — the app clock's LAST COMPLETE month.
+      const dbMonthDay5 = "add_days(date_trunc('month', today()), 4)";
       // Day 1 of the month the app clock is in — its "today".
-      const appToday = "date_trunc('month', now()) + interval '1 month'";
+      const appToday = "add_months(date_trunc('month', today()), 1)";
 
       afterEach(() => {
         vi.useRealTimers();
@@ -683,11 +742,11 @@ describe.skipIf(!hasTestDatabase())(
           app_window_start: string;
           db_window_start: string;
         }>(`
-        SELECT to_char(date_trunc('month', CURRENT_DATE) + interval '1 month', 'YYYY-MM-DD') AS app_today,
-               to_char(date_trunc('month', CURRENT_DATE) + interval '1 month', 'YYYY-MM')     AS app_month,
-               to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM')                          AS db_month,
-               to_char(date_trunc('month', CURRENT_DATE) - interval '4 months', 'YYYY-MM')    AS app_window_start,
-               to_char(date_trunc('month', CURRENT_DATE) - interval '5 months', 'YYYY-MM')    AS db_window_start
+        SELECT to_char(add_months(date_trunc('month', today()), 1), 'YYYY-MM-DD') AS app_today,
+               to_char(add_months(date_trunc('month', today()), 1), 'YYYY-MM')    AS app_month,
+               to_char(date_trunc('month', today()), 'YYYY-MM')                   AS db_month,
+               to_char(add_months(date_trunc('month', today()), -4), 'YYYY-MM')   AS app_window_start,
+               to_char(add_months(date_trunc('month', today()), -5), 'YYYY-MM')   AS db_window_start
       `);
         const facts = must(rows[0], "rollover facts");
         // 00:30 of that app-timezone day == 22:30/23:30 UTC on the day before.

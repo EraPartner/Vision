@@ -1,85 +1,62 @@
 /**
- * Materialized View Manager
+ * Materialized-view tables (ADR-263).
  *
- * Creates and refreshes materialized views that pre-compute expensive
- * dashboard aggregations (monthly summaries and category totals).
- * Views are refreshed CONCURRENTLY so reads remain unblocked.
+ * `mv_monthly_summary` and `mv_category_totals` pre-compute two expensive
+ * dashboard aggregations. On PostgreSQL they were materialized views; on
+ * SQLite they are ordinary baseline tables (db/migrations/0001_baseline.sql)
+ * that this module refills from their defining SELECTs.
+ *
+ * A refill is `DELETE` + `INSERT ... SELECT` inside one `withTransaction()`:
+ * readers outside the transaction use the reader connection, which sees the
+ * last committed state, so they see either the old or the new contents and
+ * never an empty table mid-refill. That is what `REFRESH ... CONCURRENTLY`
+ * guaranteed. Both tables refill in the same transaction, so they always
+ * describe the same ledger state.
  *
  * The whole lifecycle runs post-`listen` from startup/warmup.ts — none of it is
- * on the critical path to `/health`, because both creation and refresh are full
- * aggregation scans of `transactions` whenever the views are missing or stale.
+ * on the critical path to `/health`, because a refill is a full aggregation
+ * scan of `transactions`.
  */
 
-import { query, getClient } from "../database/connection.ts";
+import { query, withTransaction } from "../database/connection.ts";
 import { logger } from "../config/logger.ts";
 import { invalidateStatisticsCaches } from "./info/cache.ts";
 
-/**
- * Run one maintenance statement with the pool-wide 30s statement_timeout
- * lifted. Building or refreshing these views on a large transactions table can
- * legitimately exceed 30s — CREATE MATERIALIZED VIEW and REFRESH both run the
- * full aggregation — and under the shared pool's timeout every such statement
- * failed, leaving the views permanently stale (or, on a fresh install, never
- * built at all). CONCURRENTLY cannot run inside a transaction block, so SET
- * LOCAL is not an option — use a session-level SET on a dedicated client and
- * restore the pool default before the client is reused.
- */
-async function runMaintenanceStatement(sql: string) {
-  const client = await getClient();
-  try {
-    await client.query("SET statement_timeout = 0");
-    return await client.query(sql);
-  } finally {
-    try {
-      // RESET returns to the connection-startup value (the pool's 30s default).
-      await client.query("RESET statement_timeout");
-      client.release();
-    } catch {
-      // Couldn't restore the timeout — discard the connection rather than hand
-      // an unbounded-timeout client back to the pool.
-      client.release(true);
-    }
-  }
-}
-
-/** All managed materialized view names */
 function errorMessage(err: unknown): string | undefined {
   return err instanceof Error ? err.message : undefined;
 }
 
-const MATERIALIZED_VIEWS = ["mv_monthly_summary", "mv_category_totals"];
+interface ManagedView {
+  name: "mv_monthly_summary" | "mv_category_totals";
+  /** INSERT ... SELECT that fills the empty table. */
+  fill: string;
+  /** The unique index the baseline defines on it. */
+  index: { name: string; columns: string };
+}
 
 /**
- * Create all materialized views (idempotent).
- *
- * Called from the post-listen warmup (startup/warmup.ts), never before
- * `app.listen()`: `IF NOT EXISTS` makes this a metadata no-op once the views
- * are there, but on a first-ever boot — or after a migration that drops a view
- * to redefine it (0084/0085) — each statement is a full aggregation scan of
- * `transactions`.
+ * Monthly income / spending / net per local calendar month (last 12 months
+ * plus the current one), per currency and effective category. The effective
+ * category resolves 3 levels (own → recipient default → PRIMARY recipient's
+ * default) so the table's category grain agrees with the monthly live path
+ * and the transactions surfaces. Totals are exact (dec_sum); month_start is
+ * the DATE of the month's first day.
  */
-export async function createMaterializedViews() {
-  logger.info("Creating materialized views (if not exist)…");
-  const start = Date.now();
-
-  // 1. Monthly income / spending / net per month (last 12 months).
-  //    Effective category resolves 3 levels (own → recipient default → PRIMARY
-  //    recipient's default) so the MV's category grain agrees with the monthly
-  //    live path and the transactions surfaces. Changing this definition
-  //    requires a migration that DROPs the MV (see 0085): IF NOT EXISTS never
-  //    redefines an existing view, so already-migrated installs keep the old SQL
-  //    otherwise.
-  await runMaintenanceStatement(`
-    CREATE MATERIALIZED VIEW IF NOT EXISTS mv_monthly_summary AS
+const MONTHLY_SUMMARY_FILL = `
+    INSERT INTO mv_monthly_summary (
+      month_start, month, year, currency, transaction_count,
+      total_income, total_spending, net_amount,
+      category_id, category_id_key, category_name
+    )
     SELECT
-      date_trunc('month', t.date)::date AS month_start,
-      EXTRACT(MONTH FROM t.date)::int AS month,
-      EXTRACT(YEAR FROM t.date)::int AS year,
+      date_trunc('month', t.date) AS month_start,
+      date_part('month', t.date) AS month,
+      date_part('year', t.date) AS year,
       t.currency,
-      COUNT(*) AS transaction_count,
-      SUM(CASE WHEN t.amount >= 0 THEN t.amount ELSE 0 END) AS total_income,
-      SUM(CASE WHEN t.amount < 0 THEN t.amount ELSE 0 END) AS total_spending,
-      SUM(t.amount) AS net_amount,
+      count(*) AS transaction_count,
+      dec_sum(CASE WHEN dec_sign(t.amount) >= 0 THEN t.amount ELSE 0 END) AS total_income,
+      dec_sum(CASE WHEN dec_sign(t.amount) < 0 THEN t.amount ELSE 0 END) AS total_spending,
+      dec_sum(t.amount) AS net_amount,
       c.id AS category_id,
       COALESCE(c.id, -1) AS category_id_key,
       COALESCE(c.path_name, 'UNCATEGORISED') AS category_name
@@ -87,110 +64,119 @@ export async function createMaterializedViews() {
     LEFT JOIN recipients r ON t.recipient_id = r.id
     LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
     LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
-    WHERE t.is_active = true AND t.is_transfer = false
-      AND t.date >= date_trunc('month', CURRENT_DATE) - interval '12 months'
-    GROUP BY month_start, month, year, t.currency, c.id, category_name
+    WHERE t.is_active = 1 AND t.is_transfer = 0
+      AND t.date >= add_months(date_trunc('month', today()), -12)
+    GROUP BY date_trunc('month', t.date), date_part('month', t.date), date_part('year', t.date),
+             t.currency, c.id, COALESCE(c.path_name, 'UNCATEGORISED')
     ORDER BY month_start
-  `);
+  `;
 
-  // Unique index on plain columns — no expressions, so CONCURRENT refresh works
-  await runMaintenanceStatement(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_monthly_summary
-    ON mv_monthly_summary (month_start, currency, category_id_key)
-  `);
-  await runMaintenanceStatement(`DROP INDEX IF EXISTS mv_monthly_summary_idx`);
+/**
+ * Category totals (all-time), per currency. Effective category resolves 3
+ * levels (own → recipient default → PRIMARY recipient's default) so the fast
+ * path agrees with getCategoryBreakdown's live fallback and the transactions
+ * surfaces.
+ */
+const CATEGORY_TOTALS_FILL = `
+    INSERT INTO mv_category_totals (category_id, name, count, total, currency)
+    SELECT
+      COALESCE(c.id, -1) AS category_id,
+      COALESCE(c.path_name, 'UNCATEGORISED') AS name,
+      count(*) AS count,
+      dec_sum(t.amount) AS total,
+      t.currency
+    FROM transactions t
+    LEFT JOIN recipients r ON t.recipient_id = r.id
+    LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+    LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
+    WHERE t.is_active = 1 AND t.is_transfer = 0
+    GROUP BY
+      COALESCE(c.id, -1),
+      COALESCE(c.path_name, 'UNCATEGORISED'),
+      t.currency
+    ORDER BY count(*) DESC
+  `;
 
-  // 2. Category totals (all-time). Effective category resolves 3 levels
-  //    (own → recipient default → PRIMARY recipient's default) so the MV
-  //    fast path agrees with getCategoryBreakdown's live fallback and the
-  //    transactions surfaces. Changing this definition requires a migration
-  //    that DROPs the MV (see 0084): IF NOT EXISTS never redefines an
-  //    existing view, so already-migrated installs keep the old SQL otherwise.
-  await runMaintenanceStatement(`
-      CREATE MATERIALIZED VIEW IF NOT EXISTS mv_category_totals AS
-      SELECT
-        COALESCE(c.id, -1) AS category_id,
-        COALESCE(c.path_name, 'UNCATEGORISED') AS name,
-        COUNT(*) AS count,
-        SUM(t.amount) AS total,
-        t.currency
-      FROM transactions t
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
-      WHERE t.is_active = true AND t.is_transfer = false
-      GROUP BY
-        COALESCE(c.id, -1),
-        COALESCE(c.path_name, 'UNCATEGORISED'),
-        t.currency
-      ORDER BY count DESC
-    `);
-  await runMaintenanceStatement(`
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_category_totals
-      ON mv_category_totals (category_id, currency)
-    `);
-  await runMaintenanceStatement(`DROP INDEX IF EXISTS mv_category_totals_idx`);
+const MANAGED_VIEWS: readonly ManagedView[] = [
+  {
+    name: "mv_monthly_summary",
+    fill: MONTHLY_SUMMARY_FILL,
+    index: { name: "idx_mv_monthly_summary", columns: "(month_start, currency, category_id_key)" },
+  },
+  {
+    name: "mv_category_totals",
+    fill: CATEGORY_TOTALS_FILL,
+    index: { name: "idx_mv_category_totals", columns: "(category_id, currency)" },
+  },
+];
 
-  // The boot-wide `ANALYZE` in main.ts runs pre-listen and so no longer covers
-  // views created after it; without this a freshly created view carries no
-  // planner statistics (matviews are never auto-analyzed, and REFRESH does not
-  // sample them either). Same best-effort shape as the post-migration ANALYZE
-  // in migrate.js — the views are tiny, and stale stats must not fail warmup.
+/** Replace a view table's contents; call inside withTransaction(). */
+async function refill(view: ManagedView): Promise<void> {
+  await query(`DELETE FROM ${view.name}`);
+  await query(view.fill);
+}
+
+/**
+ * Fill every view table that holds no rows (idempotent).
+ *
+ * The tables exist from the baseline migration. PostgreSQL's
+ * `CREATE MATERIALIZED VIEW IF NOT EXISTS` populated a view when it was
+ * created and left an existing one alone; the equivalent here is to fill an
+ * empty table and keep a populated one (the previous launch's aggregates,
+ * which serve the first screen until the refresh replaces them).
+ *
+ * Called from the post-listen warmup (startup/warmup.ts), never before
+ * `app.listen()`: on a first boot each fill is a full aggregation scan of
+ * `transactions`.
+ */
+export async function createMaterializedViews() {
+  logger.info("Filling empty materialized-view tables…");
+  const start = Date.now();
+  await withTransaction(async () => {
+    for (const view of MANAGED_VIEWS) {
+      // Checked inside the write transaction, so a concurrent refresh cannot
+      // fill the table between the check and the fill.
+      const existing = await query(`SELECT 1 FROM ${view.name} LIMIT 1`);
+      if (existing.rows.length === 0) await refill(view);
+    }
+  });
+  // Give freshly filled tables planner statistics (sqlite_stat1), as the
+  // PostgreSQL build analyzed each view after creating it. Best effort: the
+  // tables are tiny, and stale stats must not fail warmup.
   await Promise.all(
-    MATERIALIZED_VIEWS.map((view) =>
-      query(`ANALYZE ${view}`).catch((err: unknown) => {
-        logger.warn(`Could not ANALYZE ${view}`, { error: errorMessage(err) });
+    MANAGED_VIEWS.map(({ name }) =>
+      query(`ANALYZE ${name}`).catch((err: unknown) => {
+        logger.warn(`Could not ANALYZE ${name}`, { error: errorMessage(err) });
       }),
     ),
   );
-
   logger.info(`Materialized views ready in ${Date.now() - start}ms`);
 }
 
 /**
- * Ensure all unique indexes exist (idempotent).
- * Runs at startup separately from createMaterializedViews so that DBs which
- * were created before the indexes were added get them retroactively.
+ * Ensure the unique indexes exist (idempotent). The baseline creates them;
+ * this keeps a database whose index was dropped by hand from silently
+ * accepting duplicate rows. A failure is logged and does not stop warmup.
  */
 export async function ensureMaterializedViewIndexes() {
-  const indexes = [
-    {
-      name: "idx_mv_monthly_summary",
-      legacyName: "mv_monthly_summary_idx",
-      view: "mv_monthly_summary",
-      columns: `(month_start, currency, category_id_key)`,
-    },
-    {
-      name: "idx_mv_category_totals",
-      legacyName: "mv_category_totals_idx",
-      view: "mv_category_totals",
-      columns: `(category_id, currency)`,
-    },
-  ];
-
-  // All indexes are on independent views — create them in parallel
-  await Promise.all(
-    indexes.map(async ({ name, legacyName, view, columns }) =>
-      runMaintenanceStatement(
-        `CREATE UNIQUE INDEX IF NOT EXISTS ${name} ON ${view} ${columns}`,
-      )
-        .then(() =>
-          runMaintenanceStatement(`DROP INDEX IF EXISTS ${legacyName}`),
-        )
-        .catch((err: unknown) => {
-          logger.warn(`Could not create index ${name} on ${view}`, {
-            error: errorMessage(err),
-          });
-        }),
-    ),
-  );
+  for (const { name, index } of MANAGED_VIEWS) {
+    try {
+      await query(
+        `CREATE UNIQUE INDEX IF NOT EXISTS ${index.name} ON ${name} ${index.columns}`,
+      );
+    } catch (err) {
+      logger.warn(`Could not create index ${index.name} on ${name}`, {
+        error: errorMessage(err),
+      });
+    }
+  }
 }
 
 let refreshInFlight: Promise<void> | null = null;
 let refreshQueued = false;
 
 /**
- * Refresh all materialized views concurrently.
+ * Refill both materialized-view tables in one transaction.
  * Coalesces rapid-fire calls (e.g. bulk import) into a single refresh.
  */
 export async function refreshMaterializedViews(): Promise<void> {
@@ -204,39 +190,23 @@ export async function refreshMaterializedViews(): Promise<void> {
 
   const start = Date.now();
   const refresh = (async () => {
-    // CONCURRENTLY requires unique indexes (created above) and allows
-    // reads to continue during refresh.
-    await Promise.all(
-      MATERIALIZED_VIEWS.map((view) =>
-        runMaintenanceStatement(
-          `REFRESH MATERIALIZED VIEW CONCURRENTLY ${view}`,
-        ).catch((err: unknown) => {
-          // Fall back to non-concurrent if the view has no unique index or was never
-          // populated. Match case-insensitively: Postgres phrases the unpopulated case as
-          // "CONCURRENTLY cannot be used when the materialized view is not populated"
-          // (uppercase CONCURRENTLY, "is not populated") — a case-sensitive substring check
-          // missed it, so the first refresh after an initdb-loaded dump kept failing.
-          const msg = (errorMessage(err) ?? "").toLowerCase();
-          if (
-            msg.includes("not populated") ||
-            msg.includes("has not been populated") ||
-            msg.includes("cannot refresh materialized view") ||
-            msg.includes("concurrently")
-          ) {
-            logger.warn(`Falling back to non-concurrent refresh for ${view}`);
-            return runMaintenanceStatement(`REFRESH MATERIALIZED VIEW ${view}`);
-          }
-          // Any other error is a real refresh failure — re-throw so the outer
-          // catch logs it. Swallowing it here let refreshMaterializedViews
-          // resolve "successfully" while leaving a stale view in place.
-          logger.warn(`Failed to refresh ${view}`, { error: errorMessage(err) });
+    // One write transaction refills both tables: readers keep seeing the
+    // previous contents until COMMIT, then the new ones (never an empty table).
+    await withTransaction(async () => {
+      for (const view of MANAGED_VIEWS) {
+        try {
+          await refill(view);
+        } catch (err) {
+          // A failed refill rolls the whole refresh back, so the tables keep
+          // their previous contents; re-throw so the outer catch logs it.
+          logger.warn(`Failed to refresh ${view.name}`, { error: errorMessage(err) });
           throw err;
-        }),
-      ),
-    );
-    // A request can repopulate the process cache from the old snapshot while
-    // the concurrent refresh is running. Clear it again after all views have
-    // switched to the new snapshot so that race cannot outlive the refresh.
+        }
+      }
+    });
+    // A request can repopulate the process cache from the old contents while
+    // the refresh is running. Clear it again after the new contents are
+    // committed so that race cannot outlive the refresh.
     invalidateStatisticsCaches();
     logger.info(`Materialized views refreshed in ${Date.now() - start}ms`);
   })();

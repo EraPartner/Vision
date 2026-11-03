@@ -1,15 +1,12 @@
 /**
- * Real-PostgreSQL behaviour of the cash-flow forecast caches, the forecast
+ * Real-database (SQLite) behaviour of the cash-flow forecast caches, the forecast
  * accuracy history and the provider-health counters. Replaces mocked-pool
  * tests that asserted the SQL text and bound parameters of these repositories.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import accuracyRepo from "../src/repositories/cashflowForecastAccuracyRepository.ts";
@@ -26,20 +23,15 @@ async function dbMonth(back: number): Promise<string> {
   const { rows } = await must(getTestPool(), "getTestPool()").query<{
     m: string;
   }>(
-    `SELECT to_char(date_trunc('month', CURRENT_DATE) - make_interval(months => $1), 'YYYY-MM') AS m`,
-    [back],
+    `SELECT to_char(add_months(date_trunc('month', today()), $1), 'YYYY-MM') AS m`,
+    [-back],
   );
   return must(rows[0], "rows[0]").m;
 }
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "forecast caches and provider health (real DB)",
   () => {
-    beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180_000);
-
     afterEach(async () => {
       const pool = must(getTestPool(), "getTestPool()");
       await pool.query(
@@ -60,9 +52,8 @@ describe.skipIf(!hasTestDatabase())(
 
     afterAll(async () => {
       try {
-        await releaseDbSuiteLock();
-      } finally {
         await closeTestPool();
+      } finally {
         await closePool();
       }
     });

@@ -27,7 +27,7 @@ export async function get({
       .selectFrom("cashflow_forecast_mc_rolling")
       .select(["payload", "computed_at"])
       .where("user_id", "=", userId)
-      .where("today_iso", "=", sql<Date>`${todayIso}::date`)
+      .where("today_iso", "=", sql<Date>`ts_date(${todayIso})`)
       .where("days_back", "=", daysBack)
       .where("days_forward", "=", daysForward)
       .where("filter_hash", "=", filterHash)
@@ -37,7 +37,7 @@ export async function get({
 }
 
 /**
- * @param computedAt TIMESTAMPTZ — pg hands this back as a `Date`.
+ * @param computedAt TIMESTAMPTZ — the driver hands this back as a `Date`.
  */
 export function isFresh(computedAt: Date | string | number): boolean {
   return Date.now() - new Date(computedAt).getTime() < CACHE_TTL_MS;
@@ -56,13 +56,13 @@ export async function upsert({
     .insertInto("cashflow_forecast_mc_rolling")
     .values({
       user_id: userId,
-      today_iso: sql<Date>`${todayIso}::date`,
+      today_iso: sql<Date>`ts_date(${todayIso})`,
       days_back: daysBack,
       days_forward: daysForward,
       filter_hash: filterHash,
       mc_paths: mcPaths,
-      payload: sql<Json>`${JSON.stringify(payload)}::jsonb`,
-      computed_at: sql<Date>`NOW()`,
+      payload: sql<Json>`vision_jsonb(${JSON.stringify(payload)})`,
+      computed_at: sql<Date>`now()`,
     })
     .onConflict((oc) =>
       oc
@@ -70,7 +70,7 @@ export async function upsert({
         .doUpdateSet((eb) => ({
           mc_paths: eb.ref("excluded.mc_paths"),
           payload: eb.ref("excluded.payload"),
-          computed_at: sql<Date>`NOW()`,
+          computed_at: sql<Date>`now()`,
         })),
     )
     .execute();

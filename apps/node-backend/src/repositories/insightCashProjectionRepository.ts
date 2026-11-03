@@ -1,9 +1,10 @@
 import { sql } from "kysely";
 import { asCurrencyCode } from "@vision/types/brands";
 import { checkedRow, db } from "../database/db.ts";
+import { withTransaction } from "../database/connection.ts";
 import { cashProjectionRowSchema } from "../database/rows/info.ts";
 
-const monthStart = (month: string) => sql<Date>`(${month} || '-01')::date`;
+const monthStart = (month: string) => sql<Date>`ts_date(${month} || '-01')`;
 
 /** @param month YYYY-MM */
 export async function getProjection(
@@ -30,35 +31,47 @@ async function saveProjection(
   methodId: string,
   value: number,
 ): Promise<void> {
-  await db
-    .with("saved", (qb) =>
-      qb
-        .insertInto("insight_cash_projections")
-        .values({
-          month_start: monthStart(month),
-          currency: asCurrencyCode(currency),
-          method_id: methodId,
-          month_end_net_cashflow: value,
-        })
-        .onConflict((oc) =>
-          oc.columns(["month_start", "currency", "method_id"]).doUpdateSet({
-            month_end_net_cashflow: (eb) =>
-              eb.ref("excluded.month_end_net_cashflow"),
-            observed_at: sql<Date>`NOW()`,
-          }),
-        )
-        .returning(sql<number>`1`.as("saved")),
-    )
-    .deleteFrom("insight_cash_projections")
-    .where(
-      "month_start",
-      "<",
-      sql<Date>`date_trunc('month', CURRENT_DATE) - INTERVAL '2 months'`,
-    )
-    .where((eb) =>
-      eb.exists(eb.selectFrom("saved").select(sql<number>`1`.as("one"))),
-    )
-    .execute();
+  const code = asCurrencyCode(currency);
+  // One write transaction: the upsert, then the retention prune of months
+  // before the start of the month two months ago. PostgreSQL ran both as one
+  // statement (a data-modifying CTE), whose DELETE could not see the row the
+  // upsert had just written, so the saved row always survived even when its
+  // own month is past the cutoff; the prune excludes it explicitly to keep that.
+  await withTransaction(async () => {
+    await db
+      .insertInto("insight_cash_projections")
+      .values({
+        month_start: monthStart(month),
+        currency: code,
+        method_id: methodId,
+        month_end_net_cashflow: value,
+      })
+      .onConflict((oc) =>
+        oc.columns(["month_start", "currency", "method_id"]).doUpdateSet({
+          month_end_net_cashflow: (eb) =>
+            eb.ref("excluded.month_end_net_cashflow"),
+          observed_at: sql<Date>`now()`,
+        }),
+      )
+      .execute();
+    await db
+      .deleteFrom("insight_cash_projections")
+      .where(
+        "month_start",
+        "<",
+        sql<Date>`add_months(date_trunc('month', today()), -2)`,
+      )
+      .where((eb) =>
+        eb.not(
+          eb.and([
+            eb("month_start", "=", monthStart(month)),
+            eb("currency", "=", code),
+            eb("method_id", "=", methodId),
+          ]),
+        ),
+      )
+      .execute();
+  });
 }
 
 export default { getProjection, saveProjection };

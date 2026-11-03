@@ -1,8 +1,9 @@
 /**
- * Real-Postgres tests for plannedTransactionRepository's windowed reads —
+ * Real-database (SQLite) tests for plannedTransactionRepository's windowed reads —
  * `getDueSoon` and `getForForecast` — on the ONE-CLOCK rule (ADR-009): both
  * windows anchor on the APP_TIMEZONE calendar day, read once and bound into
- * the SQL, not on Postgres `CURRENT_DATE` (the DB session's UTC day).
+ * the SQL, not on the database clock's `today()` (PostgreSQL's `CURRENT_DATE`,
+ * the DB session's UTC day).
  *
  * Unlike the month-rollover suites (infoRepoForecast.db.test.ts,
  * infoRepoMonthly.db.test.ts), the exposure pinned here is NIGHTLY: for the
@@ -11,22 +12,19 @@
  * yesterday's (app-clock) bills in "due soon" and cut the final day off the
  * lookahead.
  *
- * Technique as in the forecast suite's rollover describe: only `Date` is faked
- * (pg's connection/statement timers must keep running or the pool stalls); the
- * DB keeps its own real, unfaked clock; the process clock is pinned to 00:30
- * app-time on the day AFTER the DB's today, reproducing the drift window at
- * whatever hour the suite runs. Fixture dates are computed from the DB clock
- * BEFORE pinning, so every planned_date is a plain literal on the relationship
- * under test.
+ * Technique as in the forecast suite's rollover describe: only `Date` is faked;
+ * the process clock is pinned to 00:30 app-time on the day AFTER the database
+ * clock's today, reproducing the drift window at whatever hour the suite runs.
+ * Fixture dates are computed from the database clock BEFORE pinning, so every
+ * planned_date is a plain literal on the relationship under test. (SQLite's
+ * now()/today() run in this process and follow the faked Date afterwards;
+ * nothing under test reads them, since both windows are bound.)
  */
 
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from './setup/db.ts';
 import plannedTransactionRepository from '../src/repositories/plannedTransactionRepository.ts';
 import { closePool } from '../src/database/connection.ts';
@@ -52,29 +50,19 @@ async function insertPlanned({
 }): Promise<number> {
   const { rows } = await must(getTestPool(), "test pool").query<IdRow>(
     `INSERT INTO planned_transactions (planned_date, amount, currency, is_active, is_executed, memo)
-     VALUES ($1, $2, 'EUR', $3, $4, $5) RETURNING id`,
+     VALUES (ts_date($1), vision_numeric($2, 18, 4), 'EUR', $3, $4, $5) RETURNING id`,
     [date, amount, isActive, isExecuted, memo],
   );
   return must(rows[0], "rows[0]").id;
 }
 
-describe.skipIf(!hasTestDatabase())('repositories/plannedTransactionRepository — one clock (real DB)', () => {
-  beforeAll(async () => {
-    expect(
-      process.env.DATABASE_URL,
-      'DATABASE_URL must equal TEST_DATABASE_URL for this suite (see scripts/with-test-db.sh)',
-    ).toBe(process.env.TEST_DATABASE_URL);
-    // DB suites share one database across parallel vitest workers — serialize.
-    await acquireDbSuiteLock();
-  }, 180_000);
-
+describe('repositories/plannedTransactionRepository — one clock (real DB)', () => {
   afterEach(async () => {
     vi.useRealTimers();
     await must(getTestPool(), "test pool").query('DELETE FROM planned_transactions');
   });
 
   afterAll(async () => {
-    await releaseDbSuiteLock();
     await closeTestPool();
     await closePool();
   });
@@ -94,12 +82,12 @@ describe.skipIf(!hasTestDatabase())('repositories/plannedTransactionRepository �
       forecast_horizon: string;
       past_forecast_horizon: string;
     }>(`
-      SELECT to_char(CURRENT_DATE,                                'YYYY-MM-DD') AS db_today,
-             to_char(CURRENT_DATE + 1,                            'YYYY-MM-DD') AS app_today,
-             to_char(CURRENT_DATE + 1 + 7,                        'YYYY-MM-DD') AS due_window_end,
-             to_char(CURRENT_DATE + 1 + 8,                        'YYYY-MM-DD') AS past_due_window,
-             to_char((CURRENT_DATE + 1) + interval '1 month',     'YYYY-MM-DD') AS forecast_horizon,
-             to_char((CURRENT_DATE + 1) + interval '1 month' + interval '1 day', 'YYYY-MM-DD') AS past_forecast_horizon
+      SELECT to_char(today(),                                   'YYYY-MM-DD') AS db_today,
+             to_char(add_days(today(), 1),                      'YYYY-MM-DD') AS app_today,
+             to_char(add_days(today(), 1 + 7),                  'YYYY-MM-DD') AS due_window_end,
+             to_char(add_days(today(), 1 + 8),                  'YYYY-MM-DD') AS past_due_window,
+             to_char(add_months(add_days(today(), 1), 1),       'YYYY-MM-DD') AS forecast_horizon,
+             to_char(add_days(add_months(add_days(today(), 1), 1), 1), 'YYYY-MM-DD') AS past_forecast_horizon
     `);
     const facts = must(rows[0], "calendar facts");
     // 00:30 of the app-timezone day AFTER the DB's today == 22:30/23:30 UTC

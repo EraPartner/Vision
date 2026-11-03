@@ -1,17 +1,20 @@
 /**
- * Normalization — recipient name canonicalization + pg_trgm-backed fuzzy matching.
+ * Normalization — recipient name canonicalization + trigram fuzzy matching.
  *
  * Phase 6 of the non-portfolio refactor. Consolidates the existing
- * `textNormalization.js` normalize helpers and adds a Postgres-backed batch
- * matcher that uses the `pg_trgm` GIN index (installed in migration 0026) to
- * find the best existing recipient for a set of candidate names in O(log N)
- * per lookup — replacing ad-hoc per-row similarity scans in import hot paths.
+ * `textNormalization.js` normalize helpers and adds a single-query batch
+ * matcher that scores candidate names against the existing recipients with
+ * Vision's pg_trgm-compatible similarity() (ADR-263: SQLite has no trigram
+ * index, so the fuzzy step compares each candidate with every recipient in
+ * one statement) — replacing ad-hoc per-row similarity scans in import hot
+ * paths.
  *
  * The DB-level UNIQUE constraint on `recipients.normalized_name` (migration
  * 0029) guarantees that an exact-normalized match returns at most one row.
  */
 import { sql } from 'kysely';
 import { db } from '../../database/db.ts';
+import { float4Value } from '../../database/sqlite/text.ts';
 import { normalizeForMatching } from '../../lib/textNormalization.ts';
 
 export {
@@ -30,7 +33,7 @@ type RecipientMatchQueryRow = {
   norm: string;
   recipient_id: number;
   normalized_name: string;
-  /** REAL — pg's default float4 parser yields a number. */
+  /** similarity() — a float4 value, as a number. */
   sim: number;
   is_exact: boolean;
 };
@@ -38,14 +41,17 @@ type RecipientMatchQueryRow = {
 /** Default pg_trgm similarity cutoff for "the same recipient, spelled differently". */
 const DEFAULT_MATCH_THRESHOLD = 0.7;
 
+/** pg_trgm.similarity_threshold's default: the floor of its `%` operator. */
+const PG_TRGM_SIMILARITY_THRESHOLD = 0.3;
+
 /**
  * Batch-resolve raw recipient names to existing recipient ids.
  *
  * For each input name:
  *   1. Normalize to canonical form (`normalizeForMatching`).
  *   2. Prefer an exact normalized match (unique constraint guarantees O(1)).
- *   3. Fall back to the highest-similarity recipient above `threshold` via
- *      the pg_trgm `%` operator (uses the GIN index).
+ *   3. Fall back to the highest-similarity recipient above `threshold` (and
+ *      pg_trgm's `%` floor of 0.3) by trigram similarity().
  *
  * Returns a Map keyed on the ORIGINAL raw input name so callers can correlate
  * matches back to their source rows without a second normalization pass.
@@ -73,19 +79,24 @@ export async function findBestRecipientMatches(
   // Single-trip SQL:
   //   * `candidates` holds the deduped normalized inputs.
   //   * `exact_matches` picks the UNIQUE-guaranteed exact hit when present.
-  //   * `fuzzy_matches` uses pg_trgm `%` (GIN-backed) then DISTINCT ON keeps
-  //     the best similarity per candidate above the threshold.
+  //   * `fuzzy_matches` keeps recipients that pass pg_trgm's `%` (similarity
+  //     >= pg_trgm.similarity_threshold, 0.3) and the caller's threshold,
+  //     then a row_number() window (PostgreSQL's DISTINCT ON) keeps the best
+  //     similarity per candidate, ties to the lowest recipient id.
   //   * The final UNION prefers exact over fuzzy via `is_exact` ranking.
+  // similarity() returns a float4 (as the shortest decimal that reads back as
+  // it, PostgreSQL's float4out); PostgreSQL compared it with the bound
+  // threshold as float4, so the threshold takes the same float4 form.
   const result = await sql<RecipientMatchQueryRow>`
     WITH candidates AS (
-      SELECT DISTINCT norm FROM unnest(${uniqNorms}::text[]) AS t(norm)
+      SELECT DISTINCT value AS norm FROM json_each(${JSON.stringify(uniqNorms)})
     ),
     exact_matches AS (
       SELECT c.norm,
              r.id  AS recipient_id,
              r.normalized_name,
-             1.0::real AS sim,
-             true AS is_exact
+             1.0 AS sim,
+             1 AS is_exact
       FROM candidates c
       JOIN recipients r ON r.normalized_name = c.norm
     ),
@@ -96,18 +107,24 @@ export async function findBestRecipientMatches(
              similarity(r.normalized_name, c.norm) AS sim
       FROM candidates c
       JOIN recipients r
-        ON r.normalized_name % c.norm
-       AND r.normalized_name <> c.norm
-      WHERE similarity(r.normalized_name, c.norm) >= ${threshold}
+        ON r.normalized_name <> c.norm
+      WHERE similarity(r.normalized_name, c.norm) >= ${PG_TRGM_SIMILARITY_THRESHOLD}
+        AND similarity(r.normalized_name, c.norm) >= ${float4Value(threshold)}
     ),
     fuzzy_matches AS (
-      SELECT DISTINCT ON (norm) norm, recipient_id, normalized_name, sim, false AS is_exact
-      FROM fuzzy_candidates
-      ORDER BY norm, sim DESC, recipient_id ASC
+      SELECT norm, recipient_id, normalized_name, sim, 0 AS is_exact
+      FROM (
+        SELECT norm, recipient_id, normalized_name, sim,
+               row_number() OVER (PARTITION BY norm ORDER BY sim DESC, recipient_id ASC) AS rn
+        FROM fuzzy_candidates
+      ) ranked
+      WHERE rn = 1
     )
-    SELECT * FROM exact_matches
+    SELECT norm, recipient_id, normalized_name, sim, is_exact AS "is_exact::bool"
+    FROM exact_matches
     UNION ALL
-    SELECT f.* FROM fuzzy_matches f
+    SELECT f.norm, f.recipient_id, f.normalized_name, f.sim, f.is_exact
+    FROM fuzzy_matches f
     WHERE NOT EXISTS (SELECT 1 FROM exact_matches e WHERE e.norm = f.norm)
   `.execute(db);
 

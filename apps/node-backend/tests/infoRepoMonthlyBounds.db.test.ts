@@ -5,11 +5,8 @@
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.ts";
 import { fetchFinancialData } from "../src/services/reports/dataFetcher.ts";
@@ -35,7 +32,7 @@ async function insertTxn(
     id: TransactionId;
   }>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, account_id)
-     VALUES ($1, $2, 'EUR', $3, $4) RETURNING id`,
+     VALUES (ts_date($1), vision_numeric($2, 18, 4), 'EUR', $3, $4) RETURNING id`,
     [date, amount, recipientId, ids.account],
   );
   transactionIds.push(must(rows[0], "rows[0]").id);
@@ -45,12 +42,10 @@ const monthKeys = (
   result: Awaited<ReturnType<typeof getMonthlyFinancialSummary>>,
 ) => result.months.map((m) => `${m.year}-${String(m.month).padStart(2, "0")}`);
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "monthly summary calendar bounds (real DB)",
   () => {
     beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
       const pool = must(getTestPool(), "getTestPool()");
       const { rows: account } = await pool.query<{ id: AccountId }>(
         `INSERT INTO accounts (name, display_name, currency) VALUES ($1, $1, 'EUR') RETURNING id`,
@@ -68,7 +63,7 @@ describe.skipIf(!hasTestDatabase())(
 
     afterEach(async () => {
       await must(getTestPool(), "getTestPool()").query(
-        "DELETE FROM transactions WHERE id = ANY($1::int[])",
+        "DELETE FROM transactions WHERE id IN (SELECT value FROM json_each($1))",
         [transactionIds.splice(0)],
       );
       clearMemoryCache();
@@ -77,12 +72,11 @@ describe.skipIf(!hasTestDatabase())(
     afterAll(async () => {
       try {
         const pool = must(getTestPool(), "getTestPool()");
-        await pool.query("DELETE FROM recipients WHERE id = ANY($1::int[])", [
+        await pool.query("DELETE FROM recipients WHERE id IN (SELECT value FROM json_each($1))", [
           [ids.recipient, ids.excludedRecipient],
         ]);
         await pool.query("DELETE FROM accounts WHERE id = $1", [ids.account]);
       } finally {
-        await releaseDbSuiteLock();
         await closeTestPool();
         await closePool();
       }
