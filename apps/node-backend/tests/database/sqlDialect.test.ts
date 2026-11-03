@@ -130,9 +130,23 @@ describe("SQL dialect checker", () => {
       "// sql-dialect-ok: detects PostgreSQL casts in saved analyses",
       'const PG_CAST = "x::numeric";',
       'db.selectFrom("t").where("amount", "=", "0.00").orderBy(sql`dec_key(amount)`);',
+      'await db.selectFrom("t").selectAll().where("id", "=", id).forUpdate().execute();',
+      'db.selectFrom("t").selectAll().offset(10).execute();',
+      'db.selectFrom("t").selectAll().limit(5).offset(10).execute();',
+      'db.selectFrom("t").selectAll().offset(10).limit(-1).execute();',
     ].join("\n");
     const found = checkTypeScriptFile("x.ts", fixedContext, source).map((f) => `${f.line}:${f.rule}`);
-    expect(found).toEqual(["1:pg-syntax", "2:decimal", "3:decimal", "4:decimal", "5:decimal", "6:decimal", "7:function"]);
+    expect(found).toEqual([
+      "1:pg-syntax",
+      "2:decimal",
+      "3:decimal",
+      "4:decimal",
+      "5:decimal",
+      "6:decimal",
+      "7:function",
+      "12:pg-syntax",
+      "13:pg-syntax",
+    ]);
   });
 });
 

@@ -598,6 +598,16 @@ export function checkMigrationFile(file: string, text: string, ctx: DialectConte
 const SQL_CALLS = new Set(["query", "queryPrepared", "prepare", "exec", "raw", "execute"]);
 const SQL_HINT = /\b(SELECT|INSERT INTO|UPDATE|DELETE FROM|FROM|WHERE|JOIN|VALUES|RETURNING|COALESCE|GROUP BY|ORDER BY|CASE WHEN|ON CONFLICT|CREATE|ALTER|DROP|CURRENT_DATE|CURRENT_TIMESTAMP|IS NULL|IS NOT NULL)\b|\$\d|\w::[a-z]|\w\s+I?LIKE\s+[$?'(:]|\bINTERVAL\s+'/u;
 const KYSELY_AGGREGATES = new Set(["sum", "avg", "min", "max"]);
+/** Kysely builder methods that compile to PostgreSQL-only clauses. */
+const KYSELY_PG_ONLY: Readonly<Record<string, string>> = {
+  forUpdate: "FOR UPDATE",
+  forShare: "FOR SHARE",
+  forNoKeyUpdate: "FOR NO KEY UPDATE",
+  forKeyShare: "FOR KEY SHARE",
+  skipLocked: "SKIP LOCKED",
+  noWait: "NOWAIT",
+  distinctOn: "DISTINCT ON",
+};
 const KYSELY_WHERE = new Set(["where", "orWhere", "having", "orHaving", "eb", "cmpr"]);
 
 export function checkTypeScriptFile(file: string, ctx: DialectContext, source = readFileSync(file, "utf8")): Finding[] {
@@ -675,6 +685,28 @@ export function checkTypeScriptFile(file: string, ctx: DialectContext, source = 
     return ref.split(".").at(-1)?.toLowerCase();
   };
 
+  /** Method names called anywhere in the builder chain that contains `call`. */
+  const chainMethods = (call: ts.CallExpression): Set<string> => {
+    let top: ts.Node = call;
+    while (
+      (ts.isPropertyAccessExpression(top.parent) && top.parent.expression === top) ||
+      (ts.isCallExpression(top.parent) && top.parent.expression === top) ||
+      ts.isAwaitExpression(top.parent)
+    ) {
+      top = top.parent;
+    }
+    const names = new Set<string>();
+    let cursor: ts.Node | undefined = ts.isAwaitExpression(top) ? top.expression : top;
+    while (cursor) {
+      if (ts.isCallExpression(cursor)) cursor = cursor.expression;
+      else if (ts.isPropertyAccessExpression(cursor)) {
+        names.add(cursor.name.text);
+        cursor = cursor.expression;
+      } else cursor = undefined;
+    }
+    return names;
+  };
+
   const checkKyselyCall = (node: ts.CallExpression) => {
     const callee = node.expression;
     const name = ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : "";
@@ -689,6 +721,15 @@ export function checkTypeScriptFile(file: string, ctx: DialectContext, source = 
       if (!SQLITE_339_FUNCTIONS.has(fnName) && !ctx.visionFunctions.has(fnName)) {
         report(node, "function", `fn("${a0.text}") is not a SQLite 3.39 or Vision function${FUNCTION_HINTS[fnName] ? `: ${FUNCTION_HINTS[fnName]}` : ""}`);
       }
+    }
+    if (ts.isPropertyAccessExpression(callee) && Object.hasOwn(KYSELY_PG_ONLY, name)) {
+      report(node, "pg-syntax", `Kysely ${name}() compiles to ${KYSELY_PG_ONLY[name]}, which SQLite rejects; the single writer's BEGIN IMMEDIATE serialises writes (ADR-263)`);
+    }
+    // Only a chain that starts at selectFrom() is known whole; a builder held
+    // in a variable may have its limit() set elsewhere.
+    const chain = name === "offset" ? chainMethods(node) : undefined;
+    if (chain?.has("selectFrom") && !chain.has("limit") && ts.isPropertyAccessExpression(callee)) {
+      report(node, "pg-syntax", "Kysely offset() without limit() emits OFFSET alone, which SQLite rejects; add .limit(-1)");
     }
     if (name === "orderBy" && ts.isPropertyAccessExpression(callee)) {
       const column = columnOf(a0);
