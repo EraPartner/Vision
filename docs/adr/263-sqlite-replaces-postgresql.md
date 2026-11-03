@@ -211,25 +211,51 @@ so what services read stays what node-postgres returned. Bound values convert th
 
 ### Moving existing 2.0.0 data
 
-A standalone script, `scripts/vision-v2-to-sqlite.ts`, run once with Bun. Nothing of it ships in
-the app.
+A standalone script, `scripts/vision-v2-to-sqlite.ts` (library in
+`apps/node-backend/scripts/transition/`), run once with `bun run transition:v2 -- <backup>` from a
+repository checkout. Nothing of it ships in the app. The step-by-step checklist is
+[[docs/guides/sqlite-transition|Moving Vision 2.0 data to SQLite]].
 
-- Input is a Vision 2.0.0 `.visionbak` (plain or encrypted). The script never connects to,
-  starts or changes PostgreSQL, and never modifies or deletes the input or the PostgreSQL data
-  directory.
-- It refuses a bundle whose migration ledger is not 2.0.0's `0005`, and refuses to write over an
-  existing SQLite database unless it is the one this script produced from the same input
-  (a re-run is then a no-op that re-verifies).
-- `--dry-run` converts into a temporary file, verifies and prints the report without installing
-  anything. Without it the script installs only after verification passes, through a temporary
-  file and an atomic rename.
-- Conversion is per column from a typed mapping table covered by tests; decimals stay text from
-  end to end, timestamps keep their offset and microseconds, sequences continue after
-  PostgreSQL's last value.
-- Verification per table: row count, a SHA-256 over the canonical rows in primary-key order, and
-  the exact decimal sum of every NUMERIC column, each computed from the dump and from the SQLite
-  database through the backend's own reader. Then `integrity_check`, `foreign_key_check` and the
-  app invariants (account balances, split totals, open split amounts). The report is JSON.
+- Input is a Vision 2.0.0 `.visionbak` or `.visionbak.enc`. The passphrase comes from
+  `--passphrase-file`, `VISION_BACKUP_PASSPHRASE` or a hidden terminal prompt. The script reads
+  the bundle's `db.sql` (a `pg_dump`) and never connects to, starts or changes PostgreSQL. It never
+  modifies the input or the PostgreSQL data directory, and it checks the input's SHA-256 again
+  after the run.
+- It refuses a dump whose migration ledger is not exactly 2.0.0's `0001` to `0005`, a table or
+  column with no SQLite counterpart (except the Kysely ledger tables and the generated
+  `search_vector` column, which the baseline drops on purpose), and any value it cannot convert
+  exactly. The error names the table, column, row and value.
+- Conversion is per column, chosen by the SQLite declared type, from a mapping table covered by
+  tests (`tests/transition/typeMapping.test.ts`). Decimals stay text from end to end, timestamps
+  keep their microseconds, and sequences continue after PostgreSQL's last value, including the
+  shared portfolio sequence. The load runs in one transaction with the triggers dropped and
+  recreated in their original order; CHECK constraints stay on. The former materialized views
+  are left empty, and the app refills them at start.
+- Verification, all before anything is installed:
+  - row counts per table, and a SHA-256 per table over the converted values and the rows read
+    back in key order;
+  - a round trip that reads `db.sql` from disk a second time and compares every value of every
+    row, by primary key, with separately written inverse code;
+  - count, exact sum, minimum and maximum of every decimal column;
+  - every value through the backend's reader for its type;
+  - `integrity_check`, `foreign_key_check`, the schema fingerprint against a fresh install, the
+    ledger, sequences and triggers, and the app's own restore verifier (`db-file.ts verify`);
+  - attachment SHA-256s after copying.
+  The tests show that the round trip catches a conversion that is off by one microsecond, which
+  the checksums alone would miss.
+- `--dry-run` converts and verifies without installing. Without it the script installs into
+  `<userData>/database/vision.sqlite3`: a verified temporary copy is hard-linked into place, so an
+  existing database is never overwritten, and a stale `-wal`, `-shm` or `-journal` file is
+  refused. A byte-for-byte copy of the input, the JSON report and a record of the input's SHA-256
+  go next to the database. Running it again with the same backup reports that the transition is
+  done and changes nothing. Attachments are copied without overwriting.
+- `--to-backup <file>` writes a format-2 bundle instead, encrypted when the input was, for a
+  restore from the app's Settings; this also keeps the browser preferences in the backup.
+- The report states what the script cannot verify: that the backup holds the latest data, that
+  the app shows the same figures on that data (the report lists the largest money totals to
+  compare), the refilled summary tables, `real` columns stored as doubles, enum ordering as text,
+  custom analysis SQL written for PostgreSQL (copied, not run), and browser preferences after a
+  direct install.
 - Saved analyses with PostgreSQL custom SQL are flagged as described above.
 - Vision refuses to start when it finds a 2.0.0 PostgreSQL data directory and no SQLite database,
   and names the script, so a first launch cannot create an empty database over real data.
@@ -258,7 +284,8 @@ timing buffer in the adapter instead of `pg_stat_statements`.
   decimal checks fail there because the functions live in the backend.
 - PostgreSQL's per-statement timeout exists only for analysis SQL. A slow application query
   blocks the backend's event loop for its duration, as any synchronous work does.
-- jsonb's key order and duplicate-key folding are not reproduced; values read back are equal.
+- `jsonb` values are stored in PostgreSQL's canonical output form (`vision_jsonb()`), so the text
+  read back is what PostgreSQL returned; plain `json` keeps the text as written.
 
 ## Related
 

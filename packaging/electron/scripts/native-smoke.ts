@@ -315,6 +315,7 @@ export function sanitizeSmokeDiagnostic(value: unknown): string {
     .replace(/postgres(?:ql)?:\/\/[^\s'"`]+/gi, "[redacted database URL]")
     .replace(
       /\b(PGPASSWORD|DATABASE_URL|MIGRATION_DATABASE_URL|password|passphrase)\s*(?:=|:)\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi,
+      // sql-dialect-ok: a regex replacement string, not SQL
       "$1=[redacted]",
     );
 }

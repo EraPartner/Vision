@@ -215,6 +215,11 @@ The driver translates SQLite errors into the PostgreSQL SQLSTATEs services alrea
 `57014`. A trigger raises `RAISE(ABORT, 'vision:<sqlstate>:<constraint>:<message>')`, which
 becomes `code`, `constraint` and `message`.
 
+A foreign key error has no constraint name: SQLite reports only "FOREIGN KEY constraint failed",
+so `constraint` is undefined for `23503`, and for `23001`, the code a `RESTRICT` action raises.
+Code that needs to know which reference failed checks the referenced row first, inside the same
+transaction.
+
 ## Transactions and connections
 
 - One writer connection runs every write and every transaction, one at a time behind an async
@@ -230,6 +235,38 @@ becomes `code`, `constraint` and `message`.
 Migrations live in `db/migrations/NNNN_name.sql` (optional `NNNN_name.down.sql`). See
 [[docs/guides/migrations]] for the runner, the lint rules and the table-rebuild procedure for
 changes `ALTER TABLE` cannot make.
+
+## Known differences from PostgreSQL
+
+The baseline and the driver reproduce PostgreSQL's results for everything Vision does. The golden
+tests in `apps/node-backend/tests/database/sqlite/` and `tests/database/sqliteBaseline.test.ts`
+compare them with values PostgreSQL 18 computed. These differences remain, by design:
+
+- **Foreign key errors** carry no constraint name (see [[#Errors]]).
+- **An explicit `NULL` written to an `INTEGER PRIMARY KEY`** stores the next id. PostgreSQL
+  refused it with `23502`. No Vision code writes one.
+- **Unique violations** report the index PostgreSQL reported: SQLite checks the newest unique
+  index first, so the baseline creates a table's unique indexes in reverse PostgreSQL order. A
+  rowid key is checked before them and any other primary key after them.
+- **`updated_at`** is `NOT NULL ON CONFLICT REPLACE` with a `now()` default: an `UPDATE` that
+  writes `NULL` stores `now()`, as PostgreSQL's `BEFORE` trigger did. A `BEFORE INSERT` trigger
+  refuses an `INSERT` of `NULL` with `23502`, as PostgreSQL did.
+- **`BEFORE` triggers that assigned `NEW.<column>`** are `AFTER` triggers that update the row,
+  because a SQLite `BEFORE` trigger cannot change `NEW`. `RETURNING` does not see what they write.
+  This covers `update_*_updated_at` (the write plugin also sets `updated_at` in the statement, so
+  `RETURNING` sees the same value) and the legacy category sync triggers.
+- **`categories.name`** defaults to `'__LEGACY_NAME_PENDING__'`, which the legacy sync trigger
+  replaces, because the column is `NOT NULL` and the trigger runs after the insert.
+- **The insight digest marker** moves per row, not per statement. A statement that touches no row
+  no longer bumps it, and one that touches n rows bumps it n times. Readers compare
+  `dirty_version` with `computed_version` for equality only, so the result is the same.
+- **The two former materialized views** are ordinary tables that `materializedViewService`
+  refills with `DELETE` and `INSERT ... SELECT` in one transaction.
+- **`real` columns** are SQLite doubles. A PostgreSQL `real` (float4) value is stored as the
+  double of its shortest text, which is the number node-postgres gave Vision 2.0.
+- **Enum ordering** is text ordering. No query in the 2.0.0 sources ordered by an enum column
+  (checked with `git grep` on 2026-11-03), so no result changes.
+- **`lower`, `upper` and `ilike()`** fold ASCII only, as PostgreSQL's C locale did.
 
 ## Related
 
