@@ -10,6 +10,13 @@ aliases: [adr-222, kysely migrations, squashed baseline, remove python, drop ale
 
 # ADR-222: TypeScript migrations with Kysely and one squashed baseline
 
+> [!note] Superseded in part by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> the PostgreSQL 18 baseline, Kysely's `Migrator` with its `kysely_migration` tables,
+> `kysely-codegen` and the squawk lint no longer exist. `db/migrations/0001_baseline.sql` is now
+> SQLite SQL, `migrate.ts` records migrations in `vision_migrations`, and
+> `scripts/db-codegen.ts` generates the types. The single numbered-SQL chain, the refusal of
+> databases the runner does not recognise and recovery by backup restore stay.
+
 > [!note] Superseded in part by [[docs/adr/231-remove-audit-history|ADR-231]] on 2026-10-20:
 > the migrator no longer appends `schema_migration` audit events, and migration 0004 drops the
 > audit chain. The Kysely migrator and the SQL baseline stay in force.

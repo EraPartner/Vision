@@ -17,6 +17,13 @@ related_code:
 
 # ADR-242: Backup before boot-time migrations
 
+> [!note] Superseded in part by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> the Electron `beforeMigrations` hook and its `.visionbak` bundle in `pre-update-backups` no
+> longer exist. When migrations are pending for an existing database, the backend first writes a
+> `VACUUM INTO` copy to `<userData>/database/pre-migration-backups/` and keeps the last three. A
+> failed copy stops startup with `PRE_MIGRATION_BACKUP_FAILED`. Fail-closed startup and the audit
+> cleanup after migration stay.
+
 ## Status
 
 Accepted on 2026-10-21. Amends [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]

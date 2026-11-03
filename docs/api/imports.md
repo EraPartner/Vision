@@ -4,9 +4,9 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/import
 description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
-date: 2026-10-28
-updated: 2026-10-28
-last_modified: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
+last_modified: 2026-11-03
 tags:
   [
     api,
@@ -257,7 +257,7 @@ TRANSPORT,GAS,Fuel purchases
 - **Unified Pipeline**: All imports (standard, custom, and streaming) route through `runImportPipeline()` ([[apps/node-backend/src/services/importPipeline/index.ts]]), which orchestrates stage → validate → match → commit, then attempts transfer reconciliation, awaits forecast-cache invalidation, and schedules one materialized-view refresh. The response confirms the ledger commit, not completion of the derived-view refresh.
 - **Phase Isolation**: Each phase is idempotent at its boundary; failures in any phase mark the batch as `failed` without cascading partial state.
 - **Temp File Cleanup**: Route-level cleanup uses non-blocking `fs.promises.unlink(...).catch(...)` to avoid blocking the event loop under concurrent imports ([[apps/node-backend/src/routes/importRoutes.ts]]).
-- **Concurrent Row Processing**: Row batches are processed with adaptive concurrency calculated as `Math.max(2, Math.floor(poolMax / 2))` where `poolMax = max(DB_POOL_SIZE, DB_MAX_OVERFLOW)`. With default pool settings (poolMax=10), concurrency is 5. Batches use `Promise.allSettled` so one bad row doesn't stall others.
+- **Chunked Row Processing**: The commit stage drains staging rows in chunks of 1000. Each chunk runs in one `BEGIN IMMEDIATE` transaction on the single writer, and each row uses a savepoint so one bad row does not poison the others. There is no connection pool to size ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]).
 - **Deduplication**: provider-neutral, versioned occurrence fingerprints shared across every
   adapter. Immutable provider IDs take precedence; normalized field identity is the fallback.
 - **Error Sanitization**: Route failures return generic `"Import failed"` detail without exposing internal exception details. Every SSE error also includes a stable `code`; validation failures use `VALIDATION_ERROR` and unexpected failures use `INTERNAL_SERVER_ERROR`.
@@ -499,10 +499,10 @@ detail-only and therefore optional:
 
 | Field                                                         | Wire type                | Notes                                                                                                               |
 | ------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `id`                                                          | string                   | PostgreSQL `BIGINT`; use as an opaque decimal identifier                                                            |
+| `id`                                                          | string                   | `BIGINT` column, read as a decimal string; use as an opaque identifier                                              |
 | `adapter_name`                                                | string                   | Adapter used for the import                                                                                         |
 | `source_filename`                                             | string or null           | Uploaded filename                                                                                                   |
-| `source_size_bytes`                                           | string or null           | PostgreSQL `BIGINT`; byte count is serialized as a decimal string                                                   |
+| `source_size_bytes`                                           | string or null           | `BIGINT` column; byte count is serialized as a decimal string                                                       |
 | `custom_config`                                               | object or null, optional | Present only on the detail response                                                                                 |
 | `status`                                                      | string                   | `pending`, `staging`, `validating`, `matching`, `awaiting_review`, `committing`, `complete`, `failed`, or `aborted` |
 | `rows_total`, `rows_imported`, `rows_duplicate`, `rows_error` | integer                  | Non-null row counters                                                                                               |
@@ -627,8 +627,8 @@ return `409 CONFLICT`. Commit claims `awaiting_review` (or internal automatic `m
 A duplicate commit cannot claim the same batch concurrently. This tightens the existing write
 contract without adding routes.
 
-Rollback rechecks batch status under a row lock inside its transaction, before discovering
-ledger rows. This serializes with commit claims and review overrides: rollback first makes
+Rollback rechecks batch status inside its `BEGIN IMMEDIATE` transaction on the single writer,
+before discovering ledger rows. This serializes with commit claims and review overrides: rollback first makes
 the batch aborted and rejects later commit; commit first makes rollback reject the in-progress
 batch. Missing/aborted/in-progress checks retain their existing 404/400 responses. Rollback
 then locks affected accounts before transaction rows and deletes only the protected IDs. Closed accounts require reopening

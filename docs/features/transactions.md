@@ -2,8 +2,8 @@
 title: Transactions
 type: feature
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-11-03
+updated: 2026-11-03
 tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient, deep-link, electron-native, new-transaction, render-loop-fix, category-ids-filter, multi-value-filter, balance-write-protection, tag-editing-fix, amount-filter, search-suggestions, date-search, tag-search, url-state, inspector, add-transaction-sheet, transactions-toolbar, adr-181]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
 description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests). June 2026 Premium v3 V5-V7: per-row context menu, Quick Look dialog (Space), keyboard row navigation (↑/↓/Enter), Duplicate, and Filter-by-recipient actions. June 2026 V12 (ADR-072): /transactions?new=1 deep link opens AddTransactionDialog (used by native menu and dock menu). 2026-06-25: balance field is now write-protected (import pipeline only); PATCH and manual create can no longer set it; TransactionInfoDialog renders it read-only. 2026-06-26: TransactionInfoDialog tag-editing state bug fixed — last-tag removal chip persisted on screen after PATCH succeeded; dialog now tracks tag slugs in local state seeded from infoTransaction.tags. 2026-06-28: free-text search now also matches the transaction date (ISO text) and active tag slugs; new amount_min/amount_max/amount_exact filter params; TransactionSearchSuggestions dropdown for quick filters; FilterBanner shows amount descriptors. Aug 2026: search and sort (sort_key/sort_dir) are URL-backed; load-more and attachment-delete failures surface a retry-capable toast instead of failing silently. October 2026 (ADR-181): the Transactions page is rebuilt around a filter-chip toolbar, a selection-driven inspector (replaces the details dialog) and an Add Transaction sheet with Expense / Income / Transfer kinds (replaces the add dialog); `N` opens the sheet on the web.
@@ -179,7 +179,7 @@ These params are threaded through the full stack:
 
 #### Extended Free-Text Search (2026-06-28)
 
-The free-text `search` parameter (`ILIKE %term%`) now matches across **all** of the following columns (extended from the previous set):
+The free-text `search` parameter (`ilike(column, '%term%')`, ASCII case folding; see [[docs/reference/sqlite-sql-dialect|SQLite SQL dialect]]) now matches across **all** of the following columns (extended from the previous set):
 
 | Column                      | Notes                                       |
 | --------------------------- | ------------------------------------------- |
@@ -195,7 +195,7 @@ The free-text `search` parameter (`ILIKE %term%`) now matches across **all** of 
 | `pc.general` / `pc.detail`  | Primary recipient category                  |
 | Tag slugs (EXISTS subquery) | Active tags on the row — **new**            |
 
-The tag match uses `EXISTS (SELECT 1 FROM transaction_tags tt JOIN tags tg ON tg.id = tt.tag_id WHERE tt.transaction_id = t.id AND tg.is_active AND tg.slug ILIKE $n)`, so a search for `rome` will surface rows tagged `rome-2025`.
+The tag match selects `tt.transaction_id FROM transaction_tags tt JOIN tags tg ON tg.id = tt.tag_id WHERE tg.is_active = 1 AND ilike(tg.slug, ?)` as one branch of the search's `t.id IN (... UNION ...)`, so a search for `rome` will surface rows tagged `rome-2025`.
 
 Code links: [[apps/node-backend/src/lib/filterBuilder.ts]]
 

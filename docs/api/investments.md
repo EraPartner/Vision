@@ -4,9 +4,9 @@ type: endpoint
 method: GET, POST, PUT, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
-date: 2026-10-28
-last_modified: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+last_modified: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     api,
@@ -472,11 +472,11 @@ change to the receipt schema. The web dialogs report `selected_count` as the mov
 replay (`retagMovedCount()` in `apps/frontend/src/lib/api/portfolio.ts`).
 
 This route has a separate 30 requests/minute limiter in addition to the investments group limiter.
-The operation first locks the destination account row, matching account close and merge lock order,
-then briefly takes a `SHARE ROW EXCLUSIVE` lock on `portfolio_transactions`,
-`portfolio_asset_transfers`, and `portfolio_asset_adjustments`. This prevents a
-concurrent close from invalidating eligibility, avoids reversed-order deadlocks, and blocks insert
-phantoms while the full-history invariant and compare-and-set update run in one transaction.
+The eligibility check, the full-history invariant and the compare-and-set update run in one
+`BEGIN IMMEDIATE` transaction on the single writer connection. No other write, including an
+account close or a write to `portfolio_transactions`, `portfolio_asset_transfers` or
+`portfolio_asset_adjustments`, can run until it commits. This replaces the former account row lock
+and `SHARE ROW EXCLUSIVE` table lock ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]).
 
 > [!warning] `investment_ids` contract (2026-08-11 — breaking for malformed ids)
 > A malformed element is now a `400 VALIDATION_ERROR` (`"investment_ids contains invalid value: <value>"`). It used to be `parseInt` + `filter(Number.isInteger)`, which took the leading digits of anything: `?investment_ids=12abc` returned **investment 12**'s transactions, `5,12abc` returned 5 **and** 12, and `1e3` returned investment 1 — a `200` describing a holding the caller never named. The identical parse ran again inside `portfolioTxRepo.reads.ts`; that layer now delegates to `validateId` too, but keeps dropping rather than throwing. Absent or empty is unchanged: this param is required, so it is still `400 investment_ids is required`.
@@ -513,8 +513,9 @@ phantoms while the full-history invariant and compare-and-set update run in one 
 Code links: [[apps/node-backend/src/routes/investments.ts]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/hooks/usePortfolio.ts]]
 
 `import_batch_id` records portfolio-import provenance. It is a decimal string
-when the row was created by a portfolio import because node-postgres preserves
-PostgreSQL `BIGINT` values as strings. It is `null` for manual transactions and
+when the row was created by a portfolio import because the database driver reads `BIGINT`
+columns as decimal strings, as node-postgres did before
+[[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]. It is `null` for manual transactions and
 transactions created before migration 0086 added attribution.
 
 ### POST /api/investments/:id/transactions

@@ -3,8 +3,8 @@ title: Frontend Architecture
 type: architecture
 status: active
 description: "React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic."
-date: 2026-11-02
-updated: 2026-11-02
+date: 2026-11-03
+updated: 2026-11-03
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
@@ -888,7 +888,7 @@ package "Backend (Express)" {
   class CategoryRoutes
 }
 
-database "PostgreSQL" as DB
+database "SQLite" as DB
 
 User --> Browser : Action
 Browser --> ApiClient : API Call
@@ -929,7 +929,7 @@ participant "useTransactions" as Hook
 participant "ApiClient" as API
 participant "Express Routes" as Routes
 participant "TransactionRepository" as Repo
-database "PostgreSQL" as DB
+database "SQLite" as DB
 
 User -> Page : Submit Form
 Page -> Hook : createTransaction(data)

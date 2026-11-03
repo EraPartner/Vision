@@ -2,7 +2,7 @@
 title: Analysis Monitors
 type: feature
 status: active
-date: 2026-10-09
+date: 2026-11-03
 tags: [feature, analysis, monitoring, research, dossiers, notifications]
 description: Local scheduled checks for saved-analysis thresholds and dossier evidence changes, with durable observations and an in-app inbox.
 aliases: [saved analysis conditions, evidence change monitors]
@@ -25,13 +25,15 @@ baseline rather than comparing unlike results.
 
 Only a completed, current-version, single-row, finite numeric saved-analysis result can drive a
 threshold alert. Partial, stale, or failed checks appear in the observation history and cannot
-trigger one. The observation records the exact analysis run, result-window metadata, reason, and
+trigger one. A check on a saved analysis whose custom SQL was written for PostgreSQL
+records status `stale` with reason code `analysis-needs-review` until the analysis is saved again as
+SQLite SQL ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). The observation records the exact analysis run, result-window metadata, reason, and
 `coverage: unknown`: Vision does not claim verified upstream source coverage. An evidence change
 means the saved dossier evidence set changed, not that any source was rechecked or a claim was
 fact-checked. If a target is deleted, its rule and past observations remain visible with a saved
 target label; future checks fail visibly until the rule is deleted.
 
-All checks and notifications stay in the local backend and PostgreSQL database. No monitor check
+All checks and notifications stay in the local backend and its SQLite database. No monitor check
 contacts an AI model, market-data provider, or public web service, and no operating-system push
 notification is sent. The inbox is an in-app view only. The three monitor tables are included in
 normal `.visionbak` backups. Deleting a rule also deletes its observations and inbox entries.

@@ -3517,7 +3517,7 @@
                 "from": "build.electron",
                 "to": "db.postgres",
                 "payload": "embed db/ migration files",
-                "annotation": "packaging/electron/scripts/prepare-native-runtime.ts copies db/ (migrations and schema-inventory.sql) into the payload; the compiled backend applies them in-process on boot."
+                "annotation": "packaging/electron/scripts/prepare-native-runtime.ts copies db/migrations into the payload; the compiled backend applies them in-process on boot."
               },
               {
                 "from": "build.release",

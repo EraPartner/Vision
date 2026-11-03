@@ -1,7 +1,7 @@
 ---
 title: "ADR-262: App role gets MAINTAIN so admin VACUUM runs"
 type: adr
-status: accepted
+status: Superseded
 date: 2026-10-29
 tags: [adr, database, postgresql, security, least-privilege, admin, vacuum, adr-113, adr-133]
 description: "The admin page's VACUUM ANALYZE ran as the least-privilege app role, which owns no tables, so PostgreSQL skipped every table with a warning and the route reported success. The app role now holds MAINTAIN on public tables, and the route refuses with 403 when a requested table lacks it. The page shows manual as well as automatic vacuum and analyze times."
@@ -16,6 +16,10 @@ related_code:
 ---
 
 # ADR-262: App role gets MAINTAIN so admin VACUUM runs
+
+> [!note] Superseded by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> there are no PostgreSQL roles. Admin vacuum runs SQLite's `VACUUM`, `ANALYZE` and
+> `PRAGMA optimize` on the exclusive writer.
 
 ## Status
 

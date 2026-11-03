@@ -2,9 +2,9 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-10-28
-updated: 2026-10-28
-last_modified: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
+last_modified: 2026-11-03
 tags:
   [
     feature,
@@ -373,7 +373,7 @@ Enable via browser DevTools (Console tab) or server-side log aggregation.
 ## Privacy & Security
 
 - **No external API calls** — enforced by service-layer conventions and **CI test** (spies on `global.fetch` when Ollama client is injected) in `aiChatService.test.ts`.
-- **Read-only tool registry** — enforced by **CI denylist check** verifying no tool calls write methods (`create()`, `update()`, `delete()`, etc.) or imports the Postgres pool directly.
+- **Read-only tool registry** — enforced by **CI denylist check** verifying no tool calls write methods (`create()`, `update()`, `delete()`, etc.) or imports `database/connection` directly.
 - **Parameterized queries only** — tools go through existing repositories; no dynamic SQL built from LLM output.
 - **Audit log** — every `tool_call` + `tool_result` persisted in `ai_messages`.
 - **Input validation** — Zod on the chat message body; `tools/_validate.ts` on tool args, with ids on the shared `validateId` accept set.

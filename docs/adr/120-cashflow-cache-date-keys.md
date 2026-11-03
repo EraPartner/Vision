@@ -11,6 +11,12 @@ aliases: [adr-120, cashflow-date-keys]
 
 # ADR-120: Cash-Flow Cache Date Keys
 
+> [!note] Superseded in part by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> the keys are no longer PostgreSQL `DATE` values. They are `DATE_TEXT` columns holding
+> `YYYY-MM-DD` text checked by `vision_date_ok()`, and migration 0093 left the tree with the other
+> PostgreSQL migrations. The first-of-month keys, the string contracts at the repository boundary
+> and the `user_id` partition stay.
+
 ## Status
 
 Accepted

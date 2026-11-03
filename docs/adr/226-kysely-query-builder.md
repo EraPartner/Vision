@@ -10,6 +10,12 @@ aliases: [adr-226, kysely query builder, kysely queries, money column]
 
 # ADR-226: Kysely query builder over query()
 
+> [!note] Superseded in part by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> Kysely now compiles SQLite SQL, `LATERAL` and PL/pgSQL calls no longer exist, and
+> `bun run db:codegen` runs `scripts/db-codegen.ts` with `db-codegen.config.json` instead of
+> `kysely-codegen` and `.kysely-codegenrc.json`. The SQLite driver keeps the node-postgres result
+> shapes. The `db` builder over `query()`, `withTransaction()` and the row-schema checks stay.
+
 ## Status
 
 Accepted on 2026-10-19. Tor approved moving the backend queries to Kysely and extending the Money

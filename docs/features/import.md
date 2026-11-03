@@ -2,9 +2,9 @@
 title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
-date: 2026-10-28
-updated: 2026-10-28
-last_modified: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
+last_modified: 2026-11-03
 tags:
   [
     feature,
@@ -391,7 +391,7 @@ sequence. Their adapters and staging INSERT schemas remain domain-specific.
 #### 4. **Commit** (`commitBatch`)
 
 - Insert canonical transactions with per-row SAVEPOINT protection (if insert fails, transaction stays usable for remaining rows)
-- **BIGSERIAL Validation (2026-05-12):** [[apps/node-backend/src/services/importPipeline/commit.ts]] (lines 101–105) validates staging row IDs via regex `/^\d+$/` instead of `Number.isInteger()`. Root cause: `import_staging_rows.id` is BIGSERIAL; the `pg` driver returns BIGINT values as strings to preserve int64 precision. The old `Number.isInteger("123")` check failed silently, counting all rows as errors before any INSERT. New regex accepts string-form bigints and is injection-safe for SAVEPOINT identifiers.
+- **BIGSERIAL Validation (2026-05-12):** [[apps/node-backend/src/services/importPipeline/commit.ts]] (lines 101–105) validates staging row IDs via regex `/^\d+$/` instead of `Number.isInteger()`. Root cause: `import_staging_rows.id` is BIGSERIAL; the database driver returns BIGINT values as strings to preserve int64 precision (node-postgres then, the SQLite driver now). The old `Number.isInteger("123")` check failed silently, counting all rows as errors before any INSERT. New regex accepts string-form bigints and is injection-safe for SAVEPOINT identifiers.
 - **Versioned import identity (2026-09-09):** migration 0103 adds a partial unique index over
   `(dedup_fingerprint_version, dedup_fingerprint)`. Commit treats that index as the race guard.
   Since the maintained-installation cutover on 2026-09-13, the active import path uses only this
@@ -412,7 +412,7 @@ sequence. Their adapters and staging INSERT schemas remain domain-specific.
 #### 5. **Aggregation Refresh** (post-pipeline)
 
 - After canonical rows are durable and transfer reconciliation has been attempted, the pipeline awaits invalidation of both six-hour forecast Monte Carlo caches.
-- It then schedules one coalesced refresh of the two managed materialized views. The import response does not wait for those full-table scans.
+- It then schedules one coalesced refresh of the two summary tables (the former materialized views). The import response does not wait for those full-table scans.
 - The materialized-view scheduler uses a five-second trailing delay with a ten-second maximum wait for a continuous mutation burst. Refresh duration and any wait behind an in-flight refresh are additional.
 - Canonical transaction reads are immediately consistent. MV-backed monthly and category projections are eventually consistent and may return the previous snapshot until the scheduled refresh completes.
 - Refresh failures remain non-fatal to the durable import and are logged. A later mutation, explicit maintenance refresh, or startup warmup provides another refresh opportunity.
@@ -565,7 +565,7 @@ The review page (`ImportReviewPage`) discloses, before commit, which accounts th
 
 - Creates transactions in main table
 - Links to raw source for audit trail
-- **Phase 0+**: Triggers fire-and-forget materialized view refresh (post-commit) to keep aggregations warm
+- **Phase 0+**: Triggers fire-and-forget summary-table refresh (post-commit) to keep aggregations warm
 
 ## Deduplication Strategies
 
@@ -648,7 +648,7 @@ Saved parsers are persisted in the `custom_parser_configs` table (migration `003
 
 **Repository**: [[apps/node-backend/src/repositories/customParserConfigRepository.ts]] — `getAll`, `getById`, `getByName`, `create`, `update`, `delete`; maps `config_json` → `config` for callers. On every read it re-checks the stored config against the save-path schema of its `kind` (`storedParserConfigSchema` in `lib/parserConfigSchema.ts`, shared with the POST/PATCH request schemas). A stored config the save path would reject is a data-contract violation: it throws in tests and development and is logged elsewhere (issue paths only), and the row is still returned unchanged. See [[docs/adr/193-zod-runtime-contracts|ADR-193]].
 
-**Backup**: `custom_parser_configs` is included in the whole-database `pg_dump` backup and travels with `.visionbak` exports.
+**Backup**: `custom_parser_configs` is included in the whole-database copy (`db.sqlite3`) and travels with `.visionbak` exports.
 
 ### CRUD Endpoints
 
@@ -921,7 +921,7 @@ The `ExportCard` component now provides multi-select pickers for bank accounts a
 
 - **Purpose:** Build WHERE clause for transaction queries
 - **Support:** Now accepts `bankAccounts` (plural, exact IN clause) and `categoryIds` (plural, IN clause)
-- **Precedence:** `bankAccount` (singular ILIKE) still takes precedence when set, but plural `bankAccounts` is preferred by routes
+- **Precedence:** `bankAccount` (singular, case-insensitive `ilike()` match) still takes precedence when set, but plural `bankAccounts` is preferred by routes
 - **Whitespace handling:** Bank account IBANs trimmed; blank entries filtered out
 
 ### Query Parameter Contracts
@@ -1047,9 +1047,10 @@ returns a conflict.
 
 Eligible rows use grouped modern/legacy duplicate lookups, bulk canonical inserts and batched
 staging status writes. Bulk failures fall back to isolated per-row savepoints. Occurrence-aware
-fingerprints, source hashes and chunk commit boundaries are retained. Accounts are locked in
-sorted order and revalidated as active through commit. Query-count and elapsed-time measurements
-on real PostgreSQL remain pending; reduced source-level round trips are not a measured speedup.
+fingerprints, source hashes and chunk commit boundaries are retained. Accounts are revalidated as
+active inside each chunk's `BEGIN IMMEDIATE` write transaction, which holds the single writer, so
+no other writer can close them before the chunk commits. Query-count and elapsed-time measurements
+on a real database remain pending; reduced source-level round trips are not a measured speedup.
 
 Belfius sequence metadata survives staging and commit for same-day balance selection; see
 [[docs/adr/206-bank-chronology]]. Rollback rejects planned-execution links and requires reopening

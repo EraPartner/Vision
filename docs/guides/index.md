@@ -30,7 +30,7 @@ SORT title ASC
 - [[docs/guides/visual-learning|Understand Vision Visually]] - Conceptual diagrams and guided paths through the interactive flows
 
 - [[docs/guides/setup\|Setup Guide]] - Local development environment setup
-- [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] - Bundled PostgreSQL 18, Electron lifecycle, diagnostics, backup, and restore
+- [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] - SQLite database file, Electron lifecycle, diagnostics, backup, and restore
 - [[docs/guides/devcontainer\|Agent Sandbox Guide]] - Built-in Claude Code and Codex sandbox workflow
 - [[docs/guides/backend-configuration\|Backend Configuration]] - Config, logging, and database utilities
 

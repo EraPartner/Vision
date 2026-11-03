@@ -22,6 +22,12 @@ aliases: [native macOS runtime, Docker to native cutover, runtime provider]
 
 # ADR-113: Native macOS runtime with optional Docker provider
 
+> [!note] Superseded in part by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> the sentence that replacing PostgreSQL with SQLite is not acceptable no longer holds, and neither
+> does any PostgreSQL part (cluster, roles, payload and `pg_dump` backups). Vision stores its data
+> in one SQLite file that the backend opens in-process. The native runtime and its data-directory
+> isolation stay.
+
 > [!warning] Partially superseded
 > [[docs/adr/133-native-only-runtime-and-delivery|ADR-133]] retired the optional Docker provider,
 > importer, and rollback tooling on 2026-09-08. The native runtime, isolation, backup, and payload

@@ -2,8 +2,8 @@
 title: Research Feature
 type: feature
 status: active
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   - url-state
   - feature
@@ -157,7 +157,7 @@ The map is unit-testable in isolation (no I/O, no env reads; `isUsable` is injec
 `quotaGovernor.ts` tracks two token-bucket windows per provider:
 
 - **Per-minute (in-memory):** self-healing on restart.
-- **Per-day (persisted):** mirrored in memory, backed by the `provider_quota` PostgreSQL table via `providerQuotaRepository.ts`. Per-day persistence prevents a frequently-restarted backend from blowing a small daily cap (e.g. Alpha Vantage's ~25/day).
+- **Per-day (persisted):** mirrored in memory, backed by the `provider_quota` database table via `providerQuotaRepository.ts`. Per-day persistence prevents a frequently-restarted backend from blowing a small daily cap (e.g. Alpha Vantage's ~25/day).
 
 `PROVIDER_LIMITS` (as shipped):
 

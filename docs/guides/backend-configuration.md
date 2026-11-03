@@ -1,7 +1,7 @@
 ---
 title: Backend Configuration & Infrastructure
 type: guide
-date: 2026-10-20
+date: 2026-11-03
 tags:
   [guide, backend, configuration, logging, database, infrastructure, phase-1]
 status: active
@@ -49,10 +49,9 @@ offline, but receives `allowExternal: false`; the later online recovery pass per
     environment: string,       // ENVIRONMENT or NODE_ENV (default: development)
   },
   database: {
-    url: string,               // DATABASE_URL (default: postgresql://ftm_user:ftm_password@localhost:5432/...)
+    path: string,              // VISION_DATABASE_PATH (default: ./data/vision.sqlite3, development and test only)
+    lockTimeoutMs: number,     // VISION_DB_LOCK_TIMEOUT_MS (default: 60000)
     echo: boolean,             // DB_ECHO (default: false)
-    poolSize: number,          // DB_POOL_SIZE (default: 5)
-    maxOverflow: number,       // DB_MAX_OVERFLOW (default: 10)
   },
   api: {
     title: string,             // App title
@@ -154,26 +153,30 @@ Several services have been optimized to use `debug` level for high-frequency or 
 
 **Files:** [[apps/node-backend/src/main.ts]], [[apps/node-backend/src/database/migrate.ts]]
 
-The backend process connects to `DATABASE_URL` and waits for readiness. Native Electron manages its
-private PostgreSQL process and supplies that URL. In a custom source deployment the database
-lifecycle remains external to the backend.
+The backend opens the SQLite file named by `VISION_DATABASE_PATH` in-process; there is no database
+server or connection URL ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). Native Electron
+passes `<userData>/database/vision.sqlite3`. Outside development and test the backend refuses to
+start when `VISION_DATABASE_PATH` is not set.
 
 ### Startup Sequence
 
-1. Polls `checkConnection()` with exponential backoff (40 attempts, 50ms → 1000ms)
-2. Runs `runMigrations()` once a DB connection is available. Kysely's migrator applies pending
-   `db/migrations/` files in-process in one transaction, installing the `0001` baseline first on
-   an empty database. A database with application objects but no migration ledger is refused
-   ([[docs/adr/224-remove-alembic-adoption|ADR-224]]).
-3. Starts the HTTP server once migrations and role grants succeed
-4. Creates, indexes and refreshes materialized views (runtime artifacts) in the post-listen
-   warmup (`apps/node-backend/src/startup/warmup.ts`)
+1. Runs `runMigrations()` on the file. The SQLite migration runner applies pending
+   `db/migrations/` files in-process in one `BEGIN IMMEDIATE` transaction, installing the `0001`
+   baseline first on an empty database, and records each one in `vision_migrations`. It refuses a
+   database that has tables but no ledger, a migration this build does not know, or a changed
+   checksum. Before it changes a database that holds data, it writes a `VACUUM INTO` copy to
+   `pre-migration-backups/` next to the file.
+2. Opens the shared connections and checks them once with `checkConnection()`
+3. Starts the HTTP server
+4. Fills, indexes and refreshes the summary tables (the former materialized views) in the
+   post-listen warmup (`apps/node-backend/src/startup/warmup.ts`)
 
 ### Operational Model
 
-- Database lifecycle is managed by native Electron or by the source-deployment operator.
+- The database file lives in the application data directory under native Electron, or wherever
+  the source-deployment operator points `VISION_DATABASE_PATH`.
 - Backend process lifecycle is managed by Electron or the operator's process supervisor.
-- **Schema is managed exclusively by `db/migrations/`** through the Kysely migrator ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]], superseding the Alembic decision in [[docs/adr/027-alembic-single-source-of-schema|ADR-027]]) — the legacy `schemaInit.js` was deleted in Phase 1 (2026-04-21)
+- **Schema is managed exclusively by `db/migrations/`** through the SQLite migration runner ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]; [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] superseded the Alembic decision in [[docs/adr/027-alembic-single-source-of-schema|ADR-027]]) — the legacy `schemaInit.js` was deleted in Phase 1 (2026-04-21)
 - Migration commands are available via `bun run db:*` (see [[docs/reference/scripts|Scripts Reference]])
 
 ---

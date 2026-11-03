@@ -298,7 +298,7 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] drops the PostgreSQL server, roles, payload and
 CI install. The backend opens one SQLite file through `node:sqlite` with a single writer;
 decimals stay PostgreSQL-formatted text with `decimal.js` SQL functions, months keep
-PostgreSQL's clamp-to-month-end rule, migrations restart at `0001_sqlite_baseline` with checksums,
+PostgreSQL's clamp-to-month-end rule, migrations restart at `0001_baseline.sql` with checksums,
 pre-migration copies and a newer-database refusal, and a standalone script converts a 2.0.0 backup
 with per-table verification. Supersedes the PostgreSQL parts of ADR-113, ADR-226 and ADR-262.
 

@@ -1,7 +1,7 @@
 ---
 title: Scripts Reference
 type: reference
-date: 2026-10-28
+date: 2026-11-03
 tags:
   [
     reference,
@@ -41,7 +41,7 @@ Bun runs directly, for example `bun scripts/validate-locales.ts`. Run them with 
 
 The Electron shell in `packaging/electron/` is strict TypeScript compiled into
 `packaging/electron/out/` ([[docs/adr/196-electron-shell-typescript|ADR-196]]). The `dev`,
-`electron:dev`, `electron:prod`, `native:prepare`, `native:*smoke`, `demo:reset-native`
+`electron:dev`, `electron:prod`, `native:*smoke`, `demo:reset-native`
 and `test:electron` scripts run `bun packaging/electron/build.ts` first and then run the compiled JavaScript, for example
 `node packaging/electron/out/scripts/native-development.js` (compiled from `packaging/electron/scripts/native-development.ts`). The Electron package's own `start`,
 `prepare:*` and `dist*` scripts run `bun build.ts` first in the same way.
@@ -63,7 +63,6 @@ and `test:electron` scripts run `bun packaging/electron/build.ts` first and then
 | `build:dev`      | Build the development frontend                                            |
 | `dist`           | Build the frontend and Electron distribution                              |
 | `version:bump`   | Update versioned manifests atomically                                     |
-| `native:prepare` | Prepare the pinned PostgreSQL development payload                         |
 
 ## Static and generated checks
 
@@ -90,7 +89,6 @@ and `test:electron` scripts run `bun packaging/electron/build.ts` first and then
 | `check:workflow-supply-chain`| Enforce the GitHub workflow supply-chain policy    |
 | `todo:list`                  | Print the current TODO ledger                      |
 | `todo:check`                 | Verify TODO counts and ledger integrity            |
-| `db:lint`                    | Squawk lint of `db/migrations/*.sql` (destructive DDL) |
 | `search:ast`                 | Structural code search with ast-grep (`bun run search:ast -l ts -p 'sumMoney($$$)' apps`) |
 | `check`                      | Run the repository aggregate static and test gates |
 
@@ -99,45 +97,47 @@ and `test:electron` scripts run `bun packaging/electron/build.ts` first and then
 | Script                          | Purpose                                                                                                                        |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `test`                          | Backend Vitest suite                                                                                                           |
-| `test:frontend`                 | Build and run the full frontend Vitest suite against a disposable PostgreSQL 18 backend, including live API contracts          |
-| `test:watch`                    | Watch the backend suite against a disposable PostgreSQL 18 database, including CI performance probes                           |
+| `test:frontend`                 | Build the frontend, then run the full frontend Vitest suite against the production backend on a temporary SQLite database, including live API contracts |
+| `test:watch`                    | Watch the backend suite, including CI performance probes                                                                       |
 | `test:electron`                 | Build the Electron shell, then run its compiled `node:test` suites (`node --test 'packaging/electron/out/**/*.test.js'`)       |
 | `test:scripts`                  | Repository script tests (`bun test scripts/tests`; the jsdom flow-visualizer test runs under `node --test`)                    |
 | `test:packages`                 | Shared package Vitest suite, including the Belgian tax engine tests (`packages/shared-utils/tests`)                            |
-| `test:db`                       | Backend suite against a disposable native PostgreSQL 18 cluster                                                                |
-| `native:db-smoke`               | Native migration, dump/restore, and attachment smoke                                                                           |
-| `native:isolated-smoke`         | Full smoke with a disposable native cluster                                                                                    |
-| `native:smoke`                  | Offline disposable native backend, encrypted backup restore, and restore into a second fresh cluster (device move)             |
+| `native:isolated-smoke`         | Run `native:smoke` in a child process with a minimal environment and its own temporary application-data directory and SQLite database |
+| `native:smoke`                  | Offline disposable native backend on a temporary SQLite database, encrypted backup restore, and restore into a second fresh runtime (device move) |
 | `calibrate:category-outliers`   | Privacy-preserving threshold backtest against a local Vision API                                                               |
 | `evaluate:local-ai`             | Score a live Ollama model with fixed synthetic tool oracles                                                                    |
 
-`scripts/with-test-db.sh` ignores inherited database URLs by default. It creates a private native
-PostgreSQL 18 cluster with a generated password and SCRAM authentication, enables required
-extensions, migrates it, runs the backend suite (or the forwarded Vitest arguments), and removes it on exit. An already-disposable
-caller database requires `VISION_TEST_DB_USE_CALLER=1`. It never uses the user's Vision database by
-default. `VISION_TEST_DB_VERIFY_CODEGEN=1` additionally runs `bun run db:codegen --verify` after the
-migration so `schema.generated.ts` cannot drift from the migrated schema; CI sets it.
+The backend suite needs no database server. A Vitest global setup
+(`apps/node-backend/tests/setup/sqliteTemplate.ts`) migrates one SQLite template file per run, and
+every test file gets its own copy of it (`tests/setup/sqliteDatabase.ts`), so database tests always
+run. `tests/database/codegen.test.ts` fails when `schema.generated.ts` drifts from the migrated
+schema. `test:frontend` runs `scripts/run-frontend-tests.sh`, which starts the backend through
+`.github/scripts/with-native-stack.sh` on a fresh SQLite file in a temporary directory.
 
 ## Database
 
-All database scripts use the Kysely migrator in `apps/node-backend/src/database/migrate.ts`
-([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]). They read `DATABASE_URL`
-(falling back to `config/.env.local`) and use `DATABASE_URL_MIGRATIONS` as the owner role when set.
+The `db:migrate`, `db:migrate:down`, `db:status` and `db:new` scripts run
+`apps/node-backend/scripts/db-migrate.ts`, which uses the migration runner in
+`apps/node-backend/src/database/migrate.ts`, the same code the app runs on boot
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). They open the SQLite file named by
+`VISION_DATABASE_PATH` (falling back to `config/.env.local`). Before the runner migrates a database
+that already holds data, it writes a `VACUUM INTO` copy to `pre-migration-backups/` next to the
+database and keeps the newest three.
 
 | Script            | Purpose                                                                                              |
 | ----------------- | ---------------------------------------------------------------------------------------------------- |
-| `db:migrate`      | Apply every pending migration in `db/migrations/`; refuses objects without a migration ledger           |
+| `db:migrate`      | Apply every pending migration in `db/migrations/` in one transaction; refuses a database with tables but no ledger, a migration this build does not know, or a changed migration |
 | `db:migrate:down` | Revert the latest migration; refuses when it has no `.down.sql`                                      |
 | `db:status`       | List migrations and when each was applied                                                            |
 | `db:new`          | Create `db/migrations/NNNN_<name>.sql` (`bun run db:new -- <name>`)                                  |
-| `db:lint`         | Squawk lint of migration SQL with `config/squawk.toml`                                               |
-| `db:codegen`      | Regenerate `apps/node-backend/src/database/schema.generated.ts` from `.kysely-codegenrc.json`       |
-| `db:index-stats`  | Inspect index statistics                                                                             |
+| `db:codegen`      | Regenerate `schema.generated.ts` and `schemaMap.generated.ts` in `apps/node-backend/src/database/` from an in-memory database built by the migrations, with `apps/node-backend/db-codegen.config.json`; `--verify` exits 1 on drift |
+| `db:index-stats`  | List the indexes of the `transactions` table with their columns, and their sizes when the SQLite build has `dbstat` |
+| `transition:v2`   | Convert a Vision 2.0 (PostgreSQL) backup into the SQLite database once (`bun run transition:v2 -- <backup>`); see [[docs/guides/sqlite-transition\|Moving Vision 2.0 data to SQLite]] |
 
-`apps/node-backend/scripts/postgres-mcp.ts` is not a package script. It is the read-only
-PostgreSQL MCP server that `.mcp.json` registers for Claude Code; it reads only
-`VISION_MCP_DATABASE_URL` and refuses non-loopback hosts
-([[docs/adr/227-claude-code-static-analysis-aids|ADR-227]]).
+`apps/node-backend/scripts/sqlite-mcp.ts` is not a package script. It is the read-only SQLite MCP
+server that `.mcp.json` registers for Claude Code as `vision-sqlite`; it opens only the file named
+by `VISION_MCP_DATABASE_PATH`, never `VISION_DATABASE_PATH`, read-only and with
+`PRAGMA query_only = ON` ([[docs/adr/227-claude-code-static-analysis-aids|ADR-227]]).
 `apps/node-backend/scripts/typescript-mcp.ts` is the TypeScript navigation MCP server that
 `.mcp.json` registers next to it; it wraps the repository's own `tsserver`
 ([[docs/adr/228-typescript-navigation-mcp|ADR-228]]).
@@ -159,7 +159,6 @@ then reports only aggregate sensitivity and timing counts. It never writes to th
 ```bash
 # Daily native development
 bun run install:electron
-bun run native:prepare
 bun run dev
 
 # Focused verification

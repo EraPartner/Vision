@@ -2,8 +2,8 @@
 title: Reports API
 type: endpoint
 status: active
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   - api
   - reports
@@ -239,8 +239,8 @@ Generate a theme-aware financial PDF report with custom section selection and pe
 | `period`               | object        | `{ kind: "rolling", months: 12 }` | Period descriptor (see Period Options below)                                                                                                  |
 | `sections`             | array         | `[]` (uses defaults)              | List of section IDs to include; empty = default sections                                                                                      |
 | `theme`                | object        | `{ mode: "light" }`                              | Theme tokens (HSL values); omit to use defaults                                                                                               |
-| `excludedCategoryIds`  | integer array | `[]`                              | Category IDs to exclude from filtered view; each ID must be in PostgreSQL `int4` range 1..2,147,483,647 (generates filter impact comparison)  |
-| `excludedRecipientIds` | integer array | `[]`                              | Recipient IDs to exclude from filtered view; each ID must be in PostgreSQL `int4` range 1..2,147,483,647 (generates filter impact comparison) |
+| `excludedCategoryIds`  | integer array | `[]`                              | Category IDs to exclude from filtered view; each ID must be in the `int4` range 1..2,147,483,647 (generates filter impact comparison)  |
+| `excludedRecipientIds` | integer array | `[]`                              | Recipient IDs to exclude from filtered view; each ID must be in the `int4` range 1..2,147,483,647 (generates filter impact comparison) |
 
 **Validation and defaults**
 

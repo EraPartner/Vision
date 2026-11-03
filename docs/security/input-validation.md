@@ -2,8 +2,8 @@
 title: Input Validation
 type: security
 status: active
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     security,
@@ -82,7 +82,7 @@ types also reject values that were coerced before, for example a string `"false"
 field.
 
 Data Vision produced itself is checked separately: bank and portfolio adapter output, saved parser
-configs read back from the database, and the PostgreSQL rows of almost every repository and
+configs read back from the database, and the database rows of almost every repository and
 service read ([[docs/adr/194-runtime-contracts-completion|ADR-194]]). A mismatch there is a Vision
 bug, never a 400, and fallback paths rethrow it rather than hide it. It throws in every environment: tests and development always, and production through
 `PRODUCTION_DATA_CONTRACT_MODE` in `lib/dataContract.ts`, which is `"throw"` (the owner chose to
@@ -108,7 +108,7 @@ validateId(value, (fieldName = "id"), (max = MAX_INT32_ID));
 > [!warning] Breaking change (2026-08-11) — `"12abc"` no longer resolves to id 12
 > `validateId` was `parseInt`-based, so it took the _leading digits of anything_: `DELETE /api/research/mappings/12abc` deleted mapping **12**, `"12.5"` resolved to 12 and `"1e3"` to 1. A malformed id silently addressed a record the client never named, instead of failing. It is now a strict digit-string parse, and all such inputs return **400 `VALIDATION_ERROR`**.
 >
-> Note that a bare `Number()` would _not_ have been a correct fix: it accepts `"0x10"` as 16, turns `"1e3"` into 1000 (a _different_ wrong record) and leaves `"12.5"` a non-integer that reaches Postgres.
+> Note that a bare `Number()` would _not_ have been a correct fix: it accepts `"0x10"` as 16, turns `"1e3"` into 1000 (a _different_ wrong record) and leaves `"12.5"` a non-integer that reaches the database.
 >
 > This tightens **every** route behind `validateIdParam` / `validateIntParam` / `assertOptionalId` and the `validatedIdField` zod adapter in `splits.ts`. It only narrows what is accepted: every id that a well-behaved client sends (a plain integer) behaves exactly as before, and `openapi.yaml` already typed these params `integer` — the implementation now conforms to the published contract rather than deviating from it.
 
@@ -155,7 +155,7 @@ const accountId = assertOptionalId(req.query.account_id, "account_id");
 
 - Absent or empty (`undefined` / `null` / `''`) returns `null`, so the caller can treat the filter as unset
 - Anything else must satisfy `validateId`; otherwise a `ValidationError` (400) is raised **before** the value reaches the database layer
-- This is what keeps `?account_id=abc` a 400 rather than a `NaN` parameter that Postgres rejects with `22P02` as a 500
+- This is what keeps `?account_id=abc` a 400 rather than a `NaN` parameter that reaches the database layer
 
 **Call sites:** `routes/transactions.ts` (export filters), `routes/info/statistics.ts`.
 
@@ -276,7 +276,7 @@ The four scalar id filters on the same endpoints — `transaction_id`, `category
 `investment_ids` uses the same wrapper shape in `investmentService.ts`, with one deliberate
 difference: it is **required**, not optional, so absent/empty is the endpoint's pre-existing
 `400 investment_ids is required` rather than "no filter". Its repository-side twin in
-`portfolioTxRepo.reads.ts` (`normalizeInvestmentIds`, feeding both `= ANY($1::int[])` predicates)
+`portfolioTxRepo.reads.ts` (`normalizeInvestmentIds`, feeding both `IN (SELECT value FROM json_each(?))` predicates)
 also delegates to `validateId` now, but keeps dropping rather than throwing — that layer has
 always been a silent filter, and the throwing guard belongs where a 400 can reach the caller.
 
@@ -493,16 +493,16 @@ parseOptionalPagination(query, { defaultLimit, maxLimit })
 
 For operations on columns that may not exist in all schema versions (e.g., `planned_transactions.recipient_id`), Vision uses a two-step approach:
 
-1. **Schema Validation:** Query `information_schema.columns` to check column existence before attempting to update it
-2. **Bound Update:** If the column exists, run a Kysely query-builder UPDATE whose ID array is a bound parameter in `ANY(...::int[])`
+1. **Schema Validation:** Query `pragma_table_info('<table>')` to check column existence before attempting to update it
+2. **Bound Update:** If the column exists, run a Kysely query-builder UPDATE whose ID array is one bound JSON parameter in `IN (SELECT value FROM json_each(?))`
 
 **Example:** Recipient merge service (`recipientMergeService.ts` calling
 `apps/node-backend/src/repositories/plannedTransactionRepository.ts`)
 
 ```typescript
 // Step 1: Check if column exists (safe, no data modification)
-const { rows } = await sql`SELECT 1 FROM information_schema.columns
-   WHERE table_name = 'planned_transactions' AND column_name = 'recipient_id'
+const { rows } = await sql`SELECT 1 FROM pragma_table_info('planned_transactions')
+   WHERE name = 'recipient_id'
    LIMIT 1`.execute(db);
 
 // Step 2: Only run UPDATE if column exists (values are bound parameters)
@@ -510,7 +510,7 @@ if (rows.length > 0) {
   await db
     .updateTable("planned_transactions")
     .set({ recipient_id: primaryId })
-    .where("recipient_id", "=", sql<RecipientId>`ANY(${aliasIds}::int[])`)
+    .where(sql<boolean>`recipient_id IN (SELECT value FROM json_each(${JSON.stringify(aliasIds)}))`)
     .executeTakeFirst();
 }
 ```
@@ -643,15 +643,15 @@ The shared boundary validates these common shapes before any repository write:
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `type`                                                                 | Canonical `PORTFOLIO_TXN_TYPES` value                                                                                                                                                                  |
 | `date`, `recurrence_end_date`                                          | `YYYY-MM-DD`; transaction `date` cannot be cleared, while recurrence end date can                                                                                                                      |
-| `amount`, `units`, `price_per_unit`, `fees`, `taxes`, `fx_rate_to_eur` | Finite JSON number or decimal numeric string (including exponent notation) within the field's PostgreSQL-safe range; strings normalize to numbers, while booleans, arrays, hex and padded forms reject |
+| `amount`, `units`, `price_per_unit`, `fees`, `taxes`, `fx_rate_to_eur` | Finite JSON number or decimal numeric string (including exponent notation) within the integer-digit capacity of the field's `NUMERIC(p,s)` column; strings normalize to numbers, while booleans, arrays, hex and padded forms reject |
 | `currency`                                                             | Three-letter ISO shape, normalized to uppercase; create may fall back when empty, PATCH cannot clear it                                                                                                |
 | `note`                                                                 | String or `null`                                                                                                                                                                                       |
 | `is_recurring`                                                         | Boolean, without string or number coercion                                                                                                                                                             |
 | `recurrence_interval`                                                  | Canonical `PORTFOLIO_RECURRENCE_INTERVALS` value or a clear value                                                                                                                                      |
 | `account_id`                                                           | Existing `validateId` path described below; `null` retains its unassign meaning on PATCH                                                                                                               |
 
-Malformed values now return **400 `VALIDATION_ERROR`** instead of reaching PostgreSQL as a cast,
-enum, NOT NULL, or numeric-range failure. The schema is loose so unknown fields retain the existing
+Malformed values now return **400 `VALIDATION_ERROR`** instead of reaching the database as a
+type-check, enum, NOT NULL, or numeric-range failure. The schema is loose so unknown fields retain the existing
 repository-allowlist behavior; this change closes validation drift without changing the write
 field vocabulary.
 

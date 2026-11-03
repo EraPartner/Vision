@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/accounts
 description: Account entity management (ADR-088) — the user's own accounts spanning budgeting cash, portfolio holdings, and liabilities
-date: 2026-10-21
-updated: 2026-10-21
+date: 2026-11-03
+updated: 2026-11-03
 tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve, rename-propagation, lifecycle, normalized-identity]
 status: active
 aliases: [accounts-api, account-management, account-entity]
@@ -51,8 +51,8 @@ while `total` stays the full match count.
 **stored** exchange rate (`services/currency/latestRateConversion.ts`), the same rates
 `GET /api/accounts/totals` uses. Since 2026-10-19 a partition whose currency has no stored rate is
 left out and listed in `unconverted_currencies` (`balance_incomplete: true`); before, an empty or
-partial rate table fell back to the hard-coded `FALLBACK_RATES` constants. Covered on real
-PostgreSQL by [[apps/node-backend/tests/accountTotals.db.test.ts]].
+partial rate table fell back to the hard-coded `FALLBACK_RATES` constants. Covered against a real
+SQLite database by [[apps/node-backend/tests/accountTotals.db.test.ts]].
 
 ### GET /api/accounts/totals
 
@@ -86,7 +86,7 @@ through `useAccountTotals(currency)` in `apps/frontend/src/hooks/useAccounts.ts`
   Liabilities) with the same unconverted counters.
 - `accounts[]` carries `{ id, group, converted_balance, unconverted_currencies }` per account.
 
-Covered on real PostgreSQL by [[apps/node-backend/tests/accountTotals.db.test.ts]].
+Covered against a real SQLite database by [[apps/node-backend/tests/accountTotals.db.test.ts]].
 
 ### GET /api/accounts/:id
 
@@ -150,14 +150,16 @@ account`.
   to 400 `funding_account_id does not reference an existing account` rather than surfacing as a
   raw 500.
 
-Create, PATCH, delete, and merge operations that can change a funding edge take the same
-transaction-scoped PostgreSQL advisory lock before validation. Validation and mutation therefore
-observe one serialized funding graph; a concurrent PATCH cannot apply a stale, previously valid
-edge after a merge repoints one of its ancestors. The raw admin database editor takes this lock
-before any `accounts` row lock too. It still bypasses the validation rules above by design, so an
-administrator can create an invalid edge, but it cannot race an API mutation outside the shared
-write order. If a writer cannot acquire the lock before the database statement timeout, the API
-returns retryable `503 SERVICE_UNAVAILABLE` instead of a generic internal error.
+Create, PATCH, delete, and merge operations that can change a funding edge validate and write
+inside one `BEGIN IMMEDIATE` write transaction on the single database writer
+(`withFundingGraphTransaction` in `lib/accountFundingGraphLock.ts`,
+[[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). Validation and mutation therefore observe
+one serialized funding graph; a concurrent PATCH cannot apply a stale, previously valid edge after
+a merge repoints one of its ancestors. The raw admin database editor writes `accounts` rows in a
+write transaction too. It still bypasses the validation rules above by design, so an administrator
+can create an invalid edge, but it cannot race an API mutation outside the shared write order. If
+the wait for the write lock times out (SQLSTATE `55P03` after `VISION_DB_LOCK_TIMEOUT_MS`, default
+60000 ms), the API returns retryable `503 SERVICE_UNAVAILABLE` instead of a generic internal error.
 
 Lifecycle ([[docs/adr/088-account-entity|ADR-088 addendum]], D5): `{ is_active: false }` stamps
 `closed_at` server-side (kept on redundant re-archives); `{ is_active: true }` clears it.
@@ -217,7 +219,9 @@ therefore surface a stale-statement drift or later future-dated activity for exp
 Returns `204 No Content` with an empty body on success. Delete is only possible with zero referencing rows (the `account_id` FKs are
 `ON DELETE RESTRICT`): an account that still has transactions, planned transactions, or portfolio
 lots returns `409` with a message routing the caller to **close** the account instead (lifecycle
-D5: active → closed → only-if-empty deleted). The UI opens `CloseAccountDialog` on that 409.
+D5: active → closed → only-if-empty deleted). SQLite reports the `RESTRICT` refusal as SQLSTATE
+`23001`; the service maps it, and `23503`, to the 409. The UI opens `CloseAccountDialog` on that
+409.
 `404` if not found.
 
 ### POST /api/accounts/:id/merge
@@ -242,8 +246,7 @@ after the ADR-088 adapter change.
 Before any repoint, the service evaluates the survivor's projected funding chain with every source
 reference replaced by the survivor. A direct self-reference or longer cycle rejects the whole merge
 with `400 Merging these accounts would create a funding-account cycle`; no references move and no
-source is deleted. The shared funding-graph advisory lock covers this validation and every repoint
-in the same transaction. A pre-existing cycle that the merge does not create remains outside this
+source is deleted. This validation and every repoint run in the same write transaction. A pre-existing cycle that the merge does not create remains outside this
 guard.
 
 **Overlapping-stamp guard (WP-A3, §1 F2):** per-row `balance` stamps are per-source-bank running

@@ -2,10 +2,10 @@
 title: Performance Documentation Index
 type: performance-index
 status: active
-date: 2026-10-28
-last_modified: 2026-10-28
+date: 2026-11-03
+last_modified: 2026-11-03
 tags: [performance, index, optimization, startup, offline-resilience]
-description: Performance optimization strategies including caching, materialized views, chart downsampling, and offline-aware startup optimization.
+description: Performance optimization strategies including caching, summary tables (the former materialized views), chart downsampling, and offline-aware startup optimization.
 aliases: [performance, optimization, speed]
 ---
 
@@ -79,15 +79,23 @@ boot graph by explicit product decision.
 
 ## PostgreSQL measurement evidence
 
+> [!note] Measured before ADR-263
+> The numbers and plan shapes in this section come from the PostgreSQL 18.6 build, before
+> [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]. The harness now runs on SQLite, and this
+> page records no SQLite run yet.
+
 The opt-in
 [[apps/node-backend/tests/transactionPerformanceMeasurements.db.test.ts|measurement harness]]
-creates a disposable corpus and runs the exact production query shapes with
-`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`, and rolls back both the data and the temporary index
-drop. It is intentionally excluded from ordinary test runs because it inserts 120,000 rows and is
-a measurement rather than a stable wall-clock gate.
+seeds a 120,000-row corpus in its own disposable test database and runs the exact production
+query shapes. SQLite has no `EXPLAIN ANALYZE`, so the harness times each statement on the driver
+and logs the `EXPLAIN QUERY PLAN` tree as JSON. It drops the stamped-balance index only inside a
+rolled-back transaction. Ordinary `bun run test` skips it; it runs when
+`VISION_RUN_PERFORMANCE_PROBES=1` is set, which CI's `Test (Backend)` job and `bun run test:watch`
+do.
 
 ```bash
-VISION_RUN_PERFORMANCE_PROBES=1 bun run test:db \
+cd apps/node-backend
+VISION_RUN_PERFORMANCE_PROBES=1 bunx vitest run \
   tests/transactionPerformanceMeasurements.db.test.ts --reporter=verbose
 ```
 
@@ -152,7 +160,7 @@ semantics until production measurements justify extra complexity:
   preserves sticky labels, keyboard controls, and exact drill-through links.
 - Transaction sorts by memo, currency, effective recipient name, or effective
   category label retain their expression sort over the filtered result for now.
-  The 2026-09-08 PostgreSQL measurement crossed the 250 ms p95 design threshold,
+  The 2026-09-08 PostgreSQL measurement (before ADR-263) crossed the 250 ms p95 design threshold,
   so the exact indexed-key comparisons described above are now justified. Do
   not deploy them until their plan improvement and write/storage cost are
   measured and sort-aware application telemetry establishes how often these
@@ -183,7 +191,7 @@ Vision implements a multi-layer caching strategy:
 1. **Browser Cache** - Static assets and API responses
 2. **React Query Cache** - Client-side data caching
 3. **In-Memory Cache** - Exchange rates and price feeds (backend)
-4. **Materialized Views** - Pre-computed aggregations (PostgreSQL)
+4. **Summary tables** - Pre-computed aggregations (`mv_monthly_summary`, `mv_category_totals`, refilled by the backend)
 5. **Read-Through Cache** - Asset price history with DB fallback
 6. **Performance Snapshots** - Daily portfolio performance cache
 

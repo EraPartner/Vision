@@ -4,9 +4,9 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
 description: Portfolio CSV, Saxo XLSX and IBKR funding XLS/XLSX staging, cross-export deduplication, one full-history reviewed reconciliation, reversible adoption receipts, and dated custody/unit adjustments with original basis
-date: 2026-10-26
-updated: 2026-10-26
-last_modified: 2026-10-21
+date: 2026-11-03
+updated: 2026-11-03
+last_modified: 2026-11-03
 tags:
   [
     api,
@@ -583,11 +583,11 @@ requires application rollback first; see [[docs/adr/177-reviewed-history-reconci
 When the pipeline detects unresolved instruments (symbol not found in `investments`) it leaves the batch in `awaiting_review` and the SSE stream emits a `review_required` event. These endpoints let the client inspect, assign instruments, and commit.
 
 > [!warning] Batch/row id contract (2026-08-11 — breaking for malformed ids)
-> Every `:id` and `:rowId` on `/api/portfolio/import/batches/*` accepts **only** a plain base-10 integer in 1..9,007,199,254,740,991 (`portfolio_import_batches.id` and `portfolio_import_staging_rows.id` are `BIGSERIAL`, so the ceiling is _not_ `int32`). Anything else returns `400 VALIDATION_ERROR`.
+> Every `:id` and `:rowId` on `/api/portfolio/import/batches/*` accepts **only** a plain base-10 integer in 1..9,007,199,254,740,991 (`portfolio_import_batches.id` and `portfolio_import_staging_rows.id` are `BIGINT` keys from a sequence, so the ceiling is _not_ `int32`). Anything else returns `400 VALIDATION_ERROR`.
 >
 > These ids were parsed with a bare `Number()`, which silently addressed a **different batch** on `"0x10"` → 16, `"1e3"` → 1000 and `"9007199254740993"` → …992, and additionally accepted `"+5"`, `" 12 "` and `"12.0"`. The parser now delegates to the shared `validateId` (`lib/importBatchIds.ts`, shared with the transaction import router). Clients sending plain integers are unaffected. Full accept set: [[docs/security/input-validation#coercedIdSchema (import batch/row ids)|Input Validation]].
 >
-> As of 2026-08-22, `openapi.yaml` publishes these path parameters as `integer` / `int64` with the same positive safe-integer range. Generated TypeScript clients therefore expose `id` and `rowId` path arguments as `number`, matching runtime validation and the shipped frontend callers. This is a breaking schema correction for external spec consumers that generated string-valued path arguments; runtime behavior did not change. `PortfolioImportBatch.id` in batch list/detail responses remains a string because node-postgres returns raw `BIGINT` values as strings at that repository boundary.
+> As of 2026-08-22, `openapi.yaml` publishes these path parameters as `integer` / `int64` with the same positive safe-integer range. Generated TypeScript clients therefore expose `id` and `rowId` path arguments as `number`, matching runtime validation and the shipped frontend callers. This is a breaking schema correction for external spec consumers that generated string-valued path arguments; runtime behavior did not change. `PortfolioImportBatch.id` in batch list/detail responses remains a string because the SQLite driver returns `BIGINT` columns as decimal strings at that repository boundary, as node-postgres did before [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]].
 
 ### GET /api/portfolio/import/batches/:id/preview
 
@@ -711,8 +711,9 @@ generic batch that had no account remains unassigned.
 On a recommit, providing an account also resets cash rows whose exact stored error is
 `brokerage cash row requires a batch account` to `matched` and decrements `rows_error`; other cash
 errors are not cleared. The review page requires this account selection when it displays that
-repairable error. The service holds the batch row lock from account selection through commit, so
-concurrent recommits cannot change the selected account between validation and insertion.
+repairable error. The service runs account selection through commit in one `BEGIN IMMEDIATE` transaction on the
+single writer, so concurrent recommits cannot change the selected account between validation and
+insertion.
 Because the whole batch inherits it, the value is validated with `validateId` before the account
 existence check rather than coerced: `"1e3"` used to arrive as the real account 1000, pass the
 existence check and stamp every committed lot with it. Malformed values now return **400**.

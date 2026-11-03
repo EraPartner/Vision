@@ -10,6 +10,11 @@ aliases: [analysis executor, saved analyses, manual analysis workspace]
 
 # ADR-144: Isolated Manual Analysis Workspace
 
+> [!note] Superseded in part by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> custom SQL runs in a worker sandbox with an in-memory SQLite database that holds copies of the
+> named datasets, not on a least-privilege PostgreSQL role. The isolation from application tables,
+> the 5 s limit and the saved-analysis model stay.
+
 ## Status
 
 Accepted

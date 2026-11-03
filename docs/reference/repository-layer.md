@@ -2,9 +2,9 @@
 title: Repository Layer Reference
 type: reference
 status: active
-date: 2026-10-28
-updated: 2026-10-28
-tags: [backend, repositories, reference, data-access, postgresql, phase-0, phase-1, phase-3, phase-3-1, phase-9, phase-q, decimal, money, recipient-groups]
+date: 2026-11-03
+updated: 2026-11-03
+tags: [backend, repositories, reference, data-access, sqlite, phase-0, phase-1, phase-3, phase-3-1, phase-9, phase-q, decimal, money, recipient-groups]
 aliases: [repositories, repository layer, data access, DAL, database access]
 description: Complete reference for all 21 backend repository domains (plus infoRepository's 7 sub-modules and portfolioTransactionRepository's 3 split files). Phase 3.1: infoRepository split into 7 domain sub-modules with batch FX optimization. Phase Q: transactionRepository supports recipientGroupId filtering via filterBuilder.
 related_code: ["apps/node-backend/src/repositories/"]
@@ -25,10 +25,10 @@ The repository layer is the lowest layer in Vision's [[docs/adr/006-three-layer-
 Service Layer (business logic)
         │
         ▼
-   Repository Layer ←── db.ts (Kysely builder) → connection.ts query() (PostgreSQL pool)
+   Repository Layer ←── db.ts (Kysely builder) → connection.ts query() (SQLite writer and reader)
         │
         ▼
-   PostgreSQL Database
+   SQLite database file (vision.sqlite3)
 ```
 
 **Design principles:**
@@ -52,9 +52,9 @@ Service Layer (business logic)
   [[docs/reference/database-query-patterns#Row contracts (ADR-193)|Row contracts]] and
   [[docs/adr/193-zod-runtime-contracts|ADR-193]].
 
-**Phase 0+ Note:** A few hot-path queries compile their Kysely query and run it through `queryPrepared()` for plan caching, for example `transactionRepository.getById` (statement name `'tx_get_by_id'`) and the statistics queries in `infoRepositoryStatistics.ts`. See `apps/node-backend/src/database/connection.ts` for the implementation and [[docs/reference/database-query-patterns|Database Query Patterns]] for usage guidelines.
+**Phase 0+ Note:** A few hot-path queries compile their Kysely query and run it through `queryPrepared()`, for example `transactionRepository.getById` (statement name `'tx_get_by_id'`) and the statistics queries in `infoRepositoryStatistics.ts`. On SQLite the name is ignored: `query()` itself keeps up to 400 prepared statements per connection, keyed by SQL text. See `apps/node-backend/src/database/connection.ts` for the implementation and [[docs/reference/database-query-patterns|Database Query Patterns]] for usage guidelines.
 
-**Phase 9+ Note — Decimal Enforcement (Mandatory):** All repositories returning monetary values must coerce NUMERIC/DECIMAL columns on emit to eliminate IEEE 754 floating-point drift (node-postgres returns NUMERIC as JS strings; no global type parser is set deliberately to avoid loss in the decimal.ts pipeline). Two helpers in `packages/shared-utils/src/money.ts` (re-exported via `apps/node-backend/src/lib/money.ts`) cover the boundary:
+**Phase 9+ Note — Decimal Enforcement (Mandatory):** All repositories returning monetary values must coerce NUMERIC/DECIMAL columns on emit to eliminate IEEE 754 floating-point drift (the SQLite driver returns `DECIMAL_TEXT` columns as JS strings, as node-postgres returned NUMERIC, so nothing is lost before the decimal.ts pipeline). Two helpers in `packages/shared-utils/src/money.ts` (re-exported via `apps/node-backend/src/lib/money.ts`) cover the boundary:
 
 - `numericColumn(v)` — converts a single NUMERIC value to number; `null`/`undefined` pass through unchanged; `''` → `undefined`
 - `coerceNumericFields(row, fields)` — shallow-copy coercion of named columns via `numericColumn`; no-op on nullish rows
@@ -336,7 +336,7 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 ### Key Query Patterns
 
 - **Owed Aggregation:** SQL returns aggregate/detail rows; `splitService` performs money-safe projections and remaining-balance calculations
-- **Client-aware primitives:** Row locks, inserts, conditional settlement, and audit inserts accept a transaction client so the service can make each lifecycle mutation atomic
+- **Client-aware primitives:** The payment-cap read, inserts, conditional settlement, and audit inserts accept a transaction client so the service can make each lifecycle mutation atomic
 - **Partial Payments:** Multiple payments per split tracked in `split_payments` table
 
 ### Dependencies
@@ -477,11 +477,11 @@ The main `infoRepository.ts` file:
 | `getAverageVsCurrentSpending` | monthlyRepository           | `() => Promise<...>`                          | Average vs. current spending     |
 | `getCashflowComparison`       | monthlyRepository           | `() => Promise<...>`                          | Cashflow period comparison       |
 | `getPlannedExpensesNextMonth` | plannedRepository           | `() => Promise<...>`                          | Planned expenses forecast        |
-| `clearMvCache`                | helpers                     | `() => void`                                  | Clear materialized view cache    |
+| `clearMvCache`                | helpers                     | `() => void`                                  | Clear the summary-table availability cache |
 
 ### Key Query Patterns (Unified)
 
-- **Materialized Views:** All sub-repos read from `monthly_summaries_mv`, `category_totals_mv`, `daily_cashflow_mv`, `bank_balances_mv`
+- **Summary tables:** The monthly and statistics fast paths read `mv_monthly_summary` and `mv_category_totals` when `mvAvailable()` reports them filled, and fall back to live SQL otherwise
 - **FX Conversion:** Multi-currency endpoints support `targetCurrency` parameter with date-aware historical rate fallback
 - **Batch FX Optimization (Phase 3.1):** `batchConvertGroupsWithHistoricalRateFallback()` helper in `infoRepositoryHelpers.ts` combines N row groups into 1 `convertRowsToEur` call, eliminating redundant `exchange_rates` queries per group
 - **Parallel Query Execution:** `Promise.all` for independent queries (`getMonthlyFinancialSummary`, `getCashflowComparison`, `getBankBalances`, `getAverageVsCurrentSpending`)
@@ -502,7 +502,7 @@ The main `infoRepository.ts` file:
 ## Repository Dependency Map
 
 ```
-database/db.ts (Kysely builder) ──→ connection.ts query() (PostgreSQL pool)
+database/db.ts (Kysely builder) ──→ connection.ts query() (SQLite writer and reader)
     │
     ├── transactionRepository
     ├── recipientRepository ──→ textNormalization

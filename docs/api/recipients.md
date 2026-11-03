@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/recipients
 description: Recipient (payee/payer) management with atomic merge and normalization-based matching
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
 tags: [api, recipients, payees, merge, atomic, phase-6, recipient-clusters]
 status: active
 aliases: [recipients-api, payee, payer, counterparty, recipient-management]
@@ -77,8 +77,9 @@ use the default.
 ```
 
 `name` and `search` use Unicode case-insensitive matching, including accented upper/lowercase
-pairs on native C-locale clusters. PostgreSQL 18's `pg_catalog.pg_unicode_fast` is applied to
-search expressions only. Accents are not removed. Response shape, stored names and sorting are
+pairs. Vision's `ilike()` folds ASCII only, so the repository turns the pattern into a `REGEXP` that
+matches what PostgreSQL 18's `pg_unicode_fast` ILIKE matched; the three Greek sigmas and `İ`
+(U+0130) are the known differences. Accents are not removed. Response shape, stored names and sorting are
 unchanged; no schema migration is required.
 
 Implementation note:
@@ -116,9 +117,9 @@ rename whose normalized name is `system` returns `400 VALIDATION_ERROR`; it cann
 inactive system recipient. Concurrent create-or-get misses use a conflict-safe upsert that returns
 the winning row, so a committed conflict cannot be followed by a transient “not found” response.
 
-Server flows that need the system recipient follow one lock order: account first, then recipient.
-No recipient-owned flow acquires an account lock after locking a recipient. This prevents a reverse
-accounts-to-recipients lock edge from forming a deadlock cycle.
+Server flows that need the system recipient run in one `BEGIN IMMEDIATE` transaction on the single
+writer connection. Write transactions never interleave, so these flows need no lock order and
+cannot form a deadlock cycle ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]).
 
 The response data includes the recipient fields plus `created` and `links`.
 

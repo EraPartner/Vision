@@ -2,14 +2,14 @@
 title: Troubleshooting & FAQ
 type: reference
 status: active
-date: 2026-10-20
+date: 2026-11-03
 tags:
   [
     troubleshooting,
     faq,
     native-runtime,
     electron,
-    postgresql,
+    sqlite,
     migrations,
     backup,
     keychain,
@@ -22,24 +22,32 @@ aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
 
 ## Native startup
 
-### PostgreSQL does not start
+### The database does not open
 
-1. Open logs from the recovery screen and inspect `postgres.log` and `backend.log`.
-2. Check whether another process owns the configured loopback PostgreSQL port. Vision will not
-   connect to an unknown listener.
-3. If payload verification fails, reinstall the same Vision release. Runtime data and attachments
+Vision has no database server. The backend opens `<userData>/database/vision.sqlite3` itself
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]).
+
+1. Open logs from the recovery screen and inspect `backend.log`
+   (`native/<runtime id>/logs/backend.log`).
+2. If the dialog says Vision found data from Vision 2.0 (`LEGACY_POSTGRES_DATA`), the old
+   PostgreSQL data is still in `native/vision/postgres/data` and nothing was changed. Follow
+   [[docs/guides/sqlite-transition|Moving Vision 2.0 data to SQLite]].
+3. If the log says the SQLite library is too old, the Mac needs macOS 13 or later (SQLite 3.39.0
+   or later).
+4. If payload verification fails, reinstall the same Vision release. Runtime data and attachments
    live outside `Vision.app` and must not be deleted.
-4. From a prepared checkout, run `bun run native:db-smoke` and
-   `bun run native:isolated-smoke`.
+5. From a prepared checkout, run `bun run native:isolated-smoke`.
 
 Do not reset the database merely to make startup succeed.
 
 ### Database connection refused
 
-- For Electron, inspect `native/vision/logs/postgres.log` and do not print `runtime.env`.
-- For source development, stop the launcher cleanly, check port ownership, then rerun `bun run dev`.
-- For a backend-only source run, supply explicit `DATABASE_URL` and
-  `DATABASE_URL_MIGRATIONS` values through the documented environment layering.
+- For Electron, inspect `native/vision/logs/backend.log` and do not print `runtime.env`.
+- For source development, stop the launcher cleanly, check that no other process owns the backend
+  port, then rerun `bun run dev`.
+- For a backend-only source run, set `VISION_DATABASE_PATH` to the SQLite file through the
+  documented environment layering. Outside development and test the backend refuses to start
+  without it.
 
 ## Migrations
 
@@ -47,21 +55,23 @@ Do not reset the database merely to make startup succeed.
 
 ```bash
 bun run db:status
-bun run db:lint
 ```
 
-All pending migrations run in one transaction, so a failure rolls the whole run back. Read the
-first failing migration and database error and fix it in a new or corrected unapplied file. A
-database with application objects but no migration ledger is refused; restore a backup taken
-after the switch to TypeScript migrations. If the app stays on "Almost ready…" or shows "Failed to
+All pending migrations run in one `BEGIN IMMEDIATE` transaction, so a failure rolls the whole run
+back and the log says "Nothing was changed". Read the first failing migration and database error
+and fix it in a new or corrected unapplied file. The runner also refuses, without changing
+anything, a database that holds tables but no migration ledger, a database a newer Vision migrated,
+and a migration whose checksum changed after it was applied. Before it migrates a database that
+holds data, the backend writes a copy to `database/pre-migration-backups/`; if that copy fails,
+the launch dialog shows `PRE_MIGRATION_BACKUP_FAILED` and nothing is migrated. If the app stays on "Almost ready…" or shows "Failed to
 start Vision.", read `~/Library/Application Support/Vision/native/vision/logs/backend.log`. A
 destructive `db:migrate:down` requires a verified backup and explicit review.
 See [[docs/guides/migrations|Database Migration Guide]].
 
 ### Target database is not up to date
 
-Stop application writers, run `bun run db:migrate` with the owner connection, and verify
-`bun run db:status`. Do not point migration commands at the real Vision database when diagnosing
+Stop application writers, run `bun run db:migrate` with `VISION_DATABASE_PATH` set to the target
+file, and verify `bun run db:status`. Do not point migration commands at the real Vision database when diagnosing
 with a disposable test database.
 
 ## Frontend
@@ -99,9 +109,9 @@ stored prices directly.
 ### Backend authentication fails after reinstall
 
 Current Vision fixes the historical application-name and user-data mismatch by setting the
-canonical name before resolving paths and migrating the old directory. Do not generate replacement
-credentials over an existing private cluster. Inspect the canonical application-data directory and
-ADR-045 before changing files.
+canonical name before resolving paths and migrating the old directory. Do not create a new
+database over an existing one. Inspect the canonical application-data directory and ADR-045 before
+changing files.
 
 ### Repeated “Vision Safe Storage” prompt
 
@@ -119,8 +129,10 @@ Never print the passphrase. A signed and notarized production build provides the
 | ----------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `INVALID_PASSPHRASE`                | Encrypted backup authentication failed            | Re-enter the passphrase; do not modify the bundle                                                                                             |
 | `BUNDLE_SCHEMA_NEWER`               | Backup was created by a newer schema              | Upgrade Vision before restoring                                                                                                               |
-| `BACKUP_PRE_BASELINE`               | Backup predates the TypeScript migration baseline | Not restorable by this version; restore only backups taken after the switch ([[docs/adr/222-typescript-migrations-kysely-baseline\|ADR-222]]) |
-| `PORT_COLLISION`, `POSTGRES_PORT_COLLISION` | An unknown process owns a required loopback port | Identify and stop the exact process or choose a valid development port                                                                        |
+| `BACKUP_POSTGRESQL_V2`              | Backup is a Vision 2.0 PostgreSQL backup          | Convert it once with `bun run transition:v2 -- <backup> --to-backup <new.visionbak>` ([[docs/guides/sqlite-transition\|Moving Vision 2.0 data to SQLite]]) |
+| `LEGACY_POSTGRES_DATA`              | Vision 2.0 data exists and no SQLite database yet | Follow [[docs/guides/sqlite-transition\|Moving Vision 2.0 data to SQLite]]; do not delete the old data directory |
+| `PRE_MIGRATION_BACKUP_FAILED`       | The copy before a migration could not be written  | Free disk space or fix permissions in `database/`, then start Vision again; nothing was migrated                                              |
+| `PORT_COLLISION`                    | An unknown process owns the backend loopback port | Identify and stop the exact process or choose a valid development port                                                                        |
 | `APP_ERROR`                         | Sanitized backend failure                         | Correlate the request ID with structured logs                                                                                                 |
 
 ## Related

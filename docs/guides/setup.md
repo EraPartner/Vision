@@ -2,7 +2,7 @@
 title: Setup Guide
 type: guide
 status: active
-date: 2026-10-28
+date: 2026-11-03
 tags:
   [
     guide,
@@ -10,7 +10,7 @@ tags:
     development,
     local,
     native-runtime,
-    postgresql,
+    sqlite,
     electron,
     onboarding,
   ]
@@ -21,9 +21,12 @@ related_code: [[package.json]]
 
 # Setup Guide
 
-Vision development uses native processes and PostgreSQL 18. The macOS desktop package carries its
-own PostgreSQL, Bun, migration, and report-browser payloads. Agents use their provider's built-in
-sandbox; see [[docs/guides/devcontainer|Agent Sandbox Guide]].
+Vision development uses native processes and one SQLite database file. The backend opens the file
+in-process through Bun's `node:sqlite` and the system SQLite library, so there is no database
+server to install or run ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). The macOS desktop
+package carries the compiled backend, the database tool, the frontend and the migration files.
+Agents use their provider's built-in sandbox; see
+[[docs/guides/devcontainer|Agent Sandbox Guide]].
 
 ## Prerequisites
 
@@ -31,7 +34,7 @@ sandbox; see [[docs/guides/devcontainer|Agent Sandbox Guide]].
 | ---------- | ------- | -------------------------------------------------------- |
 | Bun        | 1.4.2   | Workspaces, development, checks, and backend compilation |
 | Node.js    | 20+     | Electron packaging tools                                 |
-| PostgreSQL | 18.6    | Native development payload or disposable database checks |
+| SQLite     | 3.39.0+ | The system library the backend uses (macOS 13 or later)  |
 
 ## Install
 
@@ -49,28 +52,30 @@ Never commit credentials.
 
 ## Start development
 
-Prepare the pinned native payload once, then launch the native development profile:
+Launch the native development profile:
 
 ```bash
-bun run native:prepare
 bun run dev
 ```
 
 `bun run dev` compiles the TypeScript Electron shell into `packaging/electron/out/`
-([[docs/adr/196-electron-shell-typescript|ADR-196]]), then starts a private PostgreSQL 18 cluster,
-the watched backend, and the Vite frontend (`packaging/electron/scripts/native-development.ts`).
-It does not open an Electron window; use `bun run electron:dev` for the desktop shell. The cluster is stored under the `Vision Development` application-data directory. Startup creates
-separate administrator, migration-owner, and application roles, installs required extensions, runs the
-Kysely migrator (`db/migrations/`), and waits for detailed readiness.
+([[docs/adr/196-electron-shell-typescript|ADR-196]]), prepares the `vision_dev` runtime layout,
+and starts the watched backend and the Vite frontend
+(`packaging/electron/scripts/native-development.ts`). It does not open an Electron window; use
+`bun run electron:dev` for the desktop shell. The database is
+`database/vision.sqlite3` under the `Vision Development` application-data directory
+(`VISION_DEV_USER_DATA` overrides the directory). The backend creates the file on first start and
+applies pending `db/migrations/` files before it listens.
 
 The Vite development server always listens on `127.0.0.1` because its proxy exposes the local data
 API. Open the frontend at `http://127.0.0.1:8080`: the browser calls `/api` same-origin and the
 proxy forwards it to the backend named by `VISION_DEV_API_TARGET`, which `bun run dev` sets. The
 backend sends no CORS headers, so a frontend on another origin cannot use it ([[docs/adr/233-loopback-only-backend|ADR-233]]).
 
-For focused frontend work, point `DATABASE_URL` at a disposable PostgreSQL 18 database and run the
-workspace scripts directly. `bun run test:db` creates, migrates, and removes a private temporary
-cluster automatically.
+For focused work, run the workspace scripts directly. In development and test the backend uses
+`./data/vision.sqlite3` unless `VISION_DATABASE_PATH` names another file, and it creates and
+migrates that file when it starts. Backend tests need no database setup: each test file gets its own
+copy of a migrated SQLite template ([[docs/testing/testing|Testing Guide]]).
 
 ## Demo application
 
@@ -79,7 +84,7 @@ cluster automatically.
 open "/Applications/Vision Demo.app"
 ```
 
-The Demo uses deterministic synthetic data and a separate native cluster below
+The Demo uses deterministic synthetic data and its own SQLite database below
 `~/Library/Application Support/Vision Demo`. It never touches real Vision data. Reset it only with
 `bun run demo:reset-native`; the reset takes effect on the next Demo launch.
 
@@ -92,18 +97,15 @@ The Demo uses deterministic synthetic data and a separate native cluster below
 | `bun run build`                          | Build the production frontend                                                        |
 | `bun run lint` / `bun run lint:backend`  | Lint frontend (plus import boundaries and dead code) and backend                     |
 | `bun run typecheck`                      | Type-check the frontend                                                              |
-| `bun run test` / `bun run test:frontend` | Run backend tests or the full frontend suite with a disposable PostgreSQL 18 backend |
-| `bun run test:watch`                     | Watch all backend tests with a disposable PostgreSQL 18 database                     |
+| `bun run test` / `bun run test:frontend` | Run backend tests, or the full frontend suite with a backend on a temporary SQLite file |
+| `bun run test:watch`                     | Watch all backend tests                                                              |
 | `bun run test:electron`                  | Build the Electron shell, then run its Electron and native-runtime tests             |
 | `bun run typecheck:electron`             | Type-check the Electron shell and its preload                                        |
-| `bun run test:db`                        | Run backend tests against disposable native PostgreSQL 18                            |
-| `bun run native:prepare`                 | Prepare the pinned development/package payload                                       |
-| `bun run native:db-smoke`                | Check migrations, dump/restore, and attachments                                      |
 | `bun run native:isolated-smoke`          | Run the complete isolated native smoke                                               |
 | `bun run native:smoke`                   | Run native backend and health checks                                                 |
 
-Schema changes go through the Kysely migrator (`bun run db:migrate`, `bun run db:status`); no
-Python toolchain is needed. See [[docs/guides/migrations|Database Migrations]].
+Schema changes go through the SQLite migration runner (`bun run db:migrate`,
+`bun run db:status`); no Python toolchain is needed. See [[docs/guides/migrations|Database Migrations]].
 
 ## Related
 

@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/planned-transactions
 description: Scheduled and recurring payment management
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-11-03
+updated: 2026-11-03
 tags: [api, planned, recurring, schedule, phase-3, idempotency, phase-9, decimal, money, auto-link, planned-match, june-2026]
 status: active
 aliases: [planned-transactions-api, planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loans]
@@ -247,7 +247,7 @@ Implementation:
 - The execution insert uses `ON CONFLICT DO NOTHING`; an existing pair returns `{ duplicate: true }` without advancing the parent or copying tags.
 - Route checks for `duplicate` flag and sets the `Idempotent-Replay` header before responding.
 - `todayAppDateString()` supplies a missing execution date in the shared service.
-- Mocked service and route tests cover bounds and response behavior. [[apps/node-backend/tests/plannedExecutionConcurrency.db.test.ts]] verifies persisted concurrent advancement on disposable PostgreSQL; its live run remains pending in [[TODO]].
+- Mocked service and route tests cover bounds and response behavior. [[apps/node-backend/tests/plannedExecutionConcurrency.db.test.ts]] verifies persisted concurrent advancement on its own copy of the migrated SQLite template; its live run remains pending in [[TODO]].
 
 ### DELETE /api/planned-transactions/:id
 
@@ -318,7 +318,7 @@ entries yet; the strip still buckets its rows client-side for display. Implement
   The conversion helper is the shared `services/currency/latestRateConversion.ts`; hard-coded
   fallback constants are never used.
 
-Covered on real PostgreSQL by [[apps/node-backend/tests/plannedTotals.db.test.ts]].
+Covered against a real SQLite database by [[apps/node-backend/tests/plannedTotals.db.test.ts]].
 
 ### GET /api/planned-transactions/match-suggestions
 

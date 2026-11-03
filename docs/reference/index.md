@@ -2,8 +2,8 @@
 title: Reference Documentation Index
 type: reference-index
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     reference,
@@ -42,7 +42,7 @@ SORT title ASC
 | [[docs/reference/code-patterns\|Code Patterns]]                            | Standard patterns for all layers (routes, services, repositories, components)                               |
 | [[docs/reference/service-layer\|Service Layer Reference]]                  | Backend service architecture, domain seams, and major public services                                       |
 | [[docs/reference/repository-layer\|Repository Layer Reference]]            | Complete reference for all 21 backend repository domains (+ infoRepository and portfolioTxRepo sub-modules) |
-| [[docs/reference/database-query-patterns\|Database Query Patterns]]        | PostgreSQL query patterns, index strategies, optimization techniques                                        |
+| [[docs/reference/database-query-patterns\|Database Query Patterns]]        | SQLite query patterns, index strategies, optimization techniques                                            |
 | [[docs/reference/frontend-routes\|Frontend Routes]]                        | Complete manifest-backed route table, including the manual analysis workspace                               |
 | [[docs/reference/react-query-keys\|React Query Keys]]                      | All frontend query keys for cache invalidation                                                              |
 | [[docs/reference/typescript-types\|TypeScript Types]]                      | All frontend type definitions                                                                               |
@@ -61,8 +61,9 @@ SORT title ASC
 
 | Document                                                | Description                                                                                             |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| [[docs/reference/database-triggers\|Database Triggers]] | All PostgreSQL triggers                                                                                 |
-| [[docs/guides/migrations\|Migration Workflow]]          | Create, lint, apply, and roll back `db/migrations/` files; use `bun run db:status` for the current chain |
+| [[docs/reference/database-triggers\|Database Triggers]] | All SQLite triggers                                                                                     |
+| [[docs/reference/sqlite-sql-dialect\|SQLite SQL Dialect]] | Storage types, canonical value forms, and SQL rules since [[docs/adr/263-sqlite-replaces-postgresql\|ADR-263]] |
+| [[docs/guides/migrations\|Migration Workflow]]          | Create, check, apply, and roll back `db/migrations/` files; use `bun run db:status` for the current chain |
 
 ## Configuration
 

@@ -2,20 +2,20 @@
 title: Deployment Guide
 type: guide
 status: active
-date: 2026-10-21
+date: 2026-11-03
 tags:
   [
     guide,
     deployment,
     production,
     native-runtime,
-    postgresql,
+    sqlite,
     electron,
     security,
     packaging,
     bun,
   ]
-description: Deploy Vision as the native macOS desktop application or run the loopback-only source backend with operator-managed PostgreSQL 18.
+description: Deploy Vision as the native macOS desktop application or run the loopback-only source backend on a SQLite database file the operator chooses.
 aliases: [deployment-guide, production-deploy, electron-packaging]
 related_code: ["packaging/electron/", "apps/node-backend/src/main.ts"]
 ---
@@ -26,8 +26,8 @@ Vision supports two deployment shapes:
 
 | Method            | Use case                            | Database ownership                                          |
 | ----------------- | ----------------------------------- | ----------------------------------------------------------- |
-| Native Electron   | Normal macOS desktop installation   | Vision owns a private bundled PostgreSQL 18 cluster         |
-| Source run        | Running the backend from a checkout | The operator supplies PostgreSQL 18 and process supervision |
+| Native Electron   | Normal macOS desktop installation   | Vision owns one SQLite file in its application-data directory |
+| Source run        | Running the backend from a checkout | The operator chooses the SQLite file and supplies process supervision |
 
 The project does not publish or support a product container image. Agent execution uses the
 provider's built-in sandbox; see [[docs/guides/devcontainer|Agent Sandbox Guide]].
@@ -36,13 +36,13 @@ provider's built-in sandbox; see [[docs/guides/devcontainer|Agent Sandbox Guide]
 
 Build prerequisites and runtime behavior are in
 [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]]. A packaged app contains the
-production frontend, Bun backend with its `db/` migration files, PostgreSQL 18.6, and Chrome Headless
-Shell.
-It does not require a host PostgreSQL service.
+production frontend, the Bun backend with its `db/` migration files, and the database tool. The
+backend opens `<userData>/database/vision.sqlite3` in-process through the system SQLite library
+(3.39.0 or later). There is no database server
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]).
 
 ```bash
 bun run install:electron
-bun run native:prepare
 bun run dist
 ```
 
@@ -59,12 +59,13 @@ The Electron shell is TypeScript compiled into `packaging/electron/out/`. The El
 ## Source run
 
 A backend started from a checkout serves the same machine only, exactly like the desktop app
-([[docs/adr/233-loopback-only-backend|ADR-233]]). The operator provides PostgreSQL 18, a process
-supervisor and backups. Set the backend environment explicitly:
+([[docs/adr/233-loopback-only-backend|ADR-233]]). The operator chooses the database file and
+provides a process supervisor and backups. Set the backend environment explicitly. Outside
+development and test the backend refuses to start without `VISION_DATABASE_PATH`:
 
 ```bash
-DATABASE_URL=postgresql://vision_app:<password>@127.0.0.1:5432/financial_transactions
-DATABASE_URL_MIGRATIONS=postgresql://vision_owner:<password>@127.0.0.1:5432/financial_transactions
+VISION_DATABASE_PATH=/absolute/path/to/vision.sqlite3
+ATTACHMENTS_DIR=/absolute/path/to/attachments
 PORT=3002
 SERVER_HOST=127.0.0.1
 LOG_LEVEL=info
@@ -79,10 +80,10 @@ bun run backend
 curl --fail http://127.0.0.1:3002/health
 ```
 
-`DATABASE_URL_MIGRATIONS` owns schema changes. `DATABASE_URL` is the least-privilege application
-role. The grant template at `config/postgres/app-role-grants.sql.tpl` records the expected grants.
-Apply schema changes only through the repository migrator (`bun run db:migrate`); the backend
-also applies pending migrations before it listens.
+The database is one file with no roles or credentials; protect it with file permissions. Apply
+schema changes only through the repository migrator (`bun run db:migrate`); the backend also applies
+pending migrations before it listens. Before it migrates a database that holds data, it writes a
+`VACUUM INTO` copy to `pre-migration-backups/` next to the file and keeps the newest three.
 
 ## Network boundary
 
@@ -98,31 +99,36 @@ The API has no user authentication. Its boundary is the machine itself
   built app, and in development the Vite proxy forwards `/api` with `changeOrigin: true`.
 - The Cross-Site Request Forgery (CSRF) guard rejects cross-site requests of every method on the
   whole `/api` plane (ADR-237).
-- Do not expose PostgreSQL to the network.
+- There is no database port: the backend opens the SQLite file in-process.
 
 ## Backup and restore
 
-The desktop app creates complete `.visionbak` bundles containing a custom-format PostgreSQL dump,
-attachments, preferences, and a checksum manifest. Restore validates and stages the bundle before
+The desktop app creates complete `.visionbak` bundles containing a verified SQLite copy of the
+database (`db.sqlite3`), attachments, preferences, and metadata with the database checksum. Restore validates and stages the bundle before
 switching the active database. See [[docs/features/backup-coverage-audit|Backup Coverage Audit]].
 
-Source runs must use PostgreSQL-native backup tools plus a separately versioned attachment
-backup. Verify restore into a disposable database and record the application version and schema
-revision (the highest `public.kysely_migration` name) with each backup. A database dump alone is not a complete Vision backup.
+Source runs need their own backup of the database file plus a separately versioned attachment
+backup. Do not copy the database file while the backend runs: recent writes may still be in the
+`-wal` file. `bun run apps/node-backend/scripts/db-file.ts snapshot <database> <destination>`
+writes a consistent `VACUUM INTO` copy while the backend runs and verifies it, and
+`db-file.ts verify <database>` checks a copy before you rely on it. Record the application version
+and schema revision (the latest version in the `vision_migrations` ledger) with each backup. A
+database copy alone is not a complete Vision backup.
 
 ## Updates
 
 Native packaged updates install a verified macOS release artifact after creating a pre-update
-backup. The packaged app also backs up before the backend applies pending migrations at launch,
-whichever way it was installed
-([[docs/adr/242-backup-before-boot-migrations|ADR-242]]). Source runs are operator-managed. See
+backup. The backend also copies the database to `pre-migration-backups/` before it applies pending
+migrations at launch, whichever way the app was installed, and does not start when that copy fails
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). Vision 2.0 data moves once through
+[[docs/guides/sqlite-transition|the transition script]]. Source runs are operator-managed. See
 [[docs/features/application-updates|Application Updates]].
 
 ## Monitoring
 
 - Probe `GET /health` for liveness and database reachability.
 - Probe `GET /health/detailed` during startup and before switching a staged database live.
-- Keep backend and PostgreSQL logs under the deployment supervisor.
+- Keep backend logs under the deployment supervisor.
 - Alert on migration failure, repeated restarts, backup failure, and low disk space.
 
 ## Related

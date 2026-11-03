@@ -2,11 +2,11 @@
 title: Testing Documentation Index
 type: testing-index
 status: active
-date: 2026-10-28
-updated: 2026-10-28
-last-updated: 2026-10-06
-modified: 2026-10-06
-last_updated_timestamp: 2026-10-06T00:00:00Z
+date: 2026-11-03
+updated: 2026-11-03
+last-updated: 2026-11-03
+modified: 2026-11-03
+last_updated_timestamp: 2026-11-03T00:00:00Z
 added_phase_f1_backend_drift_detection: 2026-05-02
 added_phase_f2_stale_refetch: 2026-05-02
 added_phase_f3_dialog_completeness: 2026-05-02
@@ -103,11 +103,11 @@ Implementation and waived live acceptance for the October audit: [[docs/testing/
 ## Running Tests
 
 ```bash
-# Backend tests without a database (DB-backed cases self-skip)
-bun test
+# Backend tests, database tests included (each test file gets its own SQLite copy)
+bun run test
 
-# Backend watch mode with disposable PostgreSQL 18
-bun test:watch
+# Backend watch mode
+bun run test:watch
 
 # Specific file
 bun vitest run tests/path/to/test.test.ts

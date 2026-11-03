@@ -9,6 +9,11 @@ description: Quiesce the native writer for a consistent bundle and recover inter
 
 # ADR-207: Coordinated native backup and restore recovery
 
+> [!note] Superseded in part by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> a backup now copies the SQLite file instead of taking a PostgreSQL dump, and a restore switches
+> the database directory instead of a PostgreSQL database. Writer quiescence and interrupted
+> switch recovery stay in force.
+
 > [!note] Superseded in part by [[docs/adr/231-remove-audit-history|ADR-231]] on 2026-10-20:
 > there is no audit closure or trusted audit session to pause. Writer quiescence and interrupted
 > switch recovery stay in force.

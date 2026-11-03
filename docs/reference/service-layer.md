@@ -2,8 +2,8 @@
 title: Service Layer Reference
 type: reference
 status: active
-date: 2026-10-28
-last_modified: 2026-10-28
+date: 2026-11-03
+last_modified: 2026-11-03
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
 description: Reference for backend service responsibilities and route/repository boundaries enforced by the local architecture lint rules.
 aliases: [services, service layer, business logic, backend services]
@@ -36,7 +36,7 @@ Repository Layer (SQL queries)
 - Services are pure functions or function modules — no classes
 - External I/O (DB, HTTP) is encapsulated within services
 - Pure computation services have zero dependencies
-- Side-effect services depend on `connection.ts` (PostgreSQL)
+- Side-effect services depend on `connection.ts` (the SQLite connections)
 
 ### Service directory placement
 
@@ -152,7 +152,7 @@ directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Bank
 
 ### Dependencies
 
-- `connection.ts` (PostgreSQL)
+- `connection.ts` (SQLite)
 - `logger.ts`
 
 ---
@@ -199,7 +199,7 @@ the Belgian tax dashboards use `services/currency/latestRateConversion.ts`
 
 ### Dependencies
 
-- `connection.ts` (PostgreSQL)
+- `connection.ts` (SQLite)
 - `logger.ts`
 
 ---
@@ -253,7 +253,7 @@ the Belgian tax dashboards use `services/currency/latestRateConversion.ts`
 
 ### Dependencies
 
-- `connection.ts` (PostgreSQL)
+- `connection.ts` (SQLite)
 - Node.js `crypto` module
 
 ---
@@ -293,14 +293,14 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 2. **Validate:** Check required fields, dedup hashes, mark invalid rows with errors
 3. **Match:** Look up or create recipients, categories, resolve aliases
 4. **Commit:** Insert canonical transactions, raw references, aggregate stats
-5. **Refresh:** Schedule non-blocking materialized view refresh
+5. **Refresh:** Schedule non-blocking summary-table refresh
 
 ### Key Features
 
 - **Idempotent Phases:** Each phase isolated; failure marks batch as `failed` without cascade
 - **Async Progress Callbacks:** `onProgress` callback is `await`-ed, propagates SSE backpressure into pipeline
 - **Batch Persistence:** All imports assigned `batchId`, tracked in `import_batches` table for history/rollback
-- **Adaptive Concurrency:** Row batches processed with `Math.max(2, Math.floor(poolMax / 2))` concurrency based on DB pool size
+- **Chunked Commit:** Staging rows commit in chunks of 1000, each in one `BEGIN IMMEDIATE` transaction with a savepoint per row; there is no connection pool ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]])
 - **Error Sanitization:** Generic error messages prevent internal exception leakage
 
 ### Sub-modules
@@ -371,30 +371,30 @@ retains its adapter selection and domain-specific staging INSERT.
 ## 9. materializedViewService.ts
 
 **File:** [[apps/node-backend/src/services/materializedViewService.ts]]  
-**Purpose:** Creates and refreshes PostgreSQL materialized views for pre-computed dashboard aggregations.
+**Purpose:** Fills and refreshes the two summary tables (`mv_monthly_summary`, `mv_category_totals`) that pre-compute dashboard aggregations. On PostgreSQL they were materialized views; the SQLite baseline creates them as ordinary tables ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]).
 
 ### Exported Functions
 
 | Function                        | Signature             | Returns                              |
 | ------------------------------- | --------------------- | ------------------------------------ |
-| `createMaterializedViews`       | `() => Promise<void>` | Creates 2 views with unique indexes  |
-| `ensureMaterializedViewIndexes` | `() => Promise<void>` | Retroactively ensures unique indexes |
-| `refreshMaterializedViews`      | `() => Promise<void>` | Refreshes all views CONCURRENTLY     |
+| `createMaterializedViews`       | `() => Promise<void>` | Fills either table when it is empty, then runs `ANALYZE` |
+| `ensureMaterializedViewIndexes` | `() => Promise<void>` | Recreates a dropped unique index (`CREATE UNIQUE INDEX IF NOT EXISTS`) |
+| `refreshMaterializedViews`      | `() => Promise<void>` | Refills both tables in one write transaction |
 | `scheduleRefresh`               | `() => void`          | Debounced refresh (5s, 10s max wait) |
 
 ### Materialized Views
 
-| View              | Purpose                             |
-| ----------------- | ----------------------------------- |
-| Monthly summaries | Aggregated income/expense per month |
-| Category totals   | Spending per category per period    |
+| Table                | Purpose                                                         |
+| -------------------- | --------------------------------------------------------------- |
+| `mv_monthly_summary` | Income, spending and net per month, currency and category (last 12 months) |
+| `mv_category_totals` | All-time totals per category and currency                       |
 
 ### Key Algorithms
 
-- **CONCURRENTLY Refresh:** Allows reads during refresh (requires unique indexes)
+- **Refill in one transaction:** `DELETE` + `INSERT ... SELECT` for both tables inside one `withTransaction()`. Readers on the reader connection see the old contents until `COMMIT`, never an empty table
 - **Call Coalescing:** concurrent callers await the active refresh; one deferred follow-up captures mutations that arrive while it runs
 - **Debounced Scheduling:** a 5-second trailing delay with a 10-second burst cap coalesces rapid changes
-- **Fallback:** If CONCURRENTLY is unavailable for a known recoverable reason, refresh falls back to the standard form; other failures reject the caller
+- **Failure:** A failed refill rolls the whole refresh back, so both tables keep their previous contents, and the caller's promise rejects
 
 ### Dependencies
 
@@ -654,7 +654,7 @@ See [[docs/features/import#import-pipeline-orchestrator|Import Feature — Pipel
 
 - **Phase-based Progress Events:** Staging → validating → matching → committing (not raw line counts)
 - **Async Backpressure:** Progress callbacks are `await`-ed to propagate TCP socket backpressure
-- **Adaptive Concurrency:** Row batches processed with `Math.max(2, Math.floor(poolMax / 2))` based on DB pool size
+- **Chunked Commit:** Staging rows commit in chunks of 1000, each in one `BEGIN IMMEDIATE` transaction with a savepoint per row
 - **Batch Persistence:** All imports tracked in `import_batches` table with `batchId`
 
 See [[docs/features/import#streaming-import-with-server-sent-events-sse|Import Feature — Streaming Import]] for current implementation details.
@@ -757,10 +757,11 @@ analysis definitions and run state.
 
 - `analysisCatalog` exposes four versioned datasets and compiles only declared fields, filters,
   groups, measures, order terms, and the validated many-to-one account join.
-- `analysisExecutor` accepts one `SELECT` or `WITH` statement over declared approved views. It uses
-  the restricted `vision_analysis_executor` PostgreSQL role, a read-only transaction, statement,
-  lock and idle timeouts, a 1,000-row cap, a 2 MB response cap, and a reserved same-role connection
-  for cancellation even while both execution slots are occupied.
+- `analysisExecutor` accepts one `SELECT` or `WITH` statement over declared approved views. It
+  copies the rows of the named `vision_analysis_*` views from one read snapshot into a worker
+  thread with an in-memory SQLite database (`analysisSandboxWorker.ts`), which never sees the
+  database file. One sandbox runs at a time. Limits are a 5 s statement timeout (then SQLSTATE
+  `57014` and the worker is terminated), a 1,000-row cap and a 2 MB response cap.
 - `savedAnalysisService` validates the shared analysis contract, appends immutable definition
   versions, and stores charts, parameters, source references, refresh status, failures, and the last
   usable result across budgeting, portfolio, research, and cross-workspace libraries.
@@ -822,7 +823,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 ## aggregationRefresh.ts (2026-04-29)
 
 **File:** [[apps/node-backend/src/services/aggregationRefresh.ts]]  
-**Purpose:** Manages debounced and deferred refresh scheduling for aggregation materialized views without blocking server shutdown.
+**Purpose:** Manages debounced and deferred refresh scheduling for the summary tables (the former materialized views) without blocking server shutdown.
 
 ### Exported Functions
 

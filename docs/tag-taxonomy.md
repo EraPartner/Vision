@@ -2,7 +2,7 @@
 title: Tag Taxonomy
 type: reference
 status: active
-date: 2026-10-19
+date: 2026-11-03
 tags: [tags, taxonomy, reference, organization]
 description: Controlled vocabulary of tags used across the Vision knowledge base for consistent filtering and search
 aliases: [tag guide, tagging, categories, labels]
@@ -63,10 +63,11 @@ aliases: [tag guide, tagging, categories, labels]
 | -------------------- | ------------------------------------------------------------ |
 | `react`              | React-specific content                                       |
 | `typescript`         | TypeScript-specific content                                  |
-| `postgresql`         | PostgreSQL-specific content                                  |
+| `sqlite`             | SQLite-specific content: the database file, dialect, driver (ADR-263) |
+| `postgresql`         | PostgreSQL-specific content (historical; replaced by ADR-263) |
 | `plantuml`           | PlantUML diagrams                                            |
 | `alembic`            | Alembic migrations (historical; replaced by ADR-222)         |
-| `kysely`             | Kysely migrator and query builder, `db/migrations/`, DB types |
+| `kysely`             | Kysely query builder and generated DB types                  |
 | `vitest`             | Vitest testing                                               |
 | `eslint`             | ESLint configuration and rules, including type-aware rules   |
 | `dependency-cruiser` | Import-boundary checks (`bun run lint:deps`)                 |
@@ -91,7 +92,7 @@ aliases: [tag guide, tagging, categories, labels]
 2. **Use singular form**: `feature` not `features`, `guide` not `guides`
 3. **Be specific but not excessive**: 3-6 tags per document is ideal
 4. **No orphan tags**: Every tag should appear in at least 2 documents
-5. **No technology jargon as tags**: Use `react` not `react-18`, use `postgresql` not `postgres-15`
+5. **No technology jargon as tags**: Use `react` not `react-18`, use `sqlite` not `sqlite-3`
 
 ## Examples
 
@@ -122,7 +123,7 @@ tags: [guide, setup, development, database]
 ### ADR
 
 ```yaml
-tags: [adr, architecture, database, postgresql]
+tags: [adr, architecture, database, sqlite]
 ```
 
 ## Deprecated Tags (Do Not Use)

@@ -2,9 +2,9 @@
 title: Aggregations API
 type: endpoint
 status: active
-date: 2026-10-28
-updated: 2026-10-28
-last_modified: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
+last_modified: 2026-11-03
 recipient_pivot_added: 2026-04-28
 tag_pivot_added: 2026-06-26
 tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, tag-pivot, saved-charts, exclusion-filters, ensemble-v2, tags]
@@ -45,7 +45,7 @@ related_code:
 # Aggregations API
 
 > [!abstract] Overview
-> Phase 2 introduces `/api/aggregations/*` endpoints — server-computed financial aggregations with metadata indicating whether data was served from materialized views (`'mv'`) or computed live (`'live'`). These endpoints power dashboard stat cards and statistics widgets with support for category/recipient exclusions.
+> Phase 2 introduces `/api/aggregations/*` endpoints — server-computed financial aggregations with metadata indicating whether data was served from the summary tables (`'mv'`, the former materialized views) or computed live (`'live'`). These endpoints power dashboard stat cards and statistics widgets with support for category/recipient exclusions.
 
 > [!info] Phase 9 Migration Complete
 > Legacy `/api/info/*` endpoints were removed in Phase 9. All aggregation requests now route through `/api/aggregations/*`.
@@ -103,7 +103,7 @@ All endpoints follow the unified response envelope (ADR-026) with a nested aggre
 | Field                  | Type                        | Meaning                                                                                                                                                                                                                        |
 | ---------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `data.data`            | object                      | Endpoint-specific aggregation result (see endpoint sections)                                                                                                                                                                   |
-| `data.meta.source`     | `'mv' \| 'live' \| 'cache'` | `'mv'` = served from materialized view (no exclusions); `'live'` = dynamically computed (due to category or recipient exclusions or custom params); `'cache'` = served from 6-hour TTL cache (Phase E cash flow forecast only) |
+| `data.meta.source`     | `'mv' \| 'live' \| 'cache'` | `'mv'` = served from a summary table (no exclusions); `'live'` = dynamically computed (due to category or recipient exclusions or custom params); `'cache'` = served from 6-hour TTL cache (Phase E cash flow forecast only) |
 | `data.meta.computedAt` | ISO 8601 timestamp          | When the aggregation was computed or cached                                                                                                                                                                                    |
 
 **Frontend unwrapping:** After `unwrapEnvelope()` strips the outer `ok/meta` layer, consumers receive `{ data, meta: { source, computedAt } }` (the aggregation envelope).
@@ -1294,9 +1294,8 @@ methodAccuracy.simple_avg.history.forEach((point) => {
 - Table: `cashflow_forecast_accuracy` (created by historical Alembic migration 0012_cashflow_forecast_accuracy; part of the `0001` baseline)
 - UPSERT on (user_id, method_id, as_of_month) — idempotent
 - Populated by nightly batch job (Phase G) or manual updates from `/api/aggregations/cashflow-forecast-methods` backtest
-- **Fallback (April 2026):** If the database is unreachable or the table is missing, backend's `accuracyStore` falls back to an in-memory Map for backward compatibility:
-  - Triggers on error codes: `42P01` (undefined_table), `ECONNREFUSED` (DB unreachable), `ENOTFOUND` (host unresolved), `ETIMEDOUT` (connection timeout)
-  - Supports dev/test environments without a running PostgreSQL instance
+- **Fallback (April 2026):** If the table is missing, backend's `accuracyStore` falls back to an in-memory Map for backward compatibility:
+  - Triggers on error code `42P01` (the driver reports SQLite's "no such table" with it); the network codes `ECONNREFUSED`, `ENOTFOUND` and `ETIMEDOUT` it also lists come from the PostgreSQL build and do not occur with the SQLite file
   - Fallback is silent; forecast endpoints remain usable with or without accuracy persistence
 
 **Use Cases:**
@@ -1337,7 +1336,7 @@ The `meta.source` field distinguishes between two computation modes:
 
 | Condition                                                       | Source   | Rationale                                                          |
 | --------------------------------------------------------------- | -------- | ------------------------------------------------------------------ |
-| No `excluded_category_ids[]` AND no `excluded_recipient_ids[]`  | `'mv'`   | Unfiltered request served from materialized view (fast, stale)     |
+| No `excluded_category_ids[]` AND no `excluded_recipient_ids[]`  | `'mv'`   | Unfiltered request served from a summary table (fast, stale)       |
 | `excluded_category_ids[]` OR `excluded_recipient_ids[]` present | `'live'` | Exclusions require live scan of all transactions (slower, current) |
 | `/average-vs-current`                                           | `'live'` | Phase 2 always computes current-period metrics live                |
 

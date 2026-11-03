@@ -2,7 +2,7 @@
 title: Contributing Guide
 type: guide
 status: active
-date: 2026-10-28
+date: 2026-11-03
 tags:
   [
     guide,
@@ -253,18 +253,18 @@ const buttonVariants = cva("base-styles", {
 ### Backend Tests
 
 ```bash
-# Run backend tests without a database (DB-backed cases self-skip)
+# Run all backend tests; each test file gets its own copy of a migrated SQLite template
 bun run test
 
-# Watch all backend tests with disposable PostgreSQL 18 during development
+# Watch all backend tests during development
 bun run test:watch
 
 # Run specific test file (Vitest config lives in apps/node-backend)
 (cd apps/node-backend && bun vitest run tests/services/transactionService.test.ts)
-
-# Same, against a disposable PostgreSQL 18 database (arguments are forwarded to Vitest)
-bun run test:db tests/services/transactionService.test.ts
 ```
+
+There is no external database to start, and database tests never skip
+([[docs/testing/testing|Testing Guide]]).
 
 #### Test Structure
 
@@ -327,7 +327,9 @@ bun run db:new -- add_new_column_to_transactions
 - Always test migrations locally first
 - Provide rollback plan in PR description
 - Pending migrations run automatically at the next backend start, so ship destructive DDL only
-  after the code that stops reading the object; `bun run db:lint` (squawk) flags it
+  after the code that stops reading the object; `tests/database/sqlDialect.test.ts` flags a
+  destructive statement without a `-- destructive-ok: <reason>` line directly above it, and checks
+  every migration against the [[docs/reference/sqlite-sql-dialect|SQLite dialect rules]]
 - Add a `.down.sql` rollback and regenerate types with `bun run db:codegen`
 - Use meaningful snake_case migration names; never edit an applied migration file
 - See [[docs/guides/migrations|Database Migration Guide]]

@@ -2,8 +2,8 @@
 title: AI Agent Codebase Navigation Map
 type: reference
 status: active
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     ai-agent,
@@ -313,10 +313,10 @@ Full reference: [[docs/reference/service-layer|Service Layer Reference]]
 
 | File                                             | Purpose                                    |
 | ------------------------------------------------ | ------------------------------------------ |
-| [[apps/node-backend/src/database/connection.ts]] | Pool, `query()`, `withTransaction()`       |
-| [[apps/node-backend/src/database/db.ts]]         | Kysely query builder (ADR-226)             |
-| [[apps/node-backend/src/main.ts]]                | DB readiness retry loop + server startup   |
-| [[apps/node-backend/src/database/migrate.ts]]    | Kysely migrator (schema initialization)    |
+| [[apps/node-backend/src/database/connection.ts]] | SQLite writer and reader, `query()`, `withTransaction()` |
+| [[apps/node-backend/src/database/db.ts]]         | Kysely query builder over SQLite (ADR-226, ADR-263) |
+| [[apps/node-backend/src/main.ts]]                | Migrations, one database check, server startup |
+| [[apps/node-backend/src/database/migrate.ts]]    | SQLite migration runner and `vision_migrations` ledger |
 
 ### Migrations
 
@@ -360,7 +360,8 @@ files and optional `.down.sql` rollbacks, applied in name order. Generated types
 
 1. Read [[docs/guides/migrations|Migration Guide]]
 2. Create migration: `bun run db:new -- add_column_to_table`, plus a `.down.sql`
-3. Run migration: `bun run db:migrate`, then `bun run db:codegen` and `bun run db:lint`
+3. Run migration: `bun run db:migrate`, then `bun run db:codegen`. The backend tests
+   `tests/database/migrations.test.ts` and `tests/database/sqlDialect.test.ts` check the migration
 4. Update repository queries
 5. Update [[docs/adr/002-database-schema|Database Schema ADR]]
 

@@ -10,6 +10,11 @@ aliases: [adr-049, phase-6-7, backup-restore-hardening, updated-at-constraints, 
 
 # ADR-049: Phase 6.1–7 Bug Hunt Recovery Hardening
 
+> [!note] Superseded in part by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> backups no longer run `pg_dump`, and the `psql` checks below no longer apply. A backup copies the
+> SQLite file through the backend's database-file tool. The HTTP request timeout and the guard
+> against concurrent backups stay.
+
 ## Status
 
 Accepted

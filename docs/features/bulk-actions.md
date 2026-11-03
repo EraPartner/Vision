@@ -2,8 +2,8 @@
 title: Bulk Transaction Actions
 type: feature
 status: active
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
 tags: [feature, transactions, bulk, productivity]
 description: Multi-row checkbox selection drives delete, recategorize, recipient reassignment, activate/deactivate, export, tag, and split operations across many transactions in one atomic call.
 aliases: [bulk-actions, bulk-delete, bulk-update, bulk-export]
@@ -132,7 +132,7 @@ Filter shape mirrors a subset of the existing `GET /api/transactions` query fiel
 
 ## Cascade Behaviour for Bulk Delete
 
-`POST /bulk-delete` performs `DELETE FROM transactions WHERE id = ANY($1::int[])`. Foreign-key cascades cover dependent rows:
+`POST /bulk-delete` performs `DELETE FROM transactions WHERE id IN (SELECT value FROM json_each(?))` with the ids bound as one JSON array, inside one `BEGIN IMMEDIATE` transaction. Foreign-key cascades cover dependent rows:
 
 | Table                           | FK action            |
 | ------------------------------- | -------------------- |

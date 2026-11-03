@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, DELETE
 path: /api/attachments
 description: Manage receipt and document attachments for transactions
-date: 2026-10-21
-updated: 2026-10-21
+date: 2026-11-03
+updated: 2026-11-03
 tags: [api, attachments, receipts, files, storage, phase-5a, security, path-traversal, rfc-5987]
 status: active
 aliases: [attachments-api, receipts, documents, file-management]
@@ -54,7 +54,7 @@ Upload a file attachment to a transaction.
 }
 ```
 
-The attachment `id` is a BIGSERIAL and is serialized as a decimal string; `openapi.yaml` declares it as a string since 2026-10-13.
+The attachment `id` is a `BIGINT` key from a sequence and is serialized as a decimal string; `openapi.yaml` declares it as a string since 2026-10-13.
 
 **Error Responses:**
 - `400` Bad Request — File missing or exceeds size limit
@@ -174,14 +174,20 @@ The attachment service validates all file paths before reading or writing:
 This prevents directory traversal attacks (e.g., stored paths like `../../../etc/passwd`). The `sep` is imported from `node:path` to handle OS-specific separators correctly (Windows vs. POSIX).
 
 ### Metadata Schema
+The SQLite baseline (`db/migrations/0001_baseline.sql`) defines the table as follows
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]):
+
 ```sql
 CREATE TABLE attachments (
-  id SERIAL PRIMARY KEY,
-  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
-  stored_path VARCHAR NOT NULL,      -- Relative path: {txId}/{uuid}.ext
-  mime_type VARCHAR,                  -- e.g., "application/pdf"
-  size_bytes INTEGER,                 -- File size in bytes
-  created_at TIMESTAMP DEFAULT NOW()
+  id BIGINT CONSTRAINT attachments_pkey PRIMARY KEY NOT NULL DEFAULT (nextval('attachments_id_seq')),
+  transaction_id INTEGER NOT NULL,
+  filename TEXT NOT NULL,
+  stored_path TEXT NOT NULL,          -- Relative path: {txId}/{uuid}.ext
+  mime_type TEXT NOT NULL,            -- e.g., "application/pdf"
+  size_bytes BIGINT NOT NULL,         -- File size in bytes
+  created_at TIMESTAMPTZ_TEXT NOT NULL DEFAULT (now())
+    CONSTRAINT attachments_created_at__vtype CHECK (vision_ts_ok(created_at)),
+  CONSTRAINT attachments_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
 );
 ```
 

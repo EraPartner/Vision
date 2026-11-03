@@ -12,6 +12,11 @@ aliases: [native Vision Demo, deterministic Demo seed, Demo PostgreSQL runtime]
 
 # ADR-114: Native deterministic Vision Demo runtime
 
+> [!note] Superseded in part by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> the Demo no longer runs a PostgreSQL cluster on `127.0.0.1:54330`, and its build no longer writes
+> a PostgreSQL dump. The build packages a migrated and seeded SQLite file, `vision-demo.sqlite3`.
+> The Demo's isolated identity and deterministic synthetic seed stay.
+
 ## Status
 
 Accepted — 2026-08-31. This supersedes only the statements in

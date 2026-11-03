@@ -31,18 +31,20 @@ operator updates the source deployment and database in its own maintenance windo
 ## Backup before update
 
 The Electron main process creates a native backup before it replaces application files. A failed
-backup blocks installation. The updater pauses the runtime watchdog, stops the native backend and
-database in order, performs the install, and keeps rollback state until the updated app opens.
+backup blocks installation. The updater pauses the runtime watchdog, stops the native backend,
+performs the install, and keeps rollback state until the updated app opens.
 
 Backup and restore use the same native transport as manual `.visionbak` operations. An in-progress
 database switch blocks update work.
 
-The backend applies pending migrations when it boots, and some migrations delete data. So every
-launch, whether after this updater or a manual install, compares the packaged migration chain with
-the database. When the database is behind, the app writes another `.visionbak` to the same
-`pre-update-backups` folder before it starts the backend, and stops with an error instead of
-migrating when that backup fails. Vision Demo is excluded
-([[docs/adr/242-backup-before-boot-migrations|ADR-242]]).
+The backend applies pending migrations when it boots, and some migrations delete data. So on every
+launch, whether after this updater or a manual install, the backend's migration runner writes a
+`VACUUM INTO` copy of the database to `<userData>/database/pre-migration-backups/` before it applies
+migrations to a database that already has a migration ledger. The newest three copies are kept. If
+the copy fails, nothing is migrated, the backend does not start, and the launch dialog reports
+`PRE_MIGRATION_BACKUP_FAILED`. This applies to Vision Demo too. It replaces the Electron-side
+`.visionbak` that [[docs/adr/242-backup-before-boot-migrations|ADR-242]] wrote to
+`pre-update-backups` ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]).
 
 ## Packaged native update
 
@@ -102,8 +104,9 @@ release job verifies build provenance before publishing. No application image is
 
 Application rollback and database rollback are separate. Replacing the app does not downgrade the
 database. A migration rollback (`bun run db:migrate:down`, only for migrations with a `.down.sql`) requires
-explicit review and a backup; below the `0001` baseline, recovery is a backup restore taken after
-the baseline switch. A failed native database switch
+explicit review and a backup; below the `0001` SQLite baseline there is no migration, and a
+Vision 2.0 backup must go through `bun run transition:v2` once
+([[docs/guides/sqlite-transition|Moving Vision 2.0 data to SQLite]]). A failed native database switch
 keeps the previous database until validation succeeds.
 
 ## Security properties

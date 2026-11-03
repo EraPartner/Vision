@@ -2,8 +2,8 @@
 title: Settings Feature
 type: feature
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     feature,
@@ -227,8 +227,8 @@ Upserts a single setting.
 
 Implementation note:
 
-- Backend route logic reuses `assertSettingKeyLength` and `validateSettingValue` across single-key and bulk writes. Dashboard exclusion fields must be arrays; digit-string IDs are coerced to positive PostgreSQL `int4` integers, while malformed or out-of-range values are rejected before storage.
-- The repository serializes the already-validated value directly to JSONB. It does not apply a second lossy `Number()` normalization pass ([[apps/node-backend/src/repositories/settingsRepository.ts]]).
+- Backend route logic reuses `assertSettingKeyLength` and `validateSettingValue` across single-key and bulk writes. Dashboard exclusion fields must be arrays; digit-string IDs are coerced to positive integers no larger than 2147483647 (the `int4` maximum), while malformed or out-of-range values are rejected before storage.
+- The repository serializes the already-validated value directly to canonical jsonb text (`vision_jsonb`). It does not apply a second lossy `Number()` normalization pass ([[apps/node-backend/src/repositories/settingsRepository.ts]]).
 
 #### PUT /api/settings (bulk)
 

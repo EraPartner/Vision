@@ -2,7 +2,7 @@
 title: State Management Deep Dive
 type: component
 status: active
-date: 2026-10-26
+date: 2026-11-03
 tags: [state-management, react-query, context, frontend, patterns, workspace]
 description: Comprehensive guide to Vision's state management architecture — React Query for server state, React Context for global state, and local component state patterns
 aliases:
@@ -296,7 +296,7 @@ React Component
     │               └── AbortController support
     │               │
     │               ▼
-    │       Express Route → Service → Repository → PostgreSQL
+    │       Express Route → Service → Repository → SQLite
     │               │
     │               ▼
     │       Response → Parse JSON → Update Cache

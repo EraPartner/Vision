@@ -2,7 +2,7 @@
 title: Understand Vision Visually
 type: guide
 status: active
-date: 2026-10-20
+date: 2026-11-03
 tags: [guide, architecture, diagrams, visual-learning, flows]
 description: A visual reading path through request handling, financial records, portfolio history, AI boundaries, and backup recovery.
 aliases: [visual learning, visual documentation, understand Vision]
@@ -40,7 +40,7 @@ flowchart TD
     Guard --> Route[Validated route]
     Route --> Service[Business rules in services]
     Service --> Repo[SQL access in repositories]
-    Repo --> DB[(PostgreSQL)]
+    Repo --> DB[(SQLite file)]
     Route --> Result[Success data or structured error]
     Result --> Query
     Query --> Page
@@ -153,7 +153,7 @@ See [[docs/security/ai-data-access|AI Data Access]], [[docs/features/ai-chat|AI 
 
 ```mermaid
 flowchart TD
-    Data[Database SQL, attachments and optional UI state] --> Bundle[Backup bundle]
+    Data[SQLite database copy, attachments and optional UI state] --> Bundle[Backup bundle]
     Bundle --> Passphrase{Passphrase configured?}
     Passphrase -->|Yes| Encrypted[Authenticated encrypted backup]
     Passphrase -->|No| Plain[Plaintext backup with warning]

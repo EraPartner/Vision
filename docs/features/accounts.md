@@ -2,8 +2,8 @@
 title: Accounts
 type: feature
 status: active
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     feature,
@@ -71,12 +71,15 @@ Same-day imported anchors use retained bank sequence where available, independen
 arrival order. Unsequenced rows follow sequenced rows and use ID order; unknown historical
 chronology is not guessed. See [[docs/adr/206-bank-chronology]].
 
-Ledger creation/import holds a shared lock on active accounts through commit. Ledger edits,
-deletions and import rollback lock affected accounts in ID order before locking transaction rows.
-Closing takes an exclusive account lock before computing adjustments. A writer that loses the
-race must revalidate the closed state and asks the user to reopen the account; it cannot add a
-new balance after closing. Metadata-only edits do not require reopening. Concurrency scenarios
-are authored but remain unexecuted pending disposable PostgreSQL availability.
+Ledger creation, import, edits, deletions, import rollback and account closing each run in one
+`BEGIN IMMEDIATE` transaction on the single writer connection
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). That transaction replaces the former row
+locks: no other writer can run between the closed-state check and the ledger write. Closing reads
+the active state and the balance, writes the adjustments and closes the account in one
+transaction. A writer that runs after the close sees the closed state and asks the user to reopen
+the account; it cannot add a new balance after closing. Metadata-only edits do not require
+reopening. `tests/accountLifecycleConcurrency.db.test.ts` runs an edit and a create against a
+concurrent close on a real SQLite database.
 
 ## Architecture: Glance → Overview → Ledger
 
@@ -171,7 +174,7 @@ treats an unavailable rate as 1:1 for these account surfaces
 
 The dialog:
 
-- **Fresh statement reading** — an amount + as-of-date input (defaults to today) with a **live drift preview** (`entered − reconcilable balance`, rounded to cents half-away-from-zero for display while each reading stores `NUMERIC(18,4)`). _Save reading_ PUTs the selected currency to `/api/accounts/:id/statement-balances/:currency`; the legacy scalar account fields remain an atomic compatibility projection of the declared-currency row. Raw input is shape-validated before parsing so typos (`12,,3`, `1234..56`) and calendar-invalid ISO dates can never reach PostgreSQL. A reading dated **before today** renders an amber warning — activity after that date is already in the computed balance, so an adjustment would double-count it — with the ledger exit emphasized as the recommended path. On an unanchored account, _Record as opening balance_ also follows a valid fresh amount/date; the stored statement remains the fallback only while no reading draft exists, so an invalid or date-less draft can never silently backfill a different figure.
+- **Fresh statement reading** — an amount + as-of-date input (defaults to today) with a **live drift preview** (`entered − reconcilable balance`, rounded to cents half-away-from-zero for display while each reading stores `NUMERIC(18,4)`). _Save reading_ PUTs the selected currency to `/api/accounts/:id/statement-balances/:currency`; the legacy scalar account fields remain an atomic compatibility projection of the declared-currency row. Raw input is shape-validated before parsing so typos (`12,,3`, `1234..56`) and calendar-invalid ISO dates can never reach the database. A reading dated **before today** renders an amber warning — activity after that date is already in the computed balance, so an adjustment would double-count it — with the ledger exit emphasized as the recommended path. On an unanchored account, _Record as opening balance_ also follows a valid fresh amount/date; the stored statement remains the fallback only while no reading draft exists, so an invalid or date-less draft can never silently backfill a different figure.
 - **Accept computed balance** — rewrite the stored statement figure to the native reconciliation base (`reconcilable_balance`; no transaction created).
 - **Add adjustment transaction** — keep the statement as truth; the server stamps one balancing ledger row.
 - **Show transactions since {date}** — deep-links to `/accounts/:id?since={statement date}` (the fresh reading's date when one is entered, else the stored anchor's).
@@ -202,7 +205,7 @@ The Transactions page's actions bar has an **Account** combobox (`AccountFilterC
 - `apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx` — Account filter sets/clears `account_id`.
 - `apps/node-backend/tests/routes/transactions.test.ts` — `include_balance` threading + `running_balance` on/off the wire.
 - `apps/frontend/src/features/accounts/__tests__/groupAccounts.test.ts` — group assignment and ordering.
-- `apps/node-backend/tests/accountTotals.db.test.ts` — real-PostgreSQL group subtotals, Net cash population, and unconverted-currency handling for `GET /api/accounts/totals`.
+- `apps/node-backend/tests/accountTotals.db.test.ts` — real-SQLite group subtotals, Net cash population, and unconverted-currency handling for `GET /api/accounts/totals`.
 - `apps/frontend/src/features/accounts/__tests__/brokerAccountMetrics.test.ts` — position-only holdings value, complete broker P&L, and oversold aggregation from the portfolio-summary partition.
 
 ### Opening-balance correction

@@ -23,6 +23,11 @@ related_code:
 
 # ADR-233: Loopback-only backend
 
+> [!note] Superseded in part by [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] on 2026-11-03:
+> the role bootstrap, its single privileged connect and the `pg_isready` check no longer exist,
+> because there is no database server. The loopback-only bind, the fixed Host allowlist and the
+> CSRF Origin fallback stay.
+
 ## Status
 
 Accepted on 2026-10-20. Supersedes the `ADMIN_AUTH_TOKEN` bearer check of

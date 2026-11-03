@@ -2,9 +2,9 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-11-02
-updated: 2026-11-02
-last_modified: 2026-11-02
+date: 2026-11-03
+updated: 2026-11-03
+last_modified: 2026-11-03
 tags:
   [
     knowledge-base,
@@ -132,7 +132,7 @@ LIMIT 5
 | Document                                    | Description                         | Complexity                                                       |
 | ------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------- |
 | [[docs/reference/algorithms                 | Algorithms & Data Structures]]      | LTTB, SHA-256 deduplication, recurring detection, Modified Dietz | O(n), O(1)                |
-| [[docs/reference/database-query-patterns    | Database Query Patterns]]           | PostgreSQL CTEs, window functions, materialized views            | Index analysis            |
+| [[docs/reference/database-query-patterns    | Database Query Patterns]]           | SQLite CTEs, window functions, summary tables                    | Index analysis            |
 | [[docs/reference/data-model                 | Data Model]]                        | Entity relationships and schema design                           | Schema patterns           |
 | [[docs/performance/chart-downsampling       | Chart Downsampling]]                | LTTB implementation for time-series                              | O(n) time, O(k) space     |
 | [[docs/adr/005-materialized-views| ADR-005: Materialized Views]]       | Pre-computed aggregation strategy                                | Query vs view trade-offs  |
@@ -192,15 +192,15 @@ LIMIT 20
 | [[docs/reference/react-query-keys        | 🔄 React Query Keys]]                 | All frontend query keys                                          |
 | [[docs/reference/frontend-routes         | 🛣️ Frontend Routes]]                  | Complete route table                                             |
 | [[docs/reference/scripts                 | ⚙️ Scripts Reference]]                | All bun/npm commands                                             |
-| [[docs/reference/database-triggers       | 🗄️ Database Triggers]]                | All PostgreSQL triggers                                          |
-| [[docs/guides/migrations                 | 🔗 Migration Workflow]]               | Kysely migrator workflow; use `bun run db:status` for the chain   |
+| [[docs/reference/database-triggers       | 🗄️ Database Triggers]]                | All database triggers                                            |
+| [[docs/guides/migrations                 | 🔗 Migration Workflow]]               | SQLite migration runner; use `bun run db:status` for the chain    |
 | [[docs/reference/code-patterns           | 💻 Code Patterns]]                    | Standard code patterns for all layers                            |
 | [[docs/reference/error-codes             | ❌ Error Codes]]                      | All API error responses and status codes                         |
 | [[docs/reference/typescript-types        | 🔢 TypeScript Types]]                 | All frontend type definitions                                    |
 | [[docs/reference/analysis-contract       | 🧩 Analysis Contract]]                | Shared definitions, results, lineage, and compatibility          |
 | [[docs/reference/algorithms              | 🧮 Algorithms]]                       | LTTB, deduplication, recurring detection, currency conversion    |
 | [[docs/reference/service-layer           | 🗂️ Service Layer]]                    | All 16 backend services reference                                |
-| [[docs/reference/database-query-patterns | 🗄️ Database Query Patterns]]          | PostgreSQL patterns, indexes, optimization                       |
+| [[docs/reference/database-query-patterns | 🗄️ Database Query Patterns]]          | SQLite query patterns, indexes, optimization                     |
 | [[docs/reference/agent-navigation-map    | 🗺️ Agent Navigation Map]]             | File navigation by feature, layer, task                          |
 | [[docs/reference/frontend-api-client     | 🔌 Frontend API Client]]              | Transport, types, and facade layers of the HTTP client (Phase 1) |
 | [[docs/reference/api-endpoint-matrix     | 📊 API Endpoint Matrix]]              | HTTP operations checked against OpenAPI, plus native IPC contracts   |
@@ -214,6 +214,16 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-11-03 — SQLite replaces PostgreSQL (ADR-263)
+
+Vision keeps its data in one SQLite file, `database/vision.sqlite3` in the application data
+directory, opened in-process by the backend. The desktop package no longer carries a database
+server, and there are no database roles, ports or credentials. Migrations restart at
+`db/migrations/0001_baseline.sql`, and backups carry `db.sqlite3`. Vision 2.0 data moves once
+through `bun run transition:v2`. See [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]],
+[[docs/guides/sqlite-transition|Moving Vision 2.0 data to SQLite]] and
+[[docs/reference/sqlite-sql-dialect|SQLite SQL dialect]].
 
 ### 2026-10-28 — Mac optimisation phases E to I (ADR-255 to ADR-260)
 
@@ -906,8 +916,8 @@ Vision is a comprehensive **financial transaction management application** suppo
 
 - **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS + Radix UI
 - **Backend**: Node.js (Bun) + Express
-- **Database**: PostgreSQL 18 with Kysely migrations (`db/migrations/`, ADR-222) and Kysely-built
-  backend queries (ADR-226)
+- **Database**: SQLite, one file opened in-process (ADR-263), with numbered SQL migrations
+  (`db/migrations/`) and Kysely-built backend queries (ADR-226)
 - **Desktop**: Electron, macOS on Apple Silicon only (ADR-219)
 - **Testing**: Vitest + React Testing Library
 

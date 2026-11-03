@@ -2,8 +2,8 @@
 title: Agent Sandbox Guide
 type: guide
 status: active
-date: 2026-10-22
-updated: 2026-10-21
+date: 2026-11-03
+updated: 2026-11-03
 tags: [guide, security, claude-code, codex, development]
 description: Use built-in Claude Code and Codex sandboxes with Vision's native development workflow.
 aliases: [devcontainer-guide, devcontainer, dev-container, claude-code-container, agent-sandbox]
@@ -40,9 +40,11 @@ aids ([[docs/adr/227-claude-code-static-analysis-aids|ADR-227]]):
   `find_symbol`, `definition`, `references`, `hover` and `diagnostics`, across the frontend,
   backend and shared packages. It runs the repository's own `tsserver`, so nothing is installed
   globally ([[docs/adr/228-typescript-navigation-mcp|ADR-228]]).
-- The `vision-postgres` MCP server answers read-only SQL against a local migrated database. Set
-  `VISION_MCP_DATABASE_URL` to a loopback URL, preferably with a read-only role, before starting
-  Claude Code. Never point it at the real Vision database.
+- The `vision-sqlite` MCP server (`apps/node-backend/scripts/sqlite-mcp.ts`) answers one read-only
+  SQL statement at a time against a local migrated SQLite file. Set `VISION_MCP_DATABASE_PATH` to
+  that file before starting Claude Code. The server never reads `VISION_DATABASE_PATH`. It opens the
+  file read-only with `PRAGMA query_only = ON` and returns at most 200 rows. Never point it at the
+  real Vision database ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]).
 - `bun run search:ast -l ts -p '<pattern>' <path>` runs ast-grep for structural searches.
 
 ## Development and verification
