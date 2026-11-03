@@ -59,8 +59,22 @@ const driver: Driver = {
   async destroy() {},
 };
 
+/**
+ * Kysely's SQLite adapter declares one connection, so Kysely queues every
+ * query behind the one before it. Here a "connection" is only a facade over
+ * query(): connection.ts already serializes writers with its write lock and
+ * routes a query to its transaction through AsyncLocalStorage. With Kysely's
+ * queue as well, a write waiting for the lock outside a transaction held the
+ * queue, and the transaction holding the lock could never run its next query.
+ */
+class VisionSqliteAdapter extends SqliteAdapter {
+  override get supportsMultipleConnections(): boolean {
+    return true;
+  }
+}
+
 const dialect: Dialect = {
-  createAdapter: () => new SqliteAdapter(),
+  createAdapter: () => new VisionSqliteAdapter(),
   createDriver: () => driver,
   createIntrospector: (kysely) => new SqliteIntrospector(kysely),
   createQueryCompiler: () => new SqliteQueryCompiler(),
