@@ -2,9 +2,9 @@
 title: Backup Coverage Audit
 type: feature
 status: active
-date: 2026-10-28
-updated: 2026-10-28
-last_modified: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
+last_modified: 2026-11-03
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
 description: "Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-GCM encryption (v2, 2026-04-28; the AES-256-CBC v1 format was retired and is refused since 2026-10-19, ADR-219), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes \"backup path keeps reverting to default\" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope."
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
@@ -280,6 +280,12 @@ vision_backup_{deviceId}_{timestamp}.visionbak   ← .zip archive (unencrypted)
 vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v2 format)
 ```
 
+Backup files are created owner-only (`0600`). With a passphrase, the plaintext `.visionbak` is
+built in a private temporary staging directory and only the `.visionbak.enc` reaches the backup
+folder (through a `.partial` sidecar), so an unencrypted copy never lands in iCloud Drive or another
+synced folder. `runBundleBackup()` checks the destination against the system-directory denylist at
+use, so a folder stored through the settings API cannot bypass the IPC check.
+
 ### Encryption Formats
 
 **v1 (Retired):** AES-256-CBC with static salt
@@ -313,7 +319,7 @@ their public interfaces and supply format-specific magic values and messages:
 - `packaging/electron/backup/bundle.ts` — `.visionbak` bundle adapter, which provides:
 
 - `createBundle()` — Create zip from db.sql, attachments/, frontend-state.json, metadata.json
-- `encryptBundle(bundlePath, passphrase)` — Wrap bundle in AES-256-GCM (v2); takes plaintext passphrase, not pre-derived key
+- `encryptBundle(bundlePath, passphrase, { destDir? })` — Wrap bundle in AES-256-GCM (v2) into `destDir` (default: the bundle's folder) and delete the plaintext; takes plaintext passphrase, not pre-derived key
 - `decryptToTemp(encPath, passphrase, tmpPath)` — Decrypt a v2 bundle; refuse a retired `VISIONBAK1` bundle by name
 - `openBundle()` — Extract and decrypt bundle; returns paths to sql, attachments, frontend state
 - `isBundleEncrypted()` — Inspect bundle header without full extraction

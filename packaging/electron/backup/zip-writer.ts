@@ -122,7 +122,8 @@ export async function createZipWriter(
   filePath: string,
   { level = 6, forceZip64 = false }: ZipWriterOptions = {},
 ): Promise<ZipWriter> {
-  const handle = await fs.promises.open(filePath, "w");
+  // Owner-only: a backup holds the whole database.
+  const handle = await fs.promises.open(filePath, "w", 0o600);
   const records: CentralRecord[] = [];
   let position = 0;
   let closed = false;

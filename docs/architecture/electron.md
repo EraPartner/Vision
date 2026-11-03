@@ -2,8 +2,8 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   [
     architecture,
@@ -556,8 +556,10 @@ If updating the icon, regenerate `.icns` from `.svg` using an asset pipeline too
 
 - **Current**: Ad-hoc unsigned (no Developer ID certificate)
 - **Suitable for**: Personal/local use, internal distribution
-- **First launch**: macOS Gatekeeper prompts "Cannot be verified"; user can:
-  - Right-click → "Open"
+- **Minimum macOS**: 13 Ventura (`LSMinimumSystemVersion` 13.0 in the packaged `Info.plist`)
+- **First launch**: macOS Gatekeeper blocks the unverified app once; user can:
+  - macOS 15 and newer: System Settings → Privacy & Security → "Open Anyway" (right-click → "Open" no longer bypasses Gatekeeper)
+  - macOS 13 and 14: Right-click → "Open"
   - Or: `xattr -dr com.apple.quarantine /Applications/Vision.app`
 - **For production**: Acquire Developer ID, set `mac.signingIdentity` + `mac.notarize` in electron-builder config
 
@@ -998,6 +1000,10 @@ contextBridge.exposeInMainWorld("electronRecovery", electronRecovery);
 - Every privileged invoke must come from the current main frame at the selected
   backend origin or the exact packaged recovery page. A localhost page at a
   different port, a subframe, and an arbitrary local file cannot use the bridge.
+- The backend binds `127.0.0.1` only. The renderer origin stays `http://localhost:<port>`, but a
+  `host-resolver-rules` switch (`MAP localhost 127.0.0.1`) keeps Chromium from also trying
+  `[::1]:<port>`, where another local process or account could listen and be served as the trusted
+  origin. Main-process health and settings requests use `http://127.0.0.1:<port>` directly.
 - Renderer navigation and redirects are restricted to that backend origin and
   recovery page. Programmatic splash loads remain controlled by the main process.
 - The request and check permission handlers deny renderer capabilities except

@@ -2,7 +2,12 @@
 
 Vision is a self-hosted financial transaction manager. The native macOS application keeps its
 database and attachments on your Mac. Normal installation and daily use do not require Homebrew,
-Postgres.app or a separately installed Chrome.
+a database server or a separately installed Chrome.
+
+> **Coming from Vision 2.0?** Vision 2.0 kept its data in PostgreSQL. This version keeps it in one
+> SQLite file and does not start while it finds Vision 2.0 data without one. Make a backup in
+> Vision 2.0 before you install, then follow the transition guide:
+> https://github.com/EraPartner/Vision/blob/main/docs/guides/sqlite-transition.md
 
 ## What's in this release
 
@@ -13,16 +18,17 @@ Postgres.app or a separately installed Chrome.
 | `README.md`                        | This file                                         |
 | `*.sha256`                         | SHA-256 checksums for each release artifact       |
 
-The application contains PostgreSQL 18.6, the Vision backend, the production frontend and the
-migration runner. PDF reports print with the application's own Electron Chromium. PostgreSQL data
+The application contains Bun, the Vision backend, the production frontend and the migration
+runner. The database is one SQLite file opened by the backend through the SQLite library that
+ships with macOS. PDF reports print with the application's own Electron Chromium. The database
 and attachments are stored outside the application bundle so replacing `Vision.app` does not
 replace user data.
 
 ## Requirements
 
-- macOS 12 Monterey or newer
+- macOS 13 Ventura or newer
 - Apple Silicon
-- Enough free disk space for the application, private PostgreSQL cluster, attachments, and backups
+- Enough free disk space for the application, the database, attachments, and backups
 - An internet connection only when downloading Vision or using an integration that itself needs it
 
 ## Install
@@ -49,23 +55,36 @@ is the offline integrity check; the attestation binds an artifact to Vision's re
 1. Open `Vision-__VERSION__-arm64.dmg`.
 2. Drag `Vision.app` to `/Applications`.
 3. Eject the disk image.
-4. Right-click `/Applications/Vision.app`, select **Open**, then confirm **Open**.
+4. Open `/Applications/Vision.app` once, as described below.
 
-The one-time right-click is expected while releases use an ad-hoc signature instead of an Apple
-Developer ID. Later launches can use a normal double-click.
+Releases use an ad-hoc signature instead of an Apple Developer ID, so macOS blocks the first
+launch. Allow it once; later launches can use a normal double-click.
+
+**macOS 15 Sequoia and newer**
+
+1. Double-click `/Applications/Vision.app`. macOS reports that it could not verify Vision. Click
+   **Done**.
+2. Open **System Settings → Privacy & Security** and scroll to **Security**.
+3. Next to the message that Vision was blocked, click **Open Anyway** and confirm with your password
+   or Touch ID.
+4. Click **Open Anyway** in the dialog that follows.
+
+**macOS 13 Ventura and macOS 14 Sonoma**
+
+Right-click `/Applications/Vision.app`, select **Open**, then confirm **Open**.
 
 ### 3. First launch
 
 Vision verifies its packaged runtime before it creates data. It then:
 
-1. initializes a private PostgreSQL 18 cluster on loopback;
-2. creates separate cluster-administrator, migration-owner, and application roles;
-3. runs the normal Vision migration runner;
-4. starts the native backend and waits for detailed readiness; and
-5. opens the UI only after the database is ready.
+1. starts the native backend, which creates the SQLite database and runs the Vision migration
+   runner;
+2. waits for detailed readiness; and
+3. opens the UI only after the database is ready.
 
-An interrupted first launch is resumable. If the private PostgreSQL port is already occupied,
-Vision fails closed and records a diagnostic instead of connecting to the unknown server.
+Before migrations change a database that already holds data, the runner writes a copy of it to
+`database/pre-migration-backups/` and keeps the newest three. If that copy cannot be written,
+Vision does not start and changes nothing.
 
 ## Existing legacy installation
 
@@ -76,10 +95,9 @@ encrypted backup and restore support applies to the canonical native runtime.
 
 ## Daily use
 
-Open `Vision.app`. Vision starts its private PostgreSQL server and backend, checks readiness, and
-serves the production frontend over loopback. By default, quitting Vision cleanly stops both child
-processes. The **Keep services running on quit** preference deliberately leaves them running for a
-faster next launch.
+Open `Vision.app`. Vision starts its backend, checks readiness, and serves the production frontend
+over loopback. By default, quitting Vision cleanly stops the backend. The **Keep services running
+on quit** preference deliberately leaves it running for a faster next launch.
 
 ## Updating
 
@@ -94,31 +112,34 @@ an application update.
 
 | Location                                                                | Contents                                          |
 | ----------------------------------------------------------------------- | ------------------------------------------------- |
-| `~/Library/Application Support/Vision/native/vision/postgres/data/`     | Private PostgreSQL cluster                        |
+| `~/Library/Application Support/Vision/database/vision.sqlite3`          | The SQLite database                               |
+| `~/Library/Application Support/Vision/database/pre-migration-backups/`  | Copies written before migrations                  |
 | `~/Library/Application Support/Vision/native/vision/attachments/`       | Transaction attachments                           |
-| `~/Library/Application Support/Vision/native/vision/runtime.env`        | Generated native connection settings; mode `0600` |
-| `~/Library/Application Support/Vision/native/vision/logs/`              | Backend and PostgreSQL logs                       |
+| `~/Library/Application Support/Vision/native/vision/runtime.env`        | Generated native settings; mode `0600`            |
+| `~/Library/Application Support/Vision/native/vision/logs/`              | Backend logs                                      |
 | `~/Library/Application Support/Vision/native/vision/runtime-state.json` | Active provider and cutover marker                |
 
 ## Backup and restore
 
-Use the in-app backup controls to create a `.visionbak` file. Native mode preserves the existing
-bundle format, optional AES-256-GCM encryption, supported frontend/localStorage state, PostgreSQL
-data, and attachments. Restore rejects a newer schema and any backup taken before Vision switched
-to its TypeScript migration baseline, stages a fresh database and attachment tree,
-and activates them only after validation. A failed activation rolls both back.
+Use the in-app backup controls to create a `.visionbak` file. A backup holds a copy of the SQLite
+database, the attachments and supported frontend/localStorage state, with optional AES-256-GCM
+encryption. Restore rejects a newer schema, stages a fresh database and attachment tree, and
+activates them only after validation. A failed activation rolls both back. Backups made by
+Vision 2.0 hold PostgreSQL data: restore one only after the transition script has converted it
+(`bun run transition:v2 -- <backup> --to-backup <new file>`, see the transition guide).
 
 Keep at least one backup outside `~/Library/Application Support/Vision` before uninstalling or
 performing a rollback.
 
 ## Troubleshooting
 
-| Symptom                                                              | Action                                                                                             |
-| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| **Vision cannot be opened because the developer cannot be verified** | Right-click `Vision.app`, select **Open**, then confirm **Open**.                                  |
-| **Vision reports a corrupt or wrong-version native runtime**         | Reinstall the same Vision release. Do not bypass the check with an unknown PostgreSQL server.      |
-| **Native PostgreSQL port is in use**                                 | Stop the unrelated listener on port `54329`, or use the documented development-only port override. |
-| **Backend does not become ready**                                    | Open Vision logs from the recovery screen and inspect `postgres.log` and `backend.log`.            |
+| Symptom                                                      | Action                                                                                             |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| **macOS could not verify Vision**                            | Allow the first launch once, as described in [Install the app](#2-install-the-app).                |
+| **Vision reports a corrupt or wrong-version native runtime** | Reinstall the same Vision release.                                                                 |
+| **Vision found data from Vision 2.0 and did not start**      | Move the data once with the transition script; see the transition guide linked above.              |
+| **Vision could not back up the database before migrating**   | Fix the reason the message names (often a full disk), then open Vision again. Nothing was changed. |
+| **Backend does not become ready**                            | Open Vision logs from the recovery screen and inspect `backend.log`.                               |
 
 ## Uninstall
 

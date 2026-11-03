@@ -6,11 +6,12 @@ import test from "node:test";
 import type { TestContext } from "node:test";
 
 import { createZipWriter } from "./zip-writer";
-import { BUNDLE_VERSION, createBundle, openBundle } from "./bundle";
+import { BUNDLE_VERSION, createBundle, encryptBundle, openBundle } from "./bundle";
 import {
   assertBackupSchemaCompatible,
   init,
   resolveDatabaseEnvironment,
+  runBundleBackup,
   runBundleRestore,
   runRestore,
 } from "./restore";
@@ -362,4 +363,49 @@ void test("database file restore activates a SQLite file without attachments", a
     "waitUntilReady",
     "finalizeDatabase",
   ]);
+});
+
+void test("a backup refuses a system directory even when it comes from stored settings", async () => {
+  init({ runtimeProvider: () => null });
+  await assert.rejects(
+    runBundleBackup("/etc/vision", null),
+    /system directories is not allowed/,
+  );
+});
+
+void test("an encrypted backup reaches its folder only as owner-only ciphertext", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vision-backup-dest-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const staging = path.join(root, "staging");
+  const destDir = path.join(root, "iCloud Backups");
+  fs.mkdirSync(staging);
+  const databasePath = path.join(staging, "snapshot.sqlite3");
+  fs.writeFileSync(databasePath, sqliteHeader(1));
+
+  const { bundlePath } = await createBundle({
+    destDir: staging,
+    deviceId: "abcd1234",
+    appVersion: "2.1.0",
+    databasePath,
+    database: {
+      schemaVersion: 1,
+      sqliteVersion: "3.43.2",
+      sha256: "c".repeat(64),
+      bytes: 4096,
+    },
+    attachmentsDir: null,
+    frontendState: null,
+  });
+  assert.equal(fs.statSync(bundlePath).mode & 0o777, 0o600);
+  const { encPath } = await encryptBundle(bundlePath, "correct horse", {
+    destDir,
+  });
+
+  assert.deepEqual(fs.readdirSync(destDir), [path.basename(encPath)]);
+  assert.match(path.basename(encPath), /\.visionbak\.enc$/);
+  assert.equal(fs.statSync(encPath).mode & 0o777, 0o600);
+  assert.equal(fs.existsSync(bundlePath), false);
+  const opened = await openBundle(encPath, { passphrase: "correct horse" });
+  t.after(opened.cleanup);
+  assert.equal(opened.metadata.schemaVersion, 1);
 });

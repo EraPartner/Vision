@@ -43,7 +43,7 @@ import {
 } from "./runtime/ipc-schemas";
 import * as updater from "./updater";
 import { createRuntimeProvider } from "./runtime";
-import { LEGACY_POSTGRES_DATA_CODE } from "./runtime/native";
+import { LEGACY_POSTGRES_DATA_CODE, LOOPBACK_HOST } from "./runtime/native";
 import {
   externalBrowserUrl,
   isAllowedPermissionCheck,
@@ -65,7 +65,7 @@ import type {
 } from "./electron-api";
 
 const settingsWriter = createSettingsWriter((key: string, payload: unknown) =>
-  httpPut(`http://localhost:${appPort}/api/settings/${key}`, payload),
+  httpPut(`${backendUrl()}/api/settings/${key}`, payload),
 );
 const {
   getDefaultICloudBackupDir,
@@ -247,6 +247,16 @@ const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
 }
+
+// The renderer origin is http://localhost:<port>, but the backend binds
+// 127.0.0.1 only. Chromium would also try [::1]:<port>, where any other local
+// process or account could listen and be served as the trusted app origin
+// with the preload bridge. Resolve localhost to the backend's address only;
+// the origin, and with it renderer storage, stays the same.
+app.commandLine.appendSwitch(
+  "host-resolver-rules",
+  `MAP localhost ${LOOPBACK_HOST}`,
+);
 
 // Sandbox every renderer, including any webContents a future change creates,
 // and refuse <webview> attachment outright (ADR-155: no web views).
@@ -430,7 +440,11 @@ function registerSecurityHeaders() {
 // Resolved at launch by resolveAppPort() — a persisted random free port.
 let appPort = DEFAULT_APP_PORT;
 const appUrl = () => `http://localhost:${appPort}`;
-const healthUrl = () => `${appUrl()}/health`;
+// The backend binds 127.0.0.1 only. Main-process requests name that address,
+// and the renderer's `localhost` resolves only to it (host-resolver-rules
+// above), so a listener on [::1] at the same port is never reached.
+const backendUrl = () => `http://${LOOPBACK_HOST}:${appPort}`;
+const healthUrl = () => `${backendUrl()}/health`;
 let activeRuntime: RuntimeProvider | null = null;
 
 // ── Settings (persisted across launches) ─────────────────────────────────────
@@ -741,7 +755,7 @@ function pollHealth(maxAttempts = HEALTH_POLL_ATTEMPTS): Promise<void> {
 function pingReady(timeoutMs = 2000): Promise<{ ready: boolean } | undefined> {
   return new Promise((resolve) => {
     const req = http.get(
-      `${appUrl()}/health/detailed`,
+      `${backendUrl()}/health/detailed`,
       { agent: healthAgent },
       (res) => {
         const code = res.statusCode;
@@ -1986,7 +2000,7 @@ registerHandler(
       // The API wraps responses as { ok, data: { key, value } } (ADR-026).
       const response = readSettingsResponse(
         await httpGet(
-          `http://localhost:${appPort}/api/settings/backup_settings`,
+          `${backendUrl()}/api/settings/backup_settings`,
         ),
       );
       if (response.ok) settingsWriter.loaded("backup_settings", response.data);
@@ -2045,7 +2059,7 @@ registerHandler(
       // The API wraps responses as { ok, data: { key, value } } (ADR-026).
       const response = readSettingsResponse(
         await httpGet(
-          `http://localhost:${appPort}/api/settings/services_settings`,
+          `${backendUrl()}/api/settings/services_settings`,
         ),
       );
       if (response.ok)
@@ -2825,7 +2839,7 @@ app.on("will-quit", (e) => {
       // The API wraps responses as { ok, data: { key, value } } (ADR-026).
       const { stored } = readSettingsResponse(
         await httpGet(
-          `http://localhost:${appPort}/api/settings/backup_settings`,
+          `${backendUrl()}/api/settings/backup_settings`,
         ),
       );
       if (isObjectLike(stored)) return stored;
@@ -2843,7 +2857,7 @@ app.on("will-quit", (e) => {
     try {
       const { stored } = readSettingsResponse(
         await httpGet(
-          `http://localhost:${appPort}/api/settings/services_settings`,
+          `${backendUrl()}/api/settings/services_settings`,
         ),
       );
       if (isObjectLike(stored)) return stored.keepServicesOnQuit === true;

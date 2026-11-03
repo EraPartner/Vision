@@ -1,0 +1,2 @@
+# A fixed, non-secret pg_dump \restrict key in a test fixture (replaced by "pgdumpkey" in the next commit).
+6e9bf019f12c02516a7f98134c22b8e04a628dc7:packaging/electron/runtime/psql-restore-guard.test.ts:generic-api-key:8
