@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { APP_TIMEZONE, appDateStringToUtc } from "../src/lib/timezone.ts";
 import {
   __buildDefinition as buildDefinition,
   __runtimeRequest as runtimeRequest,
@@ -68,6 +69,42 @@ describe("saved analysis definitions", () => {
       expect(source.generatedSql).toMatch(/ORDER BY.*month.*DESC/);
       expect((runtimeRequest(saved) as VisualRuntimeRequest).limit).toBe(500);
       expect(source.generatedSql).not.toMatch(/LIMIT/i);
+    }
+  });
+
+  it("defaults date_to to the app-zone day just after local midnight, not the UTC day", () => {
+    // 00:30 on 4 Nov in APP_TIMEZONE: the UTC day is still 3 Nov east of UTC.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(appDateStringToUtc("2026-11-04").getTime() + 30 * 60_000);
+    try {
+      const definition = buildDefinition({
+        definitionId: "analysis:defaults",
+        version: 1,
+        name: "Defaults",
+        workspace: "budgeting",
+        parameters: {},
+        querySpec: {
+          mode: "visual",
+          plan: {
+            datasetId: "cash-flows",
+            fields: ["month"],
+            groups: ["month"],
+            measures: ["sum_spending"],
+            filters: [{ fieldId: "currency", operator: "eq", value: "EUR" }],
+            joins: [],
+            orderBy: [],
+            limit: 500,
+          },
+        },
+      });
+      const byId = new Map(
+        definition.parameters.map((parameter) => [parameter.id, parameter]),
+      );
+      expect(byId.get("date_to")?.defaultValue).toBe("2026-11-04");
+      // The label names the zone the datasets are bucketed in.
+      expect(byId.get("timezone")?.defaultValue).toBe(APP_TIMEZONE);
+    } finally {
+      vi.useRealTimers();
     }
   });
 

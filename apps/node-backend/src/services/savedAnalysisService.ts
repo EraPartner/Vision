@@ -54,6 +54,7 @@ import type {
 } from "./analysisFormulaEngine.ts";
 import { nonZeroOr } from "../lib/math.ts";
 import { errorCode, errorMessage } from "../lib/errors.ts";
+import { APP_TIMEZONE, todayAppDateString } from "../lib/timezone.ts";
 
 interface StandardParameterValues {
   currency?: string;
@@ -184,7 +185,8 @@ function standardParameters(values: StandardParameterValues = {}) {
       label: "Reporting timezone",
       type: "string",
       required: true,
-      defaultValue: values.timezone || "Europe/Helsinki",
+      // Datasets bucket calendar days in APP_TIMEZONE, so label them with it.
+      defaultValue: values.timezone || APP_TIMEZONE,
       sensitive: false,
     },
     {
@@ -200,7 +202,8 @@ function standardParameters(values: StandardParameterValues = {}) {
       label: "To",
       type: "date",
       required: true,
-      defaultValue: values.date_to || new Date().toISOString().slice(0, 10),
+      // App-zone today: the UTC day is still yesterday after local midnight.
+      defaultValue: values.date_to || todayAppDateString(),
       sensitive: false,
     },
   ];

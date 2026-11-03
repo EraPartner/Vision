@@ -6,9 +6,9 @@
  * calendar date in any timezone east of UTC.
  */
 
-import { toYmd } from '@/lib/dateUtils';
+import { differenceInDays, parseLocalDateFromYmd, toYmd } from '@/lib/dateUtils';
 
-export { parseLocalDateFromYmd as parseYmd, toYmd } from '@/lib/dateUtils';
+export { toYmd } from '@/lib/dateUtils';
 
 /** Today's date at local midnight (00:00:00.000). */
 export function todayLocal(): Date {
@@ -22,7 +22,11 @@ export function todayYmd(): string {
     return toYmd(new Date());
 }
 
-/** Elapsed fractional days between two Date objects. */
-export function daysBetween(from: Date, to: Date): number {
-    return (to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24);
+/**
+ * Whole local calendar days from `now` until the `ymd` day (0 = today,
+ * negative once it has passed). Counts days, not elapsed hours, so a 23- or
+ * 25-hour DST day cannot move the result.
+ */
+export function calendarDaysUntil(ymd: string, now: Date = new Date()): number {
+    return differenceInDays(parseLocalDateFromYmd(ymd), now);
 }

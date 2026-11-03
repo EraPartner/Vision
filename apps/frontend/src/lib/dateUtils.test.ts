@@ -8,6 +8,7 @@ import {
     formatDateTimeStringWithAppSettings,
     formatDateWithAppSettings,
     formatDateStringWithAppSettings,
+    isoToDateTimeLocal,
     parseAppDateInput,
     toYmd,
     weekStartsOnFromSetting,
@@ -140,5 +141,28 @@ describe("appLanguageToLocale", () => {
             "May 2026",
         );
         expect(formatDate(d, "MMM yyyy", "de-DE")).toBe("Mai 2026");
+    });
+});
+
+describe("isoToDateTimeLocal", () => {
+    test("shows the local wall clock, so a save round-trips to the same instant", () => {
+        const previousTz = process.env.TZ;
+        process.env.TZ = "Europe/Helsinki";
+        try {
+            const stored = "2026-11-03T22:30:00.000Z"; // 4 Nov 00:30 in Helsinki
+            const shown = isoToDateTimeLocal(stored);
+            expect(shown).toBe("2026-11-04T00:30");
+            // The dossier input saves `new Date(value).toISOString()`.
+            expect(new Date(shown).toISOString()).toBe(stored);
+        } finally {
+            if (previousTz === undefined) delete process.env.TZ;
+            else process.env.TZ = previousTz;
+        }
+    });
+
+    test("is empty for a missing or unparseable value", () => {
+        expect(isoToDateTimeLocal(null)).toBe("");
+        expect(isoToDateTimeLocal(undefined)).toBe("");
+        expect(isoToDateTimeLocal("not a date")).toBe("");
     });
 });
