@@ -93,13 +93,19 @@ function decimalTypmod(declared: string): Typmod | null {
   return { precision: Number(m[1]), scale: Number(m[2]) };
 }
 
-const integerRule = (sqlite: "INTEGER" | "BIGINT"): TypeRule => ({
+const PG_INT32 = /^(smallint|integer)$/;
+
+const integerRule = (sqlite: "INTEGER" | "INT" | "BIGINT"): TypeRule => ({
   sqlite,
-  postgres: "smallint, integer, bigint",
+  postgres: sqlite === "BIGINT" ? "smallint, integer, bigint" : "smallint, integer",
   storage: "integer",
-  conversion: "decimal integer text -> 64-bit integer, bound as BigInt (exact beyond 2^53); outside int64 refused",
+  conversion:
+    sqlite === "BIGINT"
+      ? "decimal integer text -> 64-bit integer, bound as BigInt (exact beyond 2^53); outside int64 refused"
+      : "decimal integer text -> integer, bound as BigInt; the backend reads it as a JavaScript number, " +
+        "so a PostgreSQL bigint may not feed it",
   matchesDeclared: (d) => normaliseDeclared(d) === sqlite,
-  acceptsPg: (pg) => PG_INTEGER.test(pg),
+  acceptsPg: (pg) => (sqlite === "BIGINT" ? PG_INTEGER : PG_INT32).test(pg),
   build: () => (text) => parsePgInteger(text),
 });
 
@@ -109,6 +115,7 @@ const integerRule = (sqlite: "INTEGER" | "BIGINT"): TypeRule => ({
  */
 export const TYPE_MAPPING: readonly TypeRule[] = [
   integerRule("INTEGER"),
+  integerRule("INT"),
   integerRule("BIGINT"),
   {
     sqlite: "DECIMAL_TEXT(p,s)",

@@ -30,7 +30,6 @@ import {
   readZipEntries,
 } from "./zip.ts";
 import type { ZipEntry } from "./zip.ts";
-import { sha256File } from "./files.ts";
 
 export const METADATA_MEMBER = "metadata.json";
 export const DUMP_MEMBER = "db.sql";
@@ -74,6 +73,8 @@ export interface OpenedV2Bundle {
   dumpSha256: string;
   /** frontend-state.json exactly as stored, or null when the bundle has none. */
   frontendStateBytes: Buffer | null;
+  /** Its parsed value, as Vision's restore reads it (null when absent or not JSON). */
+  frontendState: unknown;
   frontendStateKeys: number | null;
   attachments: BundleAttachment[];
   /** Directories below attachments/ that the archive lists (some may be empty). */
@@ -189,6 +190,7 @@ export async function openV2Bundle(
   const dump = await extractEntryToFile(zipPath, dumpEntry, dumpPath, budget);
 
   let frontendStateBytes: Buffer | null = null;
+  let frontendState: unknown = null;
   let frontendStateKeys: number | null = null;
   const frontendEntry = one("frontend-state");
   if (frontendEntry) {
@@ -198,6 +200,7 @@ export async function openV2Bundle(
     frontendStateBytes = await readEntry(zipPath, frontendEntry, budget);
     try {
       const state: unknown = JSON.parse(frontendStateBytes.toString("utf8"));
+      frontendState = state;
       const keys = isRecord(state) ? state.keys : undefined;
       if (isRecord(keys)) frontendStateKeys = Object.keys(keys).length;
       else warnings.push("frontend-state.json has no { keys: {...} } object; Vision's restore would skip it.");
@@ -237,6 +240,7 @@ export async function openV2Bundle(
     dumpBytes: dump.bytes,
     dumpSha256: dump.sha256,
     frontendStateBytes,
+    frontendState,
     frontendStateKeys,
     attachments,
     attachmentDirectories: attachmentDirectories.sort(),
@@ -255,13 +259,6 @@ export interface SqliteBundleMetadata {
   deviceId: string;
   createdAt: string;
   encrypted: false;
-  /** Where this bundle came from; ignored by the app's restore. */
-  transition: {
-    sourceBundleSha256: string;
-    sourceAppVersion: string;
-    sourceSchemaHead: string;
-    sourceCreatedAt: string;
-  };
 }
 
 export interface WriteSqliteBundleOptions {
@@ -273,9 +270,56 @@ export interface WriteSqliteBundleOptions {
   attachmentsDir: string | null;
   attachmentDirectories: readonly string[];
   attachments: readonly BundleAttachment[];
-  frontendStateBytes: Buffer | null;
+  /** Written as createBundle does: JSON.stringify(state, null, 2), omitted when falsy. */
+  frontendState: unknown;
   /** Encrypt with this passphrase (the input's), or null for a plain bundle. */
   passphrase: string | null;
+}
+
+interface WalkItem {
+  name: string;
+  directory: boolean;
+}
+
+/**
+ * The order packaging/electron/backup/zip-writer.ts walks a directory in:
+ * each directory's names sorted, every entry followed by its own contents.
+ */
+export function attachmentWalk(
+  directories: readonly string[],
+  files: readonly BundleAttachment[],
+): WalkItem[] {
+  interface Node {
+    children: Map<string, Node>;
+    file: boolean;
+  }
+  const root: Node = { children: new Map(), file: false };
+  const add = (relative: string, file: boolean): void => {
+    let node = root;
+    const parts = relative.split("/");
+    parts.forEach((part, i) => {
+      let child = node.children.get(part);
+      if (child === undefined) {
+        child = { children: new Map(), file: file && i === parts.length - 1 };
+        node.children.set(part, child);
+      }
+      node = child;
+    });
+  };
+  for (const d of directories) add(d, false);
+  for (const f of files) add(f.relativePath, true);
+  const out: WalkItem[] = [];
+  const walk = (node: Node, prefix: string): void => {
+    for (const name of [...node.children.keys()].sort()) {
+      const child = node.children.get(name);
+      if (child === undefined) continue;
+      const full = prefix === "" ? name : `${prefix}/${name}`;
+      out.push({ name: full, directory: !child.file });
+      if (!child.file) walk(child, full);
+    }
+  };
+  walk(root, "");
+  return out;
 }
 
 /** Write a format-2 bundle; refuses an existing destination. */
@@ -291,22 +335,16 @@ export async function writeSqliteBundle(options: WriteSqliteBundleOptions): Prom
     await writer.addBuffer(METADATA_MEMBER, Buffer.from(JSON.stringify(options.metadata, null, 2), "utf8"));
     await writer.addFile(SQLITE_MEMBER, options.databasePath);
     if (options.attachmentsDir !== null) {
-      const directories = new Set(options.attachmentDirectories);
-      for (const attachment of options.attachments) {
-        const parts = attachment.relativePath.split("/");
-        for (let i = 1; i < parts.length; i++) directories.add(parts.slice(0, i).join("/"));
-      }
-      // The 2.0 writer lists each directory before its contents, in sorted order.
-      const names = [
-        ...[...directories].map((d) => ({ name: d, directory: true })),
-        ...options.attachments.map((a) => ({ name: a.relativePath, directory: false })),
-      ].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-      for (const item of names) {
+      for (const item of attachmentWalk(options.attachmentDirectories, options.attachments)) {
         if (item.directory) await writer.addDirectory(`${ATTACHMENTS_PREFIX}${item.name}/`);
         else await writer.addFile(`${ATTACHMENTS_PREFIX}${item.name}`, path.join(options.attachmentsDir, ...item.name.split("/")));
       }
     }
-    if (options.frontendStateBytes !== null) await writer.addBuffer(FRONTEND_STATE_MEMBER, options.frontendStateBytes);
+    // createBundle: `if (frontendState) append(JSON.stringify(frontendState, null, 2))`.
+    if (options.frontendState !== null && options.frontendState !== undefined && options.frontendState !== false &&
+      options.frontendState !== 0 && options.frontendState !== "") {
+      await writer.addBuffer(FRONTEND_STATE_MEMBER, Buffer.from(JSON.stringify(options.frontendState, null, 2), "utf8"));
+    }
     await writer.finalize();
   } catch (err) {
     await writer.abort().catch(() => undefined);
@@ -386,4 +424,3 @@ export async function readBackSqliteBundle(
   };
 }
 
-export { sha256File };
